@@ -697,6 +697,31 @@ def _composer_refused(session):
         jht_tmux_send(CAPITANO_SESSION, msg)
 
 
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "15"))
+# Per sessione: il processo `jht-tmux-send` lasciato correre oltre l'attesa, e se serve liberare la casella.
+_tmux_send_running = {}
+_tmux_send_overran = set()
+
+
+def _run_tmux_send(args, wait_s, session=None):
+    """Come `subprocess.run(args, timeout=wait_s)`, ma allo scadere NON uccide `jht-tmux-send`.
+
+    Il trasporto ha scadenze sue (fino a 100 s per un pane che non e' al prompt) e fra l'incolla e l'Invio
+    c'e' una finestra: ucciderlo li' lascia l'incolla nella casella senza Invio (TEST 5, 27/10). Qui si
+    aspetta `wait_s` per non fermare il bridge; poi il processo finisce da solo (un thread lo raccoglie) e
+    al chiamante arriva TimeoutExpired come prima. Ritorna il CompletedProcess."""
+    import threading
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    if session is not None:
+        _tmux_send_running[session] = proc
+    try:
+        out, err = proc.communicate(timeout=wait_s)
+    except subprocess.TimeoutExpired:
+        threading.Thread(target=proc.communicate, daemon=True).start()
+        raise
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
+
+
 def jht_tmux_send(session, text):
     # Standby a spesa zero: in standby i bridge leggono e NON parlano. Il gate
     # sta qui, nel chokepoint unico di scrittura tmux, così ogni path (tick,
@@ -712,9 +737,28 @@ def jht_tmux_send(session, text):
     # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
     # zero auto-recovery (setsid detached, fuori dal respawn di pid1). Vedi postmortem
     # docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
+    # Una consegna a questa sessione ancora in corso (il trasporto e' stato lasciato finire): non se ne
+    # affianca una seconda, il giro dopo la trova finita.
+    running = _tmux_send_running.get(session)
+    if running is not None and running.poll() is None:
+        print(f"[bridge V6] WARN jht_tmux_send({session}): the previous delivery is still running, not stacking another",
+              file=sys.stderr)
+        return False
+    # Il giro dopo uno scaduto: se nella casella e' rimasto un incolla NOSTRO senza Invio, il trasporto lo
+    # sottomette (solo se e' provato suo) prima del messaggio nuovo.
+    if session in _tmux_send_overran:
+        _tmux_send_overran.discard(session)
+        try:
+            _run_tmux_send(["jht-tmux-send", "--flush-ours", session], 60)
+        except (subprocess.TimeoutExpired, OSError):
+            _tmux_send_overran.add(session)
     try:
-        rc = subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode
-    except (subprocess.TimeoutExpired, OSError) as e:
+        rc = _run_tmux_send(["jht-tmux-send", session, text], TMUX_SEND_WAIT_S, session).returncode
+    except subprocess.TimeoutExpired as e:
+        _tmux_send_overran.add(session)
+        print(f"[bridge V6] WARN jht_tmux_send({session}): {e}; left to finish, not killed", file=sys.stderr)
+        return False
+    except OSError as e:
         print(f"[bridge V6] WARN jht_tmux_send({session}): {e}", file=sys.stderr)
         return False
     if rc != 0:

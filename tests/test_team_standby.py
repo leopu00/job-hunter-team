@@ -350,8 +350,8 @@ def test_sentinel_send_reopens_after_wake(bridge, sb, monkeypatch):
     class OkRun:
         returncode = 0
 
-    monkeypatch.setattr(bridge, "subprocess",
-                        type("S", (), {"run": staticmethod(lambda *a, **k: OkRun())}))
+    # the bridge runs the transport through `_run_tmux_send` (it does not kill it on a timeout any more)
+    monkeypatch.setattr(bridge, "_run_tmux_send", lambda *a, **k: OkRun())
     sb.enter(wake_on_weekly=100, now=T0)
     assert bridge.jht_tmux_send("SENTINELLA", "x") is False
     sb.wake("reset", weekly_usage=1, now=T0)     # flag via → guard aperto
