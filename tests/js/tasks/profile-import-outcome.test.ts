@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EXIT_CAPTAIN_NOT_TOLD,
+  PROFILE_READY_MESSAGE,
   importOutcome,
 } from "../../../cli/src/lib/profile-import.js";
 
@@ -21,11 +22,16 @@ describe("what the person is told after an import that wrote the profile", () =>
     const warn = outcome.warn.join("\n");
     expect(warn).toMatch(/the Capitano was NOT told/);
     expect(warn).toContain(detail);
-    expect(warn).toMatch(/run the same import again with --replace/);
+    // the way to try again is the message alone: a second import with --replace would move the profile just written
+    // to .prev and drop the one kept before it
+    const retry = `jht team send capitano "${PROFILE_READY_MESSAGE}"`;
+    expect(warn).toContain(retry);
+    expect(warn).toMatch(/profile is saved/);
+    expect(warn).not.toMatch(/--replace|import again/);
     expect(outcome.json).toMatchObject({
-      ok: true, profileWritten: true, captain: "failed", captainTold: false,
-      retry: "run the same import again with --replace", detail,
+      ok: true, profileWritten: true, captain: "failed", captainTold: false, retry, detail,
     });
+    expect(String(outcome.json.retry)).not.toMatch(/--replace/);
   });
 
   it("without a detail it still says it", () => {

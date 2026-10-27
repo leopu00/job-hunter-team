@@ -297,7 +297,7 @@ missing field is named.
   private, as `candidate_profile.yml.prev` next to it (only the last one).
 - A profile review is waiting for your confirmation in the app: confirm or discard it first.
 - No subscription plan declared: the import works, and tells you to run `jht providers plan`.
-- The Capitano could not be told (its composer held a text that is not provably ours, or its pane was busy): the profile is saved, the command says `Profile saved.` and warns that the Capitano was NOT told, and exits with code 3 (`--json`: `ok: true`, `captain: "failed"`, `captainTold: false`). Run the same import again with `--replace` to tell it; the Capitano finds the profile at its next wake anyway.
+- The Capitano could not be told (its composer held a text that is not provably ours, or its pane was busy): the profile is saved, the command says `Profile saved.` and warns that the Capitano was NOT told, and exits with code 3 (`--json`: `ok: true`, `captain: "failed"`, `captainTold: false`). Do not import again (`--replace` would move the profile just written to `.prev` and drop the older one): send the Capitano the message the warning prints (`jht team send capitano "…"`); it finds the profile at its next wake anyway.
 
 **The eight fields the team needs to start**
 

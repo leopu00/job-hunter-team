@@ -182,8 +182,8 @@ export const EXIT_CAPTAIN_NOT_TOLD = 3;
  * What the person is told after an import that WROTE the profile, and the exit code. The Capitano's own message can fail
  * (its composer held a text that was not provably ours, the pane was busy): the profile is saved and the Capitano finds
  * it at its next wake, but the team does not start now, and `ok:true` with a quiet line was read as a full success
- * (TEST 10, 27/10: «captain:failed» behind an ok). So that case is said, as a warning and with the way to try again, and
- * answers with its own exit code.
+ * (TEST 10, 27/10: «captain:failed» behind an ok). So that case is said, as a warning and with the way to try again
+ * (the message to the Capitano alone, never a second import), and answers with its own exit code.
  *
  * @param {object} result  the `ok:true` answer of importProfile
  * @returns {{ exitCode: number, json: object, out: string[], warn: string[] }}
@@ -202,14 +202,17 @@ export function importOutcome(result) {
     : [];
   if (result.captain === 'failed') {
     out.push('Profile saved.', ...kept);
+    // Not «import again»: --replace would move the profile just written to .prev and drop the one kept before.
+    const retry = `jht team send capitano "${PROFILE_READY_MESSAGE}"`;
     warn.push(
       `Warning: the Capitano was NOT told (${result.detail ?? 'delivery failed'}): the team does not start now.`,
-      'It finds the profile at its next wake; to tell it now, run the same import again with --replace.',
+      'The profile is saved, and the Capitano finds it at its next wake. To tell it now, send it the message again:',
+      `  ${retry}`,
     );
     out.push(...plan);
     return {
       exitCode: EXIT_CAPTAIN_NOT_TOLD,
-      json: { ...result, captainTold: false, retry: 'run the same import again with --replace' },
+      json: { ...result, captainTold: false, retry },
       out,
       warn,
     };
