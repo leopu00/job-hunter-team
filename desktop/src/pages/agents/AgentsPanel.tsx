@@ -28,6 +28,8 @@ import {
 import type { AgentIdentity, AgentQuestion, QuestionOption, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
+import { StartTeamAction } from "../../shell/StartTeamAction";
+import { useTeamOff } from "../../lib/team-off";
 import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
@@ -490,6 +492,7 @@ function rememberView(view: "list" | "lanes"): void {
 export default function AgentsPanel({ search }: PageProps) {
   const t = AGENTS_PANEL_TEXT[appLocale()];
   const readOnly = useExistingTeamReadOnly() !== null;
+  const teamOff = useTeamOff();
   const [list, setList] = useState<Outcome<PanelList> | null>(null);
   const [team, setTeam] = useState<TeamControlState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -652,6 +655,12 @@ export default function AgentsPanel({ search }: PageProps) {
           <strong>{t.failed}</strong>
           <p>{failureText(list.code)}</p>
           <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
+          {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it */}
+          {list.code === "agent_control_no_team" && !teamOff && (
+            <div className="mt-2">
+              <StartTeamAction onStarted={() => void read()} />
+            </div>
+          )}
         </div>
       )}
 
