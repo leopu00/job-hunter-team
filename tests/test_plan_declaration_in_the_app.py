@@ -118,3 +118,102 @@ def test_the_capitano_skill_tells_what_to_do_when_the_burst_refuses(lang: str):
     text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
     for needed in (f"{REGISTRY} list <provider>", f"{REGISTRY} set <provider>:<id>", "Codex reports:", "begin-burst"):
         assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
+
+
+# ── a burst that runs with no plan declared is told, not left silent ─────────────────────────
+
+def _state(home: Path, phase: str) -> None:
+    (home / "state").mkdir(exist_ok=True)
+    (home / "state" / "first-run.json").write_text(json.dumps({
+        "phase": phase, "created_at": "2026-10-26T07:29:00+00:00", "burst_started_at": "2026-10-26T07:29:00+00:00",
+        "completed_at": None, "completed_reason": None, "scored_at_start": 0,
+    }), encoding="utf-8")
+
+
+@pytest.mark.parametrize("command", ["status", "begin-burst"])
+@pytest.mark.parametrize("lang", LANGS)
+def test_a_burst_without_a_plan_says_so_and_how_to_declare_it(home: Path, command: str, lang: str):
+    _state(home, "burst")
+    done = _run("first_run.py", command, home=home, lang=lang)
+    out = json.loads(done.stdout)
+    assert done.returncode == 0 and out["phase"] == "burst", (done.returncode, out)
+    assert out["plan_missing"] is True
+    assert "plan_registry.py list <provider>" in out["hint"] and "plan_registry.py set <provider>:<id>" in out["hint"]
+    if command == "begin-burst":
+        assert out["note"] == "burst already in progress"  # the burst is not stopped by it
+
+
+@pytest.mark.parametrize("command", ["status", "begin-burst"])
+def test_a_burst_with_a_declared_plan_says_nothing_about_it(home: Path, command: str):
+    _state(home, "burst")
+    assert _run("plan_registry.py", "set", "codex:plus", home=home).returncode == 0
+    out = json.loads(_run("first_run.py", command, home=home).stdout)
+    assert "plan_missing" not in out and "hint" not in out
+
+
+@pytest.mark.parametrize("phase", ["awaiting_profile", "steady"])
+def test_the_other_phases_are_not_touched(home: Path, phase: str):
+    _state(home, phase)
+    assert "plan_missing" not in json.loads(_run("first_run.py", "status", home=home).stdout)
+
+
+def test_declaring_the_plan_ends_the_warning(home: Path):
+    _state(home, "burst")
+    assert json.loads(_run("first_run.py", "status", home=home).stdout)["plan_missing"] is True
+    assert _run("plan_registry.py", "set", "codex:pro", home=home).returncode == 0
+    assert "plan_missing" not in json.loads(_run("first_run.py", "status", home=home).stdout)
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_capitano_skill_reads_plan_missing_as_a_plan_to_declare(lang: str):
+    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
+    assert "plan_missing: true" in text and "first_run.py status" in text
+    assert text.count(f"{REGISTRY} set <provider>:<id>") >= 2  # begin-burst refusing, and a burst that lost its plan
+
+
+# ── a configuration that cannot be read is never replaced by the one key ───────────────────────
+
+BROKEN_CONFIGS = {
+    "not json": b"{ not json",
+    "empty file": b"",
+    "a list": b'["active_provider", "codex"]',
+    "a string": b'"codex"',
+    "not text": b'{"active_provider": "codex\xff"}',
+    "cut short": b'{"active_provider": "codex", "providers": {"openai": {"api_key": "x"',
+}
+
+
+@pytest.mark.parametrize("case", BROKEN_CONFIGS)
+@pytest.mark.parametrize("lang", ["en", "it"])
+def test_set_refuses_a_configuration_it_cannot_read_and_leaves_the_file_as_it_is(home: Path, case: str, lang: str):
+    path = home / "jht.config.json"
+    path.write_bytes(BROKEN_CONFIGS[case])
+    done = _run("plan_registry.py", "set", "codex:plus", home=home, lang=lang)
+    assert done.returncode == 1 and done.stdout == ""
+    assert str(path) in done.stderr, done.stderr
+    assert path.read_bytes() == BROKEN_CONFIGS[case]
+    assert not (home / "jht.config.json.tmp").exists()
+
+
+def test_set_refuses_a_configuration_that_is_not_a_file(home: Path):
+    path = home / "jht.config.json"
+    path.unlink()
+    path.mkdir()
+    done = _run("plan_registry.py", "set", "codex:plus", home=home)
+    assert done.returncode == 1 and str(path) in done.stderr
+    assert path.is_dir() and list(path.iterdir()) == []
+
+
+def test_set_still_creates_the_configuration_when_there_is_none_and_keeps_what_is_in_it(home: Path):
+    (home / "jht.config.json").unlink()
+    assert _run("plan_registry.py", "set", "codex:plus", home=home).returncode == 0
+    assert json.loads((home / "jht.config.json").read_text(encoding="utf-8")) == {"providers": {"openai": {"plan": "plus"}}}
+    (home / "jht.config.json").write_text(json.dumps({"active_provider": "codex", "keep": {"me": 1}}), encoding="utf-8")
+    assert _run("plan_registry.py", "set", "codex:pro", home=home).returncode == 0
+    assert json.loads((home / "jht.config.json").read_text(encoding="utf-8")) == {
+        "active_provider": "codex", "keep": {"me": 1}, "providers": {"openai": {"plan": "pro"}}}
+
+
+def test_reading_the_plan_still_treats_a_broken_configuration_as_no_plan(home: Path):
+    (home / "jht.config.json").write_bytes(b"{ not json")
+    assert _run("plan_registry.py", "get", home=home).stdout.strip() == "PLAN_MISSING"

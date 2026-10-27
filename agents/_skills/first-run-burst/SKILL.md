@@ -49,6 +49,13 @@ a suggestion, never your choice. When the user chooses, write exactly their
 choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` and run `begin-burst` again. If they
 do not know, stop and tell them; ask again at your next wake.
 
+**While the burst runs, the plan can be gone** (the configuration was reset, the provider changed, the file
+was edited). `first_run.py status` and `begin-burst` then carry `plan_missing: true` with a `hint`: do not
+read «burst already in progress» as «all is well». The burst goes on, and you declare the plan the same way:
+ask the user in the chat which plan they have (`python3 /app/shared/skills/plan_registry.py list <provider>`), suggest the one on the
+`Codex reports:` line without choosing for them, and write exactly their choice with
+`python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. The Assistente asks the same when the user talks to it.
+
 **2. Spawn the whole roster, staggered by ~60 seconds.**
 
 Not one worker every ten minutes: the whole formation, back to back, through

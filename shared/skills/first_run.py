@@ -157,6 +157,21 @@ def plan_info() -> dict:
     return mod.burst_roster()
 
 
+def plan_gap(state: dict) -> dict:
+    """A burst that runs with no subscription plan declared (the configuration was reset, the provider
+    changed, or the file was edited after the burst began): `plan_missing`, why, and how to declare it.
+
+    The burst only ever opens with a declared plan, and begin_burst answers «already in progress» for a
+    burst that runs, so without this nobody is told the plan is gone. Empty when the plan is declared, when
+    there is no burst, or when the registry cannot be read (an unreadable table is not a missing plan)."""
+    if state.get("phase") != PHASE_BURST:
+        return {}
+    info = plan_info()
+    if info.get("ok") or not info.get("hint"):
+        return {}
+    return {"plan_missing": True, "reason": info.get("reason", "plan not declared"), "hint": info["hint"]}
+
+
 def begin_burst() -> dict:
     """Profilo pronto → si apre la fase di burst. Idempotente.
 
@@ -168,7 +183,7 @@ def begin_burst() -> dict:
     if state["phase"] == PHASE_STEADY:
         return dict(state, note="first run has already been completed")
     if state["phase"] == PHASE_BURST:
-        return dict(state, note="burst already in progress")
+        return dict(state, note="burst already in progress", **plan_gap(state))
 
     info = plan_info()
     if not info.get("ok"):
@@ -251,7 +266,8 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     if args.command == "status":
-        out = status()
+        state = status()
+        out = dict(state, **plan_gap(state))
     elif args.command == "plan":
         out = plan_info()
     elif args.command == "begin-burst":

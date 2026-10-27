@@ -77,7 +77,7 @@ export const UPDATE_TEXT: Record<Locale, { message: string; download: string; di
   es: { message: "Ya está disponible Job Hunter Team {version}.", download: "Descargar", dismiss: "Ahora no", failed: "No se pudo abrir el navegador. Abre jobhunterteam.ai tú mismo." },
   fr: { message: "Job Hunter Team {version} est disponible.", download: "Télécharger", dismiss: "Pas maintenant", failed: "Le navigateur n’a pas pu s’ouvrir. Ouvre jobhunterteam.ai toi-même." },
   hu: { message: "Elérhető a Job Hunter Team {version} verziója.", download: "Letöltés", dismiss: "Most nem", failed: "A böngészőt nem sikerült megnyitni. Nyisd meg te a jobhunterteam.ai oldalt." },
-  pt: { message: "Já está disponível o Job Hunter Team {version}.", download: "Transferir", dismiss: "Agora não", failed: "Não foi possível abrir o navegador. Abre tu o jobhunterteam.ai." },
+  pt: { message: "Já está disponível o Job Hunter Team {version}.", download: "Descarregar", dismiss: "Agora não", failed: "Não foi possível abrir o navegador. Abre tu o jobhunterteam.ai." },
 };
 
 export const UPDATE_CHECK_TEXT: Record<Locale, { title: string; text: string; on: string; off: string }> = {
@@ -87,5 +87,5 @@ export const UPDATE_CHECK_TEXT: Record<Locale, { title: string; text: string; on
   es: { title: "Versiones nuevas", text: "Al iniciar, la app pregunta a GitHub cuál es la última versión pública. Ninguna cuenta ni dato tuyo; GitHub ve la dirección IP y la versión de la app. No descarga ni instala nada.", on: "Comprobar al iniciar", off: "No comprobar" },
   fr: { title: "Nouvelles versions", text: "Au démarrage, l’app demande à GitHub quelle est la dernière version publique. Aucun compte ni donnée de ta part ; GitHub voit l’adresse IP et la version de l’app. Rien n’est téléchargé ni installé.", on: "Vérifier au démarrage", off: "Ne pas vérifier" },
   hu: { title: "Új verziók", text: "Indításkor az app megkérdezi a GitHubtól, mi a legfrissebb nyilvános verzió. Nincs fiók vagy saját adatod; a GitHub látja az IP-címet és az app verzióját. Semmit nem tölt le és nem telepít.", on: "Ellenőrzés indításkor", off: "Ne ellenőrizzen" },
-  pt: { title: "Versões novas", text: "No arranque, a app pergunta ao GitHub qual é a última versão pública. Nenhuma conta nem dado teu; o GitHub vê o endereço IP e a versão da app. Não transfere nem instala nada.", on: "Verificar no arranque", off: "Não verificar" },
+  pt: { title: "Versões novas", text: "No arranque, a app pergunta ao GitHub qual é a última versão pública. Nenhuma conta nem dado teu; o GitHub vê o endereço IP e a versão da app. Não descarrega nem instala nada.", on: "Verificar no arranque", off: "Não verificar" },
 };

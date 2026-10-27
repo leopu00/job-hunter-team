@@ -188,7 +188,7 @@ const pt: BackupText = {
   cancelling: "A cancelar…",
   phasePlan: "A preparar a cópia",
   phaseSnapshot: "Cópia coerente da base de dados",
-  phaseCopy: "A transferir os ficheiros",
+  phaseCopy: "A copiar os ficheiros",
   phaseVerify: "A verificar o ficheiro",
   saved: { one: "Guardado: {count} ficheiro, {size} (cópia comprimida).", other: "Guardado: {count} ficheiros, {size} (cópia comprimida)." },
   inspectTitle: "Verificar uma cópia",

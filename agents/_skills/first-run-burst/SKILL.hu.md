@@ -47,6 +47,13 @@ döntésed. Amikor a felhasználó választ, pontosan az ő választását írd 
 paranccsal, és futtasd újra a `begin-burst`-öt. Ha nem tudja, állj meg és mondd meg neki; a következő
 ébredésnél kérdezd meg újra.
 
+**Amíg a burst fut, a csomag eltűnhet** (a konfigurációt visszaállították, a szolgáltató megváltozott, a
+fájlt szerkesztették). A `first_run.py status` és a `begin-burst` ilyenkor `plan_missing: true`-t és egy `hint`-et
+ad: ne olvasd a „burst already in progress" üzenetet úgy, hogy „minden rendben". A burst megy tovább, a csomagot
+pedig ugyanúgy add meg: kérdezd meg a felhasználót a chatben, melyik csomagja van (`python3 /app/shared/skills/plan_registry.py list <provider>`),
+a `Codex reports:` sorban szereplőt javasold, anélkül hogy helyette választanál, és pontosan az ő választását
+írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal. Az Asszisztens is megkérdezi, amikor a felhasználó beszél vele.
+
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n

@@ -140,6 +140,25 @@ function clientMessageId(): string {
 
 /** How long «connecting» may last before the bar says so and offers the retry (never a silent wait). */
 const CONNECTING_SLOW_MS = 8_000;
+// An embedded pane opens a connection that was closed by itself. The first time the team has just come
+// up, so the first attempt can meet it not ready yet: it asks again, a little later each time, before
+// it tells the person anything.
+const REOPEN_TRIES = 3;
+const REOPEN_WAIT_MS = 1_500;
+// What asking again cannot change, or makes worse (a server that counts failed sign-ins or turns the
+// computer away): these are told at once, with their Retry. Anything else is a team not ready yet.
+const REOPEN_NO_RETRY = new Set([
+  "ssh_auth_failed",
+  "ssh_rate_limited",
+  "host_key_changed",
+  "host_key_mismatch",
+  "ssh_client_missing",
+  "own_vps_key_changed",
+  "own_vps_claim_refused",
+  "account_scope_mismatch",
+  "read_only_link",
+  "existing_team_runtime_target_changed",
+]);
 
 function StatusBar({
   status,
@@ -303,21 +322,35 @@ export default function DirectChatScreen({
     };
 
     void (async () => {
+      // Set when the opening below failed for good: the status the native side gives afterwards is
+      // «disconnected» (nothing is open), and it must not cover the reason on the bar.
+      let openingFailed = false;
       try {
         let snapshot = await client.status();
         // An embedded pane may open after the connection was closed (leaving the Messages page
         // closes it): the saved host is enough to open it again, with no question to the person.
-        if (embedded && active && snapshot.state === "disconnected") {
+        for (let attempt = 1; embedded && active && snapshot.state === "disconnected"; attempt += 1) {
           setStatus({ state: "connecting" });
-          snapshot = await client.reconnect();
+          try {
+            snapshot = await client.reconnect();
+            break;
+          } catch (error) {
+            const code = errorCode(error);
+            if (attempt >= REOPEN_TRIES || (code !== null && REOPEN_NO_RETRY.has(code))) throw error;
+            await new Promise((resolve) => setTimeout(resolve, REOPEN_WAIT_MS * attempt));
+            if (!active) return;
+            // Someone else may have opened it meanwhile (another tab of the same chat).
+            snapshot = await client.status();
+          }
         }
         if (active) setStatus(snapshot);
       } catch (error) {
+        openingFailed = true;
         if (active) setStatus({ state: "error", code: errorCode(error) ?? "status_failed" });
       }
       try {
         const subscribed = await client.subscribe({ onEvent });
-        if (active) setStatus(subscribed);
+        if (active && !(openingFailed && subscribed.state === "disconnected")) setStatus(subscribed);
       } catch (error) {
         if (active) setStatus({ state: "error", code: errorCode(error) ?? "subscribe_failed" });
       }
