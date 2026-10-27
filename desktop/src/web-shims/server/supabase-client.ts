@@ -1,5 +1,5 @@
 import { existingTeamView } from "../../lib/existing-team-readonly";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
 import { inertSupabase } from "./inert-supabase";
 
 /**
@@ -7,5 +7,5 @@ import { inertSupabase } from "./inert-supabase";
  * client, with the user's session. Typed `any` like the web's own.
  */
 export function createClient(): any {
-  return existingTeamView() ? inertSupabase : supabase;
+  return existingTeamView() ? inertSupabase : cloudClient();
 }

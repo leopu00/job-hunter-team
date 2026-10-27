@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { PAGE_READ_DEADLINE_MS } from "../lib/read-deadline";
 import { refresh } from "./router";
 import ServerPage from "./server-page";
 
@@ -53,5 +54,31 @@ describe("ServerPage", () => {
     render(<ServerPage render={() => Promise.reject(new Error("offline"))} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Non riesco a leggere questa pagina");
     spy.mockRestore();
+  });
+});
+
+describe("ServerPage, a page that never answers", () => {
+  it("says it could not be read after the deadline, with a button that reads it again", async () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const page = vi
+        .fn()
+        .mockReturnValueOnce(new Promise<React.ReactNode>(() => undefined))
+        .mockResolvedValueOnce(<p>second try</p>);
+      render(<ServerPage render={page} fallback={<p>skeleton</p>} />);
+      await act(async () => undefined);
+      expect(screen.getByText("skeleton")).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(PAGE_READ_DEADLINE_MS); });
+      expect(screen.queryByText("skeleton")).not.toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("Non riesco a leggere questa pagina");
+      await act(async () => { screen.getByRole("button", { name: "Aggiorna" }).click(); });
+      await act(async () => undefined);
+      expect(screen.getByText("second try")).toBeInTheDocument();
+      expect(page).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

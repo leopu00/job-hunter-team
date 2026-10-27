@@ -240,7 +240,9 @@ describe("Dashboard on an existing team read only", () => {
     });
 
     reply = () => ({ ok: true, data: syntheticStats() });
-    await user.click(screen.getByRole("button", { name: "Aggiorna" }));
+    // the page's own button, next to its message (the strip's «Aggiorna» is the other one)
+    const pageAlert = screen.getAllByRole("alert").find((alert) => alert.textContent?.includes("(positions_unavailable)"))!;
+    await user.click(within(pageAlert.parentElement as HTMLElement).getByRole("button", { name: "Aggiorna" }));
     expect(await screen.findByText("12 posizioni totali · 1 escluse · 11 attive")).toBeInTheDocument();
   });
 
