@@ -106,7 +106,9 @@ be copied with credential values into shell history, issues or logs.
 
 The team sizes its first run on your subscription plan, so declare the one you pay for:
 `jht providers plan` lists the plans of the active provider and `jht providers plan <id>`
-writes yours. Choose by what you pay for your ChatGPT subscription:
+writes yours. Without an id it only reads, and only while the team is running: with the container
+stopped it says the container is not active and does not start it (`jht up` does). Choose by what
+you pay for your ChatGPT subscription:
 
 | Id        | Plan    | List price     |
 |-----------|---------|----------------|
