@@ -35,7 +35,7 @@ name: <str>                 # mandatory
 target_role: <str>          # mandatory
 location: <str>             # mandatory
 experience_years: <int>     # mandatory (>= 0)
-has_degree: <true|false>    # mandatory
+has_degree: <true|false>    # optional: absent = not declared; if there, a boolean
 seniority_target: <str>     # mandatory (junior|mid|senior|…)
 email: <str>                # optional
 timezone: <str>             # optional

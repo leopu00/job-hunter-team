@@ -83,14 +83,14 @@ Der Parser des Frontends ist strikt. Fünf Regeln, die jedes aufgetretene Proble
 
 ## Mindestschema (das Minimum)
 
-Das Frontend hat einen Fallback, der "Vai alla dashboard" freischaltet, wenn diese Felder vorhanden + nicht leer sind (damit der Benutzer fortfahren kann, noch bevor Sie `ready.flag` erstellen). Füllen Sie alle aus:
+Das Frontend hat einen Fallback, der "Vai alla dashboard" freischaltet, wenn die acht Mindestfelder vorhanden + nicht leer sind: Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, mindestens 2 primäre Fähigkeiten, mindestens 1 Sprache (damit der Benutzer fortfahren kann, noch bevor Sie `ready.flag` erstellen). Füllen Sie zuerst diese aus. Der Rest des Schemas unten ist empfohlen, Erfahrungen und Abschlüsse eingeschlossen: Fragen Sie direkt nach der Freischaltung danach, und erfinden Sie nie etwas, nur um das Schema zu füllen.
 
 ```yaml
 name: <Vorname Nachname>
 target_role: <Zielrolle>
 location: <Stadt oder Gebiet>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # optional: fehlt = nicht angegeben; wenn vorhanden, boolesch
 seniority_target: <junior|mid|senior>
 industry: <Branche>
 
@@ -110,13 +110,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 Eintrag, jeder mit company/role/years/summary
+  experience:                 # empfohlen, nicht Pflicht: wenn vorhanden, jeder Eintrag mit company/role/years/summary
     - company: ...
       role: ...
       years: ...              # z.B. "Mär 2022 - laufend" — für tatsächliche Dauer verwendet
       summary: |-
         ...
-  education:                  # >= 1 Eintrag, jeder mit institution/degree/year
+  education:                  # empfohlen, nicht Pflicht: wenn vorhanden, jeder Eintrag mit institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -228,15 +228,16 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 ### Das Flag NICHT erstellen, wenn
 
 - die letzte Profilvalidierung `INVALID_PROFILE` ausgegeben hat (auch nur einmal nach dem letzten Write);
-- fehlen: Name, Zielrolle, Stadt, Erfahrungsjahre, E-Mail;
-- fehlen: Fähigkeiten (≥2), Sprachen (≥1), Erfahrungen (≥1), Abschlüsse (≥1).
+- fehlen (die acht Mindestfelder): Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, Fähigkeiten (≥2), Sprachen (≥1).
+
+Erfahrungen und Abschlüsse sind empfohlen: Sie blockieren das Flag nicht. Frag direkt danach, wenn du es erstellt hast.
 
 ## 🎓 `has_degree` — aus der Ausbildung, nie als Platzhalter
 
-`has_degree` ist für den Validator Pflicht, aber es ist eine Tatsache über den Kandidaten, kein Standardwert:
+`has_degree` ist optional: fehlt es, heißt das «nicht angegeben», nie «nein». Es ist eine Tatsache über den Kandidaten, kein Standardwert; du darfst danach fragen (es gehört zu den optionalen Feldern), aber es blockiert weder das Profil noch die Freigabe:
 - `true`, wenn `education` (Lebenslauf oder Chat) einen Abschluss enthält: Bachelor, Master, Promotion oder Gleichwertiges.
 - `false` erst, nachdem der Nutzer dir gesagt hat, dass er keinen hat.
-- Solange du noch fragst, schreib es nicht. Ist der einzige `ERROR:` der Validierung `has_degree`, dann IST deine nächste Nachricht diese Frage: stell sie, warte auf die Antwort, dann schreib das Feld. Nie `false`, um den Validator zum Schweigen zu bringen: Der Scorer vergleicht es mit den Abschlussanforderungen jeder Stelle.
+- Wenn du es nicht weißt, lass den Schlüssel weg: kein `false` aus Vorsicht, kein leerer Wert, kein Text (`"ja"`): Steht der Schlüssel da, muss er `true` oder `false` sein. Nie `false`, um eine Lücke zu füllen: Der Scorer vergleicht es mit den Abschlussanforderungen jeder Stelle.
 
 ## ⚠️ Anti-Halluzination — die kritische Regel
 
