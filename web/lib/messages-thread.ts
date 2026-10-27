@@ -69,7 +69,7 @@ export const THREAD_T: Record<string, Record<string, string>> = {
     es: "El mensaje está guardado, pero no se pudo avisar al equipo. Comprueba que esté conectado e inténtalo de nuevo.",
     de: "Die Nachricht ist gespeichert, aber das Team konnte nicht benachrichtigt werden. Prüfe, ob es online ist, und versuche es erneut.",
     fr: "Le message est enregistré, mais l'équipe n'a pas pu être prévenue. Vérifiez qu'elle est en ligne et réessayez.",
-    pt: "A mensagem foi salva, mas a equipe não pôde ser avisada. Verifique se ela está online e tente novamente.",
+    pt: "A mensagem foi guardada, mas a equipa não pôde ser avisada. Verifica se está online e tenta novamente.",
   },
   see_position: {
     it: "→ vedi posizione",
@@ -87,7 +87,7 @@ export const THREAD_T: Record<string, Record<string, string>> = {
     es: "Tú",
     de: "Du",
     fr: "Vous",
-    pt: "Você",
+    pt: "Tu",
   },
 };
 

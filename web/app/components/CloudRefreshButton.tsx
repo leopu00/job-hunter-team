@@ -255,7 +255,7 @@ const T: Record<
     hourAgo: (n) => (n === 1 ? "há 1 hora" : `há ${n} horas`),
     daysAgo: (n) => (n === 1 ? "há 1 dia" : `há ${n} dias`),
     updated: (rel) => `Atualizado ${rel}`,
-    networkError: "Verifique sua conexão e tente novamente.",
+    networkError: "Verifica a tua ligação e tenta novamente.",
     syncing: "Sync…",
     syncNow: "Sync now",
     title: "Pedir ao VPS uma atualização dos dados agora",
@@ -265,17 +265,17 @@ const T: Record<
     quarantined: (n) =>
       `${n} registo${n === 1 ? " local precisa" : "s locais precisam"} de atenção. Os outros dados continuam a sincronizar.`,
     vpsSlow:
-      "Nenhuma confirmação chegou em três minutos. Verifique se a equipe está online e tente novamente.",
+      "Nenhuma confirmação chegou em três minutos. Verifica se a equipa está online e tenta novamente.",
     syncTimedOut:
-      "A sincronização demorou demais e foi interrompida. Tente novamente.",
+      "A sincronização demorou demais e foi interrompida. Tenta novamente.",
     syncPushPartial:
-      "Parte dos dados não foi confirmada. O resto chegou e a equipe repete as linhas restantes.",
+      "Parte dos dados não foi confirmada. O resto chegou e a equipa repete as linhas restantes.",
     syncPushFailed:
-      "O envio parou antes do fim. Os dados já confirmados permanecem; a equipe tenta de novo sozinha.",
+      "O envio parou antes do fim. Os dados já confirmados permanecem; a equipa tenta de novo sozinha.",
     syncAckFailed:
-      "Os dados podem ter chegado, mas falta a confirmação. Aguarde alguns segundos e tente novamente.",
+      "Os dados podem ter chegado, mas falta a confirmação. Aguarda alguns segundos e tenta novamente.",
     syncSuperseded:
-      "Uma solicitação mais recente substituiu esta sincronização. Acompanhe a aba mais recente.",
+      "Um pedido mais recente substituiu esta sincronização. Acompanha o separador mais recente.",
   },
 };
 

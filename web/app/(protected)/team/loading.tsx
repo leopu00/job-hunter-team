@@ -10,7 +10,7 @@ const T: Record<Locale, string> = {
   fr: "Chargement de l'Équipe",
   de: "Team wird geladen",
   hu: "Csapat betöltése",
-  pt: "Carregando Equipe",
+  pt: "A carregar Equipa",
 };
 
 export default function Loading() {

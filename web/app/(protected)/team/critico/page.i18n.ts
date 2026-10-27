@@ -34,7 +34,7 @@ export const T = {
     es: "Equipo",
     de: "Team",
     fr: "Équipe",
-    pt: "Equipe",
+    pt: "Equipa",
   },
   critic: {
     it: "Critico",
@@ -97,7 +97,7 @@ export const T = {
     es: "En espera en cola",
     de: "Warteschlange",
     fr: "En file d'attente",
-    pt: "Aguardando na fila",
+    pt: "À espera na fila",
   },
   needsWork: {
     it: "Needs Work",
@@ -169,7 +169,7 @@ export const T = {
     es: "Cargando…",
     de: "Wird geladen…",
     fr: "Chargement…",
-    pt: "Carregando…",
+    pt: "A carregar…",
   },
   queueEmpty: {
     it: "Coda vuota — nessun CV in attesa di review.",

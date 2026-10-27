@@ -34,7 +34,7 @@ export const T = {
     es: "Notificaciones del navegador mientras el sitio está abierto: mensajes del equipo y posiciones que cumplen tus reglas.",
     de: "Browser-Benachrichtigungen, solange die Seite offen ist: Team-Nachrichten und Stellen, die deinen Regeln entsprechen.",
     fr: "Notifications du navigateur tant que le site est ouvert : messages de l'équipe et postes correspondant à vos règles.",
-    pt: "Notificações do navegador enquanto o site está aberto: mensagens da equipe e vagas que atendem às suas regras.",
+    pt: "Notificações do navegador enquanto o site está aberto: mensagens da equipa e vagas que cumprem as tuas regras.",
   },
   cloud_only: {
     it: "Questa sezione riguarda solo il sito cloud. In locale le notifiche vivono nell'app desktop.",
@@ -43,7 +43,7 @@ export const T = {
     es: "Esta sección solo aplica al sitio cloud. En local, las notificaciones viven en la app de escritorio.",
     de: "Dieser Bereich gilt nur für die Cloud-Seite. Lokal leben Benachrichtigungen in der Desktop-App.",
     fr: "Cette section ne concerne que le site cloud. En local, les notifications vivent dans l'app de bureau.",
-    pt: "Esta seção aplica-se apenas ao site na nuvem. Localmente, as notificações vivem no app desktop.",
+    pt: "Esta secção aplica-se apenas ao site na nuvem. Localmente, as notificações vivem no app desktop.",
   },
   master: {
     it: "Abilita le notifiche del browser",
@@ -106,7 +106,7 @@ export const T = {
     es: "Una notificación cuando un agente te escribe.",
     de: "Eine Benachrichtigung, wenn dir ein Agent schreibt.",
     fr: "Une notification quand un agent vous écrit.",
-    pt: "Uma notificação quando um agente escreve para você.",
+    pt: "Uma notificação quando um agente te escreve.",
   },
   only_hidden: {
     it: "Solo quando la scheda non è attiva",
@@ -124,7 +124,7 @@ export const T = {
     es: "Si ya estás mirando el sitio, sin notificación.",
     de: "Wenn du die Seite gerade ansiehst, keine Benachrichtigung.",
     fr: "Si vous regardez déjà le site, pas de notification.",
-    pt: "Se você já está olhando o site, sem notificação.",
+    pt: "Se já estás a ver o site, sem notificação.",
   },
   rules_title: {
     it: "Regole sulle posizioni",
@@ -358,7 +358,7 @@ export const T = {
     es: "Guardar",
     de: "Speichern",
     fr: "Enregistrer",
-    pt: "Salvar",
+    pt: "Guardar",
   },
   saved: {
     it: "Salvato",
@@ -367,7 +367,7 @@ export const T = {
     es: "Guardado",
     de: "Gespeichert",
     fr: "Enregistré",
-    pt: "Salvo",
+    pt: "Guardado",
   },
   save_error: {
     it: "Salvataggio fallito",
@@ -376,7 +376,7 @@ export const T = {
     es: "Error al guardar",
     de: "Speichern fehlgeschlagen",
     fr: "Échec de l'enregistrement",
-    pt: "Falha ao salvar",
+    pt: "Falha ao guardar",
   },
   login_required: {
     it: "Accedi per configurare le notifiche.",

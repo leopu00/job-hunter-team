@@ -97,7 +97,7 @@ export const T = {
     es: "guardar",
     de: "speichern",
     fr: "enregistrer",
-    pt: "salvar",
+    pt: "guardar",
   },
   loading: {
     it: "Caricamento…",
@@ -106,7 +106,7 @@ export const T = {
     es: "Cargando…",
     de: "Laden…",
     fr: "Chargement…",
-    pt: "Carregando…",
+    pt: "A carregar…",
   },
   no_secrets: {
     it: "Nessun secret",
@@ -124,7 +124,7 @@ export const T = {
     es: "Guarda aquí tus claves API y tokens cifrados.",
     de: "Speichere hier deine verschlüsselten API-Keys und Tokens.",
     fr: "Enregistrez ici vos clés API et tokens chiffrés.",
-    pt: "Salve aqui suas chaves API e tokens criptografados.",
+    pt: "Guarda aqui as tuas chaves API e tokens cifrados.",
   },
   reveal_show: {
     it: "Mostra valore",

@@ -97,7 +97,7 @@ export const T = {
     es: "Restaurado en {dir} ({n} archivos)",
     de: "Wiederhergestellt nach {dir} ({n} Dateien)",
     fr: "Restauré dans {dir} ({n} fichiers)",
-    pt: "Restaurado em {dir} ({n} arquivos)",
+    pt: "Restaurado em {dir} ({n} ficheiros)",
   },
   err_restore: {
     it: "Backup NON ripristinato:",
@@ -142,7 +142,7 @@ export const T = {
     es: "Cargando...",
     de: "Wird geladen...",
     fr: "Chargement...",
-    pt: "Carregando...",
+    pt: "A carregar...",
   },
   empty: {
     it: "Nessun backup trovato.",
@@ -162,6 +162,6 @@ export const T = {
     es: "esta página no puede hacerlo en esta versión. Usa la copia de la aplicación de escritorio, o «jht backup create» en una terminal.",
     de: "diese Seite kann das in dieser Version nicht. Nutze das Backup der Desktop-App oder „jht backup create“ im Terminal.",
     fr: "cette page ne peut pas le faire dans cette version. Utilisez la sauvegarde de l'application de bureau, ou « jht backup create » dans un terminal.",
-    pt: "esta página não consegue fazer isso nesta versão. Use o backup do aplicativo de desktop, ou «jht backup create» no terminal.",
+    pt: "esta página não consegue fazer isso nesta versão. Usa o backup da app de desktop, ou «jht backup create» no terminal.",
   },
 } satisfies Dictionary;

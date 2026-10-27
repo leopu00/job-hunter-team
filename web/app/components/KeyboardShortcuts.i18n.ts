@@ -88,7 +88,7 @@ export const T = {
     es: "Ir al Equipo",
     de: "Zum Team",
     fr: "Aller à l'équipe",
-    pt: "Ir para a Equipe",
+    pt: "Ir para a Equipa",
   },
   sc_goto_profile: {
     it: "Vai a Profilo",

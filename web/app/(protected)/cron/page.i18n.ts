@@ -43,7 +43,7 @@ export const T = {
     es: "Cargando…",
     de: "Wird geladen…",
     fr: "Chargement…",
-    pt: "Carregando…",
+    pt: "A carregar…",
   },
   subtitle: {
     it: "{a} attivi · {p} in pausa",

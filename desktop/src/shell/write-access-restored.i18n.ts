@@ -58,7 +58,7 @@ export const WRITE_ACCESS_RESTORED_TEXT: Record<Locale, WriteAccessRestoredText>
   pt: {
     title: "Acesso de escrita ativo em {where}",
     fallbackWhere: "a equipa ligada",
-    note: "Confirmou-o você: continua ativo após reiniciar durante 30 dias no máximo, até passar a só de leitura, desligar a equipa ou a equipa mudar de versão.",
+    note: "Foste tu a confirmá-lo: continua ativo após reiniciar durante 30 dias no máximo, até passar a só de leitura, desligar a equipa ou a equipa mudar de versão.",
     switchToReadOnly: "Passar a só de leitura",
     switching: "A passar a só de leitura…",
     removalFailed: "Esta sessão é só de leitura, mas não foi possível remover o acesso guardado: pode voltar a ficar ativo no próximo arranque.",

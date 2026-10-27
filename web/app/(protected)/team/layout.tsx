@@ -35,9 +35,9 @@ const META: Record<string, { title: string; description: string }> = {
       "L'activité de votre équipe d'agents IA : qui a travaillé, combien et quand — graphiques, détail par agent et journal complet des actions",
   },
   pt: {
-    title: "Equipe — Job Hunter",
+    title: "Equipa — Job Hunter",
     description:
-      "A atividade da sua equipe de agentes de IA: quem trabalhou, quanto e quando — gráficos, detalhamento por agente e registro completo de ações",
+      "A atividade da sua equipa de agentes de IA: quem trabalhou, quanto e quando — gráficos, detalhamento por agente e registo completo de ações",
   },
 };
 

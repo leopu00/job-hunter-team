@@ -497,7 +497,7 @@ export const T: Record<
     commentDone: "Concluído",
     voiceStart: "Ditar o comentário",
     voiceStop: "Parar o ditado",
-    voiceListening: "Ouvindo…",
+    voiceListening: "A ouvir…",
     voiceError: "Ditado não disponível neste dispositivo",
     voiceDenied:
       "Permissão do microfone negada — verifique as configurações do navegador",
@@ -505,7 +505,7 @@ export const T: Record<
     modeReviewed: "Avaliadas",
     reviewedEmpty: "Ainda não há vagas avaliadas.",
     emptyTitle: "Baralho concluído!",
-    emptySubtitle: "Você triou todas as vagas na fila.",
+    emptySubtitle: "Já triaste todas as vagas na fila.",
     allPositions: "Todas as vagas",
     details: "Detalhes",
     remote: { full_remote: "Remoto", hybrid: "Híbrido", onsite: "Presencial" },

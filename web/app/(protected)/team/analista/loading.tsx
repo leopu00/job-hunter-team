@@ -11,7 +11,7 @@ const T: Record<Locale, string> = {
   fr: "Chargement de l'Analyste",
   de: "Analyst wird geladen",
   hu: "Elemző betöltése",
-  pt: "Carregando Analista",
+  pt: "A carregar Analista",
 };
 
 export default function AgentLoading() {

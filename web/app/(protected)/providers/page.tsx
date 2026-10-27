@@ -198,7 +198,7 @@ const T: Record<
   },
   pt: {
     confirmUpdate: (count, sessions) =>
-      `O provedor está ativo. Update exige parar ${count} sessões (${sessions}). Continuar?`,
+      `O fornecedor está ativo. Update exige parar ${count} sessões (${sessions}). Continuar?`,
     updatedTo: (ver) => `atualizado para ${ver}`,
     notUpdated: "CLI NÃO atualizada:",
     configured: "configurado",
@@ -206,22 +206,22 @@ const T: Record<
     updateBadge: "update",
     auth: "Autenticação",
     modelsInUse: "Modelos em uso agora",
-    noModelsInUse: "nenhum agente ligado com este provedor",
+    noModelsInUse: "nenhum agente ligado com este fornecedor",
     apiKeyWarnPre: "Adicione a API Key em",
     apiKeyWarnPost: "ou na variável de ambiente correspondente.",
     checkUpdate: "Check / Update",
     update: "Update",
-    stopTeamUpdate: "Parar equipe + update",
+    stopTeamUpdate: "Parar equipa + update",
     cancel: "Cancelar",
     activeBadge: "ativo",
-    breadcrumb: "Provedor",
-    title: "Provedores LLM",
+    breadcrumb: "Fornecedor",
+    title: "Fornecedores LLM",
     subtitle: (avail, total, active) =>
-      `${avail}/${total} configurados · provedor ativo: ${active}`,
-    loading: "Carregando…",
+      `${avail}/${total} configurados · fornecedor ativo: ${active}`,
+    loading: "A carregar…",
     configNotFound: "jht.config.json não encontrado",
     refresh: "atualizar",
-    loadingProviders: "Carregando provedores…",
+    loadingProviders: "A carregar fornecedores…",
   },
 };
 

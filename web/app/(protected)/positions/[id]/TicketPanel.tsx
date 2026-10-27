@@ -234,7 +234,7 @@ const T: Record<
     placeholder:
       "Escreve o que queres que a equipa faça nesta vaga (ex. verificar o salário real, analisar a cultura da empresa, resumir os requisitos…)",
     cancel: "Cancelar",
-    sending: "Enviando…",
+    sending: "A enviar…",
     sendRequest: "Enviar pedido",
     writeRequest: "Escreve o pedido",
     networkError: "Erro de rede",

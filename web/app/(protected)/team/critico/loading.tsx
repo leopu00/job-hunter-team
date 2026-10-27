@@ -11,7 +11,7 @@ const T: Record<Locale, string> = {
   fr: "Chargement du Critique",
   de: "Kritiker wird geladen",
   hu: "Kritikus betöltése",
-  pt: "Carregando Crítico",
+  pt: "A carregar Crítico",
 };
 
 export default function AgentLoading() {

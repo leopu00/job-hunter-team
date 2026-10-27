@@ -10,7 +10,7 @@ const T: Record<string, Record<string, string>> = {
     es: "Cargando perfil",
     de: "Profil wird geladen",
     fr: "Chargement du profil",
-    pt: "Carregando perfil",
+    pt: "A carregar perfil",
   },
 };
 

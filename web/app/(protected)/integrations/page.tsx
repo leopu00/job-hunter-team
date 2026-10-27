@@ -119,7 +119,7 @@ const T: Record<
     connected: (n) => `${n} conectadas`,
     configured: (n) => `${n} configuradas`,
     absent: (n) => `${n} ausentes`,
-    loading: "Carregando…",
+    loading: "A carregar…",
   },
 };
 

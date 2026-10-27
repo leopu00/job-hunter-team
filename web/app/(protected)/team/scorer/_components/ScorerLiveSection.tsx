@@ -199,7 +199,7 @@ const T: Record<
     rt: { now: "agora", m: (n) => `há ${n}m`, h: (n) => `há ${n}h` },
     monthShort: "short",
     noRealtime: "Dados em tempo real indisponíveis.",
-    loadingLive: "Carregando dados ao vivo…",
+    loadingLive: "A carregar dados ao vivo…",
     live: "Live",
     offline: "Offline",
     inQueue: "na fila",

@@ -97,7 +97,7 @@ const T: Record<
   },
   pt: {
     dashboard: "Painel",
-    team: "Equipe",
+    team: "Equipa",
     log: "Registo",
     titleActivity: "Atividade da equipa",
     titleLog: "Registo de atividade",

@@ -367,7 +367,7 @@ export const T = {
     es: "Notificaciones del navegador: mensajes del equipo y reglas de posiciones",
     de: "Browser-Benachrichtigungen: Team-Nachrichten und Stellen-Regeln",
     fr: "Notifications du navigateur : messages de l'équipe et règles sur les postes",
-    pt: "Notificações do navegador: mensagens da equipe e regras de vagas",
+    pt: "Notificações do navegador: mensagens da equipa e regras de vagas",
   },
   cloud_sync: {
     it: "Sincronizzazione cloud",
@@ -385,7 +385,7 @@ export const T = {
     es: "Gestiona los tokens de sincronización de tus dispositivos",
     de: "Verwalte die Sync-Tokens deiner Geräte",
     fr: "Gérez les jetons de synchronisation de vos appareils",
-    pt: "Gerencie os tokens de sincronização dos seus dispositivos",
+    pt: "Gere os tokens de sincronização dos teus dispositivos",
   },
   open: {
     it: "Apri →",

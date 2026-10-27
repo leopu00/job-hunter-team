@@ -19,7 +19,7 @@ export const T = {
     es: "Horarios y modelos del equipo",
     de: "Arbeitszeiten und Modelle des Teams",
     fr: "Horaires et modèles de l'équipe",
-    pt: "Horários e modelos da equipe",
+    pt: "Horários e modelos da equipa",
   },
   subtitle: {
     it: "Quello che scegli qui lo chiedi al tuo computer: lo applica appena è acceso e collegato, e qui vedi quando l'ha fatto.",
@@ -55,7 +55,7 @@ export const T = {
     es: "No puedo leer los ajustes del equipo. Recarga la página en un momento.",
     de: "Die Team-Einstellungen lassen sich nicht lesen. Lade die Seite gleich neu.",
     fr: "Impossible de lire les paramètres de l'équipe. Recharge la page dans un instant.",
-    pt: "Não consigo ler as configurações da equipe. Recarrega a página daqui a pouco.",
+    pt: "Não consigo ler as configurações da equipa. Recarrega a página daqui a pouco.",
   },
   status_none: {
     it: "Dal sito non hai ancora chiesto niente: vale quello impostato sul computer.",
@@ -100,7 +100,7 @@ export const T = {
     es: "Para cambiar los ajustes del equipo hace falta un acceso reciente: cierra sesión, vuelve a entrar y reinténtalo.",
     de: "Zum Ändern der Team-Einstellungen ist eine frische Anmeldung nötig: Melde dich ab, wieder an und versuche es erneut.",
     fr: "Pour modifier les paramètres de l'équipe, il faut une connexion récente : déconnecte-toi, reconnecte-toi et réessaie.",
-    pt: "Para mudar as configurações da equipe é preciso um acesso recente: sai, volta a entrar e tenta de novo.",
+    pt: "Para mudar as configurações da equipa é preciso um acesso recente: sai, volta a entrar e tenta de novo.",
   },
   err_unauthenticated: {
     it: "La sessione è scaduta: accedi di nuovo e riprova.",
@@ -163,7 +163,7 @@ export const T = {
     es: "Se aplica a los agentes en Codex: sol es el más capaz, terra el equilibrado, luna el más ligero. «Predeterminado» deja la elección del equipo. Los roles que no tocas aquí quedan como los configuraste en el ordenador.",
     de: "Gilt für Agenten auf Codex: sol ist das stärkste, terra das ausgewogene, luna das leichteste. «Standard» lässt die Wahl des Teams. Rollen, die du hier nicht änderst, bleiben so, wie du sie auf dem Computer eingestellt hast.",
     fr: "S'applique aux agents sur Codex : sol est le plus capable, terra l'équilibré, luna le plus léger. «Par défaut» laisse le choix de l'équipe. Les rôles que tu ne touches pas ici restent tels que tu les as réglés sur l'ordinateur.",
-    pt: "Aplica-se aos agentes no Codex: sol é o mais capaz, terra o equilibrado, luna o mais leve. «Predefinido» deixa a escolha da equipe. As funções que não tocas aqui ficam como as configuraste no computador.",
+    pt: "Aplica-se aos agentes no Codex: sol é o mais capaz, terra o equilibrado, luna o mais leve. «Predefinido» deixa a escolha da equipa. As funções que não tocas aqui ficam como as configuraste no computador.",
   },
   col_role: {
     it: "Ruolo",

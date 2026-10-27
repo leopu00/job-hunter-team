@@ -33,7 +33,7 @@ const META: Record<string, { title: string; description: string }> = {
       "Horaires de travail et modèle de chaque rôle, appliqués par ton ordinateur",
   },
   pt: {
-    title: "Horários e modelos da equipe — Job Hunter",
+    title: "Horários e modelos da equipa — Job Hunter",
     description:
       "Horário de trabalho e modelo de cada função, aplicados pelo teu computador",
   },
