@@ -25,6 +25,12 @@ cmd="$1"; shift
 case "$cmd" in
   has-session|list-panes|show-options) exit 0 ;;
   capture-pane)
+    # A text that is not ours and goes away by itself (the message another sender is about to submit, a suggestion
+    # drawn late): it stays for `foreign_until` looks at the screen, then the box is empty.
+    if [ -f "$S/foreign_until" ]; then
+      n=$(( $(cat "$S/foreign_looks" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/foreign_looks"
+      if [ "$n" -gt "$(cat "$S/foreign_until")" ]; then : > "$S/composer"; rm -f "$S/foreign_until"; fi
+    fi
     # A paste the TUI keeps `late_captures` looks at the screen before drawing (the number of times the transport
     # LOOKED, not seconds: a loaded runner stretches the seconds and not the looks), or until `release` exists.
     if [ -f "$S/held" ]; then
@@ -161,6 +167,9 @@ def box(tmp_path):
             **env,
         }
         full.pop("TMUX", None)
+        for name in ("JHT_TMUX_SEND_FROM", "JHT_TMUX_FOREIGN_WAIT"):
+            if name not in env:
+                full.pop(name, None)
         return subprocess.run([str(TRANSPORT), session, message], capture_output=True, text=True, timeout=120, env=full)
 
     def calls():
@@ -255,6 +264,51 @@ def test_a_text_that_never_shows_is_typed_once_and_nothing_is_pressed(box):
     assert done.returncode == 3, "the one 'maybe dead' signal pacing-bridge counts on keeps its code"
     assert len(box.typed()) == 1
     assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
+
+
+# -- a text that is not ours may be passing: the person waiting on the command gets a short wait ------------------------
+
+def _captures(box):
+    return [line for line in box.calls() if line.startswith("capture-pane")]
+
+
+def test_a_person_waiting_on_the_command_gets_a_short_wait_for_a_text_that_goes_away(box):
+    """TEST 10 (27/10): `jht profile import` answered captain:failed (rc=130) because the Capitano's composer held a
+    text that was not provably ours at that second; the same import 100 s later was delivered. A text that goes away
+    by itself is waited for, and then the message is delivered whole: pasted once, one Enter, nothing over the text."""
+    box.put("composer", "the message another sender of ours is about to submit")
+    box.put("foreign_until", "3")
+    done = box.run(JHT_TMUX_SEND_FROM="user-console")
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+    assert len(_captures(box)) > 3, "it looked again while the text was there"
+
+
+def test_a_text_that_stays_is_still_rc130_after_the_wait_and_nothing_is_pasted_or_pressed(box):
+    box.put("composer", "a person's own draft")
+    done = box.run(JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT="2")
+    assert done.returncode == 130 and "NOT delivered" in done.stderr, done.stderr
+    assert box.typed() == [] and box.keys("Enter") == []
+    assert len(_captures(box)) >= 3, "it waited, looking again, before giving up"
+    row = _pending_input(box)[-1]
+    assert row["reason"] == "composer_foreign" and row["unsent"].endswith(MESSAGE[-40:])
+
+
+def test_the_bridges_and_nudges_keep_the_immediate_130(box):
+    """Their own loops retry: a wait here would hold the loop of a dozen agents."""
+    box.put("composer", "a text that is not ours")
+    box.put("foreign_until", "3")
+    done = box.run()
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and len(_captures(box)) < 5
+
+
+@pytest.mark.parametrize("wait", ["0", "abc", "-3", "1.5"])
+def test_the_wait_can_be_switched_off_and_a_bad_value_is_no_wait(box, wait):
+    box.put("composer", "a text that is not ours")
+    done = box.run(JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT=wait)
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and len(_captures(box)) < 5
 
 
 def _busy_codex(box, **draw):

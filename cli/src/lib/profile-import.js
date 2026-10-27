@@ -174,3 +174,51 @@ export function importProfile({
     ...(told.detail ? { detail: told.detail } : {}),
   };
 }
+
+/** Exit code of an import that wrote the profile but could not tell the Capitano: not the full success of 0. */
+export const EXIT_CAPTAIN_NOT_TOLD = 3;
+
+/**
+ * What the person is told after an import that WROTE the profile, and the exit code. The Capitano's own message can fail
+ * (its composer held a text that was not provably ours, the pane was busy): the profile is saved and the Capitano finds
+ * it at its next wake, but the team does not start now, and `ok:true` with a quiet line was read as a full success
+ * (TEST 10, 27/10: «captain:failed» behind an ok). So that case is said, as a warning and with the way to try again, and
+ * answers with its own exit code.
+ *
+ * @param {object} result  the `ok:true` answer of importProfile
+ * @returns {{ exitCode: number, json: object, out: string[], warn: string[] }}
+ */
+export function importOutcome(result) {
+  const out = [];
+  const warn = [];
+  const kept = result.previousKept
+    ? [`The profile it replaced was kept, private, as ${result.previousKept} next to it.`]
+    : [];
+  const plan = result.plan === 'missing'
+    ? [
+        'No subscription plan is declared, and the Capitano does not open the first run without one.',
+        'See the plans and declare yours with: jht providers plan   (then: jht providers plan <id>)',
+      ]
+    : [];
+  if (result.captain === 'failed') {
+    out.push('Profile saved.', ...kept);
+    warn.push(
+      `Warning: the Capitano was NOT told (${result.detail ?? 'delivery failed'}): the team does not start now.`,
+      'It finds the profile at its next wake; to tell it now, run the same import again with --replace.',
+    );
+    out.push(...plan);
+    return {
+      exitCode: EXIT_CAPTAIN_NOT_TOLD,
+      json: { ...result, captainTold: false, retry: 'run the same import again with --replace' },
+      out,
+      warn,
+    };
+  }
+  out.push('Profile imported and ready.', ...kept);
+  if (result.captain === 'sent') out.push('The Capitano has been told: the team starts.');
+  else if (result.captain === 'team_off') {
+    out.push('The team is not running: the Capitano will start it from this profile at its next wake. Start the team with: jht team start');
+  }
+  out.push(...plan);
+  return { exitCode: 0, json: { ...result, captainTold: result.captain === 'sent' }, out, warn };
+}
