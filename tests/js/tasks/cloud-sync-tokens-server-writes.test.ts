@@ -46,6 +46,12 @@ describe("the writes to cloud_sync_tokens are the server's", () => {
     return [...text.matchAll(WRITE)].map((m) => ({ file: relative(ROOT, file), verb: m[1], text }));
   });
 
+  it("the census sees a write however the chain is broken over lines (so a browser delete would be found)", () => {
+    const sample = 'await supabase\n  .from( "cloud_sync_tokens" )\n  .delete()\n  .eq("id", id);';
+    expect([...sample.matchAll(WRITE)].map((m) => m[1])).toEqual(["delete"]);
+    expect([...'client.from("cloud_sync_tokens").select("id")'.matchAll(WRITE)]).toEqual([]);
+  });
+
   it("finds the writers it knows (the census is not empty)", () => {
     expect(new Set(writes.map((w) => w.file))).toEqual(new Set(SERVER_WRITERS));
   });
@@ -56,10 +62,11 @@ describe("the writes to cloud_sync_tokens are the server's", () => {
 
   it.each(SERVER_WRITERS)("%s writes with the service role", (file) => {
     const text = readFileSync(join(ROOT, file), "utf8");
-    expect(text).toMatch(/createAdminClient/);
-    // the browser-session client of the route is never the one the token write is made with
+    // the admin client made here, or the one verifyBearerToken hands over (`verified.data.admin`, made in lib/cloud-sync/auth.ts)
+    expect(text).toMatch(/createAdminClient|\.data\.admin/);
+    // the browser-session client of a route is never the one a token write is made with
     for (const m of text.matchAll(/(\w+)\s*\.from\(\s*["']cloud_sync_tokens["']\s*\)\s*\.\s*(insert|update)/g)) {
-      expect(m[1], `${file}: ${m[0]}`).not.toBe("supabase");
+      expect(m[1], `${file}: ${m[0]}`).toBe("admin");
     }
   });
 
