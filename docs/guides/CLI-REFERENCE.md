@@ -313,10 +313,9 @@ Experience and education entries are **recommended**, not required. To pass the 
 file also needs `has_degree` (`true` or `false`), the skills under `skills.primary`, and the fields
 above at the top level of the file (`seniority_target` is not read from `positioning` by the schema).
 
-**Where the email goes.** Put it at the top level, as `email:` (or as `contacts: {email: …}`): that is
-where applications read it. The check also finds it in `candidate.contacts.email` (the shape the
-Assistant writes), in `personal.email` and in `positioning.contacts.email`, but a profile that keeps it
-only in one of those passes the import and an application may still ask you for the email.
+**Where the email goes.** Put it at the top level, as `email:` (or as `contacts: {email: …}`). The check
+also finds it in `candidate.contacts.email` (the shape the Assistant writes), in `personal.email` and
+in `positioning.contacts.email`.
 
 **A minimal profile that passes:**
 

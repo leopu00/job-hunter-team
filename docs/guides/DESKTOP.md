@@ -177,11 +177,12 @@ remembers it on this computer, and at every start where it is on a fixed row say
 is on for** your user and the server, with the button **Switch to read only**. The permission comes
 back only if the check at start passes (the saved server fingerprint, the team's identity and the same
 saved team). It ends when you switch to read only, when you unlink the team, when the team changes
-version, or after 30 days: then you confirm again. If the app cannot take the saved access away when
+version, when you sign out or switch to another account, or after 30 days: then you confirm again. If the app cannot take the saved access away when
 you switch to read only, the row says so and the access may come back at the next start.
 
-After you update the app, a team on a VPS opens read only again: confirm it once more with
-**Connect with write access**. **Try again** in the connection page keeps the write access you have.
+If you update the app from a version that did not keep the permission, the team opens read only
+once after the update: confirm it with **Connect with write access**, and from then on it comes back
+by itself for the 30 days. **Try again** in the connection page keeps the write access you have.
 
 ## 🚫 What the desktop cannot do, and why
 

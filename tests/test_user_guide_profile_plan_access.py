@@ -174,3 +174,15 @@ def test_the_restart_survival_is_native_only_where_the_record_is_kept():
     assert "On a Mac the write access you confirmed survives a restart" in flat(DESKTOP)
     section_text = section(DESKTOP, "## 🔗 A team on a VPS: read only and write access")
     assert "Windows" not in section_text
+
+
+def test_leaving_the_account_ends_the_write_access_and_the_guide_says_so():
+    scope = text("desktop/src-tauri/src/account_scope.rs")
+    assert "Leaving an account (signing out, or switching to another one) takes its permission to write away" in scope
+    assert "when you sign out or switch to another account" in flat(DESKTOP)
+
+
+def test_the_guide_does_not_say_every_update_asks_again():
+    # The record is keyed by account and candidate: an update does not touch it.
+    assert "opens read only again" not in flat(DESKTOP)
+    assert "from a version that did not keep the permission" in flat(DESKTOP)
