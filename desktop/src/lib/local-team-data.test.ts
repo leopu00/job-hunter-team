@@ -57,6 +57,7 @@ describe("the pages that show the team of this computer", () => {
   it("is written in the seven languages", () => {
     for (const [locale, copy] of Object.entries(LOCAL_TEAM_DATA_TEXT)) {
       expect(copy.readOnly.length, locale).toBeGreaterThan(30);
+      expect(copy.teamPage.length, locale).toBeGreaterThan(60);
     }
     expect(Object.keys(LOCAL_TEAM_DATA_TEXT).sort()).toEqual(["de", "en", "es", "fr", "hu", "it", "pt"]);
   });

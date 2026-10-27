@@ -90,3 +90,15 @@ describe("Dashboard of a local profile", () => {
     expect(native.invoke.mock.calls.filter(([command]) => command === "onboarding_resume_team_start")).toHaveLength(1);
   });
 });
+
+describe("Team page of a local profile", () => {
+  it("says the status, the standing orders and the activity are not shown yet, and reads nothing from the cloud", async () => {
+    navigate("/team", { replace: true });
+    render(<Shell />);
+    const note = await screen.findByTestId("team-local-profile");
+    expect(note).toHaveTextContent("non mostra ancora lo stato, le direttive e l’attività degli agenti");
+    expect(note).toHaveTextContent("Agenti");
+    expect(fake.current!.calls).toEqual([]);
+    expect(apiCalls.filter((call) => call.includes("/api/team"))).toEqual([]);
+  });
+});
