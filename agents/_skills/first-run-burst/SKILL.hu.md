@@ -54,6 +54,8 @@ pedig ugyanúgy add meg: kérdezd meg a felhasználót a chatben, melyik csomagj
 a `Codex reports:` sorban szereplőt javasold, anélkül hogy helyette választanál, és pontosan az ő választását
 írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal. Az Asszisztens is megkérdezi, amikor a felhasználó beszél vele.
 
+**A csomagot csak egyszer kérdezd meg.** Amíg a csomagra vonatkozó kérdésedre nincs válasz a chatben, ne tedd fel újra, átfogalmazva sem: egy újabb „profil kész" üzenet, egy újabb ébredés vagy a `plan_missing` a következő `status`-ban nem változtat azon, amire vársz. Előbb nézd meg a chatet: ha már kérdeztél, és a felhasználó még nem válaszolt, várj. Csak azután kérdezz újra, hogy a felhasználó azt válaszolta: „nem tudom".
+
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n

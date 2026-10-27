@@ -57,6 +57,8 @@ se déclare de la même façon : demande à l'utilisateur dans le chat quelle fo
 (`python3 /app/shared/skills/plan_registry.py list <provider>`), suggère celle de la ligne `Codex reports:` sans choisir à sa place et écris exactement
 son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. L'Assistant le demande aussi quand l'utilisateur lui parle.
 
+**La formule se demande une seule fois.** Tant que ta question sur la formule reste sans réponse dans le chat, ne la repose pas, même reformulée : un nouveau message « profil prêt », un autre réveil ou `plan_missing` dans le prochain `status` ne changent pas ce que tu attends. Regarde d'abord le chat : si tu as déjà demandé et que l'utilisateur n'a pas répondu, attends. Ne redemande qu'après une réponse « je ne sais pas ».
+
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
