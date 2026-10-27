@@ -10,7 +10,7 @@ import { EnrichmentPolicy } from "../src/db/enrichment-policy.ts";
 import { createDbTools } from "../src/db/tools.ts";
 import type { ToolContext, ToolHandler } from "../src/tools/registry.ts";
 import { crossSecondBoundary } from "./helpers/clock.ts";
-import { pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
+import { argparseChoicesUnquoted, pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
 const context = {} as ToolContext;
@@ -157,7 +157,7 @@ function twins(agent = "scout-1", python: string | null = skills) {
 function expectSame(ours: { content: string }, py: { stdout: string; stderr: string; status: number }) {
   if (py.status === 2 && py.stderr) {
     // argparse: the error line is the same; the usage above it is shorter (argv.ts).
-    expect(ours.content.split("\n").at(-2)).toBe(py.stderr.trim().split("\n").at(-1));
+    expect(argparseChoicesUnquoted(ours.content.split("\n").at(-2) ?? "")).toBe(argparseChoicesUnquoted(py.stderr.trim().split("\n").at(-1) ?? ""));
     return;
   }
   const text = `${py.stdout}${py.stderr}`.trimEnd();
