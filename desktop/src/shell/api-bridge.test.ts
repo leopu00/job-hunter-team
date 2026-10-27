@@ -78,21 +78,23 @@ describe("shellApi, the language the person picks", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("refuses what the positions pages would change in the team of this computer, and only that", async () => {
+  it("refuses every non-GET /api call of a local profile except the listed ones, and still reads", async () => {
     setLocalTeamData("local:abc");
     try {
       const next = vi.fn(notInDesktop);
       const api = shellApi(next);
-      for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-        const refused = await api("/api/positions/7/user-note", { method });
-        expect(refused.status, method).toBe(403);
-        expect(await refused.json()).toEqual({ error: "read_only" });
+      for (const path of ["/api/positions/7/user-note", "/api/team-directives", "/api/anything-new/3"]) {
+        for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+          const refused = await api(path, { method });
+          expect(refused.status, `${method} ${path}`).toBe(403);
+          expect(await refused.json()).toEqual({ error: "read_only" });
+        }
       }
       expect(next).not.toHaveBeenCalled();
-      // the reads of the positions pages, and the routes of the other pages, keep going where they went
+      // a read goes where it went, and the language cookie is the one write that stays
       await api("/api/positions/facets", { method: "GET" });
-      await api("/api/settings/anything", { method: "POST" });
-      expect(next).toHaveBeenCalledTimes(2);
+      expect(next).toHaveBeenCalledOnce();
+      expect((await api("/api/i18n", post("es"))).status).toBe(200);
     } finally {
       setLocalTeamData(null);
     }

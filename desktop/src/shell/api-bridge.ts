@@ -49,6 +49,14 @@ const READ_ONLY_PATHS = new Set([
 ]);
 
 /**
+ * What a non-GET /api call may still do while the pages show the team of this computer (a profile with no
+ * cloud account), and why. Each entry needs its reason here and a line in local-team-writes.test.ts.
+ */
+export const LOCAL_TEAM_NON_GET_ALLOWED: Readonly<Record<string, string>> = {
+  "/api/i18n": "the window's language cookie: it writes nothing to the team, the VPS or the cloud (answered above, before the gate)",
+};
+
+/**
  * web/app/api/i18n/route.ts POST, as the web serves it: a language the app has
  * is kept in the NEXT_LOCALE cookie, anything else is a 400. It is answered
  * before the read-only gate because it writes nothing to the team, the VPS or
@@ -84,9 +92,10 @@ export function shellApi(next: ApiFetch): ApiFetch {
     if (existingTeamReadOnly() && path && !(method === "GET" && READ_ONLY_PATHS.has(path))) {
       return json({ error: "read_only" }, 403);
     }
-    // The team of this computer is only read: what the positions pages would change in it (a judgement, a note,
-    // a request) is refused the same way. The other pages of a local profile keep the routes they have.
-    if (localTeamData() && path?.startsWith("/api/positions/") && method !== "GET") {
+    // The team of this computer is only read, and a local profile has no cloud account to write to: every
+    // /api route that is not a GET is refused, except the ones LOCAL_TEAM_NON_GET_ALLOWED lists with its reason.
+    // A route added tomorrow is refused with no change here (local-team-writes.test.ts walks them all).
+    if (localTeamData() && path && method !== "GET" && !Object.hasOwn(LOCAL_TEAM_NON_GET_ALLOWED, path)) {
       return json({ error: "read_only" }, 403);
     }
     if (path === "/api/i18n" && method === "GET") {
