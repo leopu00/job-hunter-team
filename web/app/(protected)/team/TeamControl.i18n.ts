@@ -203,6 +203,15 @@ export const T = {
     hu: "A munkamenet lejárt. Jelentkezz be újra.",
     pt: "A sessão terminou. Inicia sessão de novo.",
   },
+  err_action_disabled: {
+    it: "Dal sito non è ancora disponibile: usa l'app.",
+    en: "Not available from the website yet: use the app.",
+    es: "Todavía no está disponible desde el sitio web: usa la aplicación.",
+    fr: "Pas encore disponible depuis le site : utilise l'application.",
+    de: "Über die Website noch nicht verfügbar: Nutze die App.",
+    hu: "A weboldalról még nem érhető el: használd az alkalmazást.",
+    pt: "Ainda não está disponível no site: usa a aplicação.",
+  },
   err_generic: {
     it: "L'azione non è andata a buon fine. Riprova.",
     en: "The action did not go through. Try again.",
