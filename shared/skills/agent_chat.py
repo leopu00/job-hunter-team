@@ -362,7 +362,7 @@ _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
 # Codex at rest puts the model and folder under the composer (the «·» line); in the middle of a turn that line
 # becomes «tab to queue message ... 80% context left», with no «·». Without these two phrases a composer in a
 # working Codex is not a composer at all: the text pasted into it is «another draft» and nothing presses Enter.
-_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|\btab to queue message\b|\b\d{1,3}% context left\b)")
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|\s{6,}\d{1,3}% context left\s*$)")
 _CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
 _NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
 
