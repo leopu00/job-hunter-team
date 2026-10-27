@@ -39,6 +39,8 @@ import argparse
 import importlib.util
 import json
 import os
+import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,6 +174,35 @@ def plan_gap(state: dict) -> dict:
     return {"plan_missing": True, "reason": info.get("reason", "plan not declared"), "hint": info["hint"]}
 
 
+def _live_sessions() -> Optional[list[str]]:
+    """Names (lower case) of the tmux sessions running, [] when there is no tmux server, None when it cannot
+    be asked (no tmux, no answer)."""
+    try:
+        done = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"],
+                              capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode == 0:
+        return [line.strip().lower() for line in done.stdout.splitlines() if line.strip()]
+    return [] if "no server running" in done.stderr or "no sessions" in done.stderr else None
+
+
+def roster_gap(state: dict) -> dict:
+    """In a burst, which roles of the roster have a session and which do not: after a restart of the
+    containers every session is gone, and the Capitano must start the MISSING ones, not the whole roster over
+    again (a worker that is up is not spawned over, whatever it is doing). `roster_alive` and `roster_missing`
+    count per role; `roster_check: "unavailable"` when tmux cannot be asked, and then nothing is assumed."""
+    roster = state.get("roster")
+    if state.get("phase") != PHASE_BURST or not isinstance(roster, dict):
+        return {}
+    names = _live_sessions()
+    if names is None:
+        return {"roster_check": "unavailable"}
+    alive = {role: sum(1 for n in names if re.fullmatch(rf"{re.escape(role)}-\d+", n)) for role in roster}
+    return {"roster_alive": alive,
+            "roster_missing": {role: max(0, int(want) - alive[role]) for role, want in roster.items()}}
+
+
 def begin_burst() -> dict:
     """Profilo pronto → si apre la fase di burst. Idempotente.
 
@@ -183,7 +214,7 @@ def begin_burst() -> dict:
     if state["phase"] == PHASE_STEADY:
         return dict(state, note="first run has already been completed")
     if state["phase"] == PHASE_BURST:
-        return dict(state, note="burst already in progress", **plan_gap(state))
+        return dict(state, note="burst already in progress", **plan_gap(state), **roster_gap(state))
 
     info = plan_info()
     if not info.get("ok"):
@@ -267,7 +298,7 @@ def main(argv: list[str]) -> int:
 
     if args.command == "status":
         state = status()
-        out = dict(state, **plan_gap(state))
+        out = dict(state, **plan_gap(state), **roster_gap(state))
     elif args.command == "plan":
         out = plan_info()
     elif args.command == "begin-burst":

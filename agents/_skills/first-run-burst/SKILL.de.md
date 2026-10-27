@@ -62,6 +62,8 @@ seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über
 `start-agent.sh` (C-03). Das ist die bewusste Ausnahme von C-02.
 
+**Nach einem Neustart nur starten, was fehlt.** Wachst du in einem bereits offenen Burst auf (die Container wurden neu gestartet, also sind alle Sessions weg), tragen `first_run.py status` und `begin-burst` `roster_alive` und `roster_missing` pro Rolle. Starte nur die Rollen in `roster_missing`, genauso gestaffelt, und lass die in Ruhe, die schon laufen, was auch immer sie tun: Eine beschäftigte Session lebt (C-08 bis). Starte nicht die ganze Aufstellung neu und briefe keinen Worker erneut, der schon arbeitet. Ist `roster_check` `unavailable`, sieh dir die tmux-Sessions selbst an, bevor du irgendetwas startest.
+
 **3. Warte nicht auf volle Warteschlangen, um den Downstream zu starten.**
 
 Spawne den Analista, sobald **eine** Position existiert, den Scorer, sobald **eine** Position checked
