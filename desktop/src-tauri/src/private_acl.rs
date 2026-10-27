@@ -209,6 +209,38 @@ pub(crate) fn owned_by_current_user(path: &Path) -> bool {
     matches
 }
 
+/// Test diagnostic: the SID of the owner of `path`, as `owned_by_current_user` reads it.
+#[cfg(test)]
+pub(crate) fn owner_sid_for_tests(path: &Path) -> Result<String, &'static str> {
+    let target = wide(path.as_os_str())?;
+    let mut owner: PSID = ptr::null_mut();
+    let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
+    // SAFETY: as in `owned_by_current_user`: the owner points into the descriptor, converted before it is released.
+    let result = unsafe {
+        GetNamedSecurityInfoW(
+            target.as_ptr(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &mut owner,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            &mut descriptor,
+        )
+    };
+    if result != ERROR_SUCCESS || owner.is_null() || descriptor.is_null() {
+        if !descriptor.is_null() {
+            // SAFETY: the descriptor came from GetNamedSecurityInfoW.
+            unsafe { LocalFree(descriptor) };
+        }
+        return Err("owner_unreadable");
+    }
+    let sid = sid_string(owner);
+    // SAFETY: allocated by GetNamedSecurityInfoW.
+    unsafe { LocalFree(descriptor) };
+    sid
+}
+
 /// Test fixture: a DACL that opens `path` to Everyone, Users and
 /// Authenticated Users, inherited by what is created inside. `protected`
 /// also cuts the entries inherited from the parent.

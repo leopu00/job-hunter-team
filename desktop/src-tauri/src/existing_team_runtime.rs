@@ -4205,11 +4205,30 @@ mod tests {
                 let made = Self { root, scope };
                 fs::create_dir_all(made.account()).expect("account folder");
                 private_acl::protect_dir(&made.account()).expect("private account folder");
+                made.explain_folder();
                 made
             }
 
             fn account(&self) -> PathBuf {
                 account_dir(&self.root, &self.scope)
+            }
+
+            /// Diagnostic: the three checks of `full_link_folder_is_private`, one by one, with the SIDs
+            /// (the owner, the current user, the SIDs the ACL allows). A folder the app has just made
+            /// private must pass all three; if not, the message says which one did not and for whom.
+            fn explain_folder(&self) {
+                let folder = self.account();
+                let meta = fs::symlink_metadata(&folder).expect("folder metadata");
+                let user = private_acl::current_user_sid().expect("current user");
+                let owner = private_acl::owner_sid_for_tests(&folder);
+                let acl = private_acl::read_acl(&folder);
+                let report = format!(
+                    "folder {folder:?}: reparse={} owned_by_current_user={} grants_only_owner={:?} | current user {user} | owner {owner:?} | acl {acl:?}",
+                    is_reparse_point(&meta),
+                    private_acl::owned_by_current_user(&folder),
+                    acl.as_ref().map(|acl| private_acl::grants_only_owner(acl, &user)),
+                );
+                assert!(full_link_folder_is_private(&folder, &meta), "the folder is not private: {report}");
             }
 
             fn record(&self) -> PathBuf {
@@ -4349,7 +4368,16 @@ mod tests {
             revoke_full_link();
             let _ = fs::remove_file(root.account().join("second-name"));
             place(&root, &good);
-            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, now), FullLinkRestore::Restored);
+            let user = private_acl::current_user_sid().unwrap();
+            let acl = private_acl::read_acl(&root.record());
+            assert_eq!(
+                restore_full_link_at(&root.root, &root.scope, &target, now),
+                FullLinkRestore::Restored,
+                "record: owned_by_current_user={} is_owner_only={:?} | current user {user} | owner {:?} | acl {acl:?}",
+                private_acl::owned_by_current_user(&root.record()),
+                acl.as_ref().map(|acl| private_acl::is_owner_only(acl, &user)),
+                private_acl::owner_sid_for_tests(&root.record()),
+            );
             revoke_full_link();
         }
 
