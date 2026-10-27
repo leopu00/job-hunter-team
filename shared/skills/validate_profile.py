@@ -259,24 +259,47 @@ def _skill_count(skills) -> int:
     return 0
 
 
+def _has_email(profile: dict, cand: dict, pers: dict) -> bool:
+    """The email, wherever the schema or the app accepts it.
+
+    shared/config/profile-schema.ts takes `email` and `contacts.email` at the root;
+    web/lib/profile-completion.ts (hasEmail) reads the root `email` and
+    `positioning.contacts.email`; the Assistant has always written
+    `candidate.contacts.email` or `personal.email`. A profile with the email in any of
+    them is a profile with an email.
+    """
+    def contacts_email(holder) -> bool:
+        node = holder.get("contacts") if isinstance(holder, dict) else None
+        return isinstance(node, dict) and _is_str(node.get("email"))
+
+    return (
+        _is_str(profile.get("email"))
+        or contacts_email(profile)
+        or contacts_email(cand)
+        or _is_str(pers.get("email"))
+        or contacts_email(profile.get("positioning"))
+    )
+
+
 def team_minimum_missing(profile) -> list:
     """What the team needs before it can start, by the names the app uses.
 
     The floor the Assistant checks before it creates ready.flag (skill profile-yaml) and
     the app's required fields (web/lib/profile-completion.ts, PROFILE_REQUIREMENTS) both
-    read these places of the YAML: root, `candidate`, `personal`. Reading the same ones
+    read these places of the YAML: root, `candidate`, `personal` (and, for the email,
+    `positioning.contacts`). Reading the same ones
     here keeps a profile that passes this check from being "not ready" for the app.
     """
     if not isinstance(profile, dict):
         return ["name"]
     cand = profile.get("candidate") if isinstance(profile.get("candidate"), dict) else {}
     pers = profile.get("personal") if isinstance(profile.get("personal"), dict) else {}
-    contacts = cand.get("contacts") if isinstance(cand.get("contacts"), dict) else {}
+    has_email = _has_email(profile, cand, pers)
     roles = profile.get("target_roles")
     ey = profile.get("experience_years")
     checks = (
         ("name", _is_str(cand.get("name")) or _is_str(pers.get("name")) or _is_str(profile.get("name"))),
-        ("email", _is_str(contacts.get("email")) or _is_str(pers.get("email"))),
+        ("email", has_email),
         ("target_role", _is_str(cand.get("target_role")) or _is_str(profile.get("target_role"))
             or (isinstance(roles, list) and bool(roles) and _is_str(roles[0]))),
         ("location", _is_str(profile.get("location")) or _is_str(pers.get("location"))),
