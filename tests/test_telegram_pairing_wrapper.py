@@ -361,6 +361,9 @@ def _read_pty_until(fd: int, wanted: bytes, timeout: float = 5) -> bytes:
     return output
 
 
+LOADED_MACHINE_WAIT = 60
+
+
 def _restore_default_sigint() -> None:
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -452,10 +455,12 @@ def test_interactive_pairing_restores_echo_after_ctrl_c(tmp_path: Path) -> None:
         start_new_session=True,
     )
     try:
-        _read_pty_until(master, b"Token del bot")
+        # What is proved is the state of the terminal after Ctrl-C, not how fast a loaded machine starts bash or
+        # lets it exit: the waits are long enough for the slowest runner, and a script that really hangs still fails.
+        _read_pty_until(master, b"Token del bot", timeout=LOADED_MACHINE_WAIT)
         assert not termios.tcgetattr(slave)[3] & termios.ECHO
         os.killpg(process.pid, signal.SIGINT)
-        process.wait(timeout=5)
+        process.wait(timeout=LOADED_MACHINE_WAIT)
         assert termios.tcgetattr(master)[3] & termios.ECHO
     finally:
         os.close(master)
