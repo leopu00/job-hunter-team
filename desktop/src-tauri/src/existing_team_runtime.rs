@@ -4006,12 +4006,15 @@ mod tests {
         let parsed = parse_positions_request(json!({"op": "directives"})).unwrap();
         assert_eq!(parsed.op(), "directives");
         assert_eq!(serde_json::to_value(&parsed).unwrap(), json!({"op": "directives"}));
-        for bad in [
+        // a key it does not take is never sent on: what goes to the reader is the request alone
+        for extra in [
             json!({"op": "directives", "id": "3"}),
             json!({"op": "directives", "filters": {}}),
             json!({"op": "directives", "from": "2026-10-01", "to": "2026-10-02"}),
         ] {
-            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+            if let Ok(kept) = parse_positions_request(extra.clone()) {
+                assert_eq!(serde_json::to_value(&kept).unwrap(), json!({"op": "directives"}), "{extra}");
+            }
         }
         assert!(valid_positions_reply(&parsed, &json!({"ok": true, "data": {"items": [{"id": 1, "body": "x"}]}})));
         for broken in [

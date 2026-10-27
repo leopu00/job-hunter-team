@@ -5,6 +5,8 @@ import { setLocalTeamData } from "../../lib/local-team-data";
 import { installApiBridge, notInDesktop, shellApi, type ApiFetch } from "../../shell/api-bridge";
 import { navigate } from "../../shell/router";
 import Shell from "../../shell/Shell";
+import { teamApi } from "../team/team-api";
+import { localTeamApi } from "../team/local-team-api";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import { syntheticStats } from "../../test-support/existing-team-stats-fixture";
 import { describeError } from "../../lib/error-catalog";
@@ -43,7 +45,7 @@ beforeEach(() => {
     apiCalls.push(`${(init?.method ?? "GET").toUpperCase()} ${String(input)}`);
     return next(input, init);
   };
-  restoreBridge = installApiBridge(record(shellApi(notInDesktop)));
+  restoreBridge = installApiBridge(record(shellApi(localTeamApi(teamApi(notInDesktop)))));
   setLocalTeamData("local:synthetic");
 });
 afterEach(() => {
@@ -92,7 +94,7 @@ describe("Dashboard of a local profile", () => {
 });
 
 describe("Team page of a local profile", () => {
-  it("shows the activity counted in the team's database, says the status and the standing orders are not shown yet, and asks the cloud for nothing", async () => {
+  it("shows the activity, the standing orders and the status of the team on this computer, says it only reads, and asks the cloud for nothing", async () => {
     const today = new Date().toISOString().slice(0, 10);
     reply = (_command, request) =>
       request.op === "directives"
@@ -111,11 +113,11 @@ describe("Team page of a local profile", () => {
     navigate("/team", { replace: true });
     render(<Shell />);
     const note = await screen.findByTestId("team-local-profile");
-    expect(note).toHaveTextContent("lo stato della squadra è un dato del cloud");
+    expect(note).toHaveTextContent("attività, ordini permanenti e stato vengono dalla squadra di questo computer");
     expect(await screen.findByText("Synthetic role five")).toBeInTheDocument();
     // the board of standing orders, read from the team's database, with no control that writes
     expect(await screen.findByText("Candidati solo in remoto")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/./, { selector: "textarea" })).toBeNull();
+    expect(document.querySelector("textarea")).toBeNull();
     const asked = native.invoke.mock.calls
       .filter(([command]) => command === "existing_team_positions_read")
       .map(([, args]) => args.request as { op: string; from?: string; to?: string });
@@ -123,6 +125,9 @@ describe("Team page of a local profile", () => {
     expect(activity?.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(activity?.to).toBe(today);
     expect(fake.current!.calls).toEqual([]);
-    expect(apiCalls.filter((call) => /\/api\/team(-state|-directives|\/status)/.test(call))).toEqual([]);
+    // the page reads the status and the board through the local routes; nothing it asks is a write
+    const teamCalls = apiCalls.filter((call) => /\/api\/team/.test(call));
+    expect(teamCalls.length).toBeGreaterThan(0);
+    expect(teamCalls.every((call) => call.startsWith("GET "))).toBe(true);
   });
 });

@@ -7,9 +7,7 @@ import * as teamDirectives from "@/app/api/team-directives/route";
 import * as emergencyStop from "./emergency-stop";
 import * as teamSend from "@/app/api/team/send/route";
 import * as teamStatus from "@/app/api/team/status/route";
-import { apiPath, json, webRoutes, type ApiFetch } from "../../shell/api-bridge";
-import { localTeamData } from "../../lib/local-team-data";
-import { readDesktopVpsDirectives } from "../../lib/existing-team-positions";
+import { webRoutes, type ApiFetch } from "../../shell/api-bridge";
 
 /**
  * The /team pages' routes, run as the web routes themselves. They take the
@@ -27,7 +25,7 @@ import { readDesktopVpsDirectives } from "../../lib/existing-team-positions";
  *        keystroke into an agent's tmux belongs to the machine that runs it
  */
 export function teamApi(next: ApiFetch): ApiFetch {
-  const routes = webRoutes(
+  return webRoutes(
     {
       "/api/scout/activity": scoutActivity,
       "/api/scorer/activity": scorerActivity,
@@ -41,16 +39,4 @@ export function teamApi(next: ApiFetch): ApiFetch {
     },
     next,
   );
-  // A profile with no cloud account reads the board from the team's own database, as the web's local branch does
-  // (`{ directives, source: "local" }`); anything else of the route, and every other route, goes where it went.
-  return async (input, init) => {
-    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    if (localTeamData() && method === "GET" && apiPath(input) === "/api/team-directives") {
-      const read = await readDesktopVpsDirectives();
-      return read.source === "vps"
-        ? json({ directives: read.data.items, source: "local" })
-        : json({ error: read.source === "unavailable" ? read.code : "not_in_desktop" }, 503);
-    }
-    return routes(input, init);
-  };
 }
