@@ -128,7 +128,7 @@ export const T: Record<string, Entry> = {
     es: "Contactos",
     de: "Kontakte",
     fr: "Contacts",
-    pt: "Contatos",
+    pt: "Contactos",
   },
   sec_languages: {
     it: "Lingue",
@@ -624,7 +624,7 @@ export const T: Record<string, Entry> = {
     es: "desbloquean el equipo",
     de: "schalten das Team frei",
     fr: "débloquent l'équipe",
-    pt: "desbloqueiam a equipe",
+    pt: "desbloqueiam a equipa",
   },
   ps_cv_preview: {
     it: "Anteprima CV",
@@ -687,7 +687,7 @@ export const T: Record<string, Entry> = {
     es: "✓ equipo activable",
     de: "✓ Team aktivierbar",
     fr: "✓ équipe activable",
-    pt: "✓ equipe ativável",
+    pt: "✓ equipa ativável",
   },
   ps_required_missing: {
     it: "obbligatori mancanti",

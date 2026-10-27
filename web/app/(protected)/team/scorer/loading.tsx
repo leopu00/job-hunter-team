@@ -11,7 +11,7 @@ const T: Record<Locale, string> = {
   fr: "Chargement de l'Évaluateur",
   de: "Bewerter wird geladen",
   hu: "Pontozó betöltése",
-  pt: "Carregando Avaliador",
+  pt: "A carregar Avaliador",
 };
 
 export default function AgentLoading() {

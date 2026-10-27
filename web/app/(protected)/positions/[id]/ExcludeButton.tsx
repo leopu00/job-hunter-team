@@ -117,7 +117,7 @@ const T: Record<
     undo: "anular",
     selectPlaceholder: "⊘ Excluir vaga…",
     excludeTitle: "Excluir manualmente esta vaga",
-    excluding: "Excluindo…",
+    excluding: "A excluir…",
     exclude: "Excluir",
   },
 };

@@ -10,7 +10,7 @@ const T: Record<string, Record<string, string>> = {
     es: "Cargando",
     de: "Wird geladen",
     fr: "Chargement",
-    pt: "Carregando",
+    pt: "A carregar",
   },
   loading_lower: {
     it: "caricamento…",
@@ -19,7 +19,7 @@ const T: Record<string, Record<string, string>> = {
     es: "cargando…",
     de: "wird geladen…",
     fr: "chargement…",
-    pt: "carregando…",
+    pt: "a carregar…",
   },
 };
 

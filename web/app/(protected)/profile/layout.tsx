@@ -35,7 +35,7 @@ const META: Record<string, { title: string; description: string }> = {
   pt: {
     title: "Perfil — Job Hunter",
     description:
-      "Perfil do candidato: avatar, habilidades, experiência, CV e estatísticas de preenchimento",
+      "Perfil do candidato: avatar, competências, experiência, CV e estatísticas de preenchimento",
   },
 };
 

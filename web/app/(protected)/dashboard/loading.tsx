@@ -11,7 +11,7 @@ const T: Record<string, Record<string, string>> = {
     es: "Cargando panel",
     de: "Dashboard wird geladen",
     fr: "Chargement du tableau de bord",
-    pt: "Carregando painel",
+    pt: "A carregar painel",
   },
 };
 

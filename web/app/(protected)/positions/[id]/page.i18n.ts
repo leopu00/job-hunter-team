@@ -256,7 +256,7 @@ export const T = {
     es: "Descargar CV (PDF)",
     de: "Lebenslauf herunterladen (PDF)",
     fr: "Télécharger le CV (PDF)",
-    pt: "Baixar CV (PDF)",
+    pt: "Transferir CV (PDF)",
   },
   download_cl: {
     it: "Scarica Cover Letter (PDF)",
@@ -265,7 +265,7 @@ export const T = {
     es: "Descargar carta de presentación (PDF)",
     de: "Anschreiben herunterladen (PDF)",
     fr: "Télécharger la lettre de motivation (PDF)",
-    pt: "Baixar carta de apresentação (PDF)",
+    pt: "Transferir carta de apresentação (PDF)",
   },
   cv_preparing: {
     it: "Preparazione…",
@@ -274,7 +274,7 @@ export const T = {
     es: "Preparando…",
     de: "Wird vorbereitet…",
     fr: "Préparation…",
-    pt: "Preparando…",
+    pt: "A preparar…",
   },
   cv_dl_error: {
     it: "Errore — riprova",

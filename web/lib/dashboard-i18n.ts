@@ -648,25 +648,25 @@ export const T = {
   },
 
   pt: {
-    live: "ao vivo · equipe ativa",
+    live: "ao vivo · equipa ativa",
     data_updated: "dados atualizados",
     title: "Dashboard",
     total_positions: (total: number, excluded: number, active: number) =>
       `${total} posições no total · ${excluded} excluídas · ${active} ativas`,
 
     start_here: "Comece aqui",
-    setup_intro: "Configure o seu perfil para iniciar a busca.",
-    step1_title: "Configure o seu Perfil",
+    setup_intro: "Configura o teu perfil para iniciar a busca.",
+    step1_title: "Configura o teu Perfil",
     step1_completed: "concluído",
     step1_desc_done:
-      "Perfil configurado. A equipe usará estas informações para personalizar a busca.",
+      "Perfil configurado. A equipa usará estas informações para personalizar a busca.",
     step1_desc_todo:
-      "Cargo desejado, competências, preferências e faixa salarial. A equipe usará estas informações para a busca.",
-    step2_title: "Iniciar a Equipe",
+      "Cargo desejado, competências, preferências e faixa salarial. A equipa usará estas informações para a busca.",
+    step2_title: "Iniciar a Equipa",
     step2_desc_done:
-      "Perfil pronto. Inicie a equipe de agentes para começar a busca automatizada de vagas.",
+      "Perfil pronto. Inicia a equipa de agentes para começar a busca automatizada de vagas.",
     step2_desc_todo:
-      "Configure primeiro o seu perfil. A equipe precisa das suas informações para procurar vagas compatíveis.",
+      "Configura primeiro o teu perfil. A equipa precisa das tuas informações para procurar vagas compatíveis.",
     help_text:
       "Precisa de ajuda? O assistente pode guiá-lo no preenchimento do seu perfil.",
     open_assistant: "Abrir assistente →",
@@ -693,7 +693,7 @@ export const T = {
     p_new: "Novas",
     p_checked: "Analisadas",
     p_scored: "Pontuadas",
-    p_writing: "Escrevendo",
+    p_writing: "A escrever",
     p_review: "Revisadas",
     p_ready: "Prontas",
     p_applied: "Enviadas",
@@ -744,7 +744,7 @@ export const T = {
     status_new: "Nova",
     status_checked: "Verificada",
     status_scored: "Pontuada",
-    status_writing: "Escrevendo",
+    status_writing: "A escrever",
     status_review: "Revisão",
     status_ready: "Pronta",
     status_applied: "Candidatura enviada",

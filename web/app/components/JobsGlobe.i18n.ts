@@ -115,7 +115,7 @@ export const T = {
     es: "Cargando…",
     de: "Laden…",
     fr: "Chargement…",
-    pt: "Carregando…",
+    pt: "A carregar…",
   },
   close: {
     it: "Chiudi",

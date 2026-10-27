@@ -25,7 +25,7 @@ export const T = {
     fr: "Équipe",
     de: "Team",
     hu: "Csapat",
-    pt: "Equipe",
+    pt: "Equipa",
   },
   scout: {
     it: "Scout",

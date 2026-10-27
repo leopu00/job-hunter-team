@@ -18,7 +18,7 @@ const DESCRIPTIONS: Record<string, string> = {
   es: "Configuración inicial de Job Hunter Team: proveedor de IA, API key, workspace y health check.",
   de: "Erstkonfiguration von Job Hunter Team: KI-Anbieter, API key, Workspace und Health Check.",
   fr: "Configuration initiale de Job Hunter Team : fournisseur IA, API key, workspace et health check.",
-  pt: "Configuração inicial do Job Hunter Team: provedor de IA, API key, workspace e health check.",
+  pt: "Configuração inicial do Job Hunter Team: fornecedor de IA, API key, workspace e health check.",
 };
 
 export async function generateMetadata(): Promise<Metadata> {

@@ -27,8 +27,8 @@ const META: Record<string, { title: string; description: string }> = {
     description: "Fournisseurs IA configurés",
   },
   pt: {
-    title: "Provedores — Job Hunter",
-    description: "Provedores de IA configurados",
+    title: "Fornecedores — Job Hunter",
+    description: "Fornecedores de IA configurados",
   },
 };
 

@@ -32,7 +32,7 @@ const META: Record<string, { title: string; description: string }> = {
   pt: {
     title: "Vagas — Job Hunter",
     description:
-      "Explore e gerencie as vagas encontradas pelo agente Explorador",
+      "Explora e gere as vagas encontradas pelo agente Explorador",
   },
 };
 

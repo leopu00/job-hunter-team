@@ -184,7 +184,7 @@ export const T: Record<string, Entry> = {
     fr: "Fournisseur et modèle LLM",
     de: "Anbieter und LLM-Modell",
     hu: "Szolgáltató és LLM-modell",
-    pt: "Provedor e modelo LLM",
+    pt: "Fornecedor e modelo LLM",
   },
   lbl_provider: {
     it: "Provider",
@@ -193,7 +193,7 @@ export const T: Record<string, Entry> = {
     fr: "Fournisseur",
     de: "Anbieter",
     hu: "Szolgáltató",
-    pt: "Provedor",
+    pt: "Fornecedor",
   },
   lbl_model: {
     it: "Modello",
@@ -211,7 +211,7 @@ export const T: Record<string, Entry> = {
     fr: "Fournisseur IA",
     de: "KI-Anbieter",
     hu: "AI-szolgáltató",
-    pt: "Provedor de IA",
+    pt: "Fornecedor de IA",
   },
   aria_model: {
     it: "Modello AI",
@@ -276,7 +276,7 @@ export const T: Record<string, Entry> = {
     fr: "Enregistrer et vérifier",
     de: "Speichern und prüfen",
     hu: "Mentés és ellenőrzés",
-    pt: "Salvar e verificar",
+    pt: "Guardar e verificar",
   },
 
   // ── page.tsx: health step ────────────────────────────────────────
@@ -305,7 +305,7 @@ export const T: Record<string, Entry> = {
     fr: "Enregistrement en cours…",
     de: "Wird gespeichert…",
     hu: "Mentés folyamatban…",
-    pt: "A salvar…",
+    pt: "A guardar…",
   },
   health_config_saved: {
     it: "Configurazione salvata.",
@@ -341,7 +341,7 @@ export const T: Record<string, Entry> = {
     fr: "L'enregistrement sur disque nécessite l'application en cours d'exécution sur votre ordinateur. Vous pouvez tout de même continuer vers le tableau de bord.",
     de: "Das Speichern auf der Festplatte erfordert die laufende App auf Ihrem Computer. Sie können trotzdem zum Dashboard fortfahren.",
     hu: "A lemezre mentéshez a számítógépeden futó alkalmazás szükséges. Az irányítópultra így is továbbléphetsz.",
-    pt: "Salvar no disco requer o aplicativo em execução no seu computador. Ainda assim, podes continuar para o painel.",
+    pt: "Guardar no disco requer a app em execução no teu computador. Ainda assim, podes continuar para o painel.",
   },
   health_provider_line: {
     it: "Provider",
@@ -350,7 +350,7 @@ export const T: Record<string, Entry> = {
     fr: "Fournisseur",
     de: "Anbieter",
     hu: "Szolgáltató",
-    pt: "Provedor",
+    pt: "Fornecedor",
   },
   nav_retry: {
     it: "Riprova",
@@ -379,7 +379,7 @@ export const T: Record<string, Entry> = {
     fr: "Erreur d'enregistrement",
     de: "Speicherfehler",
     hu: "Mentési hiba",
-    pt: "Erro ao salvar",
+    pt: "Erro ao guardar",
   },
   err_network: {
     it: "Errore di rete",

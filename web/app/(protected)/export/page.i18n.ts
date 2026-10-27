@@ -262,7 +262,7 @@ export const T = {
     es: "Exportando…",
     de: "Wird exportiert…",
     fr: "Exportation…",
-    pt: "Exportando…",
+    pt: "A exportar…",
   },
   downloaded: {
     it: "{file} scaricato",

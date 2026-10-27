@@ -106,7 +106,7 @@ export const T = {
     es: "Sincroniza tus datos locales con la nube (opcional). Los datos permanecen en tu PC hasta que hagas clic en sincronizar.",
     de: "Synchronisiere deine lokalen Daten mit der Cloud (Opt-in). Die Daten bleiben auf deinem PC, bis du auf Synchronisieren klickst.",
     fr: "Synchronisez vos données locales avec le cloud (opt-in). Les données restent sur votre PC jusqu'à ce que vous cliquiez sur synchroniser.",
-    pt: "Sincronize seus dados locais com a nuvem (opt-in). Os dados permanecem no seu PC até você clicar em sincronizar.",
+    pt: "Sincroniza os teus dados locais com a nuvem (opt-in). Os dados ficam no teu PC até clicares em sincronizar.",
   },
   loading: {
     it: "Caricamento…",
@@ -115,7 +115,7 @@ export const T = {
     es: "Cargando…",
     de: "Laden…",
     fr: "Chargement…",
-    pt: "Carregando…",
+    pt: "A carregar…",
   },
   no_local_db: {
     it: "Database locale non trovato. Avvia il team almeno una volta per generare",
@@ -124,7 +124,7 @@ export const T = {
     es: "Base de datos local no encontrada. Inicia el equipo al menos una vez para generar",
     de: "Lokale Datenbank nicht gefunden. Starte das Team mindestens einmal, um zu generieren",
     fr: "Base de données locale introuvable. Démarrez l'équipe au moins une fois pour générer",
-    pt: "Banco de dados local não encontrado. Inicie a equipe ao menos uma vez para gerar",
+    pt: "Base de dados local não encontrada. Inicia a equipa ao menos uma vez para gerar",
   },
   no_local_db_then: {
     it: ", poi torna qui.",
@@ -151,7 +151,7 @@ export const T = {
     es: "Inicia sesión con Google para vincular la sincronización a tu cuenta. Los datos van solo a tu propio espacio en la nube, protegidos por Row Level Security.",
     de: "Mit Google anmelden, um die Synchronisierung mit deinem Konto zu verknüpfen. Die Daten gehen nur in deinen eigenen Cloud-Bereich, geschützt durch Row Level Security.",
     fr: "Connectez-vous avec Google pour lier la synchronisation à votre compte. Les données vont uniquement dans votre propre espace cloud, protégé par Row Level Security.",
-    pt: "Faça login com o Google para vincular a sincronização à sua conta. Os dados vão apenas para o seu próprio espaço na nuvem, protegidos por Row Level Security.",
+    pt: "Inicia sessão com o Google para associar a sincronização à tua conta. Os dados vão apenas para o teu próprio espaço na nuvem, protegidos por Row Level Security.",
   },
   login_google: {
     it: "Login con Google",
@@ -241,7 +241,7 @@ export const T = {
     es: "Sincronizando…",
     de: "Synchronisiere…",
     fr: "Synchronisation…",
-    pt: "Sincronizando…",
+    pt: "A sincronizar…",
   },
   sync_now: {
     it: "Sync now",

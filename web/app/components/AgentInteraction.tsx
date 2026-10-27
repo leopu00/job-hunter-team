@@ -162,7 +162,7 @@ const T: Record<
     noActiveSessionShort: "nenhuma sessão ativa",
     noSessionActiveFor: (label) => `Nenhuma sessão ${label} ativa.`,
     startTeamFrom: (team) => (
-      <>Inicie a equipe a partir da página {team} para interagir.</>
+      <>Inicia a equipa a partir da página {team} para interagir.</>
     ),
     teamLabel: "Team",
   },

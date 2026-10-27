@@ -34,7 +34,7 @@ export const T = {
     es: "Archivo local",
     de: "Lokale Datei",
     fr: "Fichier local",
-    pt: "Arquivo local",
+    pt: "Ficheiro local",
   },
   add: {
     it: "Aggiungi",
@@ -88,7 +88,7 @@ export const T = {
     es: "Guardando...",
     de: "Wird gespeichert...",
     fr: "Enregistrement...",
-    pt: "Salvando...",
+    pt: "A guardar...",
   },
   ph_apikey: {
     it: "API Key...",
@@ -151,7 +151,7 @@ export const T = {
     es: "Cargando...",
     de: "Wird geladen...",
     fr: "Chargement...",
-    pt: "Carregando...",
+    pt: "A carregar...",
   },
   empty: {
     it: "Nessun provider disponibile.",
@@ -160,7 +160,7 @@ export const T = {
     es: "No hay proveedores disponibles.",
     de: "Keine Provider verfügbar.",
     fr: "Aucun fournisseur disponible.",
-    pt: "Nenhum provedor disponível.",
+    pt: "Nenhum fornecedor disponível.",
   },
   provider: {
     it: "Provider",
@@ -169,7 +169,7 @@ export const T = {
     es: "Proveedor",
     de: "Provider",
     fr: "Fournisseur",
-    pt: "Provedor",
+    pt: "Fornecedor",
   },
   active: {
     it: "{n} attivi",
@@ -187,7 +187,7 @@ export const T = {
     es: "Las API keys nunca se muestran en la interfaz. Las credenciales de variables de entorno no pueden eliminarse desde aquí.",
     de: "API-Keys werden nie in der UI angezeigt. Anmeldedaten aus Umgebungsvariablen können hier nicht entfernt werden.",
     fr: "Les clés API ne sont jamais exposées dans l'interface. Les identifiants issus de variables d'environnement ne peuvent pas être retirés ici.",
-    pt: "As API keys nunca são exibidas na interface. As credenciais de variáveis de ambiente não podem ser removidas aqui.",
+    pt: "As API keys nunca são mostradas na interface. As credenciais de variáveis de ambiente não podem ser removidas aqui.",
   },
   err_not_saved: {
     it: "Chiave NON salvata.",

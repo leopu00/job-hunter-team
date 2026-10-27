@@ -225,6 +225,6 @@ export const PICKER_T: Record<
     pickReason: "Escolhe um motivo",
     writeReason: "Escreve o motivo",
     notePlaceholder: "Nota privada (opcional)",
-    notePrivate: "Só sua: a equipa nunca a lê.",
+    notePrivate: "Só tua: a equipa nunca a lê.",
   },
 };

@@ -11,7 +11,7 @@ const T: Record<Locale, string> = {
   fr: "Chargement de l'Éclaireur",
   de: "Späher wird geladen",
   hu: "Felderítő betöltése",
-  pt: "Carregando Explorador",
+  pt: "A carregar Explorador",
 };
 
 export default function AgentLoading() {

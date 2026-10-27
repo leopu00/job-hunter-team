@@ -110,7 +110,7 @@ const T: Record<
   },
   pt: {
     title: "Notas privadas",
-    private: "Só suas: a equipa não as lê",
+    private: "Só tuas: a equipa não as lê",
     placeholder: "O que vai querer lembrar quando voltar a esta posição…",
     save: "Guardar",
     saving: "A guardar…",

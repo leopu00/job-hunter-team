@@ -60,7 +60,7 @@ const T: Record<
   pt: {
     heading: "🕐 Atividade recente",
     description:
-      "As últimas ações da equipe, da mais recente — com a instância que a executou.",
+      "As últimas ações da equipa, da mais recente — com a instância que a executou.",
     viewAll: "Ver tudo →",
     empty: "Nenhuma atividade recente.",
   },

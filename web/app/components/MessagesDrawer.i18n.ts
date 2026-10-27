@@ -28,7 +28,7 @@ export const T = {
     es: "Abrir mensajes del equipo",
     de: "Team-Nachrichten öffnen",
     fr: "Ouvrir les messages de l'équipe",
-    pt: "Abrir mensagens da equipe",
+    pt: "Abrir mensagens da equipa",
   },
   close: {
     it: "Chiudi",
@@ -55,7 +55,7 @@ export const T = {
     es: "Aún no hay mensajes del equipo.",
     de: "Noch keine Nachrichten vom Team.",
     fr: "Pas encore de messages de l'équipe.",
-    pt: "Ainda não há mensagens da equipe.",
+    pt: "Ainda não há mensagens da equipa.",
   },
   answer_exact_hint: {
     it: "Rispondi a questa richiesta. Per una scelta, copia esattamente una delle opzioni mostrate.",
@@ -64,7 +64,7 @@ export const T = {
     es: "Responde a esta solicitud. Si es una elección, copia exactamente una de las opciones mostradas.",
     de: "Beantworte diese Anfrage. Kopiere bei einer Auswahl genau eine der angezeigten Optionen.",
     fr: "Répondez à cette demande. Pour un choix, copiez exactement l’une des options affichées.",
-    pt: "Responda a esta solicitação. Para uma escolha, copie exatamente uma das opções exibidas.",
+    pt: "Responde a este pedido. Para uma escolha, copia exatamente uma das opções apresentadas.",
   },
   application_answer_placeholder: {
     it: "La tua risposta esatta…",
@@ -82,7 +82,7 @@ export const T = {
     es: "Guardar respuesta",
     de: "Antwort speichern",
     fr: "Enregistrer la réponse",
-    pt: "Salvar resposta",
+    pt: "Guardar resposta",
   },
   saving_answer: {
     it: "Salvataggio…",
@@ -91,7 +91,7 @@ export const T = {
     es: "Guardando…",
     de: "Wird gespeichert…",
     fr: "Enregistrement…",
-    pt: "Salvando…",
+    pt: "A guardar…",
   },
   answer_invalid: {
     it: "La risposta non corrisponde esattamente a una delle opzioni mostrate.",
@@ -100,6 +100,6 @@ export const T = {
     es: "La respuesta no coincide exactamente con una de las opciones mostradas.",
     de: "Die Antwort stimmt nicht genau mit einer der angezeigten Optionen überein.",
     fr: "La réponse ne correspond pas exactement à l’une des options affichées.",
-    pt: "A resposta não corresponde exatamente a uma das opções exibidas.",
+    pt: "A resposta não corresponde exatamente a uma das opções apresentadas.",
   },
 } satisfies Dictionary;

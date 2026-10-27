@@ -39,3 +39,39 @@ describe("the app's sources", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// The app reuses the web's pages (the ones behind the login, the shared components and lib), and
+// the CLI and the Telegram bot read shared/locales/pt.json. Their Portuguese is that of Portugal
+// too: these are Brazilian words no other language of the app writes, and each has a word of its own
+// in the Portuguese of the rest of the app (the site's public pages are not in this list).
+describe("the web pages the app reuses, and the CLI texts", () => {
+  // \b does not see the end of «você»: letters are told by their Unicode property instead
+  const BRAZILIAN = /(?<!\p{L})(equipes?|vocês?|carregando|salvando|excluindo|contêineres?|provedor(?:es)?|baixar|usuários?|seções?|solicitação|solicitações|contatos?|aplicativos?|banco de dados|exibid[ao]s?)(?!\p{L})/iu;
+  const web = fileURLToPath(new URL("../../../web/", import.meta.url));
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) return /^(landing|demo|node_modules)$/.test(name) ? [] : walk(path);
+      return /\.tsx?$/.test(name) && !/\.(test|d)\.tsx?$/.test(name) ? [path] : [];
+    });
+
+  it("write the Portuguese of Portugal", () => {
+    const files = ["app/(protected)", "app/components", "lib"].flatMap((dir) => walk(join(web, dir)))
+      .filter((file) => !file.includes(join("lib", "demo")));
+    const offenders = files.flatMap((file) =>
+      readFileSync(file, "utf-8").split("\n")
+        .map((line, index) => ({ line, at: `${file.slice(web.length)}:${index + 1}` }))
+        // a code comment is the team's own Italian: «contato» is its «counted»
+        .filter(({ line }) => !/^\s*(\/\/|\*|\/\*)/.test(line) && BRAZILIAN.test(line))
+        .map(({ at }) => at));
+    expect(offenders).toEqual([]);
+  });
+
+  it("keep shared/locales/pt.json in it as well", () => {
+    const texts = JSON.parse(readFileSync(join(web, "../shared/locales/pt.json"), "utf-8")) as Record<string, unknown>;
+    const offenders = Object.entries(texts)
+      .filter(([, text]) => typeof text === "string" && (BRAZILIAN.test(text) || /\b(salvo|arquivo|seu|sua|seus|suas)\b/i.test(text.replace(/\b(o|a|os|as|do|da|dos|das|no|na|ao|pelo|pela|um|uma) (seu|sua|seus|suas)\b/gi, ""))))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+  });
+});

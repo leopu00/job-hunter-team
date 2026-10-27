@@ -154,7 +154,7 @@ const T: Record<
   },
   pt: {
     dashboard: "Painel",
-    team: "Equipe",
+    team: "Equipa",
     writer: "Redator",
     subtitle: "Pipeline de redação de CV · polling 8s",
     inQueue: "Na fila",

@@ -82,7 +82,7 @@ export const T = {
     es: "Te ayudo a entender la plataforma y por dónde empezar.",
     de: "Ich helfe dir, die Plattform zu verstehen und wo du anfangen sollst.",
     fr: "Je vous aide à comprendre la plateforme et par où commencer.",
-    pt: "Ajudo você a entender a plataforma e por onde começar.",
+    pt: "Ajudo-te a perceber a plataforma e por onde começar.",
   },
   thinking: {
     it: "Sto pensando...",
@@ -91,7 +91,7 @@ export const T = {
     es: "Pensando...",
     de: "Ich denke nach...",
     fr: "Réflexion...",
-    pt: "Pensando...",
+    pt: "A pensar...",
   },
   placeholder_unconfigured: {
     it: "Chatbot non configurato",

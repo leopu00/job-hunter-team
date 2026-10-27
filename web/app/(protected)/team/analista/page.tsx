@@ -291,7 +291,7 @@ const T: Record<
   },
   pt: {
     dashboard: "Painel",
-    team: "Equipe",
+    team: "Equipa",
     analyst: "Analista",
     subtitle: "Pipeline de análise de vagas · polling 8s",
     remote: "Remoto",

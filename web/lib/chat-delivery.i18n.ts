@@ -18,7 +18,7 @@ export const CHAT_DELIVERY_T = {
     es: "Enviando…",
     de: "Senden…",
     fr: "Envoi…",
-    pt: "Enviando…",
+    pt: "A enviar…",
   },
   sent: {
     it: "Inviato",
@@ -57,7 +57,7 @@ export const CHAT_DELIVERY_T = {
     es: "El equipo aún no ha recogido este mensaje: el agente no lo ha recibido. Se entregará solo en cuanto tu box vuelva a leer el chat — no hace falta reescribirlo.",
     de: "Das Team hat diese Nachricht noch nicht abgeholt: Der Agent hat sie nicht erhalten. Sie wird von selbst zugestellt, sobald deine Box den Chat wieder liest — kein erneutes Schreiben nötig.",
     fr: "L'équipe n'a pas encore récupéré ce message : l'agent ne l'a pas reçu. Il sera remis tout seul dès que votre box relira la conversation — inutile de le réécrire.",
-    pt: "A equipe ainda não recolheu esta mensagem: o agente não a recebeu. Será entregue por si só assim que o seu box voltar a ler o chat — não precisa reescrever.",
+    pt: "A equipa ainda não recolheu esta mensagem: o agente não a recebeu. Será entregue por si só assim que o seu box voltar a ler o chat — não precisa reescrever.",
   },
   // L'azione accanto all'avviso. Richiama il box, NON rimanda il testo: il
   // turno è già salvato, riscriverlo creerebbe il doppione che l'utente

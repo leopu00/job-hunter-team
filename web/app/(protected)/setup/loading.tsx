@@ -10,7 +10,7 @@ const T: Record<string, Record<string, string>> = {
     es: "Cargando configuración",
     de: "Einrichtung wird geladen",
     fr: "Chargement de la configuration",
-    pt: "Carregando configuração",
+    pt: "A carregar configuração",
   },
 };
 
