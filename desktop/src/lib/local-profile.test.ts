@@ -16,6 +16,7 @@ import {
   renameLocalProfile,
   resetPlaygroundLocalProfile,
   selectSavedLocalProfile,
+  switchToOwnerLocalProfile,
 } from "./local-profile";
 
 vi.mock("./desktop-account-scope", () => ({
@@ -190,5 +191,29 @@ describe("local identity persistence", () => {
       displayName: "Ada Locale",
     });
     expect(localIdentitySelected()).toBe(true);
+  });
+});
+
+describe("going back to the profile that owns the runtime", () => {
+  const OWNER = "a".repeat(64);
+
+  it("keeps the owner's id under the name the person has now, and selects the local identity", async () => {
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "b".repeat(64) });
+    await createAndActivateLocalProfile("Ada Locale");
+    clearLocalIdentitySelection();
+
+    expect(switchToOwnerLocalProfile(OWNER)).toEqual({ profileId: OWNER, displayName: "Ada Locale" });
+    expect(readLocalProfile()).toEqual({ profileId: OWNER, displayName: "Ada Locale" });
+    expect(localIdentitySelected()).toBe(true);
+  });
+
+  it("refuses a malformed id and a missing current profile, and changes nothing", async () => {
+    expect(() => switchToOwnerLocalProfile(OWNER)).toThrow("local-profile-missing");
+    vi.mocked(createDesktopLocalProfile).mockResolvedValue({ profileId: "b".repeat(64) });
+    await createAndActivateLocalProfile("Ada Locale");
+    for (const bad of ["", "opaque-profile-a", "A".repeat(64), "a".repeat(63)]) {
+      expect(() => switchToOwnerLocalProfile(bad)).toThrow("local-profile-invalid");
+    }
+    expect(readLocalProfile()?.profileId).toBe("b".repeat(64));
   });
 });

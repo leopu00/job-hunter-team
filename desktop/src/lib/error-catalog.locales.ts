@@ -485,6 +485,21 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     pt: ["Os dados locais não foram postos de parte: não foi tocado em nada.", "Tenta novamente. Se se repetir, fecha as outras apps que usam a pasta ~/.jht."],
   },
 
+  "The profile was not changed: nothing was touched.": {
+    de: ["Das Profil wurde nicht gewechselt: Es wurde nichts verändert.", "Die Bestätigung gilt nur einmal und nur kurz. Starte die Auswahl neu, wenn du es noch möchtest."],
+    es: ["No se ha cambiado el perfil: no se ha tocado nada.", "La confirmación vale una sola vez y poco tiempo. Vuelve a empezar la elección si todavía lo quieres."],
+    fr: ["Le profil n’a pas été changé : rien n’a été touché.", "La confirmation ne vaut qu’une fois et peu de temps. Recommence le choix si tu le souhaites encore."],
+    hu: ["A profil nem változott: semmihez nem nyúltunk.", "A megerősítés csak egyszer és rövid ideig érvényes. Ha még szeretnéd, kezdd újra a választást."],
+    pt: ["O perfil não foi mudado: não foi tocado em nada.", "A confirmação vale uma só vez e por pouco tempo. Recomeça a escolha se ainda o quiseres."],
+  },
+  "The profile could not be changed: nothing was moved or deleted.": {
+    de: ["Das Profil konnte nicht gewechselt werden: Es wurde nichts verschoben oder gelöscht.", "Versuche es erneut. Wenn es wieder passiert, starte Job Hunter Team neu."],
+    es: ["No se ha podido cambiar el perfil: no se ha movido ni borrado nada.", "Vuelve a intentarlo. Si se repite, reinicia Job Hunter Team."],
+    fr: ["Le profil n’a pas pu être changé : rien n’a été déplacé ni supprimé.", "Réessaie. Si cela se reproduit, redémarre Job Hunter Team."],
+    hu: ["A profilt nem sikerült megváltoztatni: semmi sem lett áthelyezve vagy törölve.", "Próbáld újra. Ha ismétlődik, indítsd újra a Job Hunter Teamet."],
+    pt: ["Não foi possível mudar o perfil: não foi movido nem apagado nada.", "Tenta novamente. Se se repetir, reinicia o Job Hunter Team."],
+  },
+
   "The container engine (Podman) was not installed.": {
     de: ["Die Container-Engine (Podman) wurde nicht installiert.", "Versuche es erneut: Die App installiert sie selbst. Wenn es wieder passiert, prüfe deine Internetverbindung."],
     es: ["No se ha instalado el motor de contenedores (Podman).", "Inténtalo de nuevo: la aplicación lo instala automáticamente. Si vuelve a ocurrir, comprueba tu conexión a internet."],
@@ -1613,6 +1628,8 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   local_data_set_aside_failed: translated("The local data was not set aside: nothing was touched."),
   local_account_owner_invalid: translated("The local data on this computer belongs to another profile."),
   local_account_owner_mismatch: translated("The local data on this computer belongs to another profile."),
+  local_owner_change_refused: translated("The profile was not changed: nothing was touched."),
+  local_owner_change_failed: translated("The profile could not be changed: nothing was moved or deleted."),
 
   podman_missing: translated("The container engine (Podman) was not installed."),
   podman_not_ready: translated("The container engine is installed but does not answer."),

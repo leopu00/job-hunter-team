@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, Mutex, RwLock, RwLockReadGuard},
+    time::{Duration, Instant},
 };
 use tauri::{Manager, State};
 
@@ -63,6 +64,8 @@ impl AccountScope {
 #[derive(Clone, Default)]
 pub(crate) struct AccountScopeState {
     inner: Arc<RwLock<Option<AccountScope>>>,
+    /// The one pending confirmation of a change of the runtime's owner (see `OwnerChangeGrant`).
+    owner_change: Arc<Mutex<Option<OwnerChangeGrant>>>,
 }
 
 #[derive(Debug)]
@@ -603,6 +606,378 @@ pub(crate) fn onboarding_local_data_set_aside(
     set_aside_unassigned_local_home(home, now).map_err(onboarding::failure)
 }
 
+// ── The runtime of another profile: back to its owner, or take it over ───────
+//
+// `~/.jht` holds the first profile's provider logins, profile, documents and
+// the pairing of the device with the web. Its owner marker is the digest of
+// that profile's scope; a profile with another digest is refused everywhere
+// (`local_account_owner_mismatch`). Two ways out, each one after the person
+// confirmed it, and only for a profile that is a LOCAL one of this app and
+// whose owner is a LOCAL profile of this app that can be named without doubt:
+//
+//   - back to the owner: the app switches to the owner's scope through the
+//     same exit as signing out (`activate_scope_from`);
+//   - take it over: ONLY the marker is replaced. Nothing is moved, copied or
+//     removed.
+//
+// An account never changes the owner, and an owner that no local record of
+// this app names (a Google account, a profile whose record is gone: the digest
+// does not say which) is never taken. The two kinds of scope digest have
+// separate domains (`DIGEST_DOMAIN`, `LOCAL_DIGEST_DOMAIN`): a local record
+// cannot match the digest of an account.
+
+const OWNER_CHANGE_TTL: Duration = Duration::from_secs(120);
+/// How many profile records are looked at; one more and the owner is not known.
+const PROFILE_RECORD_LIMIT: usize = 256;
+/// The only temporary name the take-over writes (and sweeps).
+const TAKE_OVER_TEMP: &str = ".desktop-account-scope.tmp-take-over";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OwnerChange {
+    Return,
+    TakeOver,
+}
+
+impl OwnerChange {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "return" => Some(Self::Return),
+            "takeover" => Some(Self::TakeOver),
+            _ => None,
+        }
+    }
+}
+
+/// What the person confirmed: one change, for the scope that was active and the
+/// owner that was probed, valid once and for a short time.
+#[derive(Debug)]
+struct OwnerChangeGrant {
+    token: String,
+    change: OwnerChange,
+    scope_digest: String,
+    owner_digest: String,
+    issued: Instant,
+}
+
+/// The digest in the owner marker, read without following a link: `None` when
+/// there is no marker, an error code when it is not a marker of ours.
+fn read_owner_digest(marker: &Path) -> Result<Option<String>, &'static str> {
+    match fs::symlink_metadata(marker) {
+        Ok(metadata) if metadata.file_type().is_file() && metadata.len() <= 80 => {}
+        Ok(_) => return Err("local_account_owner_invalid"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("local_account_owner_unavailable"),
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let file = options
+        .open(marker)
+        .map_err(|_| "local_account_owner_unavailable")?;
+    let mut text = String::new();
+    file.take(81)
+        .read_to_string(&mut text)
+        .map_err(|_| "local_account_owner_unavailable")?;
+    let digest = text.trim();
+    if valid_digest(digest) {
+        Ok(Some(digest.to_owned()))
+    } else {
+        Err("local_account_owner_invalid")
+    }
+}
+
+/// The local profile that owns the runtime, when exactly one record of this
+/// app names it: the profile id and its scope. `None` for everything else (no
+/// marker, the marker is the current profile's own, no record, two records, a
+/// record that cannot be read, more records than the limit). Entries that are
+/// not named like a record are not records and are ignored.
+fn known_local_owner_at(
+    profiles_root: &Path,
+    marker: &Path,
+    current: &AccountScope,
+) -> Option<(String, AccountScope)> {
+    let owner = read_owner_digest(marker).ok().flatten()?;
+    if owner == current.digest() {
+        return None;
+    }
+    let mut found: Option<(String, AccountScope)> = None;
+    let mut seen = 0usize;
+    for entry in fs::read_dir(profiles_root).ok()? {
+        let name = entry.ok()?.file_name();
+        let Some(profile_id) = name
+            .to_str()
+            .and_then(|name| name.strip_suffix(".json"))
+            .filter(|id| valid_profile_id(id))
+        else {
+            continue;
+        };
+        seen += 1;
+        if seen > PROFILE_RECORD_LIMIT {
+            return None;
+        }
+        let scope = load_local_scope_at(profiles_root, profile_id).ok()?;
+        if scope.digest() == owner {
+            if found.is_some() {
+                return None;
+            }
+            found = Some((profile_id.to_owned(), scope));
+        }
+    }
+    found
+}
+
+fn issue_owner_change(
+    state: &AccountScopeState,
+    change: OwnerChange,
+    current: &AccountScope,
+    owner_digest: &str,
+) -> Result<String, &'static str> {
+    let token = hex(&ChaCha20Poly1305::generate_key(&mut OsRng));
+    let mut pending = state
+        .owner_change
+        .lock()
+        .map_err(|_| "account_scope_state_failed")?;
+    *pending = Some(OwnerChangeGrant {
+        token: token.clone(),
+        change,
+        scope_digest: current.digest().to_owned(),
+        owner_digest: owner_digest.to_owned(),
+        issued: Instant::now(),
+    });
+    Ok(token)
+}
+
+/// Spends the confirmation: it is gone after this call whatever the answer, so
+/// a second click (or a replay) finds nothing.
+fn spend_owner_change(
+    state: &AccountScopeState,
+    token: &str,
+    change: OwnerChange,
+    current: &AccountScope,
+) -> Result<OwnerChangeGrant, &'static str> {
+    let grant = state
+        .owner_change
+        .lock()
+        .map_err(|_| "account_scope_state_failed")?
+        .take()
+        .ok_or("local_owner_change_refused")?;
+    if grant.token == token
+        && grant.change == change
+        && grant.scope_digest == current.digest()
+        && grant.issued.elapsed() <= OWNER_CHANGE_TTL
+    {
+        Ok(grant)
+    } else {
+        Err("local_owner_change_refused")
+    }
+}
+
+/// Replaces the owner marker with the current profile's digest, and nothing else.
+/// One attempt: the marker is read again right before the rename and must still
+/// hold the digest that was probed; the temporary file is private, new, in the
+/// same folder, and a leftover is swept by its own name only.
+fn take_over_marker_at(
+    home: &Path,
+    expected_owner: &str,
+    scope: &AccountScope,
+) -> Result<(), &'static str> {
+    const FAILED: &str = "local_owner_change_failed";
+    let marker = home.join(".desktop-account-scope");
+    let temp = home.join(TAKE_OVER_TEMP);
+    match fs::symlink_metadata(home) {
+        Ok(metadata) if metadata.file_type().is_dir() && is_ours(&metadata) => {}
+        _ => return Err(FAILED),
+    }
+    match fs::symlink_metadata(&temp) {
+        Ok(metadata) if !metadata.file_type().is_dir() => {
+            fs::remove_file(&temp).map_err(|_| FAILED)?;
+        }
+        Ok(_) => return Err(FAILED),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(FAILED),
+    }
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    let written = (|| -> Result<(), &'static str> {
+        let mut file = options.open(&temp).map_err(|_| FAILED)?;
+        file.write_all(scope.digest().as_bytes())
+            .and_then(|_| file.write_all(b"\n"))
+            .and_then(|_| file.sync_all())
+            .map_err(|_| FAILED)?;
+        #[cfg(windows)]
+        crate::private_acl::protect_file(&temp).map_err(|_| FAILED)?;
+        Ok(())
+    })();
+    let outcome = written
+        .and_then(|_| match read_owner_digest(&marker) {
+            Ok(Some(digest)) if digest == expected_owner => Ok(()),
+            _ => Err("local_owner_change_refused"),
+        })
+        .and_then(|_| fs::rename(&temp, &marker).map_err(|_| FAILED));
+    if outcome.is_err() {
+        let _ = fs::remove_file(&temp);
+        return outcome;
+    }
+    verify_local_owner_marker(&marker, scope).map_err(|_| FAILED)
+}
+
+fn owner_change_context(
+    app: &tauri::AppHandle,
+) -> Result<(PathBuf, PathBuf), &'static str> {
+    let marker = local_owner_marker_path(app)?;
+    let profiles = local_profiles_dir(app).map_err(|_| "local_owner_change_refused")?;
+    Ok((marker, profiles))
+}
+
+const REFUSED: &str = "local_owner_change_refused";
+
+/// The confirmation of one of the two ways: the owner is probed again and a
+/// single-use token for that owner is issued.
+fn confirm_owner_change_at(
+    state: &AccountScopeState,
+    change: &str,
+    scope: &AccountScope,
+    marker: &Path,
+    profiles: &Path,
+) -> Result<String, &'static str> {
+    let change = OwnerChange::parse(change).ok_or(REFUSED)?;
+    if !scope.is_local_profile() {
+        return Err(REFUSED);
+    }
+    let (_, owner) = known_local_owner_at(profiles, marker, scope).ok_or(REFUSED)?;
+    issue_owner_change(state, change, scope, owner.digest())
+}
+
+/// Spends the token for `change` and checks the owner is still the one the
+/// person confirmed: the owner's profile id and scope.
+fn resolve_owner_change_at(
+    state: &AccountScopeState,
+    token: &str,
+    change: OwnerChange,
+    scope: &AccountScope,
+    marker: &Path,
+    profiles: &Path,
+) -> Result<(String, AccountScope), &'static str> {
+    let grant = spend_owner_change(state, token, change, scope)?;
+    if !scope.is_local_profile() {
+        return Err(REFUSED);
+    }
+    known_local_owner_at(profiles, marker, scope)
+        .filter(|(_, owner)| owner.digest() == grant.owner_digest)
+        .ok_or(REFUSED)
+}
+
+fn take_over_with_token_at(
+    state: &AccountScopeState,
+    token: &str,
+    scope: &AccountScope,
+    marker: &Path,
+    profiles: &Path,
+) -> Result<(), &'static str> {
+    let (_, owner) =
+        resolve_owner_change_at(state, token, OwnerChange::TakeOver, scope, marker, profiles)?;
+    let home = marker.parent().ok_or("local_owner_change_failed")?;
+    take_over_marker_at(home, owner.digest(), scope)
+}
+
+/// Whether the runtime of this computer belongs to another local profile that
+/// can be named, and the current profile is a local one: what the screen needs
+/// to offer the two ways. No digest, no id, no path leaves the app.
+#[tauri::command]
+pub(crate) fn onboarding_local_owner_probe(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+) -> bool {
+    if window.label() != "main" {
+        return false;
+    }
+    let Ok(guard) = scopes.lock_active() else {
+        return false;
+    };
+    let scope = guard.scope();
+    if !scope.is_local_profile() {
+        return false;
+    }
+    owner_change_context(&app)
+        .is_ok_and(|(marker, profiles)| known_local_owner_at(&profiles, &marker, scope).is_some())
+}
+
+/// The person confirmed one of the two ways: a single-use token for it.
+#[tauri::command]
+pub(crate) fn onboarding_local_owner_confirm(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    change: String,
+) -> Result<String, onboarding::OnboardingError> {
+    if window.label() != "main" {
+        return Err(onboarding::failure(REFUSED));
+    }
+    let guard = scopes.lock_active().map_err(onboarding::failure)?;
+    let (marker, profiles) = owner_change_context(&app).map_err(onboarding::failure)?;
+    confirm_owner_change_at(&scopes, &change, guard.scope(), &marker, &profiles)
+        .map_err(onboarding::failure)
+}
+
+/// Back to the owner: the app leaves the current scope the way signing out
+/// does and enters the owner's. The owner's profile id goes back to the
+/// renderer, which keeps it as it keeps the id of a profile it creates.
+#[tauri::command]
+pub(crate) fn onboarding_local_owner_return(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    chat: State<'_, direct_chat::DirectChatState>,
+    onboarding: State<'_, onboarding::OnboardingNativeState>,
+    token: String,
+) -> Result<LocalProfileCreated, onboarding::OnboardingError> {
+    if window.label() != "main" {
+        return Err(onboarding::failure(REFUSED));
+    }
+    let current = scopes.active().map_err(onboarding::failure)?;
+    let (marker, profiles) = owner_change_context(&app).map_err(onboarding::failure)?;
+    let (profile_id, owner) = resolve_owner_change_at(
+        &scopes,
+        &token,
+        OwnerChange::Return,
+        &current,
+        &marker,
+        &profiles,
+    )
+    .map_err(onboarding::failure)?;
+    activate_scope_from(&app, &scopes, &chat, &onboarding, Some(&current), owner)
+        .map_err(|error| onboarding::failure(error.code))?;
+    Ok(LocalProfileCreated { profile_id })
+}
+
+/// Take the runtime over: only the owner marker changes.
+#[tauri::command]
+pub(crate) fn onboarding_local_owner_take_over(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    scopes: State<'_, AccountScopeState>,
+    token: String,
+) -> Result<(), onboarding::OnboardingError> {
+    if window.label() != "main" {
+        return Err(onboarding::failure(REFUSED));
+    }
+    // The scope stays this one while the marker is written.
+    let guard = scopes.lock_active().map_err(onboarding::failure)?;
+    let (marker, profiles) = owner_change_context(&app).map_err(onboarding::failure)?;
+    take_over_with_token_at(&scopes, &token, guard.scope(), &marker, &profiles)
+        .map_err(onboarding::failure)
+}
+
 fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
     // These are durable artifacts written by the Electron local flow or by
     // the authoritative installer it invoked. Merely finding an arbitrary
@@ -723,10 +1098,26 @@ fn activate_scope(
     onboarding: &onboarding::OnboardingNativeState,
     next: AccountScope,
 ) -> Result<(), AccountScopeError> {
+    activate_scope_from(app, scopes, chat, onboarding, None, next)
+}
+
+/// The one way out of the active scope: with `expected` set, only if that scope is still the active
+/// one when the write lock is held (the scope a confirmation was given for).
+fn activate_scope_from(
+    app: &tauri::AppHandle,
+    scopes: &AccountScopeState,
+    chat: &direct_chat::DirectChatState,
+    onboarding: &onboarding::OnboardingNativeState,
+    expected: Option<&AccountScope>,
+    next: AccountScope,
+) -> Result<(), AccountScopeError> {
     let mut active = scopes
         .inner
         .write()
         .map_err(|_| failure("account_scope_state_failed"))?;
+    if expected.is_some_and(|expected| active.as_ref() != Some(expected)) {
+        return Err(failure("account_scope_changed"));
+    }
     if active.as_ref() == Some(&next) {
         return Ok(());
     }
@@ -2040,5 +2431,346 @@ mod tests {
         // A leap day, and the end of a year.
         assert_eq!(super::civil_stamp(1_709_164_800 + 3_661), "20240229-010101");
         assert_eq!(super::civil_stamp(1_798_761_599), "20261231-235959");
+    }
+}
+
+#[cfg(test)]
+mod owner_change_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    struct Fixture {
+        root: PathBuf,
+        profiles: PathBuf,
+        home: PathBuf,
+        marker: PathBuf,
+    }
+
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "jht-owner-change-{label}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            let profiles = root.join("local-profiles");
+            let home = root.join(".jht");
+            fs::create_dir_all(&home).unwrap();
+            Self { marker: home.join(".desktop-account-scope"), root, profiles, home }
+        }
+
+        /// A real local profile: its record on disk and its scope.
+        fn profile(&self) -> (String, AccountScope) {
+            let created = create_local_profile_at(&self.profiles).unwrap();
+            let scope = load_local_scope_at(&self.profiles, &created.profile_id).unwrap();
+            (created.profile_id, scope)
+        }
+
+        fn own(&self, scope: &AccountScope) {
+            fs::write(&self.marker, format!("{}\n", scope.digest())).unwrap();
+        }
+
+        fn marker_text(&self) -> String {
+            fs::read_to_string(&self.marker).unwrap()
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
+        let mut entries = BTreeMap::new();
+        let mut pending = vec![root.to_path_buf()];
+        while let Some(dir) = pending.pop() {
+            for entry in fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                let name = path.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                if fs::symlink_metadata(&path).unwrap().file_type().is_dir() {
+                    pending.push(path);
+                } else {
+                    entries.insert(name, fs::read(&path).unwrap());
+                }
+            }
+        }
+        entries
+    }
+
+    #[test]
+    fn the_owner_is_known_only_when_exactly_one_local_record_names_it() {
+        let f = Fixture::new("one");
+        let (owner_id, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), Some((owner_id.clone(), owner.clone())));
+        // Things in the folder that are not named like a record are not records.
+        fs::write(f.profiles.join(".DS_Store"), "x").unwrap();
+        fs::write(f.profiles.join("notes.json"), "x").unwrap();
+        assert!(known_local_owner_at(&f.profiles, &f.marker, &current).is_some());
+        // The marker is the current profile's own: there is no other owner.
+        f.own(&current);
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+        // No marker.
+        fs::remove_file(&f.marker).unwrap();
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+    }
+
+    #[test]
+    fn two_equal_records_an_unreadable_record_or_too_many_records_make_the_owner_unknown() {
+        let f = Fixture::new("doubt");
+        let (owner_id, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        assert!(known_local_owner_at(&f.profiles, &f.marker, &current).is_some());
+
+        // The same record under a second name.
+        let twin = format!("{}{}", "a".repeat(32), &owner_id[32..]);
+        fs::copy(f.profiles.join(format!("{owner_id}.json")), f.profiles.join(format!("{twin}.json"))).unwrap();
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+        fs::remove_file(f.profiles.join(format!("{twin}.json"))).unwrap();
+        assert!(known_local_owner_at(&f.profiles, &f.marker, &current).is_some());
+
+        // A record named like one that cannot be read.
+        let broken = f.profiles.join(format!("{}.json", "b".repeat(64)));
+        fs::write(&broken, "not json").unwrap();
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+        fs::write(&broken, "x".repeat(4096)).unwrap();
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+        fs::remove_file(&broken).unwrap();
+        assert!(known_local_owner_at(&f.profiles, &f.marker, &current).is_some());
+
+        // More records than the limit.
+        let extra = PROFILE_RECORD_LIMIT;
+        for index in 0..extra {
+            let id = format!("{index:064x}");
+            fs::write(f.profiles.join(format!("{id}.json")), format!("{{\"scopeDigest\":\"{}\"}}", "c".repeat(64))).unwrap();
+        }
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_place_of_a_record_or_of_the_marker_is_never_followed() {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new("links");
+        let (owner_id, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        assert!(known_local_owner_at(&f.profiles, &f.marker, &current).is_some());
+
+        // The marker as a link to a file that holds the owner's digest.
+        let outside = f.root.join("outside");
+        fs::write(&outside, format!("{}\n", owner.digest())).unwrap();
+        fs::remove_file(&f.marker).unwrap();
+        symlink(&outside, &f.marker).unwrap();
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+        assert_eq!(read_owner_digest(&f.marker), Err("local_account_owner_invalid"));
+        fs::remove_file(&f.marker).unwrap();
+        f.own(&owner);
+
+        // The owner's record as a link.
+        let record = f.profiles.join(format!("{owner_id}.json"));
+        let kept = f.root.join("kept.json");
+        fs::rename(&record, &kept).unwrap();
+        symlink(&kept, &record).unwrap();
+        assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+    }
+
+    #[test]
+    fn an_account_digest_never_matches_a_local_record_and_the_other_way_round() {
+        // The same bytes under the two domains give two digests.
+        for seed in [&b"same"[..], b"00000000-0000-4000-8000-000000000001", &[7u8; 32][..]] {
+            assert_ne!(derive_scope(seed).digest(), derive_local_scope(seed).digest());
+            assert!(!derive_scope(seed).is_local_profile());
+            assert!(derive_local_scope(seed).is_local_profile());
+        }
+        let f = Fixture::new("domains");
+        let records: Vec<(String, AccountScope)> = (0..24).map(|_| f.profile()).collect();
+        let (_, current) = f.profile();
+        for (id, scope) in &records {
+            // An account derived from the id, from the digest, from the record's own text.
+            for material in [id.as_bytes(), scope.digest().as_bytes()] {
+                let account = derive_scope(material);
+                assert!(records.iter().all(|(_, record)| record.digest() != account.digest()));
+                // An account owner is no known local owner.
+                f.own(&account);
+                assert_eq!(known_local_owner_at(&f.profiles, &f.marker, &current), None);
+            }
+            // And a local record's digest, as a marker, never equals an account's scope.
+            f.own(scope);
+            assert_ne!(read_owner_digest(&f.marker).unwrap().unwrap(), derive_scope(id.as_bytes()).digest());
+        }
+    }
+
+    #[test]
+    fn an_account_never_confirms_a_change_and_an_unknown_owner_is_never_taken() {
+        let f = Fixture::new("who");
+        let state = AccountScopeState::default();
+        let account = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let (_, owner) = f.profile();
+        f.own(&owner);
+        for change in ["return", "takeover"] {
+            assert_eq!(confirm_owner_change_at(&state, change, &account, &f.marker, &f.profiles), Err(REFUSED));
+        }
+        // A local profile, but the owner is an account's: unknown.
+        let (_, current) = f.profile();
+        f.own(&derive_scope(b"00000000-0000-4000-8000-000000000002"));
+        let before = tree(&f.home);
+        for change in ["return", "takeover"] {
+            assert_eq!(confirm_owner_change_at(&state, change, &current, &f.marker, &f.profiles), Err(REFUSED));
+        }
+        assert_eq!(confirm_owner_change_at(&state, "anything", &current, &f.marker, &f.profiles), Err(REFUSED));
+        assert!(state.owner_change.lock().unwrap().is_none());
+        assert_eq!(tree(&f.home), before);
+    }
+
+    #[test]
+    fn the_confirmation_is_spent_once_for_one_change_one_scope_and_a_short_time() {
+        let f = Fixture::new("token");
+        let state = AccountScopeState::default();
+        let (_, owner) = f.profile();
+        let (_, current) = f.profile();
+        let (_, other) = f.profile();
+        f.own(&owner);
+
+        let token = confirm_owner_change_at(&state, "takeover", &current, &f.marker, &f.profiles).unwrap();
+        assert_eq!(token.len(), 64);
+        // A wrong token spends the confirmation too: the right one finds nothing.
+        assert_eq!(spend_owner_change(&state, "nope", OwnerChange::TakeOver, &current).err(), Some(REFUSED));
+        assert_eq!(spend_owner_change(&state, &token, OwnerChange::TakeOver, &current).err(), Some(REFUSED));
+
+        let token = confirm_owner_change_at(&state, "takeover", &current, &f.marker, &f.profiles).unwrap();
+        assert!(spend_owner_change(&state, &token, OwnerChange::TakeOver, &current).is_ok());
+        assert_eq!(spend_owner_change(&state, &token, OwnerChange::TakeOver, &current).err(), Some(REFUSED));
+
+        // Another change, another scope.
+        let token = confirm_owner_change_at(&state, "takeover", &current, &f.marker, &f.profiles).unwrap();
+        assert_eq!(spend_owner_change(&state, &token, OwnerChange::Return, &current).err(), Some(REFUSED));
+        let token = confirm_owner_change_at(&state, "takeover", &current, &f.marker, &f.profiles).unwrap();
+        assert_eq!(spend_owner_change(&state, &token, OwnerChange::TakeOver, &other).err(), Some(REFUSED));
+
+        // Too old.
+        let token = confirm_owner_change_at(&state, "return", &current, &f.marker, &f.profiles).unwrap();
+        state.owner_change.lock().unwrap().as_mut().unwrap().issued =
+            Instant::now().checked_sub(OWNER_CHANGE_TTL + Duration::from_secs(1)).unwrap();
+        assert_eq!(spend_owner_change(&state, &token, OwnerChange::Return, &current).err(), Some(REFUSED));
+    }
+
+    #[test]
+    fn taking_over_changes_only_the_marker_and_a_second_click_writes_nothing() {
+        let f = Fixture::new("take");
+        let state = AccountScopeState::default();
+        let (_, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        fs::write(f.home.join("jht.config.json"), "{\"active_provider\":\"claude\"}\n").unwrap();
+        fs::create_dir_all(f.home.join(".claude")).unwrap();
+        fs::write(f.home.join(".claude/.credentials.json"), "secret\n").unwrap();
+        let before = tree(&f.home);
+
+        let token = confirm_owner_change_at(&state, "takeover", &current, &f.marker, &f.profiles).unwrap();
+        take_over_with_token_at(&state, &token, &current, &f.marker, &f.profiles).unwrap();
+        assert_eq!(f.marker_text(), format!("{}\n", current.digest()));
+        let mut after = tree(&f.home);
+        let new_marker = after.remove(".desktop-account-scope").unwrap();
+        let mut old = before.clone();
+        let old_marker = old.remove(".desktop-account-scope").unwrap();
+        assert_eq!(after, old, "nothing but the marker changed, and no leftover");
+        assert_ne!(new_marker, old_marker);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&f.marker).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        validate_or_claim_local_owner(&f.home, &current).unwrap();
+        assert_eq!(validate_or_claim_local_owner(&f.home, &owner), Err("local_account_owner_mismatch"));
+
+        // The same token again (a double click) writes nothing: the owner is the current profile now,
+        // and the confirmation is gone anyway.
+        let marker_after = tree(&f.home);
+        assert_eq!(take_over_with_token_at(&state, &token, &current, &f.marker, &f.profiles), Err(REFUSED));
+        assert_eq!(tree(&f.home), marker_after);
+        // And a confirmation for the old owner is no more: the owner is not another profile.
+        assert_eq!(confirm_owner_change_at(&state, "takeover", &current, &f.marker, &f.profiles), Err(REFUSED));
+    }
+
+    #[test]
+    fn a_marker_that_changed_after_the_probe_is_left_as_it_is() {
+        let f = Fixture::new("cas");
+        let (_, owner) = f.profile();
+        let (_, current) = f.profile();
+        let (_, third) = f.profile();
+        f.own(&third);
+        let before = tree(&f.home);
+        // The probe saw `owner`; the marker now says `third`.
+        assert_eq!(take_over_marker_at(&f.home, owner.digest(), &current), Err(REFUSED));
+        assert_eq!(tree(&f.home), before, "the marker is untouched and no temporary file is left");
+        // A marker that vanished.
+        fs::remove_file(&f.marker).unwrap();
+        assert_eq!(take_over_marker_at(&f.home, owner.digest(), &current), Err(REFUSED));
+        assert!(!f.marker.exists());
+        assert!(!f.home.join(TAKE_OVER_TEMP).exists());
+    }
+
+    #[test]
+    fn a_leftover_of_the_takeover_is_swept_by_its_own_name_only() {
+        let f = Fixture::new("sweep");
+        let (_, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        fs::write(f.home.join(TAKE_OVER_TEMP), "old\n").unwrap();
+        fs::write(f.home.join(".desktop-account-scope.tmp-other"), "not ours\n").unwrap();
+        take_over_marker_at(&f.home, owner.digest(), &current).unwrap();
+        assert!(!f.home.join(TAKE_OVER_TEMP).exists());
+        assert_eq!(fs::read_to_string(f.home.join(".desktop-account-scope.tmp-other")).unwrap(), "not ours\n");
+        assert_eq!(f.marker_text(), format!("{}\n", current.digest()));
+        // A folder under the temporary name is not ours to remove.
+        fs::remove_file(&f.marker).unwrap();
+        f.own(&owner);
+        fs::create_dir(f.home.join(TAKE_OVER_TEMP)).unwrap();
+        assert_eq!(take_over_marker_at(&f.home, owner.digest(), &current), Err("local_owner_change_failed"));
+        assert_eq!(f.marker_text(), format!("{}\n", owner.digest()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_home_that_is_a_link_is_not_written() {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new("home-link");
+        let (_, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        let linked = f.root.join("linked");
+        symlink(&f.home, &linked).unwrap();
+        let before = tree(&f.home);
+        assert_eq!(take_over_marker_at(&linked, owner.digest(), &current), Err("local_owner_change_failed"));
+        assert_eq!(tree(&f.home), before);
+    }
+
+    #[test]
+    fn going_back_names_the_owner_the_person_confirmed() {
+        let f = Fixture::new("return");
+        let state = AccountScopeState::default();
+        let (owner_id, owner) = f.profile();
+        let (_, current) = f.profile();
+        f.own(&owner);
+        let token = confirm_owner_change_at(&state, "return", &current, &f.marker, &f.profiles).unwrap();
+        // The owner changed after the confirmation: the token no longer fits.
+        let (_, third) = f.profile();
+        f.own(&third);
+        assert_eq!(
+            resolve_owner_change_at(&state, &token, OwnerChange::Return, &current, &f.marker, &f.profiles).err(),
+            Some(REFUSED)
+        );
+        f.own(&owner);
+        let token = confirm_owner_change_at(&state, "return", &current, &f.marker, &f.profiles).unwrap();
+        let (id, scope) =
+            resolve_owner_change_at(&state, &token, OwnerChange::Return, &current, &f.marker, &f.profiles).unwrap();
+        assert_eq!((id, scope), (owner_id, owner));
     }
 }

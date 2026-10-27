@@ -74,6 +74,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             account_scope::onboarding_local_data_adopt,
             account_scope::onboarding_local_data_set_aside,
+            account_scope::onboarding_local_owner_probe,
+            account_scope::onboarding_local_owner_confirm,
+            account_scope::onboarding_local_owner_return,
+            account_scope::onboarding_local_owner_take_over,
             account_scope::onboarding_previous_local_data,
             account_scope::runtime_account_scope_reset,
             account_scope::runtime_account_scope_set,
