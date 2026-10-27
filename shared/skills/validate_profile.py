@@ -7,8 +7,9 @@ post-write) sia il CLI (`jht profile validate`). La definizione tipizzata gemell
 web e' shared/config/profile-schema.ts: tenere allineati (cross-check CI — follow-up).
 
 Valida:
-  - L1 core mandatori: name, target_role, location, experience_years, has_degree,
+  - L1 core mandatori: name, target_role, location, experience_years,
     seniority_target, skills.primary (>=1), languages (>=1, ognuna language+level)
+  - has_degree facoltativo: assente = non dichiarato, mai "no"; se c'e' deve essere booleano
   - blocks[] (L2/L3) se presenti: key, kind in vocabolario, title, content conforme al kind
 
 Tollerante in transizione (pre-Fase 4): accetta varianti legacy note (languages[].name al
@@ -240,8 +241,9 @@ def validate(profile) -> None:
     ey = profile.get("experience_years")
     if not isinstance(ey, int) or isinstance(ey, bool) or ey < 0:
         err("experience_years: integer >= 0 required")
-    if not isinstance(profile.get("has_degree"), bool):
-        err("has_degree: boolean required")
+    # Optional: absent is "not declared", never "no"; a key that is there must hold a boolean.
+    if "has_degree" in profile and not isinstance(profile["has_degree"], bool):
+        err("has_degree: boolean required when present")
     validate_skills(profile.get("skills"))
     validate_languages(profile.get("languages"))
     validate_blocks(profile.get("blocks"))

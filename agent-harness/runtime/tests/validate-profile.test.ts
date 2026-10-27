@@ -70,6 +70,10 @@ const CASES: Array<[string, string]> = [
   ["a negative number of years", GOOD.replace("experience_years: 6", "experience_years: -1")],
   ["has_degree written as yes, which YAML 1.1 reads as a boolean", GOOD.replace("has_degree: true", "has_degree: yes")],
   ["has_degree written as a word", GOOD.replace("has_degree: true", 'has_degree: "true"')],
+  ["has_degree left empty", GOOD.replace("has_degree: true", "has_degree:")],
+  ["has_degree as a number", GOOD.replace("has_degree: true", "has_degree: 1")],
+  ["no has_degree at all: not declared, which is not a no", GOOD.replace("has_degree: true\n", "")],
+  ["has_degree declared false", GOOD.replace("has_degree: true", "has_degree: false")],
   ["the legacy flat list of skills", GOOD.replace("skills:\n  primary:\n    - TypeScript\n    - SQLite\n  secondary:\n    - Docker", "skills:\n  - TypeScript")],
   ["an empty flat list of skills", GOOD.replace("skills:\n  primary:\n    - TypeScript\n    - SQLite\n  secondary:\n    - Docker", "skills: []")],
   ["skills that are not a list at all", GOOD.replace("skills:\n  primary:\n    - TypeScript\n    - SQLite\n  secondary:\n    - Docker", "skills: TypeScript")],
@@ -190,7 +194,7 @@ describe("the tool", () => {
     // Exit 1 is an answer here, not a failure: the skill reads it and fixes.
     expect(bad.ok).toBe(true);
     expect(bad.content).toContain("INVALID_PROFILE");
-    expect(bad.content).toContain("has_degree: boolean required");
+    expect(bad.content).toContain("has_degree: boolean required when present");
   });
 
   it("reads a draft in the agent's own folder, and nothing outside those two", async () => {

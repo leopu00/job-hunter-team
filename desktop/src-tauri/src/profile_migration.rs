@@ -432,8 +432,7 @@ fn strict_profile_valid(bytes: &[u8]) -> bool {
         .is_some_and(|years| years >= 0)
         || profile
             .get(Value::String("has_degree".to_owned()))
-            .and_then(Value::as_bool)
-            .is_none()
+            .is_some_and(|value| value.as_bool().is_none())
     {
         return false;
     }
@@ -1401,6 +1400,17 @@ blocks:
     content: []
 "#;
         assert!(strict_profile_valid(profile));
+
+        // has_degree is optional: absent is "not declared"; a key that is there must be a boolean.
+        let text = std::str::from_utf8(profile).unwrap();
+        assert!(strict_profile_valid(
+            text.replace("has_degree: true\n", "").as_bytes()
+        ));
+        for wrong in ["has_degree: \"true\"\n", "has_degree:\n", "has_degree: maybe\n"] {
+            assert!(!strict_profile_valid(
+                text.replace("has_degree: true\n", wrong).as_bytes()
+            ));
+        }
 
         let non_string_specialty = [
             profile.as_slice(),

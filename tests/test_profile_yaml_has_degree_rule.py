@@ -78,7 +78,8 @@ def test_the_minimum_shape_does_not_list_it_as_required(lang: str) -> None:
     assert len(lines) == 1 and optional in lines[0], f"{minimum.name}: the minimum shape does not mark it {optional!r}"
 
 
-def test_the_validator_still_requires_it() -> None:
-    """The rule exists because of this line: if it goes, the rule can go too."""
+def test_the_validator_still_checks_what_is_there() -> None:
+    """Absent is "not declared" (the eight fields of the app are enough), but a value that is
+    written must be a boolean: the rule above is about what the Assistente writes."""
     source = (ROOT / "shared" / "skills" / "validate_profile.py").read_text(encoding="utf-8")
-    assert 'err("has_degree: boolean required")' in source
+    assert 'err("has_degree: boolean required when present")' in source

@@ -419,7 +419,7 @@ describe("OnboardingFlow technical setup", () => {
     });
     expect(screen.getByRole("alert")).toHaveTextContent("Podman è attivo ma il container non risponde.");
     expect(screen.getAllByText("Container")).not.toHaveLength(0);
-    await userEvent.click(screen.getByRole("button", { name: /riprendi la preparazione/i }));
+    await userEvent.click(screen.getAllByRole("button", { name: /riprendi la preparazione/i })[1]);
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
@@ -428,7 +428,8 @@ describe("OnboardingFlow technical setup", () => {
     const failedAtTheFirstStep = { status: "failed", stage: "runtime", message: "La preparazione si è fermata.", retryable: true, code: "runtime_install_failed" } as const;
     // nothing done yet: the same preparation is tried again
     const first = renderFlow({ runtime: failedAtTheFirstStep, onRetry });
-    expect(screen.getByRole("button", { name: "Riprova la preparazione" })).toBeInTheDocument();
+    // the retry beside the reason and the one under the steps are told the same
+    expect(screen.getAllByRole("button", { name: "Riprova la preparazione" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Riprendi la preparazione" })).not.toBeInTheDocument();
     expect(screen.queryByTestId("onboarding-resume-note")).not.toBeInTheDocument();
     first.unmount();
@@ -446,7 +447,8 @@ describe("OnboardingFlow technical setup", () => {
     });
     expect(screen.getByTestId("onboarding-resume-note")).toHaveTextContent("Una parte è già pronta su questo computer");
     expect(screen.queryByRole("button", { name: "Riprova la preparazione" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Riprendi la preparazione" }));
+    expect(screen.getAllByRole("button", { name: "Riprendi la preparazione" })).toHaveLength(2);
+    await userEvent.click(screen.getAllByRole("button", { name: "Riprendi la preparazione" })[1]);
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
@@ -651,9 +653,12 @@ describe("OnboardingFlow technical setup", () => {
     });
     const user = userEvent.setup();
 
-    await user.dblClick(screen.getByRole("button", { name: "Riprendi la preparazione" }));
+    await user.dblClick(screen.getAllByRole("button", { name: "Riprendi la preparazione" })[1]);
     expect(onRetry).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Verifica in corso…" })).toBeDisabled();
+    // both retries are disabled while it runs
+    const verifying = screen.getAllByRole("button", { name: "Verifica in corso…" });
+    expect(verifying).toHaveLength(2);
+    verifying.forEach((button) => expect(button).toBeDisabled());
     expect(screen.getByRole("region", { name: /avanzamento configurazione/i }).closest(".onboarding-runtime-card")).toHaveAttribute("aria-busy", "true");
 
     await act(async () => resolveRetry());
@@ -698,7 +703,7 @@ describe("OnboardingFlow technical setup", () => {
       onRetry,
     });
     const user = userEvent.setup();
-    const retry = screen.getByRole("button", { name: "Riprendi la preparazione" });
+    const retry = screen.getAllByRole("button", { name: "Riprendi la preparazione" })[1];
 
     await user.click(retry);
     await waitFor(() => expect(retry).toBeEnabled());

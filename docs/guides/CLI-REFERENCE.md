@@ -309,8 +309,9 @@ missing field is named.
 | `skills` | At least two |
 | `languages` | At least one, each with `language` and `level` |
 
-Experience and education entries are **recommended**, not required. To pass the schema check the
-file also needs `has_degree` (`true` or `false`), the skills under `skills.primary`, and the fields
+Experience and education entries are **recommended**, not required. `has_degree` is optional too: if
+it is missing it counts as not declared, never as "no". If you write it, it must be `true` or `false`
+(a word, a number or an empty value is refused). The skills go under `skills.primary`, and the fields
 above at the top level of the file (`seniority_target` is not read from `positioning` by the schema).
 
 **Where the email goes.** Put it at the top level, as `email:` (or as `contacts: {email: …}`). The check
@@ -326,7 +327,6 @@ target_role: Backend engineer
 location: Lisbon, Portugal
 experience_years: 6
 seniority_target: senior
-has_degree: true
 skills:
   primary: [Python, PostgreSQL]
   secondary: [Terraform]
@@ -334,6 +334,7 @@ languages:
   - language: English
     level: C1
 # Recommended, not required:
+# has_degree: true
 # experience: [...]
 # education: [...]
 ```

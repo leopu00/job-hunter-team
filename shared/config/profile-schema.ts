@@ -190,10 +190,11 @@ export const CandidateProfileSchema = z
     target_role: z.string().min(1),
     location: z.string().min(1),
     experience_years: z.number().int().nonnegative(),
-    has_degree: z.boolean(),
     seniority_target: z.string().min(1),
 
     // identità (L1 — opzionali)
+    // assente = non dichiarato, mai "no"
+    has_degree: z.boolean().optional(),
     email: z.string().optional(),
     timezone: z.string().optional(),
     nationality: z.string().optional(),

@@ -340,6 +340,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
       setPending(false);
     }
   }
+  // the retry of a failed step is told the same wherever it is offered
+  const retryLabel = pending ? t.verifying : resumable ? t.resumeSetup : t.retryPrepare;
   const action = failed
     ? onRetry
     : runtime.stage === "ssh-host-key" ? onConfirmHostKey : () => onRuntimeAction(runtime.stage as "provider-login" | "team-start" | "assistant");
@@ -356,6 +358,14 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
         {!failed && <strong>{actionRequired ? t.actionNeeded : t.dontClose}</strong>}
         <small>{runtime.message}</small>
         {failed && runtime.action && <small className="onboarding-runtime-status__action">{t.whatToDo(runtime.action)}</small>}
+        {/* the retry also sits here, beside the reason and the log: the one under the step list is out of view in a short window */}
+        {failed && runtime.retryable !== false && (
+          <small className="onboarding-runtime-status__retry">
+            <button className="onboarding-secondary" type="button" data-testid="onboarding-retry-here" onClick={() => void invoke(onRetry, false)} disabled={pending}>
+              {retryLabel}
+            </button>
+          </small>
+        )}
         {failed && host.kind === "local" && runtimeLogPath && (
           <small className="onboarding-runtime-status__log">
             {t.runtimeLogAt} <code><PathWithBreaks path={runtimeLogPath} /></code>{" "}
