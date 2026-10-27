@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { JHT_HOME } from '../jht-paths.js';
 import { readRegularFileText, writePrivateJson } from '../lib/secure-config-io.js';
-import { declaredPlan, planTable, withDeclaredPlan } from '../lib/provider-plan.js';
+import { declaredPlan, planTable, plansOf, suggestedPlan, withDeclaredPlan } from '../lib/provider-plan.js';
 import { refreshModelPin } from './model-pin.js';
 import { isContainer } from '../../../shared/runtime/container.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
@@ -230,17 +230,36 @@ function readConfigForPlan() {
   }
 }
 
-function handlePlan(id) {
+// `--json`: what the setup wizard of the app reads and writes. One object on stdout, exit 1 with
+// {ok:false, code} when it cannot answer. The plans are the registry's table, `suggested` is the plan the
+// account's Codex reading names (to be confirmed by the person, never declared here).
+function handlePlan(id, opts = {}) {
+  const json = opts.json === true;
+  const refuse = (code, message) => {
+    if (json) console.log(JSON.stringify({ ok: false, code }));
+    else console.error(`${ERR}  ${message}`);
+    process.exitCode = 1;
+  };
   const { config, unreadable } = readConfigForPlan();
   if (unreadable || !config || typeof config !== 'object' || Array.isArray(config)) {
-    console.error(`${ERR}  ${CONFIG_PATH} cannot be read (damaged, or not a regular file): nothing was written`);
-    process.exitCode = 1;
-    return;
+    return refuse('config_unreadable', `${CONFIG_PATH} cannot be read (damaged, or not a regular file): nothing was written`);
   }
   const active = typeof config.active_provider === 'string' ? config.active_provider.trim() : '';
   if (!active) {
-    console.error(`${ERR}  no active provider: choose one first with: jht providers use openai`);
-    process.exitCode = 1;
+    return refuse('no_active_provider', 'no active provider: choose one first with: jht providers use openai');
+  }
+  if (json && id === undefined) {
+    const table = plansOf(active);
+    if (!table) return refuse('registry_unavailable', 'the plan table cannot be read (python3 or its module)');
+    const current = declaredPlan();
+    console.log(JSON.stringify({
+      ok: true,
+      provider: table.provider,
+      declared: current ? { id: current.id, label: current.label } : null,
+      ...(current === undefined ? { declaredUnreadable: true } : {}),
+      plans: table.plans.map((p) => ({ id: p.id, label: p.label, price: p.price })),
+      suggested: suggestedPlan(active),
+    }));
     return;
   }
   if (id === undefined) {
@@ -259,12 +278,11 @@ function handlePlan(id) {
       unknown_plan: `plan '${id}' is not one of the ${next.provider} plans: see them with: jht providers plan`,
       registry_unavailable: 'the plan table cannot be read (python3 or its module): nothing was written',
     };
-    console.error(`${ERR}  ${says[next.code] ?? next.code}`);
-    process.exitCode = 1;
-    return;
+    return refuse(next.code, says[next.code] ?? next.code);
   }
   writePrivateJson(CONFIG_PATH, next.config);
-  console.log(`  ${OK} plan: ${next.plan.label} (${next.plan.id}), provider ${next.provider}`);
+  if (json) console.log(JSON.stringify({ ok: true, provider: next.provider, plan: { id: next.plan.id, label: next.plan.label } }));
+  else console.log(`  ${OK} plan: ${next.plan.label} (${next.plan.id}), provider ${next.provider}`);
 }
 
 // Spec di upgrade per ciascun provider. Consumata anche dal setup nativo Godot.
@@ -1022,7 +1040,8 @@ export function registerProvidersCommand(program) {
   cmd
     .command('plan [id]')
     .description('Show the subscription plan and the possible ones; with an id, declare it (the Capitano sizes the first run on it)')
-    .action((id) => handlePlan(id));
+    .option('--json', 'one JSON object: the declared plan, the plans and the one Codex suggests (or, with an id, the plan declared)')
+    .action((id, opts) => handlePlan(id, opts));
 
   cmd
     .command('update [id]')

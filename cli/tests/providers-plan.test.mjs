@@ -134,3 +134,66 @@ test('a configuration that is there and cannot be read stops the command: nothin
   assert.equal(lstatSync(join(link, 'jht.config.json')).isSymbolicLink(), true);
   assert.equal(readFileSync(real, 'utf8'), JSON.stringify({ active_provider: 'openai' }));
 });
+
+// ── --json: what the setup wizard of the app reads and writes ─────────────────────────────
+
+const json = (done) => JSON.parse(done.stdout);
+
+test('--json without an id: the plans, the declared one and the suggestion, as one object', { skip: !hasPython }, () => {
+  const dir = home({ active_provider: 'codex' });
+  const done = plan(dir, '--json');
+  assert.equal(done.status, 0, done.stderr);
+  const answer = json(done);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.provider, 'openai');
+  assert.equal(answer.declared, null);
+  assert.deepEqual(answer.plans.map((p) => p.id), ['plus', 'pro', 'pro-max']);
+  assert.ok(answer.plans.every((p) => typeof p.label === 'string' && typeof p.price === 'string'));
+  assert.equal(answer.suggested, null);
+  assert.equal(readFileSync(join(dir, 'jht.config.json'), 'utf8'), JSON.stringify({ active_provider: 'codex' }, null, 2), 'reading writes nothing');
+});
+
+test('--json: what Codex reports is only a suggestion, and nothing is declared by it', { skip: !hasPython }, () => {
+  const dir = home({ active_provider: 'openai' });
+  mkdirSync(join(dir, 'logs'));
+  writeFileSync(join(dir, 'logs', 'codex-plan-reading.json'),
+    JSON.stringify({ plan_type: 'prolite', single_weekly: true, observed_at: Date.now() / 1000 }));
+  const answer = json(plan(dir, '--json'));
+  assert.equal(answer.suggested, 'pro');
+  assert.equal(answer.declared, null);
+  assert.equal(read(dir).providers, undefined, 'the config has no plan');
+  // a reading Codex gave for a plan the table does not know is no suggestion
+  writeFileSync(join(dir, 'logs', 'codex-plan-reading.json'),
+    JSON.stringify({ plan_type: 'enterprise', single_weekly: true, observed_at: Date.now() / 1000 }));
+  assert.equal(json(plan(dir, '--json')).suggested, null);
+});
+
+test('--json with an id declares exactly that plan, even when it is not the suggested one', { skip: !hasPython }, () => {
+  const dir = home({ active_provider: 'openai', keep: 'me' });
+  mkdirSync(join(dir, 'logs'));
+  writeFileSync(join(dir, 'logs', 'codex-plan-reading.json'),
+    JSON.stringify({ plan_type: 'prolite', single_weekly: true, observed_at: Date.now() / 1000 }));
+  const done = plan(dir, 'plus', '--json');
+  assert.equal(done.status, 0, done.stderr);
+  assert.deepEqual(json(done), { ok: true, provider: 'openai', plan: { id: 'plus', label: 'Plus' } });
+  assert.deepEqual(read(dir), { active_provider: 'openai', keep: 'me', providers: { openai: { plan: 'plus' } } });
+  assert.deepEqual(json(plan(dir, '--json')).declared, { id: 'plus', label: 'Plus' });
+});
+
+test('--json refuses what it cannot do with a code, exit 1, and writes nothing', { skip: !hasPython }, () => {
+  const none = home({});
+  const noProvider = plan(none, '--json');
+  assert.equal(noProvider.status, 1);
+  assert.deepEqual(json(noProvider), { ok: false, code: 'no_active_provider' });
+
+  const dir = home({ active_provider: 'openai' });
+  const unknown = plan(dir, 'made-up', '--json');
+  assert.equal(unknown.status, 1);
+  assert.deepEqual(json(unknown), { ok: false, code: 'unknown_plan' });
+  assert.deepEqual(read(dir), { active_provider: 'openai' });
+
+  const damaged = home('{ not json');
+  const broken = plan(damaged, '--json');
+  assert.equal(broken.status, 1);
+  assert.deepEqual(json(broken), { ok: false, code: 'config_unreadable' });
+});

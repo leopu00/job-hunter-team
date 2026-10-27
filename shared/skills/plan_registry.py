@@ -23,6 +23,7 @@ Usage:
   python3 plan_registry.py list [provider]      # human-readable plans
   python3 plan_registry.py list --json          # every plan, for the UI
   python3 plan_registry.py get                  # active plan from jht.config.json
+  python3 plan_registry.py suggest <provider>   # the plan the account's Codex reading names (never declares it)
   python3 plan_registry.py roster               # first-run roster (JSON)
   python3 plan_registry.py roster --plan kimi:allegretto
 """
@@ -449,6 +450,28 @@ def _codex_note(prov: str, plans: list[dict]) -> Optional[str]:
     return _tf("plan.codex_reports", plan_type, f"{mapped['label']} {amount} $")
 
 
+def suggested_plan_id(provider: str) -> Optional[str]:
+    """The plan the last Codex reading names, if it is in the table: a SUGGESTION for the person to confirm.
+
+    Nothing here writes: a plan is declared only by `set`, with what the person chose."""
+    prov = normalize_provider(provider)
+    if prov != "openai":
+        return None
+    reading = _codex_reading()
+    if reading is None:
+        return None
+    plan_id = _CODEX_PLAN_TYPE_TO_ID.get(reading.get("plan_type") or "")
+    return plan_id if plan_id and find_plan(prov, plan_id) else None
+
+
+def _cmd_suggest(argv: list[str]) -> int:
+    plan_id = suggested_plan_id(argv[0]) if argv else None
+    if plan_id is None:
+        return 1
+    print(plan_id)
+    return 0
+
+
 def _cmd_get() -> int:
     plan = active_plan()
     if plan is None:
@@ -499,6 +522,8 @@ def main(argv: list[str]) -> int:
         return _cmd_list(rest)
     if cmd == "get":
         return _cmd_get()
+    if cmd == "suggest":
+        return _cmd_suggest(rest)
     if cmd == "set":
         return _cmd_set(rest)
     if cmd == "roster":

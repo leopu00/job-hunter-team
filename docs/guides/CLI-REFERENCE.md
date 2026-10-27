@@ -100,7 +100,7 @@ be copied with credential values into shell history, issues or logs.
 | `jht providers autoupdate`    | Node  | Boot step: updates the CLI of the **active** provider only, then re-checks the model pin. Fail-safe — never fails the boot. Disable with `JHT_PROVIDER_AUTOUPDATE=0`. |
 | `jht providers model-pin`     | Node  | Revisits the model the provider CLI pinned at login: picks among the aliases the config already lists (wider window), probes it, and only then writes it. `--dry-run` reports without writing; `JHT_MODEL_PIN=<alias>` freezes the choice. |
 | `jht providers check`         | Node  | List providers with an update available (scriptable, exit 1 if any). |
-| `jht providers plan [id]`     | Node  | Show the subscription plan you declared and the plans of the active provider; with an `id`, declare it. The Capitano does not open the first run without a declared plan. |
+| `jht providers plan [id]`     | Node  | Show the subscription plan you declared and the plans of the active provider; with an `id`, declare it; `--json` prints one JSON object (the desktop app's setup reads and writes the plan with it). The Capitano does not open the first run without a declared plan. |
 
 ### Choosing your plan
 
