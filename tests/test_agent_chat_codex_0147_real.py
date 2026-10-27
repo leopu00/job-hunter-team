@@ -84,6 +84,18 @@ def test_a_codex_in_the_middle_of_a_turn_with_an_empty_composer_is_writable():
     assert module.delivery_gate(ghost) == "empty"
 
 
+def test_a_line_of_the_draft_that_says_context_left_is_not_the_working_footer():
+    """The footer is told by its shape (it starts with «tab to queue message», or the figure is pushed to the
+    right edge), not by the words: a pasted text that happens to contain them stays a draft, whole."""
+    module = _module()
+    # a long paste wrapped over three rows, the middle one saying the words
+    wide = ("parola " * 20).strip()
+    rows = [wide, ("il testo dice 80% context left e poi continua " + wide)[:len(wide)], wide[:50]]
+    screen = ("\x1b[2m" + "─" * 100 + "\x1b[0m\n\n› " + rows[0].rstrip() + "\n  " + rows[1].rstrip() + "\n  " + rows[2].rstrip()
+              + "\n\n  gpt-5.6-sol high · ~/agents/capitano\n")
+    assert module.composer_text(screen) == "".join(row.strip() for row in rows)
+
+
 def _echo_over_two_rows(first_len: int, second_len: int) -> str:
     """The shape of the assistant's last input: a long `›` row and its wrapped tail, as in the capture."""
     return (
