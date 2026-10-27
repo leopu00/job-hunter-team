@@ -316,3 +316,26 @@ def test_a_failed_write_leaves_the_old_file_and_no_temp_file(home: Path):
         os.replace = real_replace
     assert path.read_bytes() == before
     assert sorted(p.name for p in home.iterdir()) == ["jht.config.json"]
+
+
+# ── the plan is asked once: a second trigger while the question is open does not ask it again ───
+
+ASK_ONCE = {
+    "en": "**Ask the plan once.**", "it": "**Il piano si chiede una volta sola.**",
+    "es": "**El plan se pregunta una sola vez.**", "fr": "**La formule se demande une seule fois.**",
+    "de": "**Das Abonnement wird nur einmal erfragt.**", "hu": "**A csomagot csak egyszer kérdezd meg.**",
+    "pt": "**O plano pergunta-se uma só vez.**",
+}
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_capitano_does_not_ask_the_plan_again_while_the_question_is_open(lang: str):
+    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
+    assert text.count(ASK_ONCE[lang]) == 1
+    paragraph = text.split(ASK_ONCE[lang], 1)[1].split("\n\n", 1)[0]
+    # the three things that start a second pass while the first question is still open
+    assert "plan_missing" in paragraph and "`status`" in paragraph
+    # it comes after both places where the plan is asked, and before the roster is spawned
+    asked = text.index(f"{REGISTRY} set <provider>:<id>`")
+    spawn = text.index("\n**2. ")
+    assert asked < text.index(ASK_ONCE[lang]) < spawn

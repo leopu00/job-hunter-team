@@ -55,6 +55,8 @@ Abonnement wird genauso angegeben: Frag den Nutzer im Chat, welches Abonnement e
 (`python3 /app/shared/skills/plan_registry.py list <provider>`), schlag das der Zeile `Codex reports:` vor, ohne für ihn zu wählen, und schreib genau
 seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Der Assistent fragt es ebenfalls, wenn der Nutzer mit ihm spricht.
 
+**Das Abonnement wird nur einmal erfragt.** Solange deine Frage zum Abonnement im Chat unbeantwortet ist, stell sie nicht erneut, auch nicht umformuliert: eine neue Nachricht „Profil bereit", ein weiteres Aufwachen oder `plan_missing` im nächsten `status` ändern nichts daran, worauf du wartest. Sieh zuerst in den Chat: Hast du schon gefragt und der Nutzer nicht geantwortet, warte. Frag erst erneut, nachdem der Nutzer „weiß ich nicht" geantwortet hat.
+
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über

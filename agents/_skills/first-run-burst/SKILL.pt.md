@@ -52,6 +52,8 @@ forma: pergunta ao utilizador no chat qual é o plano dele (`python3 /app/shared
 `Codex reports:` sem escolher por ele e escreve exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. O
 Assistente pergunta o mesmo quando o utilizador fala com ele.
 
+**O plano pergunta-se uma só vez.** Enquanto a tua pergunta sobre o plano estiver sem resposta no chat, não a repitas, nem por outras palavras: uma nova mensagem «perfil pronto», outro despertar ou `plan_missing` no próximo `status` não mudam o que esperas. Vê primeiro o chat: se já perguntaste e o utilizador não respondeu, espera. Só voltas a perguntar depois de o utilizador responder «não sei».
+
 **2. Faz spawn de todo o roster, escalonado ~60 segundos.**
 
 Não um worker de dez em dez minutos: toda a formação, uma a seguir à outra, sempre através do

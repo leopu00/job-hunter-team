@@ -57,6 +57,8 @@ usuario en el chat qué plan tiene (`python3 /app/shared/skills/plan_registry.py
 él y escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. El Asistente lo pregunta también cuando el
 usuario habla con él.
 
+**El plan se pregunta una sola vez.** Mientras tu pregunta sobre el plan siga sin respuesta en el chat, no la repitas, ni siquiera con otras palabras: un nuevo mensaje «perfil listo», otro despertar o `plan_missing` en el próximo `status` no cambian lo que esperas. Mira primero el chat: si ya preguntaste y el usuario no ha respondido, espera. Vuelve a preguntar solo después de que el usuario haya respondido «no lo sé».
+
 **2. Spawnea todo el roster, escalonado unos ~60 segundos.**
 
 No un worker cada diez minutos: toda la formación, una detrás de otra, siempre a través de
