@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { locales } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { existingTeamReadOnly } from "../lib/existing-team-readonly";
+import { localTeamData } from "../lib/local-team-data";
 import { isRatesRequest, ratesFetch } from "./rates-fetch";
 
 /**
@@ -81,6 +82,11 @@ export function shellApi(next: ApiFetch): ApiFetch {
     const path = apiPath(input);
     if (path === "/api/i18n" && method === "POST") return setLocale(input, init);
     if (existingTeamReadOnly() && path && !(method === "GET" && READ_ONLY_PATHS.has(path))) {
+      return json({ error: "read_only" }, 403);
+    }
+    // The team of this computer is only read: what the positions pages would change in it (a judgement, a note,
+    // a request) is refused the same way. The other pages of a local profile keep the routes they have.
+    if (localTeamData() && path?.startsWith("/api/positions/") && method !== "GET") {
       return json({ error: "read_only" }, 403);
     }
     if (path === "/api/i18n" && method === "GET") {

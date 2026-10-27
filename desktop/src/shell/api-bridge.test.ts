@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
+import { setLocalTeamData } from "../lib/local-team-data";
 import { installApiBridge, notInDesktop, shellApi, webRoutes, type ApiFetch } from "./api-bridge";
 
 function fakeGlobal() {
@@ -75,6 +76,26 @@ describe("shellApi, the language the person picks", () => {
     expect(other.status).toBe(403);
     expect(await other.json()).toEqual({ error: "read_only" });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("refuses what the positions pages would change in the team of this computer, and only that", async () => {
+    setLocalTeamData("local:abc");
+    try {
+      const next = vi.fn(notInDesktop);
+      const api = shellApi(next);
+      for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+        const refused = await api("/api/positions/7/user-note", { method });
+        expect(refused.status, method).toBe(403);
+        expect(await refused.json()).toEqual({ error: "read_only" });
+      }
+      expect(next).not.toHaveBeenCalled();
+      // the reads of the positions pages, and the routes of the other pages, keep going where they went
+      await api("/api/positions/facets", { method: "GET" });
+      await api("/api/settings/anything", { method: "POST" });
+      expect(next).toHaveBeenCalledTimes(2);
+    } finally {
+      setLocalTeamData(null);
+    }
   });
 
   it("lets the writes through once the existing team is connected in full (the judgement bridge answers them)", async () => {
