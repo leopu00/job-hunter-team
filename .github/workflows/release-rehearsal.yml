@@ -9,7 +9,9 @@ name: Release rehearsal
 #   - nessuna Release, nessun `upload-artifact`: su un repo pubblico gli artifact li scarica ogni utente
 #     GitHub loggato, e un DMG firmato di prova non deve uscire dal runner. Resta il log (pubblico).
 # Si lancia a mano (workflow_dispatch) da chi ha i diritti di scrittura, con il si' dell'operatore perche'
-# firma con le credenziali Apple. Funziona se questo file e' sul ramo predefinito.
+# firma con le credenziali Apple. Funziona se questo file e' sul ramo predefinito. Il commit provato deve
+# essere antenato di master-arthur (primo passo di ogni job). Le cache hanno chiavi SUE (rehearsal-tauri-…,
+# niente cache npm): quelle del rilascio non si leggono ne si scrivono da un ref qualsiasi.
 # tests/test_release_rehearsal.py tiene i passi di build uguali a quelli di release.yml e il perimetro sopra.
 
 on:
@@ -33,14 +35,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-    timeout-minutes: 360
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
           # Windows is not part of 0.4.0: no installer is built or attached,
           # and the site shows it as "coming soon" without a link.
-          - os: macos-14
+          - os: macos-15
             label: macOS arm64
             args: --target aarch64-apple-darwin --bundles app,dmg
             artifact_name: app-macos-release
@@ -61,6 +63,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Il commit provato firma con i segreti Apple: deve essere gia' passato dalla revisione, cioe' stare su
+      # master-arthur. Senza questo un ref qualsiasi (un ramo non rivisto) girerebbe con le credenziali.
+      - name: The commit to rehearse is on master-arthur
+        run: |
+          git fetch --no-tags origin master-arthur
+          git merge-base --is-ancestor HEAD FETCH_HEAD
+
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -68,10 +77,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: |
-            desktop/package-lock.json
-            shared/package-lock.json
 
       - name: Install Tauri system libraries
         if: runner.os == 'Linux'
@@ -94,8 +99,8 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             desktop/src-tauri/target
-          key: release-tauri-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
-          restore-keys: release-tauri-${{ runner.os }}-
+          key: rehearsal-tauri-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: rehearsal-tauri-${{ runner.os }}-
 
       - name: Install desktop dependencies
         working-directory: desktop
@@ -246,6 +251,13 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+
+      # Il commit provato firma con i segreti Apple: deve essere gia' passato dalla revisione, cioe' stare su
+      # master-arthur. Senza questo un ref qualsiasi (un ramo non rivisto) girerebbe con le credenziali.
+      - name: The commit to rehearse is on master-arthur
+        run: |
+          git fetch --no-tags origin master-arthur
+          git merge-base --is-ancestor HEAD FETCH_HEAD
 
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
