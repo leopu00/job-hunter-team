@@ -233,7 +233,7 @@ pub(crate) fn owner_sid_for_tests(path: &Path) -> Result<String, &'static str> {
             // SAFETY: the descriptor came from GetNamedSecurityInfoW.
             unsafe { LocalFree(descriptor) };
         }
-        return Err("owner_unreadable");
+        return Err("permissions_unreadable");
     }
     let sid = sid_string(owner);
     // SAFETY: allocated by GetNamedSecurityInfoW.
