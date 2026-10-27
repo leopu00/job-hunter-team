@@ -263,6 +263,14 @@ describe("technical and conversational gates", () => {
     });
   });
 
+  it("does not report a failed chat for a snapshot that cannot know it: it offers the step that connects the chat", () => {
+    // The native snapshots always say directChatReady false: the chat is connected by the step's button, which waits
+    // for the Assistant's first turn. A profile already complete used to turn this into «cannot be reached yet».
+    const complete = { ...READY_RUNTIME, directChatReady: false, profileReady: true };
+    expect(runtimeStateFromSnapshot(complete)).toMatchObject({ status: "action-required", stage: "assistant" });
+    expect(runtimeStateFromSnapshot({ ...complete, profileReady: false })).toMatchObject({ status: "action-required", stage: "assistant" });
+  });
+
   it("writes the final marker monotonically only with verified readiness", async () => {
     const store = markerStore();
     markOnboardingStarted(USER.id, store);
