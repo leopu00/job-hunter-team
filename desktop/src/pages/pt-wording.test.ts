@@ -40,6 +40,46 @@ describe("the app's sources", () => {
   });
 });
 
+// One verb says "download" in the Portuguese of the app: «descarregar» (the landing, the guides and the
+// account page already said it; the update button, the first start and the position's PDFs said
+// «transferir»). What «transferir» still means stays: the clipboard («área de transferência»), the
+// folder of the downloads («Transferências», its name in the system) and the transfer of the local ownership to an account.
+describe("the app says «descarregar» for a download", () => {
+  const TRANSFER = /(?<!\p{L})(transferir|transfere|transferes|transferid[oa]s?|transferências?)(?!\p{L})/iu;
+  const OTHER_MEANING = /área de transferência|pasta Transferências|transfere a titularidade/gi;
+  const src = fileURLToPath(new URL("../", import.meta.url));
+  const web = fileURLToPath(new URL("../../../web/", import.meta.url));
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) return /^(landing|demo|node_modules)$/.test(name) ? [] : walk(path);
+      return /\.tsx?$/.test(name) && !/\.(test|d)\.tsx?$/.test(name) ? [path] : [];
+    });
+  const offending = (file: string, base: string) =>
+    readFileSync(file, "utf-8").split("\n")
+      .map((line, index) => ({ line, at: `${file.slice(base.length)}:${index + 1}` }))
+      .filter(({ line }) => !/^\s*(\/\/|\*|\/\*)/.test(line) && TRANSFER.test(line.replace(OTHER_MEANING, "")))
+      .map(({ at }) => at);
+
+  it("in the app's own sources and in the pages it reuses", () => {
+    const offenders = [
+      ...walk(src).flatMap((file) => offending(file, src)),
+      ...["app/(protected)", "app/components", "lib"].flatMap((dir) => walk(join(web, dir)))
+        .filter((file) => !file.includes(join("lib", "demo")))
+        .flatMap((file) => offending(file, web)),
+    ];
+    expect(offenders).toEqual([]);
+  });
+
+  it("in shared/locales/pt.json", () => {
+    const texts = JSON.parse(readFileSync(join(web, "../shared/locales/pt.json"), "utf-8")) as Record<string, unknown>;
+    const offenders = Object.entries(texts)
+      .filter(([, text]) => typeof text === "string" && TRANSFER.test(text.replace(OTHER_MEANING, "")))
+      .map(([key]) => key);
+    expect(offenders).toEqual([]);
+  });
+});
+
 // The app reuses the web's pages (the ones behind the login, the shared components and lib), and
 // the CLI and the Telegram bot read shared/locales/pt.json. Their Portuguese is that of Portugal
 // too: these are Brazilian words no other language of the app writes, and each has a word of its own
