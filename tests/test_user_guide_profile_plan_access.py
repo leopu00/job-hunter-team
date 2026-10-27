@@ -185,12 +185,16 @@ def test_what_ends_the_write_access_is_what_the_app_says():
 
 
 def test_the_restart_survival_is_native_only_where_the_record_is_kept():
-    # The record is written and read back on unix only: the guide says Mac, and says nothing of Windows.
-    native = text("desktop/src-tauri/src/existing_team_runtime.rs")
-    assert "#[cfg(unix)]\npub(crate) fn restore_full_link_at" in native
-    assert "On a Mac the write access you confirmed survives a restart" in flat(DESKTOP)
+    # The record is written and read back on unix (mode 0600) and on Windows (the ACL of the user only); the guide
+    # says so, and says nothing of any other system.
+    native = text("desktop/src-tauri/src/existing_team_runtime.rs").replace("\r\n", "\n")
+    assert "#[cfg(any(unix, windows))]\npub(crate) fn restore_full_link_at" in native
+    assert "#[cfg(any(unix, windows))]\npub(crate) fn remember_full_link_at" in native
+    assert "#[cfg(not(any(unix, windows)))]\npub(crate) fn restore_full_link_at" in native
+    assert "#[cfg(windows)]\nfn read_full_link_mark" in native and "is_owner_only(&acl, &user)" in native
+    assert "On a Mac, on Windows and on Linux the write access you confirmed survives a restart" in flat(DESKTOP)
     section_text = section(DESKTOP, "## 🔗 A team on a VPS: read only and write access")
-    assert "Windows" not in section_text
+    assert "only your user and the system may open" in flat(section_text)
 
 
 def test_leaving_the_account_ends_the_write_access_and_the_guide_says_so():

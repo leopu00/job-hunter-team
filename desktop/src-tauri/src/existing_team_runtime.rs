@@ -2342,6 +2342,7 @@ pub(crate) fn remember_full_link_at(
     let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
+    #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
