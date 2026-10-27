@@ -92,13 +92,32 @@ describe("Dashboard of a local profile", () => {
 });
 
 describe("Team page of a local profile", () => {
-  it("says the status, the standing orders and the activity are not shown yet, and reads nothing from the cloud", async () => {
+  it("shows the activity counted in the team's database, says the status and the standing orders are not shown yet, and asks the cloud for nothing", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    reply = (_command, request) =>
+      request.op === "team_activity"
+        ? {
+            ok: true,
+            data: {
+              daily: [{ role: "scout", actor: "Scout-1", day: today, n: 4 }],
+              newest: [{ role: "scout", actor: "Scout-1", ts: `${today}T09:00:00Z`, pid: "5" }],
+              seen: [{ role: "scout", actor: "Scout-1", last: `${today}T09:00:00Z` }],
+              meta: { "5": { legacy_id: 105, title: "Synthetic role five", company: "Synthetic Co" } },
+            },
+          }
+        : { ok: true, data: syntheticStats() };
     navigate("/team", { replace: true });
     render(<Shell />);
     const note = await screen.findByTestId("team-local-profile");
-    expect(note).toHaveTextContent("non mostra ancora lo stato, le direttive e l’attività degli agenti");
-    expect(note).toHaveTextContent("Agenti");
+    expect(note).toHaveTextContent("lo stato della squadra e gli ordini permanenti sono dati del cloud");
+    expect(await screen.findByText("Synthetic role five")).toBeInTheDocument();
+    const asked = native.invoke.mock.calls
+      .filter(([command]) => command === "existing_team_positions_read")
+      .map(([, args]) => args.request as { op: string; from?: string; to?: string });
+    const activity = asked.find((request) => request.op === "team_activity");
+    expect(activity?.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(activity?.to).toBe(today);
     expect(fake.current!.calls).toEqual([]);
-    expect(apiCalls.filter((call) => call.includes("/api/team"))).toEqual([]);
+    expect(apiCalls.filter((call) => /\/api\/team(-state|-directives|\/status)/.test(call))).toEqual([]);
   });
 });

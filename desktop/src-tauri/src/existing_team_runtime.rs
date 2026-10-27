@@ -347,8 +347,8 @@ if op=='team_activity':
    if column not in have: continue
    who=actor if actor and actor in have else 'NULL'
    where=' FROM '+table+' WHERE '+column+' IS NOT NULL AND substr('+column+',1,10) BETWEEN ? AND ?'
-   for row in db.execute('SELECT '+who+' AS actor, substr('+column+',1,10) AS day, COUNT(*) AS n, MAX('+column+') AS last'+where+' GROUP BY actor, day',(first,last)):
-    daily.append({'role':role,'actor':trunc(row['actor'],40),'day':row['day'],'n':row['n'],'last':trunc(row['last'],40)})
+   for row in db.execute('SELECT '+who+' AS actor, substr('+column+',1,10) AS day, COUNT(*) AS n'+where+' GROUP BY actor, day',(first,last)):
+    daily.append({'role':role,'actor':trunc(row['actor'],40),'day':row['day'],'n':row['n']})
    for row in db.execute('SELECT '+who+' AS actor, '+column+' AS ts, '+pid+' AS pid'+where+' ORDER BY '+column+' DESC LIMIT '+str(EVENTS),(first,last)):
     newest.append({'role':role,'actor':trunc(row['actor'],40),'ts':trunc(row['ts'],40),'pid':None if row['pid'] is None else sid(row['pid'])})
   # also the last time each instance was seen, whatever the range (the web shows it next to the instance)
@@ -3944,6 +3944,41 @@ mod tests {
 
     fn exited(code: i32, stdout: &str) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult { code, stdout: stdout.as_bytes().to_vec() })
+    }
+
+    #[test]
+    fn the_team_activity_read_takes_only_a_closed_range_of_days_and_answers_the_shape_the_page_expects() {
+        let good = json!({"op": "team_activity", "from": "2026-10-05", "to": "2026-10-15"});
+        let parsed = parse_positions_request(good.clone()).unwrap();
+        assert_eq!(parsed.op(), "team_activity");
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), good);
+        for bad in [
+            json!({"op": "team_activity"}),
+            json!({"op": "team_activity", "from": "2026-10-05"}),
+            json!({"op": "team_activity", "from": "2026-10-15", "to": "2026-10-05"}),
+            json!({"op": "team_activity", "from": "2026-10-5", "to": "2026-10-15"}),
+            json!({"op": "team_activity", "from": "2026-10-05", "to": "2026-10-15", "limit": 3}),
+            json!({"op": "team_activity", "from": "2026-10-05\n", "to": "2026-10-15"}),
+            json!({"op": "team_activity", "from": "x026-10-05", "to": "2026-10-15"}),
+        ] {
+            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+        }
+        let request = parsed;
+        let ok = json!({"ok": true, "data": {"daily": [], "newest": [{"role": "scout"}], "seen": [], "meta": {}}});
+        assert!(valid_positions_reply(&request, &ok));
+        for broken in [
+            json!({"ok": true, "data": {"daily": [], "newest": [], "seen": []}}),
+            json!({"ok": true, "data": {"daily": [], "newest": [], "seen": [], "meta": [], "extra": 1}}),
+            json!({"ok": true, "data": {"daily": [1], "newest": [], "seen": [], "meta": {}}}),
+            json!({"ok": true, "data": {"daily": {}, "newest": [], "seen": [], "meta": {}}}),
+            json!({"ok": false, "error": "positions_unavailable"}),
+        ] {
+            assert!(!valid_positions_reply(&request, &broken), "{broken}");
+        }
+        // the reader that runs on the host takes the range as a parameter, reads read-only and never `SELECT *`
+        let reader = POSITIONS_READ_PY.split("if op=='team_activity':").nth(1).unwrap().split("if op=='map':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && !reader.contains("p.*"));
+        assert!(reader.contains("(first,last)"));
     }
 
     #[test]
