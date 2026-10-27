@@ -126,3 +126,104 @@ def test_a_file_over_the_size_bound_is_not_read(tmp_path: Path, monkeypatch):
     _codex(tmp_path, "big", "capitano", [(2, 5_000, 0, 1)])
     monkeypatch.setattr(boot_cost, "MAX_SESSION_BYTES", 10)
     assert boot_cost.measure(tmp_path, NOW - 7200, minutes=10)["roles"] == {}
+
+
+# ── --calls: where a role's first minutes go, by program name ─────────────────────────────────
+
+def _codex_calls(home: Path, name: str, role: str, steps: list) -> None:
+    """steps: ("model", at, total_in, cached, out) or ("tool", {payload})."""
+    rows = [{"type": "session_meta", "timestamp": _iso(0), "payload": {"cwd": f"/jht_home/agents/{role}"}},
+            {"type": "event_msg", "timestamp": _iso(0), "payload": {"type": "token_count", "info": None}}]
+    for step in steps:
+        if step[0] == "tool":
+            rows.append({"type": "response_item", "timestamp": _iso(1), "payload": step[1]})
+        else:
+            _, at, total_in, cached, out = step
+            rows.append({"type": "event_msg", "timestamp": _iso(at), "payload": {"type": "token_count", "info": {
+                "last_token_usage": {"input_tokens": total_in, "cached_input_tokens": cached, "output_tokens": out,
+                                     "reasoning_output_tokens": 0}}}})
+    _write(home / ".codex" / "sessions" / "2026" / "10" / "27" / f"rollout-{name}.jsonl", rows)
+
+
+def _shell(command) -> dict:
+    return {"type": "function_call", "name": "shell", "arguments": json.dumps({"command": command})}
+
+
+def test_programs_are_names_only_never_an_argument_or_a_word_of_a_text():
+    pin = boot_cost.programs_in
+    assert pin(["bash", "-lc", "python3 /app/shared/skills/captain_diary.py handoff"]) == ["captain_diary.py"]
+    assert pin("python3 /app/x/db_query.py recent-activity --since 2h | head -50") == ["db_query.py", "head"]
+    assert pin("cd /app && JHT_HOME=/x python3 -I first_run.py status; tmux list-sessions") == ["cd", "first_run.py", "tmux"]
+    assert pin("cat <<'EOF'\nSECRET words here\nEOF") == ["cat"]
+    assert pin('echo "line one\nSECRETWORD two" && ls') == ["echo", "ls"]
+    assert pin("python3 -c 'import os; SECRET()'") == ["python3"]
+    assert pin("timeout 30 node /app/cli/bin/jht.js team status") == ["jht.js"]
+    assert pin("sed -n 1,40p /jht_home/profile/candidate_profile.yml") == ["sed"]
+    assert pin(None) == [] and pin(12) == [] and pin("") == []
+
+
+def test_the_fresh_input_goes_to_the_programs_run_just_before_the_call(tmp_path: Path):
+    for i in range(2):
+        _codex_calls(tmp_path, f"c{i}", "capitano", [
+            ("model", 2, 40_000, 0, 100),                                         # the prompt
+            ("tool", _shell(["bash", "-lc", "python3 /app/shared/skills/captain_diary.py handoff"])),
+            ("model", 10, 49_000, 40_000, 50),                                    # 9 000 fresh from the handoff
+            ("tool", _shell("python3 /app/shared/skills/db_query.py x | head")),
+            ("tool", _shell("tmux list-sessions")),
+            ("model", 20, 57_000, 49_000, 70),                                    # 8 000 fresh, split in three
+            ("model", 30, 57_500, 57_000, 10),                                    # follows no tool
+            ("model", 9999, 99_999, 0, 1),                                        # outside the window
+        ])
+    report = boot_cost.measure_calls(tmp_path, NOW - 7200, minutes=5, role="capitano")
+    programs = report["programs"]
+    assert report["sessions"] == 2
+    assert programs["(prompt)"]["fresh_in"] == 40_000 and programs["(prompt)"]["uses"] == 1
+    assert programs["captain_diary.py"]["fresh_in"] == 9_000
+    assert programs["db_query.py"]["fresh_in"] == programs["head"]["fresh_in"] == programs["tmux"]["fresh_in"] == 2666
+    assert programs["(no tool)"]["fresh_in"] == 500
+    assert report["out"] == 100 + 50 + 70 + 10
+    assert abs(sum(p["share"] for p in programs.values()) - 1) < 0.01
+    assert next(iter(programs)) == "(prompt)"  # largest first
+
+
+def test_a_claude_response_written_as_several_lines_is_one_call(tmp_path: Path):
+    usage = {"input_tokens": 5, "cache_creation_input_tokens": 1_000, "cache_read_input_tokens": 0, "output_tokens": 20}
+    rows = [
+        {"timestamp": _iso(1), "message": {"id": "m1", "usage": usage, "content": [{"type": "text", "text": "SECRET"}]}},
+        {"timestamp": _iso(1), "message": {"id": "m1", "usage": usage, "content": [
+            {"type": "tool_use", "name": "Bash", "input": {"command": "python3 /app/shared/skills/first_run.py status"}}]}},
+        {"timestamp": _iso(1), "message": {"id": "m1", "usage": usage, "content": [
+            {"type": "tool_use", "name": "Read", "input": {"file_path": "/jht_home/profile/SECRET.yml"}}]}},
+        {"timestamp": _iso(5), "message": {"id": "m2", "usage": {"input_tokens": 3, "cache_creation_input_tokens": 400,
+                                                                  "cache_read_input_tokens": 1_000, "output_tokens": 9},
+                                           "content": []}},
+    ]
+    _write(tmp_path / ".claude" / "projects" / "-jht-home-agents-capitano" / "s.jsonl", rows)
+    report = boot_cost.measure_calls(tmp_path, NOW - 7200, minutes=5, role="capitano")
+    assert report["programs"]["(prompt)"]["fresh_in"] == 1_005 and report["programs"]["(prompt)"]["uses"] == 1
+    assert report["programs"]["first_run.py"]["fresh_in"] == report["programs"]["Read"]["fresh_in"] == 201
+    assert "SECRET" not in json.dumps(report) and report["out"] == 29
+    assert boot_cost.measure(tmp_path, NOW - 7200, minutes=5)["roles"]["capitano"]["calls"] == 2  # not 4
+
+
+def test_the_command_line_prints_only_names_and_numbers(tmp_path: Path):
+    _codex_calls(tmp_path, "c", "capitano", [
+        ("model", 2, 1_000, 0, 1), ("tool", _shell("cat /jht_home/profile/SECRET-NAME.yml")), ("model", 4, 3_000, 1_000, 1)])
+    env = {"PATH": os.environ.get("PATH", ""), "JHT_HOME": str(tmp_path), "PYTHONDONTWRITEBYTECODE": "1"}
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "--calls", "capitano", "--hours", "3"],
+                          capture_output=True, text=True, env=env, timeout=60, check=False)
+    assert done.returncode == 0 and "cat" in done.stdout and "(prompt)" in done.stdout
+    assert "SECRET" not in done.stdout + done.stderr and str(tmp_path) not in done.stdout
+    bad = subprocess.run([sys.executable, "-I", str(SCRIPT), "--calls", "../etc"], capture_output=True, text=True,
+                         env=env, timeout=60, check=False)
+    assert bad.returncode == 2 and "SECRET" not in bad.stdout
+    assert "no session" in boot_cost.render_calls(boot_cost.measure_calls(tmp_path, NOW - 7200, 5, "scout"))
+
+
+def test_a_tool_that_takes_code_is_named_by_the_tool_and_none_of_its_words_come_out():
+    tool = boot_cost._tool_programs
+    assert tool({"type": "custom_tool_call", "name": "exec", "input": "const SECRETVAR = await read('/jht_home/x');"}) == ["exec"]
+    assert tool({"type": "function_call", "name": "wait", "arguments": "{}"}) == ["wait"]
+    assert tool({"type": "function_call", "name": "x y z", "arguments": "not json"}) == ["(tool)"]
+    assert tool({"type": "function_call", "name": "shell", "arguments": json.dumps({"cmd": "ls -la /secret"})}) == ["ls"]
+    assert tool({"type": "local_shell_call", "action": {"command": ["git", "status"]}}) == ["git"]
