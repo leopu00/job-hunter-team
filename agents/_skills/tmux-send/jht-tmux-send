@@ -40,7 +40,9 @@
 #   2 → sessione inesistente
 #   3 → testo mai apparso nel pane E pane NON occupato → TUI irricettiva
 #       (probabile bash nudo post-crash / modal bloccato): unico segnale "morto".
-#   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
+#   4 → TUI occupata (turno in corso) oltre il budget d'attesa, OPPURE occupata e senza aver ancora disegnato il
+#       testo incollato dopo JHT_TMUX_LATE_RENDER_WAIT secondi oltre la finestra (10): scritto una volta, nulla
+#       premuto, il riprovo preme solo l'Invio → agente VIVO:
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
 #       tardi, MAI spawnare un rimpiazzo. "Busy != morto": confonderli e' la
 #       causa radice dell'overspawn del 07/06 (6→16 agenti in 3 giorni,
@@ -927,6 +929,14 @@ else
   case "$partial_wait_s" in ''|*[!0-9]*) partial_wait_s=8 ;; esac
   [ "${#partial_wait_s}" -le 3 ] || partial_wait_s=8
   partial_wait_s=$((10#$partial_wait_s))   # 08 and 09 are not octal numbers
+  # An agent in the middle of a turn can draw what is pasted into its composer several seconds late (the Capitano on a
+  # loaded machine, TEST 8): the render window of one at rest is not the measure of a busy one. Past the window a
+  # BUSY pane is waited for this long more; an idle one is not (it is the one that may be dead).
+  late_render_s=${JHT_TMUX_LATE_RENDER_WAIT:-10}
+  case "$late_render_s" in ''|*[!0-9]*) late_render_s=10 ;; esac
+  [ "${#late_render_s}" -le 2 ] || late_render_s=10
+  late_render_s=$((10#$late_render_s))
+  late_since=-1
   while :; do
     pane=$(_pane)
     gate=$(_delivery_gate "$pane")
@@ -964,7 +974,16 @@ else
           exit 130 ;;
       esac
     fi
-    [ "$poll" -lt "$render_polls" ] || break
+    if [ "$poll" -ge "$render_polls" ]; then
+      # The window of an agent at rest is over. A busy pane gets `late_render_s` more seconds: the text is in its
+      # composer or on its way, and a verdict of «never shown» now would be a guess.
+      if [ "$late_render_s" -gt 0 ] && _pane_busy "$pane"; then
+        [ "$late_since" -ge 0 ] || late_since=$SECONDS
+        [ $(( SECONDS - late_since )) -lt "$late_render_s" ] || break
+      else
+        break
+      fi
+    fi
     poll=$(( poll + 1 ))
     sleep 0.05
   done
@@ -972,6 +991,12 @@ else
     # Digitato una volta, mai comparso nella casella: la TUI non lo ha preso. NON si riscrive e NON si
     # preme niente (un Invio o un Escape su un turno appena partito lo rompono). Resta 3, come sempre:
     # e' l'unico segnale «forse morto» su cui conta il pacing-bridge.
+    if _pane_busy "$pane"; then
+      # Typed once, not drawn yet, and the agent is in a turn: alive, not dead. Nothing is pressed and nothing is
+      # typed again; a retry finds the text in the composer as the pending text of ours and presses only Enter.
+      echo "jht-tmux-send: $session is busy and has not drawn the paste yet: typed once, nothing pressed; retry later (rc=4)" >&2
+      exit 4
+    fi
     echo "jht-tmux-send: $session not receptive: typed once, never shown in the composer (pane not busy or text not seen): nothing pressed" >&2
     exit 3
   fi
