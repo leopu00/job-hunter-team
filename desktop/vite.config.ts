@@ -151,6 +151,7 @@ export default defineConfig(({ mode }) => ({
       { find: /^@\/lib\/cloud-sync\/auth$/, replacement: fromHere("./src/web-shims/server/cloud-sync-auth.ts") },
       { find: /^@\/lib\/cloud-sync\/tokens$/, replacement: fromHere("./src/web-shims/server/cloud-sync-tokens.ts") },
       { find: /^@\/lib\/reauth$/, replacement: fromHere("./src/web-shims/reauth.ts") },
+      { find: /^@\/lib\/write-failure-read-only$/, replacement: fromHere("./src/web-shims/write-failure-read-only.ts") },
       { find: /^@\/lib\/shell$/, replacement: fromHere("./src/web-shims/server/shell.ts") },
       { find: /^@\/lib\/pending-message-reply-local$/, replacement: fromHere("./src/web-shims/server/pending-message-reply-local.ts") },
       { find: /^better-sqlite3$/, replacement: fromHere("./src/web-shims/server/better-sqlite3.ts") },

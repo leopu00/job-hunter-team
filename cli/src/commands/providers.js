@@ -5,7 +5,8 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { JHT_HOME } from '../jht-paths.js';
-import { writePrivateJson } from '../lib/secure-config-io.js';
+import { readRegularFileText, writePrivateJson } from '../lib/secure-config-io.js';
+import { declaredPlan, planTable, withDeclaredPlan } from '../lib/provider-plan.js';
 import { refreshModelPin } from './model-pin.js';
 import { isContainer } from '../../../shared/runtime/container.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
@@ -217,6 +218,53 @@ async function handleUse(id) {
     console.log(`  ${OK} active provider: ${prev || '(none)'} → ${normalized}`);
     console.log(`  ${DIM}Restart the team to apply: jht team stop --all && jht team start${RESET}`);
   }
+}
+
+// jht providers plan [id]: the subscription plan, which the Capitano's first run cannot open without.
+// {} only for a configuration that is not there yet; one that is there and cannot be read stops the command.
+function readConfigForPlan() {
+  try {
+    return { config: JSON.parse(readRegularFileText(CONFIG_PATH)) };
+  } catch (err) {
+    return err?.code === 'ENOENT' ? { config: {} } : { unreadable: true };
+  }
+}
+
+function handlePlan(id) {
+  const { config, unreadable } = readConfigForPlan();
+  if (unreadable || !config || typeof config !== 'object' || Array.isArray(config)) {
+    console.error(`${ERR}  ${CONFIG_PATH} cannot be read (damaged, or not a regular file): nothing was written`);
+    process.exitCode = 1;
+    return;
+  }
+  const active = typeof config.active_provider === 'string' ? config.active_provider.trim() : '';
+  if (!active) {
+    console.error(`${ERR}  no active provider: choose one first with: jht providers use openai`);
+    process.exitCode = 1;
+    return;
+  }
+  if (id === undefined) {
+    const current = declaredPlan();
+    if (current) console.log(`  ${OK} plan: ${current.label} (${current.id}), provider ${current.provider}`);
+    else if (current === null) console.log(`  ${WARN}  no plan declared for ${active}: the Capitano cannot open the first run without one`);
+    else console.log(`  ${WARN}  the declared plan cannot be read now`);
+    const table = planTable(active);
+    if (table) console.log(`\n  Plans:\n${table.split('\n').map((line) => `  ${line}`).join('\n')}`);
+    console.log(`\n  ${DIM}Declare one: jht providers plan <id>${RESET}`);
+    return;
+  }
+  const next = withDeclaredPlan(config, id);
+  if (!next.ok) {
+    const says = {
+      unknown_plan: `plan '${id}' is not one of the ${next.provider} plans: see them with: jht providers plan`,
+      registry_unavailable: 'the plan table cannot be read (python3 or its module): nothing was written',
+    };
+    console.error(`${ERR}  ${says[next.code] ?? next.code}`);
+    process.exitCode = 1;
+    return;
+  }
+  writePrivateJson(CONFIG_PATH, next.config);
+  console.log(`  ${OK} plan: ${next.plan.label} (${next.plan.id}), provider ${next.provider}`);
 }
 
 // Spec di upgrade per ciascun provider. Consumata anche dal setup nativo Godot.
@@ -970,6 +1018,11 @@ export function registerProvidersCommand(program) {
     .command('use <id>')
     .description('Set the active provider (`jht config set active_provider` alias)')
     .action(handleUse);
+
+  cmd
+    .command('plan [id]')
+    .description('Show the subscription plan and the possible ones; with an id, declare it (the Capitano sizes the first run on it)')
+    .action((id) => handlePlan(id));
 
   cmd
     .command('update [id]')

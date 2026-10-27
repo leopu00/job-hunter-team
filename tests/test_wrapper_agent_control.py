@@ -39,7 +39,7 @@ def _panel_runtime(tmp_path: Path):
     runtime = Path(env["JHT_RUNTIME_DIR"])
     adapter = runtime / "bin" / "docker"
     source = adapter.read_text(encoding="utf-8")
-    anchor = "      node:*) exit 0 ;;\n"
+    anchor = "      node:*)\n"
     assert source.count(anchor) == 1
     adapter.write_text(source.replace(anchor, AGENT_CONTROL_EXEC + anchor), encoding="utf-8")
     manifest = runtime / ".runtime-integrity"

@@ -392,15 +392,18 @@ if command == "up" and dry_run and rest and rest[0] == "-d":
         if "# candidate-release" in Path(compose_file).read_text(encoding="utf-8")
         else os.environ["JHT_FIXTURE_CONFIG_HASH"]
     )
-    # 1.6.0 hashes each service's own configuration: the dependency's create comes first, with its own
+    # 1.6.0 hashes each service's own configuration, and the plan of a service prints the create of its
+    # dependency first, with its own hash (jht depends on jht-telegram), then the create of the service asked
+    service = rest[-1]
+    if service == "jht":
+        print(
+            "INFO podman create --name=jht-telegram --label io.podman.compose.config-hash="
+            + "7" * 64
+            + " --label next=value",
+            file=sys.stderr,
+        )
     print(
-        "INFO podman create --name=jht-telegram --label io.podman.compose.config-hash="
-        + "7" * 64
-        + " --label next=value",
-        file=sys.stderr,
-    )
-    print(
-        "INFO podman create --name=jht --label io.podman.compose.config-hash="
+        "INFO podman create --name=" + service + " --label io.podman.compose.config-hash="
         + config_hash
         + " --label next=value",
         file=sys.stderr,
@@ -1034,7 +1037,7 @@ def test_read_only_ps_rejects_unowned_ambiguous_or_stale_ids_without_create(
 
 @pytest.mark.parametrize(
     ("container_case", "inspect_expected"),
-    tuple(case for case in UNTRUSTED_CONTAINER_CASES if case[0] != "zero"),
+    tuple(case for case in UNTRUSTED_CONTAINER_CASES if case[0] not in ("zero", "stale")),
 )
 def test_up_rejects_untrusted_existing_container_before_any_mutation(
     tmp_path: Path,
@@ -1051,14 +1054,16 @@ def test_up_rejects_untrusted_existing_container_before_any_mutation(
     expected_provider_calls = [(MACHINE, PS_Q_CHILD)]
     if inspect_expected:
         expected_provider_calls.append((MACHINE, HASH_PROBE_CHILD))
-        # The refusal then looks, read-only, for a container of the same project that
-        # only changed its config-hash (stale_config_hint): one more id listing.
+        # The refusal then looks, read-only, twice more: whether it is a container of ours that only
+        # stopped with the hash of an earlier compose (the one `up` recreates), and for one that
+        # only changed its config-hash (stale_config_hint): two more id listings.
+        expected_provider_calls.append((MACHINE, PS_Q_CHILD))
         expected_provider_calls.append((MACHINE, PS_Q_CHILD))
     assert _provider_podman_calls(podman_log) == expected_provider_calls
     compose_calls = _actual_compose_calls(env)
     _assert_literal_project(compose_calls)
     ps_calls = [call for call in compose_calls if call[1][-2:] == ["ps", "-q"]]
-    assert len(ps_calls) == (2 if inspect_expected else 1)
+    assert len(ps_calls) == (3 if inspect_expected else 1)
     assert not any("up" in args and "--dry-run" not in args for _, args in compose_calls)
     inspect_calls = [
         args
@@ -1068,6 +1073,44 @@ def test_up_rejects_untrusted_existing_container_before_any_mutation(
     assert bool(inspect_calls) is inspect_expected
     if inspect_expected:
         _assert_hash_probes_are_read_only(env)
+
+
+def test_up_starts_a_stopped_container_of_ours_instead_of_refusing_it(tmp_path: Path):
+    # The old «stale» case: the container exists, Exited, every label and the hash as expected. podman-compose
+    # 1.6.0 lists it (its `ps` is `podman ps -a`); it is ours and simply not running, so `up` goes on.
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "stale"
+
+    result = _run(wrapper, env, "up")
+
+    # the fixture's container stays Exited after `up` (it does not model the start), so the check after
+    # `up` cannot pass here; what is decided is that the precheck did not refuse and `up` ran once
+    assert "esistente non attestabile" not in result.stderr
+    real_up = [args for _, args in _actual_compose_calls(env) if "up" in args and "--dry-run" not in args]
+    assert len(real_up) == 1
+
+
+def test_upgrade_with_a_stopped_team_of_ours_counts_it_as_absent_and_never_asks_for_volumes(tmp_path: Path):
+    # Decision: an upgrade with the team stopped takes the baseline as «absent» (nothing runs, nothing to put
+    # back) and goes on; the stopped container is not a reason to refuse. The app is told the team is «ferma»,
+    # not «non-installata», and a failed upgrade removes the new container without ever touching the volumes.
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "stale"
+
+    result = _run(wrapper, env, "upgrade", "--apply", "--json")
+
+    report = json.loads(result.stdout)
+    assert report["message"] != "Container esistente non attestabile"
+    assert report["phase"] != "preflight"
+    assert report["previous"] == {"version": "ferma", "image": "none"}
+    assert report["rolledBack"] is False
+    compose_calls = [args for _, args in _actual_compose_calls(env)]
+    assert any("up" in args and "--dry-run" not in args for args in compose_calls)
+    rollback = [args for args in compose_calls if "rm" in args]
+    assert rollback and all(args[-2:] == ["-sf", "jht"] for args in rollback)
+    assert not any(
+        flag in args for args in compose_calls for flag in ("-v", "--volumes", "-fsv", "-sfv")
+    )
 
 
 def test_up_creates_only_when_precheck_finds_no_existing_project_container(
@@ -1401,7 +1444,7 @@ def test_upgrade_activate_commits_canonical_project_metadata_for_later_probes(
 
 @pytest.mark.parametrize(
     ("container_case", "inspect_expected"),
-    tuple(case for case in UNTRUSTED_CONTAINER_CASES if case[0] != "zero"),
+    tuple(case for case in UNTRUSTED_CONTAINER_CASES if case[0] not in ("zero", "stale")),
 )
 def test_upgrade_rejects_untrusted_baseline_before_publish_or_up(
     tmp_path: Path,

@@ -87,6 +87,13 @@ exit 0
 STUB_DELIVERY = """#!/bin/sh
 # The real transport hands every message to message_origin.py (the fence); the stub says so too,
 # because the chat refuses a transport that does not.
+if [ "$1" = --flush-ours ]; then
+  # The transport's mode that submits a text of OURS left in the composer: recorded apart from the deliveries.
+  printf '%s\\n' "$2" >> "$FAKE_TMUX_STATE/flush.sessions"
+  if [ "${FAKE_FLUSH_CLEARS:-0}" = 1 ]; then rm -f "$FAKE_TMUX_STATE/screen"; : > "$FAKE_TMUX_STATE/composer"; fi
+  [ -z "$FAKE_FLUSH_ERR" ] || printf '%s\\n' "$FAKE_FLUSH_ERR" >&2
+  exit "${FAKE_FLUSH_RC:-130}"
+fi
 sleep "${FAKE_DELIVERY_SLEEP:-0}"
 printf '%s\\n' "$1" >> "$FAKE_TMUX_STATE/delivered.sessions"
 printf '%s' "$2" >> "$FAKE_TMUX_STATE/delivered.envelopes"
@@ -784,6 +791,77 @@ def test_a_real_draft_gets_its_own_closed_code_and_is_not_touched(box):
     code, answer = box.run("send", "capitano", "id-draft", stdin="1")
     assert (code, answer) == (130, {"error": "composer_has_text"})
     _nothing_happened(box)
+
+
+def _flush_calls(box):
+    path = box.state / "flush.sessions"
+    return path.read_text(encoding="utf-8").split() if path.exists() else []
+
+
+def test_a_text_of_ours_left_in_the_composer_is_submitted_by_the_transport_and_then_the_users_turn_goes(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-flush", stdin="verifica la coda",
+                            FAKE_FLUSH_RC="0", FAKE_FLUSH_CLEARS="1")
+    assert code == 0 and receipt["taken"] is True
+    assert _flush_calls(box) == ["CAPITANO"], "the transport was asked once, for this agent"
+    assert box.envelopes() == ["[@utente -> @capitano] [CHAT] verifica la coda"]
+    # the chat itself typed nothing over the draft and deleted nothing: it only asked the transport
+    assert not any(call.startswith("send-keys") for call in box.calls())
+
+
+def test_a_draft_that_is_not_ours_stays_a_closed_code_and_nothing_is_touched(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-foreign", stdin="1", FAKE_FLUSH_RC="130")
+    assert (code, answer) == (130, {"error": "composer_has_text"})
+    assert _flush_calls(box) == ["CAPITANO"]
+    _nothing_happened(box)
+
+
+@pytest.mark.parametrize("rc, closed", [
+    ("5", "composer_has_text"), ("3", "agent_not_at_prompt"), ("8", "agent_busy"),
+    ("2", "agent_unavailable"), ("1", "composer_has_text"), ("99", "composer_has_text"),
+], ids=["enters-swallowed", "menu", "lock-busy", "no-session", "old-transport-usage", "unknown"])
+def test_what_the_transport_cannot_flush_is_the_closed_code_the_chat_would_have_given(box, rc, closed):
+    box.stub_delivery()
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-flush-fails", stdin="1", FAKE_FLUSH_RC=rc)
+    assert answer == {"error": closed}
+    assert _flush_calls(box) == ["CAPITANO"]
+    _nothing_happened(box)
+
+
+def test_an_old_transport_that_takes_the_flag_for_a_session_name_leaves_the_draft_a_draft(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    # what the transport of master-arthur really prints for `--flush-ours X`: rc 2, the flag as the session
+    old = "jht-tmux-send: sessione '--flush-ours' non esiste"
+    code, answer = box.run("send", "capitano", "id-old-transport", stdin="1", FAKE_FLUSH_RC="2", FAKE_FLUSH_ERR=old)
+    assert answer == {"error": "composer_has_text"}
+    _nothing_happened(box)
+    # the same rc 2 with an ordinary message is the agent's session being gone
+    gone = "jht-tmux-send: sessione 'CAPITANO' non esiste"
+    code, answer = box.run("send", "capitano", "id-gone", stdin="1", FAKE_FLUSH_RC="2", FAKE_FLUSH_ERR=gone)
+    assert answer == {"error": "agent_unavailable"}
+
+
+def test_the_flush_is_tried_once_and_only_for_text(box):
+    box.stub_delivery()
+    # the transport says «free» but the text is still there: one try, then the closed code
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    code, answer = box.run("send", "capitano", "id-flush-once", stdin="1", FAKE_FLUSH_RC="0")
+    assert answer == {"error": "composer_has_text"}
+    assert _flush_calls(box) == ["CAPITANO"]
+    # a menu is never flushed (an Enter on it would choose), and an empty composer needs nothing
+    for index, screen in enumerate((CLAUDE_PERMISSION, CODEX_APPROVAL), start=1):
+        (box.state / "screen").write_text(screen, encoding="utf-8")
+        code, answer = box.run("send", "capitano", f"id-menu-{index}", stdin="1", FAKE_FLUSH_RC="0")
+        assert answer == {"error": "agent_not_at_prompt"}
+    (box.state / "screen").write_text(READY_CLAUDE, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", "id-ready", stdin="ok")
+    assert code == 0 and receipt["taken"] is True
+    assert _flush_calls(box) == ["CAPITANO"], "no further flush: only the first screen had text"
 
 
 def test_an_unrecognised_codex_0147_form_is_delivered_and_the_transport_must_prove_it(box):

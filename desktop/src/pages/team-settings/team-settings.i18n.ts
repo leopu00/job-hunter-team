@@ -130,19 +130,19 @@ const es: TeamSettingsText = {
 };
 
 const pt: TeamSettingsText = {
-  title: "Equipe: modelos",
-  link: "Modelos da equipe",
+  title: "Equipa: modelos",
+  link: "Modelos da equipa",
   linkNote: "Com que modelo e esforço cada papel trabalha.",
-  introLocal: "Com que modelo e esforço cada papel trabalha, para a equipe deste computador.",
-  introVps: "Com que modelo e esforço cada papel trabalha, para a equipe da VPS.",
+  introLocal: "Com que modelo e esforço cada papel trabalha, para a equipa deste computador.",
+  introVps: "Com que modelo e esforço cada papel trabalha, para a equipa da VPS.",
   back: "Configurações",
-  loading: "A ler as configurações da equipe…",
+  loading: "A ler as configurações da equipa…",
   retry: "Tentar de novo",
-  loadFailed: "Não é possível ler as configurações da equipe.",
-  saved: "Guardado: é isto que a equipe tem agora.",
+  loadFailed: "Não é possível ler as configurações da equipa.",
+  saved: "Guardado: é isto que a equipa tem agora.",
   modelsTitle: "Modelo e esforço por função",
   modelsDesc:
-    "Máximo, Equilibrado ou Económico: a equipe escolhe o modelo exato com o seu fornecedor. «Predefinido» deixa a escolha à equipe. As funções que não tocas ficam como estão.",
+    "Máximo, Equilibrado ou Económico: a equipa escolhe o modelo exato com o seu fornecedor. «Predefinido» deixa a escolha à equipa. As funções que não tocas ficam como estão.",
   classSol: "Máximo",
   classTerra: "Equilibrado",
   classLuna: "Económico",

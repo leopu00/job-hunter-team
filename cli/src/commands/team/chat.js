@@ -29,7 +29,7 @@ function bashSingleQuote(msg) {
  * Se l'arg e' gia' un nome di sessione (es. 'CRITICO-S1' spawnato dallo
  * Scrittore) lo accetta cosi' com'e' se esiste tra le attive.
  */
-function resolveSession(agentArg) {
+export function resolveSession(agentArg) {
   const active = getActiveSessions();
   const parsed = parseAgentArg(agentArg);
   if (parsed) {
@@ -54,7 +54,7 @@ const SEND_ERRORS = {
 };
 
 /** Invia un messaggio testuale all'agente e ne VERIFICA la consegna. */
-function sendMessage(session, message) {
+export function sendMessage(session, message) {
   // MAI `tmux send-keys` a mano: esce 0 appena la sessione esiste, quindi
   // dichiarerebbe consegnato anche un messaggio che la TUI ha ignorato. Il
   // wrapper aspetta il pane libero, verifica che il testo sia comparso e

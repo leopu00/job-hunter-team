@@ -2624,6 +2624,34 @@ docker_reachable() {
   docker info >/dev/null 2>&1
 }
 
+# jht profile import FILE: il file sta sull'host e il container non lo vede, quindi
+# il wrapper lo legge (regolare, non un link, al massimo 64 KiB come l'import
+# dell'app) e lo passa su stdin al CLI del container attestato. Convalida, scrittura
+# atomica e privata, ready.flag e avviso al Capitano restano tutti dentro, in un posto solo.
+profile_import_command() {
+  local file="" flag
+  local -a extra=()
+  for flag in "$@"; do
+    case "$flag" in
+      --replace|--json) extra+=("$flag") ;;
+      -*) err "opzione non riconosciuta: $flag"; return 2 ;;
+      *)
+        if [ -n "$file" ]; then err "uso: jht profile import FILE [--replace] [--json]"; return 2; fi
+        file="$flag" ;;
+    esac
+  done
+  if [ -z "$file" ]; then err "uso: jht profile import FILE [--replace] [--json]"; return 2; fi
+  if [ -L "$file" ] || [ ! -f "$file" ]; then
+    err "il profilo deve essere un file regolare, non un link: $file"; return 1
+  fi
+  local size
+  size="$(wc -c < "$file" | tr -d ' ')"
+  if [ -z "$size" ] || [ "$size" -gt 65536 ]; then
+    err "il file del profilo supera i 64 KiB"; return 1
+  fi
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" profile import --stdin ${extra[@]+"${extra[@]}"} < "$file"
+}
+
 # L'aiuto completo vive nel CLI DENTRO il container, quindi senza container si
 # stampa questo. Elenca cio' che il wrapper sa fare da se' sull'host: e' meno
 # dell'aiuto vero, ma e' onesto ed e' gratis.
@@ -2647,6 +2675,8 @@ jht — Job Hunter Team
     jht game start|stop    avvia o ferma il videogioco
     jht gui open           apre l'interfaccia grafica
     jht shell              shell dentro il container
+    jht profile import FILE [--replace]
+                           da' alla squadra il profilo del candidato (YAML)
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
@@ -4090,6 +4120,11 @@ handle_runtime_upgrade() {
     fi
     old_image=""
     old_version="non-installata"
+    # A team of ours that is there but stopped counts as absent for the upgrade (there is nothing running
+    # to put back), yet it is not "not installed": say so.
+    if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null 2>&1; then
+      old_version="ferma"
+    fi
   fi
   old_image="${old_image:-none}"
   old_version="${old_version:-sconosciuta}"
@@ -4990,6 +5025,19 @@ case "$SUB" in
     require_docker
     ensure_up
     handle_host_download "$ATTESTED_CONTAINER_ID" "${@:2}"
+    ;;
+
+  profile)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = import ]; then
+      case " ${*:3} " in
+        *" --help "*|*" -h "*) ;;   # l'aiuto e' del CLI nel container
+        *) profile_import_command "${@:3}"; exit $? ;;
+      esac
+    fi
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
   # ── Operativita': delegata al CLI Node nel container ───────────────────

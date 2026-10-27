@@ -97,7 +97,7 @@ export const T = {
     es: "Cargando mapa",
     de: "Karte wird geladen",
     fr: "Chargement de la carte",
-    pt: "Carregando mapa",
+    pt: "A carregar o mapa",
   },
   empty_action: {
     it: "Apri le posizioni",

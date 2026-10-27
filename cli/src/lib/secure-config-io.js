@@ -141,7 +141,8 @@ function writeInPlace(path, body, cause) {
 // and never a pipe or device (opening a FIFO would hang or run a producer the
 // folder's writer planted there). lstat refuses first, O_NOFOLLOW and
 // O_NONBLOCK close the window to the open, and the inode check catches a swap.
-export function readRegularFileText(path) {
+// `maxBytes`, when given, refuses a larger file (EFBIG) before reading it whole.
+export function readRegularFile(path, { maxBytes } = {}) {
   const before = lstatSync(path);
   if (before.isSymbolicLink() || !before.isFile()) {
     throw Object.assign(new Error('not a regular file'),
@@ -153,10 +154,21 @@ export function readRegularFileText(path) {
     if (!opened.isFile() || (before.ino && opened.ino && (opened.ino !== before.ino || opened.dev !== before.dev))) {
       throw Object.assign(new Error('replaced while opening'), { code: 'ESTALE' });
     }
-    return readFileSync(fd, 'utf8');
+    if (maxBytes !== undefined && opened.size > maxBytes) {
+      throw Object.assign(new Error('file too large'), { code: 'EFBIG' });
+    }
+    const bytes = readFileSync(fd);
+    if (maxBytes !== undefined && bytes.length > maxBytes) {
+      throw Object.assign(new Error('file too large'), { code: 'EFBIG' });
+    }
+    return bytes;
   } finally {
     closeSync(fd);
   }
+}
+
+export function readRegularFileText(path, options) {
+  return readRegularFile(path, options).toString('utf8');
 }
 
 export function repairPrivatePath(path, { directory = false } = {}) {

@@ -307,7 +307,7 @@ export const ASSISTANT_GUIDE_TEXT: Record<Locale, AssistantGuideText> = {
       tour: [
         { eyebrow: "Passo 01 · orientação", title: "Começa pelo Painel", message: "O Painel reúne o que merece atenção. A partir dele podes entrar nas áreas de trabalho sem perder o fio." },
         { eyebrow: "Passo 02 · oportunidades", title: "Lê, compara, decide", message: "Vagas reúne as oportunidades, Mapa coloca-as no espaço e Swipe ajuda a fazer uma primeira escolha rápida." },
-        { eyebrow: "Passo 03 · equipa", title: "Acompanha o trabalho da equipa", message: "Equipe e Agentes mostram as pessoas e as atividades. Mensagens é o sítio onde voltas a encontrar as conversas disponíveis." },
+        { eyebrow: "Passo 03 · equipa", title: "Acompanha o trabalho da equipa", message: "Equipa e Agentes mostram as pessoas e as atividades. Mensagens é o sítio onde voltas a encontrar as conversas disponíveis." },
         { eyebrow: "Passo 04 · Assistente", title: "Continua com as tuas palavras", message: "O guia termina aqui. No chat livre podes fazer uma pergunta concreta ao Assistente, sem escolher de uma lista." },
       ],
       requirements: [
@@ -319,7 +319,7 @@ export const ASSISTANT_GUIDE_TEXT: Record<Locale, AssistantGuideText> = {
       explore: [
         { eyebrow: "Passo 01 · panorama", title: "Vê primeiro o Painel", message: "Podes explorar sem concluir um tour. O Painel é um bom ponto de partida e cada área continua acessível pela navegação." },
         { eyebrow: "Passo 02 · descoberta", title: "Abre Mapa, Vagas e Swipe", message: "Estas vistas mostram as oportunidades de ângulos diferentes. Explorá-las não confirma nem altera dados a partir deste guia." },
-        { eyebrow: "Passo 03 · pessoas", title: "Conhece Equipe e Agentes", message: "Aqui encontras as superfícies dedicadas à equipa. Podes voltar ao Assistente a qualquer momento." },
+        { eyebrow: "Passo 03 · pessoas", title: "Conhece Equipa e Agentes", message: "Aqui encontras as superfícies dedicadas à equipa. Podes voltar ao Assistente a qualquer momento." },
         { eyebrow: "Passo 04 · ferramentas pessoais", title: "Completa a volta à tua maneira", message: PROFILE_OVERVIEW_COPY.pt },
       ],
     },
