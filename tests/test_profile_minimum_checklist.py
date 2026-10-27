@@ -83,17 +83,56 @@ def test_one_skill_is_not_enough_and_two_are(tmp_path: Path):
     assert "skills" not in _check(tmp_path, profile, "--minimum")["missing"]
 
 
-def test_the_places_the_app_reads_count_and_a_root_email_does_not(tmp_path: Path):
-    # the app takes the email from candidate.contacts or personal, never from the root
+EMAIL = "candidate@example.invalid"
+
+
+@pytest.mark.parametrize(
+    ("form", "place"),
+    (
+        ("root email (schema, app)", {"email": EMAIL}),
+        ("root contacts.email (schema)", {"contacts": {"email": EMAIL}}),
+        ("candidate.contacts.email (the Assistant's)", {"candidate": {"contacts": {"email": EMAIL}}}),
+        ("personal.email", {"personal": {"email": EMAIL}}),
+        ("positioning.contacts.email (app hasEmail)", {"positioning": {"contacts": {"email": EMAIL}}}),
+    ),
+)
+def test_the_email_counts_in_every_place_the_schema_or_the_app_accepts(tmp_path: Path, form: str, place: dict):
     profile = _without(_fixture(), ("candidate", "contacts"))
-    profile["email"] = "candidate@example.invalid"
     assert "email" in _check(tmp_path, profile, "--minimum")["missing"]
-    profile["personal"] = {"email": "candidate@example.invalid"}
-    assert "email" not in _check(tmp_path, profile, "--minimum")["missing"]
+    for key, value in place.items():
+        if key == "candidate":
+            profile["candidate"] = {**profile.get("candidate", {}), **value}
+        else:
+            profile[key] = value
+    verdict = _check(tmp_path, profile, "--strict", "--minimum")
+    assert "email" not in verdict["missing"], form
+    assert verdict["ok"] is True, form
+
+
+@pytest.mark.parametrize(
+    "emptied",
+    (
+        {"email": ""},
+        {"email": "   "},
+        {"email": None},
+        {"contacts": {}},
+        {"contacts": {"email": ""}},
+        {"contacts": EMAIL},  # not a mapping
+        {"personal": {"email": ""}},
+        {"positioning": {"contacts": {"email": ""}}},
+        {"positioning": {"email": EMAIL}},  # the app reads positioning.contacts.email, not positioning.email
+    ),
+)
+def test_an_empty_or_misplaced_email_is_still_missing(tmp_path: Path, emptied: dict):
+    profile = {**_without(_fixture(), ("candidate", "contacts")), **emptied}
+    assert "email" in _check(tmp_path, profile, "--minimum")["missing"]
+
+
+def test_the_flat_lists_and_the_first_target_role_count(tmp_path: Path):
     # the first of target_roles is a target role, and the flat experience/education lists count
     flat = _without(_fixture(), ("target_role",), ("candidate",))
     flat["target_roles"] = ["Backend Engineer"]
-    flat["personal"] = {"email": "candidate@example.invalid"}
+    flat["personal"] = {"email": EMAIL}
     flat["experience"] = [{"company": "Example Co"}]
     flat["education"] = [{"institution": "Example University"}]
     assert _check(tmp_path, flat, "--minimum")["missing"] == []
