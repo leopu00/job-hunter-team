@@ -4989,7 +4989,7 @@ mod tests {
 
     #[test]
     fn a_probe_that_finds_no_container_says_not_running_on_this_computer_and_unavailable_on_a_vps() {
-        assert_eq!(probe_no_container_code(&ValidatedHost::Local), "local_team_not_running");
+        assert_eq!(crate::direct_chat::probe_no_container_code(&ValidatedHost::Local), "local_team_not_running");
         let vps = ValidatedHost::Vps {
             address: "203.0.113.7".into(),
             user: "jht".into(),
@@ -4997,7 +4997,7 @@ mod tests {
             key_path: PathBuf::from("/nonexistent/key"),
             known_hosts: PathBuf::from("/nonexistent/known_hosts"),
         };
-        assert_eq!(probe_no_container_code(&vps), "container_unavailable");
+        assert_eq!(crate::direct_chat::probe_no_container_code(&vps), "container_unavailable");
         // a host that could not be asked at all stays «unavailable», whichever it is
         let source = include_str!("direct_chat.rs");
         let body = source.split("fn probe(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();

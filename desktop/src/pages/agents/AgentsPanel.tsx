@@ -177,8 +177,12 @@ function clock(seconds: number | null): string {
 
 function failureText(code: string): string {
   const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
-  // A code the catalog has a sentence for is told by that sentence alone; one it does not know keeps its code,
-  // so that a report can name it.
+  return `${copy.text} ${copy.action} (${code})`;
+}
+
+/** Why the page could not read the agents: the catalog's sentence alone; a code it has none for keeps the code. */
+function readFailureText(code: string): string {
+  const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
   return copy.known ? `${copy.text} ${copy.action}` : `${copy.text} ${copy.action} (${code})`;
 }
 
@@ -657,7 +661,7 @@ export default function AgentsPanel({ search }: PageProps) {
       {list && !list.ok && (
         <div role="alert" data-testid="panel-error" className="text-[12px] text-[var(--color-red)]">
           <strong>{t.failed}</strong>
-          <p>{failureText(list.code)}</p>
+          <p>{readFailureText(list.code)}</p>
           <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
           {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it */}
           {list.code === "agent_control_no_team" && !teamOff && (

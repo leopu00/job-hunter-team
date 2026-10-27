@@ -91,11 +91,11 @@ describe("«Start the team» where a page says the team is stopped", () => {
     it("does not touch a page that went away", async () => {
       vi.mocked(resumeOnboardingTeamStart).mockResolvedValue({} as never);
       const onStarted = vi.fn().mockResolvedValue(false);
-      const view = render(<StartTeamAction onStarted={onStarted} waits={{ after: [30, 30, 30], during: 1_000, duringMax: 1 }} />);
+      const view = render(<StartTeamAction onStarted={onStarted} waits={{ after: [300, 300, 300], during: 5_000, duringMax: 1 }} />);
       fireEvent.click(screen.getByTestId("start-team"));
       await waitFor(() => expect(onStarted).toHaveBeenCalledTimes(1));
       view.unmount();
-      await new Promise((done) => setTimeout(done, 120));
+      await new Promise((done) => setTimeout(done, 1_000));
       expect(onStarted).toHaveBeenCalledTimes(1);
     });
   });
