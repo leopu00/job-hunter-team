@@ -177,7 +177,9 @@ function clock(seconds: number | null): string {
 
 function failureText(code: string): string {
   const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
-  return `${copy.text} ${copy.action} (${code})`;
+  // A code the catalog has a sentence for is told by that sentence alone; one it does not know keeps its code,
+  // so that a report can name it.
+  return copy.known ? `${copy.text} ${copy.action}` : `${copy.text} ${copy.action} (${code})`;
 }
 
 function resultText(t: AgentsPanelText, result: ActionResult, name: string): string {
@@ -511,16 +513,18 @@ export default function AgentsPanel({ search }: PageProps) {
   };
   const latest = useRef(0);
 
-  const read = useCallback(async () => {
+  // True when the list was read; a read that another one replaced says true too (the other one answers).
+  const read = useCallback(async (): Promise<boolean> => {
     const mine = ++latest.current;
     setBusy(true);
     const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
-    if (latest.current !== mine) return;
+    if (latest.current !== mine) return true;
     setList(listed);
     setTeam(state.ok ? state.value : null);
     setHistory(past);
     setNow(Date.now());
     setBusy(false);
+    return listed.ok;
   }, []);
   useEffect(() => {
     void read();
@@ -658,7 +662,7 @@ export default function AgentsPanel({ search }: PageProps) {
           {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it */}
           {list.code === "agent_control_no_team" && !teamOff && (
             <div className="mt-2">
-              <StartTeamAction onStarted={() => void read()} />
+              <StartTeamAction onStarted={read} />
             </div>
           )}
         </div>

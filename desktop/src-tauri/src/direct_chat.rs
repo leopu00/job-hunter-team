@@ -2057,7 +2057,20 @@ fn probe(connection: &Connection) -> DirectChatStatus {
         Ok(result) if result.success() && result.stdout_text().trim() == "true" => {
             ready_for(connection)
         }
-        _ => status("error", Some("container_unavailable")),
+        // The host answered and there is no container for the team: say which kind of «no container» it is.
+        Ok(_) => status("error", Some(probe_no_container_code(&connection.validated))),
+        // The host could not be asked at all (runtime missing, another account's, a timeout).
+        Err(_) => status("error", Some("container_unavailable")),
+    }
+}
+
+/// What a probe that found no container for the team says. On this computer the team is not running: the
+/// chat's own code, which the pages answer with «Start the team». On a VPS the container is unavailable (the
+/// machine may be off or the team not installed there): nothing the app starts from here.
+fn probe_no_container_code(host: &ValidatedHost) -> &'static str {
+    match host {
+        ValidatedHost::Local => "local_team_not_running",
+        ValidatedHost::Vps { .. } => "container_unavailable",
     }
 }
 
@@ -4969,8 +4982,27 @@ mod tests {
         .unwrap();
         let failed = probe(&connection);
         assert_eq!(failed.state, "error");
-        assert_eq!(failed.code, Some("container_unavailable"));
+        // this computer's team with no container is «not running», the code the Messages page answers with «Start the team»
+        assert_eq!(failed.code, Some("local_team_not_running"));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_probe_that_finds_no_container_says_not_running_on_this_computer_and_unavailable_on_a_vps() {
+        assert_eq!(probe_no_container_code(&ValidatedHost::Local), "local_team_not_running");
+        let vps = ValidatedHost::Vps {
+            address: "203.0.113.7".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: PathBuf::from("/nonexistent/key"),
+            known_hosts: PathBuf::from("/nonexistent/known_hosts"),
+        };
+        assert_eq!(probe_no_container_code(&vps), "container_unavailable");
+        // a host that could not be asked at all stays «unavailable», whichever it is
+        let source = include_str!("direct_chat.rs");
+        let body = source.split("fn probe(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(body.contains("Err(_) => status(\"error\", Some(\"container_unavailable\"))"));
+        assert!(body.contains("tunnel_unavailable"));
     }
 }
 
