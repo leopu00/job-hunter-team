@@ -99,8 +99,10 @@ _APPLY_WORDS = (
 )
 try:
     from apply_vocabulary import MORE_APPLY
+    from profile_email import EMAIL_PATHS
 except ImportError:  # pragma: no cover - package import
     from shared.skills.apply_vocabulary import MORE_APPLY  # type: ignore[no-redef]
+    from shared.skills.profile_email import EMAIL_PATHS  # type: ignore[no-redef]
 # The seven languages with \b, and the others bounded for JavaScript too (2071).
 APPLY_LABEL = re.compile(rf"\b(?:{_APPLY_WORDS})\b|{MORE_APPLY}", re.I)
 _CV_WORDS = re.compile(
@@ -237,7 +239,7 @@ _CORE_FIELDS: tuple[tuple[str, re.Pattern[str], tuple[tuple[str, ...], ...]], ..
      (("last_name",),)),
     ("full name", re.compile(r"full name|name|vollständiger name|vor und nachname|nome completo|nome e cognome|nom complet|nombre completo|nombre y apellidos|teljes név|név", re.I),
      (("name",),)),
-    ("email", re.compile(r"e ?mail|email|correo(?: electrónico)?|courriel|mail", re.I), (("contacts", "email"), ("email",))),
+    ("email", re.compile(r"e ?mail|email|correo(?: electrónico)?|courriel|mail", re.I), EMAIL_PATHS),
     ("phone", re.compile(r"(?:mobile |cell |contact )?(?:phone|telephone)|mobile|tel|telefon(?:nummer)?|handy(?:nummer)?|telefono|cellulare|téléphone|portable|teléfono|móvil|telefone|telemóvel|celular|telefonszám|mobil", re.I),
      (("contacts", "phone"), ("phone",))),
     # 1888 (14/09): where the candidate lives. A job's location or a
@@ -465,7 +467,7 @@ def core_field(question: Mapping[str, Any]) -> tuple[str, tuple[tuple[str, ...],
         return None
     # No label and no name at all: the input type is all there is.
     if question.get("type") == "email":
-        return "email", (("contacts", "email"), ("email",))
+        return "email", EMAIL_PATHS
     if question.get("type") == "tel":
         return "phone", (("contacts", "phone"), ("phone",))
     return None

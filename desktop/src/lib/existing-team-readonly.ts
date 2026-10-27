@@ -45,6 +45,8 @@ export interface ExistingTeamReadOnly {
    * allowed; the native side still refuses what is not granted. Absent in the read-only view.
    */
   full?: boolean;
+  /** The read-only view of a team whose write access the person had confirmed: why it did not come back. */
+  notFullBecause?: "not_restored" | "expired" | "discarded";
 }
 
 let current: ExistingTeamReadOnly | null = null;
@@ -64,6 +66,7 @@ export function enterExistingTeamReadOnly(
   connection: ConnectionProbe | null = null,
   identity?: string,
   full?: boolean,
+  notFullBecause?: ExistingTeamReadOnly["notFullBecause"],
 ): void {
   // Another connection (account, VPS, team) is another opening, never the same view refreshed.
   let opening = false;
@@ -74,13 +77,16 @@ export function enterExistingTeamReadOnly(
   } else if (
     current.assistantActive === assistantActive &&
     current.connection === connection &&
-    (full === undefined || Boolean(current.full) === full)
+    (full === undefined || Boolean(current.full) === full) &&
+    current.notFullBecause === notFullBecause
   ) {
     return;
   }
   // A new probe of the same opening (the assistant's start) keeps the kind of link it came on.
   const isFull = full ?? (opening ? false : Boolean(current?.full));
-  current = isFull ? { assistantActive, connection, full: true } : { assistantActive, connection };
+  current = isFull
+    ? { assistantActive, connection, full: true }
+    : { assistantActive, connection, ...(notFullBecause ? { notFullBecause } : {}) };
   readNotice = null;
   // A connection probe that just worked is a contact; the header starts from it.
   if (opening || connection) startVpsLink(connection !== null);
@@ -160,4 +166,15 @@ export function existingTeamReadOnlyReason(state: ExistingTeamReadOnly): string 
   const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
   if (state.full) return text.fullLinkShowsOnly;
   return state.assistantActive ? text.connectionReadOnly : text.assistantOff;
+}
+
+/** Why the read-only view is read only when the person had confirmed the write access before; null otherwise. */
+export function existingTeamNotFullReason(state: ExistingTeamReadOnly): string | null {
+  const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+  switch (state.notFullBecause) {
+    case "not_restored": return text.becauseNotRestored;
+    case "expired": return text.becauseExpired;
+    case "discarded": return text.becauseDiscarded;
+    default: return null;
+  }
 }

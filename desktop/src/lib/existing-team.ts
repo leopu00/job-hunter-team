@@ -61,6 +61,11 @@ export interface ExistingTeamReadOnlyConnectionResult {
    * native side sets it; the view then opens in full and says so in a fixed row.
    */
   fullLink?: boolean;
+  /**
+   * What the start-up reopening did with the record of the full connection (`restored` comes with
+   * `fullLink`). The read-only view says why it is read only from the other three.
+   */
+  fullLinkOutcome?: "restored" | "not_restored" | "expired" | "discarded";
 }
 
 export interface ExistingTeamProgress {

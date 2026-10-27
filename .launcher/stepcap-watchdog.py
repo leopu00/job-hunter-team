@@ -686,12 +686,40 @@ def send_resume(session: str, agent: str, message: str) -> bool:
     return True
 
 
+# `subprocess.run(..., timeout=N)` KILLS jht-tmux-send at the deadline; between its paste and its Enter that
+# leaves a paste in the composer with no Enter (TEST 5, 27/10). tmux_send_run.py waits as long, raises the same
+# TimeoutExpired, and lets the transport finish; without the module the old call is kept.
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "120"))
+_tmux_send_run_module = None
+
+
+def _transport_run(args, timeout, text=True):
+    global _tmux_send_run_module
+    if _tmux_send_run_module is None:
+        import importlib.util
+        _tmux_send_run_module = False
+        here = Path(__file__).resolve().parent
+        for cand in (here / "tmux_send_run.py", Path("/app/shared/skills/tmux_send_run.py"),
+                     here.parent / "shared" / "skills" / "tmux_send_run.py"):
+            if cand.is_file():
+                try:
+                    spec = importlib.util.spec_from_file_location("tmux_send_run", cand)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    _tmux_send_run_module = mod
+                    break
+                except (OSError, ImportError, SyntaxError):
+                    continue
+    if _tmux_send_run_module:
+        return _tmux_send_run_module.run(args, timeout, text=text)
+    return subprocess.run(args, capture_output=True, text=text, timeout=timeout)
+
+
 def notify_captain(message: str) -> bool:
     for cand in ("jht-tmux-send",
                  "/app/agents/_skills/tmux-send/jht-tmux-send"):
         try:
-            res = subprocess.run([cand, CAPTAIN_SESSION, message],
-                                 capture_output=True, text=True, timeout=120)
+            res = _transport_run([cand, CAPTAIN_SESSION, message], TMUX_SEND_WAIT_S)
         except FileNotFoundError:
             continue
         except (OSError, subprocess.SubprocessError):

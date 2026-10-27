@@ -359,7 +359,10 @@ _CSI = re.compile(r"\x1b\[([0-?]*)([ -/]*)([@-~])")
 _BORDER = re.compile(r"^\s*[╭╰┌└├]?[─━═┄╌]{20,}[╮╯┐┘┤]?\s*$")
 _BOXED_COMPOSER = re.compile(r"^\s*[│┃╎|]\s*([❯›>▌])(.*?)(?:[│┃╎|]\s*)?$")
 _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
-_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b)")
+# Codex at rest puts the model and folder under the composer (the «·» line); in the middle of a turn that line
+# becomes «tab to queue message ... 80% context left», with no «·». Without these two phrases a composer in a
+# working Codex is not a composer at all: the text pasted into it is «another draft» and nothing presses Enter.
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|\s{6,}\d{1,3}% context left\s*$)")
 _CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
 _NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
 
@@ -1140,6 +1143,14 @@ def flush_queue(agent: str, session: str) -> None:
                 if row is None:
                     continue
                 pane = capture_pane(session)
+                if pane is not None and not composer_snapshot(pane)[1] and delivery_gate(pane) == "text":
+                    # A text of ours left in the box (a bridge's paste nobody submitted) would hold the turn for
+                    # ever: once, the transport submits it if it can prove it is its own, then the box is looked at again.
+                    try:
+                        flush_ours(session)
+                    except Refusal:
+                        return
+                    pane = capture_pane(session)
                 if pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) not in {"empty", "none"}:
                     return
                 try:

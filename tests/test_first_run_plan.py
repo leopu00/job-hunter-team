@@ -100,6 +100,7 @@ def test_plan_catalog_keys_exist_in_all_seven_languages():
         "plan.not_selected", "plan.select_hint", "plan.none_known",
         "plan.weekly_cap", "plan.no_weekly_cap", "plan.window_5h",
         "plan.no_window_5h", "plan.usage_pair", "plan.usage_single",
+        "plan.codex_reports", "plan.codex_reports_unlisted",
     }
     locales = os.path.join(REPO_ROOT, "shared", "locales")
     for lang in ("en", "it", "es", "fr", "de", "pt", "hu"):

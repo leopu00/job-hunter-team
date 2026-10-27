@@ -1,4 +1,4 @@
-"""`jht profile import FILE` hands the person's file to the CLI of the attested container, and nothing else."""
+"""`jht profile import FILE` and `jht profile validate FILE` hand the person's file to the CLI of the attested container, and nothing else."""
 
 from __future__ import annotations
 
@@ -104,3 +104,68 @@ def test_validate_and_help_keep_going_to_the_cli_unchanged(tmp_path: Path):
     assert done.returncode == 0, done.stderr
     assert any(line.endswith("profile import --help") for line in calls)
     assert all("--stdin" not in line for line in calls)
+
+
+def _validates(calls: list[str]) -> list[str]:
+    return [line for line in calls if "profile validate" in line]
+
+
+def test_validate_hands_the_file_over_like_import_and_its_flags_with_it(tmp_path: Path):
+    source = _file(tmp_path)
+    done, calls, copy = _run(tmp_path, "profile", "validate", str(source), "--strict", "--json")
+    assert done.returncode == 0, done.stderr
+    (call,) = _validates(calls)
+    assert call.startswith("docker exec -i aaaaaaaaaaaa node ") and call.endswith("profile validate --stdin --strict --json")
+    assert str(source) not in call, "the container is never given a host path"
+    assert copy.read_bytes() == PROFILE
+
+    before = _sub(tmp_path, "before")
+    done, calls, copy = _run(before, "profile", "validate", "--json", str(_file(before)))
+    assert done.returncode == 0, done.stderr
+    assert _validates(calls)[0].endswith("profile validate --stdin --json")
+    assert copy.read_bytes() == PROFILE
+
+
+def test_validate_has_the_same_limits_as_import(tmp_path: Path):
+    ok = _file(tmp_path, b"a" * LIMIT, "limit.yml")
+    done, calls, copy = _run(tmp_path, "profile", "validate", str(ok))
+    assert done.returncode == 0 and len(_validates(calls)) == 1 and copy.stat().st_size == LIMIT
+
+    over = _sub(tmp_path, "over")
+    done, calls, _ = _run(over, "profile", "validate", str(_file(over, b"a" * (LIMIT + 1), "big.yml")))
+    assert done.returncode == 1 and "64 KiB" in done.stderr
+    assert _validates(calls) == []
+
+    missing = _sub(tmp_path, "missing")
+    done, calls, _ = _run(missing, "profile", "validate", str(missing / "nope.yml"))
+    assert done.returncode == 1 and "file regolare" in done.stderr
+    assert _validates(calls) == []
+
+    other = _sub(tmp_path, "link")
+    link = other / "link.yml"
+    link.symlink_to(_file(other, PROFILE, "real.yml"))
+    done, calls, _ = _run(other, "profile", "validate", str(link))
+    assert done.returncode == 1 and "link" in done.stderr
+    assert _validates(calls) == []
+
+
+@pytest.mark.parametrize(
+    "args",
+    (
+        ("profile", "validate", "a.yml", "b.yml"),
+        ("profile", "validate", "a.yml", "--nope"),
+    ),
+)
+def test_validate_with_a_wrong_ask_answers_2_and_runs_nothing(tmp_path: Path, args: tuple):
+    done, calls, _ = _run(tmp_path, *args)
+    assert done.returncode == 2, done.stderr
+    assert _validates(calls) == []
+
+
+@pytest.mark.parametrize("args", (("--strict", "--json"), ("--help",), ("-h",)))
+def test_validate_without_a_file_still_goes_to_the_cli_as_it_is(tmp_path: Path, args: tuple):
+    done, calls, _ = _run(tmp_path, "profile", "validate", *args)
+    assert done.returncode == 0, done.stderr
+    (call,) = _validates(calls)
+    assert call.endswith("profile validate " + " ".join(args))
+    assert "--stdin" not in call

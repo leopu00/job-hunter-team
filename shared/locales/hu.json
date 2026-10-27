@@ -131,6 +131,8 @@
   "plan.no_weekly_cap": "nincs heti korlát",
   "plan.window_5h": "5 órás időablak",
   "plan.no_window_5h": "nincs 5 órás időablak",
+  "plan.codex_reports": "A Codex ezt jelzi: %s → %s",
+  "plan.codex_reports_unlisted": "A Codex ezt jelzi: %s (nincs ebben a táblázatban)",
   "plan.usage_pair": "használat: plan_registry.py set <provider>:<plan> | <provider> <plan>",
   "plan.usage_single": "használat: plan_registry.py set <provider>:<plan>",
   "bot_commands.assistente.budget": "Költségvetés grafikon, jelenlegi ablak",

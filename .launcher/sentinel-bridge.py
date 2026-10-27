@@ -697,6 +697,31 @@ def _composer_refused(session):
         jht_tmux_send(CAPITANO_SESSION, msg)
 
 
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "15"))
+# Per sessione: il processo `jht-tmux-send` lasciato correre oltre l'attesa, e se serve liberare la casella.
+_tmux_send_running = {}
+_tmux_send_overran = set()
+
+
+def _run_tmux_send(args, wait_s, session=None):
+    """Come `subprocess.run(args, timeout=wait_s)`, ma allo scadere NON uccide `jht-tmux-send`.
+
+    Il trasporto ha scadenze sue (fino a 100 s per un pane che non e' al prompt) e fra l'incolla e l'Invio
+    c'e' una finestra: ucciderlo li' lascia l'incolla nella casella senza Invio (TEST 5, 27/10). Qui si
+    aspetta `wait_s` per non fermare il bridge; poi il processo finisce da solo (un thread lo raccoglie) e
+    al chiamante arriva TimeoutExpired come prima. Ritorna il CompletedProcess."""
+    import threading
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    if session is not None:
+        _tmux_send_running[session] = proc
+    try:
+        out, err = proc.communicate(timeout=wait_s)
+    except subprocess.TimeoutExpired:
+        threading.Thread(target=proc.communicate, daemon=True).start()
+        raise
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
+
+
 def jht_tmux_send(session, text):
     # Standby a spesa zero: in standby i bridge leggono e NON parlano. Il gate
     # sta qui, nel chokepoint unico di scrittura tmux, così ogni path (tick,
@@ -712,9 +737,28 @@ def jht_tmux_send(session, text):
     # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
     # zero auto-recovery (setsid detached, fuori dal respawn di pid1). Vedi postmortem
     # docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
+    # Una consegna a questa sessione ancora in corso (il trasporto e' stato lasciato finire): non se ne
+    # affianca una seconda, il giro dopo la trova finita.
+    running = _tmux_send_running.get(session)
+    if running is not None and running.poll() is None:
+        print(f"[bridge V6] WARN jht_tmux_send({session}): the previous delivery is still running, not stacking another",
+              file=sys.stderr)
+        return False
+    # Il giro dopo uno scaduto: se nella casella e' rimasto un incolla NOSTRO senza Invio, il trasporto lo
+    # sottomette (solo se e' provato suo) prima del messaggio nuovo.
+    if session in _tmux_send_overran:
+        _tmux_send_overran.discard(session)
+        try:
+            _run_tmux_send(["jht-tmux-send", "--flush-ours", session], 60)
+        except (subprocess.TimeoutExpired, OSError):
+            _tmux_send_overran.add(session)
     try:
-        rc = subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode
-    except (subprocess.TimeoutExpired, OSError) as e:
+        rc = _run_tmux_send(["jht-tmux-send", session, text], TMUX_SEND_WAIT_S, session).returncode
+    except subprocess.TimeoutExpired as e:
+        _tmux_send_overran.add(session)
+        print(f"[bridge V6] WARN jht_tmux_send({session}): {e}; left to finish, not killed", file=sys.stderr)
+        return False
+    except OSError as e:
         print(f"[bridge V6] WARN jht_tmux_send({session}): {e}", file=sys.stderr)
         return False
     if rc != 0:
@@ -1282,6 +1326,46 @@ def _window_minutes(window):
         return 0
 
 
+def _plan_type_of(*rate_limits):
+    """The subscription plan Codex says the account has (`prolite`, `plus`...): a short lowercase word or None.
+    Nothing else gets through, because it is printed by `jht providers plan`."""
+    for rl in rate_limits:
+        value = rl.get("plan_type") if isinstance(rl, dict) else None
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,32}", value.strip()):
+            return value.strip().lower()
+    return None
+
+
+# The last Codex reading, for `plan_registry.py`: which plan Codex reports and whether it has ONE weekly window.
+# A fact about the account, not about this minute, so it is kept: `jht providers plan` shows it without asking Codex.
+CODEX_READING_FILE = LOGS_DIR / "codex-plan-reading.json"
+CODEX_READING_REFRESH_SEC = 86400
+
+
+def _remember_codex_reading(parsed):
+    """Writes the plan the reading shows (only when it changed, or once a day so that it does not look old).
+    Returns `parsed` itself: it never changes what the caller reads, and a failed write is silent."""
+    try:
+        if not isinstance(parsed, dict):
+            return parsed
+        reading = {"plan_type": parsed.get("plan_type"), "single_weekly": parsed.get("usage_is_weekly") is True}
+        try:
+            kept = json.loads(CODEX_READING_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            kept = {}
+        if (isinstance(kept, dict) and kept.get("plan_type") == reading["plan_type"]
+                and kept.get("single_weekly") == reading["single_weekly"]
+                and isinstance(kept.get("observed_at"), (int, float))
+                and time.time() - kept["observed_at"] < CODEX_READING_REFRESH_SEC):
+            return parsed
+        tmp = CODEX_READING_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({**reading, "observed_at": time.time()}), encoding="utf-8")
+        os.replace(tmp, CODEX_READING_FILE)
+    except OSError:
+        pass
+    return parsed
+
+
 def _codex_parsed_from_rate_limits(best_rl, freshest_rl):
     """Dal `rate_limits` di Codex (la forma dei rollout: used_percent / window_minutes / resets_at) al dict
     che il bridge conosce. `best_rl` da' la finestra corta, `freshest_rl` la settimanale (vedi sotto).
@@ -1347,6 +1431,7 @@ def _codex_parsed_from_rate_limits(best_rl, freshest_rl):
 
     return {
         "usage": usage,
+        "plan_type": _plan_type_of(best_rl, freshest_rl),
         "reset_at": reset_at,
         "reset_at_unix": reset_at_unix,
         "weekly_usage": weekly,
@@ -1438,7 +1523,7 @@ def fetch_codex_rollout():
         )[1]
         # la settimanale si legge dalla sessione PIU' fresca (vedi il commento nella funzione)
         freshest_rl = recent[0][1]
-        return _codex_parsed_from_rate_limits(best_rl, freshest_rl)
+        return _remember_codex_reading(_codex_parsed_from_rate_limits(best_rl, freshest_rl))
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -1517,8 +1602,8 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
         primary, secondary = window(limits.get("primary")), window(limits.get("secondary"))
         if primary is None:
             return None
-        rate_limits = {"primary": primary, "secondary": secondary}
-        return _codex_parsed_from_rate_limits(rate_limits, rate_limits)
+        rate_limits = {"primary": primary, "secondary": secondary, "plan_type": limits.get("planType")}
+        return _remember_codex_reading(_codex_parsed_from_rate_limits(rate_limits, rate_limits))
     except (OSError, ValueError):
         return None
     finally:

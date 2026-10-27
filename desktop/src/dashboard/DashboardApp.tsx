@@ -1114,7 +1114,9 @@ export default function DashboardApp() {
       at: Date.now(),
       captainRunning: result.snapshot.captainRunning === true,
       assistantRunning: result.snapshot.assistantRunning === true,
-    }, `account:${identityKey}|${result.connectionKey ?? "unnamed"}`);
+    }, `account:${identityKey}|${result.connectionKey ?? "unnamed"}`, undefined,
+    // a reopening that did not give the write access back says why; any other opening says nothing
+    result.fullLinkOutcome && result.fullLinkOutcome !== "restored" ? result.fullLinkOutcome : undefined);
     setReadOnlyExistingTeamKey(identityKey);
   }, [identityKey]);
 

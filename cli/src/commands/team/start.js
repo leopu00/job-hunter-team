@@ -148,6 +148,27 @@ function clearGlobalHaltGate(containerMode) {
   return { ok: true, error: '' };
 }
 
+// What the best-effort cloud steps of a start say when they fail. Two things on stderr are not a reason:
+// «not enabled» as the last line (a machine without a cloud has nothing to sync: it is no failure) and Node's own
+// warnings (SQLite is experimental in Node 22: «(Use `node --trace-warnings ...`)» was printed as the reason).
+const NOT_ENABLED = /non abilitato|not enabled/i;
+const NODE_WARNING_LINE = /^\(node:\d+\) |^\(Use `node --trace-(warnings|deprecation)/;
+
+export function syncNotApplied(label, res) {
+  if (!res || res.code === 0) return null;
+  const reason = String(res.stderr ?? '').trim().split('\n').map((line) => line.trim())
+    .filter((line) => line && !NODE_WARNING_LINE.test(line)).slice(-1)[0];
+  // «not enabled» is the reason itself (the last line), not a word somewhere in the output.
+  if (reason && NOT_ENABLED.test(reason)) return null;
+  // A step that failed says so even when all it left on stderr was Node's own warnings.
+  return `  ℹ ${label} not applied: ${reason ?? `exit code ${res.code ?? 'unknown'}`}`;
+}
+
+function reportSyncNotApplied(label, res) {
+  const note = syncNotApplied(label, res);
+  if (note) console.log(c.dim(note));
+}
+
 // ── Container mode ─────────────────────────────────────────────────
 async function startActionContainer(agentArg, options = {}) {
   const mode = options.mode || 'default';
@@ -209,10 +230,7 @@ async function startActionContainer(agentArg, options = {}) {
       'node /app/cli/bin/jht.js cloud pull-desired-state --silent',
       { timeoutMs: 15_000 },
     );
-    if (pullRes.code !== 0 && pullRes.stderr && !/non abilitato/i.test(pullRes.stderr)) {
-      const lastLine = pullRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ desired-state pull not applied: ${lastLine}`));
-    }
+    reportSyncNotApplied('desired-state pull', pullRes);
 
     // Sync ticket cloud↔VPS PRIMA dello spawn: importa i ticket 'open' creati
     // dal web durante il downtime così il Capitano (C-15) li vede al primo giro,
@@ -221,10 +239,7 @@ async function startActionContainer(agentArg, options = {}) {
       'node /app/cli/bin/jht.js cloud sync-tickets --silent',
       { timeoutMs: 15_000 },
     );
-    if (ticketRes.code !== 0 && ticketRes.stderr && !/non abilitato/i.test(ticketRes.stderr)) {
-      const lastLine = ticketRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ ticket sync not applied: ${lastLine}`));
-    }
+    reportSyncNotApplied('ticket sync', ticketRes);
 
     // Sync bacheca (team_directives) cloud↔VPS PRIMA dello spawn: importa gli
     // ordini/strategia editati dal dashboard così il Capitano li legge al primo
@@ -233,10 +248,7 @@ async function startActionContainer(agentArg, options = {}) {
       'node /app/cli/bin/jht.js cloud sync-directives --silent',
       { timeoutMs: 15_000 },
     );
-    if (dirRes.code !== 0 && dirRes.stderr && !/non abilitato/i.test(dirRes.stderr)) {
-      const lastLine = dirRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ directive sync not applied: ${lastLine}`));
-    }
+    reportSyncNotApplied('directive sync', dirRes);
 
     // Pull profilo cloud → candidate_profile.yml se il file locale manca
     // (PC nuovo / container ricreato): chiude il cerchio cloud→locale. Only-if
@@ -245,10 +257,7 @@ async function startActionContainer(agentArg, options = {}) {
       'node /app/cli/bin/jht.js cloud pull-profile --silent',
       { timeoutMs: 15_000 },
     );
-    if (profileRes.code !== 0 && profileRes.stderr && !/non abilitato/i.test(profileRes.stderr)) {
-      const lastLine = profileRes.stderr.trim().split('\n').slice(-1)[0];
-      console.log(c.dim(`  ℹ profile pull not applied: ${lastLine}`));
-    }
+    reportSyncNotApplied('profile pull', profileRes);
 
     // Il delay di ogni voce serve a far stabilizzare la voce precedente. In
     // un retry idempotente, se la precedente era già attiva, ripetere tutti i

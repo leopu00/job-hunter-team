@@ -46,6 +46,35 @@ describe("isTeamUnlocked", () => {
       false,
     );
   });
+  it("true con seniority_target alla radice (posto canonico di schema e validatore)", () => {
+    assert.equal(
+      isTeamUnlocked({
+        ...BASE,
+        seniority_target: "mid",
+        positioning: {},
+      } as unknown as CandidateProfile),
+      true,
+    );
+  });
+  it("true con seniority_target solo in positioning (posto storico)", () => {
+    assert.equal(
+      isTeamUnlocked({
+        ...BASE,
+        positioning: { seniority_target: "mid" },
+      } as CandidateProfile),
+      true,
+    );
+  });
+  it("false se seniority_target è vuoto in entrambi i posti", () => {
+    assert.equal(
+      isTeamUnlocked({
+        ...BASE,
+        seniority_target: "",
+        positioning: { seniority_target: "" },
+      } as unknown as CandidateProfile),
+      false,
+    );
+  });
   it("false se skill < 2", () => {
     assert.equal(
       isTeamUnlocked({

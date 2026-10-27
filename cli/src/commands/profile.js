@@ -2,7 +2,8 @@ import { Command } from 'commander';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync, readSync } from 'node:fs';
+import { existsSync, mkdtempSync, readSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { JHT_PROFILE_DIR } from '../jht-paths.js';
 import { readRegularFile } from '../lib/secure-config-io.js';
 import { MAX_PROFILE_BYTES, PROFILE_READY_MESSAGE, importProfile } from '../lib/profile-import.js';
@@ -15,6 +16,7 @@ const VALIDATOR = join(__dirname, '../../../shared/skills/validate_profile.py');
 const DEFAULT_PROFILE = join(JHT_PROFILE_DIR, 'candidate_profile.yml');
 
 function validateAction(file, opts) {
+  if (opts.stdin) return validateStdin(file, opts);
   const target = file || DEFAULT_PROFILE;
   if (!existsSync(VALIDATOR)) {
     console.error(`: validator not found: ${VALIDATOR}`);
@@ -89,6 +91,57 @@ function readStdin(maxBytes) {
   return Buffer.concat(chunks);
 }
 
+// `validate --stdin`: the host wrapper hands the person's file over here, as it does for
+// import (the container cannot see host paths). Same bound as the import; the validator
+// reads a private copy that is gone when it answers. Nothing is written to the profile.
+function validateStdin(file, opts) {
+  if (file) {
+    console.error('Usage: jht profile validate [file.yml] [--strict] [--json]   (a file or --stdin, not both)');
+    process.exitCode = 2;
+    return;
+  }
+  let bytes;
+  try { bytes = readStdin(MAX_PROFILE_BYTES); } catch { bytes = null; }
+  const refuse = (code) => {
+    if (opts.json) console.log(JSON.stringify({ ok: false, errors: [IMPORT_SAYS[code]], warnings: [] }));
+    else console.error(`ERROR: ${IMPORT_SAYS[code]}`);
+    process.exitCode = 1;
+  };
+  if (!bytes) return refuse('profile_unreadable');
+  if (bytes.length > MAX_PROFILE_BYTES) return refuse('profile_too_large');
+  if (bytes.length === 0) return refuse('profile_empty');
+  const dir = mkdtempSync(join(tmpdir(), 'jht-profile-validate-'));
+  try {
+    const copy = join(dir, 'candidate_profile.yml');
+    writeFileSync(copy, bytes, { mode: 0o600 });
+    if (!existsSync(VALIDATOR)) {
+      console.error(`: validator not found: ${VALIDATOR}`);
+      process.exitCode = 2;
+      return;
+    }
+    const args = [VALIDATOR, copy];
+    if (opts.strict) args.push('--strict');
+    if (opts.json) args.push('--json');
+    const r = spawnSync('python3', args, { encoding: 'utf8' });
+    if (r.error) {
+      console.error(`: impossible to run python3: ${r.error.message}`);
+      process.exitCode = 2;
+      return;
+    }
+    // The validator names the file it read (a YAML error quotes it): that was a copy that is
+    // gone now, so the person is told it was the standard input.
+    const seen = (text) => [copy, dir].reduce(
+      (out, path) => out.split(path).join('<stdin>').split(JSON.stringify(path).slice(1, -1)).join('<stdin>'),
+      text ?? '',
+    );
+    process.stdout.write(seen(r.stdout));
+    process.stderr.write(seen(r.stderr));
+    process.exitCode = r.status ?? 0;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const IMPORT_SAYS = {
   profile_empty: 'the profile file is empty',
   profile_too_large: `the profile file is larger than ${MAX_PROFILE_BYTES / 1024} KiB`,
@@ -155,6 +208,7 @@ export function registerProfileCommand(program) {
     .command('validate [file]')
     .description('Validate the profile against the canonical schema (default: $JHT_HOME/profile/candidate_profile.yml)')
     .option('--strict', 'also treat warnings (legacy lists) as errors')
+    .option('--stdin', 'read the profile from standard input (the host wrapper uses it for a file on the host)')
     .option('--json', 'output JSON {ok, errors, warnings}')
     .action(validateAction);
 

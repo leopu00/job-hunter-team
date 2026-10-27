@@ -56,6 +56,46 @@ def test_the_real_captain_with_a_heartbeat_in_the_composer_has_text():
     assert module.composer_text(screen)  # the draft is read whole, for the transport's proof
 
 
+def test_the_real_captain_with_a_pasted_token_in_the_composer_has_text():
+    """27/10, TEST 5, Mac: a 1043-character paste of the bridge sat in the Capitano's composer as the token
+    «[Pasted Content 1043 chars]» (the tail of the real capture, the transcript above it left out)."""
+    module = _module()
+    screen = _screen("capitano_pasted_token")
+    assert module.composer_text(screen) == "[Pasted Content 1043 chars]"
+    assert module.delivery_gate(screen) == "text"
+
+
+def test_a_codex_in_the_middle_of_a_turn_still_has_a_composer():
+    """The same composer while Codex works: its footer is «tab to queue message ... 80% context left», with no
+    «·» (the model line is the footer at rest). That footer is the one the Assistente's own capture of the
+    Capitano shows. Before it was recognised the composer was not found: the text pasted into it was «another
+    draft», the transport left it there without an Enter, and the gate said «blocked»."""
+    module = _module()
+    screen = _screen("capitano_working_token")
+    assert module.composer_text(screen) == "[Pasted Content 1043 chars]"
+    assert module.delivery_gate(screen) == "text"
+    assert module.composer_snapshot(screen) == ("text", False)
+
+
+def test_a_codex_in_the_middle_of_a_turn_with_an_empty_composer_is_writable():
+    module = _module()
+    ghost = _screen("capitano_working_token").replace(
+        "[Pasted Content 1043 chars]", "\x1b[2mFind and fix a bug in @filename\x1b[0m").replace("\x1b[38;5;6m", "")
+    assert module.delivery_gate(ghost) == "empty"
+
+
+def test_a_line_of_the_draft_that_says_context_left_is_not_the_working_footer():
+    """The footer is told by its shape (it starts with «tab to queue message», or the figure is pushed to the
+    right edge), not by the words: a pasted text that happens to contain them stays a draft, whole."""
+    module = _module()
+    # a long paste wrapped over three rows, the middle one saying the words
+    wide = ("parola " * 20).strip()
+    rows = [wide, ("il testo dice 80% context left e poi continua " + wide)[:len(wide)], wide[:50]]
+    screen = ("\x1b[2m" + "─" * 100 + "\x1b[0m\n\n› " + rows[0].rstrip() + "\n  " + rows[1].rstrip() + "\n  " + rows[2].rstrip()
+              + "\n\n  gpt-5.6-sol high · ~/agents/capitano\n")
+    assert module.composer_text(screen) == "".join(row.strip() for row in rows)
+
+
 def _echo_over_two_rows(first_len: int, second_len: int) -> str:
     """The shape of the assistant's last input: a long `›` row and its wrapped tail, as in the capture."""
     return (

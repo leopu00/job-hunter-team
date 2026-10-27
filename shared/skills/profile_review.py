@@ -30,6 +30,9 @@ from typing import Any, Iterator
 
 import yaml
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from profile_email import profile_email  # noqa: E402
+
 
 MAX_PROFILE_BYTES = 64 * 1024
 MAX_REVIEW_BYTES = 128 * 1024
@@ -188,16 +191,7 @@ def _languages(profile: dict[str, Any]) -> list[str]:
 
 
 def _email(profile: dict[str, Any]) -> str:
-    direct = _text(profile.get("email"))
-    if direct:
-        return direct
-    candidate = profile.get("candidate")
-    contacts = candidate.get("contacts") if isinstance(candidate, dict) else None
-    if isinstance(contacts, dict) and _text(contacts.get("email")):
-        return _text(contacts.get("email"))
-    positioning = profile.get("positioning")
-    contacts = positioning.get("contacts") if isinstance(positioning, dict) else None
-    return _text(contacts.get("email")) if isinstance(contacts, dict) else ""
+    return profile_email(profile) or ""
 
 
 def _seniority(profile: dict[str, Any]) -> str:

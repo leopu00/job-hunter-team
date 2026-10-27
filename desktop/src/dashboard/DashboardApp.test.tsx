@@ -839,6 +839,27 @@ describe("DashboardApp onboarding router", () => {
     }
   });
 
+  it("a start that did not get the write access back keeps what the native side said about it, for the banner to say why", async () => {
+    // only the three words of a reopening that gave nothing back reach the view; `restored` comes with the full connection
+    for (const [outcome, kept] of [
+      ["not_restored", "not_restored"], ["expired", "expired"], ["discarded", "discarded"], ["restored", undefined], [undefined, undefined],
+    ] as const) {
+      vi.mocked(useSession).mockReturnValue(signedInAs(`set-up-outcome-${outcome ?? "none"}`));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      vi.mocked(existingTeamBridge.reopen).mockResolvedValue({
+        readiness: true,
+        snapshot: TEAM_READY,
+        connectionKey: "k".repeat(16),
+        ...(outcome ? { fullLinkOutcome: outcome } : {}),
+      });
+      const view = render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(existingTeamView()?.notFullBecause, String(outcome)).toBe(kept);
+      view.unmount();
+      leaveExistingTeamReadOnly();
+    }
+  });
+
   describe("a set-up account whose saved team was updated on its VPS", () => {
     const SAVED_HOST = { kind: "vps" as const, address: "host.example.invalid", user: "ubuntu", port: 22, keyPath: "/synthetic/key" };
 
