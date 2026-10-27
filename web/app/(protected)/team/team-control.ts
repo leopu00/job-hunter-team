@@ -121,6 +121,8 @@ export function errorKey(code: string): string {
     case "rate_limited":
     case "confirm_expired":
     case "unauthenticated":
+    // The door switched the action off (migration 103): said as that, not as a failure to retry.
+    case "action_disabled":
       return `err_${code}`;
     default:
       return "err_generic";
