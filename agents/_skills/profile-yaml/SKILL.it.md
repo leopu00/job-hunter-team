@@ -83,7 +83,7 @@ Il parser del frontend è rigoroso. Cinque regole che prevengono ogni problema c
 
 ## Schema minimo (il minimo)
 
-Il frontend ha un fallback che sblocca "Vai alla dashboard" quando questi sono presenti + non vuoti (così l'utente può procedere anche prima che tu crei `ready.flag`). Popolali tutti:
+Il frontend ha un fallback che sblocca "Vai alla dashboard" quando gli otto campi minimi sono presenti + non vuoti: nome, email, ruolo target, città, anni di esperienza, `seniority_target`, almeno 2 skill primarie, almeno 1 lingua (così l'utente può procedere anche prima che tu crei `ready.flag`). Popola prima quelli. Il resto dello schema qui sotto è consigliato, esperienze e titoli di studio compresi: chiedilo subito dopo lo sblocco, e non inventarlo mai per riempire lo schema.
 
 ```yaml
 name: <Nome Cognome>
@@ -113,13 +113,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 voce, ognuna con company/role/years/summary
+  experience:                 # consigliato, non obbligatorio: se c'è, ogni voce con company/role/years/summary
     - company: ...
       role: ...
       years: ...              # es. "Mar 2022 - in corso" — usato per durata reale
       summary: |-
         ...
-  education:                  # >= 1 voce, ognuna con institution/degree/year
+  education:                  # consigliato, non obbligatorio: se c'è, ogni voce con institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -234,8 +234,9 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 ### NON creare il flag se
 
 - l'ultima validazione del profilo ha stampato `INVALID_PROFILE` (anche una sola volta dopo l'ultimo Write);
-- mancano: nome, ruolo target, città, anni di esperienza, email;
-- mancano: skills (≥2), lingue (≥1), esperienze (≥1), titoli di studio (≥1).
+- mancano (gli otto campi minimi): nome, email, ruolo target, città, anni di esperienza, `seniority_target`, skills (≥2), lingue (≥1).
+
+Esperienze e titoli di studio sono consigliati: non bloccano il flag. Chiedili subito dopo averlo creato.
 
 ## 🎓 `has_degree` — dagli studi, mai come segnaposto
 

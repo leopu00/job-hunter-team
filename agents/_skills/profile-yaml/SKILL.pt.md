@@ -83,7 +83,7 @@ O parser do frontend e estrito. Cinco regras que previnem todos os problemas enc
 
 ## Esquema minimo (o piso)
 
-O frontend tem um fallback que desbloqueia "Vai alla dashboard" quando estes campos estao presentes + nao vazios (para que o utilizador possa prosseguir mesmo antes de voce criar `ready.flag`). Preencha todos:
+O frontend tem um fallback que desbloqueia "Vai alla dashboard" quando os oito campos minimos estao presentes + nao vazios: nome, email, cargo alvo, cidade, anos de experiencia, `seniority_target`, pelo menos 2 competencias principais, pelo menos 1 lingua (para que o utilizador possa prosseguir mesmo antes de voce criar `ready.flag`). Preencha primeiro esses. O resto do esquema abaixo e recomendado, experiencias e formacoes incluidas: peca-o logo a seguir ao desbloqueio, e nunca o invente so para preencher o esquema.
 
 ```yaml
 name: <Nome Apelido>
@@ -110,13 +110,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 entrada, cada uma com company/role/years/summary
+  experience:                 # recomendado, nao obrigatorio: se existir, cada uma com company/role/years/summary
     - company: ...
       role: ...
       years: ...              # ex. "Mar 2022 - em curso" — usado para duracao real
       summary: |-
         ...
-  education:                  # >= 1 entrada, cada uma com institution/degree/year
+  education:                  # recomendado, nao obrigatorio: se existir, cada uma com institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -228,8 +228,9 @@ E avise o utilizador: "voltei a colocar o botao em espera — vamos rever este p
 ### NAO criar o flag se
 
 - a ultima validacao do perfil mostrou `INVALID_PROFILE` (mesmo uma unica vez apos o ultimo Write);
-- faltam: nome, cargo alvo, cidade, anos de experiencia, email;
-- faltam: competencias (≥2), linguas (≥1), experiencias (≥1), formacoes (≥1).
+- faltam (os oito campos minimos): nome, email, cargo alvo, cidade, anos de experiencia, `seniority_target`, competencias (≥2), linguas (≥1).
+
+Experiencias e formacoes sao recomendadas: nao bloqueiam o flag. Pede-as logo a seguir a cria-lo.
 
 ## 🎓 `has_degree` — a partir da formacao, nunca como valor provisorio
 

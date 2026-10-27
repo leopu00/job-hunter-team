@@ -83,7 +83,7 @@ Der Parser des Frontends ist strikt. Fünf Regeln, die jedes aufgetretene Proble
 
 ## Mindestschema (das Minimum)
 
-Das Frontend hat einen Fallback, der "Vai alla dashboard" freischaltet, wenn diese Felder vorhanden + nicht leer sind (damit der Benutzer fortfahren kann, noch bevor Sie `ready.flag` erstellen). Füllen Sie alle aus:
+Das Frontend hat einen Fallback, der "Vai alla dashboard" freischaltet, wenn die acht Mindestfelder vorhanden + nicht leer sind: Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, mindestens 2 primäre Fähigkeiten, mindestens 1 Sprache (damit der Benutzer fortfahren kann, noch bevor Sie `ready.flag` erstellen). Füllen Sie zuerst diese aus. Der Rest des Schemas unten ist empfohlen, Erfahrungen und Abschlüsse eingeschlossen: Fragen Sie direkt nach der Freischaltung danach, und erfinden Sie nie etwas, nur um das Schema zu füllen.
 
 ```yaml
 name: <Vorname Nachname>
@@ -110,13 +110,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 Eintrag, jeder mit company/role/years/summary
+  experience:                 # empfohlen, nicht Pflicht: wenn vorhanden, jeder Eintrag mit company/role/years/summary
     - company: ...
       role: ...
       years: ...              # z.B. "Mär 2022 - laufend" — für tatsächliche Dauer verwendet
       summary: |-
         ...
-  education:                  # >= 1 Eintrag, jeder mit institution/degree/year
+  education:                  # empfohlen, nicht Pflicht: wenn vorhanden, jeder Eintrag mit institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -228,8 +228,9 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 ### Das Flag NICHT erstellen, wenn
 
 - die letzte Profilvalidierung `INVALID_PROFILE` ausgegeben hat (auch nur einmal nach dem letzten Write);
-- fehlen: Name, Zielrolle, Stadt, Erfahrungsjahre, E-Mail;
-- fehlen: Fähigkeiten (≥2), Sprachen (≥1), Erfahrungen (≥1), Abschlüsse (≥1).
+- fehlen (die acht Mindestfelder): Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, Fähigkeiten (≥2), Sprachen (≥1).
+
+Erfahrungen und Abschlüsse sind empfohlen: Sie blockieren das Flag nicht. Frag direkt danach, wenn du es erstellt hast.
 
 ## 🎓 `has_degree` — aus der Ausbildung, nie als Platzhalter
 

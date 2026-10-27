@@ -83,7 +83,7 @@ A frontend parsere szigoru. Ot szabaly, ami minden eddig tapasztalt problemat me
 
 ## Minimum sema (az also hatar)
 
-A frontendnek van egy fallbackje, ami feloldja a "Vai alla dashboard" gombot, ha ezek a mezok jelen vannak + nem uresek (igy a felhasznalo tovabblephet, meg mielott letrehoznad a `ready.flag`-et). Toltsd ki mindet:
+A frontendnek van egy fallbackje, ami feloldja a "Vai alla dashboard" gombot, ha a nyolc minimalis mezo jelen van + nem ures: nev, email, cel pozicio, varos, tapasztalati evek, `seniority_target`, legalabb 2 elsodleges kepesseg, legalabb 1 nyelv (igy a felhasznalo tovabblephet, meg mielott letrehoznad a `ready.flag`-et). Eloszor ezeket told ki. A lenti sema tobbi resze ajanlott, a tapasztalatokkal es vegzettsegekkel egyutt: kerdezd meg kozvetlenul a feloldas utan, es soha ne talalj ki semmit csak azert, hogy kitoltsd a semat.
 
 ```yaml
 name: <Vezeteknev Keresztnev>
@@ -110,13 +110,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 bejegyzes, mindegyik company/role/years/summary-val
+  experience:                 # ajanlott, nem kotelezo: ha van, mindegyik company/role/years/summary-val
     - company: ...
       role: ...
       years: ...              # pl. "2022 mar. - folyamatban" — valos idotartamhoz hasznalt
       summary: |-
         ...
-  education:                  # >= 1 bejegyzes, mindegyik institution/degree/year-rel
+  education:                  # ajanlott, nem kotelezo: ha van, mindegyik institution/degree/year-rel
     - institution: ...
       degree: ...
       year: ...
@@ -228,8 +228,9 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 ### NE hozd letre a flag-et, ha
 
 - az utolso profil validalas `INVALID_PROFILE`-t irt ki (meg egyszer is az utolso Write utan);
-- hianyzik: nev, cel pozicio, varos, tapasztalati evek, email;
-- hianyzik: kepessegek (≥2), nyelvek (≥1), tapasztalatok (≥1), vegzettsegek (≥1).
+- hianyzik (a nyolc minimalis mezo): nev, email, cel pozicio, varos, tapasztalati evek, `seniority_target`, kepessegek (≥2), nyelvek (≥1).
+
+A tapasztalatok es a vegzettsegek ajanlottak: nem blokkoljak a flag-et. Kerdezd meg oket kozvetlenul a letrehozas utan.
 
 ## 🎓 `has_degree` — a vegzettsegbol, soha nem helykitoltonek
 

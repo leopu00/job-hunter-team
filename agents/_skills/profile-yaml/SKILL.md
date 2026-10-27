@@ -82,7 +82,7 @@ The frontend's parser is strict. Five rules that prevent every issue we have see
 
 ## Minimum schema (the floor)
 
-The frontend has a fallback that unlocks "Vai alla dashboard" when these are present + non-empty (so the user can proceed even before you create `ready.flag`). Populate them all:
+The frontend has a fallback that unlocks "Vai alla dashboard" when the eight minimum fields are present + non-empty: name, email, target role, city, years of experience, `seniority_target`, at least 2 primary skills, at least 1 language (so the user can proceed even before you create `ready.flag`). Fill those first. The rest of the shape below is recommended, experiences and degrees included: ask for it right after the unlock, and never invent it to fill the shape.
 
 ```yaml
 name: <First Last>
@@ -112,13 +112,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 entry, each with company/role/years/summary
+  experience:                 # recommended, not required: if there, each entry with company/role/years/summary
     - company: ...
       role: ...
       years: ...              # e.g. "Mar 2022 - present" — used for the real duration
       summary: |-
         ...
-  education:                  # >= 1 entry, each with institution/degree/year
+  education:                  # recommended, not required: if there, each entry with institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -233,8 +233,9 @@ And tell the user: "I've put the button back on hold — let's review this point
 ### Do NOT create the flag if
 
 - the last profile validation printed `INVALID_PROFILE` (even once after the last Write);
-- these are missing: name, target role, city, years of experience, email;
-- these are missing: skills (≥2), languages (≥1), experiences (≥1), degrees (≥1).
+- these are missing (the eight minimum fields): name, email, target role, city, years of experience, `seniority_target`, skills (≥2), languages (≥1).
+
+Experiences and degrees are recommended: they do not block the flag. Ask for them right after creating it.
 
 ## 🎓 `has_degree` — from the education, never as a placeholder
 

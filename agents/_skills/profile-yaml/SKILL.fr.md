@@ -83,7 +83,7 @@ Le parseur du frontend est strict. Cinq règles qui préviennent chaque problèm
 
 ## Schéma minimum (le plancher)
 
-Le frontend a un fallback qui débloque "Vai alla dashboard" quand ces champs sont présents + non vides (pour que l'utilisateur puisse continuer même avant que vous ne créiez `ready.flag`). Remplissez-les tous :
+Le frontend a un fallback qui débloque "Vai alla dashboard" quand les huit champs minimum sont présents + non vides : nom, email, rôle cible, ville, années d'expérience, `seniority_target`, au moins 2 compétences principales, au moins 1 langue (pour que l'utilisateur puisse continuer même avant que vous ne créiez `ready.flag`). Remplissez d'abord ceux-là. Le reste du schéma ci-dessous est recommandé, expériences et diplômes compris : demandez-le juste après le déblocage, et ne l'inventez jamais pour remplir le schéma.
 
 ```yaml
 name: <Prénom Nom>
@@ -110,13 +110,13 @@ candidate:
     phone: ...
     linkedin: ...
     github: ...
-  experience:                 # >= 1 entrée, chacune avec company/role/years/summary
+  experience:                 # recommandé, pas obligatoire : s'il y en a, chaque entrée avec company/role/years/summary
     - company: ...
       role: ...
       years: ...              # ex. "Mar 2022 - en cours" — utilisé pour la durée réelle
       summary: |-
         ...
-  education:                  # >= 1 entrée, chacune avec institution/degree/year
+  education:                  # recommandé, pas obligatoire : s'il y en a, chaque entrée avec institution/degree/year
     - institution: ...
       degree: ...
       year: ...
@@ -228,8 +228,9 @@ Et informez l'utilisateur : "j'ai remis le bouton en attente — revoyons ce poi
 ### NE PAS créer le flag si
 
 - la dernière validation du profil a affiché `INVALID_PROFILE` (même une seule fois après le dernier Write) ;
-- il manque : nom, rôle cible, ville, années d'expérience, email ;
-- il manque : compétences (≥2), langues (≥1), expériences (≥1), diplômes (≥1).
+- il manque (les huit champs minimum) : nom, email, rôle cible, ville, années d'expérience, `seniority_target`, compétences (≥2), langues (≥1).
+
+Expériences et diplômes sont recommandés : ils ne bloquent pas le flag. Demandez-les juste après l'avoir créé.
 
 ## 🎓 `has_degree` — d'après les études, jamais comme valeur d'attente
 

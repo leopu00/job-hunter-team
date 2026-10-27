@@ -78,8 +78,30 @@ def test_the_minimum_shape_does_not_list_it_as_required(lang: str) -> None:
     assert len(lines) == 1 and optional in lines[0], f"{minimum.name}: the minimum shape does not mark it {optional!r}"
 
 
-def test_the_validator_still_checks_what_is_there() -> None:
-    """Absent is "not declared" (the eight fields of the app are enough), but a value that is
-    written must be a boolean: the rule above is about what the Assistente writes."""
-    source = (ROOT / "shared" / "skills" / "validate_profile.py").read_text(encoding="utf-8")
-    assert 'err("has_degree: boolean required when present")' in source
+
+def _profile_yaml(lang: str) -> list[str]:
+    return (ROOT / "agents" / "_skills" / "profile-yaml" / f"SKILL{lang}.md").read_text(encoding="utf-8").splitlines()
+
+
+@pytest.mark.parametrize("lang", LANGS, ids=lambda l: l or ".en")
+def test_the_flag_waits_for_the_eight_fields_and_not_for_experience_or_degrees(lang: str) -> None:
+    """The fourth checklist (profile-yaml: the minimum shape and the flag) says what the other three say
+    (shared/config/profile-minimum.json): eight fields; experiences and degrees are recommended."""
+    lines = _profile_yaml(lang)
+    after_invalid = next(i for i, l in enumerate(lines) if l.startswith("- ") and "INVALID_PROFILE" in l)
+    missing = [l for l in lines[after_invalid + 1:after_invalid + 4] if l.startswith("- ")]
+    assert len(missing) == 1, f"SKILL{lang}.md: the flag has {len(missing)} 'missing' bullets, one is the eight fields"
+    assert "`seniority_target`" in missing[0], f"SKILL{lang}.md: the eight fields lack seniority_target"
+    # skills (≥2) and languages (≥1): the old bullet also asked experiences (≥1) and degrees (≥1)
+    assert missing[0].count("≥1") == 1 and missing[0].count("≥2") == 1, missing[0]
+
+
+@pytest.mark.parametrize("lang", LANGS, ids=lambda l: l or ".en")
+def test_the_minimum_shape_names_the_eight_fields_and_marks_experience_and_education_as_extra(lang: str) -> None:
+    lines = _profile_yaml(lang)
+    # the first heading whose paragraph speaks of the frontend fallback and ready.flag: the minimum shape
+    heading = next(i for i, l in enumerate(lines) if l.startswith("## ") and "ready.flag" in lines[i + 2])
+    assert "`seniority_target`" in lines[heading + 2], f"SKILL{lang}.md: the minimum shape does not name the eight fields"
+    for key in ("experience", "education"):
+        entry = [l for l in lines if l.startswith(f"  {key}:") and "#" in l]
+        assert len(entry) == 1 and ">= 1" not in entry[0], f"SKILL{lang}.md: {key} is still asked as at least one entry"
