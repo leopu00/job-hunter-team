@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignOutContext } from "../lib/account-actions";
@@ -50,12 +50,20 @@ describe("the line of the pages that read the cloud, for a profile with no sign-
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
-  it("is on the pages the shell runs as server pages, whatever they show", async () => {
+  it("is the whole of a server page: not its skeleton, nor the empty states of the page it would draw", async () => {
     registerAuthStorageProbe(() => false);
-    render(<ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />);
+    render(<ServerPage render={() => <h1>no positions yet</h1>} fallback={<p>skeleton</p>} />);
+    await act(async () => undefined);
     expect(screen.getByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
+    expect(screen.queryByRole("heading", { name: "no positions yet" })).not.toBeInTheDocument();
+    expect(screen.queryByText("skeleton")).not.toBeInTheDocument();
+  });
+
+  it("leaves a server page as it is with a cloud session", async () => {
+    registerAuthStorageProbe(() => true);
+    render(<ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />);
     expect(await screen.findByRole("heading", { name: "page" })).toBeInTheDocument();
-    expect(screen.getByRole("note")).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("is said in every language, and the Portuguese is that of Portugal", () => {

@@ -10,7 +10,7 @@ import { pluralText } from "../../lib/plural";
 import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 import { cloudClient } from "../../lib/cloud-client";
 import { withReadDeadline } from "../../lib/read-deadline";
-import CloudDataNotice from "../../shell/CloudDataNotice";
+import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
@@ -32,6 +32,7 @@ type Load =
 export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [locale] = useState<Locale>(readLocaleCookie);
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const blocked = useCloudDataBlocked();
 
   const read = useCallback(() => {
     withReadDeadline(loadProfile(client))
@@ -56,12 +57,15 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   );
 
   const t = getProfileT(locale);
+  // No cloud session (a local profile): the notice is the page, not a bare line on a black screen.
+  if (blocked) return <CloudDataNotice />;
   if (load.state === "loading") return <ProfileLoading />;
   if (load.state === "signed-out")
-    // No cloud session because there never was a sign-in (a local profile): that is not an expired one.
+    // A readable session that no longer answers as signed in is an expired one; with no cloud session at
+    // all (a local profile, above) there never was one.
     return cloudSessionReadable()
       ? <div className="p-12 text-center text-[var(--color-muted)]">{t("session_expired")}</div>
-      : <CloudDataNotice />;
+      : null;
   if (load.state === "failed")
     return (
       <div className="max-w-6xl mx-auto px-5 pt-8">

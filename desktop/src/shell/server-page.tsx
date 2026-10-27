@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { appLocale } from "../lib/app-locale";
 import { withReadDeadline } from "../lib/read-deadline";
-import CloudDataNotice from "./CloudDataNotice";
+import CloudDataNotice, { useCloudDataBlocked } from "./CloudDataNotice";
 import { SHELL_TEXT } from "./shell.i18n";
 import { useRefresh } from "./router";
 
@@ -28,6 +28,7 @@ type State = { state: "loading" } | { state: "ready"; node: ReactNode } | { stat
 
 export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
   const [result, setResult] = useState<State>({ state: "loading" });
+  const blocked = useCloudDataBlocked();
   // The latest closure: a run started by runKey or refresh reads the props of now.
   const latest = useRef(render);
   latest.current = render;
@@ -52,11 +53,12 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
   useEffect(run, [run, runKey]);
   useRefresh(run);
 
-  if (result.state === "ready") return <><CloudDataNotice />{result.node}</>;
+  // Nothing to read with: the page is the notice, not its own empty states.
+  if (blocked) return <CloudDataNotice />;
+  if (result.state === "ready") return result.node;
   if (result.state === "failed")
     return (
       <>
-        <CloudDataNotice />
         {failure ?? (
           <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
             {SHELL_TEXT[appLocale()].pageReadFailed(SHELL_TEXT[appLocale()].refresh)}
@@ -69,5 +71,5 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
         </div>
       </>
     );
-  return <><CloudDataNotice />{fallback}</>;
+  return <>{fallback}</>;
 }
