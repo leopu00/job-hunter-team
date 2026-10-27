@@ -68,6 +68,15 @@ export interface PyRun {
  * silent to every comparison here (21/09, found by the profile validator's
  * WARN lines). A parity test that cannot see a warning cannot check one.
  */
+/**
+ * The choices in argparse's "invalid choice" error are printed quoted by Python up to 3.13 and by the port
+ * (`choose from 'GO', 'NO_GO'`), and bare by 3.14 (`choose from GO, NO_GO`). The parity tests compare the port's
+ * error with the script's and the meaning is the same, so both sides are read without those quotes.
+ */
+export function argparseChoicesUnquoted(text: string): string {
+  return text.replace(/(invalid choice: .*?\(choose from )([^)]*)\)/g, (_all, head: string, list: string) => `${head}${list.replace(/'/g, "")})`);
+}
+
 export function runPython(skills: string, args: string[], env: Record<string, string> = {}, input?: string): PyRun {
   const run = spawnSync("python3", args, {
     cwd: skills,
