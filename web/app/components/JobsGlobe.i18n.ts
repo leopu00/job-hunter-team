@@ -261,4 +261,13 @@ export const T = {
     fr: "Lecture en cours : avec beaucoup de postes ou une équipe sur une VPS, cela peut prendre une dizaine de secondes.",
     pt: "Ainda a ler: com muitas vagas ou uma equipa numa VPS pode demorar uns dez segundos.",
   },
+  loading_slow_generic: {
+    it: "Ancora in lettura: con molte posizioni può servire una decina di secondi.",
+    en: "Still reading: with many positions this can take around ten seconds.",
+    hu: "Még olvassuk: sok pozíciónál ez tíz másodpercig is eltarthat.",
+    es: "Sigue leyendo: con muchas posiciones puede tardar unos diez segundos.",
+    de: "Wird noch gelesen: bei vielen Stellen kann das etwa zehn Sekunden dauern.",
+    fr: "Lecture en cours : avec beaucoup de postes, cela peut prendre une dizaine de secondes.",
+    pt: "Ainda a ler: com muitas vagas pode demorar uns dez segundos.",
+  },
 } satisfies Dictionary;

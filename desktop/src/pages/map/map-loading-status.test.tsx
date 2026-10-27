@@ -49,6 +49,19 @@ describe("the map while its positions are read", () => {
     }
   });
 
+  it("never names a VPS on the public page's showcase, in any language", () => {
+    for (const lang of locales) {
+      expect(T.loading_slow_generic[lang], lang).not.toMatch(/VPS/);
+      expect(T.loading_slow_generic[lang].length, lang).toBeGreaterThan(30);
+    }
+    vi.useFakeTimers();
+    render(<GlobeLoadingStatus lang="en" generic />);
+    act(() => void vi.advanceTimersByTime(SLOW_AFTER_SECONDS * 1000));
+    expect(screen.getByTestId("globe-loading-slow")).toHaveTextContent("Still reading: with many positions this can take around ten seconds.");
+    expect(screen.getByTestId("globe-loading-slow")).not.toHaveTextContent(/VPS/);
+    expect(read("web/app/components/JobsGlobe.tsx")).toContain("generic={showcase != null}");
+  });
+
   it("stops its timer when the positions arrive", () => {
     vi.useFakeTimers();
     const { unmount } = render(<GlobeLoadingStatus lang="en" />);

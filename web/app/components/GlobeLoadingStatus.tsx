@@ -10,9 +10,9 @@ export const SLOW_AFTER_SECONDS = 5;
 /**
  * What the map says while its positions are being read: a sweeping bar (it only says «working», the
  * number of reads is not known here), what is being read, the seconds so far, and from the fifth second
- * why it takes this long. Screen readers get the sentence once (the seconds are not announced).
+ * why it takes this long (`generic`: without naming a VPS, for the public page, whose person has none). Screen readers get the sentence once (the seconds are not announced).
  */
-export default function GlobeLoadingStatus({ lang }: { lang: string }) {
+export default function GlobeLoadingStatus({ lang, generic = false }: { lang: string; generic?: boolean }) {
   const tr = makeT(T, lang);
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function GlobeLoadingStatus({ lang }: { lang: string }) {
       </p>
       {seconds >= SLOW_AFTER_SECONDS && (
         <p data-testid="globe-loading-slow" className="m-0 max-w-sm text-[12px] text-[var(--color-muted)]">
-          {tr("loading_slow")}
+          {tr(generic ? "loading_slow_generic" : "loading_slow")}
         </p>
       )}
     </div>
