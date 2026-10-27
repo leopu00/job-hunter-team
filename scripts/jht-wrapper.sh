@@ -2765,16 +2765,15 @@ bind_uid_conflict() {
 # l'installazione crea ~/.jht: idempotente, 700 solo se la crea, mai un chown, e
 # mai toccata se c'e' gia' (anche un link o un file: non e' nostra).
 ensure_host_mount_points() {
-  local home_dir="${JHT_HOME_HOST:-$HOME/.jht}" point
+  local home_dir="${JHT_HOME_HOST:-$HOME/.jht}"
   if [ ! -d "$home_dir" ] && [ ! -e "$home_dir" ] && [ ! -L "$home_dir" ]; then
-    mkdir -p "$home_dir" && chmod 700 "$home_dir" || return 0
+    # Con i permessi di sempre (umask): con Docker su Linux ensure_bind_owner la passa subito a 1001, e
+    # una 700 non sarebbe piu' leggibile dall'utente. Privata e' solo la sottocartella che creiamo qui.
+    mkdir -p "$home_dir" || return 0
   fi
-  for point in runtime; do
-    if [ -e "$home_dir/$point" ] || [ -L "$home_dir/$point" ]; then
-      continue
-    fi
-    mkdir "$home_dir/$point" 2>/dev/null && chmod 700 "$home_dir/$point" 2>/dev/null || true
-  done
+  if [ ! -e "$home_dir/runtime" ] && [ ! -L "$home_dir/runtime" ]; then
+    mkdir "$home_dir/runtime" 2>/dev/null && chmod 700 "$home_dir/runtime" 2>/dev/null || true
+  fi
 }
 
 ensure_bind_owner() {

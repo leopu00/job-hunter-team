@@ -1187,8 +1187,13 @@ def test_up_makes_the_whole_data_folder_too_when_it_is_missing(tmp_path: Path):
     result = _run(wrapper, env, "up")
 
     assert "Operation not permitted" not in result.stderr, result.stderr
-    assert jht_home.stat().st_mode & 0o777 == 0o700
+    # ~/.jht is made as the system makes any folder: on Linux with Docker it is handed to the container's user
+    # right after, and a 700 there could not be read by the person; only the folder made here is private
+    umask = os.umask(0)
+    os.umask(umask)
+    assert jht_home.stat().st_mode & 0o777 == 0o777 & ~umask
     assert (jht_home / "runtime").is_dir()
+    assert (jht_home / "runtime").stat().st_mode & 0o777 == 0o700
 
 
 def test_literal_project_does_not_adopt_a_stage_compose_container(tmp_path: Path):
