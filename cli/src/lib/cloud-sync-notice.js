@@ -80,7 +80,7 @@ const toldLostSession = new Set();
 /**
  * When the daemon could not authenticate with Supabase because the session of this device is gone
  * (cloud-realtime.js: RealtimeSessionLostError), tell the user once, in their language, that the box
- * now follows the website with slower checks and has to be paired again from the app. The key is the
+ * now follows the website with slower checks and has to be paired again. The key is the
  * sync token's public prefix, so a restart does not tell it twice (the row's own key keeps it one)
  * and a new pairing that is lost in its turn is told again. Anything else that went wrong with the
  * Realtime setup (network, config) is not a lost session and says nothing. Never throws.
