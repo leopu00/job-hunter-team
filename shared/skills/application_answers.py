@@ -34,6 +34,13 @@ Commands (one JSON line on stdout)::
     application_answers.py essentials --position-id ID --json          # read only
     application_answers.py essentials --position-id ID --ask --json    # asks what is missing
     application_answers.py list --json
+    application_answers.py save --key K --value - --field-type textarea --basis cv --position-id ID <<'TXT'
+    the answer, as long as it needs
+
+A `$` in an answer (an amount: `$80,000`): between double quotes the shell reads `$8` as its own argument and
+replaces it with nothing BEFORE this command starts, so the form would get "0,000", and nothing here can bring the
+digits back. `--value -` reads the answer from stdin, where a heredoc with a quoted delimiter (<<'TXT') leaves every
+`$` alone; `--label` and `--options` take single quotes.
 
 `essentials` without `--ask` only reports: it writes nothing, not even a
 question. The questions are created by `apply_flow.py` before the first run of
@@ -1576,7 +1583,8 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--key", required=True)
     save = sub.add_parser("save", help="save an answer the CLOSER worked out (channel agent_inferred)")
     save.add_argument("--key", required=True)
-    save.add_argument("--value", required=True)
+    save.add_argument("--value", required=True,
+                      help="the answer; `-` reads it from stdin (a quoted heredoc keeps every $)")
     save.add_argument("--field-type", required=True)
     save.add_argument("--options", nargs="*", default=[])
     save.add_argument("--basis", required=True, choices=INFERENCE_BASES)
@@ -1591,6 +1599,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--db")
         p.add_argument("--profile")
     args = parser.parse_args(argv)
+    if args.command == "save" and args.value == "-":
+        # The answer from stdin: a quoted heredoc leaves every `$` alone, which no argument can promise.
+        # A text that ends in a line break loses that one; an empty one is rejected below like an empty argument.
+        args.value = sys.stdin.read().removesuffix("\n")
     home = Path(os.environ.get("JHT_HOME") or Path.home() / ".jht")
     profile_path = Path(args.profile) if args.profile else home / "profile" / "candidate_profile.yml"
     try:

@@ -147,6 +147,7 @@ STEP 6 — SALIDA
 1. ya guardada (perfil, `application_answers`, una respuesta del usuario) → la usa el flujo;
 2. si no, la deduces del perfil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), del CV (`db_query.py application $PID`, `cv_path`) y de la oferta (`db_query.py position $PID --json`), la guardas y repites el STEP 3:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
+   Un `$` en la respuesta (un importe, `$80,000`): entre comillas dobles la shell se come `$8`. Pasa la respuesta por stdin, `--value -` con un heredoc `<<'TXT'`, y escribe `--label` y `--options` entre comillas simples.
    `--position-id` es obligatorio para el salario y para un textarea: valen para una sola empresa. Una elección es una de las opciones, escrita exactamente;
 3. solo sin ninguna base: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` envía UNA pregunta por Telegram. Nunca una pregunta escrita a mano. Luego la siguiente posición.
 

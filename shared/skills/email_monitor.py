@@ -45,6 +45,9 @@ CLI (agents):
       a mail to the mailbox's own address goes out at once. stdout is one
       JSON line with ok, status (`pending_user_approval` or `sent`) and, on
       failure, a fixed reason code.
+      The body can also come from stdin (`--body -`, `--body-file -`, or neither option): with a
+      heredoc whose delimiter is quoted (<<'TXT') every `$` of the text stays as written, while
+      `"...$20..."` between double quotes reaches the shell first and loses the digits.
 
 Nothing in this file opens a credentials file (audit G1): the account
 reaches the core only as an argument, inside the broker.
@@ -510,7 +513,11 @@ def main(argv):
         return 0
 
     if args.cmd == "send":
-        if args.body is not None:
+        # `-` is stdin, as when neither option is given: a quoted heredoc leaves every `$` alone, which an
+        # argument between double quotes cannot promise (the shell eats `$1`..`$9` before this starts).
+        if args.body == "-" or args.body_file == "-":
+            text = sys.stdin.read()
+        elif args.body is not None:
             text = args.body
         elif args.body_file:
             if _is_secret_path(args.body_file):

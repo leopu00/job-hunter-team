@@ -43,9 +43,12 @@ Das Team hat bereits ein eingerichtetes Postfach. Sende über das Skript: Es lie
 das Konto selbst und gibt nur `{"ok": true, ...}` oder einen Grund-Code aus.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+Der Text geht über stdin mit einem Heredoc, dessen Begrenzer in Anführungszeichen steht: in doppelten Anführungszeichen verschluckt die Shell ein `$` mit folgender Ziffer (`$20` kommt beim Unternehmen als `0` an); ebenso beim Betreff, der in einfachen Anführungszeichen steht.
 
 **Öffne, `cat`e, `json.load`e oder drucke niemals etwas unter `$JHT_HOME/credentials/`**,
 und schreib nie ein Passwort in ein Skript, einen Chat oder ein Log: Das Skript

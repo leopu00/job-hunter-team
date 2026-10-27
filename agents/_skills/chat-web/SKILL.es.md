@@ -43,9 +43,12 @@ El equipo ya tiene un buzón configurado. Envía con el script: lee la cuenta po
 sí mismo y solo imprime `{"ok": true, ...}` o un código de motivo.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+El cuerpo va por stdin con un heredoc de delimitador entre comillas: entre comillas dobles la shell se come un `$` seguido de una cifra (`$20` llega a la empresa como `0`); lo mismo con el asunto, que va entre comillas simples.
 
 **Nunca abras, hagas `cat` o `json.load` ni imprimas nada bajo `$JHT_HOME/credentials/`**,
 y nunca pongas una contraseña en un script, un chat o un log: el script es lo

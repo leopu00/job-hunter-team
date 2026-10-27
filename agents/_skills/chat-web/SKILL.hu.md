@@ -43,9 +43,12 @@ A csapatnak már van beállított postafiókja. Küldj a szkripttel: maga olvass
 fiókot, és csak `{"ok": true, ...}` vagy egy okkódot ír ki.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+A törzs stdinen megy, idézőjeles határolójú heredoc-kal: dupla idézőjelben a shell megeszi a számjegy előtti `$`-t (a `$20` a cégnél `0`-ként érkezik); ugyanez a tárgyra is igaz, azt szimpla idézőjelbe írd.
 
 **Soha ne nyiss meg, ne `cat`-elj, ne `json.load`-olj és ne írj ki semmit a `$JHT_HOME/credentials/` alól**,
 és soha ne tegyél jelszót szkriptbe, chatbe vagy logba: egyedül a szkript nyúl a

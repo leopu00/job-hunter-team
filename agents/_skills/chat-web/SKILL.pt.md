@@ -43,9 +43,12 @@ A equipa já tem uma caixa configurada. Envia com o script: lê a conta sozinho 
 só imprime `{"ok": true, ...}` ou um código de motivo.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+O corpo vai por stdin com um heredoc de delimitador entre aspas: entre aspas duplas a shell come um `$` seguido de um dígito (`$20` chega à empresa como `0`); o mesmo no assunto, que vai entre aspas simples.
 
 **Nunca abras, faças `cat` ou `json.load` nem imprimas nada em `$JHT_HOME/credentials/`**,
 e nunca ponhas uma palavra-passe num script, num chat ou num log: o script é o

@@ -143,6 +143,7 @@ STEP 6 — EXIT
 1. already saved (profile, `application_answers`, a user reply) → the flow uses it;
 2. otherwise work it out from the profile (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), the CV (`db_query.py application $PID`, `cv_path`) and the vacancy (`db_query.py position $PID --json`), and save it, then STEP 3 again:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
+   A `$` in the answer (an amount, `$80,000`): between double quotes the shell eats `$8`. Pass the answer on stdin, `--value -` with a heredoc `<<'TXT'`, and write `--label` and `--options` between single quotes.
    `--position-id` is required for the salary and for a textarea: they belong to one company. A choice is one of the options, written exactly;
 3. only with no basis at all: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` sends ONE question on Telegram. Never write a question by hand. Then the next position.
 

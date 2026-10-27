@@ -147,6 +147,7 @@ STEP 6 — SORTIE
 1. déjà enregistrée (profil, `application_answers`, une réponse de l'utilisateur) → le flux l'utilise ;
 2. sinon tu la déduis du profil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), du CV (`db_query.py application $PID`, `cv_path`) et de l'offre (`db_query.py position $PID --json`), tu l'enregistres et refais le STEP 3 :
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
+   Un `$` dans la réponse (un montant, `$80,000`) : entre guillemets doubles, le shell avale `$8`. Passe la réponse par stdin, `--value -` avec un heredoc `<<'TXT'`, et écris `--label` et `--options` entre apostrophes simples.
    `--position-id` est obligatoire pour le salaire et pour un textarea : ils valent pour une seule entreprise. Un choix est l'une des options, écrite exactement ;
 3. seulement sans aucune base : `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` envoie UNE question sur Telegram. Jamais une question écrite à la main. Puis la position suivante.
 

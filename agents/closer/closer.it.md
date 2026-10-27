@@ -147,6 +147,7 @@ STEP 6 — USCITA
 1. già salvata (profilo, `application_answers`, una risposta dell'utente) → la usa il flusso;
 2. altrimenti la ricavi dal profilo (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), dal CV (`db_query.py application $PID`, `cv_path`) e dall'annuncio (`db_query.py position $PID --json`), la salvi e rifai lo STEP 3:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
+   Un `$` nella risposta (un importo, `$80,000`): tra virgolette doppie la shell mangia `$8`. Passa la risposta da stdin, `--value -` con un heredoc `<<'TXT'`, e scrivi `--label` e `--options` tra apici singoli.
    `--position-id` è obbligatorio per la RAL e per una textarea: valgono per una sola azienda. Una scelta è una delle opzioni, scritta esattamente;
 3. solo senza nessuna base: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` manda UNA domanda su Telegram. Mai una domanda scritta a mano. Poi la posizione successiva.
 

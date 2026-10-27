@@ -42,9 +42,12 @@ The team already has a configured mailbox. Send through the script: it reads
 the account by itself and prints only `{"ok": true, ...}` or a reason code.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+The body goes on stdin with a quoted heredoc: between double quotes the shell eats a `$` followed by a digit (`$20` reaches the company as `0`); the same for the subject, which goes between single quotes.
 
 **Never open, `cat`, `json.load` or print anything under `$JHT_HOME/credentials/`**,
 and never put a password in a script, a chat or a log: the script is the only

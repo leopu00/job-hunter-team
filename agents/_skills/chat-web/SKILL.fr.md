@@ -43,9 +43,12 @@ L'équipe a déjà une boîte configurée. Envoie avec le script : il lit le com
 lui-même et n'affiche que `{"ok": true, ...}` ou un code de motif.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+Le corps passe par stdin avec un heredoc dont le délimiteur est entre apostrophes : entre guillemets doubles, le shell avale un `$` suivi d'un chiffre (`$20` arrive à l'entreprise comme `0`) ; idem pour l'objet, qui va entre apostrophes simples.
 
 **N'ouvre jamais, ne fais jamais `cat` ou `json.load` et n'affiche rien sous `$JHT_HOME/credentials/`**,
 et ne mets jamais de mot de passe dans un script, un chat ou un log : le script

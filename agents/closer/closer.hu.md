@@ -147,6 +147,7 @@ STEP 6 — KILÉPÉS
 1. már mentve (profil, `application_answers`, a felhasználó válasza) → a folyamat használja;
 2. különben kikövetkezteted a profilból (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), a CV-ből (`db_query.py application $PID`, `cv_path`) és az álláshirdetésből (`db_query.py position $PID --json`), mented, és újra STEP 3:
    `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
+   `$` a válaszban (egy összeg, `$80,000`): dupla idézőjelben a shell megeszi a `$8`-at. A választ stdinen add át, `--value -` és `<<'TXT'` heredoc, a `--label`-t és az `--options`-t pedig szimpla idézőjelbe írd.
    A `--position-id` kötelező a fizetésnél és egy textarea esetén: egyetlen cégre érvényesek. Egy választás az opciók egyike, pontosan leírva;
 3. csak ha semmilyen alap nincs: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` EGY kérdést küld Telegramon. Soha nem írsz kérdést kézzel. Aztán a következő pozíció.
 
