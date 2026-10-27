@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { DirectChatStatus } from "./direct-chat";
-import { chatMayStillCome, FIRST_ROUND_POLL_MS, FIRST_ROUND_WAIT_MS, waitForDirectChat } from "./direct-chat-wait";
+import { chatMayStillCome, FEW_TRIES_MAX, FIRST_ROUND_POLL_MS, FIRST_ROUND_WAIT_MS, waitForDirectChat } from "./direct-chat-wait";
 
 /** A clock that only moves when the code sleeps. */
 function clock() {
@@ -55,6 +55,37 @@ describe("waitForDirectChat — the Assistant's chat comes when its first turn i
       expect(chatMayStillCome(answer("error", code))).toBe(false);
     });
 
+  it.each(["ssh_rate_limited", "ssh_client_missing", "process_start_failed", "tunnel_start_failed", "runtime_missing"])(
+    "returns at once, without a second look, when the host refuses or cannot be reached at all (%s)", async (code) => {
+      const time = clock();
+      const retry = vi.fn();
+      const chat = await waitForDirectChat(answer("error", code), retry, time);
+      expect(chat.code).toBe(code);
+      expect(retry).not.toHaveBeenCalled();
+      expect(time.sleep).not.toHaveBeenCalled();
+    });
+
+  it("asks only a few times, each after twice the wait before it, when a rejected key looks like a team not ready", async () => {
+    const time = clock();
+    const retry = vi.fn().mockResolvedValue(answer("error", "tunnel_verify_failed"));
+    const chat = await waitForDirectChat(answer("error", "tunnel_verify_failed"), retry, { ...time, pollMs: 3_000 });
+    expect(chat.code).toBe("tunnel_verify_failed");
+    expect(retry).toHaveBeenCalledTimes(FEW_TRIES_MAX);
+    expect(time.sleep.mock.calls.map(([ms]) => ms)).toEqual([3_000, 6_000, 12_000]);
+  });
+
+  it("goes on at the usual pace for a team that is simply not ready (agent_busy, container_unavailable...)", async () => {
+    const time = clock();
+    const retry = vi.fn()
+      .mockResolvedValueOnce(answer("error", "container_unavailable"))
+      .mockResolvedValueOnce(answer("error", "agent_busy"))
+      .mockResolvedValueOnce(answer("error", "agent_not_running"))
+      .mockResolvedValueOnce(answer("error", "agent_busy"))
+      .mockResolvedValueOnce(answer("ready"));
+    await expect(waitForDirectChat(answer("error", "local_team_not_running"), retry, time)).resolves.toEqual({ state: "ready" });
+    expect(time.sleep.mock.calls.map(([ms]) => ms)).toEqual([3_000, 3_000, 3_000, 3_000, 3_000]);
+  });
+
   it("stops where it stands when the person has left", async () => {
     let current = true;
     const retry = vi.fn(async () => { current = false; return answer("connecting"); });
@@ -76,6 +107,6 @@ describe("the setup waits for the chat where it connects it", () => {
     expect(source).toContain('import { waitForDirectChat } from "../lib/direct-chat-wait";');
     expect(source).toMatch(/waitForDirectChat\(await connectDirectChat\(submission\.host\), reconnectDirectChat/);
     expect(source).toMatch(/waitForDirectChat\(await reconnectDirectChat\(\), reconnectDirectChat/);
-    expect(source.match(/assistantFirstRound/g)?.length).toBe(2);
+    expect(source.match(/waitingForChat/g)?.length).toBe(2);
   });
 });

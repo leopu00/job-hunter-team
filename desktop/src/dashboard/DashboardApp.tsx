@@ -1066,7 +1066,7 @@ export default function DashboardApp() {
       // the first look.
       const chat = await waitForDirectChat(await connectDirectChat(submission.host), reconnectDirectChat, {
         stillCurrent: () => activeIdentityKeyRef.current === identityKey,
-        onWaiting: () => setRuntime({ status: "working", stage: "assistant", message: stateText().assistantFirstRound }),
+        onWaiting: () => setRuntime({ status: "working", stage: "assistant", message: stateText().waitingForChat }),
       });
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
@@ -1309,7 +1309,7 @@ export default function DashboardApp() {
       setRuntime({ status: "working", stage: "assistant", message: stateText().reconnectingChat });
       const chat = await waitForDirectChat(await reconnectDirectChat(), reconnectDirectChat, {
         stillCurrent: () => activeIdentityKeyRef.current === identityKey,
-        onWaiting: () => setRuntime({ status: "working", stage: "assistant", message: stateText().assistantFirstRound }),
+        onWaiting: () => setRuntime({ status: "working", stage: "assistant", message: stateText().waitingForChat }),
       });
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };

@@ -10,8 +10,25 @@ import { isTerminalExistingTeamError } from "./existing-team";
 export const FIRST_ROUND_WAIT_MS = 90_000;
 export const FIRST_ROUND_POLL_MS = 3_000;
 
-/** Codes that waiting does not change: the container is not the one that was installed, a host key changed... */
-const NOT_CURED_BY_WAITING = new Set(["local_container_not_attested"]);
+/**
+ * Codes that waiting does not change: the container is not the one that was installed, a host key changed, the
+ * server refuses us (`ssh_rate_limited`: asking again every few seconds makes it worse), there is no ssh client or
+ * the program does not start, the runtime or its wrapper is not the right one, the account is not the team's.
+ */
+const NOT_CURED_BY_WAITING = new Set([
+  "local_container_not_attested", "local_chat_wrapper_outdated", "local_account_owner_mismatch",
+  "local_account_owner_unavailable", "local_migration_host_invalid", "local_migration_host_not_local",
+  "local_migration_host_missing", "runtime_missing", "ssh_rate_limited", "ssh_client_missing",
+  "process_start_failed", "tunnel_start_failed", "tunnel_path_unavailable",
+]);
+
+/**
+ * Codes that may be the team not being ready yet or a host that refuses us (a key that is rejected looks the same
+ * as a team that is not up): every attempt is a new ssh connection, and a rejected key counted many times is a
+ * ban. A few attempts, each after twice the wait before it, and then the failure.
+ */
+const FEW_TRIES = new Set(["tunnel_verify_failed", "tunnel_unavailable", "connect_failed"]);
+export const FEW_TRIES_MAX = 3;
 
 export function chatMayStillCome(chat: Pick<DirectChatStatus, "state" | "code">): boolean {
   if (chat.state === "ready") return false;
@@ -49,12 +66,16 @@ export async function waitForDirectChat(
   const deadline = now() + maxMs;
   let chat = first;
   let announced = false;
+  let fewTries = 0;
   while (chatMayStillCome(chat) && now() < deadline && stillCurrent()) {
+    const few = Boolean(chat.code && FEW_TRIES.has(chat.code));
+    if (few && fewTries >= FEW_TRIES_MAX) break;
     if (!announced) {
       announced = true;
       onWaiting?.();
     }
-    await sleep(pollMs);
+    await sleep(few ? pollMs * 2 ** fewTries : pollMs);
+    if (few) fewTries += 1;
     if (!stillCurrent()) break;
     chat = await retry();
   }
