@@ -384,11 +384,12 @@ def test_5a_la_sveglia_passa_dal_sender_protetto_mai_da_send_keys(home,
         stdout = ""
         stderr = ""
 
-    def fake_run(argv, **kwargs):
+    def fake_run(argv, *args, **kwargs):
         calls.append(list(argv))
         return _Res()
 
-    monkeypatch.setattr(eng.subprocess, "run", fake_run)
+    # the engine runs the transport through `_transport_run` (it does not kill it at the deadline any more)
+    monkeypatch.setattr(eng, "_transport_run", fake_run)
     rc = _REAL_SEND_WAKEUP("SCOUT-3", "scout-3", eng.wake_message("scout-3"))
 
     assert rc == 0
