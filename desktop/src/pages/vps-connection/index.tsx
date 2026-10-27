@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { useConnectTeam } from "../../lib/connect-team";
 import { describeError, errorCodeOf } from "../../lib/error-catalog";
+import { existingTeamView } from "../../lib/existing-team-readonly";
 import { vpsLinkStatusBridge, type VpsLinkStatus } from "../../lib/vps-link-status";
 import { savedVpsBridge, type SavedVps } from "../../lib/saved-vps";
 import type { PageProps } from "../types";
@@ -66,7 +67,10 @@ export function VpsConnectionScreen() {
     if (!connectTeam || retrying) return;
     setRetrying(true);
     try {
-      await connectTeam.reopen();
+      // Reopening the team is the read-only view: it takes the write access away. A team connected in
+      // full keeps it, so for that one «Try again» only reads the status again.
+      const inFull = (reading.kind === "ready" && reading.status.mode === "full") || existingTeamView()?.full === true;
+      if (!inFull) await connectTeam.reopen();
     } finally {
       await read();
       setRetrying(false);

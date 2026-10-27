@@ -75,6 +75,17 @@ describe("VPS connection settings", () => {
     expect(vi.mocked(connectTeam.reopen).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(vpsLinkStatusBridge.status).mock.invocationCallOrder[1]);
   });
 
+  it("does not reopen a team connected in full: reopening is the read-only view and takes the write access away", async () => {
+    vi.mocked(vpsLinkStatusBridge.status).mockResolvedValue({ ...status, mode: "full" });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByTestId("vps-connection-address");
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(vpsLinkStatusBridge.status).toHaveBeenCalledTimes(2));
+    expect(connectTeam.reopen).not.toHaveBeenCalled();
+    expect(screen.getByTestId("vps-connection-mode")).not.toHaveTextContent("Read only");
+  });
+
   it("opens the reconnect dialog and unlinks only after explicit confirmation", async () => {
     const user = userEvent.setup();
     renderPage();
