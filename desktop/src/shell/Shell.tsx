@@ -8,6 +8,7 @@ import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
 import {
+  existingTeamNotFullReason,
   existingTeamReadOnlyReason,
   useExistingTeamReadNotice,
   useExistingTeamReadOnly,
@@ -181,6 +182,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   // disables what writes (a team connected in full has the same pages, with their controls on).
   const linkedTeam = useExistingTeamView();
   const readOnlyTeam = useExistingTeamReadOnly();
+  const notFullReason = readOnlyTeam ? existingTeamNotFullReason(readOnlyTeam) : null;
   const readNotice = useExistingTeamReadNotice();
   const readOnly = linkedTeam !== null;
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
@@ -216,6 +218,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
             >
               <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
               {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
+              {notFullReason && <>{" "}<span data-testid="existing-team-readonly-why">{notFullReason}</span></>}
             </p>
             <ConnectInFull />
           </div>

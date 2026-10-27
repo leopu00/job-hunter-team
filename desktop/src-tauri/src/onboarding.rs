@@ -3500,8 +3500,10 @@ pub(crate) struct ExistingTeamReadiness {
     /// the app, the record is this very connection and recent, and every check of the reopening passed
     /// (existing_team_runtime::restore_full_link_at). False for a read-only opening.
     pub(crate) full_link: bool,
-    /// What the reopening did with the record, for the log only (never sent to the renderer).
-    #[serde(skip)]
+    /// What the reopening did with the record of the full connection (existing_team_runtime::FullLinkRestore::word).
+    /// The log has it, and the renderer says why a view is read only when the person had confirmed before:
+    /// `not_restored`, `expired` or `discarded`. Only a reopening sets it.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) full_link_outcome: Option<&'static str>,
 }
 

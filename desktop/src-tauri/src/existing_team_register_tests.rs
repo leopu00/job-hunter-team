@@ -2575,6 +2575,9 @@ fn t40_the_full_connection_comes_back_after_a_restart_when_the_whole_reopening_p
     let readiness = restart_and_reopen(&sandbox, &world);
     assert!(readiness.full_link, "the person confirmed it and nothing changed");
     assert_eq!(readiness.full_link_outcome, Some("restored"));
+    // the renderer is told what the reopening did, so the read-only view can say why it is read only
+    let sent = serde_json::to_value(&readiness).unwrap();
+    assert_eq!((sent["fullLink"].as_bool(), sent["fullLinkOutcome"].as_str()), (Some(true), Some("restored")));
     assert!(runtime::full_link_granted(&sandbox.scope, &target));
     assert!(full_link_file(&sandbox).exists(), "the record stays until it expires or is taken away");
     // the reopening itself is still the read-only one: no start, nothing written, the connection key is the same
@@ -2591,6 +2594,7 @@ fn t41_no_record_or_no_confirmation_is_the_read_only_view_as_before() {
     let readiness = restart_and_reopen(&sandbox, &world);
     assert!(!readiness.full_link);
     assert_eq!(readiness.full_link_outcome, Some("not_restored"));
+    assert_eq!(serde_json::to_value(&readiness).unwrap()["fullLinkOutcome"].as_str(), Some("not_restored"));
     assert!(!runtime::full_link_granted(&sandbox.scope, &target));
     // the permission of this run only (no record: the write of it failed or was never made) is gone too
     runtime::grant_full_link(&sandbox.scope, &target);
