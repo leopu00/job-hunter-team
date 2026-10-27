@@ -235,7 +235,7 @@ pub(crate) fn own_by_current_user_for_tests(path: &Path) {
     };
     // SAFETY: allocated by ConvertStringSidToSidW.
     unsafe { LocalFree(sid) };
-    assert_eq!(status, ERROR_SUCCESS, "the owner of {path:?} could not be set to the current user");
+    assert_eq!(status, ERROR_SUCCESS, "the owner of the fixture could not be set to the current user");
 }
 
 /// Test fixture: a DACL that opens `path` to Everyone, Users and
