@@ -35,8 +35,10 @@ export interface ExistingTeamReadOnlyText {
   /** The list is sorted by the insertion date: the team's last action is not read. */
   sortLastAction: string;
   /**
-   * Why the view is read only when the person had confirmed the write access before (the reopening at
-   * start-up or «Try again»): the record is not there, is older than 30 days, or is of another connection.
+   * Why the view is read only after a reopening (start-up or «Try again») that did not give the write access
+   * back. `becauseNotRestored` is also what a team never connected in full gets (no record at all), so it
+   * says only what to press and claims no permission of the past; `becauseExpired` (older than 30 days) and
+   * `becauseDiscarded` (a record that is not this connection, or cannot be believed) say what was found.
    */
   becauseNotRestored: string;
   becauseExpired: string;
@@ -61,9 +63,9 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Torna alla configurazione",
     navAria: "Navigazione in sola lettura",
     sortLastAction: "L’ordinamento per ultima azione non è disponibile in sola lettura: gli annunci sono ordinati per data di inserimento.",
-    becauseNotRestored: "Il permesso di scrittura non è stato mantenuto dall’ultima volta: confermalo di nuovo con «Collega in scrittura» per scrivere.",
+    becauseNotRestored: "Per scrivere, premi «Collega in scrittura».",
     becauseExpired: "Il permesso di scrittura che avevi confermato è scaduto (dura 30 giorni): confermalo di nuovo con «Collega in scrittura» per scrivere.",
-    becauseDiscarded: "Il permesso di scrittura salvato era per un’altra connessione: confermalo di nuovo con «Collega in scrittura» per scrivere.",
+    becauseDiscarded: "Il permesso di scrittura salvato non è più valido: confermalo di nuovo con «Collega in scrittura» per scrivere.",
   },
   en: {
     assistantOff: "Read only: assistant not active",
@@ -82,9 +84,9 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Back to setup",
     navAria: "Read-only navigation",
     sortLastAction: "Sorting by last action is not available read only: the positions are sorted by the date they were found.",
-    becauseNotRestored: "The write access was not kept from the last time: confirm it again with “Connect with write access” to write.",
+    becauseNotRestored: "To write, press “Connect with write access”.",
     becauseExpired: "The write access you confirmed has expired (it lasts 30 days): confirm it again with “Connect with write access” to write.",
-    becauseDiscarded: "The saved write access was for another connection: confirm it again with “Connect with write access” to write.",
+    becauseDiscarded: "The saved write access is no longer valid: confirm it again with “Connect with write access” to write.",
   },
   de: {
     assistantOff: "Nur Lesen: Assistent nicht aktiv",
@@ -103,9 +105,9 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Zurück zur Einrichtung",
     navAria: "Navigation im Lesemodus",
     sortLastAction: "Die Sortierung nach letzter Aktion ist im Lesemodus nicht verfügbar: Die Stellen sind nach Funddatum sortiert.",
-    becauseNotRestored: "Der Schreibzugriff wurde seit dem letzten Mal nicht beibehalten: Bestätige ihn erneut mit „Mit Schreibzugriff verbinden“, um zu schreiben.",
+    becauseNotRestored: "Zum Schreiben drücke „Mit Schreibzugriff verbinden“.",
     becauseExpired: "Der bestätigte Schreibzugriff ist abgelaufen (er gilt 30 Tage): Bestätige ihn erneut mit „Mit Schreibzugriff verbinden“, um zu schreiben.",
-    becauseDiscarded: "Der gespeicherte Schreibzugriff gehörte zu einer anderen Verbindung: Bestätige ihn erneut mit „Mit Schreibzugriff verbinden“, um zu schreiben.",
+    becauseDiscarded: "Der gespeicherte Schreibzugriff ist nicht mehr gültig: Bestätige ihn erneut mit „Mit Schreibzugriff verbinden“, um zu schreiben.",
   },
   fr: {
     assistantOff: "Lecture seule : assistant inactif",
@@ -124,9 +126,9 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Retour à la configuration",
     navAria: "Navigation en lecture seule",
     sortLastAction: "Le tri par dernière action n’est pas disponible en lecture seule : les offres sont triées par date de découverte.",
-    becauseNotRestored: "L’accès en écriture n’a pas été conservé depuis la dernière fois : confirme-le à nouveau avec « Connecter en écriture » pour écrire.",
+    becauseNotRestored: "Pour écrire, appuie sur « Connecter en écriture ».",
     becauseExpired: "L’accès en écriture que tu avais confirmé a expiré (il dure 30 jours) : confirme-le à nouveau avec « Connecter en écriture » pour écrire.",
-    becauseDiscarded: "L’accès en écriture enregistré concernait une autre connexion : confirme-le à nouveau avec « Connecter en écriture » pour écrire.",
+    becauseDiscarded: "L’accès en écriture enregistré n’est plus valable : confirme-le à nouveau avec « Connecter en écriture » pour écrire.",
   },
   es: {
     assistantOff: "Solo lectura: asistente no activo",
@@ -145,9 +147,9 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Volver a la configuración",
     navAria: "Navegación de solo lectura",
     sortLastAction: "La ordenación por última acción no está disponible en solo lectura: las ofertas se ordenan por fecha de hallazgo.",
-    becauseNotRestored: "El permiso de escritura no se conservó desde la última vez: confírmalo de nuevo con «Conectar con escritura» para escribir.",
+    becauseNotRestored: "Para escribir, pulsa «Conectar con escritura».",
     becauseExpired: "El permiso de escritura que habías confirmado ha caducado (dura 30 días): confírmalo de nuevo con «Conectar con escritura» para escribir.",
-    becauseDiscarded: "El permiso de escritura guardado era de otra conexión: confírmalo de nuevo con «Conectar con escritura» para escribir.",
+    becauseDiscarded: "El permiso de escritura guardado ya no es válido: confírmalo de nuevo con «Conectar con escritura» para escribir.",
   },
   pt: {
     assistantOff: "Só leitura: assistente não ativo",
@@ -166,9 +168,9 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Voltar à configuração",
     navAria: "Navegação só de leitura",
     sortLastAction: "A ordenação por última ação não está disponível só em leitura: as vagas estão ordenadas pela data em que foram encontradas.",
-    becauseNotRestored: "A permissão de escrita não foi mantida desde a última vez: confirma-a de novo com «Ligar com escrita» para escrever.",
+    becauseNotRestored: "Para escrever, carrega em «Ligar com escrita».",
     becauseExpired: "A permissão de escrita que tinhas confirmado caducou (dura 30 dias): confirma-a de novo com «Ligar com escrita» para escrever.",
-    becauseDiscarded: "A permissão de escrita guardada era de outra ligação: confirma-a de novo com «Ligar com escrita» para escrever.",
+    becauseDiscarded: "A permissão de escrita guardada já não é válida: confirma-a de novo com «Ligar com escrita» para escrever.",
   },
   hu: {
     assistantOff: "Csak olvasható: az asszisztens nem aktív",
@@ -187,8 +189,8 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     back: "Vissza a beállításhoz",
     navAria: "Csak olvasható navigáció",
     sortLastAction: "Az utolsó művelet szerinti rendezés csak olvasható módban nem érhető el: a pozíciók a megtalálás dátuma szerint vannak rendezve.",
-    becauseNotRestored: "Az írási jog nem maradt meg az utolsó alkalom óta: erősítsd meg újra a „Csatlakozás írási joggal” gombbal, hogy írhass.",
+    becauseNotRestored: "Íráshoz nyomd meg a „Csatlakozás írási joggal” gombot.",
     becauseExpired: "Az általad megerősített írási jog lejárt (30 napig érvényes): erősítsd meg újra a „Csatlakozás írási joggal” gombbal, hogy írhass.",
-    becauseDiscarded: "A mentett írási jog másik kapcsolathoz tartozott: erősítsd meg újra a „Csatlakozás írási joggal” gombbal, hogy írhass.",
+    becauseDiscarded: "A mentett írási jog már nem érvényes: erősítsd meg újra a „Csatlakozás írási joggal” gombbal, hogy írhass.",
   },
 };

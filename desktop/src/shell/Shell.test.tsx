@@ -349,6 +349,9 @@ describe("Shell", () => {
         view.unmount();
         leaveExistingTeamReadOnly();
       }
+      // a team never connected in full also gets «not_restored»: its sentence claims no permission of the past
+      expect(text.becauseNotRestored).not.toMatch(/mantenut|ultima volta|confermat|scadut/i);
+      expect(EXISTING_TEAM_READONLY_TEXT.en.becauseNotRestored).not.toMatch(/kept|last time|confirmed|expired/i);
       enterExistingTeamReadOnly(true, null, "account:x|plain");
       navigate("/dashboard", { replace: true });
       render(<Shell />);
