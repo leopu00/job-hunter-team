@@ -70,6 +70,9 @@ def _wait_for(predicate, seconds=6.0):
 def _wait_for_exit(bridge):
     """The transport touches `entered` and only then exits: a delivery started before it has exited is, rightly,
     «still running». A test that wants the next round waits for the end of the process, not for its marker."""
+    # `all()` of nothing is true: a bridge that did not keep the process would pass at once and the race would
+    # come back unseen
+    assert bridge.module._tmux_send_running, "the bridge keeps the process it started"
     assert _wait_for(lambda: all(proc.poll() is not None for proc in bridge.module._tmux_send_running.values())), \
         "the transport finished"
 
