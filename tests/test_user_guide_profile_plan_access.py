@@ -112,6 +112,23 @@ def test_the_eight_required_fields_are_listed_and_in_the_example():
         assert re.search(rf"^{field}:", example, re.M), field
 
 
+def test_has_degree_is_optional_in_the_guide_and_in_the_validator(tmp_path):
+    body = flat(section(CLI, "### The candidate profile: `jht profile import` and the minimum"))
+    assert "`has_degree` is optional too" in body
+    assert "counts as not declared, never as \"no\"" in body
+    example = minimal_profile()
+    assert not re.search(r"^has_degree:", example, re.M)
+    profile = tmp_path / "candidate_profile.yml"
+    profile.write_text(example, encoding="utf-8")
+    assert run_validator(profile, "--strict", "--minimum")["ok"] is True
+    # written, it must be a boolean: the guide says a word is refused
+    profile.write_text(example + "has_degree: maybe\n", encoding="utf-8")
+    refused = run_validator(profile, "--strict")
+    assert refused["ok"] is False and any(e.startswith("has_degree:") for e in refused["errors"]), refused
+    profile.write_text(example + "has_degree: false\n", encoding="utf-8")
+    assert run_validator(profile, "--strict")["ok"] is True
+
+
 def test_the_size_limit_is_the_import_constant():
     source = text("cli/src/lib/profile-import.js")
     kib = int(re.search(r"MAX_PROFILE_BYTES\s*=\s*(\d+)\s*\*\s*1024", source).group(1))
