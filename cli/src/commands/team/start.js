@@ -167,7 +167,7 @@ function reportSyncNotApplied(label, res) {
 }
 
 // ── Container mode ─────────────────────────────────────────────────
-async function startActionContainer(agentArg, options = {}) {
+async function startActionContainer(agentArg, options = {}, releaseHaltGate = () => true) {
   const mode = options.mode || 'default';
 
   // Senza arg: bootstrap completo (SENTINELLA + BRIDGE + CAPITANO),
@@ -202,6 +202,7 @@ async function startActionContainer(agentArg, options = {}) {
       for (const session of coreSessions) {
         console.log(`  ${c.yellow('⏭')} ${session} — already active`);
       }
+      if (!releaseHaltGate()) return;
       console.log('');
       console.log(`Result: ${c.green('0 started')}, ${c.yellow('4 already active')}`);
       console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
@@ -216,6 +217,9 @@ async function startActionContainer(agentArg, options = {}) {
       process.exitCode = 1;
       return;
     }
+
+    // Da qui lo start parte davvero: ora lo stop dell'utente si toglie.
+    if (!releaseHaltGate()) return;
 
     // Pull desired-state cloud → SQLite locale PRIMA dello spawn agenti:
     // recupera write_requested cliccato via web mentre container era
@@ -355,46 +359,55 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
   return 'error';
 }
 
+// Cosa deve esserci perche' lo start abbia una possibilita': il provider attivo e,
+// fuori dal container, tmux e la CLI di quel provider (dentro, ci sono nel container).
+// Null quando si puo' partire, altrimenti la frase del rifiuto. Il gate dello stop si
+// toglie solo dopo di questo: uno start che non puo' partire non annulla lo stop.
+export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, hasCli = cliAvailable } = {}) {
+  const cliBin = providerCli(config);
+  if (!cliBin) return 'no active provider. Run: jht providers use openai';
+  if (containerMode) return null;
+  if (!hasTmux()) return 'tmux not found. Install it with: brew install tmux';
+  if (!hasCli(cliBin)) return `the ${cliBin} CLI of the active provider was not found.`;
+  return null;
+}
+
 export async function startAction(agentArg, options) {
   // Uno STOP d'emergenza/desired-state e il primo setup lasciano questo gate
   // per impedire ai watchdog di riaccendere il team. Un successivo Start
   // ESPLICITO dell'utente sul cockpit/CLI è la via di recupero; lo start di un
   // singolo agente (per esempio l'Assistente del profilo) non lo rimuove, così
   // un processo interno non può annullare lo stop globale.
+  // Il gate si toglie dopo i prerequisiti (startRefusal e, nel container, il disco):
+  // se lo start non puo' partire il team resta fermo com'era, con lo stop in piedi.
   const containerMode = usingContainer();
-  if (!agentArg) {
-    const gate = clearGlobalHaltGate(containerMode);
-    if (!gate.ok) {
-      console.error(c.red(`Unable to resume the team: ${String(gate.error).trim()}`));
+  if (!agentArg || !containerMode) {
+    const refusal = startRefusal(readJhtConfig(), { containerMode });
+    if (refusal) {
+      console.error(c.red(`Error: ${refusal}`));
       process.exitCode = 1;
       return;
     }
   }
+  const releaseHaltGate = () => {
+    if (agentArg) return true;
+    const gate = clearGlobalHaltGate(containerMode);
+    if (gate.ok) return true;
+    console.error(c.red(`Unable to resume the team: ${String(gate.error).trim()}`));
+    process.exitCode = 1;
+    return false;
+  };
 
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI
   // installate nell'immagine. (Era la stessa logica della route web
   // `/api/team/start-all`, rimossa il 2026-07-25.)
   if (containerMode) {
-    return await startActionContainer(agentArg, options);
+    return await startActionContainer(agentArg, options, releaseHaltGate);
   }
 
-  if (!tmuxAvailable()) {
-    console.error(c.red('Error: tmux not found. Install it with: brew install tmux'));
-    process.exitCode = 1;
-    return;
-  }
-  const cliBin = providerCli(readJhtConfig());
-  if (!cliBin) {
-    console.error(c.red('Error: no active provider. Run: jht providers use openai'));
-    process.exitCode = 1;
-    return;
-  }
-  if (!cliAvailable(cliBin)) {
-    console.error(c.red(`Error: the ${cliBin} CLI of the active provider was not found.`));
-    process.exitCode = 1;
-    return;
-  }
+  // Fuori dal container tmux, provider e CLI sono gia' stati verificati (startRefusal).
+  if (!releaseHaltGate()) return;
 
   const { repoRoot } = resolveConfig();
   const mode = options.mode || 'default';
