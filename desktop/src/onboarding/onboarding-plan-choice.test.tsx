@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
-import type { PlanChoiceData } from "../lib/provider-plan";
+import type { PlanChoiceData, PlanOption } from "../lib/provider-plan";
 import { OnboardingFlow } from "./OnboardingFlow";
 
 // After the provider's login and before the team starts, the person declares the subscription plan the
@@ -45,6 +45,8 @@ function flow(overrides: Partial<OnboardingFlowProps> = {}, runtime = teamStart)
 
 const start = () => screen.getByRole("button", { name: /avvia la squadra/i });
 let declare: ReturnType<typeof vi.fn>;
+// the mock as the prop it stands for
+const declared = () => declare as unknown as (plan: string) => Promise<PlanOption>;
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   declare = vi.fn(async (id: string) => ({ id, label: plans.plans.find((p) => p.id === id)!.label, price: "" }));
@@ -52,7 +54,7 @@ beforeEach(() => {
 
 describe("the subscription plan in the setup", () => {
   it("waits for the person: the team does not start, and nothing is declared, until the plan is confirmed", async () => {
-    render(flow({ onLoadPlans: async () => plans, onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => plans, onDeclarePlan: declared() }));
     expect(await screen.findByTestId("plan-choice")).toBeInTheDocument();
     expect(start()).toBeDisabled();
     expect(screen.getByTestId("plan-confirm")).toBeDisabled();
@@ -67,7 +69,7 @@ describe("the subscription plan in the setup", () => {
   });
 
   it("proposes the plan Codex reports as the one preselected, and writes it only on «Conferma»", async () => {
-    render(flow({ onLoadPlans: async () => ({ ...plans, suggested: "pro" }), onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => ({ ...plans, suggested: "pro" }), onDeclarePlan: declared() }));
     await screen.findByTestId("plan-choice");
     expect(screen.getByRole("radio", { name: /Pro 100/ })).toBeChecked();
     expect(screen.getByText("Suggerito da Codex")).toBeInTheDocument();
@@ -78,7 +80,7 @@ describe("the subscription plan in the setup", () => {
   });
 
   it("declares the plan the person chose even when it is not the one Codex suggested", async () => {
-    render(flow({ onLoadPlans: async () => ({ ...plans, suggested: "pro" }), onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => ({ ...plans, suggested: "pro" }), onDeclarePlan: declared() }));
     await screen.findByTestId("plan-choice");
     fireEvent.click(screen.getByRole("radio", { name: /Plus/ }));
     fireEvent.click(screen.getByTestId("plan-confirm"));
@@ -87,7 +89,7 @@ describe("the subscription plan in the setup", () => {
   });
 
   it("lets the person leave it to the chat: the team can start and nothing is declared", async () => {
-    render(flow({ onLoadPlans: async () => plans, onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => plans, onDeclarePlan: declared() }));
     await screen.findByTestId("plan-choice");
     expect(start()).toBeDisabled();
     fireEvent.click(screen.getByTestId("plan-later-button"));
@@ -97,21 +99,21 @@ describe("the subscription plan in the setup", () => {
   });
 
   it("asks nothing of a plan that is already declared", async () => {
-    render(flow({ onLoadPlans: async () => ({ ...plans, declared: { id: "plus", label: "Plus", price: "" } }), onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => ({ ...plans, declared: { id: "plus", label: "Plus", price: "" } }), onDeclarePlan: declared() }));
     expect(await screen.findByTestId("plan-declared")).toHaveTextContent("Piano dichiarato: Plus");
     expect(screen.queryByTestId("plan-choice")).toBeNull();
     expect(start()).toBeEnabled();
   });
 
   it("goes on without the choice when the plans cannot be read", async () => {
-    render(flow({ onLoadPlans: async () => { throw { code: "plans_unavailable" }; }, onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => { throw { code: "plans_unavailable" }; }, onDeclarePlan: declared() }));
     await waitFor(() => expect(start()).toBeEnabled());
     expect(screen.queryByTestId("plan-choice")).toBeNull();
   });
 
   it("keeps the team waiting when the plan could not be saved, and the person can try again", async () => {
     declare.mockRejectedValueOnce({ code: "plan_declare_failed" });
-    render(flow({ onLoadPlans: async () => plans, onDeclarePlan: declare }));
+    render(flow({ onLoadPlans: async () => plans, onDeclarePlan: declared() }));
     await screen.findByTestId("plan-choice");
     fireEvent.click(screen.getByRole("radio", { name: /Plus/ }));
     fireEvent.click(screen.getByTestId("plan-confirm"));
@@ -125,7 +127,7 @@ describe("the subscription plan in the setup", () => {
 
   it("is not asked at any other step, nor where the app cannot reach the host", () => {
     const load = vi.fn(async () => plans);
-    render(flow({ onLoadPlans: load, onDeclarePlan: declare }, { status: "working", stage: "team-start", message: "Avvio" }));
+    render(flow({ onLoadPlans: load, onDeclarePlan: declared() }, { status: "working", stage: "team-start", message: "Avvio" }));
     expect(load).not.toHaveBeenCalled();
     expect(screen.queryByTestId("plan-choice")).toBeNull();
   });

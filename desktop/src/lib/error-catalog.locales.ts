@@ -1530,6 +1530,20 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A Job Hunter Team régi verzióinak takarítása nem sikerült.", "Próbáld újra. Ha ismét megtörténik, ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat."],
     pt: ["A limpeza das versões antigas do Job Hunter Team não foi concluída.", "Tenta novamente. Se voltar a acontecer, esvazia o Lixo e apaga os ficheiros grandes de que já não precisas."],
   },
+  "The subscription plans cannot be read right now.": {
+    de: ["Die Abonnements können gerade nicht gelesen werden.", "Du kannst weitermachen: Der Assistent fragt dich im Chat nach dem Abonnement."],
+    es: ["No se pueden leer los planes de suscripción ahora mismo.", "Puedes continuar: el Asistente te preguntará el plan en el chat."],
+    fr: ["Les formules d’abonnement ne peuvent pas être lues pour le moment.", "Tu peux continuer : l’Assistant te demandera la formule dans le chat."],
+    hu: ["Az előfizetési csomagokat most nem lehet beolvasni.", "Folytathatod: az Asszisztens megkérdezi a chatben, melyik csomagod van."],
+    pt: ["Não é possível ler os planos de subscrição neste momento.", "Podes continuar: o Assistente pergunta-te o plano no chat."],
+  },
+  "The subscription plan could not be saved.": {
+    de: ["Das Abonnement konnte nicht gespeichert werden.", "Versuche es erneut oder wähle später: Der Assistent fragt dich im Chat."],
+    es: ["No se pudo guardar el plan de suscripción.", "Vuelve a intentarlo, o elige más tarde: el Asistente te lo preguntará en el chat."],
+    fr: ["La formule d’abonnement n’a pas pu être enregistrée.", "Réessaie, ou choisis plus tard : l’Assistant te le demandera dans le chat."],
+    hu: ["Az előfizetési csomagot nem sikerült elmenteni.", "Próbáld újra, vagy válassz később: az Asszisztens megkérdezi a chatben."],
+    pt: ["Não foi possível guardar o plano de subscrição.", "Tenta novamente, ou escolhe mais tarde: o Assistente pergunta-te no chat."],
+  },
   "Cleaning from the app is not available on this system yet.": {
     de: ["Die Bereinigung aus der App ist auf diesem System noch nicht verfügbar.", "Um Platz freizugeben, leere den Papierkorb und lösche große Dateien, die du nicht mehr brauchst, und versuche es dann erneut."],
     es: ["La limpieza desde la aplicación todavía no está disponible en este sistema.", "Para liberar espacio, vacía la papelera y elimina los archivos grandes que ya no necesites, y vuelve a intentarlo."],
@@ -2030,4 +2044,6 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   clean_images_engine_off: translated("The container engine is off: I did not start it and removed nothing."),
   clean_images_failed: translated("Cleaning the old versions of Job Hunter Team did not succeed."),
   clean_images_unsupported: translated("Cleaning from the app is not available on this system yet."),
+  plans_unavailable: translated("The subscription plans cannot be read right now."),
+  plan_declare_failed: translated("The subscription plan could not be saved."),
 };
