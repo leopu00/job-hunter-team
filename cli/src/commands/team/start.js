@@ -390,12 +390,15 @@ export async function startAction(agentArg, options) {
     }
   }
   const releaseHaltGate = () => {
-    if (agentArg) return true;
-    const gate = clearGlobalHaltGate(containerMode);
-    if (gate.ok) return true;
-    console.error(c.red(`Unable to resume the team: ${String(gate.error).trim()}`));
-    process.exitCode = 1;
-    return false;
+    if (!agentArg) {
+      const gate = clearGlobalHaltGate(containerMode);
+      if (!gate.ok) {
+        console.error(c.red(`Unable to resume the team: ${String(gate.error).trim()}`));
+        process.exitCode = 1;
+        return false;
+      }
+    }
+    return true;
   };
 
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
