@@ -11,6 +11,7 @@ import { desktopLinks } from "./desktop-links";
 import { THEME_STORAGE_KEY } from "./theme";
 import { downgradeExistingTeamToReadOnly, enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { announceRestoredWriteAccess, reportWriteAccessRemovalFailed, writeAccessNotice } from "../lib/write-access-restored";
+import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
 import Shell from "./Shell";
 import { SHELL_TEXT } from "./shell.i18n";
 
@@ -334,6 +335,31 @@ describe("Shell", () => {
       leaveExistingTeamReadOnly();
     }
     expect(writeAccessNotice()).toBeNull();
+  });
+
+  it("says in the read-only banner why the write access did not come back, and says nothing when it was never given", async () => {
+    const text = EXISTING_TEAM_READONLY_TEXT.it;
+    const reasons = { not_restored: text.becauseNotRestored, expired: text.becauseExpired, discarded: text.becauseDiscarded } as const;
+    try {
+      for (const [because, sentence] of Object.entries(reasons)) {
+        enterExistingTeamReadOnly(true, null, `account:x|${because}`, undefined, because as keyof typeof reasons);
+        navigate("/dashboard", { replace: true });
+        const view = render(<Shell />);
+        expect(await screen.findByTestId("existing-team-readonly-why")).toHaveTextContent(sentence);
+        view.unmount();
+        leaveExistingTeamReadOnly();
+      }
+      // a team never connected in full also gets «not_restored»: its sentence claims no permission of the past
+      expect(text.becauseNotRestored).not.toMatch(/mantenut|ultima volta|confermat|scadut/i);
+      expect(EXISTING_TEAM_READONLY_TEXT.en.becauseNotRestored).not.toMatch(/kept|last time|confirmed|expired/i);
+      enterExistingTeamReadOnly(true, null, "account:x|plain");
+      navigate("/dashboard", { replace: true });
+      render(<Shell />);
+      expect(await screen.findByTestId("existing-team-readonly-banner")).toBeInTheDocument();
+      expect(screen.queryByTestId("existing-team-readonly-why")).toBeNull();
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
   });
 
   it("exports only its component, so an edit is Fast Refreshed instead of reloading the page", async () => {

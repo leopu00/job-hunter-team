@@ -29,6 +29,14 @@ describe("the read-only texts of an existing team", () => {
     expect(Object.keys(EXISTING_TEAM_STATUS_TEXT).sort()).toEqual(Object.keys(ASSISTANT).sort());
   });
 
+  it.each(Object.keys(ASSISTANT))("%s: the three reasons for a read-only view name the button that connects with write access", (locale) => {
+    const text = EXISTING_TEAM_READONLY_TEXT[locale as keyof typeof EXISTING_TEAM_READONLY_TEXT];
+    const reasons = [text.becauseNotRestored, text.becauseExpired, text.becauseDiscarded];
+    expect(new Set(reasons).size).toBe(3);
+    for (const reason of reasons) expect(reason, `${locale}: ${reason}`).toContain(text.connectInFull);
+    expect(text.becauseExpired).toContain("30");
+  });
+
   it.each(Object.keys(ASSISTANT))("%s: the Team intro and the positions banner say the assistant start is separate and asks for a confirmation", (locale) => {
     const texts = [EXISTING_TEAM_STATUS_TEXT[locale as keyof typeof EXISTING_TEAM_STATUS_TEXT].intro, EXISTING_TEAM_READONLY_TEXT[locale as keyof typeof EXISTING_TEAM_READONLY_TEXT].banner];
     for (const text of texts) {
