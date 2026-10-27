@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { appLocale } from "../lib/app-locale";
 import { withReadDeadline } from "../lib/read-deadline";
+import CloudDataNotice from "./CloudDataNotice";
 import { SHELL_TEXT } from "./shell.i18n";
 import { useRefresh } from "./router";
 
@@ -51,10 +52,11 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
   useEffect(run, [run, runKey]);
   useRefresh(run);
 
-  if (result.state === "ready") return <>{result.node}</>;
+  if (result.state === "ready") return <><CloudDataNotice />{result.node}</>;
   if (result.state === "failed")
     return (
       <>
+        <CloudDataNotice />
         {failure ?? (
           <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
             {SHELL_TEXT[appLocale()].pageReadFailed(SHELL_TEXT[appLocale()].refresh)}
@@ -67,5 +69,5 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
         </div>
       </>
     );
-  return <>{fallback}</>;
+  return <><CloudDataNotice />{fallback}</>;
 }

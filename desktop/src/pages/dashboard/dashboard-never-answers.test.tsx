@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
 import { PAGE_READ_DEADLINE_MS } from "../../lib/read-deadline";
 import DashboardPage from "./index";
 import { loadDashboard } from "./load-dashboard";
@@ -32,5 +33,18 @@ describe("the dashboard whose data never arrives", () => {
     await act(async () => { screen.getByRole("button", { name: "Aggiorna" }).click(); });
     await act(async () => undefined);
     expect(screen.getByText("dashboard-screen")).toBeInTheDocument();
+  });
+});
+
+describe("the dashboard of a profile with no sign-in", () => {
+  afterEach(() => registerAuthStorageProbe(() => true));
+
+  it("opens with the line that says the data comes from the cloud, not as a page with no word", async () => {
+    registerAuthStorageProbe(() => false);
+    vi.mocked(loadDashboard).mockResolvedValueOnce({} as never);
+    render(<DashboardPage params={{}} search={new URLSearchParams()} />);
+    await act(async () => undefined);
+    expect(screen.getByText("dashboard-screen")).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
   });
 });
