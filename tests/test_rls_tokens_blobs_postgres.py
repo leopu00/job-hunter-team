@@ -18,9 +18,12 @@ Every probe seeds its two users and their rows, switches role and rolls
 back, in one transaction: nothing is left behind on either database.
 
 From migration 093 only the server writes cloud_sync_tokens: the browser
-roles keep SELECT and DELETE of their own rows, and lose INSERT and UPDATE
-(policies and privileges). Before it, a session could mint its own token or
-undo a revocation through PostgREST. A write the database refuses outright
+roles keep SELECT of their own rows, and lose INSERT and UPDATE (policies and
+privileges). Before it, a session could mint its own token or undo a
+revocation through PostgREST. Migration 105 takes DELETE too (and repeats the
+rest, so that it stands alone): a device holds a user session, and deleting
+its own token took it out of the check that keeps a device from authorising an
+application. A write the database refuses outright
 and a write that reaches no row both count as "nothing written" below.
 """
 
@@ -143,8 +146,9 @@ def test_a_user_cannot_change_or_delete_another_users_rows(target, table):
         result = _probe(target, _counted(table, verb, theirs, "n"), **a)
         assert _writes_nothing(result, "n"), (verb, result.stdout, result.stderr)
     # Own row: the path is open, so the zeros above are the policy's.
-    # UPDATE of a token is the server's alone (093): DELETE is the control there.
-    controls = ("DELETE",) if table == "cloud_sync_tokens" else ("UPDATE", "DELETE")
+    # A token is the server's alone to write or delete (093, 105): there is no open path to use as a control, and
+    # the refusals above are the privileges'.
+    controls = () if table == "cloud_sync_tokens" else ("UPDATE", "DELETE")
     for verb in controls:
         result = _probe(target, _counted(table, verb, f"user_id = '{USER_A}'", "own"), **a)
         assert result.returncode == 0, result.stderr
@@ -173,6 +177,17 @@ def test_a_user_cannot_create_a_token_through_postgrest(target):
     """A token with a hash of the caller's choosing and no expiry, around the route."""
     for owner in (USER_A, USER_B):
         result = _probe(target, _row("cloud_sync_tokens", owner), role="authenticated", user=USER_A)
+        assert _refused(result), (owner, result.stdout, result.stderr)
+
+
+def test_a_user_cannot_delete_a_token_through_postgrest(target):
+    """A device that ends its own token by deleting the row leaves the check that closes the application door."""
+    for owner in (USER_A, USER_B):
+        result = _probe(
+            target,
+            f"WITH w AS (DELETE FROM public.cloud_sync_tokens WHERE user_id = '{owner}' RETURNING 1) SELECT 'n=' || count(*) FROM w;",
+            role="authenticated", user=USER_A,
+        )
         assert _refused(result), (owner, result.stdout, result.stderr)
 
 
