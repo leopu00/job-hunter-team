@@ -154,6 +154,8 @@ vi.mock("../shell/Shell", async () => {
         {connectTeam && <button type="button" onClick={connectTeam.open}>connect-a-team</button>}
         {reconfirm && <p>reconfirm-account:{reconfirm.accountLabel}</p>}
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true))}>reconfirm-connected</button>}
+        {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(false))}>reconfirm-connected-profile-pending</button>}
+        {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true)).catch(() => undefined)}>reconfirm-connected-checked</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
         {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
         {teamOff?.startTeam && <button type="button" onClick={teamOff.startTeam}>team-off-start</button>}
@@ -1207,6 +1209,59 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("shell")).toBeInTheDocument();
     // Out of the read-only view: no confirmation to offer any more.
     expect(screen.queryByRole("button", { name: "reconfirm-connected" })).not.toBeInTheDocument();
+  });
+
+  it("the full connection confirmed from the read-only view keeps the pages on the team's VPS while its profile is still being completed", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-reconfirm-profile-pending"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person", identity: "google" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0008", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    // the Assistant answers, the profile is not complete yet (the next reads keep saying so)
+    vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
+    vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, profileReady: false });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+    await user.click(await screen.findByRole("button", { name: "reconfirm-connected-profile-pending" }));
+
+    await waitFor(() => expect(markOnboardingStarted).toHaveBeenCalledWith("existing-reconfirm-profile-pending"));
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith("/messages?agent=assistente", { replace: true });
+    // not read only any more, and not the cloud either: the team connected in full, on its own VPS
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(existingTeamView()).toMatchObject({ full: true });
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+  });
+
+  it("a full connection that fails after the permission was given leaves the person on the read-only view they were in", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-reconfirm-unreachable"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person", identity: "google" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0009", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+    // the native side gave the permission, then the chat could not be reconnected
+    vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "error", code: "tunnel_unavailable" });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+    await user.click(await screen.findByRole("button", { name: "reconfirm-connected-checked" }));
+
+    await waitFor(() => expect(reconnectDirectChat).toHaveBeenCalledTimes(1));
+    expect(markOnboardingReady).not.toHaveBeenCalled();
+    expect(markOnboardingStarted).not.toHaveBeenCalled();
+    // still the read-only view of the team, with its way to try again; not a Shell with no team behind it
+    expect(existingTeamReadOnly()).not.toBeNull();
+    expect(await screen.findByRole("button", { name: "reconfirm-connected-checked" })).toBeInTheDocument();
   });
 
   it("when what was saved no longer matches, the chat leads back to the setup's modal, never to a dead end", async () => {
