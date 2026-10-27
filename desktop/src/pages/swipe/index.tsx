@@ -3,8 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import SwipeDeck from "@/app/(protected)/swipe/SwipeDeck";
 import { appLocale } from "../../lib/app-locale";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
+import { withReadDeadline } from "../../lib/read-deadline";
+import CloudDataNotice from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
+import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
 import { loadSwipe, type SwipeDeckProps } from "./load-swipe";
 import SwipeSkeleton from "./SwipeSkeleton";
@@ -17,11 +20,11 @@ type Load = { state: "loading" } | { state: "ready"; deck: SwipeDeckProps } | { 
  * (giudizio, esclusione, sintesi) chiamano /api/positions/…, che il ponte
  * del guscio passa a lib/web-api.ts: stessa scrittura, con la sessione.
  */
-export function SwipePage({ client = supabase }: { client?: SupabaseClient }) {
+export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
   const read = useCallback(() => {
-    loadSwipe(client)
+    withReadDeadline(loadSwipe(client))
       .then((deck) => setLoad({ state: "ready", deck }))
       .catch(() => setLoad((prev) => (prev.state === "ready" ? prev : { state: "failed" })));
   }, [client]);
@@ -30,31 +33,46 @@ export function SwipePage({ client = supabase }: { client?: SupabaseClient }) {
   useRefresh(read);
 
   const text = PAGE_STATES_TEXT[appLocale()];
-  if (load.state === "loading") return <SwipeSkeleton label={text.loadingSwipe} />;
+  if (load.state === "loading") return <><CloudDataNotice /><SwipeSkeleton label={text.loadingSwipe} /></>;
   if (load.state === "failed")
     return (
-      <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        {text.swipeFailed}
-      </p>
+      <>
+        <CloudDataNotice />
+        <div className="max-w-6xl mx-auto px-5 pt-8">
+          <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+            {text.swipeFailed}
+          </p>
+          <button
+            type="button"
+            className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
+            onClick={() => { setLoad({ state: "loading" }); read(); }}
+          >
+            {SHELL_TEXT[appLocale()].refresh}
+          </button>
+        </div>
+      </>
     );
   const { pendingCards, reviewedCards, initialVerdicts, salaryAxisMaxK } = load.deck;
   return (
-    <div
-      data-testid="desktop-swipe-page"
-      className="desktop-swipe-page min-h-0 overflow-hidden"
-      style={{
-        height: "calc(100svh / var(--zoom, 1) - 3.5rem)",
-        animation: "fade-in 0.35s ease both",
-      }}
-    >
-      <SwipeDeck
-        pending={pendingCards}
-        reviewed={reviewedCards}
-        initialVerdicts={initialVerdicts}
-        salaryAxisMaxK={salaryAxisMaxK}
-        contained
-      />
-    </div>
+    <>
+      <CloudDataNotice />
+      <div
+        data-testid="desktop-swipe-page"
+        className="desktop-swipe-page min-h-0 overflow-hidden"
+        style={{
+          height: "calc(100svh / var(--zoom, 1) - 3.5rem)",
+          animation: "fade-in 0.35s ease both",
+        }}
+      >
+        <SwipeDeck
+          pending={pendingCards}
+          reviewed={reviewedCards}
+          initialVerdicts={initialVerdicts}
+          salaryAxisMaxK={salaryAxisMaxK}
+          contained
+        />
+      </div>
+    </>
   );
 }
 

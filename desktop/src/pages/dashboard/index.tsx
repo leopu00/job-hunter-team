@@ -4,6 +4,7 @@ import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { cloudClient } from "../../lib/cloud-client";
 import { withReadDeadline } from "../../lib/read-deadline";
+import CloudDataNotice from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
@@ -79,6 +80,7 @@ export default function DashboardPage(_props: PageProps) {
   const prompt = connectTeam && !existingTeam ? CONNECT_TEAM_PROMPT_TEXT[appLocale()] : null;
   return (
     <>
+      <CloudDataNotice />
       {prompt && (
         <section
           className="max-w-6xl mx-auto px-5 pt-6 flex flex-wrap items-center justify-between gap-3 text-[12px]"

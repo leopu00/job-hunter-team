@@ -1,7 +1,10 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fakeSupabase, type FakeQuery } from "../../test-support/fake-supabase";
+import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
 import { PAGE_READ_DEADLINE_MS } from "../../lib/read-deadline";
+import { SHELL_TEXT } from "../../shell/shell.i18n";
+import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
 import { ProfilePage } from ".";
 import { loadProfile, openContacts, profileExport } from "./load-profile";
 import { getProfileT, languageLevelLabel } from "@/lib/profile-i18n";
@@ -118,6 +121,37 @@ describe("ProfilePage, a session that never answers", () => {
       expect(getSession).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("ProfilePage, with no cloud session", () => {
+  afterEach(() => registerAuthStorageProbe(() => true));
+
+  it("tells a profile that never signed in where the data comes from, not that its session expired", async () => {
+    registerAuthStorageProbe(() => false);
+    const { client } = fakeSupabase(respond, null);
+    render(<ProfilePage client={client} />);
+    expect(await screen.findByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
+    expect(screen.queryByText(getProfileT("it")("session_expired"))).not.toBeInTheDocument();
+  });
+
+  it("still says the session expired to someone who had one", async () => {
+    registerAuthStorageProbe(() => true);
+    const { client } = fakeSupabase(respond, null);
+    render(<ProfilePage client={client} />);
+    expect(await screen.findByText(getProfileT("it")("session_expired"))).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+});
+
+describe("the profile's read failure", () => {
+  it("is said in every language, each with its own refresh word", () => {
+    for (const locale of Object.keys(PROFILE_PAGE_TEXT) as Array<keyof typeof PROFILE_PAGE_TEXT>) {
+      const refresh = SHELL_TEXT[locale].refresh;
+      const text = PROFILE_PAGE_TEXT[locale].readFailed(refresh);
+      expect(text, locale).toContain(refresh);
+      if (locale !== "it") expect(text, `${locale} is not Italian`).not.toBe(PROFILE_PAGE_TEXT.it.readFailed(refresh));
     }
   });
 });

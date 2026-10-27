@@ -22,7 +22,7 @@ import { readTeamAgentsShared, type TeamAgentsReading } from "../../lib/existing
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 
@@ -184,9 +184,9 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     if (!parts.data) return;
     const data = parts.data;
     // The tags' statuses in a query of their own: its failure costs the tags, not the office.
-    const statuses = loadAgentStatuses(supabase);
+    const statuses = loadAgentStatuses(cloudClient());
     try {
-      const read = await data.load(supabase);
+      const read = await data.load(cloudClient());
       if (!engineRef.current) return;
       // a team that is not online has no present status to show
       const tags = read.teamOnline ? await statuses : null;
@@ -215,7 +215,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     reduced.current = motion.reduced();
     const s = createReadScheduler(() => read.current());
     scheduler.current = s;
-    const unsubscribe = subscribeOffice(supabase, {
+    const unsubscribe = subscribeOffice(cloudClient(), {
       onChange: () => s.poke(),
       onTransition: (t) => live.current?.transition(t),
       onStatus: (up) => s.setChannel(up),
@@ -352,7 +352,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
             layout={assets.layout}
             snapshot={snapshot}
             statuses={statuses}
-            client={source === "cloud" ? supabase : NO_CLOUD}
+            client={source === "cloud" ? cloudClient() : NO_CLOUD}
             source={source === "cloud" ? "cloud" : "vps"}
             onClose={() => setPanel(null)}
             onOpen={setPanel}

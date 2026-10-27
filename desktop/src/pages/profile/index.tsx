@@ -7,8 +7,10 @@ import { getProfileT } from "@/lib/profile-i18n";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { appLocale } from "../../lib/app-locale";
 import { pluralText } from "../../lib/plural";
+import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 import { cloudClient } from "../../lib/cloud-client";
 import { withReadDeadline } from "../../lib/read-deadline";
+import CloudDataNotice from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
@@ -56,12 +58,15 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   const t = getProfileT(locale);
   if (load.state === "loading") return <ProfileLoading />;
   if (load.state === "signed-out")
-    return <div className="p-12 text-center text-[var(--color-muted)]">{t("session_expired")}</div>;
+    // No cloud session because there never was a sign-in (a local profile): that is not an expired one.
+    return cloudSessionReadable()
+      ? <div className="p-12 text-center text-[var(--color-muted)]">{t("session_expired")}</div>
+      : <CloudDataNotice />;
   if (load.state === "failed")
     return (
       <div className="max-w-6xl mx-auto px-5 pt-8">
         <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
-          Non riesco a leggere il profilo. Controlla la connessione e premi «Aggiorna».
+          {PROFILE_PAGE_TEXT[appLocale()].readFailed(SHELL_TEXT[appLocale()].refresh)}
         </p>
         <button
           type="button"

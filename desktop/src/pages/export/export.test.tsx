@@ -2,7 +2,9 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
+import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
 import { TeamOffContext } from "../../lib/team-off";
+import { inertSupabase } from "../../web-shims/server/inert-supabase";
 import { TEAM_OFF_TEXT } from "../../shell/team-off.i18n";
 import { describeError } from "../../lib/error-catalog";
 import ExportPage from "./index";
@@ -28,6 +30,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  registerAuthStorageProbe(() => true);
   localStorage.removeItem("jht-lang");
   document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
 });
@@ -172,5 +175,25 @@ describe("the export page in the app opened without the team", () => {
     const say = await screen.findByTestId("export-team-say");
     expect(say).toHaveTextContent(TEAM_OFF_TEXT.en.needsRuntime);
     expect(say).not.toHaveTextContent(/start the team/i);
+  });
+});
+
+describe("the export page: the account's data of a profile with no sign-in", () => {
+  it("asks the client that answers «no account», never the one that waits on a locked session for ever", async () => {
+    registerAuthStorageProbe(() => false);
+    const user = userEvent.setup();
+    render(<ExportPage {...props} />);
+    await user.click(screen.getByTestId("export-account-button"));
+    await waitFor(() => expect(account.buildAccountExport).toHaveBeenCalled());
+    expect(account.buildAccountExport.mock.calls[0]![0]).toBe(inertSupabase);
+  });
+
+  it("asks the app's client once there is a session", async () => {
+    registerAuthStorageProbe(() => true);
+    const user = userEvent.setup();
+    render(<ExportPage {...props} />);
+    await user.click(screen.getByTestId("export-account-button"));
+    await waitFor(() => expect(account.buildAccountExport).toHaveBeenCalled());
+    expect(account.buildAccountExport.mock.calls[0]![0]).toBe(cloud.supabase);
   });
 });
