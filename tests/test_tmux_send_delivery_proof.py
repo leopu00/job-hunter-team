@@ -25,6 +25,20 @@ cmd="$1"; shift
 case "$cmd" in
   has-session|list-panes|show-options) exit 0 ;;
   capture-pane)
+    # A text that is not ours and goes away by itself (the message another sender is about to submit, a suggestion
+    # drawn late): it stays for `foreign_until` looks at the screen, then the box is empty.
+    if [ -f "$S/foreign_until" ]; then
+      n=$(( $(cat "$S/foreign_looks" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/foreign_looks"
+      if [ "$n" -gt "$(cat "$S/foreign_until")" ]; then : > "$S/composer"; rm -f "$S/foreign_until"; fi
+    fi
+    # A paste the TUI keeps `late_captures` looks at the screen before drawing (the number of times the transport
+    # LOOKED, not seconds: a loaded runner stretches the seconds and not the looks), or until `release` exists.
+    if [ -f "$S/held" ]; then
+      n=$(( $(cat "$S/held_looks" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$S/held_looks"
+      if { [ -f "$S/late_captures" ] && [ "$n" -ge "$(cat "$S/late_captures")" ]; } || [ -f "$S/release" ]; then
+        cat "$S/held" >> "$S/composer"; rm -f "$S/held"
+      fi
+    fi
     mode=$(cat "$S/mode" 2>/dev/null || echo normal)
     case "$mode" in
       shell) printf 'user@host ~ $ \n'; exit 0 ;;
@@ -84,6 +98,7 @@ case "$cmd" in
     # The agent starts a turn while the paste renders: the screen above the composer changes,
     # the composer keeps the whole text.
     [ -f "$S/turn_on_paste" ] && { printf 'busy\n' > "$S/mode"; printf '• Mittente non verificato: nessuna risposta inviata.\n' >> "$S/transcript"; }
+    if [ -f "$S/late_captures" ] || [ -f "$S/hold" ]; then cat "$S/buffer.$name" > "$S/held"; rm -f "$S/buffer.$name" "$S/held_looks"; exit 0; fi
     if [ -f "$S/lag" ]; then (sleep "$(cat "$S/lag")"; cat "$S/buffer.$name" >> "$S/composer") & exit 0; fi
     cat "$S/buffer.$name" > "$S/pasted.$name"
     # A long paste is kept out of sight: the composer shows a token and the TUI keeps the text. `collapse` says
@@ -152,6 +167,9 @@ def box(tmp_path):
             **env,
         }
         full.pop("TMUX", None)
+        for name in ("JHT_TMUX_SEND_FROM", "JHT_TMUX_FOREIGN_WAIT"):
+            if name not in env:
+                full.pop(name, None)
         return subprocess.run([str(TRANSPORT), session, message], capture_output=True, text=True, timeout=120, env=full)
 
     def calls():
@@ -248,33 +266,79 @@ def test_a_text_that_never_shows_is_typed_once_and_nothing_is_pressed(box):
     assert box.keys("Enter") == [] and box.keys("Escape") == [] and box.keys("Space") == []
 
 
-def _busy_codex(box, lag):
+# -- a text that is not ours may be passing: the person waiting on the command gets a short wait ------------------------
+
+def _captures(box):
+    return [line for line in box.calls() if line.startswith("capture-pane")]
+
+
+def test_a_person_waiting_on_the_command_gets_a_short_wait_for_a_text_that_goes_away(box):
+    """TEST 10 (27/10): `jht profile import` answered captain:failed (rc=130) because the Capitano's composer held a
+    text that was not provably ours at that second; the same import 100 s later was delivered. A text that goes away
+    by itself is waited for, and then the message is delivered whole: pasted once, one Enter, nothing over the text."""
+    box.put("composer", "the message another sender of ours is about to submit")
+    box.put("foreign_until", "3")
+    done = box.run(JHT_TMUX_SEND_FROM="user-console")
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+    assert len(_captures(box)) > 3, "it looked again while the text was there"
+
+
+def test_a_text_that_stays_is_still_rc130_after_the_wait_and_nothing_is_pasted_or_pressed(box):
+    box.put("composer", "a person's own draft")
+    done = box.run(JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT="2")
+    assert done.returncode == 130 and "NOT delivered" in done.stderr, done.stderr
+    assert box.typed() == [] and box.keys("Enter") == []
+    assert len(_captures(box)) >= 3, "it waited, looking again, before giving up"
+    row = _pending_input(box)[-1]
+    assert row["reason"] == "composer_foreign" and row["unsent"].endswith(MESSAGE[-40:])
+
+
+def test_the_bridges_and_nudges_keep_the_immediate_130(box):
+    """Their own loops retry: a wait here would hold the loop of a dozen agents."""
+    box.put("composer", "a text that is not ours")
+    box.put("foreign_until", "3")
+    done = box.run()
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and len(_captures(box)) < 5
+
+
+@pytest.mark.parametrize("wait", ["0", "abc", "-3", "1.5"])
+def test_the_wait_can_be_switched_off_and_a_bad_value_is_no_wait(box, wait):
+    box.put("composer", "a text that is not ours")
+    done = box.run(JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT=wait)
+    assert done.returncode == 130, done.stderr
+    assert box.typed() == [] and len(_captures(box)) < 5
+
+
+def _busy_codex(box, **draw):
     """The Capitano in the middle of a turn (TEST 8, 27/10): the footer is «tab to queue message», and the TUI
-    draws what is pasted into the composer `lag` seconds late."""
+    draws what is pasted into the composer late: after `late_captures` looks at the screen (more than the render
+    window of an agent at rest), or only when `release` is put there."""
     box.put("layout", "codex")
     box.put("mode", "busy")
-    box.put("lag", str(lag))
+    for name, value in draw.items():
+        box.put(name, str(value))
 
 
 def test_a_busy_agent_that_draws_the_paste_late_is_waited_for_and_gets_its_enter(box):
-    """Before: the render window of an agent at rest (about 2 s) ended, the transport said rc=3 («never shown»,
-    the one answer that means «maybe dead») and pressed nothing; the text appeared a moment later and waited
-    for the next delivery's Enter. The user's chat showed «agent unavailable» for a message that arrived."""
-    _busy_codex(box, 9)                       # the window of an agent at rest is about 7 s here
-    done = box.run()
+    """Before: the render window of an agent at rest ended, the transport said rc=3 («never shown», the one answer
+    that means «maybe dead») and pressed nothing; the text appeared a moment later and waited for the next
+    delivery's Enter. The user's chat showed «agent unavailable» for a message that arrived."""
+    _busy_codex(box, late_captures=80)        # the window of an agent at rest is about 35 looks
+    done = box.run(JHT_TMUX_LATE_RENDER_WAIT="60")
     assert done.returncode == 0, done.stderr
     assert len(box.typed()) == 1, "typed once"
     assert len(box.keys("Enter")) == 1, "and it got its Enter"
 
 
 def test_a_busy_agent_that_never_draws_it_in_time_is_busy_not_dead_and_the_text_is_not_typed_again(box):
-    _busy_codex(box, 9)
+    _busy_codex(box, hold="")                 # drawn only when released: never within the wait
     done = box.run(JHT_TMUX_LATE_RENDER_WAIT="1")
     assert done.returncode == 4, done.stderr          # alive, retry later: pacing does not count it as a death
     assert len(box.typed()) == 1 and box.keys("Enter") == [] and box.keys("Escape") == []
     # the retry finds the text, now drawn, as the pending text of ours: Enter only, never a second paste
-    import time as _time
-    _time.sleep(1.5)                          # the TUI draws it at 9 s; the first call gave up at about 8
+    box.put("release")
     again = box.run(JHT_TMUX_LATE_RENDER_WAIT="1")
     assert again.returncode == 0, again.stderr
     assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1

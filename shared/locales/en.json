@@ -279,5 +279,6 @@
   "web_action_notice.team_started_from_web": "The team was started from the website. If it was not you, check who can access your account.",
   "web_action_notice.team_restarted_from_web": "The team was restarted from the website. If it was not you, check who can access your account.",
   "web_action_notice.directive_changed_from_web": "A standing order for the team was added or changed from the website. If it was not you, check the board in the app.",
-  "cloud_sync_notice.token_rejected": "The box can no longer sync with the website: the website refuses its sync token (expired or revoked), and new positions no longer reach it. Generate a new token on the website (Settings › Cloud sync) and run «jht cloud enable --token …» on the box, or connect the team again from the app."
+  "cloud_sync_notice.token_rejected": "The box can no longer sync with the website: the website refuses its sync token (expired or revoked), and new positions no longer reach it. Generate a new token on the website (Settings › Cloud sync) and run «jht cloud enable --token …» on the box, or connect the team again from the app.",
+  "cloud_sync_notice.session_lost": "The box lost the session it uses to follow the website live: the website's commands (sync now, chat, stop) now reach it with a delay of up to about a minute. Real time comes back with a new pairing of the device."
 }

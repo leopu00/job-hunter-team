@@ -1,0 +1,273 @@
+name: Release rehearsal
+
+# Prova a secco del job `build-desktop` di release.yml: stessi passi, stessi segreti Apple (firma Developer ID,
+# notarizzazione, staple, smoke del DMG installato sul runner). Si ferma prima di tutto cio' che resta fuori
+# dal runner:
+#   - nessun tag (il commit provato non ha bisogno di essere `production`), nessun controllo di `production`;
+#   - nessun `publish-runtime`: il tag `<versione>` dell'immagine su GHCR non si crea (e' l'unico passo di
+#     release.yml irreversibile fuori da GitHub); qui l'immagine si LEGGE soltanto;
+#   - nessuna Release, nessun `upload-artifact`: su un repo pubblico gli artifact li scarica ogni utente
+#     GitHub loggato, e un DMG firmato di prova non deve uscire dal runner. Resta il log (pubblico).
+# Si lancia a mano (workflow_dispatch) da chi ha i diritti di scrittura, con il si' dell'operatore perche'
+# firma con le credenziali Apple. Funziona se questo file e' sul ramo predefinito. Il commit provato deve
+# essere antenato di master-arthur (primo passo di ogni job). Le cache hanno chiavi SUE (rehearsal-tauri-…,
+# niente cache npm): quelle del rilascio non si leggono ne si scrivono da un ref qualsiasi.
+# tests/test_release_rehearsal.py tiene i passi di build uguali a quelli di release.yml e il perimetro sopra.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit to rehearse (default: the commit this workflow was started from)"
+        required: false
+        type: string
+
+concurrency:
+  group: release-rehearsal
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-desktop:
+    name: Rehearse the Tauri 2 build — ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows is not part of 0.4.0: no installer is built or attached,
+          # and the site shows it as "coming soon" without a link.
+          - os: macos-15
+            label: macOS arm64
+            args: --target aarch64-apple-darwin --bundles app,dmg
+            artifact_name: app-macos-release
+          - os: ubuntu-22.04
+            label: Linux x64
+            args: --bundles appimage,deb
+            artifact_name: app-linux-release
+    defaults:
+      run:
+        shell: bash
+    env:
+      HAS_MAC_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.MACOS_CERTIFICATE_PWD != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Il commit provato firma con i segreti Apple: deve essere gia' passato dalla revisione, cioe' stare su
+      # master-arthur. Senza questo un ref qualsiasi (un ramo non rivisto) girerebbe con le credenziali.
+      - name: The commit to rehearse is on master-arthur
+        run: |
+          git fetch --no-tags origin master-arthur
+          git merge-base --is-ancestor HEAD FETCH_HEAD
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+
+      - name: Install Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Prepare Rust targets
+        run: |
+          rustc --version
+          cargo --version
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            rustup target add aarch64-apple-darwin
+          fi
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: rehearsal-tauri-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: rehearsal-tauri-${{ runner.os }}-
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      # Il desktop importa shared/config/profile-schema.ts, che vuole `zod`:
+      # zod e' dichiarato e bloccato in shared/, e senza le sue dipendenze
+      # i gate e la build vite non risolvono l'import.
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
+        run: npm ci --ignore-scripts
+
+      - name: Run canonical Tauri release gates
+        run: |
+          npm --prefix desktop test
+          cargo test --manifest-path desktop/src-tauri/Cargo.toml --locked
+
+      - name: Require Apple release credentials
+        if: runner.os == 'macOS' && env.HAS_MAC_SIGNING != 'true'
+        run: |
+          echo "::error::macOS Tauri releases require signing and notarization credentials."
+          echo "::error::Configure MACOS_CERTIFICATE, MACOS_CERTIFICATE_PWD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID."
+          exit 1
+
+      - uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
+        if: runner.os == 'macOS' && env.HAS_MAC_SIGNING == 'true'
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+
+      - name: Select the Developer ID signing identity
+        if: runner.os == 'macOS'
+        run: |
+          identity="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+          test -n "$identity"
+          echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      # Tauri firma l'app con Developer ID e usa le credenziali Apple per
+      # notarizzare e fare staple del DMG. Linux resta unsigned, e dichiarato
+      # sperimentale e non provato a mano nelle note e nelle pagine di download.
+      - name: Build Tauri bundles
+        working-directory: desktop
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: npm run tauri:build -- ${{ matrix.args }}
+
+      - name: Gate bundled Google login configuration
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: python scripts/verify-tauri-login-bundle.py --path desktop/dist
+
+      # Quello che si distribuisce e' la .app e il dmg: in tutti e due devono
+      # esserci la shell e il compagno jht-existing-team, eseguibili, arm64 e con
+      # la firma che questo job produce. Developer ID e' certa: il passo
+      # «Select the Developer ID signing identity» si ferma se l'identita' manca.
+      - name: Gate macOS bundle — shell and companion shipped
+        if: runner.os == 'macOS'
+        run: python3 scripts/ci/verify_macos_bundle.py desktop/src-tauri/target/aarch64-apple-darwin/release/bundle --signature developer-id --require-dmg
+
+      - name: Collect and verify signed macOS installer
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p release-assets
+          bundle_root=desktop/src-tauri/target/aarch64-apple-darwin/release/bundle
+          source="$(find "$bundle_root/dmg" -type f -name '*.dmg' -print -quit)"
+          app="$(find "$bundle_root/macos" -type d -name '*.app' -print -quit)"
+          test -n "$source"
+          test -n "$app"
+          # Solo Apple silicon: ogni eseguibile spedito e' arm64.
+          for binary in "$app"/Contents/MacOS/*; do
+            lipo -info "$binary"
+            lipo "$binary" -verify_arch arm64
+          done
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          xcrun stapler validate "$source"
+          hdiutil verify "$source"
+          # Il nome del file resta quello dei link gia' pubblicati (sito, CLI, guide).
+          cp "$source" release-assets/job-hunter-team-macos-universal.dmg
+
+      # Niente tag senza questo verde (il job `release` aspetta build-desktop):
+      # il dmg firmato e notarizzato che sta per uscire si installa come lo
+      # installa una persona e l'app deve aprire la sua finestra. Il container
+      # non si prova sul runner (nessuna macchina virtuale): lo dichiara lo script.
+      - name: Install the signed DMG and open the app
+        if: runner.os == 'macOS'
+        run: python3 scripts/ci/smoke_macos_dmg.py release-assets/job-hunter-team-macos-universal.dmg --arch arm64 --timeout 120
+
+      - name: Collect and inspect Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release-assets
+          bundle_root=desktop/src-tauri/target/release/bundle
+          appimage="$(find "$bundle_root/appimage" -type f -name '*.AppImage' -print -quit)"
+          deb="$(find "$bundle_root/deb" -type f -name '*.deb' -print -quit)"
+          test -n "$appimage"
+          test -n "$deb"
+          cp "$appimage" release-assets/job-hunter-team-linux-x64.AppImage
+          cp "$deb" release-assets/job-hunter-team-linux-x64.deb
+          chmod +x release-assets/job-hunter-team-linux-x64.AppImage
+          extract_dir="$(mktemp -d)"
+          (cd "$extract_dir" && "$GITHUB_WORKSPACE/release-assets/job-hunter-team-linux-x64.AppImage" --appimage-extract >/dev/null)
+          test -x "$extract_dir/squashfs-root/AppRun"
+          dpkg-deb --info release-assets/job-hunter-team-linux-x64.deb >/dev/null
+
+      - name: Gate collected artifact bytes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          assets = sorted(p for p in Path("release-assets").iterdir() if p.is_file())
+          if not assets or any(p.stat().st_size == 0 for p in assets):
+              raise SystemExit(f"missing or empty release assets: {assets}")
+          # Windows is out of 0.4.0: an installer that shows up is a mistake, not a bonus
+          exe = next((p for p in assets if p.suffix == ".exe"), None)
+          if exe is not None:
+              raise SystemExit(f"Windows is not part of this release, remove {exe}")
+          print("release assets:", ", ".join(p.name for p in assets))
+          PY
+
+      # Il sidecar di release.yml si registra con un tag che esiste nel checkout: qui il tag e' solo del
+      # runner (mai spinto: il token e' di sola lettura) e il sidecar si stampa nel log.
+      - name: Record the build identity of the rehearsal (runner-local tag, nothing is pushed)
+        run: |
+          HEAD_SHA="$(git rev-parse HEAD)"
+          git tag v0.0.0-rehearsal "$HEAD_SHA"
+          for asset in release-assets/*; do
+            python scripts/release_artifacts.py record \
+              --asset "$asset" \
+              --output "${asset}.provenance.json" \
+              --tag v0.0.0-rehearsal \
+              --commit "$HEAD_SHA" \
+              --repository "$GITHUB_REPOSITORY" \
+              --source-root . || exit 1
+          done
+          sha256sum release-assets/* 2>/dev/null || shasum -a 256 release-assets/*
+
+  runtime-pin-read-only:
+    name: Runtime pin, read only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Il commit provato firma con i segreti Apple: deve essere gia' passato dalla revisione, cioe' stare su
+      # master-arthur. Senza questo un ref qualsiasi (un ramo non rivisto) girerebbe con le credenziali.
+      - name: The commit to rehearse is on master-arthur
+        run: |
+          git fetch --no-tags origin master-arthur
+          git merge-base --is-ancestor HEAD FETCH_HEAD
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+
+      # Solo letture: albero, label dell'immagine sul registro, antenato. Non c'e' `publish`.
+      - name: Verify the pin of this commit (tree, image labels, ancestry)
+        run: |
+          version="$(python -c 'import json;print(json.load(open("package.json"))["version"])')"
+          python scripts/runtime_image_pin.py verify-tree --root . --version "$version"
+          python scripts/runtime_image_pin.py verify-source
+          source_revision="$(python scripts/runtime_image_pin.py show --field source_revision)"
+          git merge-base --is-ancestor "$source_revision" HEAD

@@ -140,7 +140,10 @@ def test_unknown_plan_is_refused(jht_home):
 
 # ── Il roster ───────────────────────────────────────────────────────────
 
-def test_roster_scales_with_the_plan(jht_home):
+def test_roster_scales_with_the_plan(jht_home, monkeypatch):
+    # No cap from the host: on a small machine (a 8 GB VPS) the RAM cap trims every plan to the same roster,
+    # and this test is about the plan, not about the machine that runs it (the cap has its own tests below).
+    monkeypatch.setattr(plan_registry, "_host_agent_cap", lambda: None)
     small = plan_registry.burst_roster(plan_registry.find_plan("kimi", "moderato"))
     mid = plan_registry.burst_roster(plan_registry.find_plan("kimi", "allegretto"))
     big = plan_registry.burst_roster(plan_registry.find_plan("claude", "max20"))

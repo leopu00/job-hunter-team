@@ -56,6 +56,8 @@ ask the user in the chat which plan they have (`python3 /app/shared/skills/plan_
 `Codex reports:` line without choosing for them, and write exactly their choice with
 `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. The Assistente asks the same when the user talks to it.
 
+**Ask the plan once.** While your question about the plan is still unanswered in the chat, do not ask it again, not even reworded: a new «profile ready» message, another wake, or `plan_missing` in the next `status` do not change what you are waiting for. Look at the chat first: if you already asked and the user has not answered, wait. Ask again only after the user has answered «I do not know».
+
 **2. Spawn the whole roster, staggered by ~60 seconds.**
 
 Not one worker every ten minutes: the whole formation, back to back, through

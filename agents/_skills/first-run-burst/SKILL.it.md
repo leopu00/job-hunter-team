@@ -57,6 +57,8 @@ allo stesso modo: chiedi all'utente in chat quale piano ha (`python3 /app/shared
 `Codex reports:` senza scegliere per lui e scrivi esattamente la sua scelta con
 `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Lo chiede anche l'Assistente quando l'utente gli parla.
 
+**Il piano si chiede una volta sola.** Finché la tua domanda sul piano è senza risposta in chat, non rifarla, nemmeno con altre parole: un nuovo messaggio «profilo pronto», un altro risveglio o `plan_missing` nel prossimo `status` non cambiano ciò che aspetti. Guarda prima la chat: se hai già chiesto e l'utente non ha risposto, aspetta. Richiedilo solo dopo che l'utente ha risposto «non lo so».
+
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre

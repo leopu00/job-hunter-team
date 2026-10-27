@@ -1418,6 +1418,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Ezen a VPS-en a Job Hunter Team fut: ha most újratelepíted, működés közben változna meg a beállítása.", "Semmi sem változott. Csatlakozz a már ott lévő csapathoz újratelepítés nélkül; vagy állítsd le a VPS-en a «jht down» paranccsal, és próbáld újra."],
     pt: ["Nesta VPS o Job Hunter Team está ligado: instalá-lo de novo agora mudaria a sua configuração enquanto corre.", "Nada foi alterado. Liga-te à equipa que já lá está, sem a reinstalar; ou para-a na VPS com «jht down» e tenta de novo."],
   },
+  "Job Hunter Team is already running on this computer, and its environment cannot be updated while it runs.": {
+    de: ["Job Hunter Team läuft schon auf diesem Computer, und seine Umgebung lässt sich nicht aktualisieren, solange es läuft.", "Nichts wurde geändert. Stoppe es in einem Terminal mit «jht down» und drücke die Schaltfläche erneut: Die Einrichtung schließt das Update ab und startet es wieder. Dein Profil und deine Dokumente bleiben, wo sie sind."],
+    es: ["Job Hunter Team ya está encendido en este ordenador y su entorno no se puede actualizar mientras funciona.", "No se ha cambiado nada. Deténlo con «jht down» en un terminal y pulsa de nuevo el botón: la preparación termina la actualización y lo vuelve a encender. Tu perfil y tus documentos se quedan donde están."],
+    fr: ["Job Hunter Team est déjà allumé sur cet ordinateur et son environnement ne peut pas être mis à jour pendant qu’il tourne.", "Rien n’a été changé. Arrête-le avec «jht down» dans un terminal et appuie de nouveau sur le bouton : la préparation termine la mise à jour et le rallume. Ton profil et tes documents restent où ils sont."],
+    hu: ["A Job Hunter Team már fut ezen a számítógépen, és a környezete futás közben nem frissíthető.", "Semmi sem változott. Állítsd le egy terminálban a «jht down» paranccsal, és nyomd meg újra a gombot: a beállítás befejezi a frissítést, és újraindítja. A profilod és a dokumentumaid ott maradnak, ahol vannak."],
+    pt: ["O Job Hunter Team já está ligado neste computador e o seu ambiente não pode ser atualizado enquanto corre.", "Nada foi alterado. Para-o com «jht down» num terminal e carrega de novo no botão: a preparação conclui a atualização e volta a ligá-lo. O teu perfil e os teus documentos ficam onde estão."],
+  },
   "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.": {
     de: ["Auf dieser VPS läuft Job Hunter Team bereits mit Docker. Der Wechsel zu Podman braucht eine Migration, die die App noch nicht selbst durchführen kann.", "Die Daten des Teams bleiben, wo sie sind, auf der VPS: Nichts wurde verschoben oder gelöscht. Verbinde dich mit dem Team, das schon da ist, ohne es neu zu installieren, oder wähle eine andere VPS."],
     es: ["En este VPS Job Hunter Team ya funciona con Docker. Pasarlo a Podman requiere una migración que la app todavía no puede hacer sola.", "Los datos del equipo se quedan donde están, en el VPS: no se ha movido ni borrado nada. Conéctate al equipo que ya está, sin reinstalarlo, o elige otro VPS."],
@@ -1907,6 +1914,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_subuid_missing: translated("On the VPS your user has no subordinate IDs, which Podman without privileges needs."),
   vps_runtime_change_requires_migration: translated("This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet."),
   vps_team_running: translated("Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs."),
+  local_team_running: translated("Job Hunter Team is already running on this computer, and its environment cannot be updated while it runs."),
   host_key_missing: translated("The VPS SSH identity has not been confirmed yet."),
   host_key_mismatch: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),
   host_key_changed: translated("The server’s SSH key has CHANGED from the one you confirmed: it may be a different server. The connection is blocked."),

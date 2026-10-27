@@ -54,7 +54,7 @@ jobs:
             label: Windows x64
             args: --bundles nsis
             artifact: tauri-windows-x64
-          - os: macos-14
+          - os: macos-15
             label: macOS arm64
             args: --target aarch64-apple-darwin --bundles dmg --verbose
             artifact: tauri-macos-arm64

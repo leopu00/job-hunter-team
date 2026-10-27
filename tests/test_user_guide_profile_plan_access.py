@@ -78,6 +78,19 @@ def test_prolite_is_the_hundred_dollar_plan_which_is_declared_as_pro():
     assert pro["price"] == "100 $/month"
 
 
+def test_reading_the_plan_does_not_start_the_container_and_the_guide_says_so():
+    # the wrapper answers `jht providers plan` (no id) from the running container and never calls ensure_up
+    wrapper = text("scripts/jht-wrapper.sh")
+    branch = wrapper.split("  providers)\n", 1)[1].split("\n    ;;", 1)[0]
+    reading = branch.split("require_compose_file", 1)[0]
+    assert '[ "${2:-}" = plan ] && [ "$#" -eq 2 ]' in reading
+    assert "ensure_up" not in reading
+    assert "ensure_up" in branch.split("require_compose_file", 1)[1]
+    body = flat(section(CLI, "### Choosing your plan"))
+    assert "Without an id it only reads, and only while the team is running" in body
+    assert "does not start it (`jht up` does)" in body
+
+
 def test_providers_table_lists_the_plan_command():
     assert re.search(r"^\| `jht providers plan \[id\]`", CLI, re.M)
     assert "plan [id]" in text("cli/src/commands/providers.js")

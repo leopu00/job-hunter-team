@@ -217,3 +217,125 @@ def test_set_still_creates_the_configuration_when_there_is_none_and_keeps_what_i
 def test_reading_the_plan_still_treats_a_broken_configuration_as_no_plan(home: Path):
     (home / "jht.config.json").write_bytes(b"{ not json")
     assert _run("plan_registry.py", "get", home=home).stdout.strip() == "PLAN_MISSING"
+
+
+# ── the configuration can hold the Telegram bot_token: it is written privately ─────────────────
+
+def _mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
+
+
+def _set_under_umask(home: Path, umask: int, *args: str) -> subprocess.CompletedProcess:
+    code = (
+        "import os, runpy, sys\n"
+        f"os.umask({umask})\n"
+        "sys.argv = sys.argv[1:]\n"
+        "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+    )
+    env = {
+        "PATH": os.environ.get("PATH", ""), "JHT_HOME": str(home), "JHT_LANG": "en",
+        "JHT_HOST_ENV_FILE": "/nonexistent/jht-host.env", "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    return subprocess.run(
+        [sys.executable, "-I", "-c", code, str(SKILLS / "plan_registry.py"), *args],
+        capture_output=True, text=True, timeout=60, env=env, check=False,
+    )
+
+
+posix_only = pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+
+
+@posix_only
+def test_a_new_configuration_is_private_even_under_a_loose_umask(tmp_path: Path):
+    home = tmp_path / "jht"
+    done = _set_under_umask(home, 0o000, "set", "codex:plus")
+    assert done.returncode == 0, done.stderr
+    assert _mode(home / "jht.config.json") == 0o600
+    assert _mode(home) == 0o700  # created by the write, not by the umask
+
+
+@posix_only
+@pytest.mark.parametrize("existing", [0o600, 0o640, 0o644])
+def test_an_existing_configuration_keeps_the_mode_it_has(home: Path, existing: int):
+    path = home / "jht.config.json"
+    os.chmod(path, existing)
+    assert _set_under_umask(home, 0o077, "set", "codex:pro").returncode == 0
+    assert _mode(path) == existing
+    assert json.loads(path.read_text(encoding="utf-8"))["providers"]["openai"]["plan"] == "pro"
+
+
+@posix_only
+def test_the_folder_it_finds_is_left_as_it_is(home: Path):
+    os.chmod(home, 0o755)
+    assert _set_under_umask(home, 0o000, "set", "codex:plus").returncode == 0
+    assert _mode(home) == 0o755
+
+
+@posix_only
+def test_the_temp_file_has_no_fixed_name_and_a_planted_one_is_not_followed(home: Path):
+    secret = home.parent / "victim.txt"
+    secret.write_text("untouched", encoding="utf-8")
+    for fixed in ("jht.config.json.tmp", ".jht.config.json.tmp"):
+        (home / fixed).symlink_to(secret)
+    assert _run("plan_registry.py", "set", "codex:plus", home=home).returncode == 0
+    assert secret.read_text(encoding="utf-8") == "untouched"
+    assert json.loads((home / "jht.config.json").read_text(encoding="utf-8"))["providers"]["openai"]["plan"] == "plus"
+
+
+def test_the_token_never_travels_in_a_file_left_behind(home: Path):
+    path = home / "jht.config.json"
+    path.write_text(json.dumps({"active_provider": "codex", "telegram": {"bot_token": "123:SECRET"}}), encoding="utf-8")
+    assert _run("plan_registry.py", "set", "codex:plus", home=home).returncode == 0
+    assert json.loads(path.read_text(encoding="utf-8"))["telegram"] == {"bot_token": "123:SECRET"}
+    assert sorted(p.name for p in home.iterdir()) == ["jht.config.json"]  # no temp file left
+
+
+def test_a_failed_write_leaves_the_old_file_and_no_temp_file(home: Path):
+    sys.path.insert(0, str(SKILLS))
+    try:
+        import importlib
+        registry = importlib.import_module("plan_registry")
+    finally:
+        sys.path.remove(str(SKILLS))
+    path = home / "jht.config.json"
+    before = path.read_bytes()
+
+    class Boom(Exception):
+        pass
+
+    real_replace = os.replace
+
+    def refuse(*_a, **_k):
+        raise Boom()
+
+    os.replace = refuse
+    try:
+        with pytest.raises(Boom):
+            registry._write_config_privately(path, {"x": 1})
+    finally:
+        os.replace = real_replace
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in home.iterdir()) == ["jht.config.json"]
+
+
+# ── the plan is asked once: a second trigger while the question is open does not ask it again ───
+
+ASK_ONCE = {
+    "en": "**Ask the plan once.**", "it": "**Il piano si chiede una volta sola.**",
+    "es": "**El plan se pregunta una sola vez.**", "fr": "**La formule se demande une seule fois.**",
+    "de": "**Das Abonnement wird nur einmal erfragt.**", "hu": "**A csomagot csak egyszer kérdezd meg.**",
+    "pt": "**O plano pergunta-se uma só vez.**",
+}
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_capitano_does_not_ask_the_plan_again_while_the_question_is_open(lang: str):
+    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
+    assert text.count(ASK_ONCE[lang]) == 1
+    paragraph = text.split(ASK_ONCE[lang], 1)[1].split("\n\n", 1)[0]
+    # the three things that start a second pass while the first question is still open
+    assert "plan_missing" in paragraph and "`status`" in paragraph
+    # it comes after both places where the plan is asked, and before the roster is spawned
+    asked = text.index(f"{REGISTRY} set <provider>:<id>`")
+    spawn = text.index("\n**2. ")
+    assert asked < text.index(ASK_ONCE[lang]) < spawn

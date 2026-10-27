@@ -71,4 +71,22 @@ describe("the help page", () => {
     expect(HELP_TEXT[locale].trouble).toContain("{refresh}");
     expect(HELP_TEXT[locale].trouble).toContain("{back}");
   });
+
+  const THIS_COMPUTER: Record<string, RegExp> = {
+    it: /questo computer/, en: /this computer/, de: /diesem Computer/, fr: /cet ordinateur/, es: /este ordenador/, pt: /neste computador/, hu: /ezen a számítógépen/,
+  };
+
+  it.each(locales)("%s: it is for a team on this computer as well as on a VPS, and does not tie a page to the VPS", (locale) => {
+    const t = HELP_TEXT[locale];
+    expect(t.intro).toMatch(THIS_COMPUTER[locale]);
+    expect(t.intro).toContain("VPS");
+    for (const page of ["team", "profile", "office"] as const) expect(t.pages[page], `${locale}: ${page}`).not.toContain("VPS");
+  });
+
+  it.each(locales)("%s: a team on a VPS is read only until it is connected with the catalog's own button, never read only for good", (locale) => {
+    const t = HELP_TEXT[locale];
+    const label = EXISTING_TEAM_READONLY_TEXT[locale].connectInFull;
+    expect(t.readOnly[0]).toContain(label);
+    expect(t.pages.agents).toContain(label);
+  });
 });

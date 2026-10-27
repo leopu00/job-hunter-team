@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { buildAccountExport } from "../../lib/account-export";
+import { cloudClient } from "../../lib/cloud-client";
 import { describeError } from "../../lib/error-catalog";
 import { useTeamOff, type TeamOff } from "../../lib/team-off";
 import { teamOffFailure } from "../../shell/team-off-failure";
@@ -73,7 +74,9 @@ export default function ExportPage(_props: PageProps) {
     setAccountSay(null);
     // the cloud session is loaded only here: a page that never exports does not start it
     const { supabase, supabaseConfigured } = await import("../../lib/supabase");
-    const built = await buildAccountExport(supabaseConfigured ? supabase : null);
+    // with no cloud session to read with (a local profile) the client that answers «no account», not the
+    // one that would wait on a locked session for ever
+    const built = await buildAccountExport(supabaseConfigured ? (cloudClient() as typeof supabase) : null);
     if (!built.ok) {
       setAccountSay({
         ok: false,

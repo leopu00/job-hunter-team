@@ -2,6 +2,8 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
+import { useTeamOff } from "../../lib/team-off";
+import { StartTeamAction } from "../../shell/StartTeamAction";
 import { isOwnVpsClaimCode } from "../../lib/own-vps-claim";
 import type { VoiceInputBridge } from "../../lib/voice-input";
 import { VoiceInputControl } from "../../voice-input";
@@ -158,6 +160,8 @@ const REOPEN_NO_RETRY = new Set([
   "account_scope_mismatch",
   "read_only_link",
   "existing_team_runtime_target_changed",
+  "host_not_configured",
+  "host_config_invalid",
 ]);
 
 function StatusBar({
@@ -174,6 +178,7 @@ function StatusBar({
   const locale = appLocale();
   const t = DIRECT_CHAT_TEXT[locale];
   const [slow, setSlow] = useState(false);
+  const teamOff = useTeamOff();
   const connecting = status.state === "connecting";
   useEffect(() => {
     setSlow(false);
@@ -193,6 +198,9 @@ function StatusBar({
   // code is never shown.
   const described = (failed || operationError) && code ? describeError(code, { locale }) : null;
   if (described?.known) text = `${described.text} ${described.action}`;
+  // The team of this computer is stopped: the sentence says «start the team», so the bar offers it (the
+  // app opened without the team has it in the banner above).
+  const teamStopped = (failed || operationError) && code === "local_team_not_running" && !teamOff;
 
   return (
     <div
@@ -205,14 +213,17 @@ function StatusBar({
         {text}
       </span>
       {(failed || operationError) && (
-        <button
-          type="button"
-          onClick={onRetry}
-          disabled={reconnecting}
-          className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
-        >
-          {reconnecting ? t.reconnecting : t.retry}
-        </button>
+        <span className="shrink-0 flex items-center gap-2">
+          {teamStopped && <StartTeamAction onStarted={onRetry} />}
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={reconnecting}
+            className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
+          >
+            {reconnecting ? t.reconnecting : t.retry}
+          </button>
+        </span>
       )}
     </div>
   );
@@ -327,9 +338,10 @@ export default function DirectChatScreen({
       let openingFailed = false;
       try {
         let snapshot = await client.status();
-        // An embedded pane may open after the connection was closed (leaving the Messages page
-        // closes it): the saved host is enough to open it again, with no question to the person.
-        for (let attempt = 1; embedded && active && snapshot.state === "disconnected"; attempt += 1) {
+        // The chat may open with the connection closed: leaving the Messages page closes it, and a profile
+        // imported from the command line brings the person here with nothing opened. The saved host is
+        // enough to open it again, with no question to the person: the pane and the page alike.
+        for (let attempt = 1; active && snapshot.state === "disconnected"; attempt += 1) {
           setStatus({ state: "connecting" });
           try {
             snapshot = await client.reconnect();

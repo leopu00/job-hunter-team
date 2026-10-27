@@ -1,7 +1,7 @@
 import { locales, type Locale } from "@/i18n/config";
 import { appLocale } from "../lib/app-locale";
 import { pluralText, type PluralForms } from "../lib/plural";
-import type { DeptId } from "./contract";
+import { DEPT_ORDER, type DeptId, type OfficeLayout } from "./contract";
 
 /**
  * The words around the office scene: the panel a click opens, the tag under
@@ -22,6 +22,8 @@ export interface OfficeText {
   cloudReadFailed: string; // {error}
   loading: string;
   departmentOf: string; // {name}
+  // the department's name, by its id: painted on the floor sign and said by the panel's heading
+  departmentNames: Record<DeptId, string>;
   // what each department does, by its id: the floor's sign stays in the game's English, the panel and the tooltip say it in the person's language
   departmentTaglines: Record<DeptId, string>;
   sectionNow: string;
@@ -94,6 +96,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Non riesco a leggere il cloud: {error}",
     loading: "Caricamento…",
     departmentOf: "Reparto {name}",
+    departmentNames: {
+      scout: "Ricerca",
+      analisti: "Analisi",
+      scorer: "Compatibilità",
+      scrittori: "Candidature",
+      critici: "Controllo qualità",
+    },
     departmentTaglines: {
       scout: "Trova le opportunità giuste per te.",
       analisti: "Trasforma gli annunci in decisioni chiare.",
@@ -165,6 +174,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "I can't read the cloud: {error}",
     loading: "Loading…",
     departmentOf: "{name} department",
+    departmentNames: {
+      scout: "Research",
+      analisti: "Analysis",
+      scorer: "Compatibility",
+      scrittori: "Applications",
+      critici: "Quality check",
+    },
     departmentTaglines: {
       scout: "Finds relevant opportunities for you.",
       analisti: "Turns listings into clear decisions.",
@@ -236,6 +252,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Die Cloud lässt sich nicht lesen: {error}",
     loading: "Wird geladen…",
     departmentOf: "Abteilung {name}",
+    departmentNames: {
+      scout: "Recherche",
+      analisti: "Analyse",
+      scorer: "Passung",
+      scrittori: "Bewerbungen",
+      critici: "Qualitätskontrolle",
+    },
     departmentTaglines: {
       scout: "Findet passende Chancen für dich.",
       analisti: "Macht aus Stellenanzeigen klare Entscheidungen.",
@@ -307,6 +330,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Impossible de lire le cloud : {error}",
     loading: "Chargement…",
     departmentOf: "Service {name}",
+    departmentNames: {
+      scout: "Recherche",
+      analisti: "Analyse",
+      scorer: "Compatibilité",
+      scrittori: "Candidatures",
+      critici: "Contrôle qualité",
+    },
     departmentTaglines: {
       scout: "Trouve les opportunités qui vous correspondent.",
       analisti: "Transforme les annonces en décisions claires.",
@@ -378,6 +408,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "No puedo leer la nube: {error}",
     loading: "Cargando…",
     departmentOf: "Departamento {name}",
+    departmentNames: {
+      scout: "Búsqueda",
+      analisti: "Análisis",
+      scorer: "Compatibilidad",
+      scrittori: "Candidaturas",
+      critici: "Control de calidad",
+    },
     departmentTaglines: {
       scout: "Encuentra las oportunidades adecuadas para ti.",
       analisti: "Convierte las ofertas en decisiones claras.",
@@ -449,6 +486,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Não consigo ler a cloud: {error}",
     loading: "A carregar…",
     departmentOf: "Departamento {name}",
+    departmentNames: {
+      scout: "Pesquisa",
+      analisti: "Análise",
+      scorer: "Compatibilidade",
+      scrittori: "Candidaturas",
+      critici: "Controlo de qualidade",
+    },
     departmentTaglines: {
       scout: "Encontra as oportunidades certas para ti.",
       analisti: "Transforma anúncios em decisões claras.",
@@ -520,6 +564,13 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     cloudReadFailed: "Nem tudom beolvasni a felhőt: {error}",
     loading: "Betöltés…",
     departmentOf: "{name} részleg",
+    departmentNames: {
+      scout: "Keresés",
+      analisti: "Elemzés",
+      scorer: "Illeszkedés",
+      scrittori: "Jelentkezések",
+      critici: "Minőségellenőrzés",
+    },
     departmentTaglines: {
       scout: "Megtalálja a hozzád illő lehetőségeket.",
       analisti: "Az álláshirdetésekből világos döntéseket csinál.",
@@ -592,6 +643,29 @@ export { fill } from "../lib/text-slots";
 /** The language a dictionary is picked for; one the app does not have gets the app's own. */
 export function officeLocale(locale?: string): Locale {
   return (locales as readonly string[]).includes(locale ?? "") ? (locale as Locale) : appLocale();
+}
+
+/**
+ * The layout with the departments' signs in the person's language: the name and the tagline painted on the
+ * floor, the panel's heading and the handoff tables' tags ("RICERCA  →  ANALISI") all come from the layout.
+ */
+export function localizeLayout(layout: OfficeLayout, locale?: string): OfficeLayout {
+  const t = officeText(locale);
+  return {
+    ...layout,
+    departments: layout.departments.map((dept) => {
+      const next = DEPT_ORDER[DEPT_ORDER.indexOf(dept.id) + 1];
+      return {
+        ...dept,
+        name: t.departmentNames[dept.id] ?? dept.name,
+        tagline: dept.tagline === undefined ? undefined : (t.departmentTaglines[dept.id] ?? dept.tagline),
+        // the tag names the department and the one that takes its work, as the layout's own does
+        handoff: dept.handoff && next
+          ? { ...dept.handoff, label: `${t.departmentNames[dept.id].toUpperCase()}  →  ${t.departmentNames[next].toUpperCase()}` }
+          : dept.handoff,
+      };
+    }),
+  };
 }
 
 /** The sentence for a count, in its singular or plural form. */

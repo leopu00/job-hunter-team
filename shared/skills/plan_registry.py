@@ -31,6 +31,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
+import stat
 import sys
 from pathlib import Path
 from typing import Optional
@@ -340,14 +342,40 @@ def set_plan(provider: str, plan_id: str) -> dict:
     if not isinstance(entry, dict):
         entry = providers[prov] = {}
     entry["plan"] = plan["id"]
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    tmp.replace(path)
+    _write_config_privately(_config_path(), cfg)
     return plan
+
+
+def _write_config_privately(path: Path, cfg: dict) -> None:
+    """Write the configuration the way the CLI's private writer does (cli/src/lib/secure-config-io.js): the file
+    can hold the Telegram bot_token, so it is never created with the umask's mode and never goes through a temp
+    file with a name anyone can guess. A new file is 0600; an existing one keeps the mode it has. The temp file
+    sits in the same folder (so the rename is atomic), is created with O_EXCL under a name that is not fixed, and
+    is removed if anything fails before the rename."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+    except OSError:
+        mode = 0o600
+    body = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{secrets.token_hex(8)}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(body)
+            f.flush()
+            try:
+                os.fchmod(f.fileno(), mode)
+            except (AttributeError, OSError):  # Windows / v9fs: the host ACL owns the permissions
+                pass
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _tier_bucket(tier: float) -> int:

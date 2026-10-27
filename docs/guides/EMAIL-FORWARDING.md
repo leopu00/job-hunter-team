@@ -81,6 +81,9 @@ In the **JHT desktop app**, open **Mail** in the top menu and fill in the
 The app passes the password to the team's protected service, on the machine that
 runs the team: the agents cannot read it.
 
+If the app shows the team read only, the Mail entry is not in the menu: link the
+team with write access first (**Connect with write access**).
+
 > 🔑 **App password (Gmail):** enable 2-Step Verification, then create an
 > *App password* (Google Account → Security → App passwords) and paste that. It's
 > a 16-character token you can revoke independently, so the team never holds your

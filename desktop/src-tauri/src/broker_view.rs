@@ -516,11 +516,16 @@ fn arm_deadline(app: tauri::AppHandle, session: String, deadline: Instant) {
 /// Windows a window created from a synchronous command blocks its own thread.
 #[tauri::command]
 pub(crate) async fn broker_login_view_open(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, BrokerViewState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<(), BrokerViewError> {
     let scope = scopes.active().map_err(failure)?;
+    // The view opens the broker's login on the team's host: on an existing team that is the full link.
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &scope) {
+        return Err(failure(code));
+    }
     if app.get_webview_window(WINDOW_LABEL).is_some() {
         return crate::live_screen::open_window(&app, WINDOW_LABEL, WINDOW_PAGE, WINDOW_TITLE)
             .map(|_| ())

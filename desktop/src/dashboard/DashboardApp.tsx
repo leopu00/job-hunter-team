@@ -153,6 +153,9 @@ const CAUSE_REPLACES_ACTION = new Set([
   "container_timeout",
 ]);
 
+/** The codes whose catalog sentence already says it all: the installer's line repeats it in English, so it stays in the technical details. */
+const CAUSE_ALREADY_TOLD = new Set(["local_team_running"]);
+
 /** «Cause: …», then what to do: the catalog's own action, or retry and the log. */
 function actionWithCause(code: string, action: string, cause: string | null): string {
   if (!cause) return action;
@@ -171,6 +174,7 @@ function existingTeamAgentsOff(snapshot: OnboardingRuntimeSnapshot): boolean {
 /** The action to tell, and the raw cause for the technical details when it is not a sentence. */
 function causeParts(code: string, action: string, cause: string | null): { action: string; cause?: string } {
   if (!cause) return { action };
+  if (CAUSE_ALREADY_TOLD.has(code)) return { action, cause };
   if (isReadableCause(cause)) return { action: actionWithCause(code, action, cause) };
   return { action: CAUSE_REPLACES_ACTION.has(code) ? stateText().failureCauseRetry : action, cause };
 }
@@ -225,9 +229,14 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   // The sentence comes from the app's catalog, never from the native message;
   // the cause is the step's own line, redacted on the native side.
   const described = describeError(value.code, { locale: appLocale(), machine: errorMachineOf(error) });
+  // The team already runs: nothing failed and nothing was changed, the person stops it and presses the button again.
+  const calm = value.code === "local_team_running"
+    ? { title: stateText().teamRunningTitle, calm: true as const }
+    : {};
   return {
     status: "failed",
     stage,
+    ...calm,
     message: described.text,
     ...causeParts(value.code, described.action, cause),
     code: value.code,

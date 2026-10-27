@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
+import { withReadDeadline } from "../../lib/read-deadline";
+import CloudDataNotice from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
+import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
 import DashboardScreen from "./DashboardScreen";
 import { appLocale } from "../../lib/app-locale";
@@ -32,7 +35,7 @@ export default function DashboardPage(_props: PageProps) {
 
   const read = useCallback(() => {
     const mine = ++request.current;
-    (existingTeam ? loadExistingTeamDashboard() : loadDashboard(supabase))
+    withReadDeadline(existingTeam ? loadExistingTeamDashboard() : loadDashboard(cloudClient()))
       .then((data) => {
         if (request.current === mine) setLoad({ state: "ready", data });
       })
@@ -58,16 +61,26 @@ export default function DashboardPage(_props: PageProps) {
       ? describeError(load.code, { fallback: "existing_team_unavailable", locale: appLocale() })
       : null;
     return (
-      <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        {failure
-          ? `${failure.text} ${failure.action} (${load.code})`
-          : PAGE_STATES_TEXT[appLocale()].dashboardFailed}
-      </p>
+      <div className="max-w-6xl mx-auto px-5 pt-8">
+        <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+          {failure
+            ? `${failure.text} ${failure.action} (${load.code})`
+            : PAGE_STATES_TEXT[appLocale()].dashboardFailed}
+        </p>
+        <button
+          type="button"
+          className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
+          onClick={() => { setLoad({ state: "loading" }); read(); }}
+        >
+          {SHELL_TEXT[appLocale()].refresh}
+        </button>
+      </div>
     );
   }
   const prompt = connectTeam && !existingTeam ? CONNECT_TEAM_PROMPT_TEXT[appLocale()] : null;
   return (
     <>
+      <CloudDataNotice />
       {prompt && (
         <section
           className="max-w-6xl mx-auto px-5 pt-6 flex flex-wrap items-center justify-between gap-3 text-[12px]"

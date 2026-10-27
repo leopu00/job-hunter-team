@@ -273,6 +273,9 @@ export const T: Record<Locale, Strings> = {
       <>
         The app passes the password to the team&apos;s protected service, on the
         machine that runs the team: the agents cannot read it.
+        If the app shows the team read only, the Mail entry is not in the menu:
+        link the team with write access first (<strong>Connect with write
+        access</strong>).
       </>
     ),
     step2Callout: (
@@ -661,6 +664,9 @@ export const T: Record<Locale, Strings> = {
       <>
         L&apos;app passa la password al servizio protetto del team, sulla
         macchina che esegue il team: gli agenti non possono leggerla.
+        Se l&apos;app mostra il team in sola lettura, la voce Posta non c&apos;è
+        nel menu: serve prima il collegamento in scrittura (<strong>Collega in
+        scrittura</strong>).
       </>
     ),
     step2Callout: (
@@ -1062,6 +1068,9 @@ export const T: Record<Locale, Strings> = {
       <>
         La app pasa la contraseña al servicio protegido del equipo, en la
         máquina que ejecuta el equipo: los agentes no pueden leerla.
+        Si la app muestra el equipo en solo lectura, la entrada Correo no está
+        en el menú: antes hace falta la conexión con escritura (<strong>Conectar
+        con escritura</strong>).
       </>
     ),
     step2Callout: (
@@ -1475,6 +1484,9 @@ export const T: Record<Locale, Strings> = {
         L&apos;app transmet le mot de passe au service protégé de l&apos;équipe,
         sur la machine qui exécute l&apos;équipe : les agents ne peuvent pas le
         lire.
+        Si l&apos;app affiche l&apos;équipe en lecture seule, l&apos;entrée
+        Courrier n&apos;est pas dans le menu : il faut d&apos;abord la connexion
+        en écriture (<strong>Connecter en écriture</strong>).
       </>
     ),
     step2Callout: (
@@ -1891,6 +1903,9 @@ export const T: Record<Locale, Strings> = {
       <>
         Die App übergibt das Passwort an den geschützten Dienst des Teams, auf
         der Maschine, die das Team ausführt: Die Agenten können es nicht lesen.
+        Zeigt die App das Team nur lesend, fehlt der Eintrag E-Mail im Menü:
+        Zuerst ist die Verbindung mit Schreibzugriff nötig (<strong>Mit
+        Schreibzugriff verbinden</strong>).
       </>
     ),
     step2Callout: (
@@ -2297,6 +2312,9 @@ export const T: Record<Locale, Strings> = {
       <>
         Az alkalmazás átadja a jelszót a csapat védett szolgáltatásának, azon a
         gépen, amely a csapatot futtatja: az ügynökök nem tudják elolvasni.
+        Ha az alkalmazás a csapatot csak olvasható módban mutatja, a Levelezés
+        menüpont nincs a menüben: előbb írási joggal kell csatlakozni
+        (<strong>Csatlakozás írási joggal</strong>).
       </>
     ),
     step2Callout: (
@@ -2696,6 +2714,9 @@ export const T: Record<Locale, Strings> = {
       <>
         O app entrega a senha ao serviço protegido da equipe, na máquina que
         executa a equipe: os agentes não conseguem lê-la.
+        Se o app mostrar a equipe só em leitura, a entrada Correio não está no
+        menu: é preciso primeiro a ligação com escrita (<strong>Ligar com
+        escrita</strong>).
       </>
     ),
     step2Callout: (

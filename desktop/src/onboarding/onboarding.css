@@ -1295,6 +1295,12 @@
   margin-top: 6px;
 }
 
+/* A hint straight in the panel is a <small>, inline: without this its margin does nothing and the next field's label sits on it. */
+.onboarding-panel > .onboarding-hint {
+  display: block;
+  margin: 8px 0 18px;
+}
+
 .onboarding-runtime-phase { display: grid; gap: 6px; margin-top: 10px; }
 .onboarding-runtime-phase small { color: var(--color-muted); font-size: 11px; line-height: 1.45; }
 

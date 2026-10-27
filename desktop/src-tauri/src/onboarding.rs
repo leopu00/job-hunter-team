@@ -120,6 +120,8 @@ pub(crate) fn teardown(state: &OnboardingNativeState) {
 
 struct InteractiveSession {
     scope: AccountScope,
+    /// The host the login runs on: its input is judged against this one, not against what is saved now.
+    host: ExecutionHost,
     id: String,
     child: Arc<Mutex<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
@@ -2224,7 +2226,7 @@ fn install_local(
                     if let Some(log) = log {
                         log.record_result("install.sh", &result, &stderr, started.elapsed());
                     }
-                    ensure_success(result, "runtime_install_failed")
+                    ensure_local_install_success(result)
                 });
                 if let Err(error) = installed {
                     trace_local_runtime("runtime", "install_failed");
@@ -2312,7 +2314,7 @@ fn install_local(
                     if let Some(log) = log {
                         log.record_result("install.sh", &result, &stderr, started.elapsed());
                     }
-                    ensure_success(result, "runtime_install_failed")
+                    ensure_local_install_success(result)
                 })?;
             }
             wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
@@ -2410,6 +2412,15 @@ fn ensure_success(
     }
 }
 
+/// The install on this computer: exit 84 is install.sh refusing to change the configuration of a team that
+/// runs. It is not a failure of the preparation, so it must not be told as one («check your connection»).
+fn ensure_local_install_success(result: Result<ProcessResult, &'static str>) -> Result<(), OnboardingError> {
+    if matches!(&result, Ok(value) if value.code == REMOTE_INSTALL_TEAM_RUNNING_EXIT) {
+        return Err(failure(LOCAL_TEAM_RUNNING));
+    }
+    ensure_success(result, "runtime_install_failed")
+}
+
 fn ensure_success_with_timeout(
     result: Result<ProcessResult, &'static str>,
     code: &'static str,
@@ -2439,6 +2450,8 @@ const REMOTE_INSTALL_RUNTIME_CHANGE_EXIT: i32 = 85;
 /// configuration under it, so the install stopped before changing anything.
 const REMOTE_INSTALL_TEAM_RUNNING_EXIT: i32 = 84;
 const VPS_TEAM_RUNNING: &str = "vps_team_running";
+/// The same refusal of install.sh (exit 84) on this computer: the team was started by hand, with `jht up`.
+const LOCAL_TEAM_RUNNING: &str = "local_team_running";
 /// The runtime of every VPS: rootless Podman, a fixed choice.
 const REMOTE_INSTALL_RUNTIME: &str = " --runtime podman";
 /// What install.sh says, with its own exit, when the VPS cannot run rootless
@@ -3058,6 +3071,7 @@ fn prepare_impl(
 
 #[tauri::command]
 pub(crate) async fn onboarding_prepare(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -3066,6 +3080,11 @@ pub(crate) async fn onboarding_prepare(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // The setup installs, starts and configures the team on its host and saves it as the account's: on an
+    // existing team opened read only, that host is not the setup's to take, only the full link's.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), &expected, &submission.host) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -4681,6 +4700,7 @@ fn provider_bootstrap_input(provider: SubscriptionProvider) -> Option<&'static [
 
 #[tauri::command]
 pub(crate) fn onboarding_provider_login(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -4689,6 +4709,10 @@ pub(crate) fn onboarding_provider_login(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<InteractiveStart, OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
+    // A provider login writes the provider's credentials into the team's host: on an existing team, the full link.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &host) {
+        return Err(failure(code));
+    }
     let mut slot = state
         .interactive
         .lock()
@@ -4924,6 +4948,7 @@ pub(crate) fn onboarding_provider_login(
     });
     *slot = Some(InteractiveSession {
         scope: scope.scope().clone(),
+        host: host.clone(),
         id: id.clone(),
         child,
         stdin: Mutex::new(Some(stdin)),
@@ -4935,14 +4960,20 @@ pub(crate) fn onboarding_provider_login(
 
 #[tauri::command]
 pub(crate) fn onboarding_provider_login_input(
+    window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     session_id: String,
     request_id: String,
     input: String,
 ) -> Result<(), OnboardingError> {
-    let scope = scopes.lock_active().map_err(failure)?;
     let mut input = Zeroizing::new(input);
+    if let Some(code) = crate::agent_control::window_refusal(window.label()) {
+        input.zeroize();
+        return Err(failure(code));
+    }
+    let scope = scopes.lock_active().map_err(failure)?;
     let slot = state
         .interactive
         .lock()
@@ -4951,6 +4982,12 @@ pub(crate) fn onboarding_provider_login_input(
         .as_ref()
         .filter(|value| value.id == session_id && &value.scope == scope.scope())
         .ok_or_else(|| failure("session_not_found"))?;
+    // The session writes to the host it was opened on: a login opened with the full link that was taken
+    // away since (switched to read only) takes no more input.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &session.host) {
+        input.zeroize();
+        return Err(failure(code));
+    }
     let mut stdin = session.stdin.lock().map_err(|_| failure("state_failed"))?;
     let writer = stdin.as_mut().ok_or_else(|| failure("session_closed"))?;
     write_provider_input(&session.pending_input, writer, &request_id, input.as_str())?;
@@ -5292,6 +5329,7 @@ fn retry_cold_windows_team_start(is_windows: bool, is_local: bool, code: &str) -
 
 #[tauri::command]
 pub(crate) async fn onboarding_team_start(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -5299,6 +5337,10 @@ pub(crate) async fn onboarding_team_start(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Starting the team acts on its host: on an existing team, only on the full link.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), &expected, &host) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5563,12 +5605,21 @@ fn clean_images_with(
 /// `host`: the one being set up; none = the saved one (a resumed team).
 #[tauri::command]
 pub(crate) async fn onboarding_clean_images(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     host: Option<ExecutionHost>,
 ) -> Result<CleanImagesOutcome, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Removing images acts on the team's host (the named one, or the saved one): on an existing team, only on the full link.
+    let refusal = match &host {
+        Some(host) => crate::agent_control::host_action_refusal(&app, window.label(), &expected, host),
+        None => crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected),
+    };
+    if let Some(code) = refusal {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5780,12 +5831,17 @@ pub(crate) async fn onboarding_resume_runtime_wake(
 
 #[tauri::command]
 pub(crate) async fn onboarding_resume_team_start(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Resuming the team starts it on the saved host: on an existing team, only on the full link.
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5835,6 +5891,7 @@ pub(crate) async fn onboarding_resume_team_start(
 
 #[tauri::command]
 pub(crate) async fn onboarding_assistant_open(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -5842,6 +5899,10 @@ pub(crate) async fn onboarding_assistant_open(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Opening the assistant starts it on the team's host: on an existing team, only on the full link.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), &expected, &host) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -7330,6 +7391,18 @@ mod tests {
 
     fn exited(code: i32) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    #[test]
+    fn an_install_on_this_computer_with_the_team_running_says_so_and_not_that_the_preparation_failed() {
+        use super::ensure_local_install_success;
+        assert!(ensure_local_install_success(exited(0)).is_ok());
+        let refused = ensure_local_install_success(exited(84)).unwrap_err();
+        assert_eq!(refused.code, "local_team_running");
+        // once the team is stopped, asking again works
+        assert!(refused.retryable);
+        assert_eq!(ensure_local_install_success(exited(1)).unwrap_err().code, "runtime_install_failed");
+        assert_eq!(ensure_local_install_success(Err("process_timeout")).unwrap_err().code, "timeout");
     }
 
     #[test]

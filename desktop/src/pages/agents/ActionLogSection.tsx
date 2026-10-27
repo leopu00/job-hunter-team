@@ -4,12 +4,14 @@ import type { Locale } from "@/i18n/config";
 import type { WebActionLogClient } from "@/lib/web-action-log";
 import { WEB_ACTION_LOG_TEXT } from "@/lib/web-action-log.i18n";
 import { appLocale } from "../../lib/app-locale";
+import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 
 /** What the section reads the log with: the app's session, or nothing when nobody is signed in with an account. */
 export async function appLogClient(): Promise<WebActionLogClient | null> {
   // Loaded when the section is opened, not with the panel: the panel does not need the account to show its agents.
   const { supabase, supabaseConfigured } = await import("../../lib/supabase");
-  if (!supabaseConfigured) return null;
+  // A locked session storage (a local profile) answers nothing: no account, said at once.
+  if (!supabaseConfigured || !cloudSessionReadable()) return null;
   const { data } = await supabase.auth.getSession();
   return data.session ? supabase : null;
 }
