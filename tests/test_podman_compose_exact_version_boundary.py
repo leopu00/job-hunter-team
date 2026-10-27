@@ -1096,6 +1096,10 @@ def test_upgrade_with_a_stopped_team_of_ours_counts_it_as_absent_and_never_asks_
     # not «non-installata», and a failed upgrade removes the new container without ever touching the volumes.
     wrapper, env, podman_log, create_marker = _runtime(tmp_path)
     env["JHT_FIXTURE_CONTAINER_CASE"] = "stale"
+    # the emulated container never starts, so the verification of the new runtime fails by design: two
+    # observations are enough to say so (twenty took 40-50 s, close to the 60 s of WRAPPER_TIMEOUT_S, and
+    # timed out on a busy machine)
+    env["JHT_UPGRADE_VERIFY_TRIES"] = "2"
 
     result = _run(wrapper, env, "upgrade", "--apply", "--json")
 
