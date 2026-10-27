@@ -289,13 +289,15 @@ test('jht profile import: an invalid profile, a link and a big file are refused 
   const verdict = JSON.parse(invalid.stdout);
   assert.equal(verdict.code, 'profile_invalid');
   assert.ok(verdict.errors.length > 0);
-  assert.ok(['email', 'experience', 'education', 'languages'].every((key) => verdict.missing.includes(key)), verdict.missing.join());
+  assert.ok(['email', 'seniority_target', 'languages'].every((key) => verdict.missing.includes(key)), verdict.missing.join());
+  // experience and education are recommended, not required: never named as what the team lacks
+  assert.ok(!verdict.missing.includes('experience') && !verdict.missing.includes('education'), verdict.missing.join());
 
-  // What a hand-written profile lacked in a real try: the email and the education, though everything else is there.
+  // What a hand-written profile lacked in a real try: the email, though everything else is there.
   const lacking = join(root, 'lacking.yml');
-  writeFileSync(lacking, readFileSync(FIXTURE, 'utf8').replace(/  contacts:\n    email: [^\n]*\n/, '').replace(/  education:[\s\S]*$/, ''));
+  writeFileSync(lacking, readFileSync(FIXTURE, 'utf8').replace(/  contacts:\n    email: [^\n]*\n/, ''));
   const partial = JSON.parse(run(root, ['profile', 'import', lacking, '--json']).stdout);
-  assert.deepEqual([partial.code, partial.missing], ['profile_invalid', ['email', 'education']]);
+  assert.deepEqual([partial.code, partial.missing], ['profile_invalid', ['email']]);
 
   const link = join(root, 'link.yml');
   symlinkSync(FIXTURE, link);

@@ -50,8 +50,10 @@ export async function GET() {
   const profile = readWorkspaceProfile();
   // Il bottone "Vai alla dashboard" si abilita se uno dei due è vero:
   //   (a) l'assistente ha creato ~/.jht/profile/ready.flag (canale esplicito).
-  //   (b) il YAML soddisfa già la checklist minima (nome, ruolo, città,
-  //       anni, email, ≥2 skill, ≥1 lingua, ≥1 esperienza, ≥1 titolo).
+  //   (b) il YAML soddisfa già i campi obbligatori (web/lib/profile-completion.ts:
+  //       nome, ruolo, città, anni, seniority, email, ≥2 skill, ≥1 lingua;
+  //       esperienza e titolo di studio sono raccomandati, non obbligatori).
+  //       L'elenco condiviso è shared/config/profile-minimum.json.
   // Il fallback (b) evita il bug classico in cui l'assistente annuncia in
   // chat "ho sbloccato" senza aver effettivamente eseguito il comando shell
   // che crea il flag: con la checklist completa, da qui `ready` è già true

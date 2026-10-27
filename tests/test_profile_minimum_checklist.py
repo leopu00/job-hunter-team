@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "shared" / "skills" / "validate_profile.py"
 FIXTURE = ROOT / "cli" / "tests" / "fixtures" / "profile-synthetic.yml"
 COMPLETION = ROOT / "web" / "lib" / "profile-completion.ts"
+SHARED = ROOT / "shared" / "config" / "profile-minimum.json"
+GAME_STATUS = ROOT / "game" / "scripts" / "backend" / "payloads" / "profile_status.py"
 
 
 def _check(tmp_path: Path, profile: dict, *flags: str) -> dict:
@@ -62,10 +64,9 @@ def _without(profile: dict, *paths: tuple[str, ...]) -> dict:
         ("target_role", [("target_role",), ("candidate", "target_role")]),
         ("location", [("location",)]),
         ("experience_years", [("experience_years",)]),
+        ("seniority_target", [("seniority_target",)]),
         ("skills", [("skills",)]),
         ("languages", [("languages",)]),
-        ("experience", [("candidate", "experience")]),
-        ("education", [("candidate", "education")]),
     ),
 )
 def test_each_missing_field_is_named_and_stops_the_profile(tmp_path: Path, missing: str, paths: list):
@@ -128,33 +129,39 @@ def test_an_empty_or_misplaced_email_is_still_missing(tmp_path: Path, emptied: d
     assert "email" in _check(tmp_path, profile, "--minimum")["missing"]
 
 
-def test_the_flat_lists_and_the_first_target_role_count(tmp_path: Path):
-    # the first of target_roles is a target role, and the flat experience/education lists count
-    flat = _without(_fixture(), ("target_role",), ("candidate",))
+def test_experience_and_education_are_recommended_and_do_not_stop_the_team(tmp_path: Path):
+    # decision of 2026-06-06: the team starts without them (the app, the Assistant's skill and the game agree)
+    bare = _without(_fixture(), ("candidate", "experience"), ("candidate", "education"))
+    verdict = _check(tmp_path, bare, "--strict", "--minimum")
+    assert verdict["ok"] is True and verdict["missing"] == []
+
+
+def test_the_first_target_role_counts(tmp_path: Path):
+    flat = _without(_fixture(), ("target_role",), ("candidate", "target_role"))
     flat["target_roles"] = ["Backend Engineer"]
-    flat["personal"] = {"email": EMAIL}
-    flat["experience"] = [{"company": "Example Co"}]
-    flat["education"] = [{"institution": "Example University"}]
     assert _check(tmp_path, flat, "--minimum")["missing"] == []
 
 
-def test_a_profile_the_checklist_passes_is_never_one_the_apps_required_fields_refuse(tmp_path: Path):
-    """The app's required fields (profile-completion.ts) are the floor this checklist must not be under."""
+def _shared() -> dict:
+    return json.loads(SHARED.read_text(encoding="utf-8"))
+
+
+def test_the_checklist_is_the_shared_list_and_the_apps_required_fields(tmp_path: Path):
+    """One list, read by the validator, the app, the game: a field added to one and not the others is red here."""
+    shared = _shared()["required"]
+    # the validator: what an empty profile lacks, in its own order
+    assert _check(tmp_path, {}, "--minimum")["missing"] == shared
+    # the app: the keys of PROFILE_REQUIREMENTS at level required, in their order
     source = COMPLETION.read_text(encoding="utf-8")
-    required = re.findall(r'key: "([a-z_]+)",\s*level: "required"', source)
-    assert set(required) >= {"name", "email", "target_role", "location", "experience_years", "skills", "languages"}
-    # the app's key -> where a profile that lacks it is written
-    where = {
-        "name": [("name",), ("candidate", "name")],
-        "email": [("candidate", "contacts")],
-        "target_role": [("target_role",), ("candidate", "target_role")],
-        "location": [("location",)],
-        "experience_years": [("experience_years",)],
-        "seniority_target": [("seniority_target",)],
-        "skills": [("skills",)],
-        "languages": [("languages",)],
-    }
-    assert set(required) <= set(where), f"a new required field of the app: {set(required) - set(where)}"
-    for key in required:
-        verdict = _check(tmp_path, _without(_fixture(), *where[key]), "--strict", "--minimum")
-        assert verdict["ok"] is False, f"a profile without {key} must not pass"
+    assert re.findall(r'key: "([a-z_]+)",\s*level: "required"', source) == shared
+    # the game's wizard: the keys of the `required` dict of its status payload
+    payload = GAME_STATUS.read_text(encoding="utf-8")
+    block = re.search(r"required = dict\((.*?)\n\)", payload, re.S)
+    assert block is not None
+    assert re.findall(r"^\s+([a-z_]+)=", block.group(1), re.M) == shared
+
+
+@pytest.mark.parametrize("case", _shared()["cases"], ids=lambda case: case["name"])
+def test_the_validator_gives_the_answer_the_shared_cases_expect(tmp_path: Path, case: dict):
+    # web/lib/profile-minimum-parity.test.ts reads the same cases and asks the app the same
+    assert _check(tmp_path, case["profile"], "--minimum")["missing"] == case["missing"]

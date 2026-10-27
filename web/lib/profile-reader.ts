@@ -74,7 +74,15 @@ export function isProfileComplete(profile: CandidateProfile | null): boolean {
   return isTeamUnlocked(profile);
 }
 
-function mapYamlToProfile(raw: any): CandidateProfile {
+// Un testo vuoto o di soli spazi non è un valore: come per il validatore
+// (validate_profile.py, _is_str), così il campo non conta come compilato e la
+// catena `a ?? b` passa al posto successivo.
+function filled<T>(value: T): T | null {
+  if (typeof value !== "string") return value ?? null;
+  return value.trim() === "" ? null : value;
+}
+
+export function mapYamlToProfile(raw: any): CandidateProfile {
   const candidate = raw.candidate ?? {};
   const personal = raw.personal ?? {};
 
@@ -136,23 +144,42 @@ function mapYamlToProfile(raw: any): CandidateProfile {
         }
       : null;
 
-  // Contacts: cerca in candidate.contacts o personal
-  const contacts = candidate.contacts ?? {
-    email: personal.email,
-    phone: personal.phone,
-    linkedin: personal.linkedin,
-    github: personal.github,
-    website: personal.website,
-  };
+  // Contacts: cerca in candidate.contacts, poi nei `contacts` alla radice (schema
+  // canonico, shared/config/profile-schema.ts), poi in personal
+  const rootContacts =
+    raw.contacts && typeof raw.contacts === "object" ? raw.contacts : null;
+  // `positioning.contacts`: il posto che la checklist dell'app legge (hasEmail) e che il
+  // validatore ammette per l'email
+  const positioningContacts =
+    raw.positioning?.contacts && typeof raw.positioning.contacts === "object"
+      ? raw.positioning.contacts
+      : null;
+  const contacts = candidate.contacts ??
+    rootContacts ?? {
+      email: personal.email,
+      phone: personal.phone,
+      linkedin: personal.linkedin,
+      github: personal.github,
+      website: personal.website,
+    };
 
   return {
     id: "local",
     user_id: "local",
-    name: candidate.name ?? personal.name ?? raw.name ?? null,
-    email: contacts.email ?? personal.email ?? null,
+    name: filled(candidate.name) ?? filled(personal.name) ?? filled(raw.name) ?? null,
+    email:
+      filled(contacts.email) ??
+      filled(personal.email) ??
+      filled(raw.email) ??
+      filled(positioningContacts?.email) ??
+      null,
     target_role:
-      candidate.target_role ?? raw.target_role ?? raw.target_roles?.[0] ?? null,
-    location: raw.location ?? personal.location ?? null,
+      filled(candidate.target_role) ??
+      filled(raw.target_role) ??
+      // solo una lista ha un primo ruolo: una stringa non è la lista dei suoi caratteri
+      filled(Array.isArray(raw.target_roles) ? raw.target_roles[0] : null) ??
+      null,
+    location: filled(raw.location) ?? filled(personal.location) ?? null,
     experience_years: raw.experience_years ?? null,
     experience_months: null,
     has_degree: raw.has_degree ?? false,
@@ -162,7 +189,8 @@ function mapYamlToProfile(raw: any): CandidateProfile {
     job_titles: raw.target_roles_priority ?? raw.target_roles ?? null,
     salary_target,
     positioning: {
-      seniority_target: raw.seniority_target,
+      seniority_target:
+        filled(raw.seniority_target) ?? filled(raw.positioning?.seniority_target),
       strengths: candidate.strengths ?? raw.domain_expertise,
       experience: candidate.experience ?? raw.experience,
       education: candidate.education ?? raw.education,
