@@ -21,6 +21,7 @@ State is per process. A module that cannot be loaded leaves the caller on its ol
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import threading
 
 BUSY_RC = 8
@@ -32,8 +33,38 @@ _overran: set[str] = set()
 
 
 def _spawn(args, text: bool):
-    return subprocess.Popen(list(args), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=text,
-                            start_new_session=True)
+    """The transport's output goes to two temporary files, not to pipes. A caller that exits after the deadline
+    (a short-lived skill: standby, soft_pause_team, application_answers) would close the read ends of the pipes,
+    and the transport's next `echo` would die: of SIGPIPE, or, with SIGPIPE ignored, of `set -e` on the failed
+    write; either way maybe before its Enter. With files there is no read end to close."""
+    out, err = tempfile.TemporaryFile(), tempfile.TemporaryFile()
+    try:
+        proc = subprocess.Popen(list(args), stdout=out, stderr=err, start_new_session=True)
+    except BaseException:
+        out.close()
+        err.close()
+        raise
+    proc._tmux_send_files = (out, err)       # type: ignore[attr-defined]
+    return proc
+
+
+def _collect(proc, text: bool):
+    out, err = proc._tmux_send_files
+    try:
+        values = []
+        for handle in (out, err):
+            handle.seek(0)
+            raw = handle.read()
+            values.append(raw.decode("utf-8", "replace") if text else raw)
+        return values[0], values[1]
+    finally:
+        out.close()
+        err.close()
+
+
+def _reap(proc, text: bool) -> None:
+    proc.wait()
+    _collect(proc, text)
 
 
 def _wait(args, timeout: float, text: bool, session: str | None) -> subprocess.CompletedProcess:
@@ -42,10 +73,11 @@ def _wait(args, timeout: float, text: bool, session: str | None) -> subprocess.C
         with _lock:
             _running[session] = proc
     try:
-        out, err = proc.communicate(timeout=timeout)
+        proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        threading.Thread(target=proc.communicate, daemon=True).start()
+        threading.Thread(target=_reap, args=(proc, text), daemon=True).start()
         raise
+    out, err = _collect(proc, text)
     return subprocess.CompletedProcess(list(args), proc.returncode, out, err)
 
 
