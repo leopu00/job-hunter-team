@@ -669,6 +669,245 @@
       "missing": [
         "email"
       ]
+    },
+    {
+      "name": "the seniority counts in positioning.seniority_target",
+      "profile": {
+        "name": "Example Person",
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "positioning": {
+          "seniority_target": "mid"
+        }
+      },
+      "missing": []
+    },
+    {
+      "name": "the email counts in positioning.contacts.email",
+      "profile": {
+        "name": "Example Person",
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "positioning": {
+          "contacts": {
+            "email": "candidate@example.invalid"
+          }
+        }
+      },
+      "missing": []
+    },
+    {
+      "name": "a positioning.email is not the email",
+      "profile": {
+        "name": "Example Person",
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "positioning": {
+          "email": "candidate@example.invalid"
+        }
+      },
+      "missing": [
+        "email"
+      ]
+    },
+    {
+      "name": "a blank email is no email",
+      "profile": {
+        "name": "Example Person",
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "email": "   "
+      },
+      "missing": [
+        "email"
+      ]
+    },
+    {
+      "name": "a blank name is no name, and the next place is looked at",
+      "profile": {
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "name": "  ",
+        "personal": {
+          "name": "Example Person"
+        }
+      },
+      "missing": []
+    },
+    {
+      "name": "a blank name with no other place is no name",
+      "profile": {
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ],
+        "name": "  "
+      },
+      "missing": [
+        "name"
+      ]
+    },
+    {
+      "name": "a blank seniority is no seniority",
+      "profile": {
+        "name": "Example Person",
+        "target_role": "Backend Engineer",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "  ",
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ]
+      },
+      "missing": [
+        "seniority_target"
+      ]
+    },
+    {
+      "name": "a blank location is no location",
+      "profile": {
+        "name": "Example Person",
+        "target_role": "Backend Engineer",
+        "location": " ",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ]
+      },
+      "missing": [
+        "location"
+      ]
+    },
+    {
+      "name": "a blank target role is no target role",
+      "profile": {
+        "name": "Example Person",
+        "target_role": " ",
+        "location": "Rome, Italy",
+        "experience_years": 4,
+        "seniority_target": "mid",
+        "email": "candidate@example.invalid",
+        "skills": {
+          "primary": [
+            "Python",
+            "SQL"
+          ]
+        },
+        "languages": [
+          {
+            "language": "Italian",
+            "level": "native"
+          }
+        ]
+      },
+      "missing": [
+        "target_role"
+      ]
     }
   ]
 }
