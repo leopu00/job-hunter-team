@@ -4198,14 +4198,28 @@ mod tests {
         }
 
         impl Root {
-            fn new() -> Self {
+            /// A folder of the account the way the app makes it, or `None` where the process is not the
+            /// kind that owns what it creates: an elevated administrator's files belong to the group
+            /// Administrators, not to the user, and `owned_by_current_user` is false for them. There the
+            /// app keeps nothing (read only at every start, see
+            /// `an_elevated_process_keeps_nothing_and_stays_read_only`); the other tests need the
+            /// ordinary user and run on a machine with one (the non-elevated account of the test PC).
+            fn new() -> Option<Self> {
+                let made = Self::make();
+                if !private_acl::owned_by_current_user(&made.account()) {
+                    return None;
+                }
+                made.explain_folder();
+                Some(made)
+            }
+
+            fn make() -> Self {
                 let n = ROOTS.fetch_add(1, Ordering::SeqCst);
                 let root = std::env::temp_dir().join(format!("jht-full-link-{}-{n}", std::process::id()));
                 let scope = AccountScope::synthetic_local(format!("full-link-{n}").as_bytes());
                 let made = Self { root, scope };
                 fs::create_dir_all(made.account()).expect("account folder");
                 private_acl::protect_dir(&made.account()).expect("private account folder");
-                made.explain_folder();
                 made
             }
 
@@ -4267,7 +4281,7 @@ mod tests {
         #[test]
         fn it_is_written_private_with_the_exact_keys_and_comes_back_within_thirty_days() {
             let _serial = serial();
-            let root = Root::new();
+            let Some(root) = Root::new() else { return };
             let target = ActivatedTarget::synthetic_for_tests();
             let given = 1_800_000_000u64;
             revoke_full_link();
@@ -4298,7 +4312,7 @@ mod tests {
         #[test]
         fn another_candidate_or_another_account_never_gets_the_permission() {
             let _serial = serial();
-            let root = Root::new();
+            let Some(root) = Root::new() else { return };
             let target = ActivatedTarget::synthetic_for_tests();
             revoke_full_link();
             remember_full_link_at(&root.root, &root.scope, &other_target(), unix_now()).unwrap();
@@ -4323,7 +4337,7 @@ mod tests {
         #[test]
         fn a_record_that_cannot_be_believed_is_ignored_and_removed() {
             let _serial = serial();
-            let root = Root::new();
+            let Some(root) = Root::new() else { return };
             let target = ActivatedTarget::synthetic_for_tests();
             let now = unix_now();
             let good = good_record(&root, &target, now);
@@ -4384,7 +4398,7 @@ mod tests {
         #[test]
         fn a_link_in_place_of_the_record_is_not_followed() {
             let _serial = serial();
-            let root = Root::new();
+            let Some(root) = Root::new() else { return };
             let target = ActivatedTarget::synthetic_for_tests();
             let now = unix_now();
             let real = root.account().join("elsewhere.json");
@@ -4404,7 +4418,7 @@ mod tests {
         #[test]
         fn a_folder_that_is_not_private_gets_no_record_and_no_sweep() {
             let _serial = serial();
-            let root = Root::new();
+            let Some(root) = Root::new() else { return };
             let target = ActivatedTarget::synthetic_for_tests();
             let unavailable: Result<(), &str> = Err("existing_team_runtime_unavailable");
             let stray = root.account().join("existing-team-runtime-full-link.tmp-9-9");
@@ -4427,7 +4441,7 @@ mod tests {
         #[test]
         fn taking_it_away_says_when_it_could_only_be_neutralized_and_when_it_could_not() {
             let _serial = serial();
-            let root = Root::new();
+            let Some(root) = Root::new() else { return };
             let target = ActivatedTarget::synthetic_for_tests();
             // a file nobody is holding goes
             remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
@@ -4458,6 +4472,31 @@ mod tests {
             crate::account_scope::forget_write_access_at(&root.root, &root.scope);
             assert!(!root.record().exists());
             assert!(dir.join(FULL_LINK_FILE).exists());
+            revoke_full_link();
+        }
+
+        /// What is wanted of an elevated process: it keeps nothing. Its files are owned by the group
+        /// Administrators, so the record is not written (`existing_team_runtime_unavailable`, the
+        /// permission lasts this run only) and one found there is not believed. Not widened to make a
+        /// runner pass: where the process owns what it creates, this test has nothing to say.
+        #[test]
+        fn an_elevated_process_keeps_nothing_and_stays_read_only() {
+            let _serial = serial();
+            let root = Root::make();
+            if private_acl::owned_by_current_user(&root.account()) {
+                return;
+            }
+            let target = ActivatedTarget::synthetic_for_tests();
+            revoke_full_link();
+            assert_eq!(
+                remember_full_link_at(&root.root, &root.scope, &target, unix_now()),
+                Err("existing_team_runtime_unavailable")
+            );
+            assert!(!root.record().exists());
+            // a record put there anyway (owned by the group too) is not believed
+            place(&root, &good_record(&root, &target, unix_now()));
+            assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
+            assert!(!full_link_granted(&root.scope, &target));
             revoke_full_link();
         }
     }
