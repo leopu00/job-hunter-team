@@ -9,7 +9,7 @@ linked (jht-notify-user, as web_action_notice.py does).
 
 A second code, `session_lost`, tells that the Supabase session the daemon listens to the website with
 is gone (its refresh token was used twice): the box falls back to slower checks until the device is
-paired again from the app.
+paired again.
 
 A closed code with a fixed sentence in the user's language, under `cloud_sync_notice.<code>` in
 shared/locales/<lang>.json. One notice per token: the key is the token's public prefix, the one the

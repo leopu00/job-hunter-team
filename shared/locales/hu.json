@@ -251,5 +251,5 @@
   "web_action_notice.team_restarted_from_web": "A csapatot a weboldalról újraindították. Ha nem te voltál, ellenőrizd, ki fér hozzá a fiókodhoz.",
   "web_action_notice.directive_changed_from_web": "A weboldalról hozzáadtak vagy módosítottak egy állandó csapatutasítást. Ha nem te voltál, nézd meg a táblát az alkalmazásban.",
   "cloud_sync_notice.token_rejected": "A gép már nem tud szinkronizálni a webhellyel: a webhely elutasítja a szinkronizálási tokenjét (lejárt vagy visszavonták), és az új pozíciók már nem érkeznek meg. Generálj új tokent a webhelyen (Beállítások › Cloud sync), és futtasd a gépen: «jht cloud enable --token …», vagy kapcsold újra a csapatot az appból.",
-  "cloud_sync_notice.session_lost": "A gép elvesztette azt a munkamenetet, amellyel valós időben követi a webhelyet: a webhely parancsai (szinkron, chat, leállítás) most legfeljebb körülbelül egy perc késéssel érkeznek meg. Párosítsd újra az eszközt az appban a visszaállításhoz."
+  "cloud_sync_notice.session_lost": "A gép elvesztette azt a munkamenetet, amellyel valós időben követi a webhelyet: a webhely parancsai (szinkron, chat, leállítás) most legfeljebb körülbelül egy perc késéssel érkeznek meg. A valós idő az eszköz új párosításával tér vissza."
 }

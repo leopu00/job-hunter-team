@@ -250,5 +250,5 @@
   "web_action_notice.team_restarted_from_web": "A equipa foi reiniciada a partir do site. Se não foste tu, verifica quem consegue entrar na tua conta.",
   "web_action_notice.directive_changed_from_web": "Foi adicionada ou alterada uma ordem permanente da equipa a partir do site. Se não foste tu, verifica o quadro na app.",
   "cloud_sync_notice.token_rejected": "A máquina já não consegue sincronizar com o site: o site recusa o seu token de sincronização (expirado ou revogado) e as posições novas já não chegam lá. Gera um token novo no site (Definições › Cloud sync) e executa «jht cloud enable --token …» na máquina, ou volta a ligar a equipa a partir da app.",
-  "cloud_sync_notice.session_lost": "A máquina perdeu a sessão com que acompanha o site em tempo real: os comandos do site (sincronizar, chat, paragem) chegam-lhe agora com um atraso de até cerca de um minuto. Volta a emparelhar o dispositivo a partir da app para a restabelecer."
+  "cloud_sync_notice.session_lost": "A máquina perdeu a sessão com que acompanha o site em tempo real: os comandos do site (sincronizar, chat, paragem) chegam-lhe agora com um atraso de até cerca de um minuto. O tempo real volta com um novo emparelhamento do dispositivo."
 }
