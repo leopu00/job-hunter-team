@@ -22,8 +22,10 @@ Output:
     INVALID_PROFILE (exit 1)   "ERROR: ..." su stderr
 Con --strict anche i warning diventano errori (usato dopo la migrazione produttori).
 Con --minimum si aggiunge cio' che serve al team per partire (nome, email, ruolo, citta', anni,
-2+ competenze, 1+ lingua, 1+ esperienza, 1+ titolo di studio): i campi che mancano sono errori
-e, con --json, sotto "missing". Lo usa `jht profile import`.
+seniority, 2+ competenze, 1+ lingua: gli otto campi obbligatori dell'app, elenco condiviso in
+shared/config/profile-minimum.json): i campi che mancano sono errori e, con --json, sotto
+"missing". Esperienza e titolo di studio sono raccomandati, non obbligatori. Lo usa
+`jht profile import`.
 
 Lingua (RULE-T14): il testo libero che l'utente legge (narrative, key_points, timeline, summary)
 deve essere nella lingua dell'utente (i18n-prefs.json, poi JHT_LANG; `--lang XX` la forza). Un testo
@@ -284,11 +286,13 @@ def _has_email(profile: dict, cand: dict, pers: dict) -> bool:
 def team_minimum_missing(profile) -> list:
     """What the team needs before it can start, by the names the app uses.
 
-    The floor the Assistant checks before it creates ready.flag (skill profile-yaml) and
-    the app's required fields (web/lib/profile-completion.ts, PROFILE_REQUIREMENTS) both
-    read these places of the YAML: root, `candidate`, `personal` (and, for the email,
-    `positioning.contacts`). Reading the same ones
-    here keeps a profile that passes this check from being "not ready" for the app.
+    The eight required fields of the app (web/lib/profile-completion.ts, PROFILE_REQUIREMENTS,
+    which is what GET /api/profile answers `ready` with), of the Assistant's skill
+    (onboarding-flow) and of the game's wizard; the list is shared/config/profile-minimum.json
+    and tests/test_profile_minimum_checklist.py proves this function gives the same answer as
+    the app on the same profiles. Experience and education are recommended, not required
+    (decision of 2026-06-06). Each is read in the places the app reads it: root, `candidate`,
+    `personal` (and, for the email and the seniority, `positioning`).
     """
     if not isinstance(profile, dict):
         return ["name"]
@@ -304,10 +308,10 @@ def team_minimum_missing(profile) -> list:
             or (isinstance(roles, list) and bool(roles) and _is_str(roles[0]))),
         ("location", _is_str(profile.get("location")) or _is_str(pers.get("location"))),
         ("experience_years", ey is not None and not isinstance(ey, bool)),
+        ("seniority_target", _is_str(profile.get("seniority_target"))
+            or (isinstance(profile.get("positioning"), dict) and _is_str(profile["positioning"].get("seniority_target")))),
         ("skills", _skill_count(cand.get("skills") if cand.get("skills") is not None else profile.get("skills")) >= 2),
         ("languages", _items(cand.get("languages"), profile.get("languages")) >= 1),
-        ("experience", _items(cand.get("experience"), profile.get("experience")) >= 1),
-        ("education", _items(cand.get("education"), profile.get("education")) >= 1),
     )
     return [key for key, ok in checks if not ok]
 

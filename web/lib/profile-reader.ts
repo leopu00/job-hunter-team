@@ -74,7 +74,7 @@ export function isProfileComplete(profile: CandidateProfile | null): boolean {
   return isTeamUnlocked(profile);
 }
 
-function mapYamlToProfile(raw: any): CandidateProfile {
+export function mapYamlToProfile(raw: any): CandidateProfile {
   const candidate = raw.candidate ?? {};
   const personal = raw.personal ?? {};
 
@@ -136,20 +136,24 @@ function mapYamlToProfile(raw: any): CandidateProfile {
         }
       : null;
 
-  // Contacts: cerca in candidate.contacts o personal
-  const contacts = candidate.contacts ?? {
-    email: personal.email,
-    phone: personal.phone,
-    linkedin: personal.linkedin,
-    github: personal.github,
-    website: personal.website,
-  };
+  // Contacts: cerca in candidate.contacts, poi nei `contacts` alla radice (schema
+  // canonico, shared/config/profile-schema.ts), poi in personal
+  const rootContacts =
+    raw.contacts && typeof raw.contacts === "object" ? raw.contacts : null;
+  const contacts = candidate.contacts ??
+    rootContacts ?? {
+      email: personal.email,
+      phone: personal.phone,
+      linkedin: personal.linkedin,
+      github: personal.github,
+      website: personal.website,
+    };
 
   return {
     id: "local",
     user_id: "local",
     name: candidate.name ?? personal.name ?? raw.name ?? null,
-    email: contacts.email ?? personal.email ?? null,
+    email: contacts.email ?? personal.email ?? raw.email ?? null,
     target_role:
       candidate.target_role ?? raw.target_role ?? raw.target_roles?.[0] ?? null,
     location: raw.location ?? personal.location ?? null,
