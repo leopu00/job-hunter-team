@@ -1471,6 +1471,13 @@ export default function DashboardApp() {
     });
   }, [markerId]);
 
+  // The account changed (signed out, another one in): the one before leaves nothing of its wizard behind.
+  const previousMarkerRef = useRef<string | null>(markerId);
+  useEffect(() => {
+    const previous = previousMarkerRef.current;
+    previousMarkerRef.current = markerId;
+    if (previous && previous !== markerId) clearOnboardingDraft(previous);
+  }, [markerId]);
   const rememberDraft = useCallback((next: OnboardingDraft | null) => {
     if (!markerId) return;
     draftRef.current = { id: markerId, draft: next ?? undefined };
@@ -1561,7 +1568,14 @@ export default function DashboardApp() {
     [gate.phase, identityKey, localTeamPlatform, openProviderSetup, vpsSetupKey],
   );
 
+  // Leaving the account takes the wizard's step and choices with it.
+  const forgetDraft = () => {
+    if (!markerId) return;
+    draftRef.current = { id: markerId, draft: undefined };
+    clearOnboardingDraft(markerId);
+  };
   const logout = localProfile ? async () => {
+    forgetDraft();
     leaveExistingTeamReadOnly();
     await clearDesktopAccountScope();
     clearLocalIdentitySelection();
@@ -1733,7 +1747,7 @@ export default function DashboardApp() {
               <button type="button" className="existing-team-modal__secondary" onClick={() => setSavedTeamOpening({ identityKey, phase: "done" })}>
                 {stateText().continueWithoutTeam}
               </button>
-              <button type="button" className="existing-team-modal__secondary" onClick={() => void Promise.resolve((logout ?? signOut)()).catch(() => undefined)}>
+              <button type="button" className="existing-team-modal__secondary" onClick={() => { forgetDraft(); void Promise.resolve((logout ?? signOut)()).catch(() => undefined); }}>
                 {stateText().signOut}
               </button>
             </div>

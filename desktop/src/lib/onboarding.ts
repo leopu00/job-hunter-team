@@ -247,8 +247,9 @@ export interface OnboardingFlowProps {
 
 /**
  * The step the wizard had reached and the choices made so far, kept in the renderer so that reopening the app
- * does not start again from the welcome. Never a secret: the environment, the VPS address, user and port, the
- * path of the SSH key file (not the key) and the provider's name.
+ * does not start again from the welcome. Never a secret, and nothing that names a place on this computer: the
+ * environment, the VPS address, user and port, and the provider's name. The SSH key file is chosen again (its path
+ * is not kept, so the draft's `keyPath` is always empty). A draft is forgotten after 30 days.
  */
 export interface OnboardingDraft {
   step: number;
@@ -397,6 +398,8 @@ export function clearOnboardingInterruption(userId: string, store: OnboardingMar
 
 const DRAFT_PREFIX = "jht.desktop.onboarding.draft.";
 const DRAFT_LAST_STEP = 3;
+const DRAFT_KEEP_MS = 30 * 24 * 60 * 60 * 1_000;
+const DRAFT_CLOCK_SKEW_MS = 24 * 60 * 60 * 1_000;
 
 /** Remembers the wizard's step and choices (see OnboardingDraft). */
 export function recordOnboardingDraft(
@@ -404,28 +407,33 @@ export function recordOnboardingDraft(
 ): void {
   // Written field by field: whatever else the caller's object carries is not stored.
   const host = value.host.kind === "vps"
-    ? { kind: "vps", address: value.host.address, user: value.host.user, port: value.host.port, keyPath: value.host.keyPath }
+    ? { kind: "vps", address: value.host.address, user: value.host.user, port: value.host.port }
     : { kind: "local" };
-  try { store.setItem(`${DRAFT_PREFIX}${userId}`, JSON.stringify({ step: value.step, host, provider: value.provider })); } catch { /* the wizard still works; only the memory is lost */ }
+  try { store.setItem(`${DRAFT_PREFIX}${userId}`, JSON.stringify({ step: value.step, host, provider: value.provider, savedAt: Date.now() })); } catch { /* the wizard still works; only the memory is lost */ }
 }
 
 export function readOnboardingDraft(
-  userId: string, store: OnboardingMarkerStore = localStorage,
+  userId: string, store: OnboardingMarkerStore = localStorage, now: number = Date.now(),
 ): OnboardingDraft | undefined {
   try {
     const raw = store.getItem(`${DRAFT_PREFIX}${userId}`);
     if (!raw) return undefined;
     const row = record(JSON.parse(raw));
+    if (typeof row.savedAt !== "number" || !Number.isFinite(row.savedAt) || row.savedAt > now + DRAFT_CLOCK_SKEW_MS) return undefined;
+    if (now - row.savedAt > DRAFT_KEEP_MS) {
+      clearOnboardingDraft(userId, store);
+      return undefined;
+    }
     if (!Number.isInteger(row.step) || (row.step as number) < 0 || (row.step as number) > DRAFT_LAST_STEP) return undefined;
     if (row.provider !== null && !(typeof row.provider === "string" && INTERRUPTION_PROVIDERS.has(row.provider))) return undefined;
     const host = record(row.host);
     let restored: ExecutionHost;
     if (host.kind === "local") restored = { kind: "local" };
     else if (host.kind === "vps") {
-      if (typeof host.address !== "string" || typeof host.user !== "string" || typeof host.keyPath !== "string" ||
+      if (typeof host.address !== "string" || typeof host.user !== "string" ||
           typeof host.port !== "number" || !Number.isInteger(host.port) || host.port < 1 || host.port > 65535 ||
-          host.address.length > 255 || host.user.length > 128 || host.keyPath.length > 1_024) return undefined;
-      restored = { kind: "vps", address: host.address, user: host.user, port: host.port, keyPath: host.keyPath };
+          host.address.length > 255 || host.user.length > 128) return undefined;
+      restored = { kind: "vps", address: host.address, user: host.user, port: host.port, keyPath: "" };
     } else return undefined;
     return { step: row.step as number, host: restored, provider: row.provider as SubscriptionProvider | null };
   } catch { return undefined; }

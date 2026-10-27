@@ -1622,7 +1622,7 @@ describe("DashboardApp onboarding router", () => {
       const first = render(<DashboardApp />);
       expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
       await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
-      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-account")) ?? "null")).toEqual({ step: 2, host: { kind: "local" }, provider: "codex" });
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-account")) ?? "null")).toMatchObject({ step: 2, host: { kind: "local" }, provider: "codex", savedAt: expect.any(Number) });
       first.unmount();
 
       render(<DashboardApp />);
@@ -1630,17 +1630,37 @@ describe("DashboardApp onboarding router", () => {
     });
 
     it("are the account's own: another account opens on the welcome", async () => {
-      localStorage.setItem(DRAFT_KEY("draft-account-a"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex" }));
+      localStorage.setItem(DRAFT_KEY("draft-account-a"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex", savedAt: Date.now() }));
       vi.mocked(useSession).mockReturnValue(signedInAs("draft-account-b"));
       requireOnboarding();
       render(<DashboardApp />);
       expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
     });
 
+    it("go with the account that leaves: signed out, or another account in, the one before keeps nothing", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-leaving-account"));
+      requireOnboarding();
+      const view = render(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: "remember-draft" }));
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-leaving-account")) ?? "null")).not.toBeNull();
+
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      view.rerender(<DashboardApp />);
+      await waitFor(() => expect(localStorage.getItem(DRAFT_KEY("draft-leaving-account"))).toBe(""));
+
+      // another account takes its place: the one it replaced is cleared too
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-first-account"));
+      view.rerender(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: "remember-draft" }));
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-second-account"));
+      view.rerender(<DashboardApp />);
+      await waitFor(() => expect(localStorage.getItem(DRAFT_KEY("draft-first-account"))).toBe(""));
+    });
+
     it("go when the wizard says it started over, and when the whole setup is started over", async () => {
       vi.mocked(useSession).mockReturnValue(signedInAs("draft-restart-account"));
       requireOnboarding();
-      localStorage.setItem(DRAFT_KEY("draft-restart-account"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex" }));
+      localStorage.setItem(DRAFT_KEY("draft-restart-account"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex", savedAt: Date.now() }));
       render(<DashboardApp />);
       expect(await screen.findByText("draft:3:local:codex")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("button", { name: "forget-draft" }));

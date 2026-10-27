@@ -604,14 +604,14 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const headingRef = useRef<HTMLHeadingElement>(null);
   const shellRef = useRef<HTMLElement>(null);
 
-  // The step and the choices are kept as they change, so a reopened app does not start again from the welcome.
-  // The reopened Provider step is not a first setup: it keeps nothing.
+  // The step and the choices are kept when the step changes (not at every key typed), so a reopened app does not
+  // start again from the welcome. The reopened Provider step is not a first setup: it keeps nothing.
   useEffect(() => {
     if (providerOnly || isUntouched({ step, host, provider }, freshChoices())) return;
     draftChangeRef.current?.({ step, host, provider });
-    // freshChoices only reads the platform and the mode, which do not change while the wizard is open
+    // the choices are those of the render the step changed in; freshChoices only reads the platform and the mode
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, host, provider]);
+  }, [step]);
   // The note about the picked-up step is for that step: leaving it ends it.
   useEffect(() => { if (step !== start.step) setDraftNote(false); }, [step, start.step]);
 
