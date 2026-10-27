@@ -53,7 +53,8 @@ with your infrastructure provider before you start.
   Environment step offers **Check VPS** under «Do you already have a team
   running on a VPS?». It connects this app to that team without reinstalling
   or restarting it, after the same fingerprint check. Host and key stay only
-  on this computer.
+  on this computer. The app opens it read only; to write to it, see
+  [read only and write access](DESKTOP.md#-a-team-on-a-vps-read-only-and-write-access).
 - **A VPS that already runs the team with Docker**, for example from an
   earlier installation: the app does not move it to Podman. Nothing on the VPS
   is moved or deleted. Connect to the existing team instead, or choose
