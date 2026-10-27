@@ -59,6 +59,15 @@ PINNED_CONSUMERS = (
     Path("docs/guides/CLI-INSTALL.md"),
     Path(".env.example"),
 )
+# L'app desktop compila lo sha256 dell'installer che scarica dal sito
+# (onboarding.rs: include_str!("../installer.sha256")) e rifiuta un installer
+# diverso. Gli installer portano il pin dentro: cambiato il pin, cambia il
+# loro digest, e quello compilato nell'app deve seguirlo. Coppie
+# (installer, file col suo sha256).
+INSTALLER_DIGESTS = (
+    (Path("scripts/install.sh"), Path("desktop/src-tauri/installer.sha256")),
+    (Path("scripts/install.ps1"), Path("desktop/src-tauri/installer-windows.sha256")),
+)
 # Ogni copia distribuita ha un punto operativo preciso. Cercare il digest in
 # qualunque punto del file era un falso verde: una riga commentata poteva
 # attestare il valore corretto mentre l'assegnazione eseguita usava altro.
@@ -197,6 +206,11 @@ def _pinned_value(pin: "RuntimeImagePin", group: str) -> str:
     return pin.image_ref if group == "image" else pin.digest
 
 
+def _installer_digest(content: bytes) -> str:
+    """sha256 of an installer as git stores it: a checkout that made it CRLF hashes the same."""
+    return hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest()
+
+
 def verify_tree(
     root: Path,
     expected_version: str | None = None,
@@ -232,6 +246,16 @@ def verify_tree(
                 raise RuntimeImagePinError("consumer_digest_drift")
         if MUTABLE_RELEASE_REF_RE.search(text):
             raise RuntimeImagePinError("consumer_mutable_ref")
+    for installer, digest_file in INSTALLER_DIGESTS:
+        if installer not in PINNED_CONSUMERS:
+            continue
+        try:
+            expected = _installer_digest((root / installer).read_bytes())
+            recorded = (root / digest_file).read_text(encoding="ascii").strip()
+        except (OSError, UnicodeError) as exc:
+            raise RuntimeImagePinError("consumer_missing") from exc
+        if recorded != expected:
+            raise RuntimeImagePinError("installer_digest_drift")
     return pin
 
 
@@ -270,6 +294,7 @@ def update_tree(
     if set(CONSUMER_VALUE_PATTERNS) != set(PINNED_CONSUMERS):
         raise RuntimeImagePinError("consumer_contract_invalid")
     rewritten: dict[Path, str] = {}
+    raw_bytes: dict[Path, bytes] = {}
     for relative in PINNED_CONSUMERS:
         try:
             with open(root / relative, encoding="utf-8", newline="") as handle:
@@ -291,7 +316,15 @@ def update_tree(
         for start, end, value in sorted(spans, reverse=True):
             text = text[:start] + value + text[end:]
         rewritten[relative] = text.replace("\n", "\r\n") if crlf else text
+        raw_bytes[relative] = rewritten[relative].encode("utf-8")
 
+    # The digest the app compiles follows the installer it names, from the bytes about to be written.
+    digests: dict[Path, str] = {}
+    for installer, digest_file in INSTALLER_DIGESTS:
+        if installer in raw_bytes:
+            if not (root / digest_file).is_file():
+                raise RuntimeImagePinError("consumer_missing")
+            digests[digest_file] = _installer_digest(raw_bytes[installer]) + "\n"
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "release_version": version,
@@ -312,6 +345,13 @@ def update_tree(
             with open(temporary, "w", encoding="utf-8", newline="") as handle:
                 handle.write(text)
             # os.replace puts the new file's mode in place: the installers are 0755
+            shutil.copymode(target, temporary)
+        for relative, text in digests.items():
+            target = root / relative
+            temporary = target.with_name(target.name + ".pin-new")
+            staged.append((temporary, target))
+            with open(temporary, "w", encoding="ascii", newline="") as handle:
+                handle.write(text)
             shutil.copymode(target, temporary)
         temporary = manifest_path.with_name(manifest_path.name + ".pin-new")
         staged.append((temporary, manifest_path))
