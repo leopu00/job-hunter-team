@@ -1313,7 +1313,7 @@ export default function DashboardApp() {
     }
   }, [fail, identityKey, setRuntime]);
 
-  const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult) => {
+  const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult, options?: { fromReadOnlyView?: boolean }) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
     const chat = await reconnectDirectChat();
@@ -1339,6 +1339,9 @@ export default function DashboardApp() {
     }
     markOnboardingStarted(markerId);
     setConnectedExistingTeamKey(identityKey);
+    // The person confirmed the write access from the read-only view of this very team and left it: the
+    // pages go on reading its VPS, not the cloud, while the profile is still being completed in the chat.
+    if (options?.fromReadOnlyView) openFullExistingTeam(snapshot);
     setAssistantChatIdentityKey(identityKey);
     navigate("/messages?agent=assistente", { replace: true });
   }, [identityKey, markerId, openFullExistingTeam]);
@@ -1359,9 +1362,9 @@ export default function DashboardApp() {
   const reconfirmExistingTeam = useMemo(() => ({
     accountLabel: gate.phase === "required" ? gate.account.displayName : null,
     onConnected: async (result: ExistingTeamConnectionResult) => {
-      leaveExistingTeamReadOnly();
-      setReadOnlyExistingTeamKey(null);
-      await connectExistingTeam(result);
+      // The view is left only by the team opening in full (openFullExistingTeam): a connection that
+      // then fails (the Assistant cannot be reached) leaves the person on the view they were in.
+      await connectExistingTeam(result, { fromReadOnlyView: true });
     },
     onSetup: () => {
       leaveExistingTeamReadOnly();
