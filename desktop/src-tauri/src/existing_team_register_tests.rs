@@ -2949,3 +2949,124 @@ fn t50_the_sign_out_and_the_switch_of_account_call_it_and_leftover_temporary_fil
     assert!(!leftover.exists(), "so does the start-up reopening");
     runtime::revoke_full_link();
 }
+
+// ------------------------------------------- the commands that act on the team's host
+
+fn refusal(label: &str, sandbox: &Sandbox, host: &ExecutionHost) -> Option<&'static str> {
+    crate::agent_control::host_action_refusal_at(label, &sandbox.root, &sandbox.scope, host)
+}
+
+#[test]
+fn t51_an_existing_team_opened_read_only_is_acted_on_by_no_command_and_the_full_link_opens_it() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    // the read-only view selected the team, and holds no full link: whatever the page sends, the answer is the panel's
+    runtime::revoke_full_link();
+    assert_eq!(refusal("main", &sandbox, &host()), Some("agent_control_read_only"));
+    // the full link of THIS team opens it
+    runtime::grant_full_link(&sandbox.scope, &target);
+    assert_eq!(refusal("main", &sandbox, &host()), None);
+    // and taking it away (switch to read only, sign out) closes it again
+    runtime::revoke_full_link();
+    assert_eq!(refusal("main", &sandbox, &host()), Some("agent_control_read_only"));
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t52_only_the_apps_own_window_acts_on_the_host_even_with_the_full_link() {
+    let _serial = serial();
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    runtime::grant_full_link(&sandbox.scope, &target);
+    for label in ["broker-login", "live-screen", "main2", "Main", "", "main "] {
+        assert_eq!(refusal(label, &sandbox, &host()), Some("agent_control_window"), "{label:?}");
+        // for this computer too: the window comes first, before any look at the host
+        assert_eq!(refusal(label, &sandbox, &ExecutionHost::Local), Some("agent_control_window"), "{label:?}");
+    }
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t53_this_computer_and_the_setup_of_a_vps_of_the_persons_own_are_as_they_were() {
+    let _serial = serial();
+    runtime::revoke_full_link();
+    // a VPS the app sets up: no candidate, no selection, no link, and the commands of the setup go
+    let fresh = Sandbox::new();
+    assert_eq!(refusal("main", &fresh, &host()), None, "the setup of a new VPS");
+    // this computer: never asked for a link, with or without an existing team saved in the account
+    assert_eq!(refusal("main", &fresh, &ExecutionHost::Local), None);
+    let saved = Sandbox::new();
+    connected_once(&saved);
+    assert_eq!(refusal("main", &saved, &ExecutionHost::Local), None, "this computer's team of an account that also opened a VPS team");
+}
+
+#[test]
+fn t54_a_team_half_saved_or_changed_is_closed_and_a_host_that_is_not_the_selected_one_is_not_acted_on() {
+    let _serial = serial();
+    runtime::revoke_full_link();
+    // a candidate with no selection: the discovery that was never confirmed
+    let half = Sandbox::new();
+    connected_once(&half);
+    fs::remove_file(half.selection()).unwrap();
+    assert_eq!(refusal("main", &half, &host()), Some("existing_team_runtime_selection_required"));
+    // another VPS than the selected one, even with the full link of the selected team
+    let sandbox = Sandbox::new();
+    connected_once(&sandbox);
+    let target = runtime::selected_at(&sandbox.root, &sandbox.scope, &host()).unwrap().unwrap();
+    runtime::grant_full_link(&sandbox.scope, &target);
+    let elsewhere = ExecutionHost::Vps { address: "203.0.113.99".into(), user: "jht".into(), port: 22, key_path: "/tmp/synthetic-key".into() };
+    assert_eq!(refusal("main", &sandbox, &elsewhere), Some("existing_team_runtime_target_changed"));
+    // a selection that cannot be read
+    fs::write(sandbox.selection(), b"not json").unwrap();
+    assert!(refusal("main", &sandbox, &host()).is_some());
+    runtime::revoke_full_link();
+}
+
+#[test]
+fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
+    let onboarding = include_str!("onboarding.rs").split("mod existing_team_assistant_tests").next().unwrap().replace("\r\n", "\n");
+    let mail = include_str!("mail.rs").replace("\r\n", "\n");
+    let broker = include_str!("broker_view.rs").replace("\r\n", "\n");
+    let lib = include_str!("lib.rs");
+    let body = |source: &str, name: &str| -> String {
+        let at = source.find(&format!("fn {name}(")).unwrap_or_else(|| panic!("{name}"));
+        source[at..].split("\n}\n").next().unwrap().to_owned()
+    };
+    // (source, command, the refusal it must call, the first thing it does that has an effect or takes a slot)
+    let commands: [(&str, &str, &str, &[&str]); 8] = [
+        (&onboarding, "onboarding_team_start", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
+        (&onboarding, "onboarding_resume_team_start", "saved_host_action_refusal(", &["compare_exchange", "spawn_blocking", "load_persisted_host("]),
+        (&onboarding, "onboarding_assistant_open", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
+        (&onboarding, "onboarding_clean_images", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
+        (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["state\n        .interactive", "validate_host(", "spawn("]),
+        (&onboarding, "onboarding_provider_login_input", "saved_host_action_refusal(", &[".interactive", "write_provider_input("]),
+        (&mail, "mail_save_password", "saved_host_action_refusal(", &["spawn_blocking", "active_host("]),
+        (&broker, "broker_login_view_open", "saved_host_action_refusal(", &["get_webview_window", "compare_exchange", "spawn_blocking"]),
+    ];
+    for (source, name, refusal_call, effects) in commands {
+        let text = body(source, name);
+        assert!(text.contains("window: tauri::Window"), "{name}: it knows which window asks");
+        assert!(text.contains("window.label()"), "{name}: and says it");
+        let asked = text.find(refusal_call).unwrap_or_else(|| panic!("{name}: it asks"));
+        assert!(text.contains("failure(code)"), "{name}: and answers with the refusal's own code");
+        for effect in effects {
+            if let Some(at) = text.find(effect) {
+                assert!(asked < at, "{name}: asks before `{effect}`");
+            }
+        }
+        assert!(lib.contains(&format!("::{name},")) || lib.contains(&format!("::{name}\n")), "{name} stays registered");
+    }
+    // the password of the mailbox is wiped on a refusal too
+    let save = body(&mail, "mail_save_password");
+    assert!(save.matches("request.password.zeroize()").count() >= 3);
+    // the closing of a login only kills the person's own process: it stays open to a read-only view
+    assert!(!body(&onboarding, "onboarding_provider_login_close").contains("window"));
+    // what is left out acts on this computer only: no host is read in them
+    for local in ["onboarding_podman_machine_recreate", "onboarding_local_uninstall", "onboarding_resume_runtime_wake"] {
+        let text = body(&onboarding, local);
+        assert!(!text.contains("ExecutionHost::Vps"), "{local}");
+    }
+}

@@ -688,6 +688,49 @@ pub(crate) fn window_refusal(label: &str) -> Option<&'static str> {
     (label != "main").then_some("agent_control_window")
 }
 
+/// The one native check for a command that ACTS on the host the account saved (starts the team or the
+/// assistant, signs a provider in, cleans the images, saves the mailbox password, opens the broker's login
+/// view): the read-only view of an existing team selects that host too, and never holds the full link, so
+/// the page's own buttons are not the boundary.
+///
+/// - Only the app's own window (`agent_control_window`).
+/// - This computer's team is not decided here: it is the person's own machine and keeps its own rules.
+/// - A VPS with an existing team selected acts only on the full link of that team made in this run of the
+///   app, else `agent_control_read_only`. A VPS the app set up itself has no candidate and no selection:
+///   it is the setup, and passes. A half-saved team, a selection of another host or an unreadable one is
+///   closed with its own code, never opened. The host the renderer names is the one judged: another host
+///   than the saved one is `existing_team_runtime_target_changed`.
+pub(crate) fn host_action_refusal_at(label: &str, root: &Path, scope: &AccountScope, host: &ExecutionHost) -> Option<&'static str> {
+    if let Some(code) = window_refusal(label) {
+        return Some(code);
+    }
+    if !matches!(host, ExecutionHost::Vps { .. }) {
+        return None;
+    }
+    match crate::existing_team_runtime::selected_or_own_at(root, scope, host) {
+        Ok(None) => None,
+        Ok(Some(target)) => (!full_link_granted(scope, &target)).then_some("agent_control_read_only"),
+        Err(code) => Some(code),
+    }
+}
+
+pub(crate) fn host_action_refusal(app: &tauri::AppHandle, label: &str, scope: &AccountScope, host: &ExecutionHost) -> Option<&'static str> {
+    match root(app) {
+        Ok(root) => host_action_refusal_at(label, &root, scope, host),
+        Err(code) => Some(code),
+    }
+}
+
+/// The same check for a command that acts on the saved host without naming one: the account's host. With
+/// no saved host there is nothing to act on, and the command says so in its own words.
+pub(crate) fn saved_host_action_refusal(app: &tauri::AppHandle, label: &str, scope: &AccountScope) -> Option<&'static str> {
+    if let Some(code) = window_refusal(label) {
+        return Some(code);
+    }
+    let host = direct_chat::load_persisted_host(app, scope).ok()?;
+    host_action_refusal(app, label, scope, &host)
+}
+
 pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, request: Value) -> Value {
     let Ok(request) = serde_json::from_value::<ControlRequest>(request) else {
         return failure("agent_control_invalid");

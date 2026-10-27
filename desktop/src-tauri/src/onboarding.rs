@@ -4681,6 +4681,7 @@ fn provider_bootstrap_input(provider: SubscriptionProvider) -> Option<&'static [
 
 #[tauri::command]
 pub(crate) fn onboarding_provider_login(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -4689,6 +4690,10 @@ pub(crate) fn onboarding_provider_login(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<InteractiveStart, OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
+    // A provider login writes the provider's credentials into the team's host: on an existing team, the full link.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &host) {
+        return Err(failure(code));
+    }
     let mut slot = state
         .interactive
         .lock()
@@ -4935,6 +4940,8 @@ pub(crate) fn onboarding_provider_login(
 
 #[tauri::command]
 pub(crate) fn onboarding_provider_login_input(
+    window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     session_id: String,
@@ -4943,6 +4950,12 @@ pub(crate) fn onboarding_provider_login_input(
 ) -> Result<(), OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
     let mut input = Zeroizing::new(input);
+    // The session writes to the team's host: a login opened with the full link that was taken away since
+    // (switched to read only) takes no more input.
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), scope.scope()) {
+        input.zeroize();
+        return Err(failure(code));
+    }
     let slot = state
         .interactive
         .lock()
@@ -5292,6 +5305,7 @@ fn retry_cold_windows_team_start(is_windows: bool, is_local: bool, code: &str) -
 
 #[tauri::command]
 pub(crate) async fn onboarding_team_start(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -5299,6 +5313,10 @@ pub(crate) async fn onboarding_team_start(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Starting the team acts on its host: on an existing team, only on the full link.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), &expected, &host) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5563,12 +5581,21 @@ fn clean_images_with(
 /// `host`: the one being set up; none = the saved one (a resumed team).
 #[tauri::command]
 pub(crate) async fn onboarding_clean_images(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     host: Option<ExecutionHost>,
 ) -> Result<CleanImagesOutcome, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Removing images acts on the team's host (the named one, or the saved one): on an existing team, only on the full link.
+    let refusal = match &host {
+        Some(host) => crate::agent_control::host_action_refusal(&app, window.label(), &expected, host),
+        None => crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected),
+    };
+    if let Some(code) = refusal {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5780,12 +5807,17 @@ pub(crate) async fn onboarding_resume_runtime_wake(
 
 #[tauri::command]
 pub(crate) async fn onboarding_resume_team_start(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Resuming the team starts it on the saved host: on an existing team, only on the full link.
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5835,6 +5867,7 @@ pub(crate) async fn onboarding_resume_team_start(
 
 #[tauri::command]
 pub(crate) async fn onboarding_assistant_open(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -5842,6 +5875,10 @@ pub(crate) async fn onboarding_assistant_open(
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<OnboardingSnapshot, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // Opening the assistant starts it on the team's host: on an existing team, only on the full link.
+    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), &expected, &host) {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
