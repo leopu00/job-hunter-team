@@ -43,9 +43,12 @@ Il team ha già una casella configurata. Invia con lo script: legge l'account
 da solo e stampa solo `{"ok": true, ...}` oppure un codice di motivo.
 
 ```bash
-printf '%s\n' "<body>" > /tmp/mail-body.txt
-python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject "<subject>" --body-file /tmp/mail-body.txt
+python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<subject>' --body - <<'TXT'
+<body>
+TXT
 ```
+
+Il corpo va su stdin con un heredoc con il delimitatore tra apici: tra virgolette doppie la shell mangia un `$` seguito da una cifra (`$20` arriva all'azienda come `0`); lo stesso per l'oggetto, che va tra apici singoli. Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un corpo che finisce con una riga `TXT` viene rifiutato, non parte niente).
 
 **Non aprire, non fare `cat` né `json.load` e non stampare niente sotto `$JHT_HOME/credentials/`**,
 e non mettere mai una password in uno script, in chat o in un log: lo script è
