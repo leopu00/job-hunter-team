@@ -195,6 +195,10 @@ def test_the_restart_survival_is_native_only_where_the_record_is_kept():
     assert "On a Mac, on Windows and on Linux the write access you confirmed survives a restart" in flat(DESKTOP)
     section_text = section(DESKTOP, "## 🔗 A team on a VPS: read only and write access")
     assert "only your user and the system may open" in flat(section_text)
+    # an elevated administrator owns nothing it creates, and the app keeps no record there: the guide says so
+    assert "run the app as an elevated administrator" in flat(section_text)
+    assert "the write access is not remembered" in flat(section_text)
+    assert "an_elevated_process_keeps_nothing_and_stays_read_only" in native
 
 
 def test_leaving_the_account_ends_the_write_access_and_the_guide_says_so():

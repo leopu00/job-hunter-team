@@ -180,6 +180,8 @@ saved team). It ends when you switch to read only, when you unlink the team, whe
 version, when you sign out or switch to another account, or after 30 days: then you confirm again. If the app cannot take the saved access away when
 you switch to read only, the row says so and the access may come back at the next start.
 
+If you run the app as an elevated administrator ("Run as administrator"), the write access is not remembered: the files an elevated program creates belong to the Administrators group, not to your user, and the app does not trust them. The team opens read only at every start, and you confirm again with **Connect with write access** when you need it; nothing is wrong, and the app run as your normal user keeps it for the 30 days.
+
 If you update the app from a version that did not keep the permission, the team opens read only
 once after the update: confirm it with **Connect with write access**, and from then on it comes back
 by itself for the 30 days. **Try again** in the connection page keeps the write access you have.

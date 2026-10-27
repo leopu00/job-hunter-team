@@ -4198,19 +4198,16 @@ mod tests {
         }
 
         impl Root {
-            /// A folder of the account the way the app makes it, or `None` where the process is not the
-            /// kind that owns what it creates: an elevated administrator's files belong to the group
-            /// Administrators, not to the user, and `owned_by_current_user` is false for them. There the
-            /// app keeps nothing (read only at every start, see
-            /// `an_elevated_process_keeps_nothing_and_stays_read_only`); the other tests need the
-            /// ordinary user and run on a machine with one (the non-elevated account of the test PC).
-            fn new() -> Option<Self> {
+            /// A folder of the account the way an ordinary (not elevated) user's app makes it: private, and the
+            /// user's own. An elevated process owns nothing it creates (the group Administrators does), and the
+            /// app keeps no record there: that case is `an_elevated_process_keeps_nothing_and_stays_read_only`.
+            /// Here the fixture gives the user the folder and the files (`own`), so the logic behind the check
+            /// is tried on whatever machine the tests run on.
+            fn new() -> Self {
                 let made = Self::make();
-                if !private_acl::owned_by_current_user(&made.account()) {
-                    return None;
-                }
+                private_acl::own_by_current_user_for_tests(&made.account());
                 made.explain_folder();
-                Some(made)
+                made
             }
 
             fn make() -> Self {
@@ -4227,20 +4224,18 @@ mod tests {
                 account_dir(&self.root, &self.scope)
             }
 
-            /// Diagnostic: the three checks of `full_link_folder_is_private`, one by one, with the SIDs
-            /// (the owner, the current user, the SIDs the ACL allows). A folder the app has just made
-            /// private must pass all three; if not, the message says which one did not and for whom.
+            /// The three checks of `full_link_folder_is_private`, one by one: a folder the fixture has just made
+            /// private and the user's own must pass all three, and the message says which one did not. Only
+            /// yes or no: no SID and no path, a public log is not the place for them.
             fn explain_folder(&self) {
                 let folder = self.account();
                 let meta = fs::symlink_metadata(&folder).expect("folder metadata");
                 let user = private_acl::current_user_sid().expect("current user");
-                let owner = private_acl::owner_sid_for_tests(&folder);
-                let acl = private_acl::read_acl(&folder);
                 let report = format!(
-                    "folder {folder:?}: reparse={} owned_by_current_user={} grants_only_owner={:?} | current user {user} | owner {owner:?} | acl {acl:?}",
+                    "reparse={} owned_by_current_user={} grants_only_owner={:?}",
                     is_reparse_point(&meta),
                     private_acl::owned_by_current_user(&folder),
-                    acl.as_ref().map(|acl| private_acl::grants_only_owner(acl, &user)),
+                    private_acl::read_acl(&folder).map(|acl| private_acl::grants_only_owner(&acl, &user)),
                 );
                 assert!(full_link_folder_is_private(&folder, &meta), "the folder is not private: {report}");
             }
@@ -4260,6 +4255,13 @@ mod tests {
             FULL_LINK_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
         }
 
+        /// `remember_full_link_at`, then the record is the user's own (see `Root::new`).
+        fn remember(root: &Root, target: &ActivatedTarget, at: u64) -> Result<(), &'static str> {
+            remember_full_link_at(&root.root, &root.scope, target, at)?;
+            private_acl::own_by_current_user_for_tests(&root.record());
+            Ok(())
+        }
+
         fn other_target() -> ActivatedTarget {
             let mut other = ActivatedTarget::synthetic_for_tests();
             other.candidate_sha256 = "0".repeat(64);
@@ -4276,16 +4278,17 @@ mod tests {
             let _ = fs::remove_file(&file);
             fs::write(&file, bytes).unwrap();
             private_acl::protect_file(&file).unwrap();
+            private_acl::own_by_current_user_for_tests(&file);
         }
 
         #[test]
         fn it_is_written_private_with_the_exact_keys_and_comes_back_within_thirty_days() {
             let _serial = serial();
-            let Some(root) = Root::new() else { return };
+            let root = Root::new();
             let target = ActivatedTarget::synthetic_for_tests();
             let given = 1_800_000_000u64;
             revoke_full_link();
-            remember_full_link_at(&root.root, &root.scope, &target, given).expect("remembered");
+            remember(&root, &target, given).expect("remembered");
             private_acl::assert_owner_only(&root.record());
             let bytes = fs::read(root.record()).unwrap();
             let value: Value = serde_json::from_slice(&bytes).unwrap();
@@ -4300,7 +4303,7 @@ mod tests {
                 (given - 1, false, "the clock went back"),
             ] {
                 revoke_full_link();
-                remember_full_link_at(&root.root, &root.scope, &target, given).unwrap();
+                remember(&root, &target, given).unwrap();
                 let outcome = restore_full_link_at(&root.root, &root.scope, &target, now);
                 assert_eq!(full_link_granted(&root.scope, &target), restored, "{what}");
                 assert_eq!(outcome, if restored { FullLinkRestore::Restored } else { FullLinkRestore::Expired }, "{what}");
@@ -4312,16 +4315,16 @@ mod tests {
         #[test]
         fn another_candidate_or_another_account_never_gets_the_permission() {
             let _serial = serial();
-            let Some(root) = Root::new() else { return };
+            let root = Root::new();
             let target = ActivatedTarget::synthetic_for_tests();
             revoke_full_link();
-            remember_full_link_at(&root.root, &root.scope, &other_target(), unix_now()).unwrap();
+            remember(&root, &other_target(), unix_now()).unwrap();
             assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
             assert!(!full_link_granted(&root.scope, &target) && !root.record().exists());
             // no record at all
             assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::NotRestored);
             // the record of this account copied into the folder of another is not the other's: its key is
-            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            remember(&root, &target, unix_now()).unwrap();
             let other = AccountScope::synthetic_local(b"full-link-other-scope");
             let dir = account_dir(&root.root, &other);
             fs::create_dir_all(&dir).unwrap();
@@ -4329,6 +4332,7 @@ mod tests {
             let copy = path(&root.root, &other, FULL_LINK_FILE);
             fs::copy(root.record(), &copy).unwrap();
             private_acl::protect_file(&copy).unwrap();
+            private_acl::own_by_current_user_for_tests(&copy);
             assert_eq!(restore_full_link_at(&root.root, &other, &target, unix_now()), FullLinkRestore::Discarded);
             assert!(!full_link_granted(&other, &target) && !full_link_granted(&root.scope, &target));
             revoke_full_link();
@@ -4337,7 +4341,7 @@ mod tests {
         #[test]
         fn a_record_that_cannot_be_believed_is_ignored_and_removed() {
             let _serial = serial();
-            let Some(root) = Root::new() else { return };
+            let root = Root::new();
             let target = ActivatedTarget::synthetic_for_tests();
             let now = unix_now();
             let good = good_record(&root, &target, now);
@@ -4387,10 +4391,9 @@ mod tests {
             assert_eq!(
                 restore_full_link_at(&root.root, &root.scope, &target, now),
                 FullLinkRestore::Restored,
-                "record: owned_by_current_user={} is_owner_only={:?} | current user {user} | owner {:?} | acl {acl:?}",
+                "the record: owned_by_current_user={} is_owner_only={:?}",
                 private_acl::owned_by_current_user(&root.record()),
                 acl.as_ref().map(|acl| private_acl::is_owner_only(acl, &user)),
-                private_acl::owner_sid_for_tests(&root.record()),
             );
             revoke_full_link();
         }
@@ -4398,7 +4401,7 @@ mod tests {
         #[test]
         fn a_link_in_place_of_the_record_is_not_followed() {
             let _serial = serial();
-            let Some(root) = Root::new() else { return };
+            let root = Root::new();
             let target = ActivatedTarget::synthetic_for_tests();
             let now = unix_now();
             let real = root.account().join("elsewhere.json");
@@ -4418,7 +4421,7 @@ mod tests {
         #[test]
         fn a_folder_that_is_not_private_gets_no_record_and_no_sweep() {
             let _serial = serial();
-            let Some(root) = Root::new() else { return };
+            let root = Root::new();
             let target = ActivatedTarget::synthetic_for_tests();
             let unavailable: Result<(), &str> = Err("existing_team_runtime_unavailable");
             let stray = root.account().join("existing-team-runtime-full-link.tmp-9-9");
@@ -4429,7 +4432,7 @@ mod tests {
             assert!(!root.record().exists());
             // and the folder, made private again, takes it and sweeps what an interrupted write left
             private_acl::protect_dir(&root.account()).unwrap();
-            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            remember(&root, &target, unix_now()).unwrap();
             assert!(!stray.exists() && root.record().exists());
             // a file that is not a folder in its place is refused too
             fs::remove_dir_all(root.account()).unwrap();
@@ -4441,16 +4444,16 @@ mod tests {
         #[test]
         fn taking_it_away_says_when_it_could_only_be_neutralized_and_when_it_could_not() {
             let _serial = serial();
-            let Some(root) = Root::new() else { return };
+            let root = Root::new();
             let target = ActivatedTarget::synthetic_for_tests();
             // a file nobody is holding goes
-            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            remember(&root, &target, unix_now()).unwrap();
             assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed));
             assert!(!root.record().exists());
             assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed), "nothing to remove is removed");
             // held open by someone who lets others read and write but not delete or rename: it cannot go,
             // but it can be overwritten, and then it is no record
-            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            remember(&root, &target, unix_now()).unwrap();
             let holder = OpenOptions::new().read(true).share_mode(0x1 | 0x2).open(root.record()).unwrap();
             assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Neutralized));
             drop(holder);
@@ -4458,13 +4461,13 @@ mod tests {
             assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
             assert!(!full_link_granted(&root.scope, &target));
             // held open by someone who lets nobody in: neither works, and the error is said by name
-            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            remember(&root, &target, unix_now()).unwrap();
             let holder = OpenOptions::new().read(true).share_mode(0).open(root.record()).unwrap();
             assert_eq!(forget_full_link_at(&root.root, &root.scope), Err("existing_team_full_link_not_removed"));
             drop(holder);
             assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed));
             // leaving the account takes it the same way, and another account's record stays
-            remember_full_link_at(&root.root, &root.scope, &target, unix_now()).unwrap();
+            remember(&root, &target, unix_now()).unwrap();
             let other = AccountScope::synthetic_local(b"full-link-kept-scope");
             let dir = account_dir(&root.root, &other);
             fs::create_dir_all(&dir).unwrap();

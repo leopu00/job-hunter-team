@@ -19,6 +19,7 @@ use windows_sys::{
             AclSizeInformation,
             Authorization::{
                 ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+                ConvertStringSidToSidW,
                 GetNamedSecurityInfoW, SetNamedSecurityInfoW, SDDL_REVISION_1, SE_FILE_OBJECT,
             },
             GetAce, GetAclInformation, GetSecurityDescriptorControl, GetSecurityDescriptorDacl,
@@ -209,36 +210,32 @@ pub(crate) fn owned_by_current_user(path: &Path) -> bool {
     matches
 }
 
-/// Test diagnostic: the SID of the owner of `path`, as `owned_by_current_user` reads it.
+/// Test fixture, never the app: makes the current user the owner of `path`, the way a process that is not
+/// elevated creates its files. A token that is elevated makes the group Administrators the owner of what it
+/// creates, and `owned_by_current_user` is false for that on purpose (the app keeps nothing there); the tests
+/// of the logic that sits behind that check need the ordinary user's files, and this is how a runner gets them.
 #[cfg(test)]
-pub(crate) fn owner_sid_for_tests(path: &Path) -> Result<String, &'static str> {
-    let target = wide(path.as_os_str())?;
-    let mut owner: PSID = ptr::null_mut();
-    let mut descriptor: PSECURITY_DESCRIPTOR = ptr::null_mut();
-    // SAFETY: as in `owned_by_current_user`: the owner points into the descriptor, converted before it is released.
-    let result = unsafe {
-        GetNamedSecurityInfoW(
+pub(crate) fn own_by_current_user_for_tests(path: &Path) {
+    let user = wide(OsStr::new(&current_user_sid().unwrap())).unwrap();
+    let target = wide(path.as_os_str()).unwrap();
+    let mut sid: PSID = ptr::null_mut();
+    // SAFETY: `user` is a NUL-terminated UTF-16 SID string; the SID is allocated by the call and released below.
+    assert!(unsafe { ConvertStringSidToSidW(user.as_ptr(), &mut sid) } != 0, "the SID of the user");
+    // SAFETY: `target` is a NUL-terminated UTF-16 path and `sid` a valid SID; group, DACL and SACL are left untouched.
+    let status = unsafe {
+        SetNamedSecurityInfoW(
             target.as_ptr(),
             SE_FILE_OBJECT,
             OWNER_SECURITY_INFORMATION,
-            &mut owner,
+            sid,
             ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            &mut descriptor,
+            ptr::null(),
+            ptr::null(),
         )
     };
-    if result != ERROR_SUCCESS || owner.is_null() || descriptor.is_null() {
-        if !descriptor.is_null() {
-            // SAFETY: the descriptor came from GetNamedSecurityInfoW.
-            unsafe { LocalFree(descriptor) };
-        }
-        return Err("permissions_unreadable");
-    }
-    let sid = sid_string(owner);
-    // SAFETY: allocated by GetNamedSecurityInfoW.
-    unsafe { LocalFree(descriptor) };
-    sid
+    // SAFETY: allocated by ConvertStringSidToSidW.
+    unsafe { LocalFree(sid) };
+    assert_eq!(status, ERROR_SUCCESS, "the owner of {path:?} could not be set to the current user");
 }
 
 /// Test fixture: a DACL that opens `path` to Everyone, Users and
