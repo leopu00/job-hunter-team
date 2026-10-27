@@ -245,14 +245,16 @@ fn process_reply_overflow_and_deadline_never_return_partial_json() {
         run("printf secret >&2; exit 1", Duration::from_secs(2)),
         Err("browser_transport_unavailable")
     );
+    // The deadline is what the cases above prove. The two below are about SIZE: a slow runner reads 12 MiB (one
+    // 64 KiB buffer per turn of the loop) in more than the 3 s they used to have, and «too large» came back as
+    // «timeout». They get a deadline no runner reaches, so only the size can end them.
+    let size_only = Duration::from_secs(120);
     assert_eq!(
-        run("head -c 3145728 /dev/zero", Duration::from_secs(2))
-            .unwrap()
-            .len(),
+        run("head -c 3145728 /dev/zero", size_only).unwrap().len(),
         3145728
     );
     assert_eq!(
-        run("head -c 12582913 /dev/zero", Duration::from_secs(3)),
+        run("head -c 12582913 /dev/zero", size_only),
         Err("browser_response_too_large")
     );
 }
