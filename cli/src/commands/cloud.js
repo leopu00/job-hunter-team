@@ -2448,7 +2448,9 @@ async function handlePullDesiredState(options = {}) {
       console.error(pc.red('Cloud sync is not enabled.'));
       console.error(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
     }
-    process.exitCode = 1;
+    // At boot (--silent) a machine without a cloud has nothing to sync: that is not a failure, and an exit code
+    // other than 0 made `jht team start` print «not applied» for it. By hand the message and the code stay.
+    process.exitCode = silent ? 0 : 1;
     return;
   }
 
@@ -2990,7 +2992,9 @@ async function handleTicketSync(options = {}) {
       console.error(pc.red('Cloud sync is not enabled.'));
       console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login'));
     }
-    process.exitCode = 1;
+    // At boot (--silent) a machine without a cloud has nothing to sync: that is not a failure, and an exit code
+    // other than 0 made `jht team start` print «not applied» for it. By hand the message and the code stay.
+    process.exitCode = silent ? 0 : 1;
     return;
   }
 
@@ -3265,7 +3269,9 @@ async function handleDirectiveSync(options = {}) {
       console.error(pc.red('Cloud sync is not enabled.'));
       console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login'));
     }
-    process.exitCode = 1;
+    // At boot (--silent) a machine without a cloud has nothing to sync: that is not a failure, and an exit code
+    // other than 0 made `jht team start` print «not applied» for it. By hand the message and the code stay.
+    process.exitCode = silent ? 0 : 1;
     return;
   }
 
