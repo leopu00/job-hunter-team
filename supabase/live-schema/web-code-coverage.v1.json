@@ -1600,9 +1600,6 @@
       "sha256:151552a04d2cf41e34d476abaa32e7709aead3cacb5abfe05000c5efadd53147": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:1664fd1698d146b795c82e579033aa2b9c46ba46cb6d2d35cdc0f4207bbd49a0": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:19a7775a0c77dae1f336a3dbe53a4ef2fc45c4edfca6bc1358670a0f2d8231b3": {
         "exception": "reviewed_dynamic_schema_use"
       },
@@ -1628,6 +1625,9 @@
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:2dc139adad523987c0897b0e124ea5d409f8b553c79dacf9dbdcea57e1b2f99e": {
+        "exception": "reviewed_dynamic_schema_use"
+      },
+      "sha256:2e8def102f084b6677539e1361561fb6c9b371533a7dd7a0d72ea55fb1031cee": {
         "exception": "reviewed_dynamic_schema_use"
       },
       "sha256:30cb22c92fd0a19e2997f8ef54638af51b0f54dc9b566021701fc276155ef2f0": {
