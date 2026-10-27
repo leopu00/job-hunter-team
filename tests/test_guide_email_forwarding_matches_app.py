@@ -17,6 +17,8 @@ PAGE = (ROOT / "web/app/docs/guides/email-forwarding/page.i18n.tsx").read_text(e
 MD = (ROOT / "docs/guides/EMAIL-FORWARDING.md").read_text(encoding="utf-8")
 MAIL = (ROOT / "desktop/src/pages/mail/mail.i18n.ts").read_text(encoding="utf-8")
 LINKS = (ROOT / "desktop/src/shell/desktop-links.ts").read_text(encoding="utf-8")
+READONLY = (ROOT / "desktop/src/lib/existing-team-readonly.i18n.ts").read_text(encoding="utf-8")
+ROUTES = (ROOT / "desktop/src/shell/routes.tsx").read_text(encoding="utf-8")
 
 # What the guide said before it followed the app: none of it exists in the app.
 OLD_LABELS = {
@@ -87,12 +89,28 @@ def test_the_dedicated_question_is_answered_in_the_guide():
         assert plain(APP[lang]["dedicatedYes"]) in BLOCKS[lang], lang
 
 
+def test_the_guide_says_the_mail_entry_is_missing_in_read_only_and_names_the_apps_button():
+    # the read-only menu (READ_ONLY_NAV) has no /mail: a reader on a team opened read only must be told
+    nav = re.search(r"export const READ_ONLY_NAV = \[(.*?)\] as const", ROUTES, re.S).group(1)
+    assert '"/mail"' not in nav
+    texts = {}
+    for block in re.finditer(r"^  (\w+): \{\n(.*?)\n  \},", READONLY, re.S | re.M):
+        texts[block.group(1)] = dict(re.findall(r'^\s+(\w+): "(.*)",$', block.group(2), re.M))
+    for lang in LANGS:
+        assert plain(texts[lang]["connectInFull"]) in BLOCKS[lang], lang
+
+
 # ── the guide in docs/, in English ───────────────────────────────────────
 
 def test_the_english_guide_quotes_the_apps_labels():
     text = re.sub(r"[*`]", "", re.sub(r"\s+", " ", MD))
     for key in QUOTED:
         assert APP["en"][key] in text, key
+
+
+def test_the_english_guide_names_the_read_only_button():
+    assert "the Mail entry is not in the menu" in re.sub(r"\s+", " ", MD)
+    assert "**Connect with write access**" in re.sub(r"\s+", " ", MD)
 
 
 def test_the_english_guide_has_no_label_of_the_old_flow():
