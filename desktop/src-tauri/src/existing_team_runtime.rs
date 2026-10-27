@@ -156,9 +156,12 @@ LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source',
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
-if not isinstance(req,dict) or set(req)-{'op','filters','id','offset'}: fail('positions_request_invalid')
+if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync','map'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync','map','team_activity'): fail('positions_request_invalid')
+DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
+if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
+if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
@@ -325,6 +328,46 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
+if op=='team_activity':
+ # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
+ # newest events with the position they touched. The columns are the ones the web's own local reader reads
+ # (found_at/last_checked of positions, scored_at of scores, written_at and critic_reviewed_at of applications);
+ # a database without one of them counts none for it. Counts are made here, so the reply does not grow with the
+ # history; the newest EVENTS rows are the feed and the timeline.
+ EVENTS=2500; DAYS=366; first=req['from']; last=req['to']
+ sources=(('scout','positions','found_at','found_by','id','id'),('analista','positions','last_checked',None,'id','id'),('scorer','scores','scored_at','scored_by','position_id','position_id'),('scrittore','applications','written_at','written_by','position_id','position_id'),('critico','applications','critic_reviewed_at','reviewed_by','position_id','position_id'))
+ try:
+  from datetime import date
+  if (date.fromisoformat(last)-date.fromisoformat(first)).days>DAYS: fail('positions_request_invalid')
+ except ValueError: fail('positions_request_invalid')
+ try:
+  daily=[]; newest=[]
+  for role,table,column,actor,pid,_ in sources:
+   have=columns(table)
+   if column not in have: continue
+   who=actor if actor and actor in have else 'NULL'
+   where=' FROM '+table+' WHERE '+column+' IS NOT NULL AND substr('+column+',1,10) BETWEEN ? AND ?'
+   for row in db.execute('SELECT '+who+' AS actor, substr('+column+',1,10) AS day, COUNT(*) AS n, MAX('+column+') AS last'+where+' GROUP BY actor, day',(first,last)):
+    daily.append({'role':role,'actor':trunc(row['actor'],40),'day':row['day'],'n':row['n'],'last':trunc(row['last'],40)})
+   for row in db.execute('SELECT '+who+' AS actor, '+column+' AS ts, '+pid+' AS pid'+where+' ORDER BY '+column+' DESC LIMIT '+str(EVENTS),(first,last)):
+    newest.append({'role':role,'actor':trunc(row['actor'],40),'ts':trunc(row['ts'],40),'pid':None if row['pid'] is None else sid(row['pid'])})
+  # also the last time each instance was seen, whatever the range (the web shows it next to the instance)
+  seen=[]
+  for role,table,column,actor,pid,_ in sources:
+   have=columns(table)
+   if column not in have: continue
+   who=actor if actor and actor in have else 'NULL'
+   for row in db.execute('SELECT '+who+' AS actor, MAX('+column+') AS last FROM '+table+' WHERE '+column+' IS NOT NULL GROUP BY actor'):
+    seen.append({'role':role,'actor':trunc(row['actor'],40),'last':trunc(row['last'],40)})
+  newest.sort(key=lambda item:item['ts'] or '',reverse=True); newest=newest[:EVENTS]
+  pids=[item['pid'] for item in newest[:40] if item['pid'] is not None]
+  meta={}
+  have=columns('positions'); wanted=[name for name in ('id','legacy_id','title','company') if name in have]
+  if pids and 'id' in wanted:
+   for row in db.execute('SELECT '+', '.join(wanted)+' FROM positions WHERE id IN ('+','.join('?'*len(pids))+')',[int(pid) for pid in pids if pid.isdigit()]):
+    meta[sid(row['id'])]={'legacy_id':row['legacy_id'] if 'legacy_id' in wanted else None,'title':trunc(row['title'],200) if 'title' in wanted else None,'company':trunc(row['company'],120) if 'company' in wanted else None}
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'daily':daily,'newest':newest,'seen':seen,'meta':meta}})
 if op=='map':
  # What the globe needs of every position that is not excluded, and nothing else, in the list's order
  # (the pins of one city are laid out by that order). One reply carries as many as fit in the byte
@@ -408,6 +451,12 @@ enum PositionsRequest {
         offset: u32,
     },
     Profile,
+    /// What each role did per day and instance in a range of days, and the newest events (see the script's `team_activity`).
+    #[serde(rename = "team_activity")]
+    TeamActivity {
+        from: String,
+        to: String,
+    },
     /// How the box's push to the website is going (its periodic push's last outcome).
     #[serde(rename = "cloud_sync")]
     CloudSync,
@@ -544,6 +593,7 @@ impl PositionsRequest {
             Self::Map { .. } => 4,
             Self::Profile => 5,
             Self::CloudSync => 6,
+            Self::TeamActivity { .. } => 7,
         }]
     }
 
@@ -554,9 +604,17 @@ impl PositionsRequest {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
             Self::Map { offset } => *offset <= 1_000_000,
+            Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
             Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
         }
     }
+}
+
+/// A calendar day as the activity range names it: `YYYY-MM-DD`, digits only (the reader checks the date itself).
+fn valid_day(day: &str) -> bool {
+    let bytes = day.as_bytes();
+    bytes.len() == 10
+        && bytes.iter().enumerate().all(|(index, byte)| if index == 4 || index == 7 { *byte == b'-' } else { byte.is_ascii_digit() })
 }
 
 fn object_or_null(value: Option<&Value>) -> bool {
@@ -608,6 +666,13 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                             && part.get("of").is_some_and(Value::is_u64)
                     })
                 })
+        }),
+        PositionsRequest::TeamActivity { .. } => data.as_object().is_some_and(|data| {
+            data.len() == 4
+                && ["daily", "newest", "seen"]
+                    .iter()
+                    .all(|key| data.get(*key).and_then(Value::as_array).is_some_and(|items| items.iter().all(Value::is_object)))
+                && data.get("meta").is_some_and(Value::is_object)
         }),
         PositionsRequest::CloudSync => data.as_object().is_some_and(|data| {
             let text_or_null = |key: &str| data.get(key).is_some_and(|value| value.is_null() || value.is_string());
