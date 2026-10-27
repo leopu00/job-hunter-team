@@ -159,7 +159,11 @@ def test_a_body_in_the_argument_and_a_body_file_are_unchanged(tmp_path, monkeypa
 def test_every_language_of_the_closer_says_how_to_pass_an_answer_with_a_dollar(suffix: str):
     text = (ROOT / "agents" / "closer" / f"closer{suffix}.md").read_text(encoding="utf-8")
 
-    assert "`--value -`" in text and "<<'TXT'" in text and "`$80,000`" in text and "`$8`" in text
+    assert "`--value -`" in text and "`$80,000`" in text and "`$8`" in text
+    # the model the agents copy is the one that works: the answer on stdin, never between double quotes
+    assert "--basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'\n   <answer>\n   TXT\n" in text
+    assert '--value "<answer>"' not in text
+    assert "application_answers.py save --key \"<key>\" --value - --field-type" in text
 
 
 @pytest.mark.parametrize("suffix", LANGUAGES)

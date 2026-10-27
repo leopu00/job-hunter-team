@@ -142,8 +142,12 @@ STEP 6 — EXIT
 **CL-08 — You fill in by yourself; you ask only when nothing supports an answer.** For every key in `missing` (not in the result? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` lists them) or in `pending_question`, in this order:
 1. already saved (profile, `application_answers`, a user reply) → the flow uses it;
 2. otherwise work it out from the profile (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), the CV (`db_query.py application $PID`, `cv_path`) and the vacancy (`db_query.py position $PID --json`), and save it, then STEP 3 again:
-   `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
-   A `$` in the answer (an amount, `$80,000`): between double quotes the shell eats `$8`. Pass the answer on stdin, `--value -` with a heredoc `<<'TXT'`, and write `--label` and `--options` between single quotes.
+   ```bash
+   python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
+   <answer>
+   TXT
+   ```
+   The answer goes on stdin, between the `<<'TXT'` lines (`--value -`): between double quotes the shell eats the `$8` of an amount like `$80,000` and the form would get `0,000`. `--label` and `--options`, if any, between single quotes.
    `--position-id` is required for the salary and for a textarea: they belong to one company. A choice is one of the options, written exactly;
 3. only with no basis at all: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` sends ONE question on Telegram. Never write a question by hand. Then the next position.
 
