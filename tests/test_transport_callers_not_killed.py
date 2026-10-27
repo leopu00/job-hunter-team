@@ -92,6 +92,9 @@ def _wait_for_exit(module):
     """The transport touches `entered` and only then exits: a delivery started before it has exited is, rightly,
     «still running». A test that wants the next round waits for the end of the process, not for its marker."""
     helper = module._tmux_send_run_module
+    # `all()` of nothing is true: a helper that did not keep the process would pass at once and the race would
+    # come back unseen
+    assert helper._running, "the helper keeps the process it started"
     assert _wait_for(lambda: all(proc.poll() is not None for proc in list(helper._running.values()))), "the transport finished"
 
 
