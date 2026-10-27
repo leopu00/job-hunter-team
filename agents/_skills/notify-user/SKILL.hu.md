@@ -68,6 +68,20 @@ Kimenet (stdout):
 <row_id> via=<telegram|web>
 ```
 
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
+```
+
 ## Típusok
 
 | Típus | Mikor | Dashboard renderelés |

@@ -8,7 +8,7 @@ import type { PageProps } from "../types";
 import { HELP_TEXT } from "./help.i18n";
 
 /**
- * /help: what the app does today, for someone reading a team on a VPS. The page
+ * /help: what the app does today, for a team on this computer or on a VPS. The page
  * names are the navigation's own (the dashboard's dictionary for the web's
  * three, the read-only view's for the rest), and the two buttons the trouble
  * paragraph names are the navbar's.

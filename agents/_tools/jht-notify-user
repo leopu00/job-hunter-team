@@ -23,6 +23,13 @@ Domanda strutturata (opzioni da toccare, scadenza, risposta come dato):
   aggiunge l'opzione «Rinvia, non fare niente», che e' anche il default se
   l'utente non risponde. Altri flag: --tipo, --multipla, --libera.
 
+Testo con «$» (prezzi, variabili): tra virgolette doppie la shell mangia «$1», «$2»
+(«$20» diventa «0») prima che il tool lo veda. Metti il testo tra apici singoli, oppure
+passalo da stdin con «-» e un heredoc dal delimitatore tra apici:
+    jht-notify-user --agent capitano - <<'TXT'
+    Plus — $20/month; Pro — $100/month
+    TXT
+
 Exit:
     0 → riga inserita in DB; consegna Telegram opzionale (best-effort)
     1 → argomenti invalidi
@@ -304,8 +311,14 @@ def main() -> int:
         "--scade-tra", metavar="DURATA",
         help="Domanda strutturata: scadenza (es. 30m, 6h, 2d; da 5 minuti a 7 giorni). Alla scadenza vale «Rinvia».",
     )
-    parser.add_argument("body", help="Testo del messaggio (quotalo).")
+    parser.add_argument(
+        "body",
+        help="Testo del messaggio, tra apici singoli (tra doppi la shell mangia $1, $2); «-» lo legge da stdin.",
+    )
     args = parser.parse_args()
+    if args.body == "-":
+        # the newline a heredoc ends with is not part of the text
+        args.body = sys.stdin.read().removesuffix("\n")
     structured = bool(
         args.option or args.oggetto or args.tipo or args.multipla or args.libera or args.scade_tra
     )

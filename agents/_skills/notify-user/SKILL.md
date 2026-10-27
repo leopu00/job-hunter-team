@@ -67,6 +67,20 @@ Output (stdout):
 <row_id> via=<telegram|web>
 ```
 
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
+```
+
 ## Kinds
 
 | Kind | Quando | Rendering dashboard |
