@@ -113,3 +113,24 @@ def test_the_screens_of_those_phases_exist_in_the_registry_and_the_old_ones_do_n
     for old in ["S08-setup-overview-empty", "S10-choose-provider", "S12-upload-cv", "S13-profile-ready", "S14-working-hours", "S15-setup-complete"]:
         assert old not in screens and old not in GUIDE, old
     assert "Docker" not in screens
+
+
+PLAN_WORD = {"en": "plan", "it": "piano", "es": "plan", "fr": "formule", "de": "Plan", "pt": "plano", "hu": "csomag"}
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_guide_says_the_assistant_asks_for_the_plan_in_the_chat(lang):
+    # the app has no screen for the subscription plan: the Assistant asks for it during the introduction
+    body = phase_body("talk-to-the-assistant", lang)
+    assert "Codex" in body and PLAN_WORD[lang] in body, (lang, body)
+
+
+def test_the_assistant_skill_asks_for_the_plan_the_way_the_guide_says():
+    skill = (ROOT / "agents/_skills/onboarding-flow/SKILL.md").read_text(encoding="utf-8")
+    assert "plan_registry.py" in skill and "list codex" in skill and "set codex" in skill
+
+
+def test_no_page_of_the_guide_sends_you_to_a_plan_screen_that_the_app_does_not_have():
+    screens = (ROOT / "web/app/setup-guide/guide-screens.ts").read_text(encoding="utf-8")
+    for source in (GUIDE, screens):
+        assert "plan list appears" not in source and "after you log in" not in source
