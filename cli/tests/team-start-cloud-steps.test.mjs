@@ -43,16 +43,27 @@ for (const step of ['pull-desired-state', 'sync-tickets', 'sync-directives']) {
 test('what the start prints for a step: nothing when it worked or when there is no cloud', () => {
   assert.equal(syncNotApplied('ticket sync', { code: 0, stderr: WARNING }), null);
   assert.equal(syncNotApplied('ticket sync', { code: 1, stderr: 'Cloud sync is not enabled.\n' }), null);
-  assert.equal(syncNotApplied('ticket sync', { code: 1, stderr: 'Cloud sync non abilitato\n' }), null);
-  assert.equal(syncNotApplied('ticket sync', { code: 1, stderr: '' }), null);
+  assert.equal(syncNotApplied('ticket sync', { code: 1, stderr: `${WARNING}Cloud sync non abilitato\n` }), null);
   assert.equal(syncNotApplied('ticket sync', undefined), null);
 });
 
+test('a step that failed says so even when it left nothing, or only Node\'s own warnings', () => {
+  assert.equal(syncNotApplied('desired-state pull', { code: 1, stderr: WARNING }),
+    '  ℹ desired-state pull not applied: exit code 1');
+  assert.equal(syncNotApplied('ticket sync', { code: 3, stderr: '' }), '  ℹ ticket sync not applied: exit code 3');
+  assert.equal(syncNotApplied('ticket sync', { code: null }), '  ℹ ticket sync not applied: exit code unknown');
+});
+
 test("Node's own warnings are never the reason a step gives", () => {
-  assert.equal(syncNotApplied('desired-state pull', { code: 1, stderr: WARNING }), null);
   assert.equal(
     syncNotApplied('desired-state pull', { code: 1, stderr: `${WARNING}pull-desired-state: HTTP 503\n${WARNING}` }),
     '  ℹ desired-state pull not applied: pull-desired-state: HTTP 503');
+});
+
+test('«not enabled» in an earlier line does not hide a real failure that follows', () => {
+  assert.equal(
+    syncNotApplied('directive sync', { code: 1, stderr: 'cloud sync is not enabled for the old board\nsync-directives: HTTP 500\n' }),
+    '  ℹ directive sync not applied: sync-directives: HTTP 500');
 });
 
 test('a real failure keeps its last line, as before', () => {

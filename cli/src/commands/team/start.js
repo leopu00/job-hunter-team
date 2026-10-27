@@ -149,16 +149,19 @@ function clearGlobalHaltGate(containerMode) {
 }
 
 // What the best-effort cloud steps of a start say when they fail. Two things on stderr are not a reason:
-// «not enabled» (a machine without a cloud has nothing to sync: it is no failure) and Node's own warnings
-// (SQLite is experimental in Node 22: «(Use `node --trace-warnings ...`)» was printed as the reason).
+// «not enabled» as the last line (a machine without a cloud has nothing to sync: it is no failure) and Node's own
+// warnings (SQLite is experimental in Node 22: «(Use `node --trace-warnings ...`)» was printed as the reason).
 const NOT_ENABLED = /non abilitato|not enabled/i;
 const NODE_WARNING_LINE = /^\(node:\d+\) |^\(Use `node --trace-(warnings|deprecation)/;
 
 export function syncNotApplied(label, res) {
-  if (!res || res.code === 0 || !res.stderr || NOT_ENABLED.test(res.stderr)) return null;
-  const reason = res.stderr.trim().split('\n').map((line) => line.trim())
+  if (!res || res.code === 0) return null;
+  const reason = String(res.stderr ?? '').trim().split('\n').map((line) => line.trim())
     .filter((line) => line && !NODE_WARNING_LINE.test(line)).slice(-1)[0];
-  return reason ? `  ℹ ${label} not applied: ${reason}` : null;
+  // «not enabled» is the reason itself (the last line), not a word somewhere in the output.
+  if (reason && NOT_ENABLED.test(reason)) return null;
+  // A step that failed says so even when all it left on stderr was Node's own warnings.
+  return `  ℹ ${label} not applied: ${reason ?? `exit code ${res.code ?? 'unknown'}`}`;
 }
 
 function reportSyncNotApplied(label, res) {
