@@ -3924,12 +3924,6 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    /// What the local chat steps (container lookup, exec) may take in a test:
-    /// the fake engine is a few `sh` runs, and a loaded CI runner or the turn's
-    /// parallel builds stretch them past two seconds. A refusal under test
-    /// never waits this long: it fails before any engine runs.
-    #[cfg(unix)]
-
     // -- the environment the wrapper runs the compose in (the chat said «the running container is not the one Job Hunter Team installed») --
 
     use super::wrapper_compose_environment;
@@ -4000,6 +3994,11 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    /// What the local chat steps (container lookup, exec) may take in a test:
+    /// the fake engine is a few `sh` runs, and a loaded CI runner or the turn's
+    /// parallel builds stretch them past two seconds. A refusal under test
+    /// never waits this long: it fails before any engine runs.
+    #[cfg(unix)]
     const LOCAL_TEST_TIMEOUT: Duration = Duration::from_secs(30);
 
     /// A runtime the attestation accepts, with a fake private Podman shim whose `exec` echoes its
