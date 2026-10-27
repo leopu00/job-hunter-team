@@ -8,6 +8,7 @@ the token's public prefix. Synthetic tokens only.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -195,3 +196,13 @@ def test_a_lost_session_goes_through_the_notify_tool_keyed_by_the_sync_token(mon
     assert cmd[cmd.index("--source-id") + 1] == "cloud-sync:session_lost:jht_sync_AbCd"
     assert json.loads(cmd[cmd.index("--source-payload") + 1]) == {"code": "session_lost"}
     assert cmd[-1] == csn.text_for("session_lost", "it")
+
+
+def test_the_lost_session_sentence_does_not_send_the_person_to_the_app():
+    """The pairing token carries the app's own session (DashboardApp.tsx), so a new pairing from the app puts the box
+    on the app's session again, where the app's refresh can end it, and after migration 105 the app's own approvals
+    for that box are refused. The sentence says that real time comes back with a new pairing and names no place."""
+    locales = REPO / "shared" / "locales"
+    for lang in csn.LANGUAGES:
+        text = json.loads((locales / f"{lang}.json").read_text(encoding="utf-8"))["cloud_sync_notice.session_lost"]
+        assert not re.search(r"\bapp(?:ból|ban)?\b", text, re.IGNORECASE), lang
