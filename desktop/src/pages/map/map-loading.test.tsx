@@ -42,7 +42,7 @@ describe("the map while it loads", () => {
   it("keeps the globe's place while its chunk loads, and shows a readable line, not 11px of dim text, while the data comes", () => {
     expect(lazy).toContain("loading: () => <GlobePlaceholder />");
     expect(lazy).not.toContain("loading: () => null");
-    expect(globe).toContain('data-testid="globe-loading"');
+    expect(globe).toContain("GlobeLoadingStatus");
     expect(globe).not.toContain("text-[11px] text-[var(--color-dim)] pointer-events-none");
   });
 });

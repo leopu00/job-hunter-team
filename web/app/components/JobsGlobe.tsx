@@ -35,6 +35,7 @@ import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
 import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 import { makeT } from "@/lib/i18n-dict";
+import GlobeLoadingStatus from "./GlobeLoadingStatus";
 import { T } from "./JobsGlobe.i18n";
 import {
   attachFpsMonitor,
@@ -2399,16 +2400,7 @@ export default function JobsGlobe({
           </div>
         )}
 
-        {!loaded && (
-          <p
-            role="status"
-            data-testid="globe-loading"
-            className="absolute inset-x-0 bottom-24 flex items-center justify-center gap-2 text-[12px] text-[var(--color-muted)] pointer-events-none"
-          >
-            <span className="h-2 w-2 rounded-full bg-[var(--color-blue)] animate-pulse" aria-hidden="true" />
-            {tr("loading")}
-          </p>
-        )}
+        {!loaded && <GlobeLoadingStatus lang={showcase?.lang ?? locale} />}
 
         {/* Senza posizioni con una sede il globo era solo uno sfondo: una frase
             dice perché è vuoto e cosa comparirà. */}

@@ -186,6 +186,8 @@ export default function MapCharts({
   // Posizioni con coordinate ufficio — fetched per ricomputare
   // donut/histogram in base al filtro location.
   const [coordItems, setCoordItems] = useState<CoordItem[]>([]);
+  // The three reads that fill the panels still to settle: until then a count of 0 is «not read yet», not «none».
+  const [readsPending, setReadsPending] = useState(3);
   const [locations, setLocations] = useState<LocationCountry[]>([]);
   // Country e city aperti nel drilldown della sidebar Location.
   const [openCountry, setOpenCountry] = useState<string | null>(null);
@@ -199,7 +201,8 @@ export default function MapCharts({
       .then((d: NoCoordItem[]) => {
         if (!cancel) setNoCoords(Array.isArray(d) ? d : []);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => !cancel && setReadsPending((n) => n - 1));
     // Fetch in parallelo positions con coords (subset di campi
     // necessari a ricomputare donut+histogram sotto filtro location).
     fetch("/api/positions/coords")
@@ -207,7 +210,8 @@ export default function MapCharts({
       .then((d: CoordItem[]) => {
         if (!cancel) setCoordItems(Array.isArray(d) ? d : []);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => !cancel && setReadsPending((n) => n - 1));
     return () => {
       cancel = true;
     };
@@ -221,7 +225,8 @@ export default function MapCharts({
       .then((d: LocationCountry[]) => {
         if (!cancel) setLocations(Array.isArray(d) ? d : []);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => !cancel && setReadsPending((n) => n - 1));
     return () => {
       cancel = true;
     };
@@ -720,7 +725,7 @@ export default function MapCharts({
         >
           <CardHeader
             title={tr("positions_title")}
-            meta={filteredPositions.length}
+            meta={readsPending > 0 ? "…" : filteredPositions.length}
             collapsed={collapsed.remote}
             onToggle={() => toggleCollapse("remote")}
             tr={tr}
