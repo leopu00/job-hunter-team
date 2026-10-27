@@ -190,6 +190,7 @@ vi.mock("../onboarding", () => ({
         )}
         {props.runtime.status === "failed" && props.runtime.code && <p>code:{props.runtime.code}</p>}
         {props.runtime.status === "failed" && props.runtime.title && <p>title:{props.runtime.title}</p>}
+        {props.runtime.status === "failed" && props.runtime.calm && <p>calm-card</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
         {props.onOpenWithoutTeam && <button type="button" onClick={props.onOpenWithoutTeam}>open-without-team</button>}
@@ -1574,6 +1575,30 @@ describe("DashboardApp onboarding router", () => {
       "Cosa fare: Riprova; se si ripete, apri il registro qui sotto e mandalo al supporto.",
     )).toBeInTheDocument();
     expect(screen.queryByText(/Causa:/)).not.toBeInTheDocument();
+  });
+
+  it("a setup stopped by the team running says it calmly: the installer's own line stays in the technical details", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("runtime-team-running-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime)
+      .mockRejectedValueOnce({
+        code: "local_team_running",
+        message: "local_team_running",
+        retryable: true,
+        detail: "team_running: Job Hunter Team is running on this computer (jht, jht-broker, jht-telegram). Installing now would change its configuration under it.",
+      });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    const described = describeError("local_team_running");
+    expect(screen.getByText(described.text)).toBeInTheDocument();
+    expect(screen.getByText(`Cosa fare: ${described.action}`)).toBeInTheDocument();
+    expect(screen.queryByText(/Causa:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/team_running:/)).not.toBeInTheDocument();
+    // the card is calm, with its own title (not «set up again»)
+    expect(screen.getByText("calm-card")).toBeInTheDocument();
+    expect(screen.getByText("title:Job Hunter Team è già acceso")).toBeInTheDocument();
   });
 
   it("a local preparation that fails is remembered, and a reopened setup can resume it with the same provider or drop it", async () => {

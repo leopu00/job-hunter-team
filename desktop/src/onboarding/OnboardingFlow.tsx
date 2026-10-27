@@ -223,6 +223,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   if (runtime.status === "collecting") return null;
 
   const failed = runtime.status === "failed";
+  // A failed step that is only waiting for the person (the team runs, stop it first): same card, calm tone.
+  const calm = runtime.status === "failed" && runtime.calm === true;
   const actionRequired = runtime.status === "action-required";
   const visibleRuntimeStages = runtimeStages(host, t);
   const activeIndex = visibleRuntimeStages.findIndex((stage) => stage.value === runtime.stage);
@@ -362,7 +364,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
       aria-live={failed ? undefined : "polite"}
       role={failed ? "alert" : "status"}
     >
-      <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
+      <span className="onboarding-runtime-status__pulse" aria-hidden="true">{calm ? "→" : failed ? "!" : actionRequired ? "→" : "••"}</span>
       <div>
         {!failed && <strong>{actionRequired ? t.actionNeeded : t.dontClose}</strong>}
         <small>{runtime.message}</small>
@@ -396,8 +398,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           <p className="onboarding-progress__intro">{t.autoIntro}</p>
           <p className="onboarding-progress__privacy">{t.noApiKey}</p>
         </aside>
-        <section className={`onboarding-runtime-card${failed ? " onboarding-runtime-card--failed" : ""}`} aria-busy={pending}>
-          <p className="onboarding-eyebrow">{failed ? t.interventionRequired : actionRequired ? t.yourTurn : t.inProgressEyebrow}</p>
+        <section className={`onboarding-runtime-card${failed && !calm ? " onboarding-runtime-card--failed" : ""}`} aria-busy={pending}>
+          <p className="onboarding-eyebrow">{calm ? t.yourTurn : failed ? t.interventionRequired : actionRequired ? t.yourTurn : t.inProgressEyebrow}</p>
           <h2
             ref={failureHeadingRef}
             tabIndex={failed ? -1 : undefined}

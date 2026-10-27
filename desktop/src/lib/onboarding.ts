@@ -85,6 +85,8 @@ export type OnboardingRuntimeState =
       status: "failed";
       stage: OnboardingRuntimeStage;
       title?: string;
+      /** Not a fault: the step is waiting for a thing the person does (the card is not red, it does not say «set up again»). */
+      calm?: true;
       message: string;
       /** What to do now, from the error catalog. */
       action?: string;

@@ -89,3 +89,36 @@ describe("the retry of a failed setup step", () => {
     finishFirst();
   });
 });
+
+// The team already runs (install.sh refuses to change it under the agents): nothing failed and nothing was changed.
+// The card must not look like a fault («Set up again: Runtime», red, «Action required»): it says what to do.
+describe("the card of a setup stopped only because the team runs", () => {
+  const running = (over: Record<string, unknown> = {}) => ({
+    status: "failed", stage: "runtime", title: "Job Hunter Team è già acceso", calm: true,
+    message: "Job Hunter Team è già acceso su questo computer.", action: "Fermalo con «jht down» in un terminale e premi di nuovo il pulsante.",
+    code: "local_team_running", retryable: true, ...over,
+  }) as OnboardingFlowProps["runtime"];
+  const card = () => screen.getByRole("heading", { level: 2 }).closest("section") as HTMLElement;
+
+  it("has its own title, the calm tone and the action, and keeps the retry", () => {
+    for (const locale of locales) {
+      render(<OnboardingFlow {...props({ locale, runtime: running() })} />);
+      const text = ONBOARDING_TEXT[locale];
+      expect(screen.getByRole("heading", { level: 2 }), locale).toHaveTextContent("Job Hunter Team è già acceso");
+      expect(screen.getByRole("heading", { level: 2 }), locale).not.toHaveTextContent(text.configureAgain("Runtime"));
+      expect(card().className, locale).not.toContain("onboarding-runtime-card--failed");
+      expect(within(card()).getByText(text.yourTurn), locale).toBeInTheDocument();
+      expect(within(card()).queryByText(text.interventionRequired), locale).toBeNull();
+      expect(within(card()).getByText(/jht down/), locale).toBeInTheDocument();
+      expect(within(screen.getByRole("alert")).getByTestId("onboarding-retry-here"), locale).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it("is the only failure told this way: any other keeps the red card and «set up again»", () => {
+    render(<OnboardingFlow {...props({ runtime: running({ title: undefined, calm: undefined, code: "runtime_install_failed" }) })} />);
+    expect(card().className).toContain("onboarding-runtime-card--failed");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(ONBOARDING_TEXT.it.configureAgain("Runtime"));
+    expect(within(card()).getByText(ONBOARDING_TEXT.it.interventionRequired)).toBeInTheDocument();
+  });
+});
