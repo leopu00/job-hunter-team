@@ -11,6 +11,7 @@ import {
   directChatStatus,
   reconnectDirectChat,
 } from "../lib/direct-chat";
+import { waitForDirectChat } from "../lib/direct-chat-wait";
 import {
   activateDesktopAccountScope,
   activateDesktopLocalScope,
@@ -1061,7 +1062,12 @@ export default function DashboardApp() {
       setRuntime({ status: "working", stage: "assistant", message: stateText().openingAssistantChat });
       beginActivityInvocation();
       const nativeSnapshot = await openOnboardingAssistant(submission.host, recordActivityProgress);
-      const chat = await connectDirectChat(submission.host);
+      // The chat answers once the Assistant's first turn is over: the setup waits for it, it does not fail on
+      // the first look.
+      const chat = await waitForDirectChat(await connectDirectChat(submission.host), reconnectDirectChat, {
+        stillCurrent: () => activeIdentityKeyRef.current === identityKey,
+        onWaiting: () => setRuntime({ status: "working", stage: "assistant", message: stateText().assistantFirstRound }),
+      });
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
       if (!isOnboardingAssistantReachable(snapshot)) throw new Error("assistant-unverified");
@@ -1301,7 +1307,10 @@ export default function DashboardApp() {
         return;
       }
       setRuntime({ status: "working", stage: "assistant", message: stateText().reconnectingChat });
-      const chat = await reconnectDirectChat();
+      const chat = await waitForDirectChat(await reconnectDirectChat(), reconnectDirectChat, {
+        stillCurrent: () => activeIdentityKeyRef.current === identityKey,
+        onWaiting: () => setRuntime({ status: "working", stage: "assistant", message: stateText().assistantFirstRound }),
+      });
       if (activeIdentityKeyRef.current !== identityKey) throw new Error("account-changed");
       const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
       if (!isOnboardingAssistantReachable(snapshot)) throw new Error("assistant-unverified");

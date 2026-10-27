@@ -484,9 +484,9 @@ export function runtimeStateFromSnapshot(snapshot: OnboardingRuntimeSnapshot): O
   if (!snapshot.assistantRunning || !snapshot.captainRunning) {
     return { status: "failed", stage: "team-start", message: stateText().snapshotTeamNotOperational };
   }
-  if (snapshot.profileReady && !snapshot.directChatReady) {
-    return { status: "failed", stage: "assistant", message: stateText().snapshotChatUnreachable };
-  }
+  // `directChatReady` is not known here: the native snapshots always say false, the chat is connected by the
+  // button this state offers («Open the chat»), which waits for the Assistant's first turn. A profile that is
+  // already complete used to be reported as «the direct chat cannot be reached yet» with the chat never asked.
   return { status: "action-required", stage: "assistant",
     message: snapshot.profileReady ? stateText().snapshotCompletePresentation : stateText().snapshotCompleteProfile };
 }
