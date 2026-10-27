@@ -118,3 +118,54 @@ def test_the_capitano_skill_tells_what_to_do_when_the_burst_refuses(lang: str):
     text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
     for needed in (f"{REGISTRY} list <provider>", f"{REGISTRY} set <provider>:<id>", "Codex reports:", "begin-burst"):
         assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
+
+
+# ── a burst that runs with no plan declared is told, not left silent ─────────────────────────
+
+def _state(home: Path, phase: str) -> None:
+    (home / "state").mkdir(exist_ok=True)
+    (home / "state" / "first-run.json").write_text(json.dumps({
+        "phase": phase, "created_at": "2026-10-26T07:29:00+00:00", "burst_started_at": "2026-10-26T07:29:00+00:00",
+        "completed_at": None, "completed_reason": None, "scored_at_start": 0,
+    }), encoding="utf-8")
+
+
+@pytest.mark.parametrize("command", ["status", "begin-burst"])
+@pytest.mark.parametrize("lang", LANGS)
+def test_a_burst_without_a_plan_says_so_and_how_to_declare_it(home: Path, command: str, lang: str):
+    _state(home, "burst")
+    done = _run("first_run.py", command, home=home, lang=lang)
+    out = json.loads(done.stdout)
+    assert done.returncode == 0 and out["phase"] == "burst", (done.returncode, out)
+    assert out["plan_missing"] is True
+    assert "plan_registry.py list <provider>" in out["hint"] and "plan_registry.py set <provider>:<id>" in out["hint"]
+    if command == "begin-burst":
+        assert out["note"] == "burst already in progress"  # the burst is not stopped by it
+
+
+@pytest.mark.parametrize("command", ["status", "begin-burst"])
+def test_a_burst_with_a_declared_plan_says_nothing_about_it(home: Path, command: str):
+    _state(home, "burst")
+    assert _run("plan_registry.py", "set", "codex:plus", home=home).returncode == 0
+    out = json.loads(_run("first_run.py", command, home=home).stdout)
+    assert "plan_missing" not in out and "hint" not in out
+
+
+@pytest.mark.parametrize("phase", ["awaiting_profile", "steady"])
+def test_the_other_phases_are_not_touched(home: Path, phase: str):
+    _state(home, phase)
+    assert "plan_missing" not in json.loads(_run("first_run.py", "status", home=home).stdout)
+
+
+def test_declaring_the_plan_ends_the_warning(home: Path):
+    _state(home, "burst")
+    assert json.loads(_run("first_run.py", "status", home=home).stdout)["plan_missing"] is True
+    assert _run("plan_registry.py", "set", "codex:pro", home=home).returncode == 0
+    assert "plan_missing" not in json.loads(_run("first_run.py", "status", home=home).stdout)
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_capitano_skill_reads_plan_missing_as_a_plan_to_declare(lang: str):
+    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
+    assert "plan_missing: true" in text and "first_run.py status" in text
+    assert text.count(f"{REGISTRY} set <provider>:<id>") >= 2  # begin-burst refusing, and a burst that lost its plan

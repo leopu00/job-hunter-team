@@ -50,6 +50,13 @@ suggestion, jamais ton choix. Quand l'utilisateur choisit, écris exactement son
 choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` et relance `begin-burst`. S'il ne sait
 pas, arrête-toi et dis-le-lui ; redemande à ton prochain réveil.
 
+**Pendant le burst, la formule peut disparaître** (la configuration a été réinitialisée, le fournisseur a
+changé, le fichier a été modifié). `first_run.py status` et `begin-burst` portent alors `plan_missing: true`
+avec un `hint` : ne lis pas « burst already in progress » comme « tout va bien ». Le burst continue et la formule
+se déclare de la même façon : demande à l'utilisateur dans le chat quelle formule il a
+(`python3 /app/shared/skills/plan_registry.py list <provider>`), suggère celle de la ligne `Codex reports:` sans choisir à sa place et écris exactement
+son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. L'Assistant le demande aussi quand l'utilisateur lui parle.
+
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
