@@ -7,6 +7,10 @@ website cannot say so itself, because it is the box that no longer reaches it. T
 user on its own channel: a row in the app's panel, mirrored in the chat, and Telegram when it is
 linked (jht-notify-user, as web_action_notice.py does).
 
+A second code, `session_lost`, tells that the Supabase session the daemon listens to the website with
+is gone (its refresh token was used twice): the box falls back to slower checks until the device is
+paired again from the app.
+
 A closed code with a fixed sentence in the user's language, under `cloud_sync_notice.<code>` in
 shared/locales/<lang>.json. One notice per token: the key is the token's public prefix, the one the
 website lists, so a new token that is refused in its turn is told again.
@@ -34,7 +38,7 @@ sys.path.pop(0)
 
 SOURCE_ACTION = "cloud_sync_notice"
 AGENT = "assistente"
-CODES = frozenset({"token_rejected"})
+CODES = frozenset({"token_rejected", "session_lost"})
 # The public prefix of a sync token, as the website lists it: jht_sync_ and four characters.
 KEY = re.compile(r"^jht_sync_[A-Za-z0-9_-]{4}$")
 LANGUAGES = _shared.LANGUAGES

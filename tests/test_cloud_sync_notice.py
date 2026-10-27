@@ -160,3 +160,38 @@ def test_off_hours_it_still_goes_to_telegram(tmp_path):
     assert _cli(home, "token_rejected", "jht_sync_AbCd", bin_dir=bin_dir)["notified"]
     assert sent.exists()
     assert _rows(home)[0]["delivered_via"] == "telegram"
+
+
+def test_a_lost_session_has_its_sentence_in_every_language_and_says_what_to_do():
+    locales = REPO / "shared" / "locales"
+    english = json.loads((locales / "en.json").read_text(encoding="utf-8"))["cloud_sync_notice.session_lost"]
+    seen = set()
+    for lang in csn.LANGUAGES:
+        own = json.loads((locales / f"{lang}.json").read_text(encoding="utf-8"))
+        text = own.get("cloud_sync_notice.session_lost")
+        assert isinstance(text, str) and text.strip(), lang
+        assert lang == "en" or text != english, lang
+        assert "{" not in text, lang
+        assert csn.text_for("session_lost", lang) == text
+        seen.add(text)
+    assert len(seen) == len(csn.LANGUAGES)
+
+
+def test_a_lost_session_goes_through_the_notify_tool_keyed_by_the_sync_token(monkeypatch, tmp_path):
+    tool = tmp_path / "jht-notify-user"
+    tool.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(csn._shared, "notify_tool", lambda: tool)
+    calls = []
+
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        return Done()
+
+    assert csn.notify("session_lost", "jht_sync_AbCd", lang="it", run=run) == {
+        "notified": True, "code": "session_lost", "row_id": 12,
+    }
+    cmd = calls[0]
+    # one row per sync token, apart from the row of a refused token
+    assert cmd[cmd.index("--source-id") + 1] == "cloud-sync:session_lost:jht_sync_AbCd"
+    assert json.loads(cmd[cmd.index("--source-payload") + 1]) == {"code": "session_lost"}
+    assert cmd[-1] == csn.text_for("session_lost", "it")
