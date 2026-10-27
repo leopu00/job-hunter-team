@@ -1174,7 +1174,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     bc_calendar: "Calendário",
     bc_compare: "Comparar",
     bc_contacts: "Contactos",
-    bc_database: "Banco de dados",
+    bc_database: "Base de dados",
     bc_errors: "Erros",
     bc_export: "Exportar",
     bc_feedback: "Feedback",

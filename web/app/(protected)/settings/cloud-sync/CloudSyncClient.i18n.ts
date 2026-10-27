@@ -124,7 +124,7 @@ export const T = {
     es: "Base de datos local no encontrada. Inicia el equipo al menos una vez para generar",
     de: "Lokale Datenbank nicht gefunden. Starte das Team mindestens einmal, um zu generieren",
     fr: "Base de données locale introuvable. Démarrez l'équipe au moins une fois pour générer",
-    pt: "Banco de dados local não encontrado. Inicie a equipa ao menos uma vez para gerar",
+    pt: "Base de dados local não encontrada. Inicia a equipa ao menos uma vez para gerar",
   },
   no_local_db_then: {
     it: ", poi torna qui.",

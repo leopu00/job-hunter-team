@@ -46,7 +46,7 @@ describe("the app's sources", () => {
 // in the Portuguese of the rest of the app (the site's public pages are not in this list).
 describe("the web pages the app reuses, and the CLI texts", () => {
   // \b does not see the end of «você»: letters are told by their Unicode property instead
-  const BRAZILIAN = /(?<!\p{L})(equipes?|vocês?|carregando|salvando|excluindo|contêineres?|provedor(?:es)?|baixar|usuários?|seções?|solicitação|solicitações|contatos?|aplicativos?)(?!\p{L})/iu;
+  const BRAZILIAN = /(?<!\p{L})(equipes?|vocês?|carregando|salvando|excluindo|contêineres?|provedor(?:es)?|baixar|usuários?|seções?|solicitação|solicitações|contatos?|aplicativos?|banco de dados|exibid[ao]s?)(?!\p{L})/iu;
   const web = fileURLToPath(new URL("../../../web/", import.meta.url));
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((name) => {
