@@ -374,6 +374,11 @@ class _Tmux:
                 subprocess.run(["codesign", "-f", "-s", "-", str(binary)],
                                capture_output=True, timeout=30)
         program = f"'{binary}' 300"
+        if subprocess.run([str(binary), "0"], capture_output=True, timeout=30).returncode != 0:
+            # `sleep` is one applet of a multicall binary (uutils coreutils, Ubuntu 26.04): a copy named `claude`
+            # is not an applet and exits at once.  Linux names the process by argv[0], so the real sleep is
+            # started under the name instead.
+            program = f"bash -c 'exec -a \"{binary}\" \"{shutil.which('sleep')}\" 300'"
         started = self.run([str(self.bin / "tmux"), "new-session", "-d", "-s", name, program], timeout=15)
         assert started.returncode == 0, started.stderr
         # pane_current_command si aggiorna appena il processo e' partito
