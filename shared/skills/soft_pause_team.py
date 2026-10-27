@@ -53,8 +53,10 @@ Exit 0 sempre (dal main storico); `pause_all()` è importabile dalle skill
 watchdog, poi si fermano gli agenti).
 """
 import argparse
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 CAPITANO = "CAPITANO"
 SENTINELLA = "SENTINELLA"
@@ -147,13 +149,39 @@ def list_sessions():
         return []
 
 
+# `subprocess.run(..., timeout=N)` KILLS jht-tmux-send at the deadline; between its paste and its Enter that
+# leaves a paste in the composer with no Enter (TEST 5, 27/10). tmux_send_run.py waits as long, raises the same
+# TimeoutExpired, and lets the transport finish; without the module the old call is kept.
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "15"))
+_tmux_send_run_module = None
+
+
+def _transport_run(args, timeout, text=False):
+    global _tmux_send_run_module
+    if _tmux_send_run_module is None:
+        import importlib.util
+        _tmux_send_run_module = False
+        here = Path(__file__).resolve().parent
+        for cand in (here / "tmux_send_run.py", Path("/app/shared/skills/tmux_send_run.py"),
+                     here.parent / "shared" / "skills" / "tmux_send_run.py"):
+            if cand.is_file():
+                try:
+                    spec = importlib.util.spec_from_file_location("tmux_send_run", cand)
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    _tmux_send_run_module = mod
+                    break
+                except (OSError, ImportError, SyntaxError):
+                    continue
+    if _tmux_send_run_module:
+        return _tmux_send_run_module.run(args, timeout, text=text)
+    return subprocess.run(args, capture_output=True, text=text, timeout=timeout)
+
+
 def send_message(session, message):
     """Manda un messaggio testuale via jht-tmux-send (gestisce send-keys robusto)."""
     try:
-        r = subprocess.run(
-            ["jht-tmux-send", session, message],
-            capture_output=True, timeout=15,
-        )
+        r = _transport_run(["jht-tmux-send", session, message], TMUX_SEND_WAIT_S)
         return r.returncode == 0
     except (subprocess.TimeoutExpired, OSError):
         return False
