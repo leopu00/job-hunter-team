@@ -301,3 +301,149 @@ def test_a_migration_opens_the_door_again(cluster):
     finally:
         _switch(cluster, "team.start", False)
     assert who.act("team.start", {"target": "scout"}) == {"ok": False, "error": "action_disabled"}
+
+
+# -- 105, the barrier outlives the token (S1/N5, 27/10) --------------------------------------------------------
+
+def _token(db, who, **columns):
+    """A token of the user, written the way the server writes it. `now()`-style values go in as SQL."""
+    values = {"user_id": f"'{who.user}'", "token_hash": f"'synthetic-{uuid.uuid4().hex}'", **columns}
+    db(f"INSERT INTO public.cloud_sync_tokens ({', '.join(values)}) VALUES ({', '.join(values.values())})")
+
+
+def _authorise(who, legacy_id=81):
+    return who.act("position.apply_authorize", {"legacy_id": legacy_id})
+
+
+@pytest.mark.parametrize("ended", [
+    pytest.param({"revoked_at": "now()"}, id="revoked"),
+    pytest.param({"expires_at": "now() - interval '1 day'"}, id="expired"),
+    pytest.param({"revoked_at": "now()", "expires_at": "now() - interval '1 day'"}, id="both"),
+])
+def test_a_device_that_ended_its_own_token_is_still_that_device_for_the_door(cluster, ended):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    _token(cluster, who, pairing_session_id=f"'{who.session}'", **ended)
+    assert _authorise(who) == {"ok": False, "error": "not_found"}
+    assert door._scalar(cluster, f"SELECT count(*) FROM public.web_action_log WHERE user_id = '{who.user}'") == "0"
+    assert door._scalar(cluster, f"SELECT coalesce(apply_requested, false) FROM public.positions "
+                                 f"WHERE user_id = '{who.user}' AND legacy_id = 81") == "f"
+
+
+def test_an_ended_token_of_another_session_or_without_a_session_does_not_close_the_door(cluster):
+    who = door.Browser(cluster)
+    door._position(cluster, who.user, 81)
+    # a past device (another session) and a past legacy token (no session at all): both over
+    _token(cluster, who, pairing_session_id=f"'{uuid.uuid4()}'", revoked_at="now()")
+    _token(cluster, who, revoked_at="now()")
+    _token(cluster, who, expires_at="now() - interval '1 day'")
+    first = _authorise(who)
+    assert first["ok"] and first["state"] == "awaiting_confirm", first
+    assert who.act("position.apply_authorize", confirm=first["id"])["state"] == "queued"
+
+
+def test_counter_check_with_the_filter_on_the_ended_tokens_back_the_session_gets_through(cluster):
+    """The old comparison (only the live tokens) applied over the real one: the case above is then open."""
+    path = cluster.work / "m105-live-tokens-only.sql"
+    source = M105.read_text(encoding="utf-8")
+    needle = "OR (v_session IS NOT NULL AND t.pairing_session_id = v_session)"
+    assert source.count(needle) == 1
+    path.write_text(source.replace(
+        needle,
+        "OR (v_session IS NOT NULL AND t.pairing_session_id = v_session\n"
+        "                       AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at > now()))"), encoding="utf-8")
+    try:
+        cluster(file=path)
+        who = door.Browser(cluster)
+        door._position(cluster, who.user, 81)
+        _token(cluster, who, pairing_session_id=f"'{who.session}'", revoked_at="now()")
+        answer = _authorise(who)
+        assert answer["ok"] and answer["state"] == "awaiting_confirm", "the defect: the revoked token no longer closes the door"
+    finally:
+        cluster(file=M105)
+
+
+def _as(db, role, sql):
+    return db(f"SET ROLE {role}; {sql}", check=False)
+
+
+@pytest.mark.parametrize("role", ["anon", "authenticated"])
+def test_no_browser_role_inserts_updates_or_deletes_a_token_and_the_server_does(cluster, role):
+    who = door.Browser(cluster)
+    _token(cluster, who, pairing_session_id=f"'{who.session}'")
+    for statement in (
+        f"DELETE FROM public.cloud_sync_tokens WHERE user_id = '{who.user}'",
+        f"UPDATE public.cloud_sync_tokens SET revoked_at = now() WHERE user_id = '{who.user}'",
+        f"UPDATE public.cloud_sync_tokens SET pairing_session_id = gen_random_uuid() WHERE user_id = '{who.user}'",
+        f"INSERT INTO public.cloud_sync_tokens (user_id, token_hash) VALUES ('{who.user}', 'x')",
+    ):
+        done = _as(cluster, role, statement)
+        assert done.returncode != 0 and "permission denied" in done.stderr, (role, statement, done.stderr)
+    assert door._scalar(cluster, f"SELECT count(*) FROM public.cloud_sync_tokens WHERE user_id = '{who.user}'") == "1"
+    # the server (the service role) still writes
+    assert _as(cluster, "service_role", f"UPDATE public.cloud_sync_tokens SET revoked_at = now() WHERE user_id = '{who.user}'").returncode == 0
+    assert _as(cluster, "service_role", f"DELETE FROM public.cloud_sync_tokens WHERE user_id = '{who.user}'").returncode == 0
+
+
+def test_the_owner_still_reads_their_own_tokens(cluster):
+    who = door.Browser(cluster)
+    _token(cluster, who, pairing_session_id=f"'{who.session}'")
+    done = who.script(f"SELECT count(*) FROM public.cloud_sync_tokens WHERE user_id = '{who.user}';")
+    assert done.returncode == 0, done.stderr
+    assert "1" in done.stdout.split()
+
+
+def test_the_policies_of_writing_are_dropped_and_the_one_of_reading_stays(cluster):
+    """On the cloud the table has one policy per command (006, 025). 105 drops the three that write."""
+    cluster("""
+      ALTER TABLE public.cloud_sync_tokens ENABLE ROW LEVEL SECURITY;
+      DROP POLICY IF EXISTS "Users can view own cloud sync tokens" ON public.cloud_sync_tokens;
+      DROP POLICY IF EXISTS "Users can insert own cloud sync tokens" ON public.cloud_sync_tokens;
+      DROP POLICY IF EXISTS "Users can update own cloud sync tokens" ON public.cloud_sync_tokens;
+      DROP POLICY IF EXISTS "Users can delete own cloud sync tokens" ON public.cloud_sync_tokens;
+      CREATE POLICY "Users can view own cloud sync tokens" ON public.cloud_sync_tokens FOR SELECT USING (user_id = auth.uid());
+      CREATE POLICY "Users can insert own cloud sync tokens" ON public.cloud_sync_tokens FOR INSERT WITH CHECK (user_id = auth.uid());
+      CREATE POLICY "Users can update own cloud sync tokens" ON public.cloud_sync_tokens FOR UPDATE USING (user_id = auth.uid());
+      CREATE POLICY "Users can delete own cloud sync tokens" ON public.cloud_sync_tokens FOR DELETE USING (user_id = auth.uid());
+      GRANT INSERT, UPDATE, DELETE ON public.cloud_sync_tokens TO anon, authenticated;
+    """)
+    try:
+        cluster(file=M105)         # applied again, as a migration applied by hand can be
+        cluster(file=M105)
+        left = door._scalar(cluster, "SELECT string_agg(polcmd::text, ',' ORDER BY polcmd::text) FROM pg_policy "
+                                     "WHERE polrelid = 'public.cloud_sync_tokens'::regclass")
+        assert left == "r"
+        assert door._scalar(cluster, "SELECT has_table_privilege('authenticated', 'public.cloud_sync_tokens', 'DELETE')") == "f"
+    finally:
+        cluster("ALTER TABLE public.cloud_sync_tokens DISABLE ROW LEVEL SECURITY;")
+
+
+@pytest.mark.parametrize("left_behind, message", [
+    ("GRANT DELETE ON public.cloud_sync_tokens TO PUBLIC", "can still INSERT, UPDATE or DELETE"),
+    ("GRANT UPDATE ON public.cloud_sync_tokens TO PUBLIC", "can still INSERT, UPDATE or DELETE"),
+    ("GRANT INSERT ON public.cloud_sync_tokens TO PUBLIC", "can still INSERT, UPDATE or DELETE"),
+])
+def test_the_migration_stops_when_a_privilege_it_cannot_remove_is_left(cluster, left_behind, message):
+    """A REVOKE from the browser roles does not remove what PUBLIC grants: the last block of 105 says so."""
+    cluster(left_behind)
+    try:
+        done = cluster(file=M105, check=False)
+        assert done.returncode != 0 and message in done.stderr, done.stderr
+    finally:
+        cluster("REVOKE ALL ON public.cloud_sync_tokens FROM PUBLIC")
+        cluster(file=M105)
+
+
+def test_the_migration_stops_when_a_writing_policy_is_left(cluster):
+    """A policy of another name (not one 105 drops) that writes is left in place: the last block stops."""
+    cluster("""
+      ALTER TABLE public.cloud_sync_tokens ENABLE ROW LEVEL SECURITY;
+      CREATE POLICY "other writer" ON public.cloud_sync_tokens FOR DELETE USING (true);
+    """)
+    try:
+        done = cluster(file=M105, check=False)
+        assert done.returncode != 0 and "still has an INSERT, UPDATE, DELETE or ALL policy" in done.stderr, done.stderr
+    finally:
+        cluster('DROP POLICY IF EXISTS "other writer" ON public.cloud_sync_tokens; '
+                'ALTER TABLE public.cloud_sync_tokens DISABLE ROW LEVEL SECURITY;')
+        cluster(file=M105)

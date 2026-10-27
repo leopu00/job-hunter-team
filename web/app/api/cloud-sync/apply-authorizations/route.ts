@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { sanitizedError } from "@/lib/error-response";
+import { fetchPostgrestRows } from "@/lib/postgrest-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -51,11 +52,19 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { data: deviceRows, error: deviceError } = await admin
-    .from("cloud_sync_tokens")
-    .select("pairing_session_id, expires_at")
-    .eq("user_id", userId)
-    .is("revoked_at", null);
+  // Every token of the account, the revoked and the expired ones too: the session a device was paired from
+  // stays that device's after its token ends (migration 105 compares the door's caller with all of them).
+  const { data: deviceRows, error: deviceError } = await fetchPostgrestRows<{
+    pairing_session_id?: unknown;
+    revoked_at?: unknown;
+    expires_at?: unknown;
+  }>(
+    admin
+      .from("cloud_sync_tokens")
+      .select("pairing_session_id, revoked_at, expires_at")
+      .eq("user_id", userId)
+      .order("id"),
+  );
   if (deviceError) {
     return sanitizedError(deviceError, {
       status: 500,
@@ -63,28 +72,28 @@ export async function GET(req: NextRequest) {
       publicMessage: "query_failed",
     });
   }
-  const activeDeviceRows = (
-    (deviceRows ?? []) as Array<{
-      pairing_session_id?: unknown;
-      expires_at?: unknown;
-    }>
-  ).filter((row) => {
-    if (row.expires_at === null || row.expires_at === undefined) return true;
-    return (
-      typeof row.expires_at === "string" &&
-      Date.parse(row.expires_at) > Date.now()
-    );
-  });
   // Tokens created before pairing_session_id existed cannot be tied to a
   // browser session. Do not hand a box any L3 receipt until it pairs again.
-  if (activeDeviceRows.some((row) => row.pairing_session_id === null)) {
+  // Only an ACTIVE token without a session asks for that: a legacy one that is
+  // revoked or expired is over.
+  const isActive = (row: { revoked_at?: unknown; expires_at?: unknown }) =>
+    (row.revoked_at === null || row.revoked_at === undefined) &&
+    (row.expires_at === null ||
+      row.expires_at === undefined ||
+      (typeof row.expires_at === "string" &&
+        Date.parse(row.expires_at) > Date.now()));
+  if (
+    deviceRows.some(
+      (row) => row.pairing_session_id === null && isActive(row),
+    )
+  ) {
     return NextResponse.json(
       { ok: false, error: "re_pair_required" },
       { status: 409 },
     );
   }
   const deviceSessions = new Set(
-    activeDeviceRows
+    deviceRows
       .map((row) => row.pairing_session_id)
       .filter((id): id is string => typeof id === "string"),
   );
