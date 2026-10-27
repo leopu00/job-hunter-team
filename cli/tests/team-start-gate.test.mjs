@@ -20,10 +20,12 @@ function box({ config, tmux = false, cli = null } = {}) {
   mkdirSync(bin);
   writeFileSync(join(home, '.team-halted.flag'), FLAG_TEXT);
   if (config !== undefined) writeFileSync(join(home, 'jht.config.json'), JSON.stringify(config));
-  // a fake tmux says every session is already there, so a start that gets going has nothing to launch
+  // a fake tmux that accepts everything, and a fake bash for the delayed «Enter» the start sends: nothing real
+  // is launched, but a start that gets going reaches the end
   if (tmux) writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  writeFileSync(join(bin, 'bash'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
   if (cli) writeFileSync(join(bin, cli), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-  for (const name of ['sh', 'tmux', cli].filter(Boolean)) if (existsSync(join(bin, name))) chmodSync(join(bin, name), 0o755);
+  for (const name of ['bash', 'tmux', cli].filter(Boolean)) if (existsSync(join(bin, name))) chmodSync(join(bin, name), 0o755);
   return { root, home, bin, flag: join(home, '.team-halted.flag') };
 }
 
