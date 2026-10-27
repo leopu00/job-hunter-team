@@ -83,9 +83,7 @@ export async function GET(req: NextRequest) {
       (typeof row.expires_at === "string" &&
         Date.parse(row.expires_at) > Date.now()));
   if (
-    deviceRows.some(
-      (row) => row.pairing_session_id === null && isActive(row),
-    )
+    deviceRows.some((row) => row.pairing_session_id === null && isActive(row))
   ) {
     return NextResponse.json(
       { ok: false, error: "re_pair_required" },
