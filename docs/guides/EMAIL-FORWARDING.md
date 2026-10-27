@@ -198,7 +198,7 @@ changes under us and is already documented on their side, the third is visible i
 any dashboard screenshot.
 
 When you add the images, replace the `> 📸 Missing screenshots` callout at the
-top with markdown embeds: `![Team email](assets/email-01-app-form.png)`.
+top with markdown embeds: `![Mail page](assets/email-01-app-form.png)`.
 Note the first shot is the **Mail** page of the desktop app, not the retired Electron wizard.
 
 ---
