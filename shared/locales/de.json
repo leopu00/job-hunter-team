@@ -124,7 +124,7 @@
   "plan.price_month": "%s $/Monat",
   "plan.unknown": "unbekannter Tarif: %s",
   "plan.not_selected": "kein Abonnement ausgewählt",
-  "plan.select_hint": "der Benutzer muss während der Einrichtung ein Abonnement auswählen",
+  "plan.select_hint": "der Nutzer hat kein Abonnement angegeben: rate keine Aufstellung. Frag ihn im Chat — führe `python3 /app/shared/skills/plan_registry.py list <provider>` aus (Codex ist `codex`), zeige die Abonnements und schlag das der Zeile `Codex reports:` vor, ohne für ihn zu entscheiden — schreib dann genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` und starte begin-burst erneut",
   "plan.none_known": "keine bekannten Tarife",
   "plan.weekly_cap": "Wochenlimit",
   "plan.no_weekly_cap": "kein Wochenlimit",

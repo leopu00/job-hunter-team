@@ -154,7 +154,7 @@
   "plan.price_month": "%s $/month",
   "plan.unknown": "unknown plan: %s",
   "plan.not_selected": "subscription plan not selected",
-  "plan.select_hint": "the user must select a subscription plan during setup",
+  "plan.select_hint": "the user has not declared a subscription plan: do not guess a roster. Ask them in chat — run `python3 /app/shared/skills/plan_registry.py list <provider>` (Codex is `codex`), show the plans and suggest the one on the `Codex reports:` line without deciding for them — then write exactly their choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` and run begin-burst again",
   "plan.none_known": "no known plans",
   "plan.weekly_cap": "weekly cap",
   "plan.no_weekly_cap": "no weekly cap",

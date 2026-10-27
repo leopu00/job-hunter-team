@@ -174,7 +174,7 @@ def begin_burst() -> dict:
     if not info.get("ok"):
         return {"ok": False, "phase": state["phase"],
                 "reason": info.get("reason", "plan not declared"),
-                "hint": "ask the user to complete the subscription step in setup"}
+                "hint": info.get("hint") or "declare the subscription plan with plan_registry.py list/set"}
 
     state.update({
         "phase": PHASE_BURST,

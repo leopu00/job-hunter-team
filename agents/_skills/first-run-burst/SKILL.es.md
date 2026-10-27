@@ -37,11 +37,18 @@ usuario: la shortlist es el producto, el scraping es fontanería. Todo lo que si
 python3 /app/shared/skills/first_run.py begin-burst
 ```
 
-Te devuelve el `roster` (cuántos Scout / Analista / Scorer), el `scout_cap_first_pass` y el
-`target_scored`, todos derivados de la suscripción que el usuario declaró durante el setup. Si
-responde `piano non dichiarato` (plan no declarado), el paso de setup está incompleto: díselo al
-usuario en el chat y detente — **no adivines** un roster, una sobreestimación le quema la ventana el
-primer día.
+Te devuelve el `roster` (cuántos Scout / Analista / Scorer), el
+`scout_cap_first_pass` y el `target_scored`, todos derivados de la suscripción
+que el usuario declaró. Si rechaza (`ok: false`, «plan de suscripción no
+seleccionado»), aún no hay plan declarado: **no adivines** un roster, una
+sobreestimación le quema la ventana el primer día. Pregunta al usuario en el
+chat qué plan tiene: ejecuta `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` es el
+`active_provider` de `jht.config.json`; Codex es `codex`), muestra nombres y
+precios y, si la lista termina con `Codex reports: <nombre> → <Plan> <precio>`,
+sugiere ese plan — una sugerencia, nunca tu elección. Cuando el usuario
+elija, escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` y
+vuelve a lanzar `begin-burst`. Si no lo sabe, detente y díselo; vuelve a
+preguntar en tu próximo despertar.
 
 **2. Spawnea todo el roster, escalonado unos ~60 segundos.**
 

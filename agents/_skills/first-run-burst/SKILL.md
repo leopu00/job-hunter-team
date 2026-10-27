@@ -39,9 +39,15 @@ python3 /app/shared/skills/first_run.py begin-burst
 
 It returns the `roster` (how many Scout / Analista / Scorer), the
 `scout_cap_first_pass` and the `target_scored`, all derived from the
-subscription the user declared during setup. If it answers `piano non
-dichiarato`, the setup step is incomplete: tell the user in chat and stop —
-do **not** guess a roster, an over-estimate burns their window on day one.
+subscription the user declared. If it refuses (`ok: false`, «subscription
+plan not selected»), no plan is declared yet: do **not** guess a roster, an
+over-estimate burns their window on day one. Ask the user in chat which plan
+they have: run `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` is the `active_provider`
+of `jht.config.json`; Codex is `codex`), show the names and prices, and if the
+list ends with `Codex reports: <name> → <Plan> <price>` suggest that plan —
+a suggestion, never your choice. When the user chooses, write exactly their
+choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` and run `begin-burst` again. If they
+do not know, stop and tell them; ask again at your next wake.
 
 **2. Spawn the whole roster, staggered by ~60 seconds.**
 

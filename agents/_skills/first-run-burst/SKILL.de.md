@@ -40,9 +40,13 @@ python3 /app/shared/skills/first_run.py begin-burst
 
 Er liefert dir den `roster` zurück (wie viele Scout / Analista / Scorer), den
 `scout_cap_first_pass` und das `target_scored`, alle abgeleitet aus dem Abonnement, das der Nutzer
-beim Setup angegeben hat. Antwortet er `piano non dichiarato` (Plan nicht deklariert), ist der
-Setup-Schritt unvollständig: Sag es dem Nutzer im Chat und halte an — rate **nicht** einen Roster,
-eine Überschätzung verbrennt ihm sein Fenster am ersten Tag.
+angegeben hat. Verweigert er (`ok: false`, „kein Abonnement ausgewählt"), ist noch kein Abonnement
+angegeben: rate **nicht** einen Roster, eine Überschätzung verbrennt ihm sein Fenster am ersten Tag.
+Frag den Nutzer im Chat, welches Abonnement er hat: führe `python3 /app/shared/skills/plan_registry.py list <provider>` aus (`<provider>` ist
+der `active_provider` aus `jht.config.json`; Codex ist `codex`), zeige Namen und Preise und schlag, wenn die Liste
+mit `Codex reports: <Name> → <Abo> <Preis>` endet, dieses Abonnement vor — ein Vorschlag, nie deine Wahl.
+Wählt der Nutzer, schreib genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` und starte `begin-burst` erneut.
+Weiß er es nicht, halte an und sag es ihm; frag beim nächsten Aufwachen erneut.
 
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 

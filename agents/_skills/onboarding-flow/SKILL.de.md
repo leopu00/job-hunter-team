@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Konversationsprotokoll, dem der Assistente beim Onboarding des Nutzers folgt — erste Nachricht, iteratives Eine-Frage-pro-Runde-Pacing, blockierende Checkliste (das Minimum, das das Dashboard freischaltet) vs reichhaltige Checkliste (was die Writer tatsächlich nützlich macht), branchenneutraler Fragestil (NIEMALS IT annehmen), und die verpflichtende Checkpoint-Sequenz wenn der Nutzer Dateien hochlädt. Eng gepaart mit `profile-yaml` (jede Antwort = ein Write+Validate) und `profile-summaries` (narrative MDs nach Schlüsselmeilensteinen). Diesen Skill am Anfang einer Onboarding-Sitzung und bei jeder Nutzer-Runde öffnen, die neue Info bringt.
-allowed-tools: Bash(mkdir -p *), Bash(cp *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
@@ -105,6 +105,20 @@ preferences:
 ```
 
 **Ton:** eine natürliche Frage, kein bürokratisches Formular. Z.B.: *"Da du auch nach London und Zürich schaust: hast du bereits das Recht, dort zu arbeiten, oder bräuchte es dafür einen Sponsor/ein Visum? So vermeide ich, dir Rollen vorzuschlagen, die nicht zugänglich sind."* Erkläre immer das **Warum** (= nützlichere Shortlist), frage nicht kalt.
+
+## Abonnement — einmal fragen, nie an Stelle des Nutzers eintragen
+
+Das Team kann seine erste Runde erst starten, wenn das Abonnement des Nutzers angegeben ist (der Capitano rät keine Aufstellung: eine falsche Annahme verbrennt das Fenster des Nutzers am ersten Tag). Die App hat dafür keinen Bildschirm: **du** bist die Stelle, an der der Nutzer es angibt.
+
+**Wann:** einmal, nach den ersten zwei, drei Antworten (nie in deiner ersten Nachricht), und spätestens bevor du dem Nutzer sagst, dass das Profil fertig ist.
+
+1. **Prüfen.** `python3 /app/shared/skills/plan_registry.py get`. Wird ein Abonnement ausgegeben (Exit 0), ist es angegeben: sag nichts und mach weiter. `PLAN_MISSING` (Exit 1) = nicht angegeben.
+2. **Auswahl zeigen.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex ist der Anbieter, den die App verbindet). Gib dem Nutzer Namen und Preise der Abonnements als kurze, schlichte Liste in seiner Sprache, nicht die rohe Tabelle.
+3. **Vorschlagen, nicht entscheiden.** Endet die Ausgabe mit einer Zeile `Codex reports: <Name> → <Abo> <Preis>`, schlag dieses Abonnement vor („Codex sagt mir, dein Konto sieht nach Pro aus, 100 $/Monat: ist das deins?"). Es ist ein Vorschlag: Es wird nichts geschrieben, bevor der Nutzer ja sagt. Eine Zeile, die auf `(not in this table)` endet, ist kein Vorschlag: zähle nur die Abonnements auf.
+4. **Schreiben, was er gewählt hat.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, mit `<id>` aus der ersten Spalte der Liste. Bestätige in einer Zeile.
+5. **Weiß er es nicht?** Such nicht selbst eins aus. Sag ihm, dass das Abonnement auf der Abo-Seite des Anbieters steht, frag einmal erneut, bevor das Profil fertig ist, und sag ihm, wenn er es dann noch nicht weiß, dass der Capitano erneut fragt.
+
+Nie ein Abonnement eintragen, das der Nutzer nicht gewählt hat, nie aus etwas anderem ableiten, nie erneut fragen, wenn `get` eins ausgibt. Nutze nur `get`, `list` und `set` dieses Skripts.
 
 ## Branchenneutral — NIEMALS IT als Standard annehmen
 

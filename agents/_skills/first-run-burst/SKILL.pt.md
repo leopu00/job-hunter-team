@@ -36,10 +36,14 @@ python3 /app/shared/skills/first_run.py begin-burst
 ```
 
 Devolve-te o `roster` (quantos Scout / Analista / Scorer), o `scout_cap_first_pass` e o
-`target_scored`, todos derivados da subscrição que o utilizador declarou durante o setup. Se
-responder `piano non dichiarato` (plano não declarado), o passo de setup está incompleto: di-lo ao
-utilizador no chat e para — **não adivinhes** um roster, uma sobrestimativa queima-lhe a janela logo
-no primeiro dia.
+`target_scored`, todos derivados da subscrição que o utilizador declarou. Se recusar (`ok: false`,
+«plano de subscrição não selecionado»), ainda não há plano declarado: **não adivinhes** um roster, uma
+sobrestimativa queima-lhe a janela logo no primeiro dia. Pergunta ao utilizador no chat qual é o plano
+dele: executa `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` é o `active_provider` de `jht.config.json`; o Codex
+é `codex`), mostra os nomes e os preços e, se a lista terminar com `Codex reports: <nome> → <Plano>
+<preço>`, sugere esse plano — uma sugestão, nunca a tua escolha. Quando o utilizador escolher, escreve
+exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` e volta a lançar `begin-burst`. Se não souber,
+para e di-lo; volta a perguntar no teu próximo despertar.
 
 **2. Faz spawn de todo o roster, escalonado ~60 segundos.**
 
