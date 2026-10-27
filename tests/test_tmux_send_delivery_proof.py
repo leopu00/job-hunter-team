@@ -42,7 +42,11 @@ case "$cmd" in
     [ -f "$S/transcript" ] && cat "$S/transcript"
     [ "$mode" = busy ] && echo '◦ Working (3s • esc to interrupt)'
     if [ -f "$S/layout" ] && [ "$(cat "$S/layout")" = codex ]; then
-      # Codex: the mark has no box and the model line sits under the composer.
+      # Codex: the mark has no box and the model line sits under the composer. In the middle of a turn that line
+      # is «tab to queue message ... 80% context left» (the footer of the real Capitano, TEST 5, 27/10).
+      if [ "$mode" = busy ]; then
+        printf '› %s\n  tab to queue message                                                        80%% context left\n' "$(cat "$S/composer" 2>/dev/null)"; exit 0
+      fi
       printf '› %s\n  gpt-5.6-sol high · ~/agents/capitano\n' "$(cat "$S/composer" 2>/dev/null)"; exit 0
     fi
     printf '╭──────────────────────────────────────────────╮\n│ ❯ %s │\n╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' "$(cat "$S/composer" 2>/dev/null)" ;;
@@ -64,6 +68,11 @@ case "$cmd" in
     # A person types next to our text a moment after it rendered (during the settle pause).
     if [ -f "$S/typing_after" ]; then
       (sleep "$(cat "$S/typing_after")"; printf '%s' ' tipo io' >> "$S/composer") >/dev/null 2>&1 &
+    fi
+    # The agent's turn starts a moment after the paste rendered (the Enter of an earlier paste starts it):
+    # the screen goes from «at rest» to «working» while the transport is still settling.
+    if [ -f "$S/busy_after" ]; then
+      (sleep "$(cat "$S/busy_after")"; printf 'busy\n' > "$S/mode") >/dev/null 2>&1 &
     fi
     # A paste the TUI draws in two goes: the first half now, the rest after the delay in `split`.
     if [ -f "$S/split" ]; then
@@ -668,6 +677,36 @@ def test_a_long_paste_the_tui_keeps_out_of_sight_is_ours_and_gets_its_enter(box,
     assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
     assert BIG_BODY in (box.state / "transcript").read_text(encoding="utf-8")
     assert _body(box, "composer") == [] and not _pending(box).exists()
+
+
+def test_a_long_paste_into_a_codex_that_starts_working_is_still_ours_and_gets_its_enter(box):
+    """TEST 5, 27/10: the bridge's 1043-character PACE-GUARD, pasted into a Capitano that was at rest, whose turn
+    started 0.1 s later (the Enter of the previous paste starts it). Codex then draws «tab to queue message ... NN%
+    context left» as its footer; with that footer unrecognised the composer was no longer «our text» when the
+    transport looked again before the Enter (rc=130, composer_changed), and the token stayed in the box until a
+    person pressed Enter."""
+    _collapse(box, "codex", busy_after=0.12)
+    done = box.run(BIG)
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+    assert _body(box, "composer") == [] and not _pending(box).exists()
+
+
+def test_a_long_paste_into_a_codex_whose_turn_starts_at_the_paste_is_ours_and_gets_its_enter(box):
+    _collapse(box, "codex")
+    box.put("turn_on_paste")
+    done = box.run(BIG)
+    assert done.returncode == 0, done.stderr
+    assert len(box.keys("Enter")) == 1 and _body(box, "composer") == []
+
+
+def test_a_long_paste_into_a_codex_that_is_already_working_is_ours_and_gets_its_enter(box):
+    _collapse(box, "codex")
+    box.put("mode", "busy")
+    done = box.run(BIG)
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+    assert _body(box, "composer") == []
 
 
 def test_a_long_message_with_line_breaks_is_ours_on_claude_too(box):

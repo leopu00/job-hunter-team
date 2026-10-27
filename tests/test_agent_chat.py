@@ -1126,6 +1126,48 @@ def test_with_flush_on_read_off_only_a_send_delivers_the_queue(box):
     assert [e.rsplit("] ", 1)[1] for e in box.envelopes()] == ["primo", "secondo"]
 
 
+PASTED_TOKEN_CODEX = """\
+• Done.
+
+› \x1b[38;5;6m[Pasted Content 1043 chars]\x1b[0m
+
+  gpt-5.6-sol high · ~/capitano
+"""
+
+
+def test_a_queued_turn_behind_a_paste_of_ours_goes_once_the_transport_has_submitted_it(box):
+    """TEST 5: the user's turn waited «queued» for 14 minutes behind a bridge paste nobody had submitted."""
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-behind", stdin="ci sei?")
+    screen.write_text(PASTED_TOKEN_CODEX, encoding="utf-8")
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0", FAKE_FLUSH_CLEARS="1")[1]
+    assert _flush_calls(box) == ["CAPITANO"]
+    assert page["queued"] == [] and box.envelopes() == ["[@utente -> @capitano] [CHAT] ci sei?"]
+
+
+def test_a_queued_turn_behind_a_draft_that_is_not_ours_stays_queued_and_nothing_is_touched(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    _code, receipt = box.run("send", "capitano", "id-draft-behind", stdin="ci sei?")
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="130")[1]
+    assert _flush_calls(box) == ["CAPITANO"], "asked once"
+    assert page["queued"] == [receipt["messageId"]] and box.envelopes() == []
+    assert not any(call.startswith("send-keys") for call in box.calls()), "nothing typed"
+
+
+def test_a_working_agent_is_never_asked_to_flush(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    box.run("send", "capitano", "id-working", stdin="ci sei?")
+    box.run("read", "capitano", FAKE_FLUSH_RC="0")
+    assert _flush_calls(box) == []
+
+
 def test_a_flush_that_fails_after_typing_is_marked_unconfirmed_and_never_typed_twice(box):
     box.stub_delivery()
     screen = box.state / "screen"

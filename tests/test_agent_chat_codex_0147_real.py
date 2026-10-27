@@ -56,6 +56,34 @@ def test_the_real_captain_with_a_heartbeat_in_the_composer_has_text():
     assert module.composer_text(screen)  # the draft is read whole, for the transport's proof
 
 
+def test_the_real_captain_with_a_pasted_token_in_the_composer_has_text():
+    """27/10, TEST 5, Mac: a 1043-character paste of the bridge sat in the Capitano's composer as the token
+    «[Pasted Content 1043 chars]» (the tail of the real capture, the transcript above it left out)."""
+    module = _module()
+    screen = _screen("capitano_pasted_token")
+    assert module.composer_text(screen) == "[Pasted Content 1043 chars]"
+    assert module.delivery_gate(screen) == "text"
+
+
+def test_a_codex_in_the_middle_of_a_turn_still_has_a_composer():
+    """The same composer while Codex works: its footer is «tab to queue message ... 80% context left», with no
+    «·» (the model line is the footer at rest). That footer is the one the Assistente's own capture of the
+    Capitano shows. Before it was recognised the composer was not found: the text pasted into it was «another
+    draft», the transport left it there without an Enter, and the gate said «blocked»."""
+    module = _module()
+    screen = _screen("capitano_working_token")
+    assert module.composer_text(screen) == "[Pasted Content 1043 chars]"
+    assert module.delivery_gate(screen) == "text"
+    assert module.composer_snapshot(screen) == ("text", False)
+
+
+def test_a_codex_in_the_middle_of_a_turn_with_an_empty_composer_is_writable():
+    module = _module()
+    ghost = _screen("capitano_working_token").replace(
+        "[Pasted Content 1043 chars]", "\x1b[2mFind and fix a bug in @filename\x1b[0m").replace("\x1b[38;5;6m", "")
+    assert module.delivery_gate(ghost) == "empty"
+
+
 def _echo_over_two_rows(first_len: int, second_len: int) -> str:
     """The shape of the assistant's last input: a long `›` row and its wrapped tail, as in the capture."""
     return (
