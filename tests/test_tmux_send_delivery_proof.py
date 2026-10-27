@@ -268,13 +268,18 @@ def test_a_busy_agent_that_draws_the_paste_late_is_waited_for_and_gets_its_enter
 
 
 def test_a_busy_agent_that_never_draws_it_in_time_is_busy_not_dead_and_the_text_is_not_typed_again(box):
-    _busy_codex(box, 9)
+    # The render window is a count of polls, so its length in seconds is the cost of a poll on this machine: about 7 s
+    # on a laptop, more than 8 on a small VPS, where a TUI that draws at 9 s had drawn before the call gave up.  The
+    # TUI draws at 20 s and the retry waits for that moment, whatever the window of this machine is.
+    import time as _time
+    lag = 20
+    _busy_codex(box, lag)
+    started = _time.monotonic()
     done = box.run(JHT_TMUX_LATE_RENDER_WAIT="1")
     assert done.returncode == 4, done.stderr          # alive, retry later: pacing does not count it as a death
     assert len(box.typed()) == 1 and box.keys("Enter") == [] and box.keys("Escape") == []
     # the retry finds the text, now drawn, as the pending text of ours: Enter only, never a second paste
-    import time as _time
-    _time.sleep(1.5)                          # the TUI draws it at 9 s; the first call gave up at about 8
+    _time.sleep(max(0.0, lag + 1.5 - (_time.monotonic() - started)))
     again = box.run(JHT_TMUX_LATE_RENDER_WAIT="1")
     assert again.returncode == 0, again.stderr
     assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
