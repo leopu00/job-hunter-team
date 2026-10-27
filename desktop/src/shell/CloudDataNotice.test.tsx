@@ -62,6 +62,8 @@ describe("the line of the pages that read the cloud, for a profile with no sign-
     for (const [locale, text] of Object.entries(CLOUD_DATA_NOTICE_TEXT)) {
       expect(text.notice, `${locale}.notice`).toMatch(/\S/);
       expect(text.signIn, `${locale}.signIn`).toMatch(/\S/);
+      // the button leads to the choice of how to sign in, not to Google's page
+      expect(text.signIn, `${locale}.signIn names no provider`).not.toMatch(/google/i);
       if (locale !== "it") expect(text.notice, `${locale} is not the Italian one`).not.toBe(IT.notice);
     }
     expect(CLOUD_DATA_NOTICE_TEXT.pt.notice).toMatch(/equipa/);
