@@ -82,6 +82,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).
+
 ## Tipi
 
 | Tipo | Quando | Rendering dashboard |

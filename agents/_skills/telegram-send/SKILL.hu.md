@@ -84,6 +84,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+A záró `TXT`-t az első oszlopba írd, egyedül a sorában, szóközök nélkül (ha a behúzást is átmásolod, a heredoc soha nem záródik le: a `TXT` sorral végződő szöveget elutasítja, nem megy el semmi).
+
 ## Escape szekvenciak (`\n`, `\t`, `\r`)
 
 A wrapper a `\n`, `\t`, `\r` karaktereket az uzenetedben **valos sortoresekre/tabokra/CR-ekre** ertelmezia Telegramra kuldes elott. Tehat irhatsz igy:

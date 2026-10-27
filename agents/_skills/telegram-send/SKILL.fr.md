@@ -84,6 +84,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Écris le `TXT` de fermeture en première colonne, seul sur sa ligne, sans espaces devant (si tu copies le retrait, le heredoc ne se ferme jamais : un texte qui finit par une ligne `TXT` est refusé, rien n'est envoyé).
+
 ## Séquences d'échappement (`\n`, `\t`, `\r`)
 
 Le wrapper interprète `\n`, `\t`, `\r` dans ton message comme de **vrais sauts de ligne/tabulations/retours chariot** avant d'envoyer à Telegram. Tu peux donc écrire :

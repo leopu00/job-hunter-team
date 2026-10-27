@@ -83,6 +83,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).
+
 ## Escape sequences (`\n`, `\t`, `\r`)
 
 The wrapper interprets `\n`, `\t`, `\r` in your message as **real newlines/tabs/CRs** before sending to Telegram. So you can write:

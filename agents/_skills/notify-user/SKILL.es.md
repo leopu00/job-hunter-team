@@ -82,6 +82,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Escribe el `TXT` de cierre en la primera columna, solo en su línea, sin espacios delante (si copias la sangría el heredoc nunca se cierra: un texto que acaba en una línea `TXT` se rechaza, no se envía nada).
+
 ## Tipos
 
 | Tipo | Cuándo | Renderizado dashboard |

@@ -84,7 +84,7 @@ jht-send --partial 'Arbeite daran…'   # Checkpoint mitten in der Runde, hält 
 Regeln:
 - **Ein `[CHAT]` ⇒ mindestens ein `jht-send`. Keine Ausnahmen.** Nichts zu schreiben lässt den Nutzer auf einen eingefroren wirkenden Chat starren.
 - **Die Abschlussnachricht der Runde hat KEIN `--partial`.** Wenn du es vergisst, zeigt das Frontend die Tipp-Punkte für immer an (bis ein Fallback-Timeout ~10 Min. später greift).
-- **Anführungszeichen**: Übergib den Body als einzelnes positionelles Argument. Einfache Anführungszeichen bewahren `$`, `"`, Emoji, Akzente wörtlich. Für einen Body, der ein wörtliches `'` enthält, verwende doppelte Anführungszeichen (`jht-send "non c'è problema"`) — aber innerhalb von `"..."` expandiert die Shell `$var`, also sei vorsichtig.
+- **Anführungszeichen**: Übergib den Body als einzelnes positionelles Argument. Einfache Anführungszeichen bewahren `$`, `"`, Emoji, Akzente wörtlich. Für einen Body, der ein wörtliches `'` enthält, verwende doppelte Anführungszeichen (`jht-send "non c'è problema"`) — aber innerhalb von `"..."` expandiert die Shell `$var`, also sei vorsichtig. Bei einem `$` einfache Anführungszeichen oder stdin verwenden: siehe der Abschnitt weiter unten.
 - **Mehrzeilig**: Bash `$'Zeile1\nZeile2'`, oder verwende `\n` innerhalb des Strings und lass Python es bewahren.
 
 ## Ein `$` im Text: einfache Anführungszeichen oder stdin
@@ -101,6 +101,8 @@ jht-send - <<'TXT'
 It's $20/month, not $200
 TXT
 ```
+
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
 
 ## Nachrichtentyp (`--kind`)
 

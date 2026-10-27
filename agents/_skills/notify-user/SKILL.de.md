@@ -82,6 +82,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
+
 ## Arten
 
 | Art | Wann | Dashboard-Rendering |

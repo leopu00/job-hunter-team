@@ -38,3 +38,5 @@ jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
 Which plan do you want? Plus — $20/month; Pro — $100/month
 TXT
 ```
+
+Escreve o `TXT` de fecho na primeira coluna, sozinho na linha, sem espaços antes (se copiares o avanço, o heredoc nunca fecha: um texto que acaba numa linha `TXT` é recusado, não sai nada).

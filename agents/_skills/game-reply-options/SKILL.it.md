@@ -35,3 +35,5 @@ jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
 Which plan do you want? Plus — $20/month; Pro — $100/month
 TXT
 ```
+
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).

@@ -84,6 +84,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Escribe el `TXT` de cierre en la primera columna, solo en su línea, sin espacios delante (si copias la sangría el heredoc nunca se cierra: un texto que acaba en una línea `TXT` se rechaza, no se envía nada).
+
 ## Secuencias de escape (`\n`, `\t`, `\r`)
 
 El wrapper interpreta `\n`, `\t`, `\r` en tu mensaje como **saltos de línea/tabulaciones/retornos de carro reales** antes de enviar a Telegram. Así puedes escribir:

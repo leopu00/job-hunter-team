@@ -37,7 +37,14 @@ def main() -> int:
     parser.add_argument("--agent", help="Target agent id; normally inferred")
     parser.add_argument("choice", nargs="+", help="2-5 useful reply labels")
     args = parser.parse_args()
-    prompt = (sys.stdin.read() if args.prompt == "-" else args.prompt).strip()
+    from_stdin = args.prompt == "-"
+    prompt = (sys.stdin.read() if from_stdin else args.prompt).strip()
+    if from_stdin and prompt.splitlines()[-1:] and prompt.splitlines()[-1].strip() == "TXT":
+        # an indented closing `TXT`: the heredoc never closed and the shell passed on the delimiter line too
+        parser.error(
+            "the prompt ends with a `TXT` line: the closing line of the heredoc was indented, so it never closed. "
+            "Nothing was written. Put `TXT` in the first column, alone on its line."
+        )
     choices = [value.strip() for value in args.choice if value.strip()]
     if not prompt or not 2 <= len(choices) <= 5:
         parser.error("--prompt and between 2 and 5 non-empty choices are required")

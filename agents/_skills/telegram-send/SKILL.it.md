@@ -84,6 +84,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).
+
 ## Sequenze di escape (`\n`, `\t`, `\r`)
 
 Il wrapper interpreta `\n`, `\t`, `\r` nel tuo messaggio come **veri a capo/tabulazioni/ritorni a capo** prima di inviare a Telegram. Quindi puoi scrivere:

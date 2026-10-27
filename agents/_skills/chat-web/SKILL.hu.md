@@ -84,7 +84,7 @@ jht-send --partial 'Dolgozom rajta…'   # kör közbeni ellenőrzési pont, nyi
 Szabályok:
 - **Egy `[CHAT]` ⇒ legalább egy `jht-send`. Nincs kivétel.** Ha semmit nem írsz, a felhasználó egy befagyottnak tűnő csevegést bámul.
 - **A kör záró üzenetének NINCS `--partial`-ja.** Ha elfelejted, a frontend a gépelési pontokat mutatja örökké (amíg egy tartalék időtúllépés ~10 perc múlva meg nem szünteti).
-- **Idézőjelek**: add meg a törzset egyetlen pozicionális argumentumként. Szimpla idézőjelek megőrzik a `$`, `"`, emoji, ékezetes karaktereket szó szerint. Ha a törzs literális `'`-t tartalmaz, használj dupla idézőjelet (`jht-send "non c'è problema"`) — de `"..."`-n belül a shell kiértékeli a `$var`-t, tehát légy óvatos.
+- **Idézőjelek**: add meg a törzset egyetlen pozicionális argumentumként. Szimpla idézőjelek megőrzik a `$`, `"`, emoji, ékezetes karaktereket szó szerint. Ha a törzs literális `'`-t tartalmaz, használj dupla idézőjelet (`jht-send "non c'è problema"`) — de `"..."`-n belül a shell kiértékeli a `$var`-t, tehát légy óvatos. `$` esetén szimpla idézőjel vagy stdin: lásd az alábbi szakaszt.
 - **Többsoros**: bash `$'sor1\nsor2'`, vagy használj `\n`-t a stringen belül és hagyd, hogy a Python megőrizze.
 
 ## `$` a szövegben: szimpla idézőjel vagy stdin
@@ -101,6 +101,8 @@ jht-send - <<'TXT'
 It's $20/month, not $200
 TXT
 ```
+
+A záró `TXT`-t az első oszlopba írd, egyedül a sorában, szóközök nélkül (ha a behúzást is átmásolod, a heredoc soha nem záródik le: a `TXT` sorral végződő szöveget elutasítja, nem megy el semmi).
 
 ## Az üzenet típusa (`--kind`)
 

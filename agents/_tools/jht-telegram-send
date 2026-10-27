@@ -121,6 +121,14 @@ if [ $# -eq 1 ] && [ "$1" = "-" ]; then
     echo "jht-telegram-send: il testo su stdin è vuoto: non invio" >&2
     exit 1
   fi
+  # Una riga di chiusura `TXT` con il rientro: il heredoc non si e' chiuso e la shell ha passato anche quella riga.
+  last_line="$(printf '%s\n' "$text" | awk 'NF { l = $0 } END { print l }')"
+  last_line="${last_line#"${last_line%%[![:space:]]*}"}"
+  last_line="${last_line%"${last_line##*[![:space:]]}"}"
+  if [ "$last_line" = "TXT" ]; then
+    echo "jht-telegram-send: il testo finisce con una riga TXT: la riga di chiusura del heredoc aveva un rientro, quindi non si e' chiuso. Non invio: scrivi TXT in prima colonna, da solo sulla riga." >&2
+    exit 1
+  fi
 else
   text="$*"
 fi

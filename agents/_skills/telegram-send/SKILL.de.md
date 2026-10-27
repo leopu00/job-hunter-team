@@ -84,6 +84,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
+
 ## Escape-Sequenzen (`\n`, `\t`, `\r`)
 
 Der Wrapper interpretiert `\n`, `\t`, `\r` in deiner Nachricht als **echte Zeilenumbrueche/Tabs/CRs**, bevor er sie an Telegram sendet. Du kannst also schreiben:

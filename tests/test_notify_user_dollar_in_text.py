@@ -57,6 +57,26 @@ def test_an_empty_stdin_is_an_empty_body(box):
     assert sql(box, "SELECT COUNT(*) FROM pending_user_messages") == [(0,)]
 
 
+@pytest.mark.parametrize("closing", ["   TXT", "\tTXT", "TXT   "])
+def test_a_text_that_ends_in_the_delimiter_line_is_not_sent(box, closing: str):
+    # a copied indent: the heredoc never closed and the shell passed on the delimiter line too
+    done = subprocess.run(
+        [str(NOTIFY), "--agent", "capitano", "--no-telegram", "-"], input=f"Plus — $20/month\n{closing}\n",
+        capture_output=True, text=True, env=box.env,
+    )
+
+    assert done.returncode == 1
+    assert "TXT" in done.stderr
+    assert sql(box, "SELECT COUNT(*) FROM pending_user_messages") == [(0,)]
+
+
+def test_an_indented_closing_line_in_a_real_heredoc_sends_nothing(box):
+    done = _bash(box, f"{NOTIFY} --agent capitano --no-telegram - <<'TXT'\nPlus — $20/month\n   TXT\n")
+
+    assert done.returncode == 1
+    assert sql(box, "SELECT COUNT(*) FROM pending_user_messages") == [(0,)]
+
+
 @pytest.mark.parametrize("suffix", LANGUAGES)
 def test_every_language_of_the_skill_says_how_to_write_a_dollar(suffix: str):
     text = (ROOT / "agents" / "_skills" / "notify-user" / f"SKILL{suffix}.md").read_text(encoding="utf-8")
@@ -64,3 +84,4 @@ def test_every_language_of_the_skill_says_how_to_write_a_dollar(suffix: str):
     assert "'Plus — $20/month; Pro — $100/month'" in text
     assert "- <<'TXT'" in text
     assert "`$1`" in text and "`$2`" in text
+    assert "`TXT`" in text  # the closing line in the first column, with no spaces before it

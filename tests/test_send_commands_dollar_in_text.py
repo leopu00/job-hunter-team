@@ -5,6 +5,10 @@ before the command starts, so "Plus — $20/month; Pro — $200/month" reached t
 "Plus — 0/month; Pro — 00/month" (collaudo 27/10). `jht-notify-user` already takes the text from stdin; this
 holds the same for `jht-send`, `jht-telegram-send` and `jht-reply-options`: "-" reads the text from stdin,
 where a quoted heredoc leaves every `$` alone, and each skill tells the agents so.
+
+A copied indent keeps the closing `TXT` out of the first column: the heredoc never closes, the shell passes on the
+delimiter line too, and the text would go out ending in "TXT". A text whose last line is `TXT` is refused instead,
+and nothing is written or sent.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ REPLY_OPTIONS = ROOT / "agents" / "_skills" / "game-reply-options" / "jht-reply-
 PRICES = "Plus — $20/month; Pro — $100/month; Pro 20x — $200/month"
 WITH_APOSTROPHE = "It's $20/month, not $200"
 LANGUAGES = ["", ".it", ".es", ".fr", ".de", ".hu", ".pt"]
+CLOSINGS = ["   TXT", "\tTXT", "TXT   "]  # a copied indent of 3 spaces, a tab, trailing spaces
 
 
 def _bash(script: str, env: dict[str, str]) -> subprocess.CompletedProcess:
@@ -106,6 +111,32 @@ def test_jht_send_an_empty_stdin_writes_nothing(tmp_path: Path, stdin: str):
     assert _chat_lines(tmp_path) == []
 
 
+@pytest.mark.parametrize("closing", CLOSINGS)
+def test_jht_send_a_text_that_ends_in_the_delimiter_line_is_refused(tmp_path: Path, closing: str):
+    done = subprocess.run(
+        [str(SEND), "-"], input=f"Saved $200 a month\n{closing}\n", capture_output=True, text=True, env=_chat_env(tmp_path)
+    )
+
+    assert done.returncode == 2
+    assert "TXT" in done.stderr and "Nothing was written" in done.stderr
+    assert _chat_lines(tmp_path) == []
+
+
+def test_jht_send_an_indented_closing_line_in_a_real_heredoc_writes_nothing(tmp_path: Path):
+    done = _bash(f"{SEND} - <<'TXT'\nSaved $200 a month\n   TXT\n", _chat_env(tmp_path))
+
+    assert done.returncode == 2
+    assert _chat_lines(tmp_path) == []
+
+
+def test_jht_send_a_text_that_only_mentions_txt_is_written(tmp_path: Path):
+    done = _bash(f"{SEND} - <<'TXT'\nThe attachment is a TXT file.\nTXT is plain text.\nTXT\n", _chat_env(tmp_path))
+
+    assert done.returncode == 0, done.stderr
+    # the real delimiter closed the heredoc: the text keeps the two lines that only name TXT
+    assert [entry["text"] for entry in _chat_lines(tmp_path)] == ["The attachment is a TXT file.\nTXT is plain text."]
+
+
 # ── jht-telegram-send ────────────────────────────────────────────────────────
 
 
@@ -154,6 +185,24 @@ def test_jht_telegram_send_a_dash_among_other_words_is_still_text(box):
     assert _telegram_texts(box) == ["ready - 3 positions"]
 
 
+@pytest.mark.parametrize("closing", CLOSINGS)
+def test_jht_telegram_send_a_text_that_ends_in_the_delimiter_line_is_not_sent(box, closing: str):
+    done = subprocess.run(
+        [str(TELEGRAM), "-"], input=f"Saved $200 a month\n{closing}\n", capture_output=True, text=True, env={**os.environ, **box["env"]}
+    )
+
+    assert done.returncode == 1
+    assert "TXT" in done.stderr and "non invio" in done.stderr.lower()
+    assert _calls(box) == []
+
+
+def test_jht_telegram_send_a_text_that_only_mentions_txt_is_sent(box):
+    done = _bash(f"{TELEGRAM} - <<'TXT'\nThe attachment is a TXT file.\nTXT\n", {**os.environ, **box["env"]})
+
+    assert done.returncode == 0, done.stderr
+    assert _telegram_texts(box) == ["The attachment is a TXT file."]
+
+
 # ── jht-reply-options ────────────────────────────────────────────────────────
 
 
@@ -176,6 +225,18 @@ def test_jht_reply_options_an_empty_prompt_on_stdin_is_refused(tmp_path: Path):
     assert _chat_lines(tmp_path) == []
 
 
+@pytest.mark.parametrize("closing", CLOSINGS)
+def test_jht_reply_options_a_prompt_that_ends_in_the_delimiter_line_is_refused(tmp_path: Path, closing: str):
+    done = subprocess.run(
+        [str(REPLY_OPTIONS), "--prompt", "-", "a", "b"], input=f"Which plan? $20\n{closing}\n",
+        capture_output=True, text=True, env=_chat_env(tmp_path),
+    )
+
+    assert done.returncode == 2
+    assert "TXT" in done.stderr
+    assert _chat_lines(tmp_path) == []
+
+
 # ── the skills ───────────────────────────────────────────────────────────────
 
 EXAMPLES = {
@@ -193,3 +254,4 @@ def test_every_language_of_the_skill_says_how_to_write_a_dollar(skill: str, suff
     for example in EXAMPLES[skill]:
         assert example in text
     assert "`$1`" in text and "`$2`" in text
+    assert "`TXT`" in text  # the closing line in the first column, with no spaces before it

@@ -139,6 +139,15 @@ def main() -> int:
         if not args.message.strip():
             print("jht-send: the text on stdin is empty: nothing was written.", file=sys.stderr)
             return 2
+        lines = args.message.rstrip().splitlines()
+        if lines and lines[-1].strip() == "TXT":
+            # an indented closing `TXT`: the heredoc never closed and the shell passed on the delimiter line too
+            print(
+                "jht-send: the text ends with a `TXT` line: the closing line of the heredoc was indented, so it never closed. "
+                "Nothing was written. Put `TXT` in the first column, alone on its line.",
+                file=sys.stderr,
+            )
+            return 2
 
     if args.kind not in KINDS:
         print(

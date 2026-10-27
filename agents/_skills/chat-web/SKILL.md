@@ -83,7 +83,7 @@ jht-send --partial 'Working on it…'   # mid-turn checkpoint, keeps the turn op
 Rules:
 - **One `[CHAT]` ⇒ at least one `jht-send`. No exceptions.** Writing nothing leaves the user staring at a frozen-looking chat.
 - **The closing message of the turn has NO `--partial`.** If you forget, the frontend keeps the typing dots on forever (until a fallback timeout ~10 min later).
-- **Quotes**: pass the body as a single positional arg. Single quotes preserve `$`, `"`, emoji, accents verbatim. For a body containing a literal `'`, use double quotes (`jht-send "non c'è problema"`) — but inside `"..."` shell will expand `$var`, so be careful.
+- **Quotes**: pass the body as a single positional arg. Single quotes preserve `$`, `"`, emoji, accents verbatim. For a body containing a literal `'`, use double quotes (`jht-send "non c'è problema"`) — but inside `"..."` shell will expand `$var`, so be careful. With a `$` use single quotes or stdin: see the section below.
 - **Multi-line**: bash `$'riga1\nriga2'`, or use `\n` inside the string and let Python preserve it.
 
 ## A `$` in the text: single quotes or stdin
@@ -100,6 +100,8 @@ jht-send - <<'TXT'
 It's $20/month, not $200
 TXT
 ```
+
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).
 
 ## Message kind (`--kind`)
 
