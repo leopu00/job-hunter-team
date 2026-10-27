@@ -37,12 +37,20 @@ describe("the swipe page whose data never arrives", () => {
     expect(screen.getByText("swipe-deck")).toBeInTheDocument();
   });
 
-  it("opens with the line that says the data comes from the cloud, for a profile with no sign-in", async () => {
+  it("is the line that says the data comes from the cloud, and no deck, for a profile with no sign-in", async () => {
     registerAuthStorageProbe(() => false);
     vi.mocked(loadSwipe).mockResolvedValueOnce(DECK as never);
     render(<SwipePage client={{} as never} />);
     await act(async () => undefined);
-    expect(screen.getByText("swipe-deck")).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
+    expect(screen.queryByText("swipe-deck")).not.toBeInTheDocument();
+  });
+
+  it("shows the deck, and no line, with a cloud session", async () => {
+    vi.mocked(loadSwipe).mockResolvedValueOnce(DECK as never);
+    render(<SwipePage client={{} as never} />);
+    await act(async () => undefined);
+    expect(screen.getByText("swipe-deck")).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 });
