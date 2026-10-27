@@ -8260,19 +8260,19 @@ exit 0
     fn only_a_wrapper_that_speaks_the_desktop_chat_protocol_is_read_through() {
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-wrapper-chat-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
         let write = |name: &str, text: &str| {
             let path = dir.join(name);
-            fs::write(&path, text).unwrap();
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::write(&path, text).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
             path
         };
-        assert!(wrapper_has_desktop_chat(&write("with", "#!/bin/sh\nJHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
-        assert!(!wrapper_has_desktop_chat(&write("without", "#!/bin/sh\nexit 0\n")));
+        assert!(crate::onboarding::wrapper_has_desktop_chat(&write("with", "#!/bin/sh\nJHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("without", "#!/bin/sh\nexit 0\n")));
         // a mention in a comment or in a longer line is not the marker
-        assert!(!wrapper_has_desktop_chat(&write("quoted", "#!/bin/sh\n# JHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
-        assert!(!wrapper_has_desktop_chat(&dir.join("missing")));
-        fs::remove_dir_all(&dir).unwrap();
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("quoted", "#!/bin/sh\n# JHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&dir.join("missing")));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
