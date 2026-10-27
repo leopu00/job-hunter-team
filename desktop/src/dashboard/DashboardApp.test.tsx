@@ -192,6 +192,9 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.title && <p>title:{props.runtime.title}</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
+        {props.draft && <p>draft:{props.draft.step}:{props.draft.host.kind}:{props.draft.provider}</p>}
+        {props.onDraftChange && <button type="button" onClick={() => props.onDraftChange?.({ step: 2, host: { kind: "local" }, provider: "codex" })}>remember-draft</button>}
+        {props.onDraftChange && <button type="button" onClick={() => props.onDraftChange?.(null)}>forget-draft</button>}
         {props.onOpenWithoutTeam && <button type="button" onClick={props.onOpenWithoutTeam}>open-without-team</button>}
         {props.onResumeInterrupted && <button type="button" onClick={() => void props.onResumeInterrupted?.().catch(() => undefined)}>resume-interrupted</button>}
         {props.onDiscardInterruption && <button type="button" onClick={() => props.onDiscardInterruption?.()}>discard-interruption</button>}
@@ -1608,6 +1611,50 @@ describe("DashboardApp onboarding router", () => {
     await userEvent.click(screen.getByRole("button", { name: "discard-interruption" }));
     expect(screen.queryByText(/^interrupted:/)).not.toBeInTheDocument();
     expect(localStorage.getItem("jht.desktop.onboarding.interrupted.interrupted-account")).toBe("");
+  });
+
+  describe("the wizard's step and choices", () => {
+    const DRAFT_KEY = (id: string) => `jht.desktop.onboarding.draft.${id}`;
+
+    it("are kept as the wizard reports them, and given back to it when the app is reopened", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-account"));
+      requireOnboarding();
+      const first = render(<DashboardApp />);
+      expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+      await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-account")) ?? "null")).toEqual({ step: 2, host: { kind: "local" }, provider: "codex" });
+      first.unmount();
+
+      render(<DashboardApp />);
+      expect(await screen.findByText("draft:2:local:codex")).toBeInTheDocument();
+    });
+
+    it("are the account's own: another account opens on the welcome", async () => {
+      localStorage.setItem(DRAFT_KEY("draft-account-a"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex" }));
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-account-b"));
+      requireOnboarding();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+    });
+
+    it("go when the wizard says it started over, and when the whole setup is started over", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-restart-account"));
+      requireOnboarding();
+      localStorage.setItem(DRAFT_KEY("draft-restart-account"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex" }));
+      render(<DashboardApp />);
+      expect(await screen.findByText("draft:3:local:codex")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "forget-draft" }));
+      expect(localStorage.getItem(DRAFT_KEY("draft-restart-account"))).toBe("");
+
+      // restarting the running setup: the marker is reset (mocked here), the steps reached go with it
+      await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
+      vi.mocked(prepareOnboardingRuntime).mockReturnValue(new Promise(() => undefined));
+      await userEvent.click(screen.getByRole("button", { name: "submit-onboarding" }));
+      await userEvent.click(await screen.findByRole("button", { name: "restart-onboarding" }));
+      expect(localStorage.getItem(DRAFT_KEY("draft-restart-account"))).toBe("");
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.getByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+    });
   });
 
   it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {

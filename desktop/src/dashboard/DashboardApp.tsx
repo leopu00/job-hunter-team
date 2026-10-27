@@ -48,11 +48,15 @@ import {
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
+  clearOnboardingDraft,
   clearOnboardingInterruption,
+  readOnboardingDraft,
+  recordOnboardingDraft,
   recordOnboardingInterruption,
   resetOnboardingMarker,
   runtimeStateFromSnapshot,
   type OnboardingActivityState,
+  type OnboardingDraft,
   type OnboardingGateState,
   type OnboardingProviderLoginAction,
   type OnboardingProviderLoginState,
@@ -389,6 +393,9 @@ export default function DashboardApp() {
     ? `local:${localProfile.profileId}`
     : session ? `google:${session.user.id}` : null;
   const markerId = localProfile ? `local:${localProfile.profileId}` : session?.user.id ?? null;
+  // The wizard's step and choices (lib/onboarding.ts): read once per account, then kept here as the wizard changes
+  // them, so the wizard opens where it was left also when it is mounted again (the existing-team form replaces it).
+  const draftRef = useRef<{ id: string; draft: OnboardingDraft | undefined } | null>(null);
   // supabase-js publishes the same session again as a new object (on every return of the window to the
   // foreground, on every token refresh): what starts the account over is the account, never that object.
   const sessionRef = useRef(session);
@@ -1025,7 +1032,12 @@ export default function DashboardApp() {
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
     // The reopened Provider step is not a first setup: «Restart» there starts that step over and leaves the
     // marker alone, or the team that works would be set up again from scratch at the next start.
-    if (providerSetupKeyRef.current !== identityKey) resetOnboardingMarker(markerId);
+    if (providerSetupKeyRef.current !== identityKey) {
+      resetOnboardingMarker(markerId);
+      // Starting the setup over leaves nothing of the steps reached before.
+      clearOnboardingDraft(markerId);
+    }
+    draftRef.current = { id: markerId, draft: undefined };
     submissionRef.current = null;
     savedTeamFailureRef.current = false;
     resumeAttemptedIdentityRef.current = identityKey;
@@ -1459,6 +1471,13 @@ export default function DashboardApp() {
     });
   }, [markerId]);
 
+  const rememberDraft = useCallback((next: OnboardingDraft | null) => {
+    if (!markerId) return;
+    draftRef.current = { id: markerId, draft: next ?? undefined };
+    if (next) recordOnboardingDraft(markerId, next); else clearOnboardingDraft(markerId);
+  }, [markerId]);
+  if (markerId && draftRef.current?.id !== markerId) draftRef.current = { id: markerId, draft: readOnboardingDraft(markerId) };
+
   const runtimeAction = useCallback(async (stage: "provider-login" | "team-start" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
     if (stage === "team-start") return resumeTeam();
@@ -1784,6 +1803,8 @@ export default function DashboardApp() {
         interruption={interruption}
         onResumeInterrupted={interruption ? resumeInterrupted : undefined}
         onDiscardInterruption={interruption ? discardInterruption : undefined}
+        draft={draftRef.current?.id === markerId ? draftRef.current?.draft : undefined}
+        onDraftChange={rememberDraft}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
         onOpenWithoutTeam={openWithoutTeam}
