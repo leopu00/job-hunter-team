@@ -146,12 +146,12 @@ STEP 6 — USCITA
 **CL-08 — Compili da solo; chiedi solo quando niente sostiene una risposta.** Per ogni chiave in `missing` (non c'è nel risultato? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` le elenca) o in `pending_question`, in quest'ordine:
 1. già salvata (profilo, `application_answers`, una risposta dell'utente) → la usa il flusso;
 2. altrimenti la ricavi dal profilo (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), dal CV (`db_query.py application $PID`, `cv_path`) e dall'annuncio (`db_query.py position $PID --json`), la salvi e rifai lo STEP 3:
-   ```bash
-   python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
-   <answer>
-   TXT
-   ```
-   La risposta va su stdin, fra le righe `<<'TXT'` (`--value -`): tra virgolette doppie la shell mangia l'`$8` di un importo come `$80,000` e il modulo riceverebbe `0,000`. `--label` e `--options`, se ci sono, tra apici singoli.
+```bash
+python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
+<answer>
+TXT
+```
+   La risposta va su stdin, fra le righe `<<'TXT'` (`--value -`): tra virgolette doppie la shell mangia l'`$8` di un importo come `$80,000` e il modulo riceverebbe `0,000`. `--label` e `--options`, se ci sono, tra apici singoli. Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai).
    `--position-id` è obbligatorio per la RAL e per una textarea: valgono per una sola azienda. Una scelta è una delle opzioni, scritta esattamente;
 3. solo senza nessuna base: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` manda UNA domanda su Telegram. Mai una domanda scritta a mano. Poi la posizione successiva.
 

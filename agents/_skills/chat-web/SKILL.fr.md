@@ -48,7 +48,7 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<
 TXT
 ```
 
-Le corps passe par stdin avec un heredoc dont le délimiteur est entre apostrophes : entre guillemets doubles, le shell avale un `$` suivi d'un chiffre (`$20` arrive à l'entreprise comme `0`) ; idem pour l'objet, qui va entre apostrophes simples.
+Le corps passe par stdin avec un heredoc dont le délimiteur est entre apostrophes : entre guillemets doubles, le shell avale un `$` suivi d'un chiffre (`$20` arrive à l'entreprise comme `0`) ; idem pour l'objet, qui va entre apostrophes simples. Écris le `TXT` de fermeture en première colonne, seul sur sa ligne, sans espaces devant (si tu copies le retrait, le heredoc ne se ferme jamais : un corps qui finit par une ligne `TXT` est refusé, rien n'est envoyé).
 
 **N'ouvre jamais, ne fais jamais `cat` ou `json.load` et n'affiche rien sous `$JHT_HOME/credentials/`**,
 et ne mets jamais de mot de passe dans un script, un chat ou un log : le script

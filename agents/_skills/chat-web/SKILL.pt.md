@@ -48,7 +48,7 @@ python3 /app/shared/skills/email_monitor.py send --to "<recipient>" --subject '<
 TXT
 ```
 
-O corpo vai por stdin com um heredoc de delimitador entre aspas: entre aspas duplas a shell come um `$` seguido de um dígito (`$20` chega à empresa como `0`); o mesmo no assunto, que vai entre aspas simples.
+O corpo vai por stdin com um heredoc de delimitador entre aspas: entre aspas duplas a shell come um `$` seguido de um dígito (`$20` chega à empresa como `0`); o mesmo no assunto, que vai entre aspas simples. Escreve o `TXT` de fecho na primeira coluna, sozinho na linha, sem espaços antes (se copiares o avanço, o heredoc nunca fecha: um corpo que acaba numa linha `TXT` é recusado, não sai nada).
 
 **Nunca abras, faças `cat` ou `json.load` nem imprimas nada em `$JHT_HOME/credentials/`**,
 e nunca ponhas uma palavra-passe num script, num chat ou num log: o script é o

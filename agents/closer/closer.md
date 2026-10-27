@@ -142,12 +142,12 @@ STEP 6 — EXIT
 **CL-08 — You fill in by yourself; you ask only when nothing supports an answer.** For every key in `missing` (not in the result? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` lists them) or in `pending_question`, in this order:
 1. already saved (profile, `application_answers`, a user reply) → the flow uses it;
 2. otherwise work it out from the profile (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), the CV (`db_query.py application $PID`, `cv_path`) and the vacancy (`db_query.py position $PID --json`), and save it, then STEP 3 again:
-   ```bash
-   python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
-   <answer>
-   TXT
-   ```
-   The answer goes on stdin, between the `<<'TXT'` lines (`--value -`): between double quotes the shell eats the `$8` of an amount like `$80,000` and the form would get `0,000`. `--label` and `--options`, if any, between single quotes.
+```bash
+python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
+<answer>
+TXT
+```
+   The answer goes on stdin, between the `<<'TXT'` lines (`--value -`): between double quotes the shell eats the `$8` of an amount like `$80,000` and the form would get `0,000`. `--label` and `--options`, if any, between single quotes. Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes).
    `--position-id` is required for the salary and for a textarea: they belong to one company. A choice is one of the options, written exactly;
 3. only with no basis at all: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` sends ONE question on Telegram. Never write a question by hand. Then the next position.
 

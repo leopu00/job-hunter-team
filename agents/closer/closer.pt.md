@@ -146,12 +146,12 @@ STEP 6 — SAÍDA
 **CL-08 — Preenches sozinho; só perguntas quando nada sustenta uma resposta.** Para cada chave em `missing` (não está no resultado? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` lista-as) ou em `pending_question`, por esta ordem:
 1. já guardada (perfil, `application_answers`, uma resposta do utilizador) → o fluxo usa-a;
 2. senão deduzes do perfil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), do CV (`db_query.py application $PID`, `cv_path`) e da vaga (`db_query.py position $PID --json`), guardas e repetes o STEP 3:
-   ```bash
-   python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
-   <answer>
-   TXT
-   ```
-   A resposta vai por stdin, entre as linhas `<<'TXT'` (`--value -`): entre aspas duplas a shell come o `$8` de um montante como `$80,000` e o formulário receberia `0,000`. `--label` e `--options`, se os houver, entre aspas simples.
+```bash
+python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
+<answer>
+TXT
+```
+   A resposta vai por stdin, entre as linhas `<<'TXT'` (`--value -`): entre aspas duplas a shell come o `$8` de um montante como `$80,000` e o formulário receberia `0,000`. `--label` e `--options`, se os houver, entre aspas simples. Escreve o `TXT` de fecho na primeira coluna, sozinho na linha, sem espaços antes (se copiares o avanço, o heredoc nunca fecha).
    `--position-id` é obrigatório para o salário e para uma textarea: valem para uma só empresa. Uma escolha é uma das opções, escrita exatamente;
 3. só sem nenhuma base: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` envia UMA pergunta no Telegram. Nunca uma pergunta escrita à mão. Depois a posição seguinte.
 

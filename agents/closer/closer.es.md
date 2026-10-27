@@ -146,12 +146,12 @@ STEP 6 — SALIDA
 **CL-08 — Rellenas tú solo; preguntas solo cuando nada sostiene una respuesta.** Para cada clave en `missing` (¿no está en el resultado? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` las lista) o en `pending_question`, en este orden:
 1. ya guardada (perfil, `application_answers`, una respuesta del usuario) → la usa el flujo;
 2. si no, la deduces del perfil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), del CV (`db_query.py application $PID`, `cv_path`) y de la oferta (`db_query.py position $PID --json`), la guardas y repites el STEP 3:
-   ```bash
-   python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
-   <answer>
-   TXT
-   ```
-   La respuesta va por stdin, entre las líneas `<<'TXT'` (`--value -`): entre comillas dobles la shell se come el `$8` de un importe como `$80,000` y el formulario recibiría `0,000`. `--label` y `--options`, si los hay, entre comillas simples.
+```bash
+python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
+<answer>
+TXT
+```
+   La respuesta va por stdin, entre las líneas `<<'TXT'` (`--value -`): entre comillas dobles la shell se come el `$8` de un importe como `$80,000` y el formulario recibiría `0,000`. `--label` y `--options`, si los hay, entre comillas simples. Escribe el `TXT` de cierre en la primera columna, solo en su línea, sin espacios delante (si copias la sangría el heredoc nunca se cierra).
    `--position-id` es obligatorio para el salario y para un textarea: valen para una sola empresa. Una elección es una de las opciones, escrita exactamente;
 3. solo sin ninguna base: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` envía UNA pregunta por Telegram. Nunca una pregunta escrita a mano. Luego la siguiente posición.
 

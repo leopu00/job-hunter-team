@@ -47,7 +47,8 @@ CLI (agents):
       failure, a fixed reason code.
       The body can also come from stdin (`--body -`, `--body-file -`, or neither option): with a
       heredoc whose delimiter is quoted (<<'TXT') every `$` of the text stays as written, while
-      `"...$20..."` between double quotes reaches the shell first and loses the digits.
+      `"...$20..."` between double quotes reaches the shell first and loses the digits. A text whose last
+      line is `TXT` (an indented closing line: the heredoc never closed) is refused, nothing is sent.
 
 Nothing in this file opens a credentials file (audit G1): the account
 reaches the core only as an argument, inside the broker.
@@ -515,8 +516,15 @@ def main(argv):
     if args.cmd == "send":
         # `-` is stdin, as when neither option is given: a quoted heredoc leaves every `$` alone, which an
         # argument between double quotes cannot promise (the shell eats `$1`..`$9` before this starts).
-        if args.body == "-" or args.body_file == "-":
+        from_stdin = args.body == "-" or args.body_file == "-" or (args.body is None and not args.body_file)
+        if from_stdin:
             text = sys.stdin.read()
+            lines = text.rstrip().splitlines()
+            if lines and lines[-1].strip() == "TXT":
+                # A heredoc whose closing `TXT` was indented never closed: the shell passed on everything, the
+                # delimiter line included, and the company would get a mail that ends in "TXT". Nothing is sent.
+                print(json.dumps({"ok": False, "reason": "closer_answer_heredoc_unterminated"}))
+                return 1
         elif args.body is not None:
             text = args.body
         elif args.body_file:
@@ -528,8 +536,6 @@ def main(argv):
             except (OSError, UnicodeDecodeError):
                 print(json.dumps({"ok": False, "reason": "body_unreadable"}))
                 return 1
-        else:
-            text = sys.stdin.read()
         answer = _broker_call("mail.send", {"kind": "chat", "to": args.to, "subject": args.subject, "body": text})
         print(json.dumps(answer, ensure_ascii=False))
         return 0 if answer.get("ok") else 1

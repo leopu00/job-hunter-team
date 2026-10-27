@@ -107,6 +107,30 @@ def test_an_empty_stdin_is_an_empty_answer_and_saves_nothing(db, tmp_path, stdin
     assert _answers(db) == []
 
 
+@pytest.mark.parametrize("closing", ["   TXT", "\tTXT", "TXT   "])
+def test_an_answer_that_ends_in_the_delimiter_line_is_rejected(db, tmp_path, closing: str):
+    # a copied indent: the heredoc never closed, the shell passed on the delimiter line too, and the form would carry it
+    profile = tmp_path / "cli-profile.yml"
+    profile.write_text("name: Test Candidate\n", encoding="utf-8")
+    done = subprocess.run(
+        [sys.executable, str(SKILL), "save", "--key", "expected pay", "--field-type", "text", "--basis", "cv",
+         "--db", str(db), "--profile", str(profile), "--value", "-"],
+        input=f"$80,000 a year\n{closing}\n", capture_output=True, text=True, env={**os.environ, "JHT_HOME": str(tmp_path)},
+    )
+
+    assert done.returncode == 1
+    assert json.loads(done.stdout) == {"key": "expected pay", "reason": "closer_answer_heredoc_unterminated", "status": "rejected"}
+    assert _answers(db) == []
+
+
+def test_an_indented_closing_line_in_a_real_heredoc_saves_nothing(db, tmp_path):
+    done = _bash(db, tmp_path, "$SAVE save --key 'expected pay' --field-type text --basis cv --db \"$DB\" --profile \"$PROFILE\" --value - <<'TXT'\n$80,000 a year\n   TXT\n")
+
+    assert done.returncode == 1
+    assert json.loads(done.stdout)["reason"] == "closer_answer_heredoc_unterminated"
+    assert _answers(db) == []
+
+
 def test_a_value_in_the_argument_is_unchanged(db, tmp_path):
     done = _bash(db, tmp_path, "$SAVE save --key 'expected pay' --field-type text --basis cv --db \"$DB\" --profile \"$PROFILE\" --value '$80,000'")
 
@@ -141,6 +165,26 @@ def test_the_body_from_stdin_keeps_every_dollar(monkeypatch, sent, option):
     assert args["body"] == LETTER + "\n"
 
 
+@pytest.mark.parametrize("option", [["--body", "-"], ["--body-file", "-"], []])
+@pytest.mark.parametrize("closing", ["   TXT", "\tTXT", "TXT   "])
+def test_a_body_that_ends_in_the_delimiter_line_is_not_sent(monkeypatch, sent, capsys, option, closing: str):
+    # a copied indent of 3 spaces: the heredoc never closed and the mail to the company would end in "TXT"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(f"Dear team, I ask $80,000.\n{closing}\n"))
+
+    code = email_monitor.main(["send", "--to", "hr@example.com", "--subject", "Offer", *option])
+
+    assert code == 1
+    assert json.loads(capsys.readouterr().out) == {"ok": False, "reason": "closer_answer_heredoc_unterminated"}
+    assert sent == []
+
+
+def test_a_body_that_only_mentions_txt_inside_a_sentence_is_sent(monkeypatch, sent):
+    monkeypatch.setattr(sys, "stdin", io.StringIO("The attachment is a TXT file.\nTXT is plain text.\n"))
+
+    assert email_monitor.main(["send", "--to", "hr@example.com", "--subject", "S", "--body", "-"]) == 0
+    assert sent[0][1]["body"] == "The attachment is a TXT file.\nTXT is plain text.\n"
+
+
 def test_a_body_in_the_argument_and_a_body_file_are_unchanged(tmp_path, monkeypatch, sent):
     body_file = tmp_path / "body.txt"
     body_file.write_text("From a file: $20\n", encoding="utf-8")
@@ -161,8 +205,12 @@ def test_every_language_of_the_closer_says_how_to_pass_an_answer_with_a_dollar(s
 
     assert "`--value -`" in text and "`$80,000`" in text and "`$8`" in text
     # the model the agents copy is the one that works: the answer on stdin, never between double quotes
-    assert "--basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'\n   <answer>\n   TXT\n" in text
+    # ... and its closing line sits in the first column: the list indent is not part of the command
+    assert "--basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'\n<answer>\nTXT\n```\n" in text
+    assert "\n   TXT" not in text
     assert '--value "<answer>"' not in text
+    # the closing line must be in the first column: the prompt says so too
+    assert "`TXT`" in text
     assert "application_answers.py save --key \"<key>\" --value - --field-type" in text
 
 
@@ -171,5 +219,5 @@ def test_every_language_of_chat_web_sends_the_email_body_from_stdin(suffix: str)
     text = (ROOT / "agents" / "_skills" / "chat-web" / f"SKILL{suffix}.md").read_text(encoding="utf-8")
 
     assert "--subject '<subject>' --body - <<'TXT'" in text
-    assert "`$20`" in text
+    assert "`$20`" in text and "`TXT`" in text
     assert "printf '%s\\n' \"<body>\"" not in text

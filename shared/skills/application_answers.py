@@ -40,7 +40,8 @@ Commands (one JSON line on stdout)::
 A `$` in an answer (an amount: `$80,000`): between double quotes the shell reads `$8` as its own argument and
 replaces it with nothing BEFORE this command starts, so the form would get "0,000", and nothing here can bring the
 digits back. `--value -` reads the answer from stdin, where a heredoc with a quoted delimiter (<<'TXT') leaves every
-`$` alone; `--label` and `--options` take single quotes.
+`$` alone; the closing `TXT` goes alone in the first column (an indented one never closes the heredoc: an answer
+that ends in a `TXT` line is rejected). `--label` and `--options` take single quotes.
 
 `essentials` without `--ask` only reports: it writes nothing, not even a
 question. The questions are created by `apply_flow.py` before the first run of
@@ -1603,6 +1604,13 @@ def main(argv: list[str] | None = None) -> int:
         # The answer from stdin: a quoted heredoc leaves every `$` alone, which no argument can promise.
         # A text that ends in a line break loses that one; an empty one is rejected below like an empty argument.
         args.value = sys.stdin.read().removesuffix("\n")
+        lines = args.value.rstrip().splitlines()
+        if lines and lines[-1].strip() == "TXT":
+            # A heredoc whose closing `TXT` was indented never closed: the shell passed on everything, the
+            # delimiter line included, and the form would go out with "TXT" at the end of the answer.
+            print(json.dumps({"status": "rejected", "reason": "closer_answer_heredoc_unterminated",
+                              "key": normalise_label(args.key)}, ensure_ascii=False, sort_keys=True))
+            return 1
     home = Path(os.environ.get("JHT_HOME") or Path.home() / ".jht")
     profile_path = Path(args.profile) if args.profile else home / "profile" / "candidate_profile.yml"
     try:
