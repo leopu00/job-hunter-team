@@ -1518,8 +1518,65 @@ fn podman_systemd_unit() -> String {
     ["podman-compose", "jht.service"].join("@")
 }
 
+/// The three values the wrapper puts in the environment of EVERY compose it runs (`scripts/jht-wrapper.sh`:
+/// `jht_read_host_env_value`, then `${X:-default}`, then `export`), because the compose file resolves
+/// `${JHT_HOST_TYPE}`, `${JHT_LANG}` and `${JHT_USER_TZ}` into the container's configuration and so into its
+/// `io.podman.compose.config-hash`: a value from `host.env` that passes the wrapper's check wins over the
+/// inherited environment (the last valid line of the file wins), then the inherited one, then `unknown` / `en` /
+/// `UTC`. The container the app starts is made by the wrapper, so it carries THESE values; the hash computed here
+/// has to be computed with the same ones, or a Mac whose `host.env` says `local` and its time zone (every Mac that
+/// ran the host setup) gets another hash and its own container is «not the one Job Hunter Team installed» (found in the Mac collaudo of 27/10).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn wrapper_compose_environment(host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static str, String)> {
+    fn valid(key: &str, value: &str) -> bool {
+        match key {
+            "JHT_HOST_TYPE" => matches!(value, "local" | "vps"),
+            "JHT_LANG" => matches!(value, "en" | "it" | "hu" | "es" | "de" | "fr" | "pt"),
+            _ => !value.is_empty() && value.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'+' | b'.' | b'/' | b'-')),
+        }
+    }
+    let from_file = |key: &str| -> Option<String> {
+        let mut found = None;
+        for line in host_env?.lines() {
+            let line = line.strip_suffix('\r').unwrap_or(line).trim_start();
+            let Some(value) = line.strip_prefix(key).and_then(|rest| rest.strip_prefix('=')) else { continue };
+            let mut value = value;
+            if value.starts_with('"') && value.ends_with('"') || value.starts_with('\'') && value.ends_with('\'') {
+                let quote = if value.starts_with('"') { '"' } else { '\'' };
+                value = value.strip_prefix(quote).unwrap_or(value);
+                value = value.strip_suffix(quote).unwrap_or(value);
+            }
+            if valid(key, value) {
+                found = Some(value.to_owned());
+            }
+        }
+        found
+    };
+    [("JHT_HOST_TYPE", "unknown"), ("JHT_LANG", "en"), ("JHT_USER_TZ", "UTC")]
+        .into_iter()
+        .map(|(key, default)| (key, from_file(key).or_else(|| inherited(key).filter(|value| !value.is_empty())).unwrap_or_else(|| default.to_owned())))
+        .collect()
+}
+
+/// `host.env` where the wrapper reads it: `$JHT_HOST_ENV_FILE`, else `~/.jht/host.env`; a regular file, small.
+#[cfg(target_os = "macos")]
+fn read_host_env() -> Option<String> {
+    let path = std::env::var_os("JHT_HOST_ENV_FILE").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".jht").join("host.env")))?;
+    let metadata = fs::symlink_metadata(&path).ok()?;
+    if !metadata.file_type().is_file() || metadata.len() > 65_536 {
+        return None;
+    }
+    fs::read_to_string(path).ok()
+}
+
 #[cfg(target_os = "macos")]
 fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
+    mac_config_hash_in(runtime, timeout, read_host_env().as_deref(), &|key| std::env::var(key).ok())
+}
+
+/// `host_env` is the text of `host.env` and `inherited` the process environment, so that a test can say both.
+#[cfg(target_os = "macos")]
+fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Option<String> {
     let search = |name: &str| {
         #[cfg(test)]
         {
@@ -1559,6 +1616,9 @@ fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
     let args = vec![OsString::from("--verbose"), OsString::from("--dry-run"), OsString::from("--project-name"), OsString::from("jht"), OsString::from("--podman-path"), podman.into_os_string(), OsString::from("-f"), runtime.join("docker-compose.yml").into_os_string(), OsString::from("up"), OsString::from("-d"), OsString::from("--force-recreate"), OsString::from("jht")];
     let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false")];
     if let Some(image) = image.as_deref() { environment.push(("JHT_IMAGE", image)); }
+    // The same environment the wrapper runs the compose in: see `wrapper_compose_environment`.
+    let host_environment = wrapper_compose_environment(host_env, inherited);
+    for (name, value) in &host_environment { environment.push((*name, value.as_str())); }
     let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str()?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
     let mut output = result.ok().filter(ProcessResult::success)?.stdout;
     output.extend_from_slice(&stderr);
@@ -3861,6 +3921,76 @@ mod tests {
         write_local_podman_manifest(&runtime, &wrapper);
         assert!(!local_chat_runtime_valid(&wrapper, &runtime));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    // -- the environment the wrapper runs the compose in (the chat said «the running container is not the one Job Hunter Team installed») --
+
+    use super::wrapper_compose_environment;
+
+    fn host_environment(file: Option<&str>, inherited: &[(&str, &str)]) -> Vec<(&'static str, String)> {
+        let inherited: Vec<(String, String)> = inherited.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
+        wrapper_compose_environment(file, &|key| inherited.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()))
+    }
+
+    fn pairs(values: &[(&'static str, &str)]) -> Vec<(&'static str, String)> {
+        values.iter().map(|(k, v)| (*k, (*v).to_owned())).collect()
+    }
+
+    #[test]
+    fn the_compose_environment_is_host_env_then_the_inherited_one_then_the_defaults() {
+        let defaults = pairs(&[("JHT_HOST_TYPE", "unknown"), ("JHT_LANG", "en"), ("JHT_USER_TZ", "UTC")]);
+        assert_eq!(host_environment(None, &[]), defaults);
+        assert_eq!(host_environment(Some(""), &[]), defaults);
+        // what the host setup writes on a Mac
+        let file = "JHT_LANG=en\nJHT_HOST_TYPE=local\nJHT_USER_TZ=Europe/Rome\n";
+        assert_eq!(host_environment(Some(file), &[]), pairs(&[("JHT_HOST_TYPE", "local"), ("JHT_LANG", "en"), ("JHT_USER_TZ", "Europe/Rome")]));
+        // the file wins over the inherited environment; a key the file lacks (or has invalid) takes the inherited one
+        let partial = "JHT_HOST_TYPE=vps\nJHT_LANG=xx\n";
+        assert_eq!(
+            host_environment(Some(partial), &[("JHT_HOST_TYPE", "local"), ("JHT_LANG", "it"), ("JHT_USER_TZ", "Asia/Tokyo")]),
+            pairs(&[("JHT_HOST_TYPE", "vps"), ("JHT_LANG", "it"), ("JHT_USER_TZ", "Asia/Tokyo")]),
+        );
+        // an empty inherited value is the default, as `${X:-default}` has it
+        assert_eq!(host_environment(None, &[("JHT_LANG", "")]), defaults);
+    }
+
+    #[test]
+    fn the_compose_environment_reads_host_env_as_the_wrapper_does() {
+        let value = |file: &str, key: &str| host_environment(Some(file), &[]).into_iter().find(|(k, _)| *k == key).unwrap().1;
+        // the last valid line wins; an invalid one never replaces a valid one
+        assert_eq!(value("JHT_LANG=fr\nJHT_LANG=de\nJHT_LANG=xx\n", "JHT_LANG"), "de");
+        // quotes around the whole value, spaces before the key, a carriage return at the end
+        assert_eq!(value("  JHT_LANG=\"it\"\r\n", "JHT_LANG"), "it");
+        assert_eq!(value("JHT_LANG='pt'\n", "JHT_LANG"), "pt");
+        // a key that only starts like ours, a comment and another variable change nothing
+        assert_eq!(value("JHT_LANGUAGE=it\n# JHT_LANG=it\nFOO=JHT_LANG=it\n", "JHT_LANG"), "en");
+        // host type: only local or vps; time zone: only portable characters
+        assert_eq!(value("JHT_HOST_TYPE=cloud\n", "JHT_HOST_TYPE"), "unknown");
+        assert_eq!(value("JHT_USER_TZ=Europe/Rome; rm -rf\n", "JHT_USER_TZ"), "UTC");
+        assert_eq!(value("JHT_USER_TZ=\n", "JHT_USER_TZ"), "UTC");
+        assert_eq!(value("JHT_USER_TZ=Etc/GMT+1\n", "JHT_USER_TZ"), "Etc/GMT+1");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_expected_config_hash_is_computed_in_the_environment_the_wrapper_starts_the_container_in() {
+        use super::mac_config_hash_in;
+        use sha2::{Digest, Sha256};
+        let (root, runtime, _wrapper, _id) = attested_local_fixture();
+        // a provider whose hash depends on what the compose resolves from the environment, as the real one does
+        fs::write(
+            runtime.join("bin").join("podman-compose"),
+            "#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman-compose version 1.6.0'; exit 0; }\nh=$(printf '%s|%s|%s' \"$JHT_HOST_TYPE\" \"$JHT_LANG\" \"$JHT_USER_TZ\" | shasum -a 256 | cut -d' ' -f1)\nprintf 'podman create --name=jht --label io.podman.compose.config-hash=%s x\\n' \"$h\" >&2\n",
+        )
+        .unwrap();
+        let sha = |text: &str| format!("{:x}", Sha256::digest(text.as_bytes()));
+        let none = |_: &str| -> Option<String> { None };
+        // the Mac as the host setup leaves it: the container was made with these three
+        let host_env = "JHT_LANG=en\nJHT_HOST_TYPE=local\nJHT_USER_TZ=Europe/Rome\n";
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, Some(host_env), &none), Some(sha("local|en|Europe/Rome")));
+        // without host.env: the wrapper's defaults, not empty values
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Some(sha("unknown|en|UTC")));
         fs::remove_dir_all(root).unwrap();
     }
 
