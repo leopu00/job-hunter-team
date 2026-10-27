@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Fence } from "../src/db/external-content.ts";
 import { openJobsDb, type Database } from "../src/db/jobs-db.ts";
 import { captainDiary, forPrompt, formatTime, HANDOFF_BYTES, NOTE_MAX, teamDirectives } from "../src/parity/skills/captain.ts";
-import { pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
+import { argparseChoicesUnquoted, pythonSkills, pythonSkillsOfThisTree, runPython } from "./helpers/python-skills.ts";
 
 const skills = pythonSkills();
 
@@ -19,7 +19,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const last = (text: string | undefined) => (text ?? "").trim().split("\n").at(-1);
+const last = (text: string | undefined) => argparseChoicesUnquoted((text ?? "").trim().split("\n").at(-1) ?? "");
 
 const TIMES: Array<[string, string[]]> = [
   ["Europe/Rome", ["--iso", "2026-07-15T12:34:00Z"]],
