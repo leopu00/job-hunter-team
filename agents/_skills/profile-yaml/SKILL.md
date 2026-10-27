@@ -92,7 +92,7 @@ target_roles_priority:        # 2-5 CONCRETE, searchable role titles, in priorit
   - <e.g. "Private Equity Analyst">  # and the one the Scout searches on (NOT the target_role phrase)
 location: <city or area>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # optional: absent = not declared; if there, a boolean
 seniority_target: <junior|mid|senior>
 industry: <sector>
 
@@ -238,10 +238,10 @@ And tell the user: "I've put the button back on hold — let's review this point
 
 ## 🎓 `has_degree` — from the education, never as a placeholder
 
-`has_degree` is mandatory for the validator, but it is a fact about the candidate, not a default:
+`has_degree` is optional: absent means "not declared", never "no". It is a fact about the candidate, not a default; you may ask for it (it is among the optional fields), but it blocks neither the profile nor the unlock:
 - `true` when `education` (CV or chat) lists a degree: bachelor's, master's, PhD or an equivalent.
 - `false` only after the user has told you they have no degree.
-- While you are still asking, do not write it. If the only `ERROR:` of the validation is `has_degree`, your next message IS that question: ask it, wait for the answer, then write the field. Never write `false` to silence the validator: the Scorer reads it against the degree requirements of every position.
+- If you do not know, leave the key out: no `false` out of caution, no empty value, no text (`"yes"`): when the key is there it must be `true` or `false`. Never write `false` to fill a gap: the Scorer reads it against the degree requirements of every position.
 
 ## ⚠️ Anti-hallucination — the critical rule
 

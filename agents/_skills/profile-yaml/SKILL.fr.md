@@ -90,7 +90,7 @@ name: <Prénom Nom>
 target_role: <rôle cible>
 location: <ville ou zone>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # optionnel: absent = non déclaré; si présent, booléen
 seniority_target: <junior|mid|senior>
 industry: <secteur>
 
@@ -233,10 +233,10 @@ Et informez l'utilisateur : "j'ai remis le bouton en attente — revoyons ce poi
 
 ## 🎓 `has_degree` — d'après les études, jamais comme valeur d'attente
 
-`has_degree` est obligatoire pour le validateur, mais c'est un fait sur le candidat, pas une valeur par défaut :
+`has_degree` est facultatif : absent veut dire « non déclaré », jamais « non ». C'est un fait sur le candidat, pas une valeur par défaut ; tu peux le demander (il fait partie des champs optionnels), mais il ne bloque ni le profil ni le déblocage :
 - `true` quand `education` (CV ou chat) contient un diplôme : licence, master, doctorat ou équivalent.
 - `false` seulement après que l'utilisateur t'a dit qu'il n'en a pas.
-- Tant que tu poses encore la question, ne l'écris pas. Si la seule `ERROR:` de la validation est `has_degree`, ton prochain message EST cette question : pose-la, attends la réponse, puis écris le champ. Jamais `false` pour faire taire le validateur : le Scorer le compare aux exigences de diplôme de chaque poste.
+- Si tu ne le sais pas, laisse la clé de côté : pas de `false` par prudence, pas de valeur vide, pas de texte (`"oui"`) : quand la clé est là, elle doit valoir `true` ou `false`. Jamais `false` pour combler un vide : le Scorer le compare aux exigences de diplôme de chaque poste.
 
 ## ⚠️ Anti-hallucination — la règle critique
 

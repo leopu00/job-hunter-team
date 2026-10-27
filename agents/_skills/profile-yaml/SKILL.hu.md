@@ -90,7 +90,7 @@ name: <Vezeteknev Keresztnev>
 target_role: <cel pozicio>
 location: <varos vagy terulet>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # opcionalis: hianyzik = nincs megadva; ha van, logikai
 seniority_target: <junior|mid|senior>
 industry: <agazat>
 
@@ -233,10 +233,10 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 
 ## 🎓 `has_degree` — a vegzettsegbol, soha nem helykitoltonek
 
-A `has_degree` a validatornak kotelezo, de ez egy teny a jeloltrol, nem alapertelmezett ertek:
+A `has_degree` opcionalis: ha hianyzik, az azt jelenti, hogy «nincs megadva», soha nem azt, hogy «nem». Ez egy teny a jeloltrol, nem alapertelmezett ertek; megkerdezheted (az opcionalis mezok kozott van), de sem a profilt, sem a feloldast nem blokkolja:
 - `true`, ha az `education` (oneletrajz vagy chat) tartalmaz diplomat: BSc, MSc, PhD vagy egyenerteku.
 - `false` csak azutan, hogy a felhasznalo megmondta, hogy nincs diplomaja.
-- Amig meg kerdezed, ne ird be. Ha a validacio egyetlen `ERROR:` sora a `has_degree`, a kovetkezo uzeneted EZ a kerdes: tedd fel, vard meg a valaszt, aztan ird be a mezot. Soha ne irj `false`-t, hogy elhallgattasd a validatort: a Scorer minden allas vegzettsegi kovetelmenyevel osszeveti.
+- Ha nem tudod, hagyd ki a kulcsot: ne irj `false`-t ovatossagbol, ne hagyj ures erteket, ne irj szoveget (`"igen"`): ha a kulcs ott van, `true` vagy `false` kell legyen. Soha ne irj `false`-t egy hezag kitoltesere: a Scorer minden allas vegzettsegi kovetelmenyevel osszeveti.
 
 ## ⚠️ Anti-hallucinacio — a kritikus szabaly
 

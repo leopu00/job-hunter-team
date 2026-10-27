@@ -36,7 +36,7 @@ name: <str>                 # mandatorio
 target_role: <str>          # mandatorio
 location: <str>             # mandatorio
 experience_years: <int>     # mandatorio (>= 0)
-has_degree: <true|false>    # mandatorio
+has_degree: <true|false>    # opzionale: assente = non dichiarato; se c'è, booleano
 seniority_target: <str>     # mandatorio (junior|mid|senior|…)
 email: <str>                # opzionale
 timezone: <str>             # opzionale

@@ -90,7 +90,7 @@ name: <Vorname Nachname>
 target_role: <Zielrolle>
 location: <Stadt oder Gebiet>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # optional: fehlt = nicht angegeben; wenn vorhanden, boolesch
 seniority_target: <junior|mid|senior>
 industry: <Branche>
 
@@ -233,10 +233,10 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 
 ## 🎓 `has_degree` — aus der Ausbildung, nie als Platzhalter
 
-`has_degree` ist für den Validator Pflicht, aber es ist eine Tatsache über den Kandidaten, kein Standardwert:
+`has_degree` ist optional: fehlt es, heißt das «nicht angegeben», nie «nein». Es ist eine Tatsache über den Kandidaten, kein Standardwert; du darfst danach fragen (es gehört zu den optionalen Feldern), aber es blockiert weder das Profil noch die Freigabe:
 - `true`, wenn `education` (Lebenslauf oder Chat) einen Abschluss enthält: Bachelor, Master, Promotion oder Gleichwertiges.
 - `false` erst, nachdem der Nutzer dir gesagt hat, dass er keinen hat.
-- Solange du noch fragst, schreib es nicht. Ist der einzige `ERROR:` der Validierung `has_degree`, dann IST deine nächste Nachricht diese Frage: stell sie, warte auf die Antwort, dann schreib das Feld. Nie `false`, um den Validator zum Schweigen zu bringen: Der Scorer vergleicht es mit den Abschlussanforderungen jeder Stelle.
+- Wenn du es nicht weißt, lass den Schlüssel weg: kein `false` aus Vorsicht, kein leerer Wert, kein Text (`"ja"`): Steht der Schlüssel da, muss er `true` oder `false` sein. Nie `false`, um eine Lücke zu füllen: Der Scorer vergleicht es mit den Abschlussanforderungen jeder Stelle.
 
 ## ⚠️ Anti-Halluzination — die kritische Regel
 

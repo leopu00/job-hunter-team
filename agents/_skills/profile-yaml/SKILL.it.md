@@ -93,7 +93,7 @@ target_roles_priority:        # 2-5 titoli di ruolo CONCRETI e cercabili, in pri
   - <es. "Private Equity Analyst">  # e su cui lo Scout cerca (NON la frase di target_role)
 location: <città o area>
 experience_years: <int>
-has_degree: <true|false>
+has_degree: <true|false>        # opzionale: assente = non dichiarato; se c'è, booleano
 seniority_target: <junior|mid|senior>
 industry: <settore>
 
@@ -239,10 +239,10 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 
 ## 🎓 `has_degree` — dagli studi, mai come segnaposto
 
-`has_degree` è obbligatorio per il validatore, ma è un fatto del candidato, non un valore di default:
+`has_degree` è facoltativo: assente vuol dire «non dichiarato», mai «no». È un fatto del candidato, non un valore di default; puoi chiederlo (è fra gli opzionali), ma non blocca né il profilo né lo sblocco:
 - `true` quando `education` (dal CV o dalla chat) contiene una laurea: triennale, magistrale, dottorato o equivalente.
 - `false` solo dopo che l'utente ti ha detto di non averne.
-- Finché lo stai ancora chiedendo, non scriverlo. Se l'unico `ERROR:` della validazione è `has_degree`, il tuo prossimo messaggio È quella domanda: falla, aspetta la risposta, poi scrivi il campo. Mai `false` per zittire il validatore: lo Scorer lo confronta con i requisiti di titolo di ogni posizione.
+- Se non lo sai, lascia fuori la chiave: niente `false` per prudenza, niente valore vuoto, niente testo (`"sì"`): se la chiave c'è deve essere `true` o `false`. Mai `false` per riempire un vuoto: lo Scorer lo confronta con i requisiti di titolo di ogni posizione.
 
 ## ⚠️ Anti-allucinazione — la regola critica
 

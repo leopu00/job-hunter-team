@@ -36,7 +36,7 @@ name: <str>                 # kotelezo
 target_role: <str>          # kotelezo
 location: <str>             # kotelezo
 experience_years: <int>     # kotelezo (>= 0)
-has_degree: <true|false>    # kotelezo
+has_degree: <true|false>    # opcionalis: hianyzik = nincs megadva; ha van, logikai
 seniority_target: <str>     # kotelezo (junior|mid|senior|…)
 email: <str>                # opcionalis
 timezone: <str>             # opcionalis
