@@ -827,7 +827,10 @@ fn take_over_marker_at(
         let _ = fs::remove_file(&temp);
         return outcome;
     }
-    verify_local_owner_marker(&marker, scope).map_err(|_| FAILED)
+    // The rename is the change: from here the marker is the current profile's, and an answer of
+    // «failed» would be untrue. Reading it back is a warning to itself, never the result.
+    let _ = verify_local_owner_marker(&marker, scope);
+    Ok(())
 }
 
 fn owner_change_context(

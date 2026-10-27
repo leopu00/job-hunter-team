@@ -593,8 +593,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             )}
             {ownerWays && confirmingOwner === null && (
               <>
-              <button className="onboarding-secondary" type="button" data-testid="local-owner-return" onClick={() => setConfirmingOwner("return")} disabled={pending}>{t.ownerReturn}</button>
-              <button className="onboarding-primary" type="button" data-testid="local-owner-take" onClick={() => setConfirmingOwner("take")} disabled={pending}>{t.ownerTake}<span aria-hidden="true">→</span></button>
+              <button className="onboarding-secondary" type="button" data-testid="local-owner-take" onClick={() => setConfirmingOwner("take")} disabled={pending}>{t.ownerTake}</button>
+              <button className="onboarding-primary" type="button" data-testid="local-owner-return" onClick={() => setConfirmingOwner("return")} disabled={pending}>{t.ownerReturn}<span aria-hidden="true">→</span></button>
               </>
             )}
             {ownerWays && confirmingOwner !== null && (

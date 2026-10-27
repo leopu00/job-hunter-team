@@ -54,6 +54,9 @@ describe("the runtime belongs to another local profile: two ways, each one after
     expect(await screen.findByTestId("local-owner-take")).toBeInTheDocument();
     expect(screen.getByTestId("local-owner-return")).toBeInTheDocument();
     expect(localOwner.probe).toHaveBeenCalledOnce();
+    // Going back is the highlighted way, taking over the quieter one.
+    expect(screen.getByTestId("local-owner-return")).toHaveClass("onboarding-primary");
+    expect(screen.getByTestId("local-owner-take")).toHaveClass("onboarding-secondary");
     await user.click(screen.getByTestId("local-owner-take"));
     expect(screen.getByText(t.ownerTakeText)).toBeInTheDocument();
     // The sentence names what the take-over makes the current profile's, and what it does not do.
