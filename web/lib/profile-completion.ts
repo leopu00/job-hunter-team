@@ -34,6 +34,11 @@ const hasEmail = (p: CandidateProfile) =>
   Boolean(
     p.email || (pos(p).contacts as Record<string, unknown> | undefined)?.email,
   );
+const hasSeniorityTarget = (p: CandidateProfile) =>
+  Boolean(
+    (p as { seniority_target?: unknown }).seniority_target ||
+    pos(p).seniority_target,
+  );
 const hasWorkAuth = (p: CandidateProfile) => {
   const prefs = pos(p).preferences as Record<string, unknown> | undefined;
   const wa = (pos(p).work_authorization ??
@@ -91,7 +96,8 @@ export const PROFILE_REQUIREMENTS: ProfileRequirement[] = [
     labelKey: "mf_seniority",
     anchor: "info-base",
     editAnchor: "info-base",
-    check: (p) => !!pos(p).seniority_target,
+    // la radice è il posto canonico (schema, validatore); positioning resta valido
+    check: (p) => hasSeniorityTarget(p),
   },
   {
     key: "skills",
