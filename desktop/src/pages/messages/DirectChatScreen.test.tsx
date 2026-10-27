@@ -893,4 +893,3 @@ describe("the Messages page opened with the connection closed", () => {
     }
   });
 });
-
