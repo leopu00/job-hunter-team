@@ -16,7 +16,7 @@ import { withStatusAgents } from "../../office/data/load";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
-import { officeText } from "../../office/office.i18n";
+import { localizeLayout, officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamAgentsShared, type TeamAgentsReading } from "../../lib/existing-team-agents";
 import { readTeamStatus } from "../../lib/existing-team-status";
@@ -63,7 +63,11 @@ export function OfficeLoader({ source }: { source: OfficeSource }) {
     Promise.all([loadAssets(), loadParts()])
       .then(([assets, parts]) => {
         if (!live) return;
-        setLoad(assets ? { state: "ready", ready: { assets, parts } } : { state: "no-assets" });
+        setLoad(
+          assets
+            ? { state: "ready", ready: { assets: { ...assets, layout: localizeLayout(assets.layout, appLocale()) }, parts } }
+            : { state: "no-assets" },
+        );
       })
       .catch((error: unknown) => {
         console.error("[office] load failed:", error);
