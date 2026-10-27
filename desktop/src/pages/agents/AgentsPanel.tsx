@@ -180,6 +180,12 @@ function failureText(code: string): string {
   return `${copy.text} ${copy.action} (${code})`;
 }
 
+/** Why the page could not read the agents: the catalog's sentence alone; a code it has none for keeps the code. */
+function readFailureText(code: string): string {
+  const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
+  return copy.known ? `${copy.text} ${copy.action}` : `${copy.text} ${copy.action} (${code})`;
+}
+
 function resultText(t: AgentsPanelText, result: ActionResult, name: string): string {
   const key = {
     started: t.resultStarted,
@@ -511,16 +517,18 @@ export default function AgentsPanel({ search }: PageProps) {
   };
   const latest = useRef(0);
 
-  const read = useCallback(async () => {
+  // True when the list was read; a read that another one replaced says true too (the other one answers).
+  const read = useCallback(async (): Promise<boolean> => {
     const mine = ++latest.current;
     setBusy(true);
     const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
-    if (latest.current !== mine) return;
+    if (latest.current !== mine) return true;
     setList(listed);
     setTeam(state.ok ? state.value : null);
     setHistory(past);
     setNow(Date.now());
     setBusy(false);
+    return listed.ok;
   }, []);
   useEffect(() => {
     void read();
@@ -653,12 +661,12 @@ export default function AgentsPanel({ search }: PageProps) {
       {list && !list.ok && (
         <div role="alert" data-testid="panel-error" className="text-[12px] text-[var(--color-red)]">
           <strong>{t.failed}</strong>
-          <p>{failureText(list.code)}</p>
+          <p>{readFailureText(list.code)}</p>
           <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
           {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it */}
           {list.code === "agent_control_no_team" && !teamOff && (
             <div className="mt-2">
-              <StartTeamAction onStarted={() => void read()} />
+              <StartTeamAction onStarted={read} />
             </div>
           )}
         </div>

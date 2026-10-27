@@ -169,11 +169,13 @@ function StatusBar({
   operationError,
   reconnecting,
   onRetry,
+  onReadAgain,
 }: {
   status: DirectChatStatus;
   operationError: string | null;
   reconnecting: boolean;
   onRetry: () => void;
+  onReadAgain: () => Promise<boolean>;
 }) {
   const locale = appLocale();
   const t = DIRECT_CHAT_TEXT[locale];
@@ -214,7 +216,7 @@ function StatusBar({
       </span>
       {(failed || operationError) && (
         <span className="shrink-0 flex items-center gap-2">
-          {teamStopped && <StartTeamAction onStarted={onRetry} />}
+          {teamStopped && <StartTeamAction onStarted={onReadAgain} />}
           <button
             type="button"
             onClick={onRetry}
@@ -381,8 +383,14 @@ export default function DirectChatScreen({
     };
   }, [client, embedded]);
 
+  // The history stays on screen when only the connection changes (the team stopped under an open chat): it is
+  // emptied for another agent or another client, not for a connection that fell.
+  const historyOf = useRef<{ client: unknown; agentId: string } | null>(null);
   useEffect(() => {
-    setMessages([]);
+    if (historyOf.current?.client !== client || historyOf.current.agentId !== agentId) {
+      historyOf.current = { client, agentId };
+      setMessages([]);
+    }
     setQuestions([]);
     setQuestionsHere(false);
     setAnswersInFlight(new Map());
@@ -523,6 +531,20 @@ export default function DirectChatScreen({
       window.removeEventListener("blur", close);
     };
   }, [menu]);
+
+  // «Start the team» looks again by itself while the team starts: a try that fails changes nothing on screen (the
+  // bar and its button stay), one that works takes the bar away. True: the chat is connected.
+  async function readAgain(): Promise<boolean> {
+    try {
+      const next = await client.reconnect();
+      if (next.state !== "ready") return false;
+      setOperationError(null);
+      setStatus(next);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   async function retry() {
     setReconnecting(true);
@@ -846,7 +868,7 @@ export default function DirectChatScreen({
         </header>
         )}
 
-        <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} />
+        <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} onReadAgain={readAgain} />
         {!writeLocked && isOwnVpsClaimCode(operationError) && (
           <div className="shrink-0 px-4 pt-3">
             <OwnVpsClaim reason={operationError} onClaimed={() => setOperationError(null)} />

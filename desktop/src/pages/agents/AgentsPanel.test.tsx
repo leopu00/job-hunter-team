@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
 import { tomorrowAtEightUtc } from "../../lib/agent-control";
@@ -384,6 +384,14 @@ describe("«Agenti», the agents' control panel", () => {
     show();
     const alert = await screen.findByTestId("panel-error");
     expect(alert).toHaveTextContent(describeError("agent_control_no_team", { locale: "it" }).text);
+    // told by the catalog's sentence alone: the raw code is not on screen
+    expect(alert).not.toHaveTextContent("agent_control_no_team");
+  });
+
+  it("keeps the code of a failure the catalog has no sentence for, so that a report can name it", async () => {
+    native.invoke.mockImplementation(async () => ({ ok: false, error: "code_the_catalog_does_not_know" }));
+    show();
+    expect(await screen.findByTestId("panel-error")).toHaveTextContent("(code_the_catalog_does_not_know)");
   });
 
   it("with no team running it offers «Avvia la squadra», and reads again once the team is up", async () => {
@@ -406,6 +414,41 @@ describe("«Agenti», the agents' control panel", () => {
     await screen.findByTestId("panel-summary");
     expect(screen.queryByTestId("panel-error")).toBeNull();
     expect(native.invoke.mock.calls.filter(([c]) => c === "onboarding_resume_team_start")).toHaveLength(1);
+  });
+
+  it("reads the agents again by itself when the first read after the start finds nothing yet", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let up = false;
+      let lists = 0;
+      native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+        if (command === "onboarding_resume_team_start") {
+          up = true;
+          return {};
+        }
+        if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+        const op = args.request?.op;
+        if (op === "list") {
+          lists++;
+          return up && lists >= 3 ? listReply() : { ok: false, error: "agent_control_no_team" };
+        }
+        if (op === "team") return { ok: true, data: { halted: false, standby, held } };
+        return { ok: false, error: "agent_control_unsupported" };
+      });
+      show();
+      await screen.findByTestId("panel-error");
+      fireEvent.click(await screen.findByTestId("start-team"));
+      // the first read after the start is too early: the page asks again after a few seconds, with no Refresh
+      await waitFor(() => expect(lists).toBe(2));
+      expect(screen.getByTestId("panel-error")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_500);
+      });
+      await screen.findByTestId("panel-summary");
+      expect(lists).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("offers the start only where the sentence says the team is stopped", async () => {
