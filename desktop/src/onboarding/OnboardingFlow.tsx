@@ -158,12 +158,18 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const [actionFailed, setActionFailed] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
+  // Which call of `invoke` is the latest: a screen that changed ends the calls started before it, so one that
+  // returns late cannot free (or keep) the guard of a newer one.
+  const invokeToken = useRef(0);
   const failureHeadingRef = useRef<HTMLHeadingElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const focusedFailureKeyRef = useRef<string | null>(null);
   const failureKey = runtime.status === "failed" ? `${runtime.stage}:${runtime.code ?? "unknown"}` : null;
 
   useEffect(() => {
+    // A new screen: its buttons work at the first click, even if the retry that led here has not returned yet.
+    invokeToken.current += 1;
+    pendingRef.current = false;
     setPending(false);
     setActionFailed(false);
     setConfirmingRecreate(false);
@@ -270,10 +276,13 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   async function invoke(action: () => Promise<void>, reportFailure = true) {
     if (pendingRef.current) return;
     pendingRef.current = true;
+    const mine = ++invokeToken.current;
     setPending(true); setActionFailed(false);
-    try { await action(); } catch { if (reportFailure) setActionFailed(true); } finally {
-      pendingRef.current = false;
-      setPending(false);
+    try { await action(); } catch { if (reportFailure && invokeToken.current === mine) setActionFailed(true); } finally {
+      if (invokeToken.current === mine) {
+        pendingRef.current = false;
+        setPending(false);
+      }
     }
   }
 

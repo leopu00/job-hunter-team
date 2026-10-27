@@ -292,6 +292,7 @@ def _tree_copy(tmp_path: Path) -> Path:
     tree = tmp_path / "tree"
     for relative in (
         *runtime_image_pin.PINNED_CONSUMERS,
+        *(digest for _, digest in runtime_image_pin.INSTALLER_DIGESTS),
         runtime_image_pin.MANIFEST_PATH,
         Path("package.json"),
     ):
@@ -349,6 +350,59 @@ def test_update_keeps_the_mode_of_the_installers(tmp_path: Path) -> None:
         assert (tree / relative).stat().st_mode & 0o777 == 0o755, relative
         assert NEW_DIGEST in (tree / relative).read_text()
     assert (tree / "docker-compose.yml").stat().st_mode & 0o777 == (ROOT / "docker-compose.yml").stat().st_mode & 0o777
+
+
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def test_the_digests_the_app_compiles_follow_their_installers_in_the_repository() -> None:
+    for installer, digest_file in runtime_image_pin.INSTALLER_DIGESTS:
+        assert (ROOT / digest_file).read_text().strip() == _sha(ROOT / installer), digest_file
+
+
+def test_update_regenerates_the_digest_the_app_compiles_for_each_installer(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    before = {d: (tree / d).read_bytes() for _, d in runtime_image_pin.INSTALLER_DIGESTS}
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    for installer, digest_file in runtime_image_pin.INSTALLER_DIGESTS:
+        text = (tree / digest_file).read_text()
+        assert text == _sha(tree / installer) + "\n", digest_file     # same format: one hex line
+        assert (tree / digest_file).read_bytes() != before[digest_file], digest_file
+    # the published copy is the installer byte for byte, so it hashes to the same value
+    assert (tree / "web/public/install.sh").read_bytes() == (tree / "scripts/install.sh").read_bytes()
+    assert runtime_image_pin.verify_tree(tree).digest == NEW_DIGEST
+
+
+def test_update_hashes_an_installer_as_git_stores_it_not_as_a_crlf_checkout_has_it(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    target = tree / "scripts/install.ps1"
+    target.write_bytes(target.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    recorded = (tree / "desktop/src-tauri/installer-windows.sha256").read_text().strip()
+    assert recorded == hashlib.sha256(target.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+    assert runtime_image_pin.verify_tree(tree).digest == NEW_DIGEST
+
+
+@pytest.mark.parametrize("digest_file", [d for _, d in runtime_image_pin.INSTALLER_DIGESTS], ids=str)
+def test_a_digest_left_behind_after_the_update_is_red(tmp_path: Path, digest_file: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    (tree / digest_file).write_bytes((ROOT / digest_file).read_bytes())    # the digest of the old installer
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.verify_tree(tree)
+    assert raised.value.code == "installer_digest_drift"
+
+
+def test_an_update_without_the_digest_file_changes_nothing(tmp_path: Path) -> None:
+    tree = _tree_copy(tmp_path)
+    (tree / "desktop/src-tauri/installer.sha256").unlink()
+    snapshot = {p: (tree / p).read_bytes() for p in runtime_image_pin.PINNED_CONSUMERS}
+    with pytest.raises(runtime_image_pin.RuntimeImagePinError) as raised:
+        runtime_image_pin.update_tree(tree, NEW_DIGEST, NEW_REVISION)
+    assert raised.value.code == "consumer_missing"
+    assert {p: (tree / p).read_bytes() for p in snapshot} == snapshot
+    assert not list(tree.rglob("*.pin-new"))
 
 
 def test_a_pin_left_behind_after_the_update_is_red(tmp_path: Path) -> None:

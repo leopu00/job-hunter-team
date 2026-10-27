@@ -99,6 +99,7 @@ describe("what the page sends and reads", () => {
     expect(errorKey("reauth_required")).toBe("err_reauth_required");
     expect(errorKey("rate_limited")).toBe("err_rate_limited");
     expect(errorKey("confirm_expired")).toBe("err_confirm_expired");
+    expect(errorKey("action_disabled")).toBe("err_action_disabled");
     expect(errorKey("level_mismatch")).toBe("err_generic");
     expect(errorKey("")).toBe("err_generic");
   });
@@ -109,7 +110,7 @@ describe("the words", () => {
     const keys = ["title", "intro", "target", "target_all", "expires", "confirm", "cancel", "status_lost"]
       .concat(ACTIONS.map(String), ACTIONS.map((a) => `confirm_${a}`))
       .concat(["pending", "running", "done", "error"].map((s) => `status_${s}`))
-      .concat(["reauth_required", "rate_limited", "confirm_expired", "unauthenticated"].map(errorKey), ["err_generic"]);
+      .concat(["reauth_required", "rate_limited", "confirm_expired", "unauthenticated", "action_disabled"].map(errorKey), ["err_generic"]);
     for (const key of keys) {
       const entry = (T as Record<string, Record<string, string>>)[key];
       expect(entry, key).toBeTruthy();
@@ -121,6 +122,29 @@ describe("the words", () => {
       }
     }
     expect(fill("Riavviare {target}?", "Scout")).toBe("Riavviare Scout?");
+  });
+});
+
+describe("an action the door switched off", () => {
+  it("is read from the 403 of the contract and told as «not available from the site in this version, use the app», in the seven languages", () => {
+    const answer = readDoorAnswer(403, { ok: false, error: "action_disabled" });
+    expect(answer).toEqual({ kind: "refused", code: "action_disabled" });
+    const words = (T as Record<string, Record<string, string>>)[errorKey("action_disabled")];
+    const generic = (T as Record<string, Record<string, string>>).err_generic;
+    for (const locale of ["it", "en", "es", "fr", "de", "hu", "pt"]) {
+      expect(words[locale], locale).not.toBe(generic[locale]);
+      expect(words[locale], locale).not.toMatch(/retry|riprova|reintent|réessaie|erneut|próbáld|tenta/i);
+    }
+    expect(words.it).toBe("Non disponibile dal sito in questa versione: usa l'app.");
+    // it does not promise that it will come: no «not yet» in any language
+    for (const locale of ["it", "en", "es", "fr", "de", "hu", "pt"]) {
+      expect(words[locale], locale).not.toMatch(/ancora|\byet\b|todav[ií]a|encore|noch|m[eé]g |\bainda\b/i);
+    }
+  });
+
+  it("the page shows the refusal through errorKey, and the 403 code of the contract is the one of the door", () => {
+    expect(read("app/(protected)/team/TeamControl.tsx")).toContain("setError(errorKey(answer.code))");
+    expect(read("lib/request-action-codes.ts")).toContain("action_disabled: 403");
   });
 });
 

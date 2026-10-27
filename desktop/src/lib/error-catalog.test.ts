@@ -772,6 +772,24 @@ describe("a VPS whose team already runs on Docker", () => {
   });
 });
 
+describe("this computer's team already running when the preparation needs to install", () => {
+  it("says that nothing was changed and how to go on, in every language, and not that the preparation failed", () => {
+    const texts = new Set<string>();
+    for (const locale of ERROR_LOCALES) {
+      const { text, action, known } = describeError("local_team_running", { locale });
+      expect(known, locale).toBe(true);
+      expect(text, locale).toMatch(/Job Hunter Team/);
+      expect(action, locale).toMatch(/jht down/);
+      expect(text, locale).not.toEqual(describeError("runtime_install_failed", { locale }).text);
+      expect(text, locale).not.toEqual(describeError("vps_team_running", { locale }).text);
+      // it is the person's own team, not a VPS
+      expect(text, locale).not.toMatch(/VPS/);
+      texts.add(text);
+    }
+    expect(texts.size).toBe(ERROR_LOCALES.length);
+  });
+});
+
 describe("a Mac installed with another container engine", () => {
   it("says what would stay behind and what to do, in every language, without a terminal", () => {
     for (const locale of ERROR_LOCALES) {

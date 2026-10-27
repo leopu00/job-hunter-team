@@ -5,8 +5,16 @@
 --
 -- A cloud-sync pairing exchanges a refresh token for a bearer token.  Keep the
 -- session that made that exchange on the server, so the action door can refuse
--- an L3 application request made from that device session.  The table is read
--- only by SECURITY DEFINER code; browser roles do not receive the column.
+-- an L3 application request made from that device session.
+--
+-- The refusal must outlive the token.  A device holds a user session, so it
+-- could end its own token (revoke it through the website, or delete the row)
+-- and then, with the token gone from the check, authorise an application from
+-- the same session once it is paired again.  So the comparison with the session
+-- covers EVERY row of the user, revoked or expired included, and no browser
+-- role can delete or change a row any more: only the server creates, revokes
+-- and deletes cloud-sync tokens (093 took INSERT and UPDATE; this migration
+-- takes them too, so that it stands alone in any order, and takes DELETE).
 
 ALTER TABLE public.cloud_sync_tokens
   ADD COLUMN IF NOT EXISTS pairing_session_id UUID;
@@ -61,9 +69,12 @@ BEGIN
     v_legacy := (p_params ->> 'legacy_id')::INTEGER;
 
     -- Device sessions may operate cloud sync but cannot authorise an external
-    -- application. A legacy active token has no pairing session to compare,
-    -- so it closes this L3 door until the box is paired again. Return the same
-    -- closed refusal as an inaccessible row.
+    -- application.  A token that is active and has no pairing session to
+    -- compare (a legacy one) closes this L3 door until the box is paired again.
+    -- The session of the caller is compared with the pairing session of EVERY
+    -- token of the user, a revoked or an expired one too: a device that ended
+    -- its own token is still that device.  Return the same closed refusal as an
+    -- inaccessible row.
     IF p_action = 'position.apply_authorize' THEN
         BEGIN
             v_session := NULLIF(auth.jwt() ->> 'session_id', '')::UUID;
@@ -73,10 +84,10 @@ BEGIN
         IF EXISTS (
             SELECT 1 FROM public.cloud_sync_tokens AS t
              WHERE t.user_id = p_uid
-               AND t.revoked_at IS NULL
-               AND (t.expires_at IS NULL OR t.expires_at > now())
                AND (
-                   t.pairing_session_id IS NULL
+                   (t.pairing_session_id IS NULL
+                    AND t.revoked_at IS NULL
+                    AND (t.expires_at IS NULL OR t.expires_at > now()))
                    OR (v_session IS NOT NULL AND t.pairing_session_id = v_session)
                )
         ) THEN
@@ -160,3 +171,35 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION web_door.ext_position(TEXT, TEXT, UUID, JSONB, TEXT, UUID) FROM PUBLIC, anon, authenticated;
+
+-- Only the server creates, changes and deletes cloud-sync tokens.  The user still reads their own (SELECT: the
+-- token list, the desktop's onboarding).  The website writes them with the service role after checking the
+-- session (tokens, revoke, device-confirm, device-register); nothing in the apps deletes one from the browser.
+-- 093 did this for INSERT and UPDATE; it is repeated here (IF EXISTS, REVOKE: harmless the second time) so that the
+-- barrier above does not depend on the order of the migrations, and DELETE goes with them.
+DROP POLICY IF EXISTS "Users can insert own cloud sync tokens" ON public.cloud_sync_tokens;
+DROP POLICY IF EXISTS "Users can update own cloud sync tokens" ON public.cloud_sync_tokens;
+DROP POLICY IF EXISTS "Users can delete own cloud sync tokens" ON public.cloud_sync_tokens;
+
+REVOKE INSERT, UPDATE, DELETE ON public.cloud_sync_tokens FROM anon, authenticated;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_policy
+         WHERE polrelid = 'public.cloud_sync_tokens'::regclass
+           AND polcmd IN ('a', 'w', 'd', '*')
+    ) THEN
+        RAISE EXCEPTION '105: cloud_sync_tokens still has an INSERT, UPDATE, DELETE or ALL policy';
+    END IF;
+    -- A REVOKE that removes nothing is only a WARNING: check what is left.  has_any_column_privilege sees table
+    -- and column grants alike; DELETE is a table privilege only.
+    IF has_any_column_privilege('anon', 'public.cloud_sync_tokens', 'INSERT')
+       OR has_any_column_privilege('anon', 'public.cloud_sync_tokens', 'UPDATE')
+       OR has_table_privilege('anon', 'public.cloud_sync_tokens', 'DELETE')
+       OR has_any_column_privilege('authenticated', 'public.cloud_sync_tokens', 'INSERT')
+       OR has_any_column_privilege('authenticated', 'public.cloud_sync_tokens', 'UPDATE')
+       OR has_table_privilege('authenticated', 'public.cloud_sync_tokens', 'DELETE') THEN
+        RAISE EXCEPTION '105: anon or authenticated can still INSERT, UPDATE or DELETE cloud_sync_tokens';
+    END IF;
+END $$;

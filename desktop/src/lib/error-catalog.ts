@@ -1526,6 +1526,14 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs.",
     "Nothing was changed. Connect to the team that is already there, without reinstalling it; or stop it on the VPS with «jht down» and try again.",
   ),
+  // install.sh on this computer while its team runs (exit 84): not a failure of the preparation, and
+  // nothing was changed. The way on is to stop the team, which only the person decides.
+  local_team_running: copy(
+    "Job Hunter Team è già acceso su questo computer, e l’ambiente non si può aggiornare mentre gira.",
+    "Non è stato cambiato nulla. Fermalo con «jht down» in un terminale e premi di nuovo il pulsante: la preparazione finisce l’aggiornamento e lo riaccende. Il profilo e i documenti restano dove sono.",
+    "Job Hunter Team is already running on this computer, and its environment cannot be updated while it runs.",
+    "Nothing was changed. Stop it with «jht down» in a terminal and press the button again: the setup finishes the update and starts it again. Your profile and documents stay where they are.",
+  ),
   host_key_missing: copy(
     "L’identità SSH della VPS non è ancora stata confermata.",
     "Conferma l’impronta della VPS prima di continuare.",

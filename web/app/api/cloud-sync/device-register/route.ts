@@ -9,6 +9,7 @@ import {
   missingClientColumns,
   parseClientHeader,
 } from "@/lib/cloud-sync/client-identity";
+import { missingPairingSessionColumn } from "@/lib/cloud-sync/pairing-session";
 import { invalidJsonBody } from "@/app/api/_lib/error-body";
 import { sanitizedError } from "@/lib/error-response";
 
@@ -238,20 +239,34 @@ export async function POST(req: NextRequest) {
       .insert(row)
       .select("id, name, token_prefix, created_at")
       .single();
+  // The same row in the four shapes the database can ask for: with or without the pairing session (migration 105),
+  // with or without the client declaration (migration 064).
+  const { pairing_session_id: _session, ...baseWithoutSession } = baseRow;
+  const identity = declared
+    ? clientIdentityPatch(declared, new Date().toISOString())
+    : {};
+  const rowOf = (withSession: boolean, withIdentity: boolean) => ({
+    ...(withSession ? baseRow : baseWithoutSession),
+    ...(withIdentity ? identity : {}),
+  });
 
-  let { data, error } = await register(
-    declared
-      ? {
-          ...baseRow,
-          ...clientIdentityPatch(declared, new Date().toISOString()),
-        }
-      : baseRow,
-  );
+  let withSession = true;
+  let { data, error } = await register(rowOf(true, true));
+  // Migration 105 not applied yet (the site goes out before it): the device is paired all the same, and its token is
+  // born LEGACY, without a session, which keeps the application authorisations of the site closed until the person
+  // pairs it again. Only when the error names that column; any other failure is not this one and is not retried.
+  if (missingPairingSessionColumn(error)) {
+    console.warn(
+      "[cloud-sync/device-register] cloud_sync_tokens.pairing_session_id is missing (105 not applied): token created without a session",
+    );
+    withSession = false;
+    ({ data, error } = await register(rowOf(false, true)));
+  }
   // Migration 064 non ancora applicata: si paira comunque. Un device che
   // non riesce a collegarsi perché manca una colonna di telemetria sarebbe
   // il rimedio peggiore del male.
-  if (missingClientColumns(error)) {
-    ({ data, error } = await register(baseRow));
+  if (missingClientColumns(error) && !missingPairingSessionColumn(error)) {
+    ({ data, error } = await register(rowOf(withSession, false)));
   }
 
   if (error) {
