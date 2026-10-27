@@ -1926,6 +1926,14 @@ runtime_publish_sha256() {
 
 # ── Final ─────────────────────────────────────────────────────────────────
 
+# True if /dev/tty can really be opened. The node exists and is readable on every
+# machine, but opening it fails (ENXIO, "No such device or address") when the process
+# has no controlling terminal: ssh without -t, cron, CI. So the only honest test is
+# to open it, in a subshell so that a failure cannot end the installer.
+tty_can_be_opened() {
+  ( : </dev/tty ) 2>/dev/null
+}
+
 # True if maybe_onboard() can launch the wizard right away (TTY available
 # directly or re-openable from /dev/tty). Used by final_message to decide
 # whether to print "Next steps: jht setup" (it would be noise if the
@@ -1934,7 +1942,7 @@ will_auto_onboard() {
   [ "$DRY_RUN" -eq 1 ] && return 1
   [ "${JHT_SKIP_ONBOARD:-0}" = "1" ] && return 1
   [ -t 0 ] && return 0
-  [ -r /dev/tty ] && return 0
+  tty_can_be_opened && return 0
   return 1
 }
 
@@ -2159,7 +2167,7 @@ maybe_onboard() {
   # printed "Stdin is not an interactive terminal: skipping the
   # wizard" and the user had to remember to re-run `jht setup`.
   if [ ! -t 0 ]; then
-    if [ -r /dev/tty ]; then
+    if tty_can_be_opened; then
       exec </dev/tty
     else
       info "No interactive terminal (no /dev/tty): skipping the wizard."
