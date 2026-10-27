@@ -1111,6 +1111,8 @@ export default function DashboardApp() {
   // A local profile has no cloud account: once the app is open, the pages show the team of this computer. Set while
   // rendering, before the Shell's pages read in their effects (see lib/local-team-data.ts).
   setLocalTeamData(localProfile && gate.phase === "ready" && linkedView === null ? identityKey : null);
+  // The mode ends with the app's screen (signing out, another account): nothing is left on for the next one.
+  useEffect(() => () => setLocalTeamData(null), []);
   const teamOff = useMemo<TeamOff | null>(
     () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime: wakeRuntimeAndConnect, startTeam: startTeamFromTeamOff } : null),
     [teamOffKey, identityKey, startTeamFromTeamOff, wakeRuntimeAndConnect],
