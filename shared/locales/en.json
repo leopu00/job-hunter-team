@@ -160,6 +160,8 @@
   "plan.no_weekly_cap": "no weekly cap",
   "plan.window_5h": "5-hour window",
   "plan.no_window_5h": "no 5-hour window",
+  "plan.codex_reports": "Codex reports: %s → %s",
+  "plan.codex_reports_unlisted": "Codex reports: %s (not in this table)",
   "plan.usage_pair": "usage: plan_registry.py set <provider>:<plan> | <provider> <plan>",
   "plan.usage_single": "usage: plan_registry.py set <provider>:<plan>",
   "bot_commands.assistente.budget": "Budget chart, current window",
