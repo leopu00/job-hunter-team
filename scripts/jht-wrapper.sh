@@ -2624,10 +2624,24 @@ docker_reachable() {
   docker info >/dev/null 2>&1
 }
 
-# jht profile import FILE: il file sta sull'host e il container non lo vede, quindi
-# il wrapper lo legge (regolare, non un link, al massimo 64 KiB come l'import
-# dell'app) e lo passa su stdin al CLI del container attestato. Convalida, scrittura
-# atomica e privata, ready.flag e avviso al Capitano restano tutti dentro, in un posto solo.
+# Il file di un profilo sta sull'host e il container non lo vede: il wrapper lo
+# legge (regolare, non un link, al massimo 64 KiB come l'import dell'app) e lo passa
+# su stdin al CLI del container attestato. Vale per `jht profile import FILE` e per
+# `jht profile validate FILE`: i limiti di sicurezza sono quelli di qui sotto, in un
+# posto solo, e al container non arriva mai un percorso dell'host.
+profile_host_file_ok() {
+  local file="$1" size
+  if [ -L "$file" ] || [ ! -f "$file" ]; then
+    err "il profilo deve essere un file regolare, non un link: $file"; return 1
+  fi
+  size="$(wc -c < "$file" | tr -d ' ')"
+  if [ -z "$size" ] || [ "$size" -gt 65536 ]; then
+    err "il file del profilo supera i 64 KiB"; return 1
+  fi
+}
+
+# jht profile import FILE: convalida, scrittura atomica e privata, ready.flag e
+# avviso al Capitano restano tutti dentro il CLI, in un posto solo.
 profile_import_command() {
   local file="" flag
   local -a extra=()
@@ -2641,15 +2655,40 @@ profile_import_command() {
     esac
   done
   if [ -z "$file" ]; then err "uso: jht profile import FILE [--replace] [--json]"; return 2; fi
-  if [ -L "$file" ] || [ ! -f "$file" ]; then
-    err "il profilo deve essere un file regolare, non un link: $file"; return 1
-  fi
-  local size
-  size="$(wc -c < "$file" | tr -d ' ')"
-  if [ -z "$size" ] || [ "$size" -gt 65536 ]; then
-    err "il file del profilo supera i 64 KiB"; return 1
-  fi
+  profile_host_file_ok "$file" || return 1
   docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" profile import --stdin ${extra[@]+"${extra[@]}"} < "$file"
+}
+
+# jht profile validate FILE: stesso passaggio del file di import; non scrive niente.
+# Senza FILE il CLI controlla il profilo del team (dentro il container): si inoltra
+# com'e'. Chiamato solo quando c'e' un FILE (vedi profile_validate_has_file).
+profile_validate_command() {
+  local file="" flag
+  local -a extra=()
+  for flag in "$@"; do
+    case "$flag" in
+      --strict|--json) extra+=("$flag") ;;
+      -*) err "opzione non riconosciuta: $flag"; return 2 ;;
+      *)
+        if [ -n "$file" ]; then err "uso: jht profile validate [FILE] [--strict] [--json]"; return 2; fi
+        file="$flag" ;;
+    esac
+  done
+  profile_host_file_ok "$file" || return 1
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" profile validate --stdin ${extra[@]+"${extra[@]}"} < "$file"
+}
+
+# C'e' un FILE fra gli argomenti di `profile validate` (e non e' una richiesta di aiuto)?
+profile_validate_has_file() {
+  local arg has=1
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) return 1 ;;
+      -*) ;;
+      *) has=0 ;;
+    esac
+  done
+  return "$has"
 }
 
 # L'aiuto completo vive nel CLI DENTRO il container, quindi senza container si
@@ -2677,6 +2716,9 @@ jht — Job Hunter Team
     jht shell              shell dentro il container
     jht profile import FILE [--replace]
                            da' alla squadra il profilo del candidato (YAML)
+    jht profile validate [FILE] [--strict] [--json]
+                           controlla un profilo (YAML) senza scrivere niente;
+                           senza FILE, quello della squadra
     jht mail setup         salva la casella di posta nel broker dei segreti
     jht mail drafts        email scritte dagli agenti in attesa del tuo ok
     jht mail approve <id>  le manda; jht mail discard <id> le scarta
@@ -5036,6 +5078,9 @@ case "$SUB" in
         *" --help "*|*" -h "*) ;;   # l'aiuto e' del CLI nel container
         *) profile_import_command "${@:3}"; exit $? ;;
       esac
+    fi
+    if [ "${2:-}" = validate ] && profile_validate_has_file "${@:3}"; then
+      profile_validate_command "${@:3}"; exit $?
     fi
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;

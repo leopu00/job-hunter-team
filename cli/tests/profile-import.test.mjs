@@ -255,10 +255,10 @@ registerProfileCommand(program);
 await program.parseAsync(process.argv.slice(1), { from: 'user' });
 `;
 
-function run(home, args, input) {
+function run(home, args, input, env = {}) {
   return spawnSync(process.execPath, ['--input-type=module', '-e', RUNNER, ...args], {
     encoding: 'utf8', input, timeout: 60000, cwd: resolve(import.meta.dirname, '..'),
-    env: { ...process.env, JHT_HOME: home, JHT_LANG: 'en', PATH: process.env.PATH },
+    env: { ...process.env, JHT_HOME: home, JHT_LANG: 'en', PATH: process.env.PATH, ...env },
   });
 }
 
@@ -310,6 +310,45 @@ test('jht profile import: an invalid profile, a link and a big file are refused 
   assert.ok(!existsSync(join(root, 'profile', 'candidate_profile.yml')));
   assert.ok(!existsSync(join(root, 'profile', 'ready.flag')));
   assert.equal(run(root, ['profile', 'import']).status, 2);
+});
+
+test('jht profile validate --stdin: the file of the host, checked like a path, with nothing left behind', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, () => {
+  const { root } = folder();
+  const scratch = mkdtempSync(join(tmpdir(), 'jht-validate-tmp-'));
+  const validate = (args, input) => run(root, ['profile', 'validate', ...args], input, { TMPDIR: scratch });
+
+  const good = validate(['--stdin', '--json'], PROFILE);
+  assert.equal(good.status, 0, good.stderr);
+  assert.equal(JSON.parse(good.stdout).ok, true);
+  assert.match(validate(['--stdin'], PROFILE).stdout, /VALID_PROFILE/);
+
+  const bad = validate(['--stdin', '--json'], 'name: Only A Name\n');
+  assert.equal(bad.status, 1);
+  assert.equal(JSON.parse(bad.stdout).ok, false);
+  assert.match(validate(['--stdin'], 'name: Only A Name\n').stderr, /ERROR/);
+
+  // What the container used to answer for a file it cannot see.
+  assert.match(validate([join(root, 'only-on-the-host.yml')]).stderr, /file not found/);
+
+  const big = validate(['--stdin', '--json'], Buffer.alloc(MAX_PROFILE_BYTES * 3, 97));
+  assert.equal(big.status, 1);
+  assert.match(JSON.parse(big.stdout).errors[0], /larger than 64 KiB/);
+  assert.match(validate(['--stdin'], '').stderr, /empty/);
+  assert.equal(validate([FIXTURE, '--stdin'], PROFILE).status, 2);
+  assert.deepEqual(JSON.parse(big.stdout).warnings, [], 'a refusal has the same shape as the validator answer');
+
+  // A YAML that does not parse: the parser quotes the file it read, which was a private copy.
+  for (const args of [['--stdin'], ['--stdin', '--json']]) {
+    const broken = validate(args, 'name: [unclosed\nrole: x: y\n');
+    assert.equal(broken.status, 1);
+    const said = broken.stdout + broken.stderr;
+    assert.match(said, /YAML could not be parsed/);
+    assert.match(said, /<stdin>/);
+    assert.doesNotMatch(said, /jht-profile-validate-|candidate_profile\.yml/);
+  }
+
+  assert.deepEqual(readdirSync(scratch), [], 'the private copy is removed, whatever the answer');
+  assert.ok(!existsSync(join(root, 'profile', 'candidate_profile.yml')), 'validate writes nothing');
 });
 
 // The Capitano is reached by the transport `jht team send` uses; the stubs stand for tmux and
