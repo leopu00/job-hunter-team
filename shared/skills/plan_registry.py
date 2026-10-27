@@ -47,6 +47,7 @@ except ImportError:
         "plan.free": "free",
         "plan.price_month": "%s $/month",
         "plan.unknown": "unknown plan: %s",
+        "plan.config_unreadable": "%s cannot be read (damaged, or not a JSON object): the plan was not written and the file was left as it is",
         "plan.not_selected": "subscription plan not selected",
         "plan.select_hint": "the user has not declared a subscription plan: do not guess a roster. Ask them in chat — run `python3 /app/shared/skills/plan_registry.py list <provider>` (Codex is `codex`), show the plans and suggest the one on the `Codex reports:` line without deciding for them — then write exactly their choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` and run begin-burst again",
         "plan.none_known": "no known plans",
@@ -253,6 +254,23 @@ def _read_config() -> dict:
         return {}
 
 
+def _read_config_to_write() -> dict:
+    """The configuration as it is, for a write: a file that is not there is an empty configuration, but a file
+    that is there and cannot be read as a JSON object (damaged, a list, not text, not a regular file) is never
+    read as empty, or the write would replace everything in it with the one key."""
+    path = _config_path()
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):  # ValueError: json.JSONDecodeError and UnicodeDecodeError
+        raise ValueError(_tf("plan.config_unreadable", str(path))) from None
+    if not isinstance(data, dict):
+        raise ValueError(_tf("plan.config_unreadable", str(path)))
+    return data
+
+
 def list_plans(provider: str | None = None) -> dict[str, list[dict]]:
     """Piani disponibili. Senza `provider`: tutti."""
     if provider:
@@ -314,7 +332,7 @@ def set_plan(provider: str, plan_id: str) -> dict:
     if plan is None:
         raise ValueError(_tf("plan.unknown", f"{provider}:{plan_id}"))
     prov = plan["provider"]
-    cfg = _read_config()
+    cfg = _read_config_to_write()
     providers = cfg.setdefault("providers", {})
     if not isinstance(providers, dict):
         providers = cfg["providers"] = {}

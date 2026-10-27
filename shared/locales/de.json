@@ -123,6 +123,7 @@
   "plan.free": "kostenlos",
   "plan.price_month": "%s $/Monat",
   "plan.unknown": "unbekannter Tarif: %s",
+  "plan.config_unreadable": "%s ist nicht lesbar (beschädigt oder kein JSON-Objekt): Das Abonnement wurde nicht geschrieben, die Datei blieb unverändert",
   "plan.not_selected": "kein Abonnement ausgewählt",
   "plan.select_hint": "der Nutzer hat kein Abonnement angegeben: rate keine Aufstellung. Frag ihn im Chat — führe `python3 /app/shared/skills/plan_registry.py list <provider>` aus (Codex ist `codex`), zeige die Abonnements und schlag das der Zeile `Codex reports:` vor, ohne für ihn zu entscheiden — schreib dann genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` und starte begin-burst erneut",
   "plan.none_known": "keine bekannten Tarife",

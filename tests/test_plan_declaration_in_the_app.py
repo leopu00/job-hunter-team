@@ -169,3 +169,51 @@ def test_the_capitano_skill_reads_plan_missing_as_a_plan_to_declare(lang: str):
     text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
     assert "plan_missing: true" in text and "first_run.py status" in text
     assert text.count(f"{REGISTRY} set <provider>:<id>") >= 2  # begin-burst refusing, and a burst that lost its plan
+
+
+# ── a configuration that cannot be read is never replaced by the one key ───────────────────────
+
+BROKEN_CONFIGS = {
+    "not json": b"{ not json",
+    "empty file": b"",
+    "a list": b'["active_provider", "codex"]',
+    "a string": b'"codex"',
+    "not text": b'{"active_provider": "codex\xff"}',
+    "cut short": b'{"active_provider": "codex", "providers": {"openai": {"api_key": "x"',
+}
+
+
+@pytest.mark.parametrize("case", BROKEN_CONFIGS)
+@pytest.mark.parametrize("lang", ["en", "it"])
+def test_set_refuses_a_configuration_it_cannot_read_and_leaves_the_file_as_it_is(home: Path, case: str, lang: str):
+    path = home / "jht.config.json"
+    path.write_bytes(BROKEN_CONFIGS[case])
+    done = _run("plan_registry.py", "set", "codex:plus", home=home, lang=lang)
+    assert done.returncode == 1 and done.stdout == ""
+    assert str(path) in done.stderr, done.stderr
+    assert path.read_bytes() == BROKEN_CONFIGS[case]
+    assert not (home / "jht.config.json.tmp").exists()
+
+
+def test_set_refuses_a_configuration_that_is_not_a_file(home: Path):
+    path = home / "jht.config.json"
+    path.unlink()
+    path.mkdir()
+    done = _run("plan_registry.py", "set", "codex:plus", home=home)
+    assert done.returncode == 1 and str(path) in done.stderr
+    assert path.is_dir() and list(path.iterdir()) == []
+
+
+def test_set_still_creates_the_configuration_when_there_is_none_and_keeps_what_is_in_it(home: Path):
+    (home / "jht.config.json").unlink()
+    assert _run("plan_registry.py", "set", "codex:plus", home=home).returncode == 0
+    assert json.loads((home / "jht.config.json").read_text(encoding="utf-8")) == {"providers": {"openai": {"plan": "plus"}}}
+    (home / "jht.config.json").write_text(json.dumps({"active_provider": "codex", "keep": {"me": 1}}), encoding="utf-8")
+    assert _run("plan_registry.py", "set", "codex:pro", home=home).returncode == 0
+    assert json.loads((home / "jht.config.json").read_text(encoding="utf-8")) == {
+        "active_provider": "codex", "keep": {"me": 1}, "providers": {"openai": {"plan": "pro"}}}
+
+
+def test_reading_the_plan_still_treats_a_broken_configuration_as_no_plan(home: Path):
+    (home / "jht.config.json").write_bytes(b"{ not json")
+    assert _run("plan_registry.py", "get", home=home).stdout.strip() == "PLAN_MISSING"

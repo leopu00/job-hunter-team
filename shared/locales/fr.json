@@ -123,6 +123,7 @@
   "plan.free": "gratuit",
   "plan.price_month": "%s $/mois",
   "plan.unknown": "formule inconnue : %s",
+  "plan.config_unreadable": "%s est illisible (endommagé, ou pas un objet JSON) : la formule n’a pas été écrite et le fichier est resté tel quel",
   "plan.not_selected": "formule d'abonnement non sélectionnée",
   "plan.select_hint": "l'utilisateur n'a pas déclaré de formule d'abonnement : ne devine pas une formation. Demande-la-lui dans le chat — exécute `python3 /app/shared/skills/plan_registry.py list <provider>` (Codex est `codex`), montre les formules et suggère celle de la ligne `Codex reports:` sans décider à sa place — puis écris exactement son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` et relance begin-burst",
   "plan.none_known": "aucune formule connue",
