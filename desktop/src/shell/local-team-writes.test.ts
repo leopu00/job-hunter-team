@@ -1,7 +1,8 @@
+// @vitest-environment node
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LOCAL_TEAM_NON_GET_ALLOWED, notInDesktop, shellApi } from "./api-bridge";
 import { setLocalTeamData } from "../lib/local-team-data";
 import { createClient as clientSide } from "../web-shims/server/supabase-client";
@@ -14,7 +15,12 @@ import { createClient as serverSide } from "../web-shims/server/supabase-server"
 const src = fileURLToPath(new URL("..", import.meta.url));
 const repo = fileURLToPath(new URL("../../../", import.meta.url));
 
-afterEach(() => setLocalTeamData(null));
+// the bridge reads the page's address; a node run has no page, so it gets one
+beforeEach(() => vi.stubGlobal("window", { location: { href: "http://localhost/", origin: "http://localhost" } }));
+afterEach(() => {
+  setLocalTeamData(null);
+  vi.unstubAllGlobals();
+});
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
