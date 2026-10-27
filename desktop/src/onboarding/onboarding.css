@@ -1302,3 +1302,37 @@
 .onboarding-runtime-pullbar { height: 6px; overflow: hidden; border-radius: 99px; background: var(--color-row); }
 .onboarding-runtime-pullbar i { display: block; height: 100%; border-radius: inherit; background: var(--color-blue); transition: width 0.4s ease-out; }
 @media (prefers-reduced-motion: reduce) { .onboarding-runtime-pullbar i { transition: none; } }
+
+.onboarding-plan__list {
+  margin: 12px 0 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-plan__option {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted);
+  background: var(--color-card);
+  cursor: pointer;
+}
+
+.onboarding-plan__option.is-selected {
+  border-color: var(--color-green);
+  color: var(--color-bright);
+}
+
+.onboarding-plan__option strong {
+  color: var(--color-bright);
+}
+
+.onboarding-plan__option small {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 12px;
+}

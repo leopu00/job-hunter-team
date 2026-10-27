@@ -1,4 +1,5 @@
 import type { CleanImagesOutcome } from "./clean-images";
+import type { PlanChoiceData, PlanOption } from "./provider-plan";
 import type { Locale } from "@/i18n/config";
 import { stateText } from "./onboarding-state.i18n";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
@@ -221,6 +222,13 @@ export interface OnboardingFlowProps {
    * `jht clean-images --json` on the team's host (lib/clean-images.ts).
    */
   onFreeDiskSpace?: () => Promise<CleanImagesOutcome>;
+  /**
+   * The subscription plan, chosen after the provider's login and before the team starts (lib/provider-plan.ts):
+   * the plans on the team's host, and the declaring of the one the person chose. Both absent where the app cannot
+   * ask the host; the Assistente then asks in the chat.
+   */
+  onLoadPlans?: () => Promise<PlanChoiceData>;
+  onDeclarePlan?: (plan: string) => Promise<PlanOption>;
   /**
    * Where the local runtime's log is (lib/runtime-log.ts), shown with a button
    * that opens it when a local setup step fails.

@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { appLocale } from "../lib/app-locale";
 import { cleanImages } from "../lib/clean-images";
+import { declarePlan, loadPlans } from "../lib/provider-plan";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
 import { failureText, stateText } from "../lib/onboarding-state.i18n";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
@@ -1497,6 +1498,11 @@ export default function DashboardApp() {
   // host being set up, or on the saved one when the team is resumed.
   const freeDiskSpace = useCallback(() => cleanImages(submissionRef.current?.host ?? null), []);
 
+  // The subscription plan, after the provider's login and before the team starts: on the host being set up,
+  // or on the saved one when the team is resumed.
+  const loadSubscriptionPlans = useCallback(() => loadPlans(submissionRef.current?.host ?? null), []);
+  const declareSubscriptionPlan = useCallback((plan: string) => declarePlan(submissionRef.current?.host ?? null, plan), []);
+
   const retry = useCallback(async () => {
     if (gate.phase !== "required" || gate.runtime.status !== "failed") return;
     const { stage } = gate.runtime;
@@ -1778,6 +1784,8 @@ export default function DashboardApp() {
         onUseLocalData={adoptUnassignedLocalData}
         onSetAsideLocalData={setAsideUnassignedLocalData}
         onFreeDiskSpace={freeDiskSpace}
+        onLoadPlans={loadSubscriptionPlans}
+        onDeclarePlan={declareSubscriptionPlan}
         runtimeLogPath={runtimeLog}
         onOpenRuntimeLog={openRuntimeLog}
         previousLocalData={previousLocalData}
