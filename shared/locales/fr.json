@@ -130,6 +130,8 @@
   "plan.no_weekly_cap": "sans plafond hebdomadaire",
   "plan.window_5h": "fenêtre de 5 heures",
   "plan.no_window_5h": "sans fenêtre de 5 heures",
+  "plan.codex_reports": "Codex indique : %s → %s",
+  "plan.codex_reports_unlisted": "Codex indique : %s (absent de ce tableau)",
   "plan.usage_pair": "utilisation : plan_registry.py set <provider>:<plan> | <provider> <plan>",
   "plan.usage_single": "utilisation : plan_registry.py set <provider>:<plan>",
   "bot_commands.assistente.budget": "Graphique budget, fenêtre actuelle",

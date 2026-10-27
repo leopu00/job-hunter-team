@@ -1282,6 +1282,46 @@ def _window_minutes(window):
         return 0
 
 
+def _plan_type_of(*rate_limits):
+    """The subscription plan Codex says the account has (`prolite`, `plus`...): a short lowercase word or None.
+    Nothing else gets through, because it is printed by `jht providers plan`."""
+    for rl in rate_limits:
+        value = rl.get("plan_type") if isinstance(rl, dict) else None
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,32}", value.strip()):
+            return value.strip().lower()
+    return None
+
+
+# The last Codex reading, for `plan_registry.py`: which plan Codex reports and whether it has ONE weekly window.
+# A fact about the account, not about this minute, so it is kept: `jht providers plan` shows it without asking Codex.
+CODEX_READING_FILE = LOGS_DIR / "codex-plan-reading.json"
+CODEX_READING_REFRESH_SEC = 86400
+
+
+def _remember_codex_reading(parsed):
+    """Writes the plan the reading shows (only when it changed, or once a day so that it does not look old).
+    Returns `parsed` itself: it never changes what the caller reads, and a failed write is silent."""
+    try:
+        if not isinstance(parsed, dict):
+            return parsed
+        reading = {"plan_type": parsed.get("plan_type"), "single_weekly": parsed.get("usage_is_weekly") is True}
+        try:
+            kept = json.loads(CODEX_READING_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            kept = {}
+        if (isinstance(kept, dict) and kept.get("plan_type") == reading["plan_type"]
+                and kept.get("single_weekly") == reading["single_weekly"]
+                and isinstance(kept.get("observed_at"), (int, float))
+                and time.time() - kept["observed_at"] < CODEX_READING_REFRESH_SEC):
+            return parsed
+        tmp = CODEX_READING_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({**reading, "observed_at": time.time()}), encoding="utf-8")
+        os.replace(tmp, CODEX_READING_FILE)
+    except OSError:
+        pass
+    return parsed
+
+
 def _codex_parsed_from_rate_limits(best_rl, freshest_rl):
     """Dal `rate_limits` di Codex (la forma dei rollout: used_percent / window_minutes / resets_at) al dict
     che il bridge conosce. `best_rl` da' la finestra corta, `freshest_rl` la settimanale (vedi sotto).
@@ -1347,6 +1387,7 @@ def _codex_parsed_from_rate_limits(best_rl, freshest_rl):
 
     return {
         "usage": usage,
+        "plan_type": _plan_type_of(best_rl, freshest_rl),
         "reset_at": reset_at,
         "reset_at_unix": reset_at_unix,
         "weekly_usage": weekly,
@@ -1438,7 +1479,7 @@ def fetch_codex_rollout():
         )[1]
         # la settimanale si legge dalla sessione PIU' fresca (vedi il commento nella funzione)
         freshest_rl = recent[0][1]
-        return _codex_parsed_from_rate_limits(best_rl, freshest_rl)
+        return _remember_codex_reading(_codex_parsed_from_rate_limits(best_rl, freshest_rl))
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -1517,8 +1558,8 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
         primary, secondary = window(limits.get("primary")), window(limits.get("secondary"))
         if primary is None:
             return None
-        rate_limits = {"primary": primary, "secondary": secondary}
-        return _codex_parsed_from_rate_limits(rate_limits, rate_limits)
+        rate_limits = {"primary": primary, "secondary": secondary, "plan_type": limits.get("planType")}
+        return _remember_codex_reading(_codex_parsed_from_rate_limits(rate_limits, rate_limits))
     except (OSError, ValueError):
         return None
     finally:
