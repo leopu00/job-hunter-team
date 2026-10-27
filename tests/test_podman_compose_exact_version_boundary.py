@@ -515,6 +515,12 @@ if command == "ps":
 if command in ("create", "pull"):
     if command == "pull":
         raise SystemExit(0)
+    if os.environ.get("JHT_FIXTURE_REQUIRE_MOUNT_POINT") == "1":
+        # What a Podman machine does with a named volume mounted inside the ~/.jht bind: the mount point has to
+        # be on the host already, the engine cannot make it there (crun: mkdir ... Operation not permitted).
+        if not (Path(os.environ["HOME"]) / ".jht" / "runtime").is_dir():
+            print("Error: crun: mkdir `/jht_home/runtime`: Operation not permitted: OCI permission denied", file=sys.stderr)
+            raise SystemExit(126)
     Path(os.environ["JHT_FIXTURE_CREATE_MARKER"]).write_text("created\\n")
     raise SystemExit(0)
 raise SystemExit(125)
@@ -1139,6 +1145,50 @@ def test_up_creates_only_when_precheck_finds_no_existing_project_container(
     assert len(inspect_calls) == 1 + WEB_AUTHORISATION_INSPECTS
     assert ".Name" in " ".join(inspect_calls[0])
     _assert_hash_probes_are_read_only(env)
+
+
+def test_up_makes_the_host_folder_the_compose_mounts_a_volume_in(tmp_path: Path):
+    # docker-compose.yml mounts the volume jht-runtime-mask on /jht_home/runtime, inside the ~/.jht bind. On an
+    # empty ~/.jht a Podman machine cannot make that mount point (smoke of the Mac: crun, Operation not permitted),
+    # so `up` makes it before the engine is asked: private, never a chown, and left alone when it is there.
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"
+    env["JHT_FIXTURE_REQUIRE_MOUNT_POINT"] = "1"
+    jht_home = Path(env["HOME"]) / ".jht"
+    jht_home.mkdir(mode=0o700)
+    assert not (jht_home / "runtime").exists()
+
+    result = _run(wrapper, env, "up")
+
+    assert "Operation not permitted" not in result.stderr, result.stderr
+    assert create_marker.read_text(encoding="utf-8") == "created\n"
+    assert (jht_home / "runtime").is_dir()
+    assert (jht_home / "runtime").stat().st_mode & 0o777 == 0o700
+    assert jht_home.stat().st_mode & 0o777 == 0o700
+    assert jht_home.stat().st_uid == os.getuid()
+
+    # idempotent, and a folder that is already there is not touched (its mode stays)
+    (jht_home / "runtime").chmod(0o755)
+    (jht_home / "runtime" / "kept").write_text("x", encoding="utf-8")
+    create_marker.unlink()
+    again = _run(wrapper, env, "up")
+    assert "Operation not permitted" not in again.stderr, again.stderr
+    assert (jht_home / "runtime").stat().st_mode & 0o777 == 0o755
+    assert (jht_home / "runtime" / "kept").read_text(encoding="utf-8") == "x"
+
+
+def test_up_makes_the_whole_data_folder_too_when_it_is_missing(tmp_path: Path):
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"
+    env["JHT_FIXTURE_REQUIRE_MOUNT_POINT"] = "1"
+    jht_home = Path(env["HOME"]) / ".jht"
+    assert not jht_home.exists()
+
+    result = _run(wrapper, env, "up")
+
+    assert "Operation not permitted" not in result.stderr, result.stderr
+    assert jht_home.stat().st_mode & 0o777 == 0o700
+    assert (jht_home / "runtime").is_dir()
 
 
 def test_literal_project_does_not_adopt_a_stage_compose_container(tmp_path: Path):

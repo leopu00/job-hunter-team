@@ -2758,10 +2758,30 @@ bind_uid_conflict() {
   printf '%s\n' "$name"
 }
 
+# docker-compose.yml monta il volume `jht-runtime-mask` su /jht_home/runtime,
+# cioe' DENTRO il bind ~/.jht: il motore deve fare quel punto di mount nel bind, e
+# la machine Podman del Mac non puo' (crun: mkdir /jht_home/runtime: Operation not
+# permitted) se la cartella non c'e' gia' sull'host. La crea l'avvio, come
+# l'installazione crea ~/.jht: idempotente, 700 solo se la crea, mai un chown, e
+# mai toccata se c'e' gia' (anche un link o un file: non e' nostra).
+ensure_host_mount_points() {
+  local home_dir="${JHT_HOME_HOST:-$HOME/.jht}" point
+  if [ ! -d "$home_dir" ] && [ ! -e "$home_dir" ] && [ ! -L "$home_dir" ]; then
+    mkdir -p "$home_dir" && chmod 700 "$home_dir" || return 0
+  fi
+  for point in runtime; do
+    if [ -e "$home_dir/$point" ] || [ -L "$home_dir/$point" ]; then
+      continue
+    fi
+    mkdir "$home_dir/$point" 2>/dev/null && chmod 700 "$home_dir/$point" 2>/dev/null || true
+  done
+}
+
 ensure_bind_owner() {
   # Prima di ogni avvio (ensure_up, up, upgrade) e su ogni sistema: il
   # disaccordo sulle cartelle dati vale anche dove l'owner non si tocca.
   host_data_dirs_supported || exit 1
+  ensure_host_mount_points
   # Con Podman rootless + keep-id l'utente dell'host resta proprietario dei
   # bind mount. Un chown a 1001 qui romperebbe proprio l'isolamento che il
   # namespace utente deve garantire.
