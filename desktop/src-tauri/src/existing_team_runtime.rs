@@ -4272,13 +4272,19 @@ mod tests {
             json!({"schema": 1, "connection_key": connection_key(&root.scope, target), "granted_at": at}).to_string()
         }
 
-        /// A record put in place by hand, with the privacy of the app's own writes.
-        fn place(root: &Root, bytes: &str) {
+        /// A record put in place by hand, with the privacy of the app's own writes, and left with the owner
+        /// the process gives what it creates (the user's own, or the group Administrators on an elevated one).
+        fn place_as_created(root: &Root, bytes: &str) {
             let file = root.record();
             let _ = fs::remove_file(&file);
             fs::write(&file, bytes).unwrap();
             private_acl::protect_file(&file).unwrap();
-            private_acl::own_by_current_user_for_tests(&file);
+        }
+
+        /// `place_as_created`, then the record is the user's own (see `Root::new`).
+        fn place(root: &Root, bytes: &str) {
+            place_as_created(root, bytes);
+            private_acl::own_by_current_user_for_tests(&root.record());
         }
 
         #[test]
@@ -4496,8 +4502,8 @@ mod tests {
                 Err("existing_team_runtime_unavailable")
             );
             assert!(!root.record().exists());
-            // a record put there anyway (owned by the group too) is not believed
-            place(&root, &good_record(&root, &target, unix_now()));
+            // a record put there anyway (owned by the group too: `place` would hand it to the user) is not believed
+            place_as_created(&root, &good_record(&root, &target, unix_now()));
             assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
             assert!(!full_link_granted(&root.scope, &target));
             revoke_full_link();
