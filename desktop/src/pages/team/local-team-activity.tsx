@@ -27,7 +27,7 @@ export async function LocalTeamActivity({ searchParams }: { searchParams: Promis
       <ActivityPageHeader from={fmt(activity.from)} to={fmt(activity.to)} totalAll={activity.totalAll} />
       {/* the status card, from the agents' panel's own reading; its stop links to the Agents page, as in the usual app */}
       <TeamStatusControls.Provider value={<TeamControlsLink />}>
-        <MobileTeamStatus />
+        <MobileTeamStatus showHeartbeat={false} />
       </TeamStatusControls.Provider>
       <p role="status" data-testid="team-local-profile" className="max-w-3xl mx-auto px-5 pt-4 text-[13px] text-[var(--color-muted)]">
         {LOCAL_TEAM_DATA_TEXT[appLocale()].teamPage}

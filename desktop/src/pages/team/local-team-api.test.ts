@@ -55,7 +55,7 @@ describe("GET /api/team-directives of a local profile", () => {
 });
 
 describe("GET /api/team-state of a local profile (the status card)", () => {
-  it("is running when an agent is up and the team is not stopped, with the time of the read as its last contact", async () => {
+  it("is running when an agent is up and the team is not stopped, with no device heartbeat to show", async () => {
     page();
     setLocalTeamData("local:abc");
     team({ up: true });
@@ -63,7 +63,8 @@ describe("GET /api/team-state of a local profile (the status card)", () => {
     const { state } = (await answer.json()) as { state: Record<string, unknown> };
     expect(state.is_running).toBe(true);
     expect(state.should_run).toBe(true);
-    expect(Math.abs(Date.parse(String(state.last_heartbeat_at)) - Date.now())).toBeLessThan(10_000);
+    // the time of a read is not a heartbeat: it would say «now» whatever the team did
+    expect(state.last_heartbeat_at).toBeNull();
     expect(state.emergency_stop_requested_at).toBeNull();
     expect(state.last_action).toBeNull();
   });
