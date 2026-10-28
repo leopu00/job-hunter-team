@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginScreen } from "../components/login-screen";
+import { LOCAL_PROFILES_TEXT } from "../components/local-profiles.i18n";
 import { OnboardingFlow } from "./OnboardingFlow";
 import { ONBOARDING_TEXT } from "./onboarding.i18n";
 import { describeError } from "../lib/error-catalog";
@@ -82,21 +83,22 @@ describe("login and wizard locale policy", () => {
     system("ja-JP"); render(<Transition />);
     expect(screen.getByRole("button", { name: "Use locally" })).toBeInTheDocument();
   });
-  const savedLabels: Array<[Locale, string]> = [
-    ["it", "Continua come Synthetic"], ["en", "Continue as Synthetic"], ["de", "Weiter als Synthetic"],
-    ["fr", "Continuer en tant que Synthetic"], ["es", "Continuar como Synthetic"],
-    ["pt", "Continuar como Synthetic"], ["hu", "Folytatás mint Synthetic"],
-  ];
+  // the words of each row are the list's own (components/local-profiles.i18n.ts); here only that they follow the locale
+  const savedLabels = (Object.keys(LOCAL_PROFILES_TEXT) as Locale[]).map((locale): [Locale, string] => [
+    locale, LOCAL_PROFILES_TEXT[locale].useProfile.replace("{name}", () => "Synthetic"),
+  ]);
+  const synthetic = { profileId: "p-1", displayName: "Synthetic" };
   it.each(savedLabels)("with a saved local profile the button says whose it is, in %s", (locale, label) => {
     system(`${locale}-${locale.toUpperCase()}`);
-    render(<LoginScreen configured loadBrowsers={noBrowsers} readLocal={() => ({ profileId: "p-1", displayName: "Synthetic" })} />);
+    render(<LoginScreen configured loadBrowsers={noBrowsers} listLocal={() => [synthetic]} readLocal={() => synthetic} ownerLocal={() => null} />);
     expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     // «Use locally» promises a new profile: with one saved, that is not what the button does.
     for (const [, local] of entries) expect(screen.queryByRole("button", { name: local })).toBeNull();
   });
   it("a saved name is put in the label as it is: «$&» and «$1» are letters, not replacement patterns", () => {
     system("en-US");
-    render(<LoginScreen configured loadBrowsers={noBrowsers} readLocal={() => ({ profileId: "p-1", displayName: "A$&B $1 $$" })} />);
+    const odd = { profileId: "p-1", displayName: "A$&B $1 $$" };
+    render(<LoginScreen configured loadBrowsers={noBrowsers} listLocal={() => [odd]} readLocal={() => odd} ownerLocal={() => null} />);
     expect(screen.getByRole("button", { name: "Continue as A$&B $1 $$" })).toBeInTheDocument();
   });
   it("uses the same locale for login error text and login actions", () => {

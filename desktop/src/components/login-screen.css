@@ -73,6 +73,13 @@
 .login-card__link input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--panel-soft); font-size: 12px; }
 .login-card__secondary { flex: none; padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: transparent; cursor: pointer; }
 .login-card__secondary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.login-card__profiles { width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.login-card__profiles h2 { margin: 0; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+.login-card__profiles ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.login-card__profiles .login-card__local-button { height: auto; padding: 10px 12px; overflow-wrap: anywhere; text-align: left; }
+.login-card__profiles .login-card__secondary { align-self: flex-start; }
+.login-card__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.login-card__tags span { padding: 1px 7px; border: 1px solid var(--line); border-radius: 99px; }
 .login-card__error, .login-card__note { margin: 18px 0 0; font-size: 13px; line-height: 1.5; }
 .login-card__error { color: var(--color-red, #ff9b8a); }
 .login-card__note { color: var(--muted); }
