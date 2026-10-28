@@ -1808,18 +1808,18 @@ fn split_inspected(line: &str, with_image: bool) -> Option<(&str, &str, Option<&
 
 /// The first rule of the attestation the container's labels do not meet, in the fixed words of
 /// `runtime_log::ATTEST_REASONS`; `None` when they meet all of them.
-fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
+fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>, hash_known: bool) -> Option<&'static str> {
     #[cfg(windows)]
     {
-        let _ = expected_config_hash;
+        let _ = (expected_config_hash, hash_known);
         return (!windows_container_labels_are_attested(labels, runtime)).then_some("label_windows");
     }
     #[cfg(not(windows))]
-    podman_compose_label_refusal(labels, runtime, expected_config_hash)
+    podman_compose_label_refusal(labels, runtime, expected_config_hash, hash_known)
 }
 
 #[cfg(not(windows))]
-fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
+fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>, hash_known: bool) -> Option<&'static str> {
     let runtime_text = runtime.to_string_lossy();
     let systemd_unit = podman_systemd_unit();
     if label(labels, "com.docker.compose.project") != Some("jht") || label(labels, "io.podman.compose.project") != Some("jht") {
@@ -1848,10 +1848,13 @@ fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_
         if label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str()) {
             return Some("label_systemd_unit");
         }
-        return (expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
+        // With the hash not worked out (`hash_known` false) the other labels are still judged: a container that is
+        // visibly another one is said so, and only one that looks like the installed one waits for the hash.
+        return (hash_known && expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
+        let _ = (expected_config_hash, hash_known);
         let expected_files = format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime_text, runtime_text);
         if label(labels, "com.docker.compose.project.config_files") != Some(expected_files.as_str()) {
             return Some("label_config_files");
@@ -1877,8 +1880,10 @@ fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_
 /// runtime writes. `None` when it is the one.
 fn attestation_refusal(expected: Option<&Result<String, &'static str>>, labels: &Value, runtime: &Path, image_is_the_runtimes: bool) -> Option<&'static str> {
     match expected {
-        Some(Err(reason)) => Some(*reason),
-        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok())),
+        // The hash could not be worked out: the labels that need none are judged first, so a container that is visibly
+        // another one is said to be, and only one that looks like the installed one is left to the hash's reason.
+        Some(Err(reason)) => podman_container_label_refusal(labels, runtime, None, false).or(Some(*reason)),
+        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok()), true),
     }
     .or_else(|| (!image_is_the_runtimes).then_some("label_image"))
 }
@@ -4755,8 +4760,43 @@ mod tests {
         let runtime = PathBuf::from("/runtime");
         let labels = serde_json::json!({});
         let wrong = Ok("0".repeat(64));
-        // the hash could not be worked out: the reason is the hash's, whatever the labels are
-        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &labels, &runtime, true), Some("hash_dry_run_timeout"));
+        // the hash could not be worked out: a container whose labels are visibly another's is said to be, and only
+        // one that looks like the installed one is left to the hash's reason
+        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &labels, &runtime, true), Some("label_project"));
+        let mut good = serde_json::json!({
+            "com.docker.compose.project": "jht", "io.podman.compose.project": "jht",
+            "com.docker.compose.service": "jht", "io.podman.compose.service": "jht",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.project.working_dir": "/runtime", "io.podman.compose.config-hash": "a".repeat(64),
+            "io.podman.compose.version": "1.6.0", "PODMAN_SYSTEMD_UNIT": podman_systemd_unit(),
+        });
+        good["com.docker.compose.project.config_files"] = if cfg!(target_os = "macos") {
+            "/runtime/docker-compose.yml".into()
+        } else {
+            "/runtime/docker-compose.yml,/runtime/docker-compose.podman-linux.yml".into()
+        };
+        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &good, &runtime, true), Some("hash_dry_run_timeout"));
+        assert_eq!(attestation_refusal(Some(&Err("hash_tool_missing")), &good, &runtime, true), Some("hash_tool_missing"));
+        let other_unit = podman_systemd_unit().replace("jht", "other");
+        for (name, wrong) in [
+            ("com.docker.compose.service", "other"),
+            ("com.docker.compose.project.working_dir", "/elsewhere"),
+            ("com.docker.compose.project.config_files", "/elsewhere/docker-compose.yml"),
+            ("io.podman.compose.version", "0.9.0"),
+            ("PODMAN_SYSTEMD_UNIT", other_unit.as_str()),
+        ] {
+            let mut other = good.clone();
+            other[name] = wrong.into();
+            let refusal = attestation_refusal(Some(&Err("hash_dry_run_timeout")), &other, &runtime, true);
+            assert!(refusal.is_some_and(|reason| reason.starts_with("label_")), "{name}: {refusal:?}");
+        }
+        // with the hash known and the labels good, the container is taken on the platforms that compare no hash; on macOS
+        // the hash is compared (a hash that differs is another container)
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(attestation_refusal(Some(&Ok("b".repeat(64))), &good, &runtime, true), Some("label_config_hash_differs"));
+            assert_eq!(attestation_refusal(Some(&Ok("a".repeat(64))), &good, &runtime, true), None);
+        }
         // the hash is there: the labels are looked at, rule by rule
         let mut labels = serde_json::json!({
             "com.docker.compose.project": "other", "io.podman.compose.project": "jht",
