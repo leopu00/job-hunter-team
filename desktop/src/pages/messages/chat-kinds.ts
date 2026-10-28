@@ -91,7 +91,7 @@ function cleanAnswer(value: unknown, options: DirectChatQuestionOption[]): Direc
     ...(text ? { text } : {}),
     at: value.at,
     // an origin the app does not know is said as unknown, never as the person's
-    origin: value.origin === "user" || value.origin === "expiry" ? value.origin : "unknown",
+    origin: value.origin === "user" || value.origin === "expiry" || value.origin === "system" ? value.origin : "unknown",
     seenAt: isTime(value.seenAt) ? value.seenAt : null,
   };
 }

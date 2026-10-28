@@ -385,3 +385,19 @@ def test_loading_a_skill_leaves_no_trace_in_the_modules_when_nobody_had_it(box, 
     loaded = module._load_module("agent_questions", "agent_questions.py")
 
     assert loaded is not None and "agent_questions" not in sys.modules
+
+
+# ── the tool the agent reads its answers with names the new origin ───────────
+
+def test_the_header_of_the_reply_tool_names_the_origin_the_system_writes():
+    text = (ROOT / "agents" / "_tools" / "jht-check-user-replies").read_text(encoding="utf-8")
+
+    assert "origine=sistema" in text and "non e' una scelta dell'utente" in text
+
+
+def test_the_app_lists_the_origin_in_rust_and_in_the_screen():
+    rust = (ROOT / "desktop" / "src-tauri" / "src" / "direct_chat.rs").read_text(encoding="utf-8")
+    cleaner = (ROOT / "desktop" / "src" / "pages" / "messages" / "chat-kinds.ts").read_text(encoding="utf-8")
+
+    assert 'ANSWER_ORIGINS: [&str; 3] = ["user", "expiry", "system"]' in rust
+    assert 'value.origin === "system"' in cleaner

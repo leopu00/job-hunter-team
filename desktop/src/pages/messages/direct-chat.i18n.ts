@@ -58,6 +58,8 @@ export interface DirectChatText {
   answerWaiting: string;
   /** A question nobody answered in time: its safe option was taken. */
   answerExpired: string;
+  /** A question the system closed because what it asked was settled another way (no choice is shown as taken). */
+  answerResolved: string;
   /** Under a message of the person's still in the agent's composer: pasted, Enter did not take it. */
   notSent: string;
   /** The button beside it: presses Enter once more, never pastes the text again. */
@@ -134,6 +136,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Presa dallo strumento dell'agente",
     answerWaiting: "Inviata: lo strumento dell'agente non l'ha ancora presa",
     answerExpired: "Scaduta: è stata presa la risposta di riserva",
+    answerResolved: "Risolta: non serve più una risposta",
     notSent: "Incollato ma non inviato",
     sendEnterAgain: "Invia di nuovo (Invio)",
     takenUnknown: "Non so se è stato preso",
@@ -191,6 +194,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Picked up by the agent's tool",
     answerWaiting: "Sent: the agent's tool has not picked it up yet",
     answerExpired: "Expired: the fallback answer was taken",
+    answerResolved: "Resolved: no answer is needed any more",
     notSent: "Pasted but not sent",
     sendEnterAgain: "Send again (Enter)",
     takenUnknown: "Not known whether it was taken",
@@ -248,6 +252,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Vom Werkzeug des Agenten abgeholt",
     answerWaiting: "Gesendet: das Werkzeug des Agenten hat sie noch nicht abgeholt",
     answerExpired: "Abgelaufen: die Ersatzantwort wurde genommen",
+    answerResolved: "Erledigt: eine Antwort ist nicht mehr nötig",
     notSent: "Eingefügt, aber nicht gesendet",
     sendEnterAgain: "Erneut senden (Enter)",
     takenUnknown: "Unklar, ob die Nachricht angenommen wurde",
@@ -305,6 +310,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Prise par l'outil de l'agent",
     answerWaiting: "Envoyée : l'outil de l'agent ne l'a pas encore prise",
     answerExpired: "Expirée : la réponse de repli a été prise",
+    answerResolved: "Résolue : plus besoin de réponse",
     notSent: "Collé mais non envoyé",
     sendEnterAgain: "Renvoyer (Entrée)",
     takenUnknown: "On ne sait pas s'il a été pris",
@@ -362,6 +368,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Recogida por la herramienta del agente",
     answerWaiting: "Enviada: la herramienta del agente aún no la ha recogido",
     answerExpired: "Caducada: se tomó la respuesta de reserva",
+    answerResolved: "Resuelta: ya no hace falta respuesta",
     notSent: "Pegado pero no enviado",
     sendEnterAgain: "Enviar de nuevo (Intro)",
     takenUnknown: "No se sabe si lo ha recibido",
@@ -419,6 +426,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Recolhida pela ferramenta do agente",
     answerWaiting: "Enviada: a ferramenta do agente ainda não a recolheu",
     answerExpired: "Expirada: foi tomada a resposta de reserva",
+    answerResolved: "Resolvida: já não é preciso responder",
     notSent: "Colado mas não enviado",
     sendEnterAgain: "Enviar de novo (Enter)",
     takenUnknown: "Não se sabe se foi recebido",
@@ -476,6 +484,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSeen: "Az ügynök eszköze átvette",
     answerWaiting: "Elküldve: az ügynök eszköze még nem vette át",
     answerExpired: "Lejárt: a tartalék válasz lett kiválasztva",
+    answerResolved: "Megoldva: már nincs szükség válaszra",
     notSent: "Beillesztve, de nincs elküldve",
     sendEnterAgain: "Küldés újra (Enter)",
     takenUnknown: "Nem tudni, hogy megkapta-e",
