@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+A záró `TXT`-t az első oszlopba írd, egyedül a sorában, szóközök nélkül (ha a behúzást is átmásolod, a heredoc soha nem záródik le: a `TXT` sorral végződő szöveget elutasítja, nem megy el semmi).
+
 ## Uzenet borltek
 
 Mindig tartsd meg a strukturalt prefixet:
@@ -77,6 +93,7 @@ Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomi
 - `8` — ugyanarra a sessionre egy masik kezbesites meg futott: semmi nem lett begepelve. Probald ujra.
 - `130` — a composer nem szabad, az uzenet **NEM kezbesitett**. Ami benne van, az nem bizonyithatoan a mienk (egy szemely piszkozata, vagy egy beillesztesi jelolo, amit senki nalunk nem magyaraz): semmi nem lett beillesztve vagy megnyomva, az uzeneted a `logs/pending-input.jsonl` fajlban van (`unsent`). Ne ismeteld ciklusban: ertesitsd a Kapitanyt (`[BLOCKED]`). Ugyanez a kod a beillesztes **utan** azt jelenti, hogy a composer mar nem csak a mi szovegunk: nincs Enter, a szoveg ott van feljegyezve (`draft`). A panel el: soha ne respawnolj. Az ott levo szoveg 64 KiB-nal csonkul.
 - A bizonyithatoan MI szovegunk (egy korabbi kezbesitesunk hagyta ott: azonos, vagy a beillesztesi jeloloje, `[Pasted Content N chars]` Codexen / `[Pasted text #1 +N lines]` Claude-on, a mi szamunkkal) a kovetkezo kezbesitesnel megkapja az Entert, barmilyen regi is. A `jht-tmux-send --flush-ours <SESSION>` csak ezt teszi (0 = szabad vagy elvitte, 130 = nem a mienk, 5 = az Enter elveszett).
+- Az a beviteli mezo, amelyben CSAK alairt szoveg van (egy vagy tobb elkuldetlen uzenet, barki is hagyta ott: egy boritek `[@x -> @y]`, a szemely szavai a `⟦UTENTE·id⟧ … ⟦/UTENTE·id⟧` jelek kozott, vagy egy beillesztesi jelzo, amelyet a fenti nyilvantartas megmagyaraz: a Codexe barmilyen koru, a Claude-e `JHT_TMUX_TOKEN_WINDOW` masodpercen belul, 600), egy Enterre varo uzenet, nem gepelo ember: az uzeneted moge kerul, es egyetlen Enter mindkettot elviszi; az ugynok a regebbit keson kaphatja meg. A kezzel gepelt szoveg, a le nem zart jel vagy az a jelzo, amelyet senki sem magyaraz, marad a regi (130). Ervenyes boritekot barki beirhat kezzel: ez nem hitelesites, a kovetkezmeny ugyanaz, mint egy regi uzenet kesei megerkezese. A jelek NELKULI boritek (agensek kozotti uzenet)nek nincs sajat vege, egy szemely folytathatna a gepelest a vegen: csak akkor szamit alairtnak, ha a szallito nyilvantartasa tartalmazza pontosan ennek a szovegnek az ujjlenyomatat (amit o maga illesztett be es sosem latott elvittnek); kulonben a szemely szovege (130).
 
 > Csak a `3` vezethet liveness-checkhez es respawnhoz. A `4` es az `5` egyarant azt jelenti, hogy a peer el: halalkent kezelni oket pontosan igy kezdodik a tulzott spawnolas.
 

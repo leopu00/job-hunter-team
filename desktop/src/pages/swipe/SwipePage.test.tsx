@@ -127,7 +127,8 @@ describe("SwipePage", () => {
       const actions = page.querySelector("[data-swipe-actions]");
       const summary = page.querySelector("[data-swipe-summary]");
 
-      expect(page).toHaveStyle({ height: "calc(100svh / var(--zoom, 1) - 3.5rem)" });
+      // the whole of the space the Shell gives it, not a height worked out from the window
+      expect(page).toHaveStyle({ height: "100%" });
       expect(page.className).toMatch(/min-h-0/);
       expect(page.className).toMatch(/overflow-hidden/);
       expect(deck).toHaveStyle({ height: "100%", minHeight: 0 });

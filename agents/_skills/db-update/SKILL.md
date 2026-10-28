@@ -157,6 +157,22 @@ dashboard. Other agents:
 Without this gate, the Capitano can report "12 ready" verbally while the
 DB still shows 0 — exactly the divergence that bug #21 fixed.
 
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).
+
 ## Safety rules
 
 1. **Read first.** Run `db-query position <id>` (or `application`) to see the current state before writing. Blind overwrites produce inconsistent records.

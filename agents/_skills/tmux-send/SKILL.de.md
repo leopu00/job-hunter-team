@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
+
 ## Nachrichtenumschlag
 
 Behalte immer das strukturierte Praefix bei:
@@ -77,6 +93,7 @@ Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaend
 - `8` — eine andere Zustellung an dieselbe Sitzung lief noch: nichts wurde getippt. Erneut versuchen.
 - `130` — der Composer ist nicht frei und die Nachricht ist **NICHT zugestellt**. Was darin steht, ist nicht nachweislich unseres (ein Entwurf einer Person oder ein Einfuege-Platzhalter, den niemand von uns erklaert): nichts wurde eingefuegt oder gedrueckt, und deine Nachricht steht in `logs/pending-input.jsonl` (`unsent`). Nicht in einer Schleife wiederholen: den Kapitaen informieren (`[BLOCKED]`). Derselbe Code **nach** dem Einfuegen heisst: der Composer ist nicht mehr nur unser Text: kein Enter, und der Text ist dort vermerkt (`draft`). Das Panel lebt: niemals respawnen. Der Text dort wird bei 64 KiB abgeschnitten.
 - Ein nachweislich UNSERER Text (von einer frueheren Zustellung von uns hinterlassen: identisch oder sein Einfuege-Platzhalter, `[Pasted Content N chars]` bei Codex / `[Pasted text #1 +N lines]` bei Claude, mit unserer Zahl) bekommt sein Enter bei der naechsten Zustellung, egal wie alt. `jht-tmux-send --flush-ours <SITZUNG>` macht nur das (0 = frei oder genommen, 130 = nicht unser, 5 = Enter verschluckt).
+- Ein Eingabefeld, das NUR signierten Text enthaelt (eine oder mehrere ungesendete Nachrichten, von wem auch immer: ein Umschlag `[@x -> @y]`, die Worte der Person zwischen den Marken `⟦UTENTE·id⟧ … ⟦/UTENTE·id⟧` oder ein Einfuege-Token, das das obige Register erklaert: das von Codex in jedem Alter, das von Claude innerhalb von `JHT_TMUX_TOKEN_WINDOW` Sekunden, 600), ist eine Nachricht, die auf ihr Enter wartet, keine tippende Person: deine Nachricht wird dahinter eingefuegt und ein einziges Enter nimmt beide mit; der Agent kann die aeltere verspaetet bekommen. Von Hand getippter Text, eine nicht geschlossene Marke oder ein Token, das niemand erklaert, bleiben wie bisher (130). Einen gueltigen Umschlag kann jeder von Hand tippen: das ist keine Authentifizierung, und die Folge ist dieselbe wie bei einer aelteren Nachricht, die verspaetet ankommt. Ein Umschlag OHNE Marken (eine Nachricht zwischen Agenten) hat kein eigenes Ende, eine Person koennte an seinem Ende weitertippen: er gilt nur dann als signiert, wenn das Register des Transports den Fingerabdruck genau dieses Textes hat (was er selbst eingefuegt und nie als genommen gesehen hat); sonst ist es Text der Person (130).
 
 > Nur `3` darf zu einem Liveness-Check und einem Respawn fuehren. `4` und `5` bedeuten beide, dass der Peer lebt: sie als Tod zu behandeln ist genau, wie Over-Spawning beginnt.
 

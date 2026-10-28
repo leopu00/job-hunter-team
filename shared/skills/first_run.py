@@ -189,6 +189,54 @@ def plan_gap(state: dict) -> dict:
     return {"plan_missing": True, "reason": info.get("reason", "plan not declared"), "hint": info["hint"]}
 
 
+def mentor_check() -> dict:
+    """{"mentor_due", "phase"}: whether the Mentor has anything to read yet. Until the first run is over (`steady`:
+    there are scored positions on screen) the Mentor has no record to walk, and its first wake at every start would
+    be spent on nothing; the agent watchdog turns it on when the run closes. The phase is read ONCE, here: a state
+    that cannot be read counts as due (phase "unknown"), so the Mentor is then started as it always was."""
+    try:
+        phase = status().get("phase")
+    except Exception:
+        return {"mentor_due": True, "phase": "unknown"}
+    return {"mentor_due": phase == PHASE_STEADY, "phase": phase}
+
+
+def mentor_due() -> bool:
+    return mentor_check()["mentor_due"]
+
+
+def _live_sessions() -> Optional[list[str]]:
+    """Names (lower case) of the tmux sessions running, [] when there is no tmux server, None when it cannot
+    be asked (no tmux, no answer)."""
+    try:
+        done = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"],
+                              capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode == 0:
+        return [line.strip().lower() for line in done.stdout.splitlines() if line.strip()]
+    return [] if "no server running" in done.stderr or "no sessions" in done.stderr else None
+
+
+def roster_gap(state: dict) -> dict:
+    """In a burst, which roles of the roster have a session and which do not: after a restart of the
+    containers every session is gone, and the Capitano must start the MISSING ones, not the whole roster over
+    again (a worker that is up is not spawned over, whatever it is doing). `roster_alive` and `roster_missing`
+    count per role; `roster_check: "unavailable"` when tmux cannot be asked, and then nothing is assumed."""
+    roster = state.get("roster")
+    if state.get("phase") != PHASE_BURST or not isinstance(roster, dict):
+        return {}
+    names = _live_sessions()
+    if names is None:
+        return {"roster_check": "unavailable"}
+    # The state file is a file on disk: a role or a count that is not what begin-burst wrote is left out, and the
+    # answer is about the roles that are well formed (nothing is guessed about the others).
+    wanted = {role: want for role, want in roster.items()
+              if isinstance(role, str) and isinstance(want, int) and not isinstance(want, bool) and want >= 0}
+    alive = {role: sum(1 for n in names if re.fullmatch(rf"{re.escape(role)}-\d+", n)) for role in wanted}
+    return {"roster_alive": alive, "roster_missing": {role: max(0, want - alive[role]) for role, want in wanted.items()}}
+
+
 def begin_burst() -> dict:
     """Profilo pronto → si apre la fase di burst. Idempotente.
 
@@ -200,7 +248,7 @@ def begin_burst() -> dict:
     if state["phase"] == PHASE_STEADY:
         return dict(state, note="first run has already been completed")
     if state["phase"] == PHASE_BURST:
-        return dict(state, note="burst already in progress", **plan_gap(state))
+        return dict(state, note="burst already in progress", **plan_gap(state), **roster_gap(state))
 
     info = plan_info()
     if not info.get("ok"):
@@ -691,7 +739,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="First-run status")
     ap.add_argument("command", nargs="?", default="status",
                     choices=["status", "begin-burst", "check", "complete", "reset",
-                             "plan", "ask-plan", "plan-question-check"])
+                             "plan", "ask-plan", "plan-question-check", "mentor-due"])
     ap.add_argument("--reason", default="closed manually")
     ap.add_argument("--agent", choices=PLAN_ASKERS, default="capitano",
                     help="ask-plan: whose chat the card goes to (the agent the person is talking to)")
@@ -703,9 +751,13 @@ def main(argv: list[str]) -> int:
 
     if args.command == "status":
         state = status()
-        out = dict(state, **plan_gap(state))
+        out = dict(state, **plan_gap(state), **roster_gap(state))
     elif args.command == "plan":
         out = plan_info()
+    elif args.command == "mentor-due":
+        answer = mentor_check()
+        print(json.dumps(answer))
+        return 0 if answer["mentor_due"] else 1
     elif args.command == "begin-burst":
         out = begin_burst()
     elif args.command == "check":

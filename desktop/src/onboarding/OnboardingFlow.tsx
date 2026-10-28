@@ -28,6 +28,7 @@ import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
 import RuntimePhaseDetail, { pullBar } from "./RuntimePhaseDetail";
+import { isUntouched, wizardStart } from "./wizard-draft";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -582,7 +583,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, draft, onDraftChange, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -591,9 +592,20 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const interruptionReason = interruptionCause?.known ? interruptionCause.text : t.interruptedUnknown;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
-  const [step, setStep] = useState(providerOnly ? 2 : 0);
-  const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
-  const [provider, setProvider] = useState<SubscriptionProvider | null>(providerOnly ? null : PROPOSED_PROVIDER);
+  // What a first visit finds, and where a reopened app picks up (the step and choices the person had reached).
+  const freshChoices = (): { host: ExecutionHost; provider: SubscriptionProvider | null } => ({
+    host: localRuntimeSupported ? { kind: "local" } : emptyVpsHost(),
+    provider: providerOnly ? null : PROPOSED_PROVIDER,
+  });
+  const [start] = useState(() => providerOnly
+    ? { step: 2, ...freshChoices(), restored: false }
+    : wizardStart(draft, freshChoices(), selectableProviders, localRuntimeSupported, Boolean(interruption)));
+  const [step, setStep] = useState(start.step);
+  const [host, setHost] = useState<ExecutionHost>(start.host);
+  const [provider, setProvider] = useState<SubscriptionProvider | null>(start.provider);
+  const [draftNote, setDraftNote] = useState(start.restored);
+  const draftChangeRef = useRef(onDraftChange);
+  draftChangeRef.current = onDraftChange;
   const [submitting, setSubmitting] = useState(false);
   const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
@@ -602,6 +614,17 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const [savingVps, setSavingVps] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const shellRef = useRef<HTMLElement>(null);
+
+  // The step and the choices are kept when the step changes (not at every key typed), so a reopened app does not
+  // start again from the welcome. The reopened Provider step is not a first setup: it keeps nothing.
+  useEffect(() => {
+    if (providerOnly || isUntouched({ step, host, provider }, freshChoices())) return;
+    draftChangeRef.current?.({ step, host, provider });
+    // the choices are those of the render the step changed in; freshChoices only reads the platform and the mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+  // The note about the picked-up step is for that step: leaving it ends it.
+  useEffect(() => { if (step !== start.step) setDraftNote(false); }, [step, start.step]);
 
   useEffect(() => { setProfileName(account.displayName ?? ""); }, [account.displayName]);
   useEffect(() => { void Promise.resolve().then(() => savedVpsBridge.list()).then((list) => setSavedVps(Array.isArray(list) ? list : [])).catch(() => setSavedVps([])); }, []);
@@ -676,6 +699,14 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
     } catch { setSubmitError(true); } finally { setSubmitting(false); }
   }
 
+  // «Start over»: the welcome, the first visit's choices, and nothing left of the steps reached.
+  function startOver() {
+    const fresh = freshChoices();
+    setStep(0); setHost(fresh.host); setProvider(fresh.provider);
+    setSubmitError(false); setDraftNote(false);
+    onDraftChange?.(null);
+  }
+
   function exitFailure() {
     setStep(providerOnly ? 2 : 1);
     setSubmitError(false);
@@ -700,6 +731,10 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
 
         <section className="onboarding-card">
           <div className="onboarding-card__step">{String(step + 1).padStart(2, "0")} / {String(COLLECTION_STEP_COUNT).padStart(2, "0")}</div>
+          {draftNote && step > 0 && <div className="onboarding-aside" role="note" data-testid="onboarding-draft-note">
+            <p>{t.draftRestored}</p>
+            <button className="onboarding-secondary" type="button" data-testid="onboarding-draft-start-over" onClick={startOver}>{t.startOver}</button>
+          </div>}
           {step === 0 && <form onSubmit={next} className="onboarding-panel">
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
@@ -717,7 +752,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
                 reason: interruptionReason,
               })}</p>
               <div className="onboarding-actions">
-                <button className="onboarding-secondary" type="button" onClick={() => onDiscardInterruption?.()}>{t.startOver}</button>
+                <button className="onboarding-secondary" type="button" onClick={() => { startOver(); onDiscardInterruption?.(); }}>{t.startOver}</button>
                 <button className="onboarding-primary" type="button" onClick={() => void onResumeInterrupted()}>{t.resumeSetup} <span aria-hidden="true">→</span></button>
               </div>
             </div>}

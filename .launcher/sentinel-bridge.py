@@ -697,7 +697,7 @@ def _composer_refused(session):
         jht_tmux_send(CAPITANO_SESSION, msg)
 
 
-TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "15"))
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_SENTINEL_S", os.environ.get("JHT_TMUX_SEND_WAIT_S", "15")))
 # Per sessione: il processo `jht-tmux-send` lasciato correre oltre l'attesa, e se serve liberare la casella.
 _tmux_send_running = {}
 _tmux_send_overran = set()

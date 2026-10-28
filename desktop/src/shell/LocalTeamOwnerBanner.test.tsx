@@ -26,17 +26,18 @@ beforeEach(() => {
 });
 
 describe("the band that says whose the team of this computer is", () => {
-  it("shows when the profile in use is not the one that has the team, with its name", () => {
+  it("shows when the profile in use is not the one that has the team, with its name", async () => {
     save("profile-b", "profile-a");
     render(<LocalTeamOwnerBanner locale="it" />);
-    expect(screen.getByTestId("local-team-owner-banner")).toHaveTextContent(
+    expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent(
       "Su questo Mac la squadra risulta di Ada: passa a quel profilo per usarla.",
     );
   });
 
-  it("says nothing to the owner, to a Google account, or while nobody is known to have the team", () => {
+  it("says nothing to the owner, to a Google account, or while nobody is known to have the team", async () => {
     save("profile-a", "profile-a");
     const owner = render(<LocalTeamOwnerBanner locale="it" />);
+    await act(async () => undefined);
     expect(owner.container).toBeEmptyDOMElement();
     owner.unmount();
 
@@ -45,12 +46,14 @@ describe("the band that says whose the team of this computer is", () => {
     save("profile-b", "profile-a");
     localStorage.removeItem("jht.desktop.identity.v1");
     const google = render(<LocalTeamOwnerBanner locale="it" />);
+    await act(async () => undefined);
     expect(google.container).toBeEmptyDOMElement();
     google.unmount();
 
     localStorage.clear();
     save("profile-b", null);
     const nobody = render(<LocalTeamOwnerBanner locale="it" />);
+    await act(async () => undefined);
     expect(nobody.container).toBeEmptyDOMElement();
   });
 
@@ -63,18 +66,18 @@ describe("the band that says whose the team of this computer is", () => {
     expect(readTeamOwnerView()).toEqual({ owner: "none" });
   });
 
-  it("uses the sentence without a name when the owner's name is not known", () => {
+  it("uses the sentence without a name when the owner's name is not known", async () => {
     render(<LocalTeamOwnerBanner locale="it" read={() => ({ owner: "other", name: null })} />);
-    expect(screen.getByTestId("local-team-owner-banner")).toHaveTextContent(
+    expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent(
       "Su questo Mac la squadra risulta di un altro profilo: passa a quel profilo per usarla.",
     );
   });
 
   it.each(Object.keys(LOCAL_PROFILES_TEXT) as (keyof typeof LOCAL_PROFILES_TEXT)[])(
     "%s: names the owner, whatever the name, and keeps the name out of any markup",
-    (locale) => {
+    async (locale) => {
       render(<LocalTeamOwnerBanner locale={locale} read={() => ({ owner: "other", name: "<b>$&</b> Ada" })} />);
-      const banner = screen.getByTestId("local-team-owner-banner");
+      const banner = await screen.findByTestId("local-team-owner-banner");
       expect(banner).toHaveTextContent("<b>$&</b> Ada");
       expect(banner.querySelector("b")).toBeNull();
       expect(banner).not.toHaveTextContent("{name}");
@@ -87,7 +90,7 @@ describe("the band that says whose the team of this computer is", () => {
     const onSwitch = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
     render(<LocalTeamOwnerBanner locale="it" read={() => ({ owner: "other", name: "Ada" })} onSwitch={onSwitch} />);
 
-    const button = screen.getByRole("button", { name: "Cambia profilo" });
+    const button = await screen.findByRole("button", { name: "Cambia profilo" });
     await user.click(button);
     expect(onSwitch).toHaveBeenCalledOnce();
     expect(button).toBeDisabled();
@@ -95,18 +98,20 @@ describe("the band that says whose the team of this computer is", () => {
     expect(button).toBeEnabled();
   });
 
-  it("has no button when the app gives no way to leave the profile", () => {
+  it("has no button when the app gives no way to leave the profile", async () => {
     render(<LocalTeamOwnerBanner locale="it" read={() => ({ owner: "other", name: "Ada" })} />);
+    await screen.findByTestId("local-team-owner-banner");
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("reads again when the window comes back, after the other profile started its setup", () => {
+  it("reads again when the window comes back, after the other profile started its setup", async () => {
     save("profile-b", null);
     render(<LocalTeamOwnerBanner locale="it" />);
+    await act(async () => undefined);
     expect(screen.queryByTestId("local-team-owner-banner")).toBeNull();
     localStorage.setItem("jht.desktop.onboarding.local:profile-a", "started-v1");
     act(() => { window.dispatchEvent(new Event("focus")); });
-    expect(screen.getByTestId("local-team-owner-banner")).toBeInTheDocument();
+    expect(await screen.findByTestId("local-team-owner-banner")).toBeInTheDocument();
   });
 });
 
@@ -133,9 +138,9 @@ describe("the backend's answer over the renderer's copy", () => {
     await expect(readNativeTeamOwnerView(async () => null)).resolves.toEqual({ owner: "none" });
   });
 
-  it("is another owner without a name when the owner is an account, or a profile this list does not have", async () => {
+  it("is another owner (an account, or a profile this list does not have) without a name", async () => {
     saveReal();
-    await expect(readNativeTeamOwnerView(async () => ({ kind: "google" }))).resolves.toEqual({ owner: "other", name: null });
+    await expect(readNativeTeamOwnerView(async () => ({ kind: "google" }))).resolves.toEqual({ owner: "other", name: null, account: true });
     await expect(readNativeTeamOwnerView(async () => ({ kind: "local", profileId: "c".repeat(64) }))).resolves.toEqual({ owner: "other", name: null });
   });
 
@@ -148,11 +153,10 @@ describe("the backend's answer over the renderer's copy", () => {
     await expect(readNativeTeamOwnerView(async () => { throw { code: "local_account_owner_invalid" }; })).resolves.toBeNull();
   });
 
-  it("shows the copy first and the backend's answer when it comes: it wins both ways", async () => {
+  it("lets the backend's answer win both ways, without showing the copy first", async () => {
     // the copy says the other profile has the team; the backend says nobody does yet
     save("profile-b", "profile-a");
     const none = render(<LocalTeamOwnerBanner locale="it" readNative={async () => ({ owner: "none" })} />);
-    expect(none.container.querySelector("[data-testid='local-team-owner-banner']")).not.toBeNull();
     await act(async () => undefined);
     expect(none.container).toBeEmptyDOMElement();
     none.unmount();
@@ -161,15 +165,36 @@ describe("the backend's answer over the renderer's copy", () => {
     localStorage.clear();
     save("profile-b", null);
     render(<LocalTeamOwnerBanner locale="it" readNative={async () => ({ owner: "other", name: "Ada" })} />);
-    expect(screen.queryByTestId("local-team-owner-banner")).toBeNull();
     expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent("risulta di Ada");
+  });
+
+  it("shows nothing while the backend is asked, and the copy only if it does not answer in a moment", async () => {
+    vi.useFakeTimers();
+    try {
+      save("profile-b", "profile-a");
+      render(<LocalTeamOwnerBanner locale="it" readNative={() => new Promise<never>(() => undefined)} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1400); });
+      expect(screen.queryByTestId("local-team-owner-banner")).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+      expect(screen.getByTestId("local-team-owner-banner")).toHaveTextContent("risulta di Ada");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says «un account Google» when the owner is an account", async () => {
+    saveReal();
+    await expect(readNativeTeamOwnerView(async () => ({ kind: "google" }))).resolves.toEqual({ owner: "other", name: null, account: true });
+    render(<LocalTeamOwnerBanner locale="it" readNative={async () => ({ owner: "other", name: null, account: true })} />);
+    expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent(
+      "Su questo Mac la squadra risulta di un account Google: passa a quel profilo per usarla.",
+    );
   });
 
   it("keeps the copy when the backend cannot say", async () => {
     save("profile-b", "profile-a");
     render(<LocalTeamOwnerBanner locale="it" readNative={async () => null} />);
-    await act(async () => undefined);
-    expect(screen.getByTestId("local-team-owner-banner")).toHaveTextContent("risulta di Ada");
+    expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent("risulta di Ada");
   });
 
   it("uses the sentence without a name when the backend names an account", async () => {

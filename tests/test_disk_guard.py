@@ -97,6 +97,25 @@ def phrase(lang, key, shown):
     return table[key] % shown
 
 
+def gib_text(n_bytes, lang="en"):
+    """GiB a un decimale PER DIFETTO, virgola decimale nelle lingue che la scrivono (scritto qui, non preso dal codice)."""
+    tenths = n_bytes * 10 // (1024 ** 3)
+    text = str(tenths // 10) if tenths % 10 == 0 else f"{tenths // 10}.{tenths % 10}"
+    return text.replace(".", ",") if lang in ("it", "es", "fr", "de", "hu", "pt") else text
+
+
+def fake_free_bytes(pct):
+    """I byte liberi che la fixture dei volumi finti mette a «pct»% (1_000_000 blocchi da 4096)."""
+    return int(1_000_000 * pct / 100) * 4096
+
+
+def low_phrase(lang, key, free_bytes):
+    """La frase attesa: lo spazio richiesto (8 GiB) e quello disponibile; l'avviso dice solo il disponibile."""
+    if key == "disk.warning":
+        return phrase(lang, key, gib_text(free_bytes, lang))
+    return phrase(lang, key, (gib_text(8 * 1024 ** 3, lang), gib_text(free_bytes, lang)))
+
+
 @pytest.fixture
 def volumes(tmp_path):
     home, engine = tmp_path / "home", tmp_path / "engine"
@@ -290,9 +309,10 @@ def test_read_vitals_carries_the_disk_next_to_cpu_and_ram(monkeypatch, volumes):
 def test_phrases_come_from_the_table_in_every_language():
     for lang in LANGS:
         table = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
-        for key in ("disk.warning", "disk.low"):
+        for key, placeholders in (("disk.warning", 1), ("disk.low", 2)):
             assert key in table, (lang, key)
-            assert table[key].count("%s") == 1, (lang, key)
+            assert table[key].count("%s") == placeholders, (lang, key)  # lo spazio disponibile; per il rifiuto anche il richiesto
+            assert "%" not in table[key].replace("%s", ""), (lang, key)  # nessuna percentuale
             assert len(table[key]) > 40
         assert "Docker/Podman" in table["disk.low"], lang  # come liberare spazio, in ogni lingua
 
@@ -302,7 +322,8 @@ def test_only_the_cli_phrase_names_the_terminal_command(lang):
     # L'app e il launcher usano `disk.low`: l'utente dell'app non usa il terminale.
     # La CLI e il wrapper (`disk.low.cli`) dicono anche `jht clean-images`.
     table = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
-    assert table["disk.low.cli"].count("%s") == 1 and len(table["disk.low.cli"]) > 40
+    assert table["disk.low.cli"].count("%s") == 2 and len(table["disk.low.cli"]) > 40
+    assert "%" not in table["disk.low.cli"].replace("%s", "")
     assert "`jht clean-images`" in table["disk.low.cli"]
     assert "jht " not in table["disk.low"] and "clean-images" not in table["disk.low"]
 
@@ -316,16 +337,44 @@ def test_the_user_phrase_is_the_table_entry_in_the_users_language(monkeypatch, v
     monkeypatch.syspath_prepend(str(ROOT / "shared"))
     import i18n
     i18n._resolve_lang.cache_clear()
-    disk = {"code": "disk_warning", "min_free_pct": 8.0}
-    assert hv.disk_phrase(disk) == phrase(lang, "disk.warning", "8%")
-    assert hv.disk_phrase({"code": "disk_low", "min_free_pct": 2.5}) == phrase(lang, "disk.low", "2.5%")
+    warning_free = 5 * 1024 ** 3 + 1024 ** 3 // 4   # 5,25 GiB: si dice 5,2, mai 5,3
+    low_free = 2 * 1024 ** 3 - 1                      # 1,999… GiB: si dice 1,9, mai 2
+    disk = {"code": "disk_warning", "min_free_pct": 8.0, "min_free_bytes": warning_free}
+    assert hv.disk_phrase(disk) == low_phrase(lang, "disk.warning", warning_free)
+    assert hv.disk_phrase({"code": "disk_low", "min_free_pct": 2.5, "min_free_bytes": low_free}) == low_phrase(lang, "disk.low", low_free)
+    # i valori assoluti stanno nella frase, nella lingua dell'utente
+    assert "5,2" in hv.disk_phrase(disk) if lang != "en" else "5.2" in hv.disk_phrase(disk)
+    assert "8" in hv.disk_phrase({"code": "disk_low", "min_free_pct": 2.5, "min_free_bytes": low_free})
     i18n._resolve_lang.cache_clear()
+
+
+@pytest.mark.parametrize("free,lang,shown", [
+    (0, "en", "0"), (8 * 1024 ** 3, "en", "8"), (5 * 1024 ** 3 + 1024 ** 3 // 4, "en", "5.2"),
+    (5 * 1024 ** 3 + 1024 ** 3 // 4, "it", "5,2"), (2 * 1024 ** 3 - 1, "de", "1,9"), (1024 ** 3 // 20, "pt", "0"),
+    (-5, "en", "0"),
+])
+def test_the_amount_in_gib_is_rounded_down_with_the_decimal_mark_of_the_language(free, lang, shown):
+    assert load_vitals().format_gib(free, lang) == shown
+
+
+def test_the_phrase_never_says_a_percentage(monkeypatch, volumes):
+    hv = load_vitals()
+    monkeypatch.setenv("JHT_LANG", "en")
+    monkeypatch.syspath_prepend(str(ROOT / "shared"))
+    import i18n
+    i18n._resolve_lang.cache_clear()
+    text = hv.disk_phrase({"code": "disk_low", "min_free_pct": 1.6, "min_free_bytes": 1_700_000_000})
+    i18n._resolve_lang.cache_clear()
+    assert "%" not in text and "at least 8 GiB" in text and "available: 1.5 GiB" in text
 
 
 def test_no_code_no_phrase_and_an_unanswering_table_gives_no_improvised_text(monkeypatch):
     hv = load_vitals()
-    assert hv.disk_phrase({"code": None, "min_free_pct": 50}) == ""
+    assert hv.disk_phrase({"code": None, "min_free_pct": 50, "min_free_bytes": 50}) == ""
     monkeypatch.setitem(hv.DISK_PHRASE_KEYS, "disk_low", "disk.no_such_key")
+    assert hv.disk_phrase({"code": "disk_low", "min_free_pct": 2, "min_free_bytes": 5}) == ""
+    # senza la misura in byte non si improvvisa un numero
+    monkeypatch.undo()
     assert hv.disk_phrase({"code": "disk_low", "min_free_pct": 2}) == ""
 
 
@@ -352,7 +401,7 @@ def test_at_8_percent_the_user_is_warned_once_with_the_table_phrase(monkeypatch,
     state, notices = tmp_path / "notice.json", Notices()
     assert hv.notify_disk(disk, state_path=state, notifier=notices, now=1_000_000) is True
     assert [(code, text) for code, text, _ in notices.sent] == [
-        ("disk_warning", phrase("en", "disk.warning", "8%"))
+        ("disk_warning", low_phrase("en", "disk.warning", fake_free_bytes(8)))
     ]
     # Stesso livello dentro il cooldown: niente secondo avviso.
     assert hv.notify_disk(disk, state_path=state, notifier=notices, now=1_000_000 + 3600) is False
@@ -421,7 +470,7 @@ def test_disk_guard_command_refuses_only_under_three_percent(fakedir, volumes, p
     if rc == 0:
         assert done.stderr == "" and done.stdout == ""
     else:
-        assert done.stderr.strip() == f"disk_low: {phrase('en', 'disk.low', '2%')}"
+        assert done.stderr.strip() == f"disk_low: {low_phrase('en', 'disk.low', fake_free_bytes(2))}"
 
 
 @pytest.mark.parametrize("name,total_gib,free_kib,level", LEVEL_CASES, ids=LEVEL_IDS)
@@ -505,7 +554,7 @@ def run_launcher(tmp_path, fakedir, volumes, home_pct, engine_pct, role="assiste
 def test_at_2_percent_a_new_spawn_is_refused_with_disk_low(tmp_path, fakedir, volumes, role, session):
     done, rows, calls = run_launcher(tmp_path, fakedir, volumes, 2, 50, role=role)
     assert done.returncode == 1, done.stdout + done.stderr
-    assert f"disk_low: {phrase('en', 'disk.low', '2%')}" in done.stderr
+    assert f"disk_low: {low_phrase('en', 'disk.low', fake_free_bytes(2))}" in done.stderr
     assert "disk_low" in done.stderr.strip().splitlines()[-1]
     assert rows[-1]["stage"] == "disk_low" and rows[-1]["rc"] == 1
     assert rows[-1]["session"] == session
@@ -667,7 +716,7 @@ def _disk_functions():
     """Le funzioni disco che il wrapper ha: la misura (si chiamava disk_free_permille
     prima del T19) e `disk_level_of`, che prima non c'era."""
     text = WRAPPER_SH.read_text(encoding="utf-8")
-    names = ("disk_free_permille", "disk_free_measure", "disk_engine_path", "disk_level_of", "disk_low")
+    names = ("disk_free_permille", "disk_free_measure", "disk_engine_path", "disk_level_of", "disk_gib_text", "disk_low")
     return tuple(n for n in names if re.search(rf"^{n}\(\) \{{", text, re.M))
 
 
@@ -856,7 +905,9 @@ def test_at_2_percent_the_plain_upgrade_says_disk_low_on_stderr(tmp_path):
     # l'upgrade resta rifiutato e la pulizia che gira a upgrade riuscito non parte:
     # il rifiuto indica la via per liberare spazio, `jht clean-images` (comando separato)
     assert "jht clean-images" in done.stderr and "Cestino" in done.stderr, done.stderr
-    assert "8 GiB" in done.stderr
+    # i valori ASSOLUTI: lo spazio che serve e quello che c'e' (2% del disco finto = meno di 0,1 GiB)
+    assert "almeno 8 GiB di disco — disponibili: 0 GiB" in done.stderr, done.stderr
+    assert "per mille" not in done.stderr and "%" not in done.stderr.split("ERR: disk_low:")[1].split(".")[0]
     assert calls == []
 
 
@@ -1099,7 +1150,12 @@ def test_powershell_refuses_only_on_a_measure_that_says_low_and_says_so_in_the_m
     low = ps1[ps1.index("function Get-DiskLowPermille"):]
     low = low[: low.index("\n}\n")]
     assert "Get-DiskLevelOf" in low and "-eq 'low'" in low and "return $null" in low
-    assert "meno di 8 GiB" in ps1[ps1.index("disk_low: meno del 3%"):][:200]
+    message = ps1[ps1.index('Write-Err "disk_low: '):][:260]
+    assert "almeno $(Get-DiskGibText $DiskBlockFreeKib) GiB" in message and "disponibili: $(Get-DiskGibText $script:DiskLowFreeKib) GiB" in message
+    assert "per mille" not in message and "%" not in message  # valori assoluti, mai la percentuale
+    assert "$script:DiskLowFreeKib = [long][Math]::Floor([double]$measure.Free / 1024)" in low
+    # il messaggio resta ASCII dove un 5.1 senza BOM leggerebbe male: niente trattino lungo ne' virgolette tipografiche in codice
+    assert "\u2014" not in message and "\u201c" not in message and "\u201d" not in message
     # il commento che diceva «stesse soglie» quando non lo erano non c'e' piu'
     assert "NON E' MAI STATO ESEGUITO" in ps1
 
@@ -1128,20 +1184,22 @@ def test_the_closed_codes_are_in_the_desktop_catalog_with_every_translation():
     # `disk_low` dice come liberare spazio, in tutte e sette le lingue
     low = catalog[catalog.index("  disk_low: copy("):]
     low = low[: low.index("\n  ),")]
-    assert "Cestino" in low and "Docker/Podman" in low and "Trash" in low
-    english = "The disk is almost full, so no new agent or update will start."
+    assert "Cestino" in low and "Trash" in low and "più spazio su disco" in low and "more disk space" in low
+    assert "Docker/Podman" in low and low.count("Docker/Podman") == 2  # tolgono le immagini vecchie, in italiano e in inglese
+    assert "%" not in low  # nessuna percentuale
+    english = "The agents need more disk space than is available."
     block = locales[locales.index(f'"{english}": {{'):]
     block = block[: block.index("\n  },")]
     for lang, word in (("de", "Papierkorb"), ("es", "papelera"), ("fr", "corbeille"), ("hu", "Kuká"), ("pt", "Lixo")):
         row = next(line for line in block.splitlines() if line.strip().startswith(f"{lang}:"))
-        assert word in row and "Docker/Podman" in row, (lang, row)
+        assert word in row and "Docker/Podman" in row, (lang, row)  # libera spazio: anche le immagini vecchie
     # `disk_low` ha un emettitore (il pulsante «Libera spazio», `jht team start` lo porta all'app):
     # NON sta in NOT_EMITTED. `disk_warning` non ne ha ancora, e il catalogo lo dichiara, non lo finge.
     not_emitted = catalog[catalog.index("export const NOT_EMITTED"):]
     not_emitted = not_emitted[: not_emitted.index("]);")]
     assert '"disk_warning"' in not_emitted and '"disk_low"' not in not_emitted
     for english in ("Disk space is running low.",
-                    "The disk is almost full, so no new agent or update will start."):
+                    "The agents need more disk space than is available."):
         block = locales[locales.index(f'"{english}": {{'):]
         block = block[: block.index("\n  },")]
         for lang in ("de", "es", "fr", "hu", "pt"):
@@ -1170,3 +1228,22 @@ def test_healthy_disk_fixture_pins_all_three_channels_to_the_fake_value(healthy_
              "const s=require('node:fs').statfsSync('/'); console.log(Math.floor(s.bavail*100/s.blocks))"],
             env=env, capture_output=True, text=True, timeout=30)
         assert probe.stdout.strip() == str(pct), probe.stderr
+
+
+@pytest.mark.parametrize("free_kib,shown", [
+    (0, "0"), (1, "0"), (8 * GIB_KIB, "8"), (5 * GIB_KIB + GIB_KIB // 4, "5,2"), (2 * GIB_KIB - 1, "1,9"),
+    (GIB_KIB // 20, "0"), (7 * GIB_KIB + 100, "7"),
+])
+def test_wrapper_says_the_free_space_in_gib_rounded_down_with_the_italian_comma(tmp_path, free_kib, shown):
+    done = subprocess.run(
+        ["bash", "-c", wrapper_function("disk_gib_text") + f'\ndisk_gib_text {free_kib}'],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert done.returncode == 0 and done.stdout == shown, (free_kib, done)
+
+
+def test_wrapper_refusal_names_the_required_and_the_available_space(tmp_path):
+    """500 GiB con 5,25 GiB liberi (1%): `disk_low` dice «almeno 8 GiB — disponibili: 5,2 GiB»."""
+    done, calls = run_upgrade(tmp_path, disk(500, 5 * GIB_KIB + GIB_KIB // 4), "")
+    assert "almeno 8 GiB di disco — disponibili: 5,2 GiB." in done.stderr, done.stderr
+    assert calls == []

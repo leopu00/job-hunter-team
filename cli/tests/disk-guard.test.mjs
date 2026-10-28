@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   DISK_BLOCK_FREE_BYTES, DISK_BLOCK_FREE_PCT, DISK_WARN_FREE_BYTES, DISK_WARN_FREE_PCT,
-  diskLevel, diskLowRefusal, engineDiskPath, readDisk, volumeState,
+  diskLevel, diskLowRefusal, engineDiskPath, formatGib, readDisk, volumeState,
 } from '../src/lib/disk-guard.js';
 
 // La frase viene dalla tabella nella lingua dell'utente: qui si fissa l'inglese.
@@ -44,7 +44,8 @@ test('15% nothing, 8% warns without refusing, 2% refuses with disk_low and the t
   const low = run(2);
   assert.equal(low.disk.code, 'disk_low');
   assert.equal(low.refusal.code, 'disk_low');
-  assert.match(low.refusal.message, /almost full \(only 2% is free\)/);
+  assert.match(low.refusal.message, /at least 8 GiB of disk — available: \d+(\.\d)? GiB\./);
+  assert.doesNotMatch(low.refusal.message, /%/);
 });
 
 test('the worst of the two volumes decides', () => {
@@ -102,6 +103,24 @@ test('500 GiB with 14 GiB free is not refused; 200 GiB with 4 GiB free is, with 
   assert.equal(refusal.code, 'disk_low');
   assert.match(refusal.message, /Trash/);
   assert.match(refusal.message, /`jht clean-images`/);
+});
+
+test('the refusal says the space the agents need and the space that is left, never a percentage', () => {
+  // 200 GiB con 4 GiB liberi (2%): servono almeno 8 GiB, ne restano 4
+  const refusal = diskLowRefusal({ ...base, statfs: sizedStatfs(200, 4 * GIB_KIB) });
+  assert.match(refusal.message, /at least 8 GiB of disk — available: 4 GiB\./);
+  assert.doesNotMatch(refusal.message, /%/);
+  assert.equal(refusal.disk.minFreeBytes, 4 * 1024 ** 3);
+});
+
+test('the free space is rounded down to one decimal and carries the decimal mark of the language', () => {
+  const quarter = 5 * 1024 ** 3 + 1024 ** 3 / 4; // 5,25 GiB: si dice 5,2, mai 5,3
+  assert.equal(formatGib(quarter, 'en'), '5.2');
+  assert.equal(formatGib(quarter, 'it'), '5,2');
+  assert.equal(formatGib(2 * 1024 ** 3 - 1, 'de'), '1,9');
+  assert.equal(formatGib(8 * 1024 ** 3, 'fr'), '8');
+  assert.equal(formatGib(-5, 'en'), '0');
+  assert.equal(formatGib(1024 ** 3 / 20, 'pt'), '0');
 });
 
 test('the worst volume is chosen by severity, not by the lowest percent alone', () => {

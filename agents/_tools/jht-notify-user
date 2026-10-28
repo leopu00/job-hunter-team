@@ -22,6 +22,8 @@ Domanda strutturata (opzioni da toccare, scadenza, risposta come dato):
   La risposta si legge con `jht-check-user-replies`. Con --scade-tra il codice
   aggiunge l'opzione «Rinvia, non fare niente», che e' anche il default se
   l'utente non risponde. Altri flag: --tipo, --multipla, --libera.
+  L'id di un'opzione ammette solo a-z, 0-9 e _ (fino a 24 caratteri, mai _ all'inizio):
+  niente trattino, «pro-max» si scrive pro_max.
 
 Testo con «$» (prezzi, variabili): tra virgolette doppie la shell mangia «$1», «$2»
 («$20» diventa «0») prima che il tool lo veda. Metti il testo tra apici singoli, oppure
@@ -319,6 +321,15 @@ def main() -> int:
     if args.body == "-":
         # the newline a heredoc ends with is not part of the text
         args.body = sys.stdin.read().removesuffix("\n")
+        lines = args.body.rstrip().splitlines()
+        if lines and lines[-1].strip() == "TXT":
+            # an indented closing `TXT`: the heredoc never closed and the shell passed on the delimiter line too
+            print(
+                "jht-notify-user: the text ends with a `TXT` line: the closing line of the heredoc was indented, "
+                "so the heredoc never closed. Nothing was sent: put `TXT` in the first column, alone on its line.",
+                file=sys.stderr,
+            )
+            return 1
     structured = bool(
         args.option or args.oggetto or args.tipo or args.multipla or args.libera or args.scade_tra
     )

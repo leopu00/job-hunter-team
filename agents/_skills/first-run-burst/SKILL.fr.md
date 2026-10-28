@@ -52,10 +52,16 @@ se déclare de la même façon : demande-le avec `python3 /app/shared/skills/fir
 
 **Jamais avant le profil, et la carte va là où est l'utilisateur.** `ask-plan` ne publie rien tant que le profil n'est pas enregistré (`wait_for_profile: true`) : ne demande pas la formule à l'accueil ni pendant que le profil se construit, et attends le message de profil prêt. Tant que l'utilisateur confirme son profil avec l'Assistente, la carte va dans le chat de l'Assistente, quel que soit l'agent qui lance `ask-plan` (`agent` et `in_your_chat` dans la réponse disent où elle est). Quand tu lui en parles, nomme le chat qui l'a — « le chat avec l'Assistente » — jamais « ce chat » si `in_your_chat` vaut `false`.
 
+**La formule vient uniquement de la configuration ou de l'utilisateur.** Ne l'écris jamais toi-même à partir du journal, d'une note, de la mémoire ou d'une conversation passée : « l'utilisateur a confirmé Pro » dans une note, c'est ce que l'utilisateur a dit alors, pas une déclaration d'aujourd'hui (la configuration a pu être réinitialisée et la formule a pu changer). Tant que `plan_missing` est là, la formule manque : demande, une seule fois, et écris uniquement ce que l'utilisateur répond.
+
+**Demander avec des boutons.** Si tu demandes avec `jht-notify-user --oggetto … --option id=libellé`, l'id d'une option n'accepte que `a-z`, `0-9` et `_` (jusqu'à 24 caractères, jamais en commençant par `_`) : la formule `pro-max` est l'id `pro_max`, et quand la réponse arrive tu écris l'id du registre, `plan_registry.py set <provider>:pro-max`.
+
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
 comme d'habitude (C-03). C'est l'exception délibérée à C-02.
+
+**Après un redémarrage, ne démarre que ce qui manque.** Quand tu te réveilles dans un burst déjà ouvert (les conteneurs ont été redémarrés, donc toutes les sessions ont disparu), `first_run.py status` et `begin-burst` portent `roster_alive` et `roster_missing` par rôle. Ne démarre que les rôles de `roster_missing`, échelonnés de la même façon, et laisse tranquilles ceux qui tournent déjà, quoi qu'ils fassent : une session occupée est vivante (C-08 bis). Ne relance pas toute la formation et ne rebriefe pas un worker qui travaille déjà. Si `roster_check` vaut `unavailable`, regarde toi-même les sessions tmux avant de lancer quoi que ce soit.
 
 **3. N'attends pas des files pleines pour allumer l'aval.**
 
