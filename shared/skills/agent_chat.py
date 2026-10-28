@@ -1527,17 +1527,167 @@ def questions_of(agent: str) -> list | None:
         conn.close()
 
 
-def _wake_for_answer(agent: str, session: str) -> None:
-    """Best effort: one fixed line, only with the terminal at its prompt. The agent also looks by itself."""
+# The wake is tried again while the agent has not read the answer: it is ONE fixed line typed into a terminal that
+# may be mid-turn, or holding a text, at the instant the person answers (the Capitano finished its turn two seconds
+# before the click and never heard of the answer).  A try that does not land says why, with a fixed word, in
+# logs/answer-wake.log (no question, no text, nothing the person wrote).
+WAKE_RETRY_EVERY_S = float(os.environ.get("JHT_ANSWER_WAKE_EVERY", "30"))
+WAKE_RETRY_FOR_S = float(os.environ.get("JHT_ANSWER_WAKE_FOR", "600"))
+WAKE_QUIET_AFTER_SENT_S = float(os.environ.get("JHT_ANSWER_WAKE_QUIET", "120"))
+WAKE_CODES = {"sent", "no_pane", "blocked", "busy", "text", "failed"}
+# What the transport answers to a delivery that did not land, as the code a retry reads.
+WAKE_EXIT = {8: "busy", 3: "blocked", 2: "no_pane", 5: "text", 130: "text"}
+
+
+def _wake_log(agent: str, code: str) -> None:
+    """One fixed line for a try that did not land; never raises."""
+    try:
+        logs = jht_home() / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        with open(logs / "answer-wake.log", "a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {agent} wake_{code}\n")
+    except OSError:
+        pass
+
+
+def _wake_attempt(agent: str, session: str) -> str:
+    """One try to wake the agent: ``sent`` or the closed code of why not.
+
+    The composer decides, as it does for a chat send (``delivery_gate``): an empty one takes the line even while
+    the agent works (the CLI queues it).  A text in it is first handed to the transport's ``--flush-ours``, which
+    presses Enter ONLY on a text it can prove is its own; a text of anyone else is never touched.
+    """
     try:
         pane = capture_pane(session)
-        if pane is None or prompt_state(pane) != "ready":
-            return
+        if pane is None:
+            return "no_pane"
+        gate = delivery_gate(pane)
+        if gate == "text":
+            try:
+                flush_ours(session)
+            except Refusal:
+                return "text"
+            pane = capture_pane(session)
+            if pane is None:
+                return "no_pane"
+            gate = delivery_gate(pane)
+        if gate == "text":
+            return "text"
+        if gate == "blocked":
+            return "blocked"
         binary = _delivery_binary()
-        subprocess.run([binary, session, ANSWER_WAKE.format(agent=agent)], capture_output=True,
-                       timeout=DELIVERY_TIMEOUT_S, check=False)
+        done = subprocess.run([binary, session, ANSWER_WAKE.format(agent=agent)], capture_output=True,
+                              timeout=DELIVERY_TIMEOUT_S, check=False)
+        if done.returncode == 0:
+            return "sent"
+        return WAKE_EXIT.get(done.returncode, "failed")
     except (Refusal, OSError, subprocess.SubprocessError):
+        return "failed"
+
+
+def _wake_for_answer(agent: str, session: str) -> str:
+    """The first try, made by the answer itself; says why when it does not land."""
+    code = _wake_attempt(agent, session)
+    if code != "sent":
+        _wake_log(agent, code)
+    return code
+
+
+def _answer_seen(question_id: str) -> bool:
+    """True when the agent has read the answer (the same mark the app shows as seen)."""
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file():
+        return False
+    try:
+        conn = sqlite3.connect(str(path), timeout=10)
+        try:
+            row = conn.execute("SELECT agent_seen_reply_at FROM pending_user_messages WHERE source_id = ?",
+                               (aq.ANSWER_PREFIX + question_id,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return False
+    return bool(row and row[0])
+
+
+def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake_attempt, seen=_answer_seen,
+                    sleep=time.sleep, clock=time.monotonic, every: float | None = None,
+                    window: float | None = None, quiet: float | None = None) -> str:
+    """Wake the agent again until it has read the answer, or the window is over: ``seen`` or ``gave_up``.
+
+    After a line that landed it waits ``quiet`` before another (the agent may be working through its queue);
+    a try that did not land is repeated every ``every`` seconds.
+    """
+    every = WAKE_RETRY_EVERY_S if every is None else every
+    window = WAKE_RETRY_FOR_S if window is None else window
+    quiet = WAKE_QUIET_AFTER_SENT_S if quiet is None else quiet
+    deadline = clock() + window
+    next_try = clock()
+    while True:
+        if seen(question_id):
+            return "seen"
+        now = clock()
+        if now >= deadline:
+            return "gave_up"
+        if now >= next_try:
+            code = attempt(agent, session)
+            if code != "sent":
+                _wake_log(agent, code)
+            next_try = clock() + (quiet if code == "sent" else every)
+        sleep(min(every, max(0.0, deadline - clock())))
+
+
+def _wake_lock(question_id: str):
+    """One retrying process per question; returns the lock path, or None when another one holds it."""
+    folder = jht_home() / "locks"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    path = folder / f"answer-wake-{question_id}.lock"
+    for _ in range(2):
+        try:
+            os.close(os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+            return path
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime < WAKE_RETRY_FOR_S + 60:
+                    return None
+                path.unlink()          # a holder that died without cleaning up
+            except OSError:
+                return None
+        except OSError:
+            return None
+    return None
+
+
+def wake(agent: str, question_id: str) -> dict:
+    """``agent_chat.py wake <agent> <question>``: the retrying process the answer starts (detached)."""
+    if not QUESTION_ID.match(question_id or ""):
+        raise Refusal("chat_invalid")
+    lock = _wake_lock(question_id)
+    if lock is None:
+        return {"result": "running"}
+    try:
+        return {"result": wake_until_seen(agent, question_id, AGENTS[agent])}
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _spawn_wake_retry(agent: str, question_id: str) -> None:
+    """Start the retrying process without waiting for it: the app's answer must not wait ten minutes."""
+    if os.environ.get("JHT_ANSWER_WAKE_RETRY", "1") == "0":
         return
+    try:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "wake", agent, question_id],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    except OSError:
+        pass
 
 
 def answer(agent: str, question_id: str, raw: str) -> dict:
@@ -1583,7 +1733,8 @@ def answer(agent: str, question_id: str, raw: str) -> dict:
         raise Refusal("answer_failed")
     finally:
         conn.close()
-    _wake_for_answer(agent, AGENTS[agent])
+    if _wake_for_answer(agent, AGENTS[agent]) != "sent":
+        _spawn_wake_retry(agent, question_id)
     return {"questionId": question_id, "accepted": True, "at": at}
 
 
@@ -1607,6 +1758,8 @@ def run(argv: list[str]) -> dict:
         return enter(agent_of(argv[1]), argv[2])
     if len(argv) == 3 and argv[0] == "answer":
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
+    if len(argv) == 3 and argv[0] == "wake":
+        return wake(agent_of(argv[1]), argv[2])
     raise Refusal("chat_invalid")
 
 
