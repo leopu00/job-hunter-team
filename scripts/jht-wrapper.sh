@@ -1407,7 +1407,7 @@ read_hidden_tty() {
       read_rc=$?
       value="$value$chunk"
       [ "$read_rc" -gt 128 ] && continue
-      [ "$read_rc" -eq 1 ] && [ $((SECONDS - started)) -ge 2 ] && continue
+      [ "${BASH_VERSINFO[0]}" -lt 4 ] && [ "$read_rc" -eq 1 ] && [ $((SECONDS - started)) -ge 2 ] && continue
       break
     done
     printf '\n' >&2
