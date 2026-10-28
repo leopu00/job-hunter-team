@@ -1,8 +1,8 @@
 import { act, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeSupabase, type FakeQuery } from "../../test-support/fake-supabase";
 import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
-import { PAGE_READ_DEADLINE_MS } from "../../lib/read-deadline";
+import { forgetReadsInFlight, PAGE_READ_DEADLINE_MS, READ_IN_FLIGHT_MAX_MS } from "../../lib/read-deadline";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
 import { ProfilePage } from ".";
@@ -32,6 +32,8 @@ function respond(query: FakeQuery) {
     };
   return { data: null, error: null };
 }
+
+beforeEach(() => forgetReadsInFlight());
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -115,7 +117,9 @@ describe("ProfilePage, a session that never answers", () => {
       render(<ProfilePage client={client} />);
       await act(async () => { await vi.advanceTimersByTimeAsync(PAGE_READ_DEADLINE_MS); });
       expect(screen.getByRole("alert")).toHaveTextContent("Non riesco a leggere il profilo");
-      await act(async () => { screen.getByRole("button", { name: "Aggiorna" }).click(); });
+      // the read that never answered is not waited for beyond the window: the button starts a new one
+      await act(async () => { await vi.advanceTimersByTimeAsync(READ_IN_FLIGHT_MAX_MS - PAGE_READ_DEADLINE_MS); });
+      await act(async () => { screen.getByRole("button", { name: "Riprova" }).click(); });
       await act(async () => undefined);
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(getSession).toHaveBeenCalledTimes(2);

@@ -4,7 +4,7 @@ import SwipeDeck from "@/app/(protected)/swipe/SwipeDeck";
 import { appLocale } from "../../lib/app-locale";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { cloudClient } from "../../lib/cloud-client";
-import { withReadDeadline } from "../../lib/read-deadline";
+import { readOnce, withReadDeadline } from "../../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
@@ -25,7 +25,7 @@ export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient 
   const blocked = useCloudDataBlocked();
 
   const read = useCallback(() => {
-    withReadDeadline(loadSwipe(client))
+    withReadDeadline(readOnce("swipe", () => loadSwipe(client)))
       .then((deck) => setLoad({ state: "ready", deck }))
       .catch(() => setLoad((prev) => (prev.state === "ready" ? prev : { state: "failed" })));
   }, [client]);
@@ -48,7 +48,7 @@ export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient 
           className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
           onClick={() => { setLoad({ state: "loading" }); read(); }}
         >
-          {SHELL_TEXT[appLocale()].refresh}
+          {SHELL_TEXT[appLocale()].retry}
         </button>
       </div>
     );

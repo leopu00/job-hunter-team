@@ -3,7 +3,7 @@ import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { cloudClient } from "../../lib/cloud-client";
-import { withReadDeadline } from "../../lib/read-deadline";
+import { readOnce, withReadDeadline } from "../../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
@@ -36,7 +36,7 @@ export default function DashboardPage(_props: PageProps) {
 
   const read = useCallback(() => {
     const mine = ++request.current;
-    withReadDeadline(existingTeam ? loadExistingTeamDashboard() : loadDashboard(cloudClient()))
+    withReadDeadline(readOnce(`dashboard:${existingTeam ? "vps" : "cloud"}`, () => (existingTeam ? loadExistingTeamDashboard() : loadDashboard(cloudClient()))))
       .then((data) => {
         if (request.current === mine) setLoad({ state: "ready", data });
       })
@@ -75,7 +75,7 @@ export default function DashboardPage(_props: PageProps) {
           className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
           onClick={() => { setLoad({ state: "loading" }); read(); }}
         >
-          {SHELL_TEXT[appLocale()].refresh}
+          {SHELL_TEXT[appLocale()].retry}
         </button>
       </div>
     );

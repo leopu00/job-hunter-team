@@ -9,7 +9,7 @@ import { appLocale } from "../../lib/app-locale";
 import { pluralText } from "../../lib/plural";
 import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 import { cloudClient } from "../../lib/cloud-client";
-import { withReadDeadline } from "../../lib/read-deadline";
+import { readOnce, withReadDeadline } from "../../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
@@ -35,7 +35,7 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   const blocked = useCloudDataBlocked();
 
   const read = useCallback(() => {
-    withReadDeadline(loadProfile(client))
+    withReadDeadline(readOnce("profile", () => loadProfile(client)))
       .then((data) => setLoad(data ? { state: "ready", data } : { state: "signed-out" }))
       .catch(() => setLoad((prev) => (prev.state === "ready" ? prev : { state: "failed" })));
   }, [client]);
@@ -77,7 +77,7 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
           className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
           onClick={() => { setLoad({ state: "loading" }); read(); }}
         >
-          {SHELL_TEXT[appLocale()].refresh}
+          {SHELL_TEXT[appLocale()].retry}
         </button>
       </div>
     );
