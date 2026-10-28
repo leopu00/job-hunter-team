@@ -912,6 +912,7 @@ def mark_delivered(agent: str, row: dict, taken: str | None = None, signature: s
             os.close(fd)
     except OSError:
         pass
+    close_plain_questions(agent, str(row.get("text") or ""))
 
 
 def _delivery_binary() -> str:
@@ -1623,6 +1624,65 @@ def _question_view(aq, conn, source_id: str, created_at) -> dict | None:
     return view
 
 
+# A question asked with a plain `jht-notify-user --kind question "text"`: no options, no contract.  The agents'
+# panel lists it as open while it has no reply (agent_state.py, a week at most); the chat shows it as a card
+# with no buttons, and the person answers it in the chat's own box (``close_plain_questions`` closes it).
+PLAIN_QUESTION_ID = "pm:{row}"
+PLAIN_QUESTIONS_FOR_S = 7 * 86400.0
+
+
+def _plain_questions(conn, agent: str) -> list:
+    since = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - PLAIN_QUESTIONS_FOR_S))
+    rows = conn.execute(
+        "SELECT id, body, created_at, user_reply, user_reply_at, agent_seen_reply_at FROM pending_user_messages "
+        "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' AND COALESCE(source_action, '') = '' "
+        "AND replace(substr(created_at, 1, 19), 'T', ' ') >= ? ORDER BY id DESC LIMIT ?",
+        (agent, since, QUESTIONS_SHOWN),
+    ).fetchall()
+    views = []
+    for row_id, body, created_at, reply, reply_at, seen_at in rows:
+        at = _seconds(created_at)
+        if at is None or not isinstance(body, str) or not body.strip():
+            continue
+        view = {"id": PLAIN_QUESTION_ID.format(row=row_id), "at": at, "kind": "question", "subject": "",
+                "text": body, "options": [], "multiple": False, "free": False, "expiresAt": None, "state": "open"}
+        if reply is not None and reply_at is not None:
+            view["state"] = "answered"
+            view["answer"] = {"choices": [], "text": str(reply), "at": _seconds(reply_at) or at,
+                              "origin": "user", "seenAt": _seconds(seen_at) if seen_at else None}
+        views.append(view)
+    return views
+
+
+def close_plain_questions(agent: str, text: str) -> None:
+    """The person wrote to the agent in the chat: its plain open questions are answered by that text.
+
+    The text reached the agent through its terminal, so the reply is marked seen at once; left unseen,
+    ``jht-check-user-replies`` would hand the agent the same words a second time.  Questions with a
+    source of their own (a closer's, a structured one) have their own way to be answered and are not
+    touched.  Never raises: the text is already delivered."""
+    path = _db_path()
+    if not text.strip() or not path.is_file():       # connect() would make an empty database of a missing one
+        return
+    try:
+        conn = sqlite3.connect(path, timeout=5)
+    except sqlite3.Error:
+        return
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE pending_user_messages SET user_reply = ?, user_reply_at = CURRENT_TIMESTAMP, "
+                "agent_seen_reply_at = CURRENT_TIMESTAMP "
+                "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' "
+                "AND COALESCE(source_action, '') = '' AND user_reply IS NULL",
+                (text[:MAX_TEXT], agent),
+            )
+    except sqlite3.Error:
+        pass
+    finally:
+        conn.close()
+
+
 def questions_of(agent: str) -> list | None:
     """The agent's latest questions, newest first, read-only. None when this image has none to give."""
     aq = _questions_module()
@@ -1639,7 +1699,10 @@ def questions_of(agent: str) -> list | None:
             "ORDER BY id DESC LIMIT ?",
             (agent, aq.SOURCE_ACTION, QUESTIONS_SHOWN),
         ).fetchall()
-        return [view for view in (_question_view(aq, conn, sid, at) for sid, at in rows) if view]
+        views = [view for view in (_question_view(aq, conn, sid, at) for sid, at in rows) if view]
+        views.extend(_plain_questions(conn, agent))
+        views.sort(key=lambda view: view["at"], reverse=True)
+        return views[:QUESTIONS_SHOWN]
     except sqlite3.Error:
         return None
     finally:

@@ -99,6 +99,7 @@ export default function ChatQuestion({
       {question.subject && <p className="m-0 mb-1 font-semibold text-[var(--color-white)]">{question.subject}</p>}
       <div>{renderChatMarkdown(question.text)}</div>
 
+      {question.options.length > 0 && (
       <div role="group" aria-label={question.subject ?? question.text} className="mt-2 flex flex-wrap gap-1.5">
         {question.options.map((option) => {
           const taken = chosen.has(option.id);
@@ -125,6 +126,13 @@ export default function ChatQuestion({
           );
         })}
       </div>
+      )}
+
+      {open && question.options.length === 0 && !question.free && (
+        <p data-testid="direct-chat-answer-below" className="m-0 mt-2 text-[13px] text-[var(--color-muted)]">
+          {t.answerBelow}
+        </p>
+      )}
 
       {open && (question.multiple || (question.free && onAnswerInWords)) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
