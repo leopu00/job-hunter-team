@@ -72,7 +72,7 @@ const BUSY = copy(
 );
 const ACCOUNT_SCOPE = copy(
   "Non riesco a verificare a quale account appartiene questa operazione.",
-  "Esci e rientra con il tuo account, poi riprova.",
+  "Disconnettiti e rientra con il tuo account, poi riprova.",
   "I cannot verify which account this operation belongs to.",
   "Sign out and back in with your account, then try again.",
 );
@@ -254,7 +254,7 @@ const LOCAL_PROFILE = copy(
 );
 const SESSION = copy(
   "La sessione del tuo account non è più valida.",
-  "Esci e rientra con il tuo account.",
+  "Disconnettiti e rientra con il tuo account.",
   "Your account session is no longer valid.",
   "Sign out and back in with your account.",
 );
@@ -264,7 +264,7 @@ const SESSION = copy(
  */
 const PAIRING_ACCOUNT = copy(
   "Una squadra su VPS ha bisogno del tuo account Google.",
-  "Esci e continua con Google, poi riprova.",
+  "Disconnettiti e continua con Google, poi riprova.",
   "A team on a VPS needs your Google account.",
   "Sign out and continue with Google, then try again.",
 );
