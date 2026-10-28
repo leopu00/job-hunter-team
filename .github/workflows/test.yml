@@ -194,6 +194,14 @@ jobs:
       # them: two of them were red on the integration branch and every job was green.  The dependencies of cli,
       # shared and shared/cron are installed by the steps above.
       # Seven of them are skipped without PyYAML for the real validator: a skip would be a green that proves nothing.
+      # So PyYAML comes from the hashed requirements the pytest job installs, not from what the image happens to ship.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML for the CLI tests (hashes)
+        run: pip install --require-hashes -r tests/requirements-app-ci.txt
+
       - name: Run the CLI node:test suites
         working-directory: cli
         run: |
