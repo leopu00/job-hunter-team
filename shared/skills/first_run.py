@@ -174,6 +174,17 @@ def plan_gap(state: dict) -> dict:
     return {"plan_missing": True, "reason": info.get("reason", "plan not declared"), "hint": info["hint"]}
 
 
+def mentor_due() -> bool:
+    """Whether the Mentor has anything to read yet. Until the first run is over (`steady`: there are scored
+    positions on screen) the Mentor has no record to walk, and its first wake at every start would be spent on
+    nothing; the Capitano turns it on when the burst closes. A state that cannot be read counts as due: the
+    Mentor is then started as it always was."""
+    try:
+        return status().get("phase") == PHASE_STEADY
+    except Exception:
+        return True
+
+
 def _live_sessions() -> Optional[list[str]]:
     """Names (lower case) of the tmux sessions running, [] when there is no tmux server, None when it cannot
     be asked (no tmux, no answer)."""
@@ -295,7 +306,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="First-run status")
     ap.add_argument("command", nargs="?", default="status",
                     choices=["status", "begin-burst", "check", "complete", "reset",
-                             "plan"])
+                             "plan", "mentor-due"])
     ap.add_argument("--reason", default="closed manually")
     args = ap.parse_args(argv)
 
@@ -304,6 +315,10 @@ def main(argv: list[str]) -> int:
         out = dict(state, **plan_gap(state), **roster_gap(state))
     elif args.command == "plan":
         out = plan_info()
+    elif args.command == "mentor-due":
+        due = mentor_due()
+        print(json.dumps({"mentor_due": due, "phase": status()["phase"]}))
+        return 0 if due else 1
     elif args.command == "begin-burst":
         out = begin_burst()
     elif args.command == "check":
