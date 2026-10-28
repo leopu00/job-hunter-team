@@ -2401,18 +2401,28 @@ pub(crate) fn forget_full_link_at(root: &Path, scope: &AccountScope) -> Result<F
     }
     #[cfg(windows)]
     {
-        use std::os::windows::fs::OpenOptionsExt;
-        // Overwritten only if it is a plain file: a link in its place is never written through, it is
-        // only moved away (below). FILE_FLAG_OPEN_REPARSE_POINT: the node itself, never its target.
+        use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+        use windows_sys::Win32::Storage::FileSystem::{GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION};
+        // Overwritten only if it is a plain file with one name: a link in its place is never written
+        // through, and neither is a second name of some other file (a hard link to the record is the
+        // same bytes); both are only moved away (below). FILE_FLAG_OPEN_REPARSE_POINT: the node itself,
+        // never its target. Not truncated by the open: the names are counted on the handle first.
         const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
         let plain = fs::symlink_metadata(&file).is_ok_and(|meta| meta.file_type().is_file() && !is_reparse_point(&meta));
         let overwritten = plain
             && OpenOptions::new()
                 .write(true)
-                .truncate(true)
                 .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
                 .open(&file)
-                .and_then(|mut handle| handle.write_all(b"x").and_then(|_| handle.sync_all()))
+                .and_then(|mut handle| {
+                    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+                    // SAFETY: the handle is open for the whole call and `info` is the structure the call fills in.
+                    if unsafe { GetFileInformationByHandle(handle.as_raw_handle(), &mut info) } == 0 || info.nNumberOfLinks != 1 {
+                        return Err(std::io::ErrorKind::InvalidInput.into());
+                    }
+                    handle.set_len(0)?;
+                    handle.write_all(b"x").and_then(|_| handle.sync_all())
+                })
                 .is_ok();
         if overwritten {
             return Ok(FullLinkForgotten::Neutralized);
@@ -4144,6 +4154,20 @@ mod tests {
         assert!(!valid_positions_reply(&list, &json!({"ok":true,"data":[]})));
     }
 
+    /// What takes the record away on Windows overwrites it only after counting its names on the handle: a
+    /// hard link to the record is the same bytes as some other file, and the open does not truncate. Read
+    /// from the source for the same reason as the test above: the Mac and Linux gates see it too.
+    #[test]
+    fn the_windows_overwrite_of_a_record_that_cannot_be_removed_counts_its_names_first() {
+        let source = include_str!("existing_team_runtime.rs").replace("\r\n", "\n");
+        let source = source.split("#[cfg(test)]\nmod tests").next().unwrap();
+        let forget = source.split("pub(crate) fn forget_full_link_at(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let windows = forget.split("#[cfg(windows)]").nth(1).expect("the Windows part");
+        let counted = windows.find("nNumberOfLinks != 1").expect("the names are counted");
+        assert!(counted < windows.find("handle.set_len(0)").expect("truncated by hand"), "counted before it is truncated");
+        assert!(!windows.contains(".truncate(true)"), "the open must not truncate before the names are counted");
+    }
+
     /// The record is kept on Windows too, and what makes it believable there is written in the code
     /// that reads it: this reads the source (any platform runs it), so a change that drops one of the
     /// checks is red on the Mac and Linux gates as well, not only on a Windows runner.
@@ -4466,6 +4490,19 @@ mod tests {
             revoke_full_link();
             assert_eq!(restore_full_link_at(&root.root, &root.scope, &target, unix_now()), FullLinkRestore::Discarded);
             assert!(!full_link_granted(&root.scope, &target));
+            // the record with a second name, held open as above: it is not overwritten, that would write into
+            // the bytes of whatever else has that name; nothing else works either, and the error is said by name
+            remember(&root, &target, unix_now()).unwrap();
+            let second = root.account().join("second-name");
+            fs::hard_link(root.record(), &second).unwrap();
+            let kept = fs::read(&second).unwrap();
+            let holder = OpenOptions::new().read(true).share_mode(0x1 | 0x2).open(root.record()).unwrap();
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Err("existing_team_full_link_not_removed"));
+            assert_eq!(fs::read(&second).unwrap(), kept, "the other name keeps its bytes");
+            drop(holder);
+            assert_eq!(forget_full_link_at(&root.root, &root.scope), Ok(FullLinkForgotten::Removed));
+            assert_eq!(fs::read(&second).unwrap(), kept, "taking one name away leaves the other");
+            fs::remove_file(&second).unwrap();
             // held open by someone who lets nobody in: neither works, and the error is said by name
             remember(&root, &target, unix_now()).unwrap();
             let holder = OpenOptions::new().read(true).share_mode(0).open(root.record()).unwrap();
