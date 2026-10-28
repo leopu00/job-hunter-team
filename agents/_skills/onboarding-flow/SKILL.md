@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Conversational protocol the Assistente follows to onboard the user — first message, iterative one-question-per-turn pacing, blocking checklist (the floor that unlocks the dashboard) vs rich checklist (what makes Writers actually useful), settore-agnostic question style (NEVER assume IT), and the mandatory checkpoint sequence when the user uploads files. Tightly paired with `profile-yaml` (every answer = one Write+validate) and `profile-summaries` (narrative MDs after key milestones). Open this skill at the start of an onboarding session and on every user turn that brings new info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
 ---
 
 # onboarding-flow — how the Assistente moves the conversation
@@ -108,19 +108,18 @@ preferences:
 
 **Tono:** una domanda naturale, non un form burocratico. Es.: *"Visto che guardi anche a Londra e Zurigo: hai già il diritto di lavorare lì, o per quelle servirebbe uno sponsor/visto? Così evito di proporti ruoli non accessibili."* Spiega sempre il **perché** (= shortlist più utile), non chiederlo a freddo.
 
-## Subscription plan — ask once, never write it for them
+## Subscription plan — ask only with the card, never write it for them
 
-The team cannot open its first run until the user's subscription plan is declared (the Capitano does not guess a roster: a wrong guess burns the user's window on day one). The app has no screen for it: **you** are where the user declares it.
+The team cannot open its first run until the user's subscription plan is declared (the Capitano does not guess a roster: a wrong guess burns the user's window on day one). **The plan is asked ONE way, from any agent and you included: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** It posts a card in this chat with the plans, their prices and the one Codex reports marked as suggested. Never ask the plan as text, never with `jht-notify-user` yourself (a question written that way does not appear in the Messages and the user is left waiting), never list the plans in your own words.
 
 **When:** once, after the first two or three answers (never in your first message), and at the latest before you tell the user the profile is ready.
 
 1. **Check.** `python3 /app/shared/skills/plan_registry.py get`. A plan printed (exit 0) = declared: say nothing and go on. `PLAN_MISSING` (exit 1) = not declared.
-2. **Show the options.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex is the provider the app connects). Give the user the plan names and prices as a short plain list in their language, not the raw table.
-3. **Suggest, never decide.** If the output ends with a line `Codex reports: <name> → <Plan> <price>`, propose that plan ("Codex tells me your account looks like Pro, 100 $/month: is that yours?"). It is a suggestion: nothing is written until the user says yes. A line ending in `(not in this table)` is not a suggestion: just list the plans.
-4. **Write what they chose.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, with `<id>` from the first column of the list. Confirm in one line.
-5. **They do not know?** Do not pick one. Tell them the plan is on the provider's subscription page, ask again once before the profile is ready, and if they still do not know, say the Capitano will ask them again.
+2. **Ask with the card.** Run `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`. `asked: true` → one line: the card with the plans is in the chat, pick yours. If it says that a question about the plan is already open (`asked: false`, with a `question_id` and the `agent` that has it) do NOT make another one: tell the user in one line to answer the card that is already waiting (if `agent` is `capitano` it is in their conversation with the Captain). If it says the plan was asked several times or that it will be asked again later, say nothing more and do not ask in text.
+3. **Write what they chose.** When the user answers the card (you read `[USER ANSWER …]`), write exactly their choice: `python3 /app/shared/skills/plan_registry.py set codex:<id>`, with `<id>` the id of the option (`pro_max` works for `pro-max`). Confirm in one line.
+4. **They do not know?** (the option «I do not know») Do not pick one. Tell them the plan is on the provider's subscription page; the system asks again later (the card comes back after an hour, three times at most).
 
-Never write a plan the user did not choose, never infer it from anything else, never ask again once `get` prints one. Use only `get`, `list` and `set` of that script.
+Never write a plan the user did not choose, never infer it from anything else, never ask again once `get` prints one. Use only `get` and `set` of the registry and `ask-plan` of `first_run.py`.
 
 ## Settore-agnostic — NEVER default to IT
 

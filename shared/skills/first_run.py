@@ -32,7 +32,7 @@ Uso:
   python3 first_run.py check               # obiettivo raggiunto? (aggiorna)
   python3 first_run.py complete --reason … # forza la fine del burst
   python3 first_run.py reset               # solo per test / wipe playground
-  python3 first_run.py ask-plan            # chiede il piano all'utente con una card (l'unico modo)
+  python3 first_run.py ask-plan [--agent capitano|assistente]  # chiede il piano all'utente con una card (l'unico modo, da qualunque agente)
   python3 first_run.py plan-question-check # la rete del watchdog: la card, se nessuno l'ha postata
 """
 from __future__ import annotations
@@ -206,7 +206,7 @@ def begin_burst() -> dict:
     if not info.get("ok"):
         return {"ok": False, "phase": state["phase"],
                 "reason": info.get("reason", "plan not declared"),
-                "hint": info.get("hint") or "declare the subscription plan with plan_registry.py list/set"}
+                "hint": info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"}
 
     with contextlib.suppress(Exception):  # the card is a courtesy to the user: it never stops the burst
         close_plan_question()  # the plan is declared: the card that asked for it has nothing left to ask
@@ -285,6 +285,7 @@ def reset() -> dict:
 
 PLAN_QUESTION_AFTER_S = 300  # a profile imported, a plan missing, no open question for this long: the system asks
 PLAN_REASK_AFTER_S = 3600  # after an answer that named no plan («I do not know»), the card comes back after this
+PLAN_ASKERS = ("capitano", "assistente")  # the agents the person talks to: the card goes to the chat they are in
 MAX_PLAN_CARDS = 3  # cards about the plan, in all, for a provider; then nobody asks again
 ANSWER_PREFIX = "ans:"  # agent_questions.ANSWER_PREFIX: a test holds them equal
 _NOTIFY_ID = re.compile(r"\bid=(aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16})\b")
@@ -451,9 +452,12 @@ def close_plan_question(now: Optional[datetime] = None) -> dict:
 
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
              now: Optional[datetime] = None) -> dict:
-    """Ask the user which plan they have: the one way to do it. Idempotent — no second card while the first has
-    no answer, and nothing to ask once the plan is declared. After an answer that named no plan («I do not know»)
-    the card comes back only after `reask_s`, and never more than `MAX_PLAN_CARDS` times for a provider."""
+    """Ask the user which plan they have: the one way to do it, for any agent (the card goes to the chat of `agent`).
+    Idempotent — no second card while the first has no answer, whoever posted it (the reply says which agent has
+    it), and nothing to ask once the plan is declared. After an answer that named no plan («I do not know») the
+    card comes back only after `reask_s`, and never more than `MAX_PLAN_CARDS` times for a provider."""
+    if agent not in PLAN_ASKERS:
+        return {"ok": False, "asked": False, "reason": f"the plan is asked in the chat of {' or '.join(PLAN_ASKERS)}"}
     now = now or datetime.now(timezone.utc)
     with _plan_question_lock():
         info = plan_info()
@@ -473,8 +477,9 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
         except sqlite3.Error as error:
             return {"ok": False, "asked": False, "reason": f"the database cannot be read: {error}"}
         if kind == "open":
+            record = state["plan_question"]
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
-                    "question_id": state["plan_question"]["id"]}
+                    "question_id": record["id"], "agent": record.get("agent") or "capitano"}
         cards = _cards_asked(state, card["provider"])
         if cards >= MAX_PLAN_CARDS:
             return {"ok": True, "asked": False, "limit": True,
@@ -488,7 +493,7 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             return {"ok": False, "asked": False, "reason": why}
         state = status()  # read again: what was written while the card was being posted stays
         state["plan_question"] = {"id": question_id, "asked_at": _now(), "asked_by": asked_by,
-                                  "provider": card["provider"]}
+                                  "provider": card["provider"], "agent": agent}
         state["plan_cards"] = {"provider": card["provider"], "count": cards + 1}
         _write(state)
         return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]]}
@@ -562,6 +567,8 @@ def main(argv: list[str]) -> int:
                     choices=["status", "begin-burst", "check", "complete", "reset",
                              "plan", "ask-plan", "plan-question-check"])
     ap.add_argument("--reason", default="closed manually")
+    ap.add_argument("--agent", choices=PLAN_ASKERS, default="capitano",
+                    help="ask-plan: whose chat the card goes to (the agent the person is talking to)")
     ap.add_argument("--after", type=float, default=PLAN_QUESTION_AFTER_S,
                     help="plan-question-check: seconds without a question before the system asks")
     ap.add_argument("--reask", type=float, default=PLAN_REASK_AFTER_S,
@@ -580,7 +587,7 @@ def main(argv: list[str]) -> int:
     elif args.command == "complete":
         out = complete(args.reason)
     elif args.command == "ask-plan":
-        out = ask_plan(reask_s=args.reask)
+        out = ask_plan(agent=args.agent, reask_s=args.reask)
     elif args.command == "plan-question-check":
         out = plan_question_check(args.after, args.reask)
     else:

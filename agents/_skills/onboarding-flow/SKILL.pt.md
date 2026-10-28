@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que o Assistente segue para integrar o utilizador — primeira mensagem, ritmo iterativo de uma-pergunta-por-turno, checklist de bloqueio (o piso que desbloqueia o dashboard) vs checklist rica (o que torna os Scrittori realmente úteis), estilo de perguntas agnóstico de setor (NUNCA assumir IT), e a sequência obrigatória de checkpoints quando o utilizador carrega ficheiros. Fortemente combinado com `profile-yaml` (cada resposta = um Write+validate) e `profile-summaries` (MDs narrativos após marcos-chave). Abrir esta skill no início de uma sessão de onboarding e em cada turno do utilizador que traga nova informação.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
 ---
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 
@@ -106,19 +106,18 @@ preferences:
 
 **Tom:** uma pergunta natural, não um formulário burocrático. Ex.: *"Visto que olhas também para Londres e Zurique: já tens o direito de trabalhar lá, ou para essas seria preciso sponsor/visto? Assim evito propor-te papéis não acessíveis."* Explique sempre o **porquê** (= shortlist mais útil), não pergunte a frio.
 
-## Plano de subscrição — pergunta uma vez, nunca o escrevas pelo utilizador
+## Plano de subscrição — pergunta só com o cartão, nunca o escrevas pelo utilizador
 
-A equipa não pode abrir a primeira ronda enquanto o plano de subscrição do utilizador não estiver declarado (o Capitano não adivinha uma formação: um palpite errado queima a janela do utilizador no primeiro dia). A app não tem um ecrã para isto: **és tu** o sítio onde o utilizador o declara.
+A equipa não pode abrir a primeira ronda enquanto o plano de subscrição do utilizador não estiver declarado (o Capitano não adivinha uma formação: um palpite errado queima a janela do utilizador no primeiro dia). **O plano pergunta-se de UMA só forma, a partir de qualquer agente e portanto também a partir de ti: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Publica neste chat um cartão com os planos, os preços e o que o Codex indica marcado como sugerido. Nunca perguntes o plano em texto, nunca com o `jht-notify-user` por tua conta (uma pergunta escrita assim não aparece em Messages e o utilizador fica à espera), nunca listes os planos com palavras tuas.
 
 **Quando:** uma vez, depois das primeiras duas ou três respostas (nunca na tua primeira mensagem), e o mais tardar antes de dizeres ao utilizador que o perfil está pronto.
 
 1. **Verifica.** `python3 /app/shared/skills/plan_registry.py get`. Se imprimir um plano (saída 0) está declarado: não digas nada e segue. `PLAN_MISSING` (saída 1) = não declarado.
-2. **Mostra as opções.** `python3 /app/shared/skills/plan_registry.py list codex` (o Codex é o fornecedor que a app liga). Dá ao utilizador os nomes e os preços dos planos numa lista curta e simples, na língua dele, não a tabela em bruto.
-3. **Sugere, não decidas.** Se a saída terminar com uma linha `Codex reports: <nome> → <Plano> <preço>`, propõe esse plano («O Codex diz-me que a tua conta parece Pro, 100 $/mês: é a tua?»). É uma sugestão: não se escreve nada até o utilizador dizer que sim. Uma linha que termina em `(not in this table)` não é uma sugestão: lista só os planos.
-4. **Escreve o que escolheu.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, com `<id>` da primeira coluna da lista. Confirma numa linha.
-5. **Não sabe?** Não escolhas tu. Diz-lhe que o plano aparece na página de subscrição do fornecedor, volta a perguntar uma vez antes de o perfil estar pronto e, se ainda não souber, diz-lhe que o Capitano lhe voltará a perguntar.
+2. **Pergunta com o cartão.** Executa `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`. `asked: true` → uma linha: o cartão com os planos está no chat, escolhe o teu. Se disser que já há uma pergunta aberta sobre o plano (`asked: false`, com um `question_id` e o `agent` que a tem) NÃO faças outra: diz ao utilizador numa linha que responda ao cartão que já espera (se `agent` for `capitano`, está na conversa dele com o Capitano). Se disser que o plano foi perguntado várias vezes ou que será perguntado mais tarde, não acrescentes nada e não perguntes em texto.
+3. **Escreve o que escolheu.** Quando o utilizador responder ao cartão (lês `[USER ANSWER …]`), escreve exatamente a escolha dele: `python3 /app/shared/skills/plan_registry.py set codex:<id>`, com `<id>` o id da opção (`pro_max` vale para `pro-max`). Confirma numa linha.
+4. **Não sabe?** (a opção «Não sei») Não escolhas tu. Diz-lhe que o plano aparece na página de subscrição do fornecedor; o sistema volta a perguntar mais tarde (o cartão volta passada uma hora, no máximo três vezes).
 
-Nunca escrevas um plano que o utilizador não escolheu, nunca o deduzas de outra coisa, nunca voltes a perguntar quando o `get` imprime um. Usa só `get`, `list` e `set` desse script.
+Nunca escrevas um plano que o utilizador não escolheu, nunca o deduzas de outra coisa, nunca voltes a perguntar quando o `get` imprime um. Usa só `get` e `set` do registo e `ask-plan` de `first_run.py`.
 
 ## Agnóstico de setor — NUNCA padrão para IT
 

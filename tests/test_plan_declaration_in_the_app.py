@@ -103,13 +103,14 @@ def test_after_the_user_chose_begin_burst_opens(home: Path):
 def test_the_assistentes_permission_on_the_registry_is_narrow(lang: str):
     tools = _frontmatter_tools(ROOT / "agents" / "_skills" / "onboarding-flow" / f"SKILL{SUFFIX[lang]}.md")
     registry = [t for t in tools if "plan_registry" in t]
-    assert registry == [f"{REGISTRY} get", f"{REGISTRY} list *", f"{REGISTRY} set *"], registry
+    # the plans are listed by the card (ask-plan), never by the agent in its own words: no `list`
+    assert registry == [f"{REGISTRY} get", f"{REGISTRY} set *"], registry
 
 
 @pytest.mark.parametrize("lang", LANGS)
 def test_the_assistente_asks_suggests_and_writes_only_what_the_user_chose(lang: str):
     text = (ROOT / "agents" / "_skills" / "onboarding-flow" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    for needed in (f"{REGISTRY} get", f"{REGISTRY} list codex", f"{REGISTRY} set codex:<id>", "PLAN_MISSING", "Codex reports:"):
+    for needed in (f"{REGISTRY} get", f"{REGISTRY} set codex:<id>", "PLAN_MISSING", "first_run.py ask-plan --agent assistente"):
         assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
 
 

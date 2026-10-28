@@ -43,6 +43,7 @@ distinguer un doublon de deux tours qui disent la même chose par hasard
 - ❌ Réponses à un message `[CHAT]` sur le tableau de bord web — utiliser `jht-send` (déjà dans le fil de chat).
 - ❌ Réponses à un `[TG]` entrant — utiliser `jht-telegram-send` directement : vous savez déjà que Telegram est actif parce que l'utilisateur vient de vous écrire de là. Économise un aller-retour DB.
 - ❌ Pièces jointes lourdes (>20 Mo). Utiliser le dossier CV de l'utilisateur + un corps de notification court.
+- ❌ La formule d'abonnement. Elle se demande SEULEMENT avec `python3 /app/shared/skills/first_run.py ask-plan` (une carte à laquelle l'utilisateur répond dans Messages), par n'importe quel agent ; une question sur la formule écrite ici en texte libre n'apparaît pas dans Messages et laisse l'utilisateur à attendre.
 
 ## Utilisation
 

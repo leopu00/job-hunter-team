@@ -43,6 +43,7 @@ distinguere un doppione da due battute che dicono la stessa cosa per caso
 - ❌ Risposte a un messaggio `[CHAT]` sulla dashboard web — usa `jht-send` (già nel thread chat).
 - ❌ Risposte a un `[TG]` in ingresso — usa `jht-telegram-send` direttamente: sai già che Telegram è attivo perché l'utente ti ha appena scritto da lì. Risparmi un roundtrip DB.
 - ❌ Allegati pesanti (>20 MB). Usa la cartella CV dell'utente + un corpo di notifica breve.
+- ❌ Il piano di abbonamento. Si chiede SOLO con `python3 /app/shared/skills/first_run.py ask-plan` (una card a cui l'utente risponde in Messages), da qualunque agente; una domanda sul piano scritta qui a testo libero non compare in Messages e lascia l'utente ad aspettare.
 
 ## Utilizzo
 

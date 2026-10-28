@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocole conversationnel que l'Assistente suit pour intégrer l'utilisateur — premier message, rythme itératif une-question-par-tour, checklist bloquante (le plancher qui débloque le tableau de bord) vs checklist riche (ce qui rend les Scrittore vraiment utiles), style de question agnostique du secteur (JAMAIS supposer IT), et la séquence de checkpoint obligatoire quand l'utilisateur upload des fichiers. Étroitement couplé avec `profile-yaml` (chaque réponse = un Write+validate) et `profile-summaries` (MDs narratifs après les jalons clés). Ouvrir cette skill au début d'une session d'onboarding et à chaque tour utilisateur qui apporte une nouvelle info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
 ---
 <!-- @translation: fr, ai-translated 2026-06-06 -->
 
@@ -106,19 +106,18 @@ preferences:
 
 **Ton :** une question naturelle, pas un formulaire bureaucratique. Ex. : *"Vu que vous regardez aussi Londres et Zurich : avez-vous déjà le droit de travailler là-bas, ou faudrait-il un sponsor/visa pour celles-là ? Comme ça j'évite de vous proposer des rôles inaccessibles."* Toujours expliquer le **pourquoi** (= liste courte plus utile), ne pas le demander à froid.
 
-## Formule d'abonnement — demande-la une fois, ne l'écris jamais à la place de l'utilisateur
+## Formule d'abonnement — demande-la seulement avec la carte, ne l'écris jamais à la place de l'utilisateur
 
-L'équipe ne peut pas ouvrir son premier tour tant que la formule d'abonnement de l'utilisateur n'est pas déclarée (le Capitano ne devine pas une formation : une supposition fausse brûle la fenêtre de l'utilisateur dès le premier jour). L'app n'a pas d'écran pour cela : **c'est toi** qui permets à l'utilisateur de la déclarer.
+L'équipe ne peut pas ouvrir son premier tour tant que la formule d'abonnement de l'utilisateur n'est pas déclarée (le Capitano ne devine pas une formation : une supposition fausse brûle la fenêtre de l'utilisateur dès le premier jour). **La formule se demande d'UNE seule façon, par n'importe quel agent et donc par toi aussi : `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Il publie dans ce chat une carte avec les formules, leurs prix et celle que Codex indique marquée comme suggérée. Ne demande jamais la formule en texte, jamais avec `jht-notify-user` de ton côté (une question écrite ainsi n'apparaît pas dans Messages et l'utilisateur reste à attendre), n'énumère jamais les formules avec tes mots.
 
 **Quand :** une fois, après les deux ou trois premières réponses (jamais dans ton premier message), et au plus tard avant de dire à l'utilisateur que le profil est prêt.
 
 1. **Vérifie.** `python3 /app/shared/skills/plan_registry.py get`. Si une formule s'affiche (sortie 0), elle est déclarée : ne dis rien et continue. `PLAN_MISSING` (sortie 1) = non déclarée.
-2. **Montre les choix.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex est le fournisseur que l'app connecte). Donne à l'utilisateur les noms et les prix des formules sous forme de courte liste simple dans sa langue, pas le tableau brut.
-3. **Suggère, ne décide pas.** Si la sortie se termine par une ligne `Codex reports: <nom> → <Formule> <prix>`, propose cette formule (« Codex m'indique que ton compte ressemble à Pro, 100 $/mois : est-ce la tienne ? »). C'est une suggestion : rien n'est écrit tant que l'utilisateur n'a pas dit oui. Une ligne qui se termine par `(not in this table)` n'est pas une suggestion : liste seulement les formules.
-4. **Écris ce qu'il a choisi.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, avec `<id>` pris dans la première colonne de la liste. Confirme en une ligne.
-5. **Il ne sait pas ?** N'en choisis pas une toi-même. Dis-lui que la formule figure sur la page d'abonnement du fournisseur, redemande une fois avant que le profil soit prêt et, s'il ne sait toujours pas, dis-lui que le Capitano le lui redemandera.
+2. **Demande avec la carte.** Exécute `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`. `asked: true` → une ligne : la carte avec les formules est dans le chat, choisis la tienne. S'il dit qu'une question sur la formule est déjà ouverte (`asked: false`, avec un `question_id` et l'`agent` qui l'a) n'en fais PAS une autre : dis à l'utilisateur en une ligne de répondre à la carte qui attend déjà (si `agent` vaut `capitano`, elle est dans sa conversation avec le Capitano). S'il dit que la formule a été demandée plusieurs fois ou qu'elle sera redemandée plus tard, n'ajoute rien et ne demande pas en texte.
+3. **Écris ce qu'il a choisi.** Quand l'utilisateur répond à la carte (tu lis `[USER ANSWER …]`), écris exactement son choix : `python3 /app/shared/skills/plan_registry.py set codex:<id>`, avec `<id>` l'id de l'option (`pro_max` vaut pour `pro-max`). Confirme en une ligne.
+4. **Il ne sait pas ?** (l'option « Je ne sais pas ») N'en choisis pas une toi-même. Dis-lui que la formule figure sur la page d'abonnement du fournisseur ; le système la redemande plus tard (la carte revient après une heure, trois fois au plus).
 
-N'écris jamais une formule que l'utilisateur n'a pas choisie, ne la déduis jamais d'autre chose, ne redemande jamais quand `get` en affiche une. N'utilise que `get`, `list` et `set` de ce script.
+N'écris jamais une formule que l'utilisateur n'a pas choisie, ne la déduis jamais d'autre chose, ne redemande jamais quand `get` en affiche une. N'utilise que `get` et `set` du registre et `ask-plan` de `first_run.py`.
 
 ## Agnostique du secteur — NE JAMAIS supposer IT
 

@@ -43,6 +43,7 @@ mondja (az „ok” ezerszer érkezik), tehát lejjebb senki nem takarítja el.
 - ❌ Válaszok `[CHAT]` üzenetre a webes dashboardon — használd a `jht-send`-et (már a csevegés szálban van).
 - ❌ Válaszok `[TG]` bejövő üzenetre — használd közvetlenül a `jht-telegram-send`-et: már tudod, hogy a Telegram él, mert a felhasználó épp onnan írt neked. Megtakarít egy DB körutat.
 - ❌ Nehéz csatolmányok (>20 MB). Használd a felhasználó CV mappáját + rövid értesítés törzs.
+- ❌ Az előfizetési csomag. CSAK ezzel kérdezd: `python3 /app/shared/skills/first_run.py ask-plan` (egy kártya, amelyre a felhasználó a Messagesben válaszol), bármelyik ügynöktől; az itt szabad szövegként írt csomagkérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár.
 
 ## Használat
 

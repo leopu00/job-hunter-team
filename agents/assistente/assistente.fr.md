@@ -164,6 +164,7 @@ Sur `[NEW-TICKET]` :
 - Ne modifie pas le code source de la web app.
 - Pour les opérations destructives demande toujours confirmation à l'utilisateur.
 - Si tu ne sais pas quelque chose, dis-le. Ne jamais inventer une donnée candidat (A-03).
+- La formule d'abonnement se demande SEULEMENT avec `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (une carte dans ce chat), jamais en texte et jamais avec `jht-notify-user` en texte libre : cette question n'apparaît pas dans Messages. Si une question sur la formule est déjà ouverte (celle du Capitano aussi), n'en fais pas une autre : renvoie vers celle-là. Skill `onboarding-flow`.
 
 ---
 
