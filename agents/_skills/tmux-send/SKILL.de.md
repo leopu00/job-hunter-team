@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
+
 ## Nachrichtenumschlag
 
 Behalte immer das strukturierte Praefix bei:

@@ -33,6 +33,14 @@
 #
 # Uso:
 #   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
+#   jht-tmux-send SESSION - <<'TXT'     # il messaggio da stdin: ogni `$` resta com'e'
+#   [@capitano -> @scout-1] [MSG] Budget: $120k, bonus $10k
+#   TXT
+#
+# Un `$` nel messaggio: tra virgolette doppie la shell legge `$1`..`$9` come suoi argomenti e li sostituisce con
+# niente PRIMA che parta questo script («$120k» arriva come «20k», e un ordine tra agenti cambia): apici singoli,
+# oppure `-` al posto del messaggio. La riga `TXT` di chiusura sta in PRIMA colonna: con un rientro il heredoc non
+# si chiude e un messaggio che finisce con una riga `TXT` viene rifiutato (exit 1, niente consegnato).
 #
 # Exit:
 #   0 → messaggio consegnato e submittato (submit VERIFICATO)
@@ -124,9 +132,26 @@ fi
 
 session="$1"
 shift
-# Supportiamo sia la forma "quotata" (un solo arg) sia lo splat accidentale
-# (piu' arg con spazi) — in quest'ultimo caso ricomponiamo con spazi.
-message="$*"
+if [ $# -eq 1 ] && [ "$1" = "-" ]; then
+  # Il messaggio da stdin: `$(cat)` toglie da se' gli a capo finali. Un messaggio vuoto non parte.
+  message="$(cat)"
+  if [ -z "${message//[[:space:]]/}" ]; then
+    echo "jht-tmux-send: il messaggio su stdin e' vuoto: non consegno" >&2
+    exit 1
+  fi
+  # Una riga di chiusura `TXT` con il rientro: il heredoc non si e' chiuso e la shell ha passato anche quella riga.
+  last_line="$(printf '%s\n' "$message" | awk 'NF { l = $0 } END { print l }')"
+  last_line="${last_line#"${last_line%%[![:space:]]*}"}"
+  last_line="${last_line%"${last_line##*[![:space:]]}"}"
+  if [ "$last_line" = "TXT" ]; then
+    echo "jht-tmux-send: il messaggio finisce con una riga TXT: la riga di chiusura del heredoc aveva un rientro, quindi non si e' chiuso. Non consegno: scrivi TXT in prima colonna, da solo sulla riga." >&2
+    exit 1
+  fi
+else
+  # Supportiamo sia la forma "quotata" (un solo arg) sia lo splat accidentale
+  # (piu' arg con spazi) — in quest'ultimo caso ricomponiamo con spazi.
+  message="$*"
+fi
 
 if ! tmux has-session -t "$session" 2>/dev/null; then
   echo "jht-tmux-send: sessione '$session' non esiste" >&2

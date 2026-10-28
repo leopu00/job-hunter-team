@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).
+
 ## Busta del messaggio
 
 Mantieni sempre il prefisso strutturato:
