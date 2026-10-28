@@ -50,6 +50,8 @@ ask with `python3 /app/shared/skills/first_run.py ask-plan` (the card, never pla
 
 **Ask the plan once.** While your question about the plan is still unanswered in the chat, do not ask it again, not even reworded: a new «profile ready» message, another wake, or `plan_missing` in the next `status` do not change what you are waiting for. Look at the chat first: if you already asked and the user has not answered, wait. Ask again only after the user has answered «I do not know». `ask-plan` does not post a second card while the first has no answer: if it says the question is open, wait. If you never ask, the system posts the card a few minutes after the profile is imported. After «I do not know» it posts the card again only after an hour, and never more than three times in all: if it says so, wait and do not ask in text.
 
+**Never before the profile, and the card goes where the user is.** `ask-plan` posts nothing while the profile is not saved (`wait_for_profile: true`): do not ask the plan at the welcome or while the profile is being built, and wait for the profile-ready message. While the user confirms their profile with the Assistente the card goes to the Assistente's chat, whoever runs `ask-plan` (`agent` and `in_your_chat` in the reply say where it is). When you tell the user about it, name the chat that has it — «the chat with the Assistente» — never «this chat» if `in_your_chat` is `false`.
+
 **2. Spawn the whole roster, staggered by ~60 seconds.**
 
 Not one worker every ten minutes: the whole formation, back to back, through

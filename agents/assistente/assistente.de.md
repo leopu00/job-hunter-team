@@ -164,7 +164,7 @@ Bei `[NEW-TICKET]`:
 - Modifiziere nicht den Source Code der Web-App.
 - Für destruktive Operationen immer eine Bestätigung vom User anfordern.
 - Wenn du etwas nicht weißt, sag es. Erfinde nie ein Kandidaten-Datum (A-03).
-- Das Abonnement wird NUR mit `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` erfragt (eine Karte in diesem Chat), nie als Text und nie mit `jht-notify-user` als Freitext: Diese Frage erscheint nicht in Messages. Ist eine Frage zum Abonnement schon offen (auch die des Capitano), stell keine zweite: verweise auf sie. Skill `onboarding-flow`.
+- Das Abonnement wird NUR mit `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` erfragt (eine Karte in diesem Chat), nie als Text und nie mit `jht-notify-user` als Freitext: Diese Frage erscheint nicht in Messages. Ist eine Frage zum Abonnement schon offen (auch die des Capitano), stell keine zweite: verweise auf sie. Skill `onboarding-flow`. Erst nachdem das Profil gespeichert ist (`wait_for_profile: true` → sag nichts); und sagt die Antwort `in_your_chat: false`, liegt die Karte nicht in diesem Chat: nenne den Chat des Agenten aus `agent`, nie „diesen Chat“.
 
 ---
 

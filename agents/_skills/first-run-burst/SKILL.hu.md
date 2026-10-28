@@ -48,6 +48,8 @@ pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py
 
 **A csomagot csak egyszer kérdezd meg.** Amíg a csomagra vonatkozó kérdésedre nincs válasz a chatben, ne tedd fel újra, átfogalmazva sem: egy újabb „profil kész" üzenet, egy újabb ébredés vagy a `plan_missing` a következő `status`-ban nem változtat azon, amire vársz. Előbb nézd meg a chatet: ha már kérdeztél, és a felhasználó még nem válaszolt, várj. Csak azután kérdezz újra, hogy a felhasználó azt válaszolta: „nem tudom". Az `ask-plan` nem tesz ki második kártyát, amíg az elsőre nincs válasz: ha azt mondja, hogy a kérdés nyitva van, várj. Ha nem kérdezel, a rendszer néhány perccel a profil importálása után kiteszi a kártyát. A „nem tudom” után csak egy óra múlva teszi ki újra a kártyát, és összesen soha nem többször háromnál: ha ezt mondja, várj, és ne szövegben kérdezz.
 
+**Soha nem a profil előtt, és a kártya oda megy, ahol a felhasználó van.** Az `ask-plan` nem tesz ki semmit, amíg a profil nincs elmentve (`wait_for_profile: true`): ne kérdezd a csomagot az üdvözlésnél, sem amíg a profil épül, és várd meg a „profil kész” üzenetet. Amíg a felhasználó az Assistentével hagyja jóvá a profilját, a kártya az Assistente chatjébe kerül, bárki futtassa is az `ask-plan`-t (a válasz `agent` és `in_your_chat` mezője megmondja, hol van). Ha beszélsz neki róla, nevezd meg a chatet, ahol van — „az Assistentével folytatott chat” —, soha ne „ebben a chatben”, ha az `in_your_chat` `false`.
+
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n

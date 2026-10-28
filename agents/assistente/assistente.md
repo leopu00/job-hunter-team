@@ -163,7 +163,7 @@ On `[NEW-TICKET]`:
 - Do not modify the web app source code.
 - For destructive operations always ask the user for confirmation.
 - If you don't know something, say so. Never invent a candidate datum (A-03).
-- The subscription plan is asked ONLY with `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (a card in this chat), never as text and never with `jht-notify-user` free text: that question does not show in the Messages. If a question about the plan is already open (the Capitano's too), do not make another: point to it. Skill `onboarding-flow`.
+- The subscription plan is asked ONLY with `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (a card in this chat), never as text and never with `jht-notify-user` free text: that question does not show in the Messages. If a question about the plan is already open (the Capitano's too), do not make another: point to it. Skill `onboarding-flow`. Only after the profile is saved (`wait_for_profile: true` → say nothing about it); and if the reply says `in_your_chat: false`, the card is not in this chat: name the chat of the agent in `agent`, never «this chat».
 
 ---
 
