@@ -207,9 +207,9 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   );
   if (linkedTeam) {
     const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
-    const bars = (
+    const navbar = <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />;
+    const strips = (
       <>
-        <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
         {readOnlyTeam && (
           <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)]">
             <p
@@ -239,16 +239,20 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <ReadOnlyActionsProvider value={readOnlyTeam ? { readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) } : { readOnly: false, reason: "" }}>
           <LeaveReadOnlyContext.Provider value={onCloseReadOnly ?? null}>
           {match?.route.fullBleed ? (
-            // the office: the same window-tall column as in the full shell, the read-only bars under the navbar
+            // a full-bleed page: the same window-tall column as in the full shell; the read-only bars under the navbar take a third of the window at most and scroll past it
             <div style={FULL_BLEED_COLUMN}>
-              {bars}
+              {navbar}
+              <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
+                {strips}
+              </div>
               <main className="relative min-h-0 flex-1" data-testid="full-bleed">
                 {page}
               </main>
             </div>
           ) : (
             <div style={{ position: "relative", zIndex: 1 }}>
-              {bars}
+              {navbar}
+              {strips}
               <MainChrome>{page}</MainChrome>
             </div>
           )}
