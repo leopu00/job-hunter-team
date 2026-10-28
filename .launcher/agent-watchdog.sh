@@ -804,12 +804,14 @@ maybe_mail_tick() {
 # domanda sul piano e' aperta da qualche minuto, la posta il sistema: una domanda scritta solo nel pane del
 # Capitano non arriva all'utente (TEST 13). La decisione sta in first_run.py (mai prima dell'import del
 # profilo); qui si esegue e si scrive una riga di log se ha fatto qualcosa. Un guasto non ferma il giro.
+# Vale anche al contrario: il piano scritto da un altro canale (chat dell'Assistente, comando, app) chiude la card
+# ancora aperta ("closed"), cosi' in Agents non resta «1 domanda aperta» per una cosa gia' detta (TEST 15).
 maybe_plan_question() {
   [ -f "$FIRST_RUN_TOOL" ] || return 0
   local out
   out="$(JHT_HOME="$JHT_HOME" python3 "$FIRST_RUN_TOOL" plan-question-check 2>/dev/null)" || return 0
   case "$out" in
-    *'"action": "asked"'*|*'"action": "declared"'*)
+    *'"action": "asked"'*|*'"action": "declared"'*|*'"action": "closed"'*)
       plan_question_failures=0
       log "plan question: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-200)" ;;
     *'"action": "stopped"'*)

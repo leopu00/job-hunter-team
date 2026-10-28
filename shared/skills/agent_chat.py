@@ -1446,7 +1446,7 @@ QUESTION_KIND_OF_TIPO = {
     "completamento": "completed",
     "comunicazione": "info",
 }
-ORIGIN_OF = {"utente": "user", "scadenza": "expiry"}      # anything else is "unknown", never "user"
+ORIGIN_OF = {"utente": "user", "scadenza": "expiry", "sistema": "system"}      # anything else is "unknown", never "user"
 MAX_SUGGESTIONS = 5
 MAX_SUGGESTION = 240
 QUESTIONS_SHOWN = 40
