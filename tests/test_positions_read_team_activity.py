@@ -117,6 +117,32 @@ def test_it_counts_per_role_instance_and_day_exactly_as_the_events_do(tmp_path: 
     assert {(row["role"], row["actor"]): row["last"] for row in data["seen"]} == last
 
 
+def test_a_long_history_keeps_the_newest_events_and_counts_all_of_them(tmp_path: Path) -> None:
+    """Past the cap the feed is the NEWEST events (the ones dropped are the oldest), and the counts lose none."""
+    tmp_path.mkdir(exist_ok=True)
+    db = sqlite3.connect(tmp_path / "jobs.db")
+    db.execute("CREATE TABLE positions(id INTEGER PRIMARY KEY, legacy_id INTEGER, title TEXT, company TEXT, found_at TEXT, found_by TEXT)")
+    db.execute("CREATE TABLE scores(id INTEGER PRIMARY KEY, position_id INTEGER)")
+    db.execute("CREATE TABLE applications(id INTEGER PRIMARY KEY, position_id INTEGER)")
+    total = 2600
+    for n in range(total):
+        # one event per minute from the 1st of October 00:00, all inside the range
+        minute = n % 60
+        hour = (n // 60) % 24
+        day = 1 + (n // 1440)
+        db.execute("INSERT INTO positions VALUES(?,?,?,?,?,?)", (n + 1, None, f"R{n}", "C", f"2026-10-{day:02d}T{hour:02d}:{minute:02d}:00Z", "scout-1"))
+    db.commit()
+    db.close()
+    reply = _run(tmp_path, {"op": "team_activity", "from": "2026-10-01", "to": "2026-10-31"})
+    data = reply["data"]
+    assert sum(row["n"] for row in data["daily"]) == total
+    assert len(data["newest"]) == 2500
+    stamps = sorted(event["ts"] for event in data["newest"])
+    # the 100 oldest (the first 100 minutes of the 1st) are the ones left out
+    assert stamps[0] > "2026-10-01T01:39:00Z"
+    assert [event["ts"] for event in data["newest"]] == sorted(stamps, reverse=True)
+
+
 def test_a_database_without_the_instance_and_event_columns_counts_what_it_has(tmp_path: Path) -> None:
     events = _database(tmp_path, full=False)
     reply = _run(tmp_path, RANGE)
