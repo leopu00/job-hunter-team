@@ -150,7 +150,8 @@ struct DirectChatInner {
     subscribers: Mutex<Vec<Channel<DirectChatEvent>>>,
     send_lock: Mutex<()>,
     /// An attachment is being chosen, copied or told: a second one waits for the person to finish.
-    attach_busy: std::sync::atomic::AtomicBool,
+    /// Its own `Arc`: the guard that holds it must not carry the whole state (and the connection's drop glue) with it.
+    attach_busy: Arc<std::sync::atomic::AtomicBool>,
 }
 
 struct Connection {
@@ -2871,22 +2872,20 @@ pub(crate) struct DirectChatAttachment {
 }
 
 /// Held while an attachment is in hand: a second click is refused, not queued.
-struct AttachGuard(Arc<DirectChatInner>);
+struct AttachGuard(Arc<std::sync::atomic::AtomicBool>);
 
 impl AttachGuard {
-    fn take(inner: &Arc<DirectChatInner>) -> Option<Self> {
+    fn take(busy: &Arc<std::sync::atomic::AtomicBool>) -> Option<Self> {
         use std::sync::atomic::Ordering;
-        inner
-            .attach_busy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        busy.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .ok()
-            .map(|_| Self(Arc::clone(inner)))
+            .map(|_| Self(Arc::clone(busy)))
     }
 }
 
 impl Drop for AttachGuard {
     fn drop(&mut self) {
-        self.0.attach_busy.store(false, std::sync::atomic::Ordering::Release);
+        self.0.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
@@ -2971,7 +2970,7 @@ pub(crate) async fn direct_chat_attach(
     }
     let expected = scopes.active().map_err(failure)?;
     let app_for_log = app.clone();
-    let _busy = AttachGuard::take(&state.inner).ok_or_else(|| failure("attach_busy"))?;
+    let _busy = AttachGuard::take(&state.inner.attach_busy).ok_or_else(|| failure("attach_busy"))?;
     let scope_state = scopes.inner().clone();
     let target = {
         let inner = Arc::clone(&state.inner);
@@ -3865,13 +3864,16 @@ mod tests {
     fn only_unix_tests_build_a_connection() {
         let tests = include_str!("direct_chat.rs").split_once("mod tests {").unwrap().1;
         let mut built = 0;
-        // the needle in two pieces, so this very test is not one of the places it finds
-        for (at, _) in tests.match_indices(concat!("Connection", " {")) {
-            built += 1;
-            let test_start = tests[..at].rfind("#[test]").expect("inside a test");
-            let attributes = &tests[..test_start];
-            let attributes = &attributes[attributes.rfind('\n').map_or(0, |line| attributes[..line].rfind('\n').unwrap_or(0))..];
-            assert!(attributes.contains("#[cfg(unix)]"), "a Connection built outside a Unix-only test, before byte {at}");
+        // the needles in two pieces, so this very test is not one of the places it finds; the chat's state
+        // holds a Connection, so building it drops one just the same
+        for needle in [concat!("Connection", " {"), concat!("DirectChatInner", "::default()"), concat!("DirectChatState", "::default()")] {
+            for (at, _) in tests.match_indices(needle) {
+                built += 1;
+                let test_start = tests[..at].rfind("#[test]").expect("inside a test");
+                let attributes = &tests[..test_start];
+                let attributes = &attributes[attributes.rfind('\n').map_or(0, |line| attributes[..line].rfind('\n').unwrap_or(0))..];
+                assert!(attributes.contains("#[cfg(unix)]"), "{needle} built outside a Unix-only test, before byte {at}");
+            }
         }
         assert!(built >= 1, "the Unix probe test builds one");
     }
@@ -5604,11 +5606,13 @@ mod attachment_command_tests {
 
     #[test]
     fn a_second_attachment_is_refused_while_one_is_in_hand_and_allowed_after() {
-        let inner = Arc::new(DirectChatInner::default());
-        let first = AttachGuard::take(&inner).expect("the first is taken");
-        assert!(AttachGuard::take(&inner).is_none());
+        // the flag alone, never the chat's state: that holds a Connection, and a test that drops one
+        // does not start on Windows (see only_unix_tests_build_a_connection)
+        let busy = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let first = AttachGuard::take(&busy).expect("the first is taken");
+        assert!(AttachGuard::take(&busy).is_none());
         drop(first);
-        assert!(AttachGuard::take(&inner).is_some());
+        assert!(AttachGuard::take(&busy).is_some());
     }
 
     #[test]
