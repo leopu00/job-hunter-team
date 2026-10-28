@@ -58,6 +58,27 @@ describe("the chat in a short window", () => {
     expect(bars.className).toMatch(/shrink-0/);
   });
 
+  it("keeps the band that says whose the team is inside the capped bars, so it cannot push the chat out either", async () => {
+    localStorage.setItem("jht.desktop.local-profiles.v2", JSON.stringify({
+      version: 2,
+      activeId: "profile-b",
+      teamOwnerId: "profile-a",
+      profiles: [
+        { profileId: "profile-a", displayName: "Ada", createdAt: 1 },
+        { profileId: "profile-b", displayName: "Bea", createdAt: 2 },
+      ],
+    }));
+    localStorage.setItem("jht.desktop.identity.v1", "local");
+    try {
+      navigate("/messages", { replace: true });
+      render(<Shell />);
+      await screen.findByRole("heading", { name: "Chat" });
+      expect(screen.getByTestId("full-bleed-bars")).toContainElement(screen.getByTestId("local-team-owner-banner"));
+    } finally {
+      localStorage.clear();
+    }
+  });
+
   it("is the same column in the read-only view, the navbar inside it", async () => {
     enterExistingTeamReadOnly(true, null);
     try {
