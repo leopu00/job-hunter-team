@@ -1437,9 +1437,10 @@ describe("«Agenti»: the list reads again by itself", () => {
     slow = true;
     await advance(LIST_REFRESH_LOCAL_MS + 500);
     await waitFor(() => expect(lists()).toBe(2));
+    await advance(6_000); // the read is still on its way, and more than the 5 s that make a seen window read again have passed
     setVisibility("hidden");
     setVisibility("visible");
-    await advance(10_000); // more than the 5 s that make a seen window read again
+    await advance(1_000);
     expect(lists()).toBe(2);
     slow = false;
     release!();
