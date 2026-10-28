@@ -586,6 +586,15 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
     card was posted for. The reverse too: a plan declared by any other path closes the card still open for it
     («closed»)."""
     now = now or datetime.now(timezone.utc)
+    # A slow start whose plan is declared now (by the card, by the app, by hand) speeds up here, whoever wrote it:
+    # nobody else calls begin-burst for a burst that is already running, so without this the team stays slow
+    # until the Capitano happens to notice.
+    slow = status()
+    if slow.get("phase") == PHASE_BURST and slow.get("plan_unknown"):
+        info = plan_info()
+        if info.get("ok"):
+            sped = _speed_up(slow, info)
+            return {"action": "sped_up", "plan": sped["plan"].get("plan"), "roster": sped["roster"]}
     # A plan declared by any path closes the card that is still asking for it, before anything else: at any
     # phase of the first run, and whether or not the profile is imported.
     closed = close_plan_question(now)
@@ -621,6 +630,8 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
         if left > 0:
             return {"action": "waiting", "seconds_left": int(left)}
         plan = registry.set_plan(provider, choice)
+        if state.get("phase") == PHASE_BURST and state.get("plan_unknown"):
+            _speed_up(state, plan_info())                 # the slow start the person chose ends with the plan they gave
         return {"action": "declared", "provider": provider, "plan": plan["id"]}
     cards = _cards_asked(state, provider)
     if cards >= MAX_PLAN_CARDS:

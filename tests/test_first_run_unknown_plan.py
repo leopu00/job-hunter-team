@@ -115,3 +115,37 @@ def test_the_captain_is_told_what_to_say_and_how_to_speed_up_in_every_language(l
     text = (SKILL / f"SKILL{lang}.md").read_text(encoding="utf-8")
     assert text.count("`prudent: true`") == 1 and text.count("`upgraded: true`") == 1
     assert "`say`" in text and "plan_registry.py set <provider>:<id>" in text
+
+
+def test_a_plan_declared_by_hand_during_a_slow_start_speeds_the_team_up_from_the_watchdog(box):
+    """Nobody calls begin-burst for a burst that already runs: the watchdog's check does it, once."""
+    asked_and_unknown(box)
+    first = run(box, "begin-burst")
+    configure(box, plan="pro")
+    out = run(box, "plan-question-check")
+    assert out["action"] == "sped_up" and out["plan"] == "pro", out
+    status = run(box, "status")
+    assert status["plan_unknown"] is False and status["roster"] == out["roster"] and sum(out["roster"].values()) > 3
+    assert status["burst_started_at"] == first["burst_started_at"] and "sped_up_at" in status
+    assert run(box, "plan-question-check")["action"] != "sped_up", "idempotent: a burst that is not slow is left alone"
+    assert run(box, "status")["sped_up_at"] == status["sped_up_at"]
+
+
+def test_the_card_that_comes_back_in_a_slow_start_and_is_answered_with_a_plan_speeds_the_team_up(box):
+    """The family of the 18c run: the net wrote the plan and nobody told the team."""
+    asked_and_unknown(box)
+    run(box, "begin-burst")
+    again = run(box, "plan-question-check", "--reask", "0")
+    assert again["action"] == "asked", again
+    answer(box, again["question_id"], "pro")
+    declared = run(box, "plan-question-check", "--after", "0", "--reask", "0")
+    assert declared["action"] == "declared" and declared["plan"] == "pro", declared
+    status = run(box, "status")
+    assert status["plan_unknown"] is False and status["plan"]["plan"] == "pro" and sum(status["roster"].values()) > 3, status
+
+
+def test_a_slow_start_without_a_declared_plan_is_not_sped_up(box):
+    asked_and_unknown(box)
+    run(box, "begin-burst")
+    assert run(box, "plan-question-check")["action"] != "sped_up"
+    assert run(box, "status")["plan_unknown"] is True
