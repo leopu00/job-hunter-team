@@ -343,7 +343,8 @@ def test_a_team_on_a_server_is_greeted_without_the_folder_of_the_attachments(hom
     [line] = home.lines()
     assert line["text"] == EN["welcome.assistente_vps"] + "\n\n" + EN["welcome.assistente_first"]
     assert "allegati" not in line["text"] and "folder" not in line["text"]
-    assert "files cannot be attached" in line["text"]
+    # the app cannot, Telegram can: the sentence says «from the app», not «cannot be attached» for everyone
+    assert "From the app, files cannot be attached" in line["text"]
 
 
 @pytest.mark.parametrize("kind", ["vps", "server", "remote", "VPS", '"vps"'])
