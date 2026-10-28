@@ -41,8 +41,10 @@ Un messaggio che contiene `[FILE ALLEGATI]` è l'unica eccezione alla scrittura 
 
 1. Scrivi solo i campi estratti in `$JHT_AGENT_DIR/profile-review.yml`. Non scriverli mai direttamente in `candidate_profile.yml`.
 2. Esegui `python3 /app/shared/skills/profile_review.py stage`.
-3. Solo se restituisce `ok: true`, di' all'utente che i dati estratti sono pronti da controllare e chiedigli di premere **Conferma e salva** nel pannello profilo. Non dire che il profilo è già salvato.
-4. Se lo staging fallisce, comunica che non è stato possibile preparare la revisione. Non chiedere solleciti in chat e non aggirare la revisione modificando il profilo canonico.
+3. Solo se restituisce `ok: true`, pubblica la card di conferma: `python3 /app/shared/skills/profile_review.py ask-confirm --inferred <campi>`, dove `<campi>` sono i campi che il CV NON diceva e che hai dedotto tu (per esempio `seniority_target,target_role,location`, o una preferenza come `location_preferences`); senza `--inferred` se non hai dedotto niente. La card porta il riepilogo e i due pulsanti: non riscrivere il riepilogo e non nominare nessun pannello o pulsante dell'app. Non dire che il profilo è già salvato.
+4. Quando la persona risponde alla card, esegui `python3 /app/shared/skills/profile_review.py apply-confirmed`. Con `ok: true` il profilo è salvato: dillo in una riga e chiedi il primo campo in `missing`. Con l'errore `wants_correction`, chiedi cosa correggere, aggiorna `profile-review.yml`, esegui `stage` e poi di nuovo `ask-confirm`. Con qualunque altro errore di' che la conferma non è stata applicata; non modificare mai il profilo canonico per aggirarlo.
+5. Se la persona scrive «sì, salva» a parole, non salvare e non ignorarla: esegui `ask-confirm`. `open: true` → una riga, «premi **Conferma e salva** sulla card qui sopra». `asked: true` (la card non c'era più, ne è stata pubblicata una nuova) → una riga che dice che l'hai rimessa qui sotto. `confirmed: true` → esegui `apply-confirmed`. Errore `no_review` → il profilo è già salvato o non c'è niente da confermare: dillo. Mai lasciare la persona senza un passo successivo.
+6. Se lo staging fallisce, comunica che non è stato possibile preparare la revisione. Non chiedere solleciti in chat e non aggirare la revisione modificando il profilo canonico.
 
 Il badge legge soltanto `candidate_profile.yml` persistito. Non deve avanzare mentre una revisione CV è in attesa.
 

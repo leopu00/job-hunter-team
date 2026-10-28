@@ -7,6 +7,10 @@ profile is deliberately untouched until the user confirms the review in the
 desktop UI.  ``confirm`` is a compare-and-swap: a concurrent profile change
 invalidates the review instead of being overwritten.
 
+In the app's chat there is no panel to press: the review is confirmed with a CARD (`ask-confirm` posts it,
+with a readable summary and two buttons) and saved only after the person's own answer to that card
+(`apply-confirmed`). Nothing the person types as words saves it.
+
 The JSON printed by this helper is a machine contract.  It contains no paths
 and never prints profile values on errors; the UI receives the review values
 only from ``status`` after a valid, owner-only envelope has been read.
@@ -22,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import stat
 import sys
 import tempfile
@@ -452,6 +457,247 @@ def confirm(review_id: str) -> dict[str, Any]:
         }
 
 
+# -- The confirmation card ---------------------------------------------------------------------------------
+#
+# The panel with «Confirm and save» exists in some views of the app and not in the chat of the first run, where
+# the person was sent to look for a button that is not there (TEST 15). In the chat the review is confirmed with
+# a card: `ask-confirm` posts it (a readable summary, the fields the CV did not say marked as deduced, two
+# buttons), and `apply-confirmed` saves the review only when the person's OWN answer to that card says confirm.
+# The card is remembered in state/profile-confirm-card.json: one card per review, none while the last is open.
+
+CARD_AGENT = "assistente"
+CONFIRM_OPTION = "confirm"
+CORRECT_OPTION = "correct"
+MAX_CARDS_PER_REVIEW = 5
+_SUMMARY_FIELDS = (
+    ("target_role", "profile_confirm.role"),
+    ("seniority_target", "profile_confirm.seniority"),
+    ("location", "profile_confirm.location"),
+    ("experience_years", "profile_confirm.years"),
+    ("skills", "profile_confirm.skills"),
+    ("languages", "profile_confirm.languages"),
+)
+_MISSING_LABEL = {
+    "name": "profile_confirm.name",
+    "email": "profile_confirm.email",
+    **dict(_SUMMARY_FIELDS),
+}
+_MAX_SUMMARY_VALUE = 120
+
+
+def _db_path() -> str:
+    return os.environ.get("JHT_DB") or str(_home() / "jobs.db")
+
+
+def _card_state_path() -> Path:
+    return _home() / "state" / "profile-confirm-card.json"
+
+
+def _read_card_state() -> dict[str, Any]:
+    try:
+        value = json.loads(_card_state_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _write_card_state(state: dict[str, Any]) -> None:
+    _atomic_bytes(_card_state_path(), (json.dumps(state, ensure_ascii=False) + "\n").encode("utf-8"))
+
+
+@contextlib.contextmanager
+def _card_lock() -> Iterator[None]:
+    """One asker at a time: the Assistente can call twice in the same second."""
+    directory = _card_state_path().parent
+    directory.mkdir(parents=True, exist_ok=True)
+    with (directory / "profile-confirm-card.lock").open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _catalog() -> tuple[Any, Any]:
+    shared = str(Path(__file__).resolve().parent.parent)  # shared/ is not on the path when this runs from skills/
+    if shared not in sys.path:
+        sys.path.insert(0, shared)
+    try:
+        from i18n import t, tf  # type: ignore
+    except ImportError:
+        raise ProfileReviewError("catalog_unavailable") from None
+    return t, tf
+
+
+def _short(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        text = ", ".join(_text(item) for item in value if _text(item))
+    elif isinstance(value, dict):
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    else:
+        text = _text(value)
+    text = " ".join(text.split())
+    return text if len(text) <= _MAX_SUMMARY_VALUE else text[: _MAX_SUMMARY_VALUE - 1] + "…"
+
+
+def _value_at(profile: dict[str, Any], path: str) -> Any:
+    node: Any = profile
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def _inferred_names(raw: str, review: dict[str, Any]) -> list[str]:
+    """The fields the person's CV did not say, as the caller names them. A name that is neither one of the eight
+    fields nor a field of the review is refused: a typo must not silently drop the mark."""
+    names = [item.strip() for item in raw.split(",") if item.strip()]
+    known = set(FIELDS) | {change["field"] for change in review["changes"]}
+    if any(name not in known for name in names):
+        raise ProfileReviewError("inferred_unknown")
+    return names
+
+
+def summary_text(envelope: dict[str, Any], inferred: list[str]) -> str:
+    """What the card says: the fields of the review in plain words, the deduced ones marked as such."""
+    t, tf = _catalog()
+    view = _view(envelope["profile"])
+    mark = f" ({t('profile_confirm.deduced')})"
+    lines = [t("profile_confirm.intro"), ""]
+    for field, label in _SUMMARY_FIELDS:
+        value = view.get(field)
+        if field == "experience_years":
+            shown = tf("profile_confirm.years_value", value) if value is not None else ""
+        elif field in ("skills", "languages"):
+            shown = _short(value[:6] if field == "skills" else value[:4])
+        else:
+            shown = _short(value)
+        if shown:
+            lines.append(f"- {t(label)}: {shown}" + (mark if field in inferred else ""))
+    shown_fields = {field for field, _ in _SUMMARY_FIELDS}
+    for name in inferred:  # a deduced preference the eight fields do not carry: said by its own name
+        if name in shown_fields or name in FIELDS:
+            continue
+        value = _short(_value_at(envelope["profile"], name))
+        if value:
+            lines.append(f"- {name}: {value}{mark}")
+    missing = [t(_MISSING_LABEL[field]) for field in envelope.get("missing", []) if field in _MISSING_LABEL]
+    if missing:
+        lines += ["", tf("profile_confirm.missing", ", ".join(missing))]
+    lines += ["", t("profile_confirm.outro")]
+    return "\n".join(lines)
+
+
+def _stored_answer(conn: sqlite3.Connection, question_id: str) -> dict[str, Any] | None:
+    """The answer to a card as the question tool would believe it, or None while there is none."""
+    import agent_questions as aq  # type: ignore
+
+    row = conn.execute(
+        "SELECT id, source_id, source_payload FROM pending_user_messages WHERE source_id = ?",
+        (aq.ANSWER_PREFIX + question_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    try:
+        answer, _question = aq.validated_answer(
+            conn, CARD_AGENT, {"id": row[0], "source_id": row[1], "source_payload": row[2]}
+        )
+    except aq.AnswerRejected:
+        return {"scelte": [], "origine": "invalid"}
+    return answer
+
+
+def _card_is_open(conn: sqlite3.Connection, question_id: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM pending_user_messages WHERE source_id = ? AND source_action = 'agent_question'", (question_id,)
+    ).fetchone()
+    return row is not None and _stored_answer(conn, question_id) is None
+
+
+def ask_confirm(inferred_raw: str = "") -> dict[str, Any]:
+    """Post the confirmation card for the review waiting, unless a card for it is already open.
+
+    Never a second card while the first has no answer; a new one when the last was answered with «correct»,
+    expired or is gone (the person wrote «yes, save» in words and the card is no longer to be found)."""
+    import first_run  # type: ignore
+
+    t, _tf = _catalog()
+    with _card_lock():
+        review = status()
+        if review is None:
+            raise ProfileReviewError("no_review")
+        if review["stale"]:
+            raise ProfileReviewError("stale")
+        envelope = _read_envelope()
+        inferred = _inferred_names(inferred_raw, review)
+        state = _read_card_state()
+        same = state.get("review_id") == review["review_id"]
+        question_id = state.get("question_id") if same else None
+        try:
+            with contextlib.closing(sqlite3.connect(f"file:{_db_path()}?mode=ro", uri=True, timeout=10)) as conn:
+                if isinstance(question_id, str):
+                    answer = _stored_answer(conn, question_id)
+                    if answer is None and _card_is_open(conn, question_id):
+                        return {"asked": False, "open": True, "question_id": question_id, "review_id": review["review_id"]}
+                    if answer is not None and answer.get("origine") == "utente" and answer.get("scelte") == [CONFIRM_OPTION]:
+                        return {"asked": False, "confirmed": True, "question_id": question_id, "review_id": review["review_id"]}
+        except sqlite3.Error:
+            raise ProfileReviewError("database_unreadable") from None
+        cards = state.get("cards", 0) if same and isinstance(state.get("cards"), int) else 0
+        if cards >= MAX_CARDS_PER_REVIEW:
+            raise ProfileReviewError("too_many_cards")
+        card = {
+            "subject": t("profile_confirm.subject"),
+            "text": summary_text(envelope, inferred),
+            "options": [
+                {"id": CONFIRM_OPTION, "label": t("profile_confirm.confirm")},
+                {"id": CORRECT_OPTION, "label": t("profile_confirm.correct")},
+            ],
+        }
+        posted, why = first_run._post_plan_card(CARD_AGENT, card)  # the one way a card is posted
+        if posted is None:
+            raise ProfileReviewError("card_not_posted")
+        _write_card_state({"review_id": review["review_id"], "question_id": posted, "cards": cards + 1})
+        return {"asked": True, "question_id": posted, "review_id": review["review_id"]}
+
+
+def apply_confirmed() -> dict[str, Any]:
+    """Save the review that the person confirmed with the card. Nothing else saves it from the chat.
+
+    The answer is read the way the question tool believes answers (checked, rebuilt), and it must be the person's
+    own (`utente`): not the expiry, not the system. The card must be the one of the review waiting."""
+    import agent_questions as aq  # type: ignore
+
+    state = _read_card_state()
+    question_id = state.get("question_id")
+    if not isinstance(question_id, str):
+        raise ProfileReviewError("no_card")
+    review = status()
+    if review is None:
+        raise ProfileReviewError("no_review")
+    if review["stale"]:
+        raise ProfileReviewError("stale")
+    if state.get("review_id") != review["review_id"]:
+        raise ProfileReviewError("card_outdated")
+    try:
+        with contextlib.closing(sqlite3.connect(f"file:{_db_path()}?mode=ro", uri=True, timeout=10)) as conn:
+            answer = _stored_answer(conn, question_id)
+    except sqlite3.Error:
+        raise ProfileReviewError("database_unreadable") from None
+    if answer is None:
+        raise ProfileReviewError("not_answered")
+    if answer.get("origine") != "utente":
+        raise ProfileReviewError("not_confirmed")
+    if answer.get("scelte") == [CORRECT_OPTION]:
+        raise ProfileReviewError("wants_correction")
+    if answer.get("scelte") != [CONFIRM_OPTION]:
+        raise ProfileReviewError("not_confirmed")
+    receipt = confirm(review["review_id"])
+    receipt["missing"] = review["missing"]
+    return receipt
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -459,6 +705,11 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("status")
     confirm_parser = sub.add_parser("confirm")
     confirm_parser.add_argument("review_id")
+    ask_parser = sub.add_parser("ask-confirm")
+    ask_parser.add_argument(
+        "--inferred", default="", help="comma-separated fields the CV did not say (deduced), marked as such on the card"
+    )
+    sub.add_parser("apply-confirmed")
     return parser
 
 
@@ -469,12 +720,17 @@ def main() -> int:
             result: Any = stage()
         elif args.command == "status":
             result = status()
+        elif args.command == "ask-confirm":
+            result = ask_confirm(args.inferred)
+        elif args.command == "apply-confirmed":
+            result = apply_confirmed()
         else:
             result = confirm(args.review_id)
     except ProfileReviewError as exc:
         print(json.dumps({"ok": False, "error": exc.code}))
         return 1
-    print(json.dumps({"ok": True, "review" if args.command != "confirm" else "receipt": result}, ensure_ascii=False))
+    key = {"confirm": "receipt", "apply-confirmed": "receipt", "ask-confirm": "card"}.get(args.command, "review")
+    print(json.dumps({"ok": True, key: result}, ensure_ascii=False))
     return 0
 
 

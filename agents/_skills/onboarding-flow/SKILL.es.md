@@ -201,11 +201,11 @@ Leer un PDF + extraer datos + validar YAML + escribir 2 MDs puede requerir 30-90
 7. Escribe MÍNIMO about.md + strengths.md             → skill profile-summaries
    (preferences.md y goals.md vienen después de la discusión específica)
 
-8. Mensaje final (NINGÚN --partial) — resumen amigable para el usuario
-   + invitación explícita a revisar y pulsar **Confirmar y guardar** en el panel.
-   Solo después de confirmar, pregunta por el primer campo vacío. Si falla la
-   preparación, informa del error sin pedir recordatorios por chat ni decir
-   que el perfil se ha guardado.
+8. Último paso (NINGÚN --partial): la tarjeta de confirmación de la skill `profile-yaml`
+   (`ask-confirm`). Lleva el resumen y los botones: no repitas el resumen y no
+   nombres ningún panel. Solo después de que la persona confirme con la tarjeta,
+   pregunta por el primer campo vacío. Si falla la preparación, informa del error
+   sin pedir recordatorios por chat ni decir que el perfil se ha guardado.
 ```
 
 > ⚠️ El paso 7 (`about.md` + `strengths.md`) **no es opcional**. Sin ellos, el Scrittore de CV aguas abajo no tendrá nunca el contexto narrativo del candidato. Tú eres el único punto donde esa narrativa se captura.

@@ -201,10 +201,11 @@ Egy PDF olvasása + adatok kinyerése + YAML validálása + 2 MD írása 30-90 m
 7. Írd meg MINIMUM az about.md-t + strengths.md-t     → skill profile-summaries
    (a preferences.md és goals.md a konkrét megbeszélés után jön)
 
-8. Záró üzenet (NINCS --partial) — felhasználóbarát összefoglaló
-   + egyértelmű kérés az ellenőrzésre és a **Jóváhagyás és mentés** gomb
-   megnyomására. Csak utána kérdezd az első üres mezőt. Sikertelen előkészítés
-   esetén jelezd a hibát chatbeli emlékeztető kérése és mentési állítás nélkül.
+8. Utolsó lépés (NINCS --partial): a `profile-yaml` skill megerősítő kártyája
+   (`ask-confirm`). Ez hordozza az összefoglalót és a gombokat: ne ismételd meg
+   az összefoglalót, és ne nevezz meg panelt. Csak miután a személy a kártyával
+   megerősítette, kérdezd az első üres mezőt. Sikertelen előkészítés esetén
+   jelezd a hibát chatbeli emlékeztető kérése és mentési állítás nélkül.
 ```
 
 > ⚠️ A 7. lépés (`about.md` + `strengths.md`) **nem opcionális**. Nélküle a downstream Writer-nek soha nem lesz meg a jelölt narratív kontextusa. Te vagy az egyetlen pont, ahol ez a narratíva rögzítésre kerül.

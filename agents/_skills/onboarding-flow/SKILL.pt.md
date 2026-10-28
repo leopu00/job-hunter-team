@@ -201,11 +201,11 @@ Ler um PDF + extrair dados + validar YAML + escrever 2 MDs pode requerer 30-90s.
 7. Escrever MÍNIMO about.md + strengths.md              → skill profile-summaries
    (preferences.md e goals.md vêm após a discussão específica)
 
-8. Mensagem final (NENHUM --partial) — resumo user-friendly
-   + convite explícito para rever e pressionar **Confirmar e guardar** no painel.
-   Só após a confirmação perguntar pelo primeiro campo vazio. Se a preparação
-   falhar, comunicar o erro sem pedir lembretes no chat nem dizer que o perfil
-   foi guardado.
+8. Último passo (NENHUM --partial): o cartão de confirmação da skill `profile-yaml`
+   (`ask-confirm`). Leva o resumo e os botões: não repetir o resumo e não nomear
+   nenhum painel. Só depois de a pessoa confirmar com o cartão perguntar pelo
+   primeiro campo vazio. Se a preparação falhar, comunicar o erro sem pedir
+   lembretes no chat nem dizer que o perfil foi guardado.
 ```
 
 > ⚠️ O passo 7 (`about.md` + `strengths.md`) **não é opcional**. Sem eles, o Scrittore CV a jusante nunca terá o contexto narrativo do candidato. Você é o único ponto em que essa narrativa é capturada.

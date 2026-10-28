@@ -201,11 +201,11 @@ Lire un PDF + extraire les données + valider le YAML + écrire 2 MD peut prendr
 7. Écrire MINIMUM about.md + strengths.md             → skill profile-summaries
    (preferences.md et goals.md viennent après la discussion spécifique)
 
-8. Message final (PAS de --partial) — résumé user-friendly
-   + invitation explicite à vérifier puis appuyer sur **Confirmer et enregistrer**.
-   Après la confirmation seulement, demander le premier champ vide. Si la
-   préparation échoue, signaler l'erreur sans demander de relance dans le chat
-   ni annoncer que le profil est enregistré.
+8. Dernière étape (PAS de --partial) : la carte de confirmation de la skill `profile-yaml`
+   (`ask-confirm`). Elle porte le résumé et les boutons : ne répète pas le résumé
+   et ne nomme aucun panneau. Après la confirmation par la carte seulement,
+   demander le premier champ vide. Si la préparation échoue, signaler l'erreur
+   sans demander de relance dans le chat ni annoncer que le profil est enregistré.
 ```
 
 > ⚠️ L'étape 7 (`about.md` + `strengths.md`) **n'est pas optionnelle**. Sans elle, le Scrittore CV en aval n'aura jamais le contexte narratif du candidat. Vous êtes le seul point où cette narration est capturée.
