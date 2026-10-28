@@ -34,6 +34,9 @@ START_AGENT = ROOT / ".launcher" / "start-agent.sh"
 # bozza resta disegnata nel composer anche a turno partito. FAKE_ROWS=N: il
 # composer Codex mostra solo le ultime N righe della bozza (scorre come una
 # textarea): il marker "›" e la testa del messaggio sono fuori vista.
+# FAKE_PLACEHOLDER=1: un incolla lungo (> 500 caratteri) il composer lo mostra come
+# segnaposto («[Pasted Content N chars]» su Codex, «[Pasted text #1 +N lines]» su
+# Claude), senza una parola del testo, come fanno le TUI vere.
 FAKE_TMUX = r"""#!/usr/bin/env bash
 d="$FAKE_DIR"
 printf '%s\n' "$*" >> "$d/calls"
@@ -47,6 +50,12 @@ while [ $# -gt 0 ]; do
     *) key="$1"; shift ;;
   esac
 done
+draft() {  # la bozza come la mostra la TUI: con FAKE_PLACEHOLDER=1 un incolla lungo diventa il segnaposto
+  if [ "${FAKE_PLACEHOLDER:-0}" = 1 ] && [ "$(wc -c < "$d/composer" | tr -d ' ')" -gt 500 ]; then
+    if [ "$FAKE_STYLE" = claude ]; then printf '[Pasted text #1 +%s lines]\n' "$(wc -l < "$d/composer" | tr -d ' ')"
+    else printf '[Pasted Content %s chars]\n' "$(wc -c < "$d/composer" | tr -d ' ')"; fi
+  else cat "$d/composer"; echo; fi
+}
 render() {  # stdin = testo grezzo, $1 = marker della prima riga
   awk -v W=60 -v style="$FAKE_STYLE" -v first="$1" '
     { line = $0
@@ -79,12 +88,12 @@ case "$sub" in
     echo
     if [ "$FAKE_STYLE" = claude ]; then
       echo "╭──────────────────────────────────────────────────────────────╮"
-      if [ -s "$d/composer" ]; then { cat "$d/composer"; echo; } | render "> "
+      if [ -s "$d/composer" ]; then draft | render "> "
       else printf '│ > %-60s │\n' ""; fi
       echo "╰──────────────────────────────────────────────────────────────╯"
       echo "  ? for shortcuts"
     else
-      if [ -s "$d/composer" ]; then { cat "$d/composer"; echo; } | render "› " | tail -n "${FAKE_ROWS:-1000}"
+      if [ -s "$d/composer" ]; then draft | render "› " | tail -n "${FAKE_ROWS:-1000}"
       else echo "› Ask Codex to do anything"; fi
       echo
       echo "  100% context left · ? for shortcuts"
@@ -125,7 +134,7 @@ class _Fake:
         (self.bin / "sleep").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8", newline="\n")
         (self.bin / "sleep").chmod(0o755)
 
-    def send(self, shell, msg, *, style="codex", enter="accept", busy=False, keep=False, rows=None):
+    def send(self, shell, msg, *, style="codex", enter="accept", busy=False, keep=False, rows=None, placeholder=False):
         env = {
             **os.environ,
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
@@ -135,6 +144,7 @@ class _Fake:
             "FAKE_BUSY": "1" if busy else "0",
             "FAKE_KEEP": "1" if keep else "0",
             "FAKE_ROWS": str(rows or 1000),
+            "FAKE_PLACEHOLDER": "1" if placeholder else "0",
             "MSG": msg,
         }
         env.pop("TUI_SUBMIT_TRIES", None)
@@ -271,3 +281,27 @@ def test_a_turn_already_running_does_not_confirm_a_lost_enter(shell, tmp_path):
     assert rc == 2, out.stdout + out.stderr
     assert fake.enters() == 3
     assert fake.typed() == 1
+
+
+# ── il segnaposto di incolla: il testo c'e', ma il composer non ne mostra una parola ──
+
+
+@pytest.mark.parametrize("style", ["codex", "claude"])
+@pytest.mark.parametrize("enter", ["accept", "lose:1"])
+def test_a_long_paste_shown_as_a_placeholder_is_typed_once(shell, tmp_path, style, enter):
+    """Le TUI vere raccolgono un incolla lungo in un segnaposto: la sonda (testa e
+    coda del messaggio) non compare mai, e l'helper credeva che il testo non fosse
+    arrivato, lo ridigitava, e il composer teneva il benvenuto due o tre volte."""
+    fake = _Fake(tmp_path)
+    rc, out = fake.send(shell, LONG_MSG, style=style, enter=enter, placeholder=True)
+    assert rc == 0, out.stdout + out.stderr
+    assert fake.typed() == 1, "il testo e' stato ridigitato: nel composer sarebbe doppio\n" + out.stdout
+    assert fake.enters() == (1 if enter == "accept" else 2)
+
+
+def test_a_placeholder_that_never_goes_away_is_not_reported_as_sent(shell, tmp_path):
+    fake = _Fake(tmp_path)
+    rc, out = fake.send(shell, LONG_MSG, enter="never", placeholder=True)
+    assert rc == 2, out.stdout + out.stderr
+    assert fake.typed() == 1
+    assert fake.enters() == 3

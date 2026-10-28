@@ -163,11 +163,18 @@ tui_send_verified() {
     # Bozza gia' nel composer: niente seconda digitazione, solo l'Enter.
     pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
     probe=$(_tui_probe_in_composer "$pane" "$probe_tail" "$probe_head")
+    # Un incolla lungo il composer non lo mostra: ne fa un segnaposto
+    # («[Pasted Content N chars]», «[Pasted text #1 +N lines]») senza una parola
+    # del testo. Quel segnaposto, qui, e' l'incolla di questo messaggio (i due
+    # chiamanti scrivono in una sessione appena avviata, dove nessun altro
+    # digita): non e' un composer vuoto e non si ridigita.
+    [ -n "$probe" ] || probe=$(_tui_placeholder_in_composer "$pane")
     if [ -z "$probe" ]; then
       tmux send-keys -t "=$sess:" -l "$msg"
       sleep 1.5
       pane=$(tmux capture-pane -t "=$sess:" -p 2>/dev/null || true)
       probe=$(_tui_probe_in_composer "$pane" "$probe_tail" "$probe_head")
+      [ -n "$probe" ] || probe=$(_tui_placeholder_in_composer "$pane")
     fi
     # Il testo e' arrivato se se ne vede la testa, o la coda nel composer: una
     # bozza lunga scorre dentro il composer e la testa esce dalla vista, e
@@ -201,6 +208,16 @@ _tui_probe_in_composer() {
       *"$3"*) printf '%s' "$3"; return 0 ;;
     esac
   fi
+  return 0
+}
+
+# Stampa il segnaposto di incolla (compattato come _tui_norm: «[PastedContent1523chars]»)
+# se il composer ne contiene uno, altrimenti niente. Dopo l'Enter il segnaposto
+# sparisce dal composer: e' la sonda di _tui_submitted al posto del testo.
+# Uso: _tui_placeholder_in_composer <pane>
+_tui_placeholder_in_composer() {
+  _tui_composer "$1" | _tui_norm \
+    | LC_ALL=C sed -n 's/.*\(\[[Pp]asted[A-Za-z]*[^]]*\]\).*/\1/p' | tail -n 1
   return 0
 }
 
@@ -335,10 +352,20 @@ tui_wait_and_send() {
 # Ritorna 0 se il flag esiste ed e' piu' recente del marcatore. Senza marcatore
 # non si puo' dire "di questo avvio": ritorna 1 (si reinietta, in sicurezza:
 # il testo gia' nel composer non viene ridigitato).
+#
+# Un flag datato DOPO adesso non e' di questo avvio: l'orologio della macchina e'
+# tornato indietro (una VM che si risveglia) e il flag vecchio sembrerebbe piu'
+# recente del marcatore, per sempre. Il confronto con "adesso" si fa con un file
+# creato in questo istante; senza mktemp non si blocca niente (come prima).
 _welcome_flag_fresh() {
   [ -f "$1" ] || return 1
   [ -n "$2" ] && [ -f "$2" ] || return 1
-  [ -n "$(find "$1" -newer "$2" 2>/dev/null)" ]
+  [ -n "$(find "$1" -newer "$2" 2>/dev/null)" ] || return 1
+  local now_file future
+  now_file=$(mktemp 2>/dev/null) || return 0
+  future=$(find "$1" -newer "$now_file" 2>/dev/null)
+  rm -f "$now_file"
+  [ -z "$future" ]
 }
 
 # Uso: tui_welcome_watchdog <session> <messaggio> <flag> <marcatore_avvio> [retries=3] [intervallo=90]

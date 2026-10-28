@@ -2031,15 +2031,33 @@ _welcome_kickoff() {
     "" \
     "2. Otherwise, Telegram is OPTIONAL (web-first). Check whether a Telegram bot is configured: python3 -c \"import json;b=(json.load(open('\${JHT_HOME:-/jht_home}/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))\"." \
     "   - If True: send the welcome message below via jht-telegram-send --from ${role} (telegram-send skill). Send ONE message in the user's language (the text below is already localized — send it EXACTLY as written), with real blank lines (\\n\\n)." \
-    "   - If False (no Telegram): DO NOT send anything — the welcome is non-blocking and appears on the dashboard. React to [WELCOME-USER] and ONLY to this event; never welcome in response to [CHAT]/[TG]." \
+    "   - If False (no Telegram): DO NOT send anything and do NOT create the flag — the welcome is non-blocking and appears on the dashboard. React to [WELCOME-USER] and ONLY to this event; never welcome in response to [CHAT]/[TG]." \
     "" \
     "Welcome content to send (only when Telegram is configured):" \
     "${body}" \
     "" \
-    "3. ALWAYS create the flag (whether sent via Telegram or skipped in web-first mode): mkdir -p ${welcome_dir} && touch ${welcome_flag}. The welcome is one-shot, NOT a gate for starting work." \
+    "3. Create the flag ONLY after the Telegram message was really sent: mkdir -p ${welcome_dir} && touch ${welcome_flag}. If the send failed, or you found no bot after all, do NOT create or touch it: the flag means \"delivered\". The welcome is one-shot, NOT a gate for starting work." \
     "" \
-    "4. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] sent/skipped + flag created'. THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
+    "4. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] sent + flag created' (or 'skipped (no telegram), no flag'). THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
   )
+  fi
+  # Senza un bot Telegram il benvenuto di Capitano e Mentor e' SALTATO: nessun flag
+  # (il flag vuol dire "consegnato") e nessun watchdog (aspetterebbe un flag che
+  # nessuno scrive e reinietterebbe tre volte il messaggio per niente). L'agente
+  # riceve comunque il kickoff: serve a farlo partire a lavorare. Se il file di
+  # configurazione non si legge, e' lo stesso caso: meglio nessun flag che un flag falso.
+  if [ "$role" != "assistente" ] && ! _telegram_bot_configured; then
+    skip_msg=$(printf '%s\n' \
+      "[@system -> @${role}] [WELCOME-USER]" \
+      "" \
+      "User welcome protocol: SKIPPED on this boot. No Telegram bot is configured, so there is nothing to send; the welcome is non-blocking and appears on the dashboard." \
+      "" \
+      "1. Do NOT send anything, and do NOT create or touch ${welcome_flag}: the flag means \"delivered\", and nothing was delivered. The launcher is not waiting for it." \
+      "" \
+      "2. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] skipped (no telegram), no flag'. THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
+    )
+    _kickoff "$SESSION" "$skip_msg"
+    return 0
   fi
   # Marcatore d'avvio: il flag conta solo se piu' recente di questo file.
   welcome_boot_marker="${welcome_log%.log}.boot"
@@ -2054,6 +2072,12 @@ _welcome_kickoff() {
     . /app/.launcher/tui-helpers.sh
     tui_welcome_watchdog "$JHT_WELCOME_SESS" "$JHT_WELCOME_MSG" "$JHT_WELCOME_FLAG" "$JHT_WELCOME_BOOT" 3 90
   ' </dev/null 9>&- &
+}
+
+# Is a Telegram bot configured? Exit 0 if one has a token, 1 otherwise (also when the
+# configuration cannot be read: the welcome is then skipped, never marked delivered).
+_telegram_bot_configured() {
+  python3 -c "import json,sys;b=(json.load(open(sys.argv[1])).get('channels') or {}).get('telegram',{}).get('bots') or {};sys.exit(0 if any((x or {}).get('bot_token','').strip() for x in b.values()) else 1)" "${JHT_HOME:-/jht_home}/jht.config.json" 2>/dev/null
 }
 
 # The text is not passed to the Assistente: assistant_welcome.py reads it from the catalog.

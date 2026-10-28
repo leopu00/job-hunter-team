@@ -149,8 +149,8 @@ Trigger: pane receives a block starting with `[@system -> @mentor] [WELCOME-USER
 
 1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → if exists, refresh it (`touch $JHT_HOME/profile/mentor-welcomed.flag`: the launcher trusts the flag only if it is newer than this boot), ack to system (`[@mentor -> @system] [WELCOME-ACK] already sent`) and stay idle.
 2. **Send welcome** via `jht-telegram-send --from mentor`. The system provides the copy in the kickoff block — use it as-is (Italian, measured voice). `\n\n` separators are interpreted by the wrapper.
-3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
-4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato`. Stay idle waiting for `[TG]` / `[CHAT]` or daily quiet pass.
+3. **Touch the flag (ONLY after the Telegram send)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`, only if the welcome was really sent. If the kickoff says it is skipped (no Telegram) or the send failed, send nothing and do NOT create or touch the flag: the flag means "delivered".
+4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato` (or `skipped (no telegram), no flag` when there is nothing to send). Stay idle waiting for `[TG]` / `[CHAT]` or daily quiet pass.
 
 What NOT to do:
 - ❌ Auto-presenting on a `[CHAT]` / `[TG]` greeting like "ciao" — handle that normally via your reply skill, not with the rich welcome.

@@ -127,8 +127,8 @@ Trigger: o pane recebe um bloco que começa com `[@system -> @capitano] [WELCOME
 2. **Envia o welcome — Telegram é OPCIONAL**. Verifica se há um bot Telegram configurado: `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
    - Se `True` → envia o welcome via `jht-telegram-send --from capitano`. O sistema fornece o texto no bloco de kickoff — usa-o literalmente, no locale do utilizador, tom Capitano (curto, operacional). `\n\n` como separadores.
    - Se `False` (sem Telegram) → **salta o envio**. O welcome é não-bloqueante e aparece no dashboard; NÃO bloqueies o boot num canal que não está configurado.
-3. **Touch da flag (SEMPRE)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`. A flag é tocada quer o welcome tenha sido enviado (Telegram) quer saltado — o welcome é one-shot, não um gate para começar a trabalhar.
-4. **Ack ao sistema + COMEÇA A TRABALHAR**: `[@capitano -> @system] [WELCOME-ACK] sent + flag created` (ou `skipped (no telegram) + flag created`). Depois procede normalmente: abre `pipeline-triage` / lê o budget e age — NÃO fiques idle "à espera de um sinal Telegram".
+3. **Touch da flag (SÓ depois do envio por Telegram)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`, só se o welcome foi mesmo enviado por Telegram. Se o saltaste (sem Telegram) ou o envio falhou, NÃO cries nem toques a flag: a flag quer dizer «entregue», e o launcher não a espera quando não há nada a enviar. O welcome é one-shot, não um gate para começar a trabalhar.
+4. **Ack ao sistema + COMEÇA A TRABALHAR**: `[@capitano -> @system] [WELCOME-ACK] sent + flag created` (ou `skipped (no telegram), no flag`). Depois procede normalmente: abre `pipeline-triage` / lê o budget e age — NÃO fiques idle "à espera de um sinal Telegram".
 
 O que NÃO fazer:
 - ❌ Auto-apresentares-te se o utilizador escrever qualquer `[CHAT]` ou `[TG]` (ex. "olá") — isso é chat normal, gere com a skill `chat-web` ou `telegram-send`, sem rich welcome.

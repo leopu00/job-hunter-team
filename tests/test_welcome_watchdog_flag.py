@@ -78,16 +78,17 @@ class _Welcome:
     def turn_running(self):
         (self.dir / "transcript").write_text("• Working (3s • esc to interrupt)\n", encoding="utf-8")
 
-    def watchdog(self, shell, *, enter="accept", retries=1):
+    def watchdog(self, shell, *, enter="accept", retries=1, placeholder=False, style="codex"):
         env = {
             **os.environ,
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "FAKE_DIR": str(self.dir),
-            "FAKE_STYLE": "codex",
+            "FAKE_STYLE": style,
             "FAKE_ENTER": enter,
             "FAKE_BUSY": "0",
             "FAKE_KEEP": "0",
             "FAKE_ROWS": "1000",
+            "FAKE_PLACEHOLDER": "1" if placeholder else "0",
             "MSG": LONG_MSG,
         }
         env.pop("TUI_SUBMIT_TRIES", None)
@@ -199,3 +200,75 @@ def test_start_agent_wires_the_boot_marker_into_the_watchdog():
     assert '[ -f "$JHT_WELCOME_FLAG" ]' not in block
     # l'agente, col flag gia' presente, deve toccarlo
     assert "Run touch ${welcome_flag}" in block
+
+
+# ── i due residui del benvenuto: «il flag vecchio blocca» e «il testo si raddoppia» ──
+
+
+@pytest.mark.parametrize("flag", ["stale", "missing"])
+@pytest.mark.parametrize("enter", ["accept", "lose:1"])
+@pytest.mark.parametrize("style", ["codex", "claude"])
+def test_a_first_paste_shown_as_a_placeholder_gets_only_enter_never_a_second_paste(shell, tmp_path, flag, enter, style):
+    """Il primo testo e' nel composer, ma la TUI ne mostra solo il segnaposto di
+    incolla: la sonda del testo non lo trova, e la reiniezione lo ridigitava."""
+    w = _Welcome(tmp_path)
+    if flag == "stale":
+        w.flag_at(STALE)
+    w.boot()
+    w.composer_holds_the_message()
+    rc, out = w.watchdog(shell, enter=enter, placeholder=True, style=style)
+    assert w.typed() == 0, "il testo e' stato incollato di nuovo: nel composer sarebbe doppio\n" + out.stdout
+    assert w.enters() >= 1
+
+
+def test_several_rounds_with_a_placeholder_and_a_lost_enter_never_paste_twice(shell, tmp_path):
+    w = _Welcome(tmp_path)
+    w.flag_at(STALE)
+    w.boot()
+    rc, out = w.watchdog(shell, enter="never", retries=3, placeholder=True)
+    assert rc == 1, out.stdout + out.stderr
+    assert w.typed() == 1, "tre giri, un solo incollo"
+
+
+@pytest.mark.parametrize("age", ["one second older", "years older"])
+def test_an_old_flag_never_stops_the_watchdog_of_a_new_boot(shell, tmp_path, age):
+    """Il residuo «un welcomed.flag vecchio blocca il watchdog» non si riproduce:
+    comunque sia vecchio, il flag non e' di questo avvio e il testo si reinietta."""
+    w = _Welcome(tmp_path)
+    w.flag_at(STALE if age == "years older" else "202610160259")  # un minuto prima di BOOT 03:00
+    w.boot()
+    rc, out = w.watchdog(shell)
+    assert rc == 1, out.stdout + out.stderr
+    assert w.typed() == 1, "nessuna reiniezione: il flag vecchio ha fermato il watchdog\n" + out.stdout
+
+
+def test_a_flag_written_in_the_same_second_as_the_marker_is_not_taken_for_a_new_one(shell, tmp_path):
+    w = _Welcome(tmp_path)
+    w.boot()
+    w.flag_at(BOOT)  # stesso istante del marcatore: nessun turno ha ancora toccato il flag
+    rc, out = w.watchdog(shell)
+    assert w.typed() == 1, out.stdout + out.stderr
+    assert rc == 1
+
+
+def test_a_flag_dated_in_the_future_is_not_a_flag_of_this_boot(shell, tmp_path):
+    """Un orologio tornato indietro (una VM che si risveglia) lascia un flag piu'
+    recente del marcatore di questo avvio: finiva per fermare il watchdog al primo
+    giro, senza nessun benvenuto e senza nessuna reiniezione."""
+    w = _Welcome(tmp_path)
+    w.boot()
+    w.flag_at("203001010000")
+    rc, out = w.watchdog(shell)
+    assert w.typed() == 1, "nessuna reiniezione: il flag dal futuro ha fermato il watchdog\n" + out.stdout
+    assert rc == 1, out.stdout + out.stderr
+
+
+def test_a_flag_touched_now_by_this_boot_still_ends_the_watchdog(shell, tmp_path):
+    """La guardia sul futuro non toglie il caso normale: il turno di questo
+    avvio tocca il flag adesso."""
+    w = _Welcome(tmp_path)
+    w.boot()
+    w.flag.write_text("", encoding="utf-8")  # mtime = adesso, ben dopo BOOT (2026-10-16)
+    rc, out = w.watchdog(shell)
+    assert rc == 0, out.stdout + out.stderr
+    assert w.calls() == []

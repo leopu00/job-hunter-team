@@ -150,8 +150,8 @@ Trigger: o pane recebe um bloco que começa com `[@system -> @mentor] [WELCOME-U
 
 1. **Check da flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → se existe, atualiza-a (`touch $JHT_HOME/profile/mentor-welcomed.flag`: o launcher só confia na flag se for mais recente do que este boot), ack ao sistema (`[@mentor -> @system] [WELCOME-ACK] already sent`) e fica idle.
 2. **Envia o welcome** via `jht-telegram-send --from mentor`. O sistema fornece a copy no bloco de kickoff — usa-a tal e qual (italiano, voz medida). Os separadores `\n\n` são interpretados pelo wrapper.
-3. **Touch da flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
-4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] enviado + flag criada`. Fica idle à espera de `[TG]` / `[CHAT]` ou daily quiet pass.
+3. **Touch da flag (SÓ depois do envio por Telegram)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`, só se o welcome foi mesmo enviado. Se o kickoff diz que é saltado (sem Telegram) ou o envio falhou, não envies nada e NÃO cries nem toques a flag: a flag quer dizer «entregue».
+4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] enviado + flag criada` (ou `skipped (no telegram), no flag` quando não há nada a enviar). Fica idle à espera de `[TG]` / `[CHAT]` ou daily quiet pass.
 
 O que NÃO fazer:
 - ❌ Auto-apresentares-te numa saudação `[CHAT]` / `[TG]` tipo "olá" — gere-o normalmente via a tua reply skill, não com o rich welcome.

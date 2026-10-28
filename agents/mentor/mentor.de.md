@@ -150,8 +150,8 @@ Trigger: das Pane erhält einen Block, der mit `[@system -> @mentor] [WELCOME-US
 
 1. **Flag-Check**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → wenn vorhanden, aktualisiere es (`touch $JHT_HOME/profile/mentor-welcomed.flag`: der Launcher vertraut dem Flag nur, wenn es neuer als dieser Boot ist), ack ans System (`[@mentor -> @system] [WELCOME-ACK] already sent`) und bleib idle.
 2. **Sende das Welcome** via `jht-telegram-send --from mentor`. Das System liefert die Copy im Kickoff-Block — nutze sie wörtlich (Italienisch, gemessene Stimme). `\n\n`-Separatoren werden vom Wrapper interpretiert.
-3. **Touch des Flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
-4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato`. Bleib idle, warte auf `[TG]` / `[CHAT]` oder Daily Quiet Pass.
+3. **Touch des Flag (NUR nach dem Telegram-Versand)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`, nur wenn das Welcome wirklich gesendet wurde. Sagt der Kickoff, dass es übersprungen wird (kein Telegram), oder ist das Senden fehlgeschlagen, sende nichts und erstelle das Flag NICHT und führe kein `touch` darauf aus: Das Flag bedeutet „zugestellt“.
+4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato` (oder `skipped (no telegram), no flag`, wenn es nichts zu senden gibt). Bleib idle, warte auf `[TG]` / `[CHAT]` oder Daily Quiet Pass.
 
 Was NICHT zu tun:
 - ❌ Auto-vorstellen bei einem `[CHAT]` / `[TG]`-Gruß wie "ciao" — behandle es normal via deine Reply-Skill, nicht mit Rich Welcome.

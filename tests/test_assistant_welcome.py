@@ -265,24 +265,35 @@ def test_the_catalog_welcome_does_not_send_the_user_to_telegram_and_asks_the_nam
 # --- the places that call it ----------------------------------------------------------------------
 
 
-def _kickoff(tmp_path: Path, role: str) -> str:
+def _kickoff(tmp_path: Path, role: str, *, bot: bool | None = None) -> str:
+    """The kickoff text of one role. `bot` writes a jht.config.json with (True) or without (False)
+    a Telegram bot token in a home of its own; None leaves the home /jht_home, which has no file."""
     source = START_AGENT.read_text(encoding="utf-8")
     start = source.index("_welcome_kickoff() {")
     function = source[start: source.index('\nif [ "$ROLE" = "assistente" ]', start)]
     out = tmp_path / "kickoff.txt"
+    watchdog = tmp_path / "watchdog-started"
+    home = "/jht_home"
+    if bot is not None:
+        home = str(tmp_path / "home")
+        Path(home).mkdir(exist_ok=True)
+        bots = {"main": {"bot_token": "123:abc" if bot else "  "}}
+        (Path(home) / "jht.config.json").write_text(json.dumps({"channels": {"telegram": {"bots": bots}}}), encoding="utf-8")
     script = "\n".join(
         [
             "jht_daemon_log() { echo /dev/null; }",
             f'_kickoff() {{ printf "%s" "$2" > "{out}"; }}',
-            "setsid() { :; }",
+            f'setsid() {{ : > "{watchdog}"; }}',
             "SESSION=S",
             function,
             f'_welcome_kickoff {role} {"welcomed.flag" if role == "assistente" else role + "-welcomed.flag"} "BODY-OF-THE-WELCOME"',
         ]
     )
     shell = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30,
-                           env={**os.environ, "JHT_HOME": "/jht_home"})
+                           env={**os.environ, "JHT_HOME": home})
     assert shell.returncode == 0, shell.stderr
+    _kickoff.watchdog_started = watchdog.exists()
+    _kickoff.home = home
     return out.read_text(encoding="utf-8")
 
 
@@ -299,12 +310,40 @@ def test_the_assistentes_kickoff_runs_the_command_and_never_makes_the_flag_by_ha
     assert "do not ask it again" in text
 
 
-def test_the_captains_and_the_mentors_kickoff_are_left_as_they_were(tmp_path):
-    for role in ("capitano", "mentor"):
-        text = _kickoff(tmp_path, role)
-        assert COMMAND not in text
-        assert "BODY-OF-THE-WELCOME" in text
-        assert f"touch /jht_home/profile/{role}-welcomed.flag" in text
+@pytest.mark.parametrize("role", ["capitano", "mentor"])
+def test_with_a_telegram_bot_the_captains_and_the_mentors_kickoff_sends_the_welcome_and_the_flag_follows_the_send(tmp_path, role):
+    text = _kickoff(tmp_path, role, bot=True)
+    home = _kickoff.home
+    assert COMMAND not in text
+    assert "BODY-OF-THE-WELCOME" in text
+    assert f"touch {home}/profile/{role}-welcomed.flag" in text
+    # the flag means "delivered": made after a real send, never "whether sent or skipped"
+    assert "ONLY after the Telegram message was really sent" in text
+    assert "ALWAYS create the flag" not in text and "sent/skipped + flag created" not in text
+    assert _kickoff.watchdog_started, "with a bot the watchdog asks again until the flag of this boot appears"
+
+
+@pytest.mark.parametrize("bot", [False, None])
+@pytest.mark.parametrize("role", ["capitano", "mentor"])
+def test_without_a_telegram_bot_the_welcome_is_skipped_with_no_flag_and_no_watchdog(tmp_path, role, bot):
+    """No bot, or a configuration nobody can read: nothing is delivered, so no flag, and no watchdog
+    waiting for a flag that nobody writes (it re-sent the kickoff three times for nothing)."""
+    text = _kickoff(tmp_path, role, bot=bot)
+    home = _kickoff.home
+    assert text.startswith(f"[@system -> @{role}] [WELCOME-USER]")
+    assert "SKIPPED" in text and "BODY-OF-THE-WELCOME" not in text
+    assert f"do NOT create or touch {home}/profile/{role}-welcomed.flag" in text
+    assert "touch " not in text.replace("do NOT create or touch", "") and "&& touch" not in text
+    assert "skipped (no telegram), no flag" in text
+    # the agent still gets the kickoff: it is what makes it start working
+    assert "start working immediately" in text
+    assert not _kickoff.watchdog_started
+
+
+def test_the_assistentes_kickoff_does_not_look_at_the_bot_and_keeps_its_watchdog(tmp_path):
+    text = _kickoff(tmp_path, "assistente", bot=False)
+    assert COMMAND in text
+    assert _kickoff.watchdog_started
 
 
 def test_the_container_boot_welcomes_the_assistente_through_the_same_command():
@@ -329,3 +368,19 @@ def test_all_seven_prompts_say_the_same_protocol(suffix):
     assert "mkdir -p $JHT_HOME/profile && touch" not in section
     assert "test -f $JHT_HOME/profile/welcomed.flag" not in section
     assert "sent + flag created" not in section
+
+
+@pytest.mark.parametrize("role", ["capitano", "mentor"])
+@pytest.mark.parametrize("suffix", ["", ".it", ".es", ".fr", ".de", ".hu", ".pt"])
+def test_all_seven_prompts_make_the_flag_only_after_a_real_send(role, suffix):
+    text = (ROOT / "agents" / role / f"{role}{suffix}.md").read_text(encoding="utf-8")
+    lines = [l for l in text.splitlines() if l.startswith("3. ") and f"{role}-welcomed.flag" in l]
+    assert len(lines) == 1, "the step that makes the flag"
+    step = lines[0]
+    assert f"touch $JHT_HOME/profile/{role}-welcomed.flag" in step
+    # not «always»: the old words of the seven languages
+    for always in ("ALWAYS", "SEMPRE", "SIEMPRE", "TOUJOURS", "IMMER", "MINDIG"):
+        assert always not in step, always
+    # and the ack of a skipped welcome says there is no flag, in the one word every language keeps
+    assert "skipped (no telegram), no flag" in text
+    assert "skipped (no telegram) + flag created" not in text

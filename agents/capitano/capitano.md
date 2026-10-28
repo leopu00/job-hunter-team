@@ -127,8 +127,8 @@ Trigger: the pane receives a block starting with `[@system -> @capitano] [WELCOM
 2. **Send the welcome — Telegram is OPTIONAL**. Check if a Telegram bot is configured: `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
    - If `True` → send the welcome via `jht-telegram-send --from capitano`. The system provides the text in the kickoff block — use it literally, in the user's locale, Capitano's tone (short, operational). `\n\n` as separators.
    - If `False` (no Telegram) → **skip the send**. The welcome is non-blocking and surfaces on the dashboard; do NOT block boot on a channel that isn't configured.
-3. **Touch the flag (ALWAYS)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`. The flag is touched whether the welcome was sent (Telegram) or skipped — the welcome is one-shot, not a gate on starting work.
-4. **Ack to system + START WORKING**: `[@capitano -> @system] [WELCOME-ACK] sent + flag created` (or `skipped (no telegram) + flag created`). Then proceed normally: open `pipeline-triage` / read the budget and act — do NOT stay idle "awaiting a Telegram signal".
+3. **Touch the flag (ONLY after the Telegram send)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`, only if the welcome was really sent on Telegram. If you skipped it (no Telegram) or the send failed, do NOT create or touch the flag: the flag means "delivered", and the launcher does not wait for it when there is nothing to send. The welcome is one-shot, not a gate on starting work.
+4. **Ack to system + START WORKING**: `[@capitano -> @system] [WELCOME-ACK] sent + flag created` (or `skipped (no telegram), no flag`). Then proceed normally: open `pipeline-triage` / read the budget and act — do NOT stay idle "awaiting a Telegram signal".
 
 What NOT to do:
 - ❌ Auto-present yourself if the user writes any `[CHAT]` or `[TG]` (e.g. "hi") — that is a normal chat, handle it with the `chat-web` or `telegram-send` skill, no rich welcome.

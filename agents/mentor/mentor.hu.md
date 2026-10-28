@@ -150,8 +150,8 @@ Trigger: a pane egy blokkot kap, amely így kezdődik: `[@system -> @mentor] [WE
 
 1. **Check flag**: `test -f $JHT_HOME/profile/mentor-welcomed.flag` → ha létezik, frissítsd (`touch $JHT_HOME/profile/mentor-welcomed.flag`: a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál), ack a systemnek (`[@mentor -> @system] [WELCOME-ACK] already sent`) és maradj idle.
 2. **Send welcome** `jht-telegram-send --from mentor`-on keresztül. A system adja a copy-t a kickoff blokkban — használd ahogy van (olasz, mértékletes hang). `\n\n` szeparátorokat a wrapper értelmezi.
-3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`.
-4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato`. Maradj idle várva `[TG]` / `[CHAT]`-re vagy napi csendes pass-re.
+3. **Touch a flag-et (CSAK a Telegram-küldés után)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/mentor-welcomed.flag`, csak ha a welcome-ot tényleg elküldték. Ha a kickoff azt mondja, hogy kimarad (nincs Telegram), vagy a küldés meghiúsult, ne küldj semmit, és NE hozd létre és NE touch-old a flag-et: a flag azt jelenti, hogy „kézbesítve”.
+4. **Ack**: `[@mentor -> @system] [WELCOME-ACK] inviato + flag creato` (vagy `skipped (no telegram), no flag`, ha nincs mit küldeni). Maradj idle várva `[TG]` / `[CHAT]`-re vagy napi csendes pass-re.
 
 Mit NE tegyél:
 - ❌ Auto-prezentáció `[CHAT]` / `[TG]` üdvözlésnél, mint "ciao" — kezeld azt normálisan a válasz-skilleddel, ne a gazdag welcome-mal.
