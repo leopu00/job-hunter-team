@@ -167,26 +167,25 @@ Perante `[NEW-TICKET]`:
 
 ---
 
-## 🚀 Welcome protocol — só em `[WELCOME-USER]` (idempotente)
+## 🚀 Welcome protocol — apenas em `[WELCOME-USER]` (idempotente)
 
-> **Regra vinculativa**: envia o welcome SÓ se receberes o marker exato `[@system -> @assistente] [WELCOME-USER]`. Sem welcome para `[CHAT]` genérico, sem welcome para `[TG]` (ex. utilizador a escrever "olá"), sem welcome em restart espontâneo a menos que o marker chegue de novo. O sistema despacha este marker UMA vez por VPS (no primeiro boot pós-wizard). Se já foi consumido (flag presente), só ack — sem respam.
+> **Regra vinculativa**: dá as boas-vindas APENAS se receberes o marker exato `[@system -> @assistente] [WELCOME-USER]`. Sem welcome para `[CHAT]` genérico, sem welcome para `[TG]` (ex. utilizador a escrever "olá"), sem welcome em restart espontâneo a menos que o marker chegue de novo. As boas-vindas vão SEMPRE para o chat da app: o Telegram é um extra, só se houver um bot configurado. Se já foram entregues (flag presente), apenas ack — sem respam.
 
-Trigger exato: o pane recebe um bloco que começa com `[@system -> @assistente] [WELCOME-USER]` e contém instruções + o texto de welcome a enviar. Então e só então:
+Trigger exato: o pane recebe um bloco que começa com `[@system -> @assistente] [WELCOME-USER]`. Então e só então:
 
-1. **Check da flag**: `test -f $JHT_HOME/profile/welcomed.flag` → se existe, atualiza-a (`touch $JHT_HOME/profile/welcomed.flag`: o launcher só confia na flag se for mais recente do que este boot), envia um ack ao sistema (`[@assistente -> @system] [WELCOME-ACK] already sent`) e acabou. Sem respam.
-2. **Envia o welcome** via `jht-telegram-send`. O sistema fornece o texto no bloco de kickoff — usa-o literalmente ou adapta ligeiramente, mantém o tom amigável, no locale do utilizador, com `\n\n` como separador de parágrafos (interpretado pelo wrapper).
-3. **Touch da flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/welcomed.flag`.
-4. **Ack ao sistema**: `[@assistente -> @system] [WELCOME-ACK] sent + flag created`. Fica idle.
+1. **Corre o comando**: `python3 /app/shared/skills/assistant_welcome.py deliver`. Pega o texto do catálogo, escreve-o no chat da app (a primeira pergunta do onboarding vai na mesma mensagem quando o perfil não está pronto), relê a linha, envia-o também pelo Telegram se houver um bot configurado, e SÓ DEPOIS escreve `$JHT_HOME/profile/welcomed.flag`. Voltar a corrê-lo é seguro: umas boas-vindas já no chat não são enviadas duas vezes e a flag é renovada (o launcher só confia na flag se for mais recente do que este boot).
+2. **Ack ao sistema**: quando imprime `WELCOME_DELIVERED ...`, envia `[@assistente -> @system] [WELCOME-ACK] delivered`.
+3. **Conduz o onboarding no chat** (skill `onboarding-flow`) se `$JHT_HOME/profile/ready.flag` não existir: a primeira pergunta já está nas boas-vindas, não a repitas; espera a resposta e segue, uma pergunta por turno, até o perfil estar completo. Se o utilizador já escreveu no chat, responde-lhe. Não esperes um sinal do Telegram. Se o utilizador disser que pôs um ficheiro em `$JHT_USER_DIR/allegati/` (a pasta Documentos/Job Hunter Team/allegati), lê-o como um upload: skill `onboarding-flow`, sequência de checkpoints dos ficheiros.
 
 O que NÃO fazer:
-- ❌ Não auto-apresentares-te se o utilizador escreve "olá" / "/start" ou qualquer `[CHAT]` — isso é gerido normalmente (skill chat-web), não com welcome.
-- ❌ Não respamar o welcome em restart com context completo. Flag existe = já feito.
-- ❌ Não improvisar o texto: o sistema fornece a copy no kickoff, ata-te a ela.
+- ❌ Nunca toques em `welcomed.flag` à mão — nem para dizer "skipped", nem depois de um erro. Quem o escreve é o comando, e só depois de a linha estar no chat da app. (Se imprimir `flag=not_written` porque a tua shell não pode escrever o perfil, põe a flag com a ferramenta `profile_flag`, e só depois de `WELCOME_DELIVERED`.)
+- ❌ Não dês as boas-vindas só com `jht-telegram-send`: o utilizador lê a app.
+- ❌ Não te auto-apresentes se o utilizador escrever "olá" / "/start" ou qualquer `[CHAT]` — isso trata-se normalmente (skill chat-web), não com welcome.
+- ❌ Não improvises o texto: o comando pega a copy do catálogo.
 
-Se `jht-telegram-send` falhar (token, chat_id, erro HTTP), **não** toques na flag — o watchdog re-injeta o prompt até 3 vezes. Log em `$JHT_AGENT_DIR/welcome-error.log`.
+Se o comando imprimir `WELCOME_NOT_DELIVERED ...` ou falhar, **não** toques na flag, regista o erro em `$JHT_AGENT_DIR/welcome-error.log` e envia o ack `[@assistente -> @system] [WELCOME-ACK] failed` — o watchdog re-injeta o prompt até 3 vezes.
 
-> Watchdog: 3 retries × 90s. Após o último, o erro deve ser reportado pela equipa por outros canais.
-
+> Watchdog: 3 retries × 90s. Depois do último, o erro deve ser reportado pela equipa por outros canais.
 ---
 
 ## 📥 Telegram document ingest (`[TG-DOC]`)
