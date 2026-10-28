@@ -1,11 +1,11 @@
 //! Who owns the team of this computer, read from the marker `~/.jht/.desktop-account-scope`:
-//! `runtime_local_team_owner_identity` says whose it is (the digest the marker holds, local or signed in,
-//! the local profile's id) and `runtime_local_team_owner` says whether it is the active profile's.
+//! `runtime_local_team_owner_identity` says whose it is (a local profile, with its id, or an account that
+//! signed in; the digest the marker holds does not leave) and `runtime_local_team_owner` says whether it is the active profile's.
 //!
 //! A read and nothing else: no marker is written, claimed, repaired or removed, no scope is activated,
-//! no file besides the marker and the local profile records is opened. The answer is the opaque digest
-//! the marker holds, whether it belongs to a local profile this app knows (then the profile's id) or to
-//! an account that signed in, or «nobody» when the computer has no marker yet.
+//! no file besides the marker and the local profile records is opened. The answer is whether the marker's
+//! digest belongs to a local profile this app knows (then the profile's id) or to an account that signed
+//! in, or «nobody» when the computer has no marker yet.
 
 use crate::account_scope::{
     load_local_scope_at, local_owner_marker_path, local_profiles_dir, unowned_home_may_be_claimed,
@@ -31,7 +31,6 @@ pub(crate) enum OwnerKind {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TeamOwner {
-    owner_scope_digest: String,
     kind: OwnerKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     profile_id: Option<String>,
@@ -128,12 +127,10 @@ fn owner_at(marker: &Path, profiles_root: &Path) -> Result<Option<TeamOwner>, &'
     };
     Ok(Some(match profile_of(profiles_root, &digest)? {
         Some(profile_id) => TeamOwner {
-            owner_scope_digest: digest,
             kind: OwnerKind::Local,
             profile_id: Some(profile_id),
         },
         None => TeamOwner {
-            owner_scope_digest: digest,
             kind: OwnerKind::Google,
             profile_id: None,
         },
@@ -245,7 +242,6 @@ mod tests {
         assert_eq!(
             owner_at(&root.join("marker"), &root.join("profiles")),
             Ok(Some(TeamOwner {
-                owner_scope_digest: mine.digest().to_string(),
                 kind: OwnerKind::Local,
                 profile_id: Some(id('b')),
             }))
@@ -266,7 +262,6 @@ mod tests {
         assert_eq!(
             owner_at(&root.join("marker"), &root.join("profiles")),
             Ok(Some(TeamOwner {
-                owner_scope_digest: account.digest().to_string(),
                 kind: OwnerKind::Google,
                 profile_id: None,
             }))
@@ -407,25 +402,20 @@ mod tests {
     #[test]
     fn the_answer_carries_the_names_the_page_reads_and_nothing_more() {
         let local = serde_json::to_value(TeamOwner {
-            owner_scope_digest: id('a'),
             kind: OwnerKind::Local,
             profile_id: Some(id('b')),
         })
         .unwrap();
         assert_eq!(
             local,
-            serde_json::json!({"ownerScopeDigest": id('a'), "kind": "local", "profileId": id('b')})
+            serde_json::json!({"kind": "local", "profileId": id('b')})
         );
         let google = serde_json::to_value(TeamOwner {
-            owner_scope_digest: id('a'),
             kind: OwnerKind::Google,
             profile_id: None,
         })
         .unwrap();
-        assert_eq!(
-            google,
-            serde_json::json!({"ownerScopeDigest": id('a'), "kind": "google"})
-        );
+        assert_eq!(google, serde_json::json!({"kind": "google"}));
         assert_eq!(
             serde_json::to_value(failure("invalid_request")).unwrap(),
             serde_json::json!({"code": "invalid_request"})

@@ -19,11 +19,11 @@ beforeEach(() => {
 describe("the identity of the team's owner", () => {
   it("reads a local profile with its id, an account without one, or nobody", async () => {
     vi.mocked(invoke)
-      .mockResolvedValueOnce({ ownerScopeDigest: digest, kind: "local", profileId: profile })
-      .mockResolvedValueOnce({ ownerScopeDigest: digest, kind: "google" })
+      .mockResolvedValueOnce({ kind: "local", profileId: profile })
+      .mockResolvedValueOnce({ kind: "google" })
       .mockResolvedValueOnce(null);
-    await expect(readDesktopTeamOwnerIdentity()).resolves.toEqual({ ownerScopeDigest: digest, kind: "local", profileId: profile });
-    await expect(readDesktopTeamOwnerIdentity()).resolves.toEqual({ ownerScopeDigest: digest, kind: "google" });
+    await expect(readDesktopTeamOwnerIdentity()).resolves.toEqual({ kind: "local", profileId: profile });
+    await expect(readDesktopTeamOwnerIdentity()).resolves.toEqual({ kind: "google" });
     await expect(readDesktopTeamOwnerIdentity()).resolves.toBeNull();
     expect(invoke).toHaveBeenCalledWith("runtime_local_team_owner_identity");
     expect(vi.mocked(invoke).mock.calls[0]).toHaveLength(1);
@@ -31,15 +31,23 @@ describe("the identity of the team's owner", () => {
 
   it("refuses an identity that is not the backend's shape", async () => {
     for (const reply of [
-      undefined, {}, { ownerScopeDigest: "short", kind: "google" },
-      { ownerScopeDigest: digest, kind: "other" },
-      { ownerScopeDigest: digest, kind: "local" },
-      { ownerScopeDigest: digest, kind: "local", profileId: "x" },
-      { ownerScopeDigest: digest, kind: "google", profileId: profile },
+      undefined, {}, { kind: "bogus" }, { ownerScopeDigest: digest },
+      { kind: "other" },
+      { kind: "local" },
+      { kind: "local", profileId: "x" },
+      { kind: "google", profileId: profile },
     ]) {
       vi.mocked(invoke).mockReset().mockResolvedValueOnce(reply);
       await expect(readDesktopTeamOwnerIdentity()).rejects.toEqual({ code: "local_account_owner_invalid" });
     }
+  });
+
+  it("hands on only the kind and the profile id, whatever else the reply carries", async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({ kind: "local", profileId: profile, ownerScopeDigest: digest })
+      .mockResolvedValueOnce({ kind: "google", ownerScopeDigest: digest });
+    await expect(readDesktopTeamOwnerIdentity()).resolves.toStrictEqual({ kind: "local", profileId: profile });
+    await expect(readDesktopTeamOwnerIdentity()).resolves.toStrictEqual({ kind: "google" });
   });
 
   it("passes the backend's closed code and is desktop only", async () => {
