@@ -27,6 +27,19 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // runtime_log.rs ATTEST_REASONS: the step of the container check a failed chat read stopped at, written beside
+  // the failure in runtime.log (`local_container_not_attested (label_project)`). The person is told the failure's
+  // own code; these words are for whoever reads the log.
+  ...Object.fromEntries(
+    [
+      "hash_tool_missing", "hash_podman_version_unreadable", "hash_podman_version_differs", "hash_machine_file",
+      "hash_compose_version_unreadable", "hash_compose_version_differs", "hash_image_pin", "hash_dry_run_exit",
+      "hash_dry_run_timeout", "hash_dry_run_not_started", "hash_plan_without_create", "hash_plan_ambiguous",
+      "label_project", "label_service", "label_container_number", "label_working_dir", "label_hash_form",
+      "label_config_files", "label_compose_version", "label_systemd_unit", "label_config_hash_differs",
+      "label_image", "label_windows",
+    ].map((word) => [word, "reason word of runtime.log beside a container check failure, never shown to the person"]),
+  ),
   // team_settings.rs: the verbs of `jht team-settings`, the keys of the settings the page edits, and the
   // box's own word for a refused value, which is mapped to team_settings_value_invalid before the person sees it.
   apply: "verb of the team-settings command, not an error",
