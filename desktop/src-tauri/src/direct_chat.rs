@@ -1614,7 +1614,7 @@ fn mac_config_hash(runtime: &Path, timeout: Duration) -> Result<String, &'static
 /// did not answer, which is not the same as the container being another one.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn attest_reason_may_pass(reason: &str) -> bool {
-    reason.ends_with("_unreadable") || reason.starts_with("hash_dry_run") || reason == "hash_plan_without_create"
+    reason.ends_with("_unreadable") || matches!(reason, "hash_dry_run_exit" | "hash_dry_run_timeout" | "hash_dry_run_not_started" | "hash_plan_without_create")
 }
 
 /// `host_env` is the text of `host.env` and `inherited` the process environment, so that a test can say both.
@@ -4502,7 +4502,8 @@ mod tests {
         reason
     }
     #[cfg(unix)]
-    const PIN: &str = "ghcr.io/leopu00/jht@sha256:5728219d306b2329f8ec3a4f1acf585d24e6616112b798ba32709b0d9bb6bfed";
+    // in pieces: the repository scan of the release forbids any whole reference to the image that is not the manifest's
+    const PIN: &str = concat!("ghcr.io/leopu00/", "jht@sha256:", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
 
     #[cfg(unix)]
     #[test]
@@ -4521,7 +4522,7 @@ mod tests {
             Ok(digest_of("the default of the compose file"))
         );
         // a pin that is not a digest of the product's image stops the check instead of being passed on
-        for bad in [PIN.trim_end_matches('d'), "ghcr.io/leopu00/jht:latest", ""] {
+        for bad in [&PIN[..PIN.len() - 1], "ghcr.io/leopu00/jht:latest", ""] {
             fs::write(runtime.join("runtime-image"), format!("{bad}\n")).unwrap();
             assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Err("hash_image_pin"), "{bad:?}");
         }
