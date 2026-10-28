@@ -124,9 +124,10 @@ def test_a_flush_that_leaves_a_text_there_is_not_typed_over_either(chat, monkeyp
     assert term.typed == []
 
 
-def test_a_menu_takes_nothing(chat, monkeypatch):
-    term = terminal(chat, monkeypatch, [MENU])
-    assert chat._wake_attempt("capitano", "CAPITANO") in {"blocked", "text"}
+@pytest.mark.parametrize("screen", [MENU, "user@host:~$\n", "Sign in to continue\n  1. Log in\n"])
+def test_a_menu_a_shell_or_a_sign_in_takes_nothing_the_wake_is_not_typed_on_a_guess(chat, monkeypatch, screen):
+    term = terminal(chat, monkeypatch, [screen])
+    assert chat._wake_attempt("capitano", "CAPITANO") == "blocked"
     assert term.typed == []
 
 
@@ -191,7 +192,7 @@ def test_the_wake_is_repeated_until_the_agent_has_read_the_answer(chat):
 
 
 def test_a_line_that_landed_is_not_typed_again_within_the_quiet_time_but_is_after_it(chat):
-    result, tries, _clock = run_loop(chat, ["sent", "sent"], seen_after=None)
+    result, tries, _clock = run_loop(chat, ["sent"] * 10, seen_after=None)
     assert result == "gave_up"
     assert tries[0] == 0.0 and tries[1] == 120.0, "the next line only after the quiet time"
     assert all(b - a >= 120 for a, b in zip(tries, tries[1:])), tries

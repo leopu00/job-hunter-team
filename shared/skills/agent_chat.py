@@ -1553,8 +1553,8 @@ def _wake_log(agent: str, code: str) -> None:
 def _wake_attempt(agent: str, session: str) -> str:
     """One try to wake the agent: ``sent`` or the closed code of why not.
 
-    The composer decides, as it does for a chat send (``delivery_gate``): an empty one takes the line even while
-    the agent works (the CLI queues it).  A text in it is first handed to the transport's ``--flush-ours``, which
+    The composer decides, as it does for a chat send (``delivery_gate``): a RECOGNISED empty one takes the line even
+    while the agent works (the CLI queues it).  A text in it is first handed to the transport's ``--flush-ours``, which
     presses Enter ONLY on a text it can prove is its own; a text of anyone else is never touched.
     """
     try:
@@ -1573,7 +1573,9 @@ def _wake_attempt(agent: str, session: str) -> str:
             gate = delivery_gate(pane)
         if gate == "text":
             return "text"
-        if gate == "blocked":
+        if gate != "empty":
+            # a menu, a sign-in, or a screen with no composer to be seen: nothing is typed on a guess (a chat send
+            # may go on over an unknown composer because it proves the submit; this line is not worth that)
             return "blocked"
         binary = _delivery_binary()
         done = subprocess.run([binary, session, ANSWER_WAKE.format(agent=agent)], capture_output=True,
