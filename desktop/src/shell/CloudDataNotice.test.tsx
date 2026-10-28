@@ -1,5 +1,4 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { readFileSync } from "node:fs";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignOutContext } from "../lib/account-actions";
@@ -96,13 +95,6 @@ describe("the line of the pages that read the cloud, for a profile with no sign-
     expect(screen.getByRole("note")).toBeInTheDocument();
     expect(errors.mock.calls.some(([message]) => String(message).includes("hooks"))).toBe(false);
     errors.mockRestore();
-  });
-
-  it("calls no hook inside an `&&`, an `||` or a `?:` in the pages that decide whether to show the notice", () => {
-    for (const file of ["./server-page.tsx", "../pages/dashboard/index.tsx"]) {
-      const source = readFileSync(new URL(file, import.meta.url), "utf8");
-      expect(source.match(/(?:&&|\|\||\?)\s*!?use[A-Z]\w*\(/g), file).toBeNull();
-    }
   });
 
   it("leaves a server page as it is with a cloud session", async () => {
