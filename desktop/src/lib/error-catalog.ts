@@ -1707,6 +1707,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team on this computer is not running.",
     "Start the team and try again.",
   ),
+  profile_progress_invalid: copy(
+    "Non riesco a leggere a che punto è il profilo.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The profile's progress cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
     "Per sicurezza non lo uso: rifai il passo Runtime della configurazione.",
