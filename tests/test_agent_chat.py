@@ -1285,6 +1285,48 @@ def test_a_held_turn_that_finds_the_composer_empty_is_unconfirmed_after_a_while_
     assert len(box.envelopes()) == 1
 
 
+def _registry(box, session="CAPITANO", pasted_at=None):
+    """The transport's record of the text it left in the composer (time, fingerprint, characters, line breaks)."""
+    import time as _time
+    path = box.home / "locks" / f"tmux-send-pending-{session}.sha"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{int(pasted_at or _time.time())} {'ab' * 32} 120 0\n", encoding="utf-8")
+    return path
+
+
+def test_a_held_turn_that_expires_is_said_unconfirmed_and_its_text_is_forgotten_by_the_transport(box):
+    """The text may still wait in the composer: it must not be submitted by a later delivery as «ours, of any age»."""
+    import time as _time
+    _code, receipt = _held_half_drawn(box)
+    registry = _registry(box, pasted_at=_time.time() - 1300)     # written when the turn was held
+    _age_the_queue(box, 1300)                      # past the life of a queued turn (20 minutes)
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0")[1]
+    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "unconfirmed"}]
+    assert not registry.exists(), "the transport can no longer prove that old text ours"
+    assert _flush_calls(box) == [] and len(box.envelopes()) == 1
+
+
+def test_the_registry_of_a_later_paste_by_someone_else_is_left_when_a_held_turn_expires(box):
+    import time as _time
+    _held_half_drawn(box)
+    registry = _registry(box, pasted_at=_time.time() + 600)       # pasted after our turn was held
+    _age_the_queue(box, 1300)
+    box.run("read", "capitano")
+    assert registry.exists()
+
+
+def test_a_held_turn_that_expires_while_the_draining_process_waits_is_retired_by_it(box):
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "0.2", "JHT_CHAT_QUEUE_TTL": "1.5", "FAKE_FLUSH_RC": "130"}
+    box.run("send", "capitano", "id-expiring", stdin="scade", **HALF_DRAWN, **drain)
+    registry = _registry(box, pasted_at=0)                         # the paste it left: older than the turn
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")        # text that is never provably ours
+    assert _wait_for(lambda: _delivered_ids(box) == ["id-expiring"], 20), "nobody read, the process settled it"
+    assert not registry.exists()
+
+
 def test_a_turn_behind_a_held_one_waits_for_it(box):
     _code, first = _held_half_drawn(box)
     code, second = box.run("send", "capitano", "id-behind-half", stdin="il terzo", FAKE_FLUSH_RC="130")

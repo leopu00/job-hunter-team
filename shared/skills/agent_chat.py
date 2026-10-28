@@ -1178,6 +1178,45 @@ def _settle_typed(agent: str, session: str, row: dict, held: dict, pane: str | N
     return False
 
 
+def _forget_pending(session: str, pasted_by: float) -> None:
+    """Take out of the transport's registry the text a typed turn left in the composer, unless a later paste
+    (someone else's) has replaced it. Without the entry the transport can no longer prove the old text ours, so
+    no later delivery presses Enter on it, whatever its age."""
+    folder = os.environ.get("JHT_TMUX_LOCK_DIR") or str(jht_home() / "locks")
+    path = Path(folder) / ("tmux-send-pending-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session) + ".sha")
+    try:
+        fields = path.read_text(encoding="utf-8").split()
+        if fields and float(fields[0]) <= pasted_by + 2:
+            path.unlink()
+    except (OSError, ValueError):
+        pass
+
+
+def _retire_typed(agent: str, session: str) -> None:
+    """A typed turn that outlived QUEUE_TTL_S: its text may still be in the composer and was never proved taken.
+
+    The page used to say «not sent, write it again» while the old text waited to be submitted by the next
+    delivery: a double. Now it is forgotten by the transport and said «unconfirmed» (look at the terminal first).
+    """
+    now = time.time()
+    stale = [held for held in _queue_lines(agent) if held.get("typed") and now - float(held.get("queued_at") or 0) > QUEUE_TTL_S]
+    if not stale:
+        return
+    try:
+        with _AgentLock(agent):
+            for held in stale:
+                client_id = held["client_message_id"]
+                if _found(chat_path(agent).parent / DELIVERED_FILE, client_id) is not None:
+                    continue
+                row = _found(chat_path(agent), client_id)
+                if row is None:
+                    continue
+                _forget_pending(session, float(held.get("queued_at") or 0))
+                mark_delivered(agent, row, "unconfirmed")
+    except Refusal:
+        return
+
+
 def flush_queue(agent: str, session: str) -> None:
     """Deliver the queued turns in order while the agent is idle; stop at the first that cannot go now.
 
@@ -1185,6 +1224,7 @@ def flush_queue(agent: str, session: str) -> None:
     turn queued) and the same guarded transport.  Called by every send and, unless FLUSH_ON_READ is off,
     every read, under the agent's lock.  An expired turn is never typed.
     """
+    _retire_typed(agent, session)
     if not queued_turns(agent):
         return
     try:
@@ -1798,6 +1838,7 @@ def drain(agent: str) -> dict:
             if time.monotonic() >= deadline:
                 return {"result": "gave_up"}
             time.sleep(DRAIN_EVERY_S)
+        _retire_typed(agent, AGENTS[agent])      # the last turn may have expired while it waited
         return {"result": "empty"}
     finally:
         try:
