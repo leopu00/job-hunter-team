@@ -272,6 +272,8 @@ def reset() -> dict:
 # tool. `plan-question-check` is the net under it: the watchdog runs it every tick.
 
 PLAN_QUESTION_AFTER_S = 300  # a profile imported, a plan missing, no open question for this long: the system asks
+PLAN_REASK_AFTER_S = 3600  # after an answer that named no plan («I do not know»), the card comes back after this
+MAX_PLAN_CARDS = 3  # cards about the plan, in all, for a provider; then nobody asks again
 ANSWER_PREFIX = "ans:"  # agent_questions.ANSWER_PREFIX: a test holds them equal
 _NOTIFY_ID = re.compile(r"\bid=(aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16})\b")
 
@@ -357,11 +359,17 @@ def _post_plan_card(agent: str, card: dict) -> tuple[Optional[str], str]:
     return found.group(1), ""
 
 
-def _plan_question_state(state: dict) -> tuple[str, Optional[dict]]:
-    """«none» (never asked, or the question is gone), «open» (asked, no answer), or «answered» with the answer."""
+def _plan_question_state(state: dict, provider: Optional[str] = None) -> tuple[str, Optional[dict]]:
+    """«none» (never asked, or the question is gone, or it was for another provider), «open» (asked, no answer),
+    or «answered» with the answer.
+
+    A card is for the provider it was posted for: when the provider has changed since, its answer (or its silence)
+    says nothing about the plans of the new one, so the state is «none» and the new provider is asked afresh."""
     record = state.get("plan_question")
     question_id = record.get("id") if isinstance(record, dict) else None
     if not isinstance(question_id, str):
+        return "none", None
+    if provider and record.get("provider") not in (None, provider):
         return "none", None
     asked, answer = _plan_question_rows(question_id)
     if answer is not None:
@@ -369,9 +377,27 @@ def _plan_question_state(state: dict) -> tuple[str, Optional[dict]]:
     return ("open" if asked else "none"), None
 
 
-def ask_plan(agent: str = "capitano", asked_by: str = "agent") -> dict:
+def _cards_asked(state: dict, provider: str) -> int:
+    """How many cards about the plan were posted for this provider (the count starts again with another)."""
+    cards = state.get("plan_cards")
+    if isinstance(cards, dict) and cards.get("provider") == provider and isinstance(cards.get("count"), int):
+        return cards["count"]
+    return 0
+
+
+def _answered_at(answer: Optional[dict]) -> Optional[datetime]:
+    moment = _parse((answer or {}).get("ts"))
+    if moment is not None and moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
+             now: Optional[datetime] = None) -> dict:
     """Ask the user which plan they have: the one way to do it. Idempotent — no second card while the first has
-    no answer, and nothing to ask once the plan is declared."""
+    no answer, and nothing to ask once the plan is declared. After an answer that named no plan («I do not know»)
+    the card comes back only after `reask_s`, and never more than `MAX_PLAN_CARDS` times for a provider."""
+    now = now or datetime.now(timezone.utc)
     with _plan_question_lock():
         info = plan_info()
         if info.get("ok"):
@@ -384,27 +410,41 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent") -> dict:
             return {"ok": False, "asked": False, "reason": "no plans are known for the active provider"}
         state = status()
         try:
-            kind, _ = _plan_question_state(state)
+            kind, answer = _plan_question_state(state, card["provider"])
         except sqlite3.Error as error:
             return {"ok": False, "asked": False, "reason": f"the database cannot be read: {error}"}
         if kind == "open":
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
                     "question_id": state["plan_question"]["id"]}
+        cards = _cards_asked(state, card["provider"])
+        if cards >= MAX_PLAN_CARDS:
+            return {"ok": True, "asked": False, "limit": True,
+                    "reason": f"the plan was asked {cards} times and the user named none: not asked again"}
+        answered = _answered_at(answer) if kind == "answered" else None
+        if answered is not None and (now - answered).total_seconds() < reask_s:
+            return {"ok": True, "asked": False, "reason": "the user answered without naming a plan: asked again later",
+                    "seconds_left": int(reask_s - (now - answered).total_seconds())}
         question_id, why = _post_plan_card(agent, card)
         if question_id is None:
             return {"ok": False, "asked": False, "reason": why}
-        state["plan_question"] = {"id": question_id, "asked_at": _now(), "asked_by": asked_by}
+        state = status()  # read again: what was written while the card was being posted stays
+        state["plan_question"] = {"id": question_id, "asked_at": _now(), "asked_by": asked_by,
+                                  "provider": card["provider"]}
+        state["plan_cards"] = {"provider": card["provider"], "count": cards + 1}
         _write(state)
         return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]]}
 
 
-def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, now: Optional[datetime] = None) -> dict:
+def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,
+                        now: Optional[datetime] = None) -> dict:
     """The net under `ask-plan`: with the profile imported and no plan declared, and nobody asking for `after_s`
-    seconds (counted from the import, or from the answer that did not name a plan), the system asks.
+    seconds from the import, the system asks.
 
     Never before the profile is imported, never in `steady`, never while a question about the plan is open, and
-    never when the registry cannot be read. An answer that names a plan which is still not written after
-    `after_s` is written here, as the user chose it."""
+    never when the registry cannot be read. After an answer that named no plan it waits `reask_s` (an hour), and
+    after `MAX_PLAN_CARDS` cards it stops («stopped»: the watchdog says so in its log). An answer that names a
+    plan which is still not written after `after_s` is written here, as the user chose it, for the provider the
+    card was posted for."""
     now = now or datetime.now(timezone.utc)
     imported = _profile_imported()
     if imported is None:
@@ -417,29 +457,35 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, now: Optional[da
         return {"action": "none", "reason": "the plan is declared"}
     if not info.get("hint"):
         return {"action": "none", "reason": "the plan table cannot be read"}
+    registry = _load_module("plan_registry", "plan_registry.py")
+    provider = (registry.question_options() or {}).get("provider") if registry is not None else None
+    if not provider:
+        return {"action": "none", "reason": "no plans are known for the active provider"}
     try:
-        kind, answer = _plan_question_state(state)
+        kind, answer = _plan_question_state(state, provider)
     except sqlite3.Error:
         return {"action": "none", "reason": "the database cannot be read"}
     if kind == "open":
         return {"action": "none", "reason": "a question about the plan is open"}
-    since = datetime.fromtimestamp(imported, timezone.utc)
-    choice = None
-    if kind == "answered":
-        since = _parse((answer or {}).get("ts")) or since
-        chosen = (answer or {}).get("scelte")
-        choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
-    if since.tzinfo is None:
-        since = since.replace(tzinfo=timezone.utc)
-    waited = (now - since).total_seconds()
-    if waited < after_s:
-        return {"action": "waiting", "seconds_left": int(after_s - waited)}
-    registry = _load_module("plan_registry", "plan_registry.py")
-    provider = (registry.question_options() or {}).get("provider") if registry is not None else None
-    if choice and provider and registry.find_plan(provider, choice) is not None:
+    chosen = (answer or {}).get("scelte")
+    choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
+    if kind == "answered" and choice and registry.find_plan(provider, choice) is not None:
+        left = after_s - (now - (_answered_at(answer) or now)).total_seconds()
+        if left > 0:
+            return {"action": "waiting", "seconds_left": int(left)}
         plan = registry.set_plan(provider, choice)
         return {"action": "declared", "provider": provider, "plan": plan["id"]}
-    asked = ask_plan(agent="capitano", asked_by="net")
+    cards = _cards_asked(state, provider)
+    if cards >= MAX_PLAN_CARDS:
+        return {"action": "stopped", "reason": f"the plan was asked {cards} times and the user named none"}
+    since = _answered_at(answer) if kind == "answered" else None
+    wait = reask_s
+    if since is None:
+        since, wait = datetime.fromtimestamp(imported, timezone.utc), after_s
+    left = wait - (now - since).total_seconds()
+    if left > 0:
+        return {"action": "waiting", "seconds_left": int(left)}
+    asked = ask_plan(agent="capitano", asked_by="net", reask_s=reask_s, now=now)
     return dict(asked, action="asked" if asked.get("asked") else ("none" if asked.get("ok") else "failed"))
 
 
@@ -451,6 +497,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--reason", default="closed manually")
     ap.add_argument("--after", type=float, default=PLAN_QUESTION_AFTER_S,
                     help="plan-question-check: seconds without a question before the system asks")
+    ap.add_argument("--reask", type=float, default=PLAN_REASK_AFTER_S,
+                    help="ask-plan, plan-question-check: seconds before the card comes back after an answer that named no plan")
     args = ap.parse_args(argv)
 
     if args.command == "status":
@@ -465,9 +513,9 @@ def main(argv: list[str]) -> int:
     elif args.command == "complete":
         out = complete(args.reason)
     elif args.command == "ask-plan":
-        out = ask_plan()
+        out = ask_plan(reask_s=args.reask)
     elif args.command == "plan-question-check":
-        out = plan_question_check(args.after)
+        out = plan_question_check(args.after, args.reask)
     else:
         out = reset()
 

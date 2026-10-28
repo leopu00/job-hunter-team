@@ -812,6 +812,12 @@ maybe_plan_question() {
     *'"action": "asked"'*|*'"action": "declared"'*)
       plan_question_failures=0
       log "plan question: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-200)" ;;
+    *'"action": "stopped"'*)
+      # tre card senza che l'utente nomini un piano: la rete tace da qui in poi, e lo dice UNA volta
+      if [ "$plan_question_stopped_logged" -eq 0 ]; then
+        plan_question_stopped_logged=1
+        log "plan question STOPPED: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-240) — the user will not be asked again by the system"
+      fi ;;
     *'"action": "failed"'*)
       # un guasto vero (il DB, lo strumento): visibile, ma una riga ogni ~10 minuti e non una per tick
       if [ $((plan_question_failures % 20)) -eq 0 ]; then
@@ -822,6 +828,7 @@ maybe_plan_question() {
   return 0
 }
 plan_question_failures=0
+plan_question_stopped_logged=0
 # --- fine rete della domanda sul piano
 
 maybe_respawn_workers() {

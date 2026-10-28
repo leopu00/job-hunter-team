@@ -17,6 +17,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -115,15 +116,23 @@ def test_a_second_ask_plan_posts_nothing_while_the_first_has_no_answer(box):
     assert len(questions(box)) == 1
 
 
-def test_after_an_answer_that_names_no_plan_ask_plan_asks_again(box):
+def test_after_an_answer_that_names_no_plan_the_card_comes_back_only_after_an_hour(box):
     configure(box)
     first = run(box, "ask-plan")
     answer(box, first["question_id"], "unknown")
 
-    again = run(box, "ask-plan")
+    soon = run(box, "ask-plan")
+    assert soon["ok"] and not soon["asked"] and 3000 < soon["seconds_left"] <= 3600
+    assert len(questions(box)) == 1
 
+    # asking for a wait of zero stands for the hour having passed
+    again = run(box, "ask-plan", "--reask", "0")
     assert again["asked"] and again["question_id"] != first["question_id"]
     assert len(questions(box)) == 2
+
+
+def ago(minutes: float) -> datetime:
+    return datetime.now(timezone.utc) - timedelta(minutes=minutes)
 
 
 def test_ask_plan_asks_nothing_once_the_plan_is_declared(box):
@@ -286,18 +295,96 @@ def test_the_net_does_nothing_once_the_plan_is_declared_or_the_first_run_is_over
     assert questions(box) == []
 
 
-def test_after_an_i_do_not_know_the_net_asks_again_only_after_the_minutes(box):
+def test_after_an_i_do_not_know_the_net_asks_again_after_an_hour_and_not_after_five_minutes(box):
     configure(box)
     import_profile(box, minutes_ago=600)
     first = run(box, "ask-plan")
-    answer(box, first["question_id"], "unknown")
+    answer(box, first["question_id"], "unknown", when=ago(10))
 
-    soon = run(box, "plan-question-check")
-    assert soon["action"] == "waiting" and len(questions(box)) == 1
+    soon = run(box, "plan-question-check")  # the first card from the import is at 5 minutes; this one is not
+    assert soon["action"] == "waiting" and 2800 < soon["seconds_left"] <= 3000
+    assert len(questions(box)) == 1
 
-    # the answer is now old: let the 5 minutes pass by asking for a window of zero
-    later = run(box, "plan-question-check", "--after", "0")
+
+def test_an_hour_after_an_i_do_not_know_the_net_asks_again(box):
+    configure(box)
+    import_profile(box, minutes_ago=600)
+    first = run(box, "ask-plan")
+    answer(box, first["question_id"], "unknown", when=ago(61))
+
+    later = run(box, "plan-question-check")
+
     assert later["action"] == "asked" and len(questions(box)) == 2
+
+
+def test_after_three_cards_the_net_stops_and_nobody_asks_again(box):
+    configure(box)
+    import_profile(box, minutes_ago=600)
+    card = run(box, "ask-plan")
+    for expected in (2, 3):
+        answer(box, card["question_id"], "unknown", when=ago(61))
+        card = run(box, "plan-question-check")
+        assert card["action"] == "asked" and len(questions(box)) == expected, card
+    answer(box, card["question_id"], "unknown", when=ago(61))
+
+    stopped = run(box, "plan-question-check")
+    by_hand = run(box, "ask-plan", "--reask", "0")
+
+    assert stopped["action"] == "stopped" and "3 times" in stopped["reason"]
+    assert by_hand["ok"] and not by_hand["asked"] and by_hand["limit"] is True
+    assert len(questions(box)) == 3
+
+
+def test_a_card_is_for_the_provider_it_was_posted_for(box):
+    configure(box)
+    import_profile(box, minutes_ago=600)
+    first = run(box, "ask-plan")
+    answer(box, first["question_id"], "pro", when=ago(30))  # an openai plan, named for the card of openai
+    configure(box, provider="claude")  # the provider changes before anybody wrote the plan
+
+    out = run(box, "plan-question-check")
+
+    assert out["action"] == "asked", out  # a new card, for the plans of the new provider
+    assert "providers" not in json.loads((box.home / "jht.config.json").read_text())  # nothing is written for claude
+    ids = [o["id"] for o in questions(box)[-1]["payload"]["opzioni"]]
+    assert ids == ["pro", "max5", "max20", "unknown"]
+    state = json.loads((box.home / "state" / "first-run.json").read_text())
+    assert state["plan_cards"] == {"provider": "claude", "count": 1}  # the count starts again with the provider
+
+
+def test_a_card_left_open_for_another_provider_does_not_stop_the_new_one(box):
+    configure(box)
+    run(box, "ask-plan")
+    configure(box, provider="kimi")
+
+    out = run(box, "ask-plan")
+
+    assert out["asked"] and len(questions(box)) == 2
+
+
+def test_what_is_written_to_the_state_while_the_card_is_posted_is_kept(box, monkeypatch):
+    import importlib.util
+
+    configure(box)
+    for key, value in box.env.items():
+        monkeypatch.setenv(key, value)
+    spec = importlib.util.spec_from_file_location("first_run_under_test", FIRST_RUN)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def post(agent, card):
+        state = json.loads(module.STATE_PATH.read_text())
+        state["written_meanwhile"] = True  # somebody else (burst, complete) writes the state during the post
+        module.STATE_PATH.write_text(json.dumps(state))
+        return "aq:capitano:1-abc", ""
+
+    monkeypatch.setattr(module, "_post_plan_card", post)
+    module.status()
+
+    assert module.ask_plan()["asked"]
+
+    kept = json.loads(module.STATE_PATH.read_text())
+    assert kept["written_meanwhile"] is True and kept["plan_question"]["id"] == "aq:capitano:1-abc"
 
 
 def test_an_answer_that_names_a_plan_is_written_as_the_user_chose_it_when_nobody_wrote_it(box):
@@ -307,7 +394,7 @@ def test_an_answer_that_names_a_plan_is_written_as_the_user_chose_it_when_nobody
     answer(box, first["question_id"], "pro_max")
 
     waiting = run(box, "plan-question-check")
-    assert waiting["action"] == "waiting"
+    assert waiting["action"] == "waiting" and waiting["seconds_left"] <= 300
 
     done = run(box, "plan-question-check", "--after", "0")
 
@@ -373,6 +460,18 @@ def test_the_watchdog_says_a_failure_once_and_not_on_every_tick(tmp_path: Path):
     failed = _watchdog_function(tmp_path, '{"action": "failed", "reason": "the card was not posted: db"}')
 
     assert failed.stdout.count("LOG plan question NOT posted") == 1 and "DONE-0" in failed.stdout
+
+
+def test_the_watchdog_says_the_net_has_stopped_once(tmp_path: Path):
+    stopped = _watchdog_function(tmp_path, '{"action": "stopped", "reason": "the plan was asked 3 times and the user named none"}')
+
+    assert stopped.stdout.count("LOG plan question STOPPED") == 1 and "DONE-0" in stopped.stdout
+
+
+def test_the_italian_card_does_not_call_the_agents_workers():
+    catalog = json.loads((LOCALES / "it.json").read_text(encoding="utf-8"))
+
+    assert "lavoratori" not in catalog["plan.question_text"] and "dimensiona gli agenti" in catalog["plan.question_text"]
 
 
 def test_the_watchdog_without_the_tool_does_nothing(tmp_path: Path):
