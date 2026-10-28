@@ -147,7 +147,7 @@ describe("the time of a message", () => {
 });
 
 describe("the size of the text", () => {
-  const FILES = ["DirectChatScreen.tsx", "ChatQuestion.tsx", "stick-to-bottom.tsx", "chat-text.tsx"];
+  const FILES = ["DirectChatScreen.tsx", "ChatMessageRow.tsx", "ChatQuestion.tsx", "stick-to-bottom.tsx", "chat-text.tsx"];
   const source = (name: string) => readFileSync(`src/pages/messages/${name}`, "utf8");
 
   it("no text in the chat is smaller than 11 px, and the words people read are 15 px, with room between the lines", () => {
@@ -157,10 +157,11 @@ describe("the size of the text", () => {
       }
     }
     const screenSource = source("DirectChatScreen.tsx");
-    // the bubble, the box people type in, the suggested replies
-    expect(screenSource).toMatch(/rounded-lg px-4 py-3 text-\[15px\] leading-\[1\.7\]/);
+    const rowSource = source("ChatMessageRow.tsx");
+    // the bubble and the suggested replies (a line of its own component), the box people type in (the screen's)
+    expect(rowSource).toMatch(/rounded-lg px-4 py-3 text-\[15px\] leading-\[1\.7\]/);
     expect(screenSource).toMatch(/resize-none border-0 bg-transparent px-1 py-1\.5 text-\[15px\]/);
-    expect(screenSource).toMatch(/px-2\.5 py-0\.5 text-left text-\[15px\]/);
+    expect(rowSource).toMatch(/px-2\.5 py-0\.5 text-left text-\[15px\]/);
     expect(source("ChatQuestion.tsx")).toMatch(/rounded-lg rounded-bl-sm px-4 py-3 text-\[15px\]/);  });
 
   it("the conversation and the box use the whole width of the page, not a narrow column", () => {
@@ -168,7 +169,7 @@ describe("the size of the text", () => {
     expect(screenSource).not.toMatch(/max-w-4xl/);
     expect(screenSource).toMatch(/<div className="w-full flex flex-col gap-3">/);
     // a bubble can grow wide but a line stays short enough to follow
-    expect(screenSource).toMatch(/max-w-\[min\(92%,72rem\)\]/);
+    expect(source("ChatMessageRow.tsx")).toMatch(/max-w-\[min\(92%,72rem\)\]/);
     expect(source("ChatQuestion.tsx")).toMatch(/max-w-\[min\(92%,72rem\)\]/);
   });
 });
