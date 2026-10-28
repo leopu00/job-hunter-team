@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorAmountsOf, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorAmountsOf, fillAmounts, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
 import { ERROR_CATALOG_LOCALES } from "./error-catalog.locales";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
@@ -976,19 +976,6 @@ describe("the room the agents need, said in numbers", () => {
     }
   });
 
-  it.each(ERROR_LOCALES)("tells memory in %s, and with the swap high also to restart", (locale) => {
-    const plain = describeError("ram_low", { locale, amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB } });
-    const swap = describeError("ram_low_swap", { locale, amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB } });
-    for (const described of [plain, swap]) {
-      expect(described.known).toBe(true);
-      expect(`${described.text} ${described.action}`).toContain("6");
-      expect(`${described.text} ${described.action}`).toContain("3");
-      expect(`${described.text} ${described.action}`).not.toMatch(/[{}%]/);
-    }
-    expect(swap.text).not.toBe(plain.text);
-    expect(swap.action).not.toBe(plain.action);
-  });
-
   it("rounds down to one decimal with the decimal mark of the language", () => {
     const quarter = { requiredBytes: 8 * GIB, availableBytes: 5 * GIB + GIB / 4 };
     expect(describeError("disk_low", { locale: "en", amounts: quarter }).text).toContain("available: 5.2 GiB");
@@ -997,10 +984,14 @@ describe("the room the agents need, said in numbers", () => {
     expect(describeError("disk_low", { locale: "en", amounts: { requiredBytes: 8 * GIB, availableBytes: 0 } }).text).toContain("available: 0 GiB");
   });
 
-  it("asks nothing of memory without the numbers: a sentence that needs them is the generic one, not a placeholder", () => {
-    const described = describeError("ram_low", { locale: "en" });
-    expect(described.known).toBe(false);
-    expect(described.text).not.toMatch(/[{}]/);
+  it("writes the amounts into a notice, in the language, and leaves a text without placeholders alone", () => {
+    const text = "need {required} GiB, there {available} GiB";
+    expect(fillAmounts(text, { requiredBytes: 6 * GIB, availableBytes: 3 * GIB + GIB / 4 }, "en")).toBe("need 6 GiB, there 3.2 GiB");
+    expect(fillAmounts(text, { requiredBytes: 6 * GIB, availableBytes: 3 * GIB + GIB / 4 }, "it")).toBe("need 6 GiB, there 3,2 GiB");
+    expect(fillAmounts("no numbers here", { requiredBytes: 1, availableBytes: 2 }, "en")).toBe("no numbers here");
+    for (const bad of [null, undefined, {}, { requiredBytes: "6", availableBytes: 3 }, { requiredBytes: -1, availableBytes: 3 }]) {
+      expect(fillAmounts(text, bad, "en")).toBe(text);
+    }
   });
 
   it("reads the amounts of a native error only when they are numbers", () => {

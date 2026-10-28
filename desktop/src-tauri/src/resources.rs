@@ -9,7 +9,9 @@
 //! 4.8 GB, and the disk guard of the team refuses to start an agent under 8 GiB free. What is already on the
 //! computer is not asked for twice: a machine and an image that exist only need the guard's margin.
 //!
-//! A measure that cannot be taken never refuses (`None`): the same rule as the disk guard.
+//! Only the disk refuses. The memory is measured at the moment (the system's free share of it moves with the
+//! pressure), so a short memory is told and the setup goes on. A measure that cannot be taken never refuses nor
+//! warns (`None`): the same rule as the disk guard.
 
 use serde::Serialize;
 use std::path::Path;
@@ -27,7 +29,7 @@ pub(crate) const GUARD_MARGIN_GIB: u64 = 8;
 pub(crate) const MACHINE_RAM_GIB: u64 = 4;
 /// What the system and the app itself need on top of the machine.
 pub(crate) const HOST_RAM_HEADROOM_GIB: u64 = 2;
-/// Swap in use from which the advice is to restart the computer (it only changes the advice, never blocks).
+/// Swap in use from which the advice is to restart the computer (it only changes the advice).
 pub(crate) const SWAP_HIGH_USED_GIB: u64 = 4;
 
 /// What is already on this computer.
@@ -75,24 +77,28 @@ pub(crate) struct Shortfall {
     pub(crate) available_bytes: u64,
 }
 
-/// `disk_low`, `ram_low` or `ram_low_swap` (memory short while the swap is already high: the advice is to
-/// restart), with the amounts; `None` when there is room or when a measure is missing.
+/// The one refusal: the disk. `disk_low` with the amounts, or `None` when there is room or the disk could not
+/// be measured. Memory never refuses (`ram_advice`): its measure moves with the pressure of the moment.
 pub(crate) fn verdict(needs: Needs, measure: Measure) -> Option<(&'static str, Shortfall)> {
-    if let Some(free) = measure.disk_free {
-        let required = needs.disk_gib * GIB;
-        if free < required {
-            return Some(("disk_low", Shortfall { required_bytes: required, available_bytes: free }));
-        }
+    let free = measure.disk_free?;
+    let required = needs.disk_gib * GIB;
+    (free < required).then_some(("disk_low", Shortfall { required_bytes: required, available_bytes: free }))
+}
+
+/// The notice shown when the memory looks short, which does not stop the setup: «it may run slowly or stop:
+/// close the apps» (with the swap high also «or restart»). `None` when there is room or it could not be measured.
+pub(crate) const RAM_NOTICE: &str = "ui_notice_ram_low";
+pub(crate) const RAM_NOTICE_SWAP: &str = "ui_notice_ram_low_swap";
+
+pub(crate) fn ram_advice(needs: Needs, measure: Measure) -> Option<(&'static str, Shortfall)> {
+    let available = measure.ram_available?;
+    let required = needs.ram_gib * GIB;
+    if available >= required {
+        return None;
     }
-    if let Some(available) = measure.ram_available {
-        let required = needs.ram_gib * GIB;
-        if available < required {
-            let swap_high = measure.swap_used.is_some_and(|used| used >= SWAP_HIGH_USED_GIB * GIB);
-            let code = if swap_high { "ram_low_swap" } else { "ram_low" };
-            return Some((code, Shortfall { required_bytes: required, available_bytes: available }));
-        }
-    }
-    None
+    let swap_high = measure.swap_used.is_some_and(|used| used >= SWAP_HIGH_USED_GIB * GIB);
+    let key = if swap_high { RAM_NOTICE_SWAP } else { RAM_NOTICE };
+    Some((key, Shortfall { required_bytes: required, available_bytes: available }))
 }
 
 /// The disk guard's own refusal, with the amounts it names: the margin and what is free now.
@@ -285,33 +291,42 @@ mod tests {
     }
 
     #[test]
-    fn memory_short_asks_to_close_apps_and_with_the_swap_high_to_restart() {
+    fn memory_short_never_refuses_the_setup() {
+        let short = Measure { disk_free: Some(gib(100)), ram_available: Some(gib(1)), swap_used: Some(gib(30)) };
+        assert_eq!(verdict(needs(NOTHING), short), None, "only the disk refuses");
+    }
+
+    #[test]
+    fn memory_short_is_told_and_with_the_swap_high_it_also_says_to_restart() {
         let low = Measure { disk_free: Some(gib(100)), ram_available: Some(gib(3)), swap_used: Some(gib(1)) };
-        let (code, shortfall) = verdict(needs(NOTHING), low).expect("3 GiB is not 6");
-        assert_eq!((code, shortfall.required_bytes, shortfall.available_bytes), ("ram_low", gib(6), gib(3)));
+        let (key, shortfall) = ram_advice(needs(NOTHING), low).expect("3 GiB is not 6");
+        assert_eq!((key, shortfall.required_bytes, shortfall.available_bytes), (RAM_NOTICE, gib(6), gib(3)));
         let swapping = Measure { swap_used: Some(gib(SWAP_HIGH_USED_GIB)), ..low };
-        assert_eq!(verdict(needs(NOTHING), swapping).map(|(code, _)| code), Some("ram_low_swap"));
+        assert_eq!(ram_advice(needs(NOTHING), swapping).map(|(key, _)| key), Some(RAM_NOTICE_SWAP));
         let just_under = Measure { swap_used: Some(gib(SWAP_HIGH_USED_GIB) - 1), ..low };
-        assert_eq!(verdict(needs(NOTHING), just_under).map(|(code, _)| code), Some("ram_low"));
+        assert_eq!(ram_advice(needs(NOTHING), just_under).map(|(key, _)| key), Some(RAM_NOTICE));
     }
 
     #[test]
-    fn a_high_swap_alone_never_blocks() {
-        let enough = Measure { disk_free: Some(gib(100)), ram_available: Some(gib(8)), swap_used: Some(gib(20)) };
-        assert_eq!(verdict(needs(NOTHING), enough), None);
+    fn enough_memory_says_nothing_even_with_the_swap_high() {
+        let enough = Measure { disk_free: Some(gib(100)), ram_available: Some(gib(6)), swap_used: Some(gib(20)) };
+        assert_eq!(ram_advice(needs(NOTHING), enough), None);
+        assert_eq!(ram_advice(needs(NOTHING), Measure { ram_available: Some(gib(6) - 1), ..enough }).map(|(key, _)| key), Some(RAM_NOTICE_SWAP));
     }
 
     #[test]
-    fn the_disk_is_told_before_the_memory() {
-        let both = Measure { disk_free: Some(gib(1)), ram_available: Some(gib(1)), swap_used: None };
-        assert_eq!(verdict(needs(NOTHING), both).map(|(code, _)| code), Some("disk_low"));
+    fn a_running_machine_has_its_memory_already_so_two_gib_are_enough() {
+        let measure = Measure { disk_free: Some(gib(100)), ram_available: Some(gib(2)), swap_used: None };
+        assert_eq!(ram_advice(needs(EVERYTHING), measure), None);
+        assert!(ram_advice(needs(Installed { machine_running: false, ..EVERYTHING }), measure).is_some());
     }
 
     #[test]
-    fn a_measure_that_cannot_be_taken_never_refuses() {
+    fn a_measure_that_cannot_be_taken_neither_refuses_nor_warns() {
         assert_eq!(verdict(needs(NOTHING), Measure::default()), None);
+        assert_eq!(ram_advice(needs(NOTHING), Measure::default()), None);
         let only_disk = Measure { disk_free: Some(gib(100)), ..Measure::default() };
-        assert_eq!(verdict(needs(NOTHING), only_disk), None);
+        assert_eq!((verdict(needs(NOTHING), only_disk), ram_advice(needs(NOTHING), only_disk)), (None, None));
     }
 
     #[test]

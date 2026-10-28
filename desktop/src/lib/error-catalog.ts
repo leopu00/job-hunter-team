@@ -2087,18 +2087,6 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agents need at least {required} GiB of disk — available: {available} GiB.",
     "Free up space: empty the Trash, remove old Docker/Podman images and delete large files you no longer need, then try again. Agents already running keep working.",
   ),
-  ram_low: copy(
-    "Gli agenti richiedono almeno {required} GiB di memoria — disponibili: {available} GiB.",
-    "Chiudi le app che non ti servono, poi riprova.",
-    "The agents need at least {required} GiB of memory — available: {available} GiB.",
-    "Close the apps you do not need, then try again.",
-  ),
-  ram_low_swap: copy(
-    "Gli agenti richiedono almeno {required} GiB di memoria — disponibili: {available} GiB. Il computer sta usando molto la memoria su disco (swap).",
-    "Chiudi le app che non ti servono e riavvia il computer per liberare la memoria, poi riprova.",
-    "The agents need at least {required} GiB of memory — available: {available} GiB. The computer is using a lot of swap memory.",
-    "Close the apps you do not need and restart the computer to free up memory, then try again.",
-  ),
 
   // ── «Free up space» on disk_low: `jht clean-images --json` (onboarding_clean_images) ──
   // The confirmation and each outcome; {size} is the freed space (describeError's `bytes`).
@@ -2352,6 +2340,17 @@ function validAmounts(value: unknown): ResourceAmounts | null {
 function formatGib(bytes: number, locale: ErrorLocale): string {
   const tenths = Math.floor((bytes * 10) / 1024 ** 3);
   return new Intl.NumberFormat(LOCALE_TAGS[locale], { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(tenths / 10);
+}
+
+/**
+ * The sentence with `{required}` and `{available}` written in the person's language (GiB, one decimal, rounded down).
+ * A text with no placeholder, or no valid amounts, comes back as it is.
+ */
+export function fillAmounts(text: string, amounts: unknown, locale?: string | null): string {
+  const valid = validAmounts(amounts);
+  if (!valid) return text;
+  const language = localeOf(locale);
+  return text.replaceAll("{required}", formatGib(valid.requiredBytes, language)).replaceAll("{available}", formatGib(valid.availableBytes, language));
 }
 
 /** The amounts a native error carries (`resources`), when they are valid numbers. */

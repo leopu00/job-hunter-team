@@ -1615,26 +1615,6 @@ describe("DashboardApp onboarding router", () => {
     expect(document.body.textContent ?? "").not.toMatch(/[{}]/);
   });
 
-  it("the setup that finds the memory short says it, and with the swap high also to restart", async () => {
-    vi.mocked(useSession).mockReturnValue(signedInAs("room-ram-account"));
-    requireOnboarding();
-    const GIB = 1024 ** 3;
-    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
-      code: "ram_low_swap",
-      message: "raw native message",
-      retryable: true,
-      resources: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB },
-    });
-    render(<DashboardApp />);
-    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
-
-    const described = describeError("ram_low_swap", { locale: "it", amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB } });
-    expect(await screen.findByText(described.text)).toBeInTheDocument();
-    expect(described.text).toContain("almeno 6 GiB di memoria — disponibili: 3 GiB");
-    expect(screen.getByText(`Cosa fare: ${described.action}`)).toBeInTheDocument();
-    expect(described.action).toMatch(/riavvia/);
-  });
-
   it("a failed local step says its own cause instead of the catalog's guess about the network", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("runtime-cause-account"));
     requireOnboarding();

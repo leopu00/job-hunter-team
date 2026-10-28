@@ -446,6 +446,9 @@ pub(crate) struct OnboardingProgress {
     /// While the runtime image is pulled: the layers finished and the bytes podman printed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pull: Option<crate::windows_runtime::PullProgress>,
+    /// The room a notice names (the memory that looks short): the screen writes the numbers in the person's language.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    amounts: Option<crate::resources::Shortfall>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -1194,7 +1197,31 @@ impl ProgressReporter {
             retryable: error.map(|value| value.retryable),
             phase,
             pull,
+            amounts: None,
         });
+    }
+
+    /// A notice that names an amount, shown at once and kept on screen (the memory looks short). Outside a step
+    /// it is dropped, like `phase`.
+    fn notice_with_amounts(&self, message: &'static str, amounts: crate::resources::Shortfall) {
+        let running = {
+            let current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+            current.as_ref().map(|(stage, started, _)| (*stage, *started))
+        };
+        if let Some((stage, started)) = running {
+            (self.emit)(OnboardingProgress {
+                stage,
+                status: OnboardingProgressStatus::Notice,
+                message,
+                sequence: self.sequence.fetch_add(1, Ordering::Relaxed),
+                elapsed_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                code: None,
+                retryable: None,
+                phase: None,
+                pull: None,
+                amounts: Some(amounts),
+            });
+        }
     }
 
     fn run<T>(
@@ -2871,31 +2898,42 @@ fn local_installed_state(app: &tauri::AppHandle, home: &Path) -> crate::resource
     crate::resources::Installed { machine, runtime: host_wrapper_path(app).is_some() && current, machine_running }
 }
 
-/// Linux has no machine and Windows' is not looked for: the machine counts as there, the runtime as not
-/// installed yet, and its memory as not taken.
-#[cfg(not(target_os = "macos"))]
+/// Linux has no Podman machine: nothing to create on the disk and no memory taken for it. The runtime counts as
+/// not installed yet (its image is asked for).
+#[cfg(target_os = "linux")]
+fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
+    crate::resources::Installed { machine: true, runtime: false, machine_running: true }
+}
+
+/// Windows' machine (WSL) is not looked for: it counts as there and its memory as not taken yet.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
     crate::resources::Installed { machine: true, runtime: false, machine_running: false }
 }
 
-/// Before anything is installed or started on this computer: is there room? If not, the setup does not even
-/// try and says what it needs and what there is (`disk_low`, `ram_low`, `ram_low_swap`, with the amounts).
-fn local_resources_check(app: &tauri::AppHandle) -> Result<(), OnboardingError> {
-    let Ok(home) = app.path().home_dir() else { return Ok(()) };
+/// Before anything is installed or started on this computer: is there room? The disk refuses: the setup does
+/// not even try and says what it needs and what there is (`disk_low`, with the amounts). The memory only warns
+/// (its measure moves with the pressure of the moment): the notice to show, with the amounts, and the setup goes on.
+fn local_resources_check(
+    app: &tauri::AppHandle,
+) -> Result<Option<(&'static str, crate::resources::Shortfall)>, OnboardingError> {
+    let Ok(home) = app.path().home_dir() else { return Ok(None) };
     let needs = crate::resources::needs(local_installed_state(app, &home));
-    match crate::resources::verdict(needs, crate::resources::measure_now(&home)) {
-        Some((code, shortfall)) => {
-            trace_local_runtime("resources", code);
-            Err(OnboardingError { resources: Some(shortfall), ..failure(code) })
-        }
-        None => Ok(()),
+    let measure = crate::resources::measure_now(&home);
+    if let Some((code, shortfall)) = crate::resources::verdict(needs, measure) {
+        trace_local_runtime("resources", code);
+        return Err(OnboardingError { resources: Some(shortfall), ..failure(code) });
     }
+    Ok(crate::resources::ram_advice(needs, measure))
 }
 
 /// The disk guard's refusal at the start of the team names the amounts too: the margin it keeps and what is free.
 fn attach_disk_amounts(error: OnboardingError, shortfall: Option<crate::resources::Shortfall>) -> OnboardingError {
+    // Only when the free space measured here really is under the margin: the guard may have refused on the engine's
+    // own volume, and «needs 8, available 40» would be a sentence that contradicts itself.
+    let under = shortfall.filter(|amounts| amounts.available_bytes < amounts.required_bytes);
     if error.code == "disk_low" && error.resources.is_none() {
-        OnboardingError { resources: shortfall, ..error }
+        OnboardingError { resources: under, ..error }
     } else {
         error
     }
@@ -2931,8 +2969,11 @@ fn prepare_impl(
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
                 ValidatedHost::Local => Some({
-                    // Room first: nothing is installed or started on a computer that cannot hold it.
-                    local_resources_check(&app)?;
+                    // Room first: nothing is installed or started on a computer that cannot hold it. A memory that looks
+                    // short is told and the setup goes on.
+                    if let Some((notice, amounts)) = local_resources_check(&app)? {
+                        reporter.notice_with_amounts(notice, amounts);
+                    }
                     // The pull of the runtime image reports its progress through the reporter while install_local runs.
                     let pull_reporter = reporter.clone();
                     crate::windows_runtime::with_pull_sink(
@@ -6741,6 +6782,45 @@ mod tests {
         assert_eq!(value["status"], "notice");
     }
 
+    /// The memory that looks short is a notice of the running step with the amounts; the step goes on and ends done,
+    /// and outside a step nothing is sent.
+    #[test]
+    fn a_short_memory_is_a_notice_with_the_amounts_and_the_step_goes_on() {
+        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&events);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        let amounts = crate::resources::Shortfall { required_bytes: 6 << 30, available_bytes: 3 << 30 };
+        reporter.notice_with_amounts("ui_notice_ram_low", amounts);
+        assert!(events.lock().unwrap().is_empty(), "outside a step it is dropped");
+        let inside = reporter.clone();
+        reporter
+            .run_with_interval(
+                OnboardingProgressStage::Engine,
+                "ui_engine_start",
+                "ui_engine_progress",
+                "ui_engine_done",
+                Duration::from_secs(1),
+                move || {
+                    inside.notice_with_amounts("ui_notice_ram_low", amounts);
+                    Ok::<_, super::OnboardingError>(())
+                },
+            )
+            .unwrap();
+        let events = events.lock().unwrap();
+        let notices: Vec<_> = events.iter().filter(|event| event.status == OnboardingProgressStatus::Notice).collect();
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].message, "ui_notice_ram_low");
+        assert_eq!(notices[0].stage, OnboardingProgressStage::Engine);
+        assert!(notices[0].code.is_none() && notices[0].retryable.is_none());
+        let value = serde_json::to_value(notices[0]).unwrap();
+        assert_eq!(value["amounts"]["requiredBytes"], 6u64 << 30);
+        assert_eq!(value["amounts"]["availableBytes"], 3u64 << 30);
+        assert_eq!(events.last().unwrap().status, OnboardingProgressStatus::Done);
+        assert!(events.iter().filter(|event| event.status != OnboardingProgressStatus::Notice).all(|event| event.amounts.is_none()));
+    }
+
     #[test]
     fn the_native_windows_build_reader_accepts_only_a_build_number() {
         assert_eq!(super::windows_build_number("22000\0"), Some(22000));
@@ -6775,6 +6855,7 @@ mod tests {
                 retryable: None,
                 phase: None,
                 pull: None,
+                amounts: None,
             });
         }
         let failed_process = outcome(false);
@@ -6889,6 +6970,7 @@ mod tests {
             retryable: None,
             phase: None,
             pull: None,
+            amounts: None,
         });
         assert!(fs::read_to_string(&vps_sink.path)
             .unwrap()
@@ -6927,6 +7009,7 @@ mod tests {
             retryable: Some(true),
             phase: None,
             pull: None,
+            amounts: None,
         });
         assert_eq!(fs::read(&sentinel).unwrap(), b"unchanged");
         assert!(fs::symlink_metadata(&sink.path)
@@ -7666,6 +7749,11 @@ mod tests {
         let shortfall = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 5 << 30 };
         let refused = attach_disk_amounts(failure("disk_low"), Some(shortfall));
         assert_eq!(refused.resources, Some(shortfall));
+        // the guard refused on another volume than the one measured here: «needs 8, available 40» is not said
+        let roomy = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 40 << 30 };
+        assert!(attach_disk_amounts(failure("disk_low"), Some(roomy)).resources.is_none());
+        let exact = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 8 << 30 };
+        assert!(attach_disk_amounts(failure("disk_low"), Some(exact)).resources.is_none());
         assert!(attach_disk_amounts(failure("team_start_failed"), Some(shortfall)).resources.is_none());
         // a measure that could not be taken leaves the plain code: the screen falls back to the sentence without numbers
         assert!(attach_disk_amounts(failure("disk_low"), None).resources.is_none());
@@ -7692,7 +7780,7 @@ mod tests {
     fn the_setup_checks_the_room_before_it_installs_anything() {
         let source = include_str!("onboarding.rs");
         let prepare = source.split("fn prepare_impl(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
-        let check = prepare.find("local_resources_check(&app)?;").expect("prepare checks the room");
+        let check = prepare.find("local_resources_check(&app)?").expect("prepare checks the room");
         let install = prepare.find("install_local(").expect("prepare installs");
         assert!(check < install, "the check comes before install_local");
     }
