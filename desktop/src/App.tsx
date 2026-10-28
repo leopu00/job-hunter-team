@@ -1,4 +1,6 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { explicitLocale } from "./lib/app-locale";
+import { LanguageScreen } from "./onboarding/LanguageScreen";
 import { LoginScreen } from "./components/login-screen";
 import {
   clearGoogleIdentitySelection,
@@ -15,6 +17,9 @@ import { useDeferredSession } from "./lib/supabase";
  */
 export default function App() {
   const { session, restore } = useDeferredSession();
+  // The language is the first thing the app asks, before any other text: until the person has said it, on this
+  // computer or in the settings, nothing else shows.
+  const [languageSaid, setLanguageSaid] = useState(() => explicitLocale() !== null);
 
   useEffect(() => {
     // index.html is always the identity boundary. A marker from an earlier
@@ -37,6 +42,7 @@ export default function App() {
     goTo(DASHBOARD_PAGE);
   }, []);
 
+  if (!languageSaid) return <LanguageScreen onChosen={() => setLanguageSaid(true)} />;
   return (
     <LoginScreen
       onChooseGoogle={chooseGoogle}
