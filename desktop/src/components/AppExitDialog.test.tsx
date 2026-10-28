@@ -194,6 +194,18 @@ describe("AppExitDialog", () => {
     expect(calls().some((call) => call.startsWith("app_exit_finish"))).toBe(false);
   });
 
+  it("a second close while the agents are being waited for neither gives the order again nor ends the wait", async () => {
+    localStorage.setItem("jht.app-exit.choice", "ordered");
+    team({ polls: [{ ready: false, active: 3 }, { ready: false, active: 3 }, { ready: true, active: 0 }] });
+    render(<AppExitDialog pollMs={5} />);
+    await closeButton();
+    await screen.findByTestId("app-exit-waiting");
+    await closeButton();
+    await closeButton();
+    await waitFor(() => expect(calls()).toContain('app_exit_finish:{"mode":"ordered"}'));
+    expect(calls().filter((call) => call === "app_exit_order")).toHaveLength(1);
+  });
+
   it("remembers the choice only when asked, and the close button then applies it without asking", async () => {
     team();
     const user = userEvent.setup();

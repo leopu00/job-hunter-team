@@ -34,6 +34,8 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
   // a new request, or a cancel, ends the wait that was running
   const runRef = useRef(0);
   const firstRef = useRef<HTMLButtonElement>(null);
+  // the phase the requests below see: a request while the agents are being waited for, or the stop is on, changes nothing
+  const busyRef = useRef(false);
 
   const leave = useCallback(async (mode: ExitMode, run: number) => {
     setPhase({ kind: "stopping" });
@@ -78,8 +80,9 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
   }, [leave, stopInOrder]);
 
   const request = useCallback(async (fromWindow: boolean) => {
-    const id = ++runRef.current;
     await exitAcknowledge().catch(() => {});
+    if (busyRef.current) return;
+    const id = ++runRef.current;
     const team = await exitTeam();
     if (runRef.current !== id) return;
     // nothing of the team here to decide about (none, on a VPS, or not told): the window closes
@@ -117,6 +120,7 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
     if (phase.kind === "choose") firstRef.current?.focus();
   }, [phase.kind]);
 
+  busyRef.current = phase.kind === "waiting" || phase.kind === "stopping";
   if (phase.kind === "closed") return null;
   const t = APP_EXIT_TEXT[appLocale()];
   const busy = phase.kind === "stopping";

@@ -251,7 +251,10 @@ pub(crate) async fn app_exit_order(
         if local_destination(&app, scope)? != TeamHost::Local {
             return Err("app_exit_vps_untouched");
         }
-        exec_local(&app, scope, &rm_flag())?;
+        // an old flag left in place would end the wait before the agents had written anything
+        if exec_local(&app, scope, &rm_flag())?.code != 0 {
+            return Err("app_exit_order_not_sent");
+        }
         let sent = exec_local(&app, scope, &send_order())?;
         if sent.code == 0 { Ok(()) } else { Err("app_exit_order_not_sent") }
     })
