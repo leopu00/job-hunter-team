@@ -141,6 +141,12 @@ describe("a question, read defensively", () => {
       expect(q.state).toBe("answered");
     }
   });
+
+  it("an answer the system wrote stays the system's: answered, and never the person's", () => {
+    const q = cleanQuestion(question({ answer: { choices: ["rm"], at: 150, origin: "system", seenAt: null } }))!;
+    expect(q.answer!.origin).toBe("system");
+    expect(q.state).toBe("answered");
+  });
 });
 
 describe("the page and the conversation", () => {

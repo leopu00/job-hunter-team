@@ -44,7 +44,9 @@ export default function ChatQuestion({
   const [error, setError] = useState<string | null>(null);
   const open = question.state === "open";
   const live = open && canAnswer && answerableHere(question) && !busy;
-  const chosen = new Set(question.answer?.choices ?? []);
+  // closed by the system: nobody chose, so no option is ticked and the note says it is resolved
+  const bySystem = question.answer?.origin === "system";
+  const chosen = new Set(bySystem ? [] : (question.answer?.choices ?? []));
   const colour = KIND_COLOR[question.kind];
 
   async function answer(choices: string[]) {
@@ -161,7 +163,12 @@ export default function ChatQuestion({
           {t.answerExpired}
         </p>
       )}
-      {question.state === "answered" && (
+      {question.state === "answered" && bySystem && (
+        <p data-testid="direct-chat-answer-resolved" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
+          {t.answerResolved}
+        </p>
+      )}
+      {question.state === "answered" && !bySystem && (
         <p data-testid="direct-chat-answer-seen" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
           {question.answer?.seenAt ? t.answerSeen : t.answerWaiting}
         </p>

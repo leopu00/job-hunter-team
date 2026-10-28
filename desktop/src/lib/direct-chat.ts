@@ -32,8 +32,9 @@ export interface DirectChatAnswer {
   text?: string;
   at: number;
   /** `expiry`: nobody answered in time and the question's safe option was taken */
+  /** `system`: the question had no object any more and the system closed it; never the person's choice */
   /** `unknown`: the team gave an origin of its own; never said as the person's. */
-  origin: "user" | "expiry" | "unknown";
+  origin: "user" | "expiry" | "system" | "unknown";
   /** when the agent read the answer in its turn; null until then */
   seenAt: number | null;
 }

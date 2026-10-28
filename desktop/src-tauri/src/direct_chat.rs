@@ -221,9 +221,10 @@ const MESSAGE_KINDS: [&str; 4] = ["urgent", "blocked", "completed", "info"];
 /// The kinds of a question: the kinds of a message, and `question`.
 const QUESTION_KINDS: [&str; 5] = ["urgent", "blocked", "question", "completed", "info"];
 const QUESTION_STATES: [&str; 3] = ["open", "answered", "expired"];
-/// Who gave an answer: the person, or the question's safe option when nobody answered in time.
+/// Who gave an answer: the person, the question's safe option when nobody answered in time, or the system
+/// closing a question that has no object any more (the plan was declared another way).
 /// Any other origin the team writes is `unknown`, and never said as the person's.
-const ANSWER_ORIGINS: [&str; 2] = ["user", "expiry"];
+const ANSWER_ORIGINS: [&str; 3] = ["user", "expiry", "system"];
 const MAX_SUBJECT_CHARS: usize = 200;
 const MAX_QUESTION_CHARS: usize = 4000;
 const MAX_LABEL_CHARS: usize = 200;
@@ -4754,6 +4755,10 @@ mod tests {
         let shown = page(odd);
         assert_eq!(shown[0]["kind"], "question");
         assert_eq!(shown[0]["answer"]["origin"], "unknown");
+        // the system's own closing is said as the system's
+        let mut closed = good.clone();
+        closed["answer"]["origin"] = serde_json::json!("system");
+        assert_eq!(page(closed)[0]["answer"]["origin"], "system");
         // a subject too long is no subject; the question stays
         let mut long = good;
         long["subject"] = serde_json::json!("s".repeat(201));
