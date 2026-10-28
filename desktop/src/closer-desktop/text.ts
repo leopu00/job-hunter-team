@@ -42,7 +42,7 @@ const de: Copy = {
   queued: "Anfrage eingereiht. Dies ist weder ein Bewerbungsergebnis noch ein Beleg.",
   discarded: "Eine Eingabe wurde wegen geänderter Ansicht verworfen. Aktualisieren und erneut handeln.",
   recovery: "Nach manueller Eingabe prüft Ergebnis beobachten nur den Beleg oder ein unbekanntes Ergebnis; es wird nicht erneut gesendet.",
-  privacy: "Private Seitenbilder sind nach 24 Stunden nicht mehr zugänglich. Die Bereinigung erfolgt bei Gelegenheit; Sie können ein Bild jetzt löschen.",
+  privacy: "Private Seitenbilder sind nach 24 Stunden nicht mehr zugänglich. Die Bereinigung erfolgt bei Gelegenheit; du kannst ein Bild jetzt löschen.",
   mode: "Einzelbilder des tatsächlichen Desktops des Browser-Verantwortlichen. Eingabe erst nach offizieller Übergabe.",
   emptyImage: "Kein Seitenbild verfügbar", focus: "Browser-Desktop: zum Fokussieren klicken, dann während manueller Steuerung tippen",
 };
@@ -55,11 +55,11 @@ const fr: Copy = {
   review: "En attente de confirmation officielle", blocked: "Aide humaine nécessaire", running: "Automatisation en cours",
   reason: "Motif", action: "Prochaine action", status: "État", position: "Poste",
   queued: "Demande mise en attente. Ce n'est ni un résultat de candidature ni un reçu.",
-  discarded: "Une saisie a été ignorée car la vue a changé. Actualisez et recommencez votre action.",
+  discarded: "Une saisie a été ignorée car la vue a changé. Actualise et recommence ton action.",
   recovery: "Après une saisie humaine, Observer le résultat recherche uniquement un reçu ou un résultat inconnu ; aucun nouvel envoi.",
-  privacy: "Les images privées de page ne sont plus accessibles après 24 heures. Le nettoyage est opportuniste ; vous pouvez supprimer une image maintenant.",
+  privacy: "Les images privées de page ne sont plus accessibles après 24 heures. Le nettoyage est opportuniste ; tu peux supprimer une image maintenant.",
   mode: "Images du vrai bureau du propriétaire du navigateur. Saisie uniquement après transfert officiel.",
-  emptyImage: "Aucune image de page disponible", focus: "Bureau du navigateur : cliquez pour donner le focus, puis saisissez en contrôle humain",
+  emptyImage: "Aucune image de page disponible", focus: "Bureau du navigateur : clique pour donner le focus, puis saisis en contrôle humain",
 };
 const es: Copy = {
   title: "Navegador asistido", open: "Abrir navegador asistido", close: "Cerrar vista", refresh: "Actualizar vista",

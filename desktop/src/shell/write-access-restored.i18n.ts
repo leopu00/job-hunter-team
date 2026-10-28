@@ -42,7 +42,7 @@ export const WRITE_ACCESS_RESTORED_TEXT: Record<Locale, WriteAccessRestoredText>
   fr: {
     title: "Accès en écriture actif sur {where}",
     fallbackWhere: "l’équipe connectée",
-    note: "Vous l’avez confirmé : il reste actif après un redémarrage pendant 30 jours au maximum, jusqu’à ce que vous passiez en lecture seule, déconnectiez l’équipe ou que l’équipe change de version.",
+    note: "Tu l’as confirmé : il reste actif après un redémarrage pendant 30 jours au maximum, jusqu’à ce que tu passes en lecture seule, déconnectes l’équipe ou que l’équipe change de version.",
     switchToReadOnly: "Passer en lecture seule",
     switching: "Passage en lecture seule…",
     removalFailed: "Cette session est en lecture seule, mais l’accès enregistré n’a pas pu être retiré : il peut revenir au prochain démarrage.",

@@ -63,7 +63,7 @@ const fr: WorkHoursText = {
   introLocal: "Quand les agents travaillent, pour l’équipe de cet ordinateur.",
   introVps: "Quand les agents travaillent, pour l’équipe de la VPS.",
   consequence: "Le nouvel horaire s’applique dès le prochain contrôle de l’équipe (dans environ 15 minutes) ; il n’interrompt pas le travail en cours.",
-  unreadable: "Si les horaires ne sont pas lisibles, l’équipe travaille sans limite d’horaire jusqu’à ce que vous les enregistriez de nouveau.",
+  unreadable: "Si les horaires ne sont pas lisibles, l’équipe travaille sans limite d’horaire jusqu’à ce que tu les enregistres de nouveau.",
   back: "Paramètres",
   loading: "Je lis les horaires de l’équipe…",
   retry: "Réessayer",

@@ -104,7 +104,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
   de: {
     title: "Team",
     intro: "Der Zustand des Teams auf dem VPS, soeben mit einem Lesebefehl gelesen. Die Ansicht ist nur lesend: Aktionen auf Daten bleiben deaktiviert; das Starten des Assistenten ist getrennt und verlangt eine Bestätigung.",
-    introFullLink: "Der Zustand des Teams auf dem VPS, soeben mit einem Lesebefehl gelesen. Aktionen am Team finden Sie auf der Seite Agenten und bei den Stellen.",
+    introFullLink: "Der Zustand des Teams auf dem VPS, soeben mit einem Lesebefehl gelesen. Aktionen am Team findest du auf der Seite Agenten und bei den Stellen.",
     summaryOff: "Das Team ist aus: Der Container ist angehalten, daher arbeitet kein Agent. Die Zeilen darunter zeigen, was die VPS meldet.",
     yes: "Ja",
     no: "Nein",
@@ -117,7 +117,7 @@ export const EXISTING_TEAM_STATUS_TEXT: Record<Locale, ExistingTeamStatusText> =
     failedAt: "Letzter Versuch um {time}. Frühere Werte werden nicht als aktuell angezeigt.",
     actionsAssistantOff: "Beim Verbinden um {time} lief der Assistent nicht: Aktionen sind deaktiviert; diese Verbindung ist ohnehin schreibgeschützt.",
     actionsReadOnly: "Beim Verbinden um {time} lief der Assistent, aber diese Verbindung ist schreibgeschützt: Aktionen bleiben deaktiviert.",
-    actionsFullLink: "Dieses Team ist vollständig verbunden: Aktionen finden Sie auf der Seite Agenten (Starten, Stoppen, Chat) und bei den Stellen (Bewertungen); diese Seite zeigt nur den Status.",
+    actionsFullLink: "Dieses Team ist vollständig verbunden: Aktionen findest du auf der Seite Agenten (Starten, Stoppen, Chat) und bei den Stellen (Bewertungen); diese Seite zeigt nur den Status.",
     atConnection: "Wert vom Verbinden um {time}, von dieser Aktualisierung nicht neu gelesen.",
     noConnectionValue: "Die Verbindung hat für diese Zeile keinen Wert geliefert; diese Aktualisierung liest ihn nicht.",
     atAssistantStart: "Wert der Prüfung nach dem Start des Assistenten um {time}, von dieser Aktualisierung nicht neu gelesen.",

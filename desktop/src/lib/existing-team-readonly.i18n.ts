@@ -114,7 +114,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     connectionReadOnly: "Lecture seule : cette connexion ne modifie pas les données",
     connectInFull: "Connecter en écriture",
     fullLinkShowsOnly: "Cette page affiche les données de l’équipe connectée et ne les modifie pas",
-    banner: "Vous consultez les offres de l’équipe existante en lecture seule. Les actions qui modifient les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
+    banner: "Tu consultes les offres de l’équipe existante en lecture seule. Les actions qui modifient les données restent désactivées ; le démarrage de l’assistant est distinct et demande une confirmation.",
     judgementHow: "Pour juger les offres depuis l’app (j’aime, exclure, notes, demandes de CV et de candidature), relie l’équipe avec « Confirmer et relier » : cette vue ne fait que les lire.",
     team: "Équipe",
     profile: "Profil",

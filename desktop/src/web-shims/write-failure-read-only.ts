@@ -13,6 +13,6 @@ export const READ_ONLY_FAILURE: LocaleDict = {
   hu: "Innen nem módosítható. Ha a csapat csak olvasható módban csatlakozik, és felül megjelenik a „Csatlakozás írási joggal” gomb, használd, és próbáld újra.",
   es: "Esto no se puede cambiar desde aquí. Si el equipo está conectado en solo lectura y arriba aparece «Conectar con escritura», úsalo e inténtalo de nuevo.",
   de: "Das lässt sich hier nicht ändern. Wenn das Team nur lesend verbunden ist und oben „Mit Schreibzugriff verbinden“ steht, nutze es und versuche es erneut.",
-  fr: "Impossible de modifier ici. Si l’équipe est connectée en lecture seule et que « Connecter en écriture » apparaît en haut, utilisez-le et réessayez.",
+  fr: "Impossible de modifier ici. Si l’équipe est connectée en lecture seule et que « Connecter en écriture » apparaît en haut, utilise-le et réessaie.",
   pt: "Não é possível alterar daqui. Se a equipa estiver ligada só em leitura e aparecer «Ligar com escrita» no topo, usa-o e tenta de novo.",
 };

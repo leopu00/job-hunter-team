@@ -33,12 +33,12 @@ export const TEXT_OVERRIDES: TextOverride[] = [
   {
     file: ACTIVITY_CHARTS,
     from: "Essayez d'élargir la plage, ou démarrez l'équipe pour remplir les graphiques — les données proviennent de SQLite local (ou de Supabase une fois synchronisé).",
-    to: "Pas encore de données de l'équipe : elles arrivent quand votre équipe se synchronise avec le cloud.",
+    to: "Pas encore de données de l'équipe : elles arrivent quand ton équipe se synchronise avec le cloud.",
   },
   {
     file: ACTIVITY_CHARTS,
     from: "Versuchen Sie, den Bereich zu erweitern, oder starten Sie das Team, damit sich die Diagramme füllen — die Daten stammen aus lokalem SQLite (oder aus Supabase bei Synchronisierung).",
-    to: "Noch keine Teamdaten: Die Daten kommen, sobald Ihr Team mit der Cloud synchronisiert.",
+    to: "Noch keine Teamdaten: Die Daten kommen, sobald dein Team mit der Cloud synchronisiert.",
   },
   {
     file: ACTIVITY_CHARTS,
@@ -71,12 +71,12 @@ export const TEXT_OVERRIDES: TextOverride[] = [
   {
     file: MOBILE_TEAM_STATUS,
     from: "La vue mobile est en lecture seule, sauf pour l'arrêt d'urgence.",
-    to: "Ici, vous voyez l'état de l'équipe ; la pause et l'arrêt sont dans le panneau Agents. Le runtime est configuré pendant l’onboarding.",
+    to: "Ici, tu vois l'état de l'équipe ; la pause et l'arrêt sont dans le panneau Agents. Le runtime est configuré pendant l’onboarding.",
   },
   {
     file: MOBILE_TEAM_STATUS,
     from: "Die mobile Ansicht ist schreibgeschützt – außer für den Not-Aus.",
-    to: "Hier sehen Sie den Status des Teams; Pause und Stopp finden Sie im Agenten-Bereich. Die Runtime wird beim Onboarding eingerichtet.",
+    to: "Hier siehst du den Status des Teams; Pause und Stopp findest du im Agenten-Bereich. Die Runtime wird beim Onboarding eingerichtet.",
   },
   {
     file: MOBILE_TEAM_STATUS,
