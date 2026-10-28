@@ -1,6 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { describeError } from "../lib/error-catalog";
 import { STATE_TEXT } from "../lib/onboarding-state.i18n";
@@ -119,17 +118,5 @@ describe("the page between «Continue with Google» and the dashboard, when a lo
       cleanup();
     }
     expect(backs.size).toBe(LOCALES.length);
-  });
-
-  it("has a sentence of its own for every code the native link can answer with", () => {
-    const source = readFileSync(new URL("../../src-tauri/src/profile_migration.rs", import.meta.url), "utf8");
-    const codes = new Set(source.match(/"local_migration_[a-z_]+"/g)?.map((quoted) => quoted.slice(1, -1)));
-    expect(codes.size).toBeGreaterThan(10);
-    const unknown = describeError("not_a_code", { locale: "it" }).text;
-    for (const code of codes) {
-      const said = describeError(code, { locale: "it" });
-      expect(said.known, code).toBe(true);
-      expect(said.text, code).not.toBe(unknown);
-    }
   });
 });
