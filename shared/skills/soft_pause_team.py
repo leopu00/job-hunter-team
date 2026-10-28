@@ -149,14 +149,17 @@ def list_sessions():
         return []
 
 
+# Seconds this caller waits for the transport before it sees the deadline (JHT_TMUX_SEND_WAIT_SOFT_PAUSE_S; the old
+# JHT_TMUX_SEND_WAIT_S, one name for every caller, still sets it when the caller's own is absent).
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_SOFT_PAUSE_S", os.environ.get("JHT_TMUX_SEND_WAIT_S", "15")))
+# >>> tmux_send_run bootstrap (the same text in every caller: shared/skills/tmux_send_run_bootstrap.txt, scripts/sync_tmux_send_bootstrap.py)
 # `subprocess.run(..., timeout=N)` KILLS jht-tmux-send at the deadline; between its paste and its Enter that
 # leaves a paste in the composer with no Enter (TEST 5, 27/10). tmux_send_run.py waits as long, raises the same
 # TimeoutExpired, and lets the transport finish; without the module the old call is kept.
-TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "15"))
 _tmux_send_run_module = None
 
 
-def _transport_run(args, timeout, text=False):
+def _transport_run(args, timeout, text=True):
     global _tmux_send_run_module
     if _tmux_send_run_module is None:
         import importlib.util
@@ -176,12 +179,13 @@ def _transport_run(args, timeout, text=False):
     if _tmux_send_run_module:
         return _tmux_send_run_module.run(args, timeout, text=text)
     return subprocess.run(args, capture_output=True, text=text, timeout=timeout)
+# <<< tmux_send_run bootstrap
 
 
 def send_message(session, message):
     """Manda un messaggio testuale via jht-tmux-send (gestisce send-keys robusto)."""
     try:
-        r = _transport_run(["jht-tmux-send", session, message], TMUX_SEND_WAIT_S)
+        r = _transport_run(["jht-tmux-send", session, message], TMUX_SEND_WAIT_S, text=False)
         return r.returncode == 0
     except (subprocess.TimeoutExpired, OSError):
         return False

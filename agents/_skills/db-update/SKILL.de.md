@@ -118,6 +118,22 @@ Dies ist das Gate, das den CV auf dem `/ready`-Dashboard des Nutzers sichtbar ma
 Ohne dieses Gate kann der Capitano verbal "12 ready" melden, während die
 DB noch 0 zeigt — genau die Divergenz, die Bug #21 behoben hat.
 
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
+
 ## Sicherheitsregeln
 
 1. **Erst lesen.** `db-query position <id>` (oder `application`) ausführen, um den aktuellen Status zu sehen, bevor geschrieben wird. Blindes Überschreiben erzeugt inkonsistente Datensätze.

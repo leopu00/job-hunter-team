@@ -1,0 +1,752 @@
+{
+  "about": "The Assistant's questionnaire as data, neutral from language: the steps, their choices and what each choice writes into candidate_profile.yml. Texts: shared/locales/<lang>.json, keys onb.<step>.object, onb.<step>.text, onb.<step>.opt.<id> (and onb.role.other_prompt). The steps are the game's scripted onboarding without its intro, confidence and finish steps. Only fields of the canonical profile (shared/config/profile-schema.ts) are written; tests/test_onboarding_questionnaire.py keeps this file, the schema and the seven languages in step.",
+  "effects": {
+    "set": "fields of the profile set to a value (L1 fields of the schema)",
+    "add": "values added to a list field of the profile",
+    "preference": "an item {heading: onb.<step>.object, text: the chosen label} in the recommended block of key `preferences` (kind key_points)",
+    "ask": "fields the chat still has to ask: nothing is written for them"
+  },
+  "version": 1,
+  "steps": [
+    {
+      "id": "role",
+      "key": "onb.role",
+      "note": "target_role (the title the person wants) is mandatory in the profile and is not a choice: it is asked in the chat; for «other» the free text answers it.",
+      "options": [
+        {
+          "id": "software",
+          "effect": {
+            "set": {
+              "target_role_category_id": "software"
+            }
+          }
+        },
+        {
+          "id": "data",
+          "effect": {
+            "set": {
+              "target_role_category_id": "data"
+            }
+          }
+        },
+        {
+          "id": "product",
+          "effect": {
+            "set": {
+              "target_role_category_id": "product"
+            }
+          }
+        },
+        {
+          "id": "design",
+          "effect": {
+            "set": {
+              "target_role_category_id": "design"
+            }
+          }
+        },
+        {
+          "id": "business",
+          "effect": {
+            "set": {
+              "target_role_category_id": "business"
+            }
+          }
+        },
+        {
+          "id": "security",
+          "effect": {
+            "set": {
+              "target_role_category_id": "security"
+            }
+          }
+        },
+        {
+          "id": "other",
+          "effect": {
+            "set": {
+              "target_role_category_id": "other"
+            }
+          },
+          "free_text": {
+            "prompt_key": "onb.role.other_prompt",
+            "field": "target_role"
+          }
+        }
+      ]
+    },
+    {
+      "id": "specialty_sw",
+      "key": "onb.specialty_sw",
+      "when": {
+        "step": "role",
+        "in": [
+          "software"
+        ]
+      },
+      "options": [
+        {
+          "id": "backend",
+          "effect": {
+            "set": {
+              "target_specialty": "backend"
+            }
+          }
+        },
+        {
+          "id": "frontend",
+          "effect": {
+            "set": {
+              "target_specialty": "frontend"
+            }
+          }
+        },
+        {
+          "id": "fullstack",
+          "effect": {
+            "set": {
+              "target_specialty": "fullstack"
+            }
+          }
+        },
+        {
+          "id": "platform",
+          "effect": {
+            "set": {
+              "target_specialty": "platform"
+            }
+          }
+        },
+        {
+          "id": "embedded",
+          "effect": {
+            "set": {
+              "target_specialty": "embedded"
+            }
+          }
+        },
+        {
+          "id": "open",
+          "effect": {
+            "set": {
+              "target_specialty": "open"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "specialty_data",
+      "key": "onb.specialty_data",
+      "when": {
+        "step": "role",
+        "in": [
+          "data"
+        ]
+      },
+      "options": [
+        {
+          "id": "data_science",
+          "effect": {
+            "set": {
+              "target_specialty": "data_science"
+            }
+          }
+        },
+        {
+          "id": "ml",
+          "effect": {
+            "set": {
+              "target_specialty": "ml"
+            }
+          }
+        },
+        {
+          "id": "genai",
+          "effect": {
+            "set": {
+              "target_specialty": "genai"
+            }
+          }
+        },
+        {
+          "id": "data_engineering",
+          "effect": {
+            "set": {
+              "target_specialty": "data_engineering"
+            }
+          }
+        },
+        {
+          "id": "research",
+          "effect": {
+            "set": {
+              "target_specialty": "research"
+            }
+          }
+        },
+        {
+          "id": "open",
+          "effect": {
+            "set": {
+              "target_specialty": "open"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "specialty_pm",
+      "key": "onb.specialty_pm",
+      "when": {
+        "step": "role",
+        "in": [
+          "product"
+        ]
+      },
+      "options": [
+        {
+          "id": "product",
+          "effect": {
+            "set": {
+              "target_specialty": "product"
+            }
+          }
+        },
+        {
+          "id": "project",
+          "effect": {
+            "set": {
+              "target_specialty": "project"
+            }
+          }
+        },
+        {
+          "id": "technical_pm",
+          "effect": {
+            "set": {
+              "target_specialty": "technical_pm"
+            }
+          }
+        },
+        {
+          "id": "delivery",
+          "effect": {
+            "set": {
+              "target_specialty": "delivery"
+            }
+          }
+        },
+        {
+          "id": "founder",
+          "effect": {
+            "set": {
+              "target_specialty": "founder"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "specialty_gen",
+      "key": "onb.specialty_gen",
+      "when": {
+        "step": "role",
+        "in": [
+          "design",
+          "business",
+          "security",
+          "other"
+        ]
+      },
+      "options": [
+        {
+          "id": "specialist",
+          "effect": {
+            "set": {
+              "target_specialty": "specialist"
+            }
+          }
+        },
+        {
+          "id": "generalist",
+          "effect": {
+            "set": {
+              "target_specialty": "generalist"
+            }
+          }
+        },
+        {
+          "id": "leadership",
+          "effect": {
+            "set": {
+              "target_specialty": "leadership"
+            }
+          }
+        },
+        {
+          "id": "individual",
+          "effect": {
+            "set": {
+              "target_specialty": "individual"
+            }
+          }
+        },
+        {
+          "id": "explore",
+          "effect": {
+            "set": {
+              "target_specialty": "explore"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "experience",
+      "key": "onb.experience",
+      "note": "The years are the lower bound of the band, as the game's table had them; «career» (changing field) has no honest number: both are asked in the chat.",
+      "options": [
+        {
+          "id": "entry",
+          "effect": {
+            "set": {
+              "experience_years": 0,
+              "seniority_target": "entry"
+            }
+          }
+        },
+        {
+          "id": "junior",
+          "effect": {
+            "set": {
+              "experience_years": 1,
+              "seniority_target": "junior"
+            }
+          }
+        },
+        {
+          "id": "mid",
+          "effect": {
+            "set": {
+              "experience_years": 3,
+              "seniority_target": "mid"
+            }
+          }
+        },
+        {
+          "id": "senior",
+          "effect": {
+            "set": {
+              "experience_years": 7,
+              "seniority_target": "senior"
+            }
+          }
+        },
+        {
+          "id": "lead",
+          "effect": {
+            "set": {
+              "experience_years": 12,
+              "seniority_target": "lead"
+            }
+          }
+        },
+        {
+          "id": "career",
+          "effect": {
+            "ask": [
+              "experience_years",
+              "seniority_target"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "current_status",
+      "key": "onb.current_status",
+      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "options": [
+        {
+          "id": "employed",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "active",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "available",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "graduate",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "freelance",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "returning",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mode",
+      "key": "onb.mode",
+      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "options": [
+        {
+          "id": "remote",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "remote_first",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "hybrid",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "onsite",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "flexible",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "where",
+      "key": "onb.where",
+      "note": "`location` (the city) is mandatory and is a place, not a choice: «local» and «country» ask it in the chat. The wider areas go to location_preferences.",
+      "options": [
+        {
+          "id": "local",
+          "effect": {
+            "ask": [
+              "location"
+            ]
+          }
+        },
+        {
+          "id": "country",
+          "effect": {
+            "ask": [
+              "location"
+            ]
+          }
+        },
+        {
+          "id": "eu",
+          "effect": {
+            "add": {
+              "location_preferences": [
+                "EU"
+              ]
+            }
+          }
+        },
+        {
+          "id": "europe",
+          "effect": {
+            "add": {
+              "location_preferences": [
+                "Europe"
+              ]
+            }
+          }
+        },
+        {
+          "id": "worldwide",
+          "effect": {
+            "add": {
+              "location_preferences": [
+                "Worldwide"
+              ]
+            }
+          }
+        },
+        {
+          "id": "remote_only",
+          "effect": {
+            "add": {
+              "location_preferences": [
+                "Remote"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "relocation",
+      "key": "onb.relocation",
+      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "options": [
+        {
+          "id": "never",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "same_country",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "eu",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "worldwide",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "sponsored",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "depends",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "contract",
+      "key": "onb.contract",
+      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "options": [
+        {
+          "id": "employee",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "permanent",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "contractor",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "freelance",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "internship",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "any",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "salary",
+      "key": "onb.salary",
+      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block. The amount, where the person gives one, is free text handled by the tool.",
+      "options": [
+        {
+          "id": "hard_floor",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "improve",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "market",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "equity",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "secondary",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "unknown",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "company",
+      "key": "onb.company",
+      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block.",
+      "options": [
+        {
+          "id": "startup",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "scaleup",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "established",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "enterprise",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "public",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        },
+        {
+          "id": "any",
+          "effect": {
+            "preference": {
+              "block": "preferences"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

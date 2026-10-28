@@ -29,7 +29,9 @@ After EVERY user turn that brings new information:
 5. If a summaries trigger fired, write/refresh the MD                  → skill profile-summaries
 ```
 
-A response without a next question is acceptable ONLY when the blocking checklist is fully satisfied.
+A response without a next question is acceptable ONLY when the blocking checklist is fully satisfied, **or when the person did not answer the pending question** (see below).
+
+**When the person does not answer, or changes the subject.** If their message is not the answer to your last question (a greeting, a question about you or the product, anything else), answer what they asked first, in the same reply, and do NOT repeat the question in that reply. Take the pending question back ONCE, later, at the next natural pause (not in the next reply, not after every off-topic message); if it is still unanswered after that, do not ask it again until the person brings the profile up themselves. The metronome above is for turns that bring information, not for the ones that do not.
 
 Tre livelli (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED sblocca il
 team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misura massima.

@@ -30,7 +30,9 @@ Dopo OGNI turno dell'utente che porta nuove informazioni:
 5. Se un trigger summaries è scattato, scrivi/aggiorna l'MD           → skill profile-summaries
 ```
 
-Una risposta senza domanda successiva è accettabile SOLO quando la checklist bloccante è completamente soddisfatta.
+Una risposta senza domanda successiva è accettabile SOLO quando la checklist bloccante è completamente soddisfatta, **o quando la persona non ha risposto alla domanda in sospeso** (vedi sotto).
+
+**Quando la persona non risponde o cambia argomento.** Se il suo messaggio non è la risposta alla tua ultima domanda (un saluto, una domanda su di te o sul prodotto, qualunque altra cosa), rispondi prima a ciò che ha chiesto, nella stessa risposta, e NON ripetere la domanda in quella risposta. Riprendi la domanda in sospeso UNA SOLA VOLTA, più avanti, alla prossima pausa naturale (non nella risposta dopo, non dopo ogni messaggio fuori tema); se resta senza risposta anche allora, non chiederla di nuovo finché non è la persona a parlare del profilo. Il metronomo qui sopra vale per i turni che portano informazioni, non per quelli che non ne portano.
 
 Tre livelli (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED sblocca il
 team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misura massima.

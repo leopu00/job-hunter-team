@@ -456,8 +456,8 @@ where
 }
 
 /// How a queued turn ended, as the team says it: typed and taken, typed and still in the composer,
-/// typed with no proof, or never typed because it waited too long.
-const QUEUE_ENDINGS: [&str; 4] = ["taken", "pending", "unconfirmed", "expired"];
+/// typed with no proof, typed and given its Enter after the time (`late`), or never typed because it waited too long.
+const QUEUE_ENDINGS: [&str; 5] = ["taken", "pending", "late", "unconfirmed", "expired"];
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub(crate) struct DirectChatQueueEnding {
@@ -1579,26 +1579,71 @@ fn read_host_env() -> Option<String> {
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 const TOOL_ROOTS: [&str; 3] = ["/opt/homebrew", "/usr/local", "/opt/podman"];
 
+/// The macOS group of the administrators (`admin`, gid 80). Homebrew leaves `Cellar` writable by it (`drwxrwxr-x
+/// user:admin`), and whoever is in the group can act as root on the machine anyway, so a folder on the way to a tool
+/// is not refused for that. It is the one exception: only on macOS, only this group, only for folders (never for the
+/// tool itself), and it replaces neither the owner (the user or root) nor the rule that others never write.
+#[cfg(unix)]
+const ADMIN_GROUP: Option<u32> = if cfg!(target_os = "macos") { Some(80) } else { None };
+
+/// A folder on the way to a tool is safe when the user or root owns it, nobody else can write in it, and the group
+/// cannot either, unless it is the administrators' (see `ADMIN_GROUP`): whoever can write in it can rename the tool
+/// and put another program in its place.
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn tool_folder_is_safe(owner: u32, group: u32, mode: u32, user: u32, admin_group: Option<u32>) -> bool {
+    (owner == user || owner == 0) && mode & 0o002 == 0 && (mode & 0o020 == 0 || admin_group == Some(group))
+}
+
+/// The tool itself is safe when the user or root owns it and neither the group (the administrators' included) nor
+/// others can write it.
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn tool_file_is_safe(owner: u32, mode: u32, user: u32) -> bool {
+    (owner == user || owner == 0) && mode & 0o022 == 0
+}
+
 /// `podman` and `podman-compose` are SYMLINKS on a Mac that has them from Homebrew (`/opt/homebrew/bin/podman` ->
-/// `../Cellar/podman/<version>/bin/podman-remote`), and a search that refused every symlink found neither: the hash the
-/// container has to carry was never computed, and the Mac's own container was «not the one Job Hunter Team installed»
-/// (Mac collaudo, TEST 6 of 27/10, after the `host.env` fix). A regular file is taken as it is; a symlink only when
-/// what it finally points to is a regular file inside one of the install `roots`, owned by the user or by root and not
-/// writable by group or others, so that a link planted in a `PATH` directory cannot send the app to another program.
+/// `../Cellar/podman/<version>/bin/podman-remote`), so the path is always resolved to the file it finally names. That
+/// file is trusted when it is a regular file inside one of the install `roots` that `tool_file_is_safe`, and every
+/// folder from its own up to the root is safe too (`tool_folder_is_safe`), as is the folder the path was asked in
+/// (the `bin` that holds the link: whoever writes there changes where it points). A regular file planted in a folder
+/// anyone can write, or in a path whose folders anyone can rename, is no more a tool of the install than a planted link.
 #[cfg(unix)]
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn tool_is_trusted(path: &Path, roots: &[&Path]) -> bool {
     use std::os::unix::fs::MetadataExt;
-    let Ok(link) = fs::symlink_metadata(path) else { return false };
-    if !link.file_type().is_symlink() {
-        return link.file_type().is_file();
-    }
     let Ok(real) = fs::canonicalize(path) else { return false };
-    if !roots.iter().any(|root| real.starts_with(fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()))) {
+    let Some(root) = roots.iter().filter_map(|root| fs::canonicalize(root).ok()).find(|root| real.starts_with(root)) else { return false };
+    let user = unsafe { libc::geteuid() };
+    let Ok(file) = fs::metadata(&real) else { return false };
+    if !file.file_type().is_file() || !tool_file_is_safe(file.uid(), file.mode(), user) {
         return false;
     }
-    let Ok(target) = fs::metadata(&real) else { return false };
-    target.file_type().is_file() && (target.uid() == unsafe { libc::geteuid() } || target.uid() == 0) && target.mode() & 0o022 == 0
+    let folders_to_the_root_are_safe = |start: &Path| {
+        let mut folder = Some(start);
+        while let Some(dir) = folder {
+            let Ok(metadata) = fs::metadata(dir) else { return false };
+            if !metadata.file_type().is_dir() || !tool_folder_is_safe(metadata.uid(), metadata.gid(), metadata.mode(), user, ADMIN_GROUP) {
+                return false;
+            }
+            if dir == root {
+                return true;
+            }
+            folder = dir.parent();
+        }
+        false
+    };
+    real.parent().is_some_and(folders_to_the_root_are_safe)
+        && path.parent().and_then(|dir| fs::canonicalize(dir).ok()).is_some_and(|dir| folders_to_the_root_are_safe(&dir))
+}
+
+/// The trusted `name` in the `bin` folder of an install root, and only there: the PATH the app was opened with is not
+/// searched (an entry of it that is empty or relative would be the folder it is run from).
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn find_trusted_tool(name: &str, roots: &[&Path]) -> Option<PathBuf> {
+    roots.iter().map(|root| root.join("bin").join(name)).find(|path| tool_is_trusted(path, roots))
 }
 
 /// The hash the running container has to carry, or why it could not be worked out: a reason in the fixed
@@ -1629,9 +1674,7 @@ fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>,
                 return Some(fixture);
             }
         }
-        let mut candidates: Vec<PathBuf> = std::env::var_os("PATH").into_iter().flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>()).map(|dir| dir.join(name)).collect();
-        candidates.extend([PathBuf::from("/opt/homebrew/bin").join(name), PathBuf::from("/usr/local/bin").join(name), PathBuf::from("/opt/podman/bin").join(name)]);
-        candidates.into_iter().find(|path| tool_is_trusted(path, &TOOL_ROOTS.map(Path::new)))
+        find_trusted_tool(name, &TOOL_ROOTS.map(Path::new))
     };
     let podman = search("podman").ok_or("hash_tool_missing")?;
     let compose = search("podman-compose").ok_or("hash_tool_missing")?;
@@ -1765,18 +1808,18 @@ fn split_inspected(line: &str, with_image: bool) -> Option<(&str, &str, Option<&
 
 /// The first rule of the attestation the container's labels do not meet, in the fixed words of
 /// `runtime_log::ATTEST_REASONS`; `None` when they meet all of them.
-fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
+fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>, hash_known: bool) -> Option<&'static str> {
     #[cfg(windows)]
     {
-        let _ = expected_config_hash;
+        let _ = (expected_config_hash, hash_known);
         return (!windows_container_labels_are_attested(labels, runtime)).then_some("label_windows");
     }
     #[cfg(not(windows))]
-    podman_compose_label_refusal(labels, runtime, expected_config_hash)
+    podman_compose_label_refusal(labels, runtime, expected_config_hash, hash_known)
 }
 
 #[cfg(not(windows))]
-fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
+fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>, hash_known: bool) -> Option<&'static str> {
     let runtime_text = runtime.to_string_lossy();
     let systemd_unit = podman_systemd_unit();
     if label(labels, "com.docker.compose.project") != Some("jht") || label(labels, "io.podman.compose.project") != Some("jht") {
@@ -1805,10 +1848,13 @@ fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_
         if label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str()) {
             return Some("label_systemd_unit");
         }
-        return (expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
+        // With the hash not worked out (`hash_known` false) the other labels are still judged: a container that is
+        // visibly another one is said so, and only one that looks like the installed one waits for the hash.
+        return (hash_known && expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
+        let _ = (expected_config_hash, hash_known);
         let expected_files = format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime_text, runtime_text);
         if label(labels, "com.docker.compose.project.config_files") != Some(expected_files.as_str()) {
             return Some("label_config_files");
@@ -1834,8 +1880,10 @@ fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_
 /// runtime writes. `None` when it is the one.
 fn attestation_refusal(expected: Option<&Result<String, &'static str>>, labels: &Value, runtime: &Path, image_is_the_runtimes: bool) -> Option<&'static str> {
     match expected {
-        Some(Err(reason)) => Some(*reason),
-        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok())),
+        // The hash could not be worked out: the labels that need none are judged first, so a container that is visibly
+        // another one is said to be, and only one that looks like the installed one is left to the hash's reason.
+        Some(Err(reason)) => podman_container_label_refusal(labels, runtime, None, false).or(Some(*reason)),
+        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok()), true),
     }
     .or_else(|| (!image_is_the_runtimes).then_some("label_image"))
 }
@@ -4392,48 +4440,156 @@ mod tests {
         assert_eq!(value("JHT_USER_TZ=Etc/GMT+1\n", "JHT_USER_TZ"), "Etc/GMT+1");
     }
 
+    /// The layout of a Homebrew prefix under a folder of the test: `bin` with links into `Cellar/<name>/<version>/bin`,
+    /// and a folder outside it. All folders 0755, as the install leaves them. (root, prefix, elsewhere)
     #[cfg(unix)]
-    #[test]
-    fn a_homebrew_style_symlink_is_a_trusted_tool_and_a_link_out_of_the_install_roots_is_not() {
-        use super::tool_is_trusted;
-        use std::os::unix::fs::{symlink, PermissionsExt};
-        let root = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-tool-trust-{}", std::process::id()));
+    fn tool_layout(label: &str) -> (PathBuf, PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-tool-{label}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let (prefix, elsewhere) = (root.join("prefix"), root.join("elsewhere"));
         for dir in [prefix.join("bin"), prefix.join("Cellar/podman/6.1.3/bin"), elsewhere.clone()] {
             fs::create_dir_all(dir).unwrap();
         }
-        let program = |path: &Path, mode: u32| {
-            fs::write(path, "#!/bin/sh\n").unwrap();
-            fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
-        };
+        for dir in [&root, &prefix, &elsewhere, &prefix.join("bin"), &prefix.join("Cellar"), &prefix.join("Cellar/podman"), &prefix.join("Cellar/podman/6.1.3"), &prefix.join("Cellar/podman/6.1.3/bin")] {
+            fs::set_permissions(dir, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        (root, prefix, elsewhere)
+    }
+
+    #[cfg(unix)]
+    fn tool_program(path: &Path, mode: u32) {
+        use std::os::unix::fs::PermissionsExt;
+        fs::write(path, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_homebrew_style_install_is_trusted_and_nothing_outside_its_roots_or_that_anyone_can_rewrite_is() {
+        use super::tool_is_trusted;
+        use std::os::unix::fs::symlink;
+        let (root, prefix, elsewhere) = tool_layout("trust");
         let roots = [prefix.as_path()];
         // `bin/podman` -> `../Cellar/podman/6.1.3/bin/podman-remote`, as Homebrew lays it out
-        program(&prefix.join("Cellar/podman/6.1.3/bin/podman-remote"), 0o755);
+        tool_program(&prefix.join("Cellar/podman/6.1.3/bin/podman-remote"), 0o755);
         symlink("../Cellar/podman/6.1.3/bin/podman-remote", prefix.join("bin/podman")).unwrap();
         assert!(tool_is_trusted(&prefix.join("bin/podman"), &roots), "the link Homebrew makes");
-        // a regular file is taken as it always was
-        program(&prefix.join("bin/podman-compose"), 0o755);
+        // a regular file in the install's own `bin` (the Podman installer's layout)
+        tool_program(&prefix.join("bin/podman-compose"), 0o755);
         assert!(tool_is_trusted(&prefix.join("bin/podman-compose"), &roots));
-        // a link to a program outside the install roots (a planted one) is not
-        program(&elsewhere.join("podman"), 0o755);
+        // a regular file, or a link to one, outside the roots is not: it is no more trusted for being a file
+        tool_program(&elsewhere.join("podman"), 0o755);
+        assert!(!tool_is_trusted(&elsewhere.join("podman"), &roots), "a regular file outside the roots");
         symlink(elsewhere.join("podman"), prefix.join("bin/planted")).unwrap();
-        assert!(!tool_is_trusted(&prefix.join("bin/planted"), &roots));
-        // inside the roots, but a program anyone in the group or on the machine can rewrite
-        program(&prefix.join("Cellar/podman/6.1.3/bin/open-to-all"), 0o757);
+        assert!(!tool_is_trusted(&prefix.join("bin/planted"), &roots), "a link out of the roots");
+        // inside the roots, but a program anyone in the group or on the machine can rewrite, as a file or as a link
+        tool_program(&prefix.join("bin/open-to-all"), 0o757);
+        tool_program(&prefix.join("bin/open-to-group"), 0o775);
+        tool_program(&prefix.join("Cellar/podman/6.1.3/bin/open-to-all"), 0o757);
         symlink("../Cellar/podman/6.1.3/bin/open-to-all", prefix.join("bin/open")).unwrap();
-        assert!(!tool_is_trusted(&prefix.join("bin/open"), &roots));
-        program(&prefix.join("Cellar/podman/6.1.3/bin/open-to-group"), 0o775);
-        symlink("../Cellar/podman/6.1.3/bin/open-to-group", prefix.join("bin/group")).unwrap();
-        assert!(!tool_is_trusted(&prefix.join("bin/group"), &roots));
-        // a link to nothing, to a directory, a missing name
+        for name in ["open-to-all", "open-to-group", "open"] {
+            assert!(!tool_is_trusted(&prefix.join("bin").join(name), &roots), "{name}");
+        }
+        // a link to nothing, to a directory, a missing name, a relative name
         symlink("../Cellar/gone", prefix.join("bin/dangling")).unwrap();
         symlink("../Cellar", prefix.join("bin/directory")).unwrap();
         for name in ["dangling", "directory", "missing"] {
             assert!(!tool_is_trusted(&prefix.join("bin").join(name), &roots), "{name}");
         }
+        assert!(!tool_is_trusted(Path::new("podman"), &roots));
         // the same link with another root list is no longer trusted
         assert!(!tool_is_trusted(&prefix.join("bin/podman"), &[elsewhere.as_path()]));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_anyone_can_write_in_on_the_way_to_the_tool_takes_the_trust_away() {
+        use super::tool_is_trusted;
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let (root, prefix, _elsewhere) = tool_layout("folders");
+        let roots = [prefix.as_path()];
+        tool_program(&prefix.join("Cellar/podman/6.1.3/bin/podman-remote"), 0o755);
+        symlink("../Cellar/podman/6.1.3/bin/podman-remote", prefix.join("bin/podman")).unwrap();
+        tool_program(&prefix.join("bin/podman-compose"), 0o755);
+        let podman = prefix.join("bin/podman");
+        let compose = prefix.join("bin/podman-compose");
+        assert!(tool_is_trusted(&podman, &roots) && tool_is_trusted(&compose, &roots));
+        // each folder between the file and the root, one at a time: written by others, or by the group (outside macOS's admins)
+        for (folder, tool) in [
+            (prefix.join("Cellar/podman/6.1.3/bin"), &podman),
+            (prefix.join("Cellar/podman/6.1.3"), &podman),
+            (prefix.join("Cellar/podman"), &podman),
+            (prefix.join("Cellar"), &podman),
+            (prefix.join("bin"), &podman),
+            (prefix.join("bin"), &compose),
+            (prefix.clone(), &compose),
+        ] {
+            for mode in [0o757, 0o777, 0o775] {
+                fs::set_permissions(&folder, fs::Permissions::from_mode(mode)).unwrap();
+                let group_only = mode == 0o775;
+                // a group that is not the administrators' (the test's folders are the user's own group, never gid 80 off macOS)
+                let expected = group_only && super::ADMIN_GROUP == Some(std::os::unix::fs::MetadataExt::gid(&fs::metadata(&folder).unwrap()));
+                assert_eq!(tool_is_trusted(tool, &roots), expected, "{} {mode:o}", folder.display());
+            }
+            fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+            assert!(tool_is_trusted(tool, &roots), "{} restored", folder.display());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_is_safe_to_the_user_and_to_root_and_to_the_administrators_group_only_where_there_is_one() {
+        use super::tool_folder_is_safe;
+        // (owner, group, mode, user, admin group)
+        assert!(tool_folder_is_safe(501, 20, 0o755, 501, Some(80)), "the user's own, 0755");
+        assert!(tool_folder_is_safe(0, 0, 0o755, 501, Some(80)), "root's");
+        assert!(!tool_folder_is_safe(502, 20, 0o755, 501, Some(80)), "another user's");
+        assert!(!tool_folder_is_safe(501, 20, 0o757, 501, Some(80)), "writable by others");
+        assert!(!tool_folder_is_safe(501, 20, 0o777, 501, Some(80)));
+        assert!(!tool_folder_is_safe(501, 20, 0o775, 501, Some(80)), "writable by a group that is not the administrators'");
+        assert!(tool_folder_is_safe(501, 80, 0o775, 501, Some(80)), "Homebrew's Cellar: the administrators' group may write");
+        assert!(!tool_folder_is_safe(501, 80, 0o777, 501, Some(80)), "never by others, administrators' group or not");
+        assert!(!tool_folder_is_safe(501, 80, 0o775, 501, None), "no administrators' group on this system");
+        // the administrators' group never stands for the owner: another account's Homebrew is refused
+        assert!(!tool_folder_is_safe(502, 80, 0o775, 501, Some(80)));
+        assert!(!tool_folder_is_safe(502, 80, 0o755, 501, Some(80)));
+        assert!(tool_folder_is_safe(501, 80, 0o755, 501, Some(80)), "the administrators' group without writing");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_tool_itself_is_never_writable_by_a_group_not_even_the_administrators() {
+        use super::tool_file_is_safe;
+        // (owner, mode, user)
+        assert!(tool_file_is_safe(501, 0o755, 501) && tool_file_is_safe(501, 0o555, 501) && tool_file_is_safe(0, 0o755, 501));
+        assert!(!tool_file_is_safe(501, 0o775, 501), "user:admin 0775");
+        assert!(!tool_file_is_safe(501, 0o757, 501));
+        assert!(!tool_file_is_safe(501, 0o777, 501));
+        assert!(!tool_file_is_safe(502, 0o755, 501), "another account's");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_tool_is_looked_for_in_the_bin_folder_of_the_roots_and_nowhere_else() {
+        use super::find_trusted_tool;
+        use std::os::unix::fs::symlink;
+        let (root, prefix, elsewhere) = tool_layout("search");
+        let second = root.join("second");
+        fs::create_dir_all(second.join("bin")).unwrap();
+        tool_program(&prefix.join("Cellar/podman/6.1.3/bin/podman-remote"), 0o755);
+        symlink("../Cellar/podman/6.1.3/bin/podman-remote", prefix.join("bin/podman")).unwrap();
+        let roots = [prefix.as_path(), second.as_path()];
+        assert_eq!(find_trusted_tool("podman", &roots), Some(prefix.join("bin/podman")));
+        // the same name in a folder that is not a root's `bin`, even a regular and well-kept file, is not found
+        tool_program(&elsewhere.join("podman-compose"), 0o755);
+        tool_program(&prefix.join("podman-compose"), 0o755);
+        assert_eq!(find_trusted_tool("podman-compose", &roots), None);
+        // the second root is looked in when the first has none
+        tool_program(&second.join("bin/podman-compose"), 0o755);
+        assert_eq!(find_trusted_tool("podman-compose", &roots), Some(second.join("bin/podman-compose")));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -4604,8 +4760,43 @@ mod tests {
         let runtime = PathBuf::from("/runtime");
         let labels = serde_json::json!({});
         let wrong = Ok("0".repeat(64));
-        // the hash could not be worked out: the reason is the hash's, whatever the labels are
-        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &labels, &runtime, true), Some("hash_dry_run_timeout"));
+        // the hash could not be worked out: a container whose labels are visibly another's is said to be, and only
+        // one that looks like the installed one is left to the hash's reason
+        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &labels, &runtime, true), Some("label_project"));
+        let mut good = serde_json::json!({
+            "com.docker.compose.project": "jht", "io.podman.compose.project": "jht",
+            "com.docker.compose.service": "jht", "io.podman.compose.service": "jht",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.project.working_dir": "/runtime", "io.podman.compose.config-hash": "a".repeat(64),
+            "io.podman.compose.version": "1.6.0", "PODMAN_SYSTEMD_UNIT": podman_systemd_unit(),
+        });
+        good["com.docker.compose.project.config_files"] = if cfg!(target_os = "macos") {
+            "/runtime/docker-compose.yml".into()
+        } else {
+            "/runtime/docker-compose.yml,/runtime/docker-compose.podman-linux.yml".into()
+        };
+        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &good, &runtime, true), Some("hash_dry_run_timeout"));
+        assert_eq!(attestation_refusal(Some(&Err("hash_tool_missing")), &good, &runtime, true), Some("hash_tool_missing"));
+        let other_unit = podman_systemd_unit().replace("jht", "other");
+        for (name, wrong) in [
+            ("com.docker.compose.service", "other"),
+            ("com.docker.compose.project.working_dir", "/elsewhere"),
+            ("com.docker.compose.project.config_files", "/elsewhere/docker-compose.yml"),
+            ("io.podman.compose.version", "0.9.0"),
+            ("PODMAN_SYSTEMD_UNIT", other_unit.as_str()),
+        ] {
+            let mut other = good.clone();
+            other[name] = wrong.into();
+            let refusal = attestation_refusal(Some(&Err("hash_dry_run_timeout")), &other, &runtime, true);
+            assert!(refusal.is_some_and(|reason| reason.starts_with("label_")), "{name}: {refusal:?}");
+        }
+        // with the hash known and the labels good, the container is taken on the platforms that compare no hash; on macOS
+        // the hash is compared (a hash that differs is another container)
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(attestation_refusal(Some(&Ok("b".repeat(64))), &good, &runtime, true), Some("label_config_hash_differs"));
+            assert_eq!(attestation_refusal(Some(&Ok("a".repeat(64))), &good, &runtime, true), None);
+        }
         // the hash is there: the labels are looked at, rule by rule
         let mut labels = serde_json::json!({
             "com.docker.compose.project": "other", "io.podman.compose.project": "jht",
@@ -4939,6 +5130,13 @@ mod tests {
         )
         .unwrap();
         fs::set_permissions(&engine, fs::Permissions::from_mode(0o700)).unwrap();
+        // The tools the Mac works the container's hash out with, as fakes: a real Homebrew on the machine that runs the test
+        // would be run against this stub runtime and not give a hash at all (which is another answer).
+        for (name, script) in [("podman", PODMAN_6_1_3.to_owned()), ("podman-compose", compose_plan("printf x | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1"))] {
+            fs::write(bin.join(name), script).unwrap();
+            fs::set_permissions(bin.join(name), fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        fs::write(runtime.join("podman-machine"), "jht-podman\n").unwrap();
         write_valid_local_podman_manifest(&runtime, &wrapper);
 
         assert_eq!(
@@ -5228,13 +5426,13 @@ mod tests {
         .unwrap();
         assert_eq!(page.queued.as_deref(), Some(&["m1".to_owned(), "m2".to_owned()][..]));
         let ended: DirectChatPage = serde_json::from_str(
-            r#"{"messages":[],"queued":[],"settled":[{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m5","how":"sent"},{"id":"a b","how":"taken"},{"id":"m6"},7,{"id":"m7","how":7}]}"#,
+            r#"{"messages":[],"queued":[],"settled":[{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m5","how":"sent"},{"id":"a b","how":"taken"},{"id":"m6"},7,{"id":"m7","how":7},{"id":"m8","how":"late"}]}"#,
         )
         .unwrap();
         let shown = serde_json::to_value(&ended).unwrap();
         assert_eq!(
             shown["settled"],
-            serde_json::json!([{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"}])
+            serde_json::json!([{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m8","how":"late"}])
         );
         let none: DirectChatPage = serde_json::from_str(r#"{"messages":[],"queued":[],"settled":"taken"}"#).unwrap();
         assert!(serde_json::to_value(&none).unwrap().get("settled").is_none());

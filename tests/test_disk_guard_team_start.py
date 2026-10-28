@@ -139,9 +139,14 @@ def spawned(calls):
     return [call for call in calls if call.startswith("SPAWN")]
 
 
-def disk_low_phrase(shown):
+def disk_low_phrase(pct):
+    """La frase attesa a `pct`% del disco finto (1_000_000 blocchi da 4096): 8 GiB richiesti e i GiB che restano,
+    a un decimale e per difetto. Non ci sono percentuali."""
     table = json.loads((ROOT / "shared" / "locales" / "en.json").read_text(encoding="utf-8"))
-    return table["disk.low.cli"].replace("%s", shown)
+    free = (1_000_000 * pct // 100) * 4096
+    tenths = free * 10 // (1024 ** 3)
+    available = str(tenths // 10) if tenths % 10 == 0 else f"{tenths // 10}.{tenths % 10}"
+    return table["disk.low.cli"] % ("8", available)
 
 
 def test_at_15_percent_one_agent_starts_as_before(cli_copy, tmp_path):
@@ -160,7 +165,7 @@ def test_at_8_percent_the_start_is_still_allowed(cli_copy, tmp_path):
 def test_at_2_percent_a_single_start_is_refused_with_the_code_and_the_table_phrase(cli_copy, tmp_path):
     done, calls = run_start(cli_copy, tmp_path, 2)
     assert done.returncode == 1, done.stdout + done.stderr
-    assert f"disk_low: {disk_low_phrase('2%')}" in done.stdout
+    assert f"disk_low: {disk_low_phrase(2)}" in done.stdout
     assert spawned(calls) == []
     assert "0 started" in done.stdout and "1 errors" in done.stdout
 
@@ -168,7 +173,7 @@ def test_at_2_percent_a_single_start_is_refused_with_the_code_and_the_table_phra
 def test_at_2_percent_the_whole_team_start_launches_and_syncs_nothing(cli_copy, tmp_path):
     done, calls = run_start(cli_copy, tmp_path, 2, agent="")
     assert done.returncode == 1, done.stdout + done.stderr
-    assert f"disk_low: {disk_low_phrase('2%')}" in done.stdout
+    assert f"disk_low: {disk_low_phrase(2)}" in done.stdout
     assert spawned(calls) == []
     assert not any("cloud" in call for call in calls), calls
 

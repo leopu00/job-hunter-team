@@ -27,3 +27,16 @@ Reglas:
 - `jht-reply-options` es la respuesta final de ese turno. No lo acompañes después
   con `jht-send`: los botones desaparecerían, y con razón, bajo la respuesta más reciente.
 - Para preguntas abiertas o una respuesta directa, usa `jht-send` como siempre.
+
+## Un `$` en el texto: comillas simples o stdin
+
+Entre comillas dobles la shell lee `$1` y `$2` como argumentos suyos y los sustituye por nada **antes de que arranque la herramienta**: «Plus — $20/month; Pro — $200/month» llega al usuario como «Plus — 0/month; Pro — 00/month», y nadie más adelante puede devolver las cifras. Si el texto lleva un `$` (precios, importes), escríbelo entre comillas simples o pásalo por stdin.
+
+```bash
+# Single quotes for the labels; the prompt from stdin: "-" reads it, the quoted delimiter keeps every $
+jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
+Which plan do you want? Plus — $20/month; Pro — $100/month
+TXT
+```
+
+Escribe el `TXT` de cierre en la primera columna, solo en su línea, sin espacios delante (si copias la sangría el heredoc nunca se cierra: un texto que acaba en una línea `TXT` se rechaza, no se envía nada).

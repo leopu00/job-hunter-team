@@ -84,8 +84,25 @@ jht-send --partial 'Trabajando en ello…'   # checkpoint a mitad de turno, mant
 Reglas:
 - **Un `[CHAT]` ⇒ al menos un `jht-send`. Sin excepciones.** No escribir nada deja al usuario mirando un chat que parece congelado.
 - **El mensaje de cierre del turno NO tiene `--partial`.** Si lo olvidas, el frontend mantiene los puntos de escritura para siempre (hasta un timeout de respaldo ~10 min después).
-- **Comillas**: pasa el cuerpo como un solo argumento posicional. Las comillas simples preservan `$`, `"`, emoji, acentos literalmente. Para un cuerpo que contiene una `'` literal, usa comillas dobles (`jht-send "non c'è problema"`) — pero dentro de `"..."` el shell expandirá `$var`, así que ten cuidado.
+- **Comillas**: pasa el cuerpo como un solo argumento posicional. Las comillas simples preservan `$`, `"`, emoji, acentos literalmente. Para un cuerpo que contiene una `'` literal, usa comillas dobles (`jht-send "non c'è problema"`) — pero dentro de `"..."` el shell expandirá `$var`, así que ten cuidado. Con un `$` usa comillas simples o stdin: mira la sección de abajo.
 - **Multi-línea**: bash `$'linea1\nlinea2'`, o usa `\n` dentro de la cadena y deja que Python lo preserve.
+
+## Un `$` en el texto: comillas simples o stdin
+
+Entre comillas dobles la shell lee `$1` y `$2` como argumentos suyos y los sustituye por nada **antes de que arranque la herramienta**: «Plus — $20/month; Pro — $200/month» llega al usuario como «Plus — 0/month; Pro — 00/month», y nadie más adelante puede devolver las cifras. Si el texto lleva un `$` (precios, importes), escríbelo entre comillas simples o pásalo por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
+Escribe el `TXT` de cierre en la primera columna, solo en su línea, sin espacios delante (si copias la sangría el heredoc nunca se cierra: un texto que acaba en una línea `TXT` se rechaza, no se envía nada).
 
 ## Tipo de mensaje (`--kind`)
 

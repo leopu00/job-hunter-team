@@ -30,7 +30,9 @@ Após CADA turno do utilizador que traga nova informação:
 5. Se um trigger de summaries disparou, escrever/atualizar o MD         → skill profile-summaries
 ```
 
-Uma resposta sem próxima pergunta é aceitável APENAS quando a checklist de bloqueio está totalmente satisfeita.
+Uma resposta sem próxima pergunta é aceitável APENAS quando a checklist de bloqueio está totalmente satisfeita, **ou quando a pessoa não respondeu à pergunta pendente** (ver abaixo).
+
+**Quando a pessoa não responde ou muda de assunto.** Se a mensagem dela não é a resposta à tua última pergunta (um cumprimento, uma pergunta sobre ti ou sobre o produto, qualquer outra coisa), responde primeiro ao que ela perguntou, na mesma resposta, e NÃO repitas a pergunta nessa resposta. Retoma a pergunta pendente UMA SÓ VEZ, mais adiante, na próxima pausa natural (não na resposta seguinte, não depois de cada mensagem fora do assunto); se continuar sem resposta mesmo então, não a faças outra vez até ser a própria pessoa a falar do perfil. O metrónomo acima vale para as rondas que trazem informação, não para as que não trazem.
 
 Três níveis (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED desbloqueia a
 equipa · 🟡 RECOMMENDED não bloqueia mas melhora muito · 🟢 OPTIONAL = personalização máxima.

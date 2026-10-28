@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## Um `$` no texto: aspas simples ou stdin
+
+Entre aspas duplas a shell lê `$1` e `$2` como argumentos seus e substitui-os por nada **antes de a ferramenta arrancar**: «Plus — $20/month; Pro — $200/month» chega ao utilizador como «Plus — 0/month; Pro — 00/month», e mais adiante ninguém consegue devolver os dígitos. Se o texto tiver um `$` (preços, montantes), escreve-o entre aspas simples ou passa-o por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Escreve o `TXT` de fecho na primeira coluna, sozinho na linha, sem espaços antes (se copiares o avanço, o heredoc nunca fecha: um texto que acaba numa linha `TXT` é recusado, não sai nada).
+
 ## Envelope da mensagem
 
 Mantenha sempre o prefixo estruturado:
@@ -77,6 +93,7 @@ Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia comp
 - `8` — outra entrega para a mesma sessao ainda estava em curso: nada foi digitado. Tente de novo.
 - `130` — o composer nao esta livre e a mensagem **NAO foi entregue**. O que la esta nao e comprovadamente nosso (um rascunho de uma pessoa, ou um marcador de colagem que ninguem nosso explica): nada foi colado nem premido, e a sua mensagem esta escrita em `logs/pending-input.jsonl` (`unsent`). Nao repita em ciclo: avise o Capitao (`[BLOCKED]`). O mesmo codigo **depois** da colagem significa que o composer ja nao e so o nosso texto: sem Enter, e o texto fica anotado la (`draft`). O painel esta vivo: nunca respawnar. O texto la e cortado em 64 KiB.
 - Um texto COMPROVADAMENTE nosso (deixado por uma entrega nossa anterior: identico, ou o seu marcador de colagem, `[Pasted Content N chars]` no Codex / `[Pasted text #1 +N lines]` no Claude, com o nosso numero) recebe o seu Enter na entrega seguinte, seja qual for a idade. `jht-tmux-send --flush-ours <SESSAO>` faz apenas isso (0 = livre ou aceite, 130 = nao nosso, 5 = Enter engolido).
+- Uma caixa que contem APENAS texto assinado (uma ou mais mensagens por enviar, de quem for: um envelope `[@x -> @y]`, as palavras da pessoa entre as marcas `⟦UTENTE·id⟧ … ⟦/UTENTE·id⟧`, ou um marcador de colagem que o registo acima explica: o do Codex de qualquer idade, o do Claude dentro de `JHT_TMUX_TOKEN_WINDOW` segundos, 600) e uma mensagem a espera do seu Enter, nao uma pessoa a escrever: a tua mensagem e colada atras e um unico Enter leva as duas; o agente pode receber a antiga com atraso. Um texto escrito a mao, uma marca por fechar ou um marcador que ninguem explica ficam como estavam (130). Qualquer pessoa pode escrever um envelope valido a mao: nao e uma autenticacao, e o custo e o mesmo de uma mensagem antiga que chega tarde. Um envelope SEM marcas (uma mensagem entre agentes) nao tem um fim proprio, e uma pessoa poderia continuar a escrever na sua cauda: so conta como assinado se o registo do transporte tiver a impressao digital desse texto exato (o que ele proprio colou e nunca viu levado); senao e texto da pessoa (130).
 
 > So `3` pode levar a um liveness-check e a um respawn. `4` e `5` significam ambos que o peer esta vivo: trata-los como morte e exatamente como comecam os over-spawn.
 
