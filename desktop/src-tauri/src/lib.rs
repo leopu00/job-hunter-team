@@ -118,6 +118,7 @@ pub fn run() {
             team_document::team_document_text,
             team_document::team_document_pages,
             team_document::team_document_page,
+            team_document::team_document_open,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,

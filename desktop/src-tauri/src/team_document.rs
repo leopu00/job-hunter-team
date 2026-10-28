@@ -41,6 +41,7 @@
 use crate::{
     account_scope::AccountScopeState,
     direct_chat::{failure, team_script_read, DirectChatError, DirectChatState},
+    private_copy::{self, CopyKind},
     team_export::{ask_where, part_path, window_may_export},
 };
 use base64::Engine;
@@ -634,6 +635,74 @@ pub(crate) async fn team_document_page(
     let _running = PreviewGuard::acquire()?;
     let reply = pages_script(&state, &scopes, json!({"op": "page", "name": name, "page": page, "sha256": sha256})).await?;
     parse_page(&reply, page, &sha256)
+}
+
+/// The whole of a document in memory, checked as the save checks it: never more than the first call said, and the
+/// sha256 of what arrived is the one the first call gave. It is what the system's reader is handed: nothing is read
+/// a second time.
+async fn pull_bytes<F, Fut>(described: &Described, mut next: F) -> Result<Vec<u8>, DirectChatError>
+where
+    F: FnMut(u64) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<u8>, DirectChatError>>,
+{
+    let mut bytes = Vec::with_capacity(described.bytes as usize);
+    let mut offset = 0u64;
+    // a team that sends a few bytes at a time is not believed
+    let mut calls = 0u64;
+    while offset < described.bytes {
+        calls += 1;
+        if calls > described.bytes / (BLOCK / 64) + 64 {
+            return Err(failure("read_failed"));
+        }
+        let data = next(offset).await?;
+        bytes.extend_from_slice(&data);
+        offset += data.len() as u64;
+    }
+    if bytes.len() as u64 != described.bytes || hex(&Sha256::digest(&bytes)) != described.sha256 {
+        return Err(failure("document_changed"));
+    }
+    Ok(bytes)
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct DocumentOpened {
+    outcome: &'static str,
+}
+
+/// Opens one of the team's PDFs with the system's reader, from a private copy that `private_copy` makes of the bytes
+/// this command has just checked (the sizes, the sha256 of the first call, the `%PDF-` at the start). Only after a
+/// click, only from the main window, one at a time; the copy has a name of random bits, never the document's.
+#[tauri::command]
+pub(crate) async fn team_document_open(
+    window: tauri::Window,
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+    name: String,
+) -> Result<DocumentOpened, DirectChatError> {
+    if !window_may_export(window.label()) || !valid_document_name(&name) {
+        return Err(failure("invalid_request"));
+    }
+    let _running = RunGuard::acquire()?;
+    let described = parse_described(&script(&state, &scopes, json!({"op": "stat", "name": name}), STAT_TIMEOUT).await?)?;
+    let bytes = {
+        let (state, scopes, name, described) = (&state, &scopes, name.clone(), &described);
+        pull_bytes(described, |offset| {
+            let name = name.clone();
+            async move {
+                let reply = script(state, scopes, json!({"op": "read", "name": name, "offset": offset}), BLOCK_TIMEOUT).await?;
+                parse_block(&reply, offset, described)
+            }
+        })
+        .await?
+    };
+    if !bytes.starts_with(b"%PDF-") {
+        return Err(failure("document_unreadable"));
+    }
+    tauri::async_runtime::spawn_blocking(move || private_copy::open_private_copy(CopyKind::Pdf, &bytes))
+        .await
+        .map_err(|_| failure("document_open_failed"))?
+        .map_err(failure)?;
+    Ok(DocumentOpened { outcome: "opened" })
 }
 
 #[cfg(test)]
@@ -1327,5 +1396,57 @@ mod tests {
         // a `.md` name never goes through the PDF operations and a `.pdf` name never through `text`
         assert_eq!(stat_error(&root, "cv.md"), "invalid_request");
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn a_document_is_pulled_whole_into_memory_or_not_at_all() {
+        let content = vec![b'x'; 1_300_000];
+        let described = described(content.len() as u64, &hex(&Sha256::digest(&content)));
+        let serve = |content: Vec<u8>, block: usize| {
+            move |offset: u64| {
+                let content = content.clone();
+                async move {
+                    let end = (offset as usize + block).min(content.len());
+                    Ok::<_, DirectChatError>(content[offset as usize..end].to_vec())
+                }
+            }
+        };
+        assert_eq!(block_on(pull_bytes(&described, serve(content.clone(), BLOCK as usize))).unwrap(), content);
+        // what arrives is not what the first call described
+        let mut other = content.clone();
+        other[1000] = b'y';
+        assert_eq!(block_on(pull_bytes(&described, serve(other, BLOCK as usize))).unwrap_err().code, "document_changed");
+        // a team that sends a few bytes at a time is not believed
+        assert_eq!(block_on(pull_bytes(&described, serve(content, 100))).unwrap_err().code, "read_failed");
+        // an error of a block is the error
+        let failing = |_: u64| async { Err::<Vec<u8>, _>(failure("document_changed")) };
+        assert_eq!(block_on(pull_bytes(&described, failing)).unwrap_err().code, "document_changed");
+    }
+
+    /// «Open in reader»: the gates first, the whole document checked, and only then the one routine of private copies;
+    /// this command writes nothing itself and logs nothing.
+    #[test]
+    fn opening_in_the_reader_checks_the_bytes_before_the_one_routine_that_writes_the_copy() {
+        let source = include_str!("team_document.rs");
+        let at = source.find("pub(crate) async fn team_document_open(").unwrap();
+        let body = &source[at..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        let gate = body.find("window_may_export(window.label())").unwrap();
+        let guard = body.find("RunGuard::acquire").unwrap();
+        let stat = body.find("script(&state").unwrap();
+        let pulled = body.find("pull_bytes(").unwrap();
+        let magic = body.find("starts_with(b\"%PDF-\")").unwrap();
+        let copy = body.find("private_copy::open_private_copy(CopyKind::Pdf, &bytes)").unwrap();
+        assert!(gate < guard && guard < stat && stat < pulled && pulled < magic && magic < copy, "gates, guard, team, whole bytes, magic, copy");
+        assert!(body.contains("valid_document_name(&name)"));
+        for writes in ["fs::", "File::", "OpenOptions", "std::fs", "write_all", "rename(", "create_new"] {
+            assert!(!body.contains(writes), "{writes}: the copy is the routine's, not this command's");
+        }
+        for logging in ["println!", "eprintln!", "tracing::", "log::", "record_", "emit("] {
+            assert!(!body.contains(logging), "{logging}");
+        }
+        for gate in ["write_gate", "require_write", "chat_write(", "is_read_only"] {
+            assert!(!body.contains(gate), "{gate}");
+        }
     }
 }
