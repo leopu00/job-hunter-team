@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
@@ -24,8 +24,6 @@ import {
   dayLabel,
   ENTER_AGAIN_MAX,
   excerpt,
-  fullStamp,
-  KIND_COLOR,
   outcomeOf,
   sightAfter,
   NOT_WORKING,
@@ -33,12 +31,13 @@ import {
   questionsOf,
   quoteLine,
   settleQueued,
-  timeLabel,
   transcript as conversationItems,
   type Outcome,
 } from "./chat-kinds";
 import { sameAsBefore } from "./same-as-before";
-import { renderChatMarkdown, renderChatText } from "./chat-text";
+import { systemLineText, withoutAttachmentPath } from "./chat-line-text";
+import { ChatMessageRow } from "./ChatMessageRow";
+import { renderChatText } from "./chat-text";
 import { JumpToLatest, useStickToBottom } from "./stick-to-bottom";
 
 // The ids are the roles' keys on the VPS; the names come from the dictionary.
@@ -79,7 +78,13 @@ function mergeMessages(
   page: DirectChatPage,
 ): DirectChatMessage[] {
   const byId = new Map(current.map((message) => [message.id, message]));
-  for (const message of page.messages) byId.set(message.id, cleanMessage(message));
+  for (const message of page.messages) {
+    const read = cleanMessage(message);
+    // A line that did not change keeps the object it had: every read brings fresh objects, and a line whose
+    // object is the same draws nothing again (ChatMessageRow), so one new line costs one line, not the history.
+    const had = byId.get(message.id);
+    byId.set(message.id, had ? sameAsBefore(had, read) : read);
+  }
   return [...byId.values()].sort((left, right) => left.at - right.at);
 }
 
@@ -91,28 +96,7 @@ export function newLineAt(value: string, start: number, end: number): { value: s
   return { value: `${value.slice(0, start)}\n${value.slice(end)}`, cursor: start + 1 };
 }
 
-/**
- * What a system line says: its closed code in the person's language when the catalog has that code as
- * its OWN entry, else the words it came with. `codes` is a plain object, so a code that is the name of
- * something every object has (`__proto__`, `constructor`) must not find it.
- */
-export function systemLineText(message: DirectChatMessage, codes: Record<string, string>): string {
-  const code = message.role === "system" ? message.code : undefined;
-  if (code && Object.prototype.hasOwnProperty.call(codes, code) && typeof codes[code] === "string") {
-    return codes[code];
-  }
-  return message.role === "user" ? withoutAttachmentPath(message.text) : message.text;
-}
-
-/**
- * An attachment goes to the Assistant with the path of its copy in the container, closing the person's
- * sentence in one bracket (`direct_chat.rs`, `attachment_message`). The person reads the sentence only:
- * this takes off that bracket, and only that exact shape at the very end — the app's folder, the name
- * the app gives its copies — never any other brackets or paths in what someone wrote.
- */
-export function withoutAttachmentPath(text: string): string {
-  return text.replace(/ \[attachment for my profile: \/jht_user\/allegati\/cv-\d{8}-\d{6}(?:-\d{1,3})?\.[a-z]{2,4}\]$/, "");
-}
+export { systemLineText, withoutAttachmentPath };
 
 export { renderChatText };
 
@@ -733,11 +717,16 @@ export default function DirectChatScreen({
 
 
   const canAnswer = status.state === "ready" && !writeLocked && questionsHere && typeof client.answer === "function";
-  const shownQuestions = questions.map((question) => {
-    const local = question.state === "open" ? answersInFlight.get(question.id) : undefined;
-    return local ? { ...question, state: "answered" as const, answer: local } : question;
-  });
-  const items = groupRepeatedMessages(conversationItems(messages, shownQuestions));
+  const shownQuestions = useMemo(
+    () =>
+      questions.map((question) => {
+        const local = question.state === "open" ? answersInFlight.get(question.id) : undefined;
+        return local ? { ...question, state: "answered" as const, answer: local } : question;
+      }),
+    [questions, answersInFlight],
+  );
+  const items = useMemo(() => groupRepeatedMessages(conversationItems(messages, shownQuestions)), [messages, shownQuestions]);
+  const newDays = useMemo(() => items.map((item, index) => index === 0 || dayKey(items[index - 1].at) !== dayKey(item.at)), [items]);
 
   // What the composer replies to now: gone from the view, it is nothing; an open question that
   // takes words is answered with them; a closed one, or a message, is quoted.
@@ -772,129 +761,16 @@ export default function DirectChatScreen({
   const lastItem = items.length > 0 ? items[items.length - 1].key : null;
   const bottom = useStickToBottom({ conversation: agentId, last: lastItem, count: items.length });
 
-  function renderMessage(message: DirectChatMessage, key: string, repeated?: number) {
-    return (
-      <article
-        key={key}
-        className={`max-w-[min(92%,72rem)] rounded-lg px-4 py-3 text-[15px] leading-[1.7] break-words ${
-          message.role === "user" ? "self-end rounded-br-sm" : "self-start rounded-bl-sm"
-        }`}
-        style={{
-          color: "var(--color-base)",
-          background:
-            message.role === "user"
-              ? "color-mix(in srgb, var(--color-green) 10%, var(--color-card))"
-              : "var(--color-card)",
-          border: `1px solid ${
-            message.role === "system"
-              ? "var(--color-yellow)"
-              : replyTo?.kind === "message" && replyTo.id === message.id
-                ? "var(--color-border-glow)"
-                : "var(--color-border)"
-          }`,
-          // urgent and blocked: a bar on the left, not the whole border
-          boxShadow: message.role === "agent" && KIND_COLOR[message.kind ?? "info"] ? `inset 3px 0 0 ${KIND_COLOR[message.kind ?? "info"]}` : undefined,
-        }}
-        data-quoted={replyTo?.kind === "message" && replyTo.id === message.id ? "true" : undefined}
-        onContextMenu={message.role === "system" ? undefined : (event) => openMenu("message", message.id, event)}
-      >
-        <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
-          <span>{message.role === "user" ? t.you : message.role === "system" ? t.system : selected.label}</span>
-          {repeated && repeated > 1 && <span data-testid="direct-chat-repeat">×{repeated}</span>}
-          {message.role === "agent" && (
-            <span data-testid="direct-chat-kind" data-kind={message.kind ?? "info"} style={{ color: KIND_COLOR[message.kind ?? "info"] ?? "var(--color-muted)" }}>
-              {t.kinds[message.kind ?? "info"]}
-            </span>
-          )}
-          <time
-            data-testid="direct-chat-time"
-            dateTime={new Date(message.at * 1000).toISOString()}
-            title={fullStamp(message.at, DICTATION_LOCALE[locale])}
-            className="ml-auto font-normal normal-case tracking-normal"
-          >
-            {timeLabel(message.at, DICTATION_LOCALE[locale])}
-          </time>
-        </div>
-        {renderChatMarkdown(systemLineText(message, t.codes))}
-        {message.role === "agent" && message.suggestions && (
-          <div role="group" aria-label={t.suggestionsLabel} className="mt-2 flex flex-wrap gap-1.5 whitespace-normal">
-            {message.suggestions.map((line) => (
-              <button
-                key={line}
-                type="button"
-                data-testid="direct-chat-suggestion"
-                disabled={status.state !== "ready" || writeLocked || sending}
-                onClick={() => void send(line)}
-                className="rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-left text-[15px] text-[var(--color-bright)] disabled:opacity-40"
-              >
-                {line}
-              </button>
-            ))}
-          </div>
-        )}
-        {message.role === "user" && message.id === inFlight && (
-          <div data-testid="direct-chat-in-flight" className="mt-1 text-right text-[13px] text-[var(--color-muted)]">
-            {t.sending}
-          </div>
-        )}
-        {message.role === "user" && message.id !== inFlight && outcomes.has(message.id) && renderOutcome(message.id, outcomes.get(message.id)!)}
-      </article>
-    );
-  }
-
-  function renderOutcome(messageId: string, outcome: Outcome) {
-    if (outcome.kind === "notSent") {
-      const canPress =
-        typeof client.enter === "function" && outcome.presses < ENTER_AGAIN_MAX && status.state === "ready" && !writeLocked;
-      return (
-        <div data-testid="direct-chat-not-sent" className="mt-1 flex items-center justify-end gap-2 text-[13px] text-[var(--color-yellow)]">
-          <span>{t.notSent}</span>
-          {canPress && (
-            <button
-              type="button"
-              data-testid="direct-chat-enter-again"
-              disabled={pressing !== null}
-              onClick={() => void enterAgain(messageId)}
-              className="rounded border border-[var(--color-border)] px-2 py-0.5 font-semibold text-[var(--color-bright)] disabled:opacity-40"
-            >
-              {pressing === messageId ? t.sending : t.sendEnterAgain}
-            </button>
-          )}
-        </div>
-      );
-    }
-    if (outcome.kind === "expired") {
-      return (
-        <div data-testid="direct-chat-queue-expired" className="mt-1 text-right text-[13px] text-[var(--color-yellow)]">
-          {t.queueExpired}
-        </div>
-      );
-    }
-    if (outcome.kind === "late") {
-      return (
-        <div data-testid="direct-chat-sent-late" className="mt-1 text-right text-[13px] text-[var(--color-yellow)]">
-          {t.queueLate}
-        </div>
-      );
-    }
-    if (outcome.kind === "unknown") {
-      // No button: a key pressed now could choose something on the agent's screen in the person's place.
-      return (
-        <div data-testid="direct-chat-taken-unknown" className="mt-1 text-right text-[13px] text-[var(--color-muted)]">
-          {t.takenUnknown}
-          {outcome.reason && <span data-testid="direct-chat-taken-reason">{`: ${t.takenReasons[outcome.reason]}`}</span>}
-        </div>
-      );
-    }
-    return (
-      <div
-        data-testid={outcome.kind === "queued" ? "direct-chat-queued" : "direct-chat-sent"}
-        className="mt-1 text-right text-[13px] text-[var(--color-muted)]"
-      >
-        {outcome.kind === "queued" ? t.queued : t.sent}
-      </div>
-    );
-  }
+  // The lines of the conversation are memoized (ChatMessageRow): they get these three as functions that keep their
+  // identity, which call the current ones, so a key typed in the composer does not render a line again.
+  const handlers = useRef({ openMenu, send, enterAgain });
+  handlers.current = { openMenu, send, enterAgain };
+  const onMenu = useCallback((id: string, event: { preventDefault(): void; clientX: number; clientY: number }) => handlers.current.openMenu("message", id, event), []);
+  const onSend = useCallback((line: string) => void handlers.current.send(line), []);
+  const onEnterAgain = useCallback((id: string) => void handlers.current.enterAgain(id), []);
+  const enterAvailable = typeof client.enter === "function" && status.state === "ready" && !writeLocked;
+  const suggestionsOff = status.state !== "ready" || writeLocked || sending;
+  const dateLocale = DICTATION_LOCALE[locale];
 
   const canSend = status.state === "ready" && !writeLocked && !sending && text.trim().length > 0;
   const composerOff = status.state !== "ready" || sending || writeLocked;
@@ -976,8 +852,7 @@ export default function DirectChatScreen({
               <p className="m-0 py-8 text-center text-[13px] text-[var(--color-muted)]">{t.empty}</p>
             )}
             {items.map((item, index) => {
-              const day = dayKey(item.at);
-              const newDay = index === 0 || dayKey(items[index - 1].at) !== day;
+              const newDay = newDays[index];
               return (
                 <Fragment key={item.key}>
                   {newDay && (
@@ -1002,7 +877,23 @@ export default function DirectChatScreen({
                       onMenu={writeLocked ? undefined : (event) => openMenu("question", item.question.id, event)}
                     />
                   ) : (
-                    renderMessage(item.message, item.key, item.repeated)
+                    <ChatMessageRow
+                      message={item.message}
+                      repeated={item.repeated}
+                      t={t}
+                      agentLabel={selected.label}
+                      dateLocale={dateLocale}
+                      quoted={replyTo?.kind === "message" && replyTo.id === item.message.id}
+                      inFlight={item.message.id === inFlight}
+                      outcome={item.message.role === "user" ? outcomes.get(item.message.id) : undefined}
+                      enterAvailable={enterAvailable}
+                      pressingThis={pressing === item.message.id}
+                      pressingAny={pressing !== null}
+                      suggestionsOff={item.message.suggestions ? suggestionsOff : false}
+                      onMenu={onMenu}
+                      onSend={onSend}
+                      onEnterAgain={onEnterAgain}
+                    />
                   )}
                 </Fragment>
               );
