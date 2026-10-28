@@ -54,8 +54,6 @@ ask with `python3 /app/shared/skills/first_run.py ask-plan` (the card, never pla
 
 **The plan comes only from the configuration or from the user.** Never write it yourself from your diary, a note, your memory or an earlier conversation: «the user confirmed Pro» in a note is what the user said then, not a declaration now (the configuration may have been reset, and the plan may have changed). While `plan_missing` is there the plan is missing: ask, once, and write only what the user answers.
 
-**Asking with buttons.** If you ask with `jht-notify-user --oggetto … --option id=label`, an option id takes only `a-z`, `0-9` and `_` (up to 24 characters, never starting with `_`): the plan `pro-max` is the id `pro_max`, and when the answer comes back you write the registry's own id, `plan_registry.py set <provider>:pro-max`.
-
 **2. Spawn the whole roster, staggered by ~60 seconds.**
 
 Not one worker every ten minutes: the whole formation, back to back, through

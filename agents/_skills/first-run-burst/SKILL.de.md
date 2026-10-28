@@ -55,8 +55,6 @@ Abonnement wird genauso angegeben: frag mit `python3 /app/shared/skills/first_ru
 
 **Das Abonnement kommt nur aus der Konfiguration oder vom Nutzer.** Schreibe es nie selbst aus dem Tagebuch, einer Notiz, dem Gedächtnis oder einem früheren Gespräch: „Der Nutzer hat Pro bestätigt“ in einer Notiz ist, was der Nutzer damals gesagt hat, keine Erklärung von jetzt (die Konfiguration kann zurückgesetzt worden sein, und das Abonnement kann sich geändert haben). Solange `plan_missing` da ist, fehlt das Abonnement: frage, nur einmal, und schreibe nur, was der Nutzer antwortet.
 
-**Mit Schaltflächen fragen.** Wenn du mit `jht-notify-user --oggetto … --option id=Bezeichnung` fragst, nimmt die ID einer Option nur `a-z`, `0-9` und `_` an (bis zu 24 Zeichen, nie mit `_` am Anfang): das Abonnement `pro-max` ist die ID `pro_max`, und wenn die Antwort kommt, schreibst du die ID des Registers, `plan_registry.py set <provider>:pro-max`.
-
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über

@@ -52,8 +52,6 @@ pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py
 
 **A csomag csak a konfigurációból vagy a felhasználótól jöhet.** Soha ne írd be magad a naplóból, egy jegyzetből, az emlékezetedből vagy egy korábbi beszélgetésből: a „a felhasználó megerősítette a Pro-t” egy jegyzetben azt jelenti, amit a felhasználó akkor mondott, nem mostani nyilatkozat (a konfigurációt lenullázhatták, és a csomag megváltozhatott). Amíg ott a `plan_missing`, a csomag hiányzik: kérdezd meg, csak egyszer, és csak azt írd be, amit a felhasználó válaszol.
 
-**Kérdezés gombokkal.** Ha a `jht-notify-user --oggetto … --option id=felirat` paranccsal kérdezel, az opció azonosítója csak `a-z`, `0-9` és `_` karaktert fogad el (legfeljebb 24 karakter, `_`-lal sosem kezdődhet): a `pro-max` csomag azonosítója `pro_max`, és amikor megjön a válasz, a nyilvántartás saját azonosítóját írod be: `plan_registry.py set <provider>:pro-max`.
-
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n

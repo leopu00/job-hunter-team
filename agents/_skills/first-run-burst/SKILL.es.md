@@ -54,8 +54,6 @@ usuario habla con él.
 
 **El plan sale solo de la configuración o del usuario.** No lo escribas nunca tú a partir del diario, de una nota, de la memoria o de una conversación anterior: «el usuario confirmó Pro» en una nota es lo que el usuario dijo entonces, no una declaración de ahora (la configuración puede haberse reiniciado y el plan puede haber cambiado). Mientras haya `plan_missing`, el plan falta: pregunta, una sola vez, y escribe solo lo que el usuario responda.
 
-**Preguntar con botones.** Si preguntas con `jht-notify-user --oggetto … --option id=etiqueta`, el id de una opción admite solo `a-z`, `0-9` y `_` (hasta 24 caracteres, nunca empezando por `_`): el plan `pro-max` es el id `pro_max`, y cuando llegue la respuesta escribes el id del registro, `plan_registry.py set <provider>:pro-max`.
-
 **2. Spawnea todo el roster, escalonado unos ~60 segundos.**
 
 No un worker cada diez minutos: toda la formación, una detrás de otra, siempre a través de
