@@ -349,6 +349,17 @@ def _plan_question_lock():
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
+def _user_chat(requested: str) -> str:
+    """The chat the card goes to: where the person is talking.
+
+    While the first run is open and the person confirmed their profile with the Assistente's card
+    (`state/profile-confirm-card.json` exists), they are in the Assistente's chat, whoever asks: the card goes
+    there, never to a chat they are not looking at. Otherwise it goes where the caller says."""
+    if status().get("phase") != PHASE_STEADY and (STATE_PATH.parent / "profile-confirm-card.json").is_file():
+        return "assistente"
+    return requested
+
+
 def _notify_command() -> list[str]:
     found = shutil.which("jht-notify-user")
     if found:
@@ -452,7 +463,10 @@ def close_plan_question(now: Optional[datetime] = None) -> dict:
 
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
              now: Optional[datetime] = None) -> dict:
-    """Ask the user which plan they have: the one way to do it, for any agent (the card goes to the chat of `agent`).
+    """Ask the user which plan they have: the one way to do it, for any agent. The card goes to the chat where the
+    person is (`_user_chat`: `agent`'s own, or the Assistente's while they confirm their profile with it), and
+    never before the profile is saved. The reply says which agent has the card and whether it is in the caller's
+    chat (`in_your_chat`), so nobody tells the person «in this chat» for a card that is elsewhere.
     Idempotent — no second card while the first has no answer, whoever posted it (the reply says which agent has
     it), and nothing to ask once the plan is declared. After an answer that named no plan («I do not know») the
     card comes back only after `reask_s`, and never more than `MAX_PLAN_CARDS` times for a provider."""
@@ -465,6 +479,9 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             closed = _close_plan_question(info, now)
             return dict({"ok": True, "asked": False, "reason": "the plan is already declared"},
                         **({"closed_question": closed["question_id"]} if closed.get("closed") else {}))
+        if _profile_imported() is None:  # the same rule as the net: the plan is never asked before the profile is saved
+            return {"ok": True, "asked": False, "wait_for_profile": True,
+                    "reason": "the profile is not saved yet: the plan is asked after it, never before"}
         if not info.get("hint"):
             return {"ok": False, "asked": False, "reason": info.get("reason", "plan_registry is unavailable")}
         registry = _load_module("plan_registry", "plan_registry.py")
@@ -478,8 +495,9 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             return {"ok": False, "asked": False, "reason": f"the database cannot be read: {error}"}
         if kind == "open":
             record = state["plan_question"]
+            holder = record.get("agent") or "capitano"
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
-                    "question_id": record["id"], "agent": record.get("agent") or "capitano"}
+                    "question_id": record["id"], "agent": holder, "in_your_chat": holder == agent}
         cards = _cards_asked(state, card["provider"])
         if cards >= MAX_PLAN_CARDS:
             return {"ok": True, "asked": False, "limit": True,
@@ -488,15 +506,17 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
         if answered is not None and (now - answered).total_seconds() < reask_s:
             return {"ok": True, "asked": False, "reason": "the user answered without naming a plan: asked again later",
                     "seconds_left": int(reask_s - (now - answered).total_seconds())}
-        question_id, why = _post_plan_card(agent, card)
+        chat = _user_chat(agent)
+        question_id, why = _post_plan_card(chat, card)
         if question_id is None:
             return {"ok": False, "asked": False, "reason": why}
         state = status()  # read again: what was written while the card was being posted stays
         state["plan_question"] = {"id": question_id, "asked_at": _now(), "asked_by": asked_by,
-                                  "provider": card["provider"], "agent": agent}
+                                  "provider": card["provider"], "agent": chat}
         state["plan_cards"] = {"provider": card["provider"], "count": cards + 1}
         _write(state)
-        return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]]}
+        return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]],
+                "agent": chat, "in_your_chat": chat == agent}
 
 
 def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,

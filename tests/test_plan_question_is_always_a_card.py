@@ -33,7 +33,11 @@ SUFFIX = {"en": "", "it": ".it", "es": ".es", "fr": ".fr", "de": ".de", "hu": ".
 QUESTIONS = "SELECT agent, source_id, source_payload FROM pending_user_messages WHERE source_action = 'agent_question'"
 
 
-def run(box, *args: str, lang: str | None = None) -> dict:
+def run(box, *args: str, lang: str | None = None, profile: bool = True) -> dict:
+    """Run first_run.py. The plan is asked after the profile is saved, so an `ask-plan` finds one in place unless the
+    test says `profile=False` (the plan is never asked before it)."""
+    if profile and args and args[0] == "ask-plan" and not (box.home / "profile" / "candidate_profile.yml").exists():
+        import_profile(box, minutes_ago=60)
     env = dict(box.env)
     # HOME is the box's, so a PyYAML in the user's site-packages is found through the path, as in the image
     env["PYTHONPATH"] = str(Path(yaml.__file__).resolve().parent.parent)
@@ -379,6 +383,7 @@ def test_what_is_written_to_the_state_while_the_card_is_posted_is_kept(box, monk
         return "aq:capitano:1-abc", ""
 
     monkeypatch.setattr(module, "_post_plan_card", post)
+    import_profile(box, minutes_ago=60)  # the plan is asked after the profile is saved
     module.status()
 
     assert module.ask_plan()["asked"]

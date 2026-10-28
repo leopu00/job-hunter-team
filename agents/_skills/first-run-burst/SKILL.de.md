@@ -51,6 +51,8 @@ Abonnement wird genauso angegeben: frag mit `python3 /app/shared/skills/first_ru
 
 **Das Abonnement wird nur einmal erfragt.** Solange deine Frage zum Abonnement im Chat unbeantwortet ist, stell sie nicht erneut, auch nicht umformuliert: eine neue Nachricht „Profil bereit", ein weiteres Aufwachen oder `plan_missing` im nächsten `status` ändern nichts daran, worauf du wartest. Sieh zuerst in den Chat: Hast du schon gefragt und der Nutzer nicht geantwortet, warte. Frag erst erneut, nachdem der Nutzer „weiß ich nicht" geantwortet hat. `ask-plan` veröffentlicht keine zweite Karte, solange die erste keine Antwort hat: Sagt er, die Frage sei offen, warte. Fragst du nicht, veröffentlicht das System die Karte wenige Minuten nach dem Profilimport. Nach „weiß ich nicht“ veröffentlicht er die Karte erst nach einer Stunde wieder und nie öfter als dreimal insgesamt: Sagt er es, warte und frag nicht in Textform.
 
+**Nie vor dem Profil, und die Karte geht dorthin, wo der Nutzer ist.** `ask-plan` veröffentlicht nichts, solange das Profil nicht gespeichert ist (`wait_for_profile: true`): frag das Abonnement nicht bei der Begrüßung und nicht, während das Profil entsteht, und warte auf die Nachricht „Profil fertig“. Solange der Nutzer sein Profil mit dem Assistente bestätigt, geht die Karte in den Chat des Assistente, wer auch immer `ask-plan` startet (`agent` und `in_your_chat` in der Antwort sagen, wo sie liegt). Wenn du ihm davon erzählst, nenne den Chat, der sie hat — „der Chat mit dem Assistente“ —, nie „diesem Chat“, wenn `in_your_chat` `false` ist.
+
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über

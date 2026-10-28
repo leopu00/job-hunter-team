@@ -50,6 +50,8 @@ usuario habla con él.
 
 **El plan se pregunta una sola vez.** Mientras tu pregunta sobre el plan siga sin respuesta en el chat, no la repitas, ni siquiera con otras palabras: un nuevo mensaje «perfil listo», otro despertar o `plan_missing` en el próximo `status` no cambian lo que esperas. Mira primero el chat: si ya preguntaste y el usuario no ha respondido, espera. Vuelve a preguntar solo después de que el usuario haya respondido «no lo sé». `ask-plan` no publica una segunda tarjeta mientras la primera no tenga respuesta: si dice que la pregunta está abierta, espera. Si no preguntas, la tarjeta la publica el sistema pocos minutos después de importar el perfil. Tras «no lo sé» vuelve a publicar la tarjeta solo pasada una hora, y nunca más de tres veces en total: si lo dice, espera y no preguntes con texto.
 
+**Nunca antes del perfil, y la tarjeta va donde está el usuario.** `ask-plan` no publica nada mientras el perfil no esté guardado (`wait_for_profile: true`): no preguntes el plan en la bienvenida ni mientras se construye el perfil, y espera el mensaje de perfil listo. Mientras el usuario confirma su perfil con el Assistente, la tarjeta va al chat del Assistente, sea quien sea quien lance `ask-plan` (`agent` e `in_your_chat` en la respuesta dicen dónde está). Cuando le hables de ella, nombra el chat que la tiene — «el chat con el Assistente» — nunca «este chat» si `in_your_chat` es `false`.
+
 **2. Spawnea todo el roster, escalonado unos ~60 segundos.**
 
 No un worker cada diez minutos: toda la formación, una detrás de otra, siempre a través de

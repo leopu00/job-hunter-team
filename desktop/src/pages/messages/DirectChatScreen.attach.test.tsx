@@ -42,57 +42,76 @@ describe("the paperclip in the Assistant's chat", () => {
     expect(screen.queryByTestId("direct-chat-attach")).toBeNull();
   });
 
-  it("asks for a file with the person's language and no path, and says what was attached by the person's own name", async () => {
-    const attach: Attach = vi.fn(async () => ({
-      outcome: "sent" as const,
-      displayName: "Mario Rossi CV.pdf",
-      receipt: { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, taken: true },
-    }));
+  it("asks for a file with the person's language and no path, and leaves no line under the composer: the message is in the conversation", async () => {
+    const SENT = "I attached my CV. [attachment for my profile: /jht_user/allegati/cv-20261028-153045.pdf]";
+    let attached = false;
+    const attach: Attach = vi.fn(async () => {
+      attached = true;
+      return {
+        outcome: "sent" as const,
+        displayName: "Mario Rossi CV.pdf",
+        receipt: { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, taken: true },
+      };
+    });
     const mock = client(attach, on);
+    vi.mocked(mock.read).mockImplementation(async () => ({
+      messages: attached ? [{ id: "m", role: "user" as const, text: SENT, at: 1 }] : [],
+      cursor: "1",
+    }));
     await ready(mock);
     const button = await screen.findByTestId("direct-chat-attach");
     await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByTestId("direct-chat-attach-note")).toBeNull();
     fireEvent.click(button);
     await waitFor(() => expect(attach).toHaveBeenCalledOnce());
     const args = vi.mocked(attach).mock.calls[0][0];
     expect(Object.keys(args).sort()).toEqual(["clientMessageId", "locale"]);
     expect(args.locale).toBe("en");
     expect(args.clientMessageId).toMatch(/^[A-Za-z0-9_-]{1,128}$/);
-    const note = await screen.findByTestId("direct-chat-attach-note");
-    expect(note).toHaveTextContent("Attached: Mario Rossi CV.pdf. The Assistant will use it for your profile.");
-    expect(note).toHaveAttribute("data-kind", "ok");
+    // the message that left by itself is a bubble, with its delivery under it, and nothing below the composer
+    // the page reads the conversation at its own pace: the bubble comes with the next read
+    await screen.findByText("I attached my CV.", {}, { timeout: 8000 });
+    expect(await screen.findByTestId("direct-chat-sent")).toBeInTheDocument();
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.queryByTestId("direct-chat-attach-note")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Attached:|Mario Rossi/);
     expect(mock.send).not.toHaveBeenCalled();
   });
 
-  it("says the Assistant uses the file only when it took the message, and reads it when free otherwise", async () => {
-    const USES = "The Assistant will use it for your profile.";
-    const LATER = "The Assistant reads it as soon as it is free.";
-    const cases: [string, Partial<DirectChatReceipt> | null, string][] = [
-      ["typed and taken", { taken: true }, USES],
-      ["typed, no word on taking (an older image)", {}, USES],
-      ["waiting in the team's queue", { state: "queued", queue: "terminal" }, LATER],
-      ["still in the composer", { taken: false }, LATER],
-      ["not known to be taken", { taken: null }, LATER],
-      ["no receipt at all", null, LATER],
+  it("says the delivery of the attachment message under it as for any message", async () => {
+    const cases: [string, Partial<DirectChatReceipt> | null, string | null][] = [
+      ["typed and taken", { taken: true }, "direct-chat-sent"],
+      ["typed, no word on taking (an older image)", {}, "direct-chat-sent"],
+      ["waiting in the team's queue", { state: "queued", queue: "terminal" }, "direct-chat-queued"],
+      ["still in the composer", { taken: false }, "direct-chat-not-sent"],
+      ["not known to be taken", { taken: null }, "direct-chat-taken-unknown"],
+      ["no receipt at all", null, null],
     ];
+    const ALL = ["direct-chat-sent", "direct-chat-queued", "direct-chat-not-sent", "direct-chat-taken-unknown"];
     for (const [label, extra, expected] of cases) {
       const receipt = extra && { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, ...extra };
       const attach: Attach = vi.fn(async () => ({ outcome: "sent" as const, displayName: "cv.pdf", ...(receipt ? { receipt } : {}) }));
-      await ready(client(attach, on));
+      const mock = client(attach, on);
+      vi.mocked(mock.read).mockResolvedValue({ messages: [{ id: "m", role: "user" as const, text: "I attached my CV. [attachment for my profile: /jht_user/allegati/cv-20261028-153045.pdf]", at: 1 }], cursor: "1" });
+      await ready(mock);
+      await screen.findByText("I attached my CV.");
+      for (const id of ALL) expect(screen.queryByTestId(id), `${label}: before`).toBeNull();
       const button = await screen.findByTestId("direct-chat-attach");
       await waitFor(() => expect(button).toBeEnabled());
       fireEvent.click(button);
-      expect(await screen.findByTestId("direct-chat-attach-note"), label).toHaveTextContent(expected);
+      await waitFor(() => expect(attach).toHaveBeenCalledOnce());
+      await waitFor(() => expect(button).toBeEnabled());
+      for (const id of ALL) {
+        if (id === expected) expect(await screen.findByTestId(id), label).toBeInTheDocument();
+        else expect(screen.queryByTestId(id), `${label}: ${id}`).toBeNull();
+      }
+      expect(screen.queryByTestId("direct-chat-attach-note"), label).toBeNull();
       cleanup();
     }
   });
 
-  it("takes the line away when the person sends a message, and not before", async () => {
-    const attach: Attach = vi.fn(async () => ({
-      outcome: "sent" as const,
-      displayName: "cv.pdf",
-      receipt: { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, taken: true },
-    }));
+  it("takes a warning away when the person sends a message, and not before", async () => {
+    const attach: Attach = vi.fn(async () => ({ outcome: "saved_not_sent" as const, displayName: "cv.pdf", code: "agent_busy" }));
     const mock = client(attach, on);
     vi.mocked(mock.send).mockResolvedValue({ clientMessageId: "x", accepted: true as const, messageId: "m2", at: 2 });
     await ready(mock);
@@ -196,11 +215,9 @@ describe("the words of the paperclip", () => {
     for (const [locale, text] of Object.entries(DIRECT_CHAT_TEXT)) {
       expect(Object.keys(text.attachErrors).sort(), locale).toEqual(Object.keys(base.attachErrors).sort());
       expect(Object.keys(text.attachOff).sort(), locale).toEqual(Object.keys(base.attachOff).sort());
-      for (const words of [...Object.values(text.attachErrors), ...Object.values(text.attachOff), text.attach, text.attachSent, text.attachSavedNotSent]) {
+      for (const words of [...Object.values(text.attachErrors), ...Object.values(text.attachOff), text.attach, text.attachSavedNotSent]) {
         expect(words.trim().length, locale).toBeGreaterThan(5);
       }
-      expect(text.attachSent, locale).toContain("{name}");
-      expect(text.attachSentLater, locale).toContain("{name}");
       expect(text.attachSavedNotSent, locale).toContain("{name}");
     }
   });

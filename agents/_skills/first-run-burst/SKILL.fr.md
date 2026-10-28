@@ -50,6 +50,8 @@ se déclare de la même façon : demande-le avec `python3 /app/shared/skills/fir
 
 **La formule se demande une seule fois.** Tant que ta question sur la formule reste sans réponse dans le chat, ne la repose pas, même reformulée : un nouveau message « profil prêt », un autre réveil ou `plan_missing` dans le prochain `status` ne changent pas ce que tu attends. Regarde d'abord le chat : si tu as déjà demandé et que l'utilisateur n'a pas répondu, attends. Ne redemande qu'après une réponse « je ne sais pas ». `ask-plan` ne publie pas une seconde carte tant que la première n'a pas de réponse : s'il dit que la question est ouverte, attends. Si tu ne demandes pas, le système publie la carte quelques minutes après l'import du profil. Après « je ne sais pas » il republie la carte seulement au bout d'une heure, et jamais plus de trois fois en tout : s'il le dit, attends et ne demande pas en texte.
 
+**Jamais avant le profil, et la carte va là où est l'utilisateur.** `ask-plan` ne publie rien tant que le profil n'est pas enregistré (`wait_for_profile: true`) : ne demande pas la formule à l'accueil ni pendant que le profil se construit, et attends le message de profil prêt. Tant que l'utilisateur confirme son profil avec l'Assistente, la carte va dans le chat de l'Assistente, quel que soit l'agent qui lance `ask-plan` (`agent` et `in_your_chat` dans la réponse disent où elle est). Quand tu lui en parles, nomme le chat qui l'a — « le chat avec l'Assistente » — jamais « ce chat » si `in_your_chat` vaut `false`.
+
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
