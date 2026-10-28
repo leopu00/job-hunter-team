@@ -920,8 +920,8 @@ pub(crate) struct OnboardingError {
     /// when they could be listed (existing_team_register::choice_failure).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) choices: Option<Box<[crate::existing_team_register::ContainerChoice]>>,
-    /// The room the agents need and the room there is, only for `disk_low`, `ram_low` and `ram_low_swap`
-    /// (resources.rs): the screen says both, in the person's language.
+    /// The room the agents need and the room there is, only for `disk_low` (resources.rs): the screen says
+    /// both, in the person's language. The memory that looks short is a notice with its own amounts, not an error.
     #[serde(skip_serializing_if = "Option::is_none")]
     resources: Option<crate::resources::Shortfall>,
 }
