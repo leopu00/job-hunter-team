@@ -58,7 +58,8 @@ export const ROUTES: Route[] = [
   { path: "/map", page: MapPage },
   { path: "/positions", page: PositionsPage },
   { path: "/positions/:id", page: PositionPage },
-  { path: "/swipe", page: SwipePage },
+  // The deck fills the window under the navbar (a full-bleed page), so a bar above it never pushes it past the window.
+  { path: "/swipe", page: SwipePage, fullBleed: true },
   { path: "/team", page: TeamPage },
   { path: "/team/log", page: TeamLogPage },
   { path: "/team/scout", page: TeamScoutPage },

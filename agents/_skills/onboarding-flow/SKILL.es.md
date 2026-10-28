@@ -30,7 +30,9 @@ Después de CADA turno del usuario que trae nueva información:
 5. Si se disparó un trigger de resúmenes, escribir/refrescar el MD        → skill profile-summaries
 ```
 
-Una respuesta sin siguiente pregunta es aceptable SOLO cuando la checklist bloqueante está completamente satisfecha.
+Una respuesta sin siguiente pregunta es aceptable SOLO cuando la checklist bloqueante está completamente satisfecha, **o cuando la persona no ha respondido a la pregunta pendiente** (ver abajo).
+
+**Cuando la persona no responde o cambia de tema.** Si su mensaje no es la respuesta a tu última pregunta (un saludo, una pregunta sobre ti o sobre el producto, cualquier otra cosa), responde primero a lo que ha preguntado, en la misma respuesta, y NO repitas la pregunta en esa respuesta. Retoma la pregunta pendiente UNA SOLA VEZ, más adelante, en la próxima pausa natural (no en la respuesta siguiente, no tras cada mensaje fuera de tema); si sigue sin respuesta incluso entonces, no la vuelvas a hacer hasta que sea la persona quien hable del perfil. El metrónomo de arriba vale para los turnos que aportan información, no para los que no la aportan.
 
 Tres niveles (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED desbloquea el
 equipo · 🟡 RECOMMENDED no bloquea pero mejora mucho · 🟢 OPTIONAL = máxima personalización.

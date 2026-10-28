@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstalledBrowser } from "../lib/browsers";
@@ -303,7 +303,8 @@ describe("LoginScreen with several local profiles", () => {
     expect(screen.getByRole("heading", { name: "Profili su questo Mac" })).toBeInTheDocument();
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]).getByTestId("login-profile-owner")).toHaveTextContent("Squadra di questo Mac");
+    // the mark of the team waits for the backend (which cannot answer here), then the copy speaks
+    expect(await within(rows[0]).findByTestId("login-profile-owner")).toHaveTextContent("Squadra di questo Mac");
     expect(within(rows[0]).queryByTestId("login-profile-last")).toBeNull();
     expect(within(rows[1]).getByTestId("login-profile-last")).toHaveTextContent("Ultimo usato");
     expect(within(rows[1]).queryByTestId("login-profile-owner")).toBeNull();
@@ -387,6 +388,19 @@ describe("LoginScreen: who has the team, from the backend", () => {
   it("marks nobody when the marker names an account or nobody, even if the copy has an owner", async () => {
     render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => ({ kind: "google" })} />);
     await vi.waitFor(() => expect(screen.queryByTestId("login-profile-owner")).toBeNull());
+  });
+
+  it("puts no mark on a row while the backend is asked, and the copy's after a moment if it does not answer", async () => {
+    vi.useFakeTimers();
+    try {
+      render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={() => new Promise<never>(() => undefined)} />);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1400); });
+      expect(screen.queryByTestId("login-profile-owner")).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+      expect(screen.getAllByRole("listitem")[0]).toContainElement(screen.getByTestId("login-profile-owner"));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the copy's mark when the backend cannot be asked", async () => {

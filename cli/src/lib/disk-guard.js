@@ -30,7 +30,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tf } from '../../wizard/i18n.js';
+import { currentLang, tf } from '../../wizard/i18n.js';
 import { isContainer } from '../../../shared/runtime/container.js';
 
 const GIB = 1024 ** 3;
@@ -127,7 +127,24 @@ export function readDisk(options = {}) {
   const level = worst ? worst.level : 'unknown';
   const code = level === 'low' ? DISK_CODE_LOW : level === 'warn' ? DISK_CODE_WARNING : null;
   const strip = ({ rawPct, ...rest }) => rest;
-  return { level, code, minFreePct: worst ? worst.freePct : null, jhtHome: strip(jhtHome), engine: strip(engine) };
+  return {
+    level, code, minFreePct: worst ? worst.freePct : null, minFreeBytes: worst ? worst.freeBytes : null,
+    jhtHome: strip(jhtHome), engine: strip(engine),
+  };
+}
+
+const DECIMAL_COMMA = new Set(['it', 'es', 'fr', 'de', 'hu', 'pt']);
+
+/**
+ * Byte -> numero di GiB a un decimale, per la frase («8», «5,2»). Per DIFETTO:
+ * non si promette piu' spazio di quello che c'e'. «GiB» sta nella frase.
+ */
+export function formatGib(bytes, lang = currentLang()) {
+  const tenths = Math.floor((Math.max(0, bytes) * 10) / GIB);
+  const whole = Math.floor(tenths / 10);
+  const frac = tenths % 10;
+  const text = frac ? `${whole}.${frac}` : String(whole);
+  return DECIMAL_COMMA.has(lang) ? text.replace('.', ',') : text;
 }
 
 /**
@@ -138,6 +155,6 @@ export function readDisk(options = {}) {
 export function diskLowRefusal(options = {}) {
   const disk = readDisk(options);
   if (disk.level !== 'low') return null;
-  const phrase = tf('disk.low.cli', `${disk.minFreePct}%`);
+  const phrase = tf('disk.low.cli', formatGib(DISK_BLOCK_FREE_BYTES), formatGib(disk.minFreeBytes));
   return { code: DISK_CODE_LOW, message: phrase === 'disk.low.cli' ? '' : phrase, disk };
 }

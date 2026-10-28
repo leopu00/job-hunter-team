@@ -530,6 +530,18 @@ def test_a_question_that_breaks_the_contract_is_not_built(overrides, code):
     assert caught.value.code == code
 
 
+def test_a_hyphen_in_an_option_id_is_refused_and_the_message_says_what_to_write():
+    """The Capitano wrote the plan `pro-max` as an id and had to ask twice: the refusal now says the fix."""
+    with pytest.raises(aq.QuestionRejected) as caught:
+        build(opzioni=[OPTIONS[0], {"id": "pro-max", "label": "Pro 20x"}])
+    assert caught.value.code == "option_id_invalid"
+    assert "write _ where you wrote -" in str(caught.value)
+    assert build(opzioni=[OPTIONS[0], {"id": "pro_max", "label": "Pro 20x"}]).payload["opzioni"][1]["id"] == "pro_max"
+    with pytest.raises(aq.QuestionRejected) as other:
+        build(opzioni=[OPTIONS[0], {"id": "Maiuscola", "label": "x"}])
+    assert "write _" not in str(other.value)  # the hint only where a hyphen was the mistake
+
+
 def test_the_boundaries_of_the_contract_are_accepted():
     assert build(scade_tra="5m").payload["scadenza"] == "2026-10-18T20:05:00Z"
     assert build(scade_tra="7d").payload["scadenza"] == "2026-10-25T20:00:00Z"

@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## Un `$` dans le texte : apostrophes simples ou stdin
+
+Entre guillemets doubles, le shell lit `$1` et `$2` comme ses propres arguments et les remplace par rien **avant que l'outil ne démarre** : « Plus — $20/month ; Pro — $200/month » arrive chez l'utilisateur comme « Plus — 0/month ; Pro — 00/month », et personne en aval ne peut rendre les chiffres. Si le texte contient un `$` (prix, montants), écris-le entre apostrophes simples ou passe-le par stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Écris le `TXT` de fermeture en première colonne, seul sur sa ligne, sans espaces devant (si tu copies le retrait, le heredoc ne se ferme jamais : un texte qui finit par une ligne `TXT` est refusé, rien n'est envoyé).
+
 ## Enveloppe du message
 
 Conservez toujours le prefixe structure :
@@ -77,6 +93,7 @@ Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie 
 - `8` — une autre livraison vers la meme session etait encore en cours : rien n'a ete tape. Reessayez.
 - `130` — le composer n'est pas libre et le message n'est **PAS livre**. Ce qui s'y trouve n'est pas prouve comme etant le notre (un brouillon d'une personne, ou un marqueur de collage que personne des notres n'explique) : rien n'a ete colle ni presse, et votre message est ecrit dans `logs/pending-input.jsonl` (`unsent`). Ne bouclez pas : prevenez le Capitaine (`[BLOCKED]`). Le meme code **apres** le collage signifie que le composer n'est plus seulement notre texte : pas d'Enter, et le texte y est note (`draft`). Le panneau est vivant : ne jamais respawner. Le texte y est coupe a 64 KiB.
 - Un texte PROUVE comme le notre (laisse par une livraison anterieure de notre part : identique, ou son marqueur de collage, `[Pasted Content N chars]` sur Codex / `[Pasted text #1 +N lines]` sur Claude, avec notre nombre) recoit son Enter a la livraison suivante, quel que soit son age. `jht-tmux-send --flush-ours <SESSION>` fait seulement cela (0 = libre ou pris, 130 = pas le notre, 5 = Enter avale).
+- Une zone de saisie qui contient SEULEMENT du texte signe (un ou plusieurs messages non envoyes, de qui que ce soit : une enveloppe `[@x -> @y]`, les mots de la personne entre les marques `⟦UTENTE·id⟧ … ⟦/UTENTE·id⟧`, ou un jeton de collage que le registre ci-dessus explique : celui de Codex a tout age, celui de Claude dans les `JHT_TMUX_TOKEN_WINDOW` secondes, 600) est un message qui attend son Entree, pas une personne qui ecrit : ton message est colle derriere et une seule Entree emporte les deux ; l'agent peut recevoir l'ancien en retard. Un texte tape a la main, une marque non fermee ou un jeton que personne n'explique restent ce qu'ils etaient (130). N'importe qui peut taper une enveloppe valide a la main : ce n'est pas une authentification, et le cout est le meme qu'un ancien message qui arrive en retard. Une enveloppe SANS marques (un message entre agents) n'a pas de fin propre, et une personne pourrait continuer a ecrire a sa suite : elle compte comme signee seulement si le registre du transport a l'empreinte de ce texte precis (ce qu'il a colle lui-meme sans jamais le voir pris) ; sinon c'est le texte de la personne (130).
 
 > Seul `3` peut mener a un liveness-check et a un respawn. `4` et `5` signifient tous deux que le pair est vivant : les traiter comme une mort est exactement ainsi que commencent les over-spawn.
 

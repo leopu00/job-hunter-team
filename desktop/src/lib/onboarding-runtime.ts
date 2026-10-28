@@ -8,6 +8,7 @@ import {
   type OnboardingSubmission,
 } from "./onboarding";
 import { appLocale } from "./app-locale";
+import { fillAmounts } from "./error-catalog";
 import { RUNTIME_TEXT, runtimeText, type RuntimeTextKey } from "./onboarding-runtime.i18n";
 
 export type OnboardingNativeProgressStage = "engine" | "runtime" | "container" | "provider" | "login" | "team" | "assistant";
@@ -104,6 +105,10 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
     (rawMessage && rawMessage.length <= 180 && !UNSAFE_ACTIVITY_TEXT.test(rawMessage)
       ? rawMessage
       : RUNTIME_TEXT[locale][FALLBACK_PROGRESS_MESSAGE[stage]]);
+  // A notice that names an amount (the memory that looks short) has its numbers written in the app's language; one whose
+  // numbers did not arrive valid is not shown with a placeholder.
+  const told = fillAmounts(message, row.amounts, locale);
+  if (/\{(required|available)\}/.test(told)) return null;
   const code = row.code === null ? null : typeof row.code === "string" && SAFE_CODE.test(row.code) ? row.code : undefined;
   const retryable = row.retryable === null || typeof row.retryable === "boolean" ? row.retryable : undefined;
   if (code === undefined || retryable === undefined) return null;
@@ -111,7 +116,7 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
   const phase = INSTALL_PHASES.find((known) => known === row.phase);
   const pull = phase === "image_pull" ? parseImagePull(row.pull) : undefined;
   return {
-    stage, status, message, sequence: row.sequence as number, elapsedMs: row.elapsedMs as number, code, retryable,
+    stage, status, message: told, sequence: row.sequence as number, elapsedMs: row.elapsedMs as number, code, retryable,
     ...(phase ? { phase } : {}),
     ...(pull ? { pull } : {}),
   };
