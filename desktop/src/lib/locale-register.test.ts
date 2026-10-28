@@ -15,9 +15,27 @@ import { describe, expect, it } from "vitest";
  */
 const src = fileURLToPath(new URL("..", import.meta.url));
 
-const FORMAL_FRENCH = /\b(?:vous|Vous|votre|Votre|vos|Vos)\b/;
-const FORMAL_GERMAN =
-  /\bIhr(?:e|en|em|er|es)?\b|\bIhnen\b|\b[a-zäöüß]+(?:en|et|st) Sie\b|\b(?:Wählen|Kopieren|Schließen|Geben|Klicken|Öffnen|Starten) Sie\b/;
+// "vous" and the verbs that the "vous" imperative ends in: a line that says "Réessayez." has no "vous".
+const FORMAL_FRENCH_VERBS = [
+  "veuillez", "vérifiez", "réessayez", "essayez", "cliquez", "saisissez", "choisissez", "utilisez", "ouvrez",
+  "copiez", "terminez", "redémarrez", "démarrez", "attendez", "consultez", "reliez", "envoyez", "contactez",
+  "sélectionnez", "confirmez", "ajoutez", "retournez", "revenez", "fermez", "actualisez", "continuez", "suivez",
+  "lisez", "entrez", "complétez", "rechargez", "relancez", "supprimez", "mettez", "prenez", "demandez",
+  "appuyez", "patientez", "souhaitez", "pouvez", "voulez", "devez",
+];
+// A word boundary that knows accents: `\b` does not see the "é" of "vérifiez" or the "Ö" of "Öffnen".
+const START = "(?<![\\p{L}\\p{N}_])";
+const END = "(?![\\p{L}\\p{N}_])";
+const FORMAL_FRENCH = new RegExp(`${START}(?:vous|votre|vos|${FORMAL_FRENCH_VERBS.join("|")})${END}`, "iu");
+const FORMAL_GERMAN = new RegExp(
+  [
+    `${START}Ihr(?:e|en|em|er|es)?${END}`,
+    `${START}Ihnen${END}`,
+    `${START}\\p{Lu}\\p{Ll}+en Sie${END}`,
+    `${START}\\p{Ll}+(?:en|et|st) Sie${END}`,
+  ].join("|"),
+  "u",
+);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
