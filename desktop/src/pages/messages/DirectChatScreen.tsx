@@ -280,7 +280,7 @@ export default function DirectChatScreen({
   // The paperclip, in the Assistant's chat only: on, or off with the reason the native side gives.
   const [attachState, setAttachState] = useState<{ available: boolean; code?: string } | null>(null);
   const [attaching, setAttaching] = useState(false);
-  const [attachNote, setAttachNote] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
+  const [attachNote, setAttachNote] = useState<{ kind: "warn" | "error"; text: string } | null>(null);
   const attachHere = agentId === "assistente" && Boolean(client.attach) && Boolean(client.attachState);
   const [loading, setLoading] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -671,9 +671,10 @@ export default function DirectChatScreen({
     try {
       const done = await client.attach({ clientMessageId: clientMessageId(), locale });
       if (done.outcome === "sent") {
-        // «uses it» only when the receipt says the Assistant took the message: waiting or not known, it reads it when free
-        const taken = done.receipt !== undefined && done.receipt.state !== "queued" && done.receipt.taken !== false && done.receipt.taken !== null;
-        setAttachNote({ kind: "ok", text: withName(taken ? t.attachSent : t.attachSentLater, done.displayName ?? "") });
+        // The message left on its own: it is a bubble in the conversation, and its delivery (taken, waiting,
+        // not known) is said under it as for any message. No line under the composer: nothing is left to say.
+        const receipt = done.receipt;
+        if (receipt) setOutcomes((current) => new Map(current).set(receipt.messageId, outcomeOf(receipt, 0)));
         readSoon.current?.();
       } else if (done.outcome === "saved_not_sent") {
         setAttachNote({ kind: "warn", text: withName(t.attachSavedNotSent, done.displayName ?? "") });
@@ -1121,10 +1122,10 @@ export default function DirectChatScreen({
           )}
           {attachNote && (
             <p
-              role={attachNote.kind === "ok" ? "status" : "alert"}
+              role="alert"
               data-testid="direct-chat-attach-note"
               data-kind={attachNote.kind}
-              className={`w-full m-0 mb-1.5 text-[13px] ${attachNote.kind === "ok" ? "text-[var(--color-muted)]" : attachNote.kind === "warn" ? "text-[var(--color-yellow)]" : "text-[var(--color-red)]"}`}
+              className={`w-full m-0 mb-1.5 text-[13px] ${attachNote.kind === "warn" ? "text-[var(--color-yellow)]" : "text-[var(--color-red)]"}`}
             >
               {attachNote.text}
             </p>
