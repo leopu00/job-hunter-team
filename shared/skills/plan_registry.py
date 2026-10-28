@@ -51,6 +51,8 @@ except ImportError:
         "plan.unknown": "unknown plan: %s",
         "plan.config_unreadable": "%s cannot be read (damaged, or not a JSON object): the plan was not written and the file was left as it is",
         "plan.not_selected": "subscription plan not selected",
+        "plan.prudent_label": "unknown plan (slow start)",
+        "plan.start_slow": "I am starting slowly; when you know your plan, tell me and we will speed up.",
         "plan.select_hint": "the user has not declared a subscription plan: do not guess a roster. Ask them with `python3 /app/shared/skills/first_run.py ask-plan` — the only way to ask: it posts the card with the plans and the one Codex reports, and it never posts a second while the first has no answer; never write the question as plain text in your pane. When the user answers, write exactly their choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (the id of the card works: `pro_max` is `pro-max`) and run begin-burst again",
         "plan.question_subject": "Which subscription plan do you have?",
         "plan.question_text": "The team needs your %s plan before it starts: it sizes the workers so your usage window is not burnt on the first day. Pick the one you really have.",
@@ -496,6 +498,18 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
         "host_agent_cap": cap,
         "capped_by_host": capped_by_host,
     }
+
+
+def prudent_roster(provider: str, host_cap: int | None = None) -> dict:
+    """The formation the first run opens with when the person does not know their plan («I do not know» on the card):
+    one worker per role, the smallest first pass and the smallest goal, as the lowest tier. It is not a guess about
+    the plan: it is the start that cannot burn a window whatever the plan is. `plan_unknown` says so, and `say` is what
+    the Capitano tells the person, in their language."""
+    plan = {"provider": provider, "id": UNKNOWN_OPTION, "label": _t("plan.prudent_label"), "tier": 0.0, "weekly_capped": True}
+    out = burst_roster(plan, host_cap=host_cap)
+    out["plan_unknown"] = True
+    out["say"] = _t("plan.start_slow")
+    return out
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────

@@ -126,6 +126,8 @@
   "plan.unknown": "plano desconhecido: %s",
   "plan.config_unreadable": "%s não se consegue ler (danificado, ou não é um objeto JSON): o plano não foi escrito e o ficheiro ficou como estava",
   "plan.not_selected": "plano de subscrição não selecionado",
+  "plan.prudent_label": "plano desconhecido (arranque lento)",
+  "plan.start_slow": "Começo devagar; quando souberes o teu plano, diz-me e aceleramos.",
   "plan.select_hint": "o utilizador não declarou um plano de subscrição: não adivinhes uma formação. Pergunta-lho com `python3 /app/shared/skills/first_run.py ask-plan` — é a única forma: publica o cartão com os planos e o que o Codex indica, e não publica um segundo enquanto o primeiro não tiver resposta; nunca escrevas a pergunta como texto simples no teu painel. Quando o utilizador responder, escreve exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (serve o id do cartão: `pro_max` é `pro-max`) e volta a executar begin-burst",
   "plan.question_subject": "Que plano de subscrição tens?",
   "plan.question_text": "A equipa precisa do teu plano %s antes de arrancar: dimensiona com ele os trabalhadores para não queimar a tua janela de utilização no primeiro dia. Escolhe o que tens mesmo.",

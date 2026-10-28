@@ -181,8 +181,8 @@ def plan_gap(state: dict) -> dict:
     The burst only ever opens with a declared plan, and begin_burst answers «already in progress» for a
     burst that runs, so without this nobody is told the plan is gone. Empty when the plan is declared, when
     there is no burst, or when the registry cannot be read (an unreadable table is not a missing plan)."""
-    if state.get("phase") != PHASE_BURST:
-        return {}
+    if state.get("phase") != PHASE_BURST or state.get("plan_unknown"):
+        return {}                  # a slow start without a plan is what the person chose: nothing to warn about
     info = plan_info()
     if info.get("ok") or not info.get("hint"):
         return {}
@@ -200,13 +200,26 @@ def begin_burst() -> dict:
     if state["phase"] == PHASE_STEADY:
         return dict(state, note="first run has already been completed")
     if state["phase"] == PHASE_BURST:
+        if state.get("plan_unknown"):
+            info = plan_info()
+            if info.get("ok"):
+                return _speed_up(state, info)
+            return dict(state, note="burst already in progress (slow start: the plan is not known yet)")
         return dict(state, note="burst already in progress", **plan_gap(state))
 
     info = plan_info()
+    slow_start = False
     if not info.get("ok"):
-        return {"ok": False, "phase": state["phase"],
-                "reason": info.get("reason", "plan not declared"),
-                "hint": info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"}
+        provider = _unknown_plan_provider()
+        registry = _load_module("plan_registry", "plan_registry.py") if provider else None
+        if registry is None:
+            return {"ok": False, "phase": state["phase"],
+                    "reason": info.get("reason", "plan not declared"),
+                    "hint": info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"}
+        # «I do not know» on the card: the first run does not wait for ever for a plan nobody can name. It opens with
+        # one worker per role, the start that cannot burn a window whatever the plan is, and speeds up when it is known.
+        info = registry.prudent_roster(provider)
+        slow_start = True
 
     with contextlib.suppress(Exception):  # the card is a courtesy to the user: it never stops the burst
         close_plan_question()  # the plan is declared: the card that asked for it has nothing left to ask
@@ -220,9 +233,51 @@ def begin_burst() -> dict:
         "scout_cap_first_pass": info["scout_cap_first_pass"],
         "target_scored": info["target_scored"],
         "capped_by_host": info.get("capped_by_host", False),
+        "plan_unknown": slow_start,
     })
     _write(state)
+    if slow_start:
+        return dict(state, ok=True, prudent=True, say=info["say"])
     return dict(state, ok=True)
+
+
+def _speed_up(state: dict, info: dict) -> dict:
+    """A burst that opened as a slow start (the person did not know their plan) and whose plan is declared now: the
+    roster, the first pass and the goal of that plan replace the prudent ones. The burst, its start and the positions
+    already scored are kept."""
+    state.update({
+        "plan": {k: info[k] for k in ("provider", "plan", "plan_label", "tier", "weekly_capped")},
+        "roster": info["roster"],
+        "scout_cap_first_pass": info["scout_cap_first_pass"],
+        "target_scored": info["target_scored"],
+        "capped_by_host": info.get("capped_by_host", False),
+        "plan_unknown": False,
+        "sped_up_at": _now(),
+    })
+    _write(state)
+    with contextlib.suppress(Exception):
+        close_plan_question()
+    return dict(state, ok=True, upgraded=True)
+
+
+def _unknown_plan_provider() -> Optional[str]:
+    """The provider whose card about the plan was answered «I do not know», else None. A card that is open, was
+    never asked, was answered with a plan, or is for another provider, is not that answer."""
+    registry = _load_module("plan_registry", "plan_registry.py")
+    if registry is None:
+        return None
+    try:
+        card = registry.question_options()
+        provider = card.get("provider") if card else None
+        if not provider:
+            return None
+        kind, answer = _plan_question_state(status(), provider)
+    except (sqlite3.Error, OSError, ValueError):
+        return None
+    chosen = (answer or {}).get("scelte")
+    if kind == "answered" and chosen == [registry.UNKNOWN_OPTION]:
+        return provider
+    return None
 
 
 def complete(reason: str) -> dict:

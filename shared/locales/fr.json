@@ -126,6 +126,8 @@
   "plan.unknown": "formule inconnue : %s",
   "plan.config_unreadable": "%s est illisible (endommagé, ou pas un objet JSON) : la formule n’a pas été écrite et le fichier est resté tel quel",
   "plan.not_selected": "formule d'abonnement non sélectionnée",
+  "plan.prudent_label": "abonnement inconnu (démarrage lent)",
+  "plan.start_slow": "Je démarre doucement ; quand tu connais ton abonnement, dis-le-moi et on accélère.",
   "plan.select_hint": "l'utilisateur n'a pas déclaré de formule d'abonnement : ne devine pas une formation. Demande-la-lui avec `python3 /app/shared/skills/first_run.py ask-plan` — c'est le seul moyen : il publie la carte avec les formules et celle que Codex indique, et n'en publie pas une seconde tant que la première n'a pas de réponse ; n'écris jamais la question comme simple texte dans ton panneau. Quand l'utilisateur répond, écris exactement son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (l'id de la carte convient : `pro_max` vaut `pro-max`) puis relance begin-burst",
   "plan.question_subject": "Quelle formule d'abonnement as-tu ?",
   "plan.question_text": "L'équipe a besoin de ta formule %s avant de démarrer : elle dimensionne les travailleurs pour ne pas brûler ta fenêtre d'utilisation dès le premier jour. Choisis celle que tu as vraiment.",

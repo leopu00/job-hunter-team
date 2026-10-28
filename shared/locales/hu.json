@@ -127,6 +127,8 @@
   "plan.unknown": "ismeretlen csomag: %s",
   "plan.config_unreadable": "%s nem olvasható (sérült, vagy nem JSON-objektum): a csomagot nem írtam be, a fájl változatlan maradt",
   "plan.not_selected": "nincs előfizetési csomag kiválasztva",
+  "plan.prudent_label": "ismeretlen előfizetés (lassú indulás)",
+  "plan.start_slow": "Lassan indulok; amint tudod, melyik előfizetésed van, szólj, és gyorsítunk.",
   "plan.select_hint": "a felhasználó nem adott meg előfizetési csomagot: ne találgass felállást. Kérdezd meg a `python3 /app/shared/skills/first_run.py ask-plan` paranccsal — ez az egyetlen mód: kiteszi a kártyát a csomagokkal és azzal, amelyet a Codex jelez, és amíg az elsőre nincs válasz, nem tesz ki másodikat; a kérdést soha ne írd egyszerű szövegként a paneledbe. Ha a felhasználó válaszol, pontosan az ő választását írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal (a kártya azonosítója is jó: a `pro_max` ugyanaz, mint a `pro-max`), majd futtasd újra a begin-burst parancsot",
   "plan.question_subject": "Melyik előfizetési csomagod van?",
   "plan.question_text": "A csapatnak az indulás előtt tudnia kell a %s csomagodat: ehhez méretezi a dolgozók számát, hogy az első napon ne égesse el a használati ablakodat. Azt válaszd, amelyik tényleg megvan.",
