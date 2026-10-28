@@ -55,6 +55,17 @@ function chatName(id: DirectChatAgentId): string {
   return DIRECT_CHAT_TEXT[appLocale()].agents[id];
 }
 
+/**
+ * The list is read again by itself while the page is on view: a reading left alone never moves
+ * (the states, the contexts, the open questions). On this computer every 20 s; on a VPS, whose reads go
+ * over ssh, every 60 s, so that the limit on sign-ins (ssh_rate_limited) is not touched. Where the team
+ * is not known yet (the first read failed) it is the slow one.
+ */
+export const LIST_REFRESH_LOCAL_MS = 20_000;
+export const LIST_REFRESH_VPS_MS = 60_000;
+/** A window seen again reads at once, unless it was read this recently. */
+const SEEN_AGAIN_MIN_MS = 5_000;
+
 /** A terminal that changed this recently says the agent is doing something (the second source). */
 const MOVING_MS = 30_000;
 
@@ -497,9 +508,10 @@ export default function AgentsPanel({ search }: PageProps) {
   // True when the list was read; a read that another one replaced says true too (the other one answers).
   // `afterStart`: the read that follows «Start the team» counts only if the team no longer shows as stopped by
   // the person (that flag falls when the start ends, after the list already answers).
-  const read = useCallback(async (afterStart = false): Promise<boolean> => {
+  // `quiet`: the periodic read, which does not turn the button to «refreshing».
+  const read = useCallback(async (afterStart = false, quiet = false): Promise<boolean> => {
     const mine = ++latest.current;
-    setBusy(true);
+    if (!quiet) setBusy(true);
     const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
     if (latest.current !== mine) return true;
     setList(listed);
@@ -516,6 +528,36 @@ export default function AgentsPanel({ search }: PageProps) {
     };
   }, [read]);
   useRefresh(() => void read());
+  // One read at a time, and none while an action or a start is on its way: their own read follows them.
+  const occupied = useRef(false);
+  occupied.current = busy || acting || starting;
+  const refreshMs = useRef(LIST_REFRESH_VPS_MS);
+  refreshMs.current = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
+  useEffect(() => {
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let last = Date.now();
+    const again = async () => {
+      if (!live) return;
+      clearTimeout(timer);
+      if (document.visibilityState === "visible" && !occupied.current) {
+        last = Date.now();
+        await read(false, true);
+      }
+      if (live) timer = setTimeout(() => void again(), refreshMs.current);
+    };
+    // the window seen again after it was hidden reads at once
+    const seen = () => {
+      if (document.visibilityState === "visible" && !occupied.current && Date.now() - last >= SEEN_AGAIN_MIN_MS) void again();
+    };
+    timer = setTimeout(() => void again(), refreshMs.current);
+    document.addEventListener("visibilitychange", seen);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", seen);
+    };
+  }, [read]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const current =

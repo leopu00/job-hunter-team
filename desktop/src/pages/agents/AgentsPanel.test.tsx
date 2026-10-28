@@ -11,7 +11,7 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel, { identityLine, TerminalText } from "./AgentsPanel";
+import AgentsPanel, { identityLine, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
 import { isDirectChatAgentId } from "../messages/DirectChatScreen";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
@@ -44,6 +44,7 @@ const AGENTS = [
   agent("DOTTORE", "dottore", null, "idle"),
 ];
 let target = "T1";
+let where: "vps" | "local" = "vps";
 let held: { session: string; byUser: boolean }[] = [];
 let standby = { state: "off", until: null as string | null, weeklyReset: false };
 let burnIntent: Record<string, unknown> | undefined;
@@ -52,7 +53,7 @@ let ownVps: string | undefined;
 let historyReply: Record<string, unknown> | null = null;
 const listReply = () => ({
   ok: true,
-  data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
+  data: { agents: AGENTS, roles: ROLES, states: true, target, where, label: "vps.example", ...(ownVps ? { ownVps } : {}) },
 });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
 const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "stop_team", "answer"]);
@@ -62,6 +63,7 @@ beforeEach(() => {
   fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   target = "T1";
+  where = "vps";
   held = [];
   standby = { state: "off", until: null, weeklyReset: false };
   burnIntent = undefined;
@@ -1269,5 +1271,109 @@ describe("«Agenti»: the terminal, read at the pace the native side says", () =
     expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("same");
     await vi.advanceTimersByTimeAsync(2_000);
     expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("new line");
+  });
+});
+
+describe("«Agenti»: the list reads again by itself", () => {
+  const lists = () => ops().filter((r) => r.op === "list").length;
+  const setVisibility = (state: "visible" | "hidden") => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+  const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility("visible");
+  });
+
+  it("the rhythms are 20 s on this computer and 60 s on a VPS", () => {
+    expect([LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS]).toEqual([20_000, 60_000]);
+  });
+
+  it("on this computer it reads every 20 s, each time with the team and the history", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    const first = lists();
+    expect(first).toBe(1);
+    await advance(LIST_REFRESH_LOCAL_MS - 2_000);
+    expect(lists()).toBe(first);
+    await advance(3_000);
+    await waitFor(() => expect(lists()).toBe(first + 1));
+    expect(ops().filter((r) => r.op === "team").length).toBe(first + 1);
+    await advance(LIST_REFRESH_LOCAL_MS);
+    await waitFor(() => expect(lists()).toBe(first + 2));
+    // a quiet read: the button never says «refreshing» for it
+    expect(screen.queryByText("Aggiorno…")).toBeNull();
+  });
+
+  it("on a VPS it reads every 60 s: its reads go over ssh", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_LOCAL_MS * 2 + 5_000);
+    expect(lists()).toBe(1);
+    await advance(LIST_REFRESH_VPS_MS - LIST_REFRESH_LOCAL_MS * 2);
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("the new states are shown without anybody pressing anything", async () => {
+    where = "local";
+    show("agent=CAPITANO");
+    expect(await screen.findByTestId("panel-state")).toHaveTextContent("Lavora");
+    const state = AGENTS[0].state;
+    AGENTS[0].state = "idle";
+    try {
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await waitFor(() => expect(screen.getByTestId("panel-state")).not.toHaveTextContent("Lavora"));
+    } finally {
+      AGENTS[0].state = state;
+    }
+  });
+
+  it("a hidden window reads nothing, and reads at once when it is seen again", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    setVisibility("hidden");
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(1);
+    setVisibility("visible");
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("a window seen again right after a read does not read twice", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(500);
+    expect(lists()).toBe(1);
+  });
+
+  it("stops when the page goes away", async () => {
+    where = "local";
+    const view = show();
+    await screen.findByTestId("panel-summary");
+    view.unmount();
+    await advance(LIST_REFRESH_LOCAL_MS * 5);
+    expect(lists()).toBe(1);
+  });
+
+  it("coming back to Agents from another page reads the list at once", async () => {
+    where = "local";
+    navigate("/agents?agent=CAPITANO", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("panel-summary");
+    expect(lists()).toBe(1);
+    navigate("/help");
+    await waitFor(() => expect(screen.queryByTestId("panel-summary")).toBeNull());
+    navigate("/agents?agent=CAPITANO");
+    await screen.findByTestId("panel-summary");
+    await waitFor(() => expect(lists()).toBe(2));
   });
 });
