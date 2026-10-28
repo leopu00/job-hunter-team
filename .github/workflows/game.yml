@@ -406,7 +406,7 @@ jobs:
             \( -name '*-setup.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.deb' \) \
             -exec cp {} gate-assets/ \;
           test -n "$(find gate-assets -type f -print -quit)"
-          find gate-assets -type f -size 0 -print -quit | grep -q . && exit 1 || true
+          if find gate-assets -type f -size 0 -print -quit | grep -q .; then exit 1; fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
