@@ -21,6 +21,7 @@ import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/ide
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
+import { STATE_TEXT } from "../lib/onboarding-state.i18n";
 import { existingTeamReadOnly, existingTeamView, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { writeAccessNotice } from "../lib/write-access-restored";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
@@ -545,10 +546,59 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
     await userEvent.click(await screen.findByRole("button", { name: "Collega e continua" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta intestato/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/revisione ancora da confermare/i);
+    expect(screen.getByTestId("local-migration-code")).toHaveTextContent("local_migration_review_pending");
+    expect(screen.getByRole("alert")).toHaveTextContent(/runtime resta intestato/i);
     expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument();
     expect(finalizeLocalProfileMigration).not.toHaveBeenCalled();
     expect(activateDesktopAccountScope).not.toHaveBeenCalled();
+  });
+
+  it("says why the check failed, with its code, and leaves the person a way out of the page", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_target_exists" });
+
+    render(<DashboardApp />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(describeError("local_migration_target_exists", { locale: "it" }).text);
+    expect(screen.getByTestId("local-migration-code")).toHaveTextContent("local_migration_target_exists");
+    expect(screen.getByTestId("local-migration")).toHaveClass("existing-team-modal");
+    expect(screen.getByRole("button", { name: "Annulla e resta in locale" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Torna ad Accedi" })).toBeEnabled();
+    expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+  });
+
+  it("«Back to sign in» is the app's own sign-out, held while it runs, and says so if it did not work", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_owner_mismatch" });
+    let fail!: (error: Error) => void;
+    vi.mocked(signOut).mockReturnValueOnce(new Promise<void>((_, reject) => { fail = reject; }));
+    vi.mocked(signOut).mockResolvedValueOnce();
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "Torna ad Accedi" }));
+
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Esco…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Annulla e resta in locale" })).toBeDisabled();
+    expect(activateSavedLocalProfile).not.toHaveBeenCalled();
+
+    // a leaving that did not work is told, and can be asked again
+    await act(async () => { fail(new Error("sign-out-failed")); });
+    expect(await screen.findByText(STATE_TEXT.it.leaveFailed)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Torna ad Accedi" }));
+    expect(signOut).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("button", { name: "Esco…" })).toBeDisabled();
   });
 
   it("routes a new account to technical host setup and a complete account to Shell", async () => {

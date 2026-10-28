@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
+import { LocalMigrationPage } from "./LocalMigrationPage";
 import { appLocale } from "../lib/app-locale";
 import { cleanImages } from "../lib/clean-images";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
@@ -110,6 +111,8 @@ type LocalMigrationGate = {
   profileId: string;
   phase: "checking" | "required" | "migrating" | "not-needed" | "completed" | "error";
   retryable?: boolean;
+  /** The native code the check or the link failed with, for the page to say what happened. */
+  code?: string | null;
 };
 
 function migrationRetryable(error: unknown): boolean {
@@ -446,6 +449,7 @@ export default function DashboardApp() {
   const accountScopeRef = useRef(accountScope);
   accountScopeRef.current = accountScope;
   const [localMigration, setLocalMigration] = useState<LocalMigrationGate | null>(null);
+  const [leavingMigration, setLeavingMigration] = useState<"idle" | "leaving" | "failed">("idle");
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
   const providerSessionIdentityRef = useRef<string | null>(null);
@@ -524,6 +528,7 @@ export default function DashboardApp() {
         profileId,
         phase: "error",
         retryable: migrationRetryable(error),
+        code: nativeErrorCode(error),
       });
     });
     return () => { active = false; };
@@ -545,6 +550,7 @@ export default function DashboardApp() {
         profileId,
         phase: "error",
         retryable: migrationRetryable(error),
+        code: nativeErrorCode(error),
       });
     }
   }, [identityKey, localMigration]);
@@ -555,16 +561,27 @@ export default function DashboardApp() {
       await activateSavedLocalProfile();
       clearGoogleIdentitySelection();
       goTo(DASHBOARD_PAGE);
-    } catch {
+    } catch (error) {
       if (!identityKey) return;
       setLocalMigration({
         identityKey,
         profileId: localMigration.profileId,
         phase: "error",
         retryable: true,
+        code: nativeErrorCode(error),
       });
     }
   }, [identityKey, localMigration]);
+
+  // «Back to sign in»: leaves the account the person just chose; the sign-in page is where they pick again.
+  const leaveMigration = useCallback(async () => {
+    setLeavingMigration("leaving");
+    try {
+      await signOut();
+    } catch {
+      setLeavingMigration("failed");
+    }
+  }, []);
 
   useEffect(() => {
     if (signedOut) goTo(LOGIN_PAGE);
@@ -1584,48 +1601,22 @@ export default function DashboardApp() {
     if (localMigration.phase === "checking") {
       return <DashboardSkeleton label={stateText().verifyingLocalProfile} />;
     }
-    if (localMigration.phase === "required" || localMigration.phase === "migrating") {
+    if (localMigration.phase === "required" || localMigration.phase === "migrating" || localMigration.phase === "error") {
       return (
-        <main aria-labelledby="local-migration-title">
-          <h1 id="local-migration-title">{stateText().migrationTitle}</h1>
-          <p>{stateText().migrationText}</p>
-          <button
-            type="button"
-            onClick={() => void confirmLocalMigration()}
-            disabled={localMigration.phase === "migrating"}
-          >
-            {localMigration.phase === "migrating" ? stateText().linking : stateText().linkAndContinue}
-          </button>
-          <button
-            type="button"
-            onClick={() => void cancelLocalMigration()}
-            disabled={localMigration.phase === "migrating"}
-          >
-            {stateText().cancelStayLocal}
-          </button>
-        </main>
-      );
-    }
-    if (localMigration.phase === "error") {
-      return (
-        <main role="alert">
-          <p>{stateText().migrationError}</p>
-          {localMigration.retryable && (
-            <button
-              type="button"
-              onClick={() => setLocalMigration({
-                identityKey,
-                profileId: localMigration.profileId,
-                phase: "required",
-              })}
-            >
-              {stateText().retry}
-            </button>
-          )}
-          <button type="button" onClick={() => void cancelLocalMigration()}>
-            {stateText().cancelStayLocal}
-          </button>
-        </main>
+        <LocalMigrationPage
+          phase={localMigration.phase}
+          code={localMigration.code}
+          retryable={localMigration.retryable}
+          leaving={leavingMigration}
+          onLink={() => void confirmLocalMigration()}
+          onStayLocal={() => void cancelLocalMigration()}
+          onRetry={() => setLocalMigration({
+            identityKey,
+            profileId: localMigration.profileId,
+            phase: "required",
+          })}
+          onLeave={() => void leaveMigration()}
+        />
       );
     }
   }
