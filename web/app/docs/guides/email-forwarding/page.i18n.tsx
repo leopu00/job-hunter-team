@@ -239,8 +239,8 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         In the <strong>JHT desktop app</strong>, open <strong>Mail</strong> in
-        the top menu and fill in the <strong>Save a new app
-        password</strong> form:
+        the top menu and fill in the <strong>Save a new app password</strong>{" "}
+        form:
       </>
     ),
     tblField: "Field",
@@ -257,13 +257,11 @@ export const T: Record<Locale, Strings> = {
     ),
     rowDedicatedValue: (
       <>
-        choose <strong>Yes: the team reads the whole mailbox</strong>.
-        With <em>No</em> the team reads only the allowed senders.
+        choose <strong>Yes: the team reads the whole mailbox</strong>. With{" "}
+        <em>No</em> the team reads only the allowed senders.
       </>
     ),
-    rowPwLabel: (
-      <strong>App password (created by your mail provider)</strong>
-    ),
+    rowPwLabel: <strong>App password (created by your mail provider)</strong>,
     rowPwValue: (
       <>
         an <strong>app-specific password</strong>, not your login password
@@ -272,10 +270,9 @@ export const T: Record<Locale, Strings> = {
     step2Local: (
       <>
         The app passes the password to the team&apos;s protected service, on the
-        machine that runs the team: the agents cannot read it.
-        If the app shows the team read only, the Mail entry is not in the menu:
-        link the team with write access first (<strong>Connect with write
-        access</strong>).
+        machine that runs the team: the agents cannot read it. If the app shows
+        the team read only, the Mail entry is not in the menu: link the team
+        with write access first (<strong>Connect with write access</strong>).
       </>
     ),
     step2Callout: (
@@ -290,12 +287,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Save: (
       <>
-        Then press <strong>Save the password</strong>. The app
-        answers <em>Password saved. The team uses the new one right
-        away.</em> and the <strong>Mail</strong> page shows the
-        status <strong>configured</strong>. The <strong>Mail
-        servers</strong> section is only for a provider the app does not
-        recognise.
+        Then press <strong>Save the password</strong>. The app answers{" "}
+        <em>Password saved. The team uses the new one right away.</em> and the{" "}
+        <strong>Mail</strong> page shows the status <strong>configured</strong>.
+        The <strong>Mail servers</strong> section is only for a provider the app
+        does not recognise.
       </>
     ),
     step3Title: "3️⃣ Auto-forward your job alerts",
@@ -432,8 +428,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "credentials not saved / wrong",
     v1f: (
       <>
-        save the address and the <strong>app password</strong> again in
-        the <strong>Mail</strong> page of the desktop app
+        save the address and the <strong>app password</strong> again in the{" "}
+        <strong>Mail</strong> page of the desktop app
       </>
     ),
     v2s: <>&quot;Login failed&quot; in the team logs</>,
@@ -457,9 +453,8 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Privacy & security",
     privacy1: (
       <>
-        The password stays in the team&apos;s <strong>protected
-        service</strong>, on the machine that runs the team: the agents cannot
-        read it.
+        The password stays in the team&apos;s <strong>protected service</strong>
+        , on the machine that runs the team: the agents cannot read it.
       </>
     ),
     privacy2: (
@@ -484,8 +479,8 @@ export const T: Record<Locale, Strings> = {
     g1: (
       <>
         The <strong>Mail</strong> page of the desktop app (mailbox address,
-        dedicated-mailbox question, app password, <em>Save the
-        password</em> button)
+        dedicated-mailbox question, app password, <em>Save the password</em>{" "}
+        button)
       </>
     ),
     g2: (
@@ -628,9 +623,9 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Condividi la casella con il team (app desktop)",
     step2Body: (
       <>
-        Nell&apos;<strong>app desktop JHT</strong>,
-        apri <strong>Posta</strong> nel menu in alto e compila il
-        modulo <strong>Salva una nuova password per app</strong>:
+        Nell&apos;<strong>app desktop JHT</strong>, apri <strong>Posta</strong>{" "}
+        nel menu in alto e compila il modulo{" "}
+        <strong>Salva una nuova password per app</strong>:
       </>
     ),
     tblField: "Campo",
@@ -647,8 +642,8 @@ export const T: Record<Locale, Strings> = {
     ),
     rowDedicatedValue: (
       <>
-        scegli <strong>Sì: il team legge tutta la casella</strong>.
-        Con <em>No</em> il team legge solo i mittenti ammessi.
+        scegli <strong>Sì: il team legge tutta la casella</strong>. Con{" "}
+        <em>No</em> il team legge solo i mittenti ammessi.
       </>
     ),
     rowPwLabel: (
@@ -663,10 +658,10 @@ export const T: Record<Locale, Strings> = {
     step2Local: (
       <>
         L&apos;app passa la password al servizio protetto del team, sulla
-        macchina che esegue il team: gli agenti non possono leggerla.
-        Se l&apos;app mostra il team in sola lettura, la voce Posta non c&apos;è
-        nel menu: serve prima il collegamento in scrittura (<strong>Collega in
-        scrittura</strong>).
+        macchina che esegue il team: gli agenti non possono leggerla. Se
+        l&apos;app mostra il team in sola lettura, la voce Posta non c&apos;è
+        nel menu: serve prima il collegamento in scrittura (
+        <strong>Collega in scrittura</strong>).
       </>
     ),
     step2Callout: (
@@ -682,11 +677,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Save: (
       <>
-        Poi premi <strong>Salva la password</strong>. L&apos;app
-        risponde <em>Password salvata. Il team usa la nuova da subito.</em> e la
-        pagina <strong>Posta</strong> mostra lo
-        stato <strong>configurata</strong>. La sezione <strong>Server di
-        posta</strong> serve solo se l&apos;app non riconosce il tuo provider.
+        Poi premi <strong>Salva la password</strong>. L&apos;app risponde{" "}
+        <em>Password salvata. Il team usa la nuova da subito.</em> e la pagina{" "}
+        <strong>Posta</strong> mostra lo stato <strong>configurata</strong>. La
+        sezione <strong>Server di posta</strong> serve solo se l&apos;app non
+        riconosce il tuo provider.
       </>
     ),
     step3Title: "3️⃣ Inoltra automaticamente i tuoi job alert",
@@ -833,8 +828,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "credenziali non salvate / errate",
     v1f: (
       <>
-        salva di nuovo l&apos;indirizzo e la <strong>password per
-        app</strong> nella pagina <strong>Posta</strong> dell&apos;app desktop
+        salva di nuovo l&apos;indirizzo e la <strong>password per app</strong>{" "}
+        nella pagina <strong>Posta</strong> dell&apos;app desktop
       </>
     ),
     v2s: <>&quot;Login failed&quot; nei log del team</>,
@@ -884,8 +879,8 @@ export const T: Record<Locale, Strings> = {
     g1: (
       <>
         Pagina <strong>Posta</strong> dell&apos;app desktop (indirizzo della
-        casella, domanda sulla casella dedicata, password per app,
-        pulsante <em>Salva la password</em>)
+        casella, domanda sulla casella dedicata, password per app, pulsante{" "}
+        <em>Salva la password</em>)
       </>
     ),
     g2: (
@@ -1031,9 +1026,9 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Comparte el buzón con el equipo (app de escritorio)",
     step2Body: (
       <>
-        En la <strong>app de escritorio JHT</strong>,
-        abre <strong>Correo</strong> en el menú superior y rellena el
-        formulario <strong>Guardar una nueva contraseña de aplicación</strong>:
+        En la <strong>app de escritorio JHT</strong>, abre{" "}
+        <strong>Correo</strong> en el menú superior y rellena el formulario{" "}
+        <strong>Guardar una nueva contraseña de aplicación</strong>:
       </>
     ),
     tblField: "Campo",
@@ -1050,13 +1045,14 @@ export const T: Record<Locale, Strings> = {
     ),
     rowDedicatedValue: (
       <>
-        elige <strong>Sí: el equipo lee todo el buzón</strong>.
-        Con <em>No</em> el equipo lee solo los remitentes admitidos.
+        elige <strong>Sí: el equipo lee todo el buzón</strong>. Con <em>No</em>{" "}
+        el equipo lee solo los remitentes admitidos.
       </>
     ),
     rowPwLabel: (
-      <strong>Contraseña de aplicación (creada por tu proveedor de
-      correo)</strong>
+      <strong>
+        Contraseña de aplicación (creada por tu proveedor de correo)
+      </strong>
     ),
     rowPwValue: (
       <>
@@ -1067,10 +1063,10 @@ export const T: Record<Locale, Strings> = {
     step2Local: (
       <>
         La app pasa la contraseña al servicio protegido del equipo, en la
-        máquina que ejecuta el equipo: los agentes no pueden leerla.
-        Si la app muestra el equipo en solo lectura, la entrada Correo no está
-        en el menú: antes hace falta la conexión con escritura (<strong>Conectar
-        con escritura</strong>).
+        máquina que ejecuta el equipo: los agentes no pueden leerla. Si la app
+        muestra el equipo en solo lectura, la entrada Correo no está en el menú:
+        antes hace falta la conexión con escritura (
+        <strong>Conectar con escritura</strong>).
       </>
     ),
     step2Callout: (
@@ -1087,11 +1083,12 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Save: (
       <>
-        Después pulsa <strong>Guardar la contraseña</strong>. La app
-        responde <em>Contraseña guardada. El equipo usa la nueva desde
-        ya.</em> y la página <strong>Correo</strong> muestra el
-        estado <strong>configurado</strong>. La sección <strong>Servidores de
-        correo</strong> solo sirve si la app no reconoce a tu proveedor.
+        Después pulsa <strong>Guardar la contraseña</strong>. La app responde{" "}
+        <em>Contraseña guardada. El equipo usa la nueva desde ya.</em> y la
+        página <strong>Correo</strong> muestra el estado{" "}
+        <strong>configurado</strong>. La sección{" "}
+        <strong>Servidores de correo</strong> solo sirve si la app no reconoce a
+        tu proveedor.
       </>
     ),
     step3Title: "3️⃣ Reenvía automáticamente tus alertas de empleo",
@@ -1237,9 +1234,9 @@ export const T: Record<Locale, Strings> = {
     v1c: "credenciales no guardadas / incorrectas",
     v1f: (
       <>
-        vuelve a guardar la dirección y la <strong>contraseña de
-        aplicación</strong> en la página <strong>Correo</strong> de la app de
-        escritorio
+        vuelve a guardar la dirección y la{" "}
+        <strong>contraseña de aplicación</strong> en la página{" "}
+        <strong>Correo</strong> de la app de escritorio
       </>
     ),
     v2s: <>&quot;Login failed&quot; en los logs del equipo</>,
@@ -1290,8 +1287,8 @@ export const T: Record<Locale, Strings> = {
     g1: (
       <>
         Página <strong>Correo</strong> de la app de escritorio (dirección del
-        buzón, pregunta sobre el buzón dedicado, contraseña de aplicación,
-        botón <em>Guardar la contraseña</em>)
+        buzón, pregunta sobre el buzón dedicado, contraseña de aplicación, botón{" "}
+        <em>Guardar la contraseña</em>)
       </>
     ),
     g2: (
@@ -1444,10 +1441,10 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Partagez la boîte avec l'équipe (app de bureau)",
     step2Body: (
       <>
-        Dans l&apos;<strong>app de bureau JHT</strong>,
-        ouvrez <strong>Courrier</strong> dans le menu du haut et remplissez le
-        formulaire <strong>Enregistrer un nouveau mot de passe
-        d’application</strong> :
+        Dans l&apos;<strong>app de bureau JHT</strong>, ouvrez{" "}
+        <strong>Courrier</strong> dans le menu du haut et remplissez le
+        formulaire{" "}
+        <strong>Enregistrer un nouveau mot de passe d’application</strong> :
       </>
     ),
     tblField: "Champ",
@@ -1460,18 +1457,20 @@ export const T: Record<Locale, Strings> = {
       </>
     ),
     rowDedicatedLabel: (
-      <strong>Est-ce une boîte réservée aux alertes d’emploi transférées
-      ?</strong>
+      <strong>
+        Est-ce une boîte réservée aux alertes d’emploi transférées ?
+      </strong>
     ),
     rowDedicatedValue: (
       <>
-        choisissez <strong>Oui : l’équipe lit toute la boîte</strong>.
-        Avec <em>Non</em>, l’équipe ne lit que les expéditeurs autorisés.
+        choisissez <strong>Oui : l’équipe lit toute la boîte</strong>. Avec{" "}
+        <em>Non</em>, l’équipe ne lit que les expéditeurs autorisés.
       </>
     ),
     rowPwLabel: (
-      <strong>Mot de passe d’application (créé par ton fournisseur de
-      messagerie)</strong>
+      <strong>
+        Mot de passe d’application (créé par ton fournisseur de messagerie)
+      </strong>
     ),
     rowPwValue: (
       <>
@@ -1483,10 +1482,10 @@ export const T: Record<Locale, Strings> = {
       <>
         L&apos;app transmet le mot de passe au service protégé de l&apos;équipe,
         sur la machine qui exécute l&apos;équipe : les agents ne peuvent pas le
-        lire.
-        Si l&apos;app affiche l&apos;équipe en lecture seule, l&apos;entrée
-        Courrier n&apos;est pas dans le menu : il faut d&apos;abord la connexion
-        en écriture (<strong>Connecter en écriture</strong>).
+        lire. Si l&apos;app affiche l&apos;équipe en lecture seule,
+        l&apos;entrée Courrier n&apos;est pas dans le menu : il faut
+        d&apos;abord la connexion en écriture (
+        <strong>Connecter en écriture</strong>).
       </>
     ),
     step2Callout: (
@@ -1504,12 +1503,14 @@ export const T: Record<Locale, Strings> = {
     step2Save: (
       <>
         Appuyez ensuite sur <strong>Enregistrer le mot de passe</strong>.
-        L&apos;app répond <em>Mot de passe enregistré. L’équipe utilise le
-        nouveau dès maintenant.</em> et la
-        page <strong>Courrier</strong> affiche
-        l&apos;état <strong>configurée</strong>. La section <strong>Serveurs de
-        messagerie</strong> ne sert que si l&apos;app ne reconnaît pas votre
-        fournisseur.
+        L&apos;app répond{" "}
+        <em>
+          Mot de passe enregistré. L’équipe utilise le nouveau dès maintenant.
+        </em>{" "}
+        et la page <strong>Courrier</strong> affiche l&apos;état{" "}
+        <strong>configurée</strong>. La section{" "}
+        <strong>Serveurs de messagerie</strong> ne sert que si l&apos;app ne
+        reconnaît pas votre fournisseur.
       </>
     ),
     step3Title: "3️⃣ Transférez automatiquement vos alertes emploi",
@@ -1662,9 +1663,9 @@ export const T: Record<Locale, Strings> = {
     v1c: "identifiants non enregistrés / erronés",
     v1f: (
       <>
-        enregistrez de nouveau l&apos;adresse et le <strong>mot de passe
-        d&apos;application</strong> dans la page <strong>Courrier</strong> de
-        l&apos;app de bureau
+        enregistrez de nouveau l&apos;adresse et le{" "}
+        <strong>mot de passe d&apos;application</strong> dans la page{" "}
+        <strong>Courrier</strong> de l&apos;app de bureau
       </>
     ),
     v2s: <>&quot;Login failed&quot; dans les logs de l&apos;équipe</>,
@@ -1866,9 +1867,9 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Teile das Postfach mit dem Team (Desktop-App)",
     step2Body: (
       <>
-        Öffne in der <strong>JHT-Desktop-App</strong> im oberen
-        Menü <strong>E-Mail</strong> und fülle das Formular <strong>Ein neues
-        App-Passwort speichern</strong> aus:
+        Öffne in der <strong>JHT-Desktop-App</strong> im oberen Menü{" "}
+        <strong>E-Mail</strong> und fülle das Formular{" "}
+        <strong>Ein neues App-Passwort speichern</strong> aus:
       </>
     ),
     tblField: "Feld",
@@ -1881,13 +1882,14 @@ export const T: Record<Locale, Strings> = {
       </>
     ),
     rowDedicatedLabel: (
-      <strong>Ist es ein Postfach nur für weitergeleitete
-      Jobbenachrichtigungen?</strong>
+      <strong>
+        Ist es ein Postfach nur für weitergeleitete Jobbenachrichtigungen?
+      </strong>
     ),
     rowDedicatedValue: (
       <>
-        wähle <strong>Ja: Das Team liest das ganze Postfach</strong>.
-        Bei <em>Nein</em> liest das Team nur die zugelassenen Absender.
+        wähle <strong>Ja: Das Team liest das ganze Postfach</strong>. Bei{" "}
+        <em>Nein</em> liest das Team nur die zugelassenen Absender.
       </>
     ),
     rowPwLabel: (
@@ -1904,8 +1906,8 @@ export const T: Record<Locale, Strings> = {
         Die App übergibt das Passwort an den geschützten Dienst des Teams, auf
         der Maschine, die das Team ausführt: Die Agenten können es nicht lesen.
         Zeigt die App das Team nur lesend, fehlt der Eintrag E-Mail im Menü:
-        Zuerst ist die Verbindung mit Schreibzugriff nötig (<strong>Mit
-        Schreibzugriff verbinden</strong>).
+        Zuerst ist die Verbindung mit Schreibzugriff nötig (
+        <strong>Mit Schreibzugriff verbinden</strong>).
       </>
     ),
     step2Callout: (
@@ -1921,12 +1923,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Save: (
       <>
-        Drücke dann auf <strong>Passwort speichern</strong>. Die App
-        antwortet <em>Passwort gespeichert. Das Team verwendet ab sofort das
-        neue.</em> und die Seite <strong>E-Mail</strong> zeigt den
-        Status <strong>eingerichtet</strong>. Der
-        Bereich <strong>Mailserver</strong> ist nur nötig, wenn die App deinen
-        Anbieter nicht erkennt.
+        Drücke dann auf <strong>Passwort speichern</strong>. Die App antwortet{" "}
+        <em>Passwort gespeichert. Das Team verwendet ab sofort das neue.</em>{" "}
+        und die Seite <strong>E-Mail</strong> zeigt den Status{" "}
+        <strong>eingerichtet</strong>. Der Bereich <strong>Mailserver</strong>{" "}
+        ist nur nötig, wenn die App deinen Anbieter nicht erkennt.
       </>
     ),
     step3Title: "3️⃣ Leite deine Job-Benachrichtigungen automatisch weiter",
@@ -2129,8 +2130,8 @@ export const T: Record<Locale, Strings> = {
     g1: (
       <>
         Seite <strong>E-Mail</strong> der Desktop-App (Adresse des Postfachs,
-        Frage zum dedizierten Postfach, App-Passwort, Schaltfläche <em>Passwort
-        speichern</em>)
+        Frage zum dedizierten Postfach, App-Passwort, Schaltfläche{" "}
+        <em>Passwort speichern</em>)
       </>
     ),
     g2: (
@@ -2274,9 +2275,9 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Oszd meg a postafiókot a csapattal (asztali alkalmazás)",
     step2Body: (
       <>
-        A <strong>JHT asztali alkalmazásban</strong> nyisd meg a felső menüben
-        a <strong>Levelezés</strong> oldalt, és töltsd ki az <strong>Új
-        alkalmazásjelszó mentése</strong> űrlapot:
+        A <strong>JHT asztali alkalmazásban</strong> nyisd meg a felső menüben a{" "}
+        <strong>Levelezés</strong> oldalt, és töltsd ki az{" "}
+        <strong>Új alkalmazásjelszó mentése</strong> űrlapot:
       </>
     ),
     tblField: "Mező",
@@ -2289,14 +2290,15 @@ export const T: Record<Locale, Strings> = {
       </>
     ),
     rowDedicatedLabel: (
-      <strong>Ez egy csak a továbbított állásértesítéseknek szánt
-      postafiók?</strong>
+      <strong>
+        Ez egy csak a továbbított állásértesítéseknek szánt postafiók?
+      </strong>
     ),
     rowDedicatedValue: (
       <>
-        válaszd az <strong>Igen: a csapat az egész postafiókot
-        olvassa</strong> lehetőséget. A <em>Nem</em> esetén a csapat csak az
-        engedélyezett feladókat olvassa.
+        válaszd az <strong>Igen: a csapat az egész postafiókot olvassa</strong>{" "}
+        lehetőséget. A <em>Nem</em> esetén a csapat csak az engedélyezett
+        feladókat olvassa.
       </>
     ),
     rowPwLabel: (
@@ -2311,10 +2313,10 @@ export const T: Record<Locale, Strings> = {
     step2Local: (
       <>
         Az alkalmazás átadja a jelszót a csapat védett szolgáltatásának, azon a
-        gépen, amely a csapatot futtatja: az ügynökök nem tudják elolvasni.
-        Ha az alkalmazás a csapatot csak olvasható módban mutatja, a Levelezés
-        menüpont nincs a menüben: előbb írási joggal kell csatlakozni
-        (<strong>Csatlakozás írási joggal</strong>).
+        gépen, amely a csapatot futtatja: az ügynökök nem tudják elolvasni. Ha
+        az alkalmazás a csapatot csak olvasható módban mutatja, a Levelezés
+        menüpont nincs a menüben: előbb írási joggal kell csatlakozni (
+        <strong>Csatlakozás írási joggal</strong>).
       </>
     ),
     step2Callout: (
@@ -2332,11 +2334,11 @@ export const T: Record<Locale, Strings> = {
     step2Save: (
       <>
         Ezután nyomd meg ezt a gombot: <strong>A jelszó mentése</strong>. Az
-        alkalmazás ezt írja: <em>A jelszó elmentve. A csapat azonnal az újat
-        használja.</em> A <strong>Levelezés</strong> oldalon az állapot
-        ekkor <strong>beállítva</strong>.
-        A <strong>Levelezőszerverek</strong> rész csak akkor kell, ha az
-        alkalmazás nem ismeri fel a szolgáltatódat.
+        alkalmazás ezt írja:{" "}
+        <em>A jelszó elmentve. A csapat azonnal az újat használja.</em> A{" "}
+        <strong>Levelezés</strong> oldalon az állapot ekkor{" "}
+        <strong>beállítva</strong>. A <strong>Levelezőszerverek</strong> rész
+        csak akkor kell, ha az alkalmazás nem ismeri fel a szolgáltatódat.
       </>
     ),
     step3Title: "3️⃣ Továbbítsd automatikusan az álláshirdetés-értesítőidet",
@@ -2532,8 +2534,8 @@ export const T: Record<Locale, Strings> = {
     g1: (
       <>
         Az asztali alkalmazás <strong>Levelezés</strong> oldala (a postafiók
-        címe, kérdés a dedikált postafiókról, alkalmazásjelszó, <em>A jelszó
-        mentése</em> gomb)
+        címe, kérdés a dedikált postafiókról, alkalmazásjelszó,{" "}
+        <em>A jelszó mentése</em> gomb)
       </>
     ),
     g2: (
@@ -2678,8 +2680,8 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         No <strong>app de desktop JHT</strong>, abra <strong>Correio</strong> no
-        menu superior e preencha o formulário <strong>Guardar uma nova
-        palavra-passe de aplicação</strong>:
+        menu superior e preencha o formulário{" "}
+        <strong>Guardar uma nova palavra-passe de aplicação</strong>:
       </>
     ),
     tblField: "Campo",
@@ -2692,18 +2694,20 @@ export const T: Record<Locale, Strings> = {
       </>
     ),
     rowDedicatedLabel: (
-      <strong>É uma caixa de correio dedicada aos alertas de emprego
-      reencaminhados?</strong>
+      <strong>
+        É uma caixa de correio dedicada aos alertas de emprego reencaminhados?
+      </strong>
     ),
     rowDedicatedValue: (
       <>
-        escolha <strong>Sim: a equipa lê toda a caixa de correio</strong>.
-        Com <em>Não</em> a equipe lê apenas os remetentes autorizados.
+        escolha <strong>Sim: a equipa lê toda a caixa de correio</strong>. Com{" "}
+        <em>Não</em> a equipe lê apenas os remetentes autorizados.
       </>
     ),
     rowPwLabel: (
-      <strong>Palavra-passe de aplicação (criada pelo teu fornecedor de
-      correio)</strong>
+      <strong>
+        Palavra-passe de aplicação (criada pelo teu fornecedor de correio)
+      </strong>
     ),
     rowPwValue: (
       <>
@@ -2713,10 +2717,9 @@ export const T: Record<Locale, Strings> = {
     step2Local: (
       <>
         O app entrega a senha ao serviço protegido da equipe, na máquina que
-        executa a equipe: os agentes não conseguem lê-la.
-        Se o app mostrar a equipe só em leitura, a entrada Correio não está no
-        menu: é preciso primeiro a ligação com escrita (<strong>Ligar com
-        escrita</strong>).
+        executa a equipe: os agentes não conseguem lê-la. Se o app mostrar a
+        equipe só em leitura, a entrada Correio não está no menu: é preciso
+        primeiro a ligação com escrita (<strong>Ligar com escrita</strong>).
       </>
     ),
     step2Callout: (
@@ -2733,10 +2736,12 @@ export const T: Record<Locale, Strings> = {
     step2Save: (
       <>
         Depois clique em <strong>Guardar a palavra-passe</strong>. O app
-        responde <em>Palavra-passe guardada. A equipa usa a nova a partir de
-        agora.</em> e a página <strong>Correio</strong> mostra o
-        estado <strong>configurada</strong>. A área <strong>Servidores de
-        correio</strong> só serve se o app não reconhecer o seu provedor.
+        responde{" "}
+        <em>Palavra-passe guardada. A equipa usa a nova a partir de agora.</em>{" "}
+        e a página <strong>Correio</strong> mostra o estado{" "}
+        <strong>configurada</strong>. A área{" "}
+        <strong>Servidores de correio</strong> só serve se o app não reconhecer
+        o seu provedor.
       </>
     ),
     step3Title: "3️⃣ Encaminhe automaticamente os seus alertas de emprego",
@@ -2886,8 +2891,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "credenciais não salvas / incorretas",
     v1f: (
       <>
-        salve novamente o endereço e a <strong>senha de app</strong> na
-        página <strong>Correio</strong> do app de desktop
+        salve novamente o endereço e a <strong>senha de app</strong> na página{" "}
+        <strong>Correio</strong> do app de desktop
       </>
     ),
     v2s: <>&quot;Login failed&quot; nos logs da equipe</>,
@@ -2938,8 +2943,8 @@ export const T: Record<Locale, Strings> = {
     g1: (
       <>
         Página <strong>Correio</strong> do app de desktop (endereço da caixa de
-        correio, pergunta sobre a caixa dedicada, senha de app,
-        botão <em>Guardar a palavra-passe</em>)
+        correio, pergunta sobre a caixa dedicada, senha de app, botão{" "}
+        <em>Guardar a palavra-passe</em>)
       </>
     ),
     g2: (
