@@ -3,6 +3,7 @@ import { appLocale } from "../../lib/app-locale";
 import { navigate } from "../../shell/router";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { useProviderSetup } from "../../lib/provider-setup";
+import { useLocalProfileLink } from "../../lib/local-profile-link";
 import type { PageProps } from "../types";
 import { BACKUP_TEXT } from "../backup/backup.i18n";
 import { EXPORT_TEXT } from "../export/export.i18n";
@@ -26,6 +27,7 @@ import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 export default function SettingsPage(_props: PageProps) {
   const t = SETTINGS_TEXT[appLocale()];
   const providerSetup = useProviderSetup();
+  const localProfileLink = useLocalProfileLink();
   // the team's hours and models are written to the team: not in the read-only view
   const readOnly = useExistingTeamReadOnly() !== null;
   const team = TEAM_SETTINGS_TEXT[appLocale()];
@@ -98,6 +100,25 @@ export default function SettingsPage(_props: PageProps) {
         <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{backupText.link}</span>
         <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{backupText.linkNote}</span>
       </button>
+      {localProfileLink && (
+        <section
+          data-testid="settings-local-link"
+          aria-labelledby="settings-local-link-title"
+          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 flex flex-col gap-2"
+        >
+          <h2 id="settings-local-link-title" className="text-[13px] font-semibold text-[var(--color-bright)]">{t.localLinkTitle}</h2>
+          <p className="text-[12px] text-[var(--color-muted)]">{t.localLinkText}</p>
+          <div>
+            <button
+              type="button"
+              onClick={() => localProfileLink.link()}
+              className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)]"
+            >
+              {t.localLinkButton}
+            </button>
+          </div>
+        </section>
+      )}
       {providerSetup && (
         <section
           data-testid="settings-provider"
