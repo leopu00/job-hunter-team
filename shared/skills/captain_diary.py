@@ -85,6 +85,29 @@ def _latest_prior(day_str: str) -> Path | None:
     return prior[-1] if prior else None
 
 
+# What a wake rereads of a diary: its last notes, within a size. The Capitano is restarted often and every restart
+# rereads this, so the cost of a day with many notes must not grow with the day. Same bounds as the harness twin
+# (agent-harness/runtime/src/parity/skills/captain.ts), which also serves the API harness.
+HANDOFF_NOTES = 30
+HANDOFF_BYTES = 8192
+
+
+def _recent_notes(text: str) -> str:
+    """The last notes of a diary file within the bounds, with a line on how many older ones are left out.
+    A diary that fits is printed as it is."""
+    notes = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
+    kept = notes[-HANDOFF_NOTES:]
+    while len(kept) > 1 and len("\n".join(kept).encode("utf-8")) > HANDOFF_BYTES:
+        kept = kept[1:]
+    cut = len(kept[0].encode("utf-8")) > HANDOFF_BYTES if len(kept) == 1 else False
+    if cut:  # one note larger than the whole bound
+        kept = [kept[0].encode("utf-8")[:HANDOFF_BYTES].decode("utf-8", "ignore") + " …"]
+    left = len(notes) - len(kept)
+    if left <= 0 and not cut:
+        return text
+    return "\n".join(([f"({left} older notes not shown)"] if left > 0 else []) + kept)
+
+
 def handoff() -> int:
     now = _now_local()
     today = now.strftime("%Y-%m-%d")
@@ -95,12 +118,12 @@ def handoff() -> int:
     else:
         print("📓 PREVIOUS CAPTAIN HANDOFF — notes from the previous Captain "
               f"({prior.stem.replace('captain-diary-', '')}):\n")
-        print(_read(prior))
+        print(_recent_notes(_read(prior)))
         print("\n— Read and inherit these lessons. Do NOT repeat the same mistakes. —")
     today_txt = _read(_file_for(today))
     if today_txt:
         print("\n🗒️  Already recorded TODAY:\n")
-        print(today_txt)
+        print(_recent_notes(today_txt))
     return 0
 
 

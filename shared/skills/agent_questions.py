@@ -219,7 +219,8 @@ def _options(raw: Sequence[Any], with_expiry: bool, lang: str | None) -> list[di
             raise QuestionRejected("option_invalid", "each option is {id, label}")
         option_id = item.get("id")
         if not isinstance(option_id, str) or not _OPTION_ID.fullmatch(option_id):
-            raise QuestionRejected("option_id_invalid", "ids are [a-z0-9_], up to 24, never starting with _")
+            hint = "; write _ where you wrote -" if isinstance(option_id, str) and "-" in option_id else ""
+            raise QuestionRejected("option_id_invalid", "ids are [a-z0-9_], up to 24, never starting with _" + hint)
         if option_id in seen:
             raise QuestionRejected("option_id_duplicate", option_id)
         label = _one_line(item.get("label"), MAX_LABEL, "option_label")
