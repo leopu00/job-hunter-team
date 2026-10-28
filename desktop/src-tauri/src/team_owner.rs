@@ -36,8 +36,9 @@ pub(crate) struct TeamOwner {
     profile_id: Option<String>,
 }
 
-/// How the marker stands to the active profile: it names it, it names another, or it is not there and the
-/// active profile may claim the home (the first one in does).
+/// How the marker stands to the active profile: it names it, it names another, it is not there and the
+/// active profile may claim the home (the first one in does), or it is not there and the home holds
+/// someone's data that this profile may not claim (nobody owns them, and this profile cannot take them).
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Ownership {
@@ -45,6 +46,7 @@ pub(crate) enum Ownership {
     Mine,
     Other,
     None,
+    Nobody,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -138,13 +140,17 @@ fn owner_at(marker: &Path, profiles_root: &Path) -> Result<Option<TeamOwner>, &'
 }
 
 /// The marker of `home` against the active scope. «None» only when the home is the active scope's to claim
-/// (the rule of `validate_or_claim_local_owner`); a home with someone's data and no marker is not its to
-/// claim and says so with the code the claim would, never «other» by guess.
+/// (the rule of `validate_or_claim_local_owner`); a home with someone's data and no marker that this scope
+/// may not claim is «nobody», never «other» by guess. A marker or home that cannot be read stays a code.
 fn ownership_at(home: &Path, active: &AccountScope) -> Result<Ownership, &'static str> {
     match marker_digest(&home.join(".desktop-account-scope"))? {
         Some(digest) if digest == active.digest() => Ok(Ownership::Mine),
         Some(_) => Ok(Ownership::Other),
-        None => unowned_home_may_be_claimed(home, active).map(|()| Ownership::None),
+        None => match unowned_home_may_be_claimed(home, active) {
+            Ok(()) => Ok(Ownership::None),
+            Err("local_account_owner_missing") => Ok(Ownership::Nobody),
+            Err(code) => Err(code),
+        },
     }
 }
 
@@ -166,8 +172,9 @@ pub(crate) fn runtime_local_team_owner_identity(
     owner_at(&marker, &profiles).map_err(failure)
 }
 
-/// Whether the team of this computer is the active profile's: «self», «other», or «none» when the home has
-/// no owner yet and the active profile would claim it. Reads only; no digest or id leaves. Without an
+/// Whether the team of this computer is the active profile's: «self», «other», «none» when the home has no
+/// owner yet and the active profile would claim it, or «nobody» when it holds data with no owner that this
+/// profile may not claim. Reads only; no digest or id leaves. Without an
 /// active profile, or with a marker that cannot be read, a closed code instead of a guess.
 #[tauri::command]
 pub(crate) fn runtime_local_team_owner(
@@ -454,28 +461,40 @@ mod tests {
 
     #[cfg(not(target_os = "windows"))]
     #[test]
-    fn a_home_with_only_what_a_run_leaves_is_none_and_one_with_data_is_not_guessed() {
+    fn leftovers_only_is_none_and_data_the_profile_may_not_claim_is_nobody() {
         let home = scratch("leftovers");
         let account = AccountScope::synthetic(b"someone");
         let local = AccountScope::synthetic_local(b"mine");
         fs::create_dir_all(home.join("logs")).unwrap();
         fs::write(home.join("logs").join("run.log"), "").unwrap();
         assert_eq!(ownership_at(&home, &account), Ok(Ownership::None));
-        // Data of a version before this app, no marker: a local profile may take it, an account may not, and
-        // neither is told «other» for it.
+        // Data of a version before this app, no marker: a local profile may take it, an account may not (nobody
+        // owns it and it cannot), and neither is told «other» for it.
         fs::write(home.join("jht.config.json"), "{}").unwrap();
         assert_eq!(ownership_at(&home, &local), Ok(Ownership::None));
-        assert_eq!(
-            ownership_at(&home, &account),
-            Err("local_account_owner_missing")
-        );
+        assert_eq!(ownership_at(&home, &account), Ok(Ownership::Nobody));
         fs::remove_file(home.join("jht.config.json")).unwrap();
         fs::write(home.join("notes.txt"), "x").unwrap();
-        assert_eq!(
-            ownership_at(&home, &local),
-            Err("local_account_owner_missing")
-        );
+        assert_eq!(ownership_at(&home, &local), Ok(Ownership::Nobody));
+        // the profile that may claim it is not the one nobody-ness depends on: with the marker written, it is self
+        mark(&home.join(MARKER), local.digest());
+        assert_eq!(ownership_at(&home, &local), Ok(Ownership::Mine));
+        assert_eq!(ownership_at(&home, &account), Ok(Ownership::Other));
         fs::remove_dir_all(home).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_home_that_cannot_be_read_is_a_code_not_nobody() {
+        let root = scratch("home-is-a-file");
+        let account = AccountScope::synthetic(b"someone");
+        let file = root.join("home");
+        fs::write(&file, "x").unwrap();
+        assert_eq!(
+            ownership_at(&file, &account),
+            Err("local_account_owner_unavailable")
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -527,6 +546,7 @@ mod tests {
             (Ownership::Mine, "self"),
             (Ownership::Other, "other"),
             (Ownership::None, "none"),
+            (Ownership::Nobody, "nobody"),
         ] {
             let said = serde_json::to_value(TeamOwnership { owner }).unwrap();
             assert_eq!(said, serde_json::json!({ "owner": word }));
