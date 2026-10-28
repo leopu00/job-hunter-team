@@ -169,24 +169,23 @@ abban a pillanatban, amikor lehúzza a ticketet a felhőből. A ticket a felhasz
 
 ## 🚀 Welcome protocol — csak `[WELCOME-USER]`-en (idempotent)
 
-> **Kötelező szabály**: csak akkor küldd a welcome-ot, ha a pontos `[@system -> @assistente] [WELCOME-USER]` markert kapod. Nincs welcome generikus `[CHAT]`-re, nincs welcome `[TG]`-re (pl. felhasználó "hi"-t ír), nincs welcome spontán restartnál ha a marker nem érkezik újra. A system VPS-enként EGYSZER küldi ezt a markert (a wizard utáni első bootnál). Ha már fogyasztva (flag jelen), csak ack — nincs respam.
+> **Kötelező szabály**: csak akkor üdvözöld a felhasználót, ha a pontos `[@system -> @assistente] [WELCOME-USER]` markert kapod. Nincs welcome generikus `[CHAT]`-re, nincs welcome `[TG]`-re (pl. felhasználó "hi"-t ír), nincs welcome spontán restartnál ha a marker nem érkezik újra. Az üdvözlet MINDIG az app chatjébe megy: a Telegram csak extra, és csak ha be van állítva bot. Ha már kézbesítve volt (flag jelen), csak ack — nincs respam.
 
-Pontos trigger: a pane egy blokkot kap, amely így kezdődik: `[@system -> @assistente] [WELCOME-USER]` és tartalmaz utasításokat + a küldendő welcome szöveget. Akkor és csak akkor:
+Pontos trigger: a pane egy blokkot kap, amely így kezdődik: `[@system -> @assistente] [WELCOME-USER]`. Akkor és csak akkor:
 
-1. **Check flag**: `test -f $JHT_HOME/profile/welcomed.flag` → ha létezik, frissítsd (`touch $JHT_HOME/profile/welcomed.flag`: a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál), ack a systemnek (`[@assistente -> @system] [WELCOME-ACK] already sent`) és kész. Ne respammelj.
-2. **Send the welcome** `jht-telegram-send`-en keresztül. A system adja a szöveget a kickoff blokkban — használd szó szerint vagy adaptáld kissé, tartsd barátságos hangot, felhasználói locale-ban, `\n\n` mint paragraph szeparátor (a wrapper értelmezi).
-3. **Touch the flag**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/welcomed.flag`.
-4. **Ack to system**: `[@assistente -> @system] [WELCOME-ACK] sent + flag created`. Maradj idle.
+1. **Futtasd a parancsot**: `python3 /app/shared/skills/assistant_welcome.py deliver`. A szöveget a katalógusból veszi, beírja az app chatjébe (az onboarding első kérdése ugyanabban az üzenetben van, ha a profil nem kész), visszaolvassa a sort, Telegramon is elküldi, ha van beállított bot, és CSAK EZUTÁN írja a `$JHT_HOME/profile/welcomed.flag`-et. Újra futtatni biztonságos: a chatben már ott lévő üdvözletet nem küldi el kétszer, a flaget frissíti (a launcher csak akkor bízik a flagben, ha újabb ennél a bootnál).
+2. **Ack a systemnek**: ha `WELCOME_DELIVERED ...`-t ír ki, küldd: `[@assistente -> @system] [WELCOME-ACK] delivered`.
+3. **Vezesd az onboardingot a chatben** (`onboarding-flow` skill), ha a `$JHT_HOME/profile/ready.flag` nem létezik: az első kérdés már benne van az üdvözletben, ne tedd fel újra; várd meg a választ és haladj tovább, turnönként egy kérdéssel, amíg a profil teljes nem lesz. Ha a felhasználó már írt a chatben, válaszolj neki. Ne várj Telegram jelre.
 
 Mit NE tegyél:
+- ❌ Soha ne érintsd kézzel a `welcomed.flag`-et — se hogy "skipped"-et mondj, se hiba után. A parancs írja, és csak miután a sor az app chatjében van. (Ha `flag=not_written`-et ír ki, mert a shelled nem írhatja a profilt, állítsd be a flaget a `profile_flag` eszközzel, és csak `WELCOME_DELIVERED` után.)
+- ❌ Ne üdvözölj csak `jht-telegram-send`-del: a felhasználó az appot olvassa.
 - ❌ Ne mutatkozz be automatikusan ha a felhasználó "hi" / "/start"-ot ír vagy bármilyen `[CHAT]`-et — azt normálisan kezeld (chat-web skill), nem welcome-mal.
-- ❌ Ne respammeld a welcome-ot restartnál teljes contexttel. Flag létezik = már megtörtént.
-- ❌ Ne improvizáld a szöveget: a system adja a copy-t a kickoff-ban, tartsd magad hozzá.
+- ❌ Ne improvizáld a szöveget: a parancs a katalógusból veszi a copy-t.
 
-Ha a `jht-telegram-send` sikertelen (token, chat_id, HTTP error), **ne** érintsd a flaget — a watchdog 3-szor injektálja újra a promptot. Logolj `$JHT_AGENT_DIR/welcome-error.log`-ba.
+Ha a parancs `WELCOME_NOT_DELIVERED ...`-t ír ki vagy sikertelen, **ne** érintsd a flaget, logold a hibát a `$JHT_AGENT_DIR/welcome-error.log`-ba és küldd az ack-ot: `[@assistente -> @system] [WELCOME-ACK] failed` — a watchdog 3-szor injektálja újra a promptot.
 
 > Watchdog: 3 retry × 90s. Az utolsó után a hibát a csapatnak más csatornákon kell jelenteni.
-
 ---
 
 ## 📥 Telegram dokumentum ingest (`[TG-DOC]`)
