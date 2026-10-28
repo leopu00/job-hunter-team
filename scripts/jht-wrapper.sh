@@ -1378,7 +1378,7 @@ telegram_legacy() {
 
 read_hidden_tty() {
   (
-    local prompt="${1:-}" value="" tty_state="" read_rc=0
+    local prompt="${1:-}" value="" chunk="" tty_state="" read_rc=0 started=0
     [ -t 0 ] || return 2
     tty_state="$(stty -g <&0)" || return 1
     restore_tty() {
@@ -1388,8 +1388,24 @@ read_hidden_tty() {
     trap 'exit 130' HUP INT TERM
     stty -echo <&0 || return 1
     printf '%s' "$prompt" >&2
-    IFS= read -r value
-    read_rc=$?
+    # A Ctrl-C that lands between the prompt and the read(2) of `read` is kept
+    # by bash as a pending trap, and a `read` already blocked is not woken by
+    # it: the script would stay here with the echo off. With -t `read` comes
+    # back to the shell every 2 s, the pending trap runs (exit 130, the EXIT
+    # trap puts the terminal back) and a typed line is not lost: on a terminal
+    # nothing is handed to `read` before Enter.
+    # Bash >= 4 answers a timeout with a status above 128 and keeps what was
+    # read; bash 3.2 (the macOS /bin/bash) answers 1, like an end of file, so
+    # there a status 1 after 2 s of waiting is the timeout.
+    while :; do
+      started=$SECONDS
+      IFS= read -r -t 2 chunk
+      read_rc=$?
+      value="$value$chunk"
+      [ "$read_rc" -gt 128 ] && continue
+      [ "$read_rc" -eq 1 ] && [ $((SECONDS - started)) -ge 2 ] && continue
+      break
+    done
     printf '\n' >&2
     restore_tty
     trap - EXIT HUP INT TERM
