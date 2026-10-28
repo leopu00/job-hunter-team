@@ -73,6 +73,11 @@ describe("DEV playground local flow", () => {
     directChatReady: false,
   };
 
+  // the sign-in list asks who owns the team (a read); what is guarded here is what changes something
+  const calledCommands = () => vi.mocked(invoke).mock.calls
+    .map(([command]) => command)
+    .filter((command) => command !== "runtime_local_team_owner_identity");
+
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -109,7 +114,7 @@ describe("DEV playground local flow", () => {
     const create = screen.getByRole("button", { name: "Continua in locale" });
     await user.dblClick(create);
 
-    expect(vi.mocked(invoke).mock.calls.map(([command]) => command)).toEqual([
+    expect(calledCommands()).toEqual([
       "runtime_playground_local_orphan_recover",
     ]);
 
@@ -120,7 +125,7 @@ describe("DEV playground local flow", () => {
       vi.mocked(invoke).mock.calls.filter(([command]) => command === "onboarding_prepare"),
     ).toHaveLength(1));
 
-    const commands = vi.mocked(invoke).mock.calls.map(([command]) => command);
+    const commands = calledCommands();
     expect(commands.filter((command) => command === "runtime_playground_local_orphan_recover"))
       .toHaveLength(1);
     expect(commands.filter((command) => command === "runtime_local_profile_create")).toHaveLength(1);
@@ -152,7 +157,7 @@ describe("DEV playground local flow", () => {
     await user.click(screen.getByRole("button", { name: "Continua in locale" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/profilo locale/i);
-    const commands = vi.mocked(invoke).mock.calls.map(([command]) => command);
+    const commands = calledCommands();
     expect(commands).toEqual(["runtime_playground_local_orphan_recover"]);
     expect(commands).not.toContain("runtime_local_profile_create");
     expect(commands).not.toContain("runtime_account_scope_set_local");

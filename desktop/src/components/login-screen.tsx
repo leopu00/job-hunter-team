@@ -28,6 +28,7 @@ import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
 import { OnboardingArtwork } from "../onboarding/OnboardingArtwork";
 import { appLocale } from "../lib/app-locale";
+import { readDesktopTeamOwnerIdentity, type DesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
 import { LOGIN_TEXT } from "./login-screen.i18n";
 import { LOCAL_PROFILES_TEXT } from "./local-profiles.i18n";
 import "./login-screen.css";
@@ -49,6 +50,8 @@ export interface LoginScreenProps {
   readLocal?: () => LocalProfile | null;
   /** the profile the renderer believes owns the team of this computer (the backend's marker decides, inside the app) */
   ownerLocal?: () => LocalProfile | null;
+  /** who the backend's owner marker names: it wins over `ownerLocal` once it answers */
+  readOwner?: () => Promise<DesktopTeamOwnerIdentity | null>;
   /** adds a profile to the list: the saved ones stay */
   createLocal?: (displayName: string) => Promise<LocalProfile>;
   /** chooses a saved profile by its id */
@@ -77,6 +80,7 @@ export function LoginScreen({
   listLocal = listLocalProfiles,
   readLocal = readLocalProfile,
   ownerLocal = readTeamOwnerCopy,
+  readOwner = readDesktopTeamOwnerIdentity,
   createLocal = createAndActivateLocalProfile,
   selectLocal = selectLocalProfileById,
   onLocalReady = () => goTo(DASHBOARD_PAGE),
@@ -96,6 +100,8 @@ export function LoginScreen({
   const [localName, setLocalName] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
   const [localError, setLocalError] = useState(false);
+  // the backend's owner: undefined until it answers (or when it cannot), null when no local profile owns the team
+  const [nativeOwnerId, setNativeOwnerId] = useState<string | null | undefined>(undefined);
   const linkField = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<LoginError | null>(
     configured ? null : new LoginError("not-configured"),
@@ -114,6 +120,17 @@ export function LoginScreen({
       active = false;
     };
   }, [loadBrowsers]);
+
+  useEffect(() => {
+    let active = true;
+    readOwner().then(
+      (identity) => { if (active) setNativeOwnerId(identity?.kind === "local" ? identity.profileId ?? null : null); },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [readOwner]);
 
   const start = useCallback(async () => {
     setError(null);
@@ -227,7 +244,7 @@ export function LoginScreen({
   const savedProfiles = listLocal();
   const hasSavedLocalProfile = savedProfiles.length > 0;
   const lastUsedId = readLocal()?.profileId ?? null;
-  const ownerId = ownerLocal()?.profileId ?? null;
+  const ownerId = nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
 
   return (
     <main className="page login-screen" lang={locale}>
