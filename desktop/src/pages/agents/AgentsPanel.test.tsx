@@ -291,7 +291,8 @@ describe("«Agenti», the agents' control panel", () => {
     const expected = ROLES.map((r) => r.role).filter((role) => isDirectChatAgentId(role));
     expect(expected).toEqual(["capitano", "scout", "analista", "scorer", "scrittore", "critico", "assistente", "mentor"]);
     for (const { role, multi } of ROLES) {
-      const session = multi ? `${role.toUpperCase()}-1` : role.toUpperCase();
+      // the critic is a single session, as in the panel (SINGLE); the multiple roles have their first
+      const session = multi && role !== "critico" ? `${role.toUpperCase()}-1` : role.toUpperCase();
       show(`agent=${session}`);
       await screen.findByTestId("panel-detail");
       if (isDirectChatAgentId(role)) {
@@ -305,7 +306,7 @@ describe("«Agenti», the agents' control panel", () => {
   });
 
   it("the button is in every language, with the agent's name as Messages writes it", async () => {
-    const names = { it: "Chatta con Scout", en: "Chat with Scout", de: "Mit Scout chatten", es: "Chatear con Scout", fr: "Discuter avec Scout", hu: "Csevegés vele: Scout", pt: "Conversar com Scout" } as const;
+    const names = { it: "Chatta con Scout", en: "Chat with Scout", de: "Mit Scout chatten", es: "Chatear con Scout", fr: "Discuter avec Scout", hu: "Csevegés vele: Felderítő", pt: "Conversar com Scout" } as const;
     for (const [locale, label] of Object.entries(names)) {
       document.cookie = `NEXT_LOCALE=${locale}; path=/`;
       show("agent=SCOUT-1");
