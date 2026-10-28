@@ -2893,17 +2893,29 @@ impl Drop for AttachGuard {
 
 /// The message of an attachment. The person reads one short sentence in their language; behind it,
 /// on the same line, the Assistant gets the path of OUR copy in its container (the page hides that
-/// bracket: `withoutAttachmentPath` in DirectChatScreen.tsx reads exactly this shape). Nothing of the person's
-/// file name or content is in it. An unknown language gets English.
+/// bracket: `withoutAttachmentPath` in DirectChatScreen.tsx reads exactly this shape). Nothing of the
+/// person's file name or content is in it. An unknown language gets English.
+/// «My CV» only for the kinds of file a CV comes in (a document); a picture or a plain text is not
+/// known to be one, and gets «a file».
 fn attachment_message(locale: &str, file: &str) -> String {
-    let said = match locale {
-        "it" => "Ho allegato il mio CV.",
-        "de" => "Ich habe meinen Lebenslauf angehängt.",
-        "es" => "He adjuntado mi CV.",
-        "fr" => "J'ai joint mon CV.",
-        "hu" => "Csatoltam az önéletrajzomat.",
-        "pt" => "Anexei meu currículo.",
-        _ => "I attached my CV.",
+    let document = file
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| crate::chat_attachment::DOCUMENT_EXTENSIONS.contains(&extension));
+    let said = match (locale, document) {
+        ("it", true) => "Ho allegato il mio CV.",
+        ("it", false) => "Ho allegato un file.",
+        ("de", true) => "Ich habe meinen Lebenslauf angehängt.",
+        ("de", false) => "Ich habe eine Datei angehängt.",
+        ("es", true) => "He adjuntado mi CV.",
+        ("es", false) => "He adjuntado un archivo.",
+        ("fr", true) => "J'ai joint mon CV.",
+        ("fr", false) => "J'ai joint un fichier.",
+        ("hu", true) => "Csatoltam az önéletrajzomat.",
+        ("hu", false) => "Csatoltam egy fájlt.",
+        ("pt", true) => "Anexei o meu CV.",
+        ("pt", false) => "Anexei um ficheiro.",
+        (_, true) => "I attached my CV.",
+        (_, false) => "I attached a file.",
     };
     format!("{said} [attachment for my profile: /jht_user/{}/{file}]", crate::chat_attachment::FOLDER)
 }
@@ -5620,24 +5632,42 @@ mod attachment_command_tests {
 
     #[test]
     fn the_person_reads_one_sentence_in_their_language_and_the_assistant_gets_the_path_behind_it() {
-        let file = "cv-20261028-153045.pdf";
-        let path = format!("/jht_user/allegati/{file}");
-        let mut said = std::collections::HashSet::new();
-        for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
-            let text = attachment_message(locale, file);
-            // the Assistant gets the path of our copy, on one line, and what it is for
-            assert!(text.ends_with(&format!(" [attachment for my profile: {path}]")), "{locale}");
-            assert!(!text.contains('\n') && !text.contains('{') && text.len() < 200, "{locale}");
-            // the person gets a sentence: no path, no folder, no name of a file, no brackets
-            let (visible, _) = text.split_once(" [attachment").unwrap();
-            assert!(!visible.contains("jht_user") && !visible.contains(file) && !visible.contains('/') && !visible.contains('['), "{locale}");
-            assert!(visible.ends_with('.') && visible.len() > 10, "{locale}");
-            said.insert(visible.to_owned());
+        // a document says «my CV»; a picture or a plain text, which is not known to be one, says «a file»
+        for (file, cv) in [
+            ("cv-20261028-153045.pdf", true),
+            ("cv-20261028-153045.docx", true),
+            ("cv-20261028-153045.odt", true),
+            ("cv-20261028-153045.rtf", true),
+            ("cv-20261028-153045.txt", false),
+            ("cv-20261028-153045.md", false),
+            ("cv-20261028-153045.png", false),
+            ("cv-20261028-153045.jpg", false),
+            ("cv-20261028-153045-2.jpg", false),
+        ] {
+            let path = format!("/jht_user/allegati/{file}");
+            let mut said = std::collections::HashSet::new();
+            for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
+                let text = attachment_message(locale, file);
+                // the Assistant gets the path of our copy, on one line, and what it is for
+                assert!(text.ends_with(&format!(" [attachment for my profile: {path}]")), "{locale} {file}");
+                assert!(!text.contains('\n') && !text.contains('{') && text.len() < 200, "{locale} {file}");
+                // the person gets a sentence: no path, no folder, no name of a file, no brackets
+                let (visible, _) = text.split_once(" [attachment").unwrap();
+                assert!(!visible.contains("jht_user") && !visible.contains(file) && !visible.contains('/') && !visible.contains('['), "{locale} {file}");
+                assert!(visible.ends_with('.') && visible.len() > 10, "{locale} {file}");
+                said.insert(visible.to_owned());
+            }
+            // seven languages, seven sentences (an unknown one and the empty one are English)
+            assert_eq!(said.len(), 7, "{file}");
+            let it = attachment_message("it", file);
+            assert_eq!(it.starts_with("Ho allegato il mio CV. ["), cv, "{file}");
+            assert_eq!(it.starts_with("Ho allegato un file. ["), !cv, "{file}");
         }
-        // seven languages, seven sentences (an unknown one and the empty one are English)
-        assert_eq!(said.len(), 7);
-        assert!(attachment_message("it", "cv-1.pdf").starts_with("Ho allegato il mio CV. ["));
+        // the Portuguese of Portugal, as the rest of the product
+        assert!(attachment_message("pt", "cv-1.pdf").starts_with("Anexei o meu CV. ["));
+        assert!(attachment_message("pt", "cv-1.png").starts_with("Anexei um ficheiro. ["));
         assert!(attachment_message("xx", "cv-1.pdf").starts_with("I attached my CV. ["));
+        assert!(attachment_message("xx", "cv-1.png").starts_with("I attached a file. ["));
     }
 
     #[test]

@@ -16,6 +16,8 @@ pub(crate) const MAX_BYTES: u64 = 10 * 1024 * 1024;
 /// The extensions the system's window offers. The content decides the one the copy gets.
 /// No `.doc`: the binary Word format is not one the Assistant's tools read.
 pub(crate) const ALLOWED_EXTENSIONS: [&str; 9] = ["pdf", "docx", "odt", "rtf", "txt", "md", "png", "jpg", "jpeg"];
+/// The kinds of file a CV comes in, among the ones accepted: the chat says «my CV» only for these.
+pub(crate) const DOCUMENT_EXTENSIONS: [&str; 4] = ["pdf", "docx", "odt", "rtf"];
 /// Our own files (`cv-*`) the folder may hold: the disk of a person is not ours to fill.
 const MAX_FILES: usize = 50;
 const MAX_FOLDER_BYTES: u64 = 250 * 1024 * 1024;
