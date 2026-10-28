@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import MainContent from "./components/main-content";
 import { ThemeProvider } from "./theme-provider";
@@ -54,9 +54,14 @@ const GlobalSearch = dynamic(() =>
   import("./components/GlobalSearch").then((m) => m.GlobalSearch),
 );
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+// JetBrains Mono (OFL, text in fonts/OFL.txt) is served from the repo, not
+// fetched at build time from Google: next/font/google needs the network of
+// whoever builds, and a build that cannot reach it fails ("Can't resolve
+// '@vercel/turbopack-next/internal/font/google/font'"). One variable file with
+// the same weights as before (300 to 700).
+const jetbrainsMono = localFont({
+  src: "./fonts/jetbrains-mono-wght.ttf",
+  weight: "300 700",
   variable: "--font-mono",
   display: "swap",
 });
