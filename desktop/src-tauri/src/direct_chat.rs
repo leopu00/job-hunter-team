@@ -1601,14 +1601,26 @@ fn tool_is_trusted(path: &Path, roots: &[&Path]) -> bool {
     target.file_type().is_file() && (target.uid() == unsafe { libc::geteuid() } || target.uid() == 0) && target.mode() & 0o022 == 0
 }
 
+/// The hash the running container has to carry, or why it could not be worked out: a reason in the fixed
+/// words of `runtime_log::ATTEST_REASONS`. A reason that waiting may cure (a probe that did not run, a
+/// plan that did not come) is told apart from one that waiting will not (another version, a missing file),
+/// see `attest_reason_may_pass`.
 #[cfg(target_os = "macos")]
-fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
+fn mac_config_hash(runtime: &Path, timeout: Duration) -> Result<String, &'static str> {
     mac_config_hash_in(runtime, timeout, read_host_env().as_deref(), &|key| std::env::var(key).ok())
 }
 
+/// Whether the reason a check could not be made may pass by itself: the probe or the plan did not run or
+/// did not answer, which is not the same as the container being another one.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn attest_reason_may_pass(reason: &str) -> bool {
+    reason.ends_with("_unreadable") || reason.starts_with("hash_dry_run") || reason == "hash_plan_without_create"
+}
+
 /// `host_env` is the text of `host.env` and `inherited` the process environment, so that a test can say both.
-#[cfg(target_os = "macos")]
-fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Result<String, &'static str> {
     let search = |name: &str| {
         #[cfg(test)]
         {
@@ -1621,44 +1633,69 @@ fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>,
         candidates.extend([PathBuf::from("/opt/homebrew/bin").join(name), PathBuf::from("/usr/local/bin").join(name), PathBuf::from("/opt/podman/bin").join(name)]);
         candidates.into_iter().find(|path| tool_is_trusted(path, &TOOL_ROOTS.map(Path::new)))
     };
-    let podman = search("podman")?;
-    let compose = search("podman-compose")?;
-    let podman_version = podman.to_str().is_some_and(|program| run_program(program, ["--version"], None, timeout).is_ok_and(|result| result.success() && std::str::from_utf8(&result.stdout).is_ok_and(|value| value.trim() == "podman version 6.1.3")));
-    let machine = fs::read_to_string(runtime.join("podman-machine")).ok()?;
-    let machine = machine.strip_suffix('\n')?;
-    if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return None; }
-    let compose_version = compose.to_str().is_some_and(|program| {
-        let (result, stderr) = run_program_keeping_stderr_with_environment(program, ["--version"], None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine)]);
-        let mut output = match result { Ok(result) if result.success() => result.stdout, _ => return false };
+    let podman = search("podman").ok_or("hash_tool_missing")?;
+    let compose = search("podman-compose").ok_or("hash_tool_missing")?;
+    // podman-compose runs `podman` by name, and an app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin`
+    // for a PATH, without Homebrew's: its own version probe then said «No such file or directory: podman» and
+    // the container looked like another one. The children get the directory of the podman that was found
+    // and trusted in front of the PATH they have (the wrapper runs them with Homebrew in it).
+    let path_with_podman = podman
+        .parent()
+        .and_then(|dir| std::env::join_paths(std::iter::once(dir.to_path_buf()).chain(std::env::var_os("PATH").iter().flat_map(std::env::split_paths))).ok())
+        .and_then(|joined| joined.into_string().ok())
+        .ok_or("hash_tool_missing")?;
+    // A version that could not be read is not a version that differs.
+    let podman_said = podman.to_str().and_then(|program| run_program(program, ["--version"], None, timeout).ok()).filter(|result| result.success()).and_then(|result| String::from_utf8(result.stdout).ok());
+    match podman_said {
+        None => return Err("hash_podman_version_unreadable"),
+        Some(said) if said.trim() != "podman version 6.1.3" => return Err("hash_podman_version_differs"),
+        Some(_) => {}
+    }
+    let machine = fs::read_to_string(runtime.join("podman-machine")).map_err(|_| "hash_machine_file")?;
+    let machine = machine.strip_suffix('\n').ok_or("hash_machine_file")?;
+    if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return Err("hash_machine_file"); }
+    let compose_said = compose.to_str().and_then(|program| {
+        let (result, stderr) = run_program_keeping_stderr_with_environment(program, ["--version"], None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine), ("PATH", path_with_podman.as_str())]);
+        let mut output = result.ok().filter(ProcessResult::success)?.stdout;
         output.extend_from_slice(&stderr);
-        std::str::from_utf8(&output).is_ok_and(|output| output.lines().any(|line| line == "podman-compose version 1.6.0"))
+        String::from_utf8(output).ok()
     });
-    if !podman_version || !compose_version { return None; }
+    match compose_said {
+        None => return Err("hash_compose_version_unreadable"),
+        Some(said) if !said.lines().any(|line| line == "podman-compose version 1.6.0") => return Err("hash_compose_version_differs"),
+        Some(_) => {}
+    }
     let image = match fs::symlink_metadata(runtime.join("runtime-image")) {
         Ok(_) => {
-            let image = fs::read_to_string(runtime.join("runtime-image")).ok()?;
-            let image = image.strip_suffix('\n')?.to_owned();
-            let digest = image.strip_prefix("ghcr.io/leopu00/jht@sha256:")?;
-            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; }
+            let image = fs::read_to_string(runtime.join("runtime-image")).map_err(|_| "hash_image_pin")?;
+            let image = image.strip_suffix('\n').ok_or("hash_image_pin")?.to_owned();
+            let digest = image.strip_prefix("ghcr.io/leopu00/jht@sha256:").ok_or("hash_image_pin")?;
+            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return Err("hash_image_pin"); }
             Some(image)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(_) => return None,
+        Err(_) => return Err("hash_image_pin"),
     };
     let args = vec![OsString::from("--verbose"), OsString::from("--dry-run"), OsString::from("--project-name"), OsString::from("jht"), OsString::from("--podman-path"), podman.into_os_string(), OsString::from("-f"), runtime.join("docker-compose.yml").into_os_string(), OsString::from("up"), OsString::from("-d"), OsString::from("--force-recreate"), OsString::from("jht")];
-    let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false")];
+    let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false"), ("PATH", path_with_podman.as_str())];
     if let Some(image) = image.as_deref() { environment.push(("JHT_IMAGE", image)); }
     // The same environment the wrapper runs the compose in: see `wrapper_compose_environment`.
     let host_environment = wrapper_compose_environment(host_env, inherited);
     for (name, value) in &host_environment { environment.push((*name, value.as_str())); }
-    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str()?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
-    let mut output = result.ok().filter(ProcessResult::success)?.stdout;
+    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str().ok_or("hash_tool_missing")?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
+    let planned = match result {
+        Ok(done) if done.success() => done,
+        Ok(_) => return Err("hash_dry_run_exit"),
+        Err("process_timeout") => return Err("hash_dry_run_timeout"),
+        Err(_) => return Err("hash_dry_run_not_started"),
+    };
+    let mut output = planned.stdout;
     output.extend_from_slice(&stderr);
-    let output = std::str::from_utf8(&output).ok()?;
+    let output = std::str::from_utf8(&output).map_err(|_| "hash_plan_without_create")?;
     let mut hash = None;
     // podman-compose 1.6.0 hashes each service on its own: the plan of `jht` prints the create of its dependency first (with another hash); only the create of `jht` carries the hash its container is labelled with.
-    for line in output.lines().filter(|line| line.contains(" create --name=jht ")) { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return None } } }
-    hash
+    for line in output.lines().filter(|line| line.contains(" create --name=jht ")) { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return Err("hash_plan_ambiguous"); } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return Err("hash_plan_ambiguous") } } }
+    hash.ok_or("hash_plan_without_create")
 }
 
 /// A Windows path as the compose labels spell it, to compare with another: forward slashes as
@@ -1726,54 +1763,90 @@ fn split_inspected(line: &str, with_image: bool) -> Option<(&str, &str, Option<&
     Some((running, labels, Some(image.trim())))
 }
 
-fn podman_container_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
+/// The first rule of the attestation the container's labels do not meet, in the fixed words of
+/// `runtime_log::ATTEST_REASONS`; `None` when they meet all of them.
+fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
     #[cfg(windows)]
     {
         let _ = expected_config_hash;
-        return windows_container_labels_are_attested(labels, runtime);
+        return (!windows_container_labels_are_attested(labels, runtime)).then_some("label_windows");
     }
     #[cfg(not(windows))]
-    podman_compose_labels_are_attested(labels, runtime, expected_config_hash)
+    podman_compose_label_refusal(labels, runtime, expected_config_hash)
 }
 
 #[cfg(not(windows))]
-fn podman_compose_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
+fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
     let runtime_text = runtime.to_string_lossy();
     let systemd_unit = podman_systemd_unit();
-    if label(labels, "com.docker.compose.project") != Some("jht")
-        || label(labels, "io.podman.compose.project") != Some("jht")
-        || label(labels, "com.docker.compose.service") != Some("jht")
-        || label(labels, "io.podman.compose.service") != Some("jht")
-        || label(labels, "com.docker.compose.container-number") != Some("1")
-        || label(labels, "com.docker.compose.project.working_dir") != Some(runtime_text.as_ref())
-        || !label(labels, "io.podman.compose.config-hash")
-            .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
-    {
-        return false;
+    if label(labels, "com.docker.compose.project") != Some("jht") || label(labels, "io.podman.compose.project") != Some("jht") {
+        return Some("label_project");
+    }
+    if label(labels, "com.docker.compose.service") != Some("jht") || label(labels, "io.podman.compose.service") != Some("jht") {
+        return Some("label_service");
+    }
+    if label(labels, "com.docker.compose.container-number") != Some("1") {
+        return Some("label_container_number");
+    }
+    if label(labels, "com.docker.compose.project.working_dir") != Some(runtime_text.as_ref()) {
+        return Some("label_working_dir");
+    }
+    if !label(labels, "io.podman.compose.config-hash").is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())) {
+        return Some("label_hash_form");
     }
     #[cfg(target_os = "macos")]
     {
-        return label(labels, "com.docker.compose.project.config_files")
-            == Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref())
-            && label(labels, "io.podman.compose.version") == Some("1.6.0")
-            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str())
-            && expected_config_hash == label(labels, "io.podman.compose.config-hash");
+        if label(labels, "com.docker.compose.project.config_files") != Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref()) {
+            return Some("label_config_files");
+        }
+        if label(labels, "io.podman.compose.version") != Some("1.6.0") {
+            return Some("label_compose_version");
+        }
+        if label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str()) {
+            return Some("label_systemd_unit");
+        }
+        return (expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         let expected_files = format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime_text, runtime_text);
-        return label(labels, "com.docker.compose.project.config_files") == Some(expected_files.as_str())
-            && label(labels, "io.podman.compose.version").is_some_and(|version| {
-                let mut parts = version.split('.');
-                matches!((parts.next(), parts.next()), (Some(major), Some(minor))
-                    if major.parse::<u16>().is_ok_and(|major| major > 1)
-                    || (major == "1" && minor.parse::<u16>().is_ok_and(|minor| minor >= 1)))
-            })
-            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str());
+        if label(labels, "com.docker.compose.project.config_files") != Some(expected_files.as_str()) {
+            return Some("label_config_files");
+        }
+        if !label(labels, "io.podman.compose.version").is_some_and(|version| {
+            let mut parts = version.split('.');
+            matches!((parts.next(), parts.next()), (Some(major), Some(minor))
+                if major.parse::<u16>().is_ok_and(|major| major > 1)
+                || (major == "1" && minor.parse::<u16>().is_ok_and(|minor| minor >= 1)))
+        }) {
+            return Some("label_compose_version");
+        }
+        return (label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str())).then_some("label_systemd_unit");
     }
     #[cfg(not(unix))]
     {
-        false
+        Some("label_windows")
+    }
+}
+
+/// The first thing that keeps a running `jht` container from being taken: the hash it has to carry could
+/// not be worked out (`expected` is the reason), or a label (or the image, on Windows) is not what the
+/// runtime writes. `None` when it is the one.
+fn attestation_refusal(expected: Option<&Result<String, &'static str>>, labels: &Value, runtime: &Path, image_is_the_runtimes: bool) -> Option<&'static str> {
+    match expected {
+        Some(Err(reason)) => Some(*reason),
+        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok())),
+    }
+    .or_else(|| (!image_is_the_runtimes).then_some("label_image"))
+}
+
+/// What is said when no container was taken: another one is up (it is not used), the check could not be
+/// made now (the page asks again, and waits as it does for a team that is starting), or none is up.
+fn container_not_found_code(refused: Option<&'static str>, unchecked: Option<&'static str>) -> &'static str {
+    match (refused, unchecked) {
+        (Some(_), _) => "local_container_not_attested",
+        (None, Some(_)) => "container_unavailable",
+        (None, None) => "local_team_not_running",
     }
 }
 
@@ -1786,9 +1859,9 @@ fn local_chat_container(
     timeout: Duration,
 ) -> Result<String, &'static str> {
     #[cfg(target_os = "macos")]
-    let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout)).flatten();
+    let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout));
     #[cfg(not(target_os = "macos"))]
-    let expected_config_hash: Option<String> = None;
+    let expected_config_hash: Option<Result<String, &'static str>> = None;
     let listed = run_local_engine(engine, local_compose_args(engine, runtime), None, timeout)?;
     let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
         .map_err(|_| "container_unavailable")?
@@ -1800,7 +1873,10 @@ fn local_chat_container(
         return Err("container_unavailable");
     }
     let mut found = None;
-    let mut refused = false;
+    // Why a container that is running as `jht` was not taken: it is not the one installed, or the check could
+    // not be made (the hash it has to carry was not worked out) which is not the same thing.
+    let mut refused: Option<&'static str> = None;
+    let mut unchecked: Option<&'static str> = None;
     for id in ids {
         let inspected = run_local_engine(
             engine,
@@ -1833,17 +1909,29 @@ fn local_chat_container(
             continue;
         }
         let image_is_the_runtimes = !cfg!(windows) || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
-        if engine.podman && !(podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref()) && image_is_the_runtimes) {
-            refused = true;
-            continue;
+        if engine.podman {
+            if let Some(reason) = attestation_refusal(expected_config_hash.as_ref(), &labels, runtime, image_is_the_runtimes) {
+                if attest_reason_may_pass(reason) {
+                    unchecked = Some(reason);
+                } else {
+                    refused = Some(reason);
+                }
+                continue;
+            }
         }
         if found.replace(id).is_some() {
             return Err("container_unavailable");
         }
     }
-    // Why there is none, said apart: the team is not up, or what is up is not the one the app's
-    // runtime started (it is never used for the chat).
-    found.map(str::to_owned).ok_or(if refused { "local_container_not_attested" } else { "local_team_not_running" })
+    // Why there is none, said apart: the team is not up, what is up is not the one the app's runtime
+    // started (it is never used for the chat), or it could not be checked now (the page tries again).
+    if let Some(id) = found {
+        return Ok(id.to_owned());
+    }
+    if let Some(reason) = refused.or(unchecked) {
+        note_attest_reason(reason);
+    }
+    Err(container_not_found_code(refused, unchecked))
 }
 
 fn local_chat_exec_args(
@@ -3081,18 +3169,33 @@ pub(crate) async fn direct_chat_attach(
 
 /// The last failure of each operation written to the runtime log: a read that fails every two
 /// seconds writes one line, and a new one only when its code changes.
-static LOGGED_CHAT_FAILURE: Mutex<[Option<&'static str>; 2]> = Mutex::new([None, None]);
+static LOGGED_CHAT_FAILURE: Mutex<[Option<(&'static str, Option<&'static str>)>; 2]> = Mutex::new([None, None]);
+
+/// The rule the last container check stopped at, in the fixed words of `runtime_log::ATTEST_REASONS`; it
+/// goes to the runtime log with the failure it explains, and nowhere else.
+static ATTEST_REASON: Mutex<Option<&'static str>> = Mutex::new(None);
+
+fn note_attest_reason(reason: &'static str) {
+    if let Ok(mut said) = ATTEST_REASON.lock() {
+        *said = Some(reason);
+    }
+}
 
 fn log_chat_failure(app: &tauri::AppHandle, operation: &'static str, code: &'static str) {
     let slot = usize::from(operation == "send");
+    let reason = if matches!(code, "local_container_not_attested" | "container_unavailable") {
+        ATTEST_REASON.lock().ok().and_then(|mut said| said.take())
+    } else {
+        None
+    };
     if let Ok(mut last) = LOGGED_CHAT_FAILURE.lock() {
-        if last[slot] == Some(code) {
+        if last[slot] == Some((code, reason)) {
             return;
         }
-        last[slot] = Some(code);
+        last[slot] = Some((code, reason));
     }
     if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
-        log.record_chat_failure(operation, code);
+        log.record_chat_failure_because(operation, code, reason);
     }
 }
 
@@ -3472,6 +3575,8 @@ mod tests {
     };
     #[cfg(unix)]
     use super::{attested_exec_args, AttestedLocalTeam};
+    #[cfg(unix)]
+    use super::{attest_reason_may_pass, attestation_refusal, container_not_found_code, mac_config_hash_in};
     #[cfg(all(unix, not(target_os = "macos")))]
     use super::local_chat_runtime_valid;
     use crate::existing_team_runtime::ActivatedTarget;
@@ -4348,10 +4453,185 @@ mod tests {
         let none = |_: &str| -> Option<String> { None };
         // the Mac as the host setup leaves it: the container was made with these three
         let host_env = "JHT_LANG=en\nJHT_HOST_TYPE=local\nJHT_USER_TZ=Europe/Rome\n";
-        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, Some(host_env), &none), Some(sha("local|en|Europe/Rome")));
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, Some(host_env), &none), Ok(sha("local|en|Europe/Rome")));
         // without host.env: the wrapper's defaults, not empty values
-        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Some(sha("unknown|en|UTC")));
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Ok(sha("unknown|en|UTC")));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A runtime with a fake `podman` and `podman-compose` in its `bin` (the tools the hash search finds first in a
+    /// test) and a machine file: (root, runtime). The caller removes `root`. `podman_says` is what `podman
+    /// --version` prints, `compose` the whole script of the provider.
+    #[cfg(unix)]
+    fn hash_runtime(podman_script: &str, compose_script: &str) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-hash-runtime-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        fs::create_dir_all(runtime.join("bin")).unwrap();
+        fs::write(runtime.join("podman-machine"), "jht-podman\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        for (name, script) in [("podman", podman_script), ("podman-compose", compose_script)] {
+            let tool = runtime.join("bin").join(name);
+            fs::write(&tool, script).unwrap();
+            fs::set_permissions(&tool, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        (root, runtime)
+    }
+
+    #[cfg(unix)]
+    const PODMAN_6_1_3: &str = "#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman version 6.1.3'; exit 0; }\nexit 91\n";
+    /// The provider's plan as the real one prints it: a create of the dependency with another hash, then the create
+    /// of `jht` whose hash is `$1`.
+    #[cfg(unix)]
+    fn compose_plan(hash_script: &str) -> String {
+        format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'podman-compose version 1.6.0'; exit 0; }}\nh=$({hash_script})\nprintf 'podman create --name=jht-telegram --label io.podman.compose.config-hash=%s x\\n' \"{}\" >&2\nprintf 'podman create --name=jht --label io.podman.compose.config-hash=%s x\\n' \"$h\" >&2\n", "b".repeat(64))
+    }
+    #[cfg(unix)]
+    fn digest_of(text: &str) -> String {
+        use sha2::{Digest, Sha256};
+        format!("{:x}", Sha256::digest(text.as_bytes()))
+    }
+    #[cfg(unix)]
+    fn listed(reason: &str) -> &str {
+        assert!(crate::runtime_log::ATTEST_REASONS.contains(&reason), "{reason} is not a reason the log can say");
+        reason
+    }
+    #[cfg(unix)]
+    const PIN: &str = "ghcr.io/leopu00/jht@sha256:5728219d306b2329f8ec3a4f1acf585d24e6616112b798ba32709b0d9bb6bfed";
+
+    #[cfg(unix)]
+    #[test]
+    fn the_expected_hash_follows_the_image_pin_of_the_runtime_and_a_runtime_without_a_pin_has_none_in_it() {
+        // the provider's hash depends on the JHT_IMAGE it is given, as the real one does through the compose file
+        let hash = "printf '%s' \"${JHT_IMAGE:-the default of the compose file}\" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1";
+        let none = |_: &str| -> Option<String> { None };
+        let (root, runtime) = hash_runtime(PODMAN_6_1_3, &compose_plan(hash));
+        // a test channel: runtime-image holds the pin, the container was made with it
+        fs::write(runtime.join("runtime-image"), format!("{PIN}\n")).unwrap();
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Ok(digest_of(PIN)));
+        // a production runtime: no pin file, the compose file's own default, and the hash is another one
+        fs::remove_file(runtime.join("runtime-image")).unwrap();
+        assert_eq!(
+            mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none),
+            Ok(digest_of("the default of the compose file"))
+        );
+        // a pin that is not a digest of the product's image stops the check instead of being passed on
+        for bad in [PIN.trim_end_matches('d'), "ghcr.io/leopu00/jht:latest", ""] {
+            fs::write(runtime.join("runtime-image"), format!("{bad}\n")).unwrap();
+            assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Err("hash_image_pin"), "{bad:?}");
+        }
+        fs::write(runtime.join("runtime-image"), PIN).unwrap();
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Err("hash_image_pin"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_provider_is_given_the_directory_of_the_podman_it_trusts_in_its_path_as_an_app_opened_from_finder_has_none() {
+        let none = |_: &str| -> Option<String> { None };
+        let (root, runtime) = hash_runtime(PODMAN_6_1_3, "");
+        // podman-compose looks `podman` up by name: it says so and stops when the name does not lead to this runtime's one
+        let find = format!(
+            "[ \"$(command -v podman)\" = \"{}\" ] || {{ echo 'failed to check if podman is installed: No such file or directory: podman' >&2; exit 1; }}\n",
+            runtime.join("bin").join("podman").display()
+        );
+        let script = compose_plan("printf '%s' fixed | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1");
+        let script = script.replacen("[ \"${1:-}\" = --version ]", &format!("{find}[ \"${{1:-}}\" = --version ]"), 1);
+        fs::write(runtime.join("bin").join("podman-compose"), script).unwrap();
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Ok(digest_of("fixed")));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_check_that_could_not_be_made_is_told_apart_from_a_container_that_is_another() {
+        let none = |_: &str| -> Option<String> { None };
+        let hash = "printf x | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1";
+        let ask = |podman: &str, compose: &str, machine: Option<&str>| {
+            let (root, runtime) = hash_runtime(podman, compose);
+            match machine {
+                Some(machine) => fs::write(runtime.join("podman-machine"), machine).unwrap(),
+                None => fs::remove_file(runtime.join("podman-machine")).unwrap(),
+            }
+            let said = mac_config_hash_in(&runtime, Duration::from_secs(20), None, &none);
+            fs::remove_dir_all(root).unwrap();
+            said
+        };
+        let good = compose_plan(hash);
+        let machine = Some("jht-podman\n");
+        // the versions: read and other, or not readable
+        assert_eq!(ask("#!/bin/sh\necho 'podman version 6.0.0'\n", &good, machine), Err("hash_podman_version_differs"));
+        assert_eq!(ask("#!/bin/sh\nexit 3\n", &good, machine), Err("hash_podman_version_unreadable"));
+        assert_eq!(ask(PODMAN_6_1_3, &good.replace("1.6.0", "1.5.0"), machine), Err("hash_compose_version_differs"));
+        assert_eq!(ask(PODMAN_6_1_3, "#!/bin/sh\nexit 1\n", machine), Err("hash_compose_version_unreadable"));
+        // the machine file
+        assert_eq!(ask(PODMAN_6_1_3, &good, None), Err("hash_machine_file"));
+        assert_eq!(ask(PODMAN_6_1_3, &good, Some("jht-podman")), Err("hash_machine_file"));
+        assert_eq!(ask(PODMAN_6_1_3, &good, Some("a b\n")), Err("hash_machine_file"));
+        // the plan: does not run, runs and says nothing of jht, says two things
+        let plan = |body: &str| format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'podman-compose version 1.6.0'; exit 0; }}\n{body}\n");
+        assert_eq!(ask(PODMAN_6_1_3, &plan("exit 7"), machine), Err("hash_dry_run_exit"));
+        assert_eq!(ask(PODMAN_6_1_3, &plan("exit 0"), machine), Err("hash_plan_without_create"));
+        assert_eq!(ask(PODMAN_6_1_3, &plan("echo 'podman create --name=jht --label io.podman.compose.config-hash=short x'"), machine), Err("hash_plan_ambiguous"));
+        let two = format!(
+            "echo 'podman create --name=jht --label io.podman.compose.config-hash={} x'; echo 'podman create --name=jht --label io.podman.compose.config-hash={} x'",
+            "a".repeat(64),
+            "c".repeat(64)
+        );
+        assert_eq!(ask(PODMAN_6_1_3, &plan(&two), machine), Err("hash_plan_ambiguous"));
+        // the plan that takes longer than the time it is given
+        let (root, runtime) = hash_runtime(PODMAN_6_1_3, &plan("sleep 5"));
+        assert_eq!(mac_config_hash_in(&runtime, Duration::from_millis(500), None, &none), Err("hash_dry_run_timeout"));
+        fs::remove_dir_all(root).unwrap();
+        // which of these waiting may cure, and the words the log can say
+        for reason in ["hash_podman_version_unreadable", "hash_compose_version_unreadable", "hash_dry_run_exit", "hash_dry_run_timeout", "hash_dry_run_not_started", "hash_plan_without_create"] {
+            assert!(attest_reason_may_pass(listed(reason)), "{reason}");
+        }
+        for reason in ["hash_tool_missing", "hash_podman_version_differs", "hash_compose_version_differs", "hash_machine_file", "hash_image_pin", "hash_plan_ambiguous", "label_config_hash_differs", "label_project", "label_image"] {
+            assert!(!attest_reason_may_pass(listed(reason)), "{reason}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hash_that_could_not_be_worked_out_is_not_said_to_be_another_container_and_a_label_that_differs_is() {
+        let runtime = PathBuf::from("/runtime");
+        let labels = serde_json::json!({});
+        let wrong = Ok("0".repeat(64));
+        // the hash could not be worked out: the reason is the hash's, whatever the labels are
+        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &labels, &runtime, true), Some("hash_dry_run_timeout"));
+        // the hash is there: the labels are looked at, rule by rule
+        let mut labels = serde_json::json!({
+            "com.docker.compose.project": "other", "io.podman.compose.project": "jht",
+            "com.docker.compose.service": "jht", "io.podman.compose.service": "jht",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.project.working_dir": "/runtime", "io.podman.compose.config-hash": "a".repeat(64),
+        });
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_project"));
+        labels["com.docker.compose.project"] = "jht".into();
+        labels["io.podman.compose.service"] = "x".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_service"));
+        labels["io.podman.compose.service"] = "jht".into();
+        labels["com.docker.compose.container-number"] = "2".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_container_number"));
+        labels["com.docker.compose.container-number"] = "1".into();
+        labels["com.docker.compose.project.working_dir"] = "/elsewhere".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_working_dir"));
+        labels["com.docker.compose.project.working_dir"] = "/runtime".into();
+        labels["io.podman.compose.config-hash"] = "not a hash".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_hash_form"));
+        // what to say when none is taken: the other one wins over the one that could not be checked
+        assert_eq!(container_not_found_code(Some("label_project"), Some("hash_dry_run_exit")), "local_container_not_attested");
+        assert_eq!(container_not_found_code(None, Some("hash_dry_run_exit")), "container_unavailable");
+        assert_eq!(container_not_found_code(None, None), "local_team_not_running");
+        for reason in ["label_project", "label_service", "label_container_number", "label_working_dir", "label_hash_form", "label_image", "label_config_files", "label_compose_version", "label_systemd_unit", "label_windows"] {
+            listed(reason);
+        }
     }
 
     /// What the local chat steps (container lookup, exec) may take in a test:
