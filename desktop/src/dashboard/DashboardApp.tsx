@@ -98,6 +98,9 @@ import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
 import { TeamOffContext, type TeamOff } from "../lib/team-off";
 import MessagesPage from "../pages/messages";
+import { readTeamStart } from "../guided-onboarding/deps";
+import GuidedOnboardingPage from "../guided-onboarding/GuidedOnboardingPage";
+import { teamStarted, type FirstRunSignal } from "../guided-onboarding/moments";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
@@ -428,6 +431,13 @@ export default function DashboardApp() {
   const [sshHostKey, setSshHostKey] = useState<OnboardingSshHostKeyConfirmation | null>(null);
   const [activity, setActivity] = useState<OnboardingActivityState | null>(null);
   const [assistantChatIdentityKey, setAssistantChatIdentityKey] = useState<string | null>(null);
+  // What the guided screen after the setup reads of the machine (the loop below fills it), and the last snapshot, for «continue later».
+  const [guidedSignals, setGuidedSignals] = useState<{ profileReady: boolean; captainRunning: boolean; firstRun: FirstRunSignal | null }>({
+    profileReady: false,
+    captainRunning: false,
+    firstRun: null,
+  });
+  const guidedSnapshotRef = useRef<OnboardingRuntimeSnapshot | null>(null);
   const [existingTeamDismissedIdentityKey, setExistingTeamDismissedIdentityKey] = useState<string | null>(null);
   // Why the saved existing team did not open at start-up, for the «existing team» window that the
   // account's registered team opens on top of everything: without it the person sees an empty form.
@@ -702,7 +712,19 @@ export default function DashboardApp() {
         ]);
         if (!active || activeIdentityKeyRef.current !== identityKey) return;
         const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
-        if (isOnboardingRuntimeReady(snapshot)) {
+        // After the setup the person is guided up to a team that works (not to a team that merely has a start button):
+        // the gate stays required until then, unless they choose «continue later». A team connected in full keeps its
+        // own way out (below). The first-run state is read only once the profile is confirmed.
+        let teamIsUp = true;
+        if (assistantChatIdentityKey === identityKey && connectedExistingTeamKey !== identityKey) {
+          guidedSnapshotRef.current = snapshot;
+          const read = isOnboardingRuntimeReady(snapshot) ? await readTeamStart().catch(() => null) : null;
+          if (!active || activeIdentityKeyRef.current !== identityKey) return;
+          const firstRun: FirstRunSignal | null = read && read.phase ? { phase: read.phase, workers: read.workers, planDeclared: read.planDeclared } : null;
+          setGuidedSignals({ profileReady: snapshot.profileReady, captainRunning: snapshot.captainRunning, firstRun });
+          teamIsUp = teamStarted({ captainRunning: snapshot.captainRunning, firstRun });
+        }
+        if (isOnboardingRuntimeReady(snapshot) && teamIsUp) {
           markOnboardingReady(markerId, snapshot);
           // A team connected in full (its Assistant chat first) opens on its own VPS, not on the cloud.
           if (connectedExistingTeamRef.current === identityKey) openFullExistingTeamRef.current?.(snapshot);
@@ -1131,6 +1153,24 @@ export default function DashboardApp() {
       fail("assistant", error);
     }
   }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime]);
+
+  // «Continue later» of the guided screen: the way out of the setup that is always there. The marker says where the setup
+  // stands (done when the runtime is ready, started otherwise: the next start comes back to the conversation); a marker that
+  // cannot be written does not keep the person in, the app opens either way.
+  const continueGuidedLater = useCallback(() => {
+    if (!identityKey) return;
+    const snapshot = guidedSnapshotRef.current;
+    try {
+      if (markerId) {
+        if (snapshot && isOnboardingRuntimeReady(snapshot)) markOnboardingReady(markerId, snapshot);
+        else markOnboardingStarted(markerId);
+      }
+    } catch {
+      // the app opens anyway
+    }
+    setAssistantChatIdentityKey(null);
+    setGate({ phase: "ready" });
+  }, [identityKey, markerId]);
 
   // Backup and Export read the team's data through the direct chat's connection: without the team the chat is not
   // opened by the setup, so the mode connects it itself, as soon as the container is there (it needs the container,
@@ -1753,9 +1793,24 @@ export default function DashboardApp() {
   }
   if (gate.phase === "required") {
     if (assistantChatIdentityKey === identityKey) {
+      // A team connected in full keeps the chat alone; after a setup of this computer the person is guided on two columns.
+      if (connectedExistingTeamKey === identityKey) {
+        return (
+          <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
+            <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />
+          </main>
+        );
+      }
       return (
         <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
-          <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />
+          <GuidedOnboardingPage
+            profileReady={guidedSignals.profileReady}
+            captainRunning={guidedSignals.captainRunning}
+            firstRun={guidedSignals.firstRun}
+            onContinueLater={continueGuidedLater}
+          >
+            <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} embedded />
+          </GuidedOnboardingPage>
         </main>
       );
     }

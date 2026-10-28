@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
+import { readTeamStart } from "../guided-onboarding/deps";
 import { readTeamLanguage } from "../lib/team-language";
 import {
   activateDesktopAccountScope,
@@ -169,6 +170,11 @@ vi.mock("../shell/Shell", async () => {
   return { default: MockShell };
 });
 vi.mock("../pages/messages", () => ({ default: () => <section data-testid="assistant-chat">Assistente</section> }));
+// The read of the first-run state is another piece (the real one is native): the tests say what it answers.
+vi.mock("../guided-onboarding/deps", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../guided-onboarding/deps")>()),
+  readTeamStart: vi.fn(),
+}));
 vi.mock("../onboarding", () => ({
   OnboardingFlow: (props: OnboardingFlowProps) => {
     const stage = props.runtime.status === "ready" ? "" : `:${props.runtime.stage}`;
@@ -334,6 +340,8 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
     vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
     vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
+    // unless a test says otherwise, the team has started (the Captain runs in TEAM_READY and the burst is open with a worker)
+    vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 1, planDeclared: true });
     vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
     // no saved existing team unless a test says so: the usual resume
     vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_candidate_required" });
@@ -3159,5 +3167,110 @@ describe("DashboardApp onboarding router", () => {
       .toBeLessThan(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[0]);
     expect(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(startOnboardingTeam).mock.invocationCallOrder[0]);
+  });
+
+  describe("the guided screen after the setup stays until the team works, and has a way out", () => {
+    async function toGuided(account: string, snapshots: OnboardingRuntimeSnapshot[]) {
+      vi.mocked(useSession).mockReturnValue(signedInAs(account));
+      requireOnboarding();
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+      vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+      vi.mocked(openOnboardingAssistant).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+      const read = vi.mocked(readOnboardingSnapshot);
+      for (const snapshot of snapshots) read.mockResolvedValueOnce(snapshot);
+      read.mockResolvedValue(snapshots[snapshots.length - 1]);
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await reachAssistant(user);
+      return user;
+    }
+
+    it("shows the two columns, with the chat inside, and keeps them while the team has not started", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 0, planDeclared: true });
+      await toGuided("guided-waiting", [{ ...TEAM_READY, profileReady: true }]);
+
+      expect(await screen.findByTestId("guided-onboarding")).toBeInTheDocument();
+      expect(screen.getByTestId("assistant-chat")).toBeInTheDocument();
+      await waitFor(() => expect(readTeamStart).toHaveBeenCalled(), { timeout: 3_500 });
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      // the profile is confirmed and the Assistant answers, yet the team has launched nothing: the gate stays required
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      expect(screen.getByTestId("guided-onboarding")).toHaveAttribute("data-moment", "team");
+    });
+
+    it("does not read the first-run state before the profile is confirmed", async () => {
+      await toGuided("guided-interview", [{ ...TEAM_READY, profileReady: false }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(readTeamStart).not.toHaveBeenCalled();
+      expect(screen.getByTestId("guided-onboarding")).toHaveAttribute("data-moment", "interview");
+    });
+
+    it("opens the app once the team has started: the Captain runs and the burst is open with a worker", async () => {
+      vi.mocked(readTeamStart)
+        .mockResolvedValueOnce({ phase: "awaiting_profile", workers: 0, planDeclared: false })
+        .mockResolvedValue({ phase: "burst", workers: 3, planDeclared: true });
+      await toGuided("guided-started", [{ ...TEAM_READY, profileReady: true }]);
+
+      await waitFor(() => expect(markOnboardingReady).toHaveBeenCalledWith(
+        "guided-started",
+        expect.objectContaining({ profileReady: true, captainRunning: true }),
+      ), { timeout: 6_000 });
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    });
+
+    it("does not take a team whose Captain is not running for a started one", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 3, planDeclared: true });
+      await toGuided("guided-no-captain", [{ ...TEAM_READY, profileReady: true, captainRunning: false }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("an unreadable first-run state is never a started team, and the way out is there", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue(null);
+      await toGuided("guided-unreadable", [{ ...TEAM_READY, profileReady: true }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(screen.getByTestId("guided-continue-later")).toBeInTheDocument();
+    });
+
+    it("a first-run read that fails does not stop the loop or the way out", async () => {
+      vi.mocked(readTeamStart).mockRejectedValue(new Error("native-down"));
+      await toGuided("guided-throws", [{ ...TEAM_READY, profileReady: true }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(screen.getByTestId("guided-continue-later")).toBeInTheDocument();
+      expect(screen.getByTestId("guided-onboarding")).toHaveAttribute("data-moment", "team");
+    });
+
+    it("«continue later» during the interview opens the app and marks the setup as started, to come back", async () => {
+      const user = await toGuided("guided-later-interview", [{ ...TEAM_READY, profileReady: false }]);
+      await user.click(await screen.findByTestId("guided-continue-later"));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(markOnboardingStarted).toHaveBeenCalledWith("guided-later-interview");
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+    });
+
+    it("«continue later» with the profile confirmed marks the setup as ready and opens the app", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 0, planDeclared: true });
+      const user = await toGuided("guided-later-ready", [{ ...TEAM_READY, profileReady: true }]);
+      await waitFor(() => expect(readTeamStart).toHaveBeenCalled(), { timeout: 3_500 });
+      await user.click(await screen.findByTestId("guided-continue-later"));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(markOnboardingReady).toHaveBeenCalledWith("guided-later-ready", expect.objectContaining({ profileReady: true }));
+    });
+
+    it("«continue later» opens the app even when the marker cannot be written", async () => {
+      vi.mocked(markOnboardingStarted).mockImplementation(() => { throw new Error("marker-failed"); });
+      const user = await toGuided("guided-later-marker", [{ ...TEAM_READY, profileReady: false }]);
+      await user.click(await screen.findByTestId("guided-continue-later"));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    });
   });
 });
