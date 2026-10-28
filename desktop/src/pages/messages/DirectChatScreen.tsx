@@ -901,7 +901,8 @@ export default function DirectChatScreen({
   return (
     <div
       className="min-h-0 overflow-hidden flex flex-col md:flex-row bg-[var(--color-void)]"
-      style={embedded ? { height: "100%" } : { height: "calc(100svh / var(--zoom, 1) - 3.5rem)" }}
+      // The whole of the space it is given: in the Shell that is the window under the navbar and its bars (a full-bleed page), so a bar above never pushes the page past the window.
+      style={{ height: "100%" }}
       data-testid="direct-chat-shell"
     >
       {!embedded && (
@@ -909,7 +910,7 @@ export default function DirectChatScreen({
         <div className="shrink-0 px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-dim)]">
           {t.agentsHeading}
         </div>
-        <nav aria-label={t.agentsNavAria} className="min-h-0 px-2 pb-3 grid content-start gap-1">
+        <nav aria-label={t.agentsNavAria} className="min-h-0 overflow-y-auto px-2 pb-3 grid content-start gap-1">
           {agents.map((agent) => (
             <button
               key={agent.id}

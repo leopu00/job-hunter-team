@@ -91,7 +91,7 @@ describe("DirectChatScreen", () => {
     [1000, 480, "1.4"],
     [480, 420, "1.15"],
   ])(
-    "confines the chat at %sx%s with zoom %s and only scrolls the transcript",
+    "confines the chat at %sx%s with zoom %s and only scrolls the transcript and the list of agents",
     async (width, height, zoom) => {
       viewport(Number(width), Number(height), String(zoom));
       const { mock } = client();
@@ -104,7 +104,8 @@ describe("DirectChatScreen", () => {
       const composerRow = screen.getByTestId("direct-chat-composer-row");
       const input = screen.getByRole("textbox", { name: "Scrivi a Capitano" });
       const conversation = screen.getByRole("region", { name: "Conversazione con Capitano" });
-      expect(shell).toHaveStyle({ height: "calc(100svh / var(--zoom, 1) - 3.5rem)" });
+      // the whole of the space the Shell gives it (the window under the navbar and its bars), not a height worked out from the window
+      expect(shell).toHaveStyle({ height: "100%" });
       expect(shell.className).toMatch(/min-h-0/);
       expect(shell.className).toMatch(/overflow-hidden/);
       expect(conversation.className).toMatch(/min-h-0/);
@@ -112,7 +113,11 @@ describe("DirectChatScreen", () => {
       expect(transcript.className).toMatch(/flex-1/);
       expect(transcript.className).toMatch(/min-h-0/);
       expect(transcript.className).toMatch(/overflow-y-auto/);
-      expect(shell.querySelectorAll(".overflow-y-auto")).toHaveLength(1);
+      // two things scroll inside it: the transcript, and the list of agents when the window is too short for all of them
+      const agents = screen.getByRole("navigation", { name: "Chat agenti" });
+      expect(agents.className).toMatch(/overflow-y-auto/);
+      expect(agents.className).toMatch(/min-h-0/);
+      expect([...shell.querySelectorAll(".overflow-y-auto")]).toEqual([agents, transcript]);
       expect(composer.className).toMatch(/shrink-0/);
       expect(composer.className).not.toMatch(/absolute|fixed|sticky/);
       expect(composerRow.className).toMatch(/flex-wrap/);

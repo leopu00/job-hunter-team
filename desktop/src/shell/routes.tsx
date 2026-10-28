@@ -40,7 +40,7 @@ import type { PageProps } from "../pages/types";
 export type Route = {
   path: string;
   page: ComponentType<PageProps>;
-  /** the page fills the window under the navbar, edge to edge, without the web's MainChrome (the office's scene) */
+  /** the page fills the window under the navbar, edge to edge, without the web's MainChrome (the office's scene, the chat) */
   fullBleed?: boolean;
 };
 
@@ -66,7 +66,8 @@ export const ROUTES: Route[] = [
   { path: "/team/scorer", page: TeamScorerPage },
   { path: "/team/scrittore", page: TeamScrittorePage },
   { path: "/team/critico", page: TeamCriticoPage },
-  { path: "/messages", page: MessagesPage },
+  // The chat fills the window under the navbar (a full-bleed page): a small window never scrolls the page away from the navbar and the list of agents.
+  { path: "/messages", page: MessagesPage, fullBleed: true },
   { path: "/profile", page: ProfilePage },
   // The desktop's own pages, with no web counterpart (DESKTOP_LINKS in desktop-links.ts).
   // The agents' control panel, on this computer or on the linked VPS (agent_control).
@@ -101,7 +102,7 @@ export const READ_ONLY_ROUTES: Route[] = [
   // The same agents' panel: here it reads, and the native side refuses every action.
   { path: "/agents", page: AgentsPanel },
   // Where «Chat with <agent>» of the Agents page leads: history and answers only, the composer is locked (MessagesPage).
-  { path: "/messages", page: MessagesPage },
+  { path: "/messages", page: MessagesPage, fullBleed: true },
   // The app's own language and currency: local choices, nothing reaches the team.
   { path: "/settings", page: SettingsPage },
   { path: "/settings/vps-connection", page: VpsConnectionPage },

@@ -265,10 +265,13 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <DesktopWriteProvider value={{ canChange: true }}>
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
-            <MailRotationBanner />
-            <NewVersionBanner />
-            <TeamOffBanner />
-            <WriteAccessRestoredBanner />
+            {/* The bars take what they need up to a third of the window and scroll beyond it: the page under them always keeps room, and the navbar above is never pushed out. */}
+            <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
+              <MailRotationBanner />
+              <NewVersionBanner />
+              <TeamOffBanner />
+              <WriteAccessRestoredBanner />
+            </div>
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
             </main>
