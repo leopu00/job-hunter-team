@@ -355,7 +355,7 @@ export async function readDesktopVpsTeamActivity(
  * The standing orders on the board of the team of this computer, read only (the Team page's panel asks for them
  * through /api/team-directives). Only for the team of this computer, like the activity.
  */
-export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items: Record<string, unknown>[] }>> {
+export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items: Record<string, unknown>[]; truncated: boolean }>> {
   if (!localTeamData()) return { source: "not_desktop" };
   const value = await read<unknown>({ op: "directives" });
   if (value.source !== "vps") return value;
@@ -363,7 +363,7 @@ export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items
   if (!isRecord(data) || !Array.isArray(data.items) || !data.items.every(isRecord)) {
     return { source: "unavailable", code: "desktop_bad_reply" };
   }
-  return { source: "vps", data: { items: data.items as Record<string, unknown>[] } };
+  return { source: "vps", data: { items: data.items as Record<string, unknown>[], truncated: data.truncated === true } };
 }
 
 export function readDesktopVpsPosition(

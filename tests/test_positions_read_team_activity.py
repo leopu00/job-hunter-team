@@ -236,7 +236,7 @@ def test_the_board_is_bounded_and_a_team_without_the_table_has_none(tmp_path: Pa
     _board(tmp_path / "many", 650)
     assert len(_run(tmp_path / "many", {"op": "directives"})["data"]["items"]) == 500
     _board(tmp_path / "none", 0, with_table=False)
-    assert _run(tmp_path / "none", {"op": "directives"}) == {"ok": True, "data": {"items": []}}
+    assert _run(tmp_path / "none", {"op": "directives"}) == {"ok": True, "data": {"items": [], "truncated": False}}
 
 
 @pytest.mark.parametrize("request_", [{"op": "directives", "id": "3"}, {"op": "directives", "from": "2026-10-01", "to": "2026-10-02"}, {"op": "directives", "filters": {}}])
@@ -254,3 +254,68 @@ def test_the_board_reads_only_and_never_with_a_star(tmp_path: Path) -> None:
         assert forbidden not in text, forbidden
     script = _script().split("if op=='directives':")[1].split("if op=='team_activity':")[0]
     assert "SELECT *" not in script
+
+
+# ── The byte budget: volume never makes a read fail ─────────────────────────
+BUDGET = 1363148
+
+
+def test_a_great_many_instances_are_counted_under_their_role_and_no_event_is_lost(tmp_path: Path) -> None:
+    """Instance names are written by agents: 2500 of them over ten days is 25,000 rows of counts, past the budget."""
+    tmp_path.mkdir(exist_ok=True)
+    db = sqlite3.connect(tmp_path / "jobs.db")
+    db.execute("CREATE TABLE positions(id INTEGER PRIMARY KEY, legacy_id INTEGER, title TEXT, company TEXT, found_at TEXT, found_by TEXT)")
+    db.execute("CREATE TABLE scores(id INTEGER PRIMARY KEY, position_id INTEGER)")
+    db.execute("CREATE TABLE applications(id INTEGER PRIMARY KEY, position_id INTEGER)")
+    total = 25000
+    for n in range(total):
+        db.execute("INSERT INTO positions VALUES(?,?,?,?,?,?)", (n + 1, None, f"R{n}", "C", f"2026-10-{1 + n % 10:02d}T10:{n % 60:02d}:00Z", f"scout-{n % 2500}"))
+    # one busy instance, so that the ranking has something to keep
+    for n in range(total, total + 400):
+        db.execute("INSERT INTO positions VALUES(?,?,?,?,?,?)", (n + 1, None, f"R{n}", "C", f"2026-10-{1 + n % 10:02d}T11:{n % 60:02d}:00Z", "scout-busy"))
+    db.commit()
+    db.close()
+    reply = _run(tmp_path, {"op": "team_activity", "from": "2026-10-01", "to": "2026-10-31"})
+    assert reply["ok"] is True
+    data = reply["data"]
+    assert len(json.dumps(reply, separators=(",", ":"))) <= BUDGET + 100_000  # the budget covers the rows; the meta is small
+    # every event is still counted
+    assert sum(row["n"] for row in data["daily"]) == total + 400
+    # the busy instance is kept by name; the ones that did least are under the role (actor None)
+    kept = {row["actor"] for row in data["daily"]}
+    assert "scout-busy" in kept and None in kept
+    assert len(kept) <= 13
+    seen = {row["actor"] for row in data["seen"]}
+    assert "scout-busy" in seen and None in seen
+    assert len(data["newest"]) <= 2500
+
+
+def test_a_normal_team_is_not_folded_at_all(tmp_path: Path) -> None:
+    events = _database(tmp_path)
+    data = _run(tmp_path, RANGE)["data"]
+    assert {row["actor"] for row in data["daily"]} >= {"scout-1", "scout-2", "scout-3", "scorer-1", "scorer-2", "critico", "scrittore-1", None}
+
+
+def test_the_board_stops_at_the_byte_budget_and_says_so(tmp_path: Path) -> None:
+    """500 orders of 4000 non-ASCII characters are far past the budget: the first ones come, the reply says it stopped."""
+    tmp_path.mkdir(exist_ok=True)
+    db = sqlite3.connect(tmp_path / "jobs.db")
+    db.execute("CREATE TABLE positions(id INTEGER PRIMARY KEY, title TEXT)")
+    db.execute("CREATE TABLE team_directives(id INTEGER PRIMARY KEY, body TEXT, kind TEXT, status TEXT, sort_order INTEGER, created_at TEXT)")
+    for n in range(1, 501):
+        db.execute("INSERT INTO team_directives VALUES(?,?,?,?,?,?)", (n, "è" * 4000, "order", "active", n, f"2026-10-01T10:{n % 60:02d}:00Z"))
+    db.commit()
+    db.close()
+    reply = _run(tmp_path, {"op": "directives"})
+    assert reply["ok"] is True
+    data = reply["data"]
+    assert data["truncated"] is True
+    assert 0 < len(data["items"]) < 500
+    assert len(json.dumps(reply, separators=(",", ":"))) <= BUDGET + 30_000
+    assert [row["id"] for row in data["items"]] == list(range(1, len(data["items"]) + 1))  # the first ones, in order
+
+
+def test_the_board_that_fits_is_whole_and_not_truncated(tmp_path: Path) -> None:
+    _board(tmp_path, 12)
+    data = _run(tmp_path, {"op": "directives"})["data"]
+    assert len(data["items"]) == 12 and data["truncated"] is False

@@ -139,7 +139,9 @@ describe("the bridge's read of the board of standing orders", () => {
   it("asks for the board with no argument and takes only a list of rows", async () => {
     setLocalTeamData("local:abc");
     native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [{ id: 1, body: "Ordine" }] } });
-    expect(await readDesktopVpsDirectives()).toEqual({ source: "vps", data: { items: [{ id: 1, body: "Ordine" }] } });
+    expect(await readDesktopVpsDirectives()).toEqual({ source: "vps", data: { items: [{ id: 1, body: "Ordine" }], truncated: false } });
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [], truncated: true } });
+    expect(await readDesktopVpsDirectives()).toEqual({ source: "vps", data: { items: [], truncated: true } });
     expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "directives" } });
     native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [1] } });
     expect(await readDesktopVpsDirectives()).toEqual({ source: "unavailable", code: "desktop_bad_reply" });

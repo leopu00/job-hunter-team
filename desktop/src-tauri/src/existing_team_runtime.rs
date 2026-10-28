@@ -332,19 +332,23 @@ if op=='directives':
  # The standing orders the user gave the team (the board of the Team page), as the web's own local reader gives
  # them: the columns it reads, in its order, at most LIMIT rows with each text bounded. A database without the
  # table, or without its id or text, has none.
- LIMIT=500
+ # The reply carries as many as fit in the byte budget of the map's reply (what the app takes is 2 MiB), in that
+ # order, and says when it stopped short: a team with a great many long orders gets the first ones, never a failure.
+ LIMIT=500; BUDGET=1363148
  try:
   have=columns('team_directives'); wanted=[name for name in ('id','body','kind','status','sort_order','created_by','created_at','updated_at','archived_at') if name in have]
   order=', '.join(name+' ASC' for name in ('status','sort_order','created_at') if name in have)
-  items=[]
+  items=[]; used=0; truncated=False
   if 'id' in wanted and 'body' in wanted:
-   for raw in db.execute('SELECT '+', '.join(wanted)+' FROM team_directives'+(' ORDER BY '+order if order else '')+' LIMIT '+str(LIMIT)):
+   for raw in db.execute('SELECT '+', '.join(wanted)+' FROM team_directives'+(' ORDER BY '+order if order else '')+' LIMIT '+str(LIMIT+1)):
     row=as_dict(raw); row['body']=trunc(row['body'],4000)
     for name in ('kind','status','created_by','created_at','updated_at','archived_at'):
      if name in row: row[name]=trunc(row[name],60)
+    used+=len(json.dumps(row,separators=(',',':')))+1
+    if len(items)>=LIMIT or (items and used>BUDGET): truncated=True; break
     items.append(row)
  except sqlite3.Error: fail('positions_unavailable')
- emit({'ok':True,'data':{'items':items}})
+ emit({'ok':True,'data':{'items':items,'truncated':truncated}})
 if op=='team_activity':
  # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
  # newest events with the position they touched. The columns are the ones the web's own local reader reads
@@ -377,6 +381,31 @@ if op=='team_activity':
    for row in db.execute('SELECT '+who+' AS actor, MAX('+column+') AS last FROM '+table+' WHERE '+column+' IS NOT NULL GROUP BY actor'):
     seen.append({'role':role,'actor':trunc(row['actor'],40),'last':trunc(row['last'],40)})
   newest.sort(key=lambda item:item['ts'] or '',reverse=True); newest=newest[:EVENTS]
+  # The reply must fit in the byte budget of the map's reply. An instance is a name an agent writes, so there may be
+  # a great many: when it does not fit, the feed first shrinks, then the instances that did least are counted under
+  # their role (no event is lost from a count), down to no instance at all. Nothing here fails for volume.
+  BUDGET=1363148
+  def fold(rows,keep,merge):
+   if keep is None: return rows
+   total={}
+   for row in base_daily: total[(row['role'],row['actor'])]=total.get((row['role'],row['actor']),0)+row['n']
+   kept=set()
+   for role in {key[0] for key in total}:
+    ranked=sorted((key for key in total if key[0]==role and key[1] is not None),key=lambda key:(-total[key],key[1]))
+    kept.update(ranked[:keep])
+   merged={}
+   for row in rows:
+    key=(row['role'],row['actor'] if (row['role'],row['actor']) in kept else None)+((row['day'],) if 'day' in row else ())
+    if key in merged: merge(merged[key],row)
+    else: merged[key]=dict(row,actor=key[1])
+   return list(merged.values())
+  def add_n(into,row): into['n']+=row['n']
+  def later(into,row): into['last']=max(into['last'] or '',row['last'] or '') or None
+  base_daily,base_seen,base_newest=daily,seen,newest
+  for rows,keep in ((EVENTS,None),(500,None),(500,12),(500,6),(500,3),(500,0)):
+   newest=base_newest[:rows]; daily=fold(base_daily,keep,add_n); seen=fold(base_seen,keep,later)
+   if len(json.dumps({'daily':daily,'newest':newest,'seen':seen},separators=(',',':')))<=BUDGET: break
+  else: fail('positions_unavailable')
   pids=[item['pid'] for item in newest[:40] if item['pid'] is not None]
   meta={}
   have=columns('positions'); wanted=[name for name in ('id','legacy_id','title','company') if name in have]

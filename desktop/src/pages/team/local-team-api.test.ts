@@ -39,7 +39,7 @@ describe("GET /api/team-directives of a local profile", () => {
     const next = vi.fn(notInDesktop);
     const answer = await localTeamApi(next)("/api/team-directives", { method: "GET" });
     expect(answer.status).toBe(200);
-    expect(await answer.json()).toEqual({ directives: [{ id: 3, body: "Cerca solo ruoli remoti", kind: "order", status: "active" }], source: "local" });
+    expect(await answer.json()).toEqual({ directives: [{ id: 3, body: "Cerca solo ruoli remoti", kind: "order", status: "active" }], source: "local", truncated: false });
     expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "directives" } });
     expect(next).not.toHaveBeenCalled();
   });
