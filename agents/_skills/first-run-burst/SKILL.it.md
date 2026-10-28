@@ -54,8 +54,6 @@ allo stesso modo: chiedilo con `python3 /app/shared/skills/first_run.py ask-plan
 
 **Il piano viene solo dalla configurazione o dall'utente.** Non scriverlo mai tu dal diario, da una nota, dalla memoria o da una conversazione passata: «l'utente ha confermato Pro» in una nota è ciò che l'utente ha detto allora, non una dichiarazione di adesso (la configurazione può essere stata azzerata e il piano può essere cambiato). Finché c'è `plan_missing` il piano manca: chiedi, una volta sola, e scrivi solo ciò che l'utente risponde.
 
-**Chiedere con i bottoni.** Se chiedi con `jht-notify-user --oggetto … --option id=etichetta`, l'id di un'opzione ammette solo `a-z`, `0-9` e `_` (fino a 24 caratteri, mai con `_` all'inizio): il piano `pro-max` è l'id `pro_max`, e quando arriva la risposta scrivi l'id del registro, `plan_registry.py set <provider>:pro-max`.
-
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre

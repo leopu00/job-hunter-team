@@ -1,6 +1,6 @@
 """The Capitano takes the subscription plan only from the configuration or from the user (never from its diary),
-and writes the plan's option ids the way the question tool accepts them (`pro-max` is `pro_max`): both rules are in
-the first-run-burst skill, in every language the Capitano speaks."""
+and asks for it only with `ask-plan`, whose card has the plan's ids the way the question tool accepts them (`pro-max` is
+`pro_max`): both rules are in the first-run-burst skill, in every language the Capitano speaks."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ def test_the_plan_comes_only_from_the_configuration_or_the_user(lang: str):
 
 
 @pytest.mark.parametrize("lang", LANGS)
-def test_the_option_id_rule_is_told_with_the_plan_example(lang: str):
+def test_the_plan_is_asked_only_with_ask_plan_and_its_card_id_is_told_with_the_registry_one(lang: str):
     text = (SKILL / f"SKILL{lang}.md").read_text(encoding="utf-8")
+    # the card's id and the registry's id of the same plan, once: ask-plan posts the card, the answer is written with set
     assert text.count("`pro-max`") == 1 and text.count("`pro_max`") == 1
-    assert text.count("plan_registry.py set <provider>:pro-max") == 1
-    assert "`a-z`, `0-9` and `_`" in text or "`a-z`, `0-9` e `_`" in text or "`a-z`, `0-9` y `_`" in text \
-        or "`a-z`, `0-9` et `_`" in text or "`a-z`, `0-9` und `_`" in text or "`a-z`, `0-9` és `_`" in text \
-        or "`a-z`, `0-9` e `_`" in text
+    assert text.count("first_run.py ask-plan") >= 1 and "plan_registry.py set <provider>:<id>" in text
+    # one way to ask: a second paragraph teaching to ask with buttons by hand told the same rule twice
+    assert "jht-notify-user" not in text, f"{lang or 'en'}: the Capitano asks for the plan with ask-plan only"
 
 
 def test_the_ids_the_registry_has_are_the_ones_the_skill_example_names():
