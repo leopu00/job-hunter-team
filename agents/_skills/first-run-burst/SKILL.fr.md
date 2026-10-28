@@ -61,6 +61,8 @@ se déclare de la même façon : demande-le avec `python3 /app/shared/skills/fir
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
 comme d'habitude (C-03). C'est l'exception délibérée à C-02.
 
+**Après un redémarrage, ne démarre que ce qui manque.** Quand tu te réveilles dans un burst déjà ouvert (les conteneurs ont été redémarrés, donc toutes les sessions ont disparu), `first_run.py status` et `begin-burst` portent `roster_alive` et `roster_missing` par rôle. Ne démarre que les rôles de `roster_missing`, échelonnés de la même façon, et laisse tranquilles ceux qui tournent déjà, quoi qu'ils fassent : une session occupée est vivante (C-08 bis). Ne relance pas toute la formation et ne rebriefe pas un worker qui travaille déjà. Si `roster_check` vaut `unavailable`, regarde toi-même les sessions tmux avant de lancer quoi que ce soit.
+
 **3. N'attends pas des files pleines pour allumer l'aval.**
 
 Spawne l'Analista dès qu'**une** position existe, le Scorer dès qu'**une** position est checked.

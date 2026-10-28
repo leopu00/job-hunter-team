@@ -61,6 +61,8 @@ ask with `python3 /app/shared/skills/first_run.py ask-plan` (the card, never pla
 Not one worker every ten minutes: the whole formation, back to back, through
 `start-agent.sh` as always (C-03). This is the deliberate C-02 exception.
 
+**After a restart, start only what is missing.** When you wake in a burst that is already open (the containers were restarted, so every session is gone), `first_run.py status` and `begin-burst` carry `roster_alive` and `roster_missing` per role. Start only the roles in `roster_missing`, staggered the same way, and leave alone the ones that are up, whatever they are doing: a busy session is alive (C-08 bis). Do not respawn the whole formation, and do not brief again a worker that is already working. If `roster_check` is `unavailable`, look at the tmux sessions yourself before you spawn anything.
+
 **3. Do not wait for full queues to start the downstream.**
 
 Spawn the Analista as soon as **one** position exists, the Scorer as soon as

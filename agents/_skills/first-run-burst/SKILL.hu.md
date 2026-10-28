@@ -59,6 +59,8 @@ pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n
 keresztül (C-03). Ez a C-02 alóli szándékos kivétel.
 
+**Újraindítás után csak azt indítsd el, ami hiányzik.** Ha egy már megnyitott burstben ébredsz (a konténereket újraindították, tehát minden munkamenet eltűnt), a `first_run.py status` és a `begin-burst` szerepenként hozza a `roster_alive` és a `roster_missing` értéket. Csak a `roster_missing` szerepeit indítsd, ugyanúgy eltolva, a már futókat pedig hagyd békén, bármit csinálnak: a foglalt munkamenet él (C-08 bis). Ne indítsd újra az egész felállást, és ne instruálj újra olyan workert, amely már dolgozik. Ha a `roster_check` értéke `unavailable`, nézd meg magad a tmux munkameneteket, mielőtt bármit elindítasz.
+
 **3. Ne várj tele sorokra, hogy elindítsd a downstreamet.**
 
 Spawnold az Analistát, amint **egy** pozíció létezik, a Scorert, amint **egy** pozíció checked. Az

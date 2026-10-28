@@ -59,6 +59,8 @@ Assistente pergunta o mesmo quando o utilizador fala com ele.
 Não um worker de dez em dez minutos: toda a formação, uma a seguir à outra, sempre através do
 `start-agent.sh` como habitualmente (C-03). Esta é a exceção deliberada a C-02.
 
+**Depois de um reinício, arranca só o que falta.** Quando acordas num burst já aberto (os contentores foram reiniciados, por isso todas as sessões desapareceram), `first_run.py status` e `begin-burst` trazem `roster_alive` e `roster_missing` por papel. Arranca só os papéis em `roster_missing`, escalonados da mesma forma, e deixa em paz os que já estão de pé, façam o que fizerem: uma sessão ocupada está viva (C-08 bis). Não voltes a lançar toda a formação nem voltes a dar instruções a um worker que já está a trabalhar. Se `roster_check` for `unavailable`, vê tu as sessões tmux antes de lançar o que quer que seja.
+
 **3. Não esperes por filas cheias para ligar o downstream.**
 
 Faz spawn do Analista assim que exista **uma** posição, e do Scorer assim que **uma** posição esteja

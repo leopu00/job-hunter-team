@@ -61,6 +61,8 @@ allo stesso modo: chiedilo con `python3 /app/shared/skills/first_run.py ask-plan
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre
 tramite `start-agent.sh` (C-03). Questa è l'eccezione deliberata a C-02.
 
+**Dopo un riavvio, avvia solo ciò che manca.** Quando ti svegli in un burst già aperto (i container sono stati riavviati, quindi ogni sessione è sparita), `first_run.py status` e `begin-burst` portano `roster_alive` e `roster_missing` per ruolo. Avvia solo i ruoli in `roster_missing`, scaglionati allo stesso modo, e lascia stare quelli già su, qualunque cosa stiano facendo: una sessione occupata è viva (C-08 bis). Non rispawnare tutta la formazione e non ribriffare un worker che sta già lavorando. Se `roster_check` è `unavailable`, guarda tu le sessioni tmux prima di spawnare qualunque cosa.
+
 **3. Non aspettare code piene per accendere il downstream.**
 
 Spawna l'Analista appena esiste **una** posizione, lo Scorer appena **una**
