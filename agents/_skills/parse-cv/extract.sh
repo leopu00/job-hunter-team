@@ -45,12 +45,25 @@ case "$MIME" in
       exit 4
     fi
     ;;
-  application/vnd.openxmlformats-officedocument.wordprocessingml.document|application/msword|application/vnd.oasis.opendocument.text|application/rtf|text/rtf)
-    OUT="$(pandoc -f auto -t plain --wrap=none "$SRC" 2>/dev/null)"
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document|application/vnd.oasis.opendocument.text|application/rtf|text/rtf)
+    # The input format is named: `pandoc -f auto` is not a format ("Unknown input format auto"), so every Word, OpenDocument
+    # and RTF file used to fail here with exit 5. --sandbox: the file is not trusted and pandoc reads no other file for it.
+    case "$MIME" in
+      application/vnd.openxmlformats-officedocument.wordprocessingml.document) FORMAT=docx ;;
+      application/vnd.oasis.opendocument.text) FORMAT=odt ;;
+      *) FORMAT=rtf ;;
+    esac
+    LIMIT=""
+    command -v timeout >/dev/null 2>&1 && LIMIT="timeout 30"
+    OUT="$($LIMIT pandoc --sandbox -f "$FORMAT" -t plain --wrap=none "$SRC" 2>/dev/null | head -c 400000)"
     if [ -z "$OUT" ]; then
       echo "ERROR: pandoc non riesce a estrarre testo da $SRC ($MIME)" >&2
       exit 5
     fi
+    ;;
+  application/msword)
+    echo "ERROR: il vecchio formato .doc non si legge: salvalo come PDF o DOCX" >&2
+    exit 6
     ;;
   text/plain|text/markdown|text/x-markdown)
     OUT="$(cat "$SRC")"
