@@ -1,5 +1,5 @@
 {
-  "about": "The Assistant's questionnaire as data, neutral from language: the steps, their choices and what each choice writes into candidate_profile.yml. Texts: shared/locales/<lang>.json, keys onb.<step>.object, onb.<step>.text, onb.<step>.opt.<id> (and onb.role.other_prompt). Ported from the game's scripted onboarding (game/scripts/setup/scripted_onboarding.gd) without its intro, confidence and finish steps. Only fields of the canonical profile (shared/config/profile-schema.ts) are written; tests/test_onboarding_questionnaire.py keeps this file, the schema and the seven languages in step.",
+  "about": "The Assistant's questionnaire as data, neutral from language: the steps, their choices and what each choice writes into candidate_profile.yml. Texts: shared/locales/<lang>.json, keys onb.<step>.object, onb.<step>.text, onb.<step>.opt.<id> (and onb.role.other_prompt). The steps are the game's scripted onboarding without its intro, confidence and finish steps. Only fields of the canonical profile (shared/config/profile-schema.ts) are written; tests/test_onboarding_questionnaire.py keeps this file, the schema and the seven languages in step.",
   "effects": {
     "set": "fields of the profile set to a value (L1 fields of the schema)",
     "add": "values added to a list field of the profile",
