@@ -43,6 +43,7 @@ distinguere un doppione da due battute che dicono la stessa cosa per caso
 - ❌ Risposte a un messaggio `[CHAT]` sulla dashboard web — usa `jht-send` (già nel thread chat).
 - ❌ Risposte a un `[TG]` in ingresso — usa `jht-telegram-send` direttamente: sai già che Telegram è attivo perché l'utente ti ha appena scritto da lì. Risparmi un roundtrip DB.
 - ❌ Allegati pesanti (>20 MB). Usa la cartella CV dell'utente + un corpo di notifica breve.
+- ❌ Il piano di abbonamento. Si chiede SOLO con `python3 /app/shared/skills/first_run.py ask-plan` (una card a cui l'utente risponde in Messages), da qualunque agente; una domanda sul piano scritta qui a testo libero non compare in Messages e lascia l'utente ad aspettare.
 
 ## Utilizzo
 
@@ -66,6 +67,20 @@ jht-notify-user --agent mentor --no-telegram "Apri il tab Patterns per i dettagl
 Output (stdout):
 ```
 <row_id> via=<telegram|web>
+```
+
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
 ```
 
 ## Tipi

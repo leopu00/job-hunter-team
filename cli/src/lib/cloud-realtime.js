@@ -52,14 +52,61 @@ export function getRealtimeCreds(config) {
   return { supabaseUrl, anonKey, refreshToken, userId: config.user_id };
 }
 
-/** Persiste il refresh_token ruotato su cloud.json (best-effort, 0600). */
-async function persistRefreshToken(newToken) {
+/**
+ * The Supabase errors that say the SESSION is gone (its refresh token was used before, or never
+ * existed, or the session ended), as opposed to a network hiccup. GoTrue answers 400 with the code
+ * `refresh_token_already_used` when a token is presented again after its reuse window, and then ends
+ * the whole session: no token of it works any more, and only a new pairing brings it back.
+ */
+const SESSION_GONE_CODES = new Set([
+  'refresh_token_already_used', 'refresh_token_not_found', 'session_not_found', 'session_expired',
+]);
+const SESSION_GONE_TEXT = /invalid refresh token|already used|refresh token not found|session (?:not found|expired)/i;
+
+export function sessionGone(error) {
+  if (!error) return false;
+  return SESSION_GONE_CODES.has(error.code) || SESSION_GONE_TEXT.test(String(error.message || ''));
+}
+
+/** The daemon could not authenticate because the session of this device is gone: the user must pair it again. */
+export class RealtimeSessionLostError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'RealtimeSessionLostError';
+    this.code = 'session_lost';
+  }
+}
+
+async function storedRefreshToken() {
   try {
-    const c = JSON.parse(await readFile(CLOUD_FILE, 'utf-8'));
-    c.supabase_refresh_token = newToken;
-    writePrivateJson(CLOUD_FILE, c);
-    await chmod(CLOUD_FILE, 0o600);
-  } catch { /* best-effort: al prossimo refresh riprova */ }
+    const token = JSON.parse(await readFile(CLOUD_FILE, 'utf-8'))?.supabase_refresh_token;
+    return typeof token === 'string' && token ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+// The writes of the rotated token go one after the other: each one reads cloud.json and writes it back
+// whole, so two at once could leave the older token on disk, and a stale token on disk is a session
+// lost at the next start. `close()` waits for the last one.
+let writes = Promise.resolve();
+
+/**
+ * Persiste il refresh_token ruotato su cloud.json (0600), in coda; un errore si dice, non si ingoia.
+ * È l'UNICO punto di scrittura del token nel processo: anche il lettore diretto (cloud-direct.js) passa di qui.
+ */
+export function persistRefreshToken(newToken, log = () => {}) {
+  writes = writes.then(async () => {
+    try {
+      const c = JSON.parse(await readFile(CLOUD_FILE, 'utf-8'));
+      c.supabase_refresh_token = newToken;
+      writePrivateJson(CLOUD_FILE, c);
+      await chmod(CLOUD_FILE, 0o600);
+    } catch (e) {
+      log('warn', `could not save the rotated refresh token to cloud.json (${e.code || e.message}): the next start may need the device paired again`);
+    }
+  });
+  return writes;
 }
 
 /**
@@ -68,6 +115,7 @@ async function persistRefreshToken(newToken) {
  * @param {object} o
  * @param {object} o.config  cloud.json già caricato (supabase_url + supabase_refresh_token + user_id)
  * @param {(level:'info'|'warn', msg:string)=>void} [o.log]
+ * @param {()=>void} [o.onSessionLost]  called once if the session ends while the daemon runs (a refresh the server refuses)
  * @returns {Promise<{client, subscribe, trackPresence, close, isConnected}>}
  *
  * - subscribe(name, { table, event='*', filter }, handler): iscrive un listener
@@ -79,7 +127,7 @@ async function persistRefreshToken(newToken) {
  * - trackPresence(key?): segnala "VPS online" via presence del websocket.
  * - close(): rimuove i canali e chiude il socket.
  */
-export async function createRealtimeSync({ config, log = () => {}, createClient: create = null } = {}) {
+export async function createRealtimeSync({ config, log = () => {}, onSessionLost = () => {}, createClient: create = null } = {}) {
   const creds = getRealtimeCreds(config);
   if (!creds) {
     throw new Error('cloud-realtime: missing credentials (supabase_url / supabase_refresh_token / anon key)');
@@ -94,11 +142,23 @@ export async function createRealtimeSync({ config, log = () => {}, createClient:
 
   // Auth con refresh_token: ottiene la session (access+refresh) → il client passa
   // l'access token al Realtime (RLS). autoRefreshToken lo tiene fresco.
-  const { data, error } = await client.auth.refreshSession({ refresh_token: creds.refreshToken });
-  if (error || !data?.session?.access_token) {
-    throw new Error(`cloud-realtime auth: ${error?.message || 'no session from refresh_token'}`);
+  let { data, error } = await client.auth.refreshSession({ refresh_token: creds.refreshToken });
+  if (sessionGone(error)) {
+    // `config` was read when the daemon started. If another process of this box rotated the token
+    // since (a second daemon on the same cloud.json, a start that overlapped the stop of the old
+    // one), cloud.json holds the newer one: try it, once. The same token again would only be one
+    // more use of a token the server already refused.
+    const stored = await storedRefreshToken();
+    if (stored && stored !== creds.refreshToken) {
+      log('info', 'refresh token refused; cloud.json holds a different one (rotated by another process): trying it once');
+      ({ data, error } = await client.auth.refreshSession({ refresh_token: stored }));
+    }
   }
-  await persistRefreshToken(data.session.refresh_token);
+  if (error || !data?.session?.access_token) {
+    const message = `cloud-realtime auth: ${error?.message || 'no session from refresh_token'}`;
+    throw sessionGone(error) ? new RealtimeSessionLostError(message) : new Error(message);
+  }
+  await persistRefreshToken(data.session.refresh_token, log);
   // L'utente è quello della sessione, non quello scritto in cloud.json: è lui
   // che la RLS vede, ed è lui che i filtri dei canali devono nominare.
   const userId = data.session.user?.id || creds.userId;
@@ -114,8 +174,19 @@ export async function createRealtimeSync({ config, log = () => {}, createClient:
 
   // Ad ogni rotazione del token (TOKEN_REFRESHED) → ripersisti + riallinea il
   // Realtime al nuovo access token.
+  let lostTold = false;
   client.auth.onAuthStateChange((event, session) => {
-    if (session?.refresh_token) void persistRefreshToken(session.refresh_token);
+    // supabase-js ends the session (SIGNED_OUT) when a refresh is refused for good. Until now the daemon
+    // went on for days with no word of it; the user hears of it once, as at boot.
+    if (event === 'SIGNED_OUT') {
+      log('warn', 'the Supabase session ended while the daemon was running (refresh refused)');
+      if (!lostTold) {
+        lostTold = true;
+        try { onSessionLost(); } catch { /* the notice never stops the daemon */ }
+      }
+      return;
+    }
+    if (session?.refresh_token) void persistRefreshToken(session.refresh_token, log);
     if (session?.access_token) {
       try { client.realtime.setAuth(session.access_token); } catch { /* best-effort */ }
     }
@@ -155,8 +226,12 @@ export async function createRealtimeSync({ config, log = () => {}, createClient:
   }
 
   async function close() {
+    // No rotation may start while the process is leaving: its answer could not be saved, and the
+    // next start would present a token the server has already used.
+    try { await client.auth.stopAutoRefresh?.(); } catch { /* ignore */ }
     for (const ch of channels) { try { await client.removeChannel(ch); } catch { /* ignore */ } }
     try { await client.realtime.disconnect(); } catch { /* ignore */ }
+    await writes;
   }
 
   function isConnected() {

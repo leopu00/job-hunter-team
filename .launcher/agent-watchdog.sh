@@ -87,6 +87,7 @@ AGENT_MAX_SESSION_AGE_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
 # Path overridabili solo per poterli esercitare nei test con dei finti: in
 # container restano quelli dell'immagine.
 ROSTER_TOOL="${JHT_ROSTER_TOOL:-/app/shared/skills/team_roster.py}"
+FIRST_RUN_TOOL="${JHT_FIRST_RUN_TOOL:-/app/shared/skills/first_run.py}"
 START_AGENT="${JHT_START_AGENT:-/app/.launcher/start-agent.sh}"
 PROCESS_HEALTH_TOOL="${JHT_PROCESS_HEALTH_TOOL:-/app/shared/skills/process_health.py}"
 # Recuperi degli agenti: il watchdog non deve limitarsi a far sparire il
@@ -798,6 +799,40 @@ maybe_mail_tick() {
   return 0
 }
 
+# --- rete della domanda sul piano
+# Il piano si chiede con UNA card (first_run.py ask-plan). Se il profilo e' importato, il piano manca e nessuna
+# domanda sul piano e' aperta da qualche minuto, la posta il sistema: una domanda scritta solo nel pane del
+# Capitano non arriva all'utente (TEST 13). La decisione sta in first_run.py (mai prima dell'import del
+# profilo); qui si esegue e si scrive una riga di log se ha fatto qualcosa. Un guasto non ferma il giro.
+# Vale anche al contrario: il piano scritto da un altro canale (chat dell'Assistente, comando, app) chiude la card
+# ancora aperta ("closed"), cosi' in Agents non resta «1 domanda aperta» per una cosa gia' detta (TEST 15).
+maybe_plan_question() {
+  [ -f "$FIRST_RUN_TOOL" ] || return 0
+  local out
+  out="$(JHT_HOME="$JHT_HOME" python3 "$FIRST_RUN_TOOL" plan-question-check 2>/dev/null)" || return 0
+  case "$out" in
+    *'"action": "asked"'*|*'"action": "declared"'*|*'"action": "closed"'*)
+      plan_question_failures=0
+      log "plan question: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-200)" ;;
+    *'"action": "stopped"'*)
+      # tre card senza che l'utente nomini un piano: la rete tace da qui in poi, e lo dice UNA volta
+      if [ "$plan_question_stopped_logged" -eq 0 ]; then
+        plan_question_stopped_logged=1
+        log "plan question STOPPED: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-240) — the user will not be asked again by the system"
+      fi ;;
+    *'"action": "failed"'*)
+      # un guasto vero (il DB, lo strumento): visibile, ma una riga ogni ~10 minuti e non una per tick
+      if [ $((plan_question_failures % 20)) -eq 0 ]; then
+        log "plan question NOT posted: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-240)"
+      fi
+      plan_question_failures=$((plan_question_failures + 1)) ;;
+  esac
+  return 0
+}
+plan_question_failures=0
+plan_question_stopped_logged=0
+# --- fine rete della domanda sul piano
+
 maybe_respawn_workers() {
   # Rete deterministica sui worker numerati: fino al 2026-07-29 la lista
   # AGENTS copriva solo i core, quindi Scout/Analisti/Scorer/Scrittori —
@@ -1146,6 +1181,8 @@ while true; do
     maybe_respawn_workers
     # Posta degli agenti: scadenze, avvisi e solleciti (non fa niente senza `mail_receivers`).
     maybe_mail_tick
+    # Il piano dell'abbonamento: se nessuno l'ha chiesto con la card, la posta il sistema.
+    maybe_plan_question
     # Bridge/daemon detached (sentinel/pacing/heartbeat-bridge/window-ratio/
     # codex-auth-healer + tg-bridge): respawn se morti, con anti-flap. Sono
     # fuori dal respawn-on-crash di pid1 (setsid), questo è il loro recovery.

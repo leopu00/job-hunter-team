@@ -91,7 +91,7 @@ describe("DirectChatScreen", () => {
     [1000, 480, "1.4"],
     [480, 420, "1.15"],
   ])(
-    "confines the chat at %sx%s with zoom %s and only scrolls the transcript",
+    "confines the chat at %sx%s with zoom %s and only scrolls the transcript and the list of agents",
     async (width, height, zoom) => {
       viewport(Number(width), Number(height), String(zoom));
       const { mock } = client();
@@ -104,7 +104,8 @@ describe("DirectChatScreen", () => {
       const composerRow = screen.getByTestId("direct-chat-composer-row");
       const input = screen.getByRole("textbox", { name: "Scrivi a Capitano" });
       const conversation = screen.getByRole("region", { name: "Conversazione con Capitano" });
-      expect(shell).toHaveStyle({ height: "calc(100svh / var(--zoom, 1) - 3.5rem)" });
+      // the whole of the space the Shell gives it (the window under the navbar and its bars), not a height worked out from the window
+      expect(shell).toHaveStyle({ height: "100%" });
       expect(shell.className).toMatch(/min-h-0/);
       expect(shell.className).toMatch(/overflow-hidden/);
       expect(conversation.className).toMatch(/min-h-0/);
@@ -112,7 +113,11 @@ describe("DirectChatScreen", () => {
       expect(transcript.className).toMatch(/flex-1/);
       expect(transcript.className).toMatch(/min-h-0/);
       expect(transcript.className).toMatch(/overflow-y-auto/);
-      expect(shell.querySelectorAll(".overflow-y-auto")).toHaveLength(1);
+      // two things scroll inside it: the transcript, and the list of agents when the window is too short for all of them
+      const agents = screen.getByRole("navigation", { name: "Chat agenti" });
+      expect(agents.className).toMatch(/overflow-y-auto/);
+      expect(agents.className).toMatch(/min-h-0/);
+      expect([...shell.querySelectorAll(".overflow-y-auto")]).toEqual([agents, transcript]);
       expect(composer.className).toMatch(/shrink-0/);
       expect(composer.className).not.toMatch(/absolute|fixed|sticky/);
       expect(composerRow.className).toMatch(/flex-wrap/);
@@ -613,6 +618,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
   it.each([
     ["pending", "direct-chat-not-sent", "Incollato ma non inviato"],
     ["unconfirmed", "direct-chat-taken-unknown", "Non so se è stato preso"],
+    ["late", "direct-chat-sent-late", "Inviato in ritardo"],
     ["expired", "direct-chat-queue-expired", "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo."],
   ] as const)("a queued turn that ends «%s» says it as the direct send does, never «Inviato»", async (how, testId, words) => {
     viewport(1280, 800);
@@ -639,6 +645,38 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
       { timeout: 4_000 },
     );
     expect(within(screen.getByText("Finale diverso").closest("article")!).queryByTestId("direct-chat-sent")).toBeNull();
+  });
+
+  it("a turn the page gave up on as expired becomes «Inviato in ritardo» when the team says its Enter came late", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    let phase: "queued" | "expired" | "late" = "queued";
+    mock.send = vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
+      clientMessageId, accepted: true, messageId: "remote-queued-5", at: 3, state: "queued", queue: "terminal",
+    }));
+    mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+      messages: [{ id: "a1", role: "agent", text: "Messaggio dalla VPS", at: 1 }],
+      cursor: "opaque-cursor",
+      queued: phase === "queued" ? ["remote-queued-5"] : [],
+      settled: phase === "queued" ? [] : [{ id: "remote-queued-5", how: phase === "expired" ? "expired" : "late" }],
+    }));
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Finale in ritardo{Enter}");
+    const mine = (await screen.findByText("Finale in ritardo")).closest("article")!;
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toBeInTheDocument());
+    phase = "expired";
+    await waitFor(
+      () => expect(within(screen.getByText("Finale in ritardo").closest("article")!).getByTestId("direct-chat-queue-expired")).toBeInTheDocument(),
+      { timeout: 4_000 },
+    );
+    phase = "late";
+    await waitFor(
+      () => expect(within(screen.getByText("Finale in ritardo").closest("article")!).getByTestId("direct-chat-sent-late")).toHaveTextContent("Inviato in ritardo"),
+      { timeout: 4_000 },
+    );
+    expect(within(screen.getByText("Finale in ritardo").closest("article")!).queryByTestId("direct-chat-queue-expired")).toBeNull();
   });
 
   it("a queued mailbox turn nobody watches stays «In coda» whatever the page says of the queue", async () => {
@@ -847,5 +885,49 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     expect(newLineAt("abcd", 2, 2)).toEqual({ value: "ab\ncd", cursor: 3 });
     expect(newLineAt("abcd", 1, 3)).toEqual({ value: "a\nd", cursor: 2 });
     expect(newLineAt("", 0, 0)).toEqual({ value: "\n", cursor: 1 });
+  });
+});
+
+describe("the Messages page opened with the connection closed", () => {
+  // Like the native side: nothing open reads «disconnected»; after an opening that worked it reads «ready».
+  function closedChat(opening: () => Promise<DirectChatStatus>) {
+    let current: DirectChatStatus = { state: "disconnected" };
+    const mock: DirectChatClient = {
+      subscribe: vi.fn(async () => current),
+      status: vi.fn(async () => current),
+      reconnect: vi.fn(async () => {
+        current = await opening();
+        return current;
+      }),
+      read: vi.fn(async (): Promise<DirectChatPage> => ({ messages: [{ id: "a1", role: "agent", text: "Messaggio dal team", at: 1 }] })),
+      send: vi.fn(),
+      close: vi.fn(),
+    };
+    return mock;
+  }
+
+  it("opens it by itself, with no Retry to press (the profile imported from the command line leaves nothing open)", async () => {
+    viewport(1000, 500);
+    const mock = closedChat(async () => ({ state: "ready" }));
+    render(<DirectChatScreen client={mock} />);
+    expect(await screen.findByText("Messaggio dal team")).toBeTruthy();
+    expect(mock.reconnect).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("direct-chat-status")).toHaveTextContent("Team collegato");
+    expect(within(screen.getByTestId("direct-chat-status")).queryByRole("button", { name: "Riprova" })).toBeNull();
+  });
+
+  it("says why it could not open, with Retry, when there is no host saved, and does not ask again", async () => {
+    viewport(1000, 500);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const mock = closedChat(async () => { throw { code: "host_not_configured" }; });
+      render(<DirectChatScreen client={mock} />);
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(mock.reconnect).toHaveBeenCalledTimes(1);
+      expect(within(bar).getByRole("button", { name: "Riprova" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -166,7 +166,11 @@ export function mapYamlToProfile(raw: any): CandidateProfile {
   return {
     id: "local",
     user_id: "local",
-    name: filled(candidate.name) ?? filled(personal.name) ?? filled(raw.name) ?? null,
+    name:
+      filled(candidate.name) ??
+      filled(personal.name) ??
+      filled(raw.name) ??
+      null,
     email:
       filled(contacts.email) ??
       filled(personal.email) ??
@@ -190,7 +194,8 @@ export function mapYamlToProfile(raw: any): CandidateProfile {
     salary_target,
     positioning: {
       seniority_target:
-        filled(raw.seniority_target) ?? filled(raw.positioning?.seniority_target),
+        filled(raw.seniority_target) ??
+        filled(raw.positioning?.seniority_target),
       strengths: candidate.strengths ?? raw.domain_expertise,
       experience: candidate.experience ?? raw.experience,
       education: candidate.education ?? raw.education,

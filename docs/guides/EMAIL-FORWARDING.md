@@ -48,7 +48,7 @@ email-sourced ones compare.
 
 ```
 1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
+2. Share it with the team (desktop app)    →  Mail page: address + app password
 3. Auto-forward your job alerts into it    →  from LinkedIn + any platform
 ```
 
@@ -69,15 +69,20 @@ there is treated as a potential lead.
 
 ## 2️⃣ Share the inbox with the team (desktop app)
 
-In the **JHT desktop app**, open **Settings → Team email** and enter:
+In the **JHT desktop app**, open **Mail** in the top menu and fill in the
+**Save a new app password** form:
 
 | Field | What to put |
 |---|---|
-| **Email address** | the dedicated inbox, e.g. `yourname.jht@gmail.com` |
-| **App password** | an **app-specific password**, not your login password |
+| **Mailbox address** | the dedicated inbox, e.g. `yourname.jht@gmail.com` |
+| **Is it a mailbox dedicated to forwarded job alerts?** | choose **Yes: the team reads the whole mailbox**. With *No* the team reads only the allowed senders. |
+| **App password (created by your mail provider)** | an **app-specific password**, not your login password |
 
-The desktop app saves these **locally** (in the team's `credentials/` folder on
-the machine that runs the team) — they are **never** sent to the cloud.
+The app passes the password to the team's protected service, on the machine that
+runs the team: the agents cannot read it.
+
+If the app shows the team read only, the Mail entry is not in the menu: link the
+team with write access first (**Connect with write access**).
 
 > 🔑 **App password (Gmail):** enable 2-Step Verification, then create an
 > *App password* (Google Account → Security → App passwords) and paste that. It's
@@ -85,8 +90,9 @@ the machine that runs the team) — they are **never** sent to the cloud.
 > real password. Other providers (Outlook, Fastmail, …) have the same concept —
 > look for "app password" or "IMAP access token".
 
-The **"How to set up forwarding"** button in that window brings you back to this
-guide.
+Then press **Save the password**. The app answers *Password saved. The team uses
+the new one right away.* and the **Mail** page shows the status **configured**.
+The **Mail servers** section is only for a provider the app does not recognise.
 
 ---
 
@@ -160,7 +166,7 @@ If nothing shows up:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| No `*-email` positions appear | credentials not saved / wrong | re-enter email + **app password** in the desktop app |
+| No `*-email` positions appear | credentials not saved / wrong | save the address and the **app password** again in the **Mail** page of the desktop app |
 | "Login failed" in the team logs | using login password, not app password | create an **app-specific password** and use that |
 | Alerts arrive but aren't forwarded | mailbox rule not matching | check the sender address in your forwarding filter |
 | Inbox empty | alerts not enabled at the source | turn on **email notifications** for your LinkedIn/board alerts |
@@ -169,8 +175,8 @@ If nothing shows up:
 
 ## 🔒 Privacy & security
 
-- The credentials are stored **locally**, with the team — **never** uploaded to
-  the cloud.
+- The password stays in the team's **protected service**, on the machine that
+  runs the team: the agents cannot read it.
 - Use a **dedicated inbox** and an **app-specific password** so the team never
   holds your personal mail or your real login.
 - Revoke any time: delete the app password (the team simply stops reading) or
@@ -186,7 +192,7 @@ steps where a picture genuinely saves the reader a wrong turn.
 
 | # | Expected screenshot | Target path |
 |---|---|---|
-| 1 | The **Team email** section of the native office (address + app-password + the "how to forward" hint) | `docs/guides/assets/email-01-app-form.png` |
+| 1 | The **Mail** page of the desktop app (mailbox address, dedicated-mailbox question, app password, **Save the password** button) | `docs/guides/assets/email-01-app-form.png` |
 | 2 | Gmail **forwarding filter** sending job alerts to the team inbox | `docs/guides/assets/email-02-gmail-filter.png` |
 
 The other three (Gmail app-password screen, LinkedIn job-alert toggle, dashboard
@@ -195,8 +201,8 @@ changes under us and is already documented on their side, the third is visible i
 any dashboard screenshot.
 
 When you add the images, replace the `> 📸 Missing screenshots` callout at the
-top with markdown embeds: `![Team email](assets/email-01-app-form.png)`.
-Note the first shot is now the **Godot office**, not the retired Electron wizard.
+top with markdown embeds: `![Mail page](assets/email-01-app-form.png)`.
+Note the first shot is the **Mail** page of the desktop app, not the retired Electron wizard.
 
 ---
 

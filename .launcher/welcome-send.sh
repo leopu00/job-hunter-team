@@ -55,19 +55,10 @@ send_one() {
 # Stringhe da shared/locales/<locale>.json. Se il catalogo non c'è
 # (legacy build without i18n.sh), English fallback.
 if declare -F t >/dev/null 2>&1; then
-  ASSISTENTE_MSG="$(t welcome.assistente)"
   CAPITANO_MSG="$(t welcome.capitano)"
   MENTOR_MSG="$(t welcome.mentor)"
 else
   log "WARN: shared/i18n.sh unavailable, using hardcoded English welcome messages"
-  ASSISTENTE_MSG="Hi! 👋
-
-I'm the Job Hunter Team Assistant — your point of contact with the AI team that's about to start looking for jobs for you.
-
-To get going I need to know you. Send me here on Telegram your CV (PDF, DOC, even a photo of the paper version works), or just tell me in a couple of lines what you're looking for — role, sector, city. From that I build the profile and the rest of the team gets to work for you.
-
-A draft or rough notes are perfectly fine, no need to have anything polished. 📄 I start from what you have."
-
   CAPITANO_MSG="I'm the Captain. 👨‍✈️
 
 I coordinate the team that will work on your search: someone hunts positions, someone analyzes them, someone calculates the match against your profile, someone writes the CV tailored to each one, someone does the final review before applying.
@@ -83,7 +74,10 @@ fi
 
 log "welcome-send start"
 
-send_one assistente welcomed.flag           "$ASSISTENTE_MSG" || true
+# The Assistente is welcomed in the chat of the app first, Telegram in addition:
+# the same command the agent runs, the only one that writes welcomed.flag.
+log "assistente: welcome in the app chat (+ Telegram when configured)"
+python3 /app/shared/skills/assistant_welcome.py deliver 2>&1 | tee -a "$LOG" || true
 send_one capitano   capitano-welcomed.flag  "$CAPITANO_MSG"   || true
 send_one mentor     mentor-welcomed.flag    "$MENTOR_MSG"     || true
 

@@ -8,9 +8,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 DISTRIBUTION = ROOT / ".github" / "workflows" / "game.yml"
-EXPECTED_OS = {"windows-2022", "macos-14", "ubuntu-22.04"}
+EXPECTED_OS = {"windows-2022", "macos-15", "ubuntu-22.04"}
 # 0.4.0: Windows is out of the release (the distribution gate still builds it)
-RELEASE_OS = {"macos-14", "ubuntu-22.04"}
+RELEASE_OS = {"macos-15", "ubuntu-22.04"}
 
 
 def _load(path: Path) -> dict:

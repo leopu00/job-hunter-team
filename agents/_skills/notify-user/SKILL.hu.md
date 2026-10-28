@@ -43,6 +43,7 @@ mondja (az „ok” ezerszer érkezik), tehát lejjebb senki nem takarítja el.
 - ❌ Válaszok `[CHAT]` üzenetre a webes dashboardon — használd a `jht-send`-et (már a csevegés szálban van).
 - ❌ Válaszok `[TG]` bejövő üzenetre — használd közvetlenül a `jht-telegram-send`-et: már tudod, hogy a Telegram él, mert a felhasználó épp onnan írt neked. Megtakarít egy DB körutat.
 - ❌ Nehéz csatolmányok (>20 MB). Használd a felhasználó CV mappáját + rövid értesítés törzs.
+- ❌ Az előfizetési csomag. CSAK ezzel kérdezd: `python3 /app/shared/skills/first_run.py ask-plan` (egy kártya, amelyre a felhasználó a Messagesben válaszol), bármelyik ügynöktől; az itt szabad szövegként írt csomagkérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár.
 
 ## Használat
 
@@ -66,6 +67,20 @@ jht-notify-user --agent mentor --no-telegram "Apri il tab Patterns per i dettagl
 Kimenet (stdout):
 ```
 <row_id> via=<telegram|web>
+```
+
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
 ```
 
 ## Típusok

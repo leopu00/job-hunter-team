@@ -1,5 +1,5 @@
 import { existingTeamView } from "../../lib/existing-team-readonly";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
 import { inertSupabase } from "./inert-supabase";
 
 /**
@@ -14,5 +14,5 @@ import { inertSupabase } from "./inert-supabase";
  */
 export async function createClient(): Promise<any> {
   // Reading an existing team's VPS: no cloud row is read next to it.
-  return existingTeamView() ? inertSupabase : supabase;
+  return existingTeamView() ? inertSupabase : cloudClient();
 }

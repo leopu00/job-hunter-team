@@ -59,11 +59,13 @@ export type Strings = {
   tblWhatToPut: string;
   rowEmailLabel: React.ReactNode;
   rowEmailValue: React.ReactNode;
+  rowDedicatedLabel: React.ReactNode;
+  rowDedicatedValue: React.ReactNode;
   rowPwLabel: React.ReactNode;
   rowPwValue: React.ReactNode;
   step2Local: React.ReactNode;
   step2Callout: React.ReactNode;
-  step2Button: React.ReactNode;
+  step2Save: React.ReactNode;
 
   step3Title: string;
   step3Body: React.ReactNode;
@@ -236,20 +238,30 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Share the inbox with the team (desktop app)",
     step2Body: (
       <>
-        In the <strong>JHT desktop app</strong>, open{" "}
-        <strong>Settings → Team email</strong> and enter:
+        In the <strong>JHT desktop app</strong>, open <strong>Mail</strong> in
+        the top menu and fill in the <strong>Save a new app password</strong>{" "}
+        form:
       </>
     ),
     tblField: "Field",
     tblWhatToPut: "What to put",
-    rowEmailLabel: <strong>Email address</strong>,
+    rowEmailLabel: <strong>Mailbox address</strong>,
     rowEmailValue: (
       <>
         the dedicated inbox, e.g.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>App password</strong>,
+    rowDedicatedLabel: (
+      <strong>Is it a mailbox dedicated to forwarded job alerts?</strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        choose <strong>Yes: the team reads the whole mailbox</strong>. With{" "}
+        <em>No</em> the team reads only the allowed senders.
+      </>
+    ),
+    rowPwLabel: <strong>App password (created by your mail provider)</strong>,
     rowPwValue: (
       <>
         an <strong>app-specific password</strong>, not your login password
@@ -257,9 +269,10 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        The desktop app saves these <strong>locally</strong> (in the team&apos;s{" "}
-        <code className={CODE_CLS}>credentials/</code> folder on the machine
-        that runs the team) — they are <strong>never</strong> sent to the cloud.
+        The app passes the password to the team&apos;s protected service, on the
+        machine that runs the team: the agents cannot read it. If the app shows
+        the team read only, the Mail entry is not in the menu: link the team
+        with write access first (<strong>Connect with write access</strong>).
       </>
     ),
     step2Callout: (
@@ -272,10 +285,13 @@ export const T: Record<Locale, Strings> = {
         &quot;app password&quot; or &quot;IMAP access token&quot;.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        The <strong>&quot;How to set up forwarding&quot;</strong> button in that
-        window brings you back to this guide.
+        Then press <strong>Save the password</strong>. The app answers{" "}
+        <em>Password saved. The team uses the new one right away.</em> and the{" "}
+        <strong>Mail</strong> page shows the status <strong>configured</strong>.
+        The <strong>Mail servers</strong> section is only for a provider the app
+        does not recognise.
       </>
     ),
     step3Title: "3️⃣ Auto-forward your job alerts",
@@ -412,7 +428,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "credentials not saved / wrong",
     v1f: (
       <>
-        re-enter email + <strong>app password</strong> in the desktop app
+        save the address and the <strong>app password</strong> again in the{" "}
+        <strong>Mail</strong> page of the desktop app
       </>
     ),
     v2s: <>&quot;Login failed&quot; in the team logs</>,
@@ -436,8 +453,8 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Privacy & security",
     privacy1: (
       <>
-        The credentials are stored <strong>locally</strong>, with the team —{" "}
-        <strong>never</strong> uploaded to the cloud.
+        The password stays in the team&apos;s <strong>protected service</strong>
+        , on the machine that runs the team: the agents cannot read it.
       </>
     ),
     privacy2: (
@@ -461,8 +478,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Target path",
     g1: (
       <>
-        Desktop <strong>Settings → Team email</strong> form (email +
-        app-password + &quot;How to set up forwarding&quot; button)
+        The <strong>Mail</strong> page of the desktop app (mailbox address,
+        dedicated-mailbox question, app password, <em>Save the password</em>{" "}
+        button)
       </>
     ),
     g2: (
@@ -605,20 +623,32 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Condividi la casella con il team (app desktop)",
     step2Body: (
       <>
-        Nell&apos;<strong>app desktop JHT</strong>, apri{" "}
-        <strong>Impostazioni → Email del team</strong> e inserisci:
+        Nell&apos;<strong>app desktop JHT</strong>, apri <strong>Posta</strong>{" "}
+        nel menu in alto e compila il modulo{" "}
+        <strong>Salva una nuova password per app</strong>:
       </>
     ),
     tblField: "Campo",
     tblWhatToPut: "Cosa inserire",
-    rowEmailLabel: <strong>Indirizzo email</strong>,
+    rowEmailLabel: <strong>Indirizzo della casella</strong>,
     rowEmailValue: (
       <>
         la casella dedicata, es.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>Password per app</strong>,
+    rowDedicatedLabel: (
+      <strong>È una casella dedicata agli avvisi di lavoro inoltrati?</strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        scegli <strong>Sì: il team legge tutta la casella</strong>. Con{" "}
+        <em>No</em> il team legge solo i mittenti ammessi.
+      </>
+    ),
+    rowPwLabel: (
+      <strong>Password per app (creata dal tuo provider di posta)</strong>
+    ),
     rowPwValue: (
       <>
         una <strong>password specifica per l&apos;app</strong>, non la tua
@@ -627,10 +657,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        L&apos;app desktop salva questi dati <strong>in locale</strong> (nella
-        cartella <code className={CODE_CLS}>credentials/</code> del team, sulla
-        macchina che esegue il team) — <strong>non</strong> vengono mai inviati
-        al cloud.
+        L&apos;app passa la password al servizio protetto del team, sulla
+        macchina che esegue il team: gli agenti non possono leggerla. Se
+        l&apos;app mostra il team in sola lettura, la voce Posta non c&apos;è
+        nel menu: serve prima il collegamento in scrittura (
+        <strong>Collega in scrittura</strong>).
       </>
     ),
     step2Callout: (
@@ -644,10 +675,13 @@ export const T: Record<Locale, Strings> = {
         IMAP&quot;.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        Il pulsante <strong>&quot;Come configurare l&apos;inoltro&quot;</strong>{" "}
-        in quella finestra ti riporta a questa guida.
+        Poi premi <strong>Salva la password</strong>. L&apos;app risponde{" "}
+        <em>Password salvata. Il team usa la nuova da subito.</em> e la pagina{" "}
+        <strong>Posta</strong> mostra lo stato <strong>configurata</strong>. La
+        sezione <strong>Server di posta</strong> serve solo se l&apos;app non
+        riconosce il tuo provider.
       </>
     ),
     step3Title: "3️⃣ Inoltra automaticamente i tuoi job alert",
@@ -794,8 +828,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "credenziali non salvate / errate",
     v1f: (
       <>
-        reinserisci email + <strong>password per app</strong> nell&apos;app
-        desktop
+        salva di nuovo l&apos;indirizzo e la <strong>password per app</strong>{" "}
+        nella pagina <strong>Posta</strong> dell&apos;app desktop
       </>
     ),
     v2s: <>&quot;Login failed&quot; nei log del team</>,
@@ -819,8 +853,8 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Privacy e sicurezza",
     privacy1: (
       <>
-        Le credenziali sono memorizzate <strong>in locale</strong>, con il team
-        — <strong>mai</strong> caricate sul cloud.
+        La password resta nel <strong>servizio protetto</strong> del team, sulla
+        macchina che esegue il team: gli agenti non possono leggerla.
       </>
     ),
     privacy2: (
@@ -844,8 +878,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Percorso di destinazione",
     g1: (
       <>
-        Modulo desktop <strong>Impostazioni → Email del team</strong> (email +
-        password per app + pulsante &quot;Come configurare l&apos;inoltro&quot;)
+        Pagina <strong>Posta</strong> dell&apos;app desktop (indirizzo della
+        casella, domanda sulla casella dedicata, password per app, pulsante{" "}
+        <em>Salva la password</em>)
       </>
     ),
     g2: (
@@ -992,19 +1027,33 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         En la <strong>app de escritorio JHT</strong>, abre{" "}
-        <strong>Ajustes → Correo del equipo</strong> e introduce:
+        <strong>Correo</strong> en el menú superior y rellena el formulario{" "}
+        <strong>Guardar una nueva contraseña de aplicación</strong>:
       </>
     ),
     tblField: "Campo",
     tblWhatToPut: "Qué poner",
-    rowEmailLabel: <strong>Dirección de correo</strong>,
+    rowEmailLabel: <strong>Dirección del buzón</strong>,
     rowEmailValue: (
       <>
         el buzón dedicado, p. ej.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>Contraseña de aplicación</strong>,
+    rowDedicatedLabel: (
+      <strong>¿Es un buzón dedicado a los avisos de empleo reenviados?</strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        elige <strong>Sí: el equipo lee todo el buzón</strong>. Con <em>No</em>{" "}
+        el equipo lee solo los remitentes admitidos.
+      </>
+    ),
+    rowPwLabel: (
+      <strong>
+        Contraseña de aplicación (creada por tu proveedor de correo)
+      </strong>
+    ),
     rowPwValue: (
       <>
         una <strong>contraseña específica de aplicación</strong>, no tu
@@ -1013,10 +1062,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        La app de escritorio guarda estos datos <strong>localmente</strong> (en
-        la carpeta <code className={CODE_CLS}>credentials/</code> del equipo, en
-        la máquina que ejecuta el equipo) — <strong>nunca</strong> se envían a
-        la nube.
+        La app pasa la contraseña al servicio protegido del equipo, en la
+        máquina que ejecuta el equipo: los agentes no pueden leerla. Si la app
+        muestra el equipo en solo lectura, la entrada Correo no está en el menú:
+        antes hace falta la conexión con escritura (
+        <strong>Conectar con escritura</strong>).
       </>
     ),
     step2Callout: (
@@ -1031,10 +1081,14 @@ export const T: Record<Locale, Strings> = {
         &quot;token de acceso IMAP&quot;.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        El botón <strong>&quot;Cómo configurar el reenvío&quot;</strong> en esa
-        ventana te trae de vuelta a esta guía.
+        Después pulsa <strong>Guardar la contraseña</strong>. La app responde{" "}
+        <em>Contraseña guardada. El equipo usa la nueva desde ya.</em> y la
+        página <strong>Correo</strong> muestra el estado{" "}
+        <strong>configurado</strong>. La sección{" "}
+        <strong>Servidores de correo</strong> solo sirve si la app no reconoce a
+        tu proveedor.
       </>
     ),
     step3Title: "3️⃣ Reenvía automáticamente tus alertas de empleo",
@@ -1180,8 +1234,9 @@ export const T: Record<Locale, Strings> = {
     v1c: "credenciales no guardadas / incorrectas",
     v1f: (
       <>
-        vuelve a introducir el correo + la{" "}
-        <strong>contraseña de aplicación</strong> en la app de escritorio
+        vuelve a guardar la dirección y la{" "}
+        <strong>contraseña de aplicación</strong> en la página{" "}
+        <strong>Correo</strong> de la app de escritorio
       </>
     ),
     v2s: <>&quot;Login failed&quot; en los logs del equipo</>,
@@ -1205,8 +1260,9 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Privacidad y seguridad",
     privacy1: (
       <>
-        Las credenciales se almacenan <strong>localmente</strong>, con el equipo
-        — <strong>nunca</strong> se suben a la nube.
+        La contraseña se queda en el <strong>servicio protegido</strong> del
+        equipo, en la máquina que ejecuta el equipo: los agentes no pueden
+        leerla.
       </>
     ),
     privacy2: (
@@ -1230,9 +1286,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Ruta de destino",
     g1: (
       <>
-        Formulario de escritorio <strong>Ajustes → Correo del equipo</strong>{" "}
-        (correo + contraseña de aplicación + botón &quot;Cómo configurar el
-        reenvío&quot;)
+        Página <strong>Correo</strong> de la app de escritorio (dirección del
+        buzón, pregunta sobre el buzón dedicado, contraseña de aplicación, botón{" "}
+        <em>Guardar la contraseña</em>)
       </>
     ),
     g2: (
@@ -1386,19 +1442,36 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         Dans l&apos;<strong>app de bureau JHT</strong>, ouvrez{" "}
-        <strong>Paramètres → E-mail de l&apos;équipe</strong> et saisissez :
+        <strong>Courrier</strong> dans le menu du haut et remplissez le
+        formulaire{" "}
+        <strong>Enregistrer un nouveau mot de passe d’application</strong> :
       </>
     ),
     tblField: "Champ",
     tblWhatToPut: "Quoi mettre",
-    rowEmailLabel: <strong>Adresse e-mail</strong>,
+    rowEmailLabel: <strong>Adresse de la boîte</strong>,
     rowEmailValue: (
       <>
         la boîte dédiée, p. ex.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>Mot de passe d&apos;application</strong>,
+    rowDedicatedLabel: (
+      <strong>
+        Est-ce une boîte réservée aux alertes d’emploi transférées ?
+      </strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        choisissez <strong>Oui : l’équipe lit toute la boîte</strong>. Avec{" "}
+        <em>Non</em>, l’équipe ne lit que les expéditeurs autorisés.
+      </>
+    ),
+    rowPwLabel: (
+      <strong>
+        Mot de passe d’application (créé par ton fournisseur de messagerie)
+      </strong>
+    ),
     rowPwValue: (
       <>
         un <strong>mot de passe spécifique à l&apos;application</strong>, pas
@@ -1407,10 +1480,12 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        L&apos;app de bureau enregistre ces données <strong>localement</strong>{" "}
-        (dans le dossier <code className={CODE_CLS}>credentials/</code> de
-        l&apos;équipe, sur la machine qui exécute l&apos;équipe) — elles ne sont{" "}
-        <strong>jamais</strong> envoyées dans le cloud.
+        L&apos;app transmet le mot de passe au service protégé de l&apos;équipe,
+        sur la machine qui exécute l&apos;équipe : les agents ne peuvent pas le
+        lire. Si l&apos;app affiche l&apos;équipe en lecture seule,
+        l&apos;entrée Courrier n&apos;est pas dans le menu : il faut
+        d&apos;abord la connexion en écriture (
+        <strong>Connecter en écriture</strong>).
       </>
     ),
     step2Callout: (
@@ -1425,10 +1500,17 @@ export const T: Record<Locale, Strings> = {
         d&apos;application&quot; ou &quot;jeton d&apos;accès IMAP&quot;.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        Le bouton <strong>&quot;Comment configurer le transfert&quot;</strong>{" "}
-        dans cette fenêtre vous ramène à ce guide.
+        Appuyez ensuite sur <strong>Enregistrer le mot de passe</strong>.
+        L&apos;app répond{" "}
+        <em>
+          Mot de passe enregistré. L’équipe utilise le nouveau dès maintenant.
+        </em>{" "}
+        et la page <strong>Courrier</strong> affiche l&apos;état{" "}
+        <strong>configurée</strong>. La section{" "}
+        <strong>Serveurs de messagerie</strong> ne sert que si l&apos;app ne
+        reconnaît pas votre fournisseur.
       </>
     ),
     step3Title: "3️⃣ Transférez automatiquement vos alertes emploi",
@@ -1581,9 +1663,9 @@ export const T: Record<Locale, Strings> = {
     v1c: "identifiants non enregistrés / erronés",
     v1f: (
       <>
-        ressaisissez l&apos;e-mail + le{" "}
-        <strong>mot de passe d&apos;application</strong> dans l&apos;app de
-        bureau
+        enregistrez de nouveau l&apos;adresse et le{" "}
+        <strong>mot de passe d&apos;application</strong> dans la page{" "}
+        <strong>Courrier</strong> de l&apos;app de bureau
       </>
     ),
     v2s: <>&quot;Login failed&quot; dans les logs de l&apos;équipe</>,
@@ -1608,8 +1690,9 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Confidentialité et sécurité",
     privacy1: (
       <>
-        Les identifiants sont stockés <strong>localement</strong>, avec
-        l&apos;équipe — <strong>jamais</strong> téléversés dans le cloud.
+        Le mot de passe reste dans le <strong>service protégé</strong> de
+        l&apos;équipe, sur la machine qui exécute l&apos;équipe : les agents ne
+        peuvent pas le lire.
       </>
     ),
     privacy2: (
@@ -1635,10 +1718,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Chemin cible",
     g1: (
       <>
-        Formulaire de bureau{" "}
-        <strong>Paramètres → E-mail de l&apos;équipe</strong> (e-mail + mot de
-        passe d&apos;application + bouton &quot;Comment configurer le
-        transfert&quot;)
+        Page <strong>Courrier</strong> de l&apos;app de bureau (adresse de la
+        boîte, question sur la boîte dédiée, mot de passe d&apos;application,
+        bouton <em>Enregistrer le mot de passe</em>)
       </>
     ),
     g2: (
@@ -1785,20 +1867,34 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Teile das Postfach mit dem Team (Desktop-App)",
     step2Body: (
       <>
-        Öffne in der <strong>JHT-Desktop-App</strong>{" "}
-        <strong>Einstellungen → Team-E-Mail</strong> und gib ein:
+        Öffne in der <strong>JHT-Desktop-App</strong> im oberen Menü{" "}
+        <strong>E-Mail</strong> und fülle das Formular{" "}
+        <strong>Ein neues App-Passwort speichern</strong> aus:
       </>
     ),
     tblField: "Feld",
     tblWhatToPut: "Was eintragen",
-    rowEmailLabel: <strong>E-Mail-Adresse</strong>,
+    rowEmailLabel: <strong>Adresse des Postfachs</strong>,
     rowEmailValue: (
       <>
         das eigene Postfach, z. B.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>App-Passwort</strong>,
+    rowDedicatedLabel: (
+      <strong>
+        Ist es ein Postfach nur für weitergeleitete Jobbenachrichtigungen?
+      </strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        wähle <strong>Ja: Das Team liest das ganze Postfach</strong>. Bei{" "}
+        <em>Nein</em> liest das Team nur die zugelassenen Absender.
+      </>
+    ),
+    rowPwLabel: (
+      <strong>App-Passwort (von deinem E-Mail-Anbieter erstellt)</strong>
+    ),
     rowPwValue: (
       <>
         ein <strong>app-spezifisches Passwort</strong>, nicht dein
@@ -1807,10 +1903,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        Die Desktop-App speichert diese <strong>lokal</strong> (im Ordner{" "}
-        <code className={CODE_CLS}>credentials/</code> des Teams, auf der
-        Maschine, die das Team ausführt) — sie werden <strong>nie</strong> in
-        die Cloud gesendet.
+        Die App übergibt das Passwort an den geschützten Dienst des Teams, auf
+        der Maschine, die das Team ausführt: Die Agenten können es nicht lesen.
+        Zeigt die App das Team nur lesend, fehlt der Eintrag E-Mail im Menü:
+        Zuerst ist die Verbindung mit Schreibzugriff nötig (
+        <strong>Mit Schreibzugriff verbinden</strong>).
       </>
     ),
     step2Callout: (
@@ -1824,11 +1921,13 @@ export const T: Record<Locale, Strings> = {
         &quot;IMAP-Zugriffstoken&quot;.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        Die Schaltfläche{" "}
-        <strong>&quot;So richtest du die Weiterleitung ein&quot;</strong> in
-        diesem Fenster bringt dich zurück zu dieser Anleitung.
+        Drücke dann auf <strong>Passwort speichern</strong>. Die App antwortet{" "}
+        <em>Passwort gespeichert. Das Team verwendet ab sofort das neue.</em>{" "}
+        und die Seite <strong>E-Mail</strong> zeigt den Status{" "}
+        <strong>eingerichtet</strong>. Der Bereich <strong>Mailserver</strong>{" "}
+        ist nur nötig, wenn die App deinen Anbieter nicht erkennt.
       </>
     ),
     step3Title: "3️⃣ Leite deine Job-Benachrichtigungen automatisch weiter",
@@ -1978,8 +2077,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "Zugangsdaten nicht gespeichert / falsch",
     v1f: (
       <>
-        E-Mail + <strong>App-Passwort</strong> in der Desktop-App erneut
-        eingeben
+        speichere die Adresse und das <strong>App-Passwort</strong> auf der
+        Seite <strong>E-Mail</strong> der Desktop-App erneut
       </>
     ),
     v2s: <>&quot;Login failed&quot; in den Team-Logs</>,
@@ -2004,8 +2103,9 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Datenschutz & Sicherheit",
     privacy1: (
       <>
-        Die Zugangsdaten werden <strong>lokal</strong> gespeichert, beim Team —{" "}
-        <strong>nie</strong> in die Cloud hochgeladen.
+        Das Passwort bleibt im <strong>geschützten Dienst</strong> des Teams,
+        auf der Maschine, die das Team ausführt: Die Agenten können es nicht
+        lesen.
       </>
     ),
     privacy2: (
@@ -2029,9 +2129,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Zielpfad",
     g1: (
       <>
-        Desktop-Formular <strong>Einstellungen → Team-E-Mail</strong> (E-Mail +
-        App-Passwort + Schaltfläche &quot;So richtest du die Weiterleitung
-        ein&quot;)
+        Seite <strong>E-Mail</strong> der Desktop-App (Adresse des Postfachs,
+        Frage zum dedizierten Postfach, App-Passwort, Schaltfläche{" "}
+        <em>Passwort speichern</em>)
       </>
     ),
     g2: (
@@ -2175,20 +2275,35 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Oszd meg a postafiókot a csapattal (asztali alkalmazás)",
     step2Body: (
       <>
-        A <strong>JHT asztali alkalmazásban</strong> nyisd meg a{" "}
-        <strong>Beállítások → Csapat e-mail</strong> menüt, és add meg:
+        A <strong>JHT asztali alkalmazásban</strong> nyisd meg a felső menüben a{" "}
+        <strong>Levelezés</strong> oldalt, és töltsd ki az{" "}
+        <strong>Új alkalmazásjelszó mentése</strong> űrlapot:
       </>
     ),
     tblField: "Mező",
     tblWhatToPut: "Mit írj be",
-    rowEmailLabel: <strong>E-mail-cím</strong>,
+    rowEmailLabel: <strong>A postafiók címe</strong>,
     rowEmailValue: (
       <>
         a dedikált postafiók, pl.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>Alkalmazásjelszó</strong>,
+    rowDedicatedLabel: (
+      <strong>
+        Ez egy csak a továbbított állásértesítéseknek szánt postafiók?
+      </strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        válaszd az <strong>Igen: a csapat az egész postafiókot olvassa</strong>{" "}
+        lehetőséget. A <em>Nem</em> esetén a csapat csak az engedélyezett
+        feladókat olvassa.
+      </>
+    ),
+    rowPwLabel: (
+      <strong>Alkalmazásjelszó (a levelezési szolgáltatód hozza létre)</strong>
+    ),
     rowPwValue: (
       <>
         egy <strong>alkalmazásspecifikus jelszó</strong>, nem a bejelentkezési
@@ -2197,10 +2312,11 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        Az asztali alkalmazás ezeket <strong>helyileg</strong> menti (a csapat{" "}
-        <code className={CODE_CLS}>credentials/</code> mappájában, azon a gépen,
-        amely a csapatot futtatja) — <strong>soha</strong> nem kerülnek fel a
-        felhőbe.
+        Az alkalmazás átadja a jelszót a csapat védett szolgáltatásának, azon a
+        gépen, amely a csapatot futtatja: az ügynökök nem tudják elolvasni. Ha
+        az alkalmazás a csapatot csak olvasható módban mutatja, a Levelezés
+        menüpont nincs a menüben: előbb írási joggal kell csatlakozni (
+        <strong>Csatlakozás írási joggal</strong>).
       </>
     ),
     step2Callout: (
@@ -2215,11 +2331,14 @@ export const T: Record<Locale, Strings> = {
         kifejezést.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        Az ablakban lévő{" "}
-        <strong>&quot;Hogyan állítsd be a továbbítást&quot;</strong> gomb
-        visszahoz erre az útmutatóra.
+        Ezután nyomd meg ezt a gombot: <strong>A jelszó mentése</strong>. Az
+        alkalmazás ezt írja:{" "}
+        <em>A jelszó elmentve. A csapat azonnal az újat használja.</em> A{" "}
+        <strong>Levelezés</strong> oldalon az állapot ekkor{" "}
+        <strong>beállítva</strong>. A <strong>Levelezőszerverek</strong> rész
+        csak akkor kell, ha az alkalmazás nem ismeri fel a szolgáltatódat.
       </>
     ),
     step3Title: "3️⃣ Továbbítsd automatikusan az álláshirdetés-értesítőidet",
@@ -2363,8 +2482,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "a hitelesítő adatok nincsenek mentve / hibásak",
     v1f: (
       <>
-        add meg újra az e-mailt + az <strong>alkalmazásjelszót</strong> az
-        asztali alkalmazásban
+        mentsd el újra a címet és az <strong>alkalmazásjelszót</strong> az
+        asztali alkalmazás <strong>Levelezés</strong> oldalán
       </>
     ),
     v2s: <>&quot;Login failed&quot; a csapat naplóiban</>,
@@ -2389,8 +2508,8 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Adatvédelem és biztonság",
     privacy1: (
       <>
-        A hitelesítő adatok <strong>helyileg</strong> tárolódnak, a csapatnál —{" "}
-        <strong>soha</strong> nem kerülnek fel a felhőbe.
+        A jelszó a csapat <strong>védett szolgáltatásában</strong> marad, azon a
+        gépen, amely a csapatot futtatja: az ügynökök nem tudják elolvasni.
       </>
     ),
     privacy2: (
@@ -2414,8 +2533,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Célútvonal",
     g1: (
       <>
-        Asztali <strong>Beállítások → Csapat e-mail</strong> űrlap (e-mail +
-        alkalmazásjelszó + &quot;Hogyan állítsd be a továbbítást&quot; gomb)
+        Az asztali alkalmazás <strong>Levelezés</strong> oldala (a postafiók
+        címe, kérdés a dedikált postafiókról, alkalmazásjelszó,{" "}
+        <em>A jelszó mentése</em> gomb)
       </>
     ),
     g2: (
@@ -2559,20 +2679,36 @@ export const T: Record<Locale, Strings> = {
       "2️⃣ Compartilhe a caixa de entrada com a equipe (app de desktop)",
     step2Body: (
       <>
-        No <strong>app de desktop JHT</strong>, abra{" "}
-        <strong>Configurações → E-mail da equipe</strong> e insira:
+        No <strong>app de desktop JHT</strong>, abra <strong>Correio</strong> no
+        menu superior e preencha o formulário{" "}
+        <strong>Guardar uma nova palavra-passe de aplicação</strong>:
       </>
     ),
     tblField: "Campo",
     tblWhatToPut: "O que colocar",
-    rowEmailLabel: <strong>Endereço de e-mail</strong>,
+    rowEmailLabel: <strong>Endereço da caixa de correio</strong>,
     rowEmailValue: (
       <>
         a caixa de entrada dedicada, p. ex.{" "}
         <code className={CODE_CLS}>yourname.jht@gmail.com</code>
       </>
     ),
-    rowPwLabel: <strong>Senha de app</strong>,
+    rowDedicatedLabel: (
+      <strong>
+        É uma caixa de correio dedicada aos alertas de emprego reencaminhados?
+      </strong>
+    ),
+    rowDedicatedValue: (
+      <>
+        escolha <strong>Sim: a equipa lê toda a caixa de correio</strong>. Com{" "}
+        <em>Não</em> a equipe lê apenas os remetentes autorizados.
+      </>
+    ),
+    rowPwLabel: (
+      <strong>
+        Palavra-passe de aplicação (criada pelo teu fornecedor de correio)
+      </strong>
+    ),
     rowPwValue: (
       <>
         uma <strong>senha específica de app</strong>, não a sua senha de login
@@ -2580,10 +2716,10 @@ export const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        O app de desktop salva esses dados <strong>localmente</strong> (na pasta{" "}
-        <code className={CODE_CLS}>credentials/</code> da equipe, na máquina que
-        executa a equipe) — eles <strong>nunca</strong> são enviados para a
-        nuvem.
+        O app entrega a senha ao serviço protegido da equipe, na máquina que
+        executa a equipe: os agentes não conseguem lê-la. Se o app mostrar a
+        equipe só em leitura, a entrada Correio não está no menu: é preciso
+        primeiro a ligação com escrita (<strong>Ligar com escrita</strong>).
       </>
     ),
     step2Callout: (
@@ -2597,10 +2733,15 @@ export const T: Record<Locale, Strings> = {
         IMAP&quot;.
       </>
     ),
-    step2Button: (
+    step2Save: (
       <>
-        O botão <strong>&quot;Como configurar o encaminhamento&quot;</strong>{" "}
-        nessa janela traz você de volta a este guia.
+        Depois clique em <strong>Guardar a palavra-passe</strong>. O app
+        responde{" "}
+        <em>Palavra-passe guardada. A equipa usa a nova a partir de agora.</em>{" "}
+        e a página <strong>Correio</strong> mostra o estado{" "}
+        <strong>configurada</strong>. A área{" "}
+        <strong>Servidores de correio</strong> só serve se o app não reconhecer
+        o seu provedor.
       </>
     ),
     step3Title: "3️⃣ Encaminhe automaticamente os seus alertas de emprego",
@@ -2750,8 +2891,8 @@ export const T: Record<Locale, Strings> = {
     v1c: "credenciais não salvas / incorretas",
     v1f: (
       <>
-        insira novamente o e-mail + a <strong>senha de app</strong> no app de
-        desktop
+        salve novamente o endereço e a <strong>senha de app</strong> na página{" "}
+        <strong>Correio</strong> do app de desktop
       </>
     ),
     v2s: <>&quot;Login failed&quot; nos logs da equipe</>,
@@ -2775,8 +2916,8 @@ export const T: Record<Locale, Strings> = {
     privacyTitle: "🔒 Privacidade e segurança",
     privacy1: (
       <>
-        As credenciais são armazenadas <strong>localmente</strong>, com a equipe
-        — <strong>nunca</strong> enviadas para a nuvem.
+        A senha fica no <strong>serviço protegido</strong> da equipe, na máquina
+        que executa a equipe: os agentes não conseguem lê-la.
       </>
     ),
     privacy2: (
@@ -2801,9 +2942,9 @@ export const T: Record<Locale, Strings> = {
     tblPath: "Caminho de destino",
     g1: (
       <>
-        Formulário de desktop <strong>Configurações → E-mail da equipe</strong>{" "}
-        (e-mail + senha de app + botão &quot;Como configurar o
-        encaminhamento&quot;)
+        Página <strong>Correio</strong> do app de desktop (endereço da caixa de
+        correio, pergunta sobre a caixa dedicada, senha de app, botão{" "}
+        <em>Guardar a palavra-passe</em>)
       </>
     ),
     g2: (

@@ -1,5 +1,7 @@
 import type {
   DirectChatAnswerReceipt,
+  DirectChatAttachment,
+  DirectChatAttachState,
   DirectChatEvent,
   DirectChatPage,
   DirectChatReceipt,
@@ -11,6 +13,8 @@ export type {
   MessageKind,
   DirectChatAnswer,
   DirectChatAnswerReceipt,
+  DirectChatAttachment,
+  DirectChatAttachState,
   DirectChatEvent,
   DirectChatMessage,
   DirectChatPage,
@@ -42,5 +46,8 @@ export type DirectChatClient = {
     choices: string[];
     text: string | null;
   }): Promise<DirectChatAnswerReceipt>;
+  /** The paperclip of the Assistant's chat. Absent on an older bridge: no button. */
+  attachState?(): Promise<DirectChatAttachState>;
+  attach?(args: { clientMessageId: string; locale: string }): Promise<DirectChatAttachment>;
   close(): MaybePromise<void>;
 };

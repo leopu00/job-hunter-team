@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Társalgási protokoll, amelyet az Assistente követ a felhasználó bevezető folyamatában — első üzenet, iteratív egy-kérdés-per-kör ütemezés, blokkoló ellenőrzőlista (a küszöb, ami feloldja a dashboardot) vs gazdag ellenőrzőlista (amitől a Writer-ek valóban hasznosak lesznek), szektoragnosztikus kérdésstílus (SOHA ne feltételezd, hogy IT), és a kötelező ellenőrzőpont-szekvencia, amikor a felhasználó fájlokat tölt fel. Szorosan összepárosítva a `profile-yaml`-lal (minden válasz = egy Write+validate) és a `profile-summaries`-szal (narratív MD-k kulcsfontosságú mérföldkövek után). Nyisd meg ezt a skillt egy onboarding munkamenet elején és minden olyan felhasználói körnél, ami új információt hoz.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
@@ -106,19 +106,18 @@ preferences:
 
 **Hangnem:** természetes kérdés, nem bürokratikus űrlap. Pl.: *"Mivel Londont és Zürichet is nézed: van már jogod ott dolgozni, vagy azokhoz szponzorra/vízumra lenne szükség? Így elkerülöm, hogy elérhetetlen pozíciókat javasoljak."* Mindig magyarázd el a **miértet** (= hasznosabb shortlist), ne kérdezd csak úgy, kontextus nélkül.
 
-## Előfizetési csomag — egyszer kérdezd meg, soha ne írd be a felhasználó helyett
+## Előfizetési csomag — csak a kártyával kérdezd, soha ne írd be a felhasználó helyett
 
-A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési csomagja nincs megadva (a Capitano nem találgat felállást: egy rossz tipp az első napon elégeti a felhasználó keretét). Az appban nincs erre képernyő: **te vagy** az a hely, ahol a felhasználó megadja.
+A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési csomagja nincs megadva (a Capitano nem találgat felállást: egy rossz tipp az első napon elégeti a felhasználó keretét). **A csomagot EGYETLEN módon kérdezd, bármelyik ügynök, tehát te is: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Kitesz egy kártyát (a te chatedbe, mert a felhasználó veled beszél) a csomagokkal, az áraikkal és azzal, amelyet a Codex jelez, javasoltként megjelölve. A csomagot soha ne kérdezd szövegben, soha ne a saját `jht-notify-user` hívásoddal (egy így írt kérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár), a csomagokat soha ne sorold fel a saját szavaiddal.
 
-**Mikor:** egyszer, az első két-három válasz után (soha nem az első üzenetedben), és legkésőbb mielőtt azt mondod a felhasználónak, hogy a profil kész.
+**Mikor:** egyszer, közvetlenül azután, hogy a profil el van mentve (a `profile_review.py apply-confirmed` `ok: true`-t adott), soha nem előtte, és soha nem az első üzeneteidben.
 
 1. **Ellenőrizd.** `python3 /app/shared/skills/plan_registry.py get`. Ha csomagot ír ki (kilépési kód 0), meg van adva: ne szólj semmit, haladj tovább. `PLAN_MISSING` (kilépési kód 1) = nincs megadva.
-2. **Mutasd a lehetőségeket.** `python3 /app/shared/skills/plan_registry.py list codex` (a Codex az a szolgáltató, amelyet az app csatlakoztat). Add meg a felhasználónak a csomagok nevét és árát rövid, egyszerű listában, az ő nyelvén, ne a nyers táblázatot.
-3. **Javasolj, ne dönts.** Ha a kimenet egy `Codex reports: <név> → <Csomag> <ár>` sorral végződik, javasold azt a csomagot („A Codex szerint a fiókod Pro-nak tűnik, 100 $/hó: ez a tied?"). Ez javaslat: addig nem írsz semmit, amíg a felhasználó nem mondja, hogy igen. A `(not in this table)` végű sor nem javaslat: csak sorold fel a csomagokat.
-4. **Írd be, amit választott.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, ahol az `<id>` a lista első oszlopából való. Erősítsd meg egy sorban.
-5. **Nem tudja?** Ne válassz helyette. Mondd meg, hogy a csomag a szolgáltató előfizetési oldalán látható, kérdezd meg még egyszer, mielőtt a profil kész, és ha még mindig nem tudja, mondd meg, hogy a Capitano újra rákérdez.
+2. **Kérdezd a kártyával.** Futtasd: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`. `asked: true` → egy sor: a csomagokat tartalmazó kártya a chatben van, válaszd ki a magadét. `wait_for_profile: true` → a profil még nincs elmentve: ne szólj semmit a csomagról, a rendszer megkérdezi, amikor a profil kész. Ha azt írja, hogy a csomagról már van nyitott kérdés (`asked: false`, egy `question_id`-val és az `agent`-tel, akinél van), NE tegyél ki másikat: egy sorban mondd meg a felhasználónak, hogy a már várakozó kártyára válaszoljon, és az `in_your_chat` alapján mondd meg, HOL van: `true` → ebben a chatben, feljebb; `false` → az `agent`-ben megnevezett ügynökkel folytatott chatben (ha `capitano`, a Capitanóéban), soha nem „ebben a chatben”. Ha azt írja, hogy a csomagot többször megkérdezték, vagy később újra megkérdezik, ne tegyél hozzá semmit, és ne kérdezz szövegben.
+3. **Írd be, amit választott.** Amikor a felhasználó válaszol a kártyára (ezt látod: `[USER ANSWER …]`), pontosan az ő választását írd be: `python3 /app/shared/skills/plan_registry.py set codex:<id>`, ahol az `<id>` az opció azonosítója (a `pro_max` a `pro-max`-ra érvényes). Erősítsd meg egy sorban.
+4. **Nem tudja?** (a „Nem tudom” opció) Ne válassz helyette. Mondd meg, hogy a csomag a szolgáltató előfizetési oldalán látható; a rendszer később újra rákérdez (a kártya egy óra múlva jön vissza, legfeljebb háromszor).
 
-Soha ne írj be olyan csomagot, amelyet a felhasználó nem választott, soha ne következtess rá másból, soha ne kérdezz újra, ha a `get` kiír egyet. Csak ennek a szkriptnek a `get`, `list` és `set` parancsát használd.
+Soha ne írj be olyan csomagot, amelyet a felhasználó nem választott, soha ne következtess rá másból, soha ne kérdezz újra, ha a `get` kiír egyet. Csak a nyilvántartás `get` és `set` parancsát, valamint a `first_run.py` `ask-plan` parancsát használd.
 
 ## Szektoragnosztikus — SOHA ne alapértelmezd IT-re
 
@@ -201,10 +200,11 @@ Egy PDF olvasása + adatok kinyerése + YAML validálása + 2 MD írása 30-90 m
 7. Írd meg MINIMUM az about.md-t + strengths.md-t     → skill profile-summaries
    (a preferences.md és goals.md a konkrét megbeszélés után jön)
 
-8. Záró üzenet (NINCS --partial) — felhasználóbarát összefoglaló
-   + egyértelmű kérés az ellenőrzésre és a **Jóváhagyás és mentés** gomb
-   megnyomására. Csak utána kérdezd az első üres mezőt. Sikertelen előkészítés
-   esetén jelezd a hibát chatbeli emlékeztető kérése és mentési állítás nélkül.
+8. Utolsó lépés (NINCS --partial): a `profile-yaml` skill megerősítő kártyája
+   (`ask-confirm`). Ez hordozza az összefoglalót és a gombokat: ne ismételd meg
+   az összefoglalót, és ne nevezz meg panelt. Csak miután a személy a kártyával
+   megerősítette, kérdezd az első üres mezőt. Sikertelen előkészítés esetén
+   jelezd a hibát chatbeli emlékeztető kérése és mentési állítás nélkül.
 ```
 
 > ⚠️ A 7. lépés (`about.md` + `strengths.md`) **nem opcionális**. Nélküle a downstream Writer-nek soha nem lesz meg a jelölt narratív kontextusa. Te vagy az egyetlen pont, ahol ez a narratíva rögzítésre kerül.

@@ -40,11 +40,17 @@
 #   2 → sessione inesistente
 #   3 → testo mai apparso nel pane E pane NON occupato → TUI irricettiva
 #       (probabile bash nudo post-crash / modal bloccato): unico segnale "morto".
-#   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
+#   4 → TUI occupata (turno in corso) oltre il budget d'attesa, OPPURE occupata e senza aver ancora disegnato il
+#       testo incollato dopo JHT_TMUX_LATE_RENDER_WAIT secondi oltre la finestra (10): scritto una volta, nulla
+#       premuto, il riprovo preme solo l'Invio → agente VIVO:
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
 #       tardi, MAI spawnare un rimpiazzo. "Busy != morto": confonderli e' la
 #       causa radice dell'overspawn del 07/06 (6→16 agenti in 3 giorni,
 #       weekly Codex al 100%, halt forzato di ~3,5 giorni).
+#   130 → un testo nel composer che non e' provato nostro: NIENTE incollato ne' premuto, il messaggio sta in
+#       pending-input.jsonl. Con JHT_TMUX_SEND_FROM=user-console (un utente che aspetta il comando) il trasporto prima
+#       aspetta JHT_TMUX_FOREIGN_WAIT secondi (45) che il composer si liberi o diventi nostro; gli altri mittenti
+#       (default 0) lo ricevono subito.
 #   5 → testo ACCETTATO nel composer ma submit mai avvenuto dopo N Enter →
 #       agente VIVO ma incastrato ("vivo ma muto"). Come rc=4 il chiamante deve
 #       RIPROVARE, MAI spawnare un rimpiazzo: il pane non e' morto, ha solo una
@@ -613,7 +619,10 @@ _submitted_from_unknown_form() {
 # Best-effort per costruzione (`|| true`, python3 opzionale): questo canale
 # porta tutto il traffico fra agenti, e un logger che fallisce non deve MAI
 # impedire una consegna.
-_record_stuck() { _record_pending_input draft "${1:-submit_unconfirmed}"; }
+# Dice anche al chiamante, su stdout, che il testo e' rimasto nella casella (riga `JHT_STUCK`): un'uscita non zero
+# non lo dice (130 vale anche «non ho digitato niente»), e la chat dell'app deve sapere se c'e' un testo suo da
+# inviare quando l'agente e' libero, o niente da ritentare.
+_record_stuck() { _record_pending_input draft "${1:-submit_unconfirmed}"; echo "JHT_STUCK"; }
 
 # Il messaggio che NON e' stato digitato (la casella era di un altro): senza questa riga resterebbe solo
 # nello stderr del chiamante. `unsent` e non `draft`: `draft` e' cio' che sta nella casella del pane.
@@ -655,6 +664,20 @@ submit_tries="${JHT_TMUX_SUBMIT_TRIES:-3}"
 # paste ogni 50 ms.  Il test puo' accorciarli senza cambiare il contratto.
 prompt_wait_s="${JHT_TMUX_PROMPT_WAIT:-100}"
 prompt_poll_s="${JHT_TMUX_PROMPT_POLL:-2}"
+# A text in the composer that is not provably ours is often passing: the message another sender of ours has pasted and
+# is about to submit (its record is written a moment later), or a suggestion Codex draws late. A person waiting on the
+# command (JHT_TMUX_SEND_FROM=user-console: `jht profile import`, `jht team chat send`) gets JHT_TMUX_FOREIGN_WAIT
+# seconds, looked at every second, for the composer to become free or ours; the bridges and nudges keep the immediate
+# rc=130 (default 0), which their own loops retry. A text that is still there at the end stays rc=130: nothing pasted.
+foreign_wait_s="${JHT_TMUX_FOREIGN_WAIT:-}"
+if [ -z "$foreign_wait_s" ]; then
+  if [ "${JHT_TMUX_SEND_FROM:-}" = "user-console" ]; then foreign_wait_s=45; else foreign_wait_s=0; fi
+fi
+case "$foreign_wait_s" in ''|*[!0-9]*) foreign_wait_s=0 ;; esac
+[ "${#foreign_wait_s}" -le 2 ] || foreign_wait_s=60
+foreign_wait_s=$((10#$foreign_wait_s))
+[ "$foreign_wait_s" -le 60 ] || foreign_wait_s=60
+foreign_seen=0
 
 # ── C4 · un lock per sessione ────────────────────────────────────────────────
 # I programmi che scrivono in un pane sono una ventina (bridge, watchdog, throttle, posta,
@@ -757,6 +780,12 @@ _wait_for_empty_composer() {
         fi
         # Text of an earlier delivery of ours: the lock below is where it gets its Enter.
         if _pending_is_ours "$pane"; then return 0; fi
+        if [ "$foreign_seen" -lt "$foreign_wait_s" ]; then
+          # Perhaps passing (see foreign_wait_s): look again in a second, outside the lock.
+          foreign_seen=$(( foreign_seen + 1 ))
+          sleep 1
+          continue
+        fi
         _say_foreign_text "$pane"
         return 130 ;;
       blocked)
@@ -861,6 +890,14 @@ if [ "$enter_mode" -eq 0 ]; then
           _record_unsent pending_enter_swallowed
           exit 130
         fi
+        if [ "$foreign_seen" -lt "$foreign_wait_s" ]; then
+          # The text came after the look outside the lock: let go of the lock (the sender of that text may need it to
+          # submit it) and wait as outside.
+          foreign_seen=$(( foreign_seen + 1 ))
+          exec 9>&-
+          sleep 1
+          continue
+        fi
         _say_foreign_text "$pane"
         exit 130 ;;
       blocked)
@@ -927,6 +964,14 @@ else
   case "$partial_wait_s" in ''|*[!0-9]*) partial_wait_s=8 ;; esac
   [ "${#partial_wait_s}" -le 3 ] || partial_wait_s=8
   partial_wait_s=$((10#$partial_wait_s))   # 08 and 09 are not octal numbers
+  # An agent in the middle of a turn can draw what is pasted into its composer several seconds late (the Capitano on a
+  # loaded machine, TEST 8): the render window of one at rest is not the measure of a busy one. Past the window a
+  # BUSY pane is waited for this long more; an idle one is not (it is the one that may be dead).
+  late_render_s=${JHT_TMUX_LATE_RENDER_WAIT:-10}
+  case "$late_render_s" in ''|*[!0-9]*) late_render_s=10 ;; esac
+  [ "${#late_render_s}" -le 2 ] || late_render_s=10
+  late_render_s=$((10#$late_render_s))
+  late_since=-1
   while :; do
     pane=$(_pane)
     gate=$(_delivery_gate "$pane")
@@ -964,7 +1009,16 @@ else
           exit 130 ;;
       esac
     fi
-    [ "$poll" -lt "$render_polls" ] || break
+    if [ "$poll" -ge "$render_polls" ]; then
+      # The window of an agent at rest is over. A busy pane gets `late_render_s` more seconds: the text is in its
+      # composer or on its way, and a verdict of «never shown» now would be a guess.
+      if [ "$late_render_s" -gt 0 ] && _pane_busy "$pane"; then
+        [ "$late_since" -ge 0 ] || late_since=$SECONDS
+        [ $(( SECONDS - late_since )) -lt "$late_render_s" ] || break
+      else
+        break
+      fi
+    fi
     poll=$(( poll + 1 ))
     sleep 0.05
   done
@@ -972,6 +1026,12 @@ else
     # Digitato una volta, mai comparso nella casella: la TUI non lo ha preso. NON si riscrive e NON si
     # preme niente (un Invio o un Escape su un turno appena partito lo rompono). Resta 3, come sempre:
     # e' l'unico segnale «forse morto» su cui conta il pacing-bridge.
+    if _pane_busy "$pane"; then
+      # Typed once, not drawn yet, and the agent is in a turn: alive, not dead. Nothing is pressed and nothing is
+      # typed again; a retry finds the text in the composer as the pending text of ours and presses only Enter.
+      echo "jht-tmux-send: $session is busy and has not drawn the paste yet: typed once, nothing pressed; retry later (rc=4)" >&2
+      exit 4
+    fi
     echo "jht-tmux-send: $session not receptive: typed once, never shown in the composer (pane not busy or text not seen): nothing pressed" >&2
     exit 3
   fi

@@ -16,13 +16,13 @@ import { withStatusAgents } from "../../office/data/load";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
-import { officeText } from "../../office/office.i18n";
+import { localizeLayout, officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamAgentsShared, type TeamAgentsReading } from "../../lib/existing-team-agents";
 import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 
@@ -63,7 +63,11 @@ export function OfficeLoader({ source }: { source: OfficeSource }) {
     Promise.all([loadAssets(), loadParts()])
       .then(([assets, parts]) => {
         if (!live) return;
-        setLoad(assets ? { state: "ready", ready: { assets, parts } } : { state: "no-assets" });
+        setLoad(
+          assets
+            ? { state: "ready", ready: { assets: { ...assets, layout: localizeLayout(assets.layout, appLocale()) }, parts } }
+            : { state: "no-assets" },
+        );
       })
       .catch((error: unknown) => {
         console.error("[office] load failed:", error);
@@ -180,9 +184,9 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     if (!parts.data) return;
     const data = parts.data;
     // The tags' statuses in a query of their own: its failure costs the tags, not the office.
-    const statuses = loadAgentStatuses(supabase);
+    const statuses = loadAgentStatuses(cloudClient());
     try {
-      const read = await data.load(supabase);
+      const read = await data.load(cloudClient());
       if (!engineRef.current) return;
       // a team that is not online has no present status to show
       const tags = read.teamOnline ? await statuses : null;
@@ -211,7 +215,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     reduced.current = motion.reduced();
     const s = createReadScheduler(() => read.current());
     scheduler.current = s;
-    const unsubscribe = subscribeOffice(supabase, {
+    const unsubscribe = subscribeOffice(cloudClient(), {
       onChange: () => s.poke(),
       onTransition: (t) => live.current?.transition(t),
       onStatus: (up) => s.setChannel(up),
@@ -348,7 +352,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
             layout={assets.layout}
             snapshot={snapshot}
             statuses={statuses}
-            client={source === "cloud" ? supabase : NO_CLOUD}
+            client={source === "cloud" ? cloudClient() : NO_CLOUD}
             source={source === "cloud" ? "cloud" : "vps"}
             onClose={() => setPanel(null)}
             onOpen={setPanel}

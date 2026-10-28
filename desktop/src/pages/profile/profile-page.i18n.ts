@@ -19,6 +19,8 @@ export interface ProfilePageText {
   opening: string;
   loginAgain: string;
   login: string;
+  /** The profile could not be read; `refresh` is the label of the button that reads it again. */
+  readFailed: (refresh: string) => string;
   sealedContacts: PluralForms; // {list}
 }
 
@@ -35,6 +37,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Apro lo schermo di accesso…",
     loginAgain: "Accedi di nuovo a LinkedIn",
     login: "Accedi a LinkedIn",
+    readFailed: (refresh) => `Non riesco a leggere il profilo. Controlla la connessione e premi «${refresh}».`,
     sealedContacts: { one: "Un contatto ({list}) è cifrato sul server e nella desktop non si apre ancora.", other: "Alcuni contatti ({list}) sono cifrati sul server e nella desktop non si aprono ancora." },
   },
   en: {
@@ -49,6 +52,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Opening the login screen…",
     loginAgain: "Log in to LinkedIn again",
     login: "Log in to LinkedIn",
+    readFailed: (refresh) => `The profile could not be read. Check the connection and press “${refresh}”.`,
     sealedContacts: { one: "One contact ({list}) is encrypted on the server and cannot be opened in the desktop yet.", other: "Some contacts ({list}) are encrypted on the server and cannot be opened in the desktop yet." },
   },
   de: {
@@ -63,6 +67,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Anmeldebildschirm wird geöffnet…",
     loginAgain: "Erneut bei LinkedIn anmelden",
     login: "Bei LinkedIn anmelden",
+    readFailed: (refresh) => `Das Profil konnte nicht gelesen werden. Prüfe die Verbindung und drücke „${refresh}“.`,
     sealedContacts: { one: "Ein Kontakt ({list}) ist auf dem Server verschlüsselt und lässt sich in der Desktop-App noch nicht öffnen.", other: "Einige Kontakte ({list}) sind auf dem Server verschlüsselt und lassen sich in der Desktop-App noch nicht öffnen." },
   },
   fr: {
@@ -77,6 +82,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Ouverture de l’écran de connexion…",
     loginAgain: "Se reconnecter à LinkedIn",
     login: "Se connecter à LinkedIn",
+    readFailed: (refresh) => `Le profil n’a pas pu être lu. Vérifie la connexion et appuie sur « ${refresh} ».`,
     sealedContacts: { one: "Un contact ({list}) est chiffré sur le serveur et ne peut pas encore être ouvert dans l’app de bureau.", other: "Certains contacts ({list}) sont chiffrés sur le serveur et ne peuvent pas encore être ouverts dans l’app de bureau." },
   },
   es: {
@@ -91,6 +97,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "Abriendo la pantalla de acceso…",
     loginAgain: "Acceder de nuevo a LinkedIn",
     login: "Acceder a LinkedIn",
+    readFailed: (refresh) => `No se pudo leer el perfil. Revisa la conexión y pulsa «${refresh}».`,
     sealedContacts: { one: "Un contacto ({list}) está cifrado en el servidor y todavía no se puede abrir en la app de escritorio.", other: "Algunos contactos ({list}) están cifrados en el servidor y todavía no se pueden abrir en la app de escritorio." },
   },
   pt: {
@@ -105,6 +112,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "A abrir o ecrã de acesso…",
     loginAgain: "Entrar de novo no LinkedIn",
     login: "Entrar no LinkedIn",
+    readFailed: (refresh) => `Não foi possível ler o perfil. Verifica a ligação e prime «${refresh}».`,
     sealedContacts: { one: "Um contacto ({list}) está cifrado no servidor e ainda não se abre na app de secretária.", other: "Alguns contactos ({list}) estão cifrados no servidor e ainda não se abrem na app de secretária." },
   },
   hu: {
@@ -119,6 +127,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
     opening: "A bejelentkezési képernyő megnyitása…",
     loginAgain: "Jelentkezz be újra a LinkedInbe",
     login: "Jelentkezz be a LinkedInbe",
+    readFailed: (refresh) => `A profil nem olvasható. Ellenőrizd a kapcsolatot, és nyomd meg a(z) „${refresh}” gombot.`,
     sealedContacts: { one: "Egy kapcsolat ({list}) titkosítva van a szerveren, és az asztali appban még nem nyitható meg.", other: "Néhány kapcsolat ({list}) titkosítva van a szerveren, és az asztali appban még nem nyitható meg." },
   },
 };

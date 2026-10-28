@@ -38,12 +38,17 @@ python3 /app/shared/skills/first_run.py begin-burst
 Devolve-te o `roster` (quantos Scout / Analista / Scorer), o `scout_cap_first_pass` e o
 `target_scored`, todos derivados da subscrição que o utilizador declarou. Se recusar (`ok: false`,
 «plano de subscrição não selecionado»), ainda não há plano declarado: **não adivinhes** um roster, uma
-sobrestimativa queima-lhe a janela logo no primeiro dia. Pergunta ao utilizador no chat qual é o plano
-dele: executa `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` é o `active_provider` de `jht.config.json`; o Codex
-é `codex`), mostra os nomes e os preços e, se a lista terminar com `Codex reports: <nome> → <Plano>
-<preço>`, sugere esse plano — uma sugestão, nunca a tua escolha. Quando o utilizador escolher, escreve
-exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` e volta a lançar `begin-burst`. Se não souber,
-para e di-lo; volta a perguntar no teu próximo despertar.
+sobrestimativa queima-lhe a janela logo no primeiro dia. Pergunta-lho com `python3 /app/shared/skills/first_run.py ask-plan`: é a única forma, porque publica o cartão na app, com os planos e o que a linha `Codex reports:` indica marcado como sugerido — uma sugestão, nunca a tua escolha. Uma pergunta escrita como texto no teu painel não chega a ninguém: o utilizador olha para a app, não para o teu painel. Quando o utilizador responder, escreve exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (serve o id do cartão: `pro_max` é `pro-max`) e volta a lançar `begin-burst`. Se responder «não sei», para e di-lo; volta a perguntar no teu próximo despertar.
+
+**Enquanto o burst corre, o plano pode desaparecer** (a configuração foi reposta, o fornecedor mudou, o
+ficheiro foi editado). `first_run.py status` e `begin-burst` trazem então `plan_missing: true` com um `hint`:
+não leias «burst already in progress» como «está tudo bem». O burst continua e o plano declara-se da mesma
+forma: pergunta com `python3 /app/shared/skills/first_run.py ask-plan` (o cartão, nunca texto simples) e escreve exatamente a escolha dele com `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. O
+Assistente pergunta o mesmo quando o utilizador fala com ele.
+
+**O plano pergunta-se uma só vez.** Enquanto a tua pergunta sobre o plano estiver sem resposta no chat, não a repitas, nem por outras palavras: uma nova mensagem «perfil pronto», outro despertar ou `plan_missing` no próximo `status` não mudam o que esperas. Vê primeiro o chat: se já perguntaste e o utilizador não respondeu, espera. Só voltas a perguntar depois de o utilizador responder «não sei». O `ask-plan` não publica um segundo cartão enquanto o primeiro não tiver resposta: se disser que a pergunta está aberta, espera. Se não perguntares, o sistema publica o cartão poucos minutos depois da importação do perfil. Depois de «não sei» volta a publicar o cartão só passada uma hora, e nunca mais de três vezes no total: se o disser, espera e não perguntes por texto.
+
+**Nunca antes do perfil, e o cartão vai para onde está o utilizador.** O `ask-plan` não publica nada enquanto o perfil não estiver guardado (`wait_for_profile: true`): não perguntes o plano na boas-vindas nem enquanto o perfil se constrói, e espera a mensagem de perfil pronto. Enquanto o utilizador confirma o perfil com o Assistente, o cartão vai para o chat do Assistente, seja quem for que lance `ask-plan` (`agent` e `in_your_chat` na resposta dizem onde está). Quando lhe falares dele, nomeia o chat que o tem — «o chat com o Assistente» — nunca «este chat» se `in_your_chat` for `false`.
 
 **2. Faz spawn de todo o roster, escalonado ~60 segundos.**
 

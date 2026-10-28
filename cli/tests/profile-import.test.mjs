@@ -266,7 +266,7 @@ test('jht profile import: from a file and from stdin, with the real validator', 
   const fromFile = folder();
   const done = run(fromFile.root, ['profile', 'import', FIXTURE, '--json']);
   assert.equal(done.status, 0, done.stderr);
-  assert.deepEqual(JSON.parse(done.stdout), { ok: true, profileWritten: true, readyFlag: true, captain: 'team_off', plan: 'missing' });
+  assert.deepEqual(JSON.parse(done.stdout), { ok: true, profileWritten: true, readyFlag: true, captain: 'team_off', plan: 'missing', captainTold: false });
   const profile = join(fromFile.root, 'profile', 'candidate_profile.yml');
   assert.deepEqual(readFileSync(profile), PROFILE);
   assert.match(readFileSync(join(fromFile.root, 'profile', 'ready.flag'), 'utf8'), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n$/);
@@ -397,7 +397,8 @@ function stubbedTools(sendExit) {
 
 test('jht profile import tells the Capitano through the transport, and says so when it cannot', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, () => {
   const python = execFileSync('sh', ['-c', 'command -v python3'], { encoding: 'utf8' }).trim();
-  for (const [exit, captain] of [[0, 'sent'], [4, 'failed']]) {
+  // A profile saved but a Capitano that could not be told is no success: exit 3, captainTold:false and the message to send again.
+  for (const [exit, captain, status] of [[0, 'sent', 0], [4, 'failed', 3]]) {
     const { root } = folder();
     const { bin, sent } = stubbedTools(exit);
     const path = `${bin}:${resolve(python, '..')}:/usr/bin:/bin`;
@@ -405,8 +406,11 @@ test('jht profile import tells the Capitano through the transport, and says so w
       encoding: 'utf8', timeout: 60000, cwd: resolve(import.meta.dirname, '..'),
       env: { ...process.env, JHT_HOME: root, JHT_LANG: 'en', PATH: path },
     });
-    assert.equal(done.status, 0, done.stderr);
-    assert.equal(JSON.parse(done.stdout).captain, captain);
+    assert.equal(done.status, status, done.stderr);
+    const said = JSON.parse(done.stdout);
+    assert.equal(said.captain, captain);
+    assert.equal(said.captainTold, captain === 'sent');
+    if (captain === 'failed') assert.equal(said.retry, `jht team send capitano "${PROFILE_READY_MESSAGE}"`);
     // Said once, to the Capitano, in the person's console voice: no borrowed envelope.
     assert.deepEqual(readFileSync(sent, 'utf8').split('\n').slice(0, 2), ['JHT-CAPITANO', PROFILE_READY_MESSAGE]);
     assert.ok(!PROFILE_READY_MESSAGE.startsWith('[@'));

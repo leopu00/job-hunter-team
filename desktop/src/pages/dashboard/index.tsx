@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
-import { supabase } from "../../lib/supabase";
+import { cloudClient } from "../../lib/cloud-client";
+import { withReadDeadline } from "../../lib/read-deadline";
+import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
+import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
 import DashboardScreen from "./DashboardScreen";
 import { appLocale } from "../../lib/app-locale";
@@ -27,12 +30,13 @@ export default function DashboardPage(_props: PageProps) {
   const request = useRef(0);
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
   const existingTeam = useExistingTeamView() !== null;
+  const blocked = useCloudDataBlocked();
   // A set-up profile with no team linked: the way to link the one that is already on a VPS.
   const connectTeam = useConnectTeam();
 
   const read = useCallback(() => {
     const mine = ++request.current;
-    (existingTeam ? loadExistingTeamDashboard() : loadDashboard(supabase))
+    withReadDeadline(existingTeam ? loadExistingTeamDashboard() : loadDashboard(cloudClient()))
       .then((data) => {
         if (request.current === mine) setLoad({ state: "ready", data });
       })
@@ -51,6 +55,8 @@ export default function DashboardPage(_props: PageProps) {
   }, [read]);
   useRefresh(read);
 
+  // No cloud session (a local profile): only the notice, no empty dashboard and no «connect a team» card.
+  if (blocked) return <CloudDataNotice />;
   if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingDashboard} />;
   if (load.state === "failed") {
     // The core's own code and what it means, not a guess about the network.
@@ -58,11 +64,20 @@ export default function DashboardPage(_props: PageProps) {
       ? describeError(load.code, { fallback: "existing_team_unavailable", locale: appLocale() })
       : null;
     return (
-      <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        {failure
-          ? `${failure.text} ${failure.action} (${load.code})`
-          : PAGE_STATES_TEXT[appLocale()].dashboardFailed}
-      </p>
+      <div className="max-w-6xl mx-auto px-5 pt-8">
+        <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+          {failure
+            ? `${failure.text} ${failure.action} (${load.code})`
+            : PAGE_STATES_TEXT[appLocale()].dashboardFailed}
+        </p>
+        <button
+          type="button"
+          className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
+          onClick={() => { setLoad({ state: "loading" }); read(); }}
+        >
+          {SHELL_TEXT[appLocale()].refresh}
+        </button>
+      </div>
     );
   }
   const prompt = connectTeam && !existingTeam ? CONNECT_TEAM_PROMPT_TEXT[appLocale()] : null;

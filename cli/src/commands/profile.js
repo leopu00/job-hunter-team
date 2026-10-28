@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { JHT_PROFILE_DIR } from '../jht-paths.js';
 import { readRegularFile } from '../lib/secure-config-io.js';
-import { MAX_PROFILE_BYTES, PROFILE_READY_MESSAGE, importProfile } from '../lib/profile-import.js';
+import { MAX_PROFILE_BYTES, PROFILE_READY_MESSAGE, importOutcome, importProfile } from '../lib/profile-import.js';
 import { resolveSession, sendMessage } from './team/chat.js';
 
 // shared/skills/validate_profile.py risolto relativo a questo file:
@@ -186,19 +186,14 @@ function importAction(file, opts) {
     return;
   }
   if (!result.ok) return fail(result.code, result);
+  const outcome = importOutcome(result);
+  if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
   if (opts.json) {
-    console.log(JSON.stringify(result));
+    console.log(JSON.stringify(outcome.json));
     return;
   }
-  console.log('Profile imported and ready.');
-  if (result.previousKept) console.log(`The profile it replaced was kept, private, as ${result.previousKept} next to it.`);
-  if (result.captain === 'sent') console.log('The Capitano has been told: the team starts.');
-  else if (result.captain === 'team_off') console.log('The team is not running: the Capitano will start it from this profile at its next wake. Start the team with: jht team start');
-  else console.log(`The Capitano could not be told now (${result.detail ?? 'delivery failed'}): it finds the profile at its next wake.`);
-  if (result.plan === 'missing') {
-    console.log('No subscription plan is declared, and the Capitano does not open the first run without one.');
-    console.log('See the plans and declare yours with: jht providers plan   (then: jht providers plan <id>)');
-  }
+  for (const line of outcome.out) console.log(line);
+  for (const line of outcome.warn) console.error(line);
 }
 
 export function registerProfileCommand(program) {

@@ -161,12 +161,18 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   const [planBlocked, setPlanBlocked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
+  // Which call of `invoke` is the latest: a screen that changed ends the calls started before it, so one that
+  // returns late cannot free (or keep) the guard of a newer one.
+  const invokeToken = useRef(0);
   const failureHeadingRef = useRef<HTMLHeadingElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const focusedFailureKeyRef = useRef<string | null>(null);
   const failureKey = runtime.status === "failed" ? `${runtime.stage}:${runtime.code ?? "unknown"}` : null;
 
   useEffect(() => {
+    // A new screen: its buttons work at the first click, even if the retry that led here has not returned yet.
+    invokeToken.current += 1;
+    pendingRef.current = false;
     setPending(false);
     setActionFailed(false);
     setConfirmingRecreate(false);
@@ -220,6 +226,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   if (runtime.status === "collecting") return null;
 
   const failed = runtime.status === "failed";
+  // A failed step that is only waiting for the person (the team runs, stop it first): same card, calm tone.
+  const calm = runtime.status === "failed" && runtime.calm === true;
   const actionRequired = runtime.status === "action-required";
   const visibleRuntimeStages = runtimeStages(host, t);
   const activeIndex = visibleRuntimeStages.findIndex((stage) => stage.value === runtime.stage);
@@ -275,10 +283,13 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   async function invoke(action: () => Promise<void>, reportFailure = true) {
     if (pendingRef.current) return;
     pendingRef.current = true;
+    const mine = ++invokeToken.current;
     setPending(true); setActionFailed(false);
-    try { await action(); } catch { if (reportFailure) setActionFailed(true); } finally {
-      pendingRef.current = false;
-      setPending(false);
+    try { await action(); } catch { if (reportFailure && invokeToken.current === mine) setActionFailed(true); } finally {
+      if (invokeToken.current === mine) {
+        pendingRef.current = false;
+        setPending(false);
+      }
     }
   }
 
@@ -358,7 +369,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
       aria-live={failed ? undefined : "polite"}
       role={failed ? "alert" : "status"}
     >
-      <span className="onboarding-runtime-status__pulse" aria-hidden="true">{failed ? "!" : actionRequired ? "→" : "••"}</span>
+      <span className="onboarding-runtime-status__pulse" aria-hidden="true">{calm ? "→" : failed ? "!" : actionRequired ? "→" : "••"}</span>
       <div>
         {!failed && <strong>{actionRequired ? t.actionNeeded : t.dontClose}</strong>}
         <small>{runtime.message}</small>
@@ -392,8 +403,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           <p className="onboarding-progress__intro">{t.autoIntro}</p>
           <p className="onboarding-progress__privacy">{t.noApiKey}</p>
         </aside>
-        <section className={`onboarding-runtime-card${failed ? " onboarding-runtime-card--failed" : ""}`} aria-busy={pending}>
-          <p className="onboarding-eyebrow">{failed ? t.interventionRequired : actionRequired ? t.yourTurn : t.inProgressEyebrow}</p>
+        <section className={`onboarding-runtime-card${failed && !calm ? " onboarding-runtime-card--failed" : ""}`} aria-busy={pending}>
+          <p className="onboarding-eyebrow">{calm ? t.yourTurn : failed ? t.interventionRequired : actionRequired ? t.yourTurn : t.inProgressEyebrow}</p>
           <h2
             ref={failureHeadingRef}
             tabIndex={failed ? -1 : undefined}

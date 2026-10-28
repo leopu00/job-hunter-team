@@ -42,6 +42,7 @@ nothing downstream will clean it up.
 - ❌ Replies to a `[CHAT]` message on the web dashboard — use `jht-send` (already in the chat thread).
 - ❌ Replies to a `[TG]` inbound — use `jht-telegram-send` directly: you already know Telegram is up because the user just wrote you from there. Saves a DB roundtrip.
 - ❌ Heavy attachments (>20 MB). Use the user's CV folder + a short notification body.
+- ❌ The subscription plan. It is asked ONLY with `python3 /app/shared/skills/first_run.py ask-plan` (a card the user can answer in the Messages), from any agent; a plan question written here as free text does not show in the Messages and leaves the user waiting.
 
 ## Usage
 
@@ -65,6 +66,20 @@ jht-notify-user --agent mentor --no-telegram "Apri il tab Patterns per i dettagl
 Output (stdout):
 ```
 <row_id> via=<telegram|web>
+```
+
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
 ```
 
 ## Kinds

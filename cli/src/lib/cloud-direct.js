@@ -12,13 +12,8 @@
 // JHT_SUPABASE_ANON_KEY o cloud.json.supabase_anon_key. La RLS limita ai dati
 // dell'utente. Vedi docs/internal/architecture/daemon-sync-redesign.md.
 
-import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
-import { join } from 'node:path';
-import { JHT_HOME } from '../jht-paths.js';
 import { createSupabaseDirect } from './supabase-direct.js';
-import { writePrivateJson } from './secure-config-io.js';
-
-const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
+import { persistRefreshToken } from './cloud-realtime.js';
 
 // Anon key del progetto prod: PUBBLICA by-design (è nel bundle del browser, ogni
 // accesso è protetto dalla RLS). Hardcodata come default così il container la ha
@@ -55,15 +50,8 @@ export function getDirectReader(config) {
     anonKey,
     refreshToken,
     userId: config.user_id,
-    // GoTrue ruota il refresh_token → persistilo su cloud.json (best-effort).
-    onRefreshToken: async (newToken) => {
-      try {
-        const c = JSON.parse(await readFile(CLOUD_FILE, 'utf-8'));
-        c.supabase_refresh_token = newToken;
-        writePrivateJson(CLOUD_FILE, c);
-        await chmod(CLOUD_FILE, 0o600);
-      } catch { /* best-effort: al prossimo refresh riprova */ }
-    },
+    // GoTrue ruota il refresh_token → persistilo su cloud.json dallo stesso punto del Realtime (in coda).
+    onRefreshToken: (newToken) => persistRefreshToken(newToken, (level, msg) => console.error(`  supabase-direct ${level}: ${msg}`)),
     log: (level, msg) => console.error(`  supabase-direct ${level}: ${msg}`),
   });
   _readerKey = key;

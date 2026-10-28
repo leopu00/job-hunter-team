@@ -137,6 +137,7 @@ def box(tmp_path):
         "JHT_EXTERNAL_CONTENT_NONCE": NONCE,
         "JHT_CHAT_PROMPT_WAIT": "0",
         "JHT_CHAT_BUSY_WAIT": "0",
+        "JHT_CHAT_DRAIN": "0",       # the process that drains the queue by itself is tried apart
         "PYTHONDONTWRITEBYTECODE": "1",
     }
     env.pop("TMUX", None)
@@ -242,15 +243,47 @@ def test_a_stuck_tmux_does_not_hold_a_read_and_leaves_the_activity_out(box):
     assert time.monotonic() - started < 6, "the capture for the activity has its own short limit"
 
 
-def test_a_read_touches_the_terminal_only_while_the_last_turn_of_the_person_waits(box):
-    # answered by the agent, or too old to be what the agent works on now: the terminal is never looked at
-    _waiting_chat(box, answered=True)
+def test_after_a_capture_that_failed_the_next_reads_wait_before_looking_at_the_screen_again(box):
+    _waiting_chat(box)
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano", FAKE_TMUX_CAPTURE_FAILS="1")
+    assert code == 0 and "activity" not in page
+    assert box.calls() != [], "the first read did try the screen"
+    (box.state / "calls").unlink()
+    # the screen is readable again, but the wait is not over: the terminal is not touched
     code, page = box.run("read", "capitano")
     assert code == 0 and "activity" not in page and box.calls() == []
+    # past the wait the next read looks again
+    mark = box.home / "agents" / "capitano" / "activity-failed"
+    old = time.time() - 20.0
+    os.utime(mark, (old, old))
+    assert box.run("read", "capitano")[1]["activity"] == "working"
+    # a screen that was read never leaves a wait behind for the reads after it
+    assert box.run("read", "capitano")[1]["activity"] == "working"
+
+
+def test_a_read_touches_the_terminal_only_within_half_an_hour_of_the_last_turn_of_the_person(box):
+    # an answer from the agent does not end it: the agent may answer first and go on working
+    _waiting_chat(box, answered=True)
+    (box.state / "screen").write_text(RUNNING_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano")
+    assert code == 0 and page["activity"] == "working" and box.calls() != []
+    (box.state / "screen").write_text(READY_CODEX, encoding="utf-8")
+    assert box.run("read", "capitano")[1]["activity"] == "idle"
+    # too old to be what the agent works on now: the terminal is never looked at
     (box.home / "agents" / "capitano" / "chat.jsonl").unlink()
     (box.home / "agents" / "capitano").rmdir()
     (box.home / "agents").rmdir()
-    _waiting_chat(box, age=3600.0)
+    (box.state / "calls").unlink(missing_ok=True)
+    _waiting_chat(box, age=3600.0, answered=True)
+    code, page = box.run("read", "capitano")
+    assert code == 0 and "activity" not in page and box.calls() == []
+    # no turn of the person's at all: nothing to be about
+    (box.home / "agents" / "capitano" / "chat.jsonl").unlink()
+    (box.home / "agents" / "capitano").rmdir()
+    (box.home / "agents").rmdir()
+    _write_chat(box, "capitano", [{"role": "assistant", "text": "buongiorno", "ts": time.time() - 5.0, "message_id": "a1"}])
     code, page = box.run("read", "capitano")
     assert code == 0 and "activity" not in page and box.calls() == []
 
@@ -1000,6 +1033,41 @@ BUSY_FORMS = pytest.mark.parametrize("screen", [
 ], ids=["unrecognised-form", "claude-empty-composer", "codex-empty-composer"])
 
 
+def _codex_wrapped_draft(text: str, width: int = 208) -> str:
+    """What Codex draws for a long draft: the marker row as wide as the terminal, the rest on the rows below,
+    then a blank row and the model/path footer (which holds a «·» too)."""
+    first, rest = ("› " + text)[:width], ("› " + text)[width:]
+    rows = [first] + ["  " + rest[n:n + width - 2] for n in range(0, len(rest), width - 2)]
+    return "• Done.\n\n" + "\n".join(rows) + "\n\n  gpt-5.6-terra high · ~/agents/assistente\n"
+
+
+FENCED_TURN = ("[@utente -> @assistente] [!UNVERIFIED SENDER] [CHAT] ⟦UTENTE·0a1b2c3d⟧ "
+               + "Platform engineer in Rome, six years, Kubernetes and CI/CD. " * 2 + "⟦/UTENTE·0a1b2c3d⟧")
+
+
+def test_a_draft_wrapped_onto_a_row_with_the_closing_fence_mark_is_read_whole_not_as_the_footer():
+    """Every turn long enough to wrap ended on a row holding «·» (the fence's mark), read as the footer:
+    the composer looked cut short for ever, and the transport pressed no Enter."""
+    module = _module()
+    pane = _codex_wrapped_draft(FENCED_TURN, width=len("› " + FENCED_TURN) - len("⟦/UTENTE·0a1b2c3d⟧"))
+    assert pane.splitlines()[3].endswith("⟧") and "·" in pane.splitlines()[3], "the second row carries the mark"
+    assert "".join(module.composer_text(pane).split()) == "".join(FENCED_TURN.split())
+    assert module.composer_snapshot(pane) == ("text", False)
+
+
+def test_a_long_single_row_draft_with_the_footer_right_under_it_is_not_read_with_the_footer():
+    module = _module()
+    pane = "• Done.\n\n› " + "x" * 150 + "\n  gpt-5.6-terra high · ~/agents/assistente\n"
+    assert module.composer_text(pane) == "x" * 150
+
+
+def test_a_wrapped_draft_whose_last_row_is_a_footer_look_alike_with_no_footer_after_it_stays_cut_at_it():
+    """Nothing below to prove the row is text: the old reading, the safe one (Enter is never pressed on a guess)."""
+    module = _module()
+    pane = "› " + "y" * 210 + "\n  tail · of it\n"
+    assert module.composer_text(pane) == "y" * 210
+
+
 def _queue_lines(box, agent="capitano"):
     path = box.home / "agents" / agent / "chat-queue.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
@@ -1188,6 +1256,181 @@ def test_a_flush_whose_composer_keeps_the_text_is_pending_for_the_page(box):
     screen.write_text(READY_CODEX, encoding="utf-8")
     page = box.run("read", "capitano", FAKE_DELIVERY_RC="5", FAKE_DELIVERY_OUT="JHT_SIGNATURE 0a1b2c")[1]
     assert page["settled"] == [{"id": receipt["messageId"], "how": "pending"}]
+
+
+WORKING_WITH_OUR_TEXT = """\
+✻ Pondering… (12s · ↑ 1.2k tokens · esc to interrupt)
+
+╭──────────────────────────────────────────────╮
+│ > il secondo messaggio                       │
+╰──────────────────────────────────────────────╯
+"""
+HALF_DRAWN = {"FAKE_DELIVERY_RC": "130", "FAKE_DELIVERY_OUT": "JHT_STUCK"}
+
+
+def _held_half_drawn(box, client_id="id-half", text="il secondo messaggio"):
+    """The agent was working, the paste was half drawn, the transport left it in the composer (130)."""
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    code, receipt = box.run("send", "capitano", client_id, stdin=text, **HALF_DRAWN)
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    return code, receipt
+
+
+def test_a_paste_left_half_drawn_in_the_composer_is_held_for_the_flush_not_lost(box):
+    code, receipt = _held_half_drawn(box)
+    assert code == 0 and receipt["state"] == "queued" and receipt["queue"] == "terminal"
+    assert [row["text"] for row in box.chat("capitano") if row["role"] == "user"] == ["il secondo messaggio"]
+    assert [line.get("typed") for line in _queue_lines(box)] == [True]
+    assert _delivered_ids(box) == [] and len(box.envelopes()) == 1, "typed once, not yet submitted"
+
+
+def test_the_held_turn_gets_its_enter_from_the_transport_when_the_agent_is_free_and_is_never_typed_again(box):
+    _code, receipt = _held_half_drawn(box)
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0", FAKE_FLUSH_CLEARS="1")[1]
+    assert _flush_calls(box) == ["CAPITANO"]
+    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "taken"}]
+    assert len(box.envelopes()) == 1, "the text was not typed a second time"
+    assert not any(call.startswith("send-keys") for call in box.calls()), "the chat pressed nothing itself"
+
+
+def test_the_held_turn_waits_while_the_agent_works_and_while_the_text_is_not_provably_ours(box):
+    _code, receipt = _held_half_drawn(box)
+    (box.state / "screen").write_text(WORKING_WITH_OUR_TEXT, encoding="utf-8")
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0")[1]
+    assert _flush_calls(box) == [] and page["queued"] == [receipt["messageId"]], "a working agent is never asked"
+    (box.state / "screen").write_text(TEXT_ALREADY_TYPED, encoding="utf-8")
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="130")[1]          # the transport cannot prove the text is ours
+    assert _flush_calls(box) == ["CAPITANO"] and page["queued"] == [receipt["messageId"]]
+    assert len(box.envelopes()) == 1 and not any(call.startswith("send-keys") for call in box.calls())
+
+
+def test_a_held_turn_that_finds_the_composer_empty_is_unconfirmed_after_a_while_and_never_typed_again(box):
+    _code, receipt = _held_half_drawn(box)
+    (box.state / "screen").write_text(READY_CODEX, encoding="utf-8")
+    page = box.run("read", "capitano")[1]
+    assert page["queued"] == [receipt["messageId"]], "a late draw is waited for"
+    _age_the_queue(box, 40)
+    page = box.run("read", "capitano")[1]
+    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "unconfirmed"}]
+    assert len(box.envelopes()) == 1
+
+
+def test_a_held_turn_that_expires_gets_its_one_enter_if_the_agent_is_free_and_the_text_is_proved_ours(box):
+    """Otherwise the old text waits «ours, of any age» for the next delivery and the person's second try is a double."""
+    _code, receipt = _held_half_drawn(box)
+    _age_the_queue(box, 1300)                      # past the life of a queued turn (20 minutes)
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0", FAKE_FLUSH_CLEARS="1")[1]
+    assert _flush_calls(box) == ["CAPITANO"], "one Enter, asked of the transport"
+    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "late"}]
+    assert len(box.envelopes()) == 1 and not any(call.startswith("send-keys") for call in box.calls())
+    box.run("read", "capitano", FAKE_FLUSH_RC="0")
+    assert _flush_calls(box) == ["CAPITANO"], "settled: not asked again"
+
+
+def test_a_held_turn_that_expires_is_left_as_it_is_when_the_text_is_not_proved_ours_or_the_agent_works(box):
+    _code, receipt = _held_half_drawn(box)
+    _age_the_queue(box, 1300)
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="130")[1]            # the transport cannot prove it
+    assert page["settled"] == [{"id": receipt["messageId"], "how": "expired"}] and _delivered_ids(box) == []
+    (box.state / "screen").write_text(WORKING_WITH_OUR_TEXT, encoding="utf-8")
+    box.run("read", "capitano", FAKE_FLUSH_RC="0")
+    assert _flush_calls(box) == ["CAPITANO"], "a working agent is not asked: only the first call counts"
+    assert _delivered_ids(box) == []
+
+
+def test_a_held_turn_expired_for_longer_than_the_window_is_not_given_an_enter(box):
+    _code, receipt = _held_half_drawn(box)
+    _age_the_queue(box, 1200 + 400)                # 400 s past its life: the window is 300 s
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0")[1]
+    assert _flush_calls(box) == [] and page["settled"] == [{"id": receipt["messageId"], "how": "expired"}]
+
+
+def test_a_held_turn_that_expires_while_the_draining_process_waits_is_given_its_enter_by_it(box):
+    """The process looks every 2 s and the turn lives 1 s: the end of its time is the moment it asks, once."""
+    import time as _time
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "2", "JHT_CHAT_QUEUE_TTL": "1",
+             "FAKE_FLUSH_RC": "0", "FAKE_FLUSH_CLEARS": "1"}
+    box.run("send", "capitano", "id-expiring", stdin="scade", **HALF_DRAWN, **drain)
+    _time.sleep(1.2)
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")        # the agent is free, the text is still there
+    assert _wait_for(lambda: _delivered_ids(box) == ["id-expiring"], 20), "nobody read, the process gave the Enter"
+    delivered = box.home / "agents" / "capitano" / "chat-delivered.jsonl"
+    assert json.loads(delivered.read_text(encoding="utf-8").splitlines()[-1])["taken"] == "late"
+    assert _flush_calls(box) == ["CAPITANO"] and len(box.envelopes()) == 1
+
+
+def test_the_draining_process_outlives_the_turn_while_the_agent_is_busy_and_the_app_is_closed(box):
+    """The agent is working when the time ends and nobody reads: the process waits for its one Enter, within the window."""
+    import time as _time
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "0.4", "JHT_CHAT_QUEUE_TTL": "1",
+             "FAKE_FLUSH_RC": "0", "FAKE_FLUSH_CLEARS": "1"}
+    box.run("send", "capitano", "id-busy-end", stdin="occupato", **HALF_DRAWN, **drain)
+    screen.write_text(WORKING_WITH_OUR_TEXT, encoding="utf-8")      # the turn is over, the agent still works
+    _time.sleep(3.0)
+    lock = box.home / "locks" / "chat-drain-capitano.lock"
+    assert lock.exists() and _delivered_ids(box) == [], "alive, nothing given to a working agent"
+    assert _flush_calls(box) == []
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")          # the agent is free at last
+    assert _wait_for(lambda: _delivered_ids(box) == ["id-busy-end"], 20)
+    delivered = box.home / "agents" / "capitano" / "chat-delivered.jsonl"
+    assert json.loads(delivered.read_text(encoding="utf-8").splitlines()[-1])["taken"] == "late"
+    assert _wait_for(lambda: not lock.exists(), 20), "and it ends"
+
+
+def test_a_turn_behind_a_held_one_waits_for_it(box):
+    _code, first = _held_half_drawn(box)
+    code, second = box.run("send", "capitano", "id-behind-half", stdin="il terzo", FAKE_FLUSH_RC="130")
+    assert code == 0 and second["state"] == "queued"
+    assert len(box.envelopes()) == 1, "nothing is typed over the text that waits in the composer"
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0", FAKE_FLUSH_CLEARS="1")[1]
+    assert first["messageId"] not in page["queued"]
+
+
+def test_a_refusal_that_typed_nothing_stays_the_closed_code(box):
+    box.stub_delivery()
+    (box.state / "screen").write_text(READY_CODEX, encoding="utf-8")
+    got = box.run("send", "capitano", "id-nothing-typed", stdin="ciao", FAKE_DELIVERY_RC="130")
+    assert got == (130, {"error": "composer_has_text"}) and _queue_lines(box) == []
+
+
+def _wait_for(check, seconds=15.0):
+    import time as _time
+    end = _time.monotonic() + seconds
+    while _time.monotonic() < end:
+        if check():
+            return True
+        _time.sleep(0.1)
+    return check()
+
+
+def test_a_held_turn_goes_by_itself_when_nobody_reads_or_writes_again(box):
+    """The condition of the captain: no second message, no page open; the process the queue starts submits it."""
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "0.2", "FAKE_FLUSH_RC": "0", "FAKE_FLUSH_CLEARS": "1"}
+    code, receipt = box.run("send", "capitano", "id-alone", stdin="da solo", **HALF_DRAWN, **drain)
+    assert code == 0 and receipt["state"] == "queued"
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")            # the agent is free, the text is still there
+    assert _wait_for(lambda: _delivered_ids(box) == ["id-alone"]), "nobody asked and it was submitted"
+    assert _flush_calls(box) == ["CAPITANO"] and len(box.envelopes()) == 1
+    assert _wait_for(lambda: not (box.home / "locks" / "chat-drain-capitano.lock").exists()), "the process ended"
+
+
+def test_without_the_draining_process_nothing_happens_by_itself(box):
+    """The counter-proof of the one above: the same turn, the process off, stays held until someone reads."""
+    _held_half_drawn(box)
+    import time as _time
+    _time.sleep(1.5)
+    assert _delivered_ids(box) == [] and _flush_calls(box) == []
 
 
 def test_a_send_to_a_working_agent_answers_in_a_few_seconds(box):

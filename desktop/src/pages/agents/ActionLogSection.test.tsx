@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WebActionLogClient } from "@/lib/web-action-log";
 import ActionLogPanel from "@/app/components/ActionLogPanel";
+import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
 import ActionLogSection, { appLogClient } from "./ActionLogSection";
 
 const app = vi.hoisted(() => ({ configured: true, session: null as { user: { id: string } } | null, client: { from: () => ({}) } }));
@@ -20,7 +21,10 @@ vi.mock("../../lib/supabase", () => ({
 
 // «Registro delle azioni» in the agents panel, against a stand-in client of the
 // log's table. Synthetic rows only.
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  registerAuthStorageProbe(() => true);
+});
 
 /** U+202E, the right-to-left override: built here, so the source holds no hidden character. */
 const RLO = String.fromCharCode(0x202e);
@@ -234,5 +238,17 @@ describe("what the section reads the log with", () => {
     app.configured = false;
     app.session = { user: { id: "u1" } };
     expect(await appLogClient()).toBeNull();
+  });
+});
+
+describe("the log's client while the session's storage is locked", () => {
+  it("is no account, at once: the session is never asked, which would wait for ever", async () => {
+    app.configured = true;
+    app.session = { user: { id: "u-1" } };
+    registerAuthStorageProbe(() => false);
+    await expect(appLogClient()).resolves.toBeNull();
+    registerAuthStorageProbe(() => true);
+    await expect(appLogClient()).resolves.not.toBeNull();
+    app.session = null;
   });
 });

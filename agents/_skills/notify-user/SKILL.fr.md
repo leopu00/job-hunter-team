@@ -43,6 +43,7 @@ distinguer un doublon de deux tours qui disent la même chose par hasard
 - ❌ Réponses à un message `[CHAT]` sur le tableau de bord web — utiliser `jht-send` (déjà dans le fil de chat).
 - ❌ Réponses à un `[TG]` entrant — utiliser `jht-telegram-send` directement : vous savez déjà que Telegram est actif parce que l'utilisateur vient de vous écrire de là. Économise un aller-retour DB.
 - ❌ Pièces jointes lourdes (>20 Mo). Utiliser le dossier CV de l'utilisateur + un corps de notification court.
+- ❌ La formule d'abonnement. Elle se demande SEULEMENT avec `python3 /app/shared/skills/first_run.py ask-plan` (une carte à laquelle l'utilisateur répond dans Messages), par n'importe quel agent ; une question sur la formule écrite ici en texte libre n'apparaît pas dans Messages et laisse l'utilisateur à attendre.
 
 ## Utilisation
 
@@ -66,6 +67,20 @@ jht-notify-user --agent mentor --no-telegram "Apri il tab Patterns per i dettagl
 Sortie (stdout) :
 ```
 <row_id> via=<telegram|web>
+```
+
+## Un `$` dans le texte : apostrophes simples ou stdin
+
+Entre guillemets doubles, le shell lit `$1` et `$2` comme ses propres arguments et les remplace par rien **avant que l'outil ne démarre** : « Plus — $20/month ; Pro — $200/month » arrive chez l'utilisateur comme « Plus — 0/month ; Pro — 00/month », et personne en aval ne peut rendre les chiffres. Si le texte contient un `$` (prix, montants), écris-le entre apostrophes simples ou passe-le par stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
 ```
 
 ## Types

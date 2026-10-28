@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
 import { tomorrowAtEightUtc } from "../../lib/agent-control";
@@ -11,17 +11,17 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel, { identityLine, TerminalText } from "./AgentsPanel";
+import AgentsPanel, { identityLine, LIST_REFRESH_FAILURES, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
+import { isDirectChatAgentId } from "../messages/DirectChatScreen";
+import { START_READ_WAITS } from "../../shell/StartTeamAction";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
 // (agent_control). Synthetic data only.
-const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
+// Channel: the start button's progress channel (resumeOnboardingTeamStart) is made with it
+const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true), Channel: class { onmessage: unknown = null } }));
 const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 vi.mock("@tauri-apps/api/core", () => native);
-// The Chat tab mounts the chat's composer, whose dictation listens to native events: with
-// isTauri() true and no native side, the real listen would reject outside any test.
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => undefined) }));
 vi.mock("../../lib/supabase", () => ({
   get supabase() {
     return fake.current!.client;
@@ -45,6 +45,7 @@ const AGENTS = [
   agent("DOTTORE", "dottore", null, "idle"),
 ];
 let target = "T1";
+let where: "vps" | "local" = "vps";
 let held: { session: string; byUser: boolean }[] = [];
 let standby = { state: "off", until: null as string | null, weeklyReset: false };
 let burnIntent: Record<string, unknown> | undefined;
@@ -53,7 +54,7 @@ let ownVps: string | undefined;
 let historyReply: Record<string, unknown> | null = null;
 const listReply = () => ({
   ok: true,
-  data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
+  data: { agents: AGENTS, roles: ROLES, states: true, target, where, label: "vps.example", ...(ownVps ? { ownVps } : {}) },
 });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
 const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "stop_team", "answer"]);
@@ -63,6 +64,7 @@ beforeEach(() => {
   fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   target = "T1";
+  where = "vps";
   held = [];
   standby = { state: "off", until: null, weeklyReset: false };
   burnIntent = undefined;
@@ -257,50 +259,70 @@ describe("«Agenti», the agents' control panel", () => {
     expect(ops().filter((r) => r.op === "screen")).toEqual([{ op: "screen", session: "SCOUT-1" }]);
   });
 
-  it("gives the chat the page and folds the terminal away until it is asked for", async () => {
+  it("has no chat of its own: «Chatta con» opens Messages with that agent chosen, and the terminal is the page", async () => {
     show("agent=CAPITANO");
-    // The chat is what the page is for: it comes first and takes the height the header leaves.
-    expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
-    const pane = screen.getByTestId("panel-chat-pane");
-    expect(pane.className).toMatch(/overflow-hidden/);
-    expect(pane.className).toMatch(/lg:flex-1/);
-    expect(pane.style.height).toBe(""); // no fixed box under the terminal any more
-    expect(screen.getByTestId("panel-detail")).toContainElement(pane);
-    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toBeInTheDocument();
-    expect(screen.queryByRole("tab")).toBeNull();
-
-    // Folded: no terminal, so no screen is read for it.
-    const toggle = screen.getByTestId("panel-terminal-toggle");
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveTextContent("Mostra il terminale");
-    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
-    expect(ops().filter((r) => r.op === "screen")).toEqual([]);
-
-    // Opened: the watched terminal says where to write, and the choice is kept.
-    fireEvent.click(toggle);
+    const button = await screen.findByTestId("panel-chat-with");
+    expect(button).toHaveTextContent("Chatta con Capitano");
+    expect(button).toHaveAttribute("href", "#/messages?agent=capitano");
+    expect(screen.getByTestId("panel-detail")).toContainElement(button);
+    // no chat in the page, no second way to open one
+    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
+    expect(screen.queryByTestId("direct-chat-shell")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByTestId("agent-chat-open-full")).toBeNull();
+    expect(screen.queryByText("Apri a tutta pagina")).toBeNull();
+    // the terminal is not folded away: it is read at once, and it says where to write
     await screen.findByTestId("panel-terminal-CAPITANO");
+    expect(screen.queryByTestId("panel-terminal-toggle")).toBeNull();
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la chat qui sopra.",
+      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa «Chatta con Capitano».",
     );
-    expect(screen.getByTestId("panel-terminal-toggle")).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("panel-terminal-toggle")).toHaveTextContent("Nascondi il terminale");
-    expect(window.localStorage.getItem("jht.agents.terminal")).toBe("open");
-    expect(screen.getByTestId("panel-chat-pane")).toBeInTheDocument(); // the chat stays while the terminal is open
-
-    fireEvent.click(screen.getByTestId("panel-terminal-toggle"));
-    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
-    expect(window.localStorage.getItem("jht.agents.terminal")).toBe("closed");
+    expect(window.localStorage.getItem("jht.agents.terminal")).toBeNull();
+    // the controls stay
+    expect(screen.getByTestId("panel-stop")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-restart")).toBeInTheDocument();
   });
 
-  it("an agent with no chat has the terminal alone", async () => {
+  it("the button leads to Messages with the agent already selected", async () => {
     show("agent=SCOUT-1");
-    await screen.findByTestId("panel-terminal-SCOUT-1");
-    expect(screen.queryByRole("tab")).toBeNull();
-    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
-    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare.",
-    );
-    expect(screen.getByTestId("panel-terminal-destination")).not.toHaveTextContent("Chat");
+    fireEvent.click(await screen.findByTestId("panel-chat-with"));
+    expect(window.location.hash).toBe("#/messages?agent=scout");
+  });
+
+  it("every agent Messages lists has «Chatta con», by its role, and the others have none", async () => {
+    // Messages' own rule (isDirectChatAgentId), not a list of this page: counted over every role of the team
+    const expected = ROLES.map((r) => r.role).filter((role) => isDirectChatAgentId(role));
+    expect(expected).toEqual(["capitano", "scout", "analista", "scorer", "scrittore", "critico", "assistente", "mentor"]);
+    for (const { role, multi } of ROLES) {
+      // the critic is a single session, as in the panel (SINGLE); the multiple roles have their first
+      const session = multi && role !== "critico" ? `${role.toUpperCase()}-1` : role.toUpperCase();
+      show(`agent=${session}`);
+      await screen.findByTestId("panel-detail");
+      if (isDirectChatAgentId(role)) {
+        expect(screen.getByTestId("panel-chat-with")).toHaveAttribute("href", `#/messages?agent=${role}`);
+      } else {
+        expect(screen.queryByTestId("panel-chat-with"), session).toBeNull();
+        await screen.findByTestId("panel-terminal-destination").catch(() => undefined);
+      }
+      cleanup();
+    }
+  });
+
+  it("the button is in every language, with the agent's name as Messages writes it", async () => {
+    const names = { it: "Chatta con Scout", en: "Chat with Scout", de: "Mit Scout chatten", es: "Chatear con Scout", fr: "Discuter avec Scout", hu: "Csevegés vele: Felderítő", pt: "Conversar com Scout" } as const;
+    for (const [locale, label] of Object.entries(names)) {
+      document.cookie = `NEXT_LOCALE=${locale}; path=/`;
+      show("agent=SCOUT-1");
+      expect(await screen.findByTestId("panel-chat-with")).toHaveTextContent(label);
+      cleanup();
+    }
+  });
+
+  it("an agent Messages does not list has the terminal alone, with no word of chat", async () => {
+    show("agent=DOTTORE");
+    await screen.findByTestId("panel-terminal-DOTTORE");
+    expect(screen.queryByTestId("panel-chat-with")).toBeNull();
+    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(/^Nel terminale non si scrive: è solo da guardare\.$/);
   });
 
   it("in the read-only view: no control at all, and only reads reach the native side", async () => {
@@ -316,6 +338,16 @@ describe("«Agenti», the agents' control panel", () => {
     expect(within(nav).getByRole("link", { name: "Agenti" })).toHaveAttribute("aria-current", "page");
     expect(ops().every((r) => ["list", "team", "screen", "history"].includes(String(r.op)))).toBe(true);
     expect(fake.current!.calls).toEqual([]);
+  });
+
+  it("in the read-only view «Chatta con» is there and leads to a Messages that only reads", async () => {
+    expect(READ_ONLY_ROUTES.find((r) => r.path === "/messages")?.page).toBe(ROUTES.find((r) => r.path === "/messages")?.page);
+    enterExistingTeamReadOnly(false);
+    navigate("/agents?agent=CAPITANO", { replace: true });
+    render(<Shell />);
+    const button = await screen.findByTestId("panel-chat-with");
+    expect(button).toHaveAttribute("href", "#/messages?agent=capitano");
+    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
   });
 
   it("a VPS of one's own without the mark offers the claim, and writes only after the person confirmed it", async () => {
@@ -383,6 +415,147 @@ describe("«Agenti», the agents' control panel", () => {
     show();
     const alert = await screen.findByTestId("panel-error");
     expect(alert).toHaveTextContent(describeError("agent_control_no_team", { locale: "it" }).text);
+    // told by the catalog's sentence alone: the raw code is not on screen
+    expect(alert).not.toHaveTextContent("agent_control_no_team");
+  });
+
+  it("keeps the code of a failure the catalog has no sentence for, so that a report can name it", async () => {
+    native.invoke.mockImplementation(async () => ({ ok: false, error: "code_the_catalog_does_not_know" }));
+    show();
+    expect(await screen.findByTestId("panel-error")).toHaveTextContent("(code_the_catalog_does_not_know)");
+  });
+
+  it("with no team running it offers «Avvia la squadra», and reads again once the team is up", async () => {
+    let up = false;
+    native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+      if (command === "onboarding_resume_team_start") {
+        up = true;
+        return {};
+      }
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (!up) return { ok: false, error: "agent_control_no_team" };
+      const op = args.request?.op;
+      if (op === "list") return listReply();
+      if (op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: false, error: "agent_control_unsupported" };
+    });
+    show();
+    await screen.findByTestId("panel-error");
+    fireEvent.click(await screen.findByTestId("start-team"));
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-error")).toBeNull();
+    expect(native.invoke.mock.calls.filter(([c]) => c === "onboarding_resume_team_start")).toHaveLength(1);
+  });
+
+  it("reads the agents again by itself when the first read after the start finds nothing yet", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let up = false;
+      let lists = 0;
+      native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+        if (command === "onboarding_resume_team_start") {
+          up = true;
+          return {};
+        }
+        if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+        const op = args.request?.op;
+        if (op === "list") {
+          lists++;
+          return up && lists >= 3 ? listReply() : { ok: false, error: "agent_control_no_team" };
+        }
+        if (op === "team") return { ok: true, data: { halted: false, standby, held } };
+        return { ok: false, error: "agent_control_unsupported" };
+      });
+      show();
+      await screen.findByTestId("panel-error");
+      fireEvent.click(await screen.findByTestId("start-team"));
+      // the first read after the start is too early: the page asks again after a few seconds, with no Refresh
+      await waitFor(() => expect(lists).toBe(2));
+      expect(screen.getByTestId("panel-error")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_500);
+      });
+      await screen.findByTestId("panel-summary");
+      expect(lists).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe("after «Avvia la squadra» the page waits for the flag «stopped by you» to fall", () => {
+    /** The native side of a team that answers the list at once but lifts the stop only after `lifts` reads of the team. */
+    function stopLifting(lifts: number) {
+      let up = false;
+      const seen = { lists: 0, teams: 0 };
+      native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+        if (command === "onboarding_resume_team_start") {
+          up = true;
+          return {};
+        }
+        if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+        const op = args.request?.op;
+        if (!up) return { ok: false, error: "agent_control_no_team" };
+        if (op === "list") {
+          seen.lists++;
+          return listReply();
+        }
+        if (op === "team") {
+          seen.teams++;
+          return { ok: true, data: { halted: seen.teams <= lifts, standby, held } };
+        }
+        return { ok: false, error: "agent_control_unsupported" };
+      });
+      return seen;
+    }
+
+    it("keeps reading until the team no longer shows as stopped, with no Refresh, and keeps the button meanwhile", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const seen = stopLifting(3);
+        show();
+        await screen.findByTestId("panel-error");
+        fireEvent.click(await screen.findByTestId("start-team"));
+        // the list answers, the team still shows as stopped by the person: the page says so and keeps the button
+        expect(await screen.findByText(/Squadra fermata da te/)).toBeInTheDocument();
+        expect(screen.getByTestId("start-team")).toBeInTheDocument();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(20_000);
+        });
+        expect(await screen.findByText(/Squadra attiva/)).toBeInTheDocument();
+        expect(screen.queryByText(/Squadra fermata da te/)).toBeNull();
+        expect(screen.queryByTestId("start-team")).toBeNull();
+        expect(seen.teams).toBe(4);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("gives up after five more tries when the team stays stopped, and leaves the page as it read it", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const seen = stopLifting(1_000);
+        show();
+        await screen.findByTestId("panel-error");
+        fireEvent.click(await screen.findByTestId("start-team"));
+        await screen.findByText(/Squadra fermata da te/);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(60_000);
+        });
+        // the read of the start's end, then five more; the first read of the page (no team) had no team to read
+        expect(seen.teams).toBe(6);
+        expect(screen.getByText(/Squadra fermata da te/)).toBeInTheDocument();
+        expect(screen.queryByTestId("start-team")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("offers the start only where the sentence says the team is stopped", async () => {
+    native.invoke.mockImplementation(async () => ({ ok: false, error: "agent_control_read_only" }));
+    show();
+    await screen.findByTestId("panel-error");
+    expect(screen.queryByTestId("start-team")).toBeNull();
   });
 });
 
@@ -715,7 +888,7 @@ describe("«Agenti», the questions the agents asked the person", () => {
     expect(second).toHaveTextContent("senza tipo");
     expect(second).toHaveTextContent("<b>not html</b> procedo?");
     expect(second.querySelector("b")).toBeNull();
-    expect(within(list).getByTestId("panel-questions-messages")).toHaveAttribute("href", "#/messages");
+    expect(within(list).getByTestId("panel-questions-messages")).toHaveAttribute("href", "#/messages?agent=capitano");
   });
 
   it("says «none» for a known zero and «non so» for an agent that does not say them", async () => {
@@ -1099,5 +1272,282 @@ describe("«Agenti»: the terminal, read at the pace the native side says", () =
     expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("same");
     await vi.advanceTimersByTimeAsync(2_000);
     expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("new line");
+  });
+});
+
+describe("«Agenti»: the list reads again by itself", () => {
+  const lists = () => ops().filter((r) => r.op === "list").length;
+  const setVisibility = (state: "visible" | "hidden") => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+  const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility("visible");
+  });
+
+  it("the rhythms are 20 s on this computer and 60 s on a VPS", () => {
+    expect([LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS]).toEqual([20_000, 60_000]);
+  });
+
+  it("on this computer it reads every 20 s, each time with the team and the history", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    const first = lists();
+    expect(first).toBe(1);
+    await advance(LIST_REFRESH_LOCAL_MS - 2_000);
+    expect(lists()).toBe(first);
+    await advance(3_000);
+    await waitFor(() => expect(lists()).toBe(first + 1));
+    expect(ops().filter((r) => r.op === "team").length).toBe(first + 1);
+    await advance(LIST_REFRESH_LOCAL_MS);
+    await waitFor(() => expect(lists()).toBe(first + 2));
+    // a quiet read: the button never says «refreshing» for it
+    expect(screen.queryByText("Aggiorno…")).toBeNull();
+  });
+
+  it("on a VPS it reads every 60 s: its reads go over ssh", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_LOCAL_MS * 2 + 5_000);
+    expect(lists()).toBe(1);
+    await advance(LIST_REFRESH_VPS_MS - LIST_REFRESH_LOCAL_MS * 2);
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("the new states are shown without anybody pressing anything", async () => {
+    where = "local";
+    show("agent=CAPITANO");
+    expect(await screen.findByTestId("panel-state")).toHaveTextContent("lavora");
+    const state = AGENTS[0].state;
+    AGENTS[0].state = "idle";
+    try {
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await waitFor(() => expect(screen.getByTestId("panel-state")).not.toHaveTextContent("lavora"));
+    } finally {
+      AGENTS[0].state = state;
+    }
+  });
+
+  it("a hidden window reads nothing, and reads at once when it is seen again", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    setVisibility("hidden");
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(1);
+    setVisibility("visible");
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("a window seen again right after a read does not read twice", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(500);
+    expect(lists()).toBe(1);
+  });
+
+  it("stops when the page goes away", async () => {
+    where = "local";
+    const view = show();
+    await screen.findByTestId("panel-summary");
+    view.unmount();
+    await advance(LIST_REFRESH_LOCAL_MS * 5);
+    expect(lists()).toBe(1);
+  });
+
+  it.each(["ssh_auth_failed", "ssh_rate_limited", "host_key_changed", "read_only_link"])(
+    "after a failure that asking again makes worse (%s) it does not read by itself; «Refresh» still does",
+    async (code) => {
+      where = "local";
+      const base = native.invoke.getMockImplementation()!;
+      let failing = true;
+      native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+        command === COMMAND && args.request.op === "list" && failing ? { ok: false, error: code } : base(command, args),
+      );
+      show();
+      await screen.findByTestId("panel-error");
+      expect(lists()).toBe(1);
+      await advance(LIST_REFRESH_VPS_MS * 4);
+      expect(lists()).toBe(1);
+      // the person's own read is still there, and once it answers the page reads by itself again
+      failing = false;
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+      await screen.findByTestId("panel-summary");
+      expect(lists()).toBe(2);
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await waitFor(() => expect(lists()).toBe(3));
+    },
+  );
+
+  it("after any other failure it goes on reading, slowly, as the team is not known", async () => {
+    const base = native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+      command === COMMAND && args.request.op === "list" ? { ok: false, error: "agent_control_unsupported" } : base(command, args),
+    );
+    show();
+    await screen.findByTestId("panel-error");
+    await advance(LIST_REFRESH_VPS_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("gives up after three periodic reads failed in a row, whatever the code (a refused key is told as «unanswered»)", async () => {
+    expect(LIST_REFRESH_FAILURES).toBe(3);
+    const base = native.invoke.getMockImplementation()!;
+    let failing = true;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+      command === COMMAND && args.request.op === "list" && failing ? { ok: false, error: "agent_control_unanswered" } : base(command, args),
+    );
+    show();
+    await screen.findByTestId("panel-error");
+    // the first read of the page, then the three periodic ones, one a minute
+    await advance(LIST_REFRESH_VPS_MS * 3 + 1_000);
+    await waitFor(() => expect(lists()).toBe(1 + LIST_REFRESH_FAILURES));
+    await advance(10 * 60_000);
+    expect(lists()).toBe(1 + LIST_REFRESH_FAILURES);
+    // a window seen again does not bring it back either
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(1_000);
+    expect(lists()).toBe(1 + LIST_REFRESH_FAILURES);
+    // «Refresh» does, and a good read brings the periodic one back
+    failing = false;
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await screen.findByTestId("panel-summary");
+    expect(lists()).toBe(2 + LIST_REFRESH_FAILURES);
+    await advance(LIST_REFRESH_VPS_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3 + LIST_REFRESH_FAILURES));
+  });
+
+  it("a good read between the failures starts the count again", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    // the page's first read, then: fail, fail, good, fail, fail, fail; whatever comes after fails too
+    const outcome = [true, false, false, true, false, false, false];
+    let n = 0;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list") return (outcome[n++] ?? false) ? base(command, args) : { ok: false, error: "agent_control_unanswered" };
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    // a step at a time: each one commits what the last read set, as the app does
+    for (let step = 0; step < 36; step++) await advance(LIST_REFRESH_LOCAL_MS);
+    // given up at the third failure of the second run, not before
+    expect(lists()).toBe(outcome.length);
+  });
+
+  it("reads nothing while a read of the person's is on its way", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let slow = false;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list" && slow) await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    slow = true;
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await waitFor(() => expect(lists()).toBe(2));
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(2);
+    slow = false;
+    release!();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3));
+  });
+
+  it("a window seen again while the periodic read is on its way does not start a second", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let slow = false;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list" && slow) await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    slow = true;
+    await advance(LIST_REFRESH_LOCAL_MS + 500);
+    await waitFor(() => expect(lists()).toBe(2));
+    await advance(6_000); // the read is still on its way, and more than the 5 s that make a seen window read again have passed
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(1_000);
+    expect(lists()).toBe(2);
+    slow = false;
+    release!();
+    await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3));
+  });
+
+  it("reads nothing while an action is on its way", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "stop") await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show("agent=SCOUT-1");
+    fireEvent.click(await screen.findByTestId("panel-stop"));
+    fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
+    await waitFor(() => expect(ops().some((r) => r.op === "stop")).toBe(true));
+    const before = lists();
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(before);
+    release!();
+    await waitFor(() => expect(lists()).toBe(before + 1)); // the action's own read
+  });
+
+  it("reads nothing while a start is on its way", async () => {
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let up = false;
+    native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+      if (command === "onboarding_resume_team_start") {
+        await new Promise<void>((resolve) => { release = resolve; });
+        up = true;
+        return {};
+      }
+      if (command === COMMAND && args.request?.op === "list" && !up) return { ok: false, error: "agent_control_no_team" };
+      return base(command, args as { request: Record<string, unknown> });
+    });
+    show();
+    await screen.findByTestId("panel-error");
+    fireEvent.click(await screen.findByTestId("start-team"));
+    await waitFor(() => expect(release).not.toBeNull());
+    const before = lists();
+    await advance(LIST_REFRESH_VPS_MS * 3);
+    // only the start's own readings (one every few seconds, up to its maximum): not one of the page's by itself
+    expect(lists() - before).toBe(START_READ_WAITS.duringMax);
+    release!();
+    await screen.findByTestId("panel-summary");
+  });
+
+  it("coming back to Agents from another page reads the list at once", async () => {
+    where = "local";
+    navigate("/agents?agent=CAPITANO", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("panel-summary");
+    expect(lists()).toBe(1);
+    navigate("/help");
+    await waitFor(() => expect(screen.queryByTestId("panel-summary")).toBeNull());
+    navigate("/agents?agent=CAPITANO");
+    await screen.findByTestId("panel-summary");
+    await waitFor(() => expect(lists()).toBe(2));
   });
 });

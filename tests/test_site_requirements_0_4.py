@@ -287,7 +287,7 @@ def test_the_getting_started_desktop_path_is_the_mac_app_with_a_link_to_the_down
     block = STARTED_I18N[start.end():STARTED_I18N.find("\n  },\n", start.end())]
     title = re.search(r'path2Title: "([^"]*)"', block).group(1)
     assert "Apple silicon" in title and "macOS" in title
-    body = re.search(r'path2A:\s*"([^"]*)"', block).group(1) + re.search(r'path2B: "([^"]*)"', block).group(1)
+    body = re.search(r'path2A:\s*"([^"]*)"', block).group(1) + re.search(r'path2B:\s*"([^"]*)"', block).group(1)
     assert "Homebrew" in body and "Podman" in body and "Windows" in body and "Linux" in body
     assert "path2Soon" not in block and "path3WinIntro" not in block
     assert 'href="/download"' in STARTED_PAGE

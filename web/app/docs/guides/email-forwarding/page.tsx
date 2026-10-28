@@ -112,6 +112,14 @@ export default async function EmailForwardingGuidePage() {
             </tr>
             <tr className="border-b border-[var(--color-border)]">
               <td className="py-2 pr-4 text-[var(--color-muted)]">
+                {t.rowDedicatedLabel}
+              </td>
+              <td className="py-2 text-[var(--color-muted)]">
+                {t.rowDedicatedValue}
+              </td>
+            </tr>
+            <tr className="border-b border-[var(--color-border)]">
+              <td className="py-2 pr-4 text-[var(--color-muted)]">
                 {t.rowPwLabel}
               </td>
               <td className="py-2 text-[var(--color-muted)]">{t.rowPwValue}</td>
@@ -121,7 +129,7 @@ export default async function EmailForwardingGuidePage() {
       </div>
       <p className={P_CLS}>{t.step2Local}</p>
       <Callout>{t.step2Callout}</Callout>
-      <p className={P_CLS}>{t.step2Button}</p>
+      <p className={P_CLS}>{t.step2Save}</p>
 
       {/* Step 3 */}
       <h2 className={TITLE_CLS}>{t.step3Title}</h2>

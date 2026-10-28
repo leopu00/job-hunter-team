@@ -2,6 +2,8 @@ import userEvent from "@testing-library/user-event";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeClick, OfficeEvent, OfficeLayout, OfficeManifest, OfficeSceneOptions, OfficeSnapshot } from "../../office/contract";
+import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
+import { inertSupabase } from "../../web-shims/server/inert-supabase";
 import { emptyEngine, loadAssets } from "../../office/parts";
 import { currentLocation, navigate } from "../../shell/router";
 
@@ -58,7 +60,10 @@ beforeEach(() => {
     vi.fn(async (url: string) => (url === "/office/manifest.json" ? json(MANIFEST) : url === "/office/layout.json" ? json(LAYOUT) : json({}, 404))),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  registerAuthStorageProbe(() => true);
+});
 
 describe("loadAssets", () => {
   it("reads the manifest, then the layout it names", async () => {
@@ -105,6 +110,16 @@ describe("the office page", () => {
     render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(applied).toHaveLength(1));
     expect(diff).toHaveBeenCalledWith(null, expect.objectContaining(snapshot));
+  });
+
+  it("reads with the client that answers «no rows» while the session's storage is locked, never the one that waits for ever", async () => {
+    registerAuthStorageProbe(() => false);
+    const engine = { ...emptyEngine() };
+    const load = vi.fn(async (_client: unknown) => ({ teamOnline: true }) as OfficeSnapshot);
+    parts.value = { createEngine: vi.fn(() => engine), data: { load, diff: vi.fn(() => []) } };
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(load).toHaveBeenCalled());
+    expect(load.mock.calls[0]![0]).toBe(inertSupabase);
   });
 
   it("with reduced motion a real move changes the pile's number, and nobody walks it", async () => {

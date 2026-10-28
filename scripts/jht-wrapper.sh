@@ -5104,6 +5104,27 @@ case "$SUB" in
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
+  # `jht providers plan` senza id LEGGE il piano dichiarato: non accende niente. Con il
+  # container spento (o la machine, o Docker) lo dice e basta, come `status`; il CLI che
+  # legge il piano sta nel container e l'host non ha il registro dei piani. Dichiarare un
+  # piano (`jht providers plan <id>`) e gli altri `jht providers ...` scrivono o usano la
+  # rete: vanno avanti come il catch-all, che avvia il container.
+  providers)
+    if [ "${2:-}" = plan ] && [ "$#" -eq 2 ]; then
+      require_confined_podman_machine
+      if docker_reachable && container_up; then
+        docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+        exit $?
+      fi
+      err "container '$CONTAINER_SERVICE' non attivo: leggere il piano non lo accende. Avvialo con 'jht up' e riprova."
+      exit 1
+    fi
+    require_compose_file
+    require_docker
+    ensure_up
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
   # ── Operativita': delegata al CLI Node nel container ───────────────────
   *)
     require_compose_file

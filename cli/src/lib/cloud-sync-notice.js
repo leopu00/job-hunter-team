@@ -73,3 +73,34 @@ export async function noticeRefusedToken(state, token, { run = defaultRun, log =
   else log(`cloud-sync notice not sent: ${result?.reason || 'unknown'}`);
   return result;
 }
+
+// The keys already told for a lost session, apart from the refused tokens above.
+const toldLostSession = new Set();
+
+/**
+ * When the daemon could not authenticate with Supabase because the session of this device is gone
+ * (cloud-realtime.js: RealtimeSessionLostError), tell the user once, in their language, that the box
+ * now follows the website with slower checks and has to be paired again. The key is the
+ * sync token's public prefix, so a restart does not tell it twice (the row's own key keeps it one)
+ * and a new pairing that is lost in its turn is told again. Anything else that went wrong with the
+ * Realtime setup (network, config) is not a lost session and says nothing. Never throws.
+ *
+ * @param {{ code?: string } | null | undefined} error
+ * @param {string | null | undefined} token
+ * @param {{ run?: (args: string[]) => Promise<object>, log?: (msg: string) => void, memo?: Set<string> }} [options]
+ */
+export async function noticeLostSession(error, token, { run = defaultRun, log = () => {}, memo = toldLostSession } = {}) {
+  if (error?.code !== 'session_lost') return { notified: false, reason: 'not_lost' };
+  const key = tokenPublicPrefix(token);
+  if (!key) return { notified: false, reason: 'token_unreadable' };
+  if (memo.has(key)) return { notified: false, reason: 'already_told' };
+  let result;
+  try {
+    result = await run(['session_lost', key]);
+  } catch {
+    result = { notified: false, reason: 'notice_script_failed' };
+  }
+  if (result?.notified) memo.add(key);
+  else log(`cloud-sync notice not sent: ${result?.reason || 'unknown'}`);
+  return result;
+}

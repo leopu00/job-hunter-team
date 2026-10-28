@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstalledBrowser } from "../lib/browsers";
@@ -92,7 +92,7 @@ describe("LoginScreen", () => {
 
   it("selects a saved local profile before the dashboard activates its scope", async () => {
     const user = userEvent.setup();
-    const selectLocal = vi.fn(() => ({
+    const selectLocal = vi.fn((_profileId: string) => ({
       profileId: "opaque-local-profile",
       displayName: "Ada Locale",
     }));
@@ -101,14 +101,16 @@ describe("LoginScreen", () => {
       <LoginScreen
         loadBrowsers={noBrowsers}
         configured
+        listLocal={() => [{ profileId: "opaque-local-profile", displayName: "Ada Locale" }]}
         readLocal={() => ({ profileId: "opaque-local-profile", displayName: "Ada Locale" })}
+        ownerLocal={() => null}
         selectLocal={selectLocal}
         onLocalReady={onLocalReady}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Continua come Ada Locale" }));
-    expect(selectLocal).toHaveBeenCalledWith();
+    expect(selectLocal).toHaveBeenCalledWith("opaque-local-profile");
     expect(screen.queryByRole("textbox", { name: "Nome visualizzato" })).not.toBeInTheDocument();
     expect(onLocalReady).toHaveBeenCalledOnce();
   });
@@ -120,6 +122,7 @@ describe("LoginScreen", () => {
       <LoginScreen
         loadBrowsers={noBrowsers}
         configured
+        listLocal={() => [{ profileId: "opaque-local-profile", displayName: "Ada Locale" }]}
         readLocal={() => ({ profileId: "opaque-local-profile", displayName: "Ada Locale" })}
         onResetLocalPlayground={onResetLocalPlayground}
       />,
@@ -273,5 +276,121 @@ describe("LoginScreen", () => {
     await user.click(screen.getByRole("button", { name: "Usa in locale" }));
     expect(screen.getByRole("textbox", { name: "Nome visualizzato" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("LoginScreen with several local profiles", () => {
+  const ada = { profileId: "profile-a", displayName: "Ada" };
+  const bea = { profileId: "profile-b", displayName: "Bea" };
+
+  it("lists the saved profiles, says which one has the team and which was used last, and chooses by id", async () => {
+    const user = userEvent.setup();
+    const selectLocal = vi.fn((_id: string) => bea);
+    const onLocalReady = vi.fn();
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        listLocal={() => [ada, bea]}
+        readLocal={() => bea}
+        ownerLocal={() => ada}
+        selectLocal={selectLocal}
+        onLocalReady={onLocalReady}
+      />,
+    );
+
+    const list = screen.getByRole("list", { name: "Profili locali salvati" });
+    expect(screen.getByRole("heading", { name: "Profili su questo Mac" })).toBeInTheDocument();
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByTestId("login-profile-owner")).toHaveTextContent("Squadra di questo Mac");
+    expect(within(rows[0]).queryByTestId("login-profile-last")).toBeNull();
+    expect(within(rows[1]).getByTestId("login-profile-last")).toHaveTextContent("Ultimo usato");
+    expect(within(rows[1]).queryByTestId("login-profile-owner")).toBeNull();
+
+    // a profile that does not own the team is chosen all the same: it enters, and the app says whose the team is
+    await user.click(screen.getByRole("button", { name: "Continua come Bea" }));
+    expect(selectLocal).toHaveBeenCalledWith("profile-b");
+    expect(onLocalReady).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("adds a profile with «Nuovo profilo locale» and does not choose or replace the saved ones", async () => {
+    const user = userEvent.setup();
+    const createLocal = vi.fn(async (displayName: string) => ({ profileId: "profile-c", displayName }));
+    const selectLocal = vi.fn((_id: string) => ada);
+    const onLocalReady = vi.fn();
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        listLocal={() => [ada, bea]}
+        readLocal={() => bea}
+        ownerLocal={() => ada}
+        createLocal={createLocal}
+        selectLocal={selectLocal}
+        onLocalReady={onLocalReady}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Nuovo profilo locale" }));
+    expect(screen.getByText("Si aggiunge agli altri: non li sostituisce.")).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Nome visualizzato" }), "Carla");
+    await user.click(screen.getByRole("button", { name: "Continua in locale" }));
+
+    expect(createLocal).toHaveBeenCalledWith("Carla");
+    expect(selectLocal).not.toHaveBeenCalled();
+    expect(onLocalReady).toHaveBeenCalledOnce();
+  });
+
+  it("has no list and offers «Usa in locale» when nothing is saved", () => {
+    render(<LoginScreen loadBrowsers={noBrowsers} configured listLocal={() => []} readLocal={() => null} ownerLocal={() => null} />);
+    expect(screen.queryByRole("list", { name: "Profili locali salvati" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nuovo profilo locale" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Usa in locale" })).toBeInTheDocument();
+  });
+
+  it("says a profile that could not be chosen, and stays on the list", async () => {
+    const user = userEvent.setup();
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        listLocal={() => [ada]}
+        readLocal={() => ada}
+        ownerLocal={() => ada}
+        selectLocal={() => { throw new Error("local-profile-missing"); }}
+        onLocalReady={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Continua come Ada" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Non riesco ad attivare il profilo locale");
+    expect(screen.getByRole("button", { name: "Continua come Ada" })).toBeEnabled();
+  });
+});
+
+describe("LoginScreen: who has the team, from the backend", () => {
+  const ada = { profileId: "profile-a", displayName: "Ada" };
+  const bea = { profileId: "profile-b", displayName: "Bea" };
+  const base = { loadBrowsers: noBrowsers, configured: true, listLocal: () => [ada, bea], readLocal: () => bea, selectLocal: vi.fn() } as const;
+
+  it("marks the profile the owner marker names, over the renderer's copy", async () => {
+    render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => ({ kind: "local", profileId: "profile-b" })} />);
+    // the copy shows first on Ada's row; the backend's answer moves the mark to Bea's
+    await vi.waitFor(() => {
+      const owners = screen.getAllByTestId("login-profile-owner");
+      expect(owners).toHaveLength(1);
+      expect(screen.getAllByRole("listitem")[1]).toContainElement(owners[0]);
+    });
+  });
+
+  it("marks nobody when the marker names an account or nobody, even if the copy has an owner", async () => {
+    render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => ({ kind: "google" })} />);
+    await vi.waitFor(() => expect(screen.queryByTestId("login-profile-owner")).toBeNull());
+  });
+
+  it("keeps the copy's mark when the backend cannot be asked", async () => {
+    render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => { throw { code: "desktop_only" }; }} />);
+    expect(screen.getAllByRole("listitem")[0]).toContainElement(await screen.findByTestId("login-profile-owner"));
   });
 });

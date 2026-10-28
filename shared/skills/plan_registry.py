@@ -32,6 +32,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
+import stat
 import sys
 from pathlib import Path
 from typing import Optional
@@ -48,8 +50,13 @@ except ImportError:
         "plan.free": "free",
         "plan.price_month": "%s $/month",
         "plan.unknown": "unknown plan: %s",
+        "plan.config_unreadable": "%s cannot be read (damaged, or not a JSON object): the plan was not written and the file was left as it is",
         "plan.not_selected": "subscription plan not selected",
-        "plan.select_hint": "the user has not declared a subscription plan: do not guess a roster. Ask them in chat — run `python3 /app/shared/skills/plan_registry.py list <provider>` (Codex is `codex`), show the plans and suggest the one on the `Codex reports:` line without deciding for them — then write exactly their choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` and run begin-burst again",
+        "plan.select_hint": "the user has not declared a subscription plan: do not guess a roster. Ask them with `python3 /app/shared/skills/first_run.py ask-plan` — the only way to ask: it posts the card with the plans and the one Codex reports, and it never posts a second while the first has no answer; never write the question as plain text in your pane. When the user answers, write exactly their choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (the id of the card works: `pro_max` is `pro-max`) and run begin-burst again",
+        "plan.question_subject": "Which subscription plan do you have?",
+        "plan.question_text": "The team needs your %s plan before it starts: it sizes the workers so your usage window is not burnt on the first day. Pick the one you really have.",
+        "plan.question_suggested": "suggested",
+        "plan.question_unknown": "I do not know",
         "plan.none_known": "no known plans",
         "plan.weekly_cap": "weekly cap",
         "plan.no_weekly_cap": "no weekly cap",
@@ -254,6 +261,23 @@ def _read_config() -> dict:
         return {}
 
 
+def _read_config_to_write() -> dict:
+    """The configuration as it is, for a write: a file that is not there is an empty configuration, but a file
+    that is there and cannot be read as a JSON object (damaged, a list, not text, not a regular file) is never
+    read as empty, or the write would replace everything in it with the one key."""
+    path = _config_path()
+    try:
+        with path.open(encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):  # ValueError: json.JSONDecodeError and UnicodeDecodeError
+        raise ValueError(_tf("plan.config_unreadable", str(path))) from None
+    if not isinstance(data, dict):
+        raise ValueError(_tf("plan.config_unreadable", str(path)))
+    return data
+
+
 def list_plans(provider: str | None = None) -> dict[str, list[dict]]:
     """Piani disponibili. Senza `provider`: tutti."""
     if provider:
@@ -285,9 +309,47 @@ def find_plan(provider: str, plan_id: str) -> Optional[dict]:
     prov = normalize_provider(provider)
     wanted = (plan_id or "").strip().lower()
     for p in PLANS.get(prov, []):
-        if p["id"] == wanted:
+        # the card of the question writes the id with `_` where the table has `-` (an option id takes no hyphen)
+        if wanted in (p["id"], option_id(p["id"])):
             return dict(_localized_plan(p, prov), provider=prov)
     return None
+
+
+def option_id(plan_id: str) -> str:
+    """The id of a plan as a button of the question card: the table's id, `-` written `_` (`pro-max` → `pro_max`)."""
+    return plan_id.replace("-", "_")
+
+
+_PROVIDER_NAMES = {"openai": "OpenAI", "claude": "Claude", "kimi": "Kimi"}
+UNKNOWN_OPTION = "unknown"
+
+
+def question_options(provider: str | None = None) -> dict:
+    """What the card that asks for the plan shows: the provider's plans (each id as `option_id` writes it), the one
+    Codex reports marked as suggested, and «I do not know». Empty when there is no provider or the table has none.
+
+    The labels and the question are in the user's language (i18n-prefs.json, then JHT_LANG)."""
+    prov = normalize_provider(provider or _read_config().get("active_provider"))
+    plans = list_plans(prov).get(prov) or []
+    if not plans:
+        return {}
+    reading = _codex_reading() if prov == "openai" else None
+    suggested = _CODEX_PLAN_TYPE_TO_ID.get((reading or {}).get("plan_type") or "") if reading else None
+    options = []
+    for plan in plans:
+        price = str(plan["price"])
+        label = plan["label"] if price == "0" else f"{plan['label']} — {price}"
+        if plan["id"] == suggested:
+            label = f"{label} ({_t('plan.question_suggested')})"
+        options.append({"id": option_id(plan["id"]), "label": label})
+    options.append({"id": UNKNOWN_OPTION, "label": _t("plan.question_unknown")})
+    return {
+        "provider": prov,
+        "subject": _t("plan.question_subject"),
+        "text": _tf("plan.question_text", _PROVIDER_NAMES.get(prov, prov.capitalize())),
+        "options": options,
+        "suggested": suggested if suggested and any(p["id"] == suggested for p in plans) else None,
+    }
 
 
 def active_plan() -> Optional[dict]:
@@ -315,7 +377,7 @@ def set_plan(provider: str, plan_id: str) -> dict:
     if plan is None:
         raise ValueError(_tf("plan.unknown", f"{provider}:{plan_id}"))
     prov = plan["provider"]
-    cfg = _read_config()
+    cfg = _read_config_to_write()
     providers = cfg.setdefault("providers", {})
     if not isinstance(providers, dict):
         providers = cfg["providers"] = {}
@@ -323,14 +385,40 @@ def set_plan(provider: str, plan_id: str) -> dict:
     if not isinstance(entry, dict):
         entry = providers[prov] = {}
     entry["plan"] = plan["id"]
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    tmp.replace(path)
+    _write_config_privately(_config_path(), cfg)
     return plan
+
+
+def _write_config_privately(path: Path, cfg: dict) -> None:
+    """Write the configuration the way the CLI's private writer does (cli/src/lib/secure-config-io.js): the file
+    can hold the Telegram bot_token, so it is never created with the umask's mode and never goes through a temp
+    file with a name anyone can guess. A new file is 0600; an existing one keeps the mode it has. The temp file
+    sits in the same folder (so the rename is atomic), is created with O_EXCL under a name that is not fixed, and
+    is removed if anything fails before the rename."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+    except OSError:
+        mode = 0o600
+    body = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+    tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{secrets.token_hex(8)}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(body)
+            f.flush()
+            try:
+                os.fchmod(f.fileno(), mode)
+            except (AttributeError, OSError):  # Windows / v9fs: the host ACL owns the permissions
+                pass
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _tier_bucket(tier: float) -> int:

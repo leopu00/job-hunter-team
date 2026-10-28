@@ -281,13 +281,22 @@ pub(crate) async fn mail_status(
 
 #[tauri::command]
 pub(crate) async fn mail_save_password(
+    window: tauri::Window,
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
     request: MailPasswordRequest,
 ) -> Result<MailSaved, MailError> {
-    let scope = scopes.active().map_err(failure)?;
+    let mut request = request;
+    let scope = scopes.active().map_err(|code| {
+        request.password.zeroize();
+        failure(code)
+    })?;
+    // The password goes to the team's host: on an existing team that is the full link, not the page's say-so.
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &scope) {
+        request.password.zeroize();
+        return Err(failure(code));
+    }
     tauri::async_runtime::spawn_blocking(move || {
-        let mut request = request;
         let invocation = setup_invocation(&request);
         request.password.zeroize();
         let invocation = invocation?;

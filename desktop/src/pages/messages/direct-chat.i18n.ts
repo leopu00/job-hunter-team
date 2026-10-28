@@ -12,7 +12,6 @@ export interface DirectChatText {
   agentsNavAria: string;
   agentSelect: string;
   /** The button of the chat in the Agents page: the same chat with the same agent, on the whole page. */
-  openFull: string;
   title: string;
   conversationWith: string; // {name}
   messagesWith: string; // {name}
@@ -45,20 +44,27 @@ export interface DirectChatText {
   sent: string;
   /** Under a message of the person's that waits in the agent's mailbox: sent, not yet taken. */
   queued: string;
+  /** While the agent works on a turn of the person's: a line with moving dots at the end of the chat. */
+  working: string; // {name}
   /** Under a message of the person's that waited too long for its agent and was never typed. */
   queueExpired: string;
+  queueLate: string;
   /** What a system line with a closed code says, by code (the backend's English text is the fallback). */
   codes: Record<string, string>;
   keysHint: string;
   /** The label of each kind of message, on every message of the agent and on its questions. */
   kinds: Record<"urgent" | "blocked" | "question" | "completed" | "info", string>;
   answerSend: string;
+  /** Under a question asked in plain words (no buttons): it is answered by writing in the chat's own box. */
+  answerBelow: string;
   /** Under an answered question: the agent's tool picked the answer up (not yet that the agent acted on it). */
   answerSeen: string;
   /** Under an answered question the agent's tool has not picked up yet. */
   answerWaiting: string;
   /** A question nobody answered in time: its safe option was taken. */
   answerExpired: string;
+  /** A question the system closed because what it asked was settled another way (no choice is shown as taken). */
+  answerResolved: string;
   /** Under a message of the person's still in the agent's composer: pasted, Enter did not take it. */
   notSent: string;
   /** The button beside it: presses Enter once more, never pastes the text again. */
@@ -93,6 +99,15 @@ export interface DirectChatText {
   /** The same, with new lines that came while the person read above; `{count}` is their number. */
   jumpToNew: string;
   /** Said before sending, when the answer is not one the team would take. */
+  /** The paperclip beside the composer (Assistant only): its label, and the word while a file is being attached. */
+  attach: string;
+  attaching: string;
+  /** The file is in the folder but the Assistant was not told; `{name}` is the person's own file name. */
+  attachSavedNotSent: string;
+  /** Why the paperclip is off, by the code the native side gives. */
+  attachOff: Record<"attach_vps" | "attach_read_only" | "attach_platform" | "attach_not_connected", string>;
+  /** Why a file was not attached, by closed code; `attach_failed` says any other. */
+  attachErrors: Record<"attachment_type" | "attachment_type_mismatch" | "attachment_too_big" | "attachment_is_link" | "attachment_not_file" | "attachment_unreadable" | "attachments_folder_unsafe" | "attachments_folder_full" | "attachment_save_failed" | "attachment_not_shared" | "attach_busy" | "attach_failed", string>;
   answerInvalid: Record<"choice_unknown" | "single_choice_only" | "free_text_not_allowed" | "empty_answer" | "text_too_long", string>;
 }
 
@@ -102,7 +117,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agenti",
     agentsNavAria: "Chat agenti",
     agentSelect: "Agente",
-    openFull: "Apri a tutta pagina",
     title: "Chat diretta",
     conversationWith: "Conversazione con {name}",
     messagesWith: "Messaggi con {name}",
@@ -128,14 +142,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destinazione: la chat di {name}. Il testo gli arriva come messaggio, non come tasti nel suo terminale.",
     sent: "Inviato",
     queued: "In coda",
+    working: "{name} sta lavorando…",
     queueExpired: "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo.",
+    queueLate: "Inviato in ritardo: il testo era rimasto nella casella dell'agente e ha avuto il suo Invio dopo la scadenza. Guarda il terminale prima di riscrivere.",
     codes: { mail_not_taken: "L'agente non ha ancora preso il messaggio.", message_too_long: "Un messaggio dell'agente era troppo lungo per essere mostrato qui." },
     keysHint: "Invio manda · Ctrl+Invio va a capo",
     kinds: { urgent: "urgente", blocked: "bloccato", question: "domanda", completed: "completato", info: "comunicazione" },
     answerSend: "Rispondi",
     answerSeen: "Presa dallo strumento dell'agente",
     answerWaiting: "Inviata: lo strumento dell'agente non l'ha ancora presa",
+    answerBelow: "Rispondi scrivendo qui sotto.",
     answerExpired: "Scaduta: è stata presa la risposta di riserva",
+    answerResolved: "Risolta: non serve più una risposta",
     notSent: "Incollato ma non inviato",
     sendEnterAgain: "Invia di nuovo (Invio)",
     takenUnknown: "Non so se è stato preso",
@@ -153,6 +171,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "Il testo è ancora nella casella.",
     jumpToLatest: "Vai all'ultimo messaggio",
     jumpToNew: "{count} nuovi: vai all'ultimo",
+    attach: "Allega un file",
+    attaching: "Allego…",
+    attachSavedNotSent: "{name} è nella cartella degli allegati, ma il messaggio all'Assistente non è partito. Scrivigli tu che hai allegato il file.",
+    attachOff: {attach_vps: "Gli allegati funzionano con la squadra su questo computer. Questa squadra è su un server.", attach_read_only: "Vista in sola lettura: collega la squadra in scrittura per allegare file.", attach_platform: "Gli allegati non sono ancora disponibili su questo sistema.", attach_not_connected: "Collega la squadra per allegare file."},
+    attachErrors: {attachment_type: "Questo tipo di file non è accettato. Usa PDF, Word (docx), OpenDocument (odt), RTF, testo (txt, md), PNG o JPG. Un .doc vecchio: salvalo come PDF o DOCX.", attachment_type_mismatch: "Il contenuto non corrisponde al tipo del file. Scegli il documento originale.", attachment_too_big: "Il file supera i 10 MB.", attachment_is_link: "Questo è un collegamento o alias. Scegli il file vero.", attachment_not_file: "Scegli un file, non una cartella.", attachment_unreadable: "Non riesco a leggere il file.", attachments_folder_unsafe: "La cartella degli allegati della squadra non è sicura per scriverci: non ho copiato niente.", attachments_folder_full: "La cartella degli allegati ha troppi file. Togline qualcuno dalla cartella e riprova.", attachment_save_failed: "Non sono riuscito a copiare il file.", attachment_not_shared: "La squadra non vede la cartella degli allegati, quindi il file non è stato tenuto. Riavvia la squadra e riprova.", attach_busy: "Un altro allegato è ancora in corso.", attach_failed: "Non sono riuscito ad allegare il file."},
     answerInvalid: { choice_unknown: "Questa scelta non è fra quelle della domanda.", single_choice_only: "Qui si sceglie una voce sola.", free_text_not_allowed: "Questa domanda non accetta risposte scritte: scegli una voce.", empty_answer: "Scegli una voce o scrivi la risposta.", text_too_long: "La risposta è troppo lunga: al massimo 1000 caratteri." },
   },
   en: {
@@ -160,7 +183,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agents",
     agentsNavAria: "Agent chats",
     agentSelect: "Agent",
-    openFull: "Open full page",
     title: "Direct chat",
     conversationWith: "Conversation with {name}",
     messagesWith: "Messages with {name}",
@@ -186,14 +208,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Goes to: the chat with {name}. The text reaches it as a message, not as keys in its terminal.",
     sent: "Sent",
     queued: "Queued",
+    working: "{name} is working…",
     queueExpired: "Not sent: the agent stayed busy for too long. Write it again.",
+    queueLate: "Sent late: the text had stayed in the agent's input box and got its Enter after the time ran out. Look at its terminal before writing again.",
     codes: { mail_not_taken: "The agent has not taken your message yet.", message_too_long: "A message from the agent was too long to be shown here." },
     keysHint: "Enter sends · Ctrl+Enter starts a new line",
     kinds: { urgent: "urgent", blocked: "blocked", question: "question", completed: "done", info: "update" },
     answerSend: "Answer",
     answerSeen: "Picked up by the agent's tool",
     answerWaiting: "Sent: the agent's tool has not picked it up yet",
+    answerBelow: "Answer by writing below.",
     answerExpired: "Expired: the fallback answer was taken",
+    answerResolved: "Resolved: no answer is needed any more",
     notSent: "Pasted but not sent",
     sendEnterAgain: "Send again (Enter)",
     takenUnknown: "Not known whether it was taken",
@@ -211,6 +237,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "The text is still in the box.",
     jumpToLatest: "Go to the latest message",
     jumpToNew: "{count} new: go to the latest",
+    attach: "Attach a file",
+    attaching: "Attaching…",
+    attachSavedNotSent: "{name} is in the attachments folder, but the message to the Assistant did not go. Tell it yourself that you attached the file.",
+    attachOff: {attach_vps: "Attachments work with the team on this computer. This team runs on a server.", attach_read_only: "Read-only view: connect the team for writing to attach files.", attach_platform: "Attachments are not available on this system yet.", attach_not_connected: "Connect the team to attach files."},
+    attachErrors: {attachment_type: "This file type is not accepted. Use PDF, Word (docx), OpenDocument (odt), RTF, text (txt, md), PNG or JPG. An old .doc: save it as PDF or DOCX.", attachment_type_mismatch: "The content does not match the file type. Choose the original document.", attachment_too_big: "The file is over 10 MB.", attachment_is_link: "That is a shortcut or alias. Choose the file itself.", attachment_not_file: "Choose a file, not a folder.", attachment_unreadable: "The file could not be read.", attachments_folder_unsafe: "The team's attachments folder is not safe to write to, so nothing was copied.", attachments_folder_full: "The attachments folder has too many files. Remove some from the folder and try again.", attachment_save_failed: "The file could not be copied.", attachment_not_shared: "The team does not see the attachments folder, so the file was not kept. Restart the team and try again.", attach_busy: "Another attachment is still in progress.", attach_failed: "The file could not be attached."},
     answerInvalid: { choice_unknown: "This choice is not one of the question's.", single_choice_only: "Only one choice here.", free_text_not_allowed: "This question takes no written answer: pick a choice.", empty_answer: "Pick a choice or write the answer.", text_too_long: "The answer is too long: 1000 characters at most." },
   },
   de: {
@@ -218,7 +249,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agenten",
     agentsNavAria: "Agenten-Chats",
     agentSelect: "Agent",
-    openFull: "Ganze Seite öffnen",
     title: "Direktchat",
     conversationWith: "Unterhaltung mit {name}",
     messagesWith: "Nachrichten mit {name}",
@@ -244,14 +274,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Ziel: der Chat mit {name}. Der Text kommt als Nachricht an, nicht als Tasten in seinem Terminal.",
     sent: "Gesendet",
     queued: "In der Warteschlange",
+    working: "{name} arbeitet…",
     queueExpired: "Nicht gesendet: der Agent war zu lange beschäftigt. Schreib es noch einmal.",
+    queueLate: "Verspätet gesendet: Der Text war im Eingabefeld des Agenten geblieben und bekam seinen Enter erst nach Ablauf der Zeit. Schau in sein Terminal, bevor du erneut schreibst.",
     codes: { mail_not_taken: "Der Agent hat deine Nachricht noch nicht abgeholt.", message_too_long: "Eine Nachricht des Agenten war zu lang, um hier angezeigt zu werden." },
     keysHint: "Enter sendet · Strg+Enter für eine neue Zeile",
     kinds: { urgent: "dringend", blocked: "blockiert", question: "Frage", completed: "erledigt", info: "Mitteilung" },
     answerSend: "Antworten",
     answerSeen: "Vom Werkzeug des Agenten abgeholt",
     answerWaiting: "Gesendet: das Werkzeug des Agenten hat sie noch nicht abgeholt",
+    answerBelow: "Antworte unten im Eingabefeld.",
     answerExpired: "Abgelaufen: die Ersatzantwort wurde genommen",
+    answerResolved: "Erledigt: eine Antwort ist nicht mehr nötig",
     notSent: "Eingefügt, aber nicht gesendet",
     sendEnterAgain: "Erneut senden (Enter)",
     takenUnknown: "Unklar, ob die Nachricht angenommen wurde",
@@ -269,6 +303,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "Der Text steht noch im Eingabefeld.",
     jumpToLatest: "Zur neuesten Nachricht",
     jumpToNew: "{count} neu: zur neuesten",
+    attach: "Datei anhängen",
+    attaching: "Wird angehängt…",
+    attachSavedNotSent: "{name} liegt im Ordner für Anhänge, aber die Nachricht an den Assistenten ist nicht rausgegangen. Sag ihm selbst, dass du die Datei angehängt hast.",
+    attachOff: {attach_vps: "Anhänge funktionieren mit dem Team auf diesem Computer. Dieses Team läuft auf einem Server.", attach_read_only: "Nur-Lese-Ansicht: Verbinde das Team zum Schreiben, um Dateien anzuhängen.", attach_platform: "Anhänge sind auf diesem System noch nicht verfügbar.", attach_not_connected: "Verbinde das Team, um Dateien anzuhängen."},
+    attachErrors: {attachment_type: "Dieser Dateityp wird nicht akzeptiert. Nutze PDF, Word (docx), OpenDocument (odt), RTF, Text (txt, md), PNG oder JPG. Eine alte .doc: speichere sie als PDF oder DOCX.", attachment_type_mismatch: "Der Inhalt passt nicht zum Dateityp. Wähle das Originaldokument.", attachment_too_big: "Die Datei ist größer als 10 MB.", attachment_is_link: "Das ist eine Verknüpfung oder ein Alias. Wähle die Datei selbst.", attachment_not_file: "Wähle eine Datei, keinen Ordner.", attachment_unreadable: "Die Datei konnte nicht gelesen werden.", attachments_folder_unsafe: "Der Anhänge-Ordner des Teams ist nicht sicher beschreibbar, deshalb wurde nichts kopiert.", attachments_folder_full: "Der Anhänge-Ordner hat zu viele Dateien. Entferne einige aus dem Ordner und versuche es erneut.", attachment_save_failed: "Die Datei konnte nicht kopiert werden.", attachment_not_shared: "Das Team sieht den Anhänge-Ordner nicht, deshalb wurde die Datei nicht behalten. Starte das Team neu und versuche es erneut.", attach_busy: "Ein anderer Anhang läuft noch.", attach_failed: "Die Datei konnte nicht angehängt werden."},
     answerInvalid: { choice_unknown: "Diese Auswahl gehört nicht zur Frage.", single_choice_only: "Hier gibt es nur eine Auswahl.", free_text_not_allowed: "Diese Frage erlaubt keine freie Antwort: wähle eine Option.", empty_answer: "Wähle eine Option oder schreibe die Antwort.", text_too_long: "Die Antwort ist zu lang: höchstens 1000 Zeichen." },
   },
   fr: {
@@ -276,7 +315,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agents",
     agentsNavAria: "Discussions avec les agents",
     agentSelect: "Agent",
-    openFull: "Ouvrir en pleine page",
     title: "Discussion directe",
     conversationWith: "Conversation avec {name}",
     messagesWith: "Messages avec {name}",
@@ -302,14 +340,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destination : la discussion avec {name}. Le texte lui arrive comme un message, pas comme des touches dans son terminal.",
     sent: "Envoyé",
     queued: "En attente",
+    working: "{name} travaille…",
     queueExpired: "Non envoyé : l'agent est resté occupé trop longtemps. Réécris-le.",
+    queueLate: "Envoyé en retard : le texte était resté dans la zone de saisie de l'agent et a reçu son Entrée après l'expiration. Regarde son terminal avant de réécrire.",
     codes: { mail_not_taken: "L'agent n'a pas encore pris ton message.", message_too_long: "Un message de l'agent était trop long pour être affiché ici." },
     keysHint: "Entrée envoie · Ctrl+Entrée pour aller à la ligne",
     kinds: { urgent: "urgent", blocked: "bloqué", question: "question", completed: "terminé", info: "info" },
     answerSend: "Répondre",
     answerSeen: "Prise par l'outil de l'agent",
     answerWaiting: "Envoyée : l'outil de l'agent ne l'a pas encore prise",
+    answerBelow: "Réponds en écrivant ci-dessous.",
     answerExpired: "Expirée : la réponse de repli a été prise",
+    answerResolved: "Résolue : plus besoin de réponse",
     notSent: "Collé mais non envoyé",
     sendEnterAgain: "Renvoyer (Entrée)",
     takenUnknown: "On ne sait pas s'il a été pris",
@@ -327,6 +369,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "Le texte est toujours dans la zone de saisie.",
     jumpToLatest: "Aller au dernier message",
     jumpToNew: "{count} nouveaux : aller au dernier",
+    attach: "Joindre un fichier",
+    attaching: "Ajout…",
+    attachSavedNotSent: "{name} est dans le dossier des pièces jointes, mais le message à l'Assistant n'est pas parti. Dis-lui toi-même que tu as joint le fichier.",
+    attachOff: {attach_vps: "Les pièces jointes fonctionnent avec l'équipe de cet ordinateur. Cette équipe tourne sur un serveur.", attach_read_only: "Vue en lecture seule : connecte l'équipe en écriture pour joindre des fichiers.", attach_platform: "Les pièces jointes ne sont pas encore disponibles sur ce système.", attach_not_connected: "Connecte l'équipe pour joindre des fichiers."},
+    attachErrors: {attachment_type: "Ce type de fichier n'est pas accepté. Utilise PDF, Word (docx), OpenDocument (odt), RTF, texte (txt, md), PNG ou JPG. Un ancien .doc : enregistre-le en PDF ou DOCX.", attachment_type_mismatch: "Le contenu ne correspond pas au type du fichier. Choisis le document d'origine.", attachment_too_big: "Le fichier dépasse 10 Mo.", attachment_is_link: "C'est un raccourci ou un alias. Choisis le fichier lui-même.", attachment_not_file: "Choisis un fichier, pas un dossier.", attachment_unreadable: "Le fichier n'a pas pu être lu.", attachments_folder_unsafe: "Le dossier des pièces jointes de l'équipe n'est pas sûr pour y écrire : rien n'a été copié.", attachments_folder_full: "Le dossier des pièces jointes contient trop de fichiers. Supprimes-en dans le dossier et réessaie.", attachment_save_failed: "Le fichier n'a pas pu être copié.", attachment_not_shared: "L'équipe ne voit pas le dossier des pièces jointes, le fichier n'a donc pas été gardé. Redémarre l'équipe et réessaie.", attach_busy: "Une autre pièce jointe est encore en cours.", attach_failed: "Le fichier n'a pas pu être joint."},
     answerInvalid: { choice_unknown: "Ce choix ne fait pas partie de la question.", single_choice_only: "Un seul choix ici.", free_text_not_allowed: "Cette question n'accepte pas de réponse écrite : choisis une option.", empty_answer: "Choisis une option ou écris la réponse.", text_too_long: "La réponse est trop longue : 1000 caractères au maximum." },
   },
   es: {
@@ -334,7 +381,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agentes",
     agentsNavAria: "Chats con agentes",
     agentSelect: "Agente",
-    openFull: "Abrir a pantalla completa",
     title: "Chat directo",
     conversationWith: "Conversación con {name}",
     messagesWith: "Mensajes con {name}",
@@ -360,14 +406,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destino: el chat con {name}. El texto le llega como mensaje, no como teclas en su terminal.",
     sent: "Enviado",
     queued: "En cola",
+    working: "{name} está trabajando…",
     queueExpired: "No enviado: el agente estuvo ocupado demasiado tiempo. Vuelve a escribirlo.",
+    queueLate: "Enviado con retraso: el texto se quedó en el cuadro de entrada del agente y recibió su Intro tras agotarse el tiempo. Mira su terminal antes de volver a escribir.",
     codes: { mail_not_taken: "El agente aún no ha tomado tu mensaje.", message_too_long: "Un mensaje del agente era demasiado largo para mostrarse aquí." },
     keysHint: "Intro envía · Ctrl+Intro salta de línea",
     kinds: { urgent: "urgente", blocked: "bloqueado", question: "pregunta", completed: "hecho", info: "aviso" },
     answerSend: "Responder",
     answerSeen: "Recogida por la herramienta del agente",
     answerWaiting: "Enviada: la herramienta del agente aún no la ha recogido",
+    answerBelow: "Responde escribiendo abajo.",
     answerExpired: "Caducada: se tomó la respuesta de reserva",
+    answerResolved: "Resuelta: ya no hace falta respuesta",
     notSent: "Pegado pero no enviado",
     sendEnterAgain: "Enviar de nuevo (Intro)",
     takenUnknown: "No se sabe si lo ha recibido",
@@ -385,6 +435,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "El texto sigue en el cuadro.",
     jumpToLatest: "Ir al último mensaje",
     jumpToNew: "{count} nuevos: ir al último",
+    attach: "Adjuntar un archivo",
+    attaching: "Adjuntando…",
+    attachSavedNotSent: "{name} está en la carpeta de adjuntos, pero el mensaje al Asistente no salió. Dile tú que has adjuntado el archivo.",
+    attachOff: {attach_vps: "Los adjuntos funcionan con el equipo de este ordenador. Este equipo está en un servidor.", attach_read_only: "Vista de solo lectura: conecta el equipo en escritura para adjuntar archivos.", attach_platform: "Los adjuntos aún no están disponibles en este sistema.", attach_not_connected: "Conecta el equipo para adjuntar archivos."},
+    attachErrors: {attachment_type: "Este tipo de archivo no se acepta. Usa PDF, Word (docx), OpenDocument (odt), RTF, texto (txt, md), PNG o JPG. Un .doc antiguo: guárdalo como PDF o DOCX.", attachment_type_mismatch: "El contenido no corresponde al tipo del archivo. Elige el documento original.", attachment_too_big: "El archivo supera los 10 MB.", attachment_is_link: "Es un acceso directo o alias. Elige el archivo en sí.", attachment_not_file: "Elige un archivo, no una carpeta.", attachment_unreadable: "No se pudo leer el archivo.", attachments_folder_unsafe: "La carpeta de adjuntos del equipo no es segura para escribir: no se copió nada.", attachments_folder_full: "La carpeta de adjuntos tiene demasiados archivos. Quita algunos de la carpeta y vuelve a intentarlo.", attachment_save_failed: "No se pudo copiar el archivo.", attachment_not_shared: "El equipo no ve la carpeta de adjuntos, así que el archivo no se conservó. Reinicia el equipo y vuelve a intentarlo.", attach_busy: "Otro adjunto sigue en curso.", attach_failed: "No se pudo adjuntar el archivo."},
     answerInvalid: { choice_unknown: "Esta opción no es de la pregunta.", single_choice_only: "Aquí solo se elige una opción.", free_text_not_allowed: "Esta pregunta no admite respuesta escrita: elige una opción.", empty_answer: "Elige una opción o escribe la respuesta.", text_too_long: "La respuesta es demasiado larga: 1000 caracteres como máximo." },
   },
   pt: {
@@ -392,7 +447,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agentes",
     agentsNavAria: "Conversas com agentes",
     agentSelect: "Agente",
-    openFull: "Abrir em página inteira",
     title: "Conversa direta",
     conversationWith: "Conversa com {name}",
     messagesWith: "Mensagens com {name}",
@@ -418,14 +472,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destino: o chat com {name}. O texto chega-lhe como mensagem, não como teclas no terminal.",
     sent: "Enviado",
     queued: "Em fila",
+    working: "{name} está a trabalhar…",
     queueExpired: "Não enviado: o agente esteve ocupado demasiado tempo. Volta a escrevê-lo.",
+    queueLate: "Enviado com atraso: o texto ficou na caixa de escrita do agente e recebeu o seu Enter depois de acabar o tempo. Vê o seu terminal antes de voltar a escrever.",
     codes: { mail_not_taken: "O agente ainda não apanhou a tua mensagem.", message_too_long: "Uma mensagem do agente era demasiado longa para ser mostrada aqui." },
     keysHint: "Enter envia · Ctrl+Enter muda de linha",
     kinds: { urgent: "urgente", blocked: "bloqueado", question: "pergunta", completed: "concluído", info: "aviso" },
     answerSend: "Responder",
     answerSeen: "Recolhida pela ferramenta do agente",
     answerWaiting: "Enviada: a ferramenta do agente ainda não a recolheu",
+    answerBelow: "Responde a escrever em baixo.",
     answerExpired: "Expirada: foi tomada a resposta de reserva",
+    answerResolved: "Resolvida: já não é preciso responder",
     notSent: "Colado mas não enviado",
     sendEnterAgain: "Enviar de novo (Enter)",
     takenUnknown: "Não se sabe se foi recebido",
@@ -443,6 +501,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "O texto continua na caixa.",
     jumpToLatest: "Ir para a última mensagem",
     jumpToNew: "{count} novas: ir para a última",
+    attach: "Anexar um ficheiro",
+    attaching: "A anexar…",
+    attachSavedNotSent: "{name} está na pasta dos anexos, mas a mensagem ao Assistente não saiu. Diz-lhe tu que anexaste o ficheiro.",
+    attachOff: {attach_vps: "Os anexos funcionam com a equipa deste computador. Esta equipa está num servidor.", attach_read_only: "Vista só de leitura: liga a equipa em escrita para anexar ficheiros.", attach_platform: "Os anexos ainda não estão disponíveis neste sistema.", attach_not_connected: "Liga a equipa para anexar ficheiros."},
+    attachErrors: {attachment_type: "Este tipo de ficheiro não é aceite. Usa PDF, Word (docx), OpenDocument (odt), RTF, texto (txt, md), PNG ou JPG. Um .doc antigo: guarda-o como PDF ou DOCX.", attachment_type_mismatch: "O conteúdo não corresponde ao tipo do ficheiro. Escolhe o documento original.", attachment_too_big: "O ficheiro excede 10 MB.", attachment_is_link: "Isto é um atalho ou alias. Escolhe o ficheiro em si.", attachment_not_file: "Escolhe um ficheiro, não uma pasta.", attachment_unreadable: "Não foi possível ler o ficheiro.", attachments_folder_unsafe: "A pasta dos anexos da equipa não é segura para escrever: nada foi copiado.", attachments_folder_full: "A pasta dos anexos tem demasiados ficheiros. Tira alguns da pasta e tenta de novo.", attachment_save_failed: "Não foi possível copiar o ficheiro.", attachment_not_shared: "A equipa não vê a pasta dos anexos, por isso o ficheiro não foi guardado. Reinicia a equipa e tenta de novo.", attach_busy: "Outro anexo ainda está em curso.", attach_failed: "Não foi possível anexar o ficheiro."},
     answerInvalid: { choice_unknown: "Esta opção não é da pergunta.", single_choice_only: "Aqui escolhe-se só uma opção.", free_text_not_allowed: "Esta pergunta não aceita resposta escrita: escolhe uma opção.", empty_answer: "Escolhe uma opção ou escreve a resposta.", text_too_long: "A resposta é demasiado longa: no máximo 1000 caracteres." },
   },
   hu: {
@@ -450,7 +513,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Ügynökök",
     agentsNavAria: "Ügynökök csevegései",
     agentSelect: "Ügynök",
-    openFull: "Megnyitás teljes oldalon",
     title: "Közvetlen csevegés",
     conversationWith: "Beszélgetés: {name}",
     messagesWith: "Üzenetek: {name}",
@@ -476,14 +538,18 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Cél: a csevegés vele: {name}. A szöveg üzenetként érkezik, nem billentyűként a termináljában.",
     sent: "Elküldve",
     queued: "Sorban",
+    working: "{name} dolgozik…",
     queueExpired: "Nem lett elküldve: az ügynök túl sokáig volt elfoglalt. Írd meg újra.",
+    queueLate: "Késve elküldve: a szöveg az ügynök beviteli mezőjében maradt, és az idő lejárta után kapta meg az Entert. Nézd meg a terminálját, mielőtt újra írsz.",
     codes: { mail_not_taken: "Az ügynök még nem vette át az üzenetedet.", message_too_long: "Az ügynök egyik üzenete túl hosszú volt ahhoz, hogy itt megjelenjen." },
     keysHint: "Enter: küldés · Ctrl+Enter: új sor",
     kinds: { urgent: "sürgős", blocked: "elakadt", question: "kérdés", completed: "kész", info: "tájékoztatás" },
     answerSend: "Válasz",
     answerSeen: "Az ügynök eszköze átvette",
     answerWaiting: "Elküldve: az ügynök eszköze még nem vette át",
+    answerBelow: "Válaszolj lent, a beírómezőben.",
     answerExpired: "Lejárt: a tartalék válasz lett kiválasztva",
+    answerResolved: "Megoldva: már nincs szükség válaszra",
     notSent: "Beillesztve, de nincs elküldve",
     sendEnterAgain: "Küldés újra (Enter)",
     takenUnknown: "Nem tudni, hogy megkapta-e",
@@ -501,6 +567,11 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerTextKept: "A szöveg még a mezőben van.",
     jumpToLatest: "Ugrás a legutóbbi üzenethez",
     jumpToNew: "{count} új: ugrás a legutóbbihoz",
+    attach: "Fájl csatolása",
+    attaching: "Csatolás…",
+    attachSavedNotSent: "A(z) {name} a csatolmányok mappájában van, de az Asszisztensnek szóló üzenet nem ment el. Írd meg neki te, hogy csatoltad a fájlt.",
+    attachOff: {attach_vps: "A csatolás az ezen a számítógépen futó csapattal működik. Ez a csapat egy szerveren fut.", attach_read_only: "Csak olvasható nézet: az írásos kapcsolat nélkül nem lehet fájlt csatolni.", attach_platform: "A csatolás ezen a rendszeren még nem érhető el.", attach_not_connected: "Csatlakoztasd a csapatot a fájl csatolásához."},
+    attachErrors: {attachment_type: "Ez a fájltípus nem fogadható el. Használj PDF-et, Wordöt (docx), OpenDocumentet (odt), RTF-et, szöveget (txt, md), PNG-t vagy JPG-t. Régi .doc fájlt mentsd el PDF-ként vagy DOCX-ként.", attachment_type_mismatch: "A tartalom nem egyezik a fájl típusával. Válaszd az eredeti dokumentumot.", attachment_too_big: "A fájl nagyobb 10 MB-nál.", attachment_is_link: "Ez egy parancsikon vagy alias. Válaszd magát a fájlt.", attachment_not_file: "Fájlt válassz, ne mappát.", attachment_unreadable: "A fájlt nem sikerült beolvasni.", attachments_folder_unsafe: "A csapat csatolmány-mappájába nem biztonságos írni, ezért semmi nem lett másolva.", attachments_folder_full: "A csatolmányok mappájában túl sok a fájl. Törölj párat a mappából, és próbáld újra.", attachment_save_failed: "A fájlt nem sikerült átmásolni.", attachment_not_shared: "A csapat nem látja a csatolmányok mappáját, ezért a fájl nem maradt meg. Indítsd újra a csapatot, és próbáld újra.", attach_busy: "Egy másik csatolás még folyamatban van.", attach_failed: "A fájlt nem sikerült csatolni."},
     answerInvalid: { choice_unknown: "Ez a választás nem tartozik a kérdéshez.", single_choice_only: "Itt csak egyet lehet választani.", free_text_not_allowed: "Erre a kérdésre nem lehet szöveges választ adni: válassz egy lehetőséget.", empty_answer: "Válassz egy lehetőséget, vagy írd meg a választ.", text_too_long: "A válasz túl hosszú: legfeljebb 1000 karakter." },
   },
 };

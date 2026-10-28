@@ -7,8 +7,12 @@ import { getProfileT } from "@/lib/profile-i18n";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { appLocale } from "../../lib/app-locale";
 import { pluralText } from "../../lib/plural";
-import { supabase } from "../../lib/supabase";
+import { cloudSessionReadable } from "../../lib/auth-storage-lock";
+import { cloudClient } from "../../lib/cloud-client";
+import { withReadDeadline } from "../../lib/read-deadline";
+import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
+import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
 import { LinkedinLoginCard } from "./LinkedinLoginCard";
 import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
@@ -25,12 +29,13 @@ type Load =
  * dati letti dalla sessione dell'utente. Come sul web cloud il profilo si
  * guarda e si esporta; la modifica passa dall'assistente, che qui non c'è.
  */
-export function ProfilePage({ client = supabase }: { client?: SupabaseClient }) {
+export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [locale] = useState<Locale>(readLocaleCookie);
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const blocked = useCloudDataBlocked();
 
   const read = useCallback(() => {
-    loadProfile(client)
+    withReadDeadline(loadProfile(client))
       .then((data) => setLoad(data ? { state: "ready", data } : { state: "signed-out" }))
       .catch(() => setLoad((prev) => (prev.state === "ready" ? prev : { state: "failed" })));
   }, [client]);
@@ -52,14 +57,29 @@ export function ProfilePage({ client = supabase }: { client?: SupabaseClient }) 
   );
 
   const t = getProfileT(locale);
+  // No cloud session (a local profile): the notice is the page, not a bare line on a black screen.
+  if (blocked) return <CloudDataNotice />;
   if (load.state === "loading") return <ProfileLoading />;
   if (load.state === "signed-out")
-    return <div className="p-12 text-center text-[var(--color-muted)]">{t("session_expired")}</div>;
+    // A readable session that no longer answers as signed in is an expired one; with no cloud session at
+    // all (a local profile, above) there never was one.
+    return cloudSessionReadable()
+      ? <div className="p-12 text-center text-[var(--color-muted)]">{t("session_expired")}</div>
+      : null;
   if (load.state === "failed")
     return (
-      <p role="alert" className="max-w-6xl mx-auto px-5 pt-8 text-[12px]" style={{ color: "var(--color-red)" }}>
-        Non riesco a leggere il profilo. Controlla la connessione e premi «Aggiorna».
-      </p>
+      <div className="max-w-6xl mx-auto px-5 pt-8">
+        <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+          {PROFILE_PAGE_TEXT[appLocale()].readFailed(SHELL_TEXT[appLocale()].refresh)}
+        </p>
+        <button
+          type="button"
+          className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
+          onClick={() => { setLoad({ state: "loading" }); read(); }}
+        >
+          {SHELL_TEXT[appLocale()].refresh}
+        </button>
+      </div>
     );
   const { data } = load;
   return (

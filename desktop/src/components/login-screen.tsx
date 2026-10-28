@@ -16,8 +16,10 @@ import {
 } from "../lib/supabase";
 import {
   createAndActivateLocalProfile,
+  listLocalProfiles,
   readLocalProfile,
-  selectSavedLocalProfile,
+  readTeamOwnerCopy,
+  selectLocalProfileById,
   type LocalProfile,
 } from "../lib/local-profile";
 import PublicPageLinks from "./PublicPageLinks";
@@ -26,7 +28,9 @@ import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
 import { OnboardingArtwork } from "../onboarding/OnboardingArtwork";
 import { appLocale } from "../lib/app-locale";
+import { readDesktopTeamOwnerIdentity, type DesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
 import { LOGIN_TEXT } from "./login-screen.i18n";
+import { LOCAL_PROFILES_TEXT } from "./local-profiles.i18n";
 import "./login-screen.css";
 
 /** The sentence and the action for a login error, from the error catalog. */
@@ -40,9 +44,18 @@ export interface LoginScreenProps {
   cancel?: () => Promise<void>;
   loadBrowsers?: () => Promise<InstalledBrowser[]>;
   configured?: boolean;
+  /** every saved local profile, in the order they were made */
+  listLocal?: () => LocalProfile[];
+  /** the profile used last */
   readLocal?: () => LocalProfile | null;
+  /** the profile the renderer believes owns the team of this computer (the backend's marker decides, inside the app) */
+  ownerLocal?: () => LocalProfile | null;
+  /** who the backend's owner marker names: it wins over `ownerLocal` once it answers */
+  readOwner?: () => Promise<DesktopTeamOwnerIdentity | null>;
+  /** adds a profile to the list: the saved ones stay */
   createLocal?: (displayName: string) => Promise<LocalProfile>;
-  selectLocal?: () => LocalProfile;
+  /** chooses a saved profile by its id */
+  selectLocal?: (profileId: string) => LocalProfile;
   onLocalReady?: () => void;
   onChooseGoogle?: () => boolean | Promise<boolean>;
   onResetLocalPlayground?: () => Promise<void>;
@@ -64,9 +77,12 @@ export function LoginScreen({
   cancel = cancelGoogleSignIn,
   loadBrowsers = listBrowsers,
   configured = supabaseConfigured,
+  listLocal = listLocalProfiles,
   readLocal = readLocalProfile,
+  ownerLocal = readTeamOwnerCopy,
+  readOwner = readDesktopTeamOwnerIdentity,
   createLocal = createAndActivateLocalProfile,
-  selectLocal = selectSavedLocalProfile,
+  selectLocal = selectLocalProfileById,
   onLocalReady = () => goTo(DASHBOARD_PAGE),
   onChooseGoogle,
   onResetLocalPlayground,
@@ -74,6 +90,7 @@ export function LoginScreen({
 }: LoginScreenProps) {
   const locale = appLocale();
   const t = LOGIN_TEXT[locale];
+  const profilesText = LOCAL_PROFILES_TEXT[locale];
   const [browsers, setBrowsers] = useState<InstalledBrowser[]>([]);
   const [choice, setChoice] = useState<BrowserChoice>("default");
   const [waiting, setWaiting] = useState(false);
@@ -83,6 +100,8 @@ export function LoginScreen({
   const [localName, setLocalName] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
   const [localError, setLocalError] = useState(false);
+  // the backend's owner: undefined until it answers (or when it cannot), null when no local profile owns the team
+  const [nativeOwnerId, setNativeOwnerId] = useState<string | null | undefined>(undefined);
   const linkField = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<LoginError | null>(
     configured ? null : new LoginError("not-configured"),
@@ -101,6 +120,17 @@ export function LoginScreen({
       active = false;
     };
   }, [loadBrowsers]);
+
+  useEffect(() => {
+    let active = true;
+    readOwner().then(
+      (identity) => { if (active) setNativeOwnerId(identity?.kind === "local" ? identity.profileId ?? null : null); },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [readOwner]);
 
   const start = useCallback(async () => {
     setError(null);
@@ -142,26 +172,29 @@ export function LoginScreen({
   const keychainBlocked = error?.code === "keychain-failed";
   const manual = choice === "manual";
 
-  const useLocal = useCallback(async () => {
+  // no profile yet: the name is asked, and the first one is made
+  const useLocal = useCallback(() => {
     setError(null);
     setLocalError(false);
-    const saved = readLocal();
-    if (!saved) {
-      setLocalSetup(true);
-      return;
-    }
+    setLocalSetup(true);
+  }, []);
+
+  const chooseLocal = useCallback((profileId: string) => {
+    if (localBusy) return;
+    setError(null);
+    setLocalError(false);
     setLocalBusy(true);
     try {
       // Do not carry an IPC scope transition across a WebView navigation.
       // DashboardApp activates and validates this saved capability.
-      selectLocal();
+      selectLocal(profileId);
       onLocalReady();
     } catch {
       setLocalError(true);
     } finally {
       setLocalBusy(false);
     }
-  }, [onLocalReady, readLocal, selectLocal]);
+  }, [localBusy, onLocalReady, selectLocal]);
 
   const createLocalIdentity = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -208,8 +241,10 @@ export function LoginScreen({
     }
   }, [localBusy, onRecoverLocalPlayground]);
 
-  const savedLocalProfile = readLocal();
-  const hasSavedLocalProfile = Boolean(savedLocalProfile);
+  const savedProfiles = listLocal();
+  const hasSavedLocalProfile = savedProfiles.length > 0;
+  const lastUsedId = readLocal()?.profileId ?? null;
+  const ownerId = nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
 
   return (
     <main className="page login-screen" lang={locale}>
@@ -235,6 +270,7 @@ export function LoginScreen({
               />
             </label>
             <p className="login-card__note">{t.localNote}</p>
+            {hasSavedLocalProfile && <p className="login-card__note">{profilesText.newProfileNote}</p>}
             {!localName.trim() && <p className="login-card__note" id="login-name-missing" role="status">{t.nameMissing}</p>}
             <button className="primary-button" type="submit" disabled={!localName.trim() || localBusy} aria-describedby={!localName.trim() ? "login-name-missing" : undefined}>
               {localBusy ? t.preparing : t.continueLocal}
@@ -298,15 +334,48 @@ export function LoginScreen({
               <GoogleIcon /> {keychainBlocked ? t.restart : t.google}
             </button>
             <div className="login-card__separator" aria-hidden="true"><span>{t.or}</span></div>
-            <button
-              className="login-card__local-button"
-              type="button"
-              onClick={() => void useLocal()}
-              disabled={localBusy}
-            >
-              {/* a saved profile is reopened, not created: the button says whose it is */}
-              {localBusy ? t.preparing : savedLocalProfile ? t.useLocalAs.replace("{name}", () => savedLocalProfile.displayName) : t.useLocal}
-            </button>
+            {hasSavedLocalProfile ? (
+              <section className="login-card__profiles" aria-labelledby="login-profiles-title">
+                <h2 id="login-profiles-title">{profilesText.listTitle}</h2>
+                <ul aria-label={profilesText.listAria}>
+                  {savedProfiles.map((profile) => (
+                    <li key={profile.profileId}>
+                      <button
+                        className="login-card__local-button"
+                        type="button"
+                        onClick={() => chooseLocal(profile.profileId)}
+                        disabled={localBusy}
+                      >
+                        {localBusy ? t.preparing : profilesText.useProfile.replace("{name}", () => profile.displayName)}
+                      </button>
+                      {(profile.profileId === ownerId || profile.profileId === lastUsedId) && (
+                        <span className="login-card__tags">
+                          {profile.profileId === ownerId && <span data-testid="login-profile-owner">{profilesText.teamHere}</span>}
+                          {profile.profileId === lastUsedId && <span data-testid="login-profile-last">{profilesText.lastUsed}</span>}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  className="login-card__secondary"
+                  type="button"
+                  onClick={useLocal}
+                  disabled={localBusy}
+                >
+                  {profilesText.newProfile}
+                </button>
+              </section>
+            ) : (
+              <button
+                className="login-card__local-button"
+                type="button"
+                onClick={useLocal}
+                disabled={localBusy}
+              >
+                {localBusy ? t.preparing : t.useLocal}
+              </button>
+            )}
             {onResetLocalPlayground && hasSavedLocalProfile && (
               <button
                 className="login-card__secondary"

@@ -43,6 +43,7 @@ distingue un duplicado de dos turnos que dicen lo mismo por casualidad
 - ❌ Respuestas a un mensaje `[CHAT]` en el dashboard web — usar `jht-send` (ya en el hilo de chat).
 - ❌ Respuestas a un `[TG]` entrante — usar `jht-telegram-send` directamente: ya sabes que Telegram está activo porque el usuario acaba de escribirte desde ahí. Ahorra un roundtrip a la DB.
 - ❌ Adjuntos pesados (>20 MB). Usar la carpeta de CV del usuario + un cuerpo de notificación corto.
+- ❌ El plan de suscripción. Se pregunta SOLO con `python3 /app/shared/skills/first_run.py ask-plan` (una tarjeta que el usuario responde en Messages), desde cualquier agente; una pregunta sobre el plan escrita aquí como texto libre no aparece en Messages y deja al usuario esperando.
 
 ## Uso
 
@@ -66,6 +67,20 @@ jht-notify-user --agent mentor --no-telegram "Abre el tab Patterns para los deta
 Salida (stdout):
 ```
 <row_id> via=<telegram|web>
+```
+
+## Un `$` en el texto: comillas simples o stdin
+
+Entre comillas dobles la shell lee `$1` y `$2` como argumentos suyos y los sustituye por nada **antes de que arranque la herramienta**: «Plus — $20/month; Pro — $200/month» llega al usuario como «Plus — 0/month; Pro — 00/month», y nadie más adelante puede devolver las cifras. Si el texto lleva un `$` (precios, importes), escríbelo entre comillas simples o pásalo por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-notify-user --agent capitano 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-notify-user --agent capitano - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
 ```
 
 ## Tipos
