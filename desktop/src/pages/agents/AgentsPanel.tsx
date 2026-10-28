@@ -57,7 +57,7 @@ function chatName(id: DirectChatAgentId): string {
 
 /**
  * The list is read again by itself while the page is on view: a reading left alone never moves
- * (the states, the contexts, the open questions). On this computer every 20 s; on a VPS, whose reads go
+ * (the states, the contexts, what the agents asked). On this computer every 20 s; on a VPS, whose reads go
  * over ssh, every 60 s, so that the limit on sign-ins (ssh_rate_limited) is not touched. Where the team
  * is not known yet (the first read failed) it is the slow one.
  */
@@ -531,8 +531,7 @@ export default function AgentsPanel({ search }: PageProps) {
   // One read at a time, and none while an action or a start is on its way: their own read follows them.
   const occupied = useRef(false);
   occupied.current = busy || acting || starting;
-  const refreshMs = useRef(LIST_REFRESH_VPS_MS);
-  refreshMs.current = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
+  const everyMs = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
   useEffect(() => {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -544,20 +543,20 @@ export default function AgentsPanel({ search }: PageProps) {
         last = Date.now();
         await read(false, true);
       }
-      if (live) timer = setTimeout(() => void again(), refreshMs.current);
+      if (live) timer = setTimeout(() => void again(), everyMs);
     };
     // the window seen again after it was hidden reads at once
     const seen = () => {
       if (document.visibilityState === "visible" && !occupied.current && Date.now() - last >= SEEN_AGAIN_MIN_MS) void again();
     };
-    timer = setTimeout(() => void again(), refreshMs.current);
+    timer = setTimeout(() => void again(), everyMs);
     document.addEventListener("visibilitychange", seen);
     return () => {
       live = false;
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", seen);
     };
-  }, [read]);
+  }, [read, everyMs]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const current =

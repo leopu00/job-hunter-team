@@ -1283,7 +1283,7 @@ describe("«Agenti»: the list reads again by itself", () => {
   const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], shouldAdvanceTime: true });
   });
   afterEach(() => {
     vi.useRealTimers();
