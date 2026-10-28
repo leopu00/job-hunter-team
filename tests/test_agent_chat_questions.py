@@ -416,3 +416,11 @@ def test_a_chat_with_no_database_still_delivers(box):
     rc, out = send(box, "assistente", "c-3", "ciao")
     assert rc == 0, out
     assert not box.db.exists(), "answering questions never makes a database"
+
+
+def test_a_delivery_the_transport_could_not_prove_closes_the_question_but_leaves_the_reply_unseen(box):
+    row = plain(box)
+    rc, out = send(box, "assistente", "c-4", "Pro", FAKE_DELIVERY_RC="7")
+    assert rc == 0, out
+    # closed in the chat, and not seen: `jht-check-user-replies` is the second way for the words to reach the agent
+    assert reply_of(box, row) == ("Pro", 1, 0)
