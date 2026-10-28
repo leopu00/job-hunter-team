@@ -90,3 +90,16 @@ describe("the help page", () => {
     expect(t.pages.agents).toContain(label);
   });
 });
+
+describe("the help page, report a problem", () => {
+  it("has the Report a problem card, with its preview button off until something is written", () => {
+    localStorage.setItem("jht-lang", "en");
+    render(
+      <DashboardI18nProvider>
+        <HelpPage {...props} />
+      </DashboardI18nProvider>,
+    );
+    expect(screen.getByRole("heading", { name: "Report a problem" })).toBeInTheDocument();
+    expect(screen.getByTestId("report-problem-preview-button")).toBeDisabled();
+  });
+});

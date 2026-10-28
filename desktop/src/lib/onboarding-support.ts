@@ -12,7 +12,11 @@ export type SetupSupportReport = {
   preview: string;
   payload: Record<string, string>;
   redactions: Record<string, number>;
+  /** The mail subject of the fallback; the setup report's own when absent. */
+  subject?: string;
 };
+
+const SETUP_SUPPORT_SUBJECT = "Job Hunter Team desktop setup report";
 
 function safeCode(value: unknown): string {
   return typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(value) ? value : "unknown";
@@ -113,6 +117,81 @@ export function createSetupSupportReport(input: {
   return { preview: final.text, payload: { ...payload, diagnostics: final.text }, redactions: mergeCounts(cleaned.counts, final.counts) };
 }
 
+/** What the person chooses among when they report a problem from Help or Settings. */
+export const PROBLEM_CATEGORIES = ["install", "team", "account", "other"] as const;
+export type ProblemCategory = (typeof PROBLEM_CATEGORIES)[number];
+export const PROBLEM_MIN_CHARS = 5;
+export const PROBLEM_MAX_CHARS = 2_000;
+
+/** The intake's own `kind` values: an installation or an account question is a support request, a team that misbehaves a bug. */
+const PROBLEM_KIND: Record<ProblemCategory, string> = { install: "supporto", team: "bug", account: "supporto", other: "altro" };
+
+function safeCategory(value: unknown): ProblemCategory {
+  return (PROBLEM_CATEGORIES as readonly unknown[]).includes(value) ? (value as ProblemCategory) : "other";
+}
+
+/** Multi-line free text: line breaks stay, control characters and runs of blank lines do not. */
+function safeStory(value: unknown, limit: number): string {
+  return typeof value === "string"
+    ? value.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, limit)
+    : "";
+}
+
+/**
+ * A report the person writes themselves, from Help or Settings. Same boundary as the setup report: the
+ * description and the runtime log are redacted here, the text previewed is the text sent, and it is
+ * redacted a second time after the frame is built. Nothing leaves before the person confirms.
+ */
+export function createProblemReport(input: {
+  category: unknown;
+  description: unknown;
+  appVersion: unknown;
+  platform: unknown;
+  locale: unknown;
+  logTail: unknown;
+}): SetupSupportReport {
+  const category = safeCategory(input.category);
+  const appVersion = safeVersion(input.appVersion);
+  const platform = redactSetupSupportText(safeText(input.platform, 120) || "Operating system unavailable").text;
+  const locale = safeLocale(input.locale);
+  const description = redactSetupSupportText(safeStory(input.description, PROBLEM_MAX_CHARS)).text;
+  const logTail = redactSetupSupportText(safeText(input.logTail, 16_000) || "(no runtime log was available)");
+  const preview = [
+    "# Job Hunter Team desktop problem report",
+    "",
+    `- Category: ${category}`,
+    `- OS: ${platform}`,
+    `- App version: ${appVersion}`,
+    "",
+    "## What happened",
+    "",
+    description || "(nothing written)",
+    "",
+    "## Last runtime-log lines",
+    "",
+    logTail.text,
+  ].join("\n");
+  const final = redactSetupSupportText(preview);
+  const happened = description;
+  return {
+    preview: final.text,
+    subject: `Job Hunter Team desktop problem report (${category})`,
+    payload: {
+      client: "tauri-desktop",
+      app_version: appVersion,
+      locale,
+      platform,
+      kind: PROBLEM_KIND[category],
+      subject: `Desktop problem: ${category}`,
+      doing: `Desktop app, problem report: ${category}`,
+      happened,
+      expected: "",
+      diagnostics: final.text,
+    },
+    redactions: mergeCounts(logTail.counts, final.counts),
+  };
+}
+
 function mergeCounts(...all: Record<string, number>[]): Record<string, number> {
   return all.reduce<Record<string, number>>((out, counts) => {
     for (const [key, value] of Object.entries(counts)) out[key] = (out[key] ?? 0) + value;
@@ -122,7 +201,7 @@ function mergeCounts(...all: Record<string, number>[]): Record<string, number> {
 
 export function mailtoForSetupSupport(report: SetupSupportReport): string | null {
   const params = new URLSearchParams({
-    subject: "Job Hunter Team desktop setup report",
+    subject: report.subject ?? SETUP_SUPPORT_SUBJECT,
     body: report.preview,
   });
   const value = `mailto:${SETUP_SUPPORT_MAILBOX}?${params}`;
@@ -170,7 +249,7 @@ export async function deliverSetupSupportReport(report: SetupSupportReport): Pro
   // mailto URL.
   const summary = report.preview.split("\n## Last runtime-log lines", 1)[0].trim();
   const fallback = `mailto:${SETUP_SUPPORT_MAILBOX}?${new URLSearchParams({
-    subject: "Job Hunter Team desktop setup report",
+    subject: report.subject ?? SETUP_SUPPORT_SUBJECT,
     body: `${summary}\n\n${savedReport
       ? `The complete redacted report is ready to attach from: ${savedReport}`
       : "The complete report could not be saved automatically. Please retry the support report."}`,

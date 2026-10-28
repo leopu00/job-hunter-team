@@ -1,4 +1,5 @@
 import { CurrencyCard, LanguageCard } from "@/app/components/SettingsCloudSections";
+import ReportProblem from "../../components/ReportProblem";
 import { appLocale } from "../../lib/app-locale";
 import { navigate } from "../../shell/router";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
@@ -98,6 +99,7 @@ export default function SettingsPage(_props: PageProps) {
         <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{backupText.link}</span>
         <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{backupText.linkNote}</span>
       </button>
+      <ReportProblem id="settings-report" />
       {providerSetup && (
         <section
           data-testid="settings-provider"
