@@ -202,7 +202,7 @@ describe("what a receipt says of the person's message", () => {
     expect(outcomeOf({ state: "queued", queue: "mailbox" }, 0)).toEqual({ kind: "queued" });
     expect(outcomeOf({ queue: "terminal" }, 0)).toEqual({ kind: "sent" });
     const outcomes = new Map<string, ReturnType<typeof outcomeOf>>([
-      ["m1", watched], ["m2", watched], ["m3", { kind: "queued" }], ["m4", watched], ["m5", watched],
+      ["m1", watched], ["m2", watched], ["m3", { kind: "queued" }], ["m4", watched], ["m5", watched], ["m6", watched], ["m7", { kind: "expired" }], ["m8", { kind: "expired" }],
     ]);
     // no word from the page, or no ending for it: nothing changes (absence from the queue says nothing)
     expect(settleQueued(outcomes, undefined)).toBe(outcomes);
@@ -210,7 +210,8 @@ describe("what a receipt says of the person's message", () => {
     expect(settleQueued(outcomes, [{ id: "zz", how: "taken" }, { id: "m1", how: "sent" }])).toBe(outcomes);
     const settled = settleQueued(outcomes, [
       { id: "m1", how: "taken" }, { id: "m2", how: "pending" }, { id: "m3", how: "taken" },
-      { id: "m4", how: "unconfirmed" }, { id: "m5", how: "expired" },
+      { id: "m4", how: "unconfirmed" }, { id: "m5", how: "expired" }, { id: "m6", how: "late" },
+      { id: "m7", how: "late" }, { id: "m8", how: "taken" },
     ]);
     // the same mapping as the direct send: taken = sent, still in the composer = Enter may be pressed,
     // no proof = not known, and a turn that waited too long was never typed
@@ -219,6 +220,11 @@ describe("what a receipt says of the person's message", () => {
     expect(settled.get("m3")).toEqual({ kind: "queued" });
     expect(settled.get("m4")).toEqual({ kind: "unknown", reason: "unconfirmed" });
     expect(settled.get("m5")).toEqual({ kind: "expired" });
+    // sent late: over a turn still watched, and over one the page already gave up on (expired)
+    expect(settled.get("m6")).toEqual({ kind: "late" });
+    expect(settled.get("m7")).toEqual({ kind: "late" });
+    // any other ending leaves an expired turn as it is
+    expect(settled.get("m8")).toEqual({ kind: "expired" });
   });
 
   it("the reason is kept only from the closed list", () => {

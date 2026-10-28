@@ -158,6 +158,8 @@ BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "3"))
 QUEUE_FILE = "chat-queue.jsonl"
 # A turn whose text is in the composer and then finds it empty: a late draw is waited for this long.
 TYPED_GONE_AFTER_S = 30.0
+# A held turn past its life is given its one Enter if the agent frees up within this time after it.
+TYPED_LATE_WINDOW_S = 300.0
 # The detached process that sees to the queue when nobody reads or writes: how often, and for how long
 # (the life of a queued turn plus a margin).
 DRAIN_EVERY_S = float(os.environ.get("JHT_CHAT_DRAIN_EVERY", "5"))
@@ -853,6 +855,9 @@ def _receipt(client_id: str, message_id, at, state: str | None = None, taken: st
     elif taken == "unconfirmed":
         out["taken"] = None         # typed once, gone from the composer, no proof it was taken
         out["reason"] = "unconfirmed"
+    elif taken == "late":
+        out["taken"] = None         # a held turn got its Enter after its time, with no proof it was taken
+        out["reason"] = "late"
     elif taken in ENTER_REASONS:
         out["taken"] = None         # «enter» found something else in the composer and pressed nothing
         out["reason"] = taken
@@ -1089,7 +1094,7 @@ def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
     """``(waiting, settled)`` for the queued turns of the last day, oldest first.
 
     ``waiting``: fresh and not delivered, the turns a flush may type.  ``settled``: what became of the others,
-    ``{"id": message_id, "how": taken|pending|unconfirmed|expired}``; a turn past QUEUE_TTL_S and never
+    ``{"id": message_id, "how": taken|pending|late|unconfirmed|expired}``; a turn past QUEUE_TTL_S and never
     delivered is ``expired``, whatever the agent shows now.
     """
     delivered = chat_path(agent).parent / DELIVERED_FILE
@@ -1109,7 +1114,7 @@ def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
         record = _found(delivered, client_id)
         if record is not None:
             if age <= QUEUE_REPORT_S:
-                how = record.get("taken") if record.get("taken") in ("taken", "pending") else "unconfirmed"
+                how = record.get("taken") if record.get("taken") in ("taken", "pending", "late") else "unconfirmed"
                 settled.append({"id": str(row.get("message_id")), "how": how})
         elif age > QUEUE_TTL_S:
             if age <= QUEUE_REPORT_S:
@@ -1178,6 +1183,47 @@ def _settle_typed(agent: str, session: str, row: dict, held: dict, pane: str | N
     return False
 
 
+def _typed_open(agent: str) -> bool:
+    """A typed turn not closed whose time is not over yet, or is over by less than the window of its one Enter."""
+    now = time.time()
+    delivered = chat_path(agent).parent / DELIVERED_FILE
+    return any(held.get("typed") and now - float(held.get("queued_at") or 0) <= QUEUE_TTL_S + TYPED_LATE_WINDOW_S
+               and _found(delivered, held["client_message_id"]) is None for held in _queue_lines(agent))
+
+
+def _retire_typed(agent: str, session: str) -> None:
+    """A typed turn that outlived QUEUE_TTL_S: its text may still wait in the composer, never proved taken.
+
+    The page tells the person «not sent, write it again» at that point, and the old text, still «ours, of any
+    age» for the transport, would be submitted by the next delivery: a double. So the one Enter it was waiting for
+    is given now, if the agent is free and the transport proves the text ours (the same ``--flush-ours``): the turn
+    is settled ``late`` («sent late»). Otherwise it is left as it was (expired), and tried again for
+    TYPED_LATE_WINDOW_S only: an agent that stays busy for longer is not given a message the page said was lost.
+    """
+    now = time.time()
+    stale = [held for held in _queue_lines(agent)
+             if held.get("typed") and QUEUE_TTL_S < now - float(held.get("queued_at") or 0) <= QUEUE_TTL_S + TYPED_LATE_WINDOW_S]
+    if not stale:
+        return
+    try:
+        with _AgentLock(agent):
+            for held in stale:
+                client_id = held["client_message_id"]
+                if _found(chat_path(agent).parent / DELIVERED_FILE, client_id) is not None:
+                    continue
+                row = _found(chat_path(agent), client_id)
+                pane = capture_pane(session)
+                if row is None or pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) != "text":
+                    continue
+                try:
+                    flush_ours(session)            # one Enter, only on a text the transport proves ours
+                except Refusal:
+                    continue
+                mark_delivered(agent, row, "late")
+    except Refusal:
+        return
+
+
 def flush_queue(agent: str, session: str) -> None:
     """Deliver the queued turns in order while the agent is idle; stop at the first that cannot go now.
 
@@ -1185,6 +1231,7 @@ def flush_queue(agent: str, session: str) -> None:
     turn queued) and the same guarded transport.  Called by every send and, unless FLUSH_ON_READ is off,
     every read, under the agent's lock.  An expired turn is never typed.
     """
+    _retire_typed(agent, session)
     if not queued_turns(agent):
         return
     try:
@@ -1769,7 +1816,7 @@ def _drain_lock(agent: str):
             return path
         except FileExistsError:
             try:
-                if time.time() - path.stat().st_mtime < QUEUE_TTL_S + 120:
+                if time.time() - path.stat().st_mtime < QUEUE_TTL_S + TYPED_LATE_WINDOW_S + 120:
                     return None
                 path.unlink()          # a holder that died without cleaning up
             except OSError:
@@ -1790,10 +1837,12 @@ def drain(agent: str) -> dict:
     if lock is None:
         return {"result": "running"}
     try:
-        deadline = time.monotonic() + QUEUE_TTL_S + 60
-        while queued_turns(agent):
+        deadline = time.monotonic() + QUEUE_TTL_S + TYPED_LATE_WINDOW_S + 60
+        # A typed turn is kept to its one late Enter: the agent may be working at the end of its time, and nobody
+        # may be reading (the app closed).
+        while queued_turns(agent) or _typed_open(agent):
             flush_queue(agent, AGENTS[agent])
-            if not queued_turns(agent):
+            if not queued_turns(agent) and not _typed_open(agent):
                 break
             if time.monotonic() >= deadline:
                 return {"result": "gave_up"}

@@ -794,6 +794,13 @@ export default function DirectChatScreen({
         </div>
       );
     }
+    if (outcome.kind === "late") {
+      return (
+        <div data-testid="direct-chat-sent-late" className="mt-1 text-right text-[13px] text-[var(--color-yellow)]">
+          {t.queueLate}
+        </div>
+      );
+    }
     if (outcome.kind === "unknown") {
       // No button: a key pressed now could choose something on the agent's screen in the person's place.
       return (

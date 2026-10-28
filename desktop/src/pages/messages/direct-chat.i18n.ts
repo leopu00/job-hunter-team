@@ -46,6 +46,7 @@ export interface DirectChatText {
   queued: string;
   /** Under a message of the person's that waited too long for its agent and was never typed. */
   queueExpired: string;
+  queueLate: string;
   /** What a system line with a closed code says, by code (the backend's English text is the fallback). */
   codes: Record<string, string>;
   keysHint: string;
@@ -129,6 +130,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Inviato",
     queued: "In coda",
     queueExpired: "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo.",
+    queueLate: "Inviato in ritardo: il testo era rimasto nella casella dell'agente e ha avuto il suo Invio dopo la scadenza. Guarda il terminale prima di riscrivere.",
     codes: { mail_not_taken: "L'agente non ha ancora preso il messaggio.", message_too_long: "Un messaggio dell'agente era troppo lungo per essere mostrato qui." },
     keysHint: "Invio manda · Ctrl+Invio va a capo",
     kinds: { urgent: "urgente", blocked: "bloccato", question: "domanda", completed: "completato", info: "comunicazione" },
@@ -187,6 +189,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Sent",
     queued: "Queued",
     queueExpired: "Not sent: the agent stayed busy for too long. Write it again.",
+    queueLate: "Sent late: the text had stayed in the agent's input box and got its Enter after the time ran out. Look at its terminal before writing again.",
     codes: { mail_not_taken: "The agent has not taken your message yet.", message_too_long: "A message from the agent was too long to be shown here." },
     keysHint: "Enter sends · Ctrl+Enter starts a new line",
     kinds: { urgent: "urgent", blocked: "blocked", question: "question", completed: "done", info: "update" },
@@ -245,6 +248,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Gesendet",
     queued: "In der Warteschlange",
     queueExpired: "Nicht gesendet: der Agent war zu lange beschäftigt. Schreib es noch einmal.",
+    queueLate: "Verspätet gesendet: Der Text war im Eingabefeld des Agenten geblieben und bekam seinen Enter erst nach Ablauf der Zeit. Schau in sein Terminal, bevor du erneut schreibst.",
     codes: { mail_not_taken: "Der Agent hat deine Nachricht noch nicht abgeholt.", message_too_long: "Eine Nachricht des Agenten war zu lang, um hier angezeigt zu werden." },
     keysHint: "Enter sendet · Strg+Enter für eine neue Zeile",
     kinds: { urgent: "dringend", blocked: "blockiert", question: "Frage", completed: "erledigt", info: "Mitteilung" },
@@ -303,6 +307,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Envoyé",
     queued: "En attente",
     queueExpired: "Non envoyé : l'agent est resté occupé trop longtemps. Réécris-le.",
+    queueLate: "Envoyé en retard : le texte était resté dans la zone de saisie de l'agent et a reçu son Entrée après l'expiration. Regarde son terminal avant de réécrire.",
     codes: { mail_not_taken: "L'agent n'a pas encore pris ton message.", message_too_long: "Un message de l'agent était trop long pour être affiché ici." },
     keysHint: "Entrée envoie · Ctrl+Entrée pour aller à la ligne",
     kinds: { urgent: "urgent", blocked: "bloqué", question: "question", completed: "terminé", info: "info" },
@@ -361,6 +366,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Enviado",
     queued: "En cola",
     queueExpired: "No enviado: el agente estuvo ocupado demasiado tiempo. Vuelve a escribirlo.",
+    queueLate: "Enviado con retraso: el texto se quedó en el cuadro de entrada del agente y recibió su Intro tras agotarse el tiempo. Mira su terminal antes de volver a escribir.",
     codes: { mail_not_taken: "El agente aún no ha tomado tu mensaje.", message_too_long: "Un mensaje del agente era demasiado largo para mostrarse aquí." },
     keysHint: "Intro envía · Ctrl+Intro salta de línea",
     kinds: { urgent: "urgente", blocked: "bloqueado", question: "pregunta", completed: "hecho", info: "aviso" },
@@ -419,6 +425,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Enviado",
     queued: "Em fila",
     queueExpired: "Não enviado: o agente esteve ocupado demasiado tempo. Volta a escrevê-lo.",
+    queueLate: "Enviado com atraso: o texto ficou na caixa de escrita do agente e recebeu o seu Enter depois de acabar o tempo. Vê o seu terminal antes de voltar a escrever.",
     codes: { mail_not_taken: "O agente ainda não apanhou a tua mensagem.", message_too_long: "Uma mensagem do agente era demasiado longa para ser mostrada aqui." },
     keysHint: "Enter envia · Ctrl+Enter muda de linha",
     kinds: { urgent: "urgente", blocked: "bloqueado", question: "pergunta", completed: "concluído", info: "aviso" },
@@ -477,6 +484,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     sent: "Elküldve",
     queued: "Sorban",
     queueExpired: "Nem lett elküldve: az ügynök túl sokáig volt elfoglalt. Írd meg újra.",
+    queueLate: "Késve elküldve: a szöveg az ügynök beviteli mezőjében maradt, és az idő lejárta után kapta meg az Entert. Nézd meg a terminálját, mielőtt újra írsz.",
     codes: { mail_not_taken: "Az ügynök még nem vette át az üzenetedet.", message_too_long: "Az ügynök egyik üzenete túl hosszú volt ahhoz, hogy itt megjelenjen." },
     keysHint: "Enter: küldés · Ctrl+Enter: új sor",
     kinds: { urgent: "sürgős", blocked: "elakadt", question: "kérdés", completed: "kész", info: "tájékoztatás" },

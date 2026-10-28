@@ -206,6 +206,7 @@ export type Outcome =
   | { kind: "sent" }
   | { kind: "queued"; watched?: true }
   | { kind: "expired" }
+  | { kind: "late" }
   | { kind: "notSent"; presses: number }
   | { kind: "unknown"; reason?: TakenReason };
 
@@ -235,11 +236,15 @@ export function settleQueued(
   let next: Map<string, Outcome> | null = null;
   for (const ending of settled) {
     const outcome = outcomes.get(ending.id);
-    if (!outcome || outcome.kind !== "queued" || !outcome.watched) continue;
+    // «Sent late» also corrects a turn the page already gave up on: its text was still in the box and got its
+    // Enter after the time, so «write it again» would make a double.
+    const lateOnExpired = ending.how === "late" && outcome?.kind === "expired";
+    if (!outcome || (!lateOnExpired && (outcome.kind !== "queued" || !outcome.watched))) continue;
     const became: Outcome | null =
       ending.how === "taken" ? { kind: "sent" }
       : ending.how === "pending" ? outcomeOf({ taken: false }, 0)
       : ending.how === "unconfirmed" ? outcomeOf({ taken: null, reason: "unconfirmed" }, 0)
+      : ending.how === "late" ? { kind: "late" }
       : ending.how === "expired" ? { kind: "expired" }
       : null;
     if (!became) continue;
