@@ -14,8 +14,8 @@
 
 pub(crate) const MAX_BYTES: u64 = 10 * 1024 * 1024;
 /// The extensions the system's window offers. The content decides the one the copy gets.
-pub(crate) const ALLOWED_EXTENSIONS: [&str; 10] =
-    ["pdf", "docx", "doc", "odt", "rtf", "txt", "md", "png", "jpg", "jpeg"];
+/// No `.doc`: the binary Word format is not one the Assistant's tools read.
+pub(crate) const ALLOWED_EXTENSIONS: [&str; 9] = ["pdf", "docx", "odt", "rtf", "txt", "md", "png", "jpg", "jpeg"];
 /// Our own files (`cv-*`) the folder may hold: the disk of a person is not ours to fill.
 const MAX_FILES: usize = 50;
 const MAX_FOLDER_BYTES: u64 = 250 * 1024 * 1024;
@@ -120,7 +120,6 @@ pub(crate) fn classify(extension: &str, bytes: &[u8]) -> Result<&'static str, &'
         "pdf" => bytes.starts_with(b"%PDF-").then_some("pdf"),
         "png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n").then_some("png"),
         "jpg" | "jpeg" => bytes.starts_with(b"\xff\xd8\xff").then_some("jpg"),
-        "doc" => bytes.starts_with(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1").then_some("doc"),
         "rtf" => bytes.starts_with(b"{\\rtf").then_some("rtf"),
         "docx" => (zip_kind(bytes) == Some(ZipKind::Docx)).then_some("docx"),
         "odt" => (zip_kind(bytes) == Some(ZipKind::Odt)).then_some("odt"),
@@ -523,6 +522,8 @@ mod tests {
         let s = Scratch::new();
         let exe = s.put("tool.exe", b"MZ");
         assert_eq!(run(&s, &exe, 1).unwrap_err(), "attachment_type");
+        let old_word = s.put("old.doc", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1abc");
+        assert_eq!(run(&s, &old_word, 1).unwrap_err(), "attachment_type");
         let none = s.put("noext", &pdf());
         assert_eq!(run(&s, &none, 1).unwrap_err(), "attachment_type");
         let lie = s.put("lie.pdf", b"just text, not a pdf");
@@ -541,7 +542,8 @@ mod tests {
         assert_eq!(classify("PDF", &pdf()), Ok("pdf"));
         assert_eq!(classify("jpeg", b"\xff\xd8\xff\xe0abc"), Ok("jpg"));
         assert_eq!(classify("png", b"\x89PNG\r\n\x1a\nabc"), Ok("png"));
-        assert_eq!(classify("doc", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1abc"), Ok("doc"));
+        // the old binary Word format is not taken, whatever it holds
+        assert_eq!(classify("doc", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1abc"), Err("attachment_type"));
         assert_eq!(classify("rtf", b"{\\rtf1\\ansi}"), Ok("rtf"));
         assert_eq!(classify("txt", "è un testo".as_bytes()), Ok("txt"));
         assert_eq!(classify("MD", b"# titolo"), Ok("md"));

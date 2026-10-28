@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen from "./DirectChatScreen";
-import type { DirectChatClient } from "./direct-chat-contract";
+import type { DirectChatClient, DirectChatReceipt } from "./direct-chat-contract";
 import { DIRECT_CHAT_TEXT } from "./direct-chat.i18n";
 
 type Attach = NonNullable<DirectChatClient["attach"]>;
@@ -43,7 +43,11 @@ describe("the paperclip in the Assistant's chat", () => {
   });
 
   it("asks for a file with the person's language and no path, and says what was attached by the person's own name", async () => {
-    const attach: Attach = vi.fn(async () => ({ outcome: "sent" as const, displayName: "Mario Rossi CV.pdf" }));
+    const attach: Attach = vi.fn(async () => ({
+      outcome: "sent" as const,
+      displayName: "Mario Rossi CV.pdf",
+      receipt: { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, taken: true },
+    }));
     const mock = client(attach, on);
     await ready(mock);
     const button = await screen.findByTestId("direct-chat-attach");
@@ -58,6 +62,29 @@ describe("the paperclip in the Assistant's chat", () => {
     expect(note).toHaveTextContent("Attached: Mario Rossi CV.pdf. The Assistant will use it for your profile.");
     expect(note).toHaveAttribute("data-kind", "ok");
     expect(mock.send).not.toHaveBeenCalled();
+  });
+
+  it("says the Assistant uses the file only when it took the message, and reads it when free otherwise", async () => {
+    const USES = "The Assistant will use it for your profile.";
+    const LATER = "The Assistant reads it as soon as it is free.";
+    const cases: [string, Partial<DirectChatReceipt> | null, string][] = [
+      ["typed and taken", { taken: true }, USES],
+      ["typed, no word on taking (an older image)", {}, USES],
+      ["waiting in the team's queue", { state: "queued", queue: "terminal" }, LATER],
+      ["still in the composer", { taken: false }, LATER],
+      ["not known to be taken", { taken: null }, LATER],
+      ["no receipt at all", null, LATER],
+    ];
+    for (const [label, extra, expected] of cases) {
+      const receipt = extra && { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, ...extra };
+      const attach: Attach = vi.fn(async () => ({ outcome: "sent" as const, displayName: "cv.pdf", ...(receipt ? { receipt } : {}) }));
+      await ready(client(attach, on));
+      const button = await screen.findByTestId("direct-chat-attach");
+      await waitFor(() => expect(button).toBeEnabled());
+      fireEvent.click(button);
+      expect(await screen.findByTestId("direct-chat-attach-note"), label).toHaveTextContent(expected);
+      cleanup();
+    }
   });
 
   it("says nothing when the person closes the system's window", async () => {
@@ -151,6 +178,7 @@ describe("the words of the paperclip", () => {
         expect(words.trim().length, locale).toBeGreaterThan(5);
       }
       expect(text.attachSent, locale).toContain("{name}");
+      expect(text.attachSentLater, locale).toContain("{name}");
       expect(text.attachSavedNotSent, locale).toContain("{name}");
     }
   });

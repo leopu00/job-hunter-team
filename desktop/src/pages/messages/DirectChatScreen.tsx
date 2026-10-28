@@ -651,7 +651,9 @@ export default function DirectChatScreen({
     try {
       const done = await client.attach({ clientMessageId: clientMessageId(), locale });
       if (done.outcome === "sent") {
-        setAttachNote({ kind: "ok", text: withName(t.attachSent, done.displayName ?? "") });
+        // «uses it» only when the receipt says the Assistant took the message: waiting or not known, it reads it when free
+        const taken = done.receipt !== undefined && done.receipt.state !== "queued" && done.receipt.taken !== false && done.receipt.taken !== null;
+        setAttachNote({ kind: "ok", text: withName(taken ? t.attachSent : t.attachSentLater, done.displayName ?? "") });
         readSoon.current?.();
       } else if (done.outcome === "saved_not_sent") {
         setAttachNote({ kind: "warn", text: withName(t.attachSavedNotSent, done.displayName ?? "") });
