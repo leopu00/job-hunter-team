@@ -14,6 +14,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -167,6 +168,11 @@ def _with_cloud(home: Path, server: HTTPServer) -> None:
 
 
 def test_a_verdict_is_kept_in_the_team_database_and_never_sent_to_the_cloud(tmp_path, cloud):
+    # The fake cloud must hear a request for «zero requests» to mean anything: prove it listens, here and now.
+    probe = urllib.request.Request(f"http://127.0.0.1:{cloud.server_port}/probe", data=b"{}", method="POST")
+    assert urllib.request.urlopen(probe, timeout=10).status == 200
+    assert _Cloud.seen == ["/probe"]
+    _Cloud.seen.clear()
     home = _team(tmp_path)
     _with_cloud(home, cloud)
     request = {"op": "feedback", "id": "1", "value": "dislike", "reason": "too_senior", "note": "il mio commento", "expect": _expect(home)}
@@ -244,3 +250,10 @@ def test_the_expected_identity_must_be_two_whole_numbers(tmp_path):
     for expect in (None, {}, {"ino": 1}, {"ino": "1", "dev": 2}, {"ino": 1, "dev": 2, "x": 3}, {"ino": True, "dev": 1}):
         answer = _run("JUDGE_PY", home, {"op": "feedback", "id": "1", "value": "like", "expect": expect})
         assert answer == {"ok": False, "code": "request_invalid"}, expect
+
+
+def test_the_cloud_checks_of_this_file_are_never_skipped():
+    """The proof that a local profile's verdict never reaches the cloud runs in every suite: nothing here is skipped."""
+    text = Path(__file__).read_text(encoding="utf-8").split("def test_the_cloud_checks_of_this_file")[0]
+    for word in ("pytest.sk" + "ip", "mark.sk" + "ip", "sk" + "ipif", "xf" + "ail", "importor" + "skip"):
+        assert word not in text, word
