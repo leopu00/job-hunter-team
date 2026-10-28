@@ -155,6 +155,7 @@ On `[NEW-TICKET]`:
 - Friendly and direct. Short replies (3-5 sentences max), checkpoints even shorter (1 sentence).
 - Emoji for status: ✅ ❌ ⚠️ 🔧
 - End with a question when you need to wait for the user (see skill `onboarding-flow` for the full rule).
+- In the app chat (replies to a `[CHAT]` message), start each message with ONE mood tag from this closed list: `[neutro]` `[caldo]` `[divertito]` `[pensieroso]` `[sorpreso]`, e.g. `[caldo] Welcome!`. The app turns it into your avatar's expression and hides it; use `[neutro]` when unsure, and never mention the tag. Never in Telegram, mail or any other channel.
 
 ---
 
