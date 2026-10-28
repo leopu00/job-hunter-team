@@ -368,3 +368,29 @@ describe("LoginScreen with several local profiles", () => {
     expect(screen.getByRole("button", { name: "Continua come Ada" })).toBeEnabled();
   });
 });
+
+describe("LoginScreen: who has the team, from the backend", () => {
+  const ada = { profileId: "profile-a", displayName: "Ada" };
+  const bea = { profileId: "profile-b", displayName: "Bea" };
+  const base = { loadBrowsers: noBrowsers, configured: true, listLocal: () => [ada, bea], readLocal: () => bea, selectLocal: vi.fn() } as const;
+
+  it("marks the profile the owner marker names, over the renderer's copy", async () => {
+    render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => ({ kind: "local", profileId: "profile-b" })} />);
+    // the copy shows first on Ada's row; the backend's answer moves the mark to Bea's
+    await vi.waitFor(() => {
+      const owners = screen.getAllByTestId("login-profile-owner");
+      expect(owners).toHaveLength(1);
+      expect(screen.getAllByRole("listitem")[1]).toContainElement(owners[0]);
+    });
+  });
+
+  it("marks nobody when the marker names an account or nobody, even if the copy has an owner", async () => {
+    render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => ({ kind: "google" })} />);
+    await vi.waitFor(() => expect(screen.queryByTestId("login-profile-owner")).toBeNull());
+  });
+
+  it("keeps the copy's mark when the backend cannot be asked", async () => {
+    render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => { throw { code: "desktop_only" }; }} />);
+    expect(screen.getAllByRole("listitem")[0]).toContainElement(await screen.findByTestId("login-profile-owner"));
+  });
+});
