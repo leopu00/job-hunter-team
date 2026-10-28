@@ -1809,6 +1809,26 @@
       "path": "docs/internal/architecture/closer-desktop-tauri.md",
       "description": "Browser assistito dentro l'app Tauri: richiesta unica al Rust, binding per account, container attestato, SSH senza PTY",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/mailbox/SKILL.md",
+      "description": "Skill degli agenti: svuota la casella di posta (jht-mail drain) come prima azione di ogni turno; i messaggi degli altri agenti sono file con ricevuta",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/scam-signals/SKILL.md",
+      "description": "Skill dell'analista: segnali anti-truffa deterministici su una posizione prima del verdetto (stesso testo in altre aziende, anticipo di denaro, azienda non verificabile, solo chat privata)",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/experiments/2026-10-25-model-comparison-test-team.md",
+      "description": "Confronto fra modelli su un team di prova (24-25/10/2026): solo metodo e numeri, nessun testo di annunci né dati di tester; in corso",
+      "last_review": null
+    },
+    {
+      "path": "docs/internal/ops/vps-provisioning-map.md",
+      "description": "Mappa del provisioning di una VPS nuova (16/10/2026): cosa fanno desktop, gioco e CLI, fiducia nel server, installer e punti con prova automatica",
+      "last_review": null
     }
   ]
 }
