@@ -25,6 +25,7 @@ import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
+import { ProviderWindowBanner } from "./ProviderWindowBanner";
 import { TeamOffBanner } from "./TeamOffBanner";
 import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
@@ -270,6 +271,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
             <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
               <MailRotationBanner />
               <NewVersionBanner />
+              <ProviderWindowBanner />
               <TeamOffBanner />
               <LocalTeamOwnerBanner onSwitch={onLogout} />
               <WriteAccessRestoredBanner />
@@ -289,6 +291,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
           <NewVersionBanner />
+          <ProviderWindowBanner />
           <TeamOffBanner />
           <LocalTeamOwnerBanner onSwitch={onLogout} />
             <WriteAccessRestoredBanner />

@@ -41,6 +41,7 @@ mod team_backup;
 mod team_export;
 mod team_owner;
 mod chat_attachment;
+mod provider_window;
 mod work_stats;
 mod text_file_export;
 mod voice_input;
@@ -177,6 +178,7 @@ pub fn run() {
             team_backup::backup_create,
             team_backup::backup_cancel,
             team_backup::backup_inspect,
+            provider_window::provider_window_read,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
             voice_input::voice_input_cancel,

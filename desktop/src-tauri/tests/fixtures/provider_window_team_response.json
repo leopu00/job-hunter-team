@@ -1,0 +1,21 @@
+{
+  "used_with_reset": {
+    "ok": true,
+    "provider": "codex",
+    "usedPct": 93.4,
+    "resetAtUnix": 1793300000.0,
+    "updatedAtUnix": 1793299000.5
+  },
+  "no_numbers": {
+    "ok": true,
+    "provider": null,
+    "usedPct": null,
+    "resetAtUnix": null,
+    "updatedAtUnix": 1793299000.5
+  },
+  "unavailable": {
+    "ok": false,
+    "error": "window_unavailable",
+    "note": "no file"
+  }
+}
