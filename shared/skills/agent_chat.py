@@ -1183,6 +1183,14 @@ def _settle_typed(agent: str, session: str, row: dict, held: dict, pane: str | N
     return False
 
 
+def _typed_open(agent: str) -> bool:
+    """A typed turn not closed whose time is not over yet, or is over by less than the window of its one Enter."""
+    now = time.time()
+    delivered = chat_path(agent).parent / DELIVERED_FILE
+    return any(held.get("typed") and now - float(held.get("queued_at") or 0) <= QUEUE_TTL_S + TYPED_LATE_WINDOW_S
+               and _found(delivered, held["client_message_id"]) is None for held in _queue_lines(agent))
+
+
 def _retire_typed(agent: str, session: str) -> None:
     """A typed turn that outlived QUEUE_TTL_S: its text may still wait in the composer, never proved taken.
 
@@ -1808,7 +1816,7 @@ def _drain_lock(agent: str):
             return path
         except FileExistsError:
             try:
-                if time.time() - path.stat().st_mtime < QUEUE_TTL_S + 120:
+                if time.time() - path.stat().st_mtime < QUEUE_TTL_S + TYPED_LATE_WINDOW_S + 120:
                     return None
                 path.unlink()          # a holder that died without cleaning up
             except OSError:
@@ -1829,15 +1837,16 @@ def drain(agent: str) -> dict:
     if lock is None:
         return {"result": "running"}
     try:
-        deadline = time.monotonic() + QUEUE_TTL_S + 60
-        while queued_turns(agent):
+        deadline = time.monotonic() + QUEUE_TTL_S + TYPED_LATE_WINDOW_S + 60
+        # A typed turn is kept to its one late Enter: the agent may be working at the end of its time, and nobody
+        # may be reading (the app closed).
+        while queued_turns(agent) or _typed_open(agent):
             flush_queue(agent, AGENTS[agent])
-            if not queued_turns(agent):
+            if not queued_turns(agent) and not _typed_open(agent):
                 break
             if time.monotonic() >= deadline:
                 return {"result": "gave_up"}
             time.sleep(DRAIN_EVERY_S)
-        _retire_typed(agent, AGENTS[agent])      # the last turn may have expired while it waited: its one Enter
         return {"result": "empty"}
     finally:
         try:

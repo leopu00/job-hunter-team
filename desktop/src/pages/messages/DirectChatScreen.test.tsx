@@ -613,7 +613,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
   it.each([
     ["pending", "direct-chat-not-sent", "Incollato ma non inviato"],
     ["unconfirmed", "direct-chat-taken-unknown", "Non so se è stato preso"],
-    ["late", "direct-chat-taken-unknown", "inviato in ritardo"],
+    ["late", "direct-chat-sent-late", "Inviato in ritardo"],
     ["expired", "direct-chat-queue-expired", "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo."],
   ] as const)("a queued turn that ends «%s» says it as the direct send does, never «Inviato»", async (how, testId, words) => {
     viewport(1280, 800);
@@ -640,6 +640,38 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
       { timeout: 4_000 },
     );
     expect(within(screen.getByText("Finale diverso").closest("article")!).queryByTestId("direct-chat-sent")).toBeNull();
+  });
+
+  it("a turn the page gave up on as expired becomes «Inviato in ritardo» when the team says its Enter came late", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    let phase: "queued" | "expired" | "late" = "queued";
+    mock.send = vi.fn(async ({ clientMessageId }): Promise<DirectChatReceipt> => ({
+      clientMessageId, accepted: true, messageId: "remote-queued-5", at: 3, state: "queued", queue: "terminal",
+    }));
+    mock.read = vi.fn(async (): Promise<DirectChatPage> => ({
+      messages: [{ id: "a1", role: "agent", text: "Messaggio dalla VPS", at: 1 }],
+      cursor: "opaque-cursor",
+      queued: phase === "queued" ? ["remote-queued-5"] : [],
+      settled: phase === "queued" ? [] : [{ id: "remote-queued-5", how: phase === "expired" ? "expired" : "late" }],
+    }));
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Finale in ritardo{Enter}");
+    const mine = (await screen.findByText("Finale in ritardo")).closest("article")!;
+    await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toBeInTheDocument());
+    phase = "expired";
+    await waitFor(
+      () => expect(within(screen.getByText("Finale in ritardo").closest("article")!).getByTestId("direct-chat-queue-expired")).toBeInTheDocument(),
+      { timeout: 4_000 },
+    );
+    phase = "late";
+    await waitFor(
+      () => expect(within(screen.getByText("Finale in ritardo").closest("article")!).getByTestId("direct-chat-sent-late")).toHaveTextContent("Inviato in ritardo"),
+      { timeout: 4_000 },
+    );
+    expect(within(screen.getByText("Finale in ritardo").closest("article")!).queryByTestId("direct-chat-queue-expired")).toBeNull();
   });
 
   it("a queued mailbox turn nobody watches stays «In coda» whatever the page says of the queue", async () => {

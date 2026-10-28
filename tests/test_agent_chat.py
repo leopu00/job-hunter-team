@@ -1332,6 +1332,27 @@ def test_a_held_turn_that_expires_while_the_draining_process_waits_is_given_its_
     assert _flush_calls(box) == ["CAPITANO"] and len(box.envelopes()) == 1
 
 
+def test_the_draining_process_outlives_the_turn_while_the_agent_is_busy_and_the_app_is_closed(box):
+    """The agent is working when the time ends and nobody reads: the process waits for its one Enter, within the window."""
+    import time as _time
+    box.stub_delivery()
+    screen = box.state / "screen"
+    screen.write_text(READY_CODEX, encoding="utf-8")
+    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "0.4", "JHT_CHAT_QUEUE_TTL": "1",
+             "FAKE_FLUSH_RC": "0", "FAKE_FLUSH_CLEARS": "1"}
+    box.run("send", "capitano", "id-busy-end", stdin="occupato", **HALF_DRAWN, **drain)
+    screen.write_text(WORKING_WITH_OUR_TEXT, encoding="utf-8")      # the turn is over, the agent still works
+    _time.sleep(3.0)
+    lock = box.home / "locks" / "chat-drain-capitano.lock"
+    assert lock.exists() and _delivered_ids(box) == [], "alive, nothing given to a working agent"
+    assert _flush_calls(box) == []
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")          # the agent is free at last
+    assert _wait_for(lambda: _delivered_ids(box) == ["id-busy-end"], 20)
+    delivered = box.home / "agents" / "capitano" / "chat-delivered.jsonl"
+    assert json.loads(delivered.read_text(encoding="utf-8").splitlines()[-1])["taken"] == "late"
+    assert _wait_for(lambda: not lock.exists(), 20), "and it ends"
+
+
 def test_a_turn_behind_a_held_one_waits_for_it(box):
     _code, first = _held_half_drawn(box)
     code, second = box.run("send", "capitano", "id-behind-half", stdin="il terzo", FAKE_FLUSH_RC="130")
