@@ -519,6 +519,78 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
                 "agent": chat, "in_your_chat": chat == agent}
 
 
+# The first run opens when the Capitano runs `begin-burst`, and the Capitano is told once, by `jht profile import`,
+# that the profile is ready. If the plan was not declared yet, that run refused; when the person then picks their plan
+# on the card (the Assistente writes it, the card shows «picked up»), nothing told the Capitano again, and the team
+# stayed in `awaiting_profile` until the person wrote «start the team» (TEST 18c, 28/10: the plan was saved 10 s after
+# the click and the burst opened four minutes later, by hand). The net tells the Capitano again, from the watchdog's
+# tick, once the profile is imported and the plan is declared and the first run has not opened.
+START_NUDGE_SETTLE_S = 45   # after the plan is written: the one who wrote it is still confirming it
+START_NUDGE_EVERY_S = 300   # between two reminders to the Capitano
+START_NUDGE_MAX = 3         # for one declared plan; then the Capitano is on its own, and so is the person (they can write)
+START_MESSAGE = (
+    "The person has declared their subscription plan and the candidate profile is complete: the team can start. "
+    "Run first_run.py begin-burst and follow your first-run-burst skill."
+)
+
+
+def _plan_declared_at() -> Optional[float]:
+    registry = _load_module("plan_registry", "plan_registry.py")
+    try:
+        return Path(registry._config_path()).stat().st_mtime if registry is not None else None
+    except (OSError, AttributeError):
+        return None
+
+
+def _tell_the_capitano(message: str) -> bool:
+    """Type `message` into the Capitano's terminal as the person's console (the way `jht profile import` does: the
+    envelope of an agent is not ours to wear). True when the transport took it."""
+    sender = os.environ.get("JHT_TMUX_SENDER") or shutil.which("jht-tmux-send")
+    if not sender:
+        for candidate in (Path("/app/agents/_skills/tmux-send/jht-tmux-send"),
+                          Path(__file__).resolve().parents[2] / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"):
+            if candidate.is_file():
+                sender = str(candidate)
+                break
+    if not sender:
+        return False
+    env = dict(os.environ, JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT="0")
+    try:
+        done = subprocess.run([sender, "CAPITANO", message], capture_output=True, timeout=180, env=env, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
+def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[float] = None) -> dict:
+    """The plan is declared and the profile imported: while the first run has not opened, tell the Capitano to open it."""
+    if state["phase"] != PHASE_AWAITING:
+        return {"action": "none", "reason": "the plan is declared"}
+    # the wait counts from the later of the two: a plan declared before the profile was ready is not news at the
+    # moment the Capitano is itself told the profile is ready
+    declared = max((moment for moment in (_plan_declared_at(), imported) if moment is not None), default=None)
+    if declared is not None and now.timestamp() - declared < START_NUDGE_SETTLE_S:
+        return {"action": "waiting", "seconds_left": int(START_NUDGE_SETTLE_S - (now.timestamp() - declared))}
+    record = state.get("start_nudge")
+    plan = info.get("plan")
+    count, last = 0, None
+    if isinstance(record, dict) and record.get("plan") == plan:
+        count = record.get("count") if isinstance(record.get("count"), int) else 0
+        last = _parse(record.get("last_at"))
+    if count >= START_NUDGE_MAX:
+        return {"action": "none", "reason": f"the Capitano was told {count} times; the person can say it in the chat"}
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        left = START_NUDGE_EVERY_S - (now - last).total_seconds()
+        if left > 0:
+            return {"action": "waiting", "seconds_left": int(left)}
+    # written before it is sent: a transport that hangs or a crash must not become a reminder every tick
+    state["start_nudge"] = {"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds")}
+    _write(state)
+    return {"action": "start", "plan": plan, "count": count + 1, "sent": _tell_the_capitano(START_MESSAGE)}
+
+
 def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,
                         now: Optional[datetime] = None) -> dict:
     """The net under `ask-plan`: with the profile imported and no plan declared, and nobody asking for `after_s`
@@ -546,7 +618,7 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
         return {"action": "none", "reason": "the first run is complete"}
     info = plan_info()
     if info.get("ok"):
-        return {"action": "none", "reason": "the plan is declared"}
+        return _start_nudge(state, info, now, imported)
     if not info.get("hint"):
         return {"action": "none", "reason": "the plan table cannot be read"}
     registry = _load_module("plan_registry", "plan_registry.py")
