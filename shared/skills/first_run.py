@@ -86,7 +86,17 @@ def _load_module(name: str, filename: str):
         try:
             spec = importlib.util.spec_from_file_location(name, cand)
             mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            # registered only while it runs (a module with a dataclass, agent_questions, cannot be executed
+            # otherwise), and what was there before comes back: this loader never replaces a module somebody imported
+            before = sys.modules.get(name)
+            sys.modules[name] = mod
+            try:
+                spec.loader.exec_module(mod)
+            finally:
+                if before is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = before
             return mod
         except (OSError, ImportError, AttributeError, SyntaxError):
             continue
@@ -198,6 +208,8 @@ def begin_burst() -> dict:
                 "reason": info.get("reason", "plan not declared"),
                 "hint": info.get("hint") or "declare the subscription plan with plan_registry.py list/set"}
 
+    with contextlib.suppress(Exception):  # the card is a courtesy to the user: it never stops the burst
+        close_plan_question()  # the plan is declared: the card that asked for it has nothing left to ask
     state.update({
         "phase": PHASE_BURST,
         "burst_started_at": _now(),
@@ -392,6 +404,51 @@ def _answered_at(answer: Optional[dict]) -> Optional[datetime]:
     return moment
 
 
+def _close_plan_question(info: dict, now: Optional[datetime] = None) -> dict:
+    """With the plan declared, close the card that asked for it if it is still open (the caller holds the lock).
+
+    The plan can be written by a path that never meets the card: the Assistente's chat, `jht providers plan`,
+    the app's settings, a hand edit. The card then stays in the Agents panel as «1 open question» and in the
+    Messages with the Capitano, asking what has been told (TEST 15). It is closed here, as the system's answer
+    (origin `sistema`, never the person's), with the plan the configuration says: the option of the card that
+    stands for it, or «I do not know» when the card is for another provider and has no such option.
+
+    `{"closed": True, ...}` when it closed one; `{"closed": False, ...}` otherwise, with `"failed": True` when
+    something that should have worked did not (a database that cannot be read or written)."""
+    record = _read().get("plan_question")
+    question_id = record.get("id") if isinstance(record, dict) else None
+    if not isinstance(question_id, str):
+        return {"closed": False, "reason": "no question about the plan was asked"}
+    questions = _load_module("agent_questions", "agent_questions.py")
+    registry = _load_module("plan_registry", "plan_registry.py")
+    if questions is None or registry is None:
+        return {"closed": False, "failed": True, "reason": "the question tool is unavailable"}
+    try:
+        asked, answer = _plan_question_rows(question_id)
+        if not asked or answer is not None:
+            return {"closed": False, "reason": "the question about the plan has an answer or is gone"}
+        conn = sqlite3.connect(_db_path(), timeout=10)
+        try:
+            closed = questions.close_as_system(
+                conn, question_id, [registry.option_id(str(info.get("plan") or "")), registry.UNKNOWN_OPTION], now=now)
+        finally:
+            conn.close()
+    except (sqlite3.Error, ValueError) as error:  # AnswerRejected is a ValueError
+        return {"closed": False, "failed": True, "reason": f"the card was not closed: {error}"}
+    if closed.status != "recorded":
+        return {"closed": False, "reason": "the question about the plan was answered meanwhile"}
+    return {"closed": True, "question_id": question_id, "choice": closed.answer.get("scelte", [])[:1]}
+
+
+def close_plan_question(now: Optional[datetime] = None) -> dict:
+    """Close the card about the plan if the plan is declared and the card is still open. Idempotent."""
+    with _plan_question_lock():
+        info = plan_info()
+        if not info.get("ok"):
+            return {"closed": False, "reason": "the plan is not declared"}
+        return _close_plan_question(info, now)
+
+
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
              now: Optional[datetime] = None) -> dict:
     """Ask the user which plan they have: the one way to do it. Idempotent — no second card while the first has
@@ -401,7 +458,9 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
     with _plan_question_lock():
         info = plan_info()
         if info.get("ok"):
-            return {"ok": True, "asked": False, "reason": "the plan is already declared"}
+            closed = _close_plan_question(info, now)
+            return dict({"ok": True, "asked": False, "reason": "the plan is already declared"},
+                        **({"closed_question": closed["question_id"]} if closed.get("closed") else {}))
         if not info.get("hint"):
             return {"ok": False, "asked": False, "reason": info.get("reason", "plan_registry is unavailable")}
         registry = _load_module("plan_registry", "plan_registry.py")
@@ -444,8 +503,16 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
     never when the registry cannot be read. After an answer that named no plan it waits `reask_s` (an hour), and
     after `MAX_PLAN_CARDS` cards it stops («stopped»: the watchdog says so in its log). An answer that names a
     plan which is still not written after `after_s` is written here, as the user chose it, for the provider the
-    card was posted for."""
+    card was posted for. The reverse too: a plan declared by any other path closes the card still open for it
+    («closed»)."""
     now = now or datetime.now(timezone.utc)
+    # A plan declared by any path closes the card that is still asking for it, before anything else: at any
+    # phase of the first run, and whether or not the profile is imported.
+    closed = close_plan_question(now)
+    if closed.get("closed"):
+        return {"action": "closed", "question_id": closed["question_id"], "choice": closed["choice"]}
+    if closed.get("failed"):
+        return {"action": "failed", "reason": closed["reason"]}
     imported = _profile_imported()
     if imported is None:
         return {"action": "none", "reason": "the profile is not imported yet"}
