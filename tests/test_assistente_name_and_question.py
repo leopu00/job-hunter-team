@@ -12,6 +12,7 @@ not the answer gets its own answer, without the question, which is taken up once
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -53,9 +54,10 @@ def test_the_prompt_says_the_assistente_has_no_name_of_its_own_and_must_not_inve
     identity = text[text.index("## 🆔"): text.index("\n---", text.index("## 🆔"))]
     assert NAME_HEADING[suffix] in identity, "the rule is in the identity section, where the prompt says who it is"
     paragraph = [p for p in identity.split("\n\n") if p.startswith(NAME_HEADING[suffix])][0]
-    # the two names it invented are the examples of what not to do, and the product's name is the one it uses
-    assert "«Ava»" in paragraph or "„Ava“" in paragraph or "« Ava »" in paragraph or "„Ava”" in paragraph
-    assert "Eva" in paragraph and "Job Hunter Team" in paragraph
+    # the product's name is the one it uses; the names it invented are not quoted, not even as examples
+    # (a name in the prompt is a name the model may take)
+    assert "Job Hunter Team" in paragraph
+    assert not re.search(r"\b(Ava|Eva)\b", text), "no invented name anywhere in the prompt"
 
 
 @pytest.mark.parametrize("suffix", SUFFIXES)
