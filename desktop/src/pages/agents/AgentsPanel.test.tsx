@@ -11,8 +11,9 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel, { identityLine, TerminalText } from "./AgentsPanel";
+import AgentsPanel, { identityLine, LIST_REFRESH_FAILURES, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
 import { isDirectChatAgentId } from "../messages/DirectChatScreen";
+import { START_READ_WAITS } from "../../shell/StartTeamAction";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
@@ -44,6 +45,7 @@ const AGENTS = [
   agent("DOTTORE", "dottore", null, "idle"),
 ];
 let target = "T1";
+let where: "vps" | "local" = "vps";
 let held: { session: string; byUser: boolean }[] = [];
 let standby = { state: "off", until: null as string | null, weeklyReset: false };
 let burnIntent: Record<string, unknown> | undefined;
@@ -52,7 +54,7 @@ let ownVps: string | undefined;
 let historyReply: Record<string, unknown> | null = null;
 const listReply = () => ({
   ok: true,
-  data: { agents: AGENTS, roles: ROLES, states: true, target, where: "vps", label: "vps.example", ...(ownVps ? { ownVps } : {}) },
+  data: { agents: AGENTS, roles: ROLES, states: true, target, where, label: "vps.example", ...(ownVps ? { ownVps } : {}) },
 });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
 const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "stop_team", "answer"]);
@@ -62,6 +64,7 @@ beforeEach(() => {
   fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   target = "T1";
+  where = "vps";
   held = [];
   standby = { state: "off", until: null, weeklyReset: false };
   burnIntent = undefined;
@@ -1269,5 +1272,282 @@ describe("«Agenti»: the terminal, read at the pace the native side says", () =
     expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("same");
     await vi.advanceTimersByTimeAsync(2_000);
     expect(screen.getByTestId("panel-terminal-SCOUT-1").textContent).toBe("new line");
+  });
+});
+
+describe("«Agenti»: the list reads again by itself", () => {
+  const lists = () => ops().filter((r) => r.op === "list").length;
+  const setVisibility = (state: "visible" | "hidden") => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+  const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    setVisibility("visible");
+  });
+
+  it("the rhythms are 20 s on this computer and 60 s on a VPS", () => {
+    expect([LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS]).toEqual([20_000, 60_000]);
+  });
+
+  it("on this computer it reads every 20 s, each time with the team and the history", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    const first = lists();
+    expect(first).toBe(1);
+    await advance(LIST_REFRESH_LOCAL_MS - 2_000);
+    expect(lists()).toBe(first);
+    await advance(3_000);
+    await waitFor(() => expect(lists()).toBe(first + 1));
+    expect(ops().filter((r) => r.op === "team").length).toBe(first + 1);
+    await advance(LIST_REFRESH_LOCAL_MS);
+    await waitFor(() => expect(lists()).toBe(first + 2));
+    // a quiet read: the button never says «refreshing» for it
+    expect(screen.queryByText("Aggiorno…")).toBeNull();
+  });
+
+  it("on a VPS it reads every 60 s: its reads go over ssh", async () => {
+    show();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_LOCAL_MS * 2 + 5_000);
+    expect(lists()).toBe(1);
+    await advance(LIST_REFRESH_VPS_MS - LIST_REFRESH_LOCAL_MS * 2);
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("the new states are shown without anybody pressing anything", async () => {
+    where = "local";
+    show("agent=CAPITANO");
+    expect(await screen.findByTestId("panel-state")).toHaveTextContent("lavora");
+    const state = AGENTS[0].state;
+    AGENTS[0].state = "idle";
+    try {
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await waitFor(() => expect(screen.getByTestId("panel-state")).not.toHaveTextContent("lavora"));
+    } finally {
+      AGENTS[0].state = state;
+    }
+  });
+
+  it("a hidden window reads nothing, and reads at once when it is seen again", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    setVisibility("hidden");
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(1);
+    setVisibility("visible");
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("a window seen again right after a read does not read twice", async () => {
+    where = "local";
+    show();
+    await screen.findByTestId("panel-summary");
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(500);
+    expect(lists()).toBe(1);
+  });
+
+  it("stops when the page goes away", async () => {
+    where = "local";
+    const view = show();
+    await screen.findByTestId("panel-summary");
+    view.unmount();
+    await advance(LIST_REFRESH_LOCAL_MS * 5);
+    expect(lists()).toBe(1);
+  });
+
+  it.each(["ssh_auth_failed", "ssh_rate_limited", "host_key_changed", "read_only_link"])(
+    "after a failure that asking again makes worse (%s) it does not read by itself; «Refresh» still does",
+    async (code) => {
+      where = "local";
+      const base = native.invoke.getMockImplementation()!;
+      let failing = true;
+      native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+        command === COMMAND && args.request.op === "list" && failing ? { ok: false, error: code } : base(command, args),
+      );
+      show();
+      await screen.findByTestId("panel-error");
+      expect(lists()).toBe(1);
+      await advance(LIST_REFRESH_VPS_MS * 4);
+      expect(lists()).toBe(1);
+      // the person's own read is still there, and once it answers the page reads by itself again
+      failing = false;
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+      await screen.findByTestId("panel-summary");
+      expect(lists()).toBe(2);
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await waitFor(() => expect(lists()).toBe(3));
+    },
+  );
+
+  it("after any other failure it goes on reading, slowly, as the team is not known", async () => {
+    const base = native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+      command === COMMAND && args.request.op === "list" ? { ok: false, error: "agent_control_unsupported" } : base(command, args),
+    );
+    show();
+    await screen.findByTestId("panel-error");
+    await advance(LIST_REFRESH_VPS_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("gives up after three periodic reads failed in a row, whatever the code (a refused key is told as «unanswered»)", async () => {
+    expect(LIST_REFRESH_FAILURES).toBe(3);
+    const base = native.invoke.getMockImplementation()!;
+    let failing = true;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+      command === COMMAND && args.request.op === "list" && failing ? { ok: false, error: "agent_control_unanswered" } : base(command, args),
+    );
+    show();
+    await screen.findByTestId("panel-error");
+    // the first read of the page, then the three periodic ones, one a minute
+    await advance(LIST_REFRESH_VPS_MS * 3 + 1_000);
+    await waitFor(() => expect(lists()).toBe(1 + LIST_REFRESH_FAILURES));
+    await advance(10 * 60_000);
+    expect(lists()).toBe(1 + LIST_REFRESH_FAILURES);
+    // a window seen again does not bring it back either
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(1_000);
+    expect(lists()).toBe(1 + LIST_REFRESH_FAILURES);
+    // «Refresh» does, and a good read brings the periodic one back
+    failing = false;
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await screen.findByTestId("panel-summary");
+    expect(lists()).toBe(2 + LIST_REFRESH_FAILURES);
+    await advance(LIST_REFRESH_VPS_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3 + LIST_REFRESH_FAILURES));
+  });
+
+  it("a good read between the failures starts the count again", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    // the page's first read, then: fail, fail, good, fail, fail, fail; whatever comes after fails too
+    const outcome = [true, false, false, true, false, false, false];
+    let n = 0;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list") return (outcome[n++] ?? false) ? base(command, args) : { ok: false, error: "agent_control_unanswered" };
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    // a step at a time: each one commits what the last read set, as the app does
+    for (let step = 0; step < 36; step++) await advance(LIST_REFRESH_LOCAL_MS);
+    // given up at the third failure of the second run, not before
+    expect(lists()).toBe(outcome.length);
+  });
+
+  it("reads nothing while a read of the person's is on its way", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let slow = false;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list" && slow) await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    slow = true;
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await waitFor(() => expect(lists()).toBe(2));
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(2);
+    slow = false;
+    release!();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3));
+  });
+
+  it("a window seen again while the periodic read is on its way does not start a second", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let slow = false;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list" && slow) await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    slow = true;
+    await advance(LIST_REFRESH_LOCAL_MS + 500);
+    await waitFor(() => expect(lists()).toBe(2));
+    await advance(6_000); // the read is still on its way, and more than the 5 s that make a seen window read again have passed
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(1_000);
+    expect(lists()).toBe(2);
+    slow = false;
+    release!();
+    await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3));
+  });
+
+  it("reads nothing while an action is on its way", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "stop") await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show("agent=SCOUT-1");
+    fireEvent.click(await screen.findByTestId("panel-stop"));
+    fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
+    await waitFor(() => expect(ops().some((r) => r.op === "stop")).toBe(true));
+    const before = lists();
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(before);
+    release!();
+    await waitFor(() => expect(lists()).toBe(before + 1)); // the action's own read
+  });
+
+  it("reads nothing while a start is on its way", async () => {
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let up = false;
+    native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+      if (command === "onboarding_resume_team_start") {
+        await new Promise<void>((resolve) => { release = resolve; });
+        up = true;
+        return {};
+      }
+      if (command === COMMAND && args.request?.op === "list" && !up) return { ok: false, error: "agent_control_no_team" };
+      return base(command, args as { request: Record<string, unknown> });
+    });
+    show();
+    await screen.findByTestId("panel-error");
+    fireEvent.click(await screen.findByTestId("start-team"));
+    await waitFor(() => expect(release).not.toBeNull());
+    const before = lists();
+    await advance(LIST_REFRESH_VPS_MS * 3);
+    // only the start's own readings (one every few seconds, up to its maximum): not one of the page's by itself
+    expect(lists() - before).toBe(START_READ_WAITS.duringMax);
+    release!();
+    await screen.findByTestId("panel-summary");
+  });
+
+  it("coming back to Agents from another page reads the list at once", async () => {
+    where = "local";
+    navigate("/agents?agent=CAPITANO", { replace: true });
+    render(<Shell />);
+    await screen.findByTestId("panel-summary");
+    expect(lists()).toBe(1);
+    navigate("/help");
+    await waitFor(() => expect(screen.queryByTestId("panel-summary")).toBeNull());
+    navigate("/agents?agent=CAPITANO");
+    await screen.findByTestId("panel-summary");
+    await waitFor(() => expect(lists()).toBe(2));
   });
 });
