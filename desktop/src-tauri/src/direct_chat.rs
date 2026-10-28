@@ -149,6 +149,8 @@ struct DirectChatInner {
     connection: Mutex<Option<Connection>>,
     subscribers: Mutex<Vec<Channel<DirectChatEvent>>>,
     send_lock: Mutex<()>,
+    /// An attachment is being chosen, copied or told: a second one waits for the person to finish.
+    attach_busy: std::sync::atomic::AtomicBool,
 }
 
 struct Connection {
@@ -2809,6 +2811,244 @@ pub(crate) async fn direct_chat_send(
     }
 }
 
+/// Whether an attachment can go now, and if not the closed reason the page says. The files are
+/// copied on this computer for this computer's team only: a VPS has its own disk, a read-only view
+/// writes nothing, and there is no copy without a connected team.
+fn attach_refusal(connection: &Connection) -> Option<&'static str> {
+    if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        return Some("attach_platform");
+    }
+    if !matches!(&connection.validated, ValidatedHost::Local) {
+        return Some("attach_vps");
+    }
+    let own_refusal = own_vps_write_refusal(connection);
+    if !link_allows_writing(connection.runtime.as_ref(), own_refusal.is_none(), |target| {
+        existing_team_runtime::full_link_granted(&connection.scope, target)
+    }) {
+        return Some("attach_read_only");
+    }
+    if connection.local_wrapper.is_none() || connection.local_runtime.is_none() {
+        return Some("attach_not_connected");
+    }
+    None
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatAttachState {
+    available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<&'static str>,
+}
+
+/// What the 📎 button says: on, or off with the reason. Reads the connection only: nothing is probed.
+#[tauri::command]
+pub(crate) fn direct_chat_attach_state(
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<DirectChatAttachState, DirectChatError> {
+    let scope = scopes.lock_active().map_err(failure)?;
+    let slot = state.inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let code = match slot.as_ref() {
+        Some(connection) if &connection.scope == scope.scope() => attach_refusal(connection),
+        Some(_) => return Err(failure("account_scope_mismatch")),
+        None => Some("attach_not_connected"),
+    };
+    Ok(DirectChatAttachState { available: code.is_none(), code })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatAttachment {
+    /// `sent`, `saved_not_sent` (the file is in the folder, the Assistant was not told: `code` says
+    /// why) or `cancelled` (the person closed the window: not an error).
+    outcome: &'static str,
+    /// The person's own file name, for their screen only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    receipt: Option<DirectChatReceipt>,
+}
+
+/// Held while an attachment is in hand: a second click is refused, not queued.
+struct AttachGuard(Arc<DirectChatInner>);
+
+impl AttachGuard {
+    fn take(inner: &Arc<DirectChatInner>) -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        inner
+            .attach_busy
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| Self(Arc::clone(inner)))
+    }
+}
+
+impl Drop for AttachGuard {
+    fn drop(&mut self) {
+        self.0.attach_busy.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
+/// The message the Assistant gets: fixed words in the person's language and the name of OUR copy.
+/// Nothing of the person's file name or content is in it. An unknown language gets English.
+fn attachment_message(locale: &str, file: &str) -> String {
+    let path = format!("/jht_user/{}/{file}", crate::chat_attachment::FOLDER);
+    match locale {
+        "it" => format!("Ho allegato il file {file} ({path}): usalo per il mio profilo."),
+        "de" => format!("Ich habe die Datei {file} angehängt ({path}): Nutze sie für mein Profil."),
+        "es" => format!("He adjuntado el archivo {file} ({path}): úsalo para mi perfil."),
+        "fr" => format!("J'ai joint le fichier {file} ({path}) : utilise-le pour mon profil."),
+        "hu" => format!("Csatoltam a(z) {file} fájlt ({path}): használd a profilomhoz."),
+        "pt" => format!("Anexei o arquivo {file} ({path}): use-o para o meu perfil."),
+        _ => format!("I attached the file {file} ({path}): use it for my profile."),
+    }
+}
+
+struct AttachTarget {
+    wrapper: PathBuf,
+    runtime: PathBuf,
+    user_dir: PathBuf,
+}
+
+/// The same gate as a message, then the places the copy needs. Runs off the main thread.
+fn attach_target(
+    inner: &DirectChatInner,
+    scopes: &AccountScopeState,
+    expected: &AccountScope,
+) -> Result<AttachTarget, DirectChatError> {
+    let scope = scopes.lock_expected(expected).map_err(failure)?;
+    let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+    if &connection.scope != scope.scope() {
+        return Err(failure("account_scope_mismatch"));
+    }
+    refuse_writing(connection)?;
+    if let Some(code) = attach_refusal(connection) {
+        return Err(failure(code));
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| failure("attach_platform"))?;
+    Ok(AttachTarget {
+        wrapper: connection.local_wrapper.clone().ok_or_else(|| failure("runtime_missing"))?,
+        runtime: connection.local_runtime.clone().ok_or_else(|| failure("runtime_missing"))?,
+        user_dir: home.join("Documents").join("Job Hunter Team"),
+    })
+}
+
+/// The copy is in the folder on this computer; the team must see the same file there. A mount that
+/// does not show it (another folder, an engine that shares less) takes the copy back: nothing is
+/// told to the Assistant about a file it cannot open.
+fn team_sees_the_copy(target: &AttachTarget, saved: &crate::chat_attachment::Saved) -> bool {
+    let path = format!("/jht_user/{}/{}", crate::chat_attachment::FOLDER, saved.file);
+    let Ok(team) = local_chat_team(&target.wrapper, &target.runtime, READ_TIMEOUT) else { return false };
+    matches!(
+        team.exec(&["stat", "-c", "%s", path.as_str()], None, READ_TIMEOUT),
+        Ok(done) if done.success() && String::from_utf8_lossy(&done.stdout).trim() == saved.size.to_string()
+    )
+}
+
+/// «Attach» in the Assistant's chat: the person chooses a file in the system's window (the page
+/// never names a path), it is checked and copied into the team's `allegati` folder, the team is
+/// asked to see it, and only then the Assistant gets a short message naming our copy.
+#[tauri::command]
+pub(crate) async fn direct_chat_attach(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+    agent_id: String,
+    client_message_id: String,
+    locale: String,
+) -> Result<DirectChatAttachment, DirectChatError> {
+    use tauri_plugin_dialog::DialogExt;
+    if !window_may_write(&window.label())
+        || agent_id != "assistente"
+        || client_message_id.is_empty()
+        || client_message_id.len() > 128
+        || !client_message_id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    {
+        return Err(failure("invalid_request"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let app_for_log = app.clone();
+    let _busy = AttachGuard::take(&state.inner).ok_or_else(|| failure("attach_busy"))?;
+    let scope_state = scopes.inner().clone();
+    let target = {
+        let inner = Arc::clone(&state.inner);
+        let (scope_state, expected) = (scope_state.clone(), expected.clone());
+        tauri::async_runtime::spawn_blocking(move || attach_target(&inner, &scope_state, &expected))
+            .await
+            .map_err(|_| failure("attach_failed"))??
+    };
+    // The system's window is modal and waits for the person: never on the main thread.
+    let picker = window.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_parent(&picker)
+            .add_filter("Documents", &crate::chat_attachment::ALLOWED_EXTENSIONS)
+            .blocking_pick_file()
+    })
+    .await
+    .map_err(|_| failure("attach_failed"))?;
+    let Some(chosen) = chosen else {
+        return Ok(DirectChatAttachment { outcome: "cancelled", display_name: None, code: None, receipt: None });
+    };
+    let source = chosen.into_path().map_err(|_| failure("attachment_unreadable"))?;
+    let saved = {
+        let user_dir = target.user_dir.clone();
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::store(&user_dir, &source, now, &mut |_| {}))
+            .await
+            .map_err(|_| failure("attach_failed"))?
+            .map_err(failure)?
+    };
+    let target = Arc::new(target);
+    let seen = {
+        let (target, saved_view) = (Arc::clone(&target), saved.clone());
+        tauri::async_runtime::spawn_blocking(move || team_sees_the_copy(&target, &saved_view))
+            .await
+            .unwrap_or(false)
+    };
+    if !seen {
+        let (user_dir, file) = (target.user_dir.clone(), saved.file.clone());
+        let _ = tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::remove(&user_dir, &file)).await;
+        return Err(failure("attachment_not_shared"));
+    }
+    let text = attachment_message(&locale, &saved.file);
+    let display_name = Some(saved.display.clone());
+    let inner = Arc::clone(&state.inner);
+    let worker_expected = expected.clone();
+    let worker_scopes = scope_state.clone();
+    let id = client_message_id;
+    let sent = tauri::async_runtime::spawn_blocking(move || {
+        let scope = worker_scopes.lock_expected(&worker_expected).map_err(failure)?;
+        {
+            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            if &connection.scope != scope.scope() {
+                return Err(failure("account_scope_mismatch"));
+            }
+        }
+        send_impl(&inner, "assistente".to_string(), text, id)
+    })
+    .await
+    .map_err(|_| failure("send_failed"))?;
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    match sent {
+        Ok(receipt) => {
+            emit(&state.inner, DirectChatEvent::Send { receipt: receipt.clone() });
+            Ok(DirectChatAttachment { outcome: "sent", display_name, code: None, receipt: Some(receipt) })
+        }
+        Err(error) => {
+            log_chat_failure(&app_for_log, "send", error.code);
+            Ok(DirectChatAttachment { outcome: "saved_not_sent", display_name, code: Some(error.code), receipt: None })
+        }
+    }
+}
+
 /// The last failure of each operation written to the runtime log: a read that fails every two
 /// seconds writes one line, and a new one only when its code changes.
 static LOGGED_CHAT_FAILURE: Mutex<[Option<&'static str>; 2]> = Mutex::new([None, None]);
@@ -5315,5 +5555,92 @@ mod assistance_registration_tests {
         assert!(implementation.contains("if write {\n        refuse_writing(connection)?;"), "a write goes through the gate of every write to the team");
         let read = source.split("pub(crate) async fn direct_chat_team_language(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(read.contains("\"op\": \"read\"") && read.contains(", false, "), "the read never asks to write");
+    }
+}
+
+#[cfg(test)]
+mod attachment_command_tests {
+    use super::*;
+
+    // Unix only, like every test that builds a Connection (only_unix_tests_build_a_connection).
+    #[cfg(unix)]
+    #[test]
+    fn the_paperclip_is_on_only_for_this_computers_team_and_says_why_it_is_off() {
+        let connection = |validated: ValidatedHost, with_runtime: bool| Connection {
+            app: None,
+            scope: crate::account_scope::AccountScope::synthetic(b"attach-tests"),
+            host: ExecutionHost::Local,
+            validated,
+            runtime: None,
+            local_wrapper: with_runtime.then(|| PathBuf::from("/nonexistent/jht")),
+            local_runtime: with_runtime.then(|| PathBuf::from("/nonexistent/runtime")),
+            local_owner_marker: None,
+            control_path: None,
+            tunnel: None,
+            link: VpsLink::PerCommand,
+        };
+        assert_eq!(attach_refusal(&connection(ValidatedHost::Local, false)), Some("attach_not_connected"));
+        let vps = ValidatedHost::Vps {
+            address: "203.0.113.7".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: PathBuf::from("/nonexistent/key"),
+            known_hosts: PathBuf::from("/nonexistent/known_hosts"),
+        };
+        assert_eq!(attach_refusal(&connection(vps, true)), Some("attach_vps"));
+        let local = attach_refusal(&connection(ValidatedHost::Local, true));
+        if cfg!(any(target_os = "macos", target_os = "linux")) {
+            assert_eq!(local, None);
+        } else {
+            assert_eq!(local, Some("attach_platform"));
+        }
+    }
+
+    #[test]
+    fn the_message_to_the_assistant_names_our_copy_only_in_the_persons_language() {
+        for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
+            let text = attachment_message(locale, "cv-20261028-153045.pdf");
+            assert!(text.contains("cv-20261028-153045.pdf"), "{locale}");
+            assert!(text.contains("/jht_user/allegati/cv-20261028-153045.pdf"), "{locale}");
+            assert!(!text.contains('\n') && !text.contains('{') && text.len() < 200, "{locale}");
+        }
+        assert!(attachment_message("it", "cv-1.pdf").starts_with("Ho allegato"));
+        assert!(attachment_message("xx", "cv-1.pdf").starts_with("I attached"));
+    }
+
+    #[test]
+    fn a_second_attachment_is_refused_while_one_is_in_hand_and_allowed_after() {
+        let inner = Arc::new(DirectChatInner::default());
+        let first = AttachGuard::take(&inner).expect("the first is taken");
+        assert!(AttachGuard::take(&inner).is_none());
+        drop(first);
+        assert!(AttachGuard::take(&inner).is_some());
+    }
+
+    #[test]
+    fn the_command_checks_before_it_opens_the_window_and_tells_the_assistant_only_what_the_team_sees() {
+        let source = include_str!("direct_chat.rs");
+        let command = source
+            .split("pub(crate) async fn direct_chat_attach(")
+            .nth(1)
+            .unwrap()
+            .split("\n}\n")
+            .next()
+            .unwrap();
+        let at = |needle: &str| command.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+        // only the app's own window, only the Assistant, one at a time
+        assert!(at("window_may_write(") < at("AttachGuard::take"));
+        assert!(command.contains("agent_id != \"assistente\""));
+        // the same gate as a message, then the window, then the copy, then the proof, then the message
+        assert!(at("attach_target(") < at("blocking_pick_file()"));
+        assert!(at("blocking_pick_file()") < at("chat_attachment::store("));
+        assert!(at("chat_attachment::store(") < at("team_sees_the_copy("));
+        assert!(at("team_sees_the_copy(") < at("send_impl("));
+        // a copy the team does not see is taken back, and nothing is told
+        assert!(at("chat_attachment::remove(") < at("send_impl("));
+        // the text is ours: built from the name of our copy, never from the page or the person's file
+        assert!(command.contains("attachment_message(&locale, &saved.file)"));
+        // the person's own name goes back to their screen, never into the message or a log
+        assert!(!command.contains("attachment_message(&locale, &saved.display)"));
     }
 }

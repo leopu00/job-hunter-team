@@ -7,7 +7,9 @@ import { LeaveReadOnlyContext } from "../../lib/leave-read-only";
 import { ReconfirmExistingTeamContext, type ReconfirmExistingTeam } from "../../lib/reconfirm-existing-team";
 
 vi.mock("../../lib/direct-chat", () => ({
+  attachDirectChat: vi.fn(),
   closeDirectChat: vi.fn(),
+  directChatAttachState: vi.fn(async () => ({ available: false })),
   directChatStatus: vi.fn(),
   readDirectChat: vi.fn(),
   reconnectDirectChat: vi.fn(),

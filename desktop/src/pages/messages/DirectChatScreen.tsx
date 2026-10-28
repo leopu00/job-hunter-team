@@ -267,6 +267,11 @@ export default function DirectChatScreen({
   const [answersInFlight, setAnswersInFlight] = useState<ReadonlyMap<string, DirectChatAnswer>>(() => new Map());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  // The paperclip, in the Assistant's chat only: on, or off with the reason the native side gives.
+  const [attachState, setAttachState] = useState<{ available: boolean; code?: string } | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [attachNote, setAttachNote] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
+  const attachHere = agentId === "assistente" && Boolean(client.attach) && Boolean(client.attachState);
   const [loading, setLoading] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
@@ -315,6 +320,30 @@ export default function DirectChatScreen({
   useEffect(() => {
     setAgentId(initialAgentId);
   }, [initialAgentId]);
+
+  // The paperclip asks the native side whether it can be used (this computer's team, writing allowed);
+  // another agent, or no connection, has none. A note about a file belongs to the chat it was made in.
+  useEffect(() => {
+    setAttachNote(null);
+  }, [agentId]);
+  useEffect(() => {
+    if (!attachHere || status.state !== "ready") {
+      setAttachState(null);
+      return;
+    }
+    let active = true;
+    Promise.resolve(client.attachState?.())
+      .then((next) => {
+        if (active) setAttachState(next ?? { available: false });
+      })
+      .catch(() => {
+        // the bridge could not say: the button stays off, with no reason to give
+        if (active) setAttachState({ available: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, [attachHere, status.state, writeLocked, client]);
 
   useEffect(() => {
     let active = true;
@@ -618,6 +647,32 @@ export default function DirectChatScreen({
     } finally {
       setSending(false);
       setInFlight(null);
+    }
+  }
+
+  // Choose a file in the system's window and give it to the Assistant: the app copies it into the team's
+  // folder and tells the Assistant; this page never sees a path.
+  async function attachFile() {
+    if (!client.attach || attaching || sending || writeLocked || status.state !== "ready" || !attachState?.available) return;
+    setAttaching(true);
+    setAttachNote(null);
+    try {
+      const done = await client.attach({ clientMessageId: clientMessageId(), locale });
+      if (done.outcome === "sent") {
+        // «uses it» only when the receipt says the Assistant took the message: waiting or not known, it reads it when free
+        const taken = done.receipt !== undefined && done.receipt.state !== "queued" && done.receipt.taken !== false && done.receipt.taken !== null;
+        setAttachNote({ kind: "ok", text: withName(taken ? t.attachSent : t.attachSentLater, done.displayName ?? "") });
+        readSoon.current?.();
+      } else if (done.outcome === "saved_not_sent") {
+        setAttachNote({ kind: "warn", text: withName(t.attachSavedNotSent, done.displayName ?? "") });
+      }
+    } catch (error) {
+      const code = errorCode(error);
+      const words: Record<string, string> = { ...t.attachOff, ...t.attachErrors };
+      const said = code !== null && Object.prototype.hasOwnProperty.call(words, code) ? words[code] : null;
+      setAttachNote({ kind: "error", text: said ?? t.attachErrors.attach_failed });
+    } finally {
+      setAttaching(false);
     }
   }
 
@@ -1047,6 +1102,21 @@ export default function DirectChatScreen({
               {answerRefusal}
             </p>
           )}
+          {attachHere && attachState && !attachState.available && attachState.code && attachState.code in t.attachOff && (
+            <p data-testid="direct-chat-attach-off" className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-muted)]">
+              {t.attachOff[attachState.code as keyof typeof t.attachOff]}
+            </p>
+          )}
+          {attachNote && (
+            <p
+              role={attachNote.kind === "ok" ? "status" : "alert"}
+              data-testid="direct-chat-attach-note"
+              data-kind={attachNote.kind}
+              className={`w-full m-0 mb-1.5 text-[13px] ${attachNote.kind === "ok" ? "text-[var(--color-muted)]" : attachNote.kind === "warn" ? "text-[var(--color-yellow)]" : "text-[var(--color-red)]"}`}
+            >
+              {attachNote.text}
+            </p>
+          )}
           <div
             className="w-full flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
@@ -1080,6 +1150,19 @@ export default function DirectChatScreen({
               }
               className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
             />
+            {attachHere && (
+              <button
+                type="button"
+                data-testid="direct-chat-attach"
+                aria-label={t.attach}
+                title={attachState && !attachState.available && attachState.code && attachState.code in t.attachOff ? t.attachOff[attachState.code as keyof typeof t.attachOff] : t.attach}
+                disabled={composerOff || attaching || !attachState?.available}
+                onClick={() => void attachFile()}
+                className="h-8 shrink-0 self-end rounded-md border border-[var(--color-border)] px-2 text-[15px] leading-none text-[var(--color-bright)] disabled:cursor-default disabled:opacity-40"
+              >
+                {attaching ? t.attaching : "📎"}
+              </button>
+            )}
             <VoiceInputControl
               value={text}
               onChange={setText}

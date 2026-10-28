@@ -102,6 +102,31 @@ const NOT_ERRORS: Record<string, string> = {
   // next to the message, from its own catalog, never as an error.
   not_ours: "reason of a receipt with taken null, said by the chat page",
   empty_unseen: "reason of a receipt with taken null, said by the chat page",
+  // A file attached in the Assistant's chat (direct_chat.rs direct_chat_attach, chat_attachment.rs): the refusals and
+  // the reasons the paperclip is off are said by the chat page next to the composer, from its own catalog
+  // (direct-chat.i18n.ts, attachErrors and attachOff), never through the error catalog.
+  attach_platform: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_vps: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_read_only: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_not_connected: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_busy: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_failed: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_unreadable: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_type: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_type_mismatch: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_too_big: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_is_link: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_not_file: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachments_folder_unsafe: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachments_folder_full: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_save_failed: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_not_shared: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  // The moments chat_attachment.rs tells a test (the person's file open, its size checked, the folder open) and the
+  // outcome of an attachment: neither reaches the person.
+  source_open: "moment of an attachment the tests act on, not an error",
+  source_checked: "moment of an attachment the tests act on, not an error",
+  folder_open: "moment of an attachment the tests act on, not an error",
+  saved_not_sent: "outcome of an attachment (copied, the Assistant not told), said by the chat page",
   // Candidate profile fields validated by profile import and migration.
   birth_year: "profile field",
   candidate_profile: "profile artifact id",
