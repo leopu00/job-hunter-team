@@ -1586,6 +1586,55 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
   });
 
+  it("the setup that finds the disk short says the room it needs and the room there is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-disk-account"));
+    requireOnboarding();
+    const GIB = 1024 ** 3;
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "disk_low",
+      message: "raw native message",
+      retryable: true,
+      resources: { requiredBytes: 26 * GIB, availableBytes: Math.floor(20.55 * GIB) },
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Gli agenti richiedono almeno 26 GiB di disco — disponibili: 20,5 GiB.")).toBeInTheDocument();
+    expect(screen.queryByText("raw native message")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("a disk refusal without numbers keeps the plain sentence, never a placeholder", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-disk-plain-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({ code: "disk_low", message: "raw native message", retryable: true });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Gli agenti richiedono più spazio su disco di quello disponibile.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/[{}]/);
+  });
+
+  it("the setup that finds the memory short says it, and with the swap high also to restart", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-ram-account"));
+    requireOnboarding();
+    const GIB = 1024 ** 3;
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "ram_low_swap",
+      message: "raw native message",
+      retryable: true,
+      resources: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB },
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    const described = describeError("ram_low_swap", { locale: "it", amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB } });
+    expect(await screen.findByText(described.text)).toBeInTheDocument();
+    expect(described.text).toContain("almeno 6 GiB di memoria — disponibili: 3 GiB");
+    expect(screen.getByText(`Cosa fare: ${described.action}`)).toBeInTheDocument();
+    expect(described.action).toMatch(/riavvia/);
+  });
+
   it("a failed local step says its own cause instead of the catalog's guess about the network", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("runtime-cause-account"));
     requireOnboarding();
@@ -1941,6 +1990,26 @@ describe("DashboardApp onboarding router", () => {
     expect(document.body).not.toHaveTextContent("native text that must not show");
     expect(document.body).not.toHaveTextContent("{time}");
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("the guard that refuses the team start on a full disk says the room it keeps and the room there is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("start-disk-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockRejectedValue({
+      code: "disk_low",
+      message: "native text that must not show",
+      retryable: true,
+      resources: { requiredBytes: 8 * 1024 ** 3, availableBytes: Math.floor(1.65 * 1024 ** 3) },
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent("Gli agenti richiedono almeno 8 GiB di disco — disponibili: 1,6 GiB.");
+    expect(document.body).not.toHaveTextContent("native text that must not show");
+    expect(document.body).not.toHaveTextContent(/[{}%]/);
   });
 
   it("names the next day when exhausted provider limits free after midnight", async () => {

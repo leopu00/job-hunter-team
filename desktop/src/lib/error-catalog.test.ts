@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorAmountsOf, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
 import { ERROR_CATALOG_LOCALES } from "./error-catalog.locales";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
@@ -948,6 +948,65 @@ describe("the provider that is not set up", () => {
       for (const part of [local.text, local.action]) expect(part, locale).not.toMatch(/VPS|jht setup|terminal|Terminal/);
       expect(local.action, locale).toContain(step[locale]);
       expect(local.text, locale).not.toBe(remote.text);
+    }
+  });
+});
+
+
+describe("the room the agents need, said in numbers", () => {
+  const GIB = 1024 ** 3;
+  // 26 GiB required, 20.55 GiB there: «26» and «20,5» (rounded DOWN to one decimal, never more room than there is)
+  const amounts = { requiredBytes: 26 * GIB, availableBytes: Math.floor(20.55 * GIB) };
+  const shown = { it: "20,5", en: "20.5", de: "20,5", es: "20,5", fr: "20,5", hu: "20,5", pt: "20,5" } as const;
+
+  it.each(ERROR_LOCALES)("says the disk required and available in %s, without a placeholder or a percentage", (locale) => {
+    const described = describeError("disk_low", { locale, amounts });
+    expect(described.known).toBe(true);
+    const all = `${described.text} ${described.action}`;
+    expect(all).toContain("26");
+    expect(all).toContain(shown[locale as keyof typeof shown]);
+    expect(all).not.toMatch(/[{}%]/);
+  });
+
+  it.each(ERROR_LOCALES)("falls back to the sentence without numbers in %s when the error carries none", (locale) => {
+    for (const options of [{ locale }, { locale, amounts: null }, { locale, amounts: { requiredBytes: -1, availableBytes: 3 } }]) {
+      const described = describeError("disk_low", options);
+      expect(described.known, locale).toBe(true);
+      expect(`${described.text} ${described.action}`).not.toMatch(/[{}\d%]/);
+    }
+  });
+
+  it.each(ERROR_LOCALES)("tells memory in %s, and with the swap high also to restart", (locale) => {
+    const plain = describeError("ram_low", { locale, amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB } });
+    const swap = describeError("ram_low_swap", { locale, amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB } });
+    for (const described of [plain, swap]) {
+      expect(described.known).toBe(true);
+      expect(`${described.text} ${described.action}`).toContain("6");
+      expect(`${described.text} ${described.action}`).toContain("3");
+      expect(`${described.text} ${described.action}`).not.toMatch(/[{}%]/);
+    }
+    expect(swap.text).not.toBe(plain.text);
+    expect(swap.action).not.toBe(plain.action);
+  });
+
+  it("rounds down to one decimal with the decimal mark of the language", () => {
+    const quarter = { requiredBytes: 8 * GIB, availableBytes: 5 * GIB + GIB / 4 };
+    expect(describeError("disk_low", { locale: "en", amounts: quarter }).text).toContain("available: 5.2 GiB");
+    expect(describeError("disk_low", { locale: "it", amounts: quarter }).text).toContain("disponibili: 5,2 GiB");
+    expect(describeError("disk_low", { locale: "de", amounts: { requiredBytes: 8 * GIB, availableBytes: 2 * GIB - 1 } }).text).toContain("verfügbar: 1,9 GiB");
+    expect(describeError("disk_low", { locale: "en", amounts: { requiredBytes: 8 * GIB, availableBytes: 0 } }).text).toContain("available: 0 GiB");
+  });
+
+  it("asks nothing of memory without the numbers: a sentence that needs them is the generic one, not a placeholder", () => {
+    const described = describeError("ram_low", { locale: "en" });
+    expect(described.known).toBe(false);
+    expect(described.text).not.toMatch(/[{}]/);
+  });
+
+  it("reads the amounts of a native error only when they are numbers", () => {
+    expect(errorAmountsOf({ code: "disk_low", resources: { requiredBytes: 8, availableBytes: 3 } })).toEqual({ requiredBytes: 8, availableBytes: 3 });
+    for (const bad of [null, "x", {}, { resources: null }, { resources: { requiredBytes: "8", availableBytes: 3 } }, { resources: { requiredBytes: 8 } }, { resources: { requiredBytes: 1.5, availableBytes: 3 } }, { resources: { requiredBytes: -1, availableBytes: 3 } }]) {
+      expect(errorAmountsOf(bad)).toBeNull();
     }
   });
 });

@@ -917,6 +917,10 @@ pub(crate) struct OnboardingError {
     /// when they could be listed (existing_team_register::choice_failure).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) choices: Option<Box<[crate::existing_team_register::ContainerChoice]>>,
+    /// The room the agents need and the room there is, only for `disk_low`, `ram_low` and `ram_low_swap`
+    /// (resources.rs): the screen says both, in the person's language.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resources: Option<crate::resources::Shortfall>,
 }
 
 #[derive(Serialize)]
@@ -1046,6 +1050,7 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
         machine: None,
         detail: None,
         choices: None,
+        resources: None,
     }
 }
 
@@ -2849,6 +2854,53 @@ fn provider_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>) 
     Err(OnboardingError { detail: Some(detail), ..failure("provider_config_failed") })
 }
 
+/// What is already on this computer, to ask only for what is still missing (resources.rs).
+#[cfg(target_os = "macos")]
+fn local_installed_state(app: &tauri::AppHandle, home: &Path) -> crate::resources::Installed {
+    let machine = crate::podman::jht_machine_exists(home);
+    // A runtime the update would replace counts as not installed: its new image is asked for again.
+    let current = release_channel::current().ok().zip(local_runtime_dir(app).ok()).is_some_and(|(channel, dir)| {
+        release_channel::installed_runtime_reusable(channel.as_ref(), &dir)
+    });
+    // Podman not found on the PATH of an app opened from the Finder says nothing about the machine: it is not
+    // taken for stopped (a stopped machine asks for its memory again, a running one has it).
+    let machine_running = machine && {
+        let status = crate::podman::check_podman_sync();
+        status.ready || !status.installed
+    };
+    crate::resources::Installed { machine, runtime: host_wrapper_path(app).is_some() && current, machine_running }
+}
+
+/// Linux has no machine and Windows' is not looked for: the machine counts as there, the runtime as not
+/// installed yet, and its memory as not taken.
+#[cfg(not(target_os = "macos"))]
+fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
+    crate::resources::Installed { machine: true, runtime: false, machine_running: false }
+}
+
+/// Before anything is installed or started on this computer: is there room? If not, the setup does not even
+/// try and says what it needs and what there is (`disk_low`, `ram_low`, `ram_low_swap`, with the amounts).
+fn local_resources_check(app: &tauri::AppHandle) -> Result<(), OnboardingError> {
+    let Ok(home) = app.path().home_dir() else { return Ok(()) };
+    let needs = crate::resources::needs(local_installed_state(app, &home));
+    match crate::resources::verdict(needs, crate::resources::measure_now(&home)) {
+        Some((code, shortfall)) => {
+            trace_local_runtime("resources", code);
+            Err(OnboardingError { resources: Some(shortfall), ..failure(code) })
+        }
+        None => Ok(()),
+    }
+}
+
+/// The disk guard's refusal at the start of the team names the amounts too: the margin it keeps and what is free.
+fn attach_disk_amounts(error: OnboardingError, shortfall: Option<crate::resources::Shortfall>) -> OnboardingError {
+    if error.code == "disk_low" && error.resources.is_none() {
+        OnboardingError { resources: shortfall, ..error }
+    } else {
+        error
+    }
+}
+
 fn prepare_impl(
     app: tauri::AppHandle,
     scope: AccountScope,
@@ -2879,6 +2931,8 @@ fn prepare_impl(
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
                 ValidatedHost::Local => Some({
+                    // Room first: nothing is installed or started on a computer that cannot hold it.
+                    local_resources_check(&app)?;
                     // The pull of the runtime image reports its progress through the reporter while install_local runs.
                     let pull_reporter = reporter.clone();
                     crate::windows_runtime::with_pull_sink(
@@ -5185,7 +5239,10 @@ fn start_team_impl(
             if let (false, Some(log)) = (through_wrapper.get(), log) {
                 log.record_result("jht team start (attested container)", &result, &[], started.elapsed());
             }
-            ensure_team_started(result)
+            ensure_team_started(result).map_err(|error| {
+                let shortfall = app.path().home_dir().ok().and_then(|home| crate::resources::guard_shortfall(&home));
+                attach_disk_amounts(error, shortfall)
+            })
         }
         ValidatedHost::Vps { .. } => ensure_team_started(run_ssh(
             validated,
@@ -7601,6 +7658,43 @@ mod tests {
         );
         assert!(ensure_team_started(Ok(printed(0, "disk_low mentioned in a log\n"))).is_ok());
         assert_eq!(ensure_team_started(Err("process_timeout")).unwrap_err().code, "timeout");
+    }
+
+    #[test]
+    fn the_guards_refusal_carries_the_amounts_and_no_other_error_does() {
+        use crate::onboarding::{attach_disk_amounts, OnboardingError};
+        let shortfall = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 5 << 30 };
+        let refused = attach_disk_amounts(failure("disk_low"), Some(shortfall));
+        assert_eq!(refused.resources, Some(shortfall));
+        assert!(attach_disk_amounts(failure("team_start_failed"), Some(shortfall)).resources.is_none());
+        // a measure that could not be taken leaves the plain code: the screen falls back to the sentence without numbers
+        assert!(attach_disk_amounts(failure("disk_low"), None).resources.is_none());
+        // the amounts the setup measured itself are not overwritten
+        let own = crate::resources::Shortfall { required_bytes: 26 << 30, available_bytes: 20 << 30 };
+        let measured = OnboardingError { resources: Some(own), ..failure("disk_low") };
+        assert_eq!(attach_disk_amounts(measured, Some(shortfall)).resources, Some(own));
+    }
+
+    #[test]
+    fn the_amounts_reach_the_screen_as_numbers_in_bytes_and_are_absent_otherwise() {
+        use crate::onboarding::OnboardingError;
+        let error = OnboardingError {
+            resources: Some(crate::resources::Shortfall { required_bytes: 27917287424, available_bytes: 21474836480 }),
+            ..failure("disk_low")
+        };
+        let json = serde_json::to_value(&error).unwrap();
+        assert_eq!(json["resources"]["requiredBytes"], 27917287424u64);
+        assert_eq!(json["resources"]["availableBytes"], 21474836480u64);
+        assert!(serde_json::to_value(failure("disk_low")).unwrap().get("resources").is_none());
+    }
+
+    #[test]
+    fn the_setup_checks_the_room_before_it_installs_anything() {
+        let source = include_str!("onboarding.rs");
+        let prepare = source.split("fn prepare_impl(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
+        let check = prepare.find("local_resources_check(&app)?;").expect("prepare checks the room");
+        let install = prepare.find("install_local(").expect("prepare installs");
+        assert!(check < install, "the check comes before install_local");
     }
 
     #[test]
