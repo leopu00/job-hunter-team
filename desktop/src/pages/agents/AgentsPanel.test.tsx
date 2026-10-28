@@ -1423,6 +1423,30 @@ describe("«Agenti»: the list reads again by itself", () => {
     await waitFor(() => expect(lists()).toBe(3));
   });
 
+  it("a window seen again while the periodic read is on its way does not start a second", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let slow = false;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list" && slow) await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    slow = true;
+    await advance(LIST_REFRESH_LOCAL_MS + 500);
+    await waitFor(() => expect(lists()).toBe(2));
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(10_000); // more than the 5 s that make a seen window read again
+    expect(lists()).toBe(2);
+    slow = false;
+    release!();
+    await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3));
+  });
+
   it("reads nothing while an action is on its way", async () => {
     where = "local";
     const base = native.invoke.getMockImplementation()!;
