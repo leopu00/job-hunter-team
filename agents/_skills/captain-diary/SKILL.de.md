@@ -8,7 +8,7 @@ allowed-tools: Bash(python3 /app/shared/skills/captain_diary.py *)
 # captain-diary — die Übergabe zwischen Capitanos
 
 Eine Datei pro Tag in `$JHT_HOME/logs/captain-diary-YYYY-MM-DD.md`, append-only.
-Ihre Aufgabe ist es, dich davor zu bewahren, **bei jedem Neustart von vorn
+Deine Aufgabe ist es, dich davor zu bewahren, **bei jedem Neustart von vorn
 anzufangen**: die Pacing-Lektionen von heute werden an den Capitano von morgen
 übergeben.
 

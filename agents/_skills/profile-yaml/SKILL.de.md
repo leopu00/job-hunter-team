@@ -7,7 +7,7 @@ allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), 
 
 # profile-yaml — einzige Quelle der Wahrheit über den Kandidaten
 
-Das Team liest `candidate_profile.yml` für jeden CV, jeden Score, jede Match-Entscheidung. Wenn Sie die Datei korrekt halten, funktioniert der Rest des Systems; wenn Sie sie veralten lassen, produzieren die Writers sterile CVs und der Scorer bewertet Positionen falsch.
+Das Team liest `candidate_profile.yml` für jeden CV, jeden Score, jede Match-Entscheidung. Wenn du die Datei korrekt hältst, funktioniert der Rest des Systems; wenn du sie veralten lässt, produzieren die Writers sterile CVs und der Scorer bewertet Positionen falsch.
 
 ## 🌍 Sprache des Freitexts (verbindlich)
 
@@ -17,21 +17,21 @@ Der Text von `narrative`, `key_points` und `timeline` im Profil wird in der Spra
 
 | Pfad                                          | Wer schreibt         | Wer liest                |
 |-----------------------------------------------|----------------------|--------------------------|
-| `$JHT_HOME/profile/candidate_profile.yml`     | **Assistente** (Sie), Capitano, Benutzer über die Web-UI | alle anderen Agenten (nur lesen — T10) |
-| `$JHT_HOME/profile/ready.flag`                | **Assistente** (Sie) | das CTA-Gate des Dashboards |
+| `$JHT_HOME/profile/candidate_profile.yml`     | **Assistente** (du), Capitano, Benutzer über die Web-UI | alle anderen Agenten (nur lesen — T10) |
+| `$JHT_HOME/profile/ready.flag`                | **Assistente** (du) | das CTA-Gate des Dashboards |
 
-Erstellen Sie das Verzeichnis, falls es nicht existiert:
+Erstelle das Verzeichnis, falls es nicht existiert:
 ```bash
 mkdir -p "$JHT_HOME/profile"
 ```
 
 ## Live-Aktualisierung — inkrementell, nach JEDER relevanten Eingabe
 
-Das Frontend fragt die Datei alle ~2s ab. Warten Sie nicht bis zum Ende des Gesprächs; **jedes Mal, wenn der Benutzer Ihnen ein neues Datum gibt, schreiben Sie es sofort**.
+Das Frontend fragt die Datei alle ~2s ab. Warte nicht bis zum Ende des Gesprächs; **jedes Mal, wenn der Benutzer dir ein neues Datum gibt, schreibe es sofort**.
 
-- "ich heiße Mario" → schreiben Sie `name: Mario` sofort.
-- "ich suche eine Stelle als Koch" → aktualisieren Sie `target_role: cuoco` sofort.
-- im Chat geschriebene Informationen → aktualisieren Sie **alle** relevanten Felder in einem einzigen Write.
+- "ich heiße Mario" → schreibe `name: Mario` sofort.
+- "ich suche eine Stelle als Koch" → aktualisiere `target_role: cuoco` sofort.
+- im Chat geschriebene Informationen → aktualisiere **alle** relevanten Felder in einem einzigen Write.
 
 Jedes neue Datum = ein `Write` oder `Edit` auf der Datei. Dann validieren. Dann die Konversation fortsetzen.
 
@@ -50,7 +50,7 @@ Das Abzeichen liest nur die persistierte Datei `candidate_profile.yml`. Während
 
 ## Pflichtvalidierung nach JEDEM Write/Edit
 
-Validieren Sie gegen das **kanonische Schema** (nicht nur "ist das YAML parsebar"): siehe die Skill
+Validiere gegen das **kanonische Schema** (nicht nur "ist das YAML parsebar"): siehe die Skill
 [`profile-schema`](../profile-schema/SKILL.md) für das vollständige Schema.
 
 ```bash
@@ -59,14 +59,14 @@ jht profile validate
 # python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-`VALID_PROFILE` → weiter. `INVALID_PROFILE` → lesen Sie die `ERROR:`-Meldungen (Feld + Grund),
-korrigieren Sie das Feld, validieren Sie erneut. Die `WARN:`-Meldungen (Legacy-Schlüssel, z.B. `languages[].name` statt
-`language`) blockieren nicht, sollten aber behoben werden, wenn Sie diesen Abschnitt bearbeiten.
+`VALID_PROFILE` → weiter. `INVALID_PROFILE` → lies die `ERROR:`-Meldungen (Feld + Grund),
+korrigiere das Feld, validiere erneut. Die `WARN:`-Meldungen (Legacy-Schlüssel, z.B. `languages[].name` statt
+`language`) blockieren nicht, sollten aber behoben werden, wenn du diesen Abschnitt bearbeitest.
 
-**Setzen Sie die Konversation mit dem Benutzer NICHT fort, bis `VALID_PROFILE` erscheint.** Ein kaputtes Profil
+**Setze die Konversation mit dem Benutzer NICHT fort, bis `VALID_PROFILE` erscheint.** Ein kaputtes Profil
 leert das gesamte linke Panel; der Benutzer denkt, die App sei abgestürzt.
 
-Wenn Sie vergessen haben, den Validierungsschritt hinzuzufügen, können Sie sicher sein, dass die Datei kaputt ist — es gibt kein "wahrscheinlich ok". Führen Sie ihn immer aus.
+Wenn du vergessen hast, den Validierungsschritt hinzuzufügen, kannst du sicher sein, dass die Datei kaputt ist — es gibt kein "wahrscheinlich ok". Führe ihn immer aus.
 
 ## YAML-Sicherheitsregeln
 
@@ -75,17 +75,17 @@ Der Parser des Frontends ist strikt. Fünf Regeln, die jedes aufgetretene Proble
 1. **Block-Scalar (`|-` oder `>-`) für jeden Text > 60 Zeichen** — Beschreibungen, Zusammenfassungen, freie Notizen, Stärken. Inline-Strings brechen bei Kommas, Doppelpunkten, Anführungszeichen, Zeilenumbrüchen, Klammern.
    ```yaml
    summary: |-
-     Hier können Sie langen Text schreiben, auch mit Kommas, Doppelpunkten, Apostrophen,
+     Hier kannst du langen Text schreiben, auch mit Kommas, Doppelpunkten, Apostrophen,
      Zeilenumbrüchen, Klammern: der Parser nimmt es so, wie es ist.
    ```
-2. **Inline-Strings mit Sonderzeichen in Anführungszeichen setzen** — wenn Sie einen String inline lassen müssen und er `"`, `:`, `#`, `&`, `*`, `>`, `|`, `%`, `@` enthält, umschließen Sie ihn mit doppelten Anführungszeichen (`"…"`) oder wechseln Sie zum Block-Scalar.
+2. **Inline-Strings mit Sonderzeichen in Anführungszeichen setzen** — wenn du einen String inline lassen musst und er `"`, `:`, `#`, `&`, `*`, `>`, `|`, `%`, `@` enthält, umschließe ihn mit doppelten Anführungszeichen (`"…"`) oder wechsle zum Block-Scalar.
 3. **Leerzeichen nach jedem `:`** — `role: Senior` ✅ · `role:Senior` ❌.
 4. **Einrückung mit 2 Leerzeichen, niemals Tabs** — Listenpunkte werden auf derselben Spalte eingerückt wie das erste Inhaltszeichen des Elternelements.
-5. **Keine langen Geviertstriche / typografische Anführungszeichen** — Einfügen aus Rich-Text-Editoren injiziert `—`, `"`, `"`. Ersetzen Sie durch einfache `-`, `"`, oder verwenden Sie Block-Scalar.
+5. **Keine langen Geviertstriche / typografische Anführungszeichen** — Einfügen aus Rich-Text-Editoren injiziert `—`, `"`, `"`. Ersetze durch einfache `-`, `"`, oder verwende Block-Scalar.
 
 ## Mindestschema (das Minimum)
 
-Das Frontend hat einen Fallback, der "Vai alla dashboard" freischaltet, wenn die acht Mindestfelder vorhanden + nicht leer sind: Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, mindestens 2 primäre Fähigkeiten, mindestens 1 Sprache (damit der Benutzer fortfahren kann, noch bevor Sie `ready.flag` erstellen). Füllen Sie zuerst diese aus. Der Rest des Schemas unten ist empfohlen, Erfahrungen und Abschlüsse eingeschlossen: Fragen Sie direkt nach der Freischaltung danach, und erfinden Sie nie etwas, nur um das Schema zu füllen.
+Das Frontend hat einen Fallback, der "Vai alla dashboard" freischaltet, wenn die acht Mindestfelder vorhanden + nicht leer sind: Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, mindestens 2 primäre Fähigkeiten, mindestens 1 Sprache (damit der Benutzer fortfahren kann, noch bevor du `ready.flag` erstellst). Fülle zuerst diese aus. Der Rest des Schemas unten ist empfohlen, Erfahrungen und Abschlüsse eingeschlossen: Frage direkt nach der Freischaltung danach, und erfinde nie etwas, nur um das Schema zu füllen.
 
 ```yaml
 name: <Vorname Nachname>
@@ -139,7 +139,7 @@ Vollständiges Schema + Beispiele: `docs/examples/candidate_profile.yml.example`
 
 ## `sector_details` — freie Schlüssel für die Branche des Benutzers
 
-Generischer Key/Value-Bereich, den das Frontend als Liste anzeigt. Die Schlüssel wählen Sie basierend auf dem Beruf des Benutzers. Reale Beispiele:
+Generischer Key/Value-Bereich, den das Frontend als Liste anzeigt. Die Schlüssel wählst du basierend auf dem Beruf des Benutzers. Reale Beispiele:
 
 ```yaml
 # Küche
@@ -171,9 +171,9 @@ sector_details:
 
 Regeln:
 - Schlüssel in `snake_case`, kurz und lesbar.
-- Fügen Sie nur Schlüssel mit tatsächlichen Werten des Kandidaten ein. Wenn unbekannt → weglassen (niemals `null` / `""`).
+- Füge nur Schlüssel mit tatsächlichen Werten des Kandidaten ein. Wenn unbekannt → weglassen (niemals `null` / `""`).
 - Werte: String, Zahl, Boolean, Array von Strings.
-- Branche nicht in der Liste → erfinden Sie die passenden Schlüssel selbst, basierend darauf, was in diesem Beruf wichtig ist. Z.B. LKW-Fahrer: `patente: CE+CQC`, `anni_alla_guida: 15`, `tratte_abituali: [...]`.
+- Branche nicht in der Liste → erfinde die passenden Schlüssel selbst, basierend darauf, was in diesem Beruf wichtig ist. Z.B. LKW-Fahrer: `patente: CE+CQC`, `anni_alla_guida: 15`, `tratte_abituali: [...]`.
 
 ## `ready.flag` — Freischaltung "Vai alla dashboard"
 
@@ -181,25 +181,25 @@ Der Button ist standardmäßig deaktiviert. Das Frontend aktiviert ihn, WENN:
 - `$JHT_HOME/profile/ready.flag` existiert (das explizite Flag, das SIE erstellen), **ODER**
 - das Backend erkennt, dass das Mindestschema bereits vollständig ist (automatischer Fallback).
 
-Daher ist der Button oft bereits durch den Fallback freigeschaltet, wenn das Profil vollständig ist — **kündigen Sie die Freischaltung nicht an, wenn nicht Sie das Flag erstellt haben**.
+Daher ist der Button oft bereits durch den Fallback freigeschaltet, wenn das Profil vollständig ist — **kündige die Freischaltung nicht an, wenn nicht du das Flag erstellt hast**.
 
 ### Wann das Flag erstellen (3 STRIKTE Schritte, niemals überspringen, niemals die Reihenfolge ändern)
 
 ```bash
-# 1. Erstellen Sie das Flag mit UTC-Zeitstempel
+# 1. Erstelle das Flag mit UTC-Zeitstempel
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
 
-# 2. ÜBERPRÜFEN Sie, dass die Datei wirklich existiert (kann lautlos fehlschlagen:
+# 2. ÜBERPRÜFE, dass die Datei wirklich existiert (kann lautlos fehlschlagen:
 #    Berechtigungen, fehlendes Verzeichnis, Festplattenquota usw.)
 test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 
-# 3. NUR wenn Schritt 2 = FLAG_OK → senden Sie die Nachricht im Chat.
+# 3. NUR wenn Schritt 2 = FLAG_OK → sende die Nachricht im Chat.
 #    Falls FLAG_MISSING → beheben (z.B. mkdir -p) und ab Schritt 1 wiederholen.
-#    Kündigen Sie die Freischaltung NIEMALS ohne FLAG_OK im vorherigen Schritt an.
+#    Kündige die Freischaltung NIEMALS ohne FLAG_OK im vorherigen Schritt an.
 ```
 
 
-### 4. Benachrichtigen Sie den Capitano — hier startet das Team
+### 4. Benachrichtige den Capitano — hier startet das Team
 
 Erst nach `FLAG_OK`, und nur einmal:
 
@@ -215,7 +215,7 @@ ersten Tag alle zehn Minuten eine Position und halt die Anwendung fur kaputt.
 
 ### Anti-Halluzination von Schritt 2
 
-Es ist bekannt, dass ein LLM dazu neigt, "ich habe X gemacht" zu schreiben, auch wenn der Tool-Call nicht ausgeführt wurde. Der `test -f` existiert genau dafür, um Sie zu unterbrechen, falls Sie die Erstellung übersprungen haben: Sie sehen `FLAG_MISSING` und erinnern sich, zurückzugehen. **Vertrauen Sie nicht Ihrer Erinnerung, vertrauen Sie nur der Ausgabe von `test -f`.**
+Es ist bekannt, dass ein LLM dazu neigt, "ich habe X gemacht" zu schreiben, auch wenn der Tool-Call nicht ausgeführt wurde. Der `test -f` existiert genau dafür, um dich zu unterbrechen, falls du die Erstellung übersprungen hast: du siehst `FLAG_MISSING` und erinnerst dich, zurückzugehen. **Vertraue nicht deiner Erinnerung, vertraue nur der Ausgabe von `test -f`.**
 
 ### Wann das Flag entfernen
 
@@ -225,7 +225,7 @@ Wenn während des Gesprächs festgestellt wird, dass ein Feld der Blockier-Check
 rm -f "$JHT_HOME/profile/ready.flag"
 ```
 
-Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt — lassen Sie uns diesen Punkt klären, bevor wir fortfahren".
+Und informiere den Benutzer: "Ich habe den Button wieder auf Warten gesetzt — lass uns diesen Punkt klären, bevor wir fortfahren".
 
 ### Das Flag NICHT erstellen, wenn
 
@@ -243,17 +243,17 @@ Erfahrungen und Abschlüsse sind empfohlen: Sie blockieren das Flag nicht. Frag 
 
 ## ⚠️ Anti-Halluzination — die kritische Regel
 
-**NIEMALS `docs/examples/candidate_profile.yml.example` oder `docs/examples/candidate_profile.hr.yml.example` als Wertequelle lesen.** Diese Dateien dokumentieren die *Struktur*, nicht den Kandidaten. Wenn Sie sie lesen, riskieren Sie, "Mario Rossi" / "mario.rossi@example.com" in das echte Profil zu schreiben.
+**NIEMALS `docs/examples/candidate_profile.yml.example` oder `docs/examples/candidate_profile.hr.yml.example` als Wertequelle lesen.** Diese Dateien dokumentieren die *Struktur*, nicht den Kandidaten. Wenn du sie liest, riskierst du, "Mario Rossi" / "mario.rossi@example.com" in das echte Profil zu schreiben.
 
-Verwenden Sie AUSSCHLIESSLICH:
-- was der Benutzer Ihnen im Chat gesagt hat
-- was Sie aus einem CV / hochgeladenen Datei extrahiert haben
+Verwende AUSSCHLIESSLICH:
+- was der Benutzer dir im Chat gesagt hat
+- was du aus einem CV / hochgeladenen Datei extrahiert hast
 
-Wenn Sie ein Feld nicht kennen: **lassen Sie `""` oder weglassen**, erfinden Sie niemals einen plausiblen Wert.
+Wenn du ein Feld nicht kennst: **lass `""` oder weglassen**, erfinde niemals einen plausiblen Wert.
 
 ## Anti-Patterns
 
-- ❌ Profil in Ihr cwd `$JHT_AGENT_DIR` schreiben statt in `$JHT_HOME/profile/` — das Frontend findet es nicht.
+- ❌ Profil in dein cwd `$JHT_AGENT_DIR` schreiben statt in `$JHT_HOME/profile/` — das Frontend findet es nicht.
 - ❌ Validierung überspringen "war doch nur eine kleine Änderung" — jeder Write kann YAML kaputt machen, immer.
 - ❌ YAML / JSON / Pfade im Chat zeigen — der Benutzer ist nicht-technisch (siehe `assistente.md` Abschnitt Benutzersprache).
 - ❌ Freischaltung ankündigen ohne `test -f` — das ist die klassische Halluzination "ich habe X gemacht" ohne es getan zu haben.
