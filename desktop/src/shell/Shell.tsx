@@ -26,6 +26,7 @@ import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
 import { TeamOffBanner } from "./TeamOffBanner";
+import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
 import { beginPageLoad } from "../lib/page-timing";
@@ -270,6 +271,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               <MailRotationBanner />
               <NewVersionBanner />
               <TeamOffBanner />
+              <LocalTeamOwnerBanner onSwitch={onLogout} />
               <WriteAccessRestoredBanner />
             </div>
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
@@ -288,6 +290,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           <MailRotationBanner />
           <NewVersionBanner />
           <TeamOffBanner />
+          <LocalTeamOwnerBanner onSwitch={onLogout} />
             <WriteAccessRestoredBanner />
           <MainChrome>{page}</MainChrome>
         </div>
