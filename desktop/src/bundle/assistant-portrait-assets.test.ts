@@ -30,8 +30,15 @@ describe("the Assistant's portraits in the bundle", () => {
     expect(sizes.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(MAX_ALL);
   });
 
-  it("has nothing else in their folder: no PNG of the game came along", () => {
+  it("has nothing else in their folder but the note of where they come from: no PNG of the game came along", () => {
     const names = readdirSync(join(PUBLIC, "assistant")).sort();
-    expect(names).toEqual(ASSISTANT_EXPRESSIONS.map((name) => `portrait-${name}.webp`).sort());
+    expect(names).toEqual([...ASSISTANT_EXPRESSIONS.map((name) => `portrait-${name}.webp`), "SOURCES.md"].sort());
+  });
+
+  it("says where they come from and what was done to them", () => {
+    const note = readFileSync(join(PUBLIC, "assistant", "SOURCES.md"), "utf8");
+    expect(note).toContain("game/assets/gen-art/portraits/assistente/");
+    expect(note).toMatch(/640 px/);
+    expect(note).toMatch(/severo/);
   });
 });
