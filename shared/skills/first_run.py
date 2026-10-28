@@ -528,10 +528,33 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
 START_NUDGE_SETTLE_S = 45   # after the plan is written: the one who wrote it is still confirming it
 START_NUDGE_EVERY_S = 300   # between two reminders to the Capitano
 START_NUDGE_MAX = 3         # for one declared plan; then the Capitano is on its own, and so is the person (they can write)
+START_NUDGE_SEND_S = float(os.environ.get("JHT_FIRST_RUN_SEND_S") or 25)  # the transport may hang: the watchdog's tick (respawns, bridges, mail) does not wait for it for long
 START_MESSAGE = (
-    "The person has declared their subscription plan and the candidate profile is complete: the team can start. "
+    "The subscription plan is declared and the candidate profile is complete: the team can start. "
     "Run first_run.py begin-burst and follow your first-run-burst skill."
 )
+# The reminders are written in a file of their own, never in first-run.json: that file is the Capitano's (begin-burst
+# rewrites all of it), and the watchdog that rewrote it from a state read a moment before could put back
+# `awaiting_profile` over a burst the Capitano had just opened, with no roster (found by the guardian, 29/10).
+NUDGE_PATH = JHT_HOME / "state" / "first-run-nudge.json"
+
+
+def _read_nudge() -> dict:
+    try:
+        with NUDGE_PATH.open(encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_nudge(record: dict) -> None:
+    NUDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = NUDGE_PATH.with_suffix(f".json.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(record, f)
+        f.write("\n")
+    tmp.replace(NUDGE_PATH)
 
 
 def _plan_declared_at() -> Optional[float]:
@@ -542,9 +565,10 @@ def _plan_declared_at() -> Optional[float]:
         return None
 
 
-def _tell_the_capitano(message: str) -> bool:
+def _tell_the_capitano(message: str, timeout: float = START_NUDGE_SEND_S) -> bool:
     """Type `message` into the Capitano's terminal as the person's console (the way `jht profile import` does: the
-    envelope of an agent is not ours to wear). True when the transport took it."""
+    envelope of an agent is not ours to wear). True when the transport took it; False when it did not, or did not
+    answer in `timeout` seconds (it is then left to finish: `tmux_send_run` does not kill it between its paste and its Enter)."""
     sender = os.environ.get("JHT_TMUX_SENDER") or shutil.which("jht-tmux-send")
     if not sender:
         for candidate in (Path("/app/agents/_skills/tmux-send/jht-tmux-send"),
@@ -554,9 +578,15 @@ def _tell_the_capitano(message: str) -> bool:
                 break
     if not sender:
         return False
-    env = dict(os.environ, JHT_TMUX_SEND_FROM="user-console", JHT_TMUX_FOREIGN_WAIT="0")
+    # this process is a short tick of its own: the environment is what the transport reads
+    os.environ["JHT_TMUX_SEND_FROM"] = "user-console"
+    os.environ["JHT_TMUX_FOREIGN_WAIT"] = "0"
+    runner = _load_module("tmux_send_run", "tmux_send_run.py")
     try:
-        done = subprocess.run([sender, "CAPITANO", message], capture_output=True, timeout=180, env=env, check=False)
+        if runner is not None:
+            done = runner.run([sender, "CAPITANO", message], timeout, text=False)
+        else:
+            done = subprocess.run([sender, "CAPITANO", message], capture_output=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
     return done.returncode == 0
@@ -571,10 +601,10 @@ def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[floa
     declared = max((moment for moment in (_plan_declared_at(), imported) if moment is not None), default=None)
     if declared is not None and now.timestamp() - declared < START_NUDGE_SETTLE_S:
         return {"action": "waiting", "seconds_left": int(START_NUDGE_SETTLE_S - (now.timestamp() - declared))}
-    record = state.get("start_nudge")
+    record = _read_nudge()
     plan = info.get("plan")
     count, last = 0, None
-    if isinstance(record, dict) and record.get("plan") == plan:
+    if record.get("plan") == plan:
         count = record.get("count") if isinstance(record.get("count"), int) else 0
         last = _parse(record.get("last_at"))
     if count >= START_NUDGE_MAX:
@@ -585,9 +615,13 @@ def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[floa
         left = START_NUDGE_EVERY_S - (now - last).total_seconds()
         if left > 0:
             return {"action": "waiting", "seconds_left": int(left)}
-    # written before it is sent: a transport that hangs or a crash must not become a reminder every tick
-    state["start_nudge"] = {"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds")}
-    _write(state)
+    # the phase is read again, now: the Capitano may have opened the run since `state` was read, and the reminder
+    # is for a run that has not opened
+    if _read().get("phase", PHASE_AWAITING) != PHASE_AWAITING:
+        return {"action": "none", "reason": "the first run opened meanwhile"}
+    # written (in the file of the reminders, never in first-run.json) before it is sent: a transport that hangs or a
+    # crash must not become a reminder every tick
+    _write_nudge({"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds")})
     return {"action": "start", "plan": plan, "count": count + 1, "sent": _tell_the_capitano(START_MESSAGE)}
 
 

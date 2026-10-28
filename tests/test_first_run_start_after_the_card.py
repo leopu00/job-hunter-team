@@ -57,6 +57,16 @@ def declared_after_the_click(box, plan: str = "pro", settled: bool = True) -> st
     return asked["question_id"]
 
 
+def nudge_file(box):
+    return box.home / "state" / "first-run-nudge.json"
+
+
+def move_the_last_reminder_back(box) -> None:
+    record = json.loads(nudge_file(box).read_text(encoding="utf-8"))
+    record["last_at"] = "2026-01-01T00:00:00+00:00"
+    nudge_file(box).write_text(json.dumps(record), encoding="utf-8")
+
+
 def age(box, seconds: float) -> None:
     """The plan was written `seconds` ago."""
     path = box.home / "jht.config.json"
@@ -75,7 +85,8 @@ def test_the_click_alone_gets_the_first_run_going(sender):
     (call,) = box.calls()
     assert call["session"] == "CAPITANO" and call["from"] == "user-console"
     assert "begin-burst" in call["message"] and "first-run-burst" in call["message"]
-    assert "plan" in call["message"] and "profile is complete" in call["message"]
+    assert "subscription plan is declared" in call["message"] and "profile is complete" in call["message"]
+    assert "The person" not in call["message"], "it is not known who wrote the plan: the sentence does not say"
     # the Capitano's step: the burst opens with the roster of the plan the person picked
     burst = run(box, "begin-burst")
     assert burst["ok"] and burst["phase"] == "burst" and burst["plan"]["plan"] == "pro", burst
@@ -115,16 +126,10 @@ def test_it_does_not_repeat_every_tick_and_stops_after_three(sender):
     assert again["action"] == "waiting" and again["seconds_left"] > 0, again
     # the next reminders come five minutes apart (the state is moved back, as the clock would)
     for expected in (2, 3):
-        state_file = box.home / "state" / "first-run.json"
-        state = json.loads(state_file.read_text(encoding="utf-8"))
-        state["start_nudge"]["last_at"] = "2026-01-01T00:00:00+00:00"
-        state_file.write_text(json.dumps(state), encoding="utf-8")
+        move_the_last_reminder_back(box)
         out = run(box, "plan-question-check")
         assert out["action"] == "start" and out["count"] == expected, out
-    state_file = box.home / "state" / "first-run.json"
-    state = json.loads(state_file.read_text(encoding="utf-8"))
-    state["start_nudge"]["last_at"] = "2026-01-01T00:00:00+00:00"
-    state_file.write_text(json.dumps(state), encoding="utf-8")
+    move_the_last_reminder_back(box)
     last = run(box, "plan-question-check")
     assert last["action"] == "none" and "3 times" in last["reason"], last
     assert len(box.calls()) == 3
@@ -175,10 +180,7 @@ def test_a_new_plan_gets_its_own_count(sender):
     assert run(box, "plan-question-check")["count"] == 1
     configure(box, plan="plus")
     age(box, 120)
-    state_file = box.home / "state" / "first-run.json"
-    state = json.loads(state_file.read_text(encoding="utf-8"))
-    state["start_nudge"]["last_at"] = "2026-01-01T00:00:00+00:00"
-    state_file.write_text(json.dumps(state), encoding="utf-8")
+    move_the_last_reminder_back(box)
     out = run(box, "plan-question-check")
     assert out["action"] == "start" and out["plan"] == "plus" and out["count"] == 1, out
 
@@ -187,3 +189,88 @@ def test_the_watchdog_logs_the_reminder():
     text = WATCHDOG.read_text(encoding="utf-8")
     net = text[text.index("# --- rete della domanda sul piano"):text.index("# --- fine rete della domanda sul piano")]
     assert "'\"action\": \"start\"'" in net
+
+
+def test_the_reminders_are_in_a_file_of_their_own_and_first_run_json_is_never_written_by_the_watchdog(sender):
+    box = sender
+    declared_after_the_click(box)
+    before = (box.home / "state" / "first-run.json").read_bytes()
+    assert run(box, "plan-question-check")["action"] == "start"
+    after = (box.home / "state" / "first-run.json").read_bytes()
+    assert before == after, "the Capitano's file is not touched by the reminder"
+    record = json.loads(nudge_file(box).read_text(encoding="utf-8"))
+    assert record["plan"] == "pro" and record["count"] == 1 and record["last_at"]
+    assert not list(nudge_file(box).parent.glob("*.tmp")), "written whole and moved in place"
+
+
+def test_a_burst_the_capitano_opens_between_the_reading_and_the_reminder_is_not_undone(sender, monkeypatch, tmp_path):
+    """The interleaving the guardian built: the watchdog read `awaiting_profile`, then the Capitano opened the run.
+    The reminder must neither put `awaiting_profile` back nor tell the Capitano to open what is open."""
+    box = sender
+    declared_after_the_click(box)
+    monkeypatch.setenv("JHT_HOME", str(box.home))
+    monkeypatch.setenv("JHT_DB", str(box.db))
+    monkeypatch.setenv("JHT_TMUX_SENDER", box.env["JHT_TMUX_SENDER"])
+    import importlib
+    import sys
+
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import first_run
+
+    importlib.reload(first_run)
+    stale = first_run.status()                              # what the watchdog read: awaiting_profile
+    assert stale["phase"] == "awaiting_profile"
+    opened = first_run.begin_burst()                        # the Capitano gets in between
+    assert opened["ok"] and opened["phase"] == "burst"
+    on_disk = (box.home / "state" / "first-run.json").read_bytes()
+
+    out = first_run._start_nudge(stale, first_run.plan_info(), first_run.datetime.now(first_run.timezone.utc), 0.0)
+
+    assert out["action"] == "none" and "meanwhile" in out["reason"], out
+    assert (box.home / "state" / "first-run.json").read_bytes() == on_disk, "the burst and its roster are as the Capitano left them"
+    assert json.loads(on_disk)["roster"] and json.loads(on_disk)["phase"] == "burst"
+    assert box.calls() == []
+
+
+def test_a_transport_that_does_not_answer_is_given_up_after_a_few_seconds(sender):
+    """The watchdog's tick also respawns workers, bridges and the mail: it does not wait minutes for a hung transport."""
+    box = sender
+    script = box.home / "fake-tmux-send"
+    script.write_text("#!/bin/sh\nsleep 30\n", encoding="utf-8")
+    declared_after_the_click(box)
+    started = time.time()
+    env_before = dict(box.env)
+    box.env["JHT_FIRST_RUN_SEND_S"] = "2"
+    out = run(box, "plan-question-check")
+    assert out["action"] == "start" and out["sent"] is False, out
+    assert time.time() - started < 28, "gave up on its own deadline, not the transport's"
+    box.env.clear(); box.env.update(env_before)
+
+
+def test_a_burst_the_capitano_opens_while_the_reminder_is_being_recorded_is_not_undone_either(sender, monkeypatch):
+    """The window after the last look at the phase: the Capitano opens the run just as the reminder is written. The
+    reminder writes only its own file, so whatever order the two happen in, the Capitano's file is the Capitano's."""
+    box = sender
+    declared_after_the_click(box)
+    monkeypatch.setenv("JHT_HOME", str(box.home))
+    monkeypatch.setenv("JHT_DB", str(box.db))
+    monkeypatch.setenv("JHT_TMUX_SENDER", box.env["JHT_TMUX_SENDER"])
+    import importlib
+    import sys
+
+    sys.path.insert(0, str(ROOT / "shared" / "skills"))
+    import first_run
+
+    importlib.reload(first_run)
+    stale = first_run.status()
+    original = first_run._write_nudge
+
+    def the_capitano_gets_in_first(record):
+        first_run.begin_burst()
+        original(record)
+
+    monkeypatch.setattr(first_run, "_write_nudge", the_capitano_gets_in_first)
+    first_run._start_nudge(stale, first_run.plan_info(), first_run.datetime.now(first_run.timezone.utc), 0.0)
+
+    final = json.loads((box.home / "state" / "first-run.json").read_text(encoding="utf-8"))
+    assert final["phase"] == "burst" and final["roster"] and final["burst_started_at"], final
