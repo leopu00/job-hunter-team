@@ -76,6 +76,12 @@
 #           li', annotato in logs/pending-input.jsonl (`draft`, motivo composer_changed o half_drawn).
 #         Un testo PROVATO nostro (identico, o il suo segnaposto di incolla con il numero giusto) riceve il suo
 #         Invio alla consegna dopo, di qualunque eta'. Mai respawnare: il pane e' vivo.
+#         Un composer con SOLO testo firmato (una o piu' buste `[@x -> @y]`, le parole dell'utente fra i marchi
+#         ⟦UTENTE·id⟧…⟦/UTENTE·id⟧, un messaggio senza marchi di cui il registro ha l'impronta, o un segnaposto che il registro
+#         spiega) NON e' una bozza: il nostro messaggio si incolla dietro
+#         e un solo Invio li manda tutti e due (agent_chat/tmux_send_composer.signed_only). Una busta valida si puo' scrivere a
+#         mano: non e' un'autenticazione, il danno e' quello di un messaggio vecchio che arriva in ritardo. Una busta senza marchi che il
+#         registro non riconosce come nostra e' testo della persona: 130 come prima.
 #
 # jht-tmux-send --flush-ours <session>: se nella casella c'e' un testo PROVATO nostro (quello che una consegna
 # nostra ha lasciato: testo identico, o il suo segnaposto di incolla con il numero di caratteri giusto, e il
@@ -185,6 +191,9 @@ _delivery_gate() { printf '%s' "$1" | _chat_parse gate; }
 # composer that holds only the token a paste like ours leaves («[Pasted Content N chars]» on Codex, «[Pasted text
 # #1 +N lines]» on Claude, with our character / line count) is our text too: the TUI keeps a long paste out of sight.
 placeholder_ours=0
+# What the composer held before our paste when that was ONLY signed text (see _signed_base_of): our message was pasted
+# behind it, and "ours" then means that text unchanged followed by ours. Empty: the composer was empty, as it always was.
+signed_base=""
 _composer_is_only_ours() {
   [ "$(_composer_vs_ours "$1" | cut -d' ' -f1)" = "ours" ]
 }
@@ -196,12 +205,13 @@ _composer_is_only_ours() {
 #   other    qualcosa d'altro, o il nostro testo con altro accanto.
 # Stampa lo stato e le due lunghezze (mai il testo): il log di un 130 mostra la FORMA.
 _composer_vs_ours() {
-  printf '%s\0%s' "$1" "$message" | python3 -I -c '
+  printf '%s\0%s\0%s' "$1" "$message" "$signed_base" | python3 -I -c '
 import sys
 sys.path.insert(0, sys.argv[1])
 import tmux_send_composer
-pane, expected = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
-state, actual, wanted = tmux_send_composer.composer_relation(pane, expected, allow_placeholder=sys.argv[2] == "1")
+pane, expected, base = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 2)
+state, actual, wanted = tmux_send_composer.composer_relation(
+    pane, expected, allow_placeholder=sys.argv[2] == "1", base=base or None)
 print("%s %d/%d" % (state, actual, wanted))
 ' "$CHAT_SKILLS" "$placeholder_ours"
 }
@@ -541,6 +551,15 @@ _occurrences() {
 # ("Pasted text", "Pasted Content") quando prima non c'era.
 _in_composer() {
   local line flat
+  if [ -n "$signed_base" ]; then
+    # Behind signed text of somebody else's: ours is in the composer when it is drawn there (or being drawn) after
+    # that text, which the line scan below cannot tell from the text it sits behind.
+    # Nothing of ours drawn yet ("none") is not pending; anything else the scan below judges as it always did.
+    case "$(_composer_vs_ours "$1" | cut -d' ' -f1)" in
+      ours|partial) return 0 ;;
+      none) return 1 ;;
+    esac
+  fi
   line=$(_composer_line "$1")
   [ -n "$line" ] || return 1
   flat=${line//$'\n'/}
@@ -704,16 +723,37 @@ _pane() { _tmux capture-pane -e -t "=$session:" -p 2>/dev/null || true; }
 _pending_file() {
   printf '%s/tmux-send-pending-%s.sha' "$lock_dir" "$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
 }
+# Le impronte di cio' che abbiamo incollato (una per riga: epoca e impronta del testo senza spazi), le ultime 50, per un
+# giorno. Servono a una cosa: una busta SENZA marchi (un messaggio fra agenti) non dice dove finisce, e chi scrive a mano in
+# coda a una busta ne sarebbe parte; conta come testo firmato solo se questo registro la riconosce come testo nostro.
+_fingerprints_file() {
+  printf '%s/tmux-send-fingerprints-%s.log' "$lock_dir" "$(printf '%s' "$session" | tr -c 'A-Za-z0-9_.-' '_')"
+}
 # L'impronta del testo (senza spazi), il suo numero di caratteri e di a capo: la lunghezza serve a provare
 # che un segnaposto di incolla («[Pasted Content N chars]») e' QUELLO che abbiamo lasciato noi.
 _pending_set() {
   command -v python3 >/dev/null 2>&1 || return 0
   mkdir -p "$lock_dir" 2>/dev/null || return 0
+  # Behind signed text (signed_base) the composer is that text and ours: the record is of the two together, and
+  # keeps the base apart (its hash and length) so that a paste token drawn behind it is still told from the base.
+  printf '%s\0%s' "$message" "$signed_base" | python3 -I -c '
+import hashlib, sys, time
+raw, base = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
+text = "".join(raw.split())
+fields = [int(time.time()), hashlib.sha256((base + text).encode()).hexdigest(), len(raw), raw.count("\n")]
+if base:
+    fields += [hashlib.sha256(base.encode()).hexdigest(), len(base)]
+print(*fields)' > "$(_pending_file)" 2>/dev/null || true
   printf '%s' "$message" | python3 -I -c '
 import hashlib, sys, time
-raw = sys.stdin.buffer.read().decode("utf-8", "replace")
-text = "".join(raw.split())
-print(int(time.time()), hashlib.sha256(text.encode()).hexdigest(), len(raw), raw.count("\n"))' > "$(_pending_file)" 2>/dev/null || true
+now = int(time.time())
+sha = hashlib.sha256("".join(sys.stdin.buffer.read().decode("utf-8", "replace").split()).encode()).hexdigest()
+try:
+    kept = [line for line in open(sys.argv[1]).read().splitlines() if len(line.split()) == 2 and 0 <= now - int(line.split()[0]) <= 86400]
+except (OSError, ValueError):
+    kept = []
+kept = (kept + ["%d %s" % (now, sha)])[-50:]
+open(sys.argv[1], "w").write("\n".join(kept) + "\n")' "$(_fingerprints_file)" 2>/dev/null || true
 }
 _pending_clear() { rm -f "$(_pending_file)" 2>/dev/null || true; }
 # 0 = e' il testo che abbiamo lasciato noi: identico, oppure il suo segnaposto di incolla con il numero giusto
@@ -726,7 +766,7 @@ import hashlib, sys
 sys.path.insert(0, sys.argv[1])
 import agent_chat, tmux_send_composer
 record = open(sys.argv[2]).read().split()
-if len(record) not in (2, 4):
+if len(record) not in (2, 4, 6):
     sys.exit(1)
 actual = agent_chat.composer_text(sys.stdin.read())
 if actual is None:
@@ -737,10 +777,47 @@ if hashlib.sha256(text.encode()).hexdigest() == record[1]:
 # the old two-field record has no length: a token cannot be proved ours with it. The token of Claude counts LINES,
 # which a person can paste too: from the registry only the token of Codex (characters) is proof; the one of Claude
 # is ours only when the composer was empty before our own paste (placeholder_ours).
-if len(record) == 4 and tmux_send_composer.paste_placeholder_fits(actual, int(record[2]), int(record[3]), claude=False):
-    sys.exit(0)
+if len(record) >= 4:
+    rest = actual
+    if len(record) == 6:
+        # pasted behind signed text: the token is what follows that text, which must be there unchanged
+        base_length = int(record[5])
+        if hashlib.sha256(text[:base_length].encode()).hexdigest() != record[4]:
+            sys.exit(1)
+        rest = tmux_send_composer.split_after(actual, base_length)
+    if tmux_send_composer.paste_placeholder_fits(rest, int(record[2]), int(record[3]), claude=False):
+        sys.exit(0)
 sys.exit(1)
 ' "$CHAT_SKILLS" "$(_pending_file)" 2>/dev/null
+}
+# 0 = the composer holds ONLY signed text (one message or several, left unsent by whoever): the squashed text is printed,
+# and ours can go in behind it with one Enter for all. A paste token counts as signed text when the record above
+# explains it: the characters of Codex's; the lines of Claude's only within JHT_TMUX_TOKEN_WINDOW seconds (600), since
+# a person can paste lines too. 1 = anything else (a person typing, a token nobody explains, a mark not closed).
+_signed_base_of() {
+  printf '%s' "$1" | python3 -I -c '
+import os, sys, time
+sys.path.insert(0, sys.argv[1])
+import agent_chat, tmux_send_composer
+try:
+    window = float(os.environ.get("JHT_TMUX_TOKEN_WINDOW", "600"))
+except ValueError:
+    window = 600.0
+try:
+    record = open(sys.argv[2]).read().split()
+except OSError:
+    record = []
+explained = tmux_send_composer.registry_token_ok(record, time.time(), window)
+try:
+    seen = open(sys.argv[3]).read().splitlines()
+except OSError:
+    seen = []
+known = tmux_send_composer.fingerprints_known(seen, time.time(), 86400)
+base = tmux_send_composer.signed_base(sys.stdin.read(), explained, known)
+if base is None:
+    sys.exit(1)
+sys.stdout.write(base)
+' "$CHAT_SKILLS" "$(_pending_file)" "$(_fingerprints_file)" 2>/dev/null
 }
 _pending_is_ours() { _pending_state "$1"; }
 # The refusal for a draft that is not ours. Nothing was pasted: our message would exist nowhere but in the
@@ -780,6 +857,8 @@ _wait_for_empty_composer() {
         fi
         # Text of an earlier delivery of ours: the lock below is where it gets its Enter.
         if _pending_is_ours "$pane"; then return 0; fi
+        # Only signed text, whoever left it unsent: ours goes in behind it (decided again under the lock).
+        if _signed_base_of "$pane" >/dev/null; then return 0; fi
         if [ "$foreign_seen" -lt "$foreign_wait_s" ]; then
           # Perhaps passing (see foreign_wait_s): look again in a second, outside the lock.
           foreign_seen=$(( foreign_seen + 1 ))
@@ -870,6 +949,7 @@ if [ "$enter_mode" -eq 0 ]; then
     fi
     pane=$(_pane)
     preflight_gate=$(_delivery_gate "$pane")
+    signed_base=""
     case "$preflight_gate" in
       empty|none) break ;;
       text)
@@ -890,6 +970,15 @@ if [ "$enter_mode" -eq 0 ]; then
           _record_unsent pending_enter_swallowed
           exit 130
         fi
+        # Only signed text is waiting there, unsent (an envelope, the marks of a person's words, a token of the
+        # record): it is a message, not somebody typing. Ours goes in behind it, and the one Enter that follows
+        # takes both; at worst the agent gets the older one late.
+        if signed_base=$(_signed_base_of "$pane") && [ -n "$signed_base" ]; then
+          echo "jht-tmux-send: $session holds signed text left unsent: pasting behind it, one Enter for both" >&2
+          preflight_gate=signed
+          break
+        fi
+        signed_base=""
         if [ "$foreign_seen" -lt "$foreign_wait_s" ]; then
           # The text came after the look outside the lock: let go of the lock (the sender of that text may need it to
           # submit it) and wait as outside.
