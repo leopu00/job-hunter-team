@@ -22,6 +22,8 @@ Domanda strutturata (opzioni da toccare, scadenza, risposta come dato):
   La risposta si legge con `jht-check-user-replies`. Con --scade-tra il codice
   aggiunge l'opzione «Rinvia, non fare niente», che e' anche il default se
   l'utente non risponde. Altri flag: --tipo, --multipla, --libera.
+  L'id di un'opzione ammette solo a-z, 0-9 e _ (fino a 24 caratteri, mai _ all'inizio):
+  niente trattino, «pro-max» si scrive pro_max.
 
 Testo con «$» (prezzi, variabili): tra virgolette doppie la shell mangia «$1», «$2»
 («$20» diventa «0») prima che il tool lo veda. Metti il testo tra apici singoli, oppure

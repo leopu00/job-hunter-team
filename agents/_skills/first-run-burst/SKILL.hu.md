@@ -50,6 +50,10 @@ pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py
 
 **Soha nem a profil előtt, és a kártya oda megy, ahol a felhasználó van.** Az `ask-plan` nem tesz ki semmit, amíg a profil nincs elmentve (`wait_for_profile: true`): ne kérdezd a csomagot az üdvözlésnél, sem amíg a profil épül, és várd meg a „profil kész” üzenetet. Amíg a felhasználó az Assistentével hagyja jóvá a profilját, a kártya az Assistente chatjébe kerül, bárki futtassa is az `ask-plan`-t (a válasz `agent` és `in_your_chat` mezője megmondja, hol van). Ha beszélsz neki róla, nevezd meg a chatet, ahol van — „az Assistentével folytatott chat” —, soha ne „ebben a chatben”, ha az `in_your_chat` `false`.
 
+**A csomag csak a konfigurációból vagy a felhasználótól jöhet.** Soha ne írd be magad a naplóból, egy jegyzetből, az emlékezetedből vagy egy korábbi beszélgetésből: a „a felhasználó megerősítette a Pro-t” egy jegyzetben azt jelenti, amit a felhasználó akkor mondott, nem mostani nyilatkozat (a konfigurációt lenullázhatták, és a csomag megváltozhatott). Amíg ott a `plan_missing`, a csomag hiányzik: kérdezd meg, csak egyszer, és csak azt írd be, amit a felhasználó válaszol.
+
+**Kérdezés gombokkal.** Ha a `jht-notify-user --oggetto … --option id=felirat` paranccsal kérdezel, az opció azonosítója csak `a-z`, `0-9` és `_` karaktert fogad el (legfeljebb 24 karakter, `_`-lal sosem kezdődhet): a `pro-max` csomag azonosítója `pro_max`, és amikor megjön a válasz, a nyilvántartás saját azonosítóját írod be: `plan_registry.py set <provider>:pro-max`.
+
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 
 Nem tíz percenként egy workert: az egész felállást, egymás után, ahogy mindig, a `start-agent.sh`-n

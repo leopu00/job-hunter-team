@@ -50,6 +50,10 @@ Assistente pergunta o mesmo quando o utilizador fala com ele.
 
 **Nunca antes do perfil, e o cartão vai para onde está o utilizador.** O `ask-plan` não publica nada enquanto o perfil não estiver guardado (`wait_for_profile: true`): não perguntes o plano na boas-vindas nem enquanto o perfil se constrói, e espera a mensagem de perfil pronto. Enquanto o utilizador confirma o perfil com o Assistente, o cartão vai para o chat do Assistente, seja quem for que lance `ask-plan` (`agent` e `in_your_chat` na resposta dizem onde está). Quando lhe falares dele, nomeia o chat que o tem — «o chat com o Assistente» — nunca «este chat» se `in_your_chat` for `false`.
 
+**O plano vem só da configuração ou do utilizador.** Nunca o escrevas tu a partir do diário, de uma nota, da memória ou de uma conversa passada: «o utilizador confirmou Pro» numa nota é o que o utilizador disse então, não uma declaração de agora (a configuração pode ter sido reposta e o plano pode ter mudado). Enquanto houver `plan_missing`, o plano falta: pergunta, uma só vez, e escreve apenas o que o utilizador responder.
+
+**Perguntar com botões.** Se perguntares com `jht-notify-user --oggetto … --option id=etiqueta`, o id de uma opção aceita só `a-z`, `0-9` e `_` (até 24 caracteres, nunca a começar por `_`): o plano `pro-max` é o id `pro_max`, e quando a resposta chegar escreves o id do registo, `plan_registry.py set <provider>:pro-max`.
+
 **2. Faz spawn de todo o roster, escalonado ~60 segundos.**
 
 Não um worker de dez em dez minutos: toda a formação, uma a seguir à outra, sempre através do

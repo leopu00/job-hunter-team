@@ -52,6 +52,10 @@ allo stesso modo: chiedilo con `python3 /app/shared/skills/first_run.py ask-plan
 
 **Mai prima del profilo, e la card va dove sta l'utente.** `ask-plan` non pubblica niente finché il profilo non è salvato (`wait_for_profile: true`): non chiedere il piano al benvenuto né mentre il profilo si costruisce, e aspetta il messaggio di profilo pronto. Finché l'utente conferma il profilo con l'Assistente, la card va nella chat dell'Assistente, chiunque lanci `ask-plan` (`agent` e `in_your_chat` nella risposta dicono dov'è). Quando ne parli all'utente, nomina la chat che ce l'ha — «la chat con l'Assistente» — mai «questa chat» se `in_your_chat` è `false`.
 
+**Il piano viene solo dalla configurazione o dall'utente.** Non scriverlo mai tu dal diario, da una nota, dalla memoria o da una conversazione passata: «l'utente ha confermato Pro» in una nota è ciò che l'utente ha detto allora, non una dichiarazione di adesso (la configurazione può essere stata azzerata e il piano può essere cambiato). Finché c'è `plan_missing` il piano manca: chiedi, una volta sola, e scrivi solo ciò che l'utente risponde.
+
+**Chiedere con i bottoni.** Se chiedi con `jht-notify-user --oggetto … --option id=etichetta`, l'id di un'opzione ammette solo `a-z`, `0-9` e `_` (fino a 24 caratteri, mai con `_` all'inizio): il piano `pro-max` è l'id `pro_max`, e quando arriva la risposta scrivi l'id del registro, `plan_registry.py set <provider>:pro-max`.
+
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre
