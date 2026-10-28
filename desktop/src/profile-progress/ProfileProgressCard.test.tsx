@@ -54,6 +54,24 @@ describe("the profile card", () => {
     expect(screen.getByText("someone@example.org")).toBeInTheDocument();
   });
 
+  it("shows what the agent wrote as plain text: no HTML, no markdown, no link to click", () => {
+    const hostile = ["<b>bold</b><img src=x onerror=alert(1)>", "[click](https://example.invalid/x)", "https://example.invalid/page", "**strong** _em_ `code`"];
+    const base = ready(8);
+    // the hostile texts go where the agent's words go: name, role, location and level (the email never has a text)
+    const named = base.fields.map((field) => {
+      const slot = ["name", "target_role", "location", "seniority_target"].indexOf(field.key);
+      return slot >= 0 ? { ...field, value: hostile[slot] } : field;
+    });
+    const { container } = render(<ProfileProgressCard progress={{ ...base, fields: named }} />);
+    // the characters are on the screen as typed ...
+    for (const text of hostile) expect(container.textContent).toContain(text);
+    // ... and none of them became an element
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("b, strong, em, code")).toBeNull();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
   it("says when the profile is complete", () => {
     render(<ProfileProgressCard progress={ready(8)} />);
     expect(screen.getByTestId("profile-progress-counter")).toHaveTextContent("Profilo completo");
