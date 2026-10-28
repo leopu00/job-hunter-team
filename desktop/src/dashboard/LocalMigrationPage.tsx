@@ -17,6 +17,8 @@ export interface LocalMigrationPageProps {
   onStayLocal: () => void;
   onRetry: () => void;
   onLeave: () => void;
+  /** Goes in with the Google account and leaves the local profile as it is (offered when the account already has its data here). */
+  onEnterWithoutLinking: () => void;
 }
 
 /**
@@ -25,7 +27,7 @@ export interface LocalMigrationPageProps {
  * back to the sign-in. A failure says what happened in the error catalog's own words and shows its code, and
  * never leaves the person without a way out.
  */
-export function LocalMigrationPage({ phase, code, retryable, leaving, onLink, onStayLocal, onRetry, onLeave }: LocalMigrationPageProps) {
+export function LocalMigrationPage({ phase, code, retryable, leaving, onLink, onStayLocal, onRetry, onLeave, onEnterWithoutLinking }: LocalMigrationPageProps) {
   const t = stateText();
   const locale = appLocale();
   const busy = phase === "migrating" || leaving === "leaving";
@@ -58,6 +60,11 @@ export function LocalMigrationPage({ phase, code, retryable, leaving, onLink, on
           {phase !== "error" && (
             <button type="button" className="existing-team-modal__primary" onClick={onLink} disabled={busy}>
               {phase === "migrating" ? t.linking : t.linkAndContinue}
+            </button>
+          )}
+          {failed && code === "local_migration_target_exists" && (
+            <button type="button" className="existing-team-modal__primary" onClick={onEnterWithoutLinking} disabled={busy} data-testid="local-migration-enter-without-linking">
+              {t.enterWithoutLinking}
             </button>
           )}
           {failed && retryable && (

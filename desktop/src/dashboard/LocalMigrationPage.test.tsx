@@ -17,6 +17,7 @@ function props(over: Partial<LocalMigrationPageProps> = {}): LocalMigrationPageP
     onStayLocal: vi.fn(),
     onRetry: vi.fn(),
     onLeave: vi.fn(),
+    onEnterWithoutLinking: vi.fn(),
     ...over,
   };
 }
@@ -67,6 +68,22 @@ describe("the page between «Continue with Google» and the dashboard, when a lo
     await user.click(screen.getByRole("button", { name: "Riprova" }));
     expect(retry).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "Torna ad Accedi" })).toBeEnabled();
+  });
+
+  it("has «Sign in with Google without linking» only for the account that already has its data here", async () => {
+    const user = userEvent.setup();
+    const enter = vi.fn();
+    const view = render(<LocalMigrationPage {...props({ onEnterWithoutLinking: enter })} />);
+    await user.click(screen.getByRole("button", { name: "Entra con Google senza collegare" }));
+    expect(enter).toHaveBeenCalledOnce();
+    view.unmount();
+    for (const code of ["local_migration_owner_mismatch", "local_migration_storage_failed", null]) {
+      const other = render(<LocalMigrationPage {...props({ code })} />);
+      expect(screen.queryByRole("button", { name: "Entra con Google senza collegare" })).toBeNull();
+      other.unmount();
+    }
+    render(<LocalMigrationPage {...props({ phase: "required", code: "local_migration_target_exists" })} />);
+    expect(screen.queryByRole("button", { name: "Entra con Google senza collegare" })).toBeNull();
   });
 
   it("the question page has the way back too, and links only on the person's gesture", async () => {

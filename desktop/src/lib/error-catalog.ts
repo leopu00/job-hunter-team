@@ -270,9 +270,9 @@ const PAIRING_ACCOUNT = copy(
 );
 const MIGRATION_TARGET_EXISTS = copy(
   "Questo account ha già i suoi dati su questo computer: quelli del profilo locale non sono stati spostati.",
-  "Continua con i dati dell’account, oppure accedi con un altro account.",
+  "Scegli «Entra con Google senza collegare» per usare i dati dell’account, senza la squadra di questo computer, oppure «Torna ad Accedi» per usare un altro account.",
   "This account already has its own data on this computer: the local profile’s data was not moved.",
-  "Go on with the account’s data, or sign in with another account.",
+  "Choose “Sign in with Google without linking” to use the account’s data, without this computer’s team, or “Back to sign in” to use another account.",
 );
 const MIGRATION_OWNER_OTHER = copy(
   "I dati locali di questo computer sono di un altro profilo: non li ho spostati.",
@@ -306,9 +306,9 @@ const MIGRATION_SCOPE_BAD = copy(
 );
 const MIGRATION_HOST_REMOTE = copy(
   "La squadra di questo profilo è su un VPS, non su questo computer.",
-  "Il collegamento vale solo per una squadra su questo computer: resta in locale, oppure usa una squadra locale.",
+  "Il collegamento vale solo per una squadra su questo computer: scegli «Annulla e resta in locale».",
   "The team of this profile is on a VPS, not on this computer.",
-  "Linking only works for a team on this computer: stay local, or use a local team.",
+  "Linking only works for a team on this computer: choose “Cancel and stay local”.",
 );
 const MIGRATION_RETRY = copy(
   "Il collegamento del profilo locale all’account non è riuscito.",
@@ -318,9 +318,9 @@ const MIGRATION_RETRY = copy(
 );
 const MIGRATION_HOST = copy(
   "Il profilo locale non risulta collegato a una squadra su questo computer.",
-  "Completa prima la configurazione della squadra locale, poi riprova.",
+  "Scegli «Annulla e resta in locale», completa la configurazione della squadra locale, poi accedi di nuovo con Google.",
   "The local profile is not linked to a team on this computer.",
-  "Finish setting up the local team first, then try again.",
+  "Choose “Cancel and stay local”, finish setting up the local team, then sign in with Google again.",
 );
 const PLAYGROUND = copy(
   "Non riesco a ripristinare il profilo di prova.",
@@ -1953,9 +1953,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   local_migration_receipt_invalid: MIGRATION_RECEIPT_BAD,
   local_migration_review_pending: copy(
     "Nel profilo locale c’è una revisione ancora da confermare.",
-    "Conferma la revisione con l’Assistente, poi riprova.",
+    "Scegli «Annulla e resta in locale», conferma la revisione con l’Assistente, poi accedi di nuovo con Google.",
     "The local profile has a review still to be confirmed.",
-    "Confirm the review with the Assistant, then try again.",
+    "Choose “Cancel and stay local”, confirm the review with the Assistant, then sign in with Google again.",
   ),
   local_migration_profile_changed: copy(
     "Il profilo locale è cambiato mentre lo collegavo all’account.",
