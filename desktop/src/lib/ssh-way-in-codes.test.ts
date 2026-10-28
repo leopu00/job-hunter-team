@@ -27,6 +27,8 @@ describe("the ways in to a VPS that fail have a sentence each", () => {
     const en = (code: string) => describeError(code, { locale: "en" });
     expect(en("ssh_auth_failed").action).toMatch(/try once/i);
     expect(en("host_key_changed").action).toMatch(/do not proceed/i);
+    // the key may be one that was never confirmed: ssh says the same for both
+    expect(en("host_key_changed").text).toMatch(/unknown or has CHANGED/);
     expect(en("ssh_connection_refused").action).toMatch(/SSH port/);
     expect(en("ssh_host_unreachable").action).toMatch(/internet connection/);
   });

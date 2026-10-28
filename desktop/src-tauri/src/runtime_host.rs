@@ -245,9 +245,13 @@ pub(crate) fn ssh_way_in_code(result: &Result<ProcessResult, &'static str>) -> O
 /// Why `ssh` exited 255, from what ssh itself printed (its own messages, never the remote
 /// command's): the server turning this address away for a while, a host key that is not the
 /// pinned one, a refused key, a refused connection, a host that cannot be reached. Read once and
-/// dropped; None is any other 255, which stays `ssh_unavailable`. The child runs with
-/// `LC_ALL=C` (`SSH_ENVIRONMENT`): the messages are the English ones whatever the system language.
-/// A changed host key comes before everything else and never reads as a failure to retry.
+/// dropped; None is any other 255, which stays `ssh_unavailable`. ssh's messages come from a file
+/// of their own (`-E`), never from the stream the remote command's stderr is on, so a command that
+/// prints «Host key verification failed» and exits 255 is not a host key. The child runs with
+/// `LC_MESSAGES=C` and without `LC_ALL` (`SSH_ENVIRONMENT`): the messages are the English ones
+/// whatever the system language. «Host key verification failed» is also what ssh says for a key it
+/// does not know or a known_hosts it cannot read: the sentence of `host_key_changed` says «unknown or
+/// changed». A changed host key comes before everything else and never reads as a failure to retry.
 fn ssh_failure_from_messages(messages: &[u8]) -> Option<&'static str> {
     if ssh_rejects_for_a_while(messages) {
         return Some("ssh_rate_limited");
@@ -276,8 +280,11 @@ fn ssh_failure_from_messages(messages: &[u8]) -> Option<&'static str> {
     None
 }
 
-/// The language of `ssh` for the one thing the app reads from it: its own messages.
-const SSH_ENVIRONMENT: [(&str, &str); 1] = [("LC_ALL", "C")];
+/// The language of `ssh` for the one thing the app reads from it: its own messages. Only the
+/// messages: `LC_ALL` would also reach the server (ssh sends `LC_*`), and it would win over
+/// `LC_MESSAGES`, so it is taken out of the child's environment.
+const SSH_ENVIRONMENT: [(&str, &str); 1] = [("LC_MESSAGES", "C")];
+const SSH_REMOVED_ENVIRONMENT: [&str; 1] = ["LC_ALL"];
 
 /// A known_hosts file that exists only for one probe, owner-only, and is gone
 /// when the probe ends. The key `ssh` writes there is not trusted by that: it
@@ -348,7 +355,7 @@ fn scan_host_key_with_ssh(program: &str, address: &str, port: u16) -> Result<Sca
     let known_hosts = ProbeKnownHosts::create()?;
     let args = host_key_probe_args(&known_hosts.path, address, port, cfg!(windows));
     let (result, stderr) =
-        run_program_keeping_stderr_with_options(program, &args, None, Duration::from_secs(20), None, &[], &SSH_ENVIRONMENT);
+        run_program_keeping_stderr_with_options(program, &args, None, Duration::from_secs(20), None, &SSH_REMOVED_ENVIRONMENT, &SSH_ENVIRONMENT);
     let written = fs::read(&known_hosts.path).unwrap_or_default();
     if !written.is_empty() && written.len() <= 64 * 1024 {
         if let Some(key) = parse_keyscan_output(&written) {
@@ -826,11 +833,17 @@ fn run_ssh_command_with(
         args.insert(0, "-o".into());
     }
     args.push(remote_command.into());
-    let (result, stderr) = run_program_keeping_stderr_with_options(program, &args, input, timeout, None, &[], &SSH_ENVIRONMENT);
-    // The stderr of ssh is looked at for one thing and dropped: why a way in that exited 255
+    // ssh's own messages go to a private file (`-E`), so that the remote command's stderr, which ssh
+    // passes on its own, is never taken for them. First in the arguments, as on the pipe-free path.
+    let messages = PrivateTempFile::create("messages")?;
+    args.insert(0, messages.path.as_os_str().to_owned());
+    args.insert(0, "-E".into());
+    let (result, _remote_stderr) =
+        run_program_keeping_stderr_with_options(program, &args, input, timeout, None, &SSH_REMOVED_ENVIRONMENT, &SSH_ENVIRONMENT);
+    // The messages of ssh are looked at for one thing and dropped: why a way in that exited 255
     // failed (see `ssh_failure_from_messages`).
     if matches!(&result, Ok(value) if value.code == 255) {
-        if let Some(code) = ssh_failure_from_messages(&stderr) {
+        if let Some(code) = ssh_failure_from_messages(&messages.read()) {
             return Err(code);
         }
     }
@@ -1833,7 +1846,8 @@ mod tests {
     /// The run of a stand-in for ssh that says `said` on stderr and exits `code`.
     #[cfg(unix)]
     fn run_saying(said: &str, code: i32) -> Result<ProcessResult, &'static str> {
-        let (dir, program) = fake_ssh(&format!("echo '{said}' >&2\nexit {code}"));
+        // ssh's own messages go where `-E <file>` says: the stand-in writes there, like ssh
+        let (dir, program) = fake_ssh(&format!("echo '{said}' >> \"$2\"\nexit {code}"));
         let done = super::run_ssh_command_with(
             program.to_str().unwrap(),
             &synthetic_vps(),
@@ -1866,13 +1880,31 @@ mod tests {
         assert_eq!(run_saying("ssh: connect to host h port 22: Connection refused", 0).unwrap().code, 0);
     }
 
-    /// The messages ssh prints are the English ones the app reads for the codes above, whatever the
-    /// language of the system: the child runs with `LC_ALL=C` (a glibc in Italian says «Connessione
-    /// rifiutata»). The stand-in prints the language it was started with.
     #[cfg(unix)]
     #[test]
-    fn ssh_runs_with_the_c_locale_so_that_its_messages_are_the_english_ones() {
-        let (dir, program) = fake_ssh("printf '%s' \"${LC_ALL-unset}\"");
+    fn a_remote_command_that_prints_ssh_words_and_exits_255_is_not_a_way_in_that_failed() {
+        // on stderr, where ssh passes the remote command's own: not the `-E` file of ssh's messages
+        let (dir, program) = fake_ssh("echo 'Host key verification failed.' >&2\necho 'jht: Permission denied (publickey).' >&2\nexit 255");
+        let done = super::run_ssh_command_with(
+            program.to_str().unwrap(),
+            &synthetic_vps(),
+            "true",
+            None,
+            std::time::Duration::from_secs(20),
+            None,
+        );
+        assert_eq!(done.unwrap().code, 255, "the caller says ssh_unavailable: nothing explains it");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// The messages ssh prints are the English ones the app reads for the codes above, whatever the
+    /// language of the system: the child runs with `LC_MESSAGES=C` (a glibc in Italian says «Connessione
+    /// rifiutata») and without `LC_ALL`, which would win over it and be sent to the server with the other
+    /// `LC_*`. The stand-in prints the language it was started with.
+    #[cfg(unix)]
+    #[test]
+    fn ssh_runs_with_the_c_messages_so_that_they_are_the_english_ones_and_without_lc_all() {
+        let (dir, program) = fake_ssh("printf '%s/%s' \"${LC_MESSAGES-unset}\" \"${LC_ALL-unset}\"");
         let done = super::run_ssh_command_with(
             program.to_str().unwrap(),
             &synthetic_vps(),
@@ -1882,11 +1914,12 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(done.stdout_text(), "C");
+        // the messages' language is C, and no LC_ALL (which would win, and travel to the server)
+        assert_eq!(done.stdout_text(), "C/unset");
         let _ = fs::remove_dir_all(dir);
-        // the key scan is ssh too
-        let (dir, program) = fake_ssh("printf 'LC_ALL=%s' \"${LC_ALL-unset}\" >&2\nexit 255");
-        // no key written: the scan fails, and what it said is only read for the codes
+        // the key scan is ssh too: it runs with the same environment, whose language it prints on the
+        // stream that scan reads (no key written: the scan fails, and what it said is only read for the codes)
+        let (dir, program) = fake_ssh("printf '%s/%s' \"${LC_MESSAGES-unset}\" \"${LC_ALL-unset}\" >&2\nexit 255");
         assert_eq!(super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(), Some("host_key_unavailable"));
         let _ = fs::remove_dir_all(dir);
     }
