@@ -175,8 +175,15 @@ impl RuntimeLog {
     /// A read or a send of the chat that failed, by its closed code only: no agent, text, host or
     /// account. The page clears its own error at the next «connected»: this is what stays.
     pub(crate) fn record_chat_failure(&self, operation: &str, code: &str) {
+        self.record_chat_failure_because(operation, code, None);
+    }
+
+    /// The same, with the step of the container check it stopped at when that is what failed (one of
+    /// `ATTEST_REASONS`, else `unlisted`): «local_container_not_attested (label_config_hash_differs)».
+    pub(crate) fn record_chat_failure_because(&self, operation: &str, code: &str, reason: Option<&str>) {
         let operation = if operation == "send" { "send" } else { "read" };
-        let entry = format!("=== {} direct_chat.{operation}: {}\n", utc(SystemTime::now()), chat_failure_code(code));
+        let because = reason.map(|reason| format!(" ({})", if ATTEST_REASONS.contains(&reason) { reason } else { "unlisted" })).unwrap_or_default();
+        let entry = format!("=== {} direct_chat.{operation}: {}{because}\n", utc(SystemTime::now()), chat_failure_code(code));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -493,6 +500,19 @@ fn rotate(path: &Path) -> Result<(), &'static str> {
 }
 
 /// `2026-10-09T06:55:01Z`.
+/// The steps of the check that the container running as `jht` is the one the app installed, as a failed
+/// chat read says which one stopped it. `hash_*`: the hash the container has to carry could not be worked
+/// out (a tool, a version, the machine file, the image pin, the compose plan); `label_*`: a label of the
+/// container is not what the runtime would have written.
+pub(crate) const ATTEST_REASONS: &[&str] = &[
+    "hash_tool_missing", "hash_podman_version_unreadable", "hash_podman_version_differs", "hash_machine_file",
+    "hash_compose_version_unreadable", "hash_compose_version_differs", "hash_image_pin", "hash_dry_run_exit",
+    "hash_dry_run_timeout", "hash_dry_run_not_started", "hash_plan_without_create", "hash_plan_ambiguous",
+    "label_project", "label_service", "label_container_number", "label_working_dir", "label_hash_form",
+    "label_config_files", "label_compose_version", "label_systemd_unit", "label_config_hash_differs",
+    "label_image", "label_windows",
+];
+
 /// The codes a failed chat read or send may leave in the log; any other is `io_error_other`.
 fn chat_failure_code(code: &str) -> &str {
     match code {
