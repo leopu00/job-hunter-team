@@ -1323,12 +1323,12 @@ describe("«Agenti»: the list reads again by itself", () => {
   it("the new states are shown without anybody pressing anything", async () => {
     where = "local";
     show("agent=CAPITANO");
-    expect(await screen.findByTestId("panel-state")).toHaveTextContent("Lavora");
+    expect(await screen.findByTestId("panel-state")).toHaveTextContent("lavora");
     const state = AGENTS[0].state;
     AGENTS[0].state = "idle";
     try {
       await advance(LIST_REFRESH_LOCAL_MS + 1_000);
-      await waitFor(() => expect(screen.getByTestId("panel-state")).not.toHaveTextContent("Lavora"));
+      await waitFor(() => expect(screen.getByTestId("panel-state")).not.toHaveTextContent("lavora"));
     } finally {
       AGENTS[0].state = state;
     }
