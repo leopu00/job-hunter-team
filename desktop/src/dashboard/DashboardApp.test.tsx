@@ -1,3 +1,4 @@
+import { localTeamData } from "../lib/local-team-data";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -136,6 +137,7 @@ vi.mock("../shell/Shell", async () => {
   const { useConnectTeam } = await import("../lib/connect-team");
   const { useProviderSetup } = await import("../lib/provider-setup");
   const { useTeamOff } = await import("../lib/team-off");
+  const { localTeamData } = await import("../lib/local-team-data");
   const ready = (profileReady: boolean) => ({
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
@@ -152,6 +154,7 @@ vi.mock("../shell/Shell", async () => {
     return (
       <main data-testid="shell">
         Shell
+        <span data-testid="local-team-data">{String(localTeamData())}</span>
         {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
         {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
         {connectTeam && <button type="button" onClick={connectTeam.open}>connect-a-team</button>}
@@ -483,6 +486,26 @@ describe("DashboardApp onboarding router", () => {
     expect(vi.mocked(clearDesktopAccountScope).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(clearLocalIdentitySelection).mock.invocationCallOrder[0]);
     expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
+  });
+
+  it("opens the pages on the team of this computer for a local profile, and not for a Google account", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({ profileId: "opaque-ready-local-profile", displayName: "Ada Locale" });
+    localStorage.setItem("jht.desktop.onboarding.local:opaque-ready-local-profile", "subscription-v1");
+    const local = render(<DashboardApp />);
+    expect(await screen.findByTestId("local-team-data")).toHaveTextContent("true");
+    local.unmount();
+    expect(localTeamData()).toBe(false);
+  });
+
+  it("does not turn the local-data mode on for a signed-in account", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(localIdentitySelected).mockReturnValue(false);
+    vi.mocked(readLocalProfile).mockReturnValue(null);
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("local-team-data")).toHaveTextContent("false");
   });
 
   it("requires an explicit gesture before migrating local ownership to Google", async () => {

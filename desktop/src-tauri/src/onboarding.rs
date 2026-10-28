@@ -1343,6 +1343,12 @@ fn wrapper_has_protocol(source: &str, protocol: &str) -> bool {
         .any(|line| line == protocol)
 }
 
+/// Whether this account's wrapper speaks the desktop chat's protocol (`desktop-chat python`, `probe`: they
+/// find the attested container and never start it).
+pub(crate) fn wrapper_has_desktop_chat(path: &Path) -> bool {
+    wrapper_source(path).is_some_and(|source| wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1"))
+}
+
 /// Whether this account's wrapper has the agent control panel's own branch,
 /// which never starts the container. An older wrapper would route
 /// `agent-control` through its generic branch, which does: the panel does
@@ -8249,6 +8255,26 @@ exit 0
 
     /// The wake on its own: this computer's runtime is turned on, a failure is its own error, and a VPS or a
     /// saved team is refused without anything being run.
+    #[cfg(unix)]
+    #[test]
+    fn only_a_wrapper_that_speaks_the_desktop_chat_protocol_is_read_through() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-wrapper-chat-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let write = |name: &str, text: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        assert!(crate::onboarding::wrapper_has_desktop_chat(&write("with", "#!/bin/sh\nJHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("without", "#!/bin/sh\nexit 0\n")));
+        // a mention in a comment or in a longer line is not the marker
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("quoted", "#!/bin/sh\n# JHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&dir.join("missing")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn the_runtime_wake_runs_only_for_this_computer() {
         use std::cell::Cell;

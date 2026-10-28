@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
+import { setLocalTeamData } from "../lib/local-team-data";
 import { installApiBridge, notInDesktop, shellApi, webRoutes, type ApiFetch } from "./api-bridge";
 
 function fakeGlobal() {
@@ -75,6 +76,28 @@ describe("shellApi, the language the person picks", () => {
     expect(other.status).toBe(403);
     expect(await other.json()).toEqual({ error: "read_only" });
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("refuses every non-GET /api call of a local profile except the listed ones, and still reads", async () => {
+    setLocalTeamData("local:abc");
+    try {
+      const next = vi.fn(notInDesktop);
+      const api = shellApi(next);
+      for (const path of ["/api/positions/7/user-note", "/api/team-directives", "/api/anything-new/3"]) {
+        for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+          const refused = await api(path, { method });
+          expect(refused.status, `${method} ${path}`).toBe(403);
+          expect(await refused.json()).toEqual({ error: "read_only" });
+        }
+      }
+      expect(next).not.toHaveBeenCalled();
+      // a read goes where it went, and the language cookie is the one write that stays
+      await api("/api/positions/facets", { method: "GET" });
+      expect(next).toHaveBeenCalledOnce();
+      expect((await api("/api/i18n", post("es"))).status).toBe(200);
+    } finally {
+      setLocalTeamData(null);
+    }
   });
 
   it("lets the writes through once the existing team is connected in full (the judgement bridge answers them)", async () => {

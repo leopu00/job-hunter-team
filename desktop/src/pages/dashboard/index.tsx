@@ -14,6 +14,7 @@ import { describeError } from "../../lib/error-catalog";
 import { ExistingTeamDashboardError, loadExistingTeamDashboard } from "../../lib/existing-team-dashboard";
 import { useConnectTeam } from "../../lib/connect-team";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
+import { useLocalTeamData } from "../../lib/local-team-data";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { CONNECT_TEAM_PROMPT_TEXT } from "./connect-team.i18n";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
@@ -29,8 +30,11 @@ export default function DashboardPage(_props: PageProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const request = useRef(0);
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
-  const existingTeam = useExistingTeamView() !== null;
-  const blocked = useCloudDataBlocked();
+  // (and a local profile's team, read from this computer: no cloud account to ask)
+  const localTeam = useLocalTeamData();
+  const existingTeam = useExistingTeamView() !== null || localTeam;
+  // The cloud notice is for a profile with nothing to show: the team of this computer is read from its own database.
+  const blocked = useCloudDataBlocked() && !localTeam;
   // A set-up profile with no team linked: the way to link the one that is already on a VPS.
   const connectTeam = useConnectTeam();
 

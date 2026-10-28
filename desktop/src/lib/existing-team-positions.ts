@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
 import { nativeReadStarted } from "./page-timing";
+import { reportLocalTeamRead } from "./local-team-data";
 import { REFRESH_EVENT } from "../shell/refresh-event";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
@@ -78,6 +79,7 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
     result = { source: "unavailable", code: "desktop_transport_unavailable" };
   }
   readEnded(result.source === "vps");
+  reportLocalTeamRead(result.source === "unavailable" ? result.code : null);
   return result;
 }
 

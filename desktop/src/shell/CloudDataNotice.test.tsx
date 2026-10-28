@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SignOutContext } from "../lib/account-actions";
 import { registerAuthStorageProbe } from "../lib/auth-storage-lock";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
+import { setLocalTeamData } from "../lib/local-team-data";
 import CloudDataNotice from "./CloudDataNotice";
 import { CLOUD_DATA_NOTICE_TEXT } from "./cloud-data-notice.i18n";
 import ServerPage from "./server-page";
@@ -16,6 +17,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   leaveExistingTeamReadOnly();
+  setLocalTeamData(null);
   registerAuthStorageProbe(() => true);
 });
 
@@ -57,6 +59,14 @@ describe("the line of the pages that read the cloud, for a profile with no sign-
     expect(screen.getByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
     expect(screen.queryByRole("heading", { name: "no positions yet" })).not.toBeInTheDocument();
     expect(screen.queryByText("skeleton")).not.toBeInTheDocument();
+  });
+
+  it("leaves a server page as it is for a local profile: its data is read from the team on this computer", async () => {
+    registerAuthStorageProbe(() => false);
+    setLocalTeamData("local:synthetic");
+    render(<ServerPage render={() => <h1>the team's positions</h1>} fallback={<p>skeleton</p>} />);
+    expect(await screen.findByRole("heading", { name: "the team's positions" })).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("leaves a server page as it is with a cloud session", async () => {

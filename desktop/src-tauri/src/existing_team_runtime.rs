@@ -2644,6 +2644,10 @@ pub(crate) fn positions_read_for_scope(
         Ok(validated) => validated,
         Err(error) => return positions_failure(error),
     };
+    // This computer's team: no SSH, no pinned target; the same reader runs in its container.
+    if matches!(validated, crate::runtime_host::ValidatedHost::Local) {
+        return positions_read_local(app, scope, &request, &request_bytes);
+    }
     let selected = match selected_or_own(app, scope, &host) {
         Ok(selected) => selected,
         Err(error) => return positions_failure(error),
@@ -2740,6 +2744,75 @@ fn read_unless_blocked(block_key: Option<String>, pinned: Option<String>, read: 
     reply
 }
 
+/// How long the check «is the team's container up» may take, once a read failed.
+const LOCAL_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The read of this computer's team. The reader and the request travel on stdin to the host wrapper's
+/// `desktop-chat python`, the channel the chat and «Export my data» use: it finds the attested container, runs
+/// the reader in it and never starts anything. Before it runs, this account must own the runtime's folder (a
+/// check only: the read never claims it) and the wrapper must speak the chat's protocol.
+fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &PositionsRequest, request_bytes: &[u8]) -> Value {
+    let started = Instant::now();
+    let wrapper = match local_reader_wrapper(app, scope) {
+        Ok(wrapper) => wrapper,
+        Err(error) => return positions_failure(error),
+    };
+    let reply = positions_read_local_with(
+        request,
+        request_bytes,
+        |input| crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "python"], Some(input), READ_TIMEOUT),
+        || {
+            crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "probe"], None, LOCAL_PROBE_TIMEOUT)
+                .map(|probe| probe.success())
+                .unwrap_or(false)
+        },
+    );
+    if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+        log.record_positions_read(&crate::runtime_log::PositionsReadTiming {
+            op: request.op(),
+            shared: false,
+            checks_skipped: false,
+            ok: reply.get("ok") == Some(&Value::Bool(true)),
+            total: started.elapsed(),
+            ssh: Duration::ZERO,
+            bytes_out: request_bytes.len(),
+            bytes_in: 0,
+        });
+    }
+    reply
+}
+
+/// The host wrapper a read of this computer's team goes through, once this account is the runtime's owner.
+fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope) -> Result<std::path::PathBuf, &'static str> {
+    let marker = crate::account_scope::local_owner_marker_path(app)?;
+    crate::account_scope::verify_local_runtime_owner(&marker, scope)?;
+    let wrapper = crate::onboarding::verified_local_wrapper_path(app)?;
+    if !crate::onboarding::wrapper_has_desktop_chat(&wrapper) {
+        return Err("local_chat_wrapper_outdated");
+    }
+    Ok(wrapper)
+}
+
+/// One run of the reader in this computer's container, then its reply. A run that fails is told apart by asking
+/// whether the team is up (`team_is_up`, asked only then): a container that is off says so, in the chat's own
+/// words; anything else is the reader's failure.
+fn positions_read_local_with(
+    request: &PositionsRequest,
+    request_bytes: &[u8],
+    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+    team_is_up: impl FnOnce() -> bool,
+) -> Value {
+    let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
+    input.push(b'\n');
+    input.extend_from_slice(request_bytes);
+    input.push(b'\n');
+    match run(&input) {
+        Ok(output) if output.success() => positions_reply_from_output(request, output),
+        _ if !team_is_up() => positions_failure("local_team_not_running"),
+        _ => positions_answer_failure("positions_unavailable"),
+    }
+}
+
 /// The read once the host and the pinned target are known: one SSH run, then
 /// its reply. A failed run says why, in vps_link's kinds: the network (retried
 /// by the app), the team, a team that is not the pinned one, a changed SSH key.
@@ -2763,6 +2836,12 @@ fn positions_read_with(
             ))
         }
     };
+    positions_reply_from_output(request, output)
+}
+
+/// What the reader printed, as the page's reply: a bounded, well-formed answer of the shape the request asked
+/// for, or why it is not one. The same for the VPS and for this computer's container.
+fn positions_reply_from_output(request: &PositionsRequest, output: ProcessResult) -> Value {
     if output.stdout.len() > 2 * 1024 * 1024 {
         return positions_answer_failure("positions_unavailable");
     }
@@ -3825,6 +3904,79 @@ mod tests {
         // a pin file that no longer reads blocks before anything runs
         assert_eq!(positions_failure("host_key_mismatch"), failure("host_key_mismatch", "blocked"));
         assert_eq!(positions_failure("host_not_configured"), failure("host_not_configured", "application"));
+    }
+
+    /// The read of this computer's team, with the fixed reader on stdin and the team's state asked only after a failure.
+    fn read_local(run: Result<ProcessResult, &'static str>, team_is_up: bool) -> (Value, usize) {
+        let mut asked = 0;
+        let reply = positions_read_local_with(
+            &PositionsRequest::Facets,
+            br#"{"op":"facets"}"#,
+            |input| {
+                // the same reader and request as the VPS gets, on stdin: the reader in hex, then the request
+                let text = String::from_utf8(input.to_vec()).unwrap();
+                let (script, request) = text.split_once('\n').unwrap();
+                assert_eq!(script, hex_encode(POSITIONS_READ_PY.as_bytes()));
+                assert_eq!(request, "{\"op\":\"facets\"}\n");
+                run
+            },
+            || {
+                asked += 1;
+                team_is_up
+            },
+        );
+        (reply, asked)
+    }
+
+    #[test]
+    fn the_read_of_this_computers_team_returns_the_readers_answer_without_asking_whether_the_team_is_up() {
+        let answer = r#"{"ok":true,"data":{"items":[]}}"#;
+        assert_eq!(read_local(exited(0, answer), true), (json!({"ok": true, "data": {"items": []}}), 0));
+        // the same checks as the VPS: a reply that is not the shape asked for is not an answer
+        let failure = |code: &str| json!({"ok": false, "error": code, "kind": "application"});
+        assert_eq!(read_local(exited(0, "not json"), true), (failure("positions_unavailable"), 0));
+        assert_eq!(read_local(exited(0, r#"{"ok":true,"data":{"rows":[]}}"#), true), (failure("positions_unavailable"), 0));
+        assert_eq!(
+            read_local(exited(0, r#"{"ok":false,"error":"positions_request_invalid"}"#), true),
+            (failure("positions_request_invalid"), 0)
+        );
+    }
+
+    #[test]
+    fn a_failed_read_of_this_computers_team_says_the_team_is_not_running_only_when_it_is_not() {
+        let failure = |code: &str| json!({"ok": false, "error": code, "kind": "application"});
+        // the container is off (the wrapper found none): the chat's own code, which the pages turn into «Start the team»
+        assert_eq!(read_local(exited(1, ""), false), (failure("local_team_not_running"), 1));
+        assert_eq!(read_local(Err("process_timeout"), false), (failure("local_team_not_running"), 1));
+        assert_eq!(read_local(Err("runtime_missing"), false), (failure("local_team_not_running"), 1));
+        // the team is up and the reader failed: not «start the team», and no host-key or network kind
+        assert_eq!(read_local(exited(1, ""), true), (failure("positions_unavailable"), 1));
+        assert_eq!(read_local(exited(255, ""), true), (failure("positions_unavailable"), 1));
+        assert_eq!(read_local(Err("process_timeout"), true), (failure("positions_unavailable"), 1));
+    }
+
+    #[test]
+    fn this_computers_team_is_read_before_any_pinned_target_or_ssh_and_the_vps_path_is_the_one_it_was() {
+        let source = include_str!("existing_team_runtime.rs");
+        let body = source.split("pub(crate) fn positions_read_for_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let local = body.find("positions_read_local(app, scope, &request, &request_bytes)").unwrap();
+        // the branch is taken on the validated host, ahead of everything that belongs to a VPS
+        for vps_only in ["selected_or_own(", "read_command_for(", "shared_master(", "run_ssh_command(", "read_unless_blocked("] {
+            assert!(local < body.find(vps_only).unwrap(), "{vps_only}");
+        }
+        assert!(body[..local].contains("ValidatedHost::Local"));
+        // the VPS still reads through positions_read_with, and the local read never reaches an ssh function
+        assert!(body.contains("positions_read_with("));
+        let local_fn = source.split("fn positions_read_local(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        for forbidden in ["run_ssh_command", "ssh", "selected_or_own", "claim"] {
+            assert!(!local_fn.replace("ssh: Duration::ZERO", "").contains(forbidden), "{forbidden}");
+        }
+        // it checks the owner without claiming the folder, and the wrapper's chat protocol, before anything runs
+        let wrapper_fn = source.split("fn local_reader_wrapper(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(wrapper_fn.contains("verify_local_runtime_owner") && !wrapper_fn.contains("validate_local_runtime"));
+        assert!(wrapper_fn.contains("wrapper_has_desktop_chat"));
+        // read only: the reader opens the database that way and the wrapper's channel starts nothing
+        assert!(POSITIONS_READ_PY.contains("mode=ro") && POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
     }
 
     #[test]
