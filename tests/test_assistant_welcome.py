@@ -253,6 +253,11 @@ def test_a_wrong_call_changes_nothing(home, args):
 def test_the_catalog_welcome_does_not_send_the_user_to_telegram_and_asks_the_name(lang):
     catalog = _catalog(lang)
     assert "Telegram" not in catalog["welcome.assistente"]
+    # the chat of the app takes text, not files: the welcome must not promise a format it cannot receive
+    for promised in ("PDF", "DOC", "photo", "foto", "fénykép", "Foto"):
+        assert promised not in catalog["welcome.assistente"], promised
+    # the one other way in is the drop-zone the Assistente reads (skill onboarding-flow): named by its real folder
+    assert "Job Hunter Team/allegati" in catalog["welcome.assistente"]
     assert catalog["welcome.assistente_first"].strip().endswith("?")
     assert "\n" not in catalog["welcome.assistente_first"]
 
@@ -318,6 +323,8 @@ def test_all_seven_prompts_say_the_same_protocol(suffix):
     for token in ("WELCOME_DELIVERED", "WELCOME_NOT_DELIVERED", "welcomed.flag", "ready.flag", "onboarding-flow",
                   "profile_flag", "welcome-error.log", "[WELCOME-ACK]"):
         assert token in section, token
+    # the drop-zone the welcome points to is one the prompt tells it to read
+    assert "$JHT_USER_DIR/allegati/" in section and "Job Hunter Team/allegati" in section
     # the old way: Telegram alone, and the flag made by hand
     assert "mkdir -p $JHT_HOME/profile && touch" not in section
     assert "test -f $JHT_HOME/profile/welcomed.flag" not in section
