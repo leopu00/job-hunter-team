@@ -27,6 +27,8 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // team_start.rs: a value of the phase the first start is in, read by the page, not an error.
+  awaiting_profile: "a phase of the team's first start (the team waits for the profile), never an error",
   // runtime_log.rs ATTEST_REASONS: the step of the container check a failed chat read stopped at, written beside
   // the failure in runtime.log (`local_container_not_attested (label_project)`). The person is told the failure's
   // own code; these words are for whoever reads the log.

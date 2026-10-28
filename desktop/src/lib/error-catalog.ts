@@ -1713,6 +1713,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The profile's progress cannot be read.",
     "Try again in a moment; if it stays so, look at the team's state.",
   ),
+  profile_unavailable: copy(
+    "Non riesco a leggere il profilo del team.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The team's profile cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
+  profile_unreadable: copy(
+    "Il file del profilo c’è ma non si legge.",
+    "Chiedi all’Assistente di riscriverlo, o controlla il file dal team.",
+    "The profile file is there but cannot be read.",
+    "Ask the Assistant to write it again, or check the file from the team.",
+  ),
+  team_start_unavailable: copy(
+    "Non riesco a leggere a che punto è la prima partenza del team.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The team's first start cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
     "Per sicurezza non lo uso: rifai il passo Runtime della configurazione.",
