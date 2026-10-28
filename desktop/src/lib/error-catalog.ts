@@ -1609,11 +1609,11 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent is not running.",
     "Start the team, then send the message again.",
   ),
-  mentor_not_yet_active: copy(
-    "Il Mentor non è ancora attivo.",
-    "Si accende da solo quando le prime posizioni hanno un punteggio: scrivigli allora.",
-    "The Mentor is not active yet.",
-    "It switches on by itself once the first positions have a score: write to it then.",
+  mentor_not_active: copy(
+    "Il Mentor non è attivo in questo momento.",
+    "Il team lo accende da solo, quando le prime posizioni hanno un punteggio o, se si era fermato, a breve: scrivigli allora.",
+    "The Mentor is not active at the moment.",
+    "The team switches it on by itself, once the first positions have a score or, if it had stopped, shortly after: write to it then.",
   ),
   team_not_running: copy(
     "Il team non è acceso.",

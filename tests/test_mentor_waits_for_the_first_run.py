@@ -163,7 +163,9 @@ def _start_agent_gate(tmp_path: Path, *, answer: int, session_alive: bool, now: 
     for name in ("python3", "tmux"):
         (bindir / name).chmod(0o755)
     script = tmp_path / "gate.sh"
-    script.write_text(f"ROLE=mentor\nSESSION=MENTOR\nJHT_MENTOR_NOW='{now}'\n{gate}\necho went on\n", encoding="utf-8")
+    # start-agent.sh runs under `set -euo pipefail`: the gate has to survive a python3 that exits with anything
+    script.write_text(f"set -euo pipefail\nROLE=mentor\nSESSION=MENTOR\nJHT_MENTOR_NOW='{now}'\n{gate}\necho went on\n",
+                      encoding="utf-8")
     done = subprocess.run(["bash", str(script)], capture_output=True, text=True, timeout=60, check=False,
                           env={"PATH": f"{bindir}:/usr/bin:/bin"})
     return done.returncode, done.stdout + done.stderr
@@ -179,3 +181,31 @@ def test_start_agent_lets_the_mentor_start_when_it_is_time_or_forced(tmp_path: P
     """Due, an unclear answer, a session that is already up (nothing to refuse), or JHT_MENTOR_NOW=1."""
     code, out = _start_agent_gate(tmp_path, answer=answer, session_alive=alive, now=now)
     assert code == 0 and "went on" in out, out
+
+
+def test_the_start_agent_gate_runs_under_set_e_and_gives_the_exit_75_message(tmp_path: Path):
+    """Under `set -e` a bare python3 that exits 1 killed the script before the `if`: no message, exit 1, and the
+    answers 2 and 127 stopped it too. Only the clear «not yet» (1) stops the Mentor, with its message and exit 75."""
+    code, out = _start_agent_gate(tmp_path, answer=1, session_alive=False)
+    assert (code, "MENTOR not started" in out) == (75, True)
+    for answer in (0, 2, 127):
+        (tmp_path / f"a{answer}").mkdir()
+        code, out = _start_agent_gate(tmp_path / f"a{answer}", answer=answer, session_alive=False)
+        assert (code, "went on" in out) == (0, True), (answer, out)
+
+
+def test_mentor_due_always_answers_with_the_json_and_a_clear_exit(tmp_path: Path):
+    """status() that raises: the phase is computed once, inside the try. The answer is «due», printed, exit 0 (not a
+    traceback with exit 1, which every caller reads as «not yet»)."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import importlib.util, sys\n"
+        f"spec = importlib.util.spec_from_file_location('fr', {str(FIRST_RUN)!r})\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "def boom():\n    raise OSError('disk gone')\n"
+        "m.status = boom\n"
+        "sys.exit(m.main(['mentor-due']))\n", encoding="utf-8")
+    done = subprocess.run([sys.executable, "-I", str(probe)], capture_output=True, text=True, timeout=60,
+                          env={"JHT_HOME": str(tmp_path / "jht"), "PYTHONDONTWRITEBYTECODE": "1"}, check=False)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {"mentor_due": True, "phase": "unknown"}

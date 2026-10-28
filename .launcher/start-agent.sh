@@ -826,8 +826,9 @@ esac
 # Una sessione gia' viva non si tocca. Qualunque risposta diversa da 1 (script assente, crash) vale «e' ora».
 # JHT_MENTOR_NOW=1 lo accende comunque (l'operatore che lo vuole subito).
 if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
-  python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1
-  if [ "$?" -eq 1 ]; then
+  _mentor_rc=0
+  python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1 || _mentor_rc=$?
+  if [ "$_mentor_rc" -eq 1 ]; then
     echo "MENTOR not started: it has nothing to read until the first positions have a score (the watchdog starts it then; JHT_MENTOR_NOW=1 starts it anyway)." >&2
     exit 75
   fi

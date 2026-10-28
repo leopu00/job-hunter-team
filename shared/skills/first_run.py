@@ -174,15 +174,20 @@ def plan_gap(state: dict) -> dict:
     return {"plan_missing": True, "reason": info.get("reason", "plan not declared"), "hint": info["hint"]}
 
 
-def mentor_due() -> bool:
-    """Whether the Mentor has anything to read yet. Until the first run is over (`steady`: there are scored
-    positions on screen) the Mentor has no record to walk, and its first wake at every start would be spent on
-    nothing; the Capitano turns it on when the burst closes. A state that cannot be read counts as due: the
-    Mentor is then started as it always was."""
+def mentor_check() -> dict:
+    """{"mentor_due", "phase"}: whether the Mentor has anything to read yet. Until the first run is over (`steady`:
+    there are scored positions on screen) the Mentor has no record to walk, and its first wake at every start would
+    be spent on nothing; the agent watchdog turns it on when the run closes. The phase is read ONCE, here: a state
+    that cannot be read counts as due (phase "unknown"), so the Mentor is then started as it always was."""
     try:
-        return status().get("phase") == PHASE_STEADY
+        phase = status().get("phase")
     except Exception:
-        return True
+        return {"mentor_due": True, "phase": "unknown"}
+    return {"mentor_due": phase == PHASE_STEADY, "phase": phase}
+
+
+def mentor_due() -> bool:
+    return mentor_check()["mentor_due"]
 
 
 def _live_sessions() -> Optional[list[str]]:
@@ -316,9 +321,9 @@ def main(argv: list[str]) -> int:
     elif args.command == "plan":
         out = plan_info()
     elif args.command == "mentor-due":
-        due = mentor_due()
-        print(json.dumps({"mentor_due": due, "phase": status()["phase"]}))
-        return 0 if due else 1
+        answer = mentor_check()
+        print(json.dumps(answer))
+        return 0 if answer["mentor_due"] else 1
     elif args.command == "begin-burst":
         out = begin_burst()
     elif args.command == "check":

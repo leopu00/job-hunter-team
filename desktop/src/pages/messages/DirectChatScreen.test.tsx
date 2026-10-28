@@ -138,7 +138,7 @@ describe("DirectChatScreen", () => {
     expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("Ciao");
   });
 
-  it("a message to the Mentor before its first positions are scored says it is not active yet, not that the team is off", async () => {
+  it("a message to the Mentor while it is not running says it is not active, not that the team is off", async () => {
     viewport(1280, 800);
     const { mock } = client();
     mock.send = vi.fn(async () => {
@@ -149,8 +149,10 @@ describe("DirectChatScreen", () => {
     await screen.findByText("Messaggio dalla VPS");
     await user.type(screen.getByRole("textbox", { name: "Scrivi a Mentor" }), "Ciao{Enter}");
     const status = await screen.findByTestId("direct-chat-status");
-    await waitFor(() => expect(status).toHaveTextContent("Il Mentor non è ancora attivo."));
+    await waitFor(() => expect(status).toHaveTextContent("Il Mentor non è attivo in questo momento."));
     expect(status).not.toHaveTextContent(/accendi il team/i);
+    // true whether the Mentor was never started (first positions not scored) or stopped afterwards
+    expect(status).toHaveTextContent(/o, se si era fermato, a breve/);
     expect(screen.getByRole("textbox", { name: "Scrivi a Mentor" })).toHaveValue("Ciao");
   });
 

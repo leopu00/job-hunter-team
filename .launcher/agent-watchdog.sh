@@ -556,8 +556,9 @@ EOF
 # 0 = e' ora, 1 = non ancora): si accende da solo, entro un tick, quando la fase diventa `steady`. Qualunque altra
 # risposta (script assente, crash, stato illeggibile) vale «e' ora»: il Mentor riparte come ha sempre fatto.
 mentor_due() {
-  python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1
-  [ "$?" -ne 1 ]
+  local rc=0
+  python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 1 ]
 }
 
 ensure_agent() {
