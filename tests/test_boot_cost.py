@@ -224,6 +224,14 @@ def test_a_tool_that_takes_code_is_named_by_the_tool_and_none_of_its_words_come_
     tool = boot_cost._tool_programs
     assert tool({"type": "custom_tool_call", "name": "exec", "input": "const SECRETVAR = await read('/jht_home/x');"}) == ["exec"]
     assert tool({"type": "function_call", "name": "wait", "arguments": "{}"}) == ["wait"]
+    # the shell commands an `exec` hands to exec_command are read like any command line; nothing else of its code is
+    code = ('const SECRETVAR = 1;\nconst r = await tools.exec_command({cmd:"sed -n \'1,80p\' /jht_home/maria/x.md", workdir:"/w"});\n'
+            "const q = await tools.exec_command({cmd: 'python3 /app/shared/skills/first_run.py status'});\n"
+            'const z = await tools.exec_command({cmd:"cat /a/b && maria_tool --token abc"});')
+    assert tool({"type": "custom_tool_call", "name": "exec", "input": code}) == ["sed", "first_run.py", "cat", "(other)"]
+    assert tool({"type": "custom_tool_call", "name": "exec", "input": "const c = `rm -rf ${x}`; tools.exec_command({cmd:c})"}) == ["exec"]
+    assert tool({"type": "custom_tool_call", "name": "exec", "input": 'tools.exec_command({cmd:"ls " + SECRET})'}) == ["ls"]
+    assert tool({"type": "custom_tool_call", "name": "exec", "input": "tools.exec_command({cmd:\"unterminated"}) == ["exec"]
     assert tool({"type": "function_call", "name": "x y z", "arguments": "not json"}) == ["(tool)"]
     assert tool({"type": "function_call", "name": "shell", "arguments": json.dumps({"cmd": "ls -la /secret"})}) == ["ls"]
     assert tool({"type": "local_shell_call", "action": {"command": ["git", "status"]}}) == ["git"]

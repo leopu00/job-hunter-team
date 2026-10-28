@@ -14,6 +14,7 @@ output. It prints numbers and role names only: no message text, no path, no iden
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -33,6 +34,7 @@ ROLES = frozenset({
 CLAUDE_AGENT_PREFIX = "-jht-home-agents-"
 # The session folders are written by the agents themselves: a link planted there must not make this read a file
 # somewhere else, and a file of any size must not be read whole.
+MAX_CODE_CHARS = 200_000
 MAX_SESSION_BYTES = 256 * 1024 * 1024
 
 
@@ -227,9 +229,31 @@ def _tool_programs(payload: dict) -> list[str]:
     action = payload.get("action")
     if isinstance(action, dict) and action.get("command") is not None:
         return programs_in(action.get("command")) or ["(shell)"]
-    # A free-text input (a tool that takes code, not a command) is named by the tool: its words are not programs.
     name = payload.get("name")
+    # A tool that takes code (Codex `exec`) is named by the tool, except for the shell commands the code hands to
+    # `exec_command`: those are read as any other command line. The rest of its words are never programs.
+    if name == "exec" and isinstance(payload.get("input"), str):
+        found = _exec_commands(payload["input"])
+        if found:
+            return found
     return [name] if name in _TOOLS else ["(tool)"]
+
+
+_EXEC_CMD = re.compile(r"""\bexec_command\s*\(\s*\{[^{}]{0,200}?\bcmd\s*:\s*("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')""")
+
+
+def _exec_commands(code: str) -> list[str]:
+    """The programs of the `cmd: "..."` string literals that `tools.exec_command({...})` is called with in `code`.
+    Only a plain string literal is read (ast.literal_eval does not run anything); the text itself goes nowhere."""
+    programs = []
+    for match in _EXEC_CMD.finditer(code[:MAX_CODE_CHARS]):
+        try:
+            command = ast.literal_eval(match.group(1))
+        except (ValueError, SyntaxError, MemoryError):
+            continue
+        if isinstance(command, str):
+            programs.extend(programs_in(command) or ["(shell)"])
+    return programs
 
 
 
