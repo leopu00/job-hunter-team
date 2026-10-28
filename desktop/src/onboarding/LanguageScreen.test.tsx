@@ -61,15 +61,16 @@ describe("the language, the first screen of the app", () => {
     const user = userEvent.setup();
     render(<LanguageScreen onChosen={chosen} />);
     expect(explicitLocale()).toBeNull();
-    // it → (ArrowDown) → en → (End) → pt → (ArrowUp) → fr
+    // the order of the list is en, it, hu, es, de, fr, pt: it → (ArrowDown) → hu → (End) → pt → (ArrowRight) wraps to en
     await user.keyboard("{ArrowDown}");
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("data-locale", "hu");
     await user.keyboard("{End}");
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("data-locale", "pt");
     await user.keyboard("{ArrowRight}");
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("data-locale", "en");
+    // back from the first one wraps to the last, and one more up is the one before it
     await user.keyboard("{ArrowLeft}{ArrowUp}");
-    expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("data-locale", "pt");
+    expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("data-locale", "fr");
     await user.keyboard("{Home}");
     expect(screen.getByRole("radio", { checked: true })).toHaveAttribute("data-locale", "en");
     // nothing is kept before the person continues
