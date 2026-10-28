@@ -414,6 +414,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   account_scope_mismatch: ACCOUNT_CHANGED,
   local_runtime_unsupported: LOCAL_UNSUPPORTED,
   local_account_owner_unavailable: LOCAL_OWNER_UNAVAILABLE,
+  local_team_owner_invalid: LOCAL_OWNER_UNAVAILABLE,
   // The person is offered the way out under the message (OnboardingFlow: «Use this data» for a
   // local profile, «Set it aside and start again» for both), never a dead end.
   local_account_owner_missing: copy(

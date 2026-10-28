@@ -1621,6 +1621,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   account_scope_mismatch: translated("The active account changed during the operation."),
   local_runtime_unsupported: translated("Running the team on this computer is not available on this system."),
   local_account_owner_unavailable: translated("I cannot read which profile owns the local data."),
+  local_team_owner_invalid: translated("I cannot read which profile owns the local data."),
   local_account_owner_missing: translated("There is local data on this computer that does not belong to any profile."),
   local_data_set_aside_failed: translated("The local data was not set aside: nothing was touched."),
   local_account_owner_invalid: translated("The local data on this computer belongs to another profile."),
