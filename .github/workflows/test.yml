@@ -190,6 +190,16 @@ jobs:
         working-directory: tests/js
         run: npm test
 
+      # cli/tests/*.test.mjs use node:test and sit outside tests/js, so the vitest run above never saw
+      # them: two of them were red on the integration branch and every job was green.  The dependencies of cli,
+      # shared and shared/cron are installed by the steps above.
+      # Seven of them are skipped without PyYAML for the real validator: a skip would be a green that proves nothing.
+      - name: Run the CLI node:test suites
+        working-directory: cli
+        run: |
+          python3 -c "import yaml"
+          npm test
+
   # Il pannello di controllo desktop (Tauri + React): la sua suite vitest e
   # il typecheck non giravano in nessun job. Pacchetto a se' con il suo lock;
   # i moduli puri di web/lib che importa (tipi, regole) non hanno dipendenze,
