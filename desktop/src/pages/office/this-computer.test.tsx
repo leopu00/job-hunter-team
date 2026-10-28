@@ -143,25 +143,30 @@ describe("the office of a local profile", () => {
     expect(calls(POSITIONS).length).toBeGreaterThan(0);
   });
 
+  // Only the interval is faked, and before the page is mounted (an interval made with the real clock is not
+  // moved by a fake one made later): the rest of the clock stays real, so the waits of the test still work.
+  const fakeInterval = () => vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  const pass = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+
   it("reads again by itself while the window is in view, and not while it is hidden", async () => {
+    fakeInterval();
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
     const first = calls(SNAPSHOT).length;
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"], shouldAdvanceTime: true });
-    await act(async () => { await vi.advanceTimersByTimeAsync(THIS_COMPUTER_OFFICE_READ_MS + 500); });
-    expect(calls(SNAPSHOT).length).toBe(first + 1);
+    await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
+    await waitFor(() => expect(calls(SNAPSHOT).length).toBe(first + 1));
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
-    await act(async () => { await vi.advanceTimersByTimeAsync(THIS_COMPUTER_OFFICE_READ_MS * 3); });
+    await pass(THIS_COMPUTER_OFFICE_READ_MS * 3);
     expect(calls(SNAPSHOT).length).toBe(first + 1);
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
   });
 
   it("follows the team: an agent that appears is drawn at the next read", async () => {
+    fakeInterval();
     mount();
     await waitFor(() => expect(entered()).toEqual(["capitano", "scout-1"]));
     agents = [...agents, agent("SCORER-1", "scorer", "1", "lavora")];
-    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"], shouldAdvanceTime: true });
-    await act(async () => { await vi.advanceTimersByTimeAsync(THIS_COMPUTER_OFFICE_READ_MS + 500); });
+    await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
     await waitFor(() => expect(entered()).toEqual(["capitano", "scorer-1", "scout-1"]));
   });
 
