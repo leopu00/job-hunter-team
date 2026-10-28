@@ -30,6 +30,8 @@ export interface ExistingTeamReadOnlyText {
   help: string;
   /** What a click on an agent of the office says: its moves are not in what the VPS reports. */
   officeAgentNoMoves: string;
+  /** The same, in the office of the team on this computer: nothing is said of a VPS. */
+  officeAgentNoMovesHere: string;
   back: string;
   navAria: string;
   /** The list is sorted by the insertion date: the team's last action is not read. */
@@ -60,6 +62,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Impostazioni",
     help: "Guida",
     officeAgentNoMoves: "Cosa ha fatto questo agente non si legge dalla VPS: qui si vede solo se la sua sessione è accesa.",
+    officeAgentNoMovesHere: "Cosa ha fatto questo agente non si legge da qui: si vede solo se la sua sessione è accesa.",
     back: "Torna alla configurazione",
     navAria: "Navigazione in sola lettura",
     sortLastAction: "L’ordinamento per ultima azione non è disponibile in sola lettura: gli annunci sono ordinati per data di inserimento.",
@@ -81,6 +84,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Settings",
     help: "Help",
     officeAgentNoMoves: "What this agent has done cannot be read from the VPS: only whether its session is up shows here.",
+    officeAgentNoMovesHere: "What this agent has done cannot be read from here: only whether its session is up shows.",
     back: "Back to setup",
     navAria: "Read-only navigation",
     sortLastAction: "Sorting by last action is not available read only: the positions are sorted by the date they were found.",
@@ -102,6 +106,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Einstellungen",
     help: "Hilfe",
     officeAgentNoMoves: "Was dieser Agent getan hat, lässt sich nicht von der VPS lesen: hier ist nur zu sehen, ob seine Sitzung läuft.",
+    officeAgentNoMovesHere: "Was dieser Agent getan hat, lässt sich von hier nicht lesen: Es zeigt sich nur, ob seine Sitzung läuft.",
     back: "Zurück zur Einrichtung",
     navAria: "Navigation im Lesemodus",
     sortLastAction: "Die Sortierung nach letzter Aktion ist im Lesemodus nicht verfügbar: Die Stellen sind nach Funddatum sortiert.",
@@ -123,6 +128,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Paramètres",
     help: "Aide",
     officeAgentNoMoves: "Ce que cet agent a fait ne se lit pas sur la VPS : on voit ici seulement si sa session est active.",
+    officeAgentNoMovesHere: "Ce que cet agent a fait ne se lit pas d’ici : on voit seulement si sa session est active.",
     back: "Retour à la configuration",
     navAria: "Navigation en lecture seule",
     sortLastAction: "Le tri par dernière action n’est pas disponible en lecture seule : les offres sont triées par date de découverte.",
@@ -144,6 +150,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Ajustes",
     help: "Ayuda",
     officeAgentNoMoves: "Lo que ha hecho este agente no se puede leer desde la VPS: aquí solo se ve si su sesión está activa.",
+    officeAgentNoMovesHere: "Lo que ha hecho este agente no se puede leer desde aquí: solo se ve si su sesión está activa.",
     back: "Volver a la configuración",
     navAria: "Navegación de solo lectura",
     sortLastAction: "La ordenación por última acción no está disponible en solo lectura: las ofertas se ordenan por fecha de hallazgo.",
@@ -165,6 +172,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Configurações",
     help: "Ajuda",
     officeAgentNoMoves: "O que este agente fez não se lê a partir da VPS: aqui só se vê se a sessão dele está ativa.",
+    officeAgentNoMovesHere: "O que este agente fez não se pode ler daqui: só se vê se a sessão dele está ativa.",
     back: "Voltar à configuração",
     navAria: "Navegação só de leitura",
     sortLastAction: "A ordenação por última ação não está disponível só em leitura: as vagas estão ordenadas pela data em que foram encontradas.",
@@ -186,6 +194,7 @@ export const EXISTING_TEAM_READONLY_TEXT: Record<Locale, ExistingTeamReadOnlyTex
     settings: "Beállítások",
     help: "Súgó",
     officeAgentNoMoves: "Azt, hogy mit csinált ez az ügynök, nem lehet kiolvasni a VPS-ről: itt csak az látszik, hogy fut-e a munkamenete.",
+    officeAgentNoMovesHere: "Hogy mit csinált ez az ügynök, innen nem olvasható: csak az látszik, hogy fut-e a munkamenete.",
     back: "Vissza a beállításhoz",
     navAria: "Csak olvasható navigáció",
     sortLastAction: "Az utolsó művelet szerinti rendezés csak olvasható módban nem érhető el: a pozíciók a megtalálás dátuma szerint vannak rendezve.",
