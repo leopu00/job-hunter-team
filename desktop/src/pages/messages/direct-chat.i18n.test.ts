@@ -43,6 +43,8 @@ describe("the chat's words for the kinds, the questions and the receipts", () =>
       expect(value.trim()).not.toBe("");
     }
     expect(t.jumpToNew).toContain("{count}");
+    expect(t.working).toContain("{name}");
+    expect(t.working.replace("{name}", "").trim()).not.toBe("");
     expect(t.sent).not.toBe(t.queued);
   });
 

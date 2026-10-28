@@ -62,9 +62,9 @@ export interface DirectChatPage {
   /** How the turns that left the queue ended (last day): typed and taken, still in the composer, no proof, or never typed. */
   settled?: { id: string; how: "taken" | "pending" | "unconfirmed" | "expired" }[];
   /**
-   * What the agent's terminal shows while the person's last turn waits for an answer: `working` (a running
-   * turn) or `idle` (an empty prompt). Absent: not known (an older image, a screen the team cannot read, a
-   * chat nobody waits on): never read as idle.
+   * What the agent's terminal shows within half an hour of the person's last turn, answered or not (the
+   * agent may answer first and go on working): `working` (a running turn) or `idle` (an empty prompt).
+   * Absent: not known (an older image, a screen the team cannot read, an older turn): never read as idle.
    */
   activity?: "working" | "idle";
 }

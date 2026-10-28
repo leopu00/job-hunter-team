@@ -242,15 +242,27 @@ def test_a_stuck_tmux_does_not_hold_a_read_and_leaves_the_activity_out(box):
     assert time.monotonic() - started < 6, "the capture for the activity has its own short limit"
 
 
-def test_a_read_touches_the_terminal_only_while_the_last_turn_of_the_person_waits(box):
-    # answered by the agent, or too old to be what the agent works on now: the terminal is never looked at
+def test_a_read_touches_the_terminal_only_within_half_an_hour_of_the_last_turn_of_the_person(box):
+    # an answer from the agent does not end it: the agent may answer first and go on working
     _waiting_chat(box, answered=True)
+    (box.state / "screen").write_text(RUNNING_CODEX, encoding="utf-8")
     code, page = box.run("read", "capitano")
-    assert code == 0 and "activity" not in page and box.calls() == []
+    assert code == 0 and page["activity"] == "working" and box.calls() != []
+    (box.state / "screen").write_text(READY_CODEX, encoding="utf-8")
+    assert box.run("read", "capitano")[1]["activity"] == "idle"
+    # too old to be what the agent works on now: the terminal is never looked at
     (box.home / "agents" / "capitano" / "chat.jsonl").unlink()
     (box.home / "agents" / "capitano").rmdir()
     (box.home / "agents").rmdir()
-    _waiting_chat(box, age=3600.0)
+    (box.state / "calls").unlink(missing_ok=True)
+    _waiting_chat(box, age=3600.0, answered=True)
+    code, page = box.run("read", "capitano")
+    assert code == 0 and "activity" not in page and box.calls() == []
+    # no turn of the person's at all: nothing to be about
+    (box.home / "agents" / "capitano" / "chat.jsonl").unlink()
+    (box.home / "agents" / "capitano").rmdir()
+    (box.home / "agents").rmdir()
+    _write_chat(box, "capitano", [{"role": "assistant", "text": "buongiorno", "ts": time.time() - 5.0, "message_id": "a1"}])
     code, page = box.run("read", "capitano")
     assert code == 0 and "activity" not in page and box.calls() == []
 

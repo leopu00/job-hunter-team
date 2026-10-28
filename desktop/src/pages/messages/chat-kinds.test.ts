@@ -14,6 +14,8 @@ import {
   outcomeOf,
   settleQueued,
   deliveryStage,
+  sightAfter,
+  NOT_WORKING,
   TAKEN_REASONS,
   cleanMessage,
   cleanQuestion,
@@ -315,5 +317,23 @@ describe("the replies an agent suggests", () => {
     expect(agent.suggestions).toEqual(["Sì", "No"]);
     const user = cleanMessage({ id: "u", role: "user", text: "t", at: 1, suggestions: ["Sì", "No"] });
     expect(user.suggestions).toBeUndefined();
+  });
+});
+
+describe("the sight of the agent working", () => {
+  it("is shown by `working` and hidden at once by `idle`", () => {
+    expect(sightAfter(NOT_WORKING, "working")).toEqual({ working: true, misses: 0 });
+    expect(sightAfter({ working: true, misses: 0 }, "idle")).toEqual(NOT_WORKING);
+  });
+
+  it("is never started from a read that does not say it: absent is not known", () => {
+    expect(sightAfter(NOT_WORKING, undefined)).toEqual(NOT_WORKING);
+  });
+
+  it("holds through one read that does not say, and ends on the second", () => {
+    const held = sightAfter({ working: true, misses: 0 }, undefined);
+    expect(held.working).toBe(true);
+    expect(sightAfter(held, undefined)).toEqual(NOT_WORKING);
+    expect(sightAfter(held, "working")).toEqual({ working: true, misses: 0 });
   });
 });
