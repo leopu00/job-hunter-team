@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DirectChatScreen from "./DirectChatScreen";
+import DirectChatScreen, { withoutAttachmentPath } from "./DirectChatScreen";
 import type { DirectChatClient, DirectChatReceipt } from "./direct-chat-contract";
 import { DIRECT_CHAT_TEXT } from "./direct-chat.i18n";
 
@@ -85,6 +85,28 @@ describe("the paperclip in the Assistant's chat", () => {
       expect(await screen.findByTestId("direct-chat-attach-note"), label).toHaveTextContent(expected);
       cleanup();
     }
+  });
+
+  it("takes the line away when the person sends a message, and not before", async () => {
+    const attach: Attach = vi.fn(async () => ({
+      outcome: "sent" as const,
+      displayName: "cv.pdf",
+      receipt: { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, taken: true },
+    }));
+    const mock = client(attach, on);
+    vi.mocked(mock.send).mockResolvedValue({ clientMessageId: "x", accepted: true as const, messageId: "m2", at: 2 });
+    await ready(mock);
+    const button = await screen.findByTestId("direct-chat-attach");
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await screen.findByTestId("direct-chat-attach-note");
+    // writing is not sending: the line stays
+    const composer = screen.getByTestId("direct-chat-composer-row").querySelector("textarea") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "ciao" } });
+    expect(screen.getByTestId("direct-chat-attach-note")).toBeInTheDocument();
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(mock.send).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByTestId("direct-chat-attach-note")).toBeNull());
   });
 
   it("says nothing when the person closes the system's window", async () => {
@@ -181,5 +203,44 @@ describe("the words of the paperclip", () => {
       expect(text.attachSentLater, locale).toContain("{name}");
       expect(text.attachSavedNotSent, locale).toContain("{name}");
     }
+  });
+});
+
+describe("the attachment in the conversation", () => {
+  const PATH = "/jht_user/allegati/cv-20261028-153045.pdf";
+
+  it("shows the sentence only: the bracket with the path of the copy is the Assistant's", () => {
+    expect(withoutAttachmentPath(`Ho allegato il mio CV. [attachment for my profile: ${PATH}]`)).toBe("Ho allegato il mio CV.");
+    expect(withoutAttachmentPath(`I attached my CV. [attachment for my profile: /jht_user/allegati/cv-20261028-153045-2.docx]`)).toBe("I attached my CV.");
+  });
+
+  it("takes off only that exact shape at the very end, never what someone wrote", () => {
+    const kept = [
+      "Ho allegato il mio CV.",
+      `Guarda [attachment for my profile: ${PATH}] e dimmi`,
+      `ciao [attachment for my profile: /jht_user/allegati/../etc/passwd]`,
+      `ciao [attachment for my profile: /jht_user/altro/cv-20261028-153045.pdf]`,
+      `ciao [attachment for my profile: /jht_user/allegati/Mario Rossi.pdf]`,
+      `ciao [attachment for my profile: ${PATH}] ancora`,
+      `[attachment for my profile: ${PATH}]`,
+    ];
+    for (const text of kept) expect(withoutAttachmentPath(text), text).toBe(text);
+  });
+
+  it("is hidden from the person's own bubble and from a quote of it, but not from the Assistant's words", async () => {
+    document.cookie = "NEXT_LOCALE=it; path=/";
+    const mock = client(vi.fn() as unknown as Attach, on);
+    vi.mocked(mock.read).mockResolvedValue({
+      messages: [
+        { id: "1", role: "user", text: `Ho allegato il mio CV. [attachment for my profile: ${PATH}]`, at: 1 },
+        { id: "2", role: "agent", text: `Ho letto ${PATH}`, at: 2 },
+      ],
+      cursor: "2",
+    });
+    render(<DirectChatScreen client={mock} initialAgentId="assistente" />);
+    await screen.findByText("Ho allegato il mio CV.");
+    expect(document.body.textContent).not.toContain("[attachment for my profile");
+    // what the Assistant wrote about its file is its own text
+    expect(document.body.textContent).toContain(`Ho letto ${PATH}`);
   });
 });
