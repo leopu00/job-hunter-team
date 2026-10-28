@@ -39,6 +39,7 @@ mod saved_vps;
 mod team_control;
 mod team_backup;
 mod team_export;
+mod team_owner;
 mod chat_attachment;
 mod work_stats;
 mod text_file_export;
@@ -84,6 +85,8 @@ pub fn run() {
             account_scope::runtime_local_profile_migration_probe,
             account_scope::runtime_playground_local_orphan_recover,
             account_scope::runtime_playground_local_reset,
+            team_owner::runtime_local_team_owner_identity,
+            team_owner::runtime_local_team_owner,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,

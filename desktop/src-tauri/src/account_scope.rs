@@ -168,21 +168,21 @@ struct LocalProfileRecord {
     scope_digest: String,
 }
 
-fn valid_digest(value: &str) -> bool {
+pub(crate) fn valid_digest(value: &str) -> bool {
     value.len() == 64
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
-fn local_profiles_dir(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+pub(crate) fn local_profiles_dir(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     app.path()
         .app_local_data_dir()
         .map(|root| root.join("local-profiles"))
         .map_err(|_| "local_profile_storage_unavailable")
 }
 
-fn valid_profile_id(value: &str) -> bool {
+pub(crate) fn valid_profile_id(value: &str) -> bool {
     valid_digest(value)
 }
 
@@ -216,7 +216,7 @@ pub(crate) fn cli_local_scope(
     load_local_scope_at(&local_profiles_dir(app)?, profile_id)
 }
 
-fn load_local_scope_at(root: &Path, profile_id: &str) -> Result<AccountScope, &'static str> {
+pub(crate) fn load_local_scope_at(root: &Path, profile_id: &str) -> Result<AccountScope, &'static str> {
     if !valid_profile_id(profile_id) {
         return Err("local_profile_invalid");
     }
@@ -323,37 +323,51 @@ fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<()
     if marker.exists() {
         return verify_local_owner_marker(&marker, scope);
     }
-    if home.exists() {
-        let metadata = fs::symlink_metadata(home).map_err(|_| "local_account_owner_unavailable")?;
-        if !metadata.file_type().is_dir() {
-            return Err("local_account_owner_unavailable");
-        }
-        if fs::read_dir(home)
-            .map_err(|_| "local_account_owner_unavailable")?
-            .next()
-            .is_some()
-        {
-            // Electron used the same ~/.jht bind mount before account scopes
-            // existed. A backend-generated local profile may claim that home
-            // once, but authenticated accounts and unrelated directories must
-            // remain fail-closed. After the marker is written, every access is
-            // subject to the normal exact-digest ownership check.
-            //
-            // A home that holds only what a run leaves behind (see
-            // `home_holds_only_leftovers`) holds the data of nobody: it is
-            // claimed like a missing one, for any scope, and nothing in it is
-            // touched or cleaned.
-            if !home_holds_only_leftovers(home)?
-                && (!scope.is_local_profile() || !recognized_legacy_local_home(home)?)
-            {
-                return Err("local_account_owner_missing");
-            }
-        }
-    } else {
+    unowned_home_may_be_claimed(home, scope)?;
+    if !home.exists() {
         create_private_dir(home)?;
     }
     write_owner_marker(&marker, scope)?;
     verify_local_owner_marker(&marker, scope)
+}
+
+/// Whether `scope` may claim a home that has no owner marker: a missing home, one that holds only what
+/// a run leaves behind (see `home_holds_only_leftovers`), or the data of a version before this app that a
+/// local profile may take once. Reads only; `validate_or_claim_local_owner` and the read of the team's
+/// owner both ask it.
+pub(crate) fn unowned_home_may_be_claimed(
+    home: &Path,
+    scope: &AccountScope,
+) -> Result<(), &'static str> {
+    if !home.exists() {
+        return Ok(());
+    }
+    let metadata = fs::symlink_metadata(home).map_err(|_| "local_account_owner_unavailable")?;
+    if !metadata.file_type().is_dir() {
+        return Err("local_account_owner_unavailable");
+    }
+    if fs::read_dir(home)
+        .map_err(|_| "local_account_owner_unavailable")?
+        .next()
+        .is_some()
+    {
+        // Electron used the same ~/.jht bind mount before account scopes
+        // existed. A backend-generated local profile may claim that home
+        // once, but authenticated accounts and unrelated directories must
+        // remain fail-closed. After the marker is written, every access is
+        // subject to the normal exact-digest ownership check.
+        //
+        // A home that holds only what a run leaves behind (see
+        // `home_holds_only_leftovers`) holds the data of nobody: it is
+        // claimed like a missing one, for any scope, and nothing in it is
+        // touched or cleaned.
+        if !home_holds_only_leftovers(home)?
+            && (!scope.is_local_profile() || !recognized_legacy_local_home(home)?)
+        {
+            return Err("local_account_owner_missing");
+        }
+    }
+    Ok(())
 }
 
 /// Whether ~/.jht holds the data of a version before this app (the game, up
