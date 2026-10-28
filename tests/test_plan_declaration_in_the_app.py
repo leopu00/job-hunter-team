@@ -87,7 +87,7 @@ def test_begin_burst_refuses_and_tells_how_to_declare_the_plan(home: Path, lang:
     done = _run("first_run.py", "begin-burst", home=home, lang=lang)
     out = json.loads(done.stdout)
     assert out["ok"] is False
-    assert "plan_registry.py list <provider>" in out["hint"] and "plan_registry.py set <provider>:<id>" in out["hint"], out
+    assert "first_run.py ask-plan" in out["hint"] and "plan_registry.py set <provider>:<id>" in out["hint"], out
     assert "subscription step in setup" not in out["hint"]
 
 
@@ -116,7 +116,7 @@ def test_the_assistente_asks_suggests_and_writes_only_what_the_user_chose(lang: 
 @pytest.mark.parametrize("lang", LANGS)
 def test_the_capitano_skill_tells_what_to_do_when_the_burst_refuses(lang: str):
     text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    for needed in (f"{REGISTRY} list <provider>", f"{REGISTRY} set <provider>:<id>", "Codex reports:", "begin-burst"):
+    for needed in ("first_run.py ask-plan", f"{REGISTRY} set <provider>:<id>", "Codex reports:", "begin-burst"):
         assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
 
 
@@ -138,7 +138,7 @@ def test_a_burst_without_a_plan_says_so_and_how_to_declare_it(home: Path, comman
     out = json.loads(done.stdout)
     assert done.returncode == 0 and out["phase"] == "burst", (done.returncode, out)
     assert out["plan_missing"] is True
-    assert "plan_registry.py list <provider>" in out["hint"] and "plan_registry.py set <provider>:<id>" in out["hint"]
+    assert "first_run.py ask-plan" in out["hint"] and "plan_registry.py set <provider>:<id>" in out["hint"]
     if command == "begin-burst":
         assert out["note"] == "burst already in progress"  # the burst is not stopped by it
 

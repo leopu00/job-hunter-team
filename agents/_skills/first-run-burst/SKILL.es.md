@@ -41,23 +41,14 @@ Te devuelve el `roster` (cuántos Scout / Analista / Scorer), el
 `scout_cap_first_pass` y el `target_scored`, todos derivados de la suscripción
 que el usuario declaró. Si rechaza (`ok: false`, «plan de suscripción no
 seleccionado»), aún no hay plan declarado: **no adivines** un roster, una
-sobreestimación le quema la ventana el primer día. Pregunta al usuario en el
-chat qué plan tiene: ejecuta `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` es el
-`active_provider` de `jht.config.json`; Codex es `codex`), muestra nombres y
-precios y, si la lista termina con `Codex reports: <nombre> → <Plan> <precio>`,
-sugiere ese plan — una sugerencia, nunca tu elección. Cuando el usuario
-elija, escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` y
-vuelve a lanzar `begin-burst`. Si no lo sabe, detente y díselo; vuelve a
-preguntar en tu próximo despertar.
+sobreestimación le quema la ventana el primer día. Pregúntaselo con `python3 /app/shared/skills/first_run.py ask-plan`: es la única forma, porque publica la tarjeta en la app, con los planes y el que indica la línea `Codex reports:` marcado como sugerido — una sugerencia, nunca tu elección. Una pregunta escrita como texto en tu panel no llega a nadie: el usuario mira la app, no tu panel. Cuando el usuario responda, escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (sirve el id de la tarjeta: `pro_max` es `pro-max`) y vuelve a lanzar `begin-burst`. Si responde «no lo sé», detente y díselo; vuelve a preguntar en tu próximo despertar.
 
 **Mientras corre el burst, el plan puede desaparecer** (la configuración se reinició, cambió el proveedor, se
 editó el archivo). `first_run.py status` y `begin-burst` llevan entonces `plan_missing: true` con un `hint`: no
-leas «burst already in progress» como «todo bien». El burst continúa y el plan se declara igual: pregunta al
-usuario en el chat qué plan tiene (`python3 /app/shared/skills/plan_registry.py list <provider>`), sugiere el de la línea `Codex reports:` sin elegir por
-él y escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. El Asistente lo pregunta también cuando el
+leas «burst already in progress» como «todo bien». El burst continúa y el plan se declara igual: pregúntalo con `python3 /app/shared/skills/first_run.py ask-plan` (la tarjeta, nunca texto simple) y escribe exactamente su elección con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. El Asistente lo pregunta también cuando el
 usuario habla con él.
 
-**El plan se pregunta una sola vez.** Mientras tu pregunta sobre el plan siga sin respuesta en el chat, no la repitas, ni siquiera con otras palabras: un nuevo mensaje «perfil listo», otro despertar o `plan_missing` en el próximo `status` no cambian lo que esperas. Mira primero el chat: si ya preguntaste y el usuario no ha respondido, espera. Vuelve a preguntar solo después de que el usuario haya respondido «no lo sé».
+**El plan se pregunta una sola vez.** Mientras tu pregunta sobre el plan siga sin respuesta en el chat, no la repitas, ni siquiera con otras palabras: un nuevo mensaje «perfil listo», otro despertar o `plan_missing` en el próximo `status` no cambian lo que esperas. Mira primero el chat: si ya preguntaste y el usuario no ha respondido, espera. Vuelve a preguntar solo después de que el usuario haya respondido «no lo sé». `ask-plan` no publica una segunda tarjeta mientras la primera no tenga respuesta: si dice que la pregunta está abierta, espera. Si no preguntas, la tarjeta la publica el sistema pocos minutos después de importar el perfil.
 
 **2. Spawnea todo el roster, escalonado unos ~60 segundos.**
 

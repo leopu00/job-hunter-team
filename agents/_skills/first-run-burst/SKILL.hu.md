@@ -39,22 +39,14 @@ python3 /app/shared/skills/first_run.py begin-burst
 Visszaadja a `roster`-t (hány Scout / Analista / Scorer), a `scout_cap_first_pass` és a
 `target_scored` értékét, mind abból az előfizetésből származtatva, amelyet a felhasználó megadott.
 Ha elutasít (`ok: false`, „nincs előfizetési csomag kiválasztva"), még nincs megadva csomag: **ne
-találgass** rostert, egy túlbecslés már az első napon elégeti az ablakát. Kérdezd meg a felhasználót a
-chatben, melyik csomagja van: futtasd a `python3 /app/shared/skills/plan_registry.py list <provider>` parancsot (a `<provider>` a
-`jht.config.json` `active_provider` értéke; a Codex `codex`), mutasd a neveket és az árakat, és ha a lista
-`Codex reports: <név> → <Csomag> <ár>` sorral végződik, azt a csomagot javasold — javaslat, soha nem a te
-döntésed. Amikor a felhasználó választ, pontosan az ő választását írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`
-paranccsal, és futtasd újra a `begin-burst`-öt. Ha nem tudja, állj meg és mondd meg neki; a következő
-ébredésnél kérdezd meg újra.
+találgass** rostert, egy túlbecslés már az első napon elégeti az ablakát. Kérdezd meg a `python3 /app/shared/skills/first_run.py ask-plan` paranccsal: ez az egyetlen mód, mert kiteszi a kártyát az appban, a csomagokkal, és azzal, amelyet a `Codex reports:` sor jelez, javasoltként megjelölve — javaslat, soha nem a te döntésed. A paneledbe szövegként írt kérdés senkihez nem jut el: a felhasználó az appot nézi, nem a paneledet. Amikor a felhasználó válaszol, pontosan az ő választását írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal (a kártya azonosítója is jó: a `pro_max` ugyanaz, mint a `pro-max`), és futtasd újra a `begin-burst`-öt. Ha azt válaszolja: „nem tudom”, állj meg és mondd meg neki; a következő ébredésnél kérdezd meg újra.
 
 **Amíg a burst fut, a csomag eltűnhet** (a konfigurációt visszaállították, a szolgáltató megváltozott, a
 fájlt szerkesztették). A `first_run.py status` és a `begin-burst` ilyenkor `plan_missing: true`-t és egy `hint`-et
 ad: ne olvasd a „burst already in progress" üzenetet úgy, hogy „minden rendben". A burst megy tovább, a csomagot
-pedig ugyanúgy add meg: kérdezd meg a felhasználót a chatben, melyik csomagja van (`python3 /app/shared/skills/plan_registry.py list <provider>`),
-a `Codex reports:` sorban szereplőt javasold, anélkül hogy helyette választanál, és pontosan az ő választását
-írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal. Az Asszisztens is megkérdezi, amikor a felhasználó beszél vele.
+pedig ugyanúgy add meg: kérdezd meg a `python3 /app/shared/skills/first_run.py ask-plan` paranccsal (a kártya, soha nem egyszerű szöveg), és pontosan az ő választását írd be a `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` paranccsal paranccsal. Az Asszisztens is megkérdezi, amikor a felhasználó beszél vele.
 
-**A csomagot csak egyszer kérdezd meg.** Amíg a csomagra vonatkozó kérdésedre nincs válasz a chatben, ne tedd fel újra, átfogalmazva sem: egy újabb „profil kész" üzenet, egy újabb ébredés vagy a `plan_missing` a következő `status`-ban nem változtat azon, amire vársz. Előbb nézd meg a chatet: ha már kérdeztél, és a felhasználó még nem válaszolt, várj. Csak azután kérdezz újra, hogy a felhasználó azt válaszolta: „nem tudom".
+**A csomagot csak egyszer kérdezd meg.** Amíg a csomagra vonatkozó kérdésedre nincs válasz a chatben, ne tedd fel újra, átfogalmazva sem: egy újabb „profil kész" üzenet, egy újabb ébredés vagy a `plan_missing` a következő `status`-ban nem változtat azon, amire vársz. Előbb nézd meg a chatet: ha már kérdeztél, és a felhasználó még nem válaszolt, várj. Csak azután kérdezz újra, hogy a felhasználó azt válaszolta: „nem tudom". Az `ask-plan` nem tesz ki második kártyát, amíg az elsőre nincs válasz: ha azt mondja, hogy a kérdés nyitva van, várj. Ha nem kérdezel, a rendszer néhány perccel a profil importálása után kiteszi a kártyát.
 
 **2. Spawnold az egész rostert, ~60 másodperces eltolással.**
 

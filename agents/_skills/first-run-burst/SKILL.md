@@ -41,22 +41,14 @@ It returns the `roster` (how many Scout / Analista / Scorer), the
 `scout_cap_first_pass` and the `target_scored`, all derived from the
 subscription the user declared. If it refuses (`ok: false`, «subscription
 plan not selected»), no plan is declared yet: do **not** guess a roster, an
-over-estimate burns their window on day one. Ask the user in chat which plan
-they have: run `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` is the `active_provider`
-of `jht.config.json`; Codex is `codex`), show the names and prices, and if the
-list ends with `Codex reports: <name> → <Plan> <price>` suggest that plan —
-a suggestion, never your choice. When the user chooses, write exactly their
-choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` and run `begin-burst` again. If they
-do not know, stop and tell them; ask again at your next wake.
+over-estimate burns their window on day one. Ask the user with `python3 /app/shared/skills/first_run.py ask-plan`: it is the only way to ask, because it posts the card in the app, with the plans and the one the `Codex reports:` line names marked as suggested — a suggestion, never your choice. A question written as text in your pane reaches nobody: the user watches the app, not your pane. When the user answers, write exactly their choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (the id of the card works: `pro_max` is `pro-max`) and run `begin-burst` again. If they answer «I do not know», stop and tell them; ask again at your next wake.
 
 **While the burst runs, the plan can be gone** (the configuration was reset, the provider changed, the file
 was edited). `first_run.py status` and `begin-burst` then carry `plan_missing: true` with a `hint`: do not
 read «burst already in progress» as «all is well». The burst goes on, and you declare the plan the same way:
-ask the user in the chat which plan they have (`python3 /app/shared/skills/plan_registry.py list <provider>`), suggest the one on the
-`Codex reports:` line without choosing for them, and write exactly their choice with
-`python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. The Assistente asks the same when the user talks to it.
+ask with `python3 /app/shared/skills/first_run.py ask-plan` (the card, never plain text) and write exactly the user's choice with `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. The Assistente asks the same when the user talks to it.
 
-**Ask the plan once.** While your question about the plan is still unanswered in the chat, do not ask it again, not even reworded: a new «profile ready» message, another wake, or `plan_missing` in the next `status` do not change what you are waiting for. Look at the chat first: if you already asked and the user has not answered, wait. Ask again only after the user has answered «I do not know».
+**Ask the plan once.** While your question about the plan is still unanswered in the chat, do not ask it again, not even reworded: a new «profile ready» message, another wake, or `plan_missing` in the next `status` do not change what you are waiting for. Look at the chat first: if you already asked and the user has not answered, wait. Ask again only after the user has answered «I do not know». `ask-plan` does not post a second card while the first has no answer: if it says the question is open, wait. If you never ask, the system posts the card a few minutes after the profile is imported.
 
 **2. Spawn the whole roster, staggered by ~60 seconds.**
 
