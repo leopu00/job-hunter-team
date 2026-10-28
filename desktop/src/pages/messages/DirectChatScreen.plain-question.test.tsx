@@ -48,7 +48,7 @@ describe("DirectChatScreen: a question asked in plain words", () => {
     expect(card).toHaveAttribute("data-state", "open");
     expect(within(card).queryAllByRole("button")).toHaveLength(0);
     expect(within(card).queryByRole("group")).toBeNull();
-    expect(within(card).getByTestId("direct-chat-answer-below")).toHaveTextContent("Rispondi scrivendo qui sotto.");
+    expect(await within(card).findByTestId("direct-chat-answer-below")).toHaveTextContent("Rispondi scrivendo qui sotto.");
   });
 
   it("is answered with an ordinary message of the chat, not through the answer of the structured questions", async () => {
@@ -75,8 +75,10 @@ describe("DirectChatScreen: a question asked in plain words", () => {
     expect(within(card).queryByTestId("direct-chat-answer-below")).toBeNull();
   });
 
-  it("is also there in the read-only view, which cannot answer", async () => {
+  it("is also there in the read-only view, which cannot answer: and there it does not say to write below", async () => {
     render(<DirectChatScreen client={client().mock} initialAgentId="assistente" writeLocked />);
-    expect(await screen.findByTestId("direct-chat-question")).toHaveTextContent("Which plan do you use?");
+    const card = await screen.findByTestId("direct-chat-question");
+    expect(card).toHaveTextContent("Which plan do you use?");
+    expect(within(card).queryByTestId("direct-chat-answer-below")).toBeNull();
   });
 });

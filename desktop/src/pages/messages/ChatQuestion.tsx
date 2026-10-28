@@ -128,7 +128,7 @@ export default function ChatQuestion({
       </div>
       )}
 
-      {open && question.options.length === 0 && !question.free && (
+      {open && canAnswer && question.options.length === 0 && !question.free && (
         <p data-testid="direct-chat-answer-below" className="m-0 mt-2 text-[13px] text-[var(--color-muted)]">
           {t.answerBelow}
         </p>

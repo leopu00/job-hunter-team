@@ -912,7 +912,7 @@ def mark_delivered(agent: str, row: dict, taken: str | None = None, signature: s
             os.close(fd)
     except OSError:
         pass
-    close_plain_questions(agent, str(row.get("text") or ""))
+    close_plain_questions(agent, str(row.get("text") or ""), seen=taken != "unconfirmed")
 
 
 def _delivery_binary() -> str:
@@ -1654,11 +1654,13 @@ def _plain_questions(conn, agent: str) -> list:
     return views
 
 
-def close_plain_questions(agent: str, text: str) -> None:
+def close_plain_questions(agent: str, text: str, seen: bool = True) -> None:
     """The person wrote to the agent in the chat: its plain open questions are answered by that text.
 
     The text reached the agent through its terminal, so the reply is marked seen at once; left unseen,
-    ``jht-check-user-replies`` would hand the agent the same words a second time.  Questions with a
+    ``jht-check-user-replies`` would hand the agent the same words a second time.  Not marked seen when the
+    transport could not prove the CLI took the text (``seen`` False): then that tool is the second way
+    for the words to reach the agent.  Questions with a
     source of their own (a closer's, a structured one) have their own way to be answered and are not
     touched.  Never raises: the text is already delivered."""
     path = _db_path()
@@ -1672,10 +1674,10 @@ def close_plain_questions(agent: str, text: str) -> None:
         with conn:
             conn.execute(
                 "UPDATE pending_user_messages SET user_reply = ?, user_reply_at = CURRENT_TIMESTAMP, "
-                "agent_seen_reply_at = CURRENT_TIMESTAMP "
+                "agent_seen_reply_at = CASE WHEN ? THEN CURRENT_TIMESTAMP END "
                 "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' "
                 "AND COALESCE(source_action, '') = '' AND user_reply IS NULL",
-                (text[:MAX_TEXT], agent),
+                (text[:MAX_TEXT], 1 if seen else 0, agent),
             )
     except sqlite3.Error:
         pass
