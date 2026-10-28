@@ -2675,6 +2675,16 @@ $DiskWarnFreePermille = 100
 $DiskWarnFreeKib = 20971520
 $DiskBlockFreePermille = 30
 $DiskBlockFreeKib = 8388608
+$script:DiskLowFreeKib = 0
+
+# KiB -> «GiB» a un decimale con la virgola italiana («8», «5,2»). Per DIFETTO: non si
+# promette piu' spazio di quello che c'e'.
+function Get-DiskGibText {
+  param([long]$Kib)
+  $tenths = [long][Math]::Floor([double]$Kib * 10 / 1048576)
+  if (($tenths % 10) -eq 0) { return [string]($tenths / 10) }
+  return ('{0},{1}' -f [long][Math]::Floor($tenths / 10), ($tenths % 10))
+}
 
 # Byte liberi e totali del volume che contiene $Path, oppure $null.
 function Get-DiskFreeMeasure {
@@ -2704,6 +2714,7 @@ function Get-DiskLowPermille {
   foreach ($volume in $volumes) {
     $measure = Get-DiskFreeMeasure $volume
     if ($null -ne $measure -and (Get-DiskLevelOf $measure.Free $measure.Total) -eq 'low') {
+      $script:DiskLowFreeKib = [long][Math]::Floor([double]$measure.Free / 1024)
       return [int][Math]::Floor([double]$measure.Free * 1000 / [double]$measure.Total)
     }
   }
@@ -2985,7 +2996,7 @@ function Invoke-RuntimeUpgrade {
     # `disk_low`; la frase la mostra l'app dalla sua tabella codice->frase.
     $diskLow = Get-DiskLowPermille
     if ($null -ne $diskLow) {
-      if (-not $script:UpgradeJson) { Write-Err "disk_low: meno del 3% di disco libero ($diskLow per mille) e meno di 8 GiB. Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono e le immagini Docker inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente." }
+      if (-not $script:UpgradeJson) { Write-Err "disk_low: Gli agenti richiedono almeno $(Get-DiskGibText $DiskBlockFreeKib) GiB di disco - disponibili: $(Get-DiskGibText $script:DiskLowFreeKib) GiB. Per liberare spazio svuota il Cestino ed elimina i file grandi che non ti servono e le immagini Docker inutilizzate, poi riprova: non e' stato scaricato ne' modificato niente." }
       Write-UpgradeResult $false $false 'preflight' $oldVersion $oldImage $oldVersion $oldImage $false 'disk_low' $false
       return 1
     }

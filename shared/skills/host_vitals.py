@@ -260,13 +260,32 @@ def read_disk(env=None):
     level = worst["level"] if worst else "unknown"
     code = {"low": DISK_CODE_LOW, "warn": DISK_CODE_WARNING}.get(level)
     return {"level": level, "code": code,
-            "min_free_pct": worst["free_pct"] if worst else None, **vols}
+            "min_free_pct": worst["free_pct"] if worst else None,
+            "min_free_bytes": worst["free_bytes"] if worst else None, **vols}
+
+
+# Lingue che scrivono la virgola decimale: «5,2 GiB». Le altre (en) il punto.
+_DECIMAL_COMMA = {"it", "es", "fr", "de", "hu", "pt"}
+
+
+def format_gib(n_bytes, lang=None):
+    """Byte → numero di GiB a un decimale, per la frase («8», «5,2»).
+
+    Arrotondato PER DIFETTO: non si promette all'utente più spazio di quello che
+    c'è. Senza unità: «GiB» sta nella frase («Gio» in francese).
+    """
+    tenths = int(max(0, n_bytes) * 10 // DISK_GIB)
+    whole, frac = divmod(tenths, 10)
+    text = f"{whole}.{frac}" if frac else str(whole)
+    return text.replace(".", ",") if lang in _DECIMAL_COMMA else text
 
 
 def disk_phrase(disk):
     """La frase dell'utente per `disk["code"]`, dalla tabella codice→frase.
 
-    Vuota se non c'è un codice o la tabella non risponde: niente testo
+    Dice i valori ASSOLUTI, non la percentuale: lo spazio che serve e quello che
+    c'è («richiedono almeno 8 GiB — disponibili: 1,6 GiB»). Vuota se non c'è un
+    codice, se manca la misura in byte o se la tabella non risponde: niente testo
     improvvisato al suo posto.
     """
     code = disk.get("code")
@@ -278,7 +297,10 @@ def disk_phrase(disk):
         if shared not in sys.path:
             sys.path.insert(0, shared)
         import i18n
-        phrase = i18n.tf(key, f"{disk['min_free_pct']:g}%")
+        lang = i18n.current_lang()
+        available = format_gib(disk["min_free_bytes"], lang)
+        args = (available,) if code == DISK_CODE_WARNING else (format_gib(DISK_BLOCK_FREE_BYTES, lang), available)
+        phrase = i18n.tf(key, *args)
     except Exception:
         return ""
     return "" if phrase == key else phrase
