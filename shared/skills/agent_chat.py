@@ -230,6 +230,7 @@ def read(agent: str, cursor_text: str | None) -> dict:
 # it does a read look at the terminal at all.
 ACTIVITY_WINDOW_S = 1800.0
 ACTIVITY_CAPTURE_TIMEOUT_S = 2.0
+ACTIVITY_RETRY_S = 15.0
 
 
 def _turn_is_recent(agent: str) -> bool:
@@ -259,9 +260,20 @@ def _turn_is_recent(agent: str) -> bool:
 def activity_of(agent: str) -> str | None:
     """`working` while the agent's CLI shows a running turn, `idle` at an empty prompt, None when
     the screen cannot say (no session, a menu, a draft, a form this reader does not know)."""
-    # A stuck tmux must not hold every read: the page reads every second or two.
+    # A stuck tmux must not hold every read: the page reads every second or two, so after a capture that
+    # failed the next ones wait ACTIVITY_RETRY_S.  Each read is its own process: the failure is a mark on disk.
+    mark = chat_path(agent).parent / "activity-failed"
+    try:
+        if 0 <= time.time() - mark.stat().st_mtime < ACTIVITY_RETRY_S:
+            return None
+    except OSError:
+        pass
     pane = capture_pane(AGENTS[agent], ACTIVITY_CAPTURE_TIMEOUT_S)
     if pane is None:
+        try:
+            mark.touch()
+        except OSError:
+            pass                  # no mark, no wait: the next read tries again, as it did before
         return None
     state, busy = composer_snapshot(pane)
     if busy:
