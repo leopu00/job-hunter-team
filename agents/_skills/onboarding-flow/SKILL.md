@@ -203,10 +203,11 @@ Reading a PDF, extracting data, validating it and writing two summaries can take
 7. Scrivi MINIMO about.md + strengths.md             → skill profile-summaries
    (preferences.md e goals.md vengono dopo la discussione specifica)
 
-8. Final message (NO `--partial`) — user-friendly summary plus an explicit
-   request to review and press **Confirm and save** in the panel. Only after
-   confirmation ask about the first missing field. If staging fails, report
-   the error without asking for a chat reminder or claiming the profile is saved.
+8. Last step (NO `--partial`): the confirmation card of the skill `profile-yaml`
+   (`ask-confirm`). It carries the summary and the buttons: do not repeat the
+   summary and do not name any panel. Only after the person confirms with the
+   card ask about the first missing field. If staging fails, report the error
+   without asking for a chat reminder or claiming the profile is saved.
 ```
 
 > ⚠️ Lo step 7 (`about.md` + `strengths.md`) **non è opzionale**. Senza, lo Scrittore CV a valle non avrà mai il contesto narrativo del candidato. Tu sei l'unico punto in cui quella narrativa viene catturata.

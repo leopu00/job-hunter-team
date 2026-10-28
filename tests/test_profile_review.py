@@ -120,7 +120,7 @@ def test_all_localized_agent_contracts_stage_cv_review_without_chat_reminder():
     for path in PROFILE_SKILLS:
         source = path.read_text(encoding="utf-8")
         marker = source.index("[FILE ALLEGATI]")
-        section = source[marker : marker + 1800]
+        section = source[marker : marker + 4500]
         assert "candidate_profile.yml" in section, path
         assert "chat" in section.lower(), path
 

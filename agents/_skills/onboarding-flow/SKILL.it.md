@@ -204,11 +204,11 @@ Leggere un PDF + estrarre dati + validare YAML + scrivere 2 MD può richiedere 3
 7. Scrivi MINIMO about.md + strengths.md             → skill profile-summaries
    (preferences.md e goals.md vengono dopo la discussione specifica)
 
-8. Messaggio finale (NESSUN --partial) — riassunto user-friendly
-   + invito esplicito a controllare e premere **Conferma e salva** nel pannello.
-   Solo dopo la conferma, chiedi il primo campo ancora vuoto. Se lo staging
-   fallisce, segnala l'errore senza chiedere solleciti in chat e senza dire
-   che il profilo è stato salvato.
+8. Ultimo passo (NESSUN --partial): la card di conferma della skill `profile-yaml`
+   (`ask-confirm`). Porta il riepilogo e i pulsanti: non ripetere il riepilogo e
+   non nominare nessun pannello. Solo dopo che la persona conferma con la card,
+   chiedi il primo campo ancora vuoto. Se lo staging fallisce, segnala l'errore
+   senza chiedere solleciti in chat e senza dire che il profilo è stato salvato.
 ```
 
 > ⚠️ Lo step 7 (`about.md` + `strengths.md`) **non è opzionale**. Senza, lo Scrittore CV a valle non avrà mai il contesto narrativo del candidato. Tu sei l'unico punto in cui quella narrativa viene catturata.

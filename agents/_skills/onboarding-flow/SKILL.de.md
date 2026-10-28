@@ -201,11 +201,12 @@ Ein PDF lesen + Daten extrahieren + YAML validieren + 2 MDs schreiben kann 30-90
 7. MINDESTENS about.md + strengths.md schreiben             → Skill profile-summaries
    (preferences.md und goals.md kommen nach der spezifischen Diskussion)
 
-8. Finale Nachricht (KEIN --partial) — nutzerfreundliche Zusammenfassung
-   + klare Aufforderung, die Daten zu prüfen und **Bestätigen und speichern**
-   zu drücken. Erst danach das erste leere Feld erfragen. Bei fehlgeschlagener
-   Vorbereitung den Fehler melden, ohne Chat-Erinnerung und ohne zu behaupten,
-   das Profil sei gespeichert.
+8. Letzter Schritt (KEIN --partial): die Bestätigungskarte der Skill `profile-yaml`
+   (`ask-confirm`). Sie enthält die Zusammenfassung und die Schaltflächen:
+   Zusammenfassung nicht wiederholen und kein Panel nennen. Erst nachdem die
+   Person mit der Karte bestätigt hat, das erste leere Feld erfragen. Bei
+   fehlgeschlagener Vorbereitung den Fehler melden, ohne Chat-Erinnerung und
+   ohne zu behaupten, das Profil sei gespeichert.
 ```
 
 > ⚠️ Schritt 7 (`about.md` + `strengths.md`) **ist nicht optional**. Ohne hat der CV-Scrittore nachgelagert nie den narrativen Kontext des Kandidaten. Du bist der einzige Punkt, an dem diese Narration erfasst wird.
