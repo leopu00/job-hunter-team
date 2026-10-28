@@ -79,6 +79,44 @@ describe("the chat in a short window", () => {
     }
   });
 
+  it("is a full-bleed page, the swipe deck included, in the app", () => {
+    expect(ROUTES.filter((route) => route.fullBleed).map((route) => route.path).sort()).toEqual(["/messages", "/office", "/swipe"]);
+  });
+
+  it("caps the read-only bars at a third of the window too, the navbar above them and out of the block", async () => {
+    enterExistingTeamReadOnly(true, null);
+    try {
+      navigate("/messages", { replace: true });
+      render(<Shell />);
+      const main = (await screen.findByRole("heading", { name: "Chat" })).closest("main")!;
+      const column = main.parentElement!;
+      const [navbar, bars, page] = [...column.children];
+      expect(navbar.tagName).toBe("HEADER");
+      expect(bars).toBe(screen.getByTestId("full-bleed-bars"));
+      expect(bars.className).toMatch(/max-h-\[34%\]/);
+      expect(bars.className).toMatch(/overflow-y-auto/);
+      expect(bars.className).toMatch(/shrink-0/);
+      expect(page).toBe(main);
+      // what the read-only view says is in the block, not above the chat outside it
+      expect(bars).toContainElement(screen.getByTestId("existing-team-readonly-banner"));
+      expect(navbar).not.toContainElement(screen.getByTestId("existing-team-readonly-banner"));
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
+  });
+
+  it("leaves the read-only bars as they were on a page that scrolls", async () => {
+    enterExistingTeamReadOnly(true, null);
+    try {
+      navigate("/dashboard", { replace: true });
+      render(<Shell />);
+      await screen.findByTestId("existing-team-readonly-banner");
+      expect(screen.queryByTestId("full-bleed-bars")).toBeNull();
+    } finally {
+      leaveExistingTeamReadOnly();
+    }
+  });
+
   it("is the same column in the read-only view, the navbar inside it", async () => {
     enterExistingTeamReadOnly(true, null);
     try {

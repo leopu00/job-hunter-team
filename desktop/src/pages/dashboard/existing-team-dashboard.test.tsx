@@ -10,6 +10,7 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import { syntheticStats } from "../../test-support/existing-team-stats-fixture";
 import { fixturePosition } from "./dashboard-fixture";
+import { forgetReadsInFlight } from "../../lib/read-deadline";
 
 // The Shell on an existing team that is only read, on its Dashboard: the numbers
 // the core counted on the team's VPS, nothing from the cloud, and what the team
@@ -36,6 +37,7 @@ let restoreBridge: () => void;
 let reply: (request: { op: string }) => unknown;
 
 beforeEach(() => {
+  forgetReadsInFlight();
   fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   apiCalls = [];
@@ -240,9 +242,9 @@ describe("Dashboard on an existing team read only", () => {
     });
 
     reply = () => ({ ok: true, data: syntheticStats() });
-    // the page's own button, next to its message (the strip's «Aggiorna» is the other one)
+    // the page's own button, next to its message (the navbar's «Aggiorna» is the other one, with another word)
     const pageAlert = screen.getAllByRole("alert").find((alert) => alert.textContent?.includes("(positions_unavailable)"))!;
-    await user.click(within(pageAlert.parentElement as HTMLElement).getByRole("button", { name: "Aggiorna" }));
+    await user.click(within(pageAlert.parentElement as HTMLElement).getByRole("button", { name: "Riprova" }));
     expect(await screen.findByText("12 posizioni totali · 1 escluse · 11 attive")).toBeInTheDocument();
   });
 
