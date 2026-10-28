@@ -101,7 +101,17 @@ export function systemLineText(message: DirectChatMessage, codes: Record<string,
   if (code && Object.prototype.hasOwnProperty.call(codes, code) && typeof codes[code] === "string") {
     return codes[code];
   }
-  return message.text;
+  return message.role === "user" ? withoutAttachmentPath(message.text) : message.text;
+}
+
+/**
+ * An attachment goes to the Assistant with the path of its copy in the container, closing the person's
+ * sentence in one bracket (`direct_chat.rs`, `attachment_message`). The person reads the sentence only:
+ * this takes off that bracket, and only that exact shape at the very end — the app's folder, the name
+ * the app gives its copies — never any other brackets or paths in what someone wrote.
+ */
+export function withoutAttachmentPath(text: string): string {
+  return text.replace(/ \[attachment for my profile: \/jht_user\/allegati\/cv-\d{8}-\d{6}(?:-\d{1,3})?\.[a-z]{2,4}\]$/, "");
 }
 
 export { renderChatText };
@@ -618,6 +628,8 @@ export default function DirectChatScreen({
     const body = target ? `${quoteLine(t.quotePrefix, target.text)}\n${typed}` : typed;
     if (suggested === undefined) setReplyTo(null);
     setAnswerRefusal(null);
+    // the line under the composer was about the last attachment: once the person writes, it goes
+    setAttachNote(null);
     const id = clientMessageId();
     // in seconds, as the team's times: the receipt's time replaces it
     const optimistic: DirectChatMessage = { id, role: "user", text: body, at: Date.now() / 1000 };
@@ -739,7 +751,7 @@ export default function DirectChatScreen({
       return { kind: "question", question, words: question.state === "open" && question.free && canAnswer, text: question.subject || question.text };
     }
     const message = messages.find((m) => m.id === replyTo.id);
-    return message ? { kind: "message", text: message.text } : null;
+    return message ? { kind: "message", text: message.role === "user" ? withoutAttachmentPath(message.text) : message.text } : null;
   }
   const target = replyTarget();
 

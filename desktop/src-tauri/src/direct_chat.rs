@@ -2891,25 +2891,35 @@ impl Drop for AttachGuard {
     }
 }
 
-/// The message the Assistant gets: fixed words in the person's language and the name of OUR copy.
-/// Nothing of the person's file name or content is in it. An unknown language gets English.
+/// The message of an attachment. The person reads one short sentence in their language; behind it,
+/// on the same line, the Assistant gets the path of OUR copy in its container (the page hides that
+/// bracket: `withoutAttachmentPath` in DirectChatScreen.tsx reads exactly this shape). Nothing of the person's
+/// file name or content is in it. An unknown language gets English.
 fn attachment_message(locale: &str, file: &str) -> String {
-    let path = format!("/jht_user/{}/{file}", crate::chat_attachment::FOLDER);
-    match locale {
-        "it" => format!("Ho allegato il file {file} ({path}): usalo per il mio profilo."),
-        "de" => format!("Ich habe die Datei {file} angehängt ({path}): Nutze sie für mein Profil."),
-        "es" => format!("He adjuntado el archivo {file} ({path}): úsalo para mi perfil."),
-        "fr" => format!("J'ai joint le fichier {file} ({path}) : utilise-le pour mon profil."),
-        "hu" => format!("Csatoltam a(z) {file} fájlt ({path}): használd a profilomhoz."),
-        "pt" => format!("Anexei o arquivo {file} ({path}): use-o para o meu perfil."),
-        _ => format!("I attached the file {file} ({path}): use it for my profile."),
-    }
+    let said = match locale {
+        "it" => "Ho allegato il mio CV.",
+        "de" => "Ich habe meinen Lebenslauf angehängt.",
+        "es" => "He adjuntado mi CV.",
+        "fr" => "J'ai joint mon CV.",
+        "hu" => "Csatoltam az önéletrajzomat.",
+        "pt" => "Anexei meu currículo.",
+        _ => "I attached my CV.",
+    };
+    format!("{said} [attachment for my profile: /jht_user/{}/{file}]", crate::chat_attachment::FOLDER)
+}
+
+/// Where the system's window opens: the Downloads folder of the person, where a CV usually is, and
+/// not Documents, which holds their personal files. Without that folder the system chooses.
+fn downloads_of(home: &Path) -> Option<PathBuf> {
+    let downloads = home.join("Downloads");
+    downloads.is_dir().then_some(downloads)
 }
 
 struct AttachTarget {
     wrapper: PathBuf,
     runtime: PathBuf,
     user_dir: PathBuf,
+    start_dir: Option<PathBuf>,
 }
 
 /// The same gate as a message, then the places the copy needs. Runs off the main thread.
@@ -2932,6 +2942,7 @@ fn attach_target(
     Ok(AttachTarget {
         wrapper: connection.local_wrapper.clone().ok_or_else(|| failure("runtime_missing"))?,
         runtime: connection.local_runtime.clone().ok_or_else(|| failure("runtime_missing"))?,
+        start_dir: downloads_of(&home),
         user_dir: home.join("Documents").join("Job Hunter Team"),
     })
 }
@@ -2983,12 +2994,17 @@ pub(crate) async fn direct_chat_attach(
     };
     // The system's window is modal and waits for the person: never on the main thread.
     let picker = window.clone();
+    let start_dir = target.start_dir.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || {
-        app.dialog()
+        let mut dialog = app
+            .dialog()
             .file()
             .set_parent(&picker)
-            .add_filter("Documents", &crate::chat_attachment::ALLOWED_EXTENSIONS)
-            .blocking_pick_file()
+            .add_filter("Documents", &crate::chat_attachment::ALLOWED_EXTENSIONS);
+        if let Some(dir) = start_dir {
+            dialog = dialog.set_directory(dir);
+        }
+        dialog.blocking_pick_file()
     })
     .await
     .map_err(|_| failure("attach_failed"))?;
@@ -2998,7 +3014,10 @@ pub(crate) async fn direct_chat_attach(
     let source = chosen.into_path().map_err(|_| failure("attachment_unreadable"))?;
     let saved = {
         let user_dir = target.user_dir.clone();
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        // the name of the copy reads the clock of this computer, not UTC
+        let now = crate::chat_attachment::local_wall_clock(
+            SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+        );
         tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::store(&user_dir, &source, now, &mut |_| {}))
             .await
             .map_err(|_| failure("attach_failed"))?
@@ -5563,6 +5582,7 @@ mod assistance_registration_tests {
 #[cfg(test)]
 mod attachment_command_tests {
     use super::*;
+    use std::fs;
 
     // Unix only, like every test that builds a Connection (only_unix_tests_build_a_connection).
     #[cfg(unix)]
@@ -5599,15 +5619,39 @@ mod attachment_command_tests {
     }
 
     #[test]
-    fn the_message_to_the_assistant_names_our_copy_only_in_the_persons_language() {
+    fn the_person_reads_one_sentence_in_their_language_and_the_assistant_gets_the_path_behind_it() {
+        let file = "cv-20261028-153045.pdf";
+        let path = format!("/jht_user/allegati/{file}");
+        let mut said = std::collections::HashSet::new();
         for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
-            let text = attachment_message(locale, "cv-20261028-153045.pdf");
-            assert!(text.contains("cv-20261028-153045.pdf"), "{locale}");
-            assert!(text.contains("/jht_user/allegati/cv-20261028-153045.pdf"), "{locale}");
+            let text = attachment_message(locale, file);
+            // the Assistant gets the path of our copy, on one line, and what it is for
+            assert!(text.ends_with(&format!(" [attachment for my profile: {path}]")), "{locale}");
             assert!(!text.contains('\n') && !text.contains('{') && text.len() < 200, "{locale}");
+            // the person gets a sentence: no path, no folder, no name of a file, no brackets
+            let (visible, _) = text.split_once(" [attachment").unwrap();
+            assert!(!visible.contains("jht_user") && !visible.contains(file) && !visible.contains('/') && !visible.contains('['), "{locale}");
+            assert!(visible.ends_with('.') && visible.len() > 10, "{locale}");
+            said.insert(visible.to_owned());
         }
-        assert!(attachment_message("it", "cv-1.pdf").starts_with("Ho allegato"));
-        assert!(attachment_message("xx", "cv-1.pdf").starts_with("I attached"));
+        // seven languages, seven sentences (an unknown one and the empty one are English)
+        assert_eq!(said.len(), 7);
+        assert!(attachment_message("it", "cv-1.pdf").starts_with("Ho allegato il mio CV. ["));
+        assert!(attachment_message("xx", "cv-1.pdf").starts_with("I attached my CV. ["));
+    }
+
+    #[test]
+    fn the_window_opens_on_downloads_when_the_person_has_that_folder_and_never_on_documents() {
+        let home = std::env::temp_dir().join(format!("jht-downloads-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&home);
+        fs::create_dir_all(home.join("Documents")).unwrap();
+        assert_eq!(downloads_of(&home), None);
+        fs::write(home.join("Downloads"), b"a file, not a folder").unwrap();
+        assert_eq!(downloads_of(&home), None);
+        fs::remove_file(home.join("Downloads")).unwrap();
+        fs::create_dir_all(home.join("Downloads")).unwrap();
+        assert_eq!(downloads_of(&home), Some(home.join("Downloads")));
+        fs::remove_dir_all(&home).unwrap();
     }
 
     #[test]
@@ -5644,6 +5688,9 @@ mod attachment_command_tests {
         assert!(at("chat_attachment::remove(") < at("send_impl("));
         // the text is ours: built from the name of our copy, never from the page or the person's file
         assert!(command.contains("attachment_message(&locale, &saved.file)"));
+        // the window opens where the person keeps downloads, and the copy is named by the local clock
+        assert!(command.contains("set_directory(") && command.contains("target.start_dir"));
+        assert!(command.contains("local_wall_clock("));
         // the person's own name goes back to their screen, never into the message or a log
         assert!(!command.contains("attachment_message(&locale, &saved.display)"));
     }

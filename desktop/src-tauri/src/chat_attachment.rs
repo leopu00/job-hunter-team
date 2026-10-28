@@ -130,7 +130,25 @@ pub(crate) fn classify(extension: &str, bytes: &[u8]) -> Result<&'static str, &'
     decided.ok_or("attachment_type_mismatch")
 }
 
-/// `20261028-153045` from seconds since the epoch, UTC.
+/// The seconds of the clock on this computer's wall: `unix_seconds` plus the zone's offset at that
+/// moment (summer time included). The name of the copy reads like the person's own clock; `stamp`
+/// then only turns those seconds into a date, with no zone of its own.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub(crate) fn local_wall_clock(unix_seconds: u64) -> u64 {
+    let at = unix_seconds as libc::time_t;
+    // SAFETY: `at` and `parts` are ours and live for the call; localtime_r writes only into `parts`.
+    let mut parts: libc::tm = unsafe { std::mem::zeroed() };
+    let known = !unsafe { libc::localtime_r(&at, &mut parts) }.is_null();
+    unix_seconds.saturating_add_signed(if known { i64::from(parts.tm_gmtoff) } else { 0 })
+}
+
+/// No copy is made off macOS and Linux; the clock is left as it is.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) fn local_wall_clock(unix_seconds: u64) -> u64 {
+    unix_seconds
+}
+
+/// `20261028-153045` from seconds on a wall clock (see `local_wall_clock`; the tests give UTC ones).
 pub(crate) fn stamp(seconds: u64) -> String {
     let days = (seconds / 86_400) as i64;
     let rest = seconds % 86_400;
@@ -449,8 +467,59 @@ mod tests {
         assert!(!saved.file.contains("Mario"));
     }
 
+    /// TZ is the whole process's: one test at a time moves it, and puts it back.
+    static ZONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    extern "C" {
+        fn tzset();
+    }
+
+    fn in_zone<T>(zone: &str, then: impl FnOnce() -> T) -> T {
+        let _only = ZONE.lock().unwrap_or_else(|e| e.into_inner());
+        let before = std::env::var_os("TZ");
+        std::env::set_var("TZ", zone);
+        // SAFETY: tzset only re-reads TZ; no other test reads the zone.
+        unsafe { tzset() };
+        let out = then();
+        match before {
+            Some(value) => std::env::set_var("TZ", value),
+            None => std::env::remove_var("TZ"),
+        }
+        unsafe { tzset() };
+        out
+    }
+
     #[test]
-    fn the_stamp_is_the_utc_date_and_time() {
+    fn the_name_reads_the_clock_of_this_computer_summer_time_included() {
+        // POSIX zone rules, so no timezone database is needed on the machine that runs the test
+        let rome = "CET-1CEST,M3.5.0,M10.5.0/3";
+        let new_york = "EST5EDT,M3.2.0,M11.1.0";
+        let october = 1_792_000_000; // 2026-10-14 17:46:40 UTC
+        let january = october + 90 * 86_400;
+        in_zone(rome, || {
+            assert_eq!(local_wall_clock(october), october + 7_200);
+            assert_eq!(local_wall_clock(january), january + 3_600);
+            assert_eq!(stamp(local_wall_clock(october)), "20261014-194640");
+        });
+        in_zone(new_york, || {
+            assert_eq!(local_wall_clock(october), october - 14_400);
+            assert_eq!(local_wall_clock(january), january - 18_000);
+        });
+        // the day changes with the zone, not only the hour
+        in_zone("NZST-12NZDT,M9.5.0,M4.1.0/3", || assert_eq!(stamp(local_wall_clock(october)), "20261015-064640"));
+        in_zone("UTC0", || assert_eq!(local_wall_clock(october), october));
+    }
+
+    #[test]
+    fn the_copy_is_named_with_the_local_date_and_time() {
+        let s = Scratch::new();
+        let source = s.put("cv.pdf", &pdf());
+        let saved = in_zone("CET-1CEST,M3.5.0,M10.5.0/3", || run(&s, &source, local_wall_clock(1_792_000_000)).unwrap());
+        assert_eq!(saved.file, "cv-20261014-194640.pdf");
+    }
+
+    #[test]
+    fn the_stamp_is_the_date_and_time_of_the_seconds_it_is_given() {
         assert_eq!(stamp(0), "19700101-000000");
         assert_eq!(stamp(951_782_400 + 3_661), "20000229-010101");
         assert_eq!(stamp(1_792_000_000), "20261014-174640");
