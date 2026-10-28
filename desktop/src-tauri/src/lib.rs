@@ -29,6 +29,7 @@ mod onboarding_attestation_tests;
 mod podman;
 #[cfg(windows)]
 mod private_acl;
+mod private_copy;
 mod profile_import;
 mod profile_migration;
 mod release_channel;
@@ -71,6 +72,10 @@ pub fn run() {
             // inside the work area of its monitor, at any scale
             window_fit::fit_main_window(app.handle());
             voice_input::attach(app.handle())?;
+            // the folder of the private copies a document is opened from (and the sweep of what an earlier run left)
+            if let Ok(dir) = tauri::Manager::path(app).app_local_data_dir() {
+                std::thread::spawn(move || private_copy::init(dir));
+            }
             // what a crash left of the pipe-free ssh calls (Windows only), off the start's path
             std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
             Ok(())
@@ -186,6 +191,11 @@ pub fn run() {
             voice_input::voice_input_status,
             voice_input::voice_input_stop
         ])
-        .run(application_context())
-        .expect("error while running JHT Desktop");
+        .build(application_context())
+        .expect("error while running JHT Desktop")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                private_copy::sweep_private_copies();
+            }
+        });
 }

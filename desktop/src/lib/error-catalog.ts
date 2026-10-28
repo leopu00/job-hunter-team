@@ -1354,6 +1354,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The export file was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
   ),
+  private_copy_failed: copy(
+    "Non sono riuscito a preparare una copia del documento da aprire.",
+    "Riprova; se continua a non funzionare, controlla che il computer abbia spazio libero.",
+    "The app could not prepare a copy of the document to open.",
+    "Try again; if it keeps failing, check that the computer has free space.",
+  ),
+  document_open_failed: copy(
+    "Il computer non è riuscito ad aprire il documento.",
+    "Controlla di avere un programma per questo tipo di file, poi riprova.",
+    "The computer could not open the document.",
+    "Check that you have a program for this type of file, then try again.",
+  ),
   private_unavailable: copy(
     "Questo posto non permette file privati.",
     "Scegline un altro, per esempio una cartella di questo computer.",
