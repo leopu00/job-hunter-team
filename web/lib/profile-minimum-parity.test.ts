@@ -22,7 +22,11 @@ const shared = JSON.parse(
   ),
 ) as {
   required: string[];
-  cases: { name: string; profile: Record<string, unknown>; missing: string[] }[];
+  cases: {
+    name: string;
+    profile: Record<string, unknown>;
+    missing: string[];
+  }[];
 };
 
 const requiredMissing = (raw: Record<string, unknown>) =>
@@ -39,7 +43,10 @@ describe("minimo del profilo: parità con il validatore", () => {
   for (const c of shared.cases) {
     it(c.name, () => {
       assert.deepEqual(requiredMissing(c.profile), c.missing);
-      assert.equal(isTeamUnlocked(mapYamlToProfile(c.profile)), c.missing.length === 0);
+      assert.equal(
+        isTeamUnlocked(mapYamlToProfile(c.profile)),
+        c.missing.length === 0,
+      );
     });
   }
 });
@@ -54,11 +61,20 @@ describe("has_degree è facoltativo: assente è «non dichiarato», mai «no»",
   });
 
   it("un valore dichiarato resta com'è, anche false", () => {
-    assert.equal(mapYamlToProfile({ ...eight, has_degree: false }).has_degree, false);
-    assert.equal(mapYamlToProfile({ ...eight, has_degree: true }).has_degree, true);
+    assert.equal(
+      mapYamlToProfile({ ...eight, has_degree: false }).has_degree,
+      false,
+    );
+    assert.equal(
+      mapYamlToProfile({ ...eight, has_degree: true }).has_degree,
+      true,
+    );
   });
 
   it("un valore che non è un booleano non diventa un «no»", () => {
-    assert.equal(mapYamlToProfile({ ...eight, has_degree: "no" }).has_degree, null);
+    assert.equal(
+      mapYamlToProfile({ ...eight, has_degree: "no" }).has_degree,
+      null,
+    );
   });
 });

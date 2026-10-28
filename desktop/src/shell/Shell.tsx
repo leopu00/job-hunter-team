@@ -26,6 +26,7 @@ import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
 import { TeamOffBanner } from "./TeamOffBanner";
+import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
 import { beginPageLoad } from "../lib/page-timing";
@@ -265,10 +266,14 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <DesktopWriteProvider value={{ canChange: true }}>
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
-            <MailRotationBanner />
-            <NewVersionBanner />
-            <TeamOffBanner />
-            <WriteAccessRestoredBanner />
+            {/* The bars take what they need up to a third of the window and scroll beyond it: the page under them always keeps room, and the navbar above is never pushed out. */}
+            <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
+              <MailRotationBanner />
+              <NewVersionBanner />
+              <TeamOffBanner />
+              <LocalTeamOwnerBanner onSwitch={onLogout} />
+              <WriteAccessRestoredBanner />
+            </div>
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
             </main>
@@ -285,6 +290,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           <MailRotationBanner />
           <NewVersionBanner />
           <TeamOffBanner />
+          <LocalTeamOwnerBanner onSwitch={onLogout} />
             <WriteAccessRestoredBanner />
           <MainChrome>{page}</MainChrome>
         </div>

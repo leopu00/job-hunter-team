@@ -251,7 +251,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "Une application graphique pour les Mac Apple silicon : avec Homebrew déjà installé, elle prépare Podman et démarre l'équipe en un clic, sans terminal. Téléchargez-la depuis ",
     downloadPage: "la page d'installation",
-    path2B: ". Windows n'est pas pris en charge dans la 0.4 et Linux est expérimental.",
+    path2B:
+      ". Windows n'est pas pris en charge dans la 0.4 et Linux est expérimental.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
@@ -307,7 +308,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "Eine grafische App für Macs mit Apple silicon: Ist Homebrew bereits installiert, richtet sie Podman ein und startet das Team mit einem Klick, ganz ohne Terminal. Lade sie von ",
     downloadPage: "der Installationsseite",
-    path2B: " herunter. Windows wird in 0.4 nicht unterstützt und Linux ist experimentell.",
+    path2B:
+      " herunter. Windows wird in 0.4 nicht unterstützt und Linux ist experimentell.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Dann starte das Team und führe den Assistenten aus:",
@@ -363,7 +365,8 @@ export const T: Record<Locale, Dict> = {
     path2A:
       "Grafikus alkalmazás Apple silicon Macekre: ha a Homebrew már telepítve van, beállítja a Podmant, és egy kattintással elindítja a csapatot, terminál nélkül. A ",
     downloadPage: "telepítési oldalról",
-    path2B: " töltheted le. A Windows a 0.4-ben nem támogatott, a Linux pedig kísérleti.",
+    path2B:
+      " töltheted le. A Windows a 0.4-ben nem támogatott, a Linux pedig kísérleti.",
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux:",
     path3WizardIntro: "Aztán indítsd el a csapatot, és futtasd a varázslót:",

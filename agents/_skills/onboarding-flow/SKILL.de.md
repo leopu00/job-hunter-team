@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Konversationsprotokoll, dem der Assistente beim Onboarding des Nutzers folgt — erste Nachricht, iteratives Eine-Frage-pro-Runde-Pacing, blockierende Checkliste (das Minimum, das das Dashboard freischaltet) vs reichhaltige Checkliste (was die Writer tatsächlich nützlich macht), branchenneutraler Fragestil (NIEMALS IT annehmen), und die verpflichtende Checkpoint-Sequenz wenn der Nutzer Dateien hochlädt. Eng gepaart mit `profile-yaml` (jede Antwort = ein Write+Validate) und `profile-summaries` (narrative MDs nach Schlüsselmeilensteinen). Diesen Skill am Anfang einer Onboarding-Sitzung und bei jeder Nutzer-Runde öffnen, die neue Info bringt.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
@@ -106,19 +106,18 @@ preferences:
 
 **Ton:** eine natürliche Frage, kein bürokratisches Formular. Z.B.: *"Da du auch nach London und Zürich schaust: hast du bereits das Recht, dort zu arbeiten, oder bräuchte es dafür einen Sponsor/ein Visum? So vermeide ich, dir Rollen vorzuschlagen, die nicht zugänglich sind."* Erkläre immer das **Warum** (= nützlichere Shortlist), frage nicht kalt.
 
-## Abonnement — einmal fragen, nie an Stelle des Nutzers eintragen
+## Abonnement — nur mit der Karte fragen, nie an Stelle des Nutzers eintragen
 
-Das Team kann seine erste Runde erst starten, wenn das Abonnement des Nutzers angegeben ist (der Capitano rät keine Aufstellung: eine falsche Annahme verbrennt das Fenster des Nutzers am ersten Tag). Die App hat dafür keinen Bildschirm: **du** bist die Stelle, an der der Nutzer es angibt.
+Das Team kann seine erste Runde erst starten, wenn das Abonnement des Nutzers angegeben ist (der Capitano rät keine Aufstellung: eine falsche Annahme verbrennt das Fenster des Nutzers am ersten Tag). **Das Abonnement wird auf EINE Weise erfragt, von jedem Agenten und damit auch von dir: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Es veröffentlicht eine Karte (in deinem Chat, weil der Nutzer mit dir spricht) mit den Abonnements, ihren Preisen und dem, den Codex meldet, als vorgeschlagen markiert. Frag das Abonnement nie als Text, nie auf eigene Faust mit `jht-notify-user` (eine so geschriebene Frage erscheint nicht in Messages und der Nutzer wartet vergeblich), zähle die Abonnements nie mit eigenen Worten auf.
 
-**Wann:** einmal, nach den ersten zwei, drei Antworten (nie in deiner ersten Nachricht), und spätestens bevor du dem Nutzer sagst, dass das Profil fertig ist.
+**Wann:** einmal, gleich nachdem das Profil gespeichert ist (`profile_review.py apply-confirmed` hat `ok: true` geliefert), nie davor und nie in deinen ersten Nachrichten.
 
 1. **Prüfen.** `python3 /app/shared/skills/plan_registry.py get`. Wird ein Abonnement ausgegeben (Exit 0), ist es angegeben: sag nichts und mach weiter. `PLAN_MISSING` (Exit 1) = nicht angegeben.
-2. **Auswahl zeigen.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex ist der Anbieter, den die App verbindet). Gib dem Nutzer Namen und Preise der Abonnements als kurze, schlichte Liste in seiner Sprache, nicht die rohe Tabelle.
-3. **Vorschlagen, nicht entscheiden.** Endet die Ausgabe mit einer Zeile `Codex reports: <Name> → <Abo> <Preis>`, schlag dieses Abonnement vor („Codex sagt mir, dein Konto sieht nach Pro aus, 100 $/Monat: ist das deins?"). Es ist ein Vorschlag: Es wird nichts geschrieben, bevor der Nutzer ja sagt. Eine Zeile, die auf `(not in this table)` endet, ist kein Vorschlag: zähle nur die Abonnements auf.
-4. **Schreiben, was er gewählt hat.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, mit `<id>` aus der ersten Spalte der Liste. Bestätige in einer Zeile.
-5. **Weiß er es nicht?** Such nicht selbst eins aus. Sag ihm, dass das Abonnement auf der Abo-Seite des Anbieters steht, frag einmal erneut, bevor das Profil fertig ist, und sag ihm, wenn er es dann noch nicht weiß, dass der Capitano erneut fragt.
+2. **Mit der Karte fragen.** Führe `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` aus. `asked: true` → eine Zeile: die Karte mit den Abonnements ist im Chat, such deins aus. `wait_for_profile: true` → das Profil ist noch nicht gespeichert: sag nichts zum Abonnement, das System fragt, sobald das Profil fertig ist. Sagt er, dass schon eine Frage zum Abonnement offen ist (`asked: false`, mit einer `question_id` und dem `agent`, der sie hat), stell KEINE zweite: sag dem Nutzer in einer Zeile, er soll die Karte beantworten, die schon wartet, und sag WO sie liegt, nach `in_your_chat`: `true` → in diesem Chat, weiter oben; `false` → im Chat mit dem Agenten aus `agent` (im Chat des Capitano, wenn es `capitano` ist), nie „in diesem Chat“. Sagt er, das Abonnement sei mehrfach erfragt worden oder werde später erneut erfragt, füge nichts hinzu und frag nicht als Text.
+3. **Schreiben, was er gewählt hat.** Antwortet der Nutzer auf die Karte (du liest `[USER ANSWER …]`), schreib genau seine Wahl: `python3 /app/shared/skills/plan_registry.py set codex:<id>`, mit `<id>` der ID der Option (`pro_max` gilt für `pro-max`). Bestätige in einer Zeile.
+4. **Weiß er es nicht?** (die Option „Ich weiß es nicht“) Such nicht selbst eins aus. Sag ihm, dass das Abonnement auf der Abo-Seite des Anbieters steht; das System fragt später erneut (die Karte kommt nach einer Stunde wieder, höchstens dreimal).
 
-Nie ein Abonnement eintragen, das der Nutzer nicht gewählt hat, nie aus etwas anderem ableiten, nie erneut fragen, wenn `get` eins ausgibt. Nutze nur `get`, `list` und `set` dieses Skripts.
+Nie ein Abonnement eintragen, das der Nutzer nicht gewählt hat, nie aus etwas anderem ableiten, nie erneut fragen, wenn `get` eins ausgibt. Nutze nur `get` und `set` des Registers und `ask-plan` von `first_run.py`.
 
 ## Branchenneutral — NIEMALS IT als Standard annehmen
 
@@ -201,11 +200,12 @@ Ein PDF lesen + Daten extrahieren + YAML validieren + 2 MDs schreiben kann 30-90
 7. MINDESTENS about.md + strengths.md schreiben             → Skill profile-summaries
    (preferences.md und goals.md kommen nach der spezifischen Diskussion)
 
-8. Finale Nachricht (KEIN --partial) — nutzerfreundliche Zusammenfassung
-   + klare Aufforderung, die Daten zu prüfen und **Bestätigen und speichern**
-   zu drücken. Erst danach das erste leere Feld erfragen. Bei fehlgeschlagener
-   Vorbereitung den Fehler melden, ohne Chat-Erinnerung und ohne zu behaupten,
-   das Profil sei gespeichert.
+8. Letzter Schritt (KEIN --partial): die Bestätigungskarte der Skill `profile-yaml`
+   (`ask-confirm`). Sie enthält die Zusammenfassung und die Schaltflächen:
+   Zusammenfassung nicht wiederholen und kein Panel nennen. Erst nachdem die
+   Person mit der Karte bestätigt hat, das erste leere Feld erfragen. Bei
+   fehlgeschlagener Vorbereitung den Fehler melden, ohne Chat-Erinnerung und
+   ohne zu behaupten, das Profil sei gespeichert.
 ```
 
 > ⚠️ Schritt 7 (`about.md` + `strengths.md`) **ist nicht optional**. Ohne hat der CV-Scrittore nachgelagert nie den narrativen Kontext des Kandidaten. Du bist der einzige Punkt, an dem diese Narration erfasst wird.

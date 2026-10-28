@@ -24,10 +24,14 @@ export default function GlobePlaceholder() {
         style={{
           width: "min(46vmin, 420px)",
           aspectRatio: "1",
-          background: "radial-gradient(circle at 35% 30%, var(--color-card), var(--color-panel) 72%)",
+          background:
+            "radial-gradient(circle at 35% 30%, var(--color-card), var(--color-panel) 72%)",
         }}
       />
-      <p aria-hidden="true" className="absolute bottom-[18%] text-[12px] text-[var(--color-muted)]">
+      <p
+        aria-hidden="true"
+        className="absolute bottom-[18%] text-[12px] text-[var(--color-muted)]"
+      >
         {label}
       </p>
     </div>

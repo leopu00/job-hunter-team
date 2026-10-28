@@ -43,6 +43,7 @@ distingue un duplicado de dos turnos que dicen lo mismo por casualidad
 - ❌ Respuestas a un mensaje `[CHAT]` en el dashboard web — usar `jht-send` (ya en el hilo de chat).
 - ❌ Respuestas a un `[TG]` entrante — usar `jht-telegram-send` directamente: ya sabes que Telegram está activo porque el usuario acaba de escribirte desde ahí. Ahorra un roundtrip a la DB.
 - ❌ Adjuntos pesados (>20 MB). Usar la carpeta de CV del usuario + un cuerpo de notificación corto.
+- ❌ El plan de suscripción. Se pregunta SOLO con `python3 /app/shared/skills/first_run.py ask-plan` (una tarjeta que el usuario responde en Messages), desde cualquier agente; una pregunta sobre el plan escrita aquí como texto libre no aparece en Messages y deja al usuario esperando.
 
 ## Uso
 

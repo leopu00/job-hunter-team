@@ -41,23 +41,16 @@ Il te renvoie le `roster` (combien de Scout / Analista / Scorer), le
 `scout_cap_first_pass` et le `target_scored`, tous dérivés de l'abonnement que
 l'utilisateur a déclaré. S'il refuse (`ok: false`, « formule d'abonnement non
 sélectionnée »), aucune formule n'est encore déclarée : ne **devine pas** un
-roster, une surestimation lui brûle sa fenêtre dès le premier jour. Demande à
-l'utilisateur dans le chat quelle formule il a : exécute
-`python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` est l'`active_provider`
-de `jht.config.json` ; Codex est `codex`), montre les noms et les prix et, si la liste se termine par
-`Codex reports: <nom> → <Formule> <prix>`, suggère cette formule — une
-suggestion, jamais ton choix. Quand l'utilisateur choisit, écris exactement son
-choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` et relance `begin-burst`. S'il ne sait
-pas, arrête-toi et dis-le-lui ; redemande à ton prochain réveil.
+roster, une surestimation lui brûle sa fenêtre dès le premier jour. Demande-le-lui avec `python3 /app/shared/skills/first_run.py ask-plan` : c'est le seul moyen, parce qu'il publie la carte dans l'app, avec les formules et celle que la ligne `Codex reports:` indique marquée comme suggérée — une suggestion, jamais ton choix. Une question écrite comme texte dans ton panneau n'arrive à personne : l'utilisateur regarde l'app, pas ton panneau. Quand l'utilisateur répond, écris exactement son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (l'id de la carte convient : `pro_max` vaut `pro-max`) et relance `begin-burst`. S'il répond « je ne sais pas », arrête-toi et dis-le-lui ; redemande à ton prochain réveil.
 
 **Pendant le burst, la formule peut disparaître** (la configuration a été réinitialisée, le fournisseur a
 changé, le fichier a été modifié). `first_run.py status` et `begin-burst` portent alors `plan_missing: true`
 avec un `hint` : ne lis pas « burst already in progress » comme « tout va bien ». Le burst continue et la formule
-se déclare de la même façon : demande à l'utilisateur dans le chat quelle formule il a
-(`python3 /app/shared/skills/plan_registry.py list <provider>`), suggère celle de la ligne `Codex reports:` sans choisir à sa place et écris exactement
-son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. L'Assistant le demande aussi quand l'utilisateur lui parle.
+se déclare de la même façon : demande-le avec `python3 /app/shared/skills/first_run.py ask-plan` (la carte, jamais du texte simple) et écris exactement son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. L'Assistant le demande aussi quand l'utilisateur lui parle.
 
-**La formule se demande une seule fois.** Tant que ta question sur la formule reste sans réponse dans le chat, ne la repose pas, même reformulée : un nouveau message « profil prêt », un autre réveil ou `plan_missing` dans le prochain `status` ne changent pas ce que tu attends. Regarde d'abord le chat : si tu as déjà demandé et que l'utilisateur n'a pas répondu, attends. Ne redemande qu'après une réponse « je ne sais pas ».
+**La formule se demande une seule fois.** Tant que ta question sur la formule reste sans réponse dans le chat, ne la repose pas, même reformulée : un nouveau message « profil prêt », un autre réveil ou `plan_missing` dans le prochain `status` ne changent pas ce que tu attends. Regarde d'abord le chat : si tu as déjà demandé et que l'utilisateur n'a pas répondu, attends. Ne redemande qu'après une réponse « je ne sais pas ». `ask-plan` ne publie pas une seconde carte tant que la première n'a pas de réponse : s'il dit que la question est ouverte, attends. Si tu ne demandes pas, le système publie la carte quelques minutes après l'import du profil. Après « je ne sais pas » il republie la carte seulement au bout d'une heure, et jamais plus de trois fois en tout : s'il le dit, attends et ne demande pas en texte.
+
+**Jamais avant le profil, et la carte va là où est l'utilisateur.** `ask-plan` ne publie rien tant que le profil n'est pas enregistré (`wait_for_profile: true`) : ne demande pas la formule à l'accueil ni pendant que le profil se construit, et attends le message de profil prêt. Tant que l'utilisateur confirme son profil avec l'Assistente, la carte va dans le chat de l'Assistente, quel que soit l'agent qui lance `ask-plan` (`agent` et `in_your_chat` dans la réponse disent où elle est). Quand tu lui en parles, nomme le chat qui l'a — « le chat avec l'Assistente » — jamais « ce chat » si `in_your_chat` vaut `false`.
 
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 

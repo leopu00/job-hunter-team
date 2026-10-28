@@ -32,8 +32,9 @@ export interface DirectChatAnswer {
   text?: string;
   at: number;
   /** `expiry`: nobody answered in time and the question's safe option was taken */
+  /** `system`: the question had no object any more and the system closed it; never the person's choice */
   /** `unknown`: the team gave an origin of its own; never said as the person's. */
-  origin: "user" | "expiry" | "unknown";
+  origin: "user" | "expiry" | "system" | "unknown";
   /** when the agent read the answer in its turn; null until then */
   seenAt: number | null;
 }
@@ -60,11 +61,11 @@ export interface DirectChatQuestion {
 export interface DirectChatPage {
   messages: DirectChatMessage[]; cursor?: string; questions?: DirectChatQuestion[]; queued?: string[];
   /** How the turns that left the queue ended (last day): typed and taken, still in the composer, no proof, or never typed. */
-  settled?: { id: string; how: "taken" | "pending" | "unconfirmed" | "expired" }[];
+  settled?: { id: string; how: "taken" | "pending" | "late" | "unconfirmed" | "expired" }[];
   /**
-   * What the agent's terminal shows while the person's last turn waits for an answer: `working` (a running
-   * turn) or `idle` (an empty prompt). Absent: not known (an older image, a screen the team cannot read, a
-   * chat nobody waits on): never read as idle.
+   * What the agent's terminal shows within half an hour of the person's last turn, answered or not (the
+   * agent may answer first and go on working): `working` (a running turn) or `idle` (an empty prompt).
+   * Absent: not known (an older image, a screen the team cannot read, an older turn): never read as idle.
    */
   activity?: "working" | "idle";
 }
@@ -129,6 +130,31 @@ export async function readDirectChat(agent: string, cursor?: string): Promise<Di
 export async function sendDirectChat(agent: string, text: string, clientMessageId: string): Promise<DirectChatReceipt> {
   if (!isTauri()) desktopOnly();
   return invoke("direct_chat_send", { agentId: agentId(agent), text, clientMessageId });
+}
+
+/** Whether the paperclip can be used now; off, `code` is why (attach_vps, attach_read_only, attach_platform, attach_not_connected). */
+export interface DirectChatAttachState { available: boolean; code?: string }
+/**
+ * What choosing a file ended in: `sent` (copied, the team sees it, the Assistant was told), `saved_not_sent`
+ * (copied, the Assistant was not told: `code` says why), `cancelled` (the window was closed).
+ * `displayName` is the person's own file name, for their screen only.
+ */
+export interface DirectChatAttachment {
+  outcome: "sent" | "saved_not_sent" | "cancelled";
+  displayName?: string;
+  code?: string;
+  receipt?: DirectChatReceipt;
+}
+
+export async function directChatAttachState(): Promise<DirectChatAttachState> {
+  if (!isTauri()) desktopOnly();
+  return invoke("direct_chat_attach_state");
+}
+
+/** Only the Assistant takes files. The page names no path: the system's window is opened by the app. */
+export async function attachDirectChat(clientMessageId: string, locale: string): Promise<DirectChatAttachment> {
+  if (!isTauri()) desktopOnly();
+  return invoke("direct_chat_attach", { agentId: "assistente", clientMessageId, locale });
 }
 
 /** The person's answer to one of the agent's questions: the options' ids and, where taken, words. */

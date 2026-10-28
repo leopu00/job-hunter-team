@@ -97,7 +97,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Windowson a telepítő az elsődleges út; a hordozható változat az alternatíva.",
     },
     assets: {},
-    pending: "Windows: tolta, la 0.4 non ha Windows. Linux: revocata dall'audit. macOS: Da rifare con l'app 0.4, dati finti, build 2. File: web/public/setup-guide/S03-artifact-download-macos.jpg (1506×825 px), poi rimettere la voce in assets.",
+    pending:
+      "Windows: tolta, la 0.4 non ha Windows. Linux: revocata dall'audit. macOS: Da rifare con l'app 0.4, dati finti, build 2. File: web/public/setup-guide/S03-artifact-download-macos.jpg (1506×825 px), poi rimettere la voce in assets.",
   },
   {
     id: "S04-installation-macos",
@@ -120,7 +121,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A macOS-változat aláírt és hitelesített: elég egy dupla kattintás.",
     },
     assets: {},
-    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S04-installation-macos.png (2064×1096 px); poi rimettere le voci in assets.",
+    pending:
+      "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S04-installation-macos.png (2064×1096 px); poi rimettere le voci in assets.",
   },
   {
     id: "S04-installation-windows",
@@ -199,7 +201,8 @@ const SCREEN_LIST: GuideScreen[] = [
       // pulito. Una voce in più nel registro, non un file in più sul
       // disco — che è esattamente a cosa serve il registro.
     },
-    pending: "Usa la stessa ripresa di S06 (S06-choose-language-macos.png e -linux.png): tolte entrambe, si rifanno con S06. Poi rimettere le voci in assets.",
+    pending:
+      "Usa la stessa ripresa di S06 (S06-choose-language-macos.png e -linux.png): tolte entrambe, si rifanno con S06. Poi rimettere le voci in assets.",
   },
   {
     id: "S06-choose-language",
@@ -222,7 +225,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Hét nyelv; a megerősítés elmenti a választást ezen az eszközön.",
     },
     assets: {},
-    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S06-choose-language-linux.png (624×486 px), S06-choose-language-macos.png (3024×1898 px); poi rimettere le voci in assets. Linux: da rifare quando c'è un collaudo Linux.",
+    pending:
+      "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File in web/public/setup-guide/: S06-choose-language-linux.png (624×486 px), S06-choose-language-macos.png (3024×1898 px); poi rimettere le voci in assets. Linux: da rifare quando c'è un collaudo Linux.",
   },
   {
     id: "S07a-start-screen",
@@ -245,7 +249,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A(z) Helyi használat egy olyan profilt indít, amely ezen az eszközön marad.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S07a-start-screen-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S07a-start-screen-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S07b-display-name",
@@ -268,7 +273,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A név csak ezen az eszközön marad meg.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S07b-display-name-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S07b-display-name-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S07-enter-office",
@@ -291,7 +297,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A profil neve megváltoztatható; csak ezen az eszközön marad meg.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S07-enter-office-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S07-enter-office-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S08-environment",
@@ -314,7 +321,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Ez az útmutató a(z) Ez a számítógép lehetőséget követi.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S08-environment-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S08-environment-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S08-provider",
@@ -337,7 +345,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A hozzáférés az előfizetéseden keresztül történik, soha nem API-kulccsal.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S08-provider-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S08-provider-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S08-confirm",
@@ -360,7 +369,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Semmi nem indul el, amíg nem választod a(z) A csapat előkészítése gombot.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S08-confirm-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S08-confirm-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S09-start-container",
@@ -383,7 +393,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Minden fázis mutatja az állapotát; az első indítás több percig tart.",
     },
     assets: {},
-    pending: "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S09-start-container-macos.png (3024×1898 px), poi rimettere la voce in assets.",
+    pending:
+      "Ripresa del collaudo da rifare pulita, senza il dialogo di sistema in alto, con profilo e dati finti. File: web/public/setup-guide/S09-start-container-macos.png (3024×1898 px), poi rimettere la voce in assets.",
   },
   {
     id: "S11-authorize-provider",
@@ -406,7 +417,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "Csak az alkalmazás által mutatott kéréseket kövesd; más nem kérnek tőled.",
     },
     assets: {},
-    pending: "Console di autorizzazione dell'accesso al provider. Nessun codice o token a schermo: fermarsi prima che compaia.",
+    pending:
+      "Console di autorizzazione dell'accesso al provider. Nessun codice o token a schermo: fermarsi prima che compaia.",
   },
   {
     id: "S16-team-starting",
@@ -476,7 +488,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A bejelentkezés gombja addig nem elérhető, amíg a konténer nem fut.",
     },
     assets: {},
-    pending: "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File: web/public/setup-guide/W01-local-account-entry-macos.png (3024×1898 px); poi rimettere la voce in assets.",
+    pending:
+      "Da rifare con l'app 0.4 su Mac, dati finti, build 2. File: web/public/setup-guide/W01-local-account-entry-macos.png (3024×1898 px); poi rimettere la voce in assets.",
   },
   {
     id: "W02-google-login",
@@ -499,7 +512,8 @@ const SCREEN_LIST: GuideScreen[] = [
       hu: "A hivatkozás a böngészőben nyílik; az egyszer használatos kód itt marad.",
     },
     assets: {},
-    pending: "Tolta: il login web è congelato e la 0.4 non ha Windows. Nessuna ripresa da fare.",
+    pending:
+      "Tolta: il login web è congelato e la 0.4 non ha Windows. Nessuna ripresa da fare.",
   },
   {
     id: "W03-permissions",

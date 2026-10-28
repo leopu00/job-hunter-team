@@ -9,6 +9,7 @@ import {
   clearDesktopAccountScope,
   migrateDesktopLocalProfileToAccount,
   probeDesktopLocalProfileMigration,
+  probeDesktopLocalTeamOwner,
 } from "../lib/desktop-account-scope";
 import {
   activateSavedLocalProfile,
@@ -21,6 +22,7 @@ import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/ide
 import { readDesktopPlatform } from "../lib/desktop-platform";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
+import { STATE_TEXT } from "../lib/onboarding-state.i18n";
 import { existingTeamReadOnly, existingTeamView, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { writeAccessNotice } from "../lib/write-access-restored";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
@@ -110,6 +112,7 @@ vi.mock("../lib/desktop-account-scope", () => ({
   clearDesktopAccountScope: vi.fn(),
   migrateDesktopLocalProfileToAccount: vi.fn(),
   probeDesktopLocalProfileMigration: vi.fn(),
+  probeDesktopLocalTeamOwner: vi.fn(),
 }));
 vi.mock("../lib/local-profile", () => ({
   activateSavedLocalProfile: vi.fn(),
@@ -138,7 +141,7 @@ vi.mock("../shell/Shell", async () => {
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
   });
   function MockShell({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) {
-    // What the chat's «Collega il team» reaches in the read-only view (AgentChatPane uses the same context).
+    // What the chat's «Collega il team» reaches in the read-only view.
     const reconfirm = useReconfirmExistingTeam();
     // What the dashboard's «Collega un team» reaches in a Shell with no team linked.
     const connectTeam = useConnectTeam();
@@ -339,6 +342,8 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(clearDesktopAccountScope).mockResolvedValue();
     vi.mocked(migrateDesktopLocalProfileToAccount).mockResolvedValue({ receiptHash: "a".repeat(64) });
     vi.mocked(probeDesktopLocalProfileMigration).mockResolvedValue(false);
+    vi.mocked(probeDesktopLocalTeamOwner).mockReset();
+    vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("none");
     vi.mocked(activateSavedLocalProfile).mockResolvedValue({
       profileId: "opaque-local-profile",
       displayName: "Synthetic Local",
@@ -545,10 +550,202 @@ describe("DashboardApp onboarding router", () => {
     render(<DashboardApp />);
     await userEvent.click(await screen.findByRole("button", { name: "Collega e continua" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta intestato/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/revisione ancora da confermare/i);
+    expect(screen.getByTestId("local-migration-code")).toHaveTextContent("local_migration_review_pending");
+    expect(screen.getByRole("alert")).toHaveTextContent(/la squadra resta del profilo locale/i);
     expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument();
     expect(finalizeLocalProfileMigration).not.toHaveBeenCalled();
     expect(activateDesktopAccountScope).not.toHaveBeenCalled();
+  });
+
+  it("says why the check failed, with its code, and leaves the person a way out of the page", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_target_exists" });
+
+    render(<DashboardApp />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(describeError("local_migration_target_exists", { locale: "it" }).text);
+    expect(screen.getByTestId("local-migration-code")).toHaveTextContent("local_migration_target_exists");
+    expect(screen.getByTestId("local-migration")).toHaveClass("existing-team-modal");
+    expect(screen.getByRole("button", { name: "Annulla e resta in locale" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Torna ad Accedi" })).toBeEnabled();
+    expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["local_migration_profile_changed", true],
+    ["local_migration_in_progress", true],
+    ["local_migration_storage_failed", true],
+    ["local_migration_owner_unavailable", true],
+    ["local_migration_review_pending", false],
+    ["local_migration_target_exists", false],
+    ["local_migration_source_invalid", false],
+  ])("offers «Try again» for %s: %s", async (code, offered) => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code });
+
+    render(<DashboardApp />);
+    await screen.findByRole("alert");
+
+    expect(screen.queryByRole("button", { name: "Riprova" }) !== null).toBe(offered);
+  });
+
+  it("on target_exists the person can go in with the account without linking, and the local profile stays as it is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_target_exists" });
+    vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+    requireOnboarding();
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await screen.findByRole("alert");
+    expect(activateDesktopAccountScope).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Entra con Google senza collegare" }));
+
+    // the account's own scope, the account's gate, and no team of this computer to set up
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    expect(activateDesktopAccountScope).toHaveBeenCalledOnce();
+    expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+    expect(finalizeLocalProfileMigration).not.toHaveBeenCalled();
+    expect(activateSavedLocalProfile).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+  });
+
+  it("offers «Sign in with Google without linking» only where the account already has its data here", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_owner_mismatch" });
+
+    render(<DashboardApp />);
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("button", { name: "Entra con Google senza collegare" })).not.toBeInTheDocument();
+  });
+
+  describe("the team of this computer is another profile's", () => {
+    function setUpLocal() {
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      vi.mocked(googleIdentitySelected).mockReturnValue(false);
+      vi.mocked(localIdentitySelected).mockReturnValue(true);
+      vi.mocked(readLocalProfile).mockReturnValue({
+        profileId: "opaque-local-profile",
+        displayName: "Synthetic Local",
+      });
+    }
+
+    it("a local profile with no setup yet goes in without the team, and nothing is written about a setup", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(activateDesktopLocalScope).toHaveBeenCalledWith("opaque-local-profile");
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(markOnboardingStarted).not.toHaveBeenCalled();
+    });
+
+    it("an account with no setup yet goes in the same way", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+      requireOnboarding();
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    });
+
+    it.each(["self", "none"] as const)("the owner (%s) gets the setup as always", async (owner) => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue(owner);
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("when the owner cannot be read the setup decides, as before", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockRejectedValue({ code: "local_account_owner_unavailable" });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("a team saved on a VPS is still offered, because it is not the team of this computer", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("existing-account"));
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+      vi.mocked(loadOnboardingGate).mockResolvedValue({
+        phase: "required",
+        account: { displayName: "Existing Person" },
+        resumeAvailable: false,
+        existingTeam: { teamId: "team-opaque-0001", status: "available" },
+        runtime: { status: "collecting", stage: "host" },
+      });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("existing-team-modal")).toBeInTheDocument();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("a setup that is already done does not ask who owns the team", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("complete-account"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(probeDesktopLocalTeamOwner).not.toHaveBeenCalled();
+    });
+  });
+
+  it("«Back to sign in» is the app's own sign-out, held while it runs, and says so if it did not work", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_owner_mismatch" });
+    let fail!: (error: Error) => void;
+    vi.mocked(signOut).mockReturnValueOnce(new Promise<void>((_, reject) => { fail = reject; }));
+    vi.mocked(signOut).mockResolvedValueOnce();
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "Torna ad Accedi" }));
+
+    expect(signOut).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Esco…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Annulla e resta in locale" })).toBeDisabled();
+    expect(activateSavedLocalProfile).not.toHaveBeenCalled();
+
+    // a leaving that did not work is told, and can be asked again
+    await act(async () => { fail(new Error("sign-out-failed")); });
+    expect(await screen.findByText(STATE_TEXT.it.leaveFailed)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Torna ad Accedi" }));
+    expect(signOut).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole("button", { name: "Esco…" })).toBeDisabled();
   });
 
   it("routes a new account to technical host setup and a complete account to Shell", async () => {

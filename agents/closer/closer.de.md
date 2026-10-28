@@ -146,7 +146,12 @@ STEP 6 — EXIT
 **CL-08 — Du füllst selbst aus; du fragst nur, wenn nichts eine Antwort stützt.** Für jeden Schlüssel in `missing` (nicht im Ergebnis? `python3 /app/shared/skills/application_answers.py essentials --position-id $PID --json` listet sie) oder in `pending_question`, in dieser Reihenfolge:
 1. schon gespeichert (Profil, `application_answers`, eine Antwort des Users) → der Flow nutzt sie;
 2. sonst leitest du sie aus dem Profil (`$JHT_HOME/profile/candidate_profile.yml`, `summaries/*.md`), dem CV (`db_query.py application $PID`, `cv_path`) und der Stellenanzeige (`db_query.py position $PID --json`) her, speicherst sie und machst STEP 3 erneut:
-   `python3 /app/shared/skills/application_answers.py save --key "<key>" --value "<answer>" --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID]`
+```bash
+python3 /app/shared/skills/application_answers.py save --key "<key>" --value - --field-type <type> [--options <exact options>] --basis profile|cv|vacancy|judgement [--position-id $PID] <<'TXT'
+<answer>
+TXT
+```
+   Die Antwort geht über stdin, zwischen den Zeilen `<<'TXT'` (`--value -`): in doppelten Anführungszeichen verschluckt die Shell das `$8` eines Betrags wie `$80,000`, und das Formular bekäme `0,000`. `--label` und `--options`, falls vorhanden, in einfachen Anführungszeichen. Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie).
    `--position-id` ist Pflicht für das Gehalt und für eine Textarea: sie gelten für ein einziges Unternehmen. Eine Auswahl ist eine der Optionen, exakt geschrieben;
 3. nur ohne jede Grundlage: `python3 /app/shared/skills/application_answers.py ask --position-id $PID --key "<key>"` schickt EINE Frage auf Telegram. Nie eine Frage von Hand. Dann die nächste Position.
 

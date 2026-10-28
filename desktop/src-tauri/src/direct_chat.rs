@@ -149,6 +149,9 @@ struct DirectChatInner {
     connection: Mutex<Option<Connection>>,
     subscribers: Mutex<Vec<Channel<DirectChatEvent>>>,
     send_lock: Mutex<()>,
+    /// An attachment is being chosen, copied or told: a second one waits for the person to finish.
+    /// Its own `Arc`: the guard that holds it must not carry the whole state (and the connection's drop glue) with it.
+    attach_busy: Arc<std::sync::atomic::AtomicBool>,
 }
 
 struct Connection {
@@ -221,9 +224,10 @@ const MESSAGE_KINDS: [&str; 4] = ["urgent", "blocked", "completed", "info"];
 /// The kinds of a question: the kinds of a message, and `question`.
 const QUESTION_KINDS: [&str; 5] = ["urgent", "blocked", "question", "completed", "info"];
 const QUESTION_STATES: [&str; 3] = ["open", "answered", "expired"];
-/// Who gave an answer: the person, or the question's safe option when nobody answered in time.
+/// Who gave an answer: the person, the question's safe option when nobody answered in time, or the system
+/// closing a question that has no object any more (the plan was declared another way).
 /// Any other origin the team writes is `unknown`, and never said as the person's.
-const ANSWER_ORIGINS: [&str; 2] = ["user", "expiry"];
+const ANSWER_ORIGINS: [&str; 3] = ["user", "expiry", "system"];
 const MAX_SUBJECT_CHARS: usize = 200;
 const MAX_QUESTION_CHARS: usize = 4000;
 const MAX_LABEL_CHARS: usize = 200;
@@ -533,8 +537,9 @@ pub(crate) struct DirectChatPage {
     /// from here, never from its absence in `queued`.
     #[serde(default, deserialize_with = "queue_endings", skip_serializing_if = "Option::is_none")]
     settled: Option<Vec<DirectChatQueueEnding>>,
-    /// `working` or `idle`, only while the person's last turn waits for an answer; absent when the team
-    /// does not say (an older image, a screen it cannot read): the page never reads absent as idle.
+    /// `working` or `idle`, within half an hour of the person's last turn (the agent may answer first and go
+    /// on working); absent when the team does not say (an older image, a screen it cannot read, an older
+    /// turn): the page never reads absent as idle.
     #[serde(default, deserialize_with = "closed_activity", skip_serializing_if = "Option::is_none")]
     activity: Option<String>,
 }
@@ -1596,14 +1601,26 @@ fn tool_is_trusted(path: &Path, roots: &[&Path]) -> bool {
     target.file_type().is_file() && (target.uid() == unsafe { libc::geteuid() } || target.uid() == 0) && target.mode() & 0o022 == 0
 }
 
+/// The hash the running container has to carry, or why it could not be worked out: a reason in the fixed
+/// words of `runtime_log::ATTEST_REASONS`. A reason that waiting may cure (a probe that did not run, a
+/// plan that did not come) is told apart from one that waiting will not (another version, a missing file),
+/// see `attest_reason_may_pass`.
 #[cfg(target_os = "macos")]
-fn mac_config_hash(runtime: &Path, timeout: Duration) -> Option<String> {
+fn mac_config_hash(runtime: &Path, timeout: Duration) -> Result<String, &'static str> {
     mac_config_hash_in(runtime, timeout, read_host_env().as_deref(), &|key| std::env::var(key).ok())
 }
 
+/// Whether the reason a check could not be made may pass by itself: the probe or the plan did not run or
+/// did not answer, which is not the same as the container being another one.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn attest_reason_may_pass(reason: &str) -> bool {
+    reason.ends_with("_unreadable") || matches!(reason, "hash_dry_run_exit" | "hash_dry_run_timeout" | "hash_dry_run_not_started" | "hash_plan_without_create")
+}
+
 /// `host_env` is the text of `host.env` and `inherited` the process environment, so that a test can say both.
-#[cfg(target_os = "macos")]
-fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Result<String, &'static str> {
     let search = |name: &str| {
         #[cfg(test)]
         {
@@ -1616,44 +1633,69 @@ fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>,
         candidates.extend([PathBuf::from("/opt/homebrew/bin").join(name), PathBuf::from("/usr/local/bin").join(name), PathBuf::from("/opt/podman/bin").join(name)]);
         candidates.into_iter().find(|path| tool_is_trusted(path, &TOOL_ROOTS.map(Path::new)))
     };
-    let podman = search("podman")?;
-    let compose = search("podman-compose")?;
-    let podman_version = podman.to_str().is_some_and(|program| run_program(program, ["--version"], None, timeout).is_ok_and(|result| result.success() && std::str::from_utf8(&result.stdout).is_ok_and(|value| value.trim() == "podman version 6.1.3")));
-    let machine = fs::read_to_string(runtime.join("podman-machine")).ok()?;
-    let machine = machine.strip_suffix('\n')?;
-    if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return None; }
-    let compose_version = compose.to_str().is_some_and(|program| {
-        let (result, stderr) = run_program_keeping_stderr_with_environment(program, ["--version"], None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine)]);
-        let mut output = match result { Ok(result) if result.success() => result.stdout, _ => return false };
+    let podman = search("podman").ok_or("hash_tool_missing")?;
+    let compose = search("podman-compose").ok_or("hash_tool_missing")?;
+    // podman-compose runs `podman` by name, and an app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin`
+    // for a PATH, without Homebrew's: its own version probe then said «No such file or directory: podman» and
+    // the container looked like another one. The children get the directory of the podman that was found
+    // and trusted in front of the PATH they have (the wrapper runs them with Homebrew in it).
+    let path_with_podman = podman
+        .parent()
+        .and_then(|dir| std::env::join_paths(std::iter::once(dir.to_path_buf()).chain(std::env::var_os("PATH").iter().flat_map(std::env::split_paths))).ok())
+        .and_then(|joined| joined.into_string().ok())
+        .ok_or("hash_tool_missing")?;
+    // A version that could not be read is not a version that differs.
+    let podman_said = podman.to_str().and_then(|program| run_program(program, ["--version"], None, timeout).ok()).filter(|result| result.success()).and_then(|result| String::from_utf8(result.stdout).ok());
+    match podman_said {
+        None => return Err("hash_podman_version_unreadable"),
+        Some(said) if said.trim() != "podman version 6.1.3" => return Err("hash_podman_version_differs"),
+        Some(_) => {}
+    }
+    let machine = fs::read_to_string(runtime.join("podman-machine")).map_err(|_| "hash_machine_file")?;
+    let machine = machine.strip_suffix('\n').ok_or("hash_machine_file")?;
+    if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return Err("hash_machine_file"); }
+    let compose_said = compose.to_str().and_then(|program| {
+        let (result, stderr) = run_program_keeping_stderr_with_environment(program, ["--version"], None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine), ("PATH", path_with_podman.as_str())]);
+        let mut output = result.ok().filter(ProcessResult::success)?.stdout;
         output.extend_from_slice(&stderr);
-        std::str::from_utf8(&output).is_ok_and(|output| output.lines().any(|line| line == "podman-compose version 1.6.0"))
+        String::from_utf8(output).ok()
     });
-    if !podman_version || !compose_version { return None; }
+    match compose_said {
+        None => return Err("hash_compose_version_unreadable"),
+        Some(said) if !said.lines().any(|line| line == "podman-compose version 1.6.0") => return Err("hash_compose_version_differs"),
+        Some(_) => {}
+    }
     let image = match fs::symlink_metadata(runtime.join("runtime-image")) {
         Ok(_) => {
-            let image = fs::read_to_string(runtime.join("runtime-image")).ok()?;
-            let image = image.strip_suffix('\n')?.to_owned();
-            let digest = image.strip_prefix("ghcr.io/leopu00/jht@sha256:")?;
-            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; }
+            let image = fs::read_to_string(runtime.join("runtime-image")).map_err(|_| "hash_image_pin")?;
+            let image = image.strip_suffix('\n').ok_or("hash_image_pin")?.to_owned();
+            let digest = image.strip_prefix("ghcr.io/leopu00/jht@sha256:").ok_or("hash_image_pin")?;
+            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return Err("hash_image_pin"); }
             Some(image)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(_) => return None,
+        Err(_) => return Err("hash_image_pin"),
     };
     let args = vec![OsString::from("--verbose"), OsString::from("--dry-run"), OsString::from("--project-name"), OsString::from("jht"), OsString::from("--podman-path"), podman.into_os_string(), OsString::from("-f"), runtime.join("docker-compose.yml").into_os_string(), OsString::from("up"), OsString::from("-d"), OsString::from("--force-recreate"), OsString::from("jht")];
-    let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false")];
+    let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false"), ("PATH", path_with_podman.as_str())];
     if let Some(image) = image.as_deref() { environment.push(("JHT_IMAGE", image)); }
     // The same environment the wrapper runs the compose in: see `wrapper_compose_environment`.
     let host_environment = wrapper_compose_environment(host_env, inherited);
     for (name, value) in &host_environment { environment.push((*name, value.as_str())); }
-    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str()?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
-    let mut output = result.ok().filter(ProcessResult::success)?.stdout;
+    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str().ok_or("hash_tool_missing")?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
+    let planned = match result {
+        Ok(done) if done.success() => done,
+        Ok(_) => return Err("hash_dry_run_exit"),
+        Err("process_timeout") => return Err("hash_dry_run_timeout"),
+        Err(_) => return Err("hash_dry_run_not_started"),
+    };
+    let mut output = planned.stdout;
     output.extend_from_slice(&stderr);
-    let output = std::str::from_utf8(&output).ok()?;
+    let output = std::str::from_utf8(&output).map_err(|_| "hash_plan_without_create")?;
     let mut hash = None;
     // podman-compose 1.6.0 hashes each service on its own: the plan of `jht` prints the create of its dependency first (with another hash); only the create of `jht` carries the hash its container is labelled with.
-    for line in output.lines().filter(|line| line.contains(" create --name=jht ")) { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return None; } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return None } } }
-    hash
+    for line in output.lines().filter(|line| line.contains(" create --name=jht ")) { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return Err("hash_plan_ambiguous"); } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return Err("hash_plan_ambiguous") } } }
+    hash.ok_or("hash_plan_without_create")
 }
 
 /// A Windows path as the compose labels spell it, to compare with another: forward slashes as
@@ -1721,54 +1763,90 @@ fn split_inspected(line: &str, with_image: bool) -> Option<(&str, &str, Option<&
     Some((running, labels, Some(image.trim())))
 }
 
-fn podman_container_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
+/// The first rule of the attestation the container's labels do not meet, in the fixed words of
+/// `runtime_log::ATTEST_REASONS`; `None` when they meet all of them.
+fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
     #[cfg(windows)]
     {
         let _ = expected_config_hash;
-        return windows_container_labels_are_attested(labels, runtime);
+        return (!windows_container_labels_are_attested(labels, runtime)).then_some("label_windows");
     }
     #[cfg(not(windows))]
-    podman_compose_labels_are_attested(labels, runtime, expected_config_hash)
+    podman_compose_label_refusal(labels, runtime, expected_config_hash)
 }
 
 #[cfg(not(windows))]
-fn podman_compose_labels_are_attested(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> bool {
+fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>) -> Option<&'static str> {
     let runtime_text = runtime.to_string_lossy();
     let systemd_unit = podman_systemd_unit();
-    if label(labels, "com.docker.compose.project") != Some("jht")
-        || label(labels, "io.podman.compose.project") != Some("jht")
-        || label(labels, "com.docker.compose.service") != Some("jht")
-        || label(labels, "io.podman.compose.service") != Some("jht")
-        || label(labels, "com.docker.compose.container-number") != Some("1")
-        || label(labels, "com.docker.compose.project.working_dir") != Some(runtime_text.as_ref())
-        || !label(labels, "io.podman.compose.config-hash")
-            .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
-    {
-        return false;
+    if label(labels, "com.docker.compose.project") != Some("jht") || label(labels, "io.podman.compose.project") != Some("jht") {
+        return Some("label_project");
+    }
+    if label(labels, "com.docker.compose.service") != Some("jht") || label(labels, "io.podman.compose.service") != Some("jht") {
+        return Some("label_service");
+    }
+    if label(labels, "com.docker.compose.container-number") != Some("1") {
+        return Some("label_container_number");
+    }
+    if label(labels, "com.docker.compose.project.working_dir") != Some(runtime_text.as_ref()) {
+        return Some("label_working_dir");
+    }
+    if !label(labels, "io.podman.compose.config-hash").is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())) {
+        return Some("label_hash_form");
     }
     #[cfg(target_os = "macos")]
     {
-        return label(labels, "com.docker.compose.project.config_files")
-            == Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref())
-            && label(labels, "io.podman.compose.version") == Some("1.6.0")
-            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str())
-            && expected_config_hash == label(labels, "io.podman.compose.config-hash");
+        if label(labels, "com.docker.compose.project.config_files") != Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref()) {
+            return Some("label_config_files");
+        }
+        if label(labels, "io.podman.compose.version") != Some("1.6.0") {
+            return Some("label_compose_version");
+        }
+        if label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str()) {
+            return Some("label_systemd_unit");
+        }
+        return (expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         let expected_files = format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime_text, runtime_text);
-        return label(labels, "com.docker.compose.project.config_files") == Some(expected_files.as_str())
-            && label(labels, "io.podman.compose.version").is_some_and(|version| {
-                let mut parts = version.split('.');
-                matches!((parts.next(), parts.next()), (Some(major), Some(minor))
-                    if major.parse::<u16>().is_ok_and(|major| major > 1)
-                    || (major == "1" && minor.parse::<u16>().is_ok_and(|minor| minor >= 1)))
-            })
-            && label(labels, "PODMAN_SYSTEMD_UNIT") == Some(systemd_unit.as_str());
+        if label(labels, "com.docker.compose.project.config_files") != Some(expected_files.as_str()) {
+            return Some("label_config_files");
+        }
+        if !label(labels, "io.podman.compose.version").is_some_and(|version| {
+            let mut parts = version.split('.');
+            matches!((parts.next(), parts.next()), (Some(major), Some(minor))
+                if major.parse::<u16>().is_ok_and(|major| major > 1)
+                || (major == "1" && minor.parse::<u16>().is_ok_and(|minor| minor >= 1)))
+        }) {
+            return Some("label_compose_version");
+        }
+        return (label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str())).then_some("label_systemd_unit");
     }
     #[cfg(not(unix))]
     {
-        false
+        Some("label_windows")
+    }
+}
+
+/// The first thing that keeps a running `jht` container from being taken: the hash it has to carry could
+/// not be worked out (`expected` is the reason), or a label (or the image, on Windows) is not what the
+/// runtime writes. `None` when it is the one.
+fn attestation_refusal(expected: Option<&Result<String, &'static str>>, labels: &Value, runtime: &Path, image_is_the_runtimes: bool) -> Option<&'static str> {
+    match expected {
+        Some(Err(reason)) => Some(*reason),
+        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok())),
+    }
+    .or_else(|| (!image_is_the_runtimes).then_some("label_image"))
+}
+
+/// What is said when no container was taken: another one is up (it is not used), the check could not be
+/// made now (the page asks again, and waits as it does for a team that is starting), or none is up.
+fn container_not_found_code(refused: Option<&'static str>, unchecked: Option<&'static str>) -> &'static str {
+    match (refused, unchecked) {
+        (Some(_), _) => "local_container_not_attested",
+        (None, Some(_)) => "container_unavailable",
+        (None, None) => "local_team_not_running",
     }
 }
 
@@ -1781,9 +1859,9 @@ fn local_chat_container(
     timeout: Duration,
 ) -> Result<String, &'static str> {
     #[cfg(target_os = "macos")]
-    let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout)).flatten();
+    let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout));
     #[cfg(not(target_os = "macos"))]
-    let expected_config_hash: Option<String> = None;
+    let expected_config_hash: Option<Result<String, &'static str>> = None;
     let listed = run_local_engine(engine, local_compose_args(engine, runtime), None, timeout)?;
     let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
         .map_err(|_| "container_unavailable")?
@@ -1795,7 +1873,10 @@ fn local_chat_container(
         return Err("container_unavailable");
     }
     let mut found = None;
-    let mut refused = false;
+    // Why a container that is running as `jht` was not taken: it is not the one installed, or the check could
+    // not be made (the hash it has to carry was not worked out) which is not the same thing.
+    let mut refused: Option<&'static str> = None;
+    let mut unchecked: Option<&'static str> = None;
     for id in ids {
         let inspected = run_local_engine(
             engine,
@@ -1828,17 +1909,29 @@ fn local_chat_container(
             continue;
         }
         let image_is_the_runtimes = !cfg!(windows) || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
-        if engine.podman && !(podman_container_labels_are_attested(&labels, runtime, expected_config_hash.as_deref()) && image_is_the_runtimes) {
-            refused = true;
-            continue;
+        if engine.podman {
+            if let Some(reason) = attestation_refusal(expected_config_hash.as_ref(), &labels, runtime, image_is_the_runtimes) {
+                if attest_reason_may_pass(reason) {
+                    unchecked = Some(reason);
+                } else {
+                    refused = Some(reason);
+                }
+                continue;
+            }
         }
         if found.replace(id).is_some() {
             return Err("container_unavailable");
         }
     }
-    // Why there is none, said apart: the team is not up, or what is up is not the one the app's
-    // runtime started (it is never used for the chat).
-    found.map(str::to_owned).ok_or(if refused { "local_container_not_attested" } else { "local_team_not_running" })
+    // Why there is none, said apart: the team is not up, what is up is not the one the app's runtime
+    // started (it is never used for the chat), or it could not be checked now (the page tries again).
+    if let Some(id) = found {
+        return Ok(id.to_owned());
+    }
+    if let Some(reason) = refused.or(unchecked) {
+        note_attest_reason(reason);
+    }
+    Err(container_not_found_code(refused, unchecked))
 }
 
 fn local_chat_exec_args(
@@ -2057,7 +2150,20 @@ fn probe(connection: &Connection) -> DirectChatStatus {
         Ok(result) if result.success() && result.stdout_text().trim() == "true" => {
             ready_for(connection)
         }
-        _ => status("error", Some("container_unavailable")),
+        // The host answered and there is no container for the team: say which kind of «no container» it is.
+        Ok(_) => status("error", Some(probe_no_container_code(&connection.validated))),
+        // The host could not be asked at all (runtime missing, another account's, a timeout).
+        Err(_) => status("error", Some("container_unavailable")),
+    }
+}
+
+/// What a probe that found no container for the team says. On this computer the team is not running: the
+/// chat's own code, which the pages answer with «Start the team». On a VPS the container is unavailable (the
+/// machine may be off or the team not installed there): nothing the app starts from here.
+fn probe_no_container_code(host: &ValidatedHost) -> &'static str {
+    match host {
+        ValidatedHost::Local => "local_team_not_running",
+        ValidatedHost::Vps { .. } => "container_unavailable",
     }
 }
 
@@ -2794,20 +2900,302 @@ pub(crate) async fn direct_chat_send(
     }
 }
 
+/// Whether an attachment can go now, and if not the closed reason the page says. The files are
+/// copied on this computer for this computer's team only: a VPS has its own disk, a read-only view
+/// writes nothing, and there is no copy without a connected team.
+fn attach_refusal(connection: &Connection) -> Option<&'static str> {
+    if !cfg!(any(target_os = "macos", target_os = "linux")) {
+        return Some("attach_platform");
+    }
+    if !matches!(&connection.validated, ValidatedHost::Local) {
+        return Some("attach_vps");
+    }
+    let own_refusal = own_vps_write_refusal(connection);
+    if !link_allows_writing(connection.runtime.as_ref(), own_refusal.is_none(), |target| {
+        existing_team_runtime::full_link_granted(&connection.scope, target)
+    }) {
+        return Some("attach_read_only");
+    }
+    if connection.local_wrapper.is_none() || connection.local_runtime.is_none() {
+        return Some("attach_not_connected");
+    }
+    None
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatAttachState {
+    available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<&'static str>,
+}
+
+/// What the 📎 button says: on, or off with the reason. Reads the connection only: nothing is probed.
+#[tauri::command]
+pub(crate) fn direct_chat_attach_state(
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+) -> Result<DirectChatAttachState, DirectChatError> {
+    let scope = scopes.lock_active().map_err(failure)?;
+    let slot = state.inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let code = match slot.as_ref() {
+        Some(connection) if &connection.scope == scope.scope() => attach_refusal(connection),
+        Some(_) => return Err(failure("account_scope_mismatch")),
+        None => Some("attach_not_connected"),
+    };
+    Ok(DirectChatAttachState { available: code.is_none(), code })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DirectChatAttachment {
+    /// `sent`, `saved_not_sent` (the file is in the folder, the Assistant was not told: `code` says
+    /// why) or `cancelled` (the person closed the window: not an error).
+    outcome: &'static str,
+    /// The person's own file name, for their screen only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    receipt: Option<DirectChatReceipt>,
+}
+
+/// Held while an attachment is in hand: a second click is refused, not queued.
+struct AttachGuard(Arc<std::sync::atomic::AtomicBool>);
+
+impl AttachGuard {
+    fn take(busy: &Arc<std::sync::atomic::AtomicBool>) -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        busy.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .ok()
+            .map(|_| Self(Arc::clone(busy)))
+    }
+}
+
+impl Drop for AttachGuard {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
+/// The message of an attachment. The person reads one short sentence in their language; behind it,
+/// on the same line, the Assistant gets the path of OUR copy in its container (the page hides that
+/// bracket: `withoutAttachmentPath` in DirectChatScreen.tsx reads exactly this shape). Nothing of the
+/// person's file name or content is in it. An unknown language gets English.
+/// «My CV» only for the kinds of file a CV comes in (a document); a picture or a plain text is not
+/// known to be one, and gets «a file».
+fn attachment_message(locale: &str, file: &str) -> String {
+    let document = file
+        .rsplit_once('.')
+        .is_some_and(|(_, extension)| crate::chat_attachment::DOCUMENT_EXTENSIONS.contains(&extension));
+    let said = match (locale, document) {
+        ("it", true) => "Ho allegato il mio CV.",
+        ("it", false) => "Ho allegato un file.",
+        ("de", true) => "Ich habe meinen Lebenslauf angehängt.",
+        ("de", false) => "Ich habe eine Datei angehängt.",
+        ("es", true) => "He adjuntado mi CV.",
+        ("es", false) => "He adjuntado un archivo.",
+        ("fr", true) => "J'ai joint mon CV.",
+        ("fr", false) => "J'ai joint un fichier.",
+        ("hu", true) => "Csatoltam az önéletrajzomat.",
+        ("hu", false) => "Csatoltam egy fájlt.",
+        ("pt", true) => "Anexei o meu CV.",
+        ("pt", false) => "Anexei um ficheiro.",
+        (_, true) => "I attached my CV.",
+        (_, false) => "I attached a file.",
+    };
+    format!("{said} [attachment for my profile: /jht_user/{}/{file}]", crate::chat_attachment::FOLDER)
+}
+
+/// Where the system's window opens: the Downloads folder of the person, where a CV usually is, and
+/// not Documents, which holds their personal files. Without that folder the system chooses.
+fn downloads_of(home: &Path) -> Option<PathBuf> {
+    let downloads = home.join("Downloads");
+    downloads.is_dir().then_some(downloads)
+}
+
+struct AttachTarget {
+    wrapper: PathBuf,
+    runtime: PathBuf,
+    user_dir: PathBuf,
+    start_dir: Option<PathBuf>,
+}
+
+/// The same gate as a message, then the places the copy needs. Runs off the main thread.
+fn attach_target(
+    inner: &DirectChatInner,
+    scopes: &AccountScopeState,
+    expected: &AccountScope,
+) -> Result<AttachTarget, DirectChatError> {
+    let scope = scopes.lock_expected(expected).map_err(failure)?;
+    let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+    if &connection.scope != scope.scope() {
+        return Err(failure("account_scope_mismatch"));
+    }
+    refuse_writing(connection)?;
+    if let Some(code) = attach_refusal(connection) {
+        return Err(failure(code));
+    }
+    let home = std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| failure("attach_platform"))?;
+    Ok(AttachTarget {
+        wrapper: connection.local_wrapper.clone().ok_or_else(|| failure("runtime_missing"))?,
+        runtime: connection.local_runtime.clone().ok_or_else(|| failure("runtime_missing"))?,
+        start_dir: downloads_of(&home),
+        user_dir: home.join("Documents").join("Job Hunter Team"),
+    })
+}
+
+/// The copy is in the folder on this computer; the team must see the same file there. A mount that
+/// does not show it (another folder, an engine that shares less) takes the copy back: nothing is
+/// told to the Assistant about a file it cannot open.
+fn team_sees_the_copy(target: &AttachTarget, saved: &crate::chat_attachment::Saved) -> bool {
+    let path = format!("/jht_user/{}/{}", crate::chat_attachment::FOLDER, saved.file);
+    let Ok(team) = local_chat_team(&target.wrapper, &target.runtime, READ_TIMEOUT) else { return false };
+    matches!(
+        team.exec(&["stat", "-c", "%s", path.as_str()], None, READ_TIMEOUT),
+        Ok(done) if done.success() && String::from_utf8_lossy(&done.stdout).trim() == saved.size.to_string()
+    )
+}
+
+/// «Attach» in the Assistant's chat: the person chooses a file in the system's window (the page
+/// never names a path), it is checked and copied into the team's `allegati` folder, the team is
+/// asked to see it, and only then the Assistant gets a short message naming our copy.
+#[tauri::command]
+pub(crate) async fn direct_chat_attach(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    state: State<'_, DirectChatState>,
+    scopes: State<'_, AccountScopeState>,
+    agent_id: String,
+    client_message_id: String,
+    locale: String,
+) -> Result<DirectChatAttachment, DirectChatError> {
+    use tauri_plugin_dialog::DialogExt;
+    if !window_may_write(&window.label())
+        || agent_id != "assistente"
+        || client_message_id.is_empty()
+        || client_message_id.len() > 128
+        || !client_message_id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    {
+        return Err(failure("invalid_request"));
+    }
+    let expected = scopes.active().map_err(failure)?;
+    let app_for_log = app.clone();
+    let _busy = AttachGuard::take(&state.inner.attach_busy).ok_or_else(|| failure("attach_busy"))?;
+    let scope_state = scopes.inner().clone();
+    let target = {
+        let inner = Arc::clone(&state.inner);
+        let (scope_state, expected) = (scope_state.clone(), expected.clone());
+        tauri::async_runtime::spawn_blocking(move || attach_target(&inner, &scope_state, &expected))
+            .await
+            .map_err(|_| failure("attach_failed"))??
+    };
+    // The system's window is modal and waits for the person: never on the main thread.
+    let picker = window.clone();
+    let start_dir = target.start_dir.clone();
+    let chosen = tauri::async_runtime::spawn_blocking(move || {
+        let mut dialog = app
+            .dialog()
+            .file()
+            .set_parent(&picker)
+            .add_filter("Documents", &crate::chat_attachment::ALLOWED_EXTENSIONS);
+        if let Some(dir) = start_dir {
+            dialog = dialog.set_directory(dir);
+        }
+        dialog.blocking_pick_file()
+    })
+    .await
+    .map_err(|_| failure("attach_failed"))?;
+    let Some(chosen) = chosen else {
+        return Ok(DirectChatAttachment { outcome: "cancelled", display_name: None, code: None, receipt: None });
+    };
+    let source = chosen.into_path().map_err(|_| failure("attachment_unreadable"))?;
+    let saved = {
+        let user_dir = target.user_dir.clone();
+        // the name of the copy reads the clock of this computer, not UTC
+        let now = crate::chat_attachment::local_wall_clock(
+            SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+        );
+        tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::store(&user_dir, &source, now, &mut |_| {}))
+            .await
+            .map_err(|_| failure("attach_failed"))?
+            .map_err(failure)?
+    };
+    let target = Arc::new(target);
+    let seen = {
+        let (target, saved_view) = (Arc::clone(&target), saved.clone());
+        tauri::async_runtime::spawn_blocking(move || team_sees_the_copy(&target, &saved_view))
+            .await
+            .unwrap_or(false)
+    };
+    if !seen {
+        let (user_dir, file) = (target.user_dir.clone(), saved.file.clone());
+        let _ = tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::remove(&user_dir, &file)).await;
+        return Err(failure("attachment_not_shared"));
+    }
+    let text = attachment_message(&locale, &saved.file);
+    let display_name = Some(saved.display.clone());
+    let inner = Arc::clone(&state.inner);
+    let worker_expected = expected.clone();
+    let worker_scopes = scope_state.clone();
+    let id = client_message_id;
+    let sent = tauri::async_runtime::spawn_blocking(move || {
+        let scope = worker_scopes.lock_expected(&worker_expected).map_err(failure)?;
+        {
+            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            if &connection.scope != scope.scope() {
+                return Err(failure("account_scope_mismatch"));
+            }
+        }
+        send_impl(&inner, "assistente".to_string(), text, id)
+    })
+    .await
+    .map_err(|_| failure("send_failed"))?;
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    match sent {
+        Ok(receipt) => {
+            emit(&state.inner, DirectChatEvent::Send { receipt: receipt.clone() });
+            Ok(DirectChatAttachment { outcome: "sent", display_name, code: None, receipt: Some(receipt) })
+        }
+        Err(error) => {
+            log_chat_failure(&app_for_log, "send", error.code);
+            Ok(DirectChatAttachment { outcome: "saved_not_sent", display_name, code: Some(error.code), receipt: None })
+        }
+    }
+}
+
 /// The last failure of each operation written to the runtime log: a read that fails every two
 /// seconds writes one line, and a new one only when its code changes.
-static LOGGED_CHAT_FAILURE: Mutex<[Option<&'static str>; 2]> = Mutex::new([None, None]);
+static LOGGED_CHAT_FAILURE: Mutex<[Option<(&'static str, Option<&'static str>)>; 2]> = Mutex::new([None, None]);
+
+/// The rule the last container check stopped at, in the fixed words of `runtime_log::ATTEST_REASONS`; it
+/// goes to the runtime log with the failure it explains, and nowhere else.
+static ATTEST_REASON: Mutex<Option<&'static str>> = Mutex::new(None);
+
+fn note_attest_reason(reason: &'static str) {
+    if let Ok(mut said) = ATTEST_REASON.lock() {
+        *said = Some(reason);
+    }
+}
 
 fn log_chat_failure(app: &tauri::AppHandle, operation: &'static str, code: &'static str) {
     let slot = usize::from(operation == "send");
+    let reason = if matches!(code, "local_container_not_attested" | "container_unavailable") {
+        ATTEST_REASON.lock().ok().and_then(|mut said| said.take())
+    } else {
+        None
+    };
     if let Ok(mut last) = LOGGED_CHAT_FAILURE.lock() {
-        if last[slot] == Some(code) {
+        if last[slot] == Some((code, reason)) {
             return;
         }
-        last[slot] = Some(code);
+        last[slot] = Some((code, reason));
     }
     if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
-        log.record_chat_failure(operation, code);
+        log.record_chat_failure_because(operation, code, reason);
     }
 }
 
@@ -3187,6 +3575,8 @@ mod tests {
     };
     #[cfg(unix)]
     use super::{attested_exec_args, AttestedLocalTeam};
+    #[cfg(unix)]
+    use super::{attest_reason_may_pass, attestation_refusal, container_not_found_code, mac_config_hash_in};
     #[cfg(all(unix, not(target_os = "macos")))]
     use super::local_chat_runtime_valid;
     use crate::existing_team_runtime::ActivatedTarget;
@@ -3612,13 +4002,16 @@ mod tests {
     fn only_unix_tests_build_a_connection() {
         let tests = include_str!("direct_chat.rs").split_once("mod tests {").unwrap().1;
         let mut built = 0;
-        // the needle in two pieces, so this very test is not one of the places it finds
-        for (at, _) in tests.match_indices(concat!("Connection", " {")) {
-            built += 1;
-            let test_start = tests[..at].rfind("#[test]").expect("inside a test");
-            let attributes = &tests[..test_start];
-            let attributes = &attributes[attributes.rfind('\n').map_or(0, |line| attributes[..line].rfind('\n').unwrap_or(0))..];
-            assert!(attributes.contains("#[cfg(unix)]"), "a Connection built outside a Unix-only test, before byte {at}");
+        // the needles in two pieces, so this very test is not one of the places it finds; the chat's state
+        // holds a Connection, so building it drops one just the same
+        for needle in [concat!("Connection", " {"), concat!("DirectChatInner", "::default()"), concat!("DirectChatState", "::default()")] {
+            for (at, _) in tests.match_indices(needle) {
+                built += 1;
+                let test_start = tests[..at].rfind("#[test]").expect("inside a test");
+                let attributes = &tests[..test_start];
+                let attributes = &attributes[attributes.rfind('\n').map_or(0, |line| attributes[..line].rfind('\n').unwrap_or(0))..];
+                assert!(attributes.contains("#[cfg(unix)]"), "{needle} built outside a Unix-only test, before byte {at}");
+            }
         }
         assert!(built >= 1, "the Unix probe test builds one");
     }
@@ -4060,10 +4453,186 @@ mod tests {
         let none = |_: &str| -> Option<String> { None };
         // the Mac as the host setup leaves it: the container was made with these three
         let host_env = "JHT_LANG=en\nJHT_HOST_TYPE=local\nJHT_USER_TZ=Europe/Rome\n";
-        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, Some(host_env), &none), Some(sha("local|en|Europe/Rome")));
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, Some(host_env), &none), Ok(sha("local|en|Europe/Rome")));
         // without host.env: the wrapper's defaults, not empty values
-        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Some(sha("unknown|en|UTC")));
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Ok(sha("unknown|en|UTC")));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A runtime with a fake `podman` and `podman-compose` in its `bin` (the tools the hash search finds first in a
+    /// test) and a machine file: (root, runtime). The caller removes `root`. `podman_says` is what `podman
+    /// --version` prints, `compose` the whole script of the provider.
+    #[cfg(unix)]
+    fn hash_runtime(podman_script: &str, compose_script: &str) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-hash-runtime-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        fs::create_dir_all(runtime.join("bin")).unwrap();
+        fs::write(runtime.join("podman-machine"), "jht-podman\n").unwrap();
+        fs::write(runtime.join("docker-compose.yml"), "services: {}\n").unwrap();
+        for (name, script) in [("podman", podman_script), ("podman-compose", compose_script)] {
+            let tool = runtime.join("bin").join(name);
+            fs::write(&tool, script).unwrap();
+            fs::set_permissions(&tool, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        (root, runtime)
+    }
+
+    #[cfg(unix)]
+    const PODMAN_6_1_3: &str = "#!/bin/sh\n[ \"${1:-}\" = --version ] && { echo 'podman version 6.1.3'; exit 0; }\nexit 91\n";
+    /// The provider's plan as the real one prints it: a create of the dependency with another hash, then the create
+    /// of `jht` whose hash is `$1`.
+    #[cfg(unix)]
+    fn compose_plan(hash_script: &str) -> String {
+        format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'podman-compose version 1.6.0'; exit 0; }}\nh=$({hash_script})\nprintf 'podman create --name=jht-telegram --label io.podman.compose.config-hash=%s x\\n' \"{}\" >&2\nprintf 'podman create --name=jht --label io.podman.compose.config-hash=%s x\\n' \"$h\" >&2\n", "b".repeat(64))
+    }
+    #[cfg(unix)]
+    fn digest_of(text: &str) -> String {
+        use sha2::{Digest, Sha256};
+        format!("{:x}", Sha256::digest(text.as_bytes()))
+    }
+    #[cfg(unix)]
+    fn listed(reason: &str) -> &str {
+        assert!(crate::runtime_log::ATTEST_REASONS.contains(&reason), "{reason} is not a reason the log can say");
+        reason
+    }
+    #[cfg(unix)]
+    // in pieces: the repository scan of the release forbids any whole reference to the image that is not the manifest's
+    const PIN: &str = concat!("ghcr.io/leopu00/", "jht@sha256:", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+
+    #[cfg(unix)]
+    #[test]
+    fn the_expected_hash_follows_the_image_pin_of_the_runtime_and_a_runtime_without_a_pin_has_none_in_it() {
+        // the provider's hash depends on the JHT_IMAGE it is given, as the real one does through the compose file
+        let hash = "printf '%s' \"${JHT_IMAGE:-the default of the compose file}\" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1";
+        let none = |_: &str| -> Option<String> { None };
+        let (root, runtime) = hash_runtime(PODMAN_6_1_3, &compose_plan(hash));
+        // a test channel: runtime-image holds the pin, the container was made with it
+        fs::write(runtime.join("runtime-image"), format!("{PIN}\n")).unwrap();
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Ok(digest_of(PIN)));
+        // a production runtime: no pin file, the compose file's own default, and the hash is another one
+        fs::remove_file(runtime.join("runtime-image")).unwrap();
+        assert_eq!(
+            mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none),
+            Ok(digest_of("the default of the compose file"))
+        );
+        // a pin that is not a digest of the product's image stops the check instead of being passed on
+        for bad in [&PIN[..PIN.len() - 1], "ghcr.io/leopu00/jht:latest", ""] {
+            fs::write(runtime.join("runtime-image"), format!("{bad}\n")).unwrap();
+            assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Err("hash_image_pin"), "{bad:?}");
+        }
+        fs::write(runtime.join("runtime-image"), PIN).unwrap();
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Err("hash_image_pin"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_provider_is_given_the_directory_of_the_podman_it_trusts_in_its_path_as_an_app_opened_from_finder_has_none() {
+        let none = |_: &str| -> Option<String> { None };
+        let (root, runtime) = hash_runtime(PODMAN_6_1_3, "");
+        // podman-compose looks `podman` up by name: it says so and stops when the name does not lead to this runtime's one
+        let find = format!(
+            "[ \"$(command -v podman)\" = \"{}\" ] || {{ echo 'failed to check if podman is installed: No such file or directory: podman' >&2; exit 1; }}\n",
+            runtime.join("bin").join("podman").display()
+        );
+        let script = compose_plan("printf '%s' fixed | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1");
+        let script = script.replacen("[ \"${1:-}\" = --version ]", &format!("{find}[ \"${{1:-}}\" = --version ]"), 1);
+        fs::write(runtime.join("bin").join("podman-compose"), script).unwrap();
+        assert_eq!(mac_config_hash_in(&runtime, LOCAL_TEST_TIMEOUT, None, &none), Ok(digest_of("fixed")));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_check_that_could_not_be_made_is_told_apart_from_a_container_that_is_another() {
+        let none = |_: &str| -> Option<String> { None };
+        let hash = "printf x | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1";
+        let ask = |podman: &str, compose: &str, machine: Option<&str>| {
+            let (root, runtime) = hash_runtime(podman, compose);
+            match machine {
+                Some(machine) => fs::write(runtime.join("podman-machine"), machine).unwrap(),
+                None => fs::remove_file(runtime.join("podman-machine")).unwrap(),
+            }
+            let said = mac_config_hash_in(&runtime, Duration::from_secs(20), None, &none);
+            fs::remove_dir_all(root).unwrap();
+            said
+        };
+        let good = compose_plan(hash);
+        let machine = Some("jht-podman\n");
+        // the versions: read and other, or not readable
+        assert_eq!(ask("#!/bin/sh\necho 'podman version 6.0.0'\n", &good, machine), Err("hash_podman_version_differs"));
+        assert_eq!(ask("#!/bin/sh\nexit 3\n", &good, machine), Err("hash_podman_version_unreadable"));
+        assert_eq!(ask(PODMAN_6_1_3, &good.replace("1.6.0", "1.5.0"), machine), Err("hash_compose_version_differs"));
+        assert_eq!(ask(PODMAN_6_1_3, "#!/bin/sh\nexit 1\n", machine), Err("hash_compose_version_unreadable"));
+        // the machine file
+        assert_eq!(ask(PODMAN_6_1_3, &good, None), Err("hash_machine_file"));
+        assert_eq!(ask(PODMAN_6_1_3, &good, Some("jht-podman")), Err("hash_machine_file"));
+        assert_eq!(ask(PODMAN_6_1_3, &good, Some("a b\n")), Err("hash_machine_file"));
+        // the plan: does not run, runs and says nothing of jht, says two things
+        let plan = |body: &str| format!("#!/bin/sh\n[ \"${{1:-}}\" = --version ] && {{ echo 'podman-compose version 1.6.0'; exit 0; }}\n{body}\n");
+        assert_eq!(ask(PODMAN_6_1_3, &plan("exit 7"), machine), Err("hash_dry_run_exit"));
+        assert_eq!(ask(PODMAN_6_1_3, &plan("exit 0"), machine), Err("hash_plan_without_create"));
+        assert_eq!(ask(PODMAN_6_1_3, &plan("echo 'podman create --name=jht --label io.podman.compose.config-hash=short x'"), machine), Err("hash_plan_ambiguous"));
+        let two = format!(
+            "echo 'podman create --name=jht --label io.podman.compose.config-hash={} x'; echo 'podman create --name=jht --label io.podman.compose.config-hash={} x'",
+            "a".repeat(64),
+            "c".repeat(64)
+        );
+        assert_eq!(ask(PODMAN_6_1_3, &plan(&two), machine), Err("hash_plan_ambiguous"));
+        // the plan that takes longer than the time it is given
+        let (root, runtime) = hash_runtime(PODMAN_6_1_3, &plan("sleep 5"));
+        assert_eq!(mac_config_hash_in(&runtime, Duration::from_millis(500), None, &none), Err("hash_dry_run_timeout"));
+        fs::remove_dir_all(root).unwrap();
+        // which of these waiting may cure, and the words the log can say
+        for reason in ["hash_podman_version_unreadable", "hash_compose_version_unreadable", "hash_dry_run_exit", "hash_dry_run_timeout", "hash_dry_run_not_started", "hash_plan_without_create"] {
+            assert!(attest_reason_may_pass(listed(reason)), "{reason}");
+        }
+        for reason in ["hash_tool_missing", "hash_podman_version_differs", "hash_compose_version_differs", "hash_machine_file", "hash_image_pin", "hash_plan_ambiguous", "label_config_hash_differs", "label_project", "label_image"] {
+            assert!(!attest_reason_may_pass(listed(reason)), "{reason}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hash_that_could_not_be_worked_out_is_not_said_to_be_another_container_and_a_label_that_differs_is() {
+        let runtime = PathBuf::from("/runtime");
+        let labels = serde_json::json!({});
+        let wrong = Ok("0".repeat(64));
+        // the hash could not be worked out: the reason is the hash's, whatever the labels are
+        assert_eq!(attestation_refusal(Some(&Err("hash_dry_run_timeout")), &labels, &runtime, true), Some("hash_dry_run_timeout"));
+        // the hash is there: the labels are looked at, rule by rule
+        let mut labels = serde_json::json!({
+            "com.docker.compose.project": "other", "io.podman.compose.project": "jht",
+            "com.docker.compose.service": "jht", "io.podman.compose.service": "jht",
+            "com.docker.compose.container-number": "1",
+            "com.docker.compose.project.working_dir": "/runtime", "io.podman.compose.config-hash": "a".repeat(64),
+        });
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_project"));
+        labels["com.docker.compose.project"] = "jht".into();
+        labels["io.podman.compose.service"] = "x".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_service"));
+        labels["io.podman.compose.service"] = "jht".into();
+        labels["com.docker.compose.container-number"] = "2".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_container_number"));
+        labels["com.docker.compose.container-number"] = "1".into();
+        labels["com.docker.compose.project.working_dir"] = "/elsewhere".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_working_dir"));
+        labels["com.docker.compose.project.working_dir"] = "/runtime".into();
+        labels["io.podman.compose.config-hash"] = "not a hash".into();
+        assert_eq!(attestation_refusal(Some(&wrong), &labels, &runtime, true), Some("label_hash_form"));
+        // what to say when none is taken: the other one wins over the one that could not be checked
+        assert_eq!(container_not_found_code(Some("label_project"), Some("hash_dry_run_exit")), "local_container_not_attested");
+        assert_eq!(container_not_found_code(None, Some("hash_dry_run_exit")), "container_unavailable");
+        assert_eq!(container_not_found_code(None, None), "local_team_not_running");
+        for reason in ["label_project", "label_service", "label_container_number", "label_working_dir", "label_hash_form", "label_image", "label_config_files", "label_compose_version", "label_systemd_unit", "label_windows"] {
+            listed(reason);
+        }
     }
 
     /// What the local chat steps (container lookup, exec) may take in a test:
@@ -4718,6 +5287,14 @@ mod tests {
         };
         let shown = page(good.clone());
         assert_eq!(shown[0], good, "a question in its shape passes as it is");
+        // asked in plain words: an empty list of options, no buttons, and it still reaches the page
+        let mut plain = good.clone();
+        plain["id"] = serde_json::json!("pm:11");
+        plain["options"] = serde_json::json!([]);
+        plain["free"] = serde_json::json!(false);
+        plain["state"] = serde_json::json!("open");
+        plain.as_object_mut().unwrap().remove("answer");
+        assert_eq!(page(plain.clone()), serde_json::json!([plain]), "a question with no options passes as it is");
         // one field out of its shape: the question is left out whole
         for (field, value) in [
             ("id", serde_json::json!("aq capitano")),
@@ -4741,6 +5318,10 @@ mod tests {
         let shown = page(odd);
         assert_eq!(shown[0]["kind"], "question");
         assert_eq!(shown[0]["answer"]["origin"], "unknown");
+        // the system's own closing is said as the system's
+        let mut closed = good.clone();
+        closed["answer"]["origin"] = serde_json::json!("system");
+        assert_eq!(page(closed)[0]["answer"]["origin"], "system");
         // a subject too long is no subject; the question stays
         let mut long = good;
         long["subject"] = serde_json::json!("s".repeat(201));
@@ -4969,8 +5550,27 @@ mod tests {
         .unwrap();
         let failed = probe(&connection);
         assert_eq!(failed.state, "error");
-        assert_eq!(failed.code, Some("container_unavailable"));
+        // this computer's team with no container is «not running», the code the Messages page answers with «Start the team»
+        assert_eq!(failed.code, Some("local_team_not_running"));
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_probe_that_finds_no_container_says_not_running_on_this_computer_and_unavailable_on_a_vps() {
+        assert_eq!(crate::direct_chat::probe_no_container_code(&ValidatedHost::Local), "local_team_not_running");
+        let vps = ValidatedHost::Vps {
+            address: "203.0.113.7".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: PathBuf::from("/nonexistent/key"),
+            known_hosts: PathBuf::from("/nonexistent/known_hosts"),
+        };
+        assert_eq!(crate::direct_chat::probe_no_container_code(&vps), "container_unavailable");
+        // a host that could not be asked at all stays «unavailable», whichever it is
+        let source = include_str!("direct_chat.rs");
+        let body = source.split("fn probe(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(body.contains("Err(_) => status(\"error\", Some(\"container_unavailable\"))"));
+        assert!(body.contains("tunnel_unavailable"));
     }
 }
 
@@ -5277,5 +5877,140 @@ mod assistance_registration_tests {
         assert!(implementation.contains("if write {\n        refuse_writing(connection)?;"), "a write goes through the gate of every write to the team");
         let read = source.split("pub(crate) async fn direct_chat_team_language(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(read.contains("\"op\": \"read\"") && read.contains(", false, "), "the read never asks to write");
+    }
+}
+
+#[cfg(test)]
+mod attachment_command_tests {
+    use super::*;
+    use std::fs;
+
+    // Unix only, like every test that builds a Connection (only_unix_tests_build_a_connection).
+    #[cfg(unix)]
+    #[test]
+    fn the_paperclip_is_on_only_for_this_computers_team_and_says_why_it_is_off() {
+        let connection = |validated: ValidatedHost, with_runtime: bool| Connection {
+            app: None,
+            scope: crate::account_scope::AccountScope::synthetic(b"attach-tests"),
+            host: ExecutionHost::Local,
+            validated,
+            runtime: None,
+            local_wrapper: with_runtime.then(|| PathBuf::from("/nonexistent/jht")),
+            local_runtime: with_runtime.then(|| PathBuf::from("/nonexistent/runtime")),
+            local_owner_marker: None,
+            control_path: None,
+            tunnel: None,
+            link: VpsLink::PerCommand,
+        };
+        assert_eq!(attach_refusal(&connection(ValidatedHost::Local, false)), Some("attach_not_connected"));
+        let vps = ValidatedHost::Vps {
+            address: "203.0.113.7".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: PathBuf::from("/nonexistent/key"),
+            known_hosts: PathBuf::from("/nonexistent/known_hosts"),
+        };
+        assert_eq!(attach_refusal(&connection(vps, true)), Some("attach_vps"));
+        let local = attach_refusal(&connection(ValidatedHost::Local, true));
+        if cfg!(any(target_os = "macos", target_os = "linux")) {
+            assert_eq!(local, None);
+        } else {
+            assert_eq!(local, Some("attach_platform"));
+        }
+    }
+
+    #[test]
+    fn the_person_reads_one_sentence_in_their_language_and_the_assistant_gets_the_path_behind_it() {
+        // a document says «my CV»; a picture or a plain text, which is not known to be one, says «a file»
+        for (file, cv) in [
+            ("cv-20261028-153045.pdf", true),
+            ("cv-20261028-153045.docx", true),
+            ("cv-20261028-153045.odt", true),
+            ("cv-20261028-153045.rtf", true),
+            ("cv-20261028-153045.txt", false),
+            ("cv-20261028-153045.md", false),
+            ("cv-20261028-153045.png", false),
+            ("cv-20261028-153045.jpg", false),
+            ("cv-20261028-153045-2.jpg", false),
+        ] {
+            let path = format!("/jht_user/allegati/{file}");
+            let mut said = std::collections::HashSet::new();
+            for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
+                let text = attachment_message(locale, file);
+                // the Assistant gets the path of our copy, on one line, and what it is for
+                assert!(text.ends_with(&format!(" [attachment for my profile: {path}]")), "{locale} {file}");
+                assert!(!text.contains('\n') && !text.contains('{') && text.len() < 200, "{locale} {file}");
+                // the person gets a sentence: no path, no folder, no name of a file, no brackets
+                let (visible, _) = text.split_once(" [attachment").unwrap();
+                assert!(!visible.contains("jht_user") && !visible.contains(file) && !visible.contains('/') && !visible.contains('['), "{locale} {file}");
+                assert!(visible.ends_with('.') && visible.len() > 10, "{locale} {file}");
+                said.insert(visible.to_owned());
+            }
+            // seven languages, seven sentences (an unknown one and the empty one are English)
+            assert_eq!(said.len(), 7, "{file}");
+            let it = attachment_message("it", file);
+            assert_eq!(it.starts_with("Ho allegato il mio CV. ["), cv, "{file}");
+            assert_eq!(it.starts_with("Ho allegato un file. ["), !cv, "{file}");
+        }
+        // the Portuguese of Portugal, as the rest of the product
+        assert!(attachment_message("pt", "cv-1.pdf").starts_with("Anexei o meu CV. ["));
+        assert!(attachment_message("pt", "cv-1.png").starts_with("Anexei um ficheiro. ["));
+        assert!(attachment_message("xx", "cv-1.pdf").starts_with("I attached my CV. ["));
+        assert!(attachment_message("xx", "cv-1.png").starts_with("I attached a file. ["));
+    }
+
+    #[test]
+    fn the_window_opens_on_downloads_when_the_person_has_that_folder_and_never_on_documents() {
+        let home = std::env::temp_dir().join(format!("jht-downloads-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&home);
+        fs::create_dir_all(home.join("Documents")).unwrap();
+        assert_eq!(downloads_of(&home), None);
+        fs::write(home.join("Downloads"), b"a file, not a folder").unwrap();
+        assert_eq!(downloads_of(&home), None);
+        fs::remove_file(home.join("Downloads")).unwrap();
+        fs::create_dir_all(home.join("Downloads")).unwrap();
+        assert_eq!(downloads_of(&home), Some(home.join("Downloads")));
+        fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn a_second_attachment_is_refused_while_one_is_in_hand_and_allowed_after() {
+        // the flag alone, never the chat's state: that holds a Connection, and a test that drops one
+        // does not start on Windows (see only_unix_tests_build_a_connection)
+        let busy = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let first = AttachGuard::take(&busy).expect("the first is taken");
+        assert!(AttachGuard::take(&busy).is_none());
+        drop(first);
+        assert!(AttachGuard::take(&busy).is_some());
+    }
+
+    #[test]
+    fn the_command_checks_before_it_opens_the_window_and_tells_the_assistant_only_what_the_team_sees() {
+        let source = include_str!("direct_chat.rs");
+        let command = source
+            .split("pub(crate) async fn direct_chat_attach(")
+            .nth(1)
+            .unwrap()
+            .split("\n}\n")
+            .next()
+            .unwrap();
+        let at = |needle: &str| command.find(needle).unwrap_or_else(|| panic!("missing {needle}"));
+        // only the app's own window, only the Assistant, one at a time
+        assert!(at("window_may_write(") < at("AttachGuard::take"));
+        assert!(command.contains("agent_id != \"assistente\""));
+        // the same gate as a message, then the window, then the copy, then the proof, then the message
+        assert!(at("attach_target(") < at("blocking_pick_file()"));
+        assert!(at("blocking_pick_file()") < at("chat_attachment::store("));
+        assert!(at("chat_attachment::store(") < at("team_sees_the_copy("));
+        assert!(at("team_sees_the_copy(") < at("send_impl("));
+        // a copy the team does not see is taken back, and nothing is told
+        assert!(at("chat_attachment::remove(") < at("send_impl("));
+        // the text is ours: built from the name of our copy, never from the page or the person's file
+        assert!(command.contains("attachment_message(&locale, &saved.file)"));
+        // the window opens where the person keeps downloads, and the copy is named by the local clock
+        assert!(command.contains("set_directory(") && command.contains("target.start_dir"));
+        assert!(command.contains("local_wall_clock("));
+        // the person's own name goes back to their screen, never into the message or a log
+        assert!(!command.contains("attachment_message(&locale, &saved.display)"));
     }
 }

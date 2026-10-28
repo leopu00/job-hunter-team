@@ -14,6 +14,8 @@ import {
   outcomeOf,
   settleQueued,
   deliveryStage,
+  sightAfter,
+  NOT_WORKING,
   TAKEN_REASONS,
   cleanMessage,
   cleanQuestion,
@@ -109,10 +111,12 @@ describe("a question, read defensively", () => {
     expect(q.options[1].label).toHaveLength(60);
   });
 
-  it("without options it is not a question: the team always asks with options", () => {
-    expect(cleanQuestion(question({ options: [] }))).toBeNull();
+  it("an empty list of options is a question asked in plain words; options that were given and all broken are not shown", () => {
+    const plain = cleanQuestion(question({ options: [], free: false }))!;
+    expect(plain.options).toEqual([]);
+    expect(plain.state).toBe("open");
     expect(cleanQuestion(question({ options: [{ id: "", label: "x" }] }))).toBeNull();
-    expect(cleanQuestion(question({ free: "yes" }))!.free).toBe(false);
+    expect(cleanQuestion({ ...question({}), options: undefined })).toBeNull();
   });
 
   it("an answer from the team closes it, with only the choices among its options", () => {
@@ -140,6 +144,12 @@ describe("a question, read defensively", () => {
       expect(q.answer!.origin).toBe("unknown");
       expect(q.state).toBe("answered");
     }
+  });
+
+  it("an answer the system wrote stays the system's: answered, and never the person's", () => {
+    const q = cleanQuestion(question({ answer: { choices: ["rm"], at: 150, origin: "system", seenAt: null } }))!;
+    expect(q.answer!.origin).toBe("system");
+    expect(q.state).toBe("answered");
   });
 });
 
@@ -196,7 +206,7 @@ describe("what a receipt says of the person's message", () => {
     expect(outcomeOf({ state: "queued", queue: "mailbox" }, 0)).toEqual({ kind: "queued" });
     expect(outcomeOf({ queue: "terminal" }, 0)).toEqual({ kind: "sent" });
     const outcomes = new Map<string, ReturnType<typeof outcomeOf>>([
-      ["m1", watched], ["m2", watched], ["m3", { kind: "queued" }], ["m4", watched], ["m5", watched],
+      ["m1", watched], ["m2", watched], ["m3", { kind: "queued" }], ["m4", watched], ["m5", watched], ["m6", watched], ["m7", { kind: "expired" }], ["m8", { kind: "expired" }],
     ]);
     // no word from the page, or no ending for it: nothing changes (absence from the queue says nothing)
     expect(settleQueued(outcomes, undefined)).toBe(outcomes);
@@ -204,7 +214,8 @@ describe("what a receipt says of the person's message", () => {
     expect(settleQueued(outcomes, [{ id: "zz", how: "taken" }, { id: "m1", how: "sent" }])).toBe(outcomes);
     const settled = settleQueued(outcomes, [
       { id: "m1", how: "taken" }, { id: "m2", how: "pending" }, { id: "m3", how: "taken" },
-      { id: "m4", how: "unconfirmed" }, { id: "m5", how: "expired" },
+      { id: "m4", how: "unconfirmed" }, { id: "m5", how: "expired" }, { id: "m6", how: "late" },
+      { id: "m7", how: "late" }, { id: "m8", how: "taken" },
     ]);
     // the same mapping as the direct send: taken = sent, still in the composer = Enter may be pressed,
     // no proof = not known, and a turn that waited too long was never typed
@@ -213,6 +224,11 @@ describe("what a receipt says of the person's message", () => {
     expect(settled.get("m3")).toEqual({ kind: "queued" });
     expect(settled.get("m4")).toEqual({ kind: "unknown", reason: "unconfirmed" });
     expect(settled.get("m5")).toEqual({ kind: "expired" });
+    // sent late: over a turn still watched, and over one the page already gave up on (expired)
+    expect(settled.get("m6")).toEqual({ kind: "late" });
+    expect(settled.get("m7")).toEqual({ kind: "late" });
+    // any other ending leaves an expired turn as it is
+    expect(settled.get("m8")).toEqual({ kind: "expired" });
   });
 
   it("the reason is kept only from the closed list", () => {
@@ -315,5 +331,23 @@ describe("the replies an agent suggests", () => {
     expect(agent.suggestions).toEqual(["Sì", "No"]);
     const user = cleanMessage({ id: "u", role: "user", text: "t", at: 1, suggestions: ["Sì", "No"] });
     expect(user.suggestions).toBeUndefined();
+  });
+});
+
+describe("the sight of the agent working", () => {
+  it("is shown by `working` and hidden at once by `idle`", () => {
+    expect(sightAfter(NOT_WORKING, "working")).toEqual({ working: true, misses: 0 });
+    expect(sightAfter({ working: true, misses: 0 }, "idle")).toEqual(NOT_WORKING);
+  });
+
+  it("is never started from a read that does not say it: absent is not known", () => {
+    expect(sightAfter(NOT_WORKING, undefined)).toEqual(NOT_WORKING);
+  });
+
+  it("holds through one read that does not say, and ends on the second", () => {
+    const held = sightAfter({ working: true, misses: 0 }, undefined);
+    expect(held.working).toBe(true);
+    expect(sightAfter(held, undefined)).toEqual(NOT_WORKING);
+    expect(sightAfter(held, "working")).toEqual({ working: true, misses: 0 });
   });
 });

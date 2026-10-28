@@ -82,7 +82,7 @@ _OPTION_ID = re.compile(r"[a-z0-9][a-z0-9_]{0,23}")
 # The shape `build_question` gives a question id: anything else in `source_id` or in an
 # answer's `id_domanda` was not written by this module.
 QUESTION_ID_RE = re.compile(r"aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16}")
-ORIGINS = ("utente", "scadenza")
+ORIGINS = ("utente", "scadenza", "sistema")  # the person; the expiry; the system closing a question that has no object any more
 _AGENT = re.compile(r"[a-z0-9][a-z0-9_-]{0,39}")
 _DURATION = re.compile(r"([0-9]{1,4})([mhd])")
 
@@ -578,6 +578,41 @@ def record_answer(
     stored = existing_answer(conn, id_domanda) or {}
     late = expiry is not None and now >= parse_iso(expiry) and stored.get("origine") == "scadenza"
     return Answer("expired" if late else "already_answered", id_domanda, stored, expiry_notice=notice)
+
+
+def close_as_system(
+    conn: sqlite3.Connection,
+    id_domanda: str,
+    prefer: Sequence[str],
+    *,
+    now: datetime | None = None,
+) -> Answer:
+    """Close an open question that has no object any more, in the system's name and not in the person's.
+
+    The thing the question asked was settled some other way (the plan was written in the configuration by a
+    chat, a command or a file edit): the card must not stay open as if somebody still owed an answer. The
+    answer is the first of `prefer` that is an option of the question, with origin `sistema` and channel
+    `tool`: the app shows it as answered, never as something the person chose, and an agent that reads it is
+    told the origin. The first answer wins, as for any other: a question somebody already answered, or that
+    expired, stays as it is (`already_answered`). Raises AnswerRejected when the question is unknown or none of
+    `prefer` is one of its options; nothing is written then.
+    """
+    now = (now or utc_now()).astimezone(timezone.utc).replace(microsecond=0)
+    try:
+        question = load_question(conn, id_domanda)
+    except QuestionRejected:
+        raise AnswerRejected("question_invalid") from None
+    if question is None:
+        raise AnswerRejected("question_unknown")
+    ids = {option["id"] for option in question["payload"]["opzioni"]}
+    choice = next((option for option in prefer if option in ids), None)
+    if choice is None:
+        raise AnswerRejected("choice_unknown", ",".join(str(option)[:20] for option in prefer)[:60])
+    with _transaction(conn):
+        inserted, answer, row_id = _insert_answer(conn, question, id_domanda, [choice], "", "tool", "sistema", now)
+    if inserted:
+        return Answer("recorded", id_domanda, answer, row_id)
+    return Answer("already_answered", id_domanda, existing_answer(conn, id_domanda) or {})
 
 
 def expire_due(

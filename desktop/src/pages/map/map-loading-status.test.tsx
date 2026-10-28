@@ -71,7 +71,7 @@ describe("the map while its positions are read", () => {
 
   it("is what the globe shows until its positions are loaded, and the old one-line text is gone", () => {
     const globe = read("web/app/components/JobsGlobe.tsx");
-    expect(globe).toContain("{!loaded && <GlobeLoadingStatus");
+    expect(globe).toMatch(/\{!loaded && \(?\s*<GlobeLoadingStatus/);
     expect(globe).not.toContain('tr("loading")');
   });
 

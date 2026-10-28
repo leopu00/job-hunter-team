@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen from "./DirectChatScreen";
-import type { DirectChatClient, DirectChatStatus } from "./direct-chat-contract";
+import type { DirectChatClient, DirectChatEvent, DirectChatStatus } from "./direct-chat-contract";
 import { resumeOnboardingTeamStart } from "../../lib/onboarding-runtime";
 import { TeamOffContext } from "../../lib/team-off";
 import { TEAM_OFF_TEXT } from "../../shell/team-off.i18n";
@@ -56,5 +56,21 @@ describe("the chat's bar when the team of this computer is stopped", () => {
     );
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
     expect(screen.queryByTestId("start-team")).toBeNull();
+  });
+
+  it("keeps the history on screen when the team stops under the open chat", async () => {
+    let onEvent: ((event: DirectChatEvent) => void) | undefined;
+    const mock = client({ state: "ready" });
+    vi.mocked(mock.read).mockResolvedValue({ messages: [{ id: "h1", role: "agent", text: "Messaggio già letto", at: 1 }], cursor: "c" });
+    vi.mocked(mock.subscribe).mockImplementation(async ({ onEvent: next }) => {
+      onEvent = next;
+      return { state: "ready" };
+    });
+    render(<DirectChatScreen client={mock} />);
+    expect(await screen.findByText("Messaggio già letto")).toBeInTheDocument();
+    act(() => onEvent?.({ kind: "status", status: { state: "error", code: "local_team_not_running" } }));
+    expect(await screen.findByTestId("start-team")).toBeInTheDocument();
+    expect(screen.getByText("Messaggio già letto")).toBeInTheDocument();
+    expect(screen.queryByText(/Nessun messaggio/)).toBeNull();
   });
 });

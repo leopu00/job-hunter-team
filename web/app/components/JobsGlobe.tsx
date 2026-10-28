@@ -2400,7 +2400,12 @@ export default function JobsGlobe({
           </div>
         )}
 
-        {!loaded && <GlobeLoadingStatus lang={showcase?.lang ?? locale} generic={showcase != null} />}
+        {!loaded && (
+          <GlobeLoadingStatus
+            lang={showcase?.lang ?? locale}
+            generic={showcase != null}
+          />
+        )}
 
         {/* Senza posizioni con una sede il globo era solo uno sfondo: una frase
             dice perché è vuoto e cosa comparirà. */}

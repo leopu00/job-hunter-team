@@ -27,6 +27,19 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // runtime_log.rs ATTEST_REASONS: the step of the container check a failed chat read stopped at, written beside
+  // the failure in runtime.log (`local_container_not_attested (label_project)`). The person is told the failure's
+  // own code; these words are for whoever reads the log.
+  ...Object.fromEntries(
+    [
+      "hash_tool_missing", "hash_podman_version_unreadable", "hash_podman_version_differs", "hash_machine_file",
+      "hash_compose_version_unreadable", "hash_compose_version_differs", "hash_image_pin", "hash_dry_run_exit",
+      "hash_dry_run_timeout", "hash_dry_run_not_started", "hash_plan_without_create", "hash_plan_ambiguous",
+      "label_project", "label_service", "label_container_number", "label_working_dir", "label_hash_form",
+      "label_config_files", "label_compose_version", "label_systemd_unit", "label_config_hash_differs",
+      "label_image", "label_windows",
+    ].map((word) => [word, "reason word of runtime.log beside a container check failure, never shown to the person"]),
+  ),
   // team_settings.rs: the verbs of `jht team-settings`, the keys of the settings the page edits, and the
   // box's own word for a refused value, which is mapped to team_settings_value_invalid before the person sees it.
   apply: "verb of the team-settings command, not an error",
@@ -102,6 +115,31 @@ const NOT_ERRORS: Record<string, string> = {
   // next to the message, from its own catalog, never as an error.
   not_ours: "reason of a receipt with taken null, said by the chat page",
   empty_unseen: "reason of a receipt with taken null, said by the chat page",
+  // A file attached in the Assistant's chat (direct_chat.rs direct_chat_attach, chat_attachment.rs): the refusals and
+  // the reasons the paperclip is off are said by the chat page next to the composer, from its own catalog
+  // (direct-chat.i18n.ts, attachErrors and attachOff), never through the error catalog.
+  attach_platform: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_vps: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_read_only: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_not_connected: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_busy: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attach_failed: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_unreadable: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_type: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_type_mismatch: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_too_big: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_is_link: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_not_file: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachments_folder_unsafe: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachments_folder_full: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_save_failed: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  attachment_not_shared: "refusal or reason of the chat's paperclip, said by the chat page next to the composer",
+  // The moments chat_attachment.rs tells a test (the person's file open, its size checked, the folder open) and the
+  // outcome of an attachment: neither reaches the person.
+  source_open: "moment of an attachment the tests act on, not an error",
+  source_checked: "moment of an attachment the tests act on, not an error",
+  folder_open: "moment of an attachment the tests act on, not an error",
+  saved_not_sent: "outcome of an attachment (copied, the Assistant not told), said by the chat page",
   // Candidate profile fields validated by profile import and migration.
   birth_year: "profile field",
   candidate_profile: "profile artifact id",

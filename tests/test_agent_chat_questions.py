@@ -45,7 +45,8 @@ def box(tmp_path):
     home.mkdir()
     db = home / "jobs.db"
     base = {**os.environ, "JHT_DB": str(db), "JHT_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1",
-            "JHT_EXTERNAL_CONTENT_NONCE": NONCE, "JHT_LANG": "it", "JHT_CHAT_PROMPT_WAIT": "0"}
+            "JHT_EXTERNAL_CONTENT_NONCE": NONCE, "JHT_LANG": "it", "JHT_CHAT_PROMPT_WAIT": "0",
+            "JHT_ANSWER_WAKE_RETRY": "0"}
     seed = subprocess.run([sys.executable, "-c", "from _db import get_db, ensure_schema; c=get_db(); ensure_schema(c); c.commit(); c.close()"],
                           cwd=SKILLS, env=base, capture_output=True, text=True)
     assert seed.returncode == 0, seed.stderr
@@ -177,6 +178,40 @@ def test_the_agent_is_woken_with_one_fixed_line_only_when_at_its_prompt(box):
     assert typed == "[ANSWER] The user answered one of your questions. Run: jht-check-user-replies --agent assistente"
 
 
+def test_a_wake_that_did_not_land_is_tried_again_by_a_detached_process_until_the_terminal_is_free(box):
+    """A first run: the person answers while the terminal is not at its prompt; the line lands when it is."""
+    import time as _time
+    qid = ask(box)
+    (box.state / "screen").write_text("Menu\n> 1. Yes\n  2. No\n", encoding="utf-8")
+    env = {**box.env, "JHT_ANSWER_WAKE_RETRY": "1", "JHT_ANSWER_WAKE_EVERY": "0.2", "JHT_ANSWER_WAKE_FOR": "20",
+           "JHT_ANSWER_WAKE_QUIET": "60"}
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "answer", "assistente", qid], input='{"choices":["breve"]}',
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert not (box.state / "delivered.envelopes").exists(), "nothing typed over a menu"
+    log = box.home / "logs" / "answer-wake.log"
+    lock = box.home / "locks" / f"answer-wake-{qid}.lock"
+
+    def until(condition, seconds=15.0):
+        end = _time.monotonic() + seconds
+        while _time.monotonic() < end:
+            if condition():
+                return True
+            _time.sleep(0.1)
+        return False
+
+    assert until(lambda: log.exists() and len(log.read_text(encoding="utf-8").splitlines()) >= 3), "the retries say why"
+    assert all(line.endswith(" assistente wake_blocked") for line in log.read_text(encoding="utf-8").splitlines())
+    assert lock.exists(), "one retrying process for the question"
+    (box.state / "screen").unlink()                 # the terminal is free
+    assert until(lambda: (box.state / "delivered.envelopes").exists()), "the retry typed the wake"
+    typed = (box.state / "delivered.envelopes").read_text(encoding="utf-8").strip("\0")
+    assert typed == "[ANSWER] The user answered one of your questions. Run: jht-check-user-replies --agent assistente"
+    with sqlite3.connect(box.db) as conn:           # the agent reads the answer: the retrying process ends and lets go
+        conn.execute("UPDATE pending_user_messages SET agent_seen_reply_at = CURRENT_TIMESTAMP WHERE source_id LIKE ?", ("%" + qid,))
+    assert until(lambda: not lock.exists()), "the process ends when the answer is read"
+
+
 def test_the_contract_table_is_the_one_of_agent_questions():
     spec = importlib.util.spec_from_file_location("t90_agent_chat", SCRIPT)
     chat_module = importlib.util.module_from_spec(spec)
@@ -303,3 +338,89 @@ def test_enter_on_a_message_taken_or_unknown_never_calls_the_transport(box):
     rc, refused = _enter(box, "../etc")
     assert refused == {"error": "chat_invalid"}
     assert len(_transport_calls(box)) == 1, "only the send typed; enter pressed nothing"
+
+
+# ── a question asked with a plain `jht-notify-user --kind question "text"` ─────────────────────────────
+
+def plain(box, agent="assistente", body="Which plan do you use? Plus, Pro or Business.", **row):
+    """A row as the tool writes it with no options: kind question, no source."""
+    columns = {"agent": agent, "body": body, "kind": "question", **row}
+    with sqlite3.connect(box.db) as conn:
+        cur = conn.execute(f"INSERT INTO pending_user_messages ({','.join(columns)}) VALUES ({','.join('?' * len(columns))})",
+                           list(columns.values()))
+        return cur.lastrowid
+
+
+def reply_of(box, row_id):
+    with sqlite3.connect(box.db) as conn:
+        return conn.execute("SELECT user_reply, user_reply_at IS NOT NULL, agent_seen_reply_at IS NOT NULL "
+                            "FROM pending_user_messages WHERE id = ?", (row_id,)).fetchone()
+
+
+def send(box, agent, client_id, text, **extra):
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "send", agent, client_id], input=text,
+                          capture_output=True, text=True, env={**box.env, **extra}, timeout=60)
+    return done.returncode, json.loads(done.stdout) if done.stdout.strip() else None
+
+
+def test_a_plain_question_is_on_the_page_of_its_agent_as_a_card_with_no_buttons(box):
+    row = plain(box)
+    plain(box, agent="capitano")                                     # another agent's
+    with sqlite3.connect(box.db) as conn:                              # a closer's question has its own way to be answered
+        conn.execute("INSERT INTO pending_user_messages (agent, body, kind, source_id, source_action, source_payload) "
+                     "VALUES ('assistente', 'Salary?', 'question', 'x1', 'closer_application_answer', '{}')")
+    found = page(box)["questions"]
+    assert [q["id"] for q in found] == [f"pm:{row}"]
+    q = found[0]
+    assert q["kind"] == "question" and q["state"] == "open" and q["options"] == [] and q["free"] is False
+    assert q["text"] == "Which plan do you use? Plus, Pro or Business." and isinstance(q["at"], float)
+    assert "answer" not in q
+
+
+def test_a_plain_question_older_than_a_week_is_not_shown(box):
+    plain(box, created_at="2020-01-01 10:00:00")
+    assert page(box).get("questions", []) == []
+
+
+def test_what_the_person_writes_in_the_chat_answers_its_open_plain_questions_and_only_those(box):
+    mine = plain(box)
+    older = plain(box, body="And the language?")
+    other_agent = plain(box, agent="capitano")
+    with sqlite3.connect(box.db) as conn:
+        conn.execute("INSERT INTO pending_user_messages (agent, body, kind, source_id, source_action, source_payload) "
+                     "VALUES ('assistente', 'Salary?', 'question', 'x1', 'closer_application_answer', '{}')")
+        closer = conn.execute("SELECT id FROM pending_user_messages WHERE source_id = 'x1'").fetchone()[0]
+    qid = ask(box)                                                   # a structured one is answered by its buttons
+    rc, out = send(box, "assistente", "c-1", "Pro, 100 al mese")
+    assert rc == 0, out
+    for row in (mine, older):
+        # seen at once: the words went to the agent's terminal, `jht-check-user-replies` must not hand them over again
+        assert reply_of(box, row) == ("Pro, 100 al mese", 1, 1)
+    assert reply_of(box, other_agent)[0] is None and reply_of(box, closer)[0] is None
+    found = {q["id"]: q for q in page(box)["questions"]}
+    assert found[f"pm:{mine}"]["state"] == "answered"
+    assert found[f"pm:{mine}"]["answer"]["text"] == "Pro, 100 al mese" and found[f"pm:{mine}"]["answer"]["origin"] == "user"
+    assert found[qid]["state"] == "open"
+
+
+def test_a_message_that_was_not_delivered_answers_nothing(box):
+    row = plain(box)
+    rc, out = send(box, "assistente", "c-2", "Pro", FAKE_DELIVERY_RC="8")
+    assert rc == 124, out
+    assert reply_of(box, row)[0] is None
+    assert page(box)["questions"][0]["state"] == "open"
+
+
+def test_a_chat_with_no_database_still_delivers(box):
+    box.db.unlink()
+    rc, out = send(box, "assistente", "c-3", "ciao")
+    assert rc == 0, out
+    assert not box.db.exists(), "answering questions never makes a database"
+
+
+def test_a_delivery_the_transport_could_not_prove_closes_the_question_but_leaves_the_reply_unseen(box):
+    row = plain(box)
+    rc, out = send(box, "assistente", "c-4", "Pro", FAKE_DELIVERY_RC="7")
+    assert rc == 0, out
+    # closed in the chat, and not seen: `jht-check-user-replies` is the second way for the words to reach the agent
+    assert reply_of(box, row) == ("Pro", 1, 0)

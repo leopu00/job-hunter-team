@@ -197,6 +197,20 @@ describe("DirectChatScreen: the agent's questions, answered with the buttons", (
     expect(within(questionCard()).getByTestId("direct-chat-answer-seen")).not.toHaveTextContent(/non/i);
   });
 
+  it("a question the system closed ticks no option and says it is resolved, not that the agent read it", async () => {
+    viewport();
+    const { mock } = client({
+      questions: [{ ...QUESTION, state: "answered", answer: { choices: ["rm"], at: 6, origin: "system", seenAt: null } }],
+    });
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Dove cerco prima?");
+    expect(within(questionCard()).queryByRole("button", { name: "✓ Roma" })).toBeNull();
+    expect(within(questionCard()).getByRole("button", { name: "Roma" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(questionCard()).getByTestId("direct-chat-answer-resolved")).toHaveTextContent(/risolta/i);
+    expect(within(questionCard()).queryByTestId("direct-chat-answer-seen")).toBeNull();
+    for (const option of within(questionCard()).getAllByTestId("direct-chat-option")) expect(option).toBeDisabled();
+  });
+
   it("an expired question says so and offers nothing", async () => {
     viewport();
     const { mock } = client({

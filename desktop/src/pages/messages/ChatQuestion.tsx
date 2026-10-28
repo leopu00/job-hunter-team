@@ -44,7 +44,9 @@ export default function ChatQuestion({
   const [error, setError] = useState<string | null>(null);
   const open = question.state === "open";
   const live = open && canAnswer && answerableHere(question) && !busy;
-  const chosen = new Set(question.answer?.choices ?? []);
+  // closed by the system: nobody chose, so no option is ticked and the note says it is resolved
+  const bySystem = question.answer?.origin === "system";
+  const chosen = new Set(bySystem ? [] : (question.answer?.choices ?? []));
   const colour = KIND_COLOR[question.kind];
 
   async function answer(choices: string[]) {
@@ -97,6 +99,7 @@ export default function ChatQuestion({
       {question.subject && <p className="m-0 mb-1 font-semibold text-[var(--color-white)]">{question.subject}</p>}
       <div>{renderChatMarkdown(question.text)}</div>
 
+      {question.options.length > 0 && (
       <div role="group" aria-label={question.subject ?? question.text} className="mt-2 flex flex-wrap gap-1.5">
         {question.options.map((option) => {
           const taken = chosen.has(option.id);
@@ -123,6 +126,13 @@ export default function ChatQuestion({
           );
         })}
       </div>
+      )}
+
+      {open && canAnswer && question.options.length === 0 && !question.free && (
+        <p data-testid="direct-chat-answer-below" className="m-0 mt-2 text-[13px] text-[var(--color-muted)]">
+          {t.answerBelow}
+        </p>
+      )}
 
       {open && (question.multiple || (question.free && onAnswerInWords)) && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -161,7 +171,12 @@ export default function ChatQuestion({
           {t.answerExpired}
         </p>
       )}
-      {question.state === "answered" && (
+      {question.state === "answered" && bySystem && (
+        <p data-testid="direct-chat-answer-resolved" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
+          {t.answerResolved}
+        </p>
+      )}
+      {question.state === "answered" && !bySystem && (
         <p data-testid="direct-chat-answer-seen" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
           {question.answer?.seenAt ? t.answerSeen : t.answerWaiting}
         </p>

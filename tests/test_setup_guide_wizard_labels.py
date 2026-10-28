@@ -127,7 +127,8 @@ def test_the_guide_says_the_assistant_asks_for_the_plan_in_the_chat(lang):
 
 def test_the_assistant_skill_asks_for_the_plan_the_way_the_guide_says():
     skill = (ROOT / "agents/_skills/onboarding-flow/SKILL.md").read_text(encoding="utf-8")
-    assert "plan_registry.py" in skill and "list codex" in skill and "set codex" in skill
+    # the plans are shown by the card in the chat (ask-plan), and the Assistant writes what the user chose
+    assert "plan_registry.py" in skill and "first_run.py ask-plan" in skill and "set codex" in skill
 
 
 def test_no_page_of_the_guide_sends_you_to_a_plan_screen_that_the_app_does_not_have():

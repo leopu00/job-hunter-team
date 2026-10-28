@@ -27,6 +27,9 @@ import {
   fullStamp,
   KIND_COLOR,
   outcomeOf,
+  sightAfter,
+  NOT_WORKING,
+  type WorkingSight,
   questionsOf,
   quoteLine,
   settleQueued,
@@ -98,7 +101,17 @@ export function systemLineText(message: DirectChatMessage, codes: Record<string,
   if (code && Object.prototype.hasOwnProperty.call(codes, code) && typeof codes[code] === "string") {
     return codes[code];
   }
-  return message.text;
+  return message.role === "user" ? withoutAttachmentPath(message.text) : message.text;
+}
+
+/**
+ * An attachment goes to the Assistant with the path of its copy in the container, closing the person's
+ * sentence in one bracket (`direct_chat.rs`, `attachment_message`). The person reads the sentence only:
+ * this takes off that bracket, and only that exact shape at the very end — the app's folder, the name
+ * the app gives its copies — never any other brackets or paths in what someone wrote.
+ */
+export function withoutAttachmentPath(text: string): string {
+  return text.replace(/ \[attachment for my profile: \/jht_user\/allegati\/cv-\d{8}-\d{6}(?:-\d{1,3})?\.[a-z]{2,4}\]$/, "");
 }
 
 export { renderChatText };
@@ -149,7 +162,7 @@ const REOPEN_TRIES = 3;
 const REOPEN_WAIT_MS = 1_500;
 // What asking again cannot change, or makes worse (a server that counts failed sign-ins or turns the
 // computer away): these are told at once, with their Retry. Anything else is a team not ready yet.
-const REOPEN_NO_RETRY = new Set([
+export const REOPEN_NO_RETRY = new Set([
   "ssh_auth_failed",
   "ssh_rate_limited",
   "host_key_changed",
@@ -169,11 +182,13 @@ function StatusBar({
   operationError,
   reconnecting,
   onRetry,
+  onReadAgain,
 }: {
   status: DirectChatStatus;
   operationError: string | null;
   reconnecting: boolean;
   onRetry: () => void;
+  onReadAgain: () => Promise<boolean>;
 }) {
   const locale = appLocale();
   const t = DIRECT_CHAT_TEXT[locale];
@@ -214,7 +229,7 @@ function StatusBar({
       </span>
       {(failed || operationError) && (
         <span className="shrink-0 flex items-center gap-2">
-          {teamStopped && <StartTeamAction onStarted={onRetry} />}
+          {teamStopped && <StartTeamAction onStarted={onReadAgain} />}
           <button
             type="button"
             onClick={onRetry}
@@ -262,6 +277,11 @@ export default function DirectChatScreen({
   const [answersInFlight, setAnswersInFlight] = useState<ReadonlyMap<string, DirectChatAnswer>>(() => new Map());
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  // The paperclip, in the Assistant's chat only: on, or off with the reason the native side gives.
+  const [attachState, setAttachState] = useState<{ available: boolean; code?: string } | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [attachNote, setAttachNote] = useState<{ kind: "warn" | "error"; text: string } | null>(null);
+  const attachHere = agentId === "assistente" && Boolean(client.attach) && Boolean(client.attachState);
   const [loading, setLoading] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
@@ -281,6 +301,8 @@ export default function DirectChatScreen({
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(() => new Map());
   // A message whose Enter is being pressed again.
   const [pressing, setPressing] = useState<string | null>(null);
+  // Whether the agent shows a running turn, from what the reads say of its screen (never from their absence).
+  const [sight, setSight] = useState<WorkingSight>(NOT_WORKING);
   const [inFlight, setInFlight] = useState<string | null>(null);
   // What the composer replies to, chosen by the person (right-click → Reply): nothing until then.
   // An open question that takes words: what is written is its answer. Anything else: a quote.
@@ -312,6 +334,30 @@ export default function DirectChatScreen({
     setAgentId(initialAgentId);
   }, [initialAgentId]);
 
+  // The paperclip asks the native side whether it can be used (this computer's team, writing allowed);
+  // another agent, or no connection, has none. A note about a file belongs to the chat it was made in.
+  useEffect(() => {
+    setAttachNote(null);
+  }, [agentId]);
+  useEffect(() => {
+    if (!attachHere || status.state !== "ready") {
+      setAttachState(null);
+      return;
+    }
+    let active = true;
+    Promise.resolve(client.attachState?.())
+      .then((next) => {
+        if (active) setAttachState(next ?? { available: false });
+      })
+      .catch(() => {
+        // the bridge could not say: the button stays off, with no reason to give
+        if (active) setAttachState({ available: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, [attachHere, status.state, writeLocked, client]);
+
   useEffect(() => {
     let active = true;
     const onEvent = (event: DirectChatEvent) => {
@@ -324,6 +370,7 @@ export default function DirectChatScreen({
         }
       } else if (event.kind === "messages" && event.agentId === currentAgent.current) {
         setMessages((current) => sameAsBefore(current, mergeMessages(current, event.page)));
+        setSight((current) => sightAfter(current, event.page.activity));
         if (Array.isArray(event.page.questions)) {
           setQuestionsHere(true);
           setQuestions((current) => sameAsBefore(current, questionsOf(event.page)));
@@ -384,14 +431,21 @@ export default function DirectChatScreen({
     };
   }, [client, embedded]);
 
+  // The history stays on screen when only the connection changes (the team stopped under an open chat): it is
+  // emptied for another agent or another client, not for a connection that fell.
+  const historyOf = useRef<{ client: unknown; agentId: string } | null>(null);
   useEffect(() => {
-    setMessages([]);
+    if (historyOf.current?.client !== client || historyOf.current.agentId !== agentId) {
+      historyOf.current = { client, agentId };
+      setMessages([]);
+    }
     setQuestions([]);
     setQuestionsHere(false);
     setAnswersInFlight(new Map());
     setReplyTo(null);
     setMenu(null);
     setOutcomes(new Map());
+    setSight(NOT_WORKING);
     setPressing(null);
     setOperationError(null);
     setLoading(false);
@@ -415,6 +469,7 @@ export default function DirectChatScreen({
         if (!active) return undefined;
         if (slowLink) cursor = page.cursor;
         setMessages((current) => sameAsBefore(current, mergeMessages(current, page)));
+        setSight((current) => sightAfter(current, page.activity));
         // a turn the team held back while its agent worked takes the ending the page reports for it
         if (Array.isArray(page.settled)) setOutcomes((current) => settleQueued(current, page.settled));
         // a page that brings the questions replaces them; one without the field (an older image)
@@ -527,6 +582,20 @@ export default function DirectChatScreen({
     };
   }, [menu]);
 
+  // «Start the team» looks again by itself while the team starts: a try that fails changes nothing on screen (the
+  // bar and its button stay), one that works takes the bar away. True: the chat is connected.
+  async function readAgain(): Promise<boolean> {
+    try {
+      const next = await client.reconnect();
+      if (next.state !== "ready") return false;
+      setOperationError(null);
+      setStatus(next);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async function retry() {
     setReconnecting(true);
     setOperationError(null);
@@ -562,6 +631,8 @@ export default function DirectChatScreen({
     const body = target ? `${quoteLine(t.quotePrefix, target.text)}\n${typed}` : typed;
     if (suggested === undefined) setReplyTo(null);
     setAnswerRefusal(null);
+    // the line under the composer was about the last attachment: once the person writes, it goes
+    setAttachNote(null);
     const id = clientMessageId();
     // in seconds, as the team's times: the receipt's time replaces it
     const optimistic: DirectChatMessage = { id, role: "user", text: body, at: Date.now() / 1000 };
@@ -591,6 +662,33 @@ export default function DirectChatScreen({
     } finally {
       setSending(false);
       setInFlight(null);
+    }
+  }
+
+  // Choose a file in the system's window and give it to the Assistant: the app copies it into the team's
+  // folder and tells the Assistant; this page never sees a path.
+  async function attachFile() {
+    if (!client.attach || attaching || sending || writeLocked || status.state !== "ready" || !attachState?.available) return;
+    setAttaching(true);
+    setAttachNote(null);
+    try {
+      const done = await client.attach({ clientMessageId: clientMessageId(), locale });
+      if (done.outcome === "sent") {
+        // The message left on its own: it is a bubble in the conversation, and its delivery (taken, waiting,
+        // not known) is said under it as for any message. No line under the composer: nothing is left to say.
+        const receipt = done.receipt;
+        if (receipt) setOutcomes((current) => new Map(current).set(receipt.messageId, outcomeOf(receipt, 0)));
+        readSoon.current?.();
+      } else if (done.outcome === "saved_not_sent") {
+        setAttachNote({ kind: "warn", text: withName(t.attachSavedNotSent, done.displayName ?? "") });
+      }
+    } catch (error) {
+      const code = errorCode(error);
+      const words: Record<string, string> = { ...t.attachOff, ...t.attachErrors };
+      const said = code !== null && Object.prototype.hasOwnProperty.call(words, code) ? words[code] : null;
+      setAttachNote({ kind: "error", text: said ?? t.attachErrors.attach_failed });
+    } finally {
+      setAttaching(false);
     }
   }
 
@@ -657,7 +755,7 @@ export default function DirectChatScreen({
       return { kind: "question", question, words: question.state === "open" && question.free && canAnswer, text: question.subject || question.text };
     }
     const message = messages.find((m) => m.id === replyTo.id);
-    return message ? { kind: "message", text: message.text } : null;
+    return message ? { kind: "message", text: message.role === "user" ? withoutAttachmentPath(message.text) : message.text } : null;
   }
   const target = replyTarget();
 
@@ -775,6 +873,13 @@ export default function DirectChatScreen({
         </div>
       );
     }
+    if (outcome.kind === "late") {
+      return (
+        <div data-testid="direct-chat-sent-late" className="mt-1 text-right text-[13px] text-[var(--color-yellow)]">
+          {t.queueLate}
+        </div>
+      );
+    }
     if (outcome.kind === "unknown") {
       // No button: a key pressed now could choose something on the agent's screen in the person's place.
       return (
@@ -800,7 +905,8 @@ export default function DirectChatScreen({
   return (
     <div
       className="min-h-0 overflow-hidden flex flex-col md:flex-row bg-[var(--color-void)]"
-      style={embedded ? { height: "100%" } : { height: "calc(100svh / var(--zoom, 1) - 3.5rem)" }}
+      // The whole of the space it is given: in the Shell that is the window under the navbar and its bars (a full-bleed page), so a bar above never pushes the page past the window.
+      style={{ height: "100%" }}
       data-testid="direct-chat-shell"
     >
       {!embedded && (
@@ -808,7 +914,7 @@ export default function DirectChatScreen({
         <div className="shrink-0 px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-dim)]">
           {t.agentsHeading}
         </div>
-        <nav aria-label={t.agentsNavAria} className="min-h-0 px-2 pb-3 grid content-start gap-1">
+        <nav aria-label={t.agentsNavAria} className="min-h-0 overflow-y-auto px-2 pb-3 grid content-start gap-1">
           {agents.map((agent) => (
             <button
               key={agent.id}
@@ -849,7 +955,7 @@ export default function DirectChatScreen({
         </header>
         )}
 
-        <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} />
+        <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} onReadAgain={readAgain} />
         {!writeLocked && isOwnVpsClaimCode(operationError) && (
           <div className="shrink-0 px-4 pt-3">
             <OwnVpsClaim reason={operationError} onClaimed={() => setOperationError(null)} />
@@ -904,6 +1010,20 @@ export default function DirectChatScreen({
                 </Fragment>
               );
             })}
+            {sight.working && status.state === "ready" && (
+              <div role="status" data-testid="direct-chat-working" className="flex items-center gap-2 text-[13px] text-[var(--color-muted)]">
+                <span aria-hidden="true" className="inline-flex items-center gap-1">
+                  {[0, 1, 2].map((dot) => (
+                    <span
+                      key={dot}
+                      className="h-1.5 w-1.5 rounded-full bg-[var(--color-muted)] animate-pulse motion-reduce:animate-none"
+                      style={{ animationDelay: `${dot * 200}ms` }}
+                    />
+                  ))}
+                </span>
+                <span>{withName(t.working, selected.label)}</span>
+              </div>
+            )}
           </div>
           <JumpToLatest
             atBottom={bottom.atBottom}
@@ -999,6 +1119,21 @@ export default function DirectChatScreen({
               {answerRefusal}
             </p>
           )}
+          {attachHere && attachState && !attachState.available && attachState.code && attachState.code in t.attachOff && (
+            <p data-testid="direct-chat-attach-off" className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-muted)]">
+              {t.attachOff[attachState.code as keyof typeof t.attachOff]}
+            </p>
+          )}
+          {attachNote && (
+            <p
+              role="alert"
+              data-testid="direct-chat-attach-note"
+              data-kind={attachNote.kind}
+              className={`w-full m-0 mb-1.5 text-[13px] ${attachNote.kind === "warn" ? "text-[var(--color-yellow)]" : "text-[var(--color-red)]"}`}
+            >
+              {attachNote.text}
+            </p>
+          )}
           <div
             className="w-full flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
@@ -1032,6 +1167,19 @@ export default function DirectChatScreen({
               }
               className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
             />
+            {attachHere && (
+              <button
+                type="button"
+                data-testid="direct-chat-attach"
+                aria-label={t.attach}
+                title={attachState && !attachState.available && attachState.code && attachState.code in t.attachOff ? t.attachOff[attachState.code as keyof typeof t.attachOff] : t.attach}
+                disabled={composerOff || attaching || !attachState?.available}
+                onClick={() => void attachFile()}
+                className="h-8 shrink-0 self-end rounded-md border border-[var(--color-border)] px-2 text-[15px] leading-none text-[var(--color-bright)] disabled:cursor-default disabled:opacity-40"
+              >
+                {attaching ? t.attaching : "📎"}
+              </button>
+            )}
             <VoiceInputControl
               value={text}
               onChange={setText}

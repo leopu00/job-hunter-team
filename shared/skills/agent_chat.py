@@ -113,6 +113,9 @@ DELIVERY_NOT_THERE = 9
 ENTER_REASONS = frozenset({"menu", "empty_unseen", "not_ours", "retry_unattested"})
 SIGNATURE = re.compile(r"^JHT_SIGNATURE ((?:[0-9a-f]{2}){1,64})$", re.M)
 ENTER_REASON = re.compile(r"^JHT_REASON ([a-z_]{1,20})$", re.M)
+# What the transport prints when it leaves the text in the composer without submitting it (half drawn, changed under
+# the paste): from then on the turn is waiting THERE, and the chat submits it when the agent is free.
+STUCK = re.compile(r"^JHT_STUCK$", re.M)
 MESSAGE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 # The ids are the roles' keys; the value is the tmux session.
@@ -153,6 +156,13 @@ PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
 # turn is QUEUED (written, not typed) and delivered by the next read or send that finds the agent idle.
 BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "3"))
 QUEUE_FILE = "chat-queue.jsonl"
+# A turn whose text is in the composer and then finds it empty: a late draw is waited for this long.
+TYPED_GONE_AFTER_S = 30.0
+# A held turn past its life is given its one Enter if the agent frees up within this time after it.
+TYPED_LATE_WINDOW_S = 300.0
+# The detached process that sees to the queue when nobody reads or writes: how often, and for how long
+# (the life of a queued turn plus a margin).
+DRAIN_EVERY_S = float(os.environ.get("JHT_CHAT_DRAIN_EVERY", "5"))
 # A queued turn is typed only while it is fresh: past this it is NOT sent (never typed, whatever the agent
 # does later) and the page says so.  Delivery and expiry are reported for a day, then forgotten.
 QUEUE_TTL_S = float(os.environ.get("JHT_CHAT_QUEUE_TTL", "1200"))
@@ -171,9 +181,11 @@ _INVISIBLE = frozenset(
 
 
 class Refusal(Exception):
-    def __init__(self, code: str):
+    def __init__(self, code: str, typed: bool = False):
         super().__init__(code)
         self.code = code
+        # The transport said the text stayed in the composer (JHT_STUCK): the turn is ours there, not lost.
+        self.typed = typed
 
 
 def jht_home() -> Path:
@@ -218,22 +230,24 @@ def read(agent: str, cursor_text: str | None) -> dict:
         waiting, settled = _queue_state(agent)
         page["queued"] = [str(held.get("message_id")) for held in waiting]
         page["settled"] = settled       # how each turn that left the queue ended, for the page to say
-    if _awaiting_reply(agent):
+    if _turn_is_recent(agent):
         activity = activity_of(agent)
         if activity:
             page["activity"] = activity     # absent = not known; never read as idle
     return page
 
 
-# The person's last turn is waiting for an answer: nothing from the agent after it, and young enough
-# that what the agent does now is about it.  Only then does a read look at the terminal at all.
+# The person's last turn is young enough that what the agent does now may be about it: the agent can
+# answer first («ok, I'm on it») and keep working, so an answer does not end the window.  Only inside
+# it does a read look at the terminal at all.
 ACTIVITY_WINDOW_S = 1800.0
 ACTIVITY_CAPTURE_TIMEOUT_S = 2.0
+ACTIVITY_RETRY_S = 15.0
 
 
-def _awaiting_reply(agent: str) -> bool:
+def _turn_is_recent(agent: str) -> bool:
     path = chat_path(agent)
-    last_user = last_agent = None
+    last_user = None
     try:
         size = path.stat().st_size
         with open(path, "rb") as handle:
@@ -250,21 +264,28 @@ def _awaiting_reply(agent: str) -> bool:
                     continue
                 if row.get("role") == "user":
                     last_user = at
-                elif row.get("role") == "assistant" and str(row.get("text") or "").strip():
-                    last_agent = at
     except OSError:
         return False
-    if last_user is None or (last_agent is not None and last_agent >= last_user):
-        return False
-    return 0 <= time.time() - last_user <= ACTIVITY_WINDOW_S
+    return last_user is not None and 0 <= time.time() - last_user <= ACTIVITY_WINDOW_S
 
 
 def activity_of(agent: str) -> str | None:
     """`working` while the agent's CLI shows a running turn, `idle` at an empty prompt, None when
     the screen cannot say (no session, a menu, a draft, a form this reader does not know)."""
-    # A stuck tmux must not hold every read: the page reads every second or two.
+    # A stuck tmux must not hold every read: the page reads every second or two, so after a capture that
+    # failed the next ones wait ACTIVITY_RETRY_S.  Each read is its own process: the failure is a mark on disk.
+    mark = chat_path(agent).parent / "activity-failed"
+    try:
+        if 0 <= time.time() - mark.stat().st_mtime < ACTIVITY_RETRY_S:
+            return None
+    except OSError:
+        pass
     pane = capture_pane(AGENTS[agent], ACTIVITY_CAPTURE_TIMEOUT_S)
     if pane is None:
+        try:
+            mark.touch()
+        except OSError:
+            pass                  # no mark, no wait: the next read tries again, as it did before
         return None
     state, busy = composer_snapshot(pane)
     if busy:
@@ -735,8 +756,14 @@ def composer_text(pane: str) -> str | None:
                     value = value[:-1]
             return value.strip()
 
+        # The rows a long draft wraps onto are its text, whatever they hold: the user's turn is fenced with
+        # ``⟦UTENTE·id⟧``, and the closing mark lands on the second row, where a «·» made it look like the
+        # model/path footer. They count only when a footer really follows them.
+        wrapped = 0 if boxed or marker != "›" else _wrapped_continuation(rows, index)
+        if wrapped and not _footer_follows(rows[index + 1 + wrapped:]):
+            wrapped = 0
         parts = [fragment(plain, first=True)]
-        for _following_raw, following in rows[index + 1:]:
+        for offset, (_following_raw, following) in enumerate(rows[index + 1:]):
             if boxed:
                 if _BORDER.match(following):
                     break
@@ -745,7 +772,7 @@ def composer_text(pane: str) -> str | None:
                     break
                 parts.append(fragment(stripped[1:]))
             else:
-                if _CODEX_DOT_FOOTER.match(following) or _CODEX_HINT.search(following):
+                if offset >= wrapped and (_CODEX_DOT_FOOTER.match(following) or _CODEX_HINT.search(following)):
                     break
                 if following.strip():
                     parts.append(following.strip())
@@ -837,6 +864,9 @@ def _receipt(client_id: str, message_id, at, state: str | None = None, taken: st
     elif taken == "unconfirmed":
         out["taken"] = None         # typed once, gone from the composer, no proof it was taken
         out["reason"] = "unconfirmed"
+    elif taken == "late":
+        out["taken"] = None         # a held turn got its Enter after its time, with no proof it was taken
+        out["reason"] = "late"
     elif taken in ENTER_REASONS:
         out["taken"] = None         # «enter» found something else in the composer and pressed nothing
         out["reason"] = taken
@@ -882,6 +912,7 @@ def mark_delivered(agent: str, row: dict, taken: str | None = None, signature: s
             os.close(fd)
     except OSError:
         pass
+    close_plain_questions(agent, str(row.get("text") or ""), seen=taken != "unconfirmed")
 
 
 def _delivery_binary() -> str:
@@ -986,11 +1017,12 @@ def deliver(agent: str, session: str, text: str) -> tuple[str, str | None]:
         return "taken", None
     if done.returncode == DELIVERY_UNCONFIRMED:
         return "unconfirmed", None
+    said = done.stdout.decode("utf-8", "replace")
     if done.returncode == DELIVERY_PENDING:
-        found = SIGNATURE.search(done.stdout.decode("utf-8", "replace"))
+        found = SIGNATURE.search(said)
         if found:
             return "pending", found.group(1)
-    raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
+    raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"), typed=bool(STUCK.search(said)))
 
 
 def _mail_module():
@@ -1072,7 +1104,7 @@ def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
     """``(waiting, settled)`` for the queued turns of the last day, oldest first.
 
     ``waiting``: fresh and not delivered, the turns a flush may type.  ``settled``: what became of the others,
-    ``{"id": message_id, "how": taken|pending|unconfirmed|expired}``; a turn past QUEUE_TTL_S and never
+    ``{"id": message_id, "how": taken|pending|late|unconfirmed|expired}``; a turn past QUEUE_TTL_S and never
     delivered is ``expired``, whatever the agent shows now.
     """
     delivered = chat_path(agent).parent / DELIVERED_FILE
@@ -1092,7 +1124,7 @@ def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
         record = _found(delivered, client_id)
         if record is not None:
             if age <= QUEUE_REPORT_S:
-                how = record.get("taken") if record.get("taken") in ("taken", "pending") else "unconfirmed"
+                how = record.get("taken") if record.get("taken") in ("taken", "pending", "late") else "unconfirmed"
                 settled.append({"id": str(row.get("message_id")), "how": how})
         elif age > QUEUE_TTL_S:
             if age <= QUEUE_REPORT_S:
@@ -1107,11 +1139,17 @@ def queued_turns(agent: str) -> list[dict]:
     return _queue_state(agent)[0]
 
 
-def _queue_locked(agent: str, client_id: str, text: str) -> dict:
-    """Write the turn and queue it (once per client id). The caller holds the agent's lock."""
+def _queue_locked(agent: str, client_id: str, text: str, typed: bool = False) -> dict:
+    """Write the turn and queue it (once per client id). The caller holds the agent's lock.
+
+    ``typed``: the text is already in the agent's composer and nothing submitted it; the flush presses Enter on
+    it (never types it again) when the agent is free.
+    """
     row = persist(agent, client_id, text)
     if not any(held["client_message_id"] == client_id for held in _queue_lines(agent)):
         line = {"client_message_id": client_id, "message_id": row.get("message_id"), "queued_at": time.time()}
+        if typed:
+            line["typed"] = True
         try:
             fd = os.open(_queue_path(agent), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
             try:
@@ -1123,7 +1161,77 @@ def _queue_locked(agent: str, client_id: str, text: str) -> dict:
             raise Refusal("persist_failed")
     out = _receipt(client_id, row.get("message_id"), row.get("ts"), "queued")
     out["queue"] = "terminal"       # held here until the agent is idle, then typed: the page watches it
+    _spawn_drain(agent)             # and a process of its own sees to it even if nobody writes or reads again
     return out
+
+
+def _settle_typed(agent: str, session: str, row: dict, held: dict, pane: str | None) -> bool:
+    """A turn whose text is already in the composer: submit it there. True when it is settled (go on to the
+    next turn), False when it has to wait. It is never typed again, and a text that is not provably ours is
+    never touched (the transport decides that, as for every flush)."""
+    if pane is None or composer_snapshot(pane)[1]:
+        return False                               # a turn is running: not now
+    gate = delivery_gate(pane)
+    if gate == "text":
+        try:
+            flush_ours(session)                    # Enter only on a text it can prove is ours
+        except Refusal:
+            return False
+        mark_delivered(agent, row, "taken")
+        return True
+    if gate in {"empty", "none"}:
+        # The box is empty: someone submitted it (the bridge's flush) or the paste never drew. A late draw is waited
+        # for a few seconds; after that nothing proves it, and it is not typed a second time.
+        try:
+            waited = time.time() - float(held.get("queued_at") or 0)
+        except (TypeError, ValueError):
+            waited = TYPED_GONE_AFTER_S
+        if waited < TYPED_GONE_AFTER_S:
+            return False
+        mark_delivered(agent, row, "unconfirmed")
+        return True
+    return False
+
+
+def _typed_open(agent: str) -> bool:
+    """A typed turn not closed whose time is not over yet, or is over by less than the window of its one Enter."""
+    now = time.time()
+    delivered = chat_path(agent).parent / DELIVERED_FILE
+    return any(held.get("typed") and now - float(held.get("queued_at") or 0) <= QUEUE_TTL_S + TYPED_LATE_WINDOW_S
+               and _found(delivered, held["client_message_id"]) is None for held in _queue_lines(agent))
+
+
+def _retire_typed(agent: str, session: str) -> None:
+    """A typed turn that outlived QUEUE_TTL_S: its text may still wait in the composer, never proved taken.
+
+    The page tells the person «not sent, write it again» at that point, and the old text, still «ours, of any
+    age» for the transport, would be submitted by the next delivery: a double. So the one Enter it was waiting for
+    is given now, if the agent is free and the transport proves the text ours (the same ``--flush-ours``): the turn
+    is settled ``late`` («sent late»). Otherwise it is left as it was (expired), and tried again for
+    TYPED_LATE_WINDOW_S only: an agent that stays busy for longer is not given a message the page said was lost.
+    """
+    now = time.time()
+    stale = [held for held in _queue_lines(agent)
+             if held.get("typed") and QUEUE_TTL_S < now - float(held.get("queued_at") or 0) <= QUEUE_TTL_S + TYPED_LATE_WINDOW_S]
+    if not stale:
+        return
+    try:
+        with _AgentLock(agent):
+            for held in stale:
+                client_id = held["client_message_id"]
+                if _found(chat_path(agent).parent / DELIVERED_FILE, client_id) is not None:
+                    continue
+                row = _found(chat_path(agent), client_id)
+                pane = capture_pane(session)
+                if row is None or pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) != "text":
+                    continue
+                try:
+                    flush_ours(session)            # one Enter, only on a text the transport proves ours
+                except Refusal:
+                    continue
+                mark_delivered(agent, row, "late")
+    except Refusal:
+        return
 
 
 def flush_queue(agent: str, session: str) -> None:
@@ -1133,6 +1241,7 @@ def flush_queue(agent: str, session: str) -> None:
     turn queued) and the same guarded transport.  Called by every send and, unless FLUSH_ON_READ is off,
     every read, under the agent's lock.  An expired turn is never typed.
     """
+    _retire_typed(agent, session)
     if not queued_turns(agent):
         return
     try:
@@ -1143,6 +1252,10 @@ def flush_queue(agent: str, session: str) -> None:
                 if row is None:
                     continue
                 pane = capture_pane(session)
+                if held.get("typed"):
+                    if _settle_typed(agent, session, row, held, pane):
+                        continue
+                    return
                 if pane is not None and not composer_snapshot(pane)[1] and delivery_gate(pane) == "text":
                     # A text of ours left in the box (a bridge's paste nobody submitted) would hold the turn for
                     # ever: once, the transport submits it if it can prove it is its own, then the box is looked at again.
@@ -1277,7 +1390,14 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)
-                taken, signature = deliver(agent, session, str(row.get("text") or text))
+                try:
+                    taken, signature = deliver(agent, session, str(row.get("text") or text))
+                except Refusal as refusal:
+                    if not refusal.typed:
+                        raise
+                    # The text stayed in the composer (half drawn under a working agent): it is held, as a turn
+                    # waiting there, not lost and not typed again; the flush submits it when the agent is free.
+                    return _queue_locked(agent, client_id, text, typed=True)
                 mark_delivered(agent, row, taken, signature)
                 return _receipt(client_id, row.get("message_id"), row.get("ts"), taken=taken)
         if retry_outside_lock:
@@ -1383,7 +1503,7 @@ QUESTION_KIND_OF_TIPO = {
     "completamento": "completed",
     "comunicazione": "info",
 }
-ORIGIN_OF = {"utente": "user", "scadenza": "expiry"}      # anything else is "unknown", never "user"
+ORIGIN_OF = {"utente": "user", "scadenza": "expiry", "sistema": "system"}      # anything else is "unknown", never "user"
 MAX_SUGGESTIONS = 5
 MAX_SUGGESTION = 240
 QUESTIONS_SHOWN = 40
@@ -1504,6 +1624,67 @@ def _question_view(aq, conn, source_id: str, created_at) -> dict | None:
     return view
 
 
+# A question asked with a plain `jht-notify-user --kind question "text"`: no options, no contract.  The agents'
+# panel lists it as open while it has no reply (agent_state.py, a week at most); the chat shows it as a card
+# with no buttons, and the person answers it in the chat's own box (``close_plain_questions`` closes it).
+PLAIN_QUESTION_ID = "pm:{row}"
+PLAIN_QUESTIONS_FOR_S = 7 * 86400.0
+
+
+def _plain_questions(conn, agent: str) -> list:
+    since = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - PLAIN_QUESTIONS_FOR_S))
+    rows = conn.execute(
+        "SELECT id, body, created_at, user_reply, user_reply_at, agent_seen_reply_at FROM pending_user_messages "
+        "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' AND COALESCE(source_action, '') = '' "
+        "AND replace(substr(created_at, 1, 19), 'T', ' ') >= ? ORDER BY id DESC LIMIT ?",
+        (agent, since, QUESTIONS_SHOWN),
+    ).fetchall()
+    views = []
+    for row_id, body, created_at, reply, reply_at, seen_at in rows:
+        at = _seconds(created_at)
+        if at is None or not isinstance(body, str) or not body.strip():
+            continue
+        view = {"id": PLAIN_QUESTION_ID.format(row=row_id), "at": at, "kind": "question", "subject": "",
+                "text": body, "options": [], "multiple": False, "free": False, "expiresAt": None, "state": "open"}
+        if reply is not None and reply_at is not None:
+            view["state"] = "answered"
+            view["answer"] = {"choices": [], "text": str(reply), "at": _seconds(reply_at) or at,
+                              "origin": "user", "seenAt": _seconds(seen_at) if seen_at else None}
+        views.append(view)
+    return views
+
+
+def close_plain_questions(agent: str, text: str, seen: bool = True) -> None:
+    """The person wrote to the agent in the chat: its plain open questions are answered by that text.
+
+    The text reached the agent through its terminal, so the reply is marked seen at once; left unseen,
+    ``jht-check-user-replies`` would hand the agent the same words a second time.  Not marked seen when the
+    transport could not prove the CLI took the text (``seen`` False): then that tool is the second way
+    for the words to reach the agent.  Questions with a
+    source of their own (a closer's, a structured one) have their own way to be answered and are not
+    touched.  Never raises: the text is already delivered."""
+    path = _db_path()
+    if not text.strip() or not path.is_file():       # connect() would make an empty database of a missing one
+        return
+    try:
+        conn = sqlite3.connect(path, timeout=5)
+    except sqlite3.Error:
+        return
+    try:
+        with conn:
+            conn.execute(
+                "UPDATE pending_user_messages SET user_reply = ?, user_reply_at = CURRENT_TIMESTAMP, "
+                "agent_seen_reply_at = CASE WHEN ? THEN CURRENT_TIMESTAMP END "
+                "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' "
+                "AND COALESCE(source_action, '') = '' AND user_reply IS NULL",
+                (text[:MAX_TEXT], 1 if seen else 0, agent),
+            )
+    except sqlite3.Error:
+        pass
+    finally:
+        conn.close()
+
+
 def questions_of(agent: str) -> list | None:
     """The agent's latest questions, newest first, read-only. None when this image has none to give."""
     aq = _questions_module()
@@ -1520,24 +1701,244 @@ def questions_of(agent: str) -> list | None:
             "ORDER BY id DESC LIMIT ?",
             (agent, aq.SOURCE_ACTION, QUESTIONS_SHOWN),
         ).fetchall()
-        return [view for view in (_question_view(aq, conn, sid, at) for sid, at in rows) if view]
+        views = [view for view in (_question_view(aq, conn, sid, at) for sid, at in rows) if view]
+        views.extend(_plain_questions(conn, agent))
+        views.sort(key=lambda view: view["at"], reverse=True)
+        return views[:QUESTIONS_SHOWN]
     except sqlite3.Error:
         return None
     finally:
         conn.close()
 
 
-def _wake_for_answer(agent: str, session: str) -> None:
-    """Best effort: one fixed line, only with the terminal at its prompt. The agent also looks by itself."""
+# The wake is tried again while the agent has not read the answer: it is ONE fixed line typed into a terminal that
+# may be mid-turn, or holding a text, at the instant the person answers (the Capitano finished its turn two seconds
+# before the click and never heard of the answer).  A try that does not land says why, with a fixed word, in
+# logs/answer-wake.log (no question, no text, nothing the person wrote).
+WAKE_RETRY_EVERY_S = float(os.environ.get("JHT_ANSWER_WAKE_EVERY", "30"))
+WAKE_RETRY_FOR_S = float(os.environ.get("JHT_ANSWER_WAKE_FOR", "600"))
+WAKE_QUIET_AFTER_SENT_S = float(os.environ.get("JHT_ANSWER_WAKE_QUIET", "120"))
+WAKE_CODES = {"sent", "no_pane", "blocked", "busy", "text", "failed"}
+# What the transport answers to a delivery that did not land, as the code a retry reads.
+WAKE_EXIT = {8: "busy", 3: "blocked", 2: "no_pane", 5: "text", 130: "text"}
+
+
+def _wake_log(agent: str, code: str) -> None:
+    """One fixed line for a try that did not land; never raises."""
+    try:
+        logs = jht_home() / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        with open(logs / "answer-wake.log", "a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {agent} wake_{code}\n")
+    except OSError:
+        pass
+
+
+def _wake_attempt(agent: str, session: str) -> str:
+    """One try to wake the agent: ``sent`` or the closed code of why not.
+
+    The composer decides, as it does for a chat send (``delivery_gate``): a RECOGNISED empty one takes the line even
+    while the agent works (the CLI queues it).  A text in it is first handed to the transport's ``--flush-ours``, which
+    presses Enter ONLY on a text it can prove is its own; a text of anyone else is never touched.
+    """
     try:
         pane = capture_pane(session)
-        if pane is None or prompt_state(pane) != "ready":
-            return
+        if pane is None:
+            return "no_pane"
+        gate = delivery_gate(pane)
+        if gate == "text":
+            try:
+                flush_ours(session)
+            except Refusal:
+                return "text"
+            pane = capture_pane(session)
+            if pane is None:
+                return "no_pane"
+            gate = delivery_gate(pane)
+        if gate == "text":
+            return "text"
+        if gate != "empty":
+            # a menu, a sign-in, or a screen with no composer to be seen: nothing is typed on a guess (a chat send
+            # may go on over an unknown composer because it proves the submit; this line is not worth that)
+            return "blocked"
         binary = _delivery_binary()
-        subprocess.run([binary, session, ANSWER_WAKE.format(agent=agent)], capture_output=True,
-                       timeout=DELIVERY_TIMEOUT_S, check=False)
+        done = subprocess.run([binary, session, ANSWER_WAKE.format(agent=agent)], capture_output=True,
+                              timeout=DELIVERY_TIMEOUT_S, check=False)
+        if done.returncode == 0:
+            return "sent"
+        return WAKE_EXIT.get(done.returncode, "failed")
     except (Refusal, OSError, subprocess.SubprocessError):
+        return "failed"
+
+
+def _wake_for_answer(agent: str, session: str) -> str:
+    """The first try, made by the answer itself; says why when it does not land."""
+    code = _wake_attempt(agent, session)
+    if code != "sent":
+        _wake_log(agent, code)
+    return code
+
+
+def _answer_seen(question_id: str) -> bool:
+    """True when the agent has read the answer (the same mark the app shows as seen)."""
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file():
+        return False
+    try:
+        conn = sqlite3.connect(str(path), timeout=10)
+        try:
+            row = conn.execute("SELECT agent_seen_reply_at FROM pending_user_messages WHERE source_id = ?",
+                               (aq.ANSWER_PREFIX + question_id,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return False
+    return bool(row and row[0])
+
+
+def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake_attempt, seen=_answer_seen,
+                    sleep=time.sleep, clock=time.monotonic, every: float | None = None,
+                    window: float | None = None, quiet: float | None = None) -> str:
+    """Wake the agent again until it has read the answer, or the window is over: ``seen`` or ``gave_up``.
+
+    After a line that landed it waits ``quiet`` before another (the agent may be working through its queue);
+    a try that did not land is repeated every ``every`` seconds.
+    """
+    every = WAKE_RETRY_EVERY_S if every is None else every
+    window = WAKE_RETRY_FOR_S if window is None else window
+    quiet = WAKE_QUIET_AFTER_SENT_S if quiet is None else quiet
+    deadline = clock() + window
+    next_try = clock()
+    while True:
+        if seen(question_id):
+            return "seen"
+        now = clock()
+        if now >= deadline:
+            return "gave_up"
+        if now >= next_try:
+            code = attempt(agent, session)
+            if code != "sent":
+                _wake_log(agent, code)
+            next_try = clock() + (quiet if code == "sent" else every)
+        sleep(min(every, max(0.0, deadline - clock())))
+
+
+def _wake_lock(question_id: str):
+    """One retrying process per question; returns the lock path, or None when another one holds it."""
+    folder = jht_home() / "locks"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    path = folder / f"answer-wake-{question_id}.lock"
+    for _ in range(2):
+        try:
+            os.close(os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+            return path
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime < WAKE_RETRY_FOR_S + 60:
+                    return None
+                path.unlink()          # a holder that died without cleaning up
+            except OSError:
+                return None
+        except OSError:
+            return None
+    return None
+
+
+def wake(agent: str, question_id: str) -> dict:
+    """``agent_chat.py wake <agent> <question>``: the retrying process the answer starts (detached)."""
+    if not QUESTION_ID.match(question_id or ""):
+        raise Refusal("chat_invalid")
+    lock = _wake_lock(question_id)
+    if lock is None:
+        return {"result": "running"}
+    try:
+        return {"result": wake_until_seen(agent, question_id, AGENTS[agent])}
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _spawn_wake_retry(agent: str, question_id: str) -> None:
+    """Start the retrying process without waiting for it: the app's answer must not wait ten minutes."""
+    if os.environ.get("JHT_ANSWER_WAKE_RETRY", "1") == "0":
         return
+    try:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "wake", agent, question_id],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    except OSError:
+        pass
+
+
+def _drain_lock(agent: str):
+    """One draining process per agent; returns the lock path, or None when another one holds it."""
+    folder = jht_home() / "locks"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    path = folder / f"chat-drain-{agent}.lock"
+    for _ in range(2):
+        try:
+            os.close(os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+            return path
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime < QUEUE_TTL_S + TYPED_LATE_WINDOW_S + 120:
+                    return None
+                path.unlink()          # a holder that died without cleaning up
+            except OSError:
+                return None
+        except OSError:
+            return None
+    return None
+
+
+def drain(agent: str) -> dict:
+    """``agent_chat.py drain <agent>``: deliver the queued turns as the agent frees up, without anybody asking.
+
+    The page flushes the queue by reading; this is for when nobody reads (the app closed, the person gone to
+    another page): a turn that is queued, or typed and stuck in the composer, still goes. Ends when nothing
+    waits any more, or after the life of a queued turn.
+    """
+    lock = _drain_lock(agent)
+    if lock is None:
+        return {"result": "running"}
+    try:
+        deadline = time.monotonic() + QUEUE_TTL_S + TYPED_LATE_WINDOW_S + 60
+        # A typed turn is kept to its one late Enter: the agent may be working at the end of its time, and nobody
+        # may be reading (the app closed).
+        while queued_turns(agent) or _typed_open(agent):
+            flush_queue(agent, AGENTS[agent])
+            if not queued_turns(agent) and not _typed_open(agent):
+                break
+            if time.monotonic() >= deadline:
+                return {"result": "gave_up"}
+            time.sleep(DRAIN_EVERY_S)
+        return {"result": "empty"}
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _spawn_drain(agent: str) -> None:
+    """Start the draining process without waiting for it. ``JHT_CHAT_DRAIN=0`` turns it off (the tests')."""
+    if os.environ.get("JHT_CHAT_DRAIN", "1") == "0":
+        return
+    try:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "drain", agent],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    except OSError:
+        pass
 
 
 def answer(agent: str, question_id: str, raw: str) -> dict:
@@ -1583,7 +1984,8 @@ def answer(agent: str, question_id: str, raw: str) -> dict:
         raise Refusal("answer_failed")
     finally:
         conn.close()
-    _wake_for_answer(agent, AGENTS[agent])
+    if _wake_for_answer(agent, AGENTS[agent]) != "sent":
+        _spawn_wake_retry(agent, question_id)
     return {"questionId": question_id, "accepted": True, "at": at}
 
 
@@ -1607,6 +2009,10 @@ def run(argv: list[str]) -> dict:
         return enter(agent_of(argv[1]), argv[2])
     if len(argv) == 3 and argv[0] == "answer":
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
+    if len(argv) == 3 and argv[0] == "wake":
+        return wake(agent_of(argv[1]), argv[2])
+    if len(argv) == 2 and argv[0] == "drain":
+        return drain(agent_of(argv[1]))
     raise Refusal("chat_invalid")
 
 

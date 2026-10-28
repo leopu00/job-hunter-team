@@ -91,22 +91,25 @@ function cleanAnswer(value: unknown, options: DirectChatQuestionOption[]): Direc
     ...(text ? { text } : {}),
     at: value.at,
     // an origin the app does not know is said as unknown, never as the person's
-    origin: value.origin === "user" || value.origin === "expiry" ? value.origin : "unknown",
+    origin: value.origin === "user" || value.origin === "expiry" || value.origin === "system" ? value.origin : "unknown",
     seenAt: isTime(value.seenAt) ? value.seenAt : null,
   };
 }
 
-/** A question as the screen shows it, or null when it cannot be one (no id, no time, no text, no options). */
+/** A question as the screen shows it, or null when it cannot be one (no id, no time, no text, or only broken options). */
 export function cleanQuestion(value: unknown): DirectChatQuestion | null {
   if (!isObject(value) || typeof value.id !== "string" || !value.id || !isTime(value.at)) return null;
   if (typeof value.text !== "string" || !value.text.trim()) return null;
   const seen = new Set<string>();
-  const options = (Array.isArray(value.options) ? value.options : [])
+  if (!Array.isArray(value.options)) return null;
+  const given = value.options;
+  const options = given
     .map(cleanOption)
     .filter((o): o is DirectChatQuestionOption => o !== null && !seen.has(o.id) && (seen.add(o.id), true))
     .slice(0, QUESTION_LIMITS.options);
-  // the team asks with 2 to 8 options, always: a question without one is not shown
-  if (options.length === 0) return null;
+  // a question asked in plain words comes with none, said so by the team (an empty list): a card with no buttons,
+  // answered in the chat's own box. Options that were given and all broken are not that: the question is not shown
+  if (given.length > 0 && options.length === 0) return null;
   const answer = cleanAnswer(value.answer, options);
   const state = value.state === "answered" || value.state === "expired" ? value.state : "open";
   const subject = typeof value.subject === "string" && value.subject.trim() ? cut(value.subject.trim(), QUESTION_LIMITS.subject) : undefined;
@@ -206,6 +209,7 @@ export type Outcome =
   | { kind: "sent" }
   | { kind: "queued"; watched?: true }
   | { kind: "expired" }
+  | { kind: "late" }
   | { kind: "notSent"; presses: number }
   | { kind: "unknown"; reason?: TakenReason };
 
@@ -235,11 +239,15 @@ export function settleQueued(
   let next: Map<string, Outcome> | null = null;
   for (const ending of settled) {
     const outcome = outcomes.get(ending.id);
-    if (!outcome || outcome.kind !== "queued" || !outcome.watched) continue;
+    // «Sent late» also corrects a turn the page already gave up on: its text was still in the box and got its
+    // Enter after the time, so «write it again» would make a double.
+    const lateOnExpired = ending.how === "late" && outcome?.kind === "expired";
+    if (!outcome || (!lateOnExpired && (outcome.kind !== "queued" || !outcome.watched))) continue;
     const became: Outcome | null =
       ending.how === "taken" ? { kind: "sent" }
       : ending.how === "pending" ? outcomeOf({ taken: false }, 0)
       : ending.how === "unconfirmed" ? outcomeOf({ taken: null, reason: "unconfirmed" }, 0)
+      : ending.how === "late" ? { kind: "late" }
       : ending.how === "expired" ? { kind: "expired" }
       : null;
     if (!became) continue;
@@ -262,6 +270,24 @@ export function deliveryStage(outcome: Outcome, activity?: "working" | "idle"): 
   if (outcome.kind === "queued") return "queued";
   if (outcome.kind !== "sent") return null;
   return activity === "working" ? "working" : "taken";
+}
+
+// ── the agent working ───────────────────────────────────────────────────────
+
+/** What the last reads said of the agent: working now, and how many reads in a row did not say it. */
+export interface WorkingSight { working: boolean; misses: number }
+export const NOT_WORKING: WorkingSight = { working: false, misses: 0 };
+
+/**
+ * The next sight after a read. `working` shows it; `idle` hides it at once; absent (a screen the team could
+ * not read for a moment) keeps a shown sight for one read and hides it on the second, so the line does not
+ * blink between two tool calls, and never shows it from nothing: absent is not known, never a guess.
+ */
+export function sightAfter(before: WorkingSight, activity?: "working" | "idle"): WorkingSight {
+  if (activity === "working") return { working: true, misses: 0 };
+  if (activity === "idle") return NOT_WORKING;
+  if (!before.working || before.misses >= 1) return NOT_WORKING;
+  return { working: true, misses: before.misses + 1 };
 }
 
 // ── days and quotes ─────────────────────────────────────────────────────────

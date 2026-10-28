@@ -4,7 +4,7 @@ import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { cloudClient } from "../../lib/cloud-client";
 import { withReadDeadline } from "../../lib/read-deadline";
-import CloudDataNotice from "../../shell/CloudDataNotice";
+import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
@@ -30,6 +30,7 @@ export default function DashboardPage(_props: PageProps) {
   const request = useRef(0);
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
   const existingTeam = useExistingTeamView() !== null;
+  const blocked = useCloudDataBlocked();
   // A set-up profile with no team linked: the way to link the one that is already on a VPS.
   const connectTeam = useConnectTeam();
 
@@ -54,6 +55,8 @@ export default function DashboardPage(_props: PageProps) {
   }, [read]);
   useRefresh(read);
 
+  // No cloud session (a local profile): only the notice, no empty dashboard and no «connect a team» card.
+  if (blocked) return <CloudDataNotice />;
   if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingDashboard} />;
   if (load.state === "failed") {
     // The core's own code and what it means, not a guess about the network.
@@ -80,7 +83,6 @@ export default function DashboardPage(_props: PageProps) {
   const prompt = connectTeam && !existingTeam ? CONNECT_TEAM_PROMPT_TEXT[appLocale()] : null;
   return (
     <>
-      <CloudDataNotice />
       {prompt && (
         <section
           className="max-w-6xl mx-auto px-5 pt-6 flex flex-wrap items-center justify-between gap-3 text-[12px]"

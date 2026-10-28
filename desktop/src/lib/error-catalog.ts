@@ -268,11 +268,47 @@ const PAIRING_ACCOUNT = copy(
   "A team on a VPS needs your Google account.",
   "Sign out and continue with Google, then try again.",
 );
-const MIGRATION_SOURCE = copy(
-  "I dati del profilo locale non superano la verifica per il collegamento all’account.",
-  "Nessun dato è stato spostato. Contatta l’assistenza prima di riprovare.",
-  "The local profile data fails the check for linking to the account.",
-  "Nothing was moved. Contact support before trying again.",
+const MIGRATION_TARGET_EXISTS = copy(
+  "Questo account ha già i suoi dati su questo computer: quelli del profilo locale non sono stati spostati.",
+  "Scegli «Entra con Google senza collegare» per usare i dati dell’account, senza la squadra di questo computer, oppure «Torna ad Accedi» per usare un altro account.",
+  "This account already has its own data on this computer: the local profile’s data was not moved.",
+  "Choose “Sign in with Google without linking” to use the account’s data, without this computer’s team, or “Back to sign in” to use another account.",
+);
+const MIGRATION_OWNER_OTHER = copy(
+  "I dati locali di questo computer sono di un altro profilo: non li ho spostati.",
+  "Torna ad Accedi e scegli il profilo a cui appartengono.",
+  "The local data on this computer belongs to another profile: I did not move it.",
+  "Go back to sign in and choose the profile it belongs to.",
+);
+const MIGRATION_OWNER_UNKNOWN = copy(
+  "Non riesco a capire di chi sono i dati locali di questo computer: non ho spostato niente.",
+  "Torna ad Accedi e riparti dal profilo locale. Se succede ancora, contatta l’assistenza.",
+  "I cannot tell who the local data on this computer belongs to: I moved nothing.",
+  "Go back to sign in and start again from the local profile. If it happens again, contact support.",
+);
+const MIGRATION_DATA_BAD = copy(
+  "I dati del profilo locale non sono in ordine: non li ho toccati.",
+  "Contatta l’assistenza prima di riprovare.",
+  "The local profile’s data is not in order: I did not touch it.",
+  "Contact support before trying again.",
+);
+const MIGRATION_RECEIPT_BAD = copy(
+  "Il registro del collegamento non è in ordine: non ho spostato niente.",
+  "Contatta l’assistenza prima di riprovare.",
+  "The record of the linking is not in order: I moved nothing.",
+  "Contact support before trying again.",
+);
+const MIGRATION_SCOPE_BAD = copy(
+  "Il collegamento vale solo dal profilo locale a un account Google.",
+  "Torna ad Accedi, scegli il profilo locale e accedi con Google.",
+  "Linking only works from the local profile to a Google account.",
+  "Go back to sign in, choose the local profile, then sign in with Google.",
+);
+const MIGRATION_HOST_REMOTE = copy(
+  "La squadra di questo profilo è su un VPS, non su questo computer.",
+  "Il collegamento vale solo per una squadra su questo computer: scegli «Annulla e resta in locale».",
+  "The team of this profile is on a VPS, not on this computer.",
+  "Linking only works for a team on this computer: choose “Cancel and stay local”.",
 );
 const MIGRATION_RETRY = copy(
   "Il collegamento del profilo locale all’account non è riuscito.",
@@ -281,10 +317,10 @@ const MIGRATION_RETRY = copy(
   "No data was lost: try again.",
 );
 const MIGRATION_HOST = copy(
-  "Il profilo locale non risulta collegato a un team su questo computer.",
-  "Completa prima la configurazione del team locale, poi riprova.",
+  "Il profilo locale non risulta collegato a una squadra su questo computer.",
+  "Scegli «Annulla e resta in locale», completa la configurazione della squadra locale, poi accedi di nuovo con Google.",
   "The local profile is not linked to a team on this computer.",
-  "Finish setting up the local team first, then try again.",
+  "Choose “Cancel and stay local”, finish setting up the local team, then sign in with Google again.",
 );
 const PLAYGROUND = copy(
   "Non riesco a ripristinare il profilo di prova.",
@@ -378,6 +414,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   account_scope_mismatch: ACCOUNT_CHANGED,
   local_runtime_unsupported: LOCAL_UNSUPPORTED,
   local_account_owner_unavailable: LOCAL_OWNER_UNAVAILABLE,
+  local_team_owner_invalid: LOCAL_OWNER_UNAVAILABLE,
   // The person is offered the way out under the message (OnboardingFlow: «Use this data» for a
   // local profile, «Set it aside and start again» for both), never a dead end.
   local_account_owner_missing: copy(
@@ -1913,19 +1950,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "A previous linking of the local profile was interrupted.",
     "Reopen Job Hunter Team: the app completes or cancels it by itself.",
   ),
-  local_migration_source_invalid: MIGRATION_SOURCE,
-  local_migration_source_mismatch: MIGRATION_SOURCE,
-  local_migration_owner_invalid: MIGRATION_SOURCE,
-  local_migration_owner_mismatch: MIGRATION_SOURCE,
-  local_migration_owner_missing: MIGRATION_SOURCE,
-  local_migration_scope_invalid: MIGRATION_SOURCE,
-  local_migration_profile_invalid: MIGRATION_SOURCE,
-  local_migration_receipt_invalid: MIGRATION_SOURCE,
+  local_migration_source_invalid: MIGRATION_DATA_BAD,
+  local_migration_source_mismatch: MIGRATION_DATA_BAD,
+  local_migration_owner_invalid: MIGRATION_OWNER_UNKNOWN,
+  local_migration_owner_mismatch: MIGRATION_OWNER_OTHER,
+  local_migration_owner_missing: MIGRATION_OWNER_UNKNOWN,
+  local_migration_scope_invalid: MIGRATION_SCOPE_BAD,
+  local_migration_profile_invalid: MIGRATION_DATA_BAD,
+  local_migration_receipt_invalid: MIGRATION_RECEIPT_BAD,
   local_migration_review_pending: copy(
     "Nel profilo locale c’è una revisione ancora da confermare.",
-    "Conferma la revisione con l’Assistente, poi riprova.",
+    "Scegli «Annulla e resta in locale», conferma la revisione con l’Assistente, poi accedi di nuovo con Google.",
     "The local profile has a review still to be confirmed.",
-    "Confirm the review with the Assistant, then try again.",
+    "Choose “Cancel and stay local”, confirm the review with the Assistant, then sign in with Google again.",
   ),
   local_migration_profile_changed: copy(
     "Il profilo locale è cambiato mentre lo collegavo all’account.",
@@ -1933,17 +1970,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The local profile changed while I was linking it to the account.",
     "Try again: the app starts from the current version.",
   ),
-  local_migration_target_exists: copy(
-    "Questo account ha già un profilo: quello locale non è stato spostato.",
-    "Continua con il profilo dell’account, oppure entra con un altro account.",
-    "This account already has a profile: the local one was not moved.",
-    "Go on with the account’s profile, or sign in with another account.",
-  ),
+  local_migration_target_exists: MIGRATION_TARGET_EXISTS,
   local_migration_storage_failed: MIGRATION_RETRY,
   local_migration_owner_unavailable: MIGRATION_RETRY,
   local_migration_host_missing: MIGRATION_HOST,
   local_migration_host_invalid: MIGRATION_HOST,
-  local_migration_host_not_local: MIGRATION_HOST,
+  local_migration_host_not_local: MIGRATION_HOST_REMOTE,
   playground_reset_unavailable: PLAYGROUND,
   playground_reset_owner_not_found: PLAYGROUND,
   playground_reset_owner_invalid: PLAYGROUND,

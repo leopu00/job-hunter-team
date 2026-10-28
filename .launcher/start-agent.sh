@@ -2018,6 +2018,25 @@ _welcome_kickoff() {
   local welcome_log welcome_boot_marker
   local msg
   welcome_log="$(jht_daemon_log "welcome-watchdog-${role}.log")"
+  if [ "$role" = "assistente" ]; then
+    # The Assistente welcomes the user in the chat of the app, ALWAYS; Telegram is
+    # an extra. One command does it and is the only thing that writes the flag,
+    # after the line is in the chat (shared/skills/assistant_welcome.py). The text
+    # is not in this message: the command takes it from the catalog.
+    msg=$(printf '%s\n' \
+      "[@system -> @assistente] [WELCOME-USER]" \
+      "" \
+      "User welcome protocol — idempotent. The welcome goes to the user's chat in the app, ALWAYS; Telegram is an extra, only when a bot is configured." \
+      "" \
+      "1. Run exactly this command, with no changes: python3 /app/shared/skills/assistant_welcome.py deliver" \
+      "   It posts the welcome in the app chat (with the first question of the onboarding in the same message when the profile is not ready), reads the line back, sends it on Telegram too if a bot is configured, and ONLY THEN writes ${welcome_flag}. Running it again is safe: a welcome already in the chat is not sent twice." \
+      "" \
+      "2. If it prints WELCOME_DELIVERED: acknowledge the system with one line: '[@assistente -> @system] [WELCOME-ACK] delivered'. Never touch ${welcome_flag} by hand, not even to say 'skipped'." \
+      "   If it prints WELCOME_NOT_DELIVERED or fails: do NOT create the flag, write the error to \$JHT_AGENT_DIR/welcome-error.log, acknowledge with '[@assistente -> @system] [WELCOME-ACK] failed'. The launcher asks you again, up to 3 times." \
+      "" \
+      "3. Then, if ${welcome_dir}/ready.flag does not exist, you lead the onboarding in the chat (skill onboarding-flow): the welcome already asked the first question, so do not ask it again; wait for the answer and go on one question per turn until the profile is complete. If the user has already written in the chat, answer them. Do not wait for any Telegram signal."
+    )
+  else
   msg=$(printf '%s\n' \
     "[@system -> @${role}] [WELCOME-USER]" \
     "" \
@@ -2036,6 +2055,7 @@ _welcome_kickoff() {
     "" \
     "4. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] sent/skipped + flag created'. THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
   )
+  fi
   # Marcatore d'avvio: il flag conta solo se piu' recente di questo file.
   welcome_boot_marker="${welcome_log%.log}.boot"
   : >"$welcome_boot_marker" 2>/dev/null || true
@@ -2051,15 +2071,9 @@ _welcome_kickoff() {
   ' </dev/null 9>&- &
 }
 
+# The text is not passed to the Assistente: assistant_welcome.py reads it from the catalog.
 if [ "$ROLE" = "assistente" ]; then
-  _welcome_kickoff "assistente" "welcomed.flag" \
-"$(_welcome_body assistente "Hi! 👋
-
-I'm the Job Hunter Team Assistant — your point of contact with the AI team that's about to start looking for jobs for you.
-
-To get going I need to know you. Send me here on Telegram your CV (PDF, DOC, even a photo of the paper version works), or just tell me in a couple of lines what you're looking for — role, sector, city. From that I build the profile and the rest of the team gets to work for you.
-
-A draft or rough notes are perfectly fine, no need to have anything polished. 📄 I start from what you have.")"
+  _welcome_kickoff "assistente" "welcomed.flag" ""
 fi
 
 if [ "$ROLE" = "capitano" ]; then

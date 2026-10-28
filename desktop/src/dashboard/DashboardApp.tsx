@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
+import { LocalMigrationPage } from "./LocalMigrationPage";
 import { appLocale } from "../lib/app-locale";
 import { cleanImages } from "../lib/clean-images";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
@@ -18,6 +19,7 @@ import {
   clearDesktopAccountScope,
   migrateDesktopLocalProfileToAccount,
   probeDesktopLocalProfileMigration,
+  probeDesktopLocalTeamOwner,
 } from "../lib/desktop-account-scope";
 import {
   activateSavedLocalProfile,
@@ -108,14 +110,21 @@ import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 type LocalMigrationGate = {
   identityKey: string;
   profileId: string;
-  phase: "checking" | "required" | "migrating" | "not-needed" | "completed" | "error";
+  phase: "checking" | "required" | "migrating" | "not-needed" | "completed" | "error"
+    /** The person went in with the account and left the local profile as it was. */
+    | "unlinked";
   retryable?: boolean;
+  /** The native code the check or the link failed with, for the page to say what happened. */
+  code?: string | null;
 };
 
 function migrationRetryable(error: unknown): boolean {
   return [
     "local_migration_storage_failed",
     "local_migration_owner_unavailable",
+    // the sentences of these two say to try again
+    "local_migration_profile_changed",
+    "local_migration_in_progress",
   ].includes(nativeErrorCode(error) ?? "");
 }
 const PROFILE_RECHECK_MS = 2_000;
@@ -367,6 +376,15 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   return null;
 }
 
+/** The native side says the team of this computer belongs to someone else. An answer that cannot be had is not «yes»: the setup decides, as before. */
+async function ownedByAnother(): Promise<boolean> {
+  try {
+    return (await probeDesktopLocalTeamOwner()) === "other";
+  } catch {
+    return false;
+  }
+}
+
 function nativeErrorCode(error: unknown): string | null {
   return typeof error === "object" && error !== null &&
     typeof (error as { code?: unknown }).code === "string"
@@ -446,6 +464,7 @@ export default function DashboardApp() {
   const accountScopeRef = useRef(accountScope);
   accountScopeRef.current = accountScope;
   const [localMigration, setLocalMigration] = useState<LocalMigrationGate | null>(null);
+  const [leavingMigration, setLeavingMigration] = useState<"idle" | "leaving" | "failed">("idle");
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
   const providerSessionIdentityRef = useRef<string | null>(null);
@@ -473,7 +492,7 @@ export default function DashboardApp() {
     : null;
   const migrationReady = !migrationProfile ||
     (localMigration?.identityKey === identityKey &&
-      (localMigration.phase === "not-needed" || localMigration.phase === "completed"));
+      (localMigration.phase === "not-needed" || localMigration.phase === "completed" || localMigration.phase === "unlinked"));
 
   const initializeAccount = useCallback(async () => {
     if (!identityKey || !markerId || !migrationReady) return;
@@ -492,9 +511,13 @@ export default function DashboardApp() {
     if (activeIdentityKeyRef.current !== initializingKey) return;
     setAccountScope({ identityKey: initializingKey, phase: "ready" });
     try {
-      const next = localProfile
+      let next = localProfile
         ? loadLocalOnboardingGate(localProfile.profileId, localProfile.displayName)
         : sessionRef.current ? await loadOnboardingGate(supabase, sessionRef.current.user) : null;
+      // The team of this computer is another profile's (or account's): this one goes in without setting up a
+      // team here, and the shell says whose the team is. The setup would stop at its first step with the
+      // owner's refusal. Nothing is written: the day this profile owns a team, the setup is still there.
+      if (next?.phase === "required" && !next.existingTeam && await ownedByAnother()) next = { phase: "ready" };
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
@@ -524,6 +547,7 @@ export default function DashboardApp() {
         profileId,
         phase: "error",
         retryable: migrationRetryable(error),
+        code: nativeErrorCode(error),
       });
     });
     return () => { active = false; };
@@ -545,6 +569,7 @@ export default function DashboardApp() {
         profileId,
         phase: "error",
         retryable: migrationRetryable(error),
+        code: nativeErrorCode(error),
       });
     }
   }, [identityKey, localMigration]);
@@ -555,16 +580,35 @@ export default function DashboardApp() {
       await activateSavedLocalProfile();
       clearGoogleIdentitySelection();
       goTo(DASHBOARD_PAGE);
-    } catch {
+    } catch (error) {
       if (!identityKey) return;
       setLocalMigration({
         identityKey,
         profileId: localMigration.profileId,
         phase: "error",
         retryable: true,
+        code: nativeErrorCode(error),
       });
     }
   }, [identityKey, localMigration]);
+
+  // «Sign in with Google without linking»: the account goes in with its own data; the local profile and the
+  // team of this computer stay as they are (the team is then another owner's, see the gate).
+  const enterWithoutLinking = useCallback(() => {
+    if (!identityKey || !localMigration || localMigration.identityKey !== identityKey || localMigration.phase !== "error" ||
+        localMigration.code !== "local_migration_target_exists") return;
+    setLocalMigration({ identityKey, profileId: localMigration.profileId, phase: "unlinked" });
+  }, [identityKey, localMigration]);
+
+  // «Back to sign in»: leaves the account the person just chose; the sign-in page is where they pick again.
+  const leaveMigration = useCallback(async () => {
+    setLeavingMigration("leaving");
+    try {
+      await signOut();
+    } catch {
+      setLeavingMigration("failed");
+    }
+  }, []);
 
   useEffect(() => {
     if (signedOut) goTo(LOGIN_PAGE);
@@ -1584,48 +1628,23 @@ export default function DashboardApp() {
     if (localMigration.phase === "checking") {
       return <DashboardSkeleton label={stateText().verifyingLocalProfile} />;
     }
-    if (localMigration.phase === "required" || localMigration.phase === "migrating") {
+    if (localMigration.phase === "required" || localMigration.phase === "migrating" || localMigration.phase === "error") {
       return (
-        <main aria-labelledby="local-migration-title">
-          <h1 id="local-migration-title">{stateText().migrationTitle}</h1>
-          <p>{stateText().migrationText}</p>
-          <button
-            type="button"
-            onClick={() => void confirmLocalMigration()}
-            disabled={localMigration.phase === "migrating"}
-          >
-            {localMigration.phase === "migrating" ? stateText().linking : stateText().linkAndContinue}
-          </button>
-          <button
-            type="button"
-            onClick={() => void cancelLocalMigration()}
-            disabled={localMigration.phase === "migrating"}
-          >
-            {stateText().cancelStayLocal}
-          </button>
-        </main>
-      );
-    }
-    if (localMigration.phase === "error") {
-      return (
-        <main role="alert">
-          <p>{stateText().migrationError}</p>
-          {localMigration.retryable && (
-            <button
-              type="button"
-              onClick={() => setLocalMigration({
-                identityKey,
-                profileId: localMigration.profileId,
-                phase: "required",
-              })}
-            >
-              {stateText().retry}
-            </button>
-          )}
-          <button type="button" onClick={() => void cancelLocalMigration()}>
-            {stateText().cancelStayLocal}
-          </button>
-        </main>
+        <LocalMigrationPage
+          phase={localMigration.phase}
+          code={localMigration.code}
+          retryable={localMigration.retryable}
+          leaving={leavingMigration}
+          onLink={() => void confirmLocalMigration()}
+          onStayLocal={() => void cancelLocalMigration()}
+          onRetry={() => setLocalMigration({
+            identityKey,
+            profileId: localMigration.profileId,
+            phase: "required",
+          })}
+          onLeave={() => void leaveMigration()}
+          onEnterWithoutLinking={enterWithoutLinking}
+        />
       );
     }
   }

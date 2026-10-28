@@ -41,23 +41,16 @@ Ti restituisce il `roster` (quanti Scout / Analisti / Scorer), lo
 `scout_cap_first_pass` e il `target_scored`, tutti derivati dall'abbonamento
 che l'utente ha dichiarato. Se rifiuta (`ok: false`, «piano di abbonamento non
 selezionato»), il piano non è ancora dichiarato: **non indovinare** un roster,
-una sovrastima gli brucia la finestra il primo giorno. Chiedi all'utente in
-chat quale piano ha: esegui `python3 /app/shared/skills/plan_registry.py list <provider>` (`<provider>` è
-l'`active_provider` di `jht.config.json`; Codex è `codex`), mostra nomi e
-prezzi e, se l'elenco finisce con `Codex reports: <nome> → <Piano> <prezzo>`,
-proponi quel piano — un suggerimento, mai una tua scelta. Quando l'utente
-sceglie, scrivi esattamente la sua scelta con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` e
-rilancia `begin-burst`. Se non lo sa, fermati e diglielo; richiedilo al
-prossimo risveglio.
+una sovrastima gli brucia la finestra il primo giorno. Chiediglielo con `python3 /app/shared/skills/first_run.py ask-plan`: è l'unico modo, perché pubblica la card nell'app, con i piani e quello che la riga `Codex reports:` indica segnato come suggerito — un suggerimento, mai una tua scelta. Una domanda scritta come testo nel tuo pane non arriva a nessuno: l'utente guarda l'app, non il tuo pane. Quando l'utente risponde, scrivi esattamente la sua scelta con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (va bene l'id della card: `pro_max` è `pro-max`) e rilancia `begin-burst`. Se risponde «non lo so», fermati e diglielo; richiedilo al prossimo risveglio.
 
 **Mentre il burst gira, il piano può sparire** (la configurazione è stata azzerata, il provider è cambiato, il
 file è stato modificato). `first_run.py status` e `begin-burst` portano allora `plan_missing: true` con un
 `hint`: non leggere «burst already in progress» come «tutto a posto». Il burst continua e il piano si dichiara
-allo stesso modo: chiedi all'utente in chat quale piano ha (`python3 /app/shared/skills/plan_registry.py list <provider>`), suggerisci quello della riga
-`Codex reports:` senza scegliere per lui e scrivi esattamente la sua scelta con
-`python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Lo chiede anche l'Assistente quando l'utente gli parla.
+allo stesso modo: chiedilo con `python3 /app/shared/skills/first_run.py ask-plan` (la card, mai testo semplice) e scrivi esattamente la sua scelta con `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Lo chiede anche l'Assistente quando l'utente gli parla.
 
-**Il piano si chiede una volta sola.** Finché la tua domanda sul piano è senza risposta in chat, non rifarla, nemmeno con altre parole: un nuovo messaggio «profilo pronto», un altro risveglio o `plan_missing` nel prossimo `status` non cambiano ciò che aspetti. Guarda prima la chat: se hai già chiesto e l'utente non ha risposto, aspetta. Richiedilo solo dopo che l'utente ha risposto «non lo so».
+**Il piano si chiede una volta sola.** Finché la tua domanda sul piano è senza risposta in chat, non rifarla, nemmeno con altre parole: un nuovo messaggio «profilo pronto», un altro risveglio o `plan_missing` nel prossimo `status` non cambiano ciò che aspetti. Guarda prima la chat: se hai già chiesto e l'utente non ha risposto, aspetta. Richiedilo solo dopo che l'utente ha risposto «non lo so». `ask-plan` non pubblica una seconda card finché la prima non ha risposta: se dice che la domanda è aperta, aspetta. Se non chiedi, la card la pubblica il sistema pochi minuti dopo l'import del profilo. Dopo «non lo so» ripubblica la card solo dopo un'ora, e mai più di tre volte in tutto: se lo dice, aspetta e non chiedere a parole.
+
+**Mai prima del profilo, e la card va dove sta l'utente.** `ask-plan` non pubblica niente finché il profilo non è salvato (`wait_for_profile: true`): non chiedere il piano al benvenuto né mentre il profilo si costruisce, e aspetta il messaggio di profilo pronto. Finché l'utente conferma il profilo con l'Assistente, la card va nella chat dell'Assistente, chiunque lanci `ask-plan` (`agent` e `in_your_chat` nella risposta dicono dov'è). Quando ne parli all'utente, nomina la chat che ce l'ha — «la chat con l'Assistente» — mai «questa chat» se `in_your_chat` è `false`.
 
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 

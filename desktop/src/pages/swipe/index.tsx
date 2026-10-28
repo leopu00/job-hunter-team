@@ -5,7 +5,7 @@ import { appLocale } from "../../lib/app-locale";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { cloudClient } from "../../lib/cloud-client";
 import { withReadDeadline } from "../../lib/read-deadline";
-import CloudDataNotice from "../../shell/CloudDataNotice";
+import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
@@ -22,6 +22,7 @@ type Load = { state: "loading" } | { state: "ready"; deck: SwipeDeckProps } | { 
  */
 export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const blocked = useCloudDataBlocked();
 
   const read = useCallback(() => {
     withReadDeadline(loadSwipe(client))
@@ -33,29 +34,27 @@ export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient 
   useRefresh(read);
 
   const text = PAGE_STATES_TEXT[appLocale()];
-  if (load.state === "loading") return <><CloudDataNotice /><SwipeSkeleton label={text.loadingSwipe} /></>;
+  // No cloud session (a local profile): only the notice, not «deck finished» about a deck never read.
+  if (blocked) return <CloudDataNotice />;
+  if (load.state === "loading") return <SwipeSkeleton label={text.loadingSwipe} />;
   if (load.state === "failed")
     return (
-      <>
-        <CloudDataNotice />
-        <div className="max-w-6xl mx-auto px-5 pt-8">
-          <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
-            {text.swipeFailed}
-          </p>
-          <button
-            type="button"
-            className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
-            onClick={() => { setLoad({ state: "loading" }); read(); }}
-          >
-            {SHELL_TEXT[appLocale()].refresh}
-          </button>
-        </div>
-      </>
+      <div className="max-w-6xl mx-auto px-5 pt-8">
+        <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
+          {text.swipeFailed}
+        </p>
+        <button
+          type="button"
+          className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
+          onClick={() => { setLoad({ state: "loading" }); read(); }}
+        >
+          {SHELL_TEXT[appLocale()].refresh}
+        </button>
+      </div>
     );
   const { pendingCards, reviewedCards, initialVerdicts, salaryAxisMaxK } = load.deck;
   return (
     <>
-      <CloudDataNotice />
       <div
         data-testid="desktop-swipe-page"
         className="desktop-swipe-page min-h-0 overflow-hidden"

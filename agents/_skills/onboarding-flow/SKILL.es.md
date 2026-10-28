@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que el Assistente sigue para dar de alta al usuario — primer mensaje, pacing iterativo de una-pregunta-por-turno, checklist bloqueante (el piso que desbloquea el dashboard) vs checklist rica (lo que hace que los Writers sean realmente útiles), estilo de preguntas agnóstico de sector (NUNCA asumir IT), y la secuencia obligatoria de checkpoints cuando el usuario sube archivos. Estrechamente emparejada con `profile-yaml` (cada respuesta = un Write+validate) y `profile-summaries` (MDs narrativos después de hitos clave). Abrir esta skill al inicio de una sesión de onboarding y en cada turno del usuario que trae nueva info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py list *), Bash(python3 /app/shared/skills/plan_registry.py set *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
 ---
 <!-- @translation: es, ai-translated 2026-06-06 -->
 
@@ -106,19 +106,18 @@ preferences:
 
 **Tono:** una pregunta natural, no un formulario burocrático. Ej.: *"Ya que también miras a Londres y Zúrich: ¿ya tienes derecho a trabajar ahí, o para esas necesitarías un sponsor/visado? Así evito proponerte roles no accesibles."* Explica siempre el **porqué** (= shortlist más útil), no lo preguntes en frío.
 
-## Plan de suscripción — pídelo una vez, nunca lo escribas por el usuario
+## Plan de suscripción — pídelo solo con la tarjeta, nunca lo escribas por el usuario
 
-El equipo no puede abrir su primera ronda hasta que el plan de suscripción del usuario esté declarado (el Capitano no adivina una formación: una suposición equivocada gasta la ventana del usuario el primer día). La app no tiene una pantalla para esto: **tú** eres el lugar donde el usuario lo declara.
+El equipo no puede abrir su primera ronda hasta que el plan de suscripción del usuario esté declarado (el Capitano no adivina una formación: una suposición equivocada gasta la ventana del usuario el primer día). **El plan se pregunta de UNA sola forma, desde cualquier agente y por tanto también desde ti: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Publica una tarjeta (en tu chat, porque el usuario habla contigo) con los planes, sus precios y el que indica Codex marcado como sugerido. Nunca preguntes el plan con texto, nunca con `jht-notify-user` por tu cuenta (una pregunta escrita así no aparece en Messages y el usuario se queda esperando), nunca enumeres los planes con tus palabras.
 
-**Cuándo:** una vez, tras las primeras dos o tres respuestas (nunca en tu primer mensaje), y como muy tarde antes de decirle al usuario que el perfil está listo.
+**Cuándo:** una vez, justo después de guardar el perfil (`profile_review.py apply-confirmed` respondió `ok: true`), nunca antes y nunca en tus primeros mensajes.
 
 1. **Comprueba.** `python3 /app/shared/skills/plan_registry.py get`. Si imprime un plan (salida 0) está declarado: no digas nada y sigue. `PLAN_MISSING` (salida 1) = no declarado.
-2. **Muestra las opciones.** `python3 /app/shared/skills/plan_registry.py list codex` (Codex es el proveedor que conecta la app). Dale al usuario los nombres y precios de los planes en una lista corta y sencilla en su idioma, no la tabla en bruto.
-3. **Sugiere, no decidas.** Si la salida termina con una línea `Codex reports: <nombre> → <Plan> <precio>`, propón ese plan («Codex me dice que tu cuenta parece Pro, 100 $/mes: ¿es la tuya?»). Es una sugerencia: no se escribe nada hasta que el usuario diga que sí. Una línea que termina en `(not in this table)` no es una sugerencia: solo enumera los planes.
-4. **Escribe lo que eligió.** `python3 /app/shared/skills/plan_registry.py set codex:<id>`, con `<id>` de la primera columna de la lista. Confirma en una línea.
-5. **¿No lo sabe?** No elijas uno tú. Dile que el plan aparece en la página de suscripción del proveedor, vuelve a preguntar una vez antes de que el perfil esté listo y, si sigue sin saberlo, dile que el Capitano se lo volverá a preguntar.
+2. **Pregunta con la tarjeta.** Ejecuta `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`. `asked: true` → una línea: la tarjeta con los planes está en el chat, elige el tuyo. `wait_for_profile: true` → el perfil aún no está guardado: no digas nada sobre el plan, lo pregunta el sistema cuando el perfil esté listo. Si dice que ya hay una pregunta abierta sobre el plan (`asked: false`, con un `question_id` y el `agent` que la tiene) NO hagas otra: dile al usuario en una línea que responda a la tarjeta que ya espera, y di DÓNDE está según `in_your_chat`: `true` → en este chat, arriba; `false` → en el chat con el agente indicado en `agent` (el del Capitano si es `capitano`), nunca «en este chat». Si dice que el plan se preguntó varias veces o que se volverá a preguntar más tarde, no añadas nada y no preguntes con texto.
+3. **Escribe lo que eligió.** Cuando el usuario responda a la tarjeta (lees `[USER ANSWER …]`), escribe exactamente su elección: `python3 /app/shared/skills/plan_registry.py set codex:<id>`, con `<id>` el id de la opción (`pro_max` vale para `pro-max`). Confirma en una línea.
+4. **¿No lo sabe?** (la opción «No lo sé») No elijas uno tú. Dile que el plan aparece en la página de suscripción del proveedor; el sistema lo vuelve a preguntar más tarde (la tarjeta vuelve tras una hora, tres veces como máximo).
 
-Nunca escribas un plan que el usuario no eligió, nunca lo deduzcas de otra cosa, nunca vuelvas a preguntar cuando `get` imprime uno. Usa solo `get`, `list` y `set` de ese script.
+Nunca escribas un plan que el usuario no eligió, nunca lo deduzcas de otra cosa, nunca vuelvas a preguntar cuando `get` imprime uno. Usa solo `get` y `set` del registro y `ask-plan` de `first_run.py`.
 
 ## Agnóstico de sector — NUNCA predeterminar a IT
 
@@ -201,11 +200,11 @@ Leer un PDF + extraer datos + validar YAML + escribir 2 MDs puede requerir 30-90
 7. Escribe MÍNIMO about.md + strengths.md             → skill profile-summaries
    (preferences.md y goals.md vienen después de la discusión específica)
 
-8. Mensaje final (NINGÚN --partial) — resumen amigable para el usuario
-   + invitación explícita a revisar y pulsar **Confirmar y guardar** en el panel.
-   Solo después de confirmar, pregunta por el primer campo vacío. Si falla la
-   preparación, informa del error sin pedir recordatorios por chat ni decir
-   que el perfil se ha guardado.
+8. Último paso (NINGÚN --partial): la tarjeta de confirmación de la skill `profile-yaml`
+   (`ask-confirm`). Lleva el resumen y los botones: no repitas el resumen y no
+   nombres ningún panel. Solo después de que la persona confirme con la tarjeta,
+   pregunta por el primer campo vacío. Si falla la preparación, informa del error
+   sin pedir recordatorios por chat ni decir que el perfil se ha guardado.
 ```
 
 > ⚠️ El paso 7 (`about.md` + `strengths.md`) **no es opcional**. Sin ellos, el Scrittore de CV aguas abajo no tendrá nunca el contexto narrativo del candidato. Tú eres el único punto donde esa narrativa se captura.

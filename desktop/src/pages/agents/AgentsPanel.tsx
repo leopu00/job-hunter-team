@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeAgentState, type AgentState, type AgentStateTone } from "@/lib/agent-state";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
@@ -28,7 +28,7 @@ import {
 import type { AgentIdentity, AgentQuestion, QuestionOption, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
-import { StartTeamAction } from "../../shell/StartTeamAction";
+import { AGENTS_START_READ_WAITS, StartTeamAction } from "../../shell/StartTeamAction";
 import { useTeamOff } from "../../lib/team-off";
 import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
@@ -38,22 +38,38 @@ import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
 import { Lanes, SessionHistory } from "./AgentHistory";
 import ActionLogSection from "./ActionLogSection";
+import Link from "../../web-shims/next-link";
+import { isDirectChatAgentId, REOPEN_NO_RETRY, type DirectChatAgentId } from "../messages/DirectChatScreen";
+import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
 
-// The chat with the three agents the person talks to is its own component,
-// mounted here when it exists in the build (it is optional, as the office's
-// parts are: a missing module is no failed build).
-type ChatRole = "capitano" | "assistente" | "mentor";
-const chatModules = import.meta.glob<{ AgentChatPane?: ComponentType<{ role: ChatRole }> }>(
-  "../messages/AgentChatPane.tsx",
-  { eager: true },
-);
-const AgentChatPane = Object.values(chatModules)[0]?.AgentChatPane ?? null;
-const CHAT_ROLES = new Set<string>(["capitano", "assistente", "mentor"]);
-
-/** The chat is the role's own, so only its first session has one. */
-function hasChat(row: PanelRow): boolean {
-  return CHAT_ROLES.has(row.role) && row.session === row.role.toUpperCase();
+/**
+ * The agents the person can chat with are the ones the Messages page lists: the same rule, not a
+ * list of this page. The chat is there; here a button leads to it with the agent already chosen.
+ */
+function chatAgentOf(row: PanelRow): DirectChatAgentId | null {
+  return isDirectChatAgentId(row.role) ? row.role : null;
 }
+
+/** The agent's name as Messages writes it. */
+function chatName(id: DirectChatAgentId): string {
+  return DIRECT_CHAT_TEXT[appLocale()].agents[id];
+}
+
+/**
+ * The list is read again by itself while the page is on view: a reading left alone never moves
+ * (the states, the contexts, what the agents asked). On this computer every 20 s; on a VPS, whose reads go
+ * over ssh, every 60 s, so that the limit on sign-ins (ssh_rate_limited) is not touched. Where the team
+ * is not known yet (the first read failed) it is the slow one. After a failure that asking again cannot
+ * change or makes worse (the chat's own set, REOPEN_NO_RETRY: a refused sign-in, a changed host key, the
+ * sign-in limit) it does not read by itself at all, and neither after three periodic reads failed in a row
+ * whatever their code: «Refresh» and coming back to the page still read, and a good read brings it back.
+ */
+export const LIST_REFRESH_LOCAL_MS = 20_000;
+export const LIST_REFRESH_VPS_MS = 60_000;
+/** The periodic read gives up after this many failed in a row (whatever their code): it cannot know every refusal a server gives. */
+export const LIST_REFRESH_FAILURES = 3;
+/** A window seen again reads at once, unless it was read this recently. */
+const SEEN_AGAIN_MIN_MS = 5_000;
 
 /** A terminal that changed this recently says the agent is doing something (the second source). */
 const MOVING_MS = 30_000;
@@ -180,6 +196,12 @@ function failureText(code: string): string {
   return `${copy.text} ${copy.action} (${code})`;
 }
 
+/** Why the page could not read the agents: the catalog's sentence alone; a code it has none for keeps the code. */
+function readFailureText(code: string): string {
+  const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
+  return copy.known ? `${copy.text} ${copy.action}` : `${copy.text} ${copy.action} (${code})`;
+}
+
 function resultText(t: AgentsPanelText, result: ActionResult, name: string): string {
   const key = {
     started: t.resultStarted,
@@ -262,7 +284,7 @@ function stateLine(t: AgentsPanelText, row: PanelRow): string {
  * window is visible, at the pace the native side says (terminal-pace.ts). One read at a time: the
  * next one is set only once the last is back.
  */
-function Terminal({ row, t, chat }: { row: PanelRow; t: AgentsPanelText; chat: boolean }) {
+function Terminal({ row, t, chatName }: { row: PanelRow; t: AgentsPanelText; chatName: string | null }) {
   const [screen, setScreen] = useState<Outcome<{ up: boolean; text: string | null; refreshMs: unknown }> | null>(null);
   const session = row.session;
   useEffect(() => {
@@ -309,10 +331,10 @@ function Terminal({ row, t, chat }: { row: PanelRow; t: AgentsPanelText; chat: b
   if (!screen.value.up) return <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>;
   return (
     <>
-      {/* Two channels: the terminal is watched, the chat is written to. */}
+      {/* Two channels: the terminal is watched, the chat (the Messages page) is written to. */}
       <p data-testid="panel-terminal-destination" className="text-[11px] mb-1 text-[var(--color-muted)]">
         {t.terminalWatchOnly}
-        {chat && ` ${fill(t.terminalWriteInChat, { name: displayName(row.session) })}`}
+        {chatName !== null && ` ${fill(t.terminalWriteInChat, { name: chatName })}`}
       </p>
       <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
       <TerminalText session={session} text={screen.value.text === "" ? t.screenEmpty : (screen.value.text ?? "")} />
@@ -456,25 +478,6 @@ function readView(): "list" | "lanes" {
   }
 }
 
-const TERMINAL_KEY = "jht.agents.terminal";
-
-/** Whether the person left the terminal open under a chat, a convenience only: without storage it is folded away. */
-function readTerminalOpen(): boolean {
-  try {
-    return window.localStorage.getItem(TERMINAL_KEY) === "open";
-  } catch {
-    return false;
-  }
-}
-
-function rememberTerminalOpen(open: boolean): void {
-  try {
-    window.localStorage.setItem(TERMINAL_KEY, open ? "open" : "closed");
-  } catch {
-    // Not remembered: the next time starts folded.
-  }
-}
-
 function rememberView(view: "list" | "lanes"): void {
   try {
     window.localStorage.setItem(VIEW_KEY, view);
@@ -493,6 +496,7 @@ export default function AgentsPanel({ search }: PageProps) {
   const t = AGENTS_PANEL_TEXT[appLocale()];
   const readOnly = useExistingTeamReadOnly() !== null;
   const teamOff = useTeamOff();
+  const [starting, setStarting] = useState(false);
   const [list, setList] = useState<Outcome<PanelList> | null>(null);
   const [team, setTeam] = useState<TeamControlState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -504,23 +508,34 @@ export default function AgentsPanel({ search }: PageProps) {
   // The previous sessions and the last day's lanes: read with the list, and never a reason to fail it.
   const [history, setHistory] = useState<Outcome<PanelHistory> | null>(null);
   const [view, setView] = useState<"list" | "lanes">(readView);
-  const [terminalOpen, setTerminalOpen] = useState<boolean>(readTerminalOpen);
-  const toggleTerminal = (open: boolean) => {
-    setTerminalOpen(open);
-    rememberTerminalOpen(open);
-  };
   const latest = useRef(0);
+  const failedInARow = useRef(0);
+  const [givenUp, setGivenUp] = useState(false);
 
-  const read = useCallback(async () => {
+  // True when the list was read; a read that another one replaced says true too (the other one answers).
+  // `afterStart`: the read that follows «Start the team» counts only if the team no longer shows as stopped by
+  // the person (that flag falls when the start ends, after the list already answers).
+  // `quiet`: the periodic read, which does not turn the button to «refreshing».
+  const read = useCallback(async (afterStart = false, quiet = false): Promise<boolean> => {
     const mine = ++latest.current;
-    setBusy(true);
+    if (!quiet) setBusy(true);
+    // a read the person asked for (or the page's first) starts the count of failed periodic ones again
     const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
-    if (latest.current !== mine) return;
+    if (latest.current !== mine) return true;
+    if (!quiet) {
+      failedInARow.current = 0;
+      setGivenUp(false);
+    } else if (listed.ok) {
+      failedInARow.current = 0;
+    } else if (++failedInARow.current >= LIST_REFRESH_FAILURES) {
+      setGivenUp(true);
+    }
     setList(listed);
     setTeam(state.ok ? state.value : null);
     setHistory(past);
     setNow(Date.now());
     setBusy(false);
+    return listed.ok && !(afterStart && state.ok && state.value.halted);
   }, []);
   useEffect(() => {
     void read();
@@ -529,6 +544,45 @@ export default function AgentsPanel({ search }: PageProps) {
     };
   }, [read]);
   useRefresh(() => void read());
+  // One read at a time, and none while an action or a start is on its way: their own read follows them.
+  const occupied = useRef(false);
+  occupied.current = busy || acting || starting;
+  // the periodic read in flight counts too: a window seen again meanwhile does not start a second
+  const quietReading = useRef(false);
+  const noRetry = list !== null && !list.ok && REOPEN_NO_RETRY.has(list.code);
+  const everyMs = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
+  useEffect(() => {
+    if (noRetry || givenUp) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let last = Date.now();
+    const again = async () => {
+      if (!live) return;
+      clearTimeout(timer);
+      if (document.visibilityState === "visible" && !occupied.current && !quietReading.current) {
+        last = Date.now();
+        quietReading.current = true;
+        try {
+          await read(false, true);
+        } finally {
+          quietReading.current = false;
+        }
+      }
+      // the count is the ref's, not the state's: the next read is not set once the third failure is in
+      if (live && failedInARow.current < LIST_REFRESH_FAILURES) timer = setTimeout(() => void again(), everyMs);
+    };
+    // the window seen again after it was hidden reads at once
+    const seen = () => {
+      if (document.visibilityState === "visible" && !occupied.current && Date.now() - last >= SEEN_AGAIN_MIN_MS) void again();
+    };
+    timer = setTimeout(() => void again(), everyMs);
+    document.addEventListener("visibilitychange", seen);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", seen);
+    };
+  }, [read, everyMs, noRetry, givenUp]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const current =
@@ -653,14 +707,16 @@ export default function AgentsPanel({ search }: PageProps) {
       {list && !list.ok && (
         <div role="alert" data-testid="panel-error" className="text-[12px] text-[var(--color-red)]">
           <strong>{t.failed}</strong>
-          <p>{failureText(list.code)}</p>
+          <p>{readFailureText(list.code)}</p>
           <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
-          {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it */}
-          {list.code === "agent_control_no_team" && !teamOff && (
-            <div className="mt-2">
-              <StartTeamAction onStarted={() => void read()} />
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it; the
+          button stays while a start runs, also once the list answers (the flag «stopped by you» falls later) */}
+      {((list && !list.ok && list.code === "agent_control_no_team" && !teamOff) || starting) && (
+        <div className="mt-2">
+          <StartTeamAction onStarted={() => read(true)} waits={AGENTS_START_READ_WAITS} onBusy={setStarting} />
         </div>
       )}
 
@@ -848,12 +904,23 @@ export default function AgentsPanel({ search }: PageProps) {
                           now={now}
                           answering={answering}
                           onAnswer={readOnly ? undefined : (question, option) => chooseOption(current, question, option)}
+                          messagesAgent={chatAgentOf(current)}
                         />
                       )}
                       {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
                       {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {chatAgentOf(current) !== null && (
+                        <Link
+                          href={`/messages?agent=${chatAgentOf(current)}`}
+                          data-testid="panel-chat-with"
+                          className="text-[12px] font-semibold px-3 py-1 rounded border no-underline"
+                          style={{ color: "var(--color-blue)", borderColor: "var(--color-blue)" }}
+                        >
+                          {fill(t.chatWith, { name: chatName(chatAgentOf(current)!) })}
+                        </Link>
+                      )}
                       {rowActions(current, readOnly).map((op) => (
                         <button
                           key={op}
@@ -895,58 +962,21 @@ export default function AgentsPanel({ search }: PageProps) {
                     />
                   )}
 
-                  {hasChat(current) && (
-                    // The chat takes the height the header leaves: it is what the person reads, so it is not a box under the terminal.
-                    <section className="flex min-h-0 flex-col border-t lg:flex-1" style={{ borderColor: "var(--color-border)" }} aria-label={t.tabChat}>
-                      <h2 className="m-0 shrink-0 px-3 py-1.5 text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]" style={{ background: "var(--color-panel)" }}>
-                        {t.tabChat}
-                      </h2>
-                      {AgentChatPane ? (
-                        <div
-                          data-testid="panel-chat-pane"
-                          className="min-w-0 h-[34rem] overflow-hidden border-t lg:h-auto lg:min-h-0 lg:flex-1"
-                          style={{ background: "var(--color-void)", borderColor: "var(--color-border)" }}
-                        >
-                          <AgentChatPane role={current.role as ChatRole} />
-                        </div>
-                      ) : (
-                        <p className="px-3 pb-3 text-[13px] text-[var(--color-muted)]">{fill(t.chatSoon, { name: displayName(current.session) })}</p>
-                      )}
-                    </section>
-                  )}
-
-                  {/* With a chat the terminal is folded away until asked for (and then it stops reading the screen while folded); without one it is the page. */}
                   <section
                     data-testid="panel-terminal-section"
-                    className={`flex flex-col border-t ${hasChat(current) ? "shrink-0" : "min-h-[10rem] flex-1 p-3 lg:min-h-0"}`}
+                    className="flex min-h-[10rem] flex-1 flex-col border-t p-3 lg:min-h-0"
                     style={{ borderColor: "var(--color-border)" }}
                     aria-label={t.tabTerminal}
                   >
-                    {hasChat(current) ? (
-                      <button
-                        type="button"
-                        data-testid="panel-terminal-toggle"
-                        aria-expanded={terminalOpen}
-                        onClick={() => toggleTerminal(!terminalOpen)}
-                        className="m-0 flex w-full shrink-0 items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]"
-                        style={{ background: "var(--color-panel)" }}
-                      >
-                        <span aria-hidden="true">{terminalOpen ? "▾" : "▸"}</span>
-                        {terminalOpen ? t.terminalHide : t.terminalShow}
-                      </button>
-                    ) : (
-                      <h2 className="m-0 mb-2 shrink-0 text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
-                    )}
-                    {(!hasChat(current) || terminalOpen) && (
-                      <div className={hasChat(current) ? "max-h-[min(16rem,32svh)] overflow-y-auto p-3" : "min-h-0 flex-1 pr-1 lg:overflow-y-auto"}>
-                        {current.agent ? (
-                          <Terminal key={current.session} row={current} t={t} chat={hasChat(current) && AgentChatPane !== null} />
-                        ) : (
-                          <p className="text-[13px] text-[var(--color-muted)]">{t.screenDown}</p>
-                        )}
-                        <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
-                      </div>
-                    )}
+                    <h2 className="m-0 mb-2 shrink-0 text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{t.tabTerminal}</h2>
+                    <div className="min-h-0 flex-1 pr-1 lg:overflow-y-auto">
+                      {current.agent ? (
+                        <Terminal key={current.session} row={current} t={t} chatName={chatAgentOf(current) === null ? null : chatName(chatAgentOf(current)!)} />
+                      ) : (
+                        <p className="text-[13px] text-[var(--color-muted)]">{t.screenDown}</p>
+                      )}
+                      <SessionHistory t={t} history={history} session={current.session} nowS={Math.floor(now / 1000)} />
+                    </div>
                   </section>
                 </section>
               )}

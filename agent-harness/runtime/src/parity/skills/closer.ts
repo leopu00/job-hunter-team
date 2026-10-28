@@ -1634,6 +1634,10 @@ const NOT_HERE = {
     "and be resolved into an answer has no path here. Nothing was sent. Read what is missing with `essentials --position-id N` " +
     "(no `--ask`), work each fact out and `save` it with its basis; for a fact nothing supports, tell the person with the " +
     "`notify_user` tool (CL-08 step 3).",
+  stdinValue:
+    "`application_answers save --value -` reads the answer from stdin, and this tool has no stdin: the answer would be saved as the " +
+    "single character `-`. Nothing was saved. Write the answer itself after `--value`: this tool takes its arguments as they are, " +
+    "so a `$` in it (`$80,000`) stays.",
   wake:
     "`application_answers wake-idle-closer` types into a live CLOSER's tmux pane; there are no panes here, and a role is woken " +
     "by the runtime's own turns. Nothing was sent.",
@@ -1665,6 +1669,7 @@ export function applicationAnswers(args: string[], options: CloserOptions): Scri
           return { ...parseArgv(SAVE_SPEC, rest), options: opts };
         })()
       : parseArgv(command === "essentials" ? ESSENTIALS_SPEC : LIST_SPEC, words);
+  if (command === "save" && parsed["value"] === "-") return { stdout: "", stderr: `${NOT_HERE.stdinValue}\n`, exitCode: 2 };
   let out: Dict;
   let code: number;
   try {

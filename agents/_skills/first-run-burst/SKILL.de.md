@@ -42,20 +42,16 @@ Er liefert dir den `roster` zurück (wie viele Scout / Analista / Scorer), den
 `scout_cap_first_pass` und das `target_scored`, alle abgeleitet aus dem Abonnement, das der Nutzer
 angegeben hat. Verweigert er (`ok: false`, „kein Abonnement ausgewählt"), ist noch kein Abonnement
 angegeben: rate **nicht** einen Roster, eine Überschätzung verbrennt ihm sein Fenster am ersten Tag.
-Frag den Nutzer im Chat, welches Abonnement er hat: führe `python3 /app/shared/skills/plan_registry.py list <provider>` aus (`<provider>` ist
-der `active_provider` aus `jht.config.json`; Codex ist `codex`), zeige Namen und Preise und schlag, wenn die Liste
-mit `Codex reports: <Name> → <Abo> <Preis>` endet, dieses Abonnement vor — ein Vorschlag, nie deine Wahl.
-Wählt der Nutzer, schreib genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` und starte `begin-burst` erneut.
-Weiß er es nicht, halte an und sag es ihm; frag beim nächsten Aufwachen erneut.
+Frag ihn mit `python3 /app/shared/skills/first_run.py ask-plan`: Das ist der einzige Weg, weil er die Karte in der App veröffentlicht, mit den Abonnements und dem, den die Zeile `Codex reports:` nennt, als vorgeschlagen markiert — ein Vorschlag, nie deine Wahl. Eine als Text in deinem Panel geschriebene Frage erreicht niemanden: Der Nutzer sieht die App, nicht dein Panel. Antwortet der Nutzer, schreib genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>` (die ID der Karte genügt: `pro_max` ist `pro-max`) und starte `begin-burst` erneut. Antwortet er „weiß ich nicht“, halte an und sag es ihm; frag beim nächsten Aufwachen erneut.
 
 **Während der Burst läuft, kann das Abonnement verschwinden** (die Konfiguration wurde zurückgesetzt, der
 Anbieter gewechselt, die Datei bearbeitet). `first_run.py status` und `begin-burst` tragen dann `plan_missing: true`
 mit einem `hint`: Lies „burst already in progress" nicht als „alles in Ordnung". Der Burst läuft weiter und das
-Abonnement wird genauso angegeben: Frag den Nutzer im Chat, welches Abonnement er hat
-(`python3 /app/shared/skills/plan_registry.py list <provider>`), schlag das der Zeile `Codex reports:` vor, ohne für ihn zu wählen, und schreib genau
-seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Der Assistent fragt es ebenfalls, wenn der Nutzer mit ihm spricht.
+Abonnement wird genauso angegeben: frag mit `python3 /app/shared/skills/first_run.py ask-plan` (die Karte, nie bloßer Text) und schreib genau seine Wahl mit `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`. Der Assistent fragt es ebenfalls, wenn der Nutzer mit ihm spricht.
 
-**Das Abonnement wird nur einmal erfragt.** Solange deine Frage zum Abonnement im Chat unbeantwortet ist, stell sie nicht erneut, auch nicht umformuliert: eine neue Nachricht „Profil bereit", ein weiteres Aufwachen oder `plan_missing` im nächsten `status` ändern nichts daran, worauf du wartest. Sieh zuerst in den Chat: Hast du schon gefragt und der Nutzer nicht geantwortet, warte. Frag erst erneut, nachdem der Nutzer „weiß ich nicht" geantwortet hat.
+**Das Abonnement wird nur einmal erfragt.** Solange deine Frage zum Abonnement im Chat unbeantwortet ist, stell sie nicht erneut, auch nicht umformuliert: eine neue Nachricht „Profil bereit", ein weiteres Aufwachen oder `plan_missing` im nächsten `status` ändern nichts daran, worauf du wartest. Sieh zuerst in den Chat: Hast du schon gefragt und der Nutzer nicht geantwortet, warte. Frag erst erneut, nachdem der Nutzer „weiß ich nicht" geantwortet hat. `ask-plan` veröffentlicht keine zweite Karte, solange die erste keine Antwort hat: Sagt er, die Frage sei offen, warte. Fragst du nicht, veröffentlicht das System die Karte wenige Minuten nach dem Profilimport. Nach „weiß ich nicht“ veröffentlicht er die Karte erst nach einer Stunde wieder und nie öfter als dreimal insgesamt: Sagt er es, warte und frag nicht in Textform.
+
+**Nie vor dem Profil, und die Karte geht dorthin, wo der Nutzer ist.** `ask-plan` veröffentlicht nichts, solange das Profil nicht gespeichert ist (`wait_for_profile: true`): frag das Abonnement nicht bei der Begrüßung und nicht, während das Profil entsteht, und warte auf die Nachricht „Profil fertig“. Solange der Nutzer sein Profil mit dem Assistente bestätigt, geht die Karte in den Chat des Assistente, wer auch immer `ask-plan` startet (`agent` und `in_your_chat` in der Antwort sagen, wo sie liegt). Wenn du ihm davon erzählst, nenne den Chat, der sie hat — „der Chat mit dem Assistente“ —, nie „diesem Chat“, wenn `in_your_chat` `false` ist.
 
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 
