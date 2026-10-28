@@ -13,8 +13,6 @@ import {
   createDesktopLocalProfile,
   migrateDesktopLocalProfileToAccount,
   probeDesktopLocalProfileMigration,
-  probeDesktopLocalTeamOwner,
-  readDesktopTeamOwnerIdentity,
   recoverDesktopPlaygroundLocalOrphan,
   resetDesktopPlaygroundLocalScope,
 } from "./desktop-account-scope";
@@ -124,58 +122,3 @@ describe("desktop account scope boundary", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
-
-describe("who owns the team of this computer", () => {
-  const digest = "a".repeat(64);
-  const profile = "b".repeat(64);
-
-  it("asks the backend, sends nothing and passes only the three answers", async () => {
-    for (const owner of ["self", "other", "none"] as const) {
-      vi.mocked(invoke).mockReset().mockResolvedValueOnce({ owner });
-      await expect(probeDesktopLocalTeamOwner()).resolves.toBe(owner);
-      expect(invoke).toHaveBeenCalledWith("runtime_local_team_owner");
-      expect(vi.mocked(invoke).mock.calls[0]).toHaveLength(1);
-    }
-  });
-
-  it("refuses an answer that is not one of the three, and passes the backend's closed code", async () => {
-    for (const reply of [undefined, null, {}, { owner: "Self" }, { owner: true }, "self"]) {
-      vi.mocked(invoke).mockReset().mockResolvedValueOnce(reply);
-      await expect(probeDesktopLocalTeamOwner()).rejects.toEqual({ code: "local_account_owner_invalid" });
-    }
-    vi.mocked(invoke).mockReset().mockRejectedValueOnce({ code: "account_scope_required" });
-    await expect(probeDesktopLocalTeamOwner()).rejects.toEqual({ code: "account_scope_required" });
-  });
-
-  it("reads the owner's identity: a local profile with its id, an account without one, or nobody", async () => {
-    vi.mocked(invoke).mockReset()
-      .mockResolvedValueOnce({ ownerScopeDigest: digest, kind: "local", profileId: profile })
-      .mockResolvedValueOnce({ ownerScopeDigest: digest, kind: "google" })
-      .mockResolvedValueOnce(null);
-    await expect(readDesktopTeamOwnerIdentity()).resolves.toEqual({ ownerScopeDigest: digest, kind: "local", profileId: profile });
-    await expect(readDesktopTeamOwnerIdentity()).resolves.toEqual({ ownerScopeDigest: digest, kind: "google" });
-    await expect(readDesktopTeamOwnerIdentity()).resolves.toBeNull();
-    expect(invoke).toHaveBeenCalledWith("runtime_local_team_owner_identity");
-  });
-
-  it("refuses an identity that is not the backend's shape", async () => {
-    for (const reply of [
-      undefined, {}, { ownerScopeDigest: "short", kind: "google" },
-      { ownerScopeDigest: digest, kind: "other" },
-      { ownerScopeDigest: digest, kind: "local" },
-      { ownerScopeDigest: digest, kind: "local", profileId: "x" },
-      { ownerScopeDigest: digest, kind: "google", profileId: profile },
-    ]) {
-      vi.mocked(invoke).mockReset().mockResolvedValueOnce(reply);
-      await expect(readDesktopTeamOwnerIdentity()).rejects.toEqual({ code: "local_account_owner_invalid" });
-    }
-  });
-
-  it("is desktop only", async () => {
-    vi.mocked(isTauri).mockReturnValue(false);
-    await expect(probeDesktopLocalTeamOwner()).rejects.toEqual({ code: "desktop_only" });
-    await expect(readDesktopTeamOwnerIdentity()).rejects.toEqual({ code: "desktop_only" });
-    expect(invoke).not.toHaveBeenCalled();
-  });
-});
-
