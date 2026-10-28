@@ -11,7 +11,7 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel, { identityLine, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
+import AgentsPanel, { identityLine, LIST_REFRESH_FAILURES, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
 import { isDirectChatAgentId } from "../messages/DirectChatScreen";
 import { START_READ_WAITS } from "../../shell/StartTeamAction";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
@@ -1398,6 +1398,51 @@ describe("«Agenti»: the list reads again by itself", () => {
     await screen.findByTestId("panel-error");
     await advance(LIST_REFRESH_VPS_MS + 1_000);
     await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("gives up after three periodic reads failed in a row, whatever the code (a refused key is told as «unanswered»)", async () => {
+    expect(LIST_REFRESH_FAILURES).toBe(3);
+    const base = native.invoke.getMockImplementation()!;
+    let failing = true;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+      command === COMMAND && args.request.op === "list" && failing ? { ok: false, error: "agent_control_unanswered" } : base(command, args),
+    );
+    show();
+    await screen.findByTestId("panel-error");
+    // the first read of the page, then the three periodic ones, one a minute
+    await advance(LIST_REFRESH_VPS_MS * 3 + 1_000);
+    await waitFor(() => expect(lists()).toBe(1 + LIST_REFRESH_FAILURES));
+    await advance(10 * 60_000);
+    expect(lists()).toBe(1 + LIST_REFRESH_FAILURES);
+    // a window seen again does not bring it back either
+    setVisibility("hidden");
+    setVisibility("visible");
+    await advance(1_000);
+    expect(lists()).toBe(1 + LIST_REFRESH_FAILURES);
+    // «Refresh» does, and a good read brings the periodic one back
+    failing = false;
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await screen.findByTestId("panel-summary");
+    expect(lists()).toBe(2 + LIST_REFRESH_FAILURES);
+    await advance(LIST_REFRESH_VPS_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3 + LIST_REFRESH_FAILURES));
+  });
+
+  it("a good read between the failures starts the count again", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    // the page's first read, then: fail, fail, good, fail, fail, fail
+    const outcome = [true, false, false, true, false, false, false];
+    let n = 0;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list") return outcome[n++] === false ? { ok: false, error: "agent_control_unanswered" } : base(command, args);
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_VPS_MS * 12);
+    // given up at the third failure of the second run, not before
+    expect(lists()).toBe(outcome.length);
   });
 
   it("reads nothing while a read of the person's is on its way", async () => {

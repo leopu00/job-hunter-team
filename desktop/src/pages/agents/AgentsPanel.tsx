@@ -61,10 +61,13 @@ function chatName(id: DirectChatAgentId): string {
  * over ssh, every 60 s, so that the limit on sign-ins (ssh_rate_limited) is not touched. Where the team
  * is not known yet (the first read failed) it is the slow one. After a failure that asking again cannot
  * change or makes worse (the chat's own set, REOPEN_NO_RETRY: a refused sign-in, a changed host key, the
- * sign-in limit) it does not read by itself at all: «Refresh» and coming back to the page still do.
+ * sign-in limit) it does not read by itself at all, and neither after three periodic reads failed in a row
+ * whatever their code: «Refresh» and coming back to the page still read, and a good read brings it back.
  */
 export const LIST_REFRESH_LOCAL_MS = 20_000;
 export const LIST_REFRESH_VPS_MS = 60_000;
+/** The periodic read gives up after this many failed in a row (whatever their code): it cannot know every refusal a server gives. */
+export const LIST_REFRESH_FAILURES = 3;
 /** A window seen again reads at once, unless it was read this recently. */
 const SEEN_AGAIN_MIN_MS = 5_000;
 
@@ -506,6 +509,8 @@ export default function AgentsPanel({ search }: PageProps) {
   const [history, setHistory] = useState<Outcome<PanelHistory> | null>(null);
   const [view, setView] = useState<"list" | "lanes">(readView);
   const latest = useRef(0);
+  const failedInARow = useRef(0);
+  const [givenUp, setGivenUp] = useState(false);
 
   // True when the list was read; a read that another one replaced says true too (the other one answers).
   // `afterStart`: the read that follows «Start the team» counts only if the team no longer shows as stopped by
@@ -514,8 +519,17 @@ export default function AgentsPanel({ search }: PageProps) {
   const read = useCallback(async (afterStart = false, quiet = false): Promise<boolean> => {
     const mine = ++latest.current;
     if (!quiet) setBusy(true);
+    // a read the person asked for (or the page's first) starts the count of failed periodic ones again
     const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
     if (latest.current !== mine) return true;
+    if (!quiet) {
+      failedInARow.current = 0;
+      setGivenUp(false);
+    } else if (listed.ok) {
+      failedInARow.current = 0;
+    } else if (++failedInARow.current >= LIST_REFRESH_FAILURES) {
+      setGivenUp(true);
+    }
     setList(listed);
     setTeam(state.ok ? state.value : null);
     setHistory(past);
@@ -538,7 +552,7 @@ export default function AgentsPanel({ search }: PageProps) {
   const noRetry = list !== null && !list.ok && REOPEN_NO_RETRY.has(list.code);
   const everyMs = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
   useEffect(() => {
-    if (noRetry) return;
+    if (noRetry || givenUp) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
@@ -567,7 +581,7 @@ export default function AgentsPanel({ search }: PageProps) {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", seen);
     };
-  }, [read, everyMs, noRetry]);
+  }, [read, everyMs, noRetry, givenUp]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const current =
