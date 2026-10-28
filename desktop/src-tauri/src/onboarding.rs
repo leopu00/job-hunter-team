@@ -1037,6 +1037,10 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
             | "existing_team_receipt_required"
             | "uninstall_unavailable"
             | "uninstall_unsupported"
+            // Asking again with the same key counts against the server's limit on failed sign-ins,
+            // and a host key that is not the pinned one is not something to retry.
+            | "ssh_auth_failed"
+            | "host_key_changed"
     ) && !code.starts_with("invalid_");
     OnboardingError {
         code,
@@ -2435,10 +2439,6 @@ fn ensure_success_with_timeout(
     }
 }
 
-/// The exit code of the `ssh` client itself when it cannot connect or is
-/// refused. stderr is never returned to this layer, so the code is the only
-/// sign: before, it was reported as the failure of whatever step was running.
-const SSH_REFUSED_EXIT: i32 = 255;
 /// `REMOTE_INSTALL`: no `sha256sum` or `shasum` on the server.
 const REMOTE_INSTALL_NO_HASH_TOOL_EXIT: i32 = 86;
 /// `REMOTE_INSTALL`: the installer that arrived is not the one that was sent.
@@ -2475,15 +2475,12 @@ const REMOTE_INSTALL_PODMAN_EXITS: [(i32, &str); 10] = [
 ];
 
 /// What ssh itself decided before the command ran: the connection was
-/// refused (255), the server is turning this address away for a while, or the
-/// OpenSSH client is not on this computer. Each says the step did not fail,
-/// the way in did.
+/// refused (255) and, when its messages say why, the reason (a refused key, a
+/// refused connection, a host that cannot be reached, a host key that changed),
+/// the server is turning this address away for a while, or the OpenSSH client
+/// is not on this computer. Each says the step did not fail, the way in did.
 fn ssh_way_in_failure(result: &Result<ProcessResult, &'static str>) -> Option<OnboardingError> {
-    match result {
-        Ok(value) if value.code == SSH_REFUSED_EXIT => Some(failure("ssh_unavailable")),
-        Err(code @ ("ssh_rate_limited" | "ssh_client_missing")) => Some(failure(code)),
-        _ => None,
-    }
+    crate::runtime_host::ssh_way_in_code(result).map(failure)
 }
 
 /// `ensure_success` for a command run on the VPS.
@@ -7465,6 +7462,27 @@ mod tests {
             "team_start_failed"
         );
         assert!(failure("ssh_unavailable").retryable);
+    }
+
+    #[test]
+    fn a_way_in_that_ssh_explained_keeps_its_code_and_only_some_are_worth_asking_again() {
+        use super::ensure_remote_success;
+        for (code, retryable) in [
+            ("ssh_auth_failed", false),
+            ("host_key_changed", false),
+            ("ssh_connection_refused", true),
+            ("ssh_host_unreachable", true),
+            ("ssh_rate_limited", true),
+        ] {
+            let error = ensure_remote_success(Err(code), "container_start_failed").unwrap_err();
+            assert_eq!(error.code, code);
+            assert_eq!(error.retryable, retryable, "{code}");
+        }
+        // a failure of the step itself keeps the step's code
+        assert_eq!(
+            ensure_remote_success(Err("process_timeout"), "container_start_failed").unwrap_err().code,
+            "container_start_failed"
+        );
     }
 
     #[test]

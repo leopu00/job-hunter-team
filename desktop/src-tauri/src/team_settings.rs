@@ -237,12 +237,12 @@ fn closed(code: &str) -> Option<&str> {
 
 /// What the box answered, as the page may read it.
 fn reply(result: Result<ProcessResult, &'static str>, target: &str, key: &str) -> Value {
+    if let Some(code) = crate::runtime_host::ssh_way_in_code(&result) {
+        return failure(code);
+    }
     let Ok(result) = result else { return failure("team_settings_unavailable") };
     if result.code == 70 {
         return failure("existing_team_runtime_changed");
-    }
-    if result.code == 255 {
-        return failure("ssh_unavailable");
     }
     let line: Option<Value> =
         String::from_utf8_lossy(&result.stdout).lines().last().and_then(|line| serde_json::from_str(line).ok());
@@ -633,5 +633,15 @@ mod tests {
         assert!(remote.contains("|| exit 70") && !remote.contains("SENTINELLA"));
         assert_eq!(verb(&Request::Read {}), "get");
         assert_eq!(stdin_of(&Request::Read {}), None);
+    }
+
+    #[test]
+    fn a_way_in_that_ssh_explained_keeps_its_code_and_is_not_the_boxs_unavailability() {
+        for code in ["ssh_auth_failed", "ssh_connection_refused", "ssh_host_unreachable", "host_key_changed", "ssh_rate_limited"] {
+            assert_eq!(reply(Err(code), "t", "k")["error"], code);
+        }
+        assert_eq!(reply(Ok(ProcessResult { code: 255, stdout: Vec::new() }), "t", "k")["error"], "ssh_unavailable");
+        // a failure of the step itself is still the box's own
+        assert_eq!(reply(Err("process_timeout"), "t", "k")["error"], "team_settings_unavailable");
     }
 }

@@ -131,7 +131,8 @@ impl RuntimeLog {
                 | "invalid_key" | "key_unavailable" | "not_vps" | "permissions_failed"
                 | "host_key_unavailable" | "host_key_missing" | "host_key_changed" | "host_key_mismatch"
                 | "host_key_confirmation_invalid" | "host_key_unwritable"
-                | "ssh_unavailable" | "ssh_client_missing" | "ssh_rate_limited" | "ssh_auth_failed" | "process_start_failed" | "process_timeout"
+                | "ssh_unavailable" | "ssh_client_missing" | "ssh_rate_limited" | "ssh_auth_failed" | "ssh_connection_refused" | "ssh_host_unreachable"
+                | "process_start_failed" | "process_timeout"
                 | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
                 | "process_input_failed" | "process_pipe_failed"
                 | "window_not_allowed" | "existing_team_reconfirm_setup"
@@ -502,7 +503,7 @@ fn chat_failure_code(code: &str) -> &str {
         | "existing_team_runtime_target_changed" | "agent_not_at_prompt" | "composer_has_text" | "team_not_running"
         | "agent_not_running" | "agent_unavailable" | "agent_busy" | "agent_stuck" | "tunnel_unavailable"
         | "tunnel_start_failed" | "tunnel_verify_failed" | "ssh_unavailable" | "ssh_auth_failed"
-        | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch"
+        | "ssh_connection_refused" | "ssh_host_unreachable" | "ssh_rate_limited" | "process_timeout" | "host_key_changed" | "host_key_mismatch"
         // why this computer's own team could not be reached: the runtime, the container, the engine
         | "runtime_missing" | "container_unavailable" | "local_team_not_running" | "local_container_not_attested"
         | "local_account_owner_unavailable" | "process_start_failed" | "process_write_failed"

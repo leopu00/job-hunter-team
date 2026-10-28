@@ -1280,10 +1280,10 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Confirm the action after reading what it involves, then try again.",
   ),
   ssh_unavailable: copy(
-    "La VPS non è raggiungibile tramite SSH. Cause probabili: una chiave con passphrase o con permessi troppo aperti, un utente sbagliato, una chiave che la VPS non accetta, una porta chiusa o un tempo scaduto.",
-    "Controlla che la VPS sia accesa e la porta SSH aperta, che l’utente sia quello giusto e che la chiave non abbia passphrase, sia leggibile solo da te e sia autorizzata sulla VPS; poi riprova.",
-    "The VPS cannot be reached over SSH. Likely causes: a key with a passphrase or with permissions that are too open, the wrong user, a key the VPS does not accept, a closed port, or a timeout.",
-    "Check that the VPS is on and the SSH port is open, that the user is the right one and that the key has no passphrase, is readable only by you and is authorized on the VPS; then try again.",
+    "L’accesso alla VPS tramite SSH non è andato a buon fine e non so dire perché.",
+    "Controlla che la VPS sia accesa e che indirizzo, porta, utente e chiave siano giusti; poi riprova.",
+    "The SSH connection to the VPS did not succeed and I cannot tell why.",
+    "Check that the VPS is on and that the address, port, user and key are right; then try again.",
   ),
   ssh_rate_limited: copy(
     "Il server sta rifiutando i collegamenti da questo computer per qualche minuto, dopo troppi tentativi.",
@@ -1298,10 +1298,22 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Install OpenSSH (on Windows: Settings › Apps › Optional features › OpenSSH Client; Mac and Linux include it), restart the app and try again.",
   ),
   ssh_auth_failed: copy(
-    "L’accesso SSH alla VPS non è riuscito.",
-    "Controlla utente e chiave SSH, poi riprova.",
-    "SSH access to the VPS did not succeed.",
-    "Check the user and SSH key, then try again.",
+    "La VPS non ha accettato la chiave SSH.",
+    "Controlla che l’utente sia quello giusto e che la chiave sia quella autorizzata sulla VPS (senza passphrase, leggibile solo da te); poi riprova una volta sola: ogni tentativo sbagliato conta per il server.",
+    "The VPS did not accept the SSH key.",
+    "Check that the user is the right one and that the key is the one authorised on the VPS (no passphrase, readable only by you); then try once: every wrong attempt counts at the server.",
+  ),
+  ssh_connection_refused: copy(
+    "La VPS rifiuta la connessione sulla porta SSH.",
+    "Controlla che la VPS sia accesa, che la porta SSH sia quella giusta e aperta e che il servizio SSH sia in funzione; poi riprova.",
+    "The VPS refuses the connection on the SSH port.",
+    "Check that the VPS is on, that the SSH port is the right one and open, and that the SSH service is running; then try again.",
+  ),
+  ssh_host_unreachable: copy(
+    "Non riesco a raggiungere la VPS: l’indirizzo non risponde o non esiste.",
+    "Controlla l’indirizzo, la tua connessione a internet e che la VPS sia accesa; poi riprova.",
+    "I cannot reach the VPS: the address does not answer or does not exist.",
+    "Check the address, your internet connection and that the VPS is on; then try again.",
   ),
 
   saved_vps_invalid: copy(
@@ -2228,7 +2240,6 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "podman_other_machine_running_named",
   "container_version_incompatible",
   "account_team_mismatch",
-  "ssh_auth_failed",
   // The runtime, the hub and the web say them; the app reads them in the 2nd cut (T10).
   "throttled_local",
   "rate_limited",

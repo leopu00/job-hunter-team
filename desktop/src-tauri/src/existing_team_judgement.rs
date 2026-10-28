@@ -378,14 +378,14 @@ fn closed_code(value: Option<&Value>) -> Option<String> {
 
 /// What the script answered, as the renderer may read it.
 pub(crate) fn reply(result: Result<ProcessResult, &'static str>) -> Value {
+    if let Some(code) = crate::runtime_host::ssh_way_in_code(&result) {
+        return failure(code);
+    }
     let Ok(result) = result else {
         return failure("existing_team_unavailable");
     };
     if result.code == 70 {
         return failure("existing_team_runtime_changed");
-    }
-    if result.code == 255 {
-        return failure("ssh_unavailable");
     }
     let line: Option<Value> = String::from_utf8_lossy(&result.stdout)
         .lines()
@@ -886,6 +886,15 @@ mod tests {
         assert_eq!(run(2, "python3: can't open file '/app/shared/skills/position_judgement.py'")["error"], "existing_team_runtime_outdated");
         assert_eq!(run(70, "")["error"], "existing_team_runtime_changed");
         assert_eq!(run(255, "")["error"], "ssh_unavailable");
+        assert_eq!(reply(Err("process_timeout"))["error"], "existing_team_unavailable");
+    }
+
+    #[test]
+    fn a_way_in_that_ssh_explained_keeps_its_code_and_is_not_the_teams_unavailability() {
+        for code in ["ssh_auth_failed", "ssh_connection_refused", "ssh_host_unreachable", "host_key_changed", "ssh_rate_limited"] {
+            assert_eq!(reply(Err(code))["error"], code);
+        }
+        assert_eq!(reply(Ok(ProcessResult { code: 255, stdout: Vec::new() }))["error"], "ssh_unavailable");
         assert_eq!(reply(Err("process_timeout"))["error"], "existing_team_unavailable");
     }
 }

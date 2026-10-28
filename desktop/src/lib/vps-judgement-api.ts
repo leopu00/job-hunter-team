@@ -184,7 +184,7 @@ function statusOf(code: string): number {
   ) {
     return 400;
   }
-  if (["ssh_unavailable", "existing_team_unavailable", "existing_team_runtime_outdated", "existing_team_runtime_changed"].includes(code)) return 503;
+  if (["ssh_unavailable", "ssh_connection_refused", "ssh_host_unreachable", "existing_team_unavailable", "existing_team_runtime_outdated", "existing_team_runtime_changed"].includes(code)) return 503;
   if (code === "existing_team_runtime_target_changed") return 409;
   // The script's refusals of the position itself: its state (already sent, not ready, …).
   return 409;

@@ -219,6 +219,66 @@ fn ssh_rejects_for_a_while(stderr: &[u8]) -> bool {
     text.contains("kex_exchange_identification") || text.contains("Connection reset")
 }
 
+/// The codes a failed way in to the VPS can take, each with its own sentence in the
+/// catalog. A caller that stops on the way in (not on its own step) passes these on.
+pub(crate) const SSH_WAY_IN_CODES: [&str; 7] = [
+    "ssh_rate_limited",
+    "ssh_client_missing",
+    "ssh_auth_failed",
+    "ssh_connection_refused",
+    "ssh_host_unreachable",
+    "host_key_changed",
+    "ssh_unavailable",
+];
+
+/// The code of a way in that failed before the command ran: ssh's own 255 that no message
+/// explains (`ssh_unavailable`) or one of `SSH_WAY_IN_CODES`; None for anything else, which
+/// is the failure of the caller's own step.
+pub(crate) fn ssh_way_in_code(result: &Result<ProcessResult, &'static str>) -> Option<&'static str> {
+    match result {
+        Ok(value) if value.code == 255 => Some("ssh_unavailable"),
+        Err(code) if SSH_WAY_IN_CODES.contains(code) => Some(*code),
+        _ => None,
+    }
+}
+
+/// Why `ssh` exited 255, from what ssh itself printed (its own messages, never the remote
+/// command's): the server turning this address away for a while, a host key that is not the
+/// pinned one, a refused key, a refused connection, a host that cannot be reached. Read once and
+/// dropped; None is any other 255, which stays `ssh_unavailable`. The child runs with
+/// `LC_ALL=C` (`SSH_ENVIRONMENT`): the messages are the English ones whatever the system language.
+/// A changed host key comes before everything else and never reads as a failure to retry.
+fn ssh_failure_from_messages(messages: &[u8]) -> Option<&'static str> {
+    if ssh_rejects_for_a_while(messages) {
+        return Some("ssh_rate_limited");
+    }
+    let text = String::from_utf8_lossy(messages);
+    if text.contains("Host key verification failed") || text.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") {
+        return Some("host_key_changed");
+    }
+    if text.contains("Permission denied (") {
+        return Some("ssh_auth_failed");
+    }
+    // `ssh: connect to host H port P: <what the system said>`
+    if text.contains("connect to host") && text.contains("Connection refused") {
+        return Some("ssh_connection_refused");
+    }
+    let could_not_connect = text.contains("connect to host")
+        && ["Connection timed out", "Operation timed out", "No route to host", "Network is unreachable", "Host is down"]
+            .iter()
+            .any(|said| text.contains(said));
+    if could_not_connect
+        || text.contains("Could not resolve hostname")
+        || text.contains("timed out during banner exchange")
+    {
+        return Some("ssh_host_unreachable");
+    }
+    None
+}
+
+/// The language of `ssh` for the one thing the app reads from it: its own messages.
+const SSH_ENVIRONMENT: [(&str, &str); 1] = [("LC_ALL", "C")];
+
 /// A known_hosts file that exists only for one probe, owner-only, and is gone
 /// when the probe ends. The key `ssh` writes there is not trusted by that: it
 /// is read, shown, and pinned only after the person confirms it.
@@ -287,15 +347,20 @@ fn host_key_probe_args(known_hosts: &Path, address: &str, port: u16, on_windows:
 fn scan_host_key_with_ssh(program: &str, address: &str, port: u16) -> Result<ScannedHostKey, &'static str> {
     let known_hosts = ProbeKnownHosts::create()?;
     let args = host_key_probe_args(&known_hosts.path, address, port, cfg!(windows));
-    let (result, stderr) = run_program_keeping_stderr(program, &args, None, Duration::from_secs(20));
+    let (result, stderr) =
+        run_program_keeping_stderr_with_options(program, &args, None, Duration::from_secs(20), None, &[], &SSH_ENVIRONMENT);
     let written = fs::read(&known_hosts.path).unwrap_or_default();
     if !written.is_empty() && written.len() <= 64 * 1024 {
         if let Some(key) = parse_keyscan_output(&written) {
             return Ok(key);
         }
     }
-    if ssh_rejects_for_a_while(&stderr) {
-        return Err("ssh_rate_limited");
+    // No key came back: the server turning this address away, a connection refused or a host
+    // that cannot be reached each say so; any other failure is `host_key_unavailable`.
+    if let Some(code @ ("ssh_rate_limited" | "ssh_connection_refused" | "ssh_host_unreachable")) =
+        ssh_failure_from_messages(&stderr)
+    {
+        return Err(code);
     }
     result?;
     Err("host_key_unavailable")
@@ -744,17 +809,30 @@ pub(crate) fn run_ssh_command(
     timeout: Duration,
     control_path: Option<&Path>,
 ) -> Result<ProcessResult, &'static str> {
+    run_ssh_command_with("ssh", host, remote_command, input, timeout, control_path)
+}
+
+fn run_ssh_command_with(
+    program: &str,
+    host: &ValidatedHost,
+    remote_command: &str,
+    input: Option<&[u8]>,
+    timeout: Duration,
+    control_path: Option<&Path>,
+) -> Result<ProcessResult, &'static str> {
     let mut args = ssh_base_args(host)?;
     if let Some(path) = control_path {
         args.insert(0, format!("ControlPath={}", path.display()).into());
         args.insert(0, "-o".into());
     }
     args.push(remote_command.into());
-    let (result, stderr) = run_program_keeping_stderr("ssh", &args, input, timeout);
-    // The stderr of ssh is looked at for one thing and dropped: a server that is
-    // refusing this address for a while (see `ssh_rejects_for_a_while`).
-    if matches!(&result, Ok(value) if value.code == 255) && ssh_rejects_for_a_while(&stderr) {
-        return Err("ssh_rate_limited");
+    let (result, stderr) = run_program_keeping_stderr_with_options(program, &args, input, timeout, None, &[], &SSH_ENVIRONMENT);
+    // The stderr of ssh is looked at for one thing and dropped: why a way in that exited 255
+    // failed (see `ssh_failure_from_messages`).
+    if matches!(&result, Ok(value) if value.code == 255) {
+        if let Some(code) = ssh_failure_from_messages(&stderr) {
+            return Err(code);
+        }
     }
     result
 }
@@ -944,7 +1022,7 @@ fn pipe_free_ssh_args(
 /// when data passes on any of its pipes (T69, measured live: a command that
 /// prints anything never returns). So ssh gets no pipe: its input comes from a
 /// private file, its output goes to one read after it ends, its own messages to
-/// a third (`-E`, read for `ssh_rate_limited`), its stderr is the null device,
+/// a third (`-E`, read for why a way in failed, see `ssh_failure_from_messages`), its stderr is the null device,
 /// and the remote command's stderr stays on the server. The files are removed
 /// when the call ends. No ControlMaster either: every call is its own connection.
 ///
@@ -970,8 +1048,10 @@ fn run_ssh_command_without_pipes_with(
     let messages = PrivateTempFile::create("messages")?;
     let args = pipe_free_ssh_args(host, &messages.path, remote_command)?;
     let result = run_program_without_pipes(program, &args, input, timeout);
-    if matches!(&result, Ok(value) if value.code == 255) && ssh_rejects_for_a_while(&messages.read()) {
-        return Err("ssh_rate_limited");
+    if matches!(&result, Ok(value) if value.code == 255) {
+        if let Some(code) = ssh_failure_from_messages(&messages.read()) {
+            return Err(code);
+        }
     }
     result
 }
@@ -1692,6 +1772,156 @@ mod tests {
             super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(),
             Some("ssh_rate_limited")
         );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn what_ssh_says_when_it_exits_255_is_told_apart() {
+        let cases: [(&str, Option<&str>); 17] = [
+            ("kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22\r\n", Some("ssh_rate_limited")),
+            ("jht@192.0.2.10: Permission denied (publickey).\r\n", Some("ssh_auth_failed")),
+            ("jht@192.0.2.10: Permission denied (publickey,keyboard-interactive).", Some("ssh_auth_failed")),
+            ("ssh: connect to host 192.0.2.10 port 22: Connection refused\r\n", Some("ssh_connection_refused")),
+            ("ssh: connect to host 192.0.2.10 port 22: Connection timed out\r\n", Some("ssh_host_unreachable")),
+            ("ssh: connect to host 192.0.2.10 port 22: Operation timed out\r\n", Some("ssh_host_unreachable")),
+            ("ssh: connect to host 192.0.2.10 port 22: No route to host\r\n", Some("ssh_host_unreachable")),
+            ("ssh: connect to host 192.0.2.10 port 22: Network is unreachable\r\n", Some("ssh_host_unreachable")),
+            ("ssh: Could not resolve hostname vps.invalid: Name or service not known\r\n", Some("ssh_host_unreachable")),
+            ("Connection timed out during banner exchange\r\n", Some("ssh_host_unreachable")),
+            ("Host key verification failed.\r\n", Some("host_key_changed")),
+            (
+                "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\r\nHost key verification failed.\r\n",
+                Some("host_key_changed"),
+            ),
+            // a changed key before anything else: it never reads as a refused key or a timeout
+            ("Host key verification failed.\r\njht@192.0.2.10: Permission denied (publickey).", Some("host_key_changed")),
+            // the remote command's own words are not ssh's: no `connect to host`, no `Permission denied (`
+            ("cat: /srv/x: Permission denied\n", None),
+            ("curl: (7) Failed to connect: Connection refused\n", None),
+            ("Killed by signal 15.\r\n", None),
+            ("", None),
+        ];
+        for (said, code) in cases {
+            assert_eq!(super::ssh_failure_from_messages(said.as_bytes()), code, "{said:?}");
+        }
+    }
+
+    #[test]
+    fn a_way_in_that_failed_has_one_code_and_a_step_that_failed_has_none() {
+        let exited = |code: i32| Ok(ProcessResult { code, stdout: Vec::new() });
+        assert_eq!(super::ssh_way_in_code(&exited(255)), Some("ssh_unavailable"));
+        assert_eq!(super::ssh_way_in_code(&exited(1)), None);
+        assert_eq!(super::ssh_way_in_code(&exited(0)), None);
+        for code in super::SSH_WAY_IN_CODES {
+            assert_eq!(super::ssh_way_in_code(&Err(code)), Some(code));
+        }
+        assert_eq!(super::ssh_way_in_code(&Err("process_timeout")), None);
+        assert_eq!(super::ssh_way_in_code(&Err("storage_unavailable")), None);
+    }
+
+    #[cfg(unix)]
+    fn synthetic_vps() -> super::ValidatedHost {
+        super::ValidatedHost::Vps {
+            address: "test-host".into(),
+            user: "test".into(),
+            port: 22,
+            key_path: "/private/synthetic-key".into(),
+            known_hosts: "/private/synthetic-known-hosts".into(),
+        }
+    }
+
+    /// The run of a stand-in for ssh that says `said` on stderr and exits `code`.
+    #[cfg(unix)]
+    fn run_saying(said: &str, code: i32) -> Result<ProcessResult, &'static str> {
+        let (dir, program) = fake_ssh(&format!("echo '{said}' >&2\nexit {code}"));
+        let done = super::run_ssh_command_with(
+            program.to_str().unwrap(),
+            &synthetic_vps(),
+            "true",
+            None,
+            std::time::Duration::from_secs(20),
+            None,
+        );
+        let _ = fs::remove_dir_all(dir);
+        done
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_255_that_ssh_explains_is_its_own_code_and_any_other_exit_is_left_alone() {
+        for (said, code) in [
+            ("jht@192.0.2.10: Permission denied (publickey).", "ssh_auth_failed"),
+            ("ssh: connect to host 192.0.2.10 port 22: Connection refused", "ssh_connection_refused"),
+            ("ssh: connect to host 192.0.2.10 port 22: Connection timed out", "ssh_host_unreachable"),
+            ("ssh: Could not resolve hostname vps.invalid: Name or service not known", "ssh_host_unreachable"),
+            ("Host key verification failed.", "host_key_changed"),
+            ("kex_exchange_identification: read: Connection reset by 192.0.2.10 port 22", "ssh_rate_limited"),
+        ] {
+            assert_eq!(run_saying(said, 255).err(), Some(code), "{said}");
+        }
+        // 255 with nothing ssh says about it stays ssh's own exit: the caller says ssh_unavailable
+        assert_eq!(run_saying("some other message", 255).unwrap().code, 255);
+        // a command that failed on its own, whatever it printed, is not the way in
+        assert_eq!(run_saying("cat: x: Permission denied (publickey).", 1).unwrap().code, 1);
+        assert_eq!(run_saying("ssh: connect to host h port 22: Connection refused", 0).unwrap().code, 0);
+    }
+
+    /// The messages ssh prints are the English ones the app reads for the codes above, whatever the
+    /// language of the system: the child runs with `LC_ALL=C` (a glibc in Italian says «Connessione
+    /// rifiutata»). The stand-in prints the language it was started with.
+    #[cfg(unix)]
+    #[test]
+    fn ssh_runs_with_the_c_locale_so_that_its_messages_are_the_english_ones() {
+        let (dir, program) = fake_ssh("printf '%s' \"${LC_ALL-unset}\"");
+        let done = super::run_ssh_command_with(
+            program.to_str().unwrap(),
+            &synthetic_vps(),
+            "true",
+            None,
+            std::time::Duration::from_secs(20),
+            None,
+        )
+        .unwrap();
+        assert_eq!(done.stdout_text(), "C");
+        let _ = fs::remove_dir_all(dir);
+        // the key scan is ssh too
+        let (dir, program) = fake_ssh("printf 'LC_ALL=%s' \"${LC_ALL-unset}\" >&2\nexit 255");
+        // no key written: the scan fails, and what it said is only read for the codes
+        assert_eq!(super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(), Some("host_key_unavailable"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_key_scan_says_a_refused_connection_and_a_host_that_cannot_be_reached() {
+        for (said, code) in [
+            ("ssh: connect to host 192.0.2.10 port 22: Connection refused", "ssh_connection_refused"),
+            ("ssh: connect to host 192.0.2.10 port 22: No route to host", "ssh_host_unreachable"),
+        ] {
+            let (dir, program) = fake_ssh(&format!("echo '{said}' >&2\nexit 255"));
+            assert_eq!(super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(), Some(code));
+            let _ = fs::remove_dir_all(dir);
+        }
+        // a refused key after the key was offered is not the scan's business: no key, `host_key_unavailable`
+        let (dir, program) = fake_ssh("echo 'jht-hostkey@192.0.2.10: Permission denied (publickey).' >&2\nexit 255");
+        assert_eq!(super::scan_host_key_with_ssh(program.to_str().unwrap(), "192.0.2.10", 22).err(), Some("host_key_unavailable"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pipe_free_ssh_tells_a_refused_key_from_its_messages_file() {
+        let (dir, program) = fake_ssh(
+            "echo 'jht@192.0.2.10: Permission denied (publickey).' >> \"$2\"\nexit 255",
+        );
+        let done = super::run_ssh_command_without_pipes_with(
+            program.to_str().unwrap(),
+            &synthetic_vps(),
+            "exit 0",
+            None,
+            std::time::Duration::from_secs(20),
+        );
+        assert_eq!(done.err(), Some("ssh_auth_failed"));
         let _ = fs::remove_dir_all(dir);
     }
 

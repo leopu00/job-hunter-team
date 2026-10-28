@@ -212,6 +212,8 @@ export const EXISTING_TEAM_ERROR_CODES: ReadonlySet<string> = new Set([
   "account_team_mismatch",
   "ssh_unavailable",
   "ssh_auth_failed",
+  "ssh_connection_refused",
+  "ssh_host_unreachable",
   "snapshot_failed",
   "container_unavailable",
   "operation_in_progress",

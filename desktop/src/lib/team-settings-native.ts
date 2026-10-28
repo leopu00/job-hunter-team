@@ -66,6 +66,11 @@ export type TeamSettingsError =
   | "own_vps_key_changed"
   | "own_vps_claim_refused"
   | "ssh_unavailable"
+  | "ssh_auth_failed"
+  | "ssh_connection_refused"
+  | "ssh_host_unreachable"
+  | "ssh_rate_limited"
+  | "host_key_changed"
   | "agent_control_window"
   | "other";
 export type TeamSettingsResult = { ok: true; settings: TeamSettings } | { ok: false; error: TeamSettingsError };
@@ -73,7 +78,8 @@ export type TeamSettingsResult = { ok: true; settings: TeamSettings } | { ok: fa
 const KNOWN_ERRORS: ReadonlySet<string> = new Set<TeamSettingsError>([
   "team_settings_request_invalid", "team_settings_value_invalid", "team_settings_read_only", "team_settings_unavailable",
   "existing_team_runtime_outdated", "existing_team_runtime_target_changed", "own_vps_claim_required", "own_vps_key_changed",
-  "own_vps_claim_refused", "ssh_unavailable", "agent_control_window",
+  "own_vps_claim_refused", "ssh_unavailable", "ssh_auth_failed", "ssh_connection_refused", "ssh_host_unreachable",
+  "ssh_rate_limited", "host_key_changed", "agent_control_window",
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
