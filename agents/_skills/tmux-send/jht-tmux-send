@@ -619,7 +619,10 @@ _submitted_from_unknown_form() {
 # Best-effort per costruzione (`|| true`, python3 opzionale): questo canale
 # porta tutto il traffico fra agenti, e un logger che fallisce non deve MAI
 # impedire una consegna.
-_record_stuck() { _record_pending_input draft "${1:-submit_unconfirmed}"; }
+# Dice anche al chiamante, su stdout, che il testo e' rimasto nella casella (riga `JHT_STUCK`): un'uscita non zero
+# non lo dice (130 vale anche «non ho digitato niente»), e la chat dell'app deve sapere se c'e' un testo suo da
+# inviare quando l'agente e' libero, o niente da ritentare.
+_record_stuck() { _record_pending_input draft "${1:-submit_unconfirmed}"; echo "JHT_STUCK"; }
 
 # Il messaggio che NON e' stato digitato (la casella era di un altro): senza questa riga resterebbe solo
 # nello stderr del chiamante. `unsent` e non `draft`: `draft` e' cio' che sta nella casella del pane.

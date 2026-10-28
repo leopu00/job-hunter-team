@@ -113,6 +113,9 @@ DELIVERY_NOT_THERE = 9
 ENTER_REASONS = frozenset({"menu", "empty_unseen", "not_ours", "retry_unattested"})
 SIGNATURE = re.compile(r"^JHT_SIGNATURE ((?:[0-9a-f]{2}){1,64})$", re.M)
 ENTER_REASON = re.compile(r"^JHT_REASON ([a-z_]{1,20})$", re.M)
+# What the transport prints when it leaves the text in the composer without submitting it (half drawn, changed under
+# the paste): from then on the turn is waiting THERE, and the chat submits it when the agent is free.
+STUCK = re.compile(r"^JHT_STUCK$", re.M)
 MESSAGE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 # The ids are the roles' keys; the value is the tmux session.
@@ -153,6 +156,11 @@ PROMPT_POLL_S = float(os.environ.get("JHT_CHAT_PROMPT_POLL", "2"))
 # turn is QUEUED (written, not typed) and delivered by the next read or send that finds the agent idle.
 BUSY_WAIT_S = float(os.environ.get("JHT_CHAT_BUSY_WAIT", "3"))
 QUEUE_FILE = "chat-queue.jsonl"
+# A turn whose text is in the composer and then finds it empty: a late draw is waited for this long.
+TYPED_GONE_AFTER_S = 30.0
+# The detached process that sees to the queue when nobody reads or writes: how often, and for how long
+# (the life of a queued turn plus a margin).
+DRAIN_EVERY_S = float(os.environ.get("JHT_CHAT_DRAIN_EVERY", "5"))
 # A queued turn is typed only while it is fresh: past this it is NOT sent (never typed, whatever the agent
 # does later) and the page says so.  Delivery and expiry are reported for a day, then forgotten.
 QUEUE_TTL_S = float(os.environ.get("JHT_CHAT_QUEUE_TTL", "1200"))
@@ -171,9 +179,11 @@ _INVISIBLE = frozenset(
 
 
 class Refusal(Exception):
-    def __init__(self, code: str):
+    def __init__(self, code: str, typed: bool = False):
         super().__init__(code)
         self.code = code
+        # The transport said the text stayed in the composer (JHT_STUCK): the turn is ours there, not lost.
+        self.typed = typed
 
 
 def jht_home() -> Path:
@@ -735,8 +745,14 @@ def composer_text(pane: str) -> str | None:
                     value = value[:-1]
             return value.strip()
 
+        # The rows a long draft wraps onto are its text, whatever they hold: the user's turn is fenced with
+        # ``⟦UTENTE·id⟧``, and the closing mark lands on the second row, where a «·» made it look like the
+        # model/path footer. They count only when a footer really follows them.
+        wrapped = 0 if boxed or marker != "›" else _wrapped_continuation(rows, index)
+        if wrapped and not _footer_follows(rows[index + 1 + wrapped:]):
+            wrapped = 0
         parts = [fragment(plain, first=True)]
-        for _following_raw, following in rows[index + 1:]:
+        for offset, (_following_raw, following) in enumerate(rows[index + 1:]):
             if boxed:
                 if _BORDER.match(following):
                     break
@@ -745,7 +761,7 @@ def composer_text(pane: str) -> str | None:
                     break
                 parts.append(fragment(stripped[1:]))
             else:
-                if _CODEX_DOT_FOOTER.match(following) or _CODEX_HINT.search(following):
+                if offset >= wrapped and (_CODEX_DOT_FOOTER.match(following) or _CODEX_HINT.search(following)):
                     break
                 if following.strip():
                     parts.append(following.strip())
@@ -986,11 +1002,12 @@ def deliver(agent: str, session: str, text: str) -> tuple[str, str | None]:
         return "taken", None
     if done.returncode == DELIVERY_UNCONFIRMED:
         return "unconfirmed", None
+    said = done.stdout.decode("utf-8", "replace")
     if done.returncode == DELIVERY_PENDING:
-        found = SIGNATURE.search(done.stdout.decode("utf-8", "replace"))
+        found = SIGNATURE.search(said)
         if found:
             return "pending", found.group(1)
-    raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"))
+    raise Refusal(DELIVERY_EXIT.get(done.returncode, "send_failed"), typed=bool(STUCK.search(said)))
 
 
 def _mail_module():
@@ -1107,11 +1124,17 @@ def queued_turns(agent: str) -> list[dict]:
     return _queue_state(agent)[0]
 
 
-def _queue_locked(agent: str, client_id: str, text: str) -> dict:
-    """Write the turn and queue it (once per client id). The caller holds the agent's lock."""
+def _queue_locked(agent: str, client_id: str, text: str, typed: bool = False) -> dict:
+    """Write the turn and queue it (once per client id). The caller holds the agent's lock.
+
+    ``typed``: the text is already in the agent's composer and nothing submitted it; the flush presses Enter on
+    it (never types it again) when the agent is free.
+    """
     row = persist(agent, client_id, text)
     if not any(held["client_message_id"] == client_id for held in _queue_lines(agent)):
         line = {"client_message_id": client_id, "message_id": row.get("message_id"), "queued_at": time.time()}
+        if typed:
+            line["typed"] = True
         try:
             fd = os.open(_queue_path(agent), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
             try:
@@ -1123,7 +1146,36 @@ def _queue_locked(agent: str, client_id: str, text: str) -> dict:
             raise Refusal("persist_failed")
     out = _receipt(client_id, row.get("message_id"), row.get("ts"), "queued")
     out["queue"] = "terminal"       # held here until the agent is idle, then typed: the page watches it
+    _spawn_drain(agent)             # and a process of its own sees to it even if nobody writes or reads again
     return out
+
+
+def _settle_typed(agent: str, session: str, row: dict, held: dict, pane: str | None) -> bool:
+    """A turn whose text is already in the composer: submit it there. True when it is settled (go on to the
+    next turn), False when it has to wait. It is never typed again, and a text that is not provably ours is
+    never touched (the transport decides that, as for every flush)."""
+    if pane is None or composer_snapshot(pane)[1]:
+        return False                               # a turn is running: not now
+    gate = delivery_gate(pane)
+    if gate == "text":
+        try:
+            flush_ours(session)                    # Enter only on a text it can prove is ours
+        except Refusal:
+            return False
+        mark_delivered(agent, row, "taken")
+        return True
+    if gate in {"empty", "none"}:
+        # The box is empty: someone submitted it (the bridge's flush) or the paste never drew. A late draw is waited
+        # for a few seconds; after that nothing proves it, and it is not typed a second time.
+        try:
+            waited = time.time() - float(held.get("queued_at") or 0)
+        except (TypeError, ValueError):
+            waited = TYPED_GONE_AFTER_S
+        if waited < TYPED_GONE_AFTER_S:
+            return False
+        mark_delivered(agent, row, "unconfirmed")
+        return True
+    return False
 
 
 def flush_queue(agent: str, session: str) -> None:
@@ -1143,6 +1195,10 @@ def flush_queue(agent: str, session: str) -> None:
                 if row is None:
                     continue
                 pane = capture_pane(session)
+                if held.get("typed"):
+                    if _settle_typed(agent, session, row, held, pane):
+                        continue
+                    return
                 if pane is not None and not composer_snapshot(pane)[1] and delivery_gate(pane) == "text":
                     # A text of ours left in the box (a bridge's paste nobody submitted) would hold the turn for
                     # ever: once, the transport submits it if it can prove it is its own, then the box is looked at again.
@@ -1277,7 +1333,14 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
                 retry_outside_lock = True
             else:
                 row = persist(agent, client_id, text)
-                taken, signature = deliver(agent, session, str(row.get("text") or text))
+                try:
+                    taken, signature = deliver(agent, session, str(row.get("text") or text))
+                except Refusal as refusal:
+                    if not refusal.typed:
+                        raise
+                    # The text stayed in the composer (half drawn under a working agent): it is held, as a turn
+                    # waiting there, not lost and not typed again; the flush submits it when the agent is free.
+                    return _queue_locked(agent, client_id, text, typed=True)
                 mark_delivered(agent, row, taken, signature)
                 return _receipt(client_id, row.get("message_id"), row.get("ts"), taken=taken)
         if retry_outside_lock:
@@ -1692,6 +1755,69 @@ def _spawn_wake_retry(agent: str, question_id: str) -> None:
         pass
 
 
+def _drain_lock(agent: str):
+    """One draining process per agent; returns the lock path, or None when another one holds it."""
+    folder = jht_home() / "locks"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    path = folder / f"chat-drain-{agent}.lock"
+    for _ in range(2):
+        try:
+            os.close(os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+            return path
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime < QUEUE_TTL_S + 120:
+                    return None
+                path.unlink()          # a holder that died without cleaning up
+            except OSError:
+                return None
+        except OSError:
+            return None
+    return None
+
+
+def drain(agent: str) -> dict:
+    """``agent_chat.py drain <agent>``: deliver the queued turns as the agent frees up, without anybody asking.
+
+    The page flushes the queue by reading; this is for when nobody reads (the app closed, the person gone to
+    another page): a turn that is queued, or typed and stuck in the composer, still goes. Ends when nothing
+    waits any more, or after the life of a queued turn.
+    """
+    lock = _drain_lock(agent)
+    if lock is None:
+        return {"result": "running"}
+    try:
+        deadline = time.monotonic() + QUEUE_TTL_S + 60
+        while queued_turns(agent):
+            flush_queue(agent, AGENTS[agent])
+            if not queued_turns(agent):
+                break
+            if time.monotonic() >= deadline:
+                return {"result": "gave_up"}
+            time.sleep(DRAIN_EVERY_S)
+        return {"result": "empty"}
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
+
+
+def _spawn_drain(agent: str) -> None:
+    """Start the draining process without waiting for it. ``JHT_CHAT_DRAIN=0`` turns it off (the tests')."""
+    if os.environ.get("JHT_CHAT_DRAIN", "1") == "0":
+        return
+    try:
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "drain", agent],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True, close_fds=True)
+    except OSError:
+        pass
+
+
 def answer(agent: str, question_id: str, raw: str) -> dict:
     """The person's answer to one of this agent's questions, from the app. The first answer wins."""
     if not QUESTION_ID.match(question_id or ""):
@@ -1762,6 +1888,8 @@ def run(argv: list[str]) -> dict:
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
     if len(argv) == 3 and argv[0] == "wake":
         return wake(agent_of(argv[1]), argv[2])
+    if len(argv) == 2 and argv[0] == "drain":
+        return drain(agent_of(argv[1]))
     raise Refusal("chat_invalid")
 
 

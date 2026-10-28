@@ -61,6 +61,17 @@ case "$cmd" in
       if [ "$mode" = busy ]; then
         printf '› %s\n  tab to queue message                                                        80%% context left\n' "$(cat "$S/composer" 2>/dev/null)"; exit 0
       fi
+      if [ -f "$S/wrap" ]; then
+        # A long draft wrapped as Codex draws it: the marker row as wide as the terminal, the rest on rows
+        # indented under it, a blank row, then the model line.
+        python3 -c '
+import sys
+width = int(sys.argv[1])
+text = "› " + open(sys.argv[2], encoding="utf-8").read()
+rows = [text[:width]] + ["  " + text[n:n + width - 2] for n in range(width, len(text), width - 2)]
+print("\n".join(rows)); print(); print("  gpt-5.6-sol high · ~/agents/capitano")' "$(cat "$S/wrap")" "$S/composer"
+        exit 0
+      fi
       printf '› %s\n  gpt-5.6-sol high · ~/agents/capitano\n' "$(cat "$S/composer" 2>/dev/null)"; exit 0
     fi
     printf '╭──────────────────────────────────────────────╮\n│ ❯ %s │\n╰──────────────────────────────────────────────╯\n  ? for shortcuts\n' "$(cat "$S/composer" 2>/dev/null)" ;;
@@ -191,6 +202,7 @@ def test_a_delivery_types_once_and_presses_enter_once(box):
     done = box.run()
     assert done.returncode == 0, done.stderr
     assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1 and box.keys("Escape") == []
+    assert "JHT_STUCK" not in done.stdout
 
 
 def test_a_slow_render_is_waited_for_not_typed_again(box):
@@ -218,6 +230,19 @@ def test_a_paste_that_stops_half_drawn_is_refused_without_enter_and_the_log_says
     assert done.returncode == 130, done.stderr
     assert box.keys("Enter") == [] and box.keys("Escape") == []
     assert "half drawn" in done.stderr
+    assert "JHT_STUCK" in done.stdout.splitlines(), "the caller is told the text stayed in the composer"
+
+
+def test_a_users_turn_that_wraps_onto_a_row_with_the_fence_mark_gets_its_enter(box):
+    """The user's turn is fenced with ⟦UTENTE·id⟧; once it wraps, the closing mark sits on a row with a
+    «·», which was read as the model line: the composer looked cut short, 130 after the wait, no Enter."""
+    box.put("layout", "codex")
+    box.put("wrap", "120")
+    chat = "[@utente -> @capitano] [CHAT] " + "Platform engineer in Rome, six years of Kubernetes and CI/CD. " * 3
+    done = box.run(message=chat, JHT_TMUX_PARTIAL_WAIT="1")
+    assert done.returncode == 0, done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1 and box.keys("Escape") == []
+    assert "half drawn" not in done.stderr
 
 
 def test_a_person_typing_next_to_our_text_before_the_first_enter_gets_no_enter(box):
