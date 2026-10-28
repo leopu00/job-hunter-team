@@ -548,7 +548,7 @@ describe("DashboardApp onboarding router", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/revisione ancora da confermare/i);
     expect(screen.getByTestId("local-migration-code")).toHaveTextContent("local_migration_review_pending");
-    expect(screen.getByRole("alert")).toHaveTextContent(/runtime resta intestato/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/la squadra resta del profilo locale/i);
     expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument();
     expect(finalizeLocalProfileMigration).not.toHaveBeenCalled();
     expect(activateDesktopAccountScope).not.toHaveBeenCalled();
