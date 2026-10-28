@@ -321,6 +321,15 @@ def main() -> int:
     if args.body == "-":
         # the newline a heredoc ends with is not part of the text
         args.body = sys.stdin.read().removesuffix("\n")
+        lines = args.body.rstrip().splitlines()
+        if lines and lines[-1].strip() == "TXT":
+            # an indented closing `TXT`: the heredoc never closed and the shell passed on the delimiter line too
+            print(
+                "jht-notify-user: the text ends with a `TXT` line: the closing line of the heredoc was indented, "
+                "so the heredoc never closed. Nothing was sent: put `TXT` in the first column, alone on its line.",
+                file=sys.stderr,
+            )
+            return 1
     structured = bool(
         args.option or args.oggetto or args.tipo or args.multipla or args.libera or args.scade_tra
     )
