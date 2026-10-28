@@ -595,7 +595,8 @@ export default function DashboardApp() {
   // «Sign in with Google without linking»: the account goes in with its own data; the local profile and the
   // team of this computer stay as they are (the team is then another owner's, see the gate).
   const enterWithoutLinking = useCallback(() => {
-    if (!identityKey || !localMigration || localMigration.identityKey !== identityKey || localMigration.phase !== "error") return;
+    if (!identityKey || !localMigration || localMigration.identityKey !== identityKey || localMigration.phase !== "error" ||
+        localMigration.code !== "local_migration_target_exists") return;
     setLocalMigration({ identityKey, profileId: localMigration.profileId, phase: "unlinked" });
   }, [identityKey, localMigration]);
 
