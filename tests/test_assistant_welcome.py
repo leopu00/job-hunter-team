@@ -329,3 +329,61 @@ def test_all_seven_prompts_say_the_same_protocol(suffix):
     assert "mkdir -p $JHT_HOME/profile && touch" not in section
     assert "test -f $JHT_HOME/profile/welcomed.flag" not in section
     assert "sent + flag created" not in section
+
+
+# --- a team on a server: the greeting does not send the person to a folder they cannot reach ---------------------
+
+
+def test_a_team_on_a_server_is_greeted_without_the_folder_of_the_attachments(home):
+    """The app cannot put a file on the server (its clip is off there), so «put it in the folder» promised a way
+    the person does not have."""
+    home.env_extra["JHT_HOST_TYPE"] = "vps"
+    done = home.deliver()
+    assert done.returncode == 0, done.stderr
+    [line] = home.lines()
+    assert line["text"] == EN["welcome.assistente_vps"] + "\n\n" + EN["welcome.assistente_first"]
+    assert "allegati" not in line["text"] and "folder" not in line["text"]
+    assert "files cannot be attached" in line["text"]
+
+
+@pytest.mark.parametrize("kind", ["vps", "server", "remote", "VPS", '"vps"'])
+def test_the_host_type_can_come_from_host_env_too(home, kind):
+    (home.path / "host.env").write_text(f"JHT_USER_TZ=Europe/Rome\nJHT_HOST_TYPE={kind}\n", encoding="utf-8")
+    home.deliver()
+    [line] = home.lines()
+    assert line["text"].startswith(EN["welcome.assistente_vps"])
+
+
+def test_the_environment_beats_host_env(home):
+    (home.path / "host.env").write_text("JHT_HOST_TYPE=vps\n", encoding="utf-8")
+    home.env_extra["JHT_HOST_TYPE"] = "local"
+    home.deliver()
+    [line] = home.lines()
+    assert line["text"].startswith(EN["welcome.assistente"]) and "allegati" in line["text"]
+
+
+@pytest.mark.parametrize("setup", ["local", "unknown", "empty", "no file", "unreadable"])
+def test_this_computer_and_anything_unclear_get_the_usual_greeting(home, setup):
+    if setup == "unreadable":
+        (home.path / "host.env").mkdir()
+    elif setup != "no file":
+        (home.path / "host.env").write_text("JHT_HOST_TYPE=" + ("" if setup == "empty" else setup) + "\n", encoding="utf-8")
+    home.deliver()
+    [line] = home.lines()
+    assert line["text"].startswith(EN["welcome.assistente"])
+    assert "Documents/Job Hunter Team/allegati" in line["text"]
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_server_greeting_in_every_language_is_the_usual_one_without_the_folder_sentence(lang):
+    catalog = _catalog(lang)
+    base, vps = catalog["welcome.assistente"], catalog["welcome.assistente_vps"]
+    assert vps != base
+    assert "allegati" not in vps and "Telegram" not in vps
+    # the same four paragraphs: only the one that sent the person to the folder changes
+    base_paragraphs, vps_paragraphs = base.split("\n\n"), vps.split("\n\n")
+    assert len(base_paragraphs) == len(vps_paragraphs) == 4
+    changed = [i for i, (a, b) in enumerate(zip(base_paragraphs, vps_paragraphs)) if a != b]
+    assert changed == [2]
+    # and it still says what to do: the text of the CV, or two lines about oneself (the same opening of that paragraph)
+    assert vps_paragraphs[2][:60] == base_paragraphs[2][:60]

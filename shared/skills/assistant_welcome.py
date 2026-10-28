@@ -28,6 +28,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -68,10 +69,35 @@ def _lookup(t, key: str) -> str:
     return "" if not value or value == key else value
 
 
+# The host types that mean the team runs on a server (cli/src/commands/pid1.js, isVpsHost).
+VPS_HOST_TYPES = {"vps", "server", "remote"}
+
+
+def host_is_vps() -> bool:
+    """True when this team runs on a server: JHT_HOST_TYPE, else the one in host.env.
+
+    Anything unreadable is not a server: the greeting is then the one for this computer.
+    """
+    kind = os.environ.get("JHT_HOST_TYPE", "").strip().lower()
+    if not kind:
+        try:
+            text = (jht_home() / "host.env").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return False
+        found = re.search(r"^JHT_HOST_TYPE=(.*)$", text, re.MULTILINE)
+        kind = found.group(1).strip().strip("'\"").lower() if found else ""
+    return kind in VPS_HOST_TYPES
+
+
 def welcome_texts() -> tuple[str, str]:
-    """(the greeting, the greeting with the first question when the profile is not ready)."""
+    """(the greeting, the greeting with the first question when the profile is not ready).
+
+    A team on a server gets the greeting without the folder of the attachments: the app cannot put a
+    file on the server, so the person has no way to use it. Without that text in the catalog the
+    greeting is the usual one.
+    """
     t = _catalog()
-    base = _lookup(t, "welcome.assistente")
+    base = (_lookup(t, "welcome.assistente_vps") if host_is_vps() else "") or _lookup(t, "welcome.assistente")
     if not base:
         return "", ""
     first = _lookup(t, "welcome.assistente_first")
