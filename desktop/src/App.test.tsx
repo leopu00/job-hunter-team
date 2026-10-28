@@ -42,6 +42,8 @@ describe("authentication entrypoint", () => {
   const restore = vi.fn();
 
   beforeEach(() => {
+    // the language has been said: the first screen is not in the way of these
+    document.cookie = "NEXT_LOCALE=it; path=/";
     vi.mocked(goTo).mockReset();
     vi.mocked(clearLocalIdentitySelection).mockReset();
     vi.mocked(clearGoogleIdentitySelection).mockReset();
@@ -52,6 +54,24 @@ describe("authentication entrypoint", () => {
       loading: false,
       restore,
     });
+  });
+
+  it("asks the language first, before any other text, and goes on to the sign-in once it is said", async () => {
+    document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
+    localStorage.removeItem("jht-lang");
+    render(<App />);
+    expect(screen.getByTestId("language-screen")).toBeInTheDocument();
+    expect(screen.queryByText("login-screen")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("language-continue"));
+    expect(screen.queryByTestId("language-screen")).not.toBeInTheDocument();
+    expect(screen.getByText("login-screen")).toBeInTheDocument();
+    localStorage.removeItem("jht-lang");
+  });
+
+  it("does not ask again once the language was said (on this computer, or in the settings)", () => {
+    render(<App />);
+    expect(screen.queryByTestId("language-screen")).not.toBeInTheDocument();
+    expect(screen.getByText("login-screen")).toBeInTheDocument();
   });
 
   it("shows the production identity frame without restoring Google or opening its storage", () => {
