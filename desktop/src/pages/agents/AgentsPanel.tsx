@@ -568,7 +568,8 @@ export default function AgentsPanel({ search }: PageProps) {
           quietReading.current = false;
         }
       }
-      if (live) timer = setTimeout(() => void again(), everyMs);
+      // the count is the ref's, not the state's: the next read is not set once the third failure is in
+      if (live && failedInARow.current < LIST_REFRESH_FAILURES) timer = setTimeout(() => void again(), everyMs);
     };
     // the window seen again after it was hidden reads at once
     const seen = () => {

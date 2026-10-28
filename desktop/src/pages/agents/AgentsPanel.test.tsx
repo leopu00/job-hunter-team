@@ -1440,7 +1440,8 @@ describe("«Agenti»: the list reads again by itself", () => {
     });
     show();
     await screen.findByTestId("panel-summary");
-    await advance(LIST_REFRESH_VPS_MS * 12);
+    // a step at a time: each one commits what the last read set, as the app does
+    for (let step = 0; step < 36; step++) await advance(LIST_REFRESH_LOCAL_MS);
     // given up at the third failure of the second run, not before
     expect(lists()).toBe(outcome.length);
   });
