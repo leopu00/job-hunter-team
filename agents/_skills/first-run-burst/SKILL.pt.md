@@ -48,6 +48,8 @@ Assistente pergunta o mesmo quando o utilizador fala com ele.
 
 **O plano pergunta-se uma só vez.** Enquanto a tua pergunta sobre o plano estiver sem resposta no chat, não a repitas, nem por outras palavras: uma nova mensagem «perfil pronto», outro despertar ou `plan_missing` no próximo `status` não mudam o que esperas. Vê primeiro o chat: se já perguntaste e o utilizador não respondeu, espera. Só voltas a perguntar depois de o utilizador responder «não sei». O `ask-plan` não publica um segundo cartão enquanto o primeiro não tiver resposta: se disser que a pergunta está aberta, espera. Se não perguntares, o sistema publica o cartão poucos minutos depois da importação do perfil. Depois de «não sei» volta a publicar o cartão só passada uma hora, e nunca mais de três vezes no total: se o disser, espera e não perguntes por texto.
 
+**Nunca antes do perfil, e o cartão vai para onde está o utilizador.** O `ask-plan` não publica nada enquanto o perfil não estiver guardado (`wait_for_profile: true`): não perguntes o plano na boas-vindas nem enquanto o perfil se constrói, e espera a mensagem de perfil pronto. Enquanto o utilizador confirma o perfil com o Assistente, o cartão vai para o chat do Assistente, seja quem for que lance `ask-plan` (`agent` e `in_your_chat` na resposta dizem onde está). Quando lhe falares dele, nomeia o chat que o tem — «o chat com o Assistente» — nunca «este chat» se `in_your_chat` for `false`.
+
 **2. Faz spawn de todo o roster, escalonado ~60 segundos.**
 
 Não um worker de dez em dez minutos: toda a formação, uma a seguir à outra, sempre através do

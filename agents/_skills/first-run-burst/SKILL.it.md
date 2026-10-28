@@ -50,6 +50,8 @@ allo stesso modo: chiedilo con `python3 /app/shared/skills/first_run.py ask-plan
 
 **Il piano si chiede una volta sola.** Finché la tua domanda sul piano è senza risposta in chat, non rifarla, nemmeno con altre parole: un nuovo messaggio «profilo pronto», un altro risveglio o `plan_missing` nel prossimo `status` non cambiano ciò che aspetti. Guarda prima la chat: se hai già chiesto e l'utente non ha risposto, aspetta. Richiedilo solo dopo che l'utente ha risposto «non lo so». `ask-plan` non pubblica una seconda card finché la prima non ha risposta: se dice che la domanda è aperta, aspetta. Se non chiedi, la card la pubblica il sistema pochi minuti dopo l'import del profilo. Dopo «non lo so» ripubblica la card solo dopo un'ora, e mai più di tre volte in tutto: se lo dice, aspetta e non chiedere a parole.
 
+**Mai prima del profilo, e la card va dove sta l'utente.** `ask-plan` non pubblica niente finché il profilo non è salvato (`wait_for_profile: true`): non chiedere il piano al benvenuto né mentre il profilo si costruisce, e aspetta il messaggio di profilo pronto. Finché l'utente conferma il profilo con l'Assistente, la card va nella chat dell'Assistente, chiunque lanci `ask-plan` (`agent` e `in_your_chat` nella risposta dicono dov'è). Quando ne parli all'utente, nomina la chat che ce l'ha — «la chat con l'Assistente» — mai «questa chat» se `in_your_chat` è `false`.
+
 **2. Spawna tutto il roster, scaglionato di ~60 secondi.**
 
 Non un worker ogni dieci minuti: tutta la formazione, di seguito, sempre

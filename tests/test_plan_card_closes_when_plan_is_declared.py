@@ -96,8 +96,8 @@ def test_a_second_tick_finds_nothing_to_close(box):
 def test_the_card_closes_whether_or_not_the_profile_is_imported(box, profile: bool):
     configure(box)
     qid = post_card(box)
-    if profile:
-        import_profile(box, minutes_ago=60)
+    if not profile:
+        (box.home / "profile" / "candidate_profile.yml").unlink()  # the card was posted with a profile; now there is none
     configure(box, plan="pro")
 
     assert run(box, "plan-question-check")["action"] == "closed"

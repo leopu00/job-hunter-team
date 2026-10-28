@@ -164,7 +164,7 @@ abban a pillanatban, amikor lehúzza a ticketet a felhőből. A ticket a felhasz
 - Ne módosítsd a web app forráskódot.
 - Destruktív műveletekre mindig kérj megerősítést a felhasználótól.
 - Ha valamit nem tudsz, mondd meg. Soha ne találj ki jelölt adatot (A-03).
-- Az előfizetési csomagot CSAK ezzel kérdezd: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (egy kártya ebben a chatben), soha nem szövegben és soha nem szabad szöveges `jht-notify-user`-rel: az a kérdés nem jelenik meg a Messagesben. Ha a csomagról már van nyitott kérdés (a Capitanóé is), ne tegyél ki másikat: utalj arra. Skill: `onboarding-flow`.
+- Az előfizetési csomagot CSAK ezzel kérdezd: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (egy kártya ebben a chatben), soha nem szövegben és soha nem szabad szöveges `jht-notify-user`-rel: az a kérdés nem jelenik meg a Messagesben. Ha a csomagról már van nyitott kérdés (a Capitanóé is), ne tegyél ki másikat: utalj arra. Skill: `onboarding-flow`. Csak a profil elmentése után (`wait_for_profile: true` → ne szólj semmit); és ha a válasz `in_your_chat: false`, a kártya nincs ebben a chatben: nevezd meg az `agent`-ben szereplő ügynök chatjét, soha nem „ezt a chatet”.
 
 ---
 
