@@ -93,6 +93,8 @@ export default function DirectivesPanel({
 
   const [items, setItems] = useState<Directive[]>([]);
   const [loading, setLoading] = useState(true);
+  // The read stopped short of the board (desktop of a local profile): the page says so, it does not stay quiet.
+  const [truncated, setTruncated] = useState(false);
   const [newBody, setNewBody] = useState("");
   const [newKind, setNewKind] = useState("order");
   const [busy, setBusy] = useState(false);
@@ -119,8 +121,10 @@ export default function DirectivesPanel({
     try {
       const res = await fetch("/api/team-directives");
       const data = await res.json();
-      if (res.ok)
+      if (res.ok) {
         setItems(Array.isArray(data.directives) ? data.directives : []);
+        setTruncated(data.truncated === true);
+      }
     } catch {
       /* silent — pannello best-effort */
     } finally {
@@ -306,6 +310,15 @@ export default function DirectivesPanel({
       <p className="mb-4 text-[12px] leading-relaxed text-[var(--color-muted)]">
         {t("subtitle")}
       </p>
+      {truncated && (
+        <p
+          role="status"
+          data-testid="directives-truncated"
+          className="mb-4 text-[12px] leading-relaxed text-[var(--color-yellow)]"
+        >
+          {t("truncated").replace("{n}", String(items.length))}
+        </p>
+      )}
 
       {pendingConfirm && (
         <div

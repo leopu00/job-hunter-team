@@ -156,13 +156,16 @@ LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source',
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
-if not isinstance(req,dict) or set(req)-{'op','filters','id','offset'}: fail('positions_request_invalid')
+if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync','map'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
+DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
+if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
+if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','profile','cloud_sync') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 if op=='cloud_sync':
  # How the box's push to the website is going: its periodic push keeps the last outcome in
@@ -325,6 +328,92 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
+if op=='directives':
+ # The standing orders the user gave the team (the board of the Team page), as the web's own local reader gives
+ # them: the columns it reads, in its order, at most LIMIT rows with each text bounded. A database without the
+ # table, or without its id or text, has none.
+ # The reply carries as many as fit in the byte budget of the map's reply (what the app takes is 2 MiB), in that
+ # order, and says when it stopped short: a team with a great many long orders gets the first ones, never a failure.
+ LIMIT=500; BUDGET=1363148
+ try:
+  have=columns('team_directives'); wanted=[name for name in ('id','body','kind','status','sort_order','created_by','created_at','updated_at','archived_at') if name in have]
+  order=', '.join(name+' ASC' for name in ('status','sort_order','created_at') if name in have)
+  items=[]; used=0; truncated=False
+  if 'id' in wanted and 'body' in wanted:
+   for raw in db.execute('SELECT '+', '.join(wanted)+' FROM team_directives'+(' ORDER BY '+order if order else '')+' LIMIT '+str(LIMIT+1)):
+    row=as_dict(raw); row['body']=trunc(row['body'],4000)
+    for name in ('kind','status','created_by','created_at','updated_at','archived_at'):
+     if name in row: row[name]=trunc(row[name],60)
+    used+=len(json.dumps(row,separators=(',',':')))+1
+    if len(items)>=LIMIT or (items and used>BUDGET): truncated=True; break
+    items.append(row)
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'items':items,'truncated':truncated}})
+if op=='team_activity':
+ # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
+ # newest events with the position they touched. The columns are the ones the web's own local reader reads
+ # (found_at/last_checked of positions, scored_at of scores, written_at and critic_reviewed_at of applications);
+ # a database without one of them counts none for it. Counts are made here, so the reply does not grow with the
+ # history; the newest EVENTS rows are the feed and the timeline.
+ EVENTS=2500; DAYS=366; first=req['from']; last=req['to']
+ sources=(('scout','positions','found_at','found_by','id','id'),('analista','positions','last_checked',None,'id','id'),('scorer','scores','scored_at','scored_by','position_id','position_id'),('scrittore','applications','written_at','written_by','position_id','position_id'),('critico','applications','critic_reviewed_at','reviewed_by','position_id','position_id'))
+ try:
+  from datetime import date
+  if (date.fromisoformat(last)-date.fromisoformat(first)).days>DAYS: fail('positions_request_invalid')
+ except ValueError: fail('positions_request_invalid')
+ try:
+  daily=[]; newest=[]
+  for role,table,column,actor,pid,_ in sources:
+   have=columns(table)
+   if column not in have: continue
+   who=actor if actor and actor in have else 'NULL'
+   where=' FROM '+table+' WHERE '+column+' IS NOT NULL AND substr('+column+',1,10) BETWEEN ? AND ?'
+   for row in db.execute('SELECT '+who+' AS actor, substr('+column+',1,10) AS day, COUNT(*) AS n'+where+' GROUP BY actor, day',(first,last)):
+    daily.append({'role':role,'actor':trunc(row['actor'],40),'day':row['day'],'n':row['n']})
+   for row in db.execute('SELECT '+who+' AS actor, '+column+' AS ts, '+pid+' AS pid'+where+' ORDER BY '+column+' DESC LIMIT '+str(EVENTS),(first,last)):
+    newest.append({'role':role,'actor':trunc(row['actor'],40),'ts':trunc(row['ts'],40),'pid':None if row['pid'] is None else sid(row['pid'])})
+  # also the last time each instance was seen, whatever the range (the web shows it next to the instance)
+  seen=[]
+  for role,table,column,actor,pid,_ in sources:
+   have=columns(table)
+   if column not in have: continue
+   who=actor if actor and actor in have else 'NULL'
+   for row in db.execute('SELECT '+who+' AS actor, MAX('+column+') AS last FROM '+table+' WHERE '+column+' IS NOT NULL GROUP BY actor'):
+    seen.append({'role':role,'actor':trunc(row['actor'],40),'last':trunc(row['last'],40)})
+  newest.sort(key=lambda item:item['ts'] or '',reverse=True); newest=newest[:EVENTS]
+  # The reply must fit in the byte budget of the map's reply. An instance is a name an agent writes, so there may be
+  # a great many: when it does not fit, the feed first shrinks, then the instances that did least are counted under
+  # their role (no event is lost from a count), down to no instance at all. Nothing here fails for volume.
+  BUDGET=1363148
+  def fold(rows,keep,merge):
+   if keep is None: return rows
+   total={}
+   for row in base_daily: total[(row['role'],row['actor'])]=total.get((row['role'],row['actor']),0)+row['n']
+   kept=set()
+   for role in {key[0] for key in total}:
+    ranked=sorted((key for key in total if key[0]==role and key[1] is not None),key=lambda key:(-total[key],key[1]))
+    kept.update(ranked[:keep])
+   merged={}
+   for row in rows:
+    key=(row['role'],row['actor'] if (row['role'],row['actor']) in kept else None)+((row['day'],) if 'day' in row else ())
+    if key in merged: merge(merged[key],row)
+    else: merged[key]=dict(row,actor=key[1])
+   return list(merged.values())
+  def add_n(into,row): into['n']+=row['n']
+  def later(into,row): into['last']=max(into['last'] or '',row['last'] or '') or None
+  base_daily,base_seen,base_newest=daily,seen,newest
+  for rows,keep in ((EVENTS,None),(500,None),(500,12),(500,6),(500,3),(500,0)):
+   newest=base_newest[:rows]; daily=fold(base_daily,keep,add_n); seen=fold(base_seen,keep,later)
+   if len(json.dumps({'daily':daily,'newest':newest,'seen':seen},separators=(',',':')))<=BUDGET: break
+  else: fail('positions_unavailable')
+  pids=[item['pid'] for item in newest[:40] if item['pid'] is not None]
+  meta={}
+  have=columns('positions'); wanted=[name for name in ('id','legacy_id','title','company') if name in have]
+  if pids and 'id' in wanted:
+   for row in db.execute('SELECT '+', '.join(wanted)+' FROM positions WHERE id IN ('+','.join('?'*len(pids))+')',[int(pid) for pid in pids if pid.isdigit()]):
+    meta[sid(row['id'])]={'legacy_id':row['legacy_id'] if 'legacy_id' in wanted else None,'title':trunc(row['title'],200) if 'title' in wanted else None,'company':trunc(row['company'],120) if 'company' in wanted else None}
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'daily':daily,'newest':newest,'seen':seen,'meta':meta}})
 if op=='map':
  # What the globe needs of every position that is not excluded, and nothing else, in the list's order
  # (the pins of one city are laid out by that order). One reply carries as many as fit in the byte
@@ -408,6 +497,14 @@ enum PositionsRequest {
         offset: u32,
     },
     Profile,
+    /// What each role did per day and instance in a range of days, and the newest events (see the script's `team_activity`).
+    #[serde(rename = "team_activity")]
+    TeamActivity {
+        from: String,
+        to: String,
+    },
+    /// The standing orders of the user's board (the script's `directives`), read only.
+    Directives,
     /// How the box's push to the website is going (its periodic push's last outcome).
     #[serde(rename = "cloud_sync")]
     CloudSync,
@@ -544,6 +641,8 @@ impl PositionsRequest {
             Self::Map { .. } => 4,
             Self::Profile => 5,
             Self::CloudSync => 6,
+            Self::TeamActivity { .. } => 7,
+            Self::Directives => 8,
         }]
     }
 
@@ -554,9 +653,17 @@ impl PositionsRequest {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
             Self::Map { offset } => *offset <= 1_000_000,
-            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
+            Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
+            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync | Self::Directives => true,
         }
     }
+}
+
+/// A calendar day as the activity range names it: `YYYY-MM-DD`, digits only (the reader checks the date itself).
+fn valid_day(day: &str) -> bool {
+    let bytes = day.as_bytes();
+    bytes.len() == 10
+        && bytes.iter().enumerate().all(|(index, byte)| if index == 4 || index == 7 { *byte == b'-' } else { byte.is_ascii_digit() })
 }
 
 fn object_or_null(value: Option<&Value>) -> bool {
@@ -578,7 +685,7 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
         return false;
     };
     match request {
-        PositionsRequest::List { .. } | PositionsRequest::Facets => data
+        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives => data
             .as_object()
             .and_then(|data| data.get("items"))
             .is_some_and(|items| {
@@ -608,6 +715,13 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                             && part.get("of").is_some_and(Value::is_u64)
                     })
                 })
+        }),
+        PositionsRequest::TeamActivity { .. } => data.as_object().is_some_and(|data| {
+            data.len() == 4
+                && ["daily", "newest", "seen"]
+                    .iter()
+                    .all(|key| data.get(*key).and_then(Value::as_array).is_some_and(|items| items.iter().all(Value::is_object)))
+                && data.get("meta").is_some_and(Value::is_object)
         }),
         PositionsRequest::CloudSync => data.as_object().is_some_and(|data| {
             let text_or_null = |key: &str| data.get(key).is_some_and(|value| value.is_null() || value.is_string());
@@ -3879,6 +3993,70 @@ mod tests {
 
     fn exited(code: i32, stdout: &str) -> Result<ProcessResult, &'static str> {
         Ok(ProcessResult { code, stdout: stdout.as_bytes().to_vec() })
+    }
+
+    #[test]
+    fn the_team_activity_read_takes_only_a_closed_range_of_days_and_answers_the_shape_the_page_expects() {
+        let good = json!({"op": "team_activity", "from": "2026-10-05", "to": "2026-10-15"});
+        let parsed = parse_positions_request(good.clone()).unwrap();
+        assert_eq!(parsed.op(), "team_activity");
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), good);
+        for bad in [
+            json!({"op": "team_activity"}),
+            json!({"op": "team_activity", "from": "2026-10-05"}),
+            json!({"op": "team_activity", "from": "2026-10-15", "to": "2026-10-05"}),
+            json!({"op": "team_activity", "from": "2026-10-5", "to": "2026-10-15"}),
+            json!({"op": "team_activity", "from": "2026-10-05", "to": "2026-10-15", "limit": 3}),
+            json!({"op": "team_activity", "from": "2026-10-05\n", "to": "2026-10-15"}),
+            json!({"op": "team_activity", "from": "x026-10-05", "to": "2026-10-15"}),
+        ] {
+            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+        }
+        let request = parsed;
+        let ok = json!({"ok": true, "data": {"daily": [], "newest": [{"role": "scout"}], "seen": [], "meta": {}}});
+        assert!(valid_positions_reply(&request, &ok));
+        for broken in [
+            json!({"ok": true, "data": {"daily": [], "newest": [], "seen": []}}),
+            json!({"ok": true, "data": {"daily": [], "newest": [], "seen": [], "meta": [], "extra": 1}}),
+            json!({"ok": true, "data": {"daily": [1], "newest": [], "seen": [], "meta": {}}}),
+            json!({"ok": true, "data": {"daily": {}, "newest": [], "seen": [], "meta": {}}}),
+            json!({"ok": false, "error": "positions_unavailable"}),
+        ] {
+            assert!(!valid_positions_reply(&request, &broken), "{broken}");
+        }
+        // the reader that runs on the host takes the range as a parameter, reads read-only and never `SELECT *`
+        let reader = POSITIONS_READ_PY.split("if op=='team_activity':").nth(1).unwrap().split("if op=='map':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && !reader.contains("p.*"));
+        assert!(reader.contains("(first,last)"));
+    }
+
+    #[test]
+    fn the_board_read_takes_no_argument_and_answers_a_list_of_rows() {
+        let parsed = parse_positions_request(json!({"op": "directives"})).unwrap();
+        assert_eq!(parsed.op(), "directives");
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), json!({"op": "directives"}));
+        // a key it does not take is never sent on: what goes to the reader is the request alone
+        for extra in [
+            json!({"op": "directives", "id": "3"}),
+            json!({"op": "directives", "filters": {}}),
+            json!({"op": "directives", "from": "2026-10-01", "to": "2026-10-02"}),
+        ] {
+            if let Ok(kept) = parse_positions_request(extra.clone()) {
+                assert_eq!(serde_json::to_value(&kept).unwrap(), json!({"op": "directives"}), "{extra}");
+            }
+        }
+        assert!(valid_positions_reply(&parsed, &json!({"ok": true, "data": {"items": [{"id": 1, "body": "x"}]}})));
+        for broken in [
+            json!({"ok": true, "data": {"items": [1]}}),
+            json!({"ok": true, "data": {"rows": []}}),
+            json!({"ok": true, "data": []}),
+        ] {
+            assert!(!valid_positions_reply(&parsed, &broken), "{broken}");
+        }
+        let reader = POSITIONS_READ_PY.split("if op=='directives':").nth(1).unwrap().split("if op=='team_activity':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && reader.contains("LIMIT"));
+        // every kind of read has its name in the load-times log
+        assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[8], "directives");
     }
 
     #[test]

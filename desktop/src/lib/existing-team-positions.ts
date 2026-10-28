@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
 import { nativeReadStarted } from "./page-timing";
-import { reportLocalTeamRead } from "./local-team-data";
+import { localTeamData, reportLocalTeamRead } from "./local-team-data";
 import { REFRESH_EVENT } from "../shell/refresh-event";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
@@ -11,6 +11,7 @@ import type {
   DesktopVpsRead,
 } from "../../../web/lib/desktop-vps-positions";
 import type { DashboardStats, PositionWithScore } from "../../../web/lib/types";
+import type { TeamActivityCounts } from "../../../web/lib/team-activity";
 import type { DashboardPosition } from "./dashboard-data";
 import type {
   PositionDetail,
@@ -36,7 +37,9 @@ type Request =
   | { op: "detail"; id: string }
   | { op: "facets" }
   | { op: "stats" }
-  | { op: "map"; offset: number };
+  | { op: "map"; offset: number }
+  | { op: "team_activity"; from: string; to: string }
+  | { op: "directives" };
 
 function listRequest(opts?: PositionFilterOpts): Request {
   return opts === undefined ? { op: "list" } : { op: "list", filters: opts };
@@ -322,6 +325,45 @@ export async function readDesktopVpsStats(): Promise<DesktopVpsRead<DesktopVpsSt
     return { source: "unavailable", code: "desktop_bad_reply" };
   }
   return { source: "vps", data: data as unknown as DesktopVpsStats };
+}
+
+/**
+ * What each role did per day and instance in a range, counted in the team's database: only for the team of
+ * this computer (a profile with no cloud account). An existing team's page keeps reading what it read.
+ */
+export async function readDesktopVpsTeamActivity(
+  from: string,
+  to: string,
+): Promise<DesktopVpsRead<TeamActivityCounts>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "team_activity", from, to });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (
+    !isRecord(data) ||
+    !Array.isArray(data.daily) ||
+    !Array.isArray(data.newest) ||
+    !Array.isArray(data.seen) ||
+    !isRecord(data.meta)
+  ) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  return { source: "vps", data: data as unknown as TeamActivityCounts };
+}
+
+/**
+ * The standing orders on the board of the team of this computer, read only (the Team page's panel asks for them
+ * through /api/team-directives). Only for the team of this computer, like the activity.
+ */
+export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items: Record<string, unknown>[]; truncated: boolean }>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "directives" });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (!isRecord(data) || !Array.isArray(data.items) || !data.items.every(isRecord)) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  return { source: "vps", data: { items: data.items as Record<string, unknown>[], truncated: data.truncated === true } };
 }
 
 export function readDesktopVpsPosition(

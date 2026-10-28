@@ -74,14 +74,16 @@ describe("a local profile never writes through /api", () => {
 });
 
 describe("the local mode's «signed in» is not an identity", () => {
-  it("is read only by the five places that answer «no cloud here», and none of them picks data or a host by it", () => {
+  it("is read only by the places that answer «no cloud here» or gate the activity read, and none of them picks data or a host by it", () => {
     const callers = sources()
       .filter((file) => /\bteamDataFromTheTeam\(|\blocalTeamData\(/.test(readFileSync(file, "utf-8")))
       .map((file) => relative(src, file))
       .sort();
     expect(callers).toEqual([
+      "lib/existing-team-positions.ts",
       "lib/local-team-data.ts",
       "pages/map/map-api.ts",
+      "pages/team/local-team-api.ts",
       "shell/api-bridge.ts",
       "web-shims/server/auth.ts",
       "web-shims/server/supabase-client.ts",
@@ -93,6 +95,16 @@ describe("the local mode's «signed in» is not an identity", () => {
       const line = text.split("\n").find((l) => l.includes("teamDataFromTheTeam()") && !l.trim().startsWith("//") && !l.includes("import"));
       expect(line, file).toMatch(/return null;|inertSupabase/);
     }
+    // the activity read is asked only for the team of this computer: a yes/no gate, no identity in it
+    const reading = readFileSync(join(src, "lib/existing-team-positions.ts"), "utf-8").split("\n").find((l) => l.includes("localTeamData()") && !l.includes("import") && !l.trim().startsWith("*"));
+    expect(reading).toContain('if (!localTeamData()) return { source: "not_desktop" }');
+    // the board's read is the same kind of gate: local mode or not, and what it answers is the team's rows
+    const board = readFileSync(join(src, "pages/team/local-team-api.ts"), "utf-8");
+    const gate = board.split("\n").find((l) => l.includes("localTeamData()") && !l.includes("import") && !l.trim().startsWith("*"));
+    expect(gate).toContain("if (!localTeamData()) return next(input, init);");
+    // and it answers GET alone: no other method is read from the team here
+    expect(board.match(/method === "GET"/g)?.length).toBe(2);
+    expect(board).not.toMatch(/method === "(POST|PUT|PATCH|DELETE)"/);
     const map = readFileSync(join(src, "pages/map/map-api.ts"), "utf-8").split("\n").find((l) => l.includes("teamDataFromTheTeam()") && !l.includes("import"));
     expect(map).toContain("vpsRows()");
   });

@@ -6,6 +6,8 @@ import { setLocalTeamData } from "../../lib/local-team-data";
 import { installApiBridge, notInDesktop, shellApi, type ApiFetch } from "../../shell/api-bridge";
 import { navigate } from "../../shell/router";
 import Shell from "../../shell/Shell";
+import { teamApi } from "../team/team-api";
+import { localTeamApi } from "../team/local-team-api";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import { syntheticStats } from "../../test-support/existing-team-stats-fixture";
 import { describeError } from "../../lib/error-catalog";
@@ -44,7 +46,7 @@ beforeEach(() => {
     apiCalls.push(`${(init?.method ?? "GET").toUpperCase()} ${String(input)}`);
     return next(input, init);
   };
-  restoreBridge = installApiBridge(record(shellApi(notInDesktop)));
+  restoreBridge = installApiBridge(record(shellApi(localTeamApi(teamApi(notInDesktop)))));
   setLocalTeamData("local:synthetic");
 });
 afterEach(() => {
@@ -104,13 +106,40 @@ describe("Dashboard of a local profile", () => {
 });
 
 describe("Team page of a local profile", () => {
-  it("says the status, the standing orders and the activity are not shown yet, and reads nothing from the cloud", async () => {
+  it("shows the activity, the standing orders and the status of the team on this computer, says it only reads, and asks the cloud for nothing", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    reply = (_command, request) =>
+      request.op === "directives"
+        ? { ok: true, data: { items: [{ id: 9, body: "Candidati solo in remoto", kind: "order", status: "active", sort_order: 1, created_by: "user", created_at: "2026-10-01T10:00:00Z", updated_at: null, archived_at: null }] } }
+        : request.op === "team_activity"
+        ? {
+            ok: true,
+            data: {
+              daily: [{ role: "scout", actor: "Scout-1", day: today, n: 4 }],
+              newest: [{ role: "scout", actor: "Scout-1", ts: `${today}T09:00:00Z`, pid: "5" }],
+              seen: [{ role: "scout", actor: "Scout-1", last: `${today}T09:00:00Z` }],
+              meta: { "5": { legacy_id: 105, title: "Synthetic role five", company: "Synthetic Co" } },
+            },
+          }
+        : { ok: true, data: syntheticStats() };
     navigate("/team", { replace: true });
     render(<Shell />);
     const note = await screen.findByTestId("team-local-profile");
-    expect(note).toHaveTextContent("non mostra ancora lo stato, le direttive e l’attività degli agenti");
-    expect(note).toHaveTextContent("Agenti");
+    expect(note).toHaveTextContent("attività, ordini permanenti e stato vengono dalla squadra di questo computer");
+    expect(await screen.findByText("Synthetic role five")).toBeInTheDocument();
+    // the board of standing orders, read from the team's database, with no control that writes
+    expect(await screen.findByText("Candidati solo in remoto")).toBeInTheDocument();
+    expect(document.querySelector("textarea")).toBeNull();
+    const asked = native.invoke.mock.calls
+      .filter(([command]) => command === "existing_team_positions_read")
+      .map(([, args]) => args.request as { op: string; from?: string; to?: string });
+    const activity = asked.find((request) => request.op === "team_activity");
+    expect(activity?.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(activity?.to).toBe(today);
     expect(fake.current!.calls).toEqual([]);
-    expect(apiCalls.filter((call) => call.includes("/api/team"))).toEqual([]);
+    // the page reads the status and the board through the local routes; nothing it asks is a write
+    const teamCalls = apiCalls.filter((call) => /\/api\/team/.test(call));
+    expect(teamCalls.length).toBeGreaterThan(0);
+    expect(teamCalls.every((call) => call.startsWith("GET "))).toBe(true);
   });
 });

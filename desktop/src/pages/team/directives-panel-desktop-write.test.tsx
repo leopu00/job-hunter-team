@@ -124,3 +124,37 @@ describe("the board of standing orders", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 });
+
+describe("a board the read stopped short of", () => {
+  const board = (truncated: boolean) =>
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ directives: [DIRECTIVE, { ...DIRECTIVE, id: 8, body: "second order" }], truncated }), { status: 200 })));
+
+  it.each([
+    ["it", "Mostro le prime 2 direttive: le altre non stanno in una lettura."],
+    ["en", "Showing the first 2 directives: the rest do not fit in one read."],
+    ["es", "Muestro las primeras 2 directivas: el resto no cabe en una lectura."],
+    ["fr", "J'affiche les 2 premières directives : le reste ne tient pas dans une lecture."],
+    ["de", "Ich zeige die ersten 2 Direktiven: der Rest passt nicht in eine Abfrage."],
+    ["hu", "Az első 2 direktívát mutatom: a többi nem fér el egy lekérdezésben."],
+    ["pt", "A mostrar as primeiras 2 diretivas: as restantes não cabem numa leitura."],
+  ])("says how many it shows, in %s", async (locale, text) => {
+    document.cookie = `NEXT_LOCALE=${locale}; path=/`;
+    localStorage.setItem("jht-lang", locale);
+    board(true);
+    render(<DirectivesPanel />);
+    expect(await screen.findByTestId("directives-truncated")).toHaveTextContent(text);
+  });
+
+  it("says nothing when the board is whole", async () => {
+    board(false);
+    render(<DirectivesPanel />);
+    expect(await screen.findByText("synthetic standing order")).toBeInTheDocument();
+    expect(screen.queryByTestId("directives-truncated")).toBeNull();
+  });
+
+  it("the website's answer, which has no such field, says nothing either", async () => {
+    render(<DirectivesPanel />);
+    expect(await screen.findByText("synthetic standing order")).toBeInTheDocument();
+    expect(screen.queryByTestId("directives-truncated")).toBeNull();
+  });
+});
