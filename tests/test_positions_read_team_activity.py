@@ -261,7 +261,7 @@ BUDGET = 1363148
 
 
 def test_a_great_many_instances_are_counted_under_their_role_and_no_event_is_lost(tmp_path: Path) -> None:
-    """Instance names are written by agents: 2500 of them over ten days is 25,000 rows of counts, past the budget."""
+    """Instance names are written by agents: 2500 of them, each on ten days, is 25,000 rows of counts, past the budget."""
     tmp_path.mkdir(exist_ok=True)
     db = sqlite3.connect(tmp_path / "jobs.db")
     db.execute("CREATE TABLE positions(id INTEGER PRIMARY KEY, legacy_id INTEGER, title TEXT, company TEXT, found_at TEXT, found_by TEXT)")
@@ -269,7 +269,7 @@ def test_a_great_many_instances_are_counted_under_their_role_and_no_event_is_los
     db.execute("CREATE TABLE applications(id INTEGER PRIMARY KEY, position_id INTEGER)")
     total = 25000
     for n in range(total):
-        db.execute("INSERT INTO positions VALUES(?,?,?,?,?,?)", (n + 1, None, f"R{n}", "C", f"2026-10-{1 + n % 10:02d}T10:{n % 60:02d}:00Z", f"scout-{n % 2500}"))
+        db.execute("INSERT INTO positions VALUES(?,?,?,?,?,?)", (n + 1, None, f"R{n}", "C", f"2026-10-{1 + n // 2500:02d}T10:{n % 60:02d}:00Z", f"scout-{n % 2500}"))
     # one busy instance, so that the ranking has something to keep
     for n in range(total, total + 400):
         db.execute("INSERT INTO positions VALUES(?,?,?,?,?,?)", (n + 1, None, f"R{n}", "C", f"2026-10-{1 + n % 10:02d}T11:{n % 60:02d}:00Z", "scout-busy"))
