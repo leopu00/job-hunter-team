@@ -72,6 +72,21 @@ export async function probeDesktopLocalProfileMigration(profileId: string): Prom
   return serialize(() => invoke<boolean>("runtime_local_profile_migration_probe", { profileId }));
 }
 
+export type DesktopLocalTeamOwner = "self" | "other" | "none";
+
+/**
+ * Whose the team of this computer is, seen from the active profile (local or account): the backend compares
+ * the owner marker of ~/.jht with the active scope and answers `self`, `other` or `none` (nobody has taken it
+ * yet). Read-only; no id of anyone crosses IPC.
+ */
+export async function probeDesktopLocalTeamOwner(): Promise<DesktopLocalTeamOwner> {
+  if (!isTauri()) desktopOnly();
+  const answer = await serialize(() => invoke<{ owner?: unknown }>("runtime_local_team_owner"));
+  const owner = answer?.owner;
+  if (owner !== "self" && owner !== "other" && owner !== "none") throw { code: "local_team_owner_invalid" };
+  return owner;
+}
+
 /** Explicit local-to-authenticated ownership commit; no account identifier crosses IPC. */
 export function migrateDesktopLocalProfileToAccount(
   profileId: string,

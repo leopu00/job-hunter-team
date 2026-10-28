@@ -19,6 +19,7 @@ import {
   clearDesktopAccountScope,
   migrateDesktopLocalProfileToAccount,
   probeDesktopLocalProfileMigration,
+  probeDesktopLocalTeamOwner,
 } from "../lib/desktop-account-scope";
 import {
   activateSavedLocalProfile,
@@ -109,7 +110,9 @@ import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 type LocalMigrationGate = {
   identityKey: string;
   profileId: string;
-  phase: "checking" | "required" | "migrating" | "not-needed" | "completed" | "error";
+  phase: "checking" | "required" | "migrating" | "not-needed" | "completed" | "error"
+    /** The person went in with the account and left the local profile as it was. */
+    | "unlinked";
   retryable?: boolean;
   /** The native code the check or the link failed with, for the page to say what happened. */
   code?: string | null;
@@ -119,6 +122,9 @@ function migrationRetryable(error: unknown): boolean {
   return [
     "local_migration_storage_failed",
     "local_migration_owner_unavailable",
+    // the sentences of these two say to try again
+    "local_migration_profile_changed",
+    "local_migration_in_progress",
   ].includes(nativeErrorCode(error) ?? "");
 }
 const PROFILE_RECHECK_MS = 2_000;
@@ -370,6 +376,15 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   return null;
 }
 
+/** The native side says the team of this computer belongs to someone else. An answer that cannot be had is not «yes»: the setup decides, as before. */
+async function ownedByAnother(): Promise<boolean> {
+  try {
+    return (await probeDesktopLocalTeamOwner()) === "other";
+  } catch {
+    return false;
+  }
+}
+
 function nativeErrorCode(error: unknown): string | null {
   return typeof error === "object" && error !== null &&
     typeof (error as { code?: unknown }).code === "string"
@@ -477,7 +492,7 @@ export default function DashboardApp() {
     : null;
   const migrationReady = !migrationProfile ||
     (localMigration?.identityKey === identityKey &&
-      (localMigration.phase === "not-needed" || localMigration.phase === "completed"));
+      (localMigration.phase === "not-needed" || localMigration.phase === "completed" || localMigration.phase === "unlinked"));
 
   const initializeAccount = useCallback(async () => {
     if (!identityKey || !markerId || !migrationReady) return;
@@ -496,9 +511,13 @@ export default function DashboardApp() {
     if (activeIdentityKeyRef.current !== initializingKey) return;
     setAccountScope({ identityKey: initializingKey, phase: "ready" });
     try {
-      const next = localProfile
+      let next = localProfile
         ? loadLocalOnboardingGate(localProfile.profileId, localProfile.displayName)
         : sessionRef.current ? await loadOnboardingGate(supabase, sessionRef.current.user) : null;
+      // The team of this computer is another profile's (or account's): this one goes in without setting up a
+      // team here, and the shell says whose the team is. The setup would stop at its first step with the
+      // owner's refusal. Nothing is written: the day this profile owns a team, the setup is still there.
+      if (next?.phase === "required" && !next.existingTeam && await ownedByAnother()) next = { phase: "ready" };
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
@@ -571,6 +590,14 @@ export default function DashboardApp() {
         code: nativeErrorCode(error),
       });
     }
+  }, [identityKey, localMigration]);
+
+  // «Sign in with Google without linking»: the account goes in with its own data; the local profile and the
+  // team of this computer stay as they are (the team is then another owner's, see the gate).
+  const enterWithoutLinking = useCallback(() => {
+    if (!identityKey || !localMigration || localMigration.identityKey !== identityKey || localMigration.phase !== "error" ||
+        localMigration.code !== "local_migration_target_exists") return;
+    setLocalMigration({ identityKey, profileId: localMigration.profileId, phase: "unlinked" });
   }, [identityKey, localMigration]);
 
   // «Back to sign in»: leaves the account the person just chose; the sign-in page is where they pick again.
@@ -1616,6 +1643,7 @@ export default function DashboardApp() {
             phase: "required",
           })}
           onLeave={() => void leaveMigration()}
+          onEnterWithoutLinking={enterWithoutLinking}
         />
       );
     }
