@@ -31,6 +31,7 @@ describe("Report a problem (Help and Settings)", () => {
     vi.stubGlobal("fetch", fetch);
     render(<ReportProblem id="t" />);
     expect(screen.getByRole("heading", { name: "Report a problem" })).toBeInTheDocument();
+    expect(screen.getByTestId("report-problem-note")).toHaveTextContent("not the names or personal details you type yourself");
     expect(screen.getByTestId("report-problem-preview-button")).toBeDisabled();
     await userEvent.type(screen.getByTestId("report-problem-description"), "abc");
     expect(screen.getByTestId("report-problem-preview-button")).toBeDisabled();

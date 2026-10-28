@@ -60,6 +60,7 @@ export default function ReportProblem({ id }: { id: string }) {
     <section data-testid="report-problem" aria-labelledby={`${id}-title`} className={card}>
       <h2 id={`${id}-title`} className="text-[13px] font-semibold text-[var(--color-bright)]">{t.reportTitle}</h2>
       <p className="text-[12px] text-[var(--color-muted)]">{t.reportIntro}</p>
+      <p className="text-[12px] text-[var(--color-muted)]" data-testid="report-problem-note">{t.reportNote}</p>
       {report ? (
         <>
           <label className="text-[11px] text-[var(--color-muted)] flex flex-col gap-1">
