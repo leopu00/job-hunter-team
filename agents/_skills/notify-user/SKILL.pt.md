@@ -43,6 +43,7 @@ por isso a jusante ninguém o limpa.
 - ❌ Respostas a uma mensagem `[CHAT]` no dashboard web — usar `jht-send` (já no thread de chat).
 - ❌ Respostas a um `[TG]` de entrada — usar `jht-telegram-send` diretamente: já sabe que Telegram está ativo porque o utilizador acabou de escrever de lá. Poupa um roundtrip ao DB.
 - ❌ Anexos pesados (>20 MB). Usar a pasta de CV do utilizador + um corpo de notificação curto.
+- ❌ O plano de subscrição. Pergunta-se SÓ com `python3 /app/shared/skills/first_run.py ask-plan` (um cartão a que o utilizador responde em Messages), a partir de qualquer agente; uma pergunta sobre o plano escrita aqui em texto livre não aparece em Messages e deixa o utilizador à espera.
 
 ## Utilização
 

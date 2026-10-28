@@ -42,6 +42,7 @@ nothing downstream will clean it up.
 - ❌ Replies to a `[CHAT]` message on the web dashboard — use `jht-send` (already in the chat thread).
 - ❌ Replies to a `[TG]` inbound — use `jht-telegram-send` directly: you already know Telegram is up because the user just wrote you from there. Saves a DB roundtrip.
 - ❌ Heavy attachments (>20 MB). Use the user's CV folder + a short notification body.
+- ❌ The subscription plan. It is asked ONLY with `python3 /app/shared/skills/first_run.py ask-plan` (a card the user can answer in the Messages), from any agent; a plan question written here as free text does not show in the Messages and leaves the user waiting.
 
 ## Usage
 

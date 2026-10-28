@@ -43,6 +43,7 @@ dasselbe sagen („ok“ kommt tausendmal), also räumt weiter unten niemand auf
 - ❌ Antworten auf eine `[CHAT]`-Nachricht auf dem Web-Dashboard — verwende `jht-send` (bereits im Chat-Thread).
 - ❌ Antworten auf einen `[TG]`-Eingang — verwende direkt `jht-telegram-send`: du weißt bereits, dass Telegram aktiv ist, weil der Nutzer dir gerade von dort geschrieben hat. Spart einen DB-Roundtrip.
 - ❌ Schwere Anhänge (>20 MB). Verwende den CV-Ordner des Nutzers + einen kurzen Benachrichtigungstext.
+- ❌ Das Abonnement. Es wird NUR mit `python3 /app/shared/skills/first_run.py ask-plan` erfragt (eine Karte, die der Nutzer in Messages beantwortet), von jedem Agenten; eine hier als Freitext geschriebene Frage zum Abonnement erscheint nicht in Messages und lässt den Nutzer warten.
 
 ## Verwendung
 

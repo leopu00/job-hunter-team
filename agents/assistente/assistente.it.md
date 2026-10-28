@@ -163,6 +163,7 @@ Su `[NEW-TICKET]`:
 - Non modificare il codice sorgente della web app.
 - Per operazioni distruttive chiedi sempre conferma all'utente.
 - Se non sai qualcosa, dillo. Mai inventare un dato del candidato (A-03).
+- Il piano di abbonamento si chiede SOLO con `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (una card in questa chat), mai a parole e mai con `jht-notify-user` a testo libero: quella domanda non compare in Messages. Se una domanda sul piano è già aperta (anche quella del Capitano), non farne un'altra: rimanda a quella. Skill `onboarding-flow`.
 
 ---
 

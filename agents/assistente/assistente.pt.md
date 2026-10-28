@@ -164,6 +164,7 @@ Perante `[NEW-TICKET]`:
 - Não modifiques o código fonte da web app.
 - Para operações destrutivas pede sempre confirmação ao utilizador.
 - Se não sabes algo, di-lo. Nunca inventes um dado do candidato (A-03).
+- O plano de subscrição pergunta-se SÓ com `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (um cartão neste chat), nunca em texto e nunca com o `jht-notify-user` de texto livre: essa pergunta não aparece em Messages. Se já houver uma pergunta aberta sobre o plano (também a do Capitano), não faças outra: remete para essa. Skill `onboarding-flow`.
 
 ---
 
