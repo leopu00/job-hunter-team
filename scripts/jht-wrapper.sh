@@ -1378,7 +1378,11 @@ telegram_legacy() {
 
 read_hidden_tty() {
   (
-    local prompt="${1:-}" value="" chunk="" tty_state="" read_rc=0 started=0
+    local prompt="${1:-}" value="" chunk="" read_rc=0 started=0
+    # Not `local`: bash 3.2 (macOS /bin/bash) drops the locals of the function
+    # before it runs the EXIT trap of the subshell on `exit 130`, and with
+    # `set -u` restore_tty then failed on tty_state and left the echo off.
+    tty_state=""
     [ -t 0 ] || return 2
     tty_state="$(stty -g <&0)" || return 1
     restore_tty() {
