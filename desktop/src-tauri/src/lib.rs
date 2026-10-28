@@ -39,6 +39,7 @@ mod saved_vps;
 mod team_control;
 mod team_backup;
 mod team_export;
+mod chat_attachment;
 mod work_stats;
 mod text_file_export;
 mod voice_input;
@@ -112,6 +113,8 @@ pub fn run() {
             team_settings::team_settings,
             export_file::export_csv_save,
             direct_chat::direct_chat_answer,
+            direct_chat::direct_chat_attach,
+            direct_chat::direct_chat_attach_state,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,
             direct_chat::direct_chat_enter,

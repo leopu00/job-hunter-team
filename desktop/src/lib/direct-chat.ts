@@ -131,6 +131,31 @@ export async function sendDirectChat(agent: string, text: string, clientMessageI
   return invoke("direct_chat_send", { agentId: agentId(agent), text, clientMessageId });
 }
 
+/** Whether the paperclip can be used now; off, `code` is why (attach_vps, attach_read_only, attach_platform, attach_not_connected). */
+export interface DirectChatAttachState { available: boolean; code?: string }
+/**
+ * What choosing a file ended in: `sent` (copied, the team sees it, the Assistant was told), `saved_not_sent`
+ * (copied, the Assistant was not told: `code` says why), `cancelled` (the window was closed).
+ * `displayName` is the person's own file name, for their screen only.
+ */
+export interface DirectChatAttachment {
+  outcome: "sent" | "saved_not_sent" | "cancelled";
+  displayName?: string;
+  code?: string;
+  receipt?: DirectChatReceipt;
+}
+
+export async function directChatAttachState(): Promise<DirectChatAttachState> {
+  if (!isTauri()) desktopOnly();
+  return invoke("direct_chat_attach_state");
+}
+
+/** Only the Assistant takes files. The page names no path: the system's window is opened by the app. */
+export async function attachDirectChat(clientMessageId: string, locale: string): Promise<DirectChatAttachment> {
+  if (!isTauri()) desktopOnly();
+  return invoke("direct_chat_attach", { agentId: "assistente", clientMessageId, locale });
+}
+
 /** The person's answer to one of the agent's questions: the options' ids and, where taken, words. */
 export async function answerDirectChat(
   agent: string,

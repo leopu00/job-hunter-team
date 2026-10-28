@@ -1,5 +1,7 @@
 import {
   answerDirectChat,
+  attachDirectChat,
+  directChatAttachState,
   closeDirectChat,
   enterDirectChat,
   directChatStatus,
@@ -20,5 +22,7 @@ export const directChatClient: DirectChatClient = {
     sendDirectChat(agentId, text, clientMessageId),
   answer: ({ agentId, questionId, choices, text }) => answerDirectChat(agentId, questionId, choices, text),
   enter: ({ agentId, messageId }) => enterDirectChat(agentId, messageId),
+  attachState: () => directChatAttachState(),
+  attach: ({ clientMessageId, locale }) => attachDirectChat(clientMessageId, locale),
   close: closeDirectChat,
 };
