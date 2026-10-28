@@ -32,6 +32,7 @@ import {
   readLocalProfile,
   renameLocalProfile,
 } from "../lib/local-profile";
+import { localOwnerWays } from "../lib/local-owner";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import {
   directChatFailureCode,
@@ -1871,6 +1872,7 @@ export default function DashboardApp() {
         onRecreatePodmanMachine={recreatePodmanMachine}
         onUseLocalData={adoptUnassignedLocalData}
         onSetAsideLocalData={setAsideUnassignedLocalData}
+        localOwner={gate.account.identity === "local" ? localOwnerWays(() => setLocalProfileRevision((revision) => revision + 1)) : undefined}
         onFreeDiskSpace={freeDiskSpace}
         runtimeLogPath={runtimeLog}
         onOpenRuntimeLog={openRuntimeLog}

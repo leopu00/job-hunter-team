@@ -219,6 +219,17 @@ export interface OnboardingFlowProps {
   /** The same error: «Set it aside and start again». Resolves with the name of the folder the data went to. */
   onSetAsideLocalData?: () => Promise<string>;
   /**
+   * The `local_account_owner_mismatch` error on a local profile: the runtime belongs to another profile.
+   * `probe` says whether the owner is a local profile of this app that can be named (the only case the
+   * two ways are offered in); `returnToOwner` and `takeOver` each ask for their own single-use token
+   * at the moment the person confirms, and run once.
+   */
+  localOwner?: {
+    probe: () => Promise<boolean>;
+    returnToOwner: () => Promise<void>;
+    takeOver: () => Promise<void>;
+  };
+  /**
    * «Free up space» on the disk_low error, after the person confirms it:
    * `jht clean-images --json` on the team's host (lib/clean-images.ts).
    */

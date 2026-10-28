@@ -376,6 +376,48 @@ export async function setAsideUnassignedLocalData(): Promise<string> {
   return folder;
 }
 
+/**
+ * Whether the runtime of this computer belongs to another LOCAL profile of this app that the app can
+ * name without doubt (exactly one record), and the current profile is a local one: the only case in
+ * which the two ways out of «another profile's data» are offered. Never throws: no answer is «no».
+ */
+export async function probeLocalOwner(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    return await invoke<unknown>("onboarding_local_owner_probe") === true;
+  } catch {
+    return false;
+  }
+}
+
+export type LocalOwnerChange = "return" | "takeover";
+
+/** The person confirmed one of the two ways: the single-use token the native side wants for it. */
+export async function confirmLocalOwnerChange(change: LocalOwnerChange): Promise<string> {
+  if (!isTauri()) desktopOnly();
+  const token = await invoke<unknown>("onboarding_local_owner_confirm", { change });
+  if (typeof token !== "string" || !/^[0-9a-f]{64}$/.test(token)) throw new Error("unexpected");
+  return token;
+}
+
+/**
+ * Back to the profile that owns the runtime: the native side leaves the current scope the way signing out
+ * does and enters the owner's; resolves with the owner's profile id for the renderer to keep.
+ */
+export async function returnToLocalOwner(token: string): Promise<string> {
+  if (!isTauri()) desktopOnly();
+  const created = await invoke<unknown>("onboarding_local_owner_return", { token });
+  const profileId = (created as { profileId?: unknown } | null)?.profileId;
+  if (typeof profileId !== "string" || !/^[0-9a-f]{64}$/.test(profileId)) throw new Error("unexpected");
+  return profileId;
+}
+
+/** Take the runtime over: only the owner mark changes. */
+export async function takeOverLocalOwner(token: string): Promise<void> {
+  if (!isTauri()) desktopOnly();
+  await invoke("onboarding_local_owner_take_over", { token });
+}
+
 /** Whether ~/.jht holds an earlier version's data no profile has taken yet. */
 export async function readPreviousLocalData(): Promise<boolean> {
   if (!isTauri()) return false;

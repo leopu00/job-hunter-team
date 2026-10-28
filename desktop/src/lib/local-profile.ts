@@ -289,6 +289,28 @@ export function createAndActivatePlaygroundLocalProfile(
   return current;
 }
 
+/**
+ * Going back to the profile that owns the runtime: the native side already entered its scope; the
+ * renderer keeps its id from now on, under the name the person has now (the old profile's label stayed
+ * in the storage of the build that made it). The profile left is neither touched nor deleted.
+ */
+export function switchToOwnerLocalProfile(
+  profileId: string,
+  store: LocalProfileStore = localStorage,
+): LocalProfile {
+  const current = readLocalProfile(store);
+  if (!current) throw new Error("local-profile-missing");
+  if (!/^[0-9a-f]{64}$/.test(profileId)) throw new Error("local-profile-invalid");
+  // the owner is a profile of the list already: it is chosen as it is, with the name it has there
+  if (listLocalProfiles(store).some((entry) => entry.profileId === profileId)) {
+    return selectLocalProfileById(profileId, store);
+  }
+  const profile = { profileId, displayName: current.displayName };
+  saveLocalProfile(profile, store);
+  selectLocalIdentity(store);
+  return profile;
+}
+
 export async function activateSavedLocalProfile(
   store: LocalProfileStore = localStorage,
 ): Promise<LocalProfile> {

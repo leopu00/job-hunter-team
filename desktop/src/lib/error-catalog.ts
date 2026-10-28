@@ -431,6 +431,20 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   local_account_owner_invalid: LOCAL_OWNER,
   local_account_owner_mismatch: LOCAL_OWNER,
+  // The two ways out of «another profile's data» (back to the owner, take it over): a refusal or a
+  // failure leaves everything as it was.
+  local_owner_change_refused: copy(
+    "Il profilo non è stato cambiato: non è stato toccato niente.",
+    "La conferma vale una volta sola e per poco tempo. Ricomincia la scelta, se vuoi ancora farla.",
+    "The profile was not changed: nothing was touched.",
+    "The confirmation is valid once and only for a short time. Start the choice again if you still want it.",
+  ),
+  local_owner_change_failed: copy(
+    "Il profilo non è stato cambiato: non è stato spostato né cancellato niente.",
+    "Riprova. Se si ripete, riavvia Job Hunter Team.",
+    "The profile could not be changed: nothing was moved or deleted.",
+    "Try again. If it happens again, restart Job Hunter Team.",
+  ),
 
   // ── Runtime installation (local) ─────────────────────────────────────────
   podman_missing: copy(
