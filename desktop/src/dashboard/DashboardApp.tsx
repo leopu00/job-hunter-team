@@ -106,7 +106,7 @@ import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
-import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
+import { describeError, errorAmountsOf, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
 import { isReadableCause } from "../lib/failure-cause";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 
@@ -241,7 +241,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   }
   // The sentence comes from the app's catalog, never from the native message;
   // the cause is the step's own line, redacted on the native side.
-  const described = describeError(value.code, { locale: appLocale(), machine: errorMachineOf(error) });
+  const described = describeError(value.code, { locale: appLocale(), machine: errorMachineOf(error), amounts: errorAmountsOf(error) });
   // The team already runs: nothing failed and nothing was changed, the person stops it and presses the button again.
   const calm = value.code === "local_team_running"
     ? { title: stateText().teamRunningTitle, calm: true as const }
@@ -261,7 +261,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
 function catalogFailure(stage: OnboardingRuntimeStage, error: unknown): OnboardingRuntimeState | null {
   const code = errorCodeOf(error);
   if (!code) return null;
-  const described = describeError(code, { resetsAt: errorResetsAt(error), locale: appLocale(), machine: errorMachineOf(error) });
+  const described = describeError(code, { resetsAt: errorResetsAt(error), locale: appLocale(), machine: errorMachineOf(error), amounts: errorAmountsOf(error) });
   if (!described.known) return null;
   const retryable = typeof error === "object" && error !== null &&
     typeof (error as { retryable?: unknown }).retryable === "boolean"
