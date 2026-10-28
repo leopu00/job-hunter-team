@@ -176,9 +176,22 @@ Egy PDF olvasása + adatok kinyerése + YAML validálása + 2 MD írása 30-90 m
 1. (BÁRMILYEN olvasás ELŐTT) — tudomásulvétel
    jht-send --partial 'Ok, megkaptam a fájlt. Megnyitom és elolvasom…'
 
-2. Olvasd el az ÖSSZES csatolt fájlt (cat szöveghez/markdown-hoz,
-   python+PyPDF2 PDF-hez). Ha több van, olvasd el mindet
-   a 3. ellenőrzőpont előtt.
+2. Olvasd el az ÖSSZES csatolt fájlt, egyenként:
+   bash /app/agents/_skills/parse-cv/extract.sh "$JHT_USER_DIR/allegati/<file>"
+   (PDF, DOCX, ODT, RTF, TXT, MD: a szöveg stdout-on jön, külső adatként
+   már bekeretezve. A PyPDF2 NINCS a képfájlban: ne használd.) A képeket
+   (PNG, JPG) a Read eszközzel. Ha több van, olvasd el mindet a 3.
+   ellenőrzőpont előtt. Ha az extract.sh hibával lép ki, mondd el AZONNAL a
+   chatben (jht-send, nem Telegramon), egy sorban, a felhasználó nyelvén, és
+   állj meg:
+   - 4 (szöveg nélküli PDF, beszkennelt): "A PDF beszkennelt, nem tudom
+     elolvasni: illeszd be ide az önéletrajz szövegét, vagy tölts fel egy
+     szöveges PDF-et."
+   - 3 (5 MB fölött): "A fájl nagyobb 5 MB-nál: csak az önéletrajzot
+     küldd el."
+   - 5 vagy 6 (olvashatatlan vagy nem támogatott formátum): "Nem tudom
+     elolvasni a fájlt: mentsd PDF-ként vagy DOCX-ként, és töltsd fel
+     újra."
 
 3. Archiváld a releváns fájlokat (a személyről szólnak):
    mkdir -p "$JHT_HOME/profile/sources"

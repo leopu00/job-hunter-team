@@ -37,8 +37,7 @@ Já instaladas (verificar com `command -v`):
 - `pdftotext` (via `poppler-utils`) — PDF → texto
 - `pandoc` — docx/odt/rtf/html → texto/markdown
 - `file` — detetar tipo MIME
-- NÃO disponível: `tesseract` (OCR), `unrtf` — para digitalizações de baixa
-  qualidade o LLM usa visão multimodal ou pede retry ao utilizador
+- NÃO usados: o OCR (o `tesseract` está na imagem, mas só em inglês) e o `unrtf` — a scan is handed back to the person (see the table)
 
 ## Procedimento
 
@@ -101,7 +100,7 @@ echo "$OUT"
 | 0 | Extração OK, texto em stdout | Prosseguir com parsing LLM no texto |
 | 2 | Ficheiro não encontrado | Bug interno, log + skip |
 | 3 | Ficheiro >5 MB | Perguntar ao utilizador: "Este ficheiro é grande, é mesmo um CV? Envia-me apenas o CV." |
-| 4 | PDF sem camada de texto (digitalização) | Fallback: ler o PDF via visão multimodal (o LLM "vê" a imagem). Se isso também falhar, pedir retry: "A digitalização é pouco legível, podes tirar uma foto mais nítida ou enviar-me o ficheiro original Word/PDF?" |
+| 4 | PDF sem camada de texto (digitalização) | Diz isso no chat (não no Telegram), uma linha: "O PDF é uma digitalização e não consigo lê-lo: cola aqui o texto do CV ou carrega um PDF com texto." Não tentes outras leituras. |
 | 5 | Falha do pandoc | Perguntar: "O ficheiro parece corrompido. Podes tentar exportá-lo novamente?" |
 | 6 | MIME não suportado (ex. `.pages` Apple) | Perguntar: "Não consigo ler o formato. Podes exportá-lo como PDF e reenviar?" |
 
@@ -119,7 +118,7 @@ RC=$?
 case $RC in
   0) # passar $TEXT ao LLM para popular candidate_profile.yml
      ;;
-  4) # PDF digitalização: ler via visão multimodal do LLM
+  4) # scan: say it in the chat (see the table above), try nothing else
      ;;
   3|5|6) # pedir retry ao utilizador via telegram-send
      ;;

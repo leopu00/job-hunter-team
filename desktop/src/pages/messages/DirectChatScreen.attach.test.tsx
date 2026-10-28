@@ -168,7 +168,7 @@ describe("the paperclip in the Assistant's chat", () => {
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     const note = await screen.findByTestId("direct-chat-attach-note");
-    expect(note).toHaveTextContent("The file is over 10 MB.");
+    expect(note).toHaveTextContent("The file is over 5 MB.");
     expect(note).toHaveAttribute("role", "alert");
     expect(note.textContent).not.toMatch(/attachment_too_big|\//);
   });

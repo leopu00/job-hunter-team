@@ -38,9 +38,7 @@ Már telepítve (ellenőrizd a `command -v` paranccsal):
 - `pdftotext` (a `poppler-utils` csomagon keresztül) — PDF → szöveg
 - `pandoc` — docx/odt/rtf/html → szöveg/markdown
 - `file` — MIME típus felismerés
-- NEM elérhető: `tesseract` (OCR), `unrtf` — gyenge minőségű
-  szkennelések esetén az LLM a multimodális vision-re támaszkodik,
-  vagy újrapróbálkozást kér a felhasználótól
+- NEM használt: az OCR (a `tesseract` benne van a képfájlban, de csak angolul) és az `unrtf` — a scan is handed back to the person (see the table)
 
 ## Eljárás
 
@@ -65,7 +63,7 @@ case "$MIME" in
     OUT="$(pdftotext -layout -nopgbrk "$SRC" - 2>/dev/null)"
     if [ -z "$OUT" ] || [ "${#OUT}" -lt 50 ]; then
       # Probabile PDF scansione (immagini, no text layer)
-      echo "ERROR: PDF text layer vuoto (probabile scansione). Usa vision multimodal o chiedi retry all'utente."
+      echo "ERROR: PDF text layer vuoto (probabile scansione). Dillo all'utente in chat: incolla il testo del CV o carica un PDF con testo."
       exit 4
     fi
     ;;
@@ -103,7 +101,7 @@ echo "$OUT"
 | 0 | Kinyerés OK, szöveg az stdout-on | Folytasd az LLM elemzéssel a szövegen |
 | 2 | Fájl nem található | Belső hiba, naplózás + kihagyás |
 | 3 | Fájl >5 MB | Kérdezd meg a felhasználót: "Ez a fájl nagy, tényleg önéletrajz? Csak az önéletrajzot küldd el." |
-| 4 | PDF szövegréteg nélkül (szkennelés) | Tartalék megoldás: olvasd a PDF-et multimodális vision-nel (az LLM "látja" a képet). Ha az is sikertelen, kérj újrapróbálkozást: "A szkennelés nehezen olvasható, tudsz élesebb fotót készíteni vagy elküldeni az eredeti Word/PDF fájlt?" |
+| 4 | PDF szövegréteg nélkül (szkennelés) | Mondd el a chatben (nem Telegramon), egy sorban: "A PDF beszkennelt, nem tudom elolvasni: illeszd be ide az önéletrajz szövegét, vagy tölts fel egy szöveges PDF-et." Ne próbálkozz más olvasással. |
 | 5 | pandoc hiba | Kérdezd: "A fájl sérültnek tűnik. Meg tudod próbálni újra exportálni a következőből: %s?" |
 | 6 | Nem támogatott MIME típus (pl. Apple `.pages`) | Kérdezd: "Nem tudom olvasni ezt a formátumot. Ki tudod exportálni PDF-ként és újra elküldeni?" |
 
@@ -122,7 +120,7 @@ RC=$?
 case $RC in
   0) # passa $TEXT al LLM per popolare candidate_profile.yml
      ;;
-  4) # PDF scansione: leggi via vision multimodal del LLM
+  4) # scan: say it in the chat (see the table above), try nothing else
      ;;
   3|5|6) # chiedi retry all'utente via telegram-send
      ;;

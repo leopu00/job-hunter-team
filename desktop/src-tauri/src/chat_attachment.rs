@@ -12,7 +12,8 @@
 //!
 //! Answers are closed codes. A source path or a name is never in an error.
 
-pub(crate) const MAX_BYTES: u64 = 10 * 1024 * 1024;
+/// The most the Assistant's tool reads (`parse-cv/extract.sh` refuses more): one limit for the app and for it.
+pub(crate) const MAX_BYTES: u64 = 5 * 1024 * 1024;
 /// The extensions the system's window offers. The content decides the one the copy gets.
 /// No `.doc`: the binary Word format is not one the Assistant's tools read.
 pub(crate) const ALLOWED_EXTENSIONS: [&str; 9] = ["pdf", "docx", "odt", "rtf", "txt", "md", "png", "jpg", "jpeg"];

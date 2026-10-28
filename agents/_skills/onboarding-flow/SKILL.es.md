@@ -176,9 +176,19 @@ Leer un PDF + extraer datos + validar YAML + escribir 2 MDs puede requerir 30-90
 1. (ANTES de cualquier lectura) — toma de recepción
    jht-send --partial 'Ok, he recibido el archivo. Lo abro y lo leo…'
 
-2. Lee TODOS los archivos adjuntos (cat para texto/markdown,
-   python+PyPDF2 para PDF). Si hay más de uno, léelos todos
-   antes del checkpoint 3.
+2. Lee TODOS los archivos adjuntos, uno a uno:
+   bash /app/agents/_skills/parse-cv/extract.sh "$JHT_USER_DIR/allegati/<file>"
+   (PDF, DOCX, ODT, RTF, TXT, MD: el texto sale por stdout, ya vallado como
+   dato externo. PyPDF2 NO está en la imagen: no lo uses.) Las imágenes
+   (PNG, JPG) con la herramienta Read. Si hay más de uno, léelos todos
+   antes del checkpoint 3. Si extract.sh termina con error, dilo YA en el
+   chat (jht-send, no en Telegram), una línea en el idioma de la persona,
+   y para ahí:
+   - 4 (PDF sin texto, un escaneo): "El PDF es un escaneo y no puedo
+     leerlo: pega aquí el texto del CV o sube un PDF con texto."
+   - 3 (más de 5 MB): "El archivo supera los 5 MB: mándame solo el CV."
+   - 5 o 6 (ilegible o formato no admitido): "No puedo leer el archivo:
+     guárdalo como PDF o DOCX y súbelo de nuevo."
 
 3. Archiva los archivos pertinentes (hablan de la persona):
    mkdir -p "$JHT_HOME/profile/sources"

@@ -178,9 +178,20 @@ Reading a PDF, extracting data, validating it and writing two summaries can take
 1. (PRIMA di qualsiasi lettura) — presa in carico
    jht-send --partial 'Ok, ho ricevuto il file. Lo apro e lo leggo…'
 
-2. Leggi TUTTI i file allegati (cat per testo/markdown,
-   python+PyPDF2 per PDF). Se ce n'è più di uno, leggili tutti
-   prima del checkpoint 3.
+2. Leggi TUTTI i file allegati, uno alla volta:
+   bash /app/agents/_skills/parse-cv/extract.sh "$JHT_USER_DIR/allegati/<file>"
+   (PDF, DOCX, ODT, RTF, TXT, MD: il testo esce su stdout, gia' recintato come
+   dato esterno. PyPDF2 NON c'e' nell'immagine: non usarlo.) Le immagini
+   (PNG, JPG) con lo strumento Read. Se ce n'e' piu' di uno, leggili tutti
+   prima del checkpoint 3. Se extract.sh esce con un errore, dillo SUBITO
+   nella chat (jht-send, non su Telegram), una riga nella lingua
+   dell'utente, e fermati li':
+   - 4 (PDF senza testo, una scansione): "Il PDF e' una scansione e non
+     riesco a leggerlo: incolla qui il testo del CV oppure carica un PDF
+     con testo."
+   - 3 (oltre 5 MB): "Il file supera i 5 MB: mandami solo il CV."
+   - 5 o 6 (illeggibile o formato non supportato): "Non riesco a leggere
+     il file: salvalo come PDF o DOCX e caricalo di nuovo."
 
 3. Archivia i file pertinenti (parlano della persona):
    mkdir -p "$JHT_HOME/profile/sources"

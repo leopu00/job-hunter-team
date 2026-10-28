@@ -37,8 +37,7 @@ Bereits installiert (mit `command -v` überprüfen):
 - `pdftotext` (via `poppler-utils`) — PDF → Text
 - `pandoc` — docx/odt/rtf/html → text/markdown
 - `file` — MIME-Typ erkennen
-- NICHT verfügbar: `tesseract` (OCR), `unrtf` — für Scans mit niedriger
-  Qualität fällt das LLM auf multimodale Vision zurück oder bittet den Nutzer um Wiederholung
+- NICHT benutzt: OCR (`tesseract` ist im Image, aber nur Englisch) und `unrtf` — a scan is handed back to the person (see the table)
 
 ## Vorgehen
 
@@ -63,7 +62,7 @@ case "$MIME" in
     OUT="$(pdftotext -layout -nopgbrk "$SRC" - 2>/dev/null)"
     if [ -z "$OUT" ] || [ "${#OUT}" -lt 50 ]; then
       # Wahrscheinlich gescanntes PDF (Bilder, keine Textebene)
-      echo "ERROR: PDF-Textebene leer (wahrscheinlich Scan). Multimodale Vision verwenden oder Nutzer um Wiederholung bitten."
+      echo "ERROR: PDF-Textebene leer (wahrscheinlich Scan). Dillo all'utente in chat: incolla il testo del CV o carica un PDF con testo."
       exit 4
     fi
     ;;
@@ -101,7 +100,7 @@ echo "$OUT"
 | 0 | Extraktion OK, Text auf stdout | Mit LLM-Parsing auf dem Text fortfahren |
 | 2 | Datei nicht gefunden | Interner Bug, loggen + überspringen |
 | 3 | Datei >5 MB | Nutzer fragen: "Diese Datei ist groß, ist das wirklich ein CV? Schick mir nur den CV." |
-| 4 | PDF ohne Textebene (Scan) | Fallback: PDF via multimodale Vision lesen (das LLM "sieht" das Bild). Wenn auch das fehlschlägt, um Wiederholung bitten: "Der Scan ist schlecht lesbar, kannst du ein schärferes Foto machen oder mir die originale Word/PDF-Datei schicken?" |
+| 4 | PDF ohne Textebene (Scan) | Sag es im Chat (nicht auf Telegram), eine Zeile: "Das PDF ist ein Scan und ich kann es nicht lesen: füge hier den Text des Lebenslaufs ein oder lade ein PDF mit Text hoch." Keine anderen Leseversuche. |
 | 5 | pandoc-Fehler | Fragen: "Die Datei scheint beschädigt. Kannst du sie nochmal exportieren?" |
 | 6 | MIME nicht unterstützt (z.B. `.pages` Apple) | Fragen: "Ich kann das Format nicht lesen. Kannst du es als PDF exportieren und nochmal schicken?" |
 
@@ -119,7 +118,7 @@ RC=$?
 case $RC in
   0) # $TEXT an das LLM übergeben um candidate_profile.yml zu befüllen
      ;;
-  4) # PDF-Scan: via multimodale Vision des LLM lesen
+  4) # scan: say it in the chat (see the table above), try nothing else
      ;;
   3|5|6) # Nutzer um Wiederholung bitten via telegram-send
      ;;

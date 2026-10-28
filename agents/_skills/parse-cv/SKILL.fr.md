@@ -29,7 +29,7 @@ Déjà installés (vérifier avec `command -v`) :
 - `pdftotext` (via `poppler-utils`) — PDF → texte
 - `pandoc` — docx/odt/rtf/html → texte/markdown
 - `file` — détecter le type MIME
-- NON disponible : `tesseract` (OCR), `unrtf` — pour les scans de basse qualité, le LLM s'appuie sur la vision multimodale ou demande un renvoi à l'utilisateur
+- NON utilisés : l'OCR (`tesseract` est dans l'image, mais seulement l'anglais) et `unrtf` — a scan is handed back to the person (see the table)
 
 ## Procédure
 
@@ -54,7 +54,7 @@ case "$MIME" in
     OUT="$(pdftotext -layout -nopgbrk "$SRC" - 2>/dev/null)"
     if [ -z "$OUT" ] || [ "${#OUT}" -lt 50 ]; then
       # Probable PDF scanné (images, pas de couche texte)
-      echo "ERROR: PDF text layer vuoto (probabile scansione). Usa vision multimodal o chiedi retry all'utente."
+      echo "ERROR: PDF text layer vuoto (probabile scansione). Dillo all'utente in chat: incolla il testo del CV o carica un PDF con testo."
       exit 4
     fi
     ;;
@@ -92,7 +92,7 @@ echo "$OUT"
 | 0 | Extraction OK, texte sur stdout | Procéder avec le parsing LLM sur le texte |
 | 2 | Fichier non trouvé | Bug interne, loguer + sauter |
 | 3 | Fichier >5 Mo | Demander à l'utilisateur : "Ce fichier est volumineux, est-ce vraiment un CV ? Envoyez-moi juste le CV." |
-| 4 | PDF sans couche texte (scan) | Fallback : lire le PDF via la vision multimodale (le LLM "voit" l'image). Si ça échoue aussi, demander un renvoi : "Le scan est peu lisible, pouvez-vous refaire une photo plus nette ou m'envoyer le fichier original Word/PDF ?" |
+| 4 | PDF sans couche texte (scan) | Dis-le dans le chat (pas sur Telegram), une ligne : "Le PDF est un scan et je n'arrive pas à le lire : colle ici le texte du CV ou charge un PDF avec du texte." N'essaie pas d'autres lectures. |
 | 5 | Échec pandoc | Demander : "Le fichier semble corrompu. Pouvez-vous le ré-exporter et me le renvoyer ?" |
 | 6 | MIME non supporté (ex. `.pages` Apple) | Demander : "Je n'arrive pas à lire le format. Pouvez-vous l'exporter en PDF et me le renvoyer ?" |
 
@@ -108,7 +108,7 @@ RC=$?
 case $RC in
   0) # passer $TEXT au LLM pour remplir candidate_profile.yml
      ;;
-  4) # PDF scanné : lire via la vision multimodale du LLM
+  4) # scan: say it in the chat (see the table above), try nothing else
      ;;
   3|5|6) # demander un renvoi à l'utilisateur via telegram-send
      ;;

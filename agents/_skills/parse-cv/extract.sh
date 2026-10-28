@@ -41,7 +41,7 @@ case "$MIME" in
   application/pdf)
     OUT="$(pdftotext -layout -nopgbrk "$SRC" - 2>/dev/null)"
     if [ -z "$OUT" ] || [ "${#OUT}" -lt 50 ]; then
-      echo "ERROR: PDF text layer vuoto (probabile scansione). Usa vision multimodal o chiedi retry all'utente." >&2
+      echo "ERROR: PDF text layer vuoto (probabile scansione). Dillo all'utente in chat: incolla il testo del CV o carica un PDF con testo." >&2
       exit 4
     fi
     ;;

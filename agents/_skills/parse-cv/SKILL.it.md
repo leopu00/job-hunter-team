@@ -37,8 +37,7 @@ Già installati (verifica con `command -v`):
 - `pdftotext` (via `poppler-utils`) — PDF → text
 - `pandoc` — docx/odt/rtf/html → text/markdown
 - `file` — detect MIME type
-- NON disponibile: `tesseract` (OCR), `unrtf` — per scansioni a bassa
-  qualità il LLM cade su vision multimodale o chiede retry all'utente
+- NON usati: l'OCR (`tesseract` c'è nell'immagine, ma solo inglese) e `unrtf` — a scan is handed back to the person (see the table)
 
 ## Procedura
 
@@ -63,7 +62,7 @@ case "$MIME" in
     OUT="$(pdftotext -layout -nopgbrk "$SRC" - 2>/dev/null)"
     if [ -z "$OUT" ] || [ "${#OUT}" -lt 50 ]; then
       # Probabile PDF scansione (immagini, no text layer)
-      echo "ERROR: PDF text layer vuoto (probabile scansione). Usa vision multimodale o chiedi retry all'utente."
+      echo "ERROR: PDF text layer vuoto (probabile scansione). Dillo all'utente in chat: incolla il testo del CV o carica un PDF con testo."
       exit 4
     fi
     ;;
@@ -101,7 +100,7 @@ echo "$OUT"
 | 0 | Estrazione OK, testo su stdout | Procedi con parsing LLM sul testo |
 | 2 | File non trovato | Bug interno, log + skip |
 | 3 | File >5 MB | Chiedi all'utente: "Questo file è grande, è davvero un CV? Mandami solo il CV." |
-| 4 | PDF senza text layer (scansione) | Fall-back: leggi il PDF via vision multimodale (il LLM "vede" l'immagine). Se anche quello fallisce, chiedi retry: "La scansione è poco leggibile, puoi rifare una foto più nitida o mandarmi il file originale Word/PDF?" |
+| 4 | PDF senza text layer (scansione) | Dillo in chat (non su Telegram), una riga: "Il PDF è una scansione e non riesco a leggerlo: incolla qui il testo del CV oppure carica un PDF con testo." Non tentare altre letture. |
 | 5 | Fallimento pandoc | Chiedi: "Il file sembra corrotto. Riprovi a esportarlo da %s?" |
 | 6 | MIME non supportato (es. `.pages` Apple) | Chiedi: "Non riesco a leggere il formato. Puoi esportarlo come PDF e rimandarmelo?" |
 
@@ -119,7 +118,7 @@ RC=$?
 case $RC in
   0) # passa $TEXT al LLM per popolare candidate_profile.yml
      ;;
-  4) # PDF scansione: leggi via vision multimodale del LLM
+  4) # scan: say it in the chat (see the table above), try nothing else
      ;;
   3|5|6) # chiedi retry all'utente via telegram-send
      ;;

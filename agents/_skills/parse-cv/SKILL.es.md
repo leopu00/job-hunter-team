@@ -29,7 +29,7 @@ Ya instaladas (verificar con `command -v`):
 - `pdftotext` (vía `poppler-utils`) — PDF → texto
 - `pandoc` — docx/odt/rtf/html → texto/markdown
 - `file` — detectar tipo MIME
-- NO disponible: `tesseract` (OCR), `unrtf` — para escaneos de baja calidad el LLM cae en visión multimodal o pide retry al usuario
+- NO se usan: el OCR (`tesseract` está en la imagen, pero solo inglés) y `unrtf` — a scan is handed back to the person (see the table)
 
 ## Procedimiento
 
@@ -92,7 +92,7 @@ echo "$OUT"
 | 0 | Extracción OK, texto en stdout | Proceder con parsing LLM sobre el texto |
 | 2 | Archivo no encontrado | Bug interno, log + skip |
 | 3 | Archivo >5 MB | Preguntar al usuario: "Este archivo es grande, ¿es realmente un CV? Mándame solo el CV." |
-| 4 | PDF sin capa de texto (escaneo) | Fall-back: leer el PDF vía visión multimodal (el LLM "ve" la imagen). Si eso también falla, pedir retry: "El escaneo es poco legible, ¿puedes rehacer una foto más nítida o mandarme el archivo original Word/PDF?" |
+| 4 | PDF sin capa de texto (escaneo) | Dilo en el chat (no en Telegram), una línea: "El PDF es un escaneo y no puedo leerlo: pega aquí el texto del CV o sube un PDF con texto." No intentes otras lecturas. |
 | 5 | Fallo de pandoc | Preguntar: "El archivo parece corrupto. ¿Puedes re-exportarlo?" |
 | 6 | MIME no soportado (ej. `.pages` Apple) | Preguntar: "No logro leer el formato. ¿Puedes exportarlo como PDF y reenviármelo?" |
 
@@ -108,7 +108,7 @@ RC=$?
 case $RC in
   0) # pasar $TEXT al LLM para poblar candidate_profile.yml
      ;;
-  4) # PDF escaneo: leer vía visión multimodal del LLM
+  4) # scan: say it in the chat (see the table above), try nothing else
      ;;
   3|5|6) # pedir retry al usuario vía telegram-send
      ;;
