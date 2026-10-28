@@ -12,7 +12,6 @@ export interface DirectChatText {
   agentsNavAria: string;
   agentSelect: string;
   /** The button of the chat in the Agents page: the same chat with the same agent, on the whole page. */
-  openFull: string;
   title: string;
   conversationWith: string; // {name}
   messagesWith: string; // {name}
@@ -102,7 +101,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agenti",
     agentsNavAria: "Chat agenti",
     agentSelect: "Agente",
-    openFull: "Apri a tutta pagina",
     title: "Chat diretta",
     conversationWith: "Conversazione con {name}",
     messagesWith: "Messaggi con {name}",
@@ -160,7 +158,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agents",
     agentsNavAria: "Agent chats",
     agentSelect: "Agent",
-    openFull: "Open full page",
     title: "Direct chat",
     conversationWith: "Conversation with {name}",
     messagesWith: "Messages with {name}",
@@ -218,7 +215,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agenten",
     agentsNavAria: "Agenten-Chats",
     agentSelect: "Agent",
-    openFull: "Ganze Seite öffnen",
     title: "Direktchat",
     conversationWith: "Unterhaltung mit {name}",
     messagesWith: "Nachrichten mit {name}",
@@ -276,7 +272,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agents",
     agentsNavAria: "Discussions avec les agents",
     agentSelect: "Agent",
-    openFull: "Ouvrir en pleine page",
     title: "Discussion directe",
     conversationWith: "Conversation avec {name}",
     messagesWith: "Messages avec {name}",
@@ -334,7 +329,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agentes",
     agentsNavAria: "Chats con agentes",
     agentSelect: "Agente",
-    openFull: "Abrir a pantalla completa",
     title: "Chat directo",
     conversationWith: "Conversación con {name}",
     messagesWith: "Mensajes con {name}",
@@ -392,7 +386,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Agentes",
     agentsNavAria: "Conversas com agentes",
     agentSelect: "Agente",
-    openFull: "Abrir em página inteira",
     title: "Conversa direta",
     conversationWith: "Conversa com {name}",
     messagesWith: "Mensagens com {name}",
@@ -450,7 +443,6 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agentsHeading: "Ügynökök",
     agentsNavAria: "Ügynökök csevegései",
     agentSelect: "Ügynök",
-    openFull: "Megnyitás teljes oldalon",
     title: "Közvetlen csevegés",
     conversationWith: "Beszélgetés: {name}",
     messagesWith: "Üzenetek: {name}",

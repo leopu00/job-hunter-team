@@ -138,7 +138,7 @@ vi.mock("../shell/Shell", async () => {
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
   });
   function MockShell({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) {
-    // What the chat's «Collega il team» reaches in the read-only view (AgentChatPane uses the same context).
+    // What the chat's «Collega il team» reaches in the read-only view.
     const reconfirm = useReconfirmExistingTeam();
     // What the dashboard's «Collega un team» reaches in a Shell with no team linked.
     const connectTeam = useConnectTeam();

@@ -12,6 +12,7 @@ import { createPermissiveSupabase } from "../../test-support/permissive-supabase
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
 import AgentsPanel, { identityLine, TerminalText } from "./AgentsPanel";
+import { isDirectChatAgentId } from "../messages/DirectChatScreen";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
@@ -20,9 +21,6 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true), Channel: class { onmessage: unknown = null } }));
 const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 vi.mock("@tauri-apps/api/core", () => native);
-// The Chat tab mounts the chat's composer, whose dictation listens to native events: with
-// isTauri() true and no native side, the real listen would reject outside any test.
-vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => undefined) }));
 vi.mock("../../lib/supabase", () => ({
   get supabase() {
     return fake.current!.client;
@@ -258,50 +256,69 @@ describe("«Agenti», the agents' control panel", () => {
     expect(ops().filter((r) => r.op === "screen")).toEqual([{ op: "screen", session: "SCOUT-1" }]);
   });
 
-  it("gives the chat the page and folds the terminal away until it is asked for", async () => {
+  it("has no chat of its own: «Chatta con» opens Messages with that agent chosen, and the terminal is the page", async () => {
     show("agent=CAPITANO");
-    // The chat is what the page is for: it comes first and takes the height the header leaves.
-    expect(await screen.findByTestId("direct-chat-destination")).toHaveTextContent("Destinazione: la chat di Capitano.");
-    const pane = screen.getByTestId("panel-chat-pane");
-    expect(pane.className).toMatch(/overflow-hidden/);
-    expect(pane.className).toMatch(/lg:flex-1/);
-    expect(pane.style.height).toBe(""); // no fixed box under the terminal any more
-    expect(screen.getByTestId("panel-detail")).toContainElement(pane);
-    expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toBeInTheDocument();
-    expect(screen.queryByRole("tab")).toBeNull();
-
-    // Folded: no terminal, so no screen is read for it.
-    const toggle = screen.getByTestId("panel-terminal-toggle");
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveTextContent("Mostra il terminale");
-    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
-    expect(ops().filter((r) => r.op === "screen")).toEqual([]);
-
-    // Opened: the watched terminal says where to write, and the choice is kept.
-    fireEvent.click(toggle);
+    const button = await screen.findByTestId("panel-chat-with");
+    expect(button).toHaveTextContent("Chatta con Capitano");
+    expect(button).toHaveAttribute("href", "#/messages?agent=capitano");
+    expect(screen.getByTestId("panel-detail")).toContainElement(button);
+    // no chat in the page, no second way to open one
+    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
+    expect(screen.queryByTestId("direct-chat-shell")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByTestId("agent-chat-open-full")).toBeNull();
+    expect(screen.queryByText("Apri a tutta pagina")).toBeNull();
+    // the terminal is not folded away: it is read at once, and it says where to write
     await screen.findByTestId("panel-terminal-CAPITANO");
+    expect(screen.queryByTestId("panel-terminal-toggle")).toBeNull();
     expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa la chat qui sopra.",
+      "Nel terminale non si scrive: è solo da guardare. Per scrivere a Capitano usa «Chatta con Capitano».",
     );
-    expect(screen.getByTestId("panel-terminal-toggle")).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByTestId("panel-terminal-toggle")).toHaveTextContent("Nascondi il terminale");
-    expect(window.localStorage.getItem("jht.agents.terminal")).toBe("open");
-    expect(screen.getByTestId("panel-chat-pane")).toBeInTheDocument(); // the chat stays while the terminal is open
-
-    fireEvent.click(screen.getByTestId("panel-terminal-toggle"));
-    expect(screen.queryByTestId("panel-terminal-CAPITANO")).toBeNull();
-    expect(window.localStorage.getItem("jht.agents.terminal")).toBe("closed");
+    expect(window.localStorage.getItem("jht.agents.terminal")).toBeNull();
+    // the controls stay
+    expect(screen.getByTestId("panel-stop")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-restart")).toBeInTheDocument();
   });
 
-  it("an agent with no chat has the terminal alone", async () => {
+  it("the button leads to Messages with the agent already selected", async () => {
     show("agent=SCOUT-1");
-    await screen.findByTestId("panel-terminal-SCOUT-1");
-    expect(screen.queryByRole("tab")).toBeNull();
-    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
-    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(
-      "Nel terminale non si scrive: è solo da guardare.",
-    );
-    expect(screen.getByTestId("panel-terminal-destination")).not.toHaveTextContent("Chat");
+    fireEvent.click(await screen.findByTestId("panel-chat-with"));
+    expect(window.location.hash).toBe("#/messages?agent=scout");
+  });
+
+  it("every agent Messages lists has «Chatta con», by its role, and the others have none", async () => {
+    // Messages' own rule (isDirectChatAgentId), not a list of this page: counted over every role of the team
+    const expected = ROLES.map((r) => r.role).filter((role) => isDirectChatAgentId(role));
+    expect(expected).toEqual(["capitano", "scout", "analista", "scorer", "scrittore", "critico", "assistente", "mentor"]);
+    for (const { role, multi } of ROLES) {
+      const session = multi ? `${role.toUpperCase()}-1` : role.toUpperCase();
+      show(`agent=${session}`);
+      await screen.findByTestId("panel-detail");
+      if (isDirectChatAgentId(role)) {
+        expect(screen.getByTestId("panel-chat-with")).toHaveAttribute("href", `#/messages?agent=${role}`);
+      } else {
+        expect(screen.queryByTestId("panel-chat-with"), session).toBeNull();
+        await screen.findByTestId("panel-terminal-destination").catch(() => undefined);
+      }
+      cleanup();
+    }
+  });
+
+  it("the button is in every language, with the agent's name as Messages writes it", async () => {
+    const names = { it: "Chatta con Scout", en: "Chat with Scout", de: "Mit Scout chatten", es: "Chatear con Scout", fr: "Discuter avec Scout", hu: "Csevegés vele: Scout", pt: "Conversar com Scout" } as const;
+    for (const [locale, label] of Object.entries(names)) {
+      document.cookie = `NEXT_LOCALE=${locale}; path=/`;
+      show("agent=SCOUT-1");
+      expect(await screen.findByTestId("panel-chat-with")).toHaveTextContent(label);
+      cleanup();
+    }
+  });
+
+  it("an agent Messages does not list has the terminal alone, with no word of chat", async () => {
+    show("agent=DOTTORE");
+    await screen.findByTestId("panel-terminal-DOTTORE");
+    expect(screen.queryByTestId("panel-chat-with")).toBeNull();
+    expect(screen.getByTestId("panel-terminal-destination")).toHaveTextContent(/^Nel terminale non si scrive: è solo da guardare\.$/);
   });
 
   it("in the read-only view: no control at all, and only reads reach the native side", async () => {
@@ -317,6 +334,16 @@ describe("«Agenti», the agents' control panel", () => {
     expect(within(nav).getByRole("link", { name: "Agenti" })).toHaveAttribute("aria-current", "page");
     expect(ops().every((r) => ["list", "team", "screen", "history"].includes(String(r.op)))).toBe(true);
     expect(fake.current!.calls).toEqual([]);
+  });
+
+  it("in the read-only view «Chatta con» is there and leads to a Messages that only reads", async () => {
+    expect(READ_ONLY_ROUTES.find((r) => r.path === "/messages")?.page).toBe(ROUTES.find((r) => r.path === "/messages")?.page);
+    enterExistingTeamReadOnly(false);
+    navigate("/agents?agent=CAPITANO", { replace: true });
+    render(<Shell />);
+    const button = await screen.findByTestId("panel-chat-with");
+    expect(button).toHaveAttribute("href", "#/messages?agent=capitano");
+    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
   });
 
   it("a VPS of one's own without the mark offers the claim, and writes only after the person confirmed it", async () => {
@@ -857,7 +884,7 @@ describe("«Agenti», the questions the agents asked the person", () => {
     expect(second).toHaveTextContent("senza tipo");
     expect(second).toHaveTextContent("<b>not html</b> procedo?");
     expect(second.querySelector("b")).toBeNull();
-    expect(within(list).getByTestId("panel-questions-messages")).toHaveAttribute("href", "#/messages");
+    expect(within(list).getByTestId("panel-questions-messages")).toHaveAttribute("href", "#/messages?agent=capitano");
   });
 
   it("says «none» for a known zero and «non so» for an agent that does not say them", async () => {

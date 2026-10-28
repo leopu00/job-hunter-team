@@ -197,6 +197,7 @@ export function QuestionList({
   now,
   onAnswer,
   answering = null,
+  messagesAgent = null,
 }: {
   t: AgentsPanelText;
   questions: AgentQuestions | null;
@@ -205,6 +206,8 @@ export function QuestionList({
   /** only where the panel acts: never in the read-only view */
   onAnswer?: OnAnswer;
   answering?: string | null;
+  /** The agent whose chat «Answer from Messages» opens; without one, Messages as it is. */
+  messagesAgent?: string | null;
 }) {
   if (!questions) {
     return (
@@ -246,7 +249,7 @@ export function QuestionList({
         {readOnly ? (
           t.questionsAnswerElsewhere
         ) : (
-          <Link href="/messages" data-testid="panel-questions-messages" className="underline">
+          <Link href={messagesAgent ? `/messages?agent=${messagesAgent}` : "/messages"} data-testid="panel-questions-messages" className="underline">
             {t.questionsAnswerInMessages}
           </Link>
         )}

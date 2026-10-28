@@ -100,6 +100,8 @@ export const READ_ONLY_ROUTES: Route[] = [
   { path: "/office", page: ExistingTeamOfficePage, fullBleed: true },
   // The same agents' panel: here it reads, and the native side refuses every action.
   { path: "/agents", page: AgentsPanel },
+  // Where «Chat with <agent>» of the Agents page leads: history and answers only, the composer is locked (MessagesPage).
+  { path: "/messages", page: MessagesPage },
   // The app's own language and currency: local choices, nothing reaches the team.
   { path: "/settings", page: SettingsPage },
   { path: "/settings/vps-connection", page: VpsConnectionPage },
