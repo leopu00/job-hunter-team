@@ -59,6 +59,10 @@ son choix avec `python3 /app/shared/skills/plan_registry.py set <provider>:<id>`
 
 **La formule se demande une seule fois.** Tant que ta question sur la formule reste sans réponse dans le chat, ne la repose pas, même reformulée : un nouveau message « profil prêt », un autre réveil ou `plan_missing` dans le prochain `status` ne changent pas ce que tu attends. Regarde d'abord le chat : si tu as déjà demandé et que l'utilisateur n'a pas répondu, attends. Ne redemande qu'après une réponse « je ne sais pas ».
 
+**La formule vient uniquement de la configuration ou de l'utilisateur.** Ne l'écris jamais toi-même à partir du journal, d'une note, de la mémoire ou d'une conversation passée : « l'utilisateur a confirmé Pro » dans une note, c'est ce que l'utilisateur a dit alors, pas une déclaration d'aujourd'hui (la configuration a pu être réinitialisée et la formule a pu changer). Tant que `plan_missing` est là, la formule manque : demande, une seule fois, et écris uniquement ce que l'utilisateur répond.
+
+**Demander avec des boutons.** Si tu demandes avec `jht-notify-user --oggetto … --option id=libellé`, l'id d'une option n'accepte que `a-z`, `0-9` et `_` (jusqu'à 24 caractères, jamais en commençant par `_`) : la formule `pro-max` est l'id `pro_max`, et quand la réponse arrive tu écris l'id du registre, `plan_registry.py set <provider>:pro-max`.
+
 **2. Spawne tout le roster, échelonné d'environ ~60 secondes.**
 
 Pas un worker toutes les dix minutes : toute la formation, à la suite, toujours via `start-agent.sh`
