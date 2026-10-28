@@ -18,7 +18,7 @@ use tauri::State;
 const TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The fixed script: reads the bridge's state file and answers one JSON.
-const PROVIDER_WINDOW_PY: &str = r#"import json,os,sys
+const PROVIDER_WINDOW_PY: &str = r#"import json,math,os,sys
 from datetime import datetime,timezone
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 gone={'ok':False,'error':'window_unavailable'}
@@ -30,7 +30,11 @@ try:
  with open(path,encoding='utf-8') as handle: state=json.load(handle)
 except Exception: emit(gone)
 if not isinstance(state,dict): emit(gone)
-def number(value): return float(value) if isinstance(value,(int,float)) and not isinstance(value,bool) else None
+def number(value):
+ if isinstance(value,bool) or not isinstance(value,(int,float)): return None
+ try: out=float(value)
+ except OverflowError: return None
+ return out if math.isfinite(out) else None
 try:
  stamp=datetime.fromisoformat(str(state.get('updated_at')))
  if stamp.tzinfo is None: stamp=stamp.replace(tzinfo=timezone.utc)

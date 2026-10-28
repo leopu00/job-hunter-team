@@ -80,3 +80,13 @@ def test_no_time_of_writing_is_unavailable(tmp_path):
 @pytest.mark.parametrize("request_text", ['{"op":"clear"}\n', '{"op":"read","extra":1}\n', "not json\n", "\n", "[]\n"])
 def test_only_the_one_request_it_knows_is_answered(tmp_path, request_text):
     assert run(tmp_path, request=request_text, state=GOOD) == GONE
+
+
+def test_a_nan_an_infinity_or_a_huge_integer_in_the_file_is_null_and_never_an_error(tmp_path):
+    raw = '{"updated_at": "2026-10-29T12:00:00+00:00", "last_usage": NaN, "last_reset_at_unix": Infinity, "last_provider": "codex"}'
+    answer = run(tmp_path / "nan", raw=raw)
+    assert answer["ok"] is True and answer["usedPct"] is None and answer["resetAtUnix"] is None
+    huge = '{"updated_at": "2026-10-29T12:00:00+00:00", "last_usage": 1' + "0" * 400 + ', "last_reset_at_unix": -1' + "0" * 400 + "}"
+    answer = run(tmp_path / "huge", raw=huge)
+    assert answer["ok"] is True and answer["usedPct"] is None and answer["resetAtUnix"] is None
+    assert json.dumps(answer, allow_nan=False)
