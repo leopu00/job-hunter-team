@@ -230,22 +230,23 @@ def read(agent: str, cursor_text: str | None) -> dict:
         waiting, settled = _queue_state(agent)
         page["queued"] = [str(held.get("message_id")) for held in waiting]
         page["settled"] = settled       # how each turn that left the queue ended, for the page to say
-    if _awaiting_reply(agent):
+    if _turn_is_recent(agent):
         activity = activity_of(agent)
         if activity:
             page["activity"] = activity     # absent = not known; never read as idle
     return page
 
 
-# The person's last turn is waiting for an answer: nothing from the agent after it, and young enough
-# that what the agent does now is about it.  Only then does a read look at the terminal at all.
+# The person's last turn is young enough that what the agent does now may be about it: the agent can
+# answer first («ok, I'm on it») and keep working, so an answer does not end the window.  Only inside
+# it does a read look at the terminal at all.
 ACTIVITY_WINDOW_S = 1800.0
 ACTIVITY_CAPTURE_TIMEOUT_S = 2.0
 
 
-def _awaiting_reply(agent: str) -> bool:
+def _turn_is_recent(agent: str) -> bool:
     path = chat_path(agent)
-    last_user = last_agent = None
+    last_user = None
     try:
         size = path.stat().st_size
         with open(path, "rb") as handle:
@@ -262,13 +263,9 @@ def _awaiting_reply(agent: str) -> bool:
                     continue
                 if row.get("role") == "user":
                     last_user = at
-                elif row.get("role") == "assistant" and str(row.get("text") or "").strip():
-                    last_agent = at
     except OSError:
         return False
-    if last_user is None or (last_agent is not None and last_agent >= last_user):
-        return False
-    return 0 <= time.time() - last_user <= ACTIVITY_WINDOW_S
+    return last_user is not None and 0 <= time.time() - last_user <= ACTIVITY_WINDOW_S
 
 
 def activity_of(agent: str) -> str | None:

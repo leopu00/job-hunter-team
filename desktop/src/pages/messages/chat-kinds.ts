@@ -269,6 +269,24 @@ export function deliveryStage(outcome: Outcome, activity?: "working" | "idle"): 
   return activity === "working" ? "working" : "taken";
 }
 
+// ── the agent working ───────────────────────────────────────────────────────
+
+/** What the last reads said of the agent: working now, and how many reads in a row did not say it. */
+export interface WorkingSight { working: boolean; misses: number }
+export const NOT_WORKING: WorkingSight = { working: false, misses: 0 };
+
+/**
+ * The next sight after a read. `working` shows it; `idle` hides it at once; absent (a screen the team could
+ * not read for a moment) keeps a shown sight for one read and hides it on the second, so the line does not
+ * blink between two tool calls, and never shows it from nothing: absent is not known, never a guess.
+ */
+export function sightAfter(before: WorkingSight, activity?: "working" | "idle"): WorkingSight {
+  if (activity === "working") return { working: true, misses: 0 };
+  if (activity === "idle") return NOT_WORKING;
+  if (!before.working || before.misses >= 1) return NOT_WORKING;
+  return { working: true, misses: before.misses + 1 };
+}
+
 // ── days and quotes ─────────────────────────────────────────────────────────
 
 /** How long a quote of a message is: an excerpt, not the whole of it. */

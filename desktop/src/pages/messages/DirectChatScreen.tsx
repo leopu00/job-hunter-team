@@ -27,6 +27,9 @@ import {
   fullStamp,
   KIND_COLOR,
   outcomeOf,
+  sightAfter,
+  NOT_WORKING,
+  type WorkingSight,
   questionsOf,
   quoteLine,
   settleQueued,
@@ -280,6 +283,8 @@ export default function DirectChatScreen({
   const [outcomes, setOutcomes] = useState<ReadonlyMap<string, Outcome>>(() => new Map());
   // A message whose Enter is being pressed again.
   const [pressing, setPressing] = useState<string | null>(null);
+  // Whether the agent shows a running turn, from what the reads say of its screen (never from their absence).
+  const [sight, setSight] = useState<WorkingSight>(NOT_WORKING);
   const [inFlight, setInFlight] = useState<string | null>(null);
   // What the composer replies to, chosen by the person (right-click → Reply): nothing until then.
   // An open question that takes words: what is written is its answer. Anything else: a quote.
@@ -323,6 +328,7 @@ export default function DirectChatScreen({
         }
       } else if (event.kind === "messages" && event.agentId === currentAgent.current) {
         setMessages((current) => sameAsBefore(current, mergeMessages(current, event.page)));
+        setSight((current) => sightAfter(current, event.page.activity));
         if (Array.isArray(event.page.questions)) {
           setQuestionsHere(true);
           setQuestions((current) => sameAsBefore(current, questionsOf(event.page)));
@@ -397,6 +403,7 @@ export default function DirectChatScreen({
     setReplyTo(null);
     setMenu(null);
     setOutcomes(new Map());
+    setSight(NOT_WORKING);
     setPressing(null);
     setOperationError(null);
     setLoading(false);
@@ -420,6 +427,7 @@ export default function DirectChatScreen({
         if (!active) return undefined;
         if (slowLink) cursor = page.cursor;
         setMessages((current) => sameAsBefore(current, mergeMessages(current, page)));
+        setSight((current) => sightAfter(current, page.activity));
         // a turn the team held back while its agent worked takes the ending the page reports for it
         if (Array.isArray(page.settled)) setOutcomes((current) => settleQueued(current, page.settled));
         // a page that brings the questions replaces them; one without the field (an older image)
@@ -930,6 +938,20 @@ export default function DirectChatScreen({
                 </Fragment>
               );
             })}
+            {sight.working && status.state === "ready" && (
+              <div role="status" data-testid="direct-chat-working" className="flex items-center gap-2 text-[13px] text-[var(--color-muted)]">
+                <span aria-hidden="true" className="inline-flex items-center gap-1">
+                  {[0, 1, 2].map((dot) => (
+                    <span
+                      key={dot}
+                      className="h-1.5 w-1.5 rounded-full bg-[var(--color-muted)] animate-pulse motion-reduce:animate-none"
+                      style={{ animationDelay: `${dot * 200}ms` }}
+                    />
+                  ))}
+                </span>
+                <span>{withName(t.working, selected.label)}</span>
+              </div>
+            )}
           </div>
           <JumpToLatest
             atBottom={bottom.atBottom}

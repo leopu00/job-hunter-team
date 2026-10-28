@@ -534,8 +534,9 @@ pub(crate) struct DirectChatPage {
     /// from here, never from its absence in `queued`.
     #[serde(default, deserialize_with = "queue_endings", skip_serializing_if = "Option::is_none")]
     settled: Option<Vec<DirectChatQueueEnding>>,
-    /// `working` or `idle`, only while the person's last turn waits for an answer; absent when the team
-    /// does not say (an older image, a screen it cannot read): the page never reads absent as idle.
+    /// `working` or `idle`, within half an hour of the person's last turn (the agent may answer first and go
+    /// on working); absent when the team does not say (an older image, a screen it cannot read, an older
+    /// turn): the page never reads absent as idle.
     #[serde(default, deserialize_with = "closed_activity", skip_serializing_if = "Option::is_none")]
     activity: Option<String>,
 }
