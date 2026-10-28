@@ -384,7 +384,7 @@ describe("Shell", () => {
     render(<Shell />);
     const dashboard = await screen.findByRole("heading", { name: "Dashboard" });
     expect(dashboard.closest("main")).not.toHaveAttribute("data-testid", "full-bleed");
-    expect(ROUTES.filter((r) => r.fullBleed).map((r) => r.path)).toEqual(["/office"]);
+    expect(ROUTES.filter((r) => r.fullBleed).map((r) => r.path).sort()).toEqual(["/messages", "/office"]);
   });
 
   it("gives the office the whole window in the read-only view of an existing team too, its bars above it", async () => {
