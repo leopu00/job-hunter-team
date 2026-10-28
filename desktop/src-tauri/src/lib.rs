@@ -40,6 +40,7 @@ mod team_control;
 mod team_backup;
 mod team_export;
 mod team_owner;
+mod attachment_kind;
 mod chat_attachment;
 mod work_stats;
 mod text_file_export;
