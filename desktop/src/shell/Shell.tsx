@@ -30,6 +30,7 @@ import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
 import { beginPageLoad } from "../lib/page-timing";
+import { forgetReadsInFlight } from "../lib/read-deadline";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
@@ -188,6 +189,12 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const readOnly = linkedTeam !== null;
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
+
+  // The shell is made again for every account (it is keyed by it): a read the last account started is never the one the next waits for.
+  useEffect(() => {
+    forgetReadsInFlight();
+    return forgetReadsInFlight;
+  }, []);
 
   // An empty or unknown hash lands on the dashboard.
   useEffect(() => {
