@@ -13,6 +13,7 @@ import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
 import AgentsPanel, { identityLine, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
 import { isDirectChatAgentId } from "../messages/DirectChatScreen";
+import { START_READ_WAITS } from "../../shell/StartTeamAction";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 
 // «Agenti»: the agents' control panel, against a stand-in native side
@@ -1362,6 +1363,108 @@ describe("«Agenti»: the list reads again by itself", () => {
     view.unmount();
     await advance(LIST_REFRESH_LOCAL_MS * 5);
     expect(lists()).toBe(1);
+  });
+
+  it.each(["ssh_auth_failed", "ssh_rate_limited", "host_key_changed", "read_only_link"])(
+    "after a failure that asking again makes worse (%s) it does not read by itself; «Refresh» still does",
+    async (code) => {
+      where = "local";
+      const base = native.invoke.getMockImplementation()!;
+      let failing = true;
+      native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+        command === COMMAND && args.request.op === "list" && failing ? { ok: false, error: code } : base(command, args),
+      );
+      show();
+      await screen.findByTestId("panel-error");
+      expect(lists()).toBe(1);
+      await advance(LIST_REFRESH_VPS_MS * 4);
+      expect(lists()).toBe(1);
+      // the person's own read is still there, and once it answers the page reads by itself again
+      failing = false;
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+      await screen.findByTestId("panel-summary");
+      expect(lists()).toBe(2);
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await waitFor(() => expect(lists()).toBe(3));
+    },
+  );
+
+  it("after any other failure it goes on reading, slowly, as the team is not known", async () => {
+    const base = native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) =>
+      command === COMMAND && args.request.op === "list" ? { ok: false, error: "agent_control_unsupported" } : base(command, args),
+    );
+    show();
+    await screen.findByTestId("panel-error");
+    await advance(LIST_REFRESH_VPS_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(2));
+  });
+
+  it("reads nothing while a read of the person's is on its way", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let slow = false;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "list" && slow) await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    slow = true;
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await waitFor(() => expect(lists()).toBe(2));
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(2);
+    slow = false;
+    release!();
+    await screen.findByTestId("panel-summary");
+    await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+    await waitFor(() => expect(lists()).toBe(3));
+  });
+
+  it("reads nothing while an action is on its way", async () => {
+    where = "local";
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command === COMMAND && args.request.op === "stop") await new Promise<void>((resolve) => { release = resolve; });
+      return base(command, args);
+    });
+    show("agent=SCOUT-1");
+    fireEvent.click(await screen.findByTestId("panel-stop"));
+    fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
+    await waitFor(() => expect(ops().some((r) => r.op === "stop")).toBe(true));
+    const before = lists();
+    await advance(LIST_REFRESH_LOCAL_MS * 3);
+    expect(lists()).toBe(before);
+    release!();
+    await waitFor(() => expect(lists()).toBe(before + 1)); // the action's own read
+  });
+
+  it("reads nothing while a start is on its way", async () => {
+    const base = native.invoke.getMockImplementation()!;
+    let release: (() => void) | null = null;
+    let up = false;
+    native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+      if (command === "onboarding_resume_team_start") {
+        await new Promise<void>((resolve) => { release = resolve; });
+        up = true;
+        return {};
+      }
+      if (command === COMMAND && args.request?.op === "list" && !up) return { ok: false, error: "agent_control_no_team" };
+      return base(command, args as { request: Record<string, unknown> });
+    });
+    show();
+    await screen.findByTestId("panel-error");
+    fireEvent.click(await screen.findByTestId("start-team"));
+    await waitFor(() => expect(release).not.toBeNull());
+    const before = lists();
+    await advance(LIST_REFRESH_VPS_MS * 3);
+    // only the start's own readings (one every few seconds, up to its maximum): not one of the page's by itself
+    expect(lists() - before).toBe(START_READ_WAITS.duringMax);
+    release!();
+    await screen.findByTestId("panel-summary");
   });
 
   it("coming back to Agents from another page reads the list at once", async () => {

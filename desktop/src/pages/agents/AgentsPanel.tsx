@@ -39,7 +39,7 @@ import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions"
 import { Lanes, SessionHistory } from "./AgentHistory";
 import ActionLogSection from "./ActionLogSection";
 import Link from "../../web-shims/next-link";
-import { isDirectChatAgentId, type DirectChatAgentId } from "../messages/DirectChatScreen";
+import { isDirectChatAgentId, REOPEN_NO_RETRY, type DirectChatAgentId } from "../messages/DirectChatScreen";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
 
 /**
@@ -59,7 +59,9 @@ function chatName(id: DirectChatAgentId): string {
  * The list is read again by itself while the page is on view: a reading left alone never moves
  * (the states, the contexts, what the agents asked). On this computer every 20 s; on a VPS, whose reads go
  * over ssh, every 60 s, so that the limit on sign-ins (ssh_rate_limited) is not touched. Where the team
- * is not known yet (the first read failed) it is the slow one.
+ * is not known yet (the first read failed) it is the slow one. After a failure that asking again cannot
+ * change or makes worse (the chat's own set, REOPEN_NO_RETRY: a refused sign-in, a changed host key, the
+ * sign-in limit) it does not read by itself at all: «Refresh» and coming back to the page still do.
  */
 export const LIST_REFRESH_LOCAL_MS = 20_000;
 export const LIST_REFRESH_VPS_MS = 60_000;
@@ -531,17 +533,26 @@ export default function AgentsPanel({ search }: PageProps) {
   // One read at a time, and none while an action or a start is on its way: their own read follows them.
   const occupied = useRef(false);
   occupied.current = busy || acting || starting;
+  // the periodic read in flight counts too: a window seen again meanwhile does not start a second
+  const quietReading = useRef(false);
+  const noRetry = list !== null && !list.ok && REOPEN_NO_RETRY.has(list.code);
   const everyMs = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
   useEffect(() => {
+    if (noRetry) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
     const again = async () => {
       if (!live) return;
       clearTimeout(timer);
-      if (document.visibilityState === "visible" && !occupied.current) {
+      if (document.visibilityState === "visible" && !occupied.current && !quietReading.current) {
         last = Date.now();
-        await read(false, true);
+        quietReading.current = true;
+        try {
+          await read(false, true);
+        } finally {
+          quietReading.current = false;
+        }
       }
       if (live) timer = setTimeout(() => void again(), everyMs);
     };
@@ -556,7 +567,7 @@ export default function AgentsPanel({ search }: PageProps) {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", seen);
     };
-  }, [read, everyMs]);
+  }, [read, everyMs, noRetry]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const current =

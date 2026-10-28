@@ -149,7 +149,7 @@ const REOPEN_TRIES = 3;
 const REOPEN_WAIT_MS = 1_500;
 // What asking again cannot change, or makes worse (a server that counts failed sign-ins or turns the
 // computer away): these are told at once, with their Retry. Anything else is a team not ready yet.
-const REOPEN_NO_RETRY = new Set([
+export const REOPEN_NO_RETRY = new Set([
   "ssh_auth_failed",
   "ssh_rate_limited",
   "host_key_changed",
