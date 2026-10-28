@@ -1707,6 +1707,37 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team on this computer is not running.",
     "Start the team and try again.",
   ),
+  // The Swipe of this computer's team: a verdict is written only on the deck it was read from.
+  deck_outdated: copy(
+    "Il mazzo che stai guardando non è più quello del team.",
+    "Aggiorna la pagina per rileggerlo e giudica di nuovo.",
+    "The deck you are looking at is no longer the team's.",
+    "Refresh the page to read it again and judge again.",
+  ),
+  position_not_found: copy(
+    "Questa posizione non c’è più nel team.",
+    "Aggiorna la pagina: il mazzo si rilegge.",
+    "This position is no longer in the team.",
+    "Refresh the page: the deck is read again.",
+  ),
+  feedback_refused: copy(
+    "Il team non ha registrato il giudizio.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not record the verdict.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  exclude_refused: copy(
+    "Il team non ha escluso la posizione.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not exclude the position.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  note_invalid: copy(
+    "La nota non è un testo che il team accetta.",
+    "Scrivila di nuovo, più semplice.",
+    "The note is not a text the team accepts.",
+    "Write it again, simpler.",
+  ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
     "Per sicurezza non lo uso: rifai il passo Runtime della configurazione.",
