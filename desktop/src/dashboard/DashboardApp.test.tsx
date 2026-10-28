@@ -136,6 +136,7 @@ vi.mock("../shell/Shell", async () => {
   const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
   const { useConnectTeam } = await import("../lib/connect-team");
   const { useProviderSetup } = await import("../lib/provider-setup");
+  const { useLocalProfileLink } = await import("../lib/local-profile-link");
   const { useTeamOff } = await import("../lib/team-off");
   const { localTeamData } = await import("../lib/local-team-data");
   const ready = (profileReady: boolean) => ({
@@ -149,6 +150,8 @@ vi.mock("../shell/Shell", async () => {
     const connectTeam = useConnectTeam();
     // What Settings › Provider reaches: only the Shell of the team of this computer has it.
     const providerSetup = useProviderSetup();
+    // What Settings › «Link the local profile» reaches: only an account that went in without linking has it.
+    const localProfileLink = useLocalProfileLink();
     // What the team-off banner reaches: the way back to «start the team».
     const teamOff = useTeamOff();
     return (
@@ -164,6 +167,7 @@ vi.mock("../shell/Shell", async () => {
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true)).catch(() => undefined)}>reconfirm-connected-checked</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
         {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
+        {localProfileLink && <button type="button" onClick={() => localProfileLink.link()}>link-the-local-profile</button>}
         {teamOff?.startTeam && <button type="button" onClick={teamOff.startTeam}>team-off-start</button>}
         {teamOff && <button type="button" onClick={() => void teamOff.wakeRuntime().catch(() => undefined)}>team-off-wake</button>}
       </main>
@@ -650,6 +654,65 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
   });
 
+  describe("going in without linking is kept for the profile", () => {
+    function targetExists() {
+      vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+      vi.mocked(readLocalProfile).mockReturnValue({
+        profileId: "opaque-local-profile",
+        displayName: "Synthetic Local",
+      });
+      vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_target_exists" });
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+      requireOnboarding();
+    }
+    afterEach(() => localStorage.removeItem("jht.desktop.unlinked-local-profile.v1"));
+
+    it("the next start goes straight in: no check, no page", async () => {
+      targetExists();
+      const user = userEvent.setup();
+      const first = render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "Entra con Google senza collegare" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(localStorage.getItem("jht.desktop.unlinked-local-profile.v1")).toBe('{"profileId":"opaque-local-profile"}');
+      first.unmount();
+
+      vi.mocked(probeDesktopLocalProfileMigration).mockClear();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("local-migration")).not.toBeInTheDocument();
+      expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+    });
+
+    it("another local profile is still asked", async () => {
+      targetExists();
+      localStorage.setItem("jht.desktop.unlinked-local-profile.v1", '{"profileId":"another-profile"}');
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("local-migration")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+    });
+
+    it("Settings takes the choice back and the page that offers the link comes again", async () => {
+      targetExists();
+      localStorage.setItem("jht.desktop.unlinked-local-profile.v1", '{"profileId":"opaque-local-profile"}');
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "link-the-local-profile" }));
+
+      expect(await screen.findByTestId("local-migration")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+      expect(localStorage.getItem("jht.desktop.unlinked-local-profile.v1")).toBeNull();
+    });
+
+    it("the way back from Settings is only there for an account that went in without linking", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("complete-account"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "link-the-local-profile" })).not.toBeInTheDocument();
+    });
+  });
+
   it("offers «Sign in with Google without linking» only where the account already has its data here", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
     vi.mocked(readLocalProfile).mockReturnValue({
@@ -696,6 +759,17 @@ describe("DashboardApp onboarding router", () => {
 
       expect(await screen.findByTestId("shell")).toBeInTheDocument();
       expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    });
+
+    it("a folder whose data belong to nobody and this profile cannot take is not the setup's to enter either", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("nobody");
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(markOnboardingReady).not.toHaveBeenCalled();
     });
 
     it.each(["self", "none"] as const)("the owner (%s) gets the setup as always", async (owner) => {

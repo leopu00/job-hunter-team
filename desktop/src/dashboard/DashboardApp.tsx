@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { LocalMigrationPage } from "./LocalMigrationPage";
+import { LocalProfileLinkContext, type LocalProfileLink } from "../lib/local-profile-link";
+import { forgetLocalProfileUnlinked, leaveLocalProfileUnlinked, localProfileLeftUnlinked } from "../lib/unlinked-local-profile";
 import { appLocale } from "../lib/app-locale";
 import { cleanImages } from "../lib/clean-images";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
@@ -381,10 +383,15 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   return null;
 }
 
-/** The native side says the team of this computer belongs to someone else. An answer that cannot be had is not «yes»: the setup decides, as before. */
-async function ownedByAnother(): Promise<boolean> {
+/**
+ * The native side says the team of this computer is not for this profile to set up: it belongs to someone else
+ * (`other`), or its data belong to nobody and this profile cannot take them (`nobody`). An answer that cannot be
+ * had is not «yes»: the setup decides, as before.
+ */
+async function teamIsNotThisProfiles(): Promise<boolean> {
   try {
-    return (await probeDesktopLocalTeamOwner()) === "other";
+    const owner = await probeDesktopLocalTeamOwner();
+    return owner === "other" || owner === "nobody";
   } catch {
     return false;
   }
@@ -473,6 +480,8 @@ export default function DashboardApp() {
   accountScopeRef.current = accountScope;
   const [localMigration, setLocalMigration] = useState<LocalMigrationGate | null>(null);
   const [leavingMigration, setLeavingMigration] = useState<"idle" | "leaving" | "failed">("idle");
+  /** Counts the times the person asked the link again from Settings: the check of the saved profile runs once more. */
+  const [migrationAsk, setMigrationAsk] = useState(0);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
   const providerSessionIdentityRef = useRef<string | null>(null);
@@ -525,7 +534,7 @@ export default function DashboardApp() {
       // The team of this computer is another profile's (or account's): this one goes in without setting up a
       // team here, and the shell says whose the team is. The setup would stop at its first step with the
       // owner's refusal. Nothing is written: the day this profile owns a team, the setup is still there.
-      if (next?.phase === "required" && !next.existingTeam && await ownedByAnother()) next = { phase: "ready" };
+      if (next?.phase === "required" && !next.existingTeam && await teamIsNotThisProfiles()) next = { phase: "ready" };
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
@@ -539,6 +548,11 @@ export default function DashboardApp() {
       return;
     }
     const profileId = migrationProfile.profileId;
+    // The person went in with the account without linking this profile, and it stays so until they ask the link.
+    if (localProfileLeftUnlinked(profileId)) {
+      setLocalMigration({ identityKey, profileId, phase: "unlinked" });
+      return;
+    }
     let active = true;
     setLocalMigration({ identityKey, profileId, phase: "checking" });
     void probeDesktopLocalProfileMigration(profileId).then((required) => {
@@ -559,7 +573,7 @@ export default function DashboardApp() {
       });
     });
     return () => { active = false; };
-  }, [identityKey, migrationProfile?.profileId]);
+  }, [identityKey, migrationAsk, migrationProfile?.profileId]);
 
   const confirmLocalMigration = useCallback(async () => {
     if (!identityKey || !localMigration || localMigration.identityKey !== identityKey ||
@@ -605,8 +619,21 @@ export default function DashboardApp() {
   const enterWithoutLinking = useCallback(() => {
     if (!identityKey || !localMigration || localMigration.identityKey !== identityKey || localMigration.phase !== "error" ||
         localMigration.code !== "local_migration_target_exists") return;
+    leaveLocalProfileUnlinked(localMigration.profileId);
     setLocalMigration({ identityKey, profileId: localMigration.profileId, phase: "unlinked" });
   }, [identityKey, localMigration]);
+
+  // From Settings: the choice is taken back and the page that offers the link comes again.
+  const localProfileLink = useMemo<LocalProfileLink | null>(() => {
+    if (!identityKey || !migrationProfile || localMigration?.identityKey !== identityKey || localMigration.phase !== "unlinked") return null;
+    const profileId = migrationProfile.profileId;
+    return {
+      link() {
+        forgetLocalProfileUnlinked(profileId);
+        setMigrationAsk((count) => count + 1);
+      },
+    };
+  }, [identityKey, localMigration?.identityKey, localMigration?.phase, migrationProfile?.profileId]);
 
   // «Back to sign in»: leaves the account the person just chose; the sign-in page is where they pick again.
   const leaveMigration = useCallback(async () => {
@@ -1864,9 +1891,11 @@ export default function DashboardApp() {
     <>
       <TeamOffContext.Provider value={teamOff}>
         <ProviderSetupContext.Provider value={providerSetup}>
-          <ConnectTeamContext.Provider value={connectTeamEntry}>
-            <Shell key={identityKey} onLogout={logout} />
-          </ConnectTeamContext.Provider>
+          <LocalProfileLinkContext.Provider value={localProfileLink}>
+            <ConnectTeamContext.Provider value={connectTeamEntry}>
+              <Shell key={identityKey} onLogout={logout} />
+            </ConnectTeamContext.Provider>
+          </LocalProfileLinkContext.Provider>
         </ProviderSetupContext.Provider>
       </TeamOffContext.Provider>
       {connectDialogElement}

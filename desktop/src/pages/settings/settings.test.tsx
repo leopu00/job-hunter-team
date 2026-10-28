@@ -6,6 +6,7 @@ import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { NOTIFY_PREFS_KEY, readNotifyPrefs, writeNotifyPrefs } from "../../lib/notify/prefs";
 import { ProviderSetupContext } from "../../lib/provider-setup";
+import { LocalProfileLinkContext } from "../../lib/local-profile-link";
 import SettingsPage from "./index";
 
 const props = { params: {}, search: new URLSearchParams() };
@@ -190,5 +191,22 @@ describe("the settings page", () => {
     } finally {
       leaveExistingTeamReadOnly();
     }
+  });
+
+  it("offers to link the local profile only to an account that went in without linking it", async () => {
+    const user = userEvent.setup();
+    const link = vi.fn();
+    const without = render(<SettingsPage {...props} />);
+    expect(screen.queryByTestId("settings-local-link")).toBeNull();
+    without.unmount();
+    render(
+      <LocalProfileLinkContext.Provider value={{ link }}>
+        <SettingsPage {...props} />
+      </LocalProfileLinkContext.Provider>,
+    );
+    const card = screen.getByTestId("settings-local-link");
+    expect(card).toHaveTextContent("Local profile not linked");
+    await user.click(screen.getByRole("button", { name: "Link the local profile" }));
+    expect(link).toHaveBeenCalledOnce();
   });
 });
