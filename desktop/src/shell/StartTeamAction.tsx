@@ -15,6 +15,8 @@ export interface StartReadWaits {
   duringMax: number;
 }
 export const START_READ_WAITS: StartReadWaits = { after: [3_000, 5_000, 8_000], during: 8_000, duringMax: 6 };
+/** The Agents page also waits for the flag «stopped by you» to fall, which a start does at its end: five tries. */
+export const AGENTS_START_READ_WAITS: StartReadWaits = { ...START_READ_WAITS, after: [3_000, 5_000, 8_000, 10_000, 12_000] };
 
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
@@ -25,7 +27,16 @@ const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
  * minute) and, once it is up, up to three more times; `onStarted` says whether the page now has its data
  * (false: not yet). A refusal is told with the catalog's own sentence, never the raw code.
  */
-export function StartTeamAction({ onStarted, waits = START_READ_WAITS }: { onStarted: () => StartedReading; waits?: StartReadWaits }) {
+export function StartTeamAction({
+  onStarted,
+  waits = START_READ_WAITS,
+  onBusy,
+}: {
+  onStarted: () => StartedReading;
+  waits?: StartReadWaits;
+  /** Told when a start begins and when it is over (with its rereadings): a page whose own data can make this button go away keeps it while this is true. */
+  onBusy?: (busy: boolean) => void;
+}) {
   const locale = appLocale();
   const [state, setState] = useState<{ phase: "idle" | "starting" } | { phase: "failed"; code: string }>({ phase: "idle" });
   const alive = useRef(true);
@@ -39,6 +50,15 @@ export function StartTeamAction({ onStarted, waits = START_READ_WAITS }: { onSta
   latest.current = onStarted;
 
   async function start() {
+    onBusy?.(true);
+    try {
+      await run();
+    } finally {
+      onBusy?.(false);
+    }
+  }
+
+  async function run() {
     setState({ phase: "starting" });
     let running = true;
     // while the start runs, the page looks again now and then: it may answer before the start has finished

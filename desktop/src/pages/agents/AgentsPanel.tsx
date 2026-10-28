@@ -28,7 +28,7 @@ import {
 import type { AgentIdentity, AgentQuestion, QuestionOption, TeamAgent } from "../../lib/existing-team-agents";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useRefresh } from "../../shell/router";
-import { StartTeamAction } from "../../shell/StartTeamAction";
+import { AGENTS_START_READ_WAITS, StartTeamAction } from "../../shell/StartTeamAction";
 import { useTeamOff } from "../../lib/team-off";
 import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
@@ -499,6 +499,7 @@ export default function AgentsPanel({ search }: PageProps) {
   const t = AGENTS_PANEL_TEXT[appLocale()];
   const readOnly = useExistingTeamReadOnly() !== null;
   const teamOff = useTeamOff();
+  const [starting, setStarting] = useState(false);
   const [list, setList] = useState<Outcome<PanelList> | null>(null);
   const [team, setTeam] = useState<TeamControlState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -518,7 +519,9 @@ export default function AgentsPanel({ search }: PageProps) {
   const latest = useRef(0);
 
   // True when the list was read; a read that another one replaced says true too (the other one answers).
-  const read = useCallback(async (): Promise<boolean> => {
+  // `afterStart`: the read that follows «Start the team» counts only if the team no longer shows as stopped by
+  // the person (that flag falls when the start ends, after the list already answers).
+  const read = useCallback(async (afterStart = false): Promise<boolean> => {
     const mine = ++latest.current;
     setBusy(true);
     const [listed, state, past] = await Promise.all([readPanelList(), readTeamState(), readPanelHistory()]);
@@ -528,7 +531,7 @@ export default function AgentsPanel({ search }: PageProps) {
     setHistory(past);
     setNow(Date.now());
     setBusy(false);
-    return listed.ok;
+    return listed.ok && !(afterStart && state.ok && state.value.halted);
   }, []);
   useEffect(() => {
     void read();
@@ -663,12 +666,14 @@ export default function AgentsPanel({ search }: PageProps) {
           <strong>{t.failed}</strong>
           <p>{readFailureText(list.code)}</p>
           <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
-          {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it */}
-          {list.code === "agent_control_no_team" && !teamOff && (
-            <div className="mt-2">
-              <StartTeamAction onStarted={read} />
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it; the
+          button stays while a start runs, also once the list answers (the flag «stopped by you» falls later) */}
+      {((list && !list.ok && list.code === "agent_control_no_team" && !teamOff) || starting) && (
+        <div className="mt-2">
+          <StartTeamAction onStarted={() => read(true)} waits={AGENTS_START_READ_WAITS} onBusy={setStarting} />
         </div>
       )}
 
