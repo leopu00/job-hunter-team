@@ -346,6 +346,17 @@ def test_the_profile_skill_confirms_with_the_card_and_never_sends_the_person_to_
 
 
 @pytest.mark.parametrize("lang", LANGS)
+def test_the_button_the_skill_tells_the_person_to_press_is_the_one_the_card_has(lang: str):
+    text = (ROOT / "agents" / "_skills" / "profile-yaml" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
+    catalog = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+    step = next(line for line in text.splitlines() if line.startswith("5. "))
+
+    named = re.findall(r"\*\*(.+?)\*\*", step)
+    assert named == [catalog["profile_confirm.confirm"]], (lang, named)
+    assert catalog["profile_confirm.correct"] != catalog["profile_confirm.confirm"]
+
+
+@pytest.mark.parametrize("lang", LANGS)
 def test_the_onboarding_skill_ends_with_the_card_and_names_no_panel(lang: str):
     text = (ROOT / "agents" / "_skills" / "onboarding-flow" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
     step = re.search(r"^8\. .*?(?=\n```)", text, re.S | re.M).group(0)
