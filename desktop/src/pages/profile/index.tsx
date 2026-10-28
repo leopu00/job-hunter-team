@@ -9,10 +9,12 @@ import { appLocale } from "../../lib/app-locale";
 import { pluralText } from "../../lib/plural";
 import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 import { cloudClient } from "../../lib/cloud-client";
+import { useLocalTeamData } from "../../lib/local-team-data";
 import { readOnce, withReadDeadline } from "../../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
+import ExistingTeamProfilePage from "../existing-team/profile";
 import type { PageProps } from "../types";
 import { LinkedinLoginCard } from "./LinkedinLoginCard";
 import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
@@ -102,6 +104,8 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   );
 }
 
-export default function ProfileRoute(_props: PageProps) {
-  return <ProfilePage />;
+export default function ProfileRoute(props: PageProps) {
+  // A local profile has no cloud account: the candidate profile is read from the team's own container.
+  const localTeam = useLocalTeamData();
+  return localTeam ? <ExistingTeamProfilePage {...props} /> : <ProfilePage />;
 }

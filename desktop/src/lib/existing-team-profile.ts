@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ProfileBlock } from "@/app/(protected)/profile/ProfileView";
 import { mapYamlToCanonical } from "../../../web/lib/profile-yaml-map";
 import type { CandidateProfile } from "../../../web/lib/types";
+import { reportLocalTeamRead } from "./local-team-data";
 import { teamStatusErrorCode } from "./existing-team-status";
 import { reportVpsRead } from "./vps-link";
 
@@ -119,21 +120,25 @@ export async function readExistingTeamProfile(
     const reply = await read();
     if (!isRecord(reply)) {
       reportVpsRead(reply);
+      reportLocalTeamRead("desktop_bad_reply");
       return { kind: "error", at: now(), code: "desktop_bad_reply" };
     }
     if (reply.ok === false) {
       reportVpsRead(reply);
+      reportLocalTeamRead(teamStatusErrorCode(reply.error));
       return { kind: "error", at: now(), code: teamStatusErrorCode(reply.error) };
     }
     const picked = reply.ok === true ? pickProfileRead(reply.data) : null;
     // A reply that says ok but whose profile is discarded is not a contact: the page shows a bad reply,
     // and so does the header.
     reportVpsRead(reply.ok === true && picked === null ? { ok: false, error: "desktop_bad_reply" } : reply);
+    reportLocalTeamRead(picked ? null : "desktop_bad_reply");
     return picked
       ? { kind: "read", at: now(), read: picked }
       : { kind: "error", at: now(), code: "desktop_bad_reply" };
   } catch (error) {
     reportVpsRead({ ok: false, error: teamStatusErrorCode(error) });
+    reportLocalTeamRead(teamStatusErrorCode(error));
     return { kind: "error", at: now(), code: teamStatusErrorCode(error) };
   }
 }
