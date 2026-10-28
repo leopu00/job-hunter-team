@@ -136,7 +136,8 @@ describe("«Agenti», the agents' control panel", () => {
     expect(pluralText("it", 2, italian.summaryWaiting)).toBe("2 ti aspettano");
     expect(pluralText("it", 1, italian.summaryUp, { total: 13 })).toBe("1 acceso su 13");
     expect(pluralText("de", 1, AGENTS_PANEL_TEXT.de.summaryWaiting)).toBe("1 wartet auf dich");
-    expect(pluralText("fr", 3, AGENTS_PANEL_TEXT.fr.summaryWaiting)).toBe("3 vous attendent");
+    expect(pluralText("fr", 1, AGENTS_PANEL_TEXT.fr.summaryWaiting)).toBe("1 t’attend");
+    expect(pluralText("fr", 3, AGENTS_PANEL_TEXT.fr.summaryWaiting)).toBe("3 t’attendent");
   });
 
   it("stops an agent only after the confirmation, which names the VPS, and sends back the list's target", async () => {
