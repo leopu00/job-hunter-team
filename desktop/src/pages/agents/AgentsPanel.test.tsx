@@ -1431,11 +1431,11 @@ describe("«Agenti»: the list reads again by itself", () => {
   it("a good read between the failures starts the count again", async () => {
     where = "local";
     const base = native.invoke.getMockImplementation()!;
-    // the page's first read, then: fail, fail, good, fail, fail, fail
+    // the page's first read, then: fail, fail, good, fail, fail, fail; whatever comes after fails too
     const outcome = [true, false, false, true, false, false, false];
     let n = 0;
     native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
-      if (command === COMMAND && args.request.op === "list") return outcome[n++] === false ? { ok: false, error: "agent_control_unanswered" } : base(command, args);
+      if (command === COMMAND && args.request.op === "list") return (outcome[n++] ?? false) ? base(command, args) : { ok: false, error: "agent_control_unanswered" };
       return base(command, args);
     });
     show();
