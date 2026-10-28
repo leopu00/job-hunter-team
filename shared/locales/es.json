@@ -374,5 +374,6 @@
   "onb.company.opt.enterprise": "Gran empresa / multinacional",
   "onb.company.opt.public": "Sector público, investigación o sin ánimo de lucro",
   "onb.company.opt.any": "Sin preferencia: importa el puesto",
-  "onb.role.other_prompt": "Escríbeme en una línea qué tipo de trabajo buscas."
+  "onb.role.other_prompt": "Escríbeme en una línea qué tipo de trabajo buscas.",
+  "onb.preferences.title": "Preferencias de trabajo"
 }

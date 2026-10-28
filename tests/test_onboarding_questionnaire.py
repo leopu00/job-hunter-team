@@ -111,9 +111,11 @@ def test_every_step_and_choice_has_its_words_in_every_language(lang):
 def test_the_seven_languages_carry_the_same_questionnaire_keys():
     keys = {lang: {key for key in TEXTS[lang] if key.startswith("onb.")} for lang in LANGS}
     expected = {key for step in DATA["steps"] for key in keys_of(step)}
+    # the tool names the block the preferences go to (onboarding_questionnaire.PREFERENCES_TITLE_KEY): one more key, not a step's
+    expected.add("onb.preferences.title")
     for lang in LANGS:
         assert keys[lang] == expected, (lang, sorted(keys[lang] ^ expected)[:5])
-    assert len(expected) == 103
+    assert len(expected) == 104
 
 
 def test_the_sentences_of_the_other_languages_are_not_the_english_ones_left_in_place():

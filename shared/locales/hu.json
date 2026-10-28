@@ -375,5 +375,6 @@
   "onb.company.opt.enterprise": "Nagyvállalat / multinacionális",
   "onb.company.opt.public": "Közszféra, kutatás vagy nonprofit",
   "onb.company.opt.any": "Nincs preferencia: a szerep számít",
-  "onb.role.other_prompt": "Írd meg egy sorban, milyen munkát keresel."
+  "onb.role.other_prompt": "Írd meg egy sorban, milyen munkát keresel.",
+  "onb.preferences.title": "Munkahelyi preferenciák"
 }

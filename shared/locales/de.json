@@ -374,5 +374,6 @@
   "onb.company.opt.enterprise": "Großkonzern / multinational",
   "onb.company.opt.public": "Öffentlicher Dienst, Forschung oder Non-Profit",
   "onb.company.opt.any": "Keine Präferenz: die Rolle zählt",
-  "onb.role.other_prompt": "Schreib mir in einer Zeile, welche Art von Arbeit du suchst."
+  "onb.role.other_prompt": "Schreib mir in einer Zeile, welche Art von Arbeit du suchst.",
+  "onb.preferences.title": "Arbeitspräferenzen"
 }
