@@ -1285,46 +1285,51 @@ def test_a_held_turn_that_finds_the_composer_empty_is_unconfirmed_after_a_while_
     assert len(box.envelopes()) == 1
 
 
-def _registry(box, session="CAPITANO", pasted_at=None):
-    """The transport's record of the text it left in the composer (time, fingerprint, characters, line breaks)."""
-    import time as _time
-    path = box.home / "locks" / f"tmux-send-pending-{session}.sha"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"{int(pasted_at or _time.time())} {'ab' * 32} 120 0\n", encoding="utf-8")
-    return path
-
-
-def test_a_held_turn_that_expires_is_said_unconfirmed_and_its_text_is_forgotten_by_the_transport(box):
-    """The text may still wait in the composer: it must not be submitted by a later delivery as «ours, of any age»."""
-    import time as _time
+def test_a_held_turn_that_expires_gets_its_one_enter_if_the_agent_is_free_and_the_text_is_proved_ours(box):
+    """Otherwise the old text waits «ours, of any age» for the next delivery and the person's second try is a double."""
     _code, receipt = _held_half_drawn(box)
-    registry = _registry(box, pasted_at=_time.time() - 1300)     # written when the turn was held
     _age_the_queue(box, 1300)                      # past the life of a queued turn (20 minutes)
-    page = box.run("read", "capitano", FAKE_FLUSH_RC="0")[1]
-    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "unconfirmed"}]
-    assert not registry.exists(), "the transport can no longer prove that old text ours"
-    assert _flush_calls(box) == [] and len(box.envelopes()) == 1
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0", FAKE_FLUSH_CLEARS="1")[1]
+    assert _flush_calls(box) == ["CAPITANO"], "one Enter, asked of the transport"
+    assert page["queued"] == [] and page["settled"] == [{"id": receipt["messageId"], "how": "late"}]
+    assert len(box.envelopes()) == 1 and not any(call.startswith("send-keys") for call in box.calls())
+    box.run("read", "capitano", FAKE_FLUSH_RC="0")
+    assert _flush_calls(box) == ["CAPITANO"], "settled: not asked again"
 
 
-def test_the_registry_of_a_later_paste_by_someone_else_is_left_when_a_held_turn_expires(box):
-    import time as _time
-    _held_half_drawn(box)
-    registry = _registry(box, pasted_at=_time.time() + 600)       # pasted after our turn was held
+def test_a_held_turn_that_expires_is_left_as_it_is_when_the_text_is_not_proved_ours_or_the_agent_works(box):
+    _code, receipt = _held_half_drawn(box)
     _age_the_queue(box, 1300)
-    box.run("read", "capitano")
-    assert registry.exists()
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="130")[1]            # the transport cannot prove it
+    assert page["settled"] == [{"id": receipt["messageId"], "how": "expired"}] and _delivered_ids(box) == []
+    (box.state / "screen").write_text(WORKING_WITH_OUR_TEXT, encoding="utf-8")
+    box.run("read", "capitano", FAKE_FLUSH_RC="0")
+    assert _flush_calls(box) == ["CAPITANO"], "a working agent is not asked: only the first call counts"
+    assert _delivered_ids(box) == []
 
 
-def test_a_held_turn_that_expires_while_the_draining_process_waits_is_retired_by_it(box):
+def test_a_held_turn_expired_for_longer_than_the_window_is_not_given_an_enter(box):
+    _code, receipt = _held_half_drawn(box)
+    _age_the_queue(box, 1200 + 400)                # 400 s past its life: the window is 300 s
+    page = box.run("read", "capitano", FAKE_FLUSH_RC="0")[1]
+    assert _flush_calls(box) == [] and page["settled"] == [{"id": receipt["messageId"], "how": "expired"}]
+
+
+def test_a_held_turn_that_expires_while_the_draining_process_waits_is_given_its_enter_by_it(box):
+    """The process looks every 2 s and the turn lives 1 s: the end of its time is the moment it asks, once."""
+    import time as _time
     box.stub_delivery()
     screen = box.state / "screen"
     screen.write_text(READY_CODEX, encoding="utf-8")
-    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "0.2", "JHT_CHAT_QUEUE_TTL": "1.5", "FAKE_FLUSH_RC": "130"}
+    drain = {"JHT_CHAT_DRAIN": "1", "JHT_CHAT_DRAIN_EVERY": "2", "JHT_CHAT_QUEUE_TTL": "1",
+             "FAKE_FLUSH_RC": "0", "FAKE_FLUSH_CLEARS": "1"}
     box.run("send", "capitano", "id-expiring", stdin="scade", **HALF_DRAWN, **drain)
-    registry = _registry(box, pasted_at=0)                         # the paste it left: older than the turn
-    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")        # text that is never provably ours
-    assert _wait_for(lambda: _delivered_ids(box) == ["id-expiring"], 20), "nobody read, the process settled it"
-    assert not registry.exists()
+    _time.sleep(1.2)
+    screen.write_text(TEXT_ALREADY_TYPED, encoding="utf-8")        # the agent is free, the text is still there
+    assert _wait_for(lambda: _delivered_ids(box) == ["id-expiring"], 20), "nobody read, the process gave the Enter"
+    delivered = box.home / "agents" / "capitano" / "chat-delivered.jsonl"
+    assert json.loads(delivered.read_text(encoding="utf-8").splitlines()[-1])["taken"] == "late"
+    assert _flush_calls(box) == ["CAPITANO"] and len(box.envelopes()) == 1
 
 
 def test_a_turn_behind_a_held_one_waits_for_it(box):

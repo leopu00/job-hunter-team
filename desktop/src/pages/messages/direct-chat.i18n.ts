@@ -65,7 +65,7 @@ export interface DirectChatText {
   /** Under a message of the person's when nobody can say whether the agent took it. */
   takenUnknown: string;
   /** Beside «not known», why: by the team's closed code; a code outside the list says nothing. */
-  takenReasons: Record<"menu" | "permission" | "login" | "busy" | "not_ours" | "empty_unseen" | "unreadable" | "unconfirmed", string>;
+  takenReasons: Record<"menu" | "permission" | "login" | "busy" | "not_ours" | "empty_unseen" | "unreadable" | "unconfirmed" | "late", string>;
   /** Why an answer did not go, by the code the team gives; `answer_failed` for any other. */
   answerErrors: Record<"question_closed" | "invalid_choice" | "not_found" | "answer_failed", string>;
   /** The group of replies the agent suggests under a message: a click sends one. */
@@ -137,7 +137,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Incollato ma non inviato",
     sendEnterAgain: "Invia di nuovo (Invio)",
     takenUnknown: "Non so se è stato preso",
-    takenReasons: { menu: "c'è un menu aperto", permission: "c'è una domanda di permesso", login: "c'è un accesso da fare", busy: "l'agente stava lavorando", not_ours: "nella casella c'è un altro testo", empty_unseen: "il testo non si è mai visto nella casella", unreadable: "lo schermo non si legge", unconfirmed: "il testo è uscito dalla casella, ma senza prova che l'abbia preso: guarda il suo terminale prima di riscrivere" },
+    takenReasons: { menu: "c'è un menu aperto", permission: "c'è una domanda di permesso", login: "c'è un accesso da fare", busy: "l'agente stava lavorando", not_ours: "nella casella c'è un altro testo", empty_unseen: "il testo non si è mai visto nella casella", unreadable: "lo schermo non si legge", unconfirmed: "il testo è uscito dalla casella, ma senza prova che l'abbia preso: guarda il suo terminale prima di riscrivere", late: "inviato in ritardo: il testo era rimasto nella casella e ha avuto il suo Invio dopo la scadenza; guarda il terminale dell'agente prima di riscrivere" },
     answerErrors: { question_closed: "A questa domanda è già stata data una risposta.", invalid_choice: "Questa scelta non è fra quelle della domanda.", not_found: "L'agente non ha più questa domanda.", answer_failed: "Risposta non inviata: riprova." },
     suggestionsLabel: "Risposte suggerite dall'agente",
     today: "oggi",
@@ -194,7 +194,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Pasted but not sent",
     sendEnterAgain: "Send again (Enter)",
     takenUnknown: "Not known whether it was taken",
-    takenReasons: { menu: "a menu is open", permission: "a permission question is open", login: "a sign-in is waiting", busy: "the agent was working", not_ours: "another text is in its input box", empty_unseen: "the text never showed in its input box", unreadable: "the screen cannot be read", unconfirmed: "the text left its input box, but with no proof it was taken: look at its terminal before writing again" },
+    takenReasons: { menu: "a menu is open", permission: "a permission question is open", login: "a sign-in is waiting", busy: "the agent was working", not_ours: "another text is in its input box", empty_unseen: "the text never showed in its input box", unreadable: "the screen cannot be read", unconfirmed: "the text left its input box, but with no proof it was taken: look at its terminal before writing again", late: "sent late: the text had stayed in its input box and got its Enter after the time ran out; look at its terminal before writing again" },
     answerErrors: { question_closed: "This question already has an answer.", invalid_choice: "This choice is not one of the question's.", not_found: "The agent no longer has this question.", answer_failed: "Answer not sent: try again." },
     suggestionsLabel: "Replies the agent suggests",
     today: "today",
@@ -251,7 +251,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Eingefügt, aber nicht gesendet",
     sendEnterAgain: "Erneut senden (Enter)",
     takenUnknown: "Unklar, ob die Nachricht angenommen wurde",
-    takenReasons: { menu: "ein Menü ist offen", permission: "eine Berechtigungsfrage ist offen", login: "eine Anmeldung steht aus", busy: "der Agent hat gerade gearbeitet", not_ours: "im Eingabefeld steht ein anderer Text", empty_unseen: "der Text war im Eingabefeld nie zu sehen", unreadable: "der Bildschirm ist nicht lesbar", unconfirmed: "der Text hat das Eingabefeld verlassen, aber ohne Beweis, dass er angenommen wurde: schau in sein Terminal, bevor du erneut schreibst" },
+    takenReasons: { menu: "ein Menü ist offen", permission: "eine Berechtigungsfrage ist offen", login: "eine Anmeldung steht aus", busy: "der Agent hat gerade gearbeitet", not_ours: "im Eingabefeld steht ein anderer Text", empty_unseen: "der Text war im Eingabefeld nie zu sehen", unreadable: "der Bildschirm ist nicht lesbar", unconfirmed: "der Text hat das Eingabefeld verlassen, aber ohne Beweis, dass er angenommen wurde: schau in sein Terminal, bevor du erneut schreibst", late: "verspätet gesendet: der Text war im Eingabefeld geblieben und bekam seinen Enter erst nach Ablauf der Zeit; schau in sein Terminal, bevor du erneut schreibst" },
     answerErrors: { question_closed: "Diese Frage wurde schon beantwortet.", invalid_choice: "Diese Wahl gehört nicht zu den Antworten der Frage.", not_found: "Der Agent hat diese Frage nicht mehr.", answer_failed: "Antwort nicht gesendet: versuche es erneut." },
     suggestionsLabel: "Vom Agenten vorgeschlagene Antworten",
     today: "heute",
@@ -308,7 +308,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Collé mais non envoyé",
     sendEnterAgain: "Renvoyer (Entrée)",
     takenUnknown: "On ne sait pas s'il a été pris",
-    takenReasons: { menu: "un menu est ouvert", permission: "une demande d'autorisation est ouverte", login: "une connexion est en attente", busy: "l'agent était en train de travailler", not_ours: "un autre texte est dans sa zone de saisie", empty_unseen: "le texte n'est jamais apparu dans sa zone de saisie", unreadable: "l'écran est illisible", unconfirmed: "le texte a quitté sa zone de saisie, mais sans preuve qu'il a été pris : regarde son terminal avant de réécrire" },
+    takenReasons: { menu: "un menu est ouvert", permission: "une demande d'autorisation est ouverte", login: "une connexion est en attente", busy: "l'agent était en train de travailler", not_ours: "un autre texte est dans sa zone de saisie", empty_unseen: "le texte n'est jamais apparu dans sa zone de saisie", unreadable: "l'écran est illisible", unconfirmed: "le texte a quitté sa zone de saisie, mais sans preuve qu'il a été pris : regarde son terminal avant de réécrire", late: "envoyé en retard : le texte était resté dans sa zone de saisie et a reçu son Entrée après l'expiration ; regarde son terminal avant de réécrire" },
     answerErrors: { question_closed: "Cette question a déjà une réponse.", invalid_choice: "Ce choix ne fait pas partie de ceux de la question.", not_found: "L'agent n'a plus cette question.", answer_failed: "Réponse non envoyée : réessaie." },
     suggestionsLabel: "Réponses proposées par l'agent",
     today: "aujourd'hui",
@@ -365,7 +365,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Pegado pero no enviado",
     sendEnterAgain: "Enviar de nuevo (Intro)",
     takenUnknown: "No se sabe si lo ha recibido",
-    takenReasons: { menu: "hay un menú abierto", permission: "hay una pregunta de permiso abierta", login: "hay un inicio de sesión pendiente", busy: "el agente estaba trabajando", not_ours: "hay otro texto en su cuadro de entrada", empty_unseen: "el texto nunca apareció en su cuadro de entrada", unreadable: "la pantalla no se puede leer", unconfirmed: "el texto salió de su cuadro de entrada, pero sin prueba de que lo haya recibido: mira su terminal antes de volver a escribir" },
+    takenReasons: { menu: "hay un menú abierto", permission: "hay una pregunta de permiso abierta", login: "hay un inicio de sesión pendiente", busy: "el agente estaba trabajando", not_ours: "hay otro texto en su cuadro de entrada", empty_unseen: "el texto nunca apareció en su cuadro de entrada", unreadable: "la pantalla no se puede leer", unconfirmed: "el texto salió de su cuadro de entrada, pero sin prueba de que lo haya recibido: mira su terminal antes de volver a escribir", late: "enviado con retraso: el texto se quedó en su cuadro de entrada y recibió su Intro tras agotarse el tiempo; mira su terminal antes de volver a escribir" },
     answerErrors: { question_closed: "Esta pregunta ya tiene respuesta.", invalid_choice: "Esta opción no está entre las de la pregunta.", not_found: "El agente ya no tiene esta pregunta.", answer_failed: "Respuesta no enviada: inténtalo de nuevo." },
     suggestionsLabel: "Respuestas sugeridas por el agente",
     today: "hoy",
@@ -422,7 +422,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Colado mas não enviado",
     sendEnterAgain: "Enviar de novo (Enter)",
     takenUnknown: "Não se sabe se foi recebido",
-    takenReasons: { menu: "há um menu aberto", permission: "há um pedido de permissão aberto", login: "há um início de sessão pendente", busy: "o agente estava a trabalhar", not_ours: "há outro texto na sua caixa de escrita", empty_unseen: "o texto nunca apareceu na sua caixa de escrita", unreadable: "o ecrã não se consegue ler", unconfirmed: "o texto saiu da sua caixa de escrita, mas sem prova de que foi recebido: vê o seu terminal antes de voltar a escrever" },
+    takenReasons: { menu: "há um menu aberto", permission: "há um pedido de permissão aberto", login: "há um início de sessão pendente", busy: "o agente estava a trabalhar", not_ours: "há outro texto na sua caixa de escrita", empty_unseen: "o texto nunca apareceu na sua caixa de escrita", unreadable: "o ecrã não se consegue ler", unconfirmed: "o texto saiu da sua caixa de escrita, mas sem prova de que foi recebido: vê o seu terminal antes de voltar a escrever", late: "enviado com atraso: o texto ficou na sua caixa de escrita e recebeu o seu Enter depois de acabar o tempo; vê o seu terminal antes de voltar a escrever" },
     answerErrors: { question_closed: "Esta pergunta já tem resposta.", invalid_choice: "Esta escolha não é uma das da pergunta.", not_found: "O agente já não tem esta pergunta.", answer_failed: "Resposta não enviada: tenta de novo." },
     suggestionsLabel: "Respostas sugeridas pelo agente",
     today: "hoje",
@@ -479,7 +479,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     notSent: "Beillesztve, de nincs elküldve",
     sendEnterAgain: "Küldés újra (Enter)",
     takenUnknown: "Nem tudni, hogy megkapta-e",
-    takenReasons: { menu: "egy menü van nyitva", permission: "egy engedélykérés van nyitva", login: "bejelentkezésre vár", busy: "az ügynök éppen dolgozott", not_ours: "a beviteli mezőben más szöveg van", empty_unseen: "a szöveg sosem jelent meg a beviteli mezőben", unreadable: "a képernyő nem olvasható", unconfirmed: "a szöveg kikerült a beviteli mezőből, de nincs bizonyíték arra, hogy átvette: nézd meg a terminálját, mielőtt újra írsz" },
+    takenReasons: { menu: "egy menü van nyitva", permission: "egy engedélykérés van nyitva", login: "bejelentkezésre vár", busy: "az ügynök éppen dolgozott", not_ours: "a beviteli mezőben más szöveg van", empty_unseen: "a szöveg sosem jelent meg a beviteli mezőben", unreadable: "a képernyő nem olvasható", unconfirmed: "a szöveg kikerült a beviteli mezőből, de nincs bizonyíték arra, hogy átvette: nézd meg a terminálját, mielőtt újra írsz", late: "késve elküldve: a szöveg a beviteli mezőben maradt, és az idő lejárta után kapta meg az Entert; nézd meg a terminálját, mielőtt újra írsz" },
     answerErrors: { question_closed: "Erre a kérdésre már érkezett válasz.", invalid_choice: "Ez a választás nincs a kérdés lehetőségei között.", not_found: "Az ügynöknél már nincs meg ez a kérdés.", answer_failed: "A válasz nem ment el: próbáld újra." },
     suggestionsLabel: "Az ügynök által javasolt válaszok",
     today: "ma",

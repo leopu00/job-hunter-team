@@ -613,6 +613,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
   it.each([
     ["pending", "direct-chat-not-sent", "Incollato ma non inviato"],
     ["unconfirmed", "direct-chat-taken-unknown", "Non so se è stato preso"],
+    ["late", "direct-chat-taken-unknown", "inviato in ritardo"],
     ["expired", "direct-chat-queue-expired", "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo."],
   ] as const)("a queued turn that ends «%s» says it as the direct send does, never «Inviato»", async (how, testId, words) => {
     viewport(1280, 800);
