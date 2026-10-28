@@ -32,13 +32,20 @@ Uso:
   python3 first_run.py check               # obiettivo raggiunto? (aggiorna)
   python3 first_run.py complete --reason … # forza la fine del burst
   python3 first_run.py reset               # solo per test / wipe playground
+  python3 first_run.py ask-plan            # chiede il piano all'utente con una card (l'unico modo)
+  python3 first_run.py plan-question-check # la rete del watchdog: la card, se nessuno l'ha postata
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import json
 import os
+import re
+import shutil
+import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -257,12 +264,241 @@ def reset() -> dict:
     return status()
 
 
+# ── The question about the plan ──────────────────────────────────────────────
+#
+# The plan is asked ONE way: a card (`jht-notify-user` with options), posted by `ask-plan`. A question written
+# as plain text in the Capitano's pane reaches nobody — the user watches the app, which shows cards and chat
+# messages, not the pane (TEST 13) — so nothing that asks the plan is left to the agent's choice of words or
+# tool. `plan-question-check` is the net under it: the watchdog runs it every tick.
+
+PLAN_QUESTION_AFTER_S = 300  # a profile imported, a plan missing, no open question for this long: the system asks
+PLAN_REASK_AFTER_S = 3600  # after an answer that named no plan («I do not know»), the card comes back after this
+MAX_PLAN_CARDS = 3  # cards about the plan, in all, for a provider; then nobody asks again
+ANSWER_PREFIX = "ans:"  # agent_questions.ANSWER_PREFIX: a test holds them equal
+_NOTIFY_ID = re.compile(r"\bid=(aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16})\b")
+
+
+def _profile_imported() -> Optional[float]:
+    """When the candidate profile became usable (the modification time of its file), None while it is not.
+
+    «Usable» is the product's own gate for the profile (`profile_gate`: a YAML with a target role, a name that
+    is not the template's, and one more signal), the same line the Assistente draws before it announces the
+    profile ready. A missing, empty or half-written file is a profile not imported yet; so is a gate that cannot
+    run (no YAML reader): the net stays quiet rather than ask early."""
+    gate = _load_module("profile_gate", "profile_gate.py")
+    if gate is None:
+        return None
+    path = JHT_HOME / "profile" / "candidate_profile.yml"
+    try:
+        usable, _ = gate.check_minimum_viable_profile(str(path))
+        return path.stat().st_mtime if usable else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _db_path() -> str:
+    return os.environ.get("JHT_DB") or str(JHT_HOME / "jobs.db")
+
+
+def _plan_question_rows(question_id: str) -> tuple[bool, Optional[dict]]:
+    """(the question is still in the database, its answer or None). A database that cannot be read raises."""
+    conn = sqlite3.connect(f"file:{_db_path()}?mode=ro", uri=True, timeout=10)
+    try:
+        asked = conn.execute("SELECT 1 FROM pending_user_messages WHERE source_id = ?", (question_id,)).fetchone()
+        row = conn.execute(
+            "SELECT source_payload FROM pending_user_messages WHERE source_id = ?", (ANSWER_PREFIX + question_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return bool(asked), None
+    try:
+        answer = json.loads(row[0] or "")
+    except ValueError:
+        answer = {}
+    return bool(asked), answer if isinstance(answer, dict) else {}
+
+
+@contextlib.contextmanager
+def _plan_question_lock():
+    """One asker at a time: the Capitano and the watchdog can both decide to ask in the same second."""
+    try:
+        import fcntl
+    except ImportError:  # no flock here: the card is idempotent by its own record
+        yield
+        return
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with STATE_PATH.with_suffix(".lock").open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _notify_command() -> list[str]:
+    found = shutil.which("jht-notify-user")
+    if found:
+        return [found]
+    return [sys.executable, str(Path(__file__).resolve().parents[2] / "agents" / "_tools" / "jht-notify-user")]
+
+
+def _post_plan_card(agent: str, card: dict) -> tuple[Optional[str], str]:
+    """Post the card; (the question's id, "") or (None, why not)."""
+    command = _notify_command() + ["--agent", agent, "--oggetto", card["subject"]]
+    for option in card["options"]:
+        command += ["--option", f"{option['id']}={option['label']}"]
+    command.append(card["text"])
+    try:
+        done = subprocess.run(command, capture_output=True, text=True, timeout=90, env=dict(os.environ), check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return None, f"the card was not posted: {error}"
+    found = _NOTIFY_ID.search(done.stdout or "")
+    if done.returncode != 0 or not found:
+        return None, "the card was not posted: " + ((done.stderr or done.stdout or "").strip()[:300] or f"exit {done.returncode}")
+    return found.group(1), ""
+
+
+def _plan_question_state(state: dict, provider: Optional[str] = None) -> tuple[str, Optional[dict]]:
+    """«none» (never asked, or the question is gone, or it was for another provider), «open» (asked, no answer),
+    or «answered» with the answer.
+
+    A card is for the provider it was posted for: when the provider has changed since, its answer (or its silence)
+    says nothing about the plans of the new one, so the state is «none» and the new provider is asked afresh."""
+    record = state.get("plan_question")
+    question_id = record.get("id") if isinstance(record, dict) else None
+    if not isinstance(question_id, str):
+        return "none", None
+    if provider and record.get("provider") not in (None, provider):
+        return "none", None
+    asked, answer = _plan_question_rows(question_id)
+    if answer is not None:
+        return "answered", answer
+    return ("open" if asked else "none"), None
+
+
+def _cards_asked(state: dict, provider: str) -> int:
+    """How many cards about the plan were posted for this provider (the count starts again with another)."""
+    cards = state.get("plan_cards")
+    if isinstance(cards, dict) and cards.get("provider") == provider and isinstance(cards.get("count"), int):
+        return cards["count"]
+    return 0
+
+
+def _answered_at(answer: Optional[dict]) -> Optional[datetime]:
+    moment = _parse((answer or {}).get("ts"))
+    if moment is not None and moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
+             now: Optional[datetime] = None) -> dict:
+    """Ask the user which plan they have: the one way to do it. Idempotent — no second card while the first has
+    no answer, and nothing to ask once the plan is declared. After an answer that named no plan («I do not know»)
+    the card comes back only after `reask_s`, and never more than `MAX_PLAN_CARDS` times for a provider."""
+    now = now or datetime.now(timezone.utc)
+    with _plan_question_lock():
+        info = plan_info()
+        if info.get("ok"):
+            return {"ok": True, "asked": False, "reason": "the plan is already declared"}
+        if not info.get("hint"):
+            return {"ok": False, "asked": False, "reason": info.get("reason", "plan_registry is unavailable")}
+        registry = _load_module("plan_registry", "plan_registry.py")
+        card = registry.question_options() if registry is not None else {}
+        if not card:
+            return {"ok": False, "asked": False, "reason": "no plans are known for the active provider"}
+        state = status()
+        try:
+            kind, answer = _plan_question_state(state, card["provider"])
+        except sqlite3.Error as error:
+            return {"ok": False, "asked": False, "reason": f"the database cannot be read: {error}"}
+        if kind == "open":
+            return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
+                    "question_id": state["plan_question"]["id"]}
+        cards = _cards_asked(state, card["provider"])
+        if cards >= MAX_PLAN_CARDS:
+            return {"ok": True, "asked": False, "limit": True,
+                    "reason": f"the plan was asked {cards} times and the user named none: not asked again"}
+        answered = _answered_at(answer) if kind == "answered" else None
+        if answered is not None and (now - answered).total_seconds() < reask_s:
+            return {"ok": True, "asked": False, "reason": "the user answered without naming a plan: asked again later",
+                    "seconds_left": int(reask_s - (now - answered).total_seconds())}
+        question_id, why = _post_plan_card(agent, card)
+        if question_id is None:
+            return {"ok": False, "asked": False, "reason": why}
+        state = status()  # read again: what was written while the card was being posted stays
+        state["plan_question"] = {"id": question_id, "asked_at": _now(), "asked_by": asked_by,
+                                  "provider": card["provider"]}
+        state["plan_cards"] = {"provider": card["provider"], "count": cards + 1}
+        _write(state)
+        return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]]}
+
+
+def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,
+                        now: Optional[datetime] = None) -> dict:
+    """The net under `ask-plan`: with the profile imported and no plan declared, and nobody asking for `after_s`
+    seconds from the import, the system asks.
+
+    Never before the profile is imported, never in `steady`, never while a question about the plan is open, and
+    never when the registry cannot be read. After an answer that named no plan it waits `reask_s` (an hour), and
+    after `MAX_PLAN_CARDS` cards it stops («stopped»: the watchdog says so in its log). An answer that names a
+    plan which is still not written after `after_s` is written here, as the user chose it, for the provider the
+    card was posted for."""
+    now = now or datetime.now(timezone.utc)
+    imported = _profile_imported()
+    if imported is None:
+        return {"action": "none", "reason": "the profile is not imported yet"}
+    state = status()
+    if state["phase"] == PHASE_STEADY:
+        return {"action": "none", "reason": "the first run is complete"}
+    info = plan_info()
+    if info.get("ok"):
+        return {"action": "none", "reason": "the plan is declared"}
+    if not info.get("hint"):
+        return {"action": "none", "reason": "the plan table cannot be read"}
+    registry = _load_module("plan_registry", "plan_registry.py")
+    provider = (registry.question_options() or {}).get("provider") if registry is not None else None
+    if not provider:
+        return {"action": "none", "reason": "no plans are known for the active provider"}
+    try:
+        kind, answer = _plan_question_state(state, provider)
+    except sqlite3.Error:
+        return {"action": "none", "reason": "the database cannot be read"}
+    if kind == "open":
+        return {"action": "none", "reason": "a question about the plan is open"}
+    chosen = (answer or {}).get("scelte")
+    choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
+    if kind == "answered" and choice and registry.find_plan(provider, choice) is not None:
+        left = after_s - (now - (_answered_at(answer) or now)).total_seconds()
+        if left > 0:
+            return {"action": "waiting", "seconds_left": int(left)}
+        plan = registry.set_plan(provider, choice)
+        return {"action": "declared", "provider": provider, "plan": plan["id"]}
+    cards = _cards_asked(state, provider)
+    if cards >= MAX_PLAN_CARDS:
+        return {"action": "stopped", "reason": f"the plan was asked {cards} times and the user named none"}
+    since = _answered_at(answer) if kind == "answered" else None
+    wait = reask_s
+    if since is None:
+        since, wait = datetime.fromtimestamp(imported, timezone.utc), after_s
+    left = wait - (now - since).total_seconds()
+    if left > 0:
+        return {"action": "waiting", "seconds_left": int(left)}
+    asked = ask_plan(agent="capitano", asked_by="net", reask_s=reask_s, now=now)
+    return dict(asked, action="asked" if asked.get("asked") else ("none" if asked.get("ok") else "failed"))
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="First-run status")
     ap.add_argument("command", nargs="?", default="status",
                     choices=["status", "begin-burst", "check", "complete", "reset",
-                             "plan"])
+                             "plan", "ask-plan", "plan-question-check"])
     ap.add_argument("--reason", default="closed manually")
+    ap.add_argument("--after", type=float, default=PLAN_QUESTION_AFTER_S,
+                    help="plan-question-check: seconds without a question before the system asks")
+    ap.add_argument("--reask", type=float, default=PLAN_REASK_AFTER_S,
+                    help="ask-plan, plan-question-check: seconds before the card comes back after an answer that named no plan")
     args = ap.parse_args(argv)
 
     if args.command == "status":
@@ -276,6 +512,10 @@ def main(argv: list[str]) -> int:
         out = check()
     elif args.command == "complete":
         out = complete(args.reason)
+    elif args.command == "ask-plan":
+        out = ask_plan(reask_s=args.reask)
+    elif args.command == "plan-question-check":
+        out = plan_question_check(args.after, args.reask)
     else:
         out = reset()
 
