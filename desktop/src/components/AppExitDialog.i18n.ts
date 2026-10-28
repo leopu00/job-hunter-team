@@ -28,7 +28,7 @@ export interface AppExitText {
 
 export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
   it: {
-    menu: "Chiudi l’app",
+    menu: "Esci da Job Hunter Team",
     title: "Chiudere l’app?",
     body: "La squadra non vive nella finestra: lavora in un contenitore sul tuo computer, e chiudere la finestra non la ferma. Continua a lavorare e a consumare.",
     ordered: "Fermali in ordine",
@@ -46,7 +46,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Non sono riuscito a fermare tutto, e l’app resta aperta. Puoi riprovare, forzare lo stop o lasciare la squadra al lavoro.",
   },
   en: {
-    menu: "Close the app",
+    menu: "Quit Job Hunter Team",
     title: "Close the app?",
     body: "The team does not live in the window: it works in a container on your computer, and closing the window does not stop it. It keeps working and spending.",
     ordered: "Stop them in order",
@@ -64,7 +64,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "I could not stop everything, and the app stays open. You can try again, force the stop or leave the team working.",
   },
   hu: {
-    menu: "Az alkalmazás bezárása",
+    menu: "Kilépés a Job Hunter Teamből",
     title: "Bezárod az alkalmazást?",
     body: "A csapat nem az ablakban él: egy tárolóban dolgozik a számítógépeden, és az ablak bezárása nem állítja le. Tovább dolgozik és költ.",
     ordered: "Leállítás rendben",
@@ -82,7 +82,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Nem sikerült mindent leállítani, az alkalmazás nyitva marad. Próbálhatod újra, erőltetheted a leállítást, vagy hagyhatod dolgozni a csapatot.",
   },
   es: {
-    menu: "Cerrar la app",
+    menu: "Salir de Job Hunter Team",
     title: "¿Cerrar la app?",
     body: "El equipo no vive en la ventana: trabaja en un contenedor de tu ordenador, y cerrar la ventana no lo detiene. Sigue trabajando y gastando.",
     ordered: "Detenerlos en orden",
@@ -100,7 +100,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "No he podido detenerlo todo, y la app sigue abierta. Puedes reintentar, forzar la parada o dejar el equipo trabajando.",
   },
   de: {
-    menu: "App schließen",
+    menu: "Job Hunter Team beenden",
     title: "App schließen?",
     body: "Das Team lebt nicht im Fenster: Es arbeitet in einem Container auf deinem Computer, und das Schließen des Fensters hält es nicht an. Es arbeitet weiter und verbraucht weiter.",
     ordered: "Der Reihe nach anhalten",
@@ -118,7 +118,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Ich konnte nicht alles anhalten, und die App bleibt offen. Du kannst es erneut versuchen, das Anhalten erzwingen oder das Team weiterarbeiten lassen.",
   },
   fr: {
-    menu: "Fermer l’app",
+    menu: "Quitter Job Hunter Team",
     title: "Fermer l’app ?",
     body: "L’équipe ne vit pas dans la fenêtre : elle travaille dans un conteneur sur ton ordinateur, et fermer la fenêtre ne l’arrête pas. Elle continue de travailler et de consommer.",
     ordered: "Les arrêter dans l’ordre",
@@ -136,7 +136,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Je n’ai pas pu tout arrêter, et l’app reste ouverte. Tu peux réessayer, forcer l’arrêt ou laisser l’équipe travailler.",
   },
   pt: {
-    menu: "Fechar a app",
+    menu: "Sair de Job Hunter Team",
     title: "Fechar a app?",
     body: "A equipa não vive na janela: trabalha num contentor no teu computador, e fechar a janela não a pára. Continua a trabalhar e a gastar.",
     ordered: "Pará-los por ordem",

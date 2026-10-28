@@ -16,7 +16,7 @@ describe("the shell's own words", () => {
 
   it("keep the Italian wording the app had before", () => {
     const it = SHELL_TEXT.it;
-    expect([it.navAria, it.refresh, it.signOut, it.signingOut]).toEqual(["Navigazione app", "Aggiorna", "Esci", "Uscita…"]);
+    expect([it.navAria, it.refresh, it.signOut, it.signingOut]).toEqual(["Navigazione app", "Aggiorna", "Disconnetti", "Disconnessione…"]);
     expect(it.pageReadFailed("Aggiorna")).toBe("Non riesco a leggere questa pagina. Controlla la connessione e premi «Aggiorna».");
   });
 

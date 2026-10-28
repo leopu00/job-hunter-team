@@ -29,6 +29,8 @@ import { TeamOffBanner } from "./TeamOffBanner";
 import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
+import { EXIT_OPEN_EVENT } from "../lib/app-exit";
+import { APP_EXIT_TEXT } from "../components/AppExitDialog.i18n";
 import { beginPageLoad } from "../lib/page-timing";
 import { forgetReadsInFlight } from "../lib/read-deadline";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
@@ -153,6 +155,10 @@ function Navbar({
               {readOnlyText.back}
             </button>
           )}
+          {/* leaving the app, not the account: it asks what to do with the team (components/AppExitDialog) */}
+          <button type="button" className={button} data-testid="app-exit-button" onClick={() => window.dispatchEvent(new Event(EXIT_OPEN_EVENT))}>
+            {APP_EXIT_TEXT[appLocale()].menu}
+          </button>
           <button type="button" className={button} onClick={() => void logout()} disabled={signingOut} title={shellText.signOutNote}>
             {signingOut ? shellText.signingOut : shellText.signOut}
           </button>
