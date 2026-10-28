@@ -36,7 +36,7 @@ describe("the chat's words for the kinds, the questions and the receipts", () =>
 
   it.each(locales)("%s fills every new sentence, and the count goes in the jump label", (locale) => {
     const t = DIRECT_CHAT_TEXT[locale];
-    for (const value of [t.sent, t.notSent, t.sendEnterAgain, t.takenUnknown, t.answerSeen, t.answerWaiting, t.answerResolved, t.jumpToLatest, t.answerInWords, t.suggestionsLabel, t.today, t.yesterday, t.replyAction, t.replyingTo, t.replyingToQuestion, t.replyClear, t.quotePrefix, t.answerTextKept]) {
+    for (const value of [t.sent, t.notSent, t.sendEnterAgain, t.takenUnknown, t.answerSeen, t.answerWaiting, t.answerResolved, t.jumpToLatest, t.answerInWords, t.suggestionsLabel, t.today, t.yesterday, t.replyAction, t.replyingTo, t.replyingToQuestion, t.replyClear, t.quotePrefix, t.answerTextKept, t.answerBelow]) {
       expect(value.trim()).not.toBe("");
     }
     for (const value of [...Object.values(t.kinds), ...Object.values(t.answerErrors), ...Object.values(t.answerInvalid)]) {

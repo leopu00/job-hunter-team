@@ -4975,6 +4975,14 @@ mod tests {
         };
         let shown = page(good.clone());
         assert_eq!(shown[0], good, "a question in its shape passes as it is");
+        // asked in plain words: an empty list of options, no buttons, and it still reaches the page
+        let mut plain = good.clone();
+        plain["id"] = serde_json::json!("pm:11");
+        plain["options"] = serde_json::json!([]);
+        plain["free"] = serde_json::json!(false);
+        plain["state"] = serde_json::json!("open");
+        plain.as_object_mut().unwrap().remove("answer");
+        assert_eq!(page(plain.clone()), serde_json::json!([plain]), "a question with no options passes as it is");
         // one field out of its shape: the question is left out whole
         for (field, value) in [
             ("id", serde_json::json!("aq capitano")),

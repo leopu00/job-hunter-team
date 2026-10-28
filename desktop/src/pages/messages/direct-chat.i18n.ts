@@ -55,6 +55,8 @@ export interface DirectChatText {
   /** The label of each kind of message, on every message of the agent and on its questions. */
   kinds: Record<"urgent" | "blocked" | "question" | "completed" | "info", string>;
   answerSend: string;
+  /** Under a question asked in plain words (no buttons): it is answered by writing in the chat's own box. */
+  answerBelow: string;
   /** Under an answered question: the agent's tool picked the answer up (not yet that the agent acted on it). */
   answerSeen: string;
   /** Under an answered question the agent's tool has not picked up yet. */
@@ -153,6 +155,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Rispondi",
     answerSeen: "Presa dallo strumento dell'agente",
     answerWaiting: "Inviata: lo strumento dell'agente non l'ha ancora presa",
+    answerBelow: "Rispondi scrivendo qui sotto.",
     answerExpired: "Scaduta: è stata presa la risposta di riserva",
     answerResolved: "Risolta: non serve più una risposta",
     notSent: "Incollato ma non inviato",
@@ -220,6 +223,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Answer",
     answerSeen: "Picked up by the agent's tool",
     answerWaiting: "Sent: the agent's tool has not picked it up yet",
+    answerBelow: "Answer by writing below.",
     answerExpired: "Expired: the fallback answer was taken",
     answerResolved: "Resolved: no answer is needed any more",
     notSent: "Pasted but not sent",
@@ -287,6 +291,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Antworten",
     answerSeen: "Vom Werkzeug des Agenten abgeholt",
     answerWaiting: "Gesendet: das Werkzeug des Agenten hat sie noch nicht abgeholt",
+    answerBelow: "Antworte unten im Eingabefeld.",
     answerExpired: "Abgelaufen: die Ersatzantwort wurde genommen",
     answerResolved: "Erledigt: eine Antwort ist nicht mehr nötig",
     notSent: "Eingefügt, aber nicht gesendet",
@@ -354,6 +359,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Répondre",
     answerSeen: "Prise par l'outil de l'agent",
     answerWaiting: "Envoyée : l'outil de l'agent ne l'a pas encore prise",
+    answerBelow: "Réponds en écrivant ci-dessous.",
     answerExpired: "Expirée : la réponse de repli a été prise",
     answerResolved: "Résolue : plus besoin de réponse",
     notSent: "Collé mais non envoyé",
@@ -421,6 +427,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Responder",
     answerSeen: "Recogida por la herramienta del agente",
     answerWaiting: "Enviada: la herramienta del agente aún no la ha recogido",
+    answerBelow: "Responde escribiendo abajo.",
     answerExpired: "Caducada: se tomó la respuesta de reserva",
     answerResolved: "Resuelta: ya no hace falta respuesta",
     notSent: "Pegado pero no enviado",
@@ -488,6 +495,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Responder",
     answerSeen: "Recolhida pela ferramenta do agente",
     answerWaiting: "Enviada: a ferramenta do agente ainda não a recolheu",
+    answerBelow: "Responde a escrever em baixo.",
     answerExpired: "Expirada: foi tomada a resposta de reserva",
     answerResolved: "Resolvida: já não é preciso responder",
     notSent: "Colado mas não enviado",
@@ -555,6 +563,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answerSend: "Válasz",
     answerSeen: "Az ügynök eszköze átvette",
     answerWaiting: "Elküldve: az ügynök eszköze még nem vette át",
+    answerBelow: "Válaszolj lent, a beírómezőben.",
     answerExpired: "Lejárt: a tartalék válasz lett kiválasztva",
     answerResolved: "Megoldva: már nincs szükség válaszra",
     notSent: "Beillesztve, de nincs elküldve",

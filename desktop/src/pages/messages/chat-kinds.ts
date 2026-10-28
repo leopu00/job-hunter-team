@@ -96,17 +96,20 @@ function cleanAnswer(value: unknown, options: DirectChatQuestionOption[]): Direc
   };
 }
 
-/** A question as the screen shows it, or null when it cannot be one (no id, no time, no text, no options). */
+/** A question as the screen shows it, or null when it cannot be one (no id, no time, no text, or only broken options). */
 export function cleanQuestion(value: unknown): DirectChatQuestion | null {
   if (!isObject(value) || typeof value.id !== "string" || !value.id || !isTime(value.at)) return null;
   if (typeof value.text !== "string" || !value.text.trim()) return null;
   const seen = new Set<string>();
-  const options = (Array.isArray(value.options) ? value.options : [])
+  if (!Array.isArray(value.options)) return null;
+  const given = value.options;
+  const options = given
     .map(cleanOption)
     .filter((o): o is DirectChatQuestionOption => o !== null && !seen.has(o.id) && (seen.add(o.id), true))
     .slice(0, QUESTION_LIMITS.options);
-  // the team asks with 2 to 8 options, always: a question without one is not shown
-  if (options.length === 0) return null;
+  // a question asked in plain words comes with none, said so by the team (an empty list): a card with no buttons,
+  // answered in the chat's own box. Options that were given and all broken are not that: the question is not shown
+  if (given.length > 0 && options.length === 0) return null;
   const answer = cleanAnswer(value.answer, options);
   const state = value.state === "answered" || value.state === "expired" ? value.state : "open";
   const subject = typeof value.subject === "string" && value.subject.trim() ? cut(value.subject.trim(), QUESTION_LIMITS.subject) : undefined;

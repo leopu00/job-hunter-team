@@ -111,10 +111,12 @@ describe("a question, read defensively", () => {
     expect(q.options[1].label).toHaveLength(60);
   });
 
-  it("without options it is not a question: the team always asks with options", () => {
-    expect(cleanQuestion(question({ options: [] }))).toBeNull();
+  it("an empty list of options is a question asked in plain words; options that were given and all broken are not shown", () => {
+    const plain = cleanQuestion(question({ options: [], free: false }))!;
+    expect(plain.options).toEqual([]);
+    expect(plain.state).toBe("open");
     expect(cleanQuestion(question({ options: [{ id: "", label: "x" }] }))).toBeNull();
-    expect(cleanQuestion(question({ free: "yes" }))!.free).toBe(false);
+    expect(cleanQuestion({ ...question({}), options: undefined })).toBeNull();
   });
 
   it("an answer from the team closes it, with only the choices among its options", () => {
