@@ -2,12 +2,18 @@ import { useEffect, useState } from "react";
 import type { Locale } from "@/i18n/config";
 import { LOCAL_PROFILES_TEXT } from "../components/local-profiles.i18n";
 import { appLocale } from "../lib/app-locale";
+import { waitAtMost } from "../lib/wait-at-most";
 import { readDesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
 import { listLocalProfiles, localIdentitySelected, readLocalProfile, readTeamOwnerCopy } from "../lib/local-profile";
 import { useLocation } from "./router";
 
 /** Whose the team of this computer is, as seen from the profile in use. */
-export type TeamOwnerView = { owner: "self" | "none" } | { owner: "other"; name: string | null };
+export type TeamOwnerView =
+  | { owner: "self" | "none" }
+  | { owner: "other"; name: string | null; /** the owner is an account that signed in, not a local profile */ account?: boolean };
+
+/** How long the first frame waits for the backend before it shows the renderer's copy. */
+const NATIVE_WAIT_MS = 1500;
 
 /**
  * The renderer's own copy of the answer: the profile in use against the one that started its setup
@@ -26,8 +32,8 @@ export function readTeamOwnerView(): TeamOwnerView {
  * The backend's answer, which is the truth: who the owner marker names, against the profile in use.
  * Null when it cannot be asked (not in the desktop app, a backend without the command, a reply that
  * is not one): the renderer's copy then speaks. A team nobody owns yet, or an owner that is an
- * account, are answers: the first is «none» and the second is another owner whose name is not a
- * local profile's.
+ * account, are answers: the first is «none» and the second is another owner that is an account.
+ * A local profile this list does not have is another owner whose name is not known.
  */
 export async function readNativeTeamOwnerView(
   ask: typeof readDesktopTeamOwnerIdentity = readDesktopTeamOwnerIdentity,
@@ -42,9 +48,8 @@ export async function readNativeTeamOwnerView(
   const active = readLocalProfile();
   if (!active || identity === null) return { owner: "none" };
   if (identity.kind === "local" && identity.profileId === active.profileId) return { owner: "self" };
-  const name = identity.kind === "local"
-    ? listLocalProfiles().find((profile) => profile.profileId === identity.profileId)?.displayName ?? null
-    : null;
+  if (identity.kind === "google") return { owner: "other", name: null, account: true };
+  const name = listLocalProfiles().find((profile) => profile.profileId === identity.profileId)?.displayName ?? null;
   return { owner: "other", name };
 }
 
@@ -69,18 +74,17 @@ export function LocalTeamOwnerBanner({
 }) {
   const locale = localeOverride ?? appLocale();
   const { path } = useLocation();
-  const [view, setView] = useState<TeamOwnerView>(() => read());
+  // null while the backend is asked: nothing shows, so the copy never shows only to be taken back
+  const [view, setView] = useState<TeamOwnerView | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // read again where the answer can have changed: another page, the window coming back
+  // read again where the answer can have changed: another page, the window coming back (what shows stays until the new answer)
   useEffect(() => {
     let live = true;
     const again = () => {
-      setView(read());
-      readNative().then(
-        (native) => { if (live && native) setView(native); },
-        () => undefined,
-      );
+      void waitAtMost(readNative(), NATIVE_WAIT_MS).then((native) => {
+        if (live) setView(native ?? read());
+      });
     };
     again();
     window.addEventListener("focus", again);
@@ -90,9 +94,11 @@ export function LocalTeamOwnerBanner({
     };
   }, [read, readNative, path]);
 
-  if (view.owner !== "other") return null;
+  if (!view || view.owner !== "other") return null;
   const t = LOCAL_PROFILES_TEXT[locale];
-  const text = view.name ? t.ownerBanner.replace("{name}", () => view.name as string) : t.ownerBannerUnknown;
+  const text = view.account
+    ? t.ownerBannerAccount
+    : view.name ? t.ownerBanner.replace("{name}", () => view.name as string) : t.ownerBannerUnknown;
   return (
     <div
       role="status"
