@@ -168,21 +168,21 @@ struct LocalProfileRecord {
     scope_digest: String,
 }
 
-fn valid_digest(value: &str) -> bool {
+pub(crate) fn valid_digest(value: &str) -> bool {
     value.len() == 64
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
 }
 
-fn local_profiles_dir(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+pub(crate) fn local_profiles_dir(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     app.path()
         .app_local_data_dir()
         .map(|root| root.join("local-profiles"))
         .map_err(|_| "local_profile_storage_unavailable")
 }
 
-fn valid_profile_id(value: &str) -> bool {
+pub(crate) fn valid_profile_id(value: &str) -> bool {
     valid_digest(value)
 }
 
@@ -216,7 +216,7 @@ pub(crate) fn cli_local_scope(
     load_local_scope_at(&local_profiles_dir(app)?, profile_id)
 }
 
-fn load_local_scope_at(root: &Path, profile_id: &str) -> Result<AccountScope, &'static str> {
+pub(crate) fn load_local_scope_at(root: &Path, profile_id: &str) -> Result<AccountScope, &'static str> {
     if !valid_profile_id(profile_id) {
         return Err("local_profile_invalid");
     }
