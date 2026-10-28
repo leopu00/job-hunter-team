@@ -40,23 +40,20 @@ export interface AgentsPanelText {
   screenMoving: string; // {seconds}
   statesUnknown: string;
   tabTerminal: string;
-  tabChat: string;
-  /** The terminal under the chat is folded away by default: the buttons that show and hide it. */
-  terminalShow: string;
-  terminalHide: string;
+  /** The button that opens Messages with this agent: «Chat with {name}». */
+  chatWith: string; // {name}
   // the bar over the terminal: who the agent is and what it uses, in labelled pieces
   barLabel: string;
   barProvider: string;
   barModel: string;
   barContext: string;
   barUsage: string;
-  chatSoon: string; // {name}
   screenReading: string;
   screenAt: string; // {time}
   screenDown: string;
-  /** Over the terminal: it is only to be watched; writing is the Chat tab's. */
+  /** Over the terminal: it is only to be watched; writing is the Messages page's. */
   terminalWatchOnly: string;
-  /** After it, for the agents with a chat: where writing goes instead. */
+  /** After it: the button that leads to where writing goes. */
   terminalWriteInChat: string; // {name}
   screenEmpty: string;
   start: string;
@@ -218,20 +215,17 @@ const it: AgentsPanelText = {
   statesUnknown:
     "La squadra non pubblica ancora lo stato degli agenti: si vedrà dopo un suo aggiornamento. Fino ad allora lo stato è «sconosciuto».",
   tabTerminal: "Terminale",
-  tabChat: "Chat",
-  terminalShow: "Mostra il terminale",
-  terminalHide: "Nascondi il terminale",
+  chatWith: "Chatta con {name}",
   barLabel: "Dati dell’agente",
   barProvider: "Provider",
   barModel: "Modello",
   barContext: "Contesto",
   barUsage: "Consumo",
-  chatSoon: "La chat con {name} arriva con il prossimo aggiornamento dell’app.",
   screenReading: "Leggo il terminale…",
   screenAt: "Ultime righe, lette alle {time}. Si aggiornano da sole finché il terminale è aperto.",
   screenDown: "La sessione non è accesa.",
   terminalWatchOnly: "Nel terminale non si scrive: è solo da guardare.",
-  terminalWriteInChat: "Per scrivere a {name} usa la chat qui sopra.",
+  terminalWriteInChat: "Per scrivere a {name} usa «Chatta con {name}».",
   screenEmpty: "Il terminale è vuoto.",
   start: "Accendi",
   stop: "Spegni",
@@ -389,20 +383,17 @@ const en: AgentsPanelText = {
   statesUnknown:
     "The team does not publish the agents' state yet: it will show after the team is updated. Until then the state is “unknown”.",
   tabTerminal: "Terminal",
-  tabChat: "Chat",
-  terminalShow: "Show the terminal",
-  terminalHide: "Hide the terminal",
+  chatWith: "Chat with {name}",
   barLabel: "Agent details",
   barProvider: "Provider",
   barModel: "Model",
   barContext: "Context",
   barUsage: "Usage",
-  chatSoon: "The chat with {name} comes with the next update of the app.",
   screenReading: "Reading the terminal…",
   screenAt: "Last lines, read at {time}. They refresh by themselves while the terminal is open.",
   screenDown: "The session is not up.",
   terminalWatchOnly: "You do not write in the terminal: it is only to be watched.",
-  terminalWriteInChat: "To write to {name}, use the chat above.",
+  terminalWriteInChat: "To write to {name}, use «Chat with {name}».",
   screenEmpty: "The terminal is empty.",
   start: "Start",
   stop: "Stop",
@@ -559,20 +550,17 @@ const de: AgentsPanelText = {
   statesUnknown:
     "Das Team veröffentlicht den Status der Agenten noch nicht: Er erscheint nach einem Update des Teams. Bis dahin ist der Status „unbekannt“.",
   tabTerminal: "Terminal",
-  tabChat: "Chat",
-  terminalShow: "Terminal anzeigen",
-  terminalHide: "Terminal ausblenden",
+  chatWith: "Mit {name} chatten",
   barLabel: "Daten des Agenten",
   barProvider: "Anbieter",
   barModel: "Modell",
   barContext: "Kontext",
   barUsage: "Verbrauch",
-  chatSoon: "Der Chat mit {name} kommt mit dem nächsten Update der App.",
   screenReading: "Ich lese das Terminal…",
   screenAt: "Letzte Zeilen, gelesen um {time}. Sie aktualisieren sich von selbst, solange das Terminal offen ist.",
   screenDown: "Die Sitzung ist nicht aktiv.",
   terminalWatchOnly: "Ins Terminal wird nicht geschrieben: Es ist nur zum Ansehen.",
-  terminalWriteInChat: "Um {name} zu schreiben, nutze den Chat weiter oben.",
+  terminalWriteInChat: "Um {name} zu schreiben, nutze «Mit {name} chatten».",
   screenEmpty: "Das Terminal ist leer.",
   start: "Starten",
   stop: "Stoppen",
@@ -730,20 +718,17 @@ const es: AgentsPanelText = {
   statesUnknown:
     "El equipo todavía no publica el estado de los agentes: se verá tras una actualización del equipo. Hasta entonces el estado es «desconocido».",
   tabTerminal: "Terminal",
-  tabChat: "Chat",
-  terminalShow: "Mostrar el terminal",
-  terminalHide: "Ocultar el terminal",
+  chatWith: "Chatear con {name}",
   barLabel: "Datos del agente",
   barProvider: "Proveedor",
   barModel: "Modelo",
   barContext: "Contexto",
   barUsage: "Consumo",
-  chatSoon: "El chat con {name} llega con la próxima actualización de la app.",
   screenReading: "Leyendo el terminal…",
   screenAt: "Últimas líneas, leídas a las {time}. Se actualizan solas mientras el terminal está abierto.",
   screenDown: "La sesión no está activa.",
   terminalWatchOnly: "En el terminal no se escribe: solo se mira.",
-  terminalWriteInChat: "Para escribir a {name}, usa el chat de arriba.",
+  terminalWriteInChat: "Para escribir a {name}, usa «Chatear con {name}».",
   screenEmpty: "El terminal está vacío.",
   start: "Encender",
   stop: "Apagar",
@@ -901,20 +886,17 @@ const fr: AgentsPanelText = {
   statesUnknown:
     "L’équipe ne publie pas encore l’état des agents : il apparaîtra après une mise à jour de l’équipe. D’ici là, l’état est « inconnu ».",
   tabTerminal: "Terminal",
-  tabChat: "Chat",
-  terminalShow: "Afficher le terminal",
-  terminalHide: "Masquer le terminal",
+  chatWith: "Discuter avec {name}",
   barLabel: "Données de l’agent",
   barProvider: "Fournisseur",
   barModel: "Modèle",
   barContext: "Contexte",
   barUsage: "Consommation",
-  chatSoon: "Le chat avec {name} arrive avec la prochaine mise à jour de l’app.",
   screenReading: "Je lis le terminal…",
   screenAt: "Dernières lignes, lues à {time}. Elles se mettent à jour toutes seules tant que le terminal est ouvert.",
   screenDown: "La session n’est pas active.",
   terminalWatchOnly: "On n’écrit pas dans le terminal : il sert seulement à regarder.",
-  terminalWriteInChat: "Pour écrire à {name}, utilise le chat ci-dessus.",
+  terminalWriteInChat: "Pour écrire à {name}, utilise « Discuter avec {name} ».",
   screenEmpty: "Le terminal est vide.",
   start: "Démarrer",
   stop: "Arrêter",
@@ -1072,20 +1054,17 @@ const hu: AgentsPanelText = {
   statesUnknown:
     "A csapat még nem teszi közzé az ügynökök állapotát: a csapat frissítése után látszik majd. Addig az állapot „ismeretlen”.",
   tabTerminal: "Terminál",
-  tabChat: "Csevegés",
-  terminalShow: "A terminál megjelenítése",
-  terminalHide: "A terminál elrejtése",
+  chatWith: "Csevegés vele: {name}",
   barLabel: "Az ügynök adatai",
   barProvider: "Szolgáltató",
   barModel: "Modell",
   barContext: "Kontextus",
   barUsage: "Fogyasztás",
-  chatSoon: "A(z) {name} ügynökkel való csevegés az alkalmazás következő frissítésével érkezik.",
   screenReading: "Beolvasom a terminált…",
   screenAt: "Utolsó sorok, beolvasva: {time}. Amíg a terminál nyitva van, maguktól frissülnek.",
   screenDown: "A munkamenet nem aktív.",
   terminalWatchOnly: "A terminálba nem lehet írni: csak megtekintésre szolgál.",
-  terminalWriteInChat: "Ha írni szeretnél neki ({name}), használd a fenti chatet.",
+  terminalWriteInChat: "Ha írni szeretnél neki ({name}), használd a(z) „Csevegés vele: {name}” gombot.",
   screenEmpty: "A terminál üres.",
   start: "Bekapcsolás",
   stop: "Kikapcsolás",
@@ -1243,20 +1222,17 @@ const pt: AgentsPanelText = {
   statesUnknown:
     "A equipa ainda não publica o estado dos agentes: aparecerá depois de uma atualização da equipa. Até lá, o estado é «desconhecido».",
   tabTerminal: "Terminal",
-  tabChat: "Chat",
-  terminalShow: "Mostrar o terminal",
-  terminalHide: "Ocultar o terminal",
+  chatWith: "Conversar com {name}",
   barLabel: "Dados do agente",
   barProvider: "Fornecedor",
   barModel: "Modelo",
   barContext: "Contexto",
   barUsage: "Consumo",
-  chatSoon: "O chat com {name} chega com a próxima atualização da app.",
   screenReading: "A ler o terminal…",
   screenAt: "Últimas linhas, lidas às {time}. Atualizam-se sozinhas enquanto o terminal estiver aberto.",
   screenDown: "A sessão não está ativa.",
   terminalWatchOnly: "No terminal não se escreve: é só para ver.",
-  terminalWriteInChat: "Para escrever a {name}, usa o chat acima.",
+  terminalWriteInChat: "Para escrever a {name}, usa «Conversar com {name}».",
   screenEmpty: "O terminal está vazio.",
   start: "Ligar",
   stop: "Desligar",
