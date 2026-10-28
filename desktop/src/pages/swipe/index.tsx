@@ -59,7 +59,8 @@ export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient 
         data-testid="desktop-swipe-page"
         className="desktop-swipe-page min-h-0 overflow-hidden"
         style={{
-          height: "calc(100svh / var(--zoom, 1) - 3.5rem)",
+          // the whole of the space the Shell gives it: the window under the navbar and its bars
+          height: "100%",
           animation: "fade-in 0.35s ease both",
         }}
       >
