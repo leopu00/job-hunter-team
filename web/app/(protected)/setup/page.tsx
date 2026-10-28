@@ -13,9 +13,7 @@ const STEP_LABEL_KEYS: Record<Step, string> = {
   apikey: "step_apikey",
   health: "step_health",
 };
-const PROVIDERS = [
-  { v: "openai", l: "OpenAI" },
-];
+const PROVIDERS = [{ v: "openai", l: "OpenAI" }];
 const MODELS: Record<string, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini"],
 };

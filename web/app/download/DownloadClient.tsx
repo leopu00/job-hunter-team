@@ -194,61 +194,106 @@ const REQ_OS: Record<Lang, ReqOs> = {
     reqTitle: "Requisiti (Mac con Apple silicon)",
     reqRows: [
       ["Homebrew", "Già installato — l'app lo usa per installare Podman"],
-      ["RAM", "Mac con almeno 16 GB consigliato · la macchina per i container usa 4 GiB"],
+      [
+        "RAM",
+        "Mac con almeno 16 GB consigliato · la macchina per i container usa 4 GiB",
+      ],
       ["CPU", "2 per la macchina per i container"],
-      ["Disco", "La macchina per i container arriva fino a 30 GiB · nessun minimo misurato"],
+      [
+        "Disco",
+        "La macchina per i container arriva fino a 30 GiB · nessun minimo misurato",
+      ],
     ],
   },
   en: {
     reqTitle: "Requirements (Mac with Apple silicon)",
     reqRows: [
       ["Homebrew", "Already installed — the app uses it to install Podman"],
-      ["RAM", "A Mac with at least 16 GB is recommended · the container machine uses 4 GiB"],
+      [
+        "RAM",
+        "A Mac with at least 16 GB is recommended · the container machine uses 4 GiB",
+      ],
       ["CPU", "2 for the container machine"],
-      ["Disk", "The container machine grows up to 30 GiB · no minimum has been measured"],
+      [
+        "Disk",
+        "The container machine grows up to 30 GiB · no minimum has been measured",
+      ],
     ],
   },
   es: {
     reqTitle: "Requisitos (Mac con Apple silicon)",
     reqRows: [
       ["Homebrew", "Ya instalado — la aplicación lo usa para instalar Podman"],
-      ["RAM", "Se recomienda un Mac con al menos 16 GB · la máquina de contenedores usa 4 GiB"],
+      [
+        "RAM",
+        "Se recomienda un Mac con al menos 16 GB · la máquina de contenedores usa 4 GiB",
+      ],
       ["CPU", "2 para la máquina de contenedores"],
-      ["Disco", "La máquina de contenedores crece hasta 30 GiB · no se ha medido ningún mínimo"],
+      [
+        "Disco",
+        "La máquina de contenedores crece hasta 30 GiB · no se ha medido ningún mínimo",
+      ],
     ],
   },
   fr: {
     reqTitle: "Prérequis (Mac Apple silicon)",
     reqRows: [
-      ["Homebrew", "Déjà installé — l'application s'en sert pour installer Podman"],
-      ["RAM", "Un Mac avec au moins 16 Go est recommandé · la machine de conteneurs utilise 4 GiB"],
+      [
+        "Homebrew",
+        "Déjà installé — l'application s'en sert pour installer Podman",
+      ],
+      [
+        "RAM",
+        "Un Mac avec au moins 16 Go est recommandé · la machine de conteneurs utilise 4 GiB",
+      ],
       ["CPU", "2 pour la machine de conteneurs"],
-      ["Disque", "La machine de conteneurs grandit jusqu'à 30 GiB · aucun minimum n'a été mesuré"],
+      [
+        "Disque",
+        "La machine de conteneurs grandit jusqu'à 30 GiB · aucun minimum n'a été mesuré",
+      ],
     ],
   },
   de: {
     reqTitle: "Voraussetzungen (Mac mit Apple Silicon)",
     reqRows: [
-      ["Homebrew", "Bereits installiert — die App nutzt es, um Podman zu installieren"],
-      ["RAM", "Empfohlen: ein Mac mit mindestens 16 GB · die Container-Maschine nutzt 4 GiB"],
+      [
+        "Homebrew",
+        "Bereits installiert — die App nutzt es, um Podman zu installieren",
+      ],
+      [
+        "RAM",
+        "Empfohlen: ein Mac mit mindestens 16 GB · die Container-Maschine nutzt 4 GiB",
+      ],
       ["CPU", "2 für die Container-Maschine"],
-      ["Festplatte", "Die Container-Maschine wächst bis auf 30 GiB · es wurde kein Minimum gemessen"],
+      [
+        "Festplatte",
+        "Die Container-Maschine wächst bis auf 30 GiB · es wurde kein Minimum gemessen",
+      ],
     ],
   },
   pt: {
     reqTitle: "Requisitos (Mac com Apple silicon)",
     reqRows: [
       ["Homebrew", "Já instalado — a aplicação usa-o para instalar o Podman"],
-      ["RAM", "Recomenda-se um Mac com pelo menos 16 GB · a máquina de contentores usa 4 GiB"],
+      [
+        "RAM",
+        "Recomenda-se um Mac com pelo menos 16 GB · a máquina de contentores usa 4 GiB",
+      ],
       ["CPU", "2 para a máquina de contentores"],
-      ["Disco", "A máquina de contentores cresce até 30 GiB · não foi medido qualquer mínimo"],
+      [
+        "Disco",
+        "A máquina de contentores cresce até 30 GiB · não foi medido qualquer mínimo",
+      ],
     ],
   },
   hu: {
     reqTitle: "Követelmények (Apple silicon Mac)",
     reqRows: [
       ["Homebrew", "Már telepítve — az alkalmazás ezzel telepíti a Podmant"],
-      ["RAM", "Ajánlott egy legalább 16 GB-os Mac · a konténergép 4 GiB-ot használ"],
+      [
+        "RAM",
+        "Ajánlott egy legalább 16 GB-os Mac · a konténergép 4 GiB-ot használ",
+      ],
       ["CPU", "2 a konténergépnek"],
       ["Lemez", "A konténergép legfeljebb 30 GiB-ig nő · nem mértek minimumot"],
     ],

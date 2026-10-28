@@ -59,8 +59,7 @@ const T: Record<
   en: {
     title: "CLI — the jht command",
     tagline: "The essential commands to drive the team from a terminal",
-    intro1:
-      "Everything the web — and the desktop app — does, you can do with",
+    intro1: "Everything the web — and the desktop app — does, you can do with",
     intro2:
       ". It's the single surface humans, power users and AI assistants share — self-sufficient for day-to-day operation. Here are the commands you'll actually use.",
     callout1: "💡 Every command supports",
@@ -112,8 +111,7 @@ const T: Record<
   it: {
     title: "CLI — il comando jht",
     tagline: "I comandi essenziali per guidare il team da terminale",
-    intro1:
-      "Tutto ciò che fa il web — e l'app desktop — lo puoi fare con",
+    intro1: "Tutto ciò che fa il web — e l'app desktop — lo puoi fare con",
     intro2:
       ". È l'unica superficie condivisa da esseri umani, utenti esperti e assistenti AI — autosufficiente per l'uso quotidiano. Ecco i comandi che userai davvero.",
     callout1: "💡 Ogni comando supporta",
@@ -183,7 +181,8 @@ const T: Record<
     lifecycleLogs: "sigue los logs del contenedor",
     h2Setup: "🧩 Configuración y salud",
     setupSetup: "asistente interactivo: proveedor, OAuth, inicio del equipo",
-    setupDoctor: "comprueba la configuración / Node / auth / DB — debe salir con 0",
+    setupDoctor:
+      "comprueba la configuración / Node / auth / DB — debe salir con 0",
     setupHealth: "salud granular de los servicios",
     setupStatus: "estado del contenedor",
     h2Providers: "🧠 Proveedores",
@@ -279,8 +278,7 @@ const T: Record<
     title: "CLI — der Befehl jht",
     tagline:
       "Die wesentlichen Befehle, um das Team vom Terminal aus zu steuern",
-    intro1:
-      "Alles, was das Web und die Desktop-App tun, kannst du mit",
+    intro1: "Alles, was das Web und die Desktop-App tun, kannst du mit",
     intro2:
       " erledigen. Es ist die einzige Oberfläche, die Menschen, Power-User und KI-Assistenten teilen — autark für den täglichen Betrieb. Hier sind die Befehle, die du tatsächlich nutzen wirst.",
     callout1: "💡 Jeder Befehl unterstützt",
@@ -333,8 +331,7 @@ const T: Record<
     title: "CLI — a jht parancs",
     tagline:
       "A csapat terminálból való irányításához szükséges alapvető parancsok",
-    intro1:
-      "Mindent, amit a web és az asztali alkalmazás csinál, megtehetsz a",
+    intro1: "Mindent, amit a web és az asztali alkalmazás csinál, megtehetsz a",
     intro2:
       " segítségével. Ez az egyetlen felület, amelyet emberek, haladó felhasználók és MI-asszisztensek megosztanak — önellátó a napi használathoz. Íme a parancsok, amelyeket valóban használni fogsz.",
     callout1: "💡 Minden parancs támogatja a",
@@ -349,7 +346,8 @@ const T: Record<
     lifecycleLogs: "a konténer naplóinak követése",
     h2Setup: "🧩 Beállítás és állapot",
     setupSetup: "interaktív varázsló: provider, OAuth, csapat indítása",
-    setupDoctor: "konfiguráció / Node / auth / DB ellenőrzése — 0-val kell kilépnie",
+    setupDoctor:
+      "konfiguráció / Node / auth / DB ellenőrzése — 0-val kell kilépnie",
     setupHealth: "részletes szolgáltatás-állapot",
     setupStatus: "konténer állapota",
     h2Providers: "🧠 Providerek",
@@ -387,8 +385,7 @@ const T: Record<
     title: "CLI — o comando jht",
     tagline:
       "Os comandos essenciais para conduzir a equipe a partir de um terminal",
-    intro1:
-      "Tudo o que a web e a app de desktop fazem, você pode fazer com",
+    intro1: "Tudo o que a web e a app de desktop fazem, você pode fazer com",
     intro2:
       ". É a única superfície partilhada por humanos, utilizadores avançados e assistentes de IA — autossuficiente para o uso diário. Aqui estão os comandos que você realmente vai usar.",
     callout1: "💡 Todos os comandos suportam",

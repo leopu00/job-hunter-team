@@ -139,18 +139,15 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
   "/docs/guides/connect-ai-provider": {
     it: {
       title: "Collega il tuo provider AI",
-      description:
-        "Scegli e accedi a Codex — il cervello del team.",
+      description: "Scegli e accedi a Codex — il cervello del team.",
     },
     en: {
       title: "Connect your AI provider",
-      description:
-        "Choose and sign into Codex — the team's brain.",
+      description: "Choose and sign into Codex — the team's brain.",
     },
     es: {
       title: "Conecta tu proveedor de AI",
-      description:
-        "Elige e inicia sesión en Codex — el cerebro del equipo.",
+      description: "Elige e inicia sesión en Codex — el cerebro del equipo.",
     },
     fr: {
       title: "Connectez votre fournisseur AI",
@@ -159,8 +156,7 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
     },
     de: {
       title: "Verbinde deinen AI-Anbieter",
-      description:
-        "Wähle Codex und melde dich an — das Gehirn des Teams.",
+      description: "Wähle Codex und melde dich an — das Gehirn des Teams.",
     },
     hu: {
       title: "Csatlakoztasd az AI-szolgáltatód",
@@ -169,8 +165,7 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
     },
     pt: {
       title: "Liga o teu provedor de AI",
-      description:
-        "Escolhe e inicia sessão no Codex — o cérebro da equipa.",
+      description: "Escolhe e inicia sessão no Codex — o cérebro da equipa.",
     },
   },
   "/docs/guides/run-on-a-vps": {

@@ -378,7 +378,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         data-testid="positions-empty-action"
         className="mt-3 inline-block rounded border border-[var(--color-border)] px-3 py-1 text-[12px] text-[var(--color-text)] hover:border-[var(--color-blue)]"
       >
-        {filtersActive ? tr("no_positions_clear") : tr("no_positions_dashboard")}
+        {filtersActive
+          ? tr("no_positions_clear")
+          : tr("no_positions_dashboard")}
       </Link>
     </>
   );

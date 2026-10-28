@@ -610,7 +610,10 @@ export default function SettingsPage() {
 
           {tab === "security" && (
             <>
-              <Row label={tr("new_password")} hint={tr("not_in_this_version_hint")}>
+              <Row
+                label={tr("new_password")}
+                hint={tr("not_in_this_version_hint")}
+              >
                 <input
                   type="password"
                   style={{ ...inp, opacity: 0.4, cursor: "not-allowed" }}
