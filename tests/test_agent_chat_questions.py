@@ -178,6 +178,40 @@ def test_the_agent_is_woken_with_one_fixed_line_only_when_at_its_prompt(box):
     assert typed == "[ANSWER] The user answered one of your questions. Run: jht-check-user-replies --agent assistente"
 
 
+def test_a_wake_that_did_not_land_is_tried_again_by_a_detached_process_until_the_terminal_is_free(box):
+    """A first run: the person answers while the terminal is not at its prompt; the line lands when it is."""
+    import time as _time
+    qid = ask(box)
+    (box.state / "screen").write_text("Menu\n> 1. Yes\n  2. No\n", encoding="utf-8")
+    env = {**box.env, "JHT_ANSWER_WAKE_RETRY": "1", "JHT_ANSWER_WAKE_EVERY": "0.2", "JHT_ANSWER_WAKE_FOR": "20",
+           "JHT_ANSWER_WAKE_QUIET": "60"}
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "answer", "assistente", qid], input='{"choices":["breve"]}',
+                          capture_output=True, text=True, env=env, timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert not (box.state / "delivered.envelopes").exists(), "nothing typed over a menu"
+    log = box.home / "logs" / "answer-wake.log"
+    lock = box.home / "locks" / f"answer-wake-{qid}.lock"
+
+    def until(condition, seconds=15.0):
+        end = _time.monotonic() + seconds
+        while _time.monotonic() < end:
+            if condition():
+                return True
+            _time.sleep(0.1)
+        return False
+
+    assert until(lambda: log.exists() and len(log.read_text(encoding="utf-8").splitlines()) >= 3), "the retries say why"
+    assert all(line.endswith(" assistente wake_blocked") for line in log.read_text(encoding="utf-8").splitlines())
+    assert lock.exists(), "one retrying process for the question"
+    (box.state / "screen").unlink()                 # the terminal is free
+    assert until(lambda: (box.state / "delivered.envelopes").exists()), "the retry typed the wake"
+    typed = (box.state / "delivered.envelopes").read_text(encoding="utf-8").strip("\0")
+    assert typed == "[ANSWER] The user answered one of your questions. Run: jht-check-user-replies --agent assistente"
+    with sqlite3.connect(box.db) as conn:           # the agent reads the answer: the retrying process ends and lets go
+        conn.execute("UPDATE pending_user_messages SET agent_seen_reply_at = CURRENT_TIMESTAMP WHERE source_id LIKE ?", ("%" + qid,))
+    assert until(lambda: not lock.exists()), "the process ends when the answer is read"
+
+
 def test_the_contract_table_is_the_one_of_agent_questions():
     spec = importlib.util.spec_from_file_location("t90_agent_chat", SCRIPT)
     chat_module = importlib.util.module_from_spec(spec)
