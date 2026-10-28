@@ -35,6 +35,16 @@ export function planTable(provider) {
   return r.ok ? r.stdout.trimEnd() : '';
 }
 
+/**
+ * The plan id the account's last Codex reading names, or null. A suggestion for the person to confirm:
+ * nothing here declares it.
+ */
+export function suggestedPlan(provider) {
+  const r = registry(['suggest', provider]);
+  const id = r.ok ? r.stdout.trim() : '';
+  return /^[a-z0-9-]{1,24}$/.test(id) ? id : null;
+}
+
 /** The declared plan (`{id, label, …}`), `null` when none, `undefined` when it cannot be told. */
 export function declaredPlan() {
   const r = registry(['get']);

@@ -2224,6 +2224,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Cleaning from the app is not available on this system yet.",
     "To free up space, empty the Trash and delete large files you no longer need, then try again.",
   ),
+  // ── The subscription plan chosen in the setup: `jht providers plan --json` (onboarding_plans, onboarding_plan_declare) ──
+  plans_unavailable: copy(
+    "Non riesco a leggere i piani di abbonamento adesso.",
+    "Puoi andare avanti: l’Assistente ti chiederà il piano in chat.",
+    "The subscription plans cannot be read right now.",
+    "You can go on: the Assistant asks you for the plan in the chat.",
+  ),
+  plan_declare_failed: copy(
+    "Non sono riuscito a salvare il piano di abbonamento.",
+    "Riprova, oppure scegli più tardi: te lo chiederà l’Assistente in chat.",
+    "The subscription plan could not be saved.",
+    "Try again, or choose later: the Assistant asks you in the chat.",
+  ),
 };
 
 /**
