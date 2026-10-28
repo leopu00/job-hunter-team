@@ -307,7 +307,11 @@ function relativeTime(value: string | null, locale: Locale): string | null {
   return formatter.format(Math.round(minutes / 60), "hour");
 }
 
-export default function MobileTeamStatus() {
+/**
+ * `showHeartbeat` false leaves out the line of the last device heartbeat: the desktop of a profile with no cloud
+ * account reads the team on its own computer, which has no device syncing to the cloud to hear from.
+ */
+export default function MobileTeamStatus({ showHeartbeat = true }: { showHeartbeat?: boolean } = {}) {
   const locale = useLocale();
   const t = T[locale] ?? EN;
   const [state, setState] = useState<TeamState | null>(null);
@@ -402,9 +406,11 @@ export default function MobileTeamStatus() {
           <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-muted)]">
             {t.readOnly}
           </p>
-          <p className="mt-1 text-[10px] text-[var(--color-dim)]">
-            {t.heartbeat}: {heartbeat ?? t.never}
-          </p>
+          {showHeartbeat && (
+            <p className="mt-1 text-[10px] text-[var(--color-dim)]">
+              {t.heartbeat}: {heartbeat ?? t.never}
+            </p>
+          )}
         </div>
 
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:min-w-52">

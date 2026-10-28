@@ -1,4 +1,5 @@
 import type { PositionWithScore } from "./types";
+import type { TeamActivityCounts } from "./team-activity";
 import type {
   PositionDetail,
   PositionFacet,
@@ -50,5 +51,16 @@ export async function readDesktopVpsPosition(
 export async function readDesktopVpsPositionFacets(): Promise<
   DesktopVpsRead<PositionFacet[]>
 > {
+  return notDesktop();
+}
+
+/**
+ * What each role of the team did per day and instance in a range, counted where the team's database is
+ * (the desktop of a profile with no cloud account). The web has no such reader: its team page reads the cloud.
+ */
+export async function readDesktopVpsTeamActivity(
+  _from: string,
+  _to: string,
+): Promise<DesktopVpsRead<TeamActivityCounts>> {
   return notDesktop();
 }

@@ -13,6 +13,7 @@ import {
   readDesktopVpsPositionFacets,
   readDesktopVpsPositions,
   readDesktopVpsPositionsWindow,
+  readDesktopVpsTeamActivity,
 } from "@/lib/desktop-vps-positions";
 // [JHT-WEB-DEMO] Modalità demo (onboarding cloud): quando il cookie
 // jht_demo_persona è attivo le query servono il dataset statico della
@@ -40,6 +41,7 @@ import {
 import {
   addDaysKey,
   buildTeamActivity,
+  buildTeamActivityFromCounts,
   normActor,
   resolveActivityRange,
   TEAM_ACTIVITY_ROLES,
@@ -1893,6 +1895,10 @@ export async function getTeamActivity(opts?: {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoTeamActivity(dp, opts);
   const { from, to } = resolveActivityRange(opts, new Date());
+  // The desktop of a profile with no cloud account: counted in the team's own database (inert on the web).
+  const desktop = await readDesktopVpsTeamActivity(from, to);
+  if (desktop.source === "vps") return buildTeamActivityFromCounts(desktop.data, from, to);
+  if (desktop.source === "unavailable") return buildTeamActivity([], from, to);
   const w = await ws();
   if (w) {
     try {

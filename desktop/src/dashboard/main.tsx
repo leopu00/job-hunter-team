@@ -1,3 +1,4 @@
+import { localTeamApi } from "../pages/team/local-team-api";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { supabase } from "../lib/supabase";
@@ -23,7 +24,7 @@ installCookieMirror();
 // Each link answers its routes and hands the rest on; the last one
 // (lib/web-api.ts) answers what nobody ported with a JSON 404. The judgement on a position goes to
 // the VPS first when the team is an existing one connected in full (lib/vps-judgement-api.ts).
-installApiBridge(shellApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase))))))));
+installApiBridge(shellApi(localTeamApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase)))))))));
 initializeTheme();
 installCsvExport();
 installDocumentSave();

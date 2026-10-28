@@ -1,3 +1,4 @@
+import { setLocalTeamData } from "../lib/local-team-data";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
@@ -1172,6 +1173,11 @@ export default function DashboardApp() {
     resumeAttemptedIdentityRef.current = null;
     void initializeAccount();
   }, [initializeAccount]);
+  // A local profile has no cloud account: once the app is open, the pages show the team of this computer. Set while
+  // rendering, before the Shell's pages read in their effects (see lib/local-team-data.ts).
+  setLocalTeamData(localProfile && gate.phase === "ready" && linkedView === null ? identityKey : null);
+  // The mode ends with the app's screen (signing out, another account): nothing is left on for the next one.
+  useEffect(() => () => setLocalTeamData(null), []);
   const teamOff = useMemo<TeamOff | null>(
     () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime: wakeRuntimeAndConnect, startTeam: startTeamFromTeamOff } : null),
     [teamOffKey, identityKey, startTeamFromTeamOff, wakeRuntimeAndConnect],
