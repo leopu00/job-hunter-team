@@ -136,7 +136,7 @@ if [ $# -eq 1 ] && [ "$1" = "-" ]; then
   # Il messaggio da stdin: `$(cat)` toglie da se' gli a capo finali. Un messaggio vuoto non parte.
   message="$(cat)"
   if [ -z "${message//[[:space:]]/}" ]; then
-    echo "jht-tmux-send: il messaggio su stdin e' vuoto: non consegno" >&2
+    echo "jht-tmux-send: the message on stdin is empty: not delivering" >&2
     exit 1
   fi
   # Una riga di chiusura `TXT` con il rientro: il heredoc non si e' chiuso e la shell ha passato anche quella riga.
@@ -144,7 +144,7 @@ if [ $# -eq 1 ] && [ "$1" = "-" ]; then
   last_line="${last_line#"${last_line%%[![:space:]]*}"}"
   last_line="${last_line%"${last_line##*[![:space:]]}"}"
   if [ "$last_line" = "TXT" ]; then
-    echo "jht-tmux-send: il messaggio finisce con una riga TXT: la riga di chiusura del heredoc aveva un rientro, quindi non si e' chiuso. Non consegno: scrivi TXT in prima colonna, da solo sulla riga." >&2
+    echo "jht-tmux-send: the message ends with a TXT line: the closing line of the heredoc was indented, so it never closed. Not delivering: put TXT in the first column, alone on its line." >&2
     exit 1
   fi
 else

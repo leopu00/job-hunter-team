@@ -118,7 +118,7 @@ if [ $# -eq 1 ] && [ "$1" = "-" ]; then
   # Il testo da stdin: `$(cat)` toglie da sé gli a capo finali. Un testo vuoto non parte.
   text="$(cat)"
   if [ -z "${text//[[:space:]]/}" ]; then
-    echo "jht-telegram-send: il testo su stdin è vuoto: non invio" >&2
+    echo "jht-telegram-send: the text on stdin is empty: not sending" >&2
     exit 1
   fi
   # Una riga di chiusura `TXT` con il rientro: il heredoc non si e' chiuso e la shell ha passato anche quella riga.
@@ -126,7 +126,7 @@ if [ $# -eq 1 ] && [ "$1" = "-" ]; then
   last_line="${last_line#"${last_line%%[![:space:]]*}"}"
   last_line="${last_line%"${last_line##*[![:space:]]}"}"
   if [ "$last_line" = "TXT" ]; then
-    echo "jht-telegram-send: il testo finisce con una riga TXT: la riga di chiusura del heredoc aveva un rientro, quindi non si e' chiuso. Non invio: scrivi TXT in prima colonna, da solo sulla riga." >&2
+    echo "jht-telegram-send: the text ends with a TXT line: the closing line of the heredoc was indented, so it never closed. Not sending: put TXT in the first column, alone on its line." >&2
     exit 1
   fi
 else

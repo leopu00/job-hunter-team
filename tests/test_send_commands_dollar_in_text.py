@@ -173,7 +173,7 @@ def test_jht_telegram_send_an_empty_stdin_sends_nothing(box, stdin: str):
     done = subprocess.run([str(TELEGRAM), "-"], input=stdin, capture_output=True, text=True, env={**os.environ, **box["env"]})
 
     assert done.returncode == 1
-    assert "vuoto" in done.stderr
+    assert "is empty" in done.stderr
     assert _calls(box) == []
 
 
@@ -192,7 +192,7 @@ def test_jht_telegram_send_a_text_that_ends_in_the_delimiter_line_is_not_sent(bo
     )
 
     assert done.returncode == 1
-    assert "TXT" in done.stderr and "non invio" in done.stderr.lower()
+    assert "TXT" in done.stderr and "not sending" in done.stderr.lower()
     assert _calls(box) == []
 
 

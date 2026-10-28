@@ -93,7 +93,7 @@ def test_an_empty_stdin_delivers_nothing(box, stdin: str):
     )
 
     assert done.returncode == 1
-    assert "vuoto" in done.stderr
+    assert "is empty" in done.stderr
     assert box.typed() == [] and box.keys("Enter") == []
 
 
@@ -105,7 +105,7 @@ def test_a_message_that_ends_in_the_delimiter_line_delivers_nothing(box, closing
     )
 
     assert done.returncode == 1
-    assert "TXT" in done.stderr and "non consegno" in done.stderr.lower()
+    assert "TXT" in done.stderr and "not delivering" in done.stderr.lower()
     assert box.typed() == [] and box.keys("Enter") == []
 
 
