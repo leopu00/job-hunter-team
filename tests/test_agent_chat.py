@@ -243,6 +243,26 @@ def test_a_stuck_tmux_does_not_hold_a_read_and_leaves_the_activity_out(box):
     assert time.monotonic() - started < 6, "the capture for the activity has its own short limit"
 
 
+def test_after_a_capture_that_failed_the_next_reads_wait_before_looking_at_the_screen_again(box):
+    _waiting_chat(box)
+    screen = box.state / "screen"
+    screen.write_text(RUNNING_CODEX, encoding="utf-8")
+    code, page = box.run("read", "capitano", FAKE_TMUX_CAPTURE_FAILS="1")
+    assert code == 0 and "activity" not in page
+    assert box.calls() != [], "the first read did try the screen"
+    (box.state / "calls").unlink()
+    # the screen is readable again, but the wait is not over: the terminal is not touched
+    code, page = box.run("read", "capitano")
+    assert code == 0 and "activity" not in page and box.calls() == []
+    # past the wait the next read looks again
+    mark = box.home / "agents" / "capitano" / "activity-failed"
+    old = time.time() - 20.0
+    os.utime(mark, (old, old))
+    assert box.run("read", "capitano")[1]["activity"] == "working"
+    # a screen that was read never leaves a wait behind for the reads after it
+    assert box.run("read", "capitano")[1]["activity"] == "working"
+
+
 def test_a_read_touches_the_terminal_only_within_half_an_hour_of_the_last_turn_of_the_person(box):
     # an answer from the agent does not end it: the agent may answer first and go on working
     _waiting_chat(box, answered=True)
