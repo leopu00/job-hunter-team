@@ -451,6 +451,75 @@ describe("«Agenti», the agents' control panel", () => {
     }
   });
 
+  describe("after «Avvia la squadra» the page waits for the flag «stopped by you» to fall", () => {
+    /** The native side of a team that answers the list at once but lifts the stop only after `lifts` reads of the team. */
+    function stopLifting(lifts: number) {
+      let up = false;
+      const seen = { lists: 0, teams: 0 };
+      native.invoke.mockImplementation(async (command: string, args: { request?: Record<string, unknown> }) => {
+        if (command === "onboarding_resume_team_start") {
+          up = true;
+          return {};
+        }
+        if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+        const op = args.request?.op;
+        if (!up) return { ok: false, error: "agent_control_no_team" };
+        if (op === "list") {
+          seen.lists++;
+          return listReply();
+        }
+        if (op === "team") {
+          seen.teams++;
+          return { ok: true, data: { halted: seen.teams <= lifts, standby, held } };
+        }
+        return { ok: false, error: "agent_control_unsupported" };
+      });
+      return seen;
+    }
+
+    it("keeps reading until the team no longer shows as stopped, with no Refresh, and keeps the button meanwhile", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const seen = stopLifting(3);
+        show();
+        await screen.findByTestId("panel-error");
+        fireEvent.click(await screen.findByTestId("start-team"));
+        // the list answers, the team still shows as stopped by the person: the page says so and keeps the button
+        expect(await screen.findByText(/Squadra fermata da te/)).toBeInTheDocument();
+        expect(screen.getByTestId("start-team")).toBeInTheDocument();
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(20_000);
+        });
+        expect(await screen.findByText(/Squadra attiva/)).toBeInTheDocument();
+        expect(screen.queryByText(/Squadra fermata da te/)).toBeNull();
+        expect(screen.queryByTestId("start-team")).toBeNull();
+        expect(seen.teams).toBe(4);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("gives up after five more tries when the team stays stopped, and leaves the page as it read it", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const seen = stopLifting(1_000);
+        show();
+        await screen.findByTestId("panel-error");
+        fireEvent.click(await screen.findByTestId("start-team"));
+        await screen.findByText(/Squadra fermata da te/);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(60_000);
+        });
+        // the read of the start's end, then five more; the first read of the page (no team) had no team to read
+        expect(seen.teams).toBe(6);
+        expect(screen.getByText(/Squadra fermata da te/)).toBeInTheDocument();
+        expect(screen.queryByTestId("start-team")).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it("offers the start only where the sentence says the team is stopped", async () => {
     native.invoke.mockImplementation(async () => ({ ok: false, error: "agent_control_read_only" }));
     show();
