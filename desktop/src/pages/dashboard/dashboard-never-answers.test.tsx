@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
-import { PAGE_READ_DEADLINE_MS } from "../../lib/read-deadline";
+import { forgetReadsInFlight, PAGE_READ_DEADLINE_MS, READ_IN_FLIGHT_MAX_MS } from "../../lib/read-deadline";
 import { ConnectTeamContext } from "../../lib/connect-team";
 import { CONNECT_TEAM_PROMPT_TEXT } from "./connect-team.i18n";
 import DashboardPage from "./index";
@@ -15,6 +15,7 @@ vi.mock("./DashboardScreen", () => ({ default: () => <p>dashboard-screen</p> }))
 vi.mock("./load-dashboard", () => ({ loadDashboard: vi.fn() }));
 
 beforeEach(() => {
+  forgetReadsInFlight();
   document.cookie = "NEXT_LOCALE=it; path=/";
   vi.useFakeTimers();
 });
@@ -32,7 +33,9 @@ describe("the dashboard whose data never arrives", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     await act(async () => { await vi.advanceTimersByTimeAsync(PAGE_READ_DEADLINE_MS); });
     expect(screen.getByRole("alert")).toHaveTextContent("Non riesco a leggere la dashboard");
-    await act(async () => { screen.getByRole("button", { name: "Aggiorna" }).click(); });
+    // the read that never answered is not waited for beyond the window: the button starts a new one
+    await act(async () => { await vi.advanceTimersByTimeAsync(READ_IN_FLIGHT_MAX_MS - PAGE_READ_DEADLINE_MS); });
+    await act(async () => { screen.getByRole("button", { name: "Riprova" }).click(); });
     await act(async () => undefined);
     expect(screen.getByText("dashboard-screen")).toBeInTheDocument();
   });

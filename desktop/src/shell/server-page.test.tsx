@@ -1,8 +1,10 @@
 import { act, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { PAGE_READ_DEADLINE_MS } from "../lib/read-deadline";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { forgetReadsInFlight, PAGE_READ_DEADLINE_MS, READ_IN_FLIGHT_MAX_MS } from "../lib/read-deadline";
 import { refresh } from "./router";
 import ServerPage from "./server-page";
+
+beforeEach(() => forgetReadsInFlight());
 
 describe("ServerPage", () => {
   it("shows the fallback, then what the async page returns", async () => {
@@ -72,7 +74,9 @@ describe("ServerPage, a page that never answers", () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(PAGE_READ_DEADLINE_MS); });
       expect(screen.queryByText("skeleton")).not.toBeInTheDocument();
       expect(screen.getByRole("alert")).toHaveTextContent("Non riesco a leggere questa pagina");
-      await act(async () => { screen.getByRole("button", { name: "Aggiorna" }).click(); });
+      // a read that never answered is not waited for beyond the window: the button starts a new one
+      await act(async () => { await vi.advanceTimersByTimeAsync(READ_IN_FLIGHT_MAX_MS - PAGE_READ_DEADLINE_MS); });
+      await act(async () => { screen.getByRole("button", { name: "Riprova" }).click(); });
       await act(async () => undefined);
       expect(screen.getByText("second try")).toBeInTheDocument();
       expect(page).toHaveBeenCalledTimes(2);
@@ -80,5 +84,53 @@ describe("ServerPage, a page that never answers", () => {
       spy.mockRestore();
       vi.useRealTimers();
     }
+  });
+
+  it("does not start a second read while the one that passed its deadline is still running, and shows its answer when it comes", async () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      let answer!: (node: React.ReactNode) => void;
+      const page = vi.fn().mockReturnValueOnce(new Promise<React.ReactNode>((resolve) => { answer = resolve; }));
+      render(<ServerPage render={page} fallback={<p>skeleton</p>} />);
+      await act(async () => undefined);
+      await act(async () => { await vi.advanceTimersByTimeAsync(PAGE_READ_DEADLINE_MS); });
+      expect(screen.getByRole("alert")).toHaveTextContent("Non riesco a leggere questa pagina");
+
+      // «Riprova» and «Aggiorna» of the navbar both ask again: the read that runs is the one waited for
+      await act(async () => { screen.getByRole("button", { name: "Riprova" }).click(); });
+      await act(async () => { refresh(); });
+      expect(page).toHaveBeenCalledTimes(1);
+
+      await act(async () => answer(<p>late answer</p>));
+      expect(screen.getByText("late answer")).toBeInTheDocument();
+      expect(page).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("reads again once the read that ended is over, so a refresh after an answer is a new read", async () => {
+    const page = vi.fn().mockResolvedValueOnce(<p>first</p>).mockResolvedValueOnce(<p>second</p>);
+    render(<ServerPage render={page} />);
+    await act(async () => undefined);
+    expect(screen.getByText("first")).toBeInTheDocument();
+    await act(async () => refresh());
+    expect(screen.getByText("second")).toBeInTheDocument();
+    expect(page).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not share a read between two pages, or between two filters of one page", async () => {
+    let one!: (node: React.ReactNode) => void;
+    const first = vi.fn().mockReturnValue(new Promise<React.ReactNode>((resolve) => { one = resolve; }));
+    const second = vi.fn().mockResolvedValue(<p>other filter</p>);
+    const view = render(<ServerPage render={first} runKey="a=1" />);
+    await act(async () => undefined);
+    view.rerender(<ServerPage render={second} runKey="a=2" />);
+    await act(async () => undefined);
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("other filter")).toBeInTheDocument();
+    one(<p>stale</p>);
   });
 });

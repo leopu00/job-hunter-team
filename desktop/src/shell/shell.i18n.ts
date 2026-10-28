@@ -5,6 +5,8 @@ export interface ShellText {
   /** The accessible name of the navigation. */
   navAria: string;
   refresh: string;
+  /** The button inside a page that could not read its data: another word than the navbar's `refresh`, so the two are not told apart only by where they are. */
+  retry: string;
   /** The button that holds the links that do not fit the navbar. */
   more: string;
   signOut: string;
@@ -21,6 +23,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   it: {
     navAria: "Navigazione app",
     refresh: "Aggiorna",
+    retry: "Riprova",
     more: "Altro",
     signOut: "Esci",
     signingOut: "Uscita…",
@@ -31,6 +34,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   en: {
     navAria: "App navigation",
     refresh: "Refresh",
+    retry: "Try again",
     more: "More",
     signOut: "Sign out",
     signingOut: "Signing out…",
@@ -41,6 +45,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   de: {
     navAria: "App-Navigation",
     refresh: "Aktualisieren",
+    retry: "Erneut versuchen",
     more: "Mehr",
     signOut: "Abmelden",
     signingOut: "Abmelden…",
@@ -51,6 +56,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   hu: {
     navAria: "Alkalmazásnavigáció",
     refresh: "Frissítés",
+    retry: "Próbáld újra",
     more: "Továbbiak",
     signOut: "Kilépés",
     signingOut: "Kilépés…",
@@ -61,6 +67,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   es: {
     navAria: "Navegación de la app",
     refresh: "Actualizar",
+    retry: "Reintentar",
     more: "Más",
     signOut: "Salir",
     signingOut: "Saliendo…",
@@ -71,6 +78,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   fr: {
     navAria: "Navigation de l’app",
     refresh: "Actualiser",
+    retry: "Réessayer",
     more: "Plus",
     signOut: "Quitter",
     signingOut: "Déconnexion…",
@@ -81,6 +89,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   pt: {
     navAria: "Navegação da app",
     refresh: "Atualizar",
+    retry: "Tentar novamente",
     more: "Mais",
     signOut: "Sair",
     signingOut: "A sair…",

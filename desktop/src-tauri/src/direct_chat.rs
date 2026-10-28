@@ -456,8 +456,8 @@ where
 }
 
 /// How a queued turn ended, as the team says it: typed and taken, typed and still in the composer,
-/// typed with no proof, or never typed because it waited too long.
-const QUEUE_ENDINGS: [&str; 4] = ["taken", "pending", "unconfirmed", "expired"];
+/// typed with no proof, typed and given its Enter after the time (`late`), or never typed because it waited too long.
+const QUEUE_ENDINGS: [&str; 5] = ["taken", "pending", "late", "unconfirmed", "expired"];
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub(crate) struct DirectChatQueueEnding {
@@ -5228,13 +5228,13 @@ mod tests {
         .unwrap();
         assert_eq!(page.queued.as_deref(), Some(&["m1".to_owned(), "m2".to_owned()][..]));
         let ended: DirectChatPage = serde_json::from_str(
-            r#"{"messages":[],"queued":[],"settled":[{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m5","how":"sent"},{"id":"a b","how":"taken"},{"id":"m6"},7,{"id":"m7","how":7}]}"#,
+            r#"{"messages":[],"queued":[],"settled":[{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m5","how":"sent"},{"id":"a b","how":"taken"},{"id":"m6"},7,{"id":"m7","how":7},{"id":"m8","how":"late"}]}"#,
         )
         .unwrap();
         let shown = serde_json::to_value(&ended).unwrap();
         assert_eq!(
             shown["settled"],
-            serde_json::json!([{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"}])
+            serde_json::json!([{"id":"m1","how":"taken"},{"id":"m2","how":"pending"},{"id":"m3","how":"unconfirmed"},{"id":"m4","how":"expired"},{"id":"m8","how":"late"}])
         );
         let none: DirectChatPage = serde_json::from_str(r#"{"messages":[],"queued":[],"settled":"taken"}"#).unwrap();
         assert!(serde_json::to_value(&none).unwrap().get("settled").is_none());

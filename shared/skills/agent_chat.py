@@ -723,6 +723,22 @@ def delivery_gate(pane: str) -> str:
     return state
 
 
+def new_turn_gate(pane: str) -> str:
+    """``delivery_gate`` for a turn about to be typed: a composer that holds only SIGNED text (one message or
+    several, whoever sent them, left unsent) is ``signed``, not ``text``: the transport pastes ours behind it and
+    one Enter takes them all. Text typed by hand, a paste token the transport does not explain, a menu: as in
+    ``delivery_gate``. The turns already typed and waiting for their Enter keep ``delivery_gate`` (their
+    composer holds OUR text, which the transport proves from its own record)."""
+    gate = delivery_gate(pane)
+    if gate != "text":
+        return gate
+    try:
+        import tmux_send_composer
+    except ImportError:
+        return gate               # without the helper, as it always was
+    return "signed" if tmux_send_composer.signed_only(composer_text(pane)) else gate
+
+
 def composer_text(pane: str) -> str | None:
     """The visible draft in the last recognised composer, or ``None``.
 
@@ -808,9 +824,9 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
         if pane is None:
             raise Refusal("agent_unavailable")
         state, busy = composer_snapshot(pane)
-        gate = delivery_gate(pane)
+        gate = new_turn_gate(pane)
         saw_busy = saw_busy or busy
-        if gate in {"empty", "none"}:
+        if gate in {"empty", "none", "signed"}:
             return
         if gate == "text":
             raise Refusal("composer_has_text")
@@ -1256,7 +1272,7 @@ def flush_queue(agent: str, session: str) -> None:
                     if _settle_typed(agent, session, row, held, pane):
                         continue
                     return
-                if pane is not None and not composer_snapshot(pane)[1] and delivery_gate(pane) == "text":
+                if pane is not None and not composer_snapshot(pane)[1] and new_turn_gate(pane) == "text":
                     # A text of ours left in the box (a bridge's paste nobody submitted) would hold the turn for
                     # ever: once, the transport submits it if it can prove it is its own, then the box is looked at again.
                     try:
@@ -1264,7 +1280,7 @@ def flush_queue(agent: str, session: str) -> None:
                     except Refusal:
                         return
                     pane = capture_pane(session)
-                if pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) not in {"empty", "none"}:
+                if pane is None or composer_snapshot(pane)[1] or new_turn_gate(pane) not in {"empty", "none", "signed"}:
                     return
                 try:
                     taken, signature = deliver(agent, session, str(row.get("text") or ""))
@@ -1373,7 +1389,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             pane = capture_pane(session)
             if pane is None:
                 raise Refusal("agent_unavailable")
-            gate = delivery_gate(pane)
+            gate = new_turn_gate(pane)
             if gate == "text":
                 # The text may have appeared while we waited: the same single try, outside the lock.
                 if flushed:
@@ -1381,7 +1397,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
                 retry_outside_lock = True
             elif gate == "blocked":
                 raise Refusal("agent_not_at_prompt")
-            elif gate not in {"empty", "none"}:
+            elif gate not in {"empty", "none", "signed"}:
                 retry_outside_lock = True
             elif composer_snapshot(pane)[1]:
                 # The turn started while we waited for the lock: not now, and not past the deadline.

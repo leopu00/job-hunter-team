@@ -246,12 +246,12 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Fogy a lemezterület.", "Szabadíts fel egy kis helyet, különben a csapat nem indít több új ügynököt és frissítést."],
     pt: ["O espaço em disco está a acabar.", "Liberta algum espaço, ou a equipa deixará de iniciar novos agentes e atualizações."],
   },
-  "The disk is almost full, so no new agent or update will start.": {
-    de: ["Die Festplatte ist fast voll, deshalb startet kein neuer Agent und kein Update.", "Leere den Papierkorb und lösche große Dateien, die du nicht mehr brauchst, etwa alte Downloads oder ungenutzte Docker/Podman-Images, und versuche es dann erneut. Bereits laufende Agenten arbeiten weiter."],
-    es: ["El disco está casi lleno, así que no se iniciará ningún agente nuevo ni ninguna actualización.", "Vacía la papelera y elimina los archivos grandes que ya no necesites, como descargas antiguas o imágenes de Docker/Podman sin usar, y vuelve a intentarlo. Los agentes ya iniciados siguen trabajando."],
-    fr: ["Le disque est presque plein : aucun nouvel agent ni aucune mise à jour ne démarrera.", "Vide la corbeille et supprime les gros fichiers dont tu n’as plus besoin, comme d’anciens téléchargements ou des images Docker/Podman inutilisées, puis réessaie. Les agents déjà lancés continuent de travailler."],
-    hu: ["A lemez majdnem megtelt, ezért nem indul új ügynök és frissítés sem.", "Ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat, például a régi letöltéseket vagy a nem használt Docker/Podman-képeket, majd próbáld újra. A már elindított ügynökök tovább dolgoznak."],
-    pt: ["O disco está quase cheio, por isso não será iniciado nenhum agente novo nem nenhuma atualização.", "Esvazia o Lixo e apaga os ficheiros grandes de que já não precisas, como descarregamentos antigos ou imagens Docker/Podman por usar, e tenta novamente. Os agentes já em execução continuam a trabalhar."],
+  "The agents need more disk space than is available.": {
+    de: ["Die Agenten benötigen mehr Festplattenspeicher, als verfügbar ist.", "Gib Speicherplatz frei: Leere den Papierkorb und lösche große Dateien, die du nicht mehr brauchst, und versuche es dann erneut. Bereits laufende Agenten arbeiten weiter."],
+    es: ["Los agentes necesitan más espacio en disco del que hay disponible.", "Libera espacio: vacía la papelera y elimina los archivos grandes que ya no necesites, y vuelve a intentarlo. Los agentes ya iniciados siguen trabajando."],
+    fr: ["Les agents ont besoin de plus d’espace disque que celui disponible.", "Libère de l’espace : vide la corbeille et supprime les gros fichiers dont tu n’as plus besoin, puis réessaie. Les agents déjà lancés continuent de travailler."],
+    hu: ["Az ügynököknek több lemezterületre van szükségük, mint amennyi elérhető.", "Szabadíts fel helyet: ürítsd ki a Kukát, és töröld a nagy, már nem szükséges fájlokat, majd próbáld újra. A már elindított ügynökök tovább dolgoznak."],
+    pt: ["Os agentes precisam de mais espaço em disco do que o disponível.", "Liberta espaço: esvazia o Lixo e apaga os ficheiros grandes de que já não precisas, e tenta novamente. Os agentes já em execução continuam a trabalhar."],
   },
   "The operation did not succeed.": {
     de: ["Der Vorgang ist fehlgeschlagen.", "Versuche es erneut. Wenn es wieder passiert, starte Job Hunter Team neu."],
@@ -2075,7 +2075,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   invalid_locale: translated("Dictation did not start."),
   native_failed: translated("Dictation did not start."),
   disk_warning: translated("Disk space is running low."),
-  disk_low: translated("The disk is almost full, so no new agent or update will start."),
+  disk_low: translated("The agents need more disk space than is available."),
   clean_images_confirm: translated("I remove only the old versions of Job Hunter Team that are no longer needed: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched."),
   clean_images_confirm_vm: translated("I remove only the old versions of Job Hunter Team that are no longer needed, inside the container engine’s virtual machine: the one in use, the previous one, those used by a container and other programs’ images stay. Data and volumes are not touched."),
   clean_images_freed: translated("I removed the old versions of Job Hunter Team and freed up to about {size}."),

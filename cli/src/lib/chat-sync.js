@@ -48,6 +48,7 @@ import { spawn } from "node:child_process";
 import { join, dirname } from "node:path";
 import { cloudSyncHeaders } from "./client-identity.js";
 import { boundedBackoffDelay } from "./bounded-backoff.js";
+import { replyColumnsForCloud } from "./local-only-replies.js";
 
 /**
  * Le tre figure con cui l'utente conversa. Il web mostra esattamente
@@ -539,6 +540,9 @@ function hasColumn(db, table, col) {
  *
  * NB: solo righe con id positivo — quelle a id negativo sul cloud sono
  * native del web e non esistono qui (vedi mig 060).
+ *
+ * La risposta libera a una domanda semplice resta qui: i tre campi della
+ * risposta escono NULL per quelle righe (local-only-replies.js).
  */
 export function takeChatRowsToPush(db, { limit = 100 } = {}) {
   return db
@@ -551,7 +555,9 @@ export function takeChatRowsToPush(db, { limit = 100 } = {}) {
               agent, body, kind, author, chat_ts,
               related_position_id,
               delivered_via, delivered_at, acknowledged_at,
-              user_reply, user_reply_at, agent_seen_reply_at, created_at
+              ${replyColumnsForCloud((column) =>
+                hasColumn(db, "pending_user_messages", column),
+              ).join(",\n              ")}, created_at
          FROM pending_user_messages
         WHERE cloud_synced_at IS NULL
         ORDER BY id ASC
