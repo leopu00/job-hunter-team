@@ -7,6 +7,14 @@ Usage:
     jht-send --agent alfa "Testo per un altro agente"
     jht-send --role assistant "..."   # default: assistant
     jht-send --kind blocked "..."     # urgent | blocked | completed | info (default)
+    jht-send - <<'TXT'                # the text on stdin: every $ stays as written
+    Plus — $20/month; Pro — $100/month
+    TXT
+
+A `$` in the text: between double quotes the shell reads `$1` and `$2` as its own
+arguments and replaces them with nothing BEFORE this tool starts ("$20" reaches the
+user as "0"), and nothing here can bring the digits back. Use single quotes, or "-"
+with a heredoc whose delimiter is quoted (<<'TXT'): the text then comes from stdin.
 
 Perché esiste:
     In passato gli agenti scrivevano su chat.jsonl con costrutti bash fragili
@@ -81,7 +89,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Invia un messaggio a chat.jsonl dell'agente (visibile nella chat web).",
     )
-    parser.add_argument("message", help="Testo del messaggio (quotalo).")
+    parser.add_argument(
+        "message",
+        help=(
+            "Testo del messaggio (quotalo). Con un `$` nel testo: apici singoli, "
+            "oppure `-` per leggerlo da stdin (heredoc <<'TXT')."
+        ),
+    )
     parser.add_argument(
         "--agent",
         help="ID agente (default: deduce da $JHT_AGENT_DIR o cwd). Es: assistente, alfa.",
@@ -118,6 +132,22 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+
+    if args.message == "-":
+        # The text from stdin: a quoted heredoc leaves every `$` alone, which no argument can promise.
+        args.message = sys.stdin.read().removesuffix("\n")
+        if not args.message.strip():
+            print("jht-send: the text on stdin is empty: nothing was written.", file=sys.stderr)
+            return 2
+        lines = args.message.rstrip().splitlines()
+        if lines and lines[-1].strip() == "TXT":
+            # an indented closing `TXT`: the heredoc never closed and the shell passed on the delimiter line too
+            print(
+                "jht-send: the text ends with a `TXT` line: the closing line of the heredoc was indented, so it never closed. "
+                "Nothing was written. Put `TXT` in the first column, alone on its line.",
+                file=sys.stderr,
+            )
+            return 2
 
     if args.kind not in KINDS:
         print(

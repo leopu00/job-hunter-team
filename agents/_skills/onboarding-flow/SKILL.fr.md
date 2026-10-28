@@ -30,7 +30,9 @@ Après CHAQUE tour utilisateur qui apporte une nouvelle information :
 5. Si un déclencheur de summaries s'est activé, écrire/rafraîchir le MD       → skill profile-summaries
 ```
 
-Une réponse sans question suivante est acceptable UNIQUEMENT quand la checklist bloquante est entièrement satisfaite.
+Une réponse sans question suivante est acceptable UNIQUEMENT quand la checklist bloquante est entièrement satisfaite, **ou quand la personne n'a pas répondu à la question en suspens** (voir ci-dessous).
+
+**Quand la personne ne répond pas ou change de sujet.** Si son message n'est pas la réponse à ta dernière question (un bonjour, une question sur toi ou sur le produit, n'importe quoi d'autre), réponds d'abord à ce qu'elle a demandé, dans la même réponse, et NE répète PAS la question dans cette réponse. Reprends la question en suspens UNE SEULE FOIS, plus tard, à la prochaine pause naturelle (pas dans la réponse suivante, pas après chaque message hors sujet) ; si elle reste sans réponse même alors, ne la repose pas avant que la personne parle elle-même du profil. Le métronome ci-dessus vaut pour les tours qui apportent des informations, pas pour ceux qui n'en apportent pas.
 
 Trois niveaux (single source : `web/lib/profile-completion.ts`). 🔴 REQUIRED débloque
 l'équipe · 🟡 RECOMMENDED ne bloque pas mais améliore beaucoup · 🟢 OPTIONAL = personnalisation maximale.

@@ -83,8 +83,25 @@ jht-send --partial 'Working on it…'   # mid-turn checkpoint, keeps the turn op
 Rules:
 - **One `[CHAT]` ⇒ at least one `jht-send`. No exceptions.** Writing nothing leaves the user staring at a frozen-looking chat.
 - **The closing message of the turn has NO `--partial`.** If you forget, the frontend keeps the typing dots on forever (until a fallback timeout ~10 min later).
-- **Quotes**: pass the body as a single positional arg. Single quotes preserve `$`, `"`, emoji, accents verbatim. For a body containing a literal `'`, use double quotes (`jht-send "non c'è problema"`) — but inside `"..."` shell will expand `$var`, so be careful.
+- **Quotes**: pass the body as a single positional arg. Single quotes preserve `$`, `"`, emoji, accents verbatim. For a body containing a literal `'`, use double quotes (`jht-send "non c'è problema"`) — but inside `"..."` shell will expand `$var`, so be careful. With a `$` use single quotes or stdin: see the section below.
 - **Multi-line**: bash `$'riga1\nriga2'`, or use `\n` inside the string and let Python preserve it.
+
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).
 
 ## Message kind (`--kind`)
 

@@ -553,6 +553,15 @@ EOF
   fi
 }
 
+# Il Mentor non ha niente da leggere finche' il primo giro dell'utente non e' chiuso (first_run.py mentor-due:
+# 0 = e' ora, 1 = non ancora): si accende da solo, entro un tick, quando la fase diventa `steady`. Qualunque altra
+# risposta (script assente, crash, stato illeggibile) vale «e' ora»: il Mentor riparte come ha sempre fatto.
+mentor_due() {
+  local rc=0
+  python3 /app/shared/skills/first_run.py mentor-due >/dev/null 2>&1 || rc=$?
+  [ "$rc" -ne 1 ]
+}
+
 ensure_agent() {
   local role="$1"
   local session mark rc detail
@@ -569,6 +578,10 @@ ensure_agent() {
     # strada che non e' questa (Dottore, Capitano, riavvio), il conteggio va
     # chiuso qui, altrimenti fallimenti di incidenti diversi si sommerebbero.
     clear_spawn_failures "$session"
+    return 0
+  fi
+  # Non e' un guasto e non e' un fallimento di spawn: il Mentor aspetta il suo momento.
+  if [ "$session" = "MENTOR" ] && ! mentor_due; then
     return 0
   fi
   # Backoff, non cap: dopo il gradino 1 si tenta piu' RADI, mai zero volte.
@@ -811,7 +824,7 @@ maybe_plan_question() {
   local out
   out="$(JHT_HOME="$JHT_HOME" python3 "$FIRST_RUN_TOOL" plan-question-check 2>/dev/null)" || return 0
   case "$out" in
-    *'"action": "asked"'*|*'"action": "declared"'*|*'"action": "closed"'*)
+    *'"action": "asked"'*|*'"action": "declared"'*|*'"action": "closed"'*|*'"action": "sped_up"'*)
       plan_question_failures=0
       log "plan question: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-200)" ;;
     *'"action": "stopped"'*)

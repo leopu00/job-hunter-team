@@ -3438,6 +3438,18 @@ DISK_WARN_FREE_KIB=20971520
 DISK_BLOCK_FREE_PERMILLE=30
 DISK_BLOCK_FREE_KIB=8388608
 DISK_LOW_PERMILLE=""
+DISK_LOW_AVAIL_KIB=""
+
+# KiB -> «GiB» a un decimale con la virgola italiana («8», «5,2»). Per DIFETTO: non si
+# promette piu' spazio di quello che c'e'. In interi, come le soglie.
+disk_gib_text() {
+  local tenths=$(( $1 * 10 / 1048576 ))
+  if [ $(( tenths % 10 )) -eq 0 ]; then
+    printf '%s' $(( tenths / 10 ))
+  else
+    printf '%s,%s' $(( tenths / 10 )) $(( tenths % 10 ))
+  fi
+}
 
 # Stampa «<per mille liberi> <KiB liberi>» del volume che contiene $1.
 disk_free_measure() {
@@ -3486,16 +3498,18 @@ disk_level_of() {
 }
 
 # 0 = almeno un volume misurato e' sotto il 3% E sotto 8 GiB (in
-# DISK_LOW_PERMILLE il valore); 1 = tutti sani oppure non misurabili.
+# DISK_LOW_PERMILLE il valore e in DISK_LOW_AVAIL_KIB lo spazio libero); 1 = tutti sani oppure non misurabili.
 disk_low() {
   local volume measure permille avail_kib
   DISK_LOW_PERMILLE=""
+  DISK_LOW_AVAIL_KIB=""
   for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(disk_engine_path)"; do
     [ -n "$volume" ] || continue
     measure="$(disk_free_measure "$volume")" || continue
     read -r permille avail_kib <<<"$measure"
     if [ "$(disk_level_of "$permille" "$avail_kib")" = "low" ]; then
       DISK_LOW_PERMILLE="$permille"
+      DISK_LOW_AVAIL_KIB="$avail_kib"
       return 0
     fi
   done
@@ -4195,7 +4209,7 @@ handle_runtime_upgrade() {
   # corso, e gli agenti che ci girano, restano intatti. Il codice e' chiuso
   # (`disk_low`); la frase la mostra l'app dalla sua tabella codice->frase.
   if disk_low; then
-    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille) e meno di 8 GiB. Per liberare spazio esegui 'jht clean-images' (toglie solo le vecchie versioni di Job Hunter Team), svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova: non e' stato scaricato ne' modificato niente."
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: Gli agenti richiedono almeno $(disk_gib_text "$DISK_BLOCK_FREE_KIB") GiB di disco — disponibili: $(disk_gib_text "$DISK_LOW_AVAIL_KIB") GiB. Per liberare spazio esegui 'jht clean-images' (toglie solo le vecchie versioni di Job Hunter Team), svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova: non e' stato scaricato ne' modificato niente."
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
     return 1
   fi

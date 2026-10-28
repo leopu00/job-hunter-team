@@ -70,6 +70,22 @@ jht-telegram-send --from mentor --html "<b>Step di crescita</b> della settimana:
 jht-telegram-send --html "<b>CV per Acme — Senior FE</b> pronto.\nLo trovi in <code>~/Documents/Job Hunter Team/output/2026-05-12/acme-senior-fe/</code>."
 ```
 
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-telegram-send 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-telegram-send - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
+```
+
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
+
 ## Escape-Sequenzen (`\n`, `\t`, `\r`)
 
 Der Wrapper interpretiert `\n`, `\t`, `\r` in deiner Nachricht als **echte Zeilenumbrueche/Tabs/CRs**, bevor er sie an Telegram sendet. Du kannst also schreiben:

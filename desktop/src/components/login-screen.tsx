@@ -28,6 +28,7 @@ import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
 import { DASHBOARD_PAGE, goTo } from "../lib/pages";
 import { OnboardingArtwork } from "../onboarding/OnboardingArtwork";
 import { appLocale } from "../lib/app-locale";
+import { waitAtMost } from "../lib/wait-at-most";
 import { readDesktopTeamOwnerIdentity, type DesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
 import { LOGIN_TEXT } from "./login-screen.i18n";
 import { LOCAL_PROFILES_TEXT } from "./local-profiles.i18n";
@@ -63,6 +64,9 @@ export interface LoginScreenProps {
 }
 
 type CopyState = "idle" | "copied" | "failed";
+
+/** How long the list waits for the backend to say who has the team before it falls back to the copy. */
+const OWNER_WAIT_MS = 1500;
 
 /**
  * La schermata «Accedi con Google». Non decide cosa viene dopo: a login
@@ -100,8 +104,10 @@ export function LoginScreen({
   const [localName, setLocalName] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
   const [localError, setLocalError] = useState(false);
-  // the backend's owner: undefined until it answers (or when it cannot), null when no local profile owns the team
+  // the backend's owner: undefined when it did not say, null when no local profile owns the team. The
+  // mark waits for it (a moment at most), so it is not shown from the copy only to move.
   const [nativeOwnerId, setNativeOwnerId] = useState<string | null | undefined>(undefined);
+  const [ownerAsked, setOwnerAsked] = useState(false);
   const linkField = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<LoginError | null>(
     configured ? null : new LoginError("not-configured"),
@@ -123,10 +129,15 @@ export function LoginScreen({
 
   useEffect(() => {
     let active = true;
-    readOwner().then(
-      (identity) => { if (active) setNativeOwnerId(identity?.kind === "local" ? identity.profileId ?? null : null); },
-      () => undefined,
+    const asked = readOwner().then(
+      (identity) => ({ said: true as const, identity }),
+      () => ({ said: false as const }),
     );
+    void waitAtMost(asked, OWNER_WAIT_MS).then((answer) => {
+      if (!active) return;
+      if (answer?.said) setNativeOwnerId(answer.identity?.kind === "local" ? answer.identity.profileId ?? null : null);
+      setOwnerAsked(true);
+    });
     return () => {
       active = false;
     };
@@ -244,7 +255,7 @@ export function LoginScreen({
   const savedProfiles = listLocal();
   const hasSavedLocalProfile = savedProfiles.length > 0;
   const lastUsedId = readLocal()?.profileId ?? null;
-  const ownerId = nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
+  const ownerId = !ownerAsked ? null : nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
 
   return (
     <main className="page login-screen" lang={locale}>

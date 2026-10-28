@@ -84,8 +84,25 @@ jht-send --partial 'Ci sto lavorando…'   # checkpoint a metà turno, mantiene 
 Regole:
 - **Un `[CHAT]` ⇒ almeno un `jht-send`. Senza eccezioni.** Non scrivere nulla lascia l'utente a fissare una chat dall'aspetto congelato.
 - **Il messaggio di chiusura del turno NON ha `--partial`.** Se lo dimentichi, il frontend mantiene i puntini di digitazione per sempre (fino a un timeout di fallback ~10 min dopo).
-- **Apici**: passa il corpo come singolo argomento posizionale. Gli apici singoli preservano `$`, `"`, emoji, accenti alla lettera. Per un corpo che contiene un apice singolo letterale, usa doppi apici (`jht-send "non c'è problema"`) — ma dentro `"..."` la shell espanderà `$var`, quindi attenzione.
+- **Apici**: passa il corpo come singolo argomento posizionale. Gli apici singoli preservano `$`, `"`, emoji, accenti alla lettera. Per un corpo che contiene un apice singolo letterale, usa doppi apici (`jht-send "non c'è problema"`) — ma dentro `"..."` la shell espanderà `$var`, quindi attenzione. Con un `$` usa apici singoli o stdin: vedi la sezione sotto.
 - **Multi-riga**: bash `$'riga1\nriga2'`, o usa `\n` dentro la stringa e lascia che Python li preservi.
+
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).
 
 ## Tipo del messaggio (`--kind`)
 

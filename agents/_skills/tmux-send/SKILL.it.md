@@ -45,6 +45,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).
+
 ## Busta del messaggio
 
 Mantieni sempre il prefisso strutturato:
@@ -77,6 +93,7 @@ Tipi standard (vedi `agents/_manual/communication-rules.md` per la tassonomia co
 - `8` — un'altra consegna alla stessa sessione era ancora in corso: non e' stato digitato niente. Riprova.
 - `130` — la casella non e' libera e il messaggio **NON e' consegnato**. Quello che c'e' non e' provato nostro (una bozza di una persona, o un segnaposto di incolla che nessuno di nostro spiega): non e' stato incollato ne' premuto niente, e il tuo messaggio e' scritto in `logs/pending-input.jsonl` (`unsent`). Non ripetere in ciclo: avvisa il Capitano (`[BLOCKED]`). Lo stesso codice **dopo** l'incolla vuol dire che la casella non e' piu' solo il nostro testo: nessun Invio, e il testo e' annotato li' (`draft`). Il pane e' vivo: mai respawnare. Il testo li' e' tagliato a 64 KiB.
 - Un testo PROVATO nostro (lasciato da una consegna nostra: identico, o il suo segnaposto di incolla, `[Pasted Content N chars]` su Codex / `[Pasted text #1 +N lines]` su Claude, con il nostro numero) riceve il suo Invio alla consegna dopo, di qualunque eta'. `jht-tmux-send --flush-ours <SESSIONE>` fa solo questo (0 = libera o preso, 130 = non nostro, 5 = Invio ingoiato).
+- Una casella che contiene SOLO testo firmato (uno o piu' messaggi, di chiunque, rimasti non inviati: una busta `[@x -> @y]`, le parole della persona fra i marchi `⟦UTENTE·id⟧ … ⟦/UTENTE·id⟧`, o un segnaposto di incolla che il registro qui sopra spiega: quello di Codex di qualunque eta', quello di Claude entro `JHT_TMUX_TOKEN_WINDOW` secondi, 600) e' un messaggio che aspetta il suo Invio, non una persona che scrive: il tuo messaggio si incolla dietro e un solo Invio li manda tutti e due; l'agente puo' ricevere in ritardo quello vecchio. Un testo scritto a mano, un marchio non chiuso o un segnaposto che nessuno spiega restano quello che erano (130). Una busta valida si puo' scrivere a mano: non e' un'autenticazione, e il costo e' lo stesso di un messaggio vecchio che arriva in ritardo. Una busta SENZA marchi (un messaggio fra agenti) non ha una fine propria, e una persona potrebbe continuare a scrivere in coda: conta come firmata solo se il registro del trasporto ha l'impronta di quel testo preciso (quello che ha incollato lui e non ha visto preso); altrimenti e' testo della persona (130).
 
 > Solo `3` può portare a un liveness-check e a un respawn. `4` e `5` significano entrambi che il peer è vivo: trattarli come morte è esattamente come iniziano gli over-spawn.
 

@@ -38,7 +38,7 @@ Már telepítve (ellenőrizd a `command -v` paranccsal):
 - `pdftotext` (a `poppler-utils` csomagon keresztül) — PDF → szöveg
 - `pandoc` — docx/odt/rtf/html → szöveg/markdown
 - `file` — MIME típus felismerés
-- NEM használt: az OCR (a `tesseract` benne van a képfájlban, de csak angolul) és az `unrtf` — a scan is handed back to the person (see the table)
+- NEM használt: az OCR (a `tesseract` benne van a képfájlban, de csak angolul) és az `unrtf` — a beszkennelt dokumentumot visszaadjuk a személynek (lásd a táblázatot)
 
 ## Eljárás
 

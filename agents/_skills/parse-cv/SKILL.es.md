@@ -29,7 +29,7 @@ Ya instaladas (verificar con `command -v`):
 - `pdftotext` (vía `poppler-utils`) — PDF → texto
 - `pandoc` — docx/odt/rtf/html → texto/markdown
 - `file` — detectar tipo MIME
-- NO se usan: el OCR (`tesseract` está en la imagen, pero solo inglés) y `unrtf` — a scan is handed back to the person (see the table)
+- NO se usan: el OCR (`tesseract` está en la imagen, pero solo inglés) y `unrtf` — un escaneo se devuelve a la persona (ver la tabla)
 
 ## Procedimiento
 

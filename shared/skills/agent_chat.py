@@ -723,6 +723,22 @@ def delivery_gate(pane: str) -> str:
     return state
 
 
+def new_turn_gate(pane: str) -> str:
+    """``delivery_gate`` for a turn about to be typed: a composer that holds only SIGNED text (one message or
+    several, whoever sent them, left unsent) is ``signed``, not ``text``: the transport pastes ours behind it and
+    one Enter takes them all. Text typed by hand, a paste token the transport does not explain, a menu: as in
+    ``delivery_gate``. The turns already typed and waiting for their Enter keep ``delivery_gate`` (their
+    composer holds OUR text, which the transport proves from its own record)."""
+    gate = delivery_gate(pane)
+    if gate != "text":
+        return gate
+    try:
+        import tmux_send_composer
+    except ImportError:
+        return gate               # without the helper, as it always was
+    return "signed" if tmux_send_composer.signed_only(composer_text(pane)) else gate
+
+
 def composer_text(pane: str) -> str | None:
     """The visible draft in the last recognised composer, or ``None``.
 
@@ -808,9 +824,9 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
         if pane is None:
             raise Refusal("agent_unavailable")
         state, busy = composer_snapshot(pane)
-        gate = delivery_gate(pane)
+        gate = new_turn_gate(pane)
         saw_busy = saw_busy or busy
-        if gate in {"empty", "none"}:
+        if gate in {"empty", "none", "signed"}:
             return
         if gate == "text":
             raise Refusal("composer_has_text")
@@ -1256,7 +1272,7 @@ def flush_queue(agent: str, session: str) -> None:
                     if _settle_typed(agent, session, row, held, pane):
                         continue
                     return
-                if pane is not None and not composer_snapshot(pane)[1] and delivery_gate(pane) == "text":
+                if pane is not None and not composer_snapshot(pane)[1] and new_turn_gate(pane) == "text":
                     # A text of ours left in the box (a bridge's paste nobody submitted) would hold the turn for
                     # ever: once, the transport submits it if it can prove it is its own, then the box is looked at again.
                     try:
@@ -1264,7 +1280,7 @@ def flush_queue(agent: str, session: str) -> None:
                     except Refusal:
                         return
                     pane = capture_pane(session)
-                if pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) not in {"empty", "none"}:
+                if pane is None or composer_snapshot(pane)[1] or new_turn_gate(pane) not in {"empty", "none", "signed"}:
                     return
                 try:
                     taken, signature = deliver(agent, session, str(row.get("text") or ""))
@@ -1373,7 +1389,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             pane = capture_pane(session)
             if pane is None:
                 raise Refusal("agent_unavailable")
-            gate = delivery_gate(pane)
+            gate = new_turn_gate(pane)
             if gate == "text":
                 # The text may have appeared while we waited: the same single try, outside the lock.
                 if flushed:
@@ -1381,7 +1397,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
                 retry_outside_lock = True
             elif gate == "blocked":
                 raise Refusal("agent_not_at_prompt")
-            elif gate not in {"empty", "none"}:
+            elif gate not in {"empty", "none", "signed"}:
                 retry_outside_lock = True
             elif composer_snapshot(pane)[1]:
                 # The turn started while we waited for the lock: not now, and not past the deadline.
@@ -1797,19 +1813,29 @@ def _answer_seen(question_id: str) -> bool:
     return bool(row and row[0])
 
 
+def _agent_working(session: str) -> bool:
+    """True when the agent's terminal says it is in the middle of a turn."""
+    pane = capture_pane(session)
+    return pane is not None and composer_snapshot(pane)[1]
+
+
 def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake_attempt, seen=_answer_seen,
                     sleep=time.sleep, clock=time.monotonic, every: float | None = None,
-                    window: float | None = None, quiet: float | None = None) -> str:
+                    window: float | None = None, quiet: float | None = None, working=_agent_working,
+                    start_after: float = 0.0) -> str:
     """Wake the agent again until it has read the answer, or the window is over: ``seen`` or ``gave_up``.
 
-    After a line that landed it waits ``quiet`` before another (the agent may be working through its queue);
-    a try that did not land is repeated every ``every`` seconds.
+    After a line that landed it waits ``quiet`` before another, and then until the agent is out of its turn: the line
+    it was given is waiting in its queue and a second one would only be read after it, twice.  A try that did not
+    land is repeated every ``every`` seconds.  ``start_after`` is how long to leave the first try when somebody has
+    just made one (the answer itself does, and the retrying process must not type the same line again at once).
     """
     every = WAKE_RETRY_EVERY_S if every is None else every
     window = WAKE_RETRY_FOR_S if window is None else window
     quiet = WAKE_QUIET_AFTER_SENT_S if quiet is None else quiet
     deadline = clock() + window
-    next_try = clock()
+    next_try = clock() + start_after
+    landed = False
     while True:
         if seen(question_id):
             return "seen"
@@ -1817,10 +1843,14 @@ def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake
         if now >= deadline:
             return "gave_up"
         if now >= next_try:
-            code = attempt(agent, session)
-            if code != "sent":
-                _wake_log(agent, code)
-            next_try = clock() + (quiet if code == "sent" else every)
+            if landed and working(session):
+                next_try = clock() + every
+            else:
+                code = attempt(agent, session)
+                if code != "sent":
+                    _wake_log(agent, code)
+                landed = landed or code == "sent"
+                next_try = clock() + (quiet if code == "sent" else every)
         sleep(min(every, max(0.0, deadline - clock())))
 
 
@@ -1856,7 +1886,8 @@ def wake(agent: str, question_id: str) -> dict:
     if lock is None:
         return {"result": "running"}
     try:
-        return {"result": wake_until_seen(agent, question_id, AGENTS[agent])}
+        # the answer made the first try a moment ago and it did not land: the next one is after the usual wait
+        return {"result": wake_until_seen(agent, question_id, AGENTS[agent], start_after=WAKE_RETRY_EVERY_S)}
     finally:
         try:
             lock.unlink()

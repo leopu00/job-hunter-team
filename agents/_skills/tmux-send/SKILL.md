@@ -44,6 +44,22 @@ jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [REPORT] Position 42 — ver
 jht-tmux-send CAPITANO "[@scrittore-1 -> @capitano] [ACK] freeze applied, sleeping."
 ```
 
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-tmux-send SCOUT-2 '[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5'
+
+# Or from stdin: "-" reads the message, the quoted delimiter keeps every $
+jht-tmux-send SCOUT-2 - <<'TXT'
+[@capitano -> @scout-2] [MSG] Budget: $120k, floor $5
+TXT
+```
+
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).
+
 ## Message envelope
 
 Always keep the structured prefix:
@@ -92,6 +108,7 @@ Pipeline hand-offs (Scout→Analyst→Scorer→Writer) are **status flips**, not
 - `8` — another delivery to the same session was still running: nothing was typed. Try again.
 - `130` — the composer is not free and the message is **NOT delivered**. What is in it is not provably ours (a person's draft, or a paste token nobody of ours explains): nothing was pasted or pressed, and your message is written in `logs/pending-input.jsonl` (`unsent`). Do not loop: tell the Captain (`[BLOCKED]`). A person waiting on the command (`JHT_TMUX_SEND_FROM=user-console`: `jht profile import`, `jht team chat send`) gets `JHT_TMUX_FOREIGN_WAIT` seconds first (default 45, 0 = none, at most 60): a text that goes away by itself (the message another sender of ours is about to submit, a suggestion Codex draws late) is waited for; the bridges and nudges keep the immediate 130. The same code **after** the paste means the composer stopped being only our text: no Enter, and the text is recorded there too (`draft`). The pane is alive: never respawn. The text there is cut at 64 KiB.
 - A text that IS provably ours (left by an earlier delivery of ours: identical, or its paste token, `[Pasted Content N chars]` on Codex / `[Pasted text #1 +N lines]` on Claude, with our count) gets its Enter at the next delivery, whatever its age. `jht-tmux-send --flush-ours <SESSION>` does only that (0 = free or taken, 130 = not ours, 5 = Enter swallowed).
+- A composer that holds ONLY signed text (one message or several, whoever left them unsent: an envelope `[@x -> @y]`, the person's words between their `⟦UTENTE·id⟧ … ⟦/UTENTE·id⟧` marks, or a paste token the record above explains: Codex's within any age, Claude's within `JHT_TMUX_TOKEN_WINDOW` seconds, 600) is a message waiting for its Enter, not somebody typing: your message is pasted behind it and one Enter takes both, so the agent may get the older one late. Text typed by hand, a mark that is not closed or a token nobody explains stay what they were (130). Anyone can type a valid envelope by hand: it is not an authentication, and the cost is the same as an older message arriving late. An envelope WITHOUT marks (a message between agents) has no end of its own, so a person could keep typing at its tail: it counts as signed only when the transport's record has the fingerprint of exactly that text (what it pasted itself and never saw taken); otherwise it is the person's text (130).
 
 > Only `3` may lead to a liveness check and respawn. `4` and `5` both mean the peer is alive: treating them as death is how over-spawning starts.
 

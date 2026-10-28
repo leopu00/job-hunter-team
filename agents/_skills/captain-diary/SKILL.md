@@ -22,6 +22,8 @@ It prints **yesterday's** notes (or those of the last day worked) plus whatever
 is already recorded **today**. You inherit the lessons → **do not repeat the
 same mistakes**. If there is nothing, you are the first: start recording.
 
+It prints at most the **last 30 notes** of each day (8 KiB), with a line saying how many older ones were left out: every restart rereads this, so keep your notes short and put the lesson first.
+
 ## During the day — record the SIGNIFICANT events
 
 One line, whenever something happens that carries a lesson. NOT a diary of
