@@ -3,6 +3,7 @@ import type { Locale } from "@/i18n/config";
 import { LOCAL_PROFILES_TEXT } from "../components/local-profiles.i18n";
 import { appLocale } from "../lib/app-locale";
 import { waitAtMost } from "../lib/wait-at-most";
+import { probeDesktopLocalTeamOwner } from "../lib/desktop-account-scope";
 import { readDesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
 import { listLocalProfiles, localIdentitySelected, readLocalProfile, readTeamOwnerCopy } from "../lib/local-profile";
 import { useLocation } from "./router";
@@ -10,6 +11,8 @@ import { useLocation } from "./router";
 /** Whose the team of this computer is, as seen from the profile in use. */
 export type TeamOwnerView =
   | { owner: "self" | "none" }
+  /** the folder holds data that no profile owns and the profile in use cannot take: no owner to switch to */
+  | { owner: "nobody" }
   | { owner: "other"; name: string | null; /** the owner is an account that signed in, not a local profile */ account?: boolean };
 
 /** How long the first frame waits for the backend before it shows the renderer's copy. */
@@ -37,6 +40,7 @@ export function readTeamOwnerView(): TeamOwnerView {
  */
 export async function readNativeTeamOwnerView(
   ask: typeof readDesktopTeamOwnerIdentity = readDesktopTeamOwnerIdentity,
+  probe: typeof probeDesktopLocalTeamOwner = probeDesktopLocalTeamOwner,
 ): Promise<TeamOwnerView | null> {
   let identity;
   try {
@@ -46,7 +50,13 @@ export async function readNativeTeamOwnerView(
   }
   if (!localIdentitySelected()) return { owner: "none" };
   const active = readLocalProfile();
-  if (!active || identity === null) return { owner: "none" };
+  if (!active) return { owner: "none" };
+  if (identity === null) {
+    // No marker names anyone: either nobody took the team yet, or the folder holds data that belong to no
+    // profile and this one may not take. Only the second has something to say; a probe that fails is the first.
+    const owner = await probe().catch(() => null);
+    return owner === "nobody" ? { owner: "nobody" } : { owner: "none" };
+  }
   if (identity.kind === "local" && identity.profileId === active.profileId) return { owner: "self" };
   if (identity.kind === "google") return { owner: "other", name: null, account: true };
   const name = listLocalProfiles().find((profile) => profile.profileId === identity.profileId)?.displayName ?? null;
@@ -94,11 +104,13 @@ export function LocalTeamOwnerBanner({
     };
   }, [read, readNative, path]);
 
-  if (!view || view.owner !== "other") return null;
+  if (!view || (view.owner !== "other" && view.owner !== "nobody")) return null;
   const t = LOCAL_PROFILES_TEXT[locale];
-  const text = view.account
-    ? t.ownerBannerAccount
-    : view.name ? t.ownerBanner.replace("{name}", () => view.name as string) : t.ownerBannerUnknown;
+  const text = view.owner === "nobody"
+    ? t.ownerBannerNobody
+    : view.account
+      ? t.ownerBannerAccount
+      : view.name ? t.ownerBanner.replace("{name}", () => view.name as string) : t.ownerBannerUnknown;
   return (
     <div
       role="status"
@@ -107,7 +119,7 @@ export function LocalTeamOwnerBanner({
       style={{ background: "var(--color-panel)", color: "var(--color-white)" }}
     >
       <span>{text}</span>
-      {onSwitch && (
+      {onSwitch && view.owner === "other" && (
         <button
           type="button"
           data-testid="local-team-owner-switch"
