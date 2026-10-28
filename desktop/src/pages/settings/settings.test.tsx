@@ -210,3 +210,19 @@ describe("the settings page", () => {
     expect(link).toHaveBeenCalledOnce();
   });
 });
+
+describe("the settings page, report a problem", () => {
+  it("has the Report a problem card, with its preview button off until something is written", () => {
+    render(<SettingsPage {...props} />);
+    expect(screen.getByRole("heading", { name: "Report a problem" })).toBeInTheDocument();
+    expect(screen.getByTestId("report-problem-preview-button")).toBeDisabled();
+  });
+
+  it("has it in the read-only view of an existing team too: reporting writes nothing to the team", () => {
+    enterExistingTeamReadOnly(false);
+    try {
+      render(<SettingsPage {...props} />);
+      expect(screen.getByRole("heading", { name: "Report a problem" })).toBeInTheDocument();
+    } finally { leaveExistingTeamReadOnly(); }
+  });
+});

@@ -1,4 +1,5 @@
 import { CurrencyCard, LanguageCard } from "@/app/components/SettingsCloudSections";
+import ReportProblem from "../../components/ReportProblem";
 import { appLocale } from "../../lib/app-locale";
 import { navigate } from "../../shell/router";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
@@ -119,6 +120,7 @@ export default function SettingsPage(_props: PageProps) {
           </div>
         </section>
       )}
+      <ReportProblem id="settings-report" />
       {providerSetup && (
         <section
           data-testid="settings-provider"

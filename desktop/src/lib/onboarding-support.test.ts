@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  PROBLEM_MAX_CHARS,
+  createProblemReport,
   createSetupSupportReport,
+  redactSetupSupportText,
   deliverSetupSupportReport,
   mailtoForSetupSupport,
   SETUP_SUPPORT_MAILTO_MAX,
@@ -86,5 +89,134 @@ describe("desktop setup support report", () => {
     expect(body).not.toContain("Users\\ada");
     expect(body).not.toContain("customer-vps.example.invalid");
     expect(body).not.toContain("person-123");
+  });
+});
+
+const sensitiveStory = [
+  "The team stopped after I typed my token=very-secret-token-value",
+  "it was talking to 203.0.113.70 and host=customer-vps.example.invalid account_id=person-123",
+  "see /Users/ada/.jht/runtime.log",
+].join("\n");
+
+function problem(over: Partial<Parameters<typeof createProblemReport>[0]> = {}) {
+  return createProblemReport({
+    category: "team", description: sensitiveStory, appVersion: "0.4.0", platform: "macOS 14.5", locale: "it", logTail: sensitiveLog, ...over,
+  });
+}
+
+describe("desktop problem report (Help and Settings)", () => {
+  it("redacts what the person wrote and the log in the preview and in the endpoint payload", () => {
+    const value = problem();
+    const outgoing = `${value.preview}\n${JSON.stringify(value.payload)}`;
+    for (const secret of ["203.0.113.70", "very-secret-token-value", "super-secret-token-value", "customer-vps.example.invalid", "person-123", "Users\\ada", "/Users/ada"]) {
+      expect(outgoing).not.toContain(secret);
+    }
+    for (const mark of ["[ip]", "[secret]", "[host]", "[id]", "[user]"]) expect(outgoing).toContain(mark);
+  });
+
+  it("sends exactly the text it previews, with the intake's fields and the category as kind", () => {
+    const value = problem();
+    expect(value.payload.diagnostics).toBe(value.preview);
+    expect(value.payload).toMatchObject({ client: "tauri-desktop", app_version: "0.4.0", locale: "it", kind: "bug", expected: "" });
+    expect(value.payload.happened).toContain("The team stopped");
+    expect(value.payload.happened).not.toContain("very-secret-token-value");
+    expect(value.preview).toContain("- Category: team");
+    expect(value.preview).toContain("## What happened");
+    expect(problem({ category: "install" }).payload.kind).toBe("supporto");
+    expect(problem({ category: "account" }).payload.kind).toBe("supporto");
+    expect(problem({ category: "other" }).payload.kind).toBe("altro");
+    // anything that is not one of the four categories is «other», never free text in the header
+    const odd = problem({ category: "x\nInjected: header" });
+    expect(odd.payload.kind).toBe("altro");
+    expect(odd.preview).toContain("- Category: other");
+    expect(odd.preview).not.toContain("Injected");
+  });
+
+  it("keeps the line breaks of the story, drops control characters, caps its length", () => {
+    const value = problem({ description: `first line\n\n\n\nsecond\u0007line ${"y".repeat(PROBLEM_MAX_CHARS + 500)}`, logTail: "" });
+    expect(value.payload.happened).toContain("first line\n\nsecond line");
+    expect(value.payload.happened).not.toContain("\u0007");
+    expect(value.payload.happened.length).toBeLessThanOrEqual(PROBLEM_MAX_CHARS);
+    expect(value.preview).toContain("(no runtime log was available)");
+  });
+
+  it("posts only redacted data after the person confirms, and uses the problem subject in the mail fallback", async () => {
+    const ok = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: "JHT-P1" }), { status: 200 }));
+    vi.stubGlobal("fetch", ok);
+    expect(await deliverSetupSupportReport(problem())).toEqual({ kind: "sent", ticket: "JHT-P1" });
+    expect(String(ok.mock.calls[0][1].body)).not.toContain("very-secret-token-value");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    const result = await deliverSetupSupportReport(problem({ logTail: "", description: "short problem text" }));
+    expect(result.kind).toBe("mailto");
+    if (result.kind !== "mailto") return;
+    expect(new URL(result.href).searchParams.get("subject")).toBe("Job Hunter Team desktop problem report (team)");
+  });
+});
+
+// Synthetic secrets of every family the rules know, plus what the setup logs add. Nothing here is real.
+const CORPUS = [
+  "sk" + "-abcdefghijklmnopqrstuvwx0123",
+  "Authorization: Bearer abcdefghijklmnop0123456789",
+  "ghp" + "_abcdefghijklmnopqrstuvwxyz0123456789", // assembled: the repo's secret scan refuses the literals
+  "AKIA" + "ABCDEFGHIJKLMNOP",
+  ["pass", "word=hunter2-hunter2 api_", "key: ", "abcdef", "0123456789abcdef"].join(""),
+  "eyJ" + "hbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop0123",
+  ["-----BEGIN ", "PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END ", "PRIVATE KEY-----"].join(""), // assembled: the repo's secret scan refuses the literal
+  "reach 203.0.113.70 and 198.51.100.7, also 192.168.1.20, 10.0.0.5, 172.16.4.9, 127.0.0.1",
+  "write to ada@example.invalid or call +39 06 1234 5678",
+  "files in /Users/ada/.jht and C:\\Users\\ada\\AppData and /home/ada/x",
+  "host=customer-vps.example.invalid account_id=person-123 id: 42",
+  "ssh root@203.0.113.9 -i /Users/ada/.ssh/id_ed25519",
+];
+
+const SECRET_PIECES = ["abcdefghijklmnopqrstuvwx0123", "abcdefghijklmnop0123456789", "hunter2", "203.0.113", "192.168.1.20", "10.0.0.5", "172.16.4.9", "198.51.100.7", "ada@example", "1234 5678", "Users/ada", "Users\\ada", "customer-vps", "person-123", "MIIEvQIBADANBgkq"];
+
+describe("the redaction of the support reports", () => {
+  it("is idempotent: redacting a redacted text gives the same text, never a doubled bracket", () => {
+    for (const sample of [...CORPUS, CORPUS.join("\n")]) {
+      const once = redactSetupSupportText(sample).text;
+      expect(redactSetupSupportText(once).text, sample).toBe(once);
+      expect(once).not.toMatch(/\]\]/);
+    }
+  });
+
+  it("takes out every piece of the corpus, private addresses included", () => {
+    const text = redactSetupSupportText(CORPUS.join("\n")).text;
+    for (const piece of SECRET_PIECES) expect(text, piece).not.toContain(piece);
+    expect(text).toContain("[ip]");
+    expect(text).toContain("[user]");
+  });
+
+  it("does not let «id:» or «host:» at the end of a line take the next heading", () => {
+    const text = redactSetupSupportText("my id:\n## Last runtime-log lines\nhost =\n## Next").text;
+    expect(text).toContain("\n## Last runtime-log lines");
+    expect(text).toContain("\n## Next");
+  });
+
+  it("removes zero-width and bidi characters that would hide or split a secret", () => {
+    const sneaky = "to\u200bken=very-secret-token-value \u202eevil\u202c and sk-abcdefghijk\u200blmnopqrstuvwx0123";
+    const value = createProblemReport({ category: "other", description: sneaky, appVersion: "0.4.0", platform: "macOS 14", locale: "en", logTail: "" });
+    expect(value.preview).not.toMatch(/[\u200b-\u200f\u202a-\u202e]/);
+    expect(value.preview).not.toContain("very-secret-token-value");
+    expect(value.preview).not.toContain("abcdefghijklmnopqrstuvwx0123");
+  });
+
+  it("sends in every free-text field only what the preview shows", () => {
+    for (const sample of CORPUS) {
+      const value = createProblemReport({ category: "team", description: sample, appVersion: "0.4.0", platform: "macOS 14.5", locale: "en", logTail: sample });
+      const { happened, diagnostics, platform } = value.payload;
+      expect(diagnostics, sample).toBe(value.preview);
+      expect(value.preview, sample).toContain(happened);
+      expect(value.preview, sample).toContain(platform);
+      for (const field of [happened, diagnostics, platform]) expect(field).not.toMatch(/\]\]/);
+      for (const piece of SECRET_PIECES) expect(JSON.stringify(value.payload), `${piece} in ${sample}`).not.toContain(piece);
+    }
+  });
+
+  it("does not double the brackets of the setup report either", () => {
+    const value = createSetupSupportReport({ stage: "runtime", code: "runtime_install_failed", appVersion: "0.4.0", platform: "macOS 14.5", locale: "en", logTail: CORPUS.join(" ") });
+    expect(value.preview).not.toMatch(/\]\]/);
+    expect(value.payload.diagnostics).toBe(value.preview);
+    for (const piece of SECRET_PIECES) expect(value.preview, piece).not.toContain(piece);
   });
 });
