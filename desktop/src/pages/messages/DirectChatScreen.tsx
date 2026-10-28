@@ -270,7 +270,9 @@ export default function DirectChatScreen({
   const connectionError = useRef(false);
   const failOperation = (code: string) => {
     connectionError.current = false;
-    setOperationError(code);
+    // The Mentor is switched on when the first positions have a score, not at the start of the team: until
+    // then «the agent is not running» would send the person to start a team that is already running.
+    setOperationError(code === "agent_not_running" && agentId === "mentor" ? "mentor_not_yet_active" : code);
   };
   // Why an answer written in the composer did not go: it stays in the box.
   const [answerRefusal, setAnswerRefusal] = useState<string | null>(null);

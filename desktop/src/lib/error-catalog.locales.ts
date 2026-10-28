@@ -877,6 +877,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["Az ügynök nem fut.", "Indítsd el a csapatot, majd küldd el újra az üzenetet."],
     pt: ["O agente não está em execução.", "Inicia a equipa e volta a enviar a mensagem."],
   },
+  "The Mentor is not active yet.": {
+    de: ["Der Mentor ist noch nicht aktiv.", "Er schaltet sich von selbst ein, sobald die ersten Positionen eine Bewertung haben: schreibe ihm dann."],
+    es: ["El Mentor aún no está activo.", "Se activa solo cuando las primeras posiciones tienen puntuación: escríbele entonces."],
+    fr: ["Le Mentor n’est pas encore actif.", "Il s’active tout seul dès que les premiers postes ont une note : écris-lui alors."],
+    hu: ["A Mentor még nem aktív.", "Magától bekapcsol, amint az első pozíciók pontszámot kapnak: akkor írj neki."],
+    pt: ["O Mentor ainda não está ativo.", "Ativa-se sozinho quando as primeiras posições têm pontuação: escreve-lhe então."],
+  },
   "The saved connection no longer matches this team.": {
     de: ["Die gespeicherte Verbindung passt nicht mehr zu diesem Team.", "Verbinde das Team in der Einrichtung neu: Dort bestätigst du den VPS noch einmal."],
     es: ["La conexión guardada ya no corresponde a este equipo.", "Vuelve a conectar el equipo desde la configuración: te pedirá de nuevo que confirmes el VPS."],
@@ -1719,6 +1726,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   persist_failed: translated("The message was not saved in the conversation."),
   invalid_agent: translated("This agent does not exist in the team."),
   agent_not_running: translated("The agent is not running."),
+  mentor_not_yet_active: translated("The Mentor is not active yet."),
   team_not_running: translated("The team is not running."),
   read_only_link: translated("This view is read only: the message was not sent."),
   own_vps_claim_required: translated("This VPS was set up before the app marked it as yours: you can read it from here, but not write to it."),

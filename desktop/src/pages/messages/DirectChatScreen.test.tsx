@@ -138,6 +138,36 @@ describe("DirectChatScreen", () => {
     expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toHaveValue("Ciao");
   });
 
+  it("a message to the Mentor before its first positions are scored says it is not active yet, not that the team is off", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "agent_not_running" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} initialAgentId="mentor" embedded />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Mentor" }), "Ciao{Enter}");
+    const status = await screen.findByTestId("direct-chat-status");
+    await waitFor(() => expect(status).toHaveTextContent("Il Mentor non è ancora attivo."));
+    expect(status).not.toHaveTextContent(/accendi il team/i);
+    expect(screen.getByRole("textbox", { name: "Scrivi a Mentor" })).toHaveValue("Ciao");
+  });
+
+  it("any other agent that is not running still tells the person to start the team", async () => {
+    viewport(1280, 800);
+    const { mock } = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "agent_not_running" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} />);
+    await screen.findByText("Messaggio dalla VPS");
+    await user.type(screen.getByRole("textbox", { name: "Scrivi a Capitano" }), "Ciao{Enter}");
+    const status = await screen.findByTestId("direct-chat-status");
+    await waitFor(() => expect(status).toHaveTextContent("L’agente non è acceso."));
+  });
+
   it("the read-only chat never offers the claim", async () => {
     viewport(1280, 800);
     const { mock, emit } = client();
