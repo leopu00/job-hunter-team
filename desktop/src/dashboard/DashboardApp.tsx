@@ -119,6 +119,9 @@ function migrationRetryable(error: unknown): boolean {
   return [
     "local_migration_storage_failed",
     "local_migration_owner_unavailable",
+    // the sentences of these two say to try again
+    "local_migration_profile_changed",
+    "local_migration_in_progress",
   ].includes(nativeErrorCode(error) ?? "");
 }
 const PROFILE_RECHECK_MS = 2_000;

@@ -573,6 +573,28 @@ describe("DashboardApp onboarding router", () => {
     expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["local_migration_profile_changed", true],
+    ["local_migration_in_progress", true],
+    ["local_migration_storage_failed", true],
+    ["local_migration_owner_unavailable", true],
+    ["local_migration_review_pending", false],
+    ["local_migration_target_exists", false],
+    ["local_migration_source_invalid", false],
+  ])("offers «Try again» for %s: %s", async (code, offered) => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(readLocalProfile).mockReturnValue({
+      profileId: "opaque-local-profile",
+      displayName: "Synthetic Local",
+    });
+    vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code });
+
+    render(<DashboardApp />);
+    await screen.findByRole("alert");
+
+    expect(screen.queryByRole("button", { name: "Riprova" }) !== null).toBe(offered);
+  });
+
   it("«Back to sign in» is the app's own sign-out, held while it runs, and says so if it did not work", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
     vi.mocked(readLocalProfile).mockReturnValue({
