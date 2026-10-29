@@ -22,6 +22,7 @@ describe("the words of the list of local profiles", () => {
     expect(text.ownerBanner).toContain("{name}");
     expect(text.ownerBannerUnknown).not.toContain("{name}");
     expect(text.ownerBannerAccount).not.toContain("{name}");
+    expect(text.ownerBannerNobody).not.toContain("{name}");
   });
 
   it.each(LOCALES)("%s: the small labels and buttons fit the places they are in", (locale) => {

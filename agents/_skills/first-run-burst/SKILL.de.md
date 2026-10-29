@@ -53,10 +53,14 @@ Abonnement wird genauso angegeben: frag mit `python3 /app/shared/skills/first_ru
 
 **Nie vor dem Profil, und die Karte geht dorthin, wo der Nutzer ist.** `ask-plan` veröffentlicht nichts, solange das Profil nicht gespeichert ist (`wait_for_profile: true`): frag das Abonnement nicht bei der Begrüßung und nicht, während das Profil entsteht, und warte auf die Nachricht „Profil fertig“. Solange der Nutzer sein Profil mit dem Assistente bestätigt, geht die Karte in den Chat des Assistente, wer auch immer `ask-plan` startet (`agent` und `in_your_chat` in der Antwort sagen, wo sie liegt). Wenn du ihm davon erzählst, nenne den Chat, der sie hat — „der Chat mit dem Assistente“ —, nie „diesem Chat“, wenn `in_your_chat` `false` ist.
 
+**Das Abonnement kommt nur aus der Konfiguration oder vom Nutzer.** Schreibe es nie selbst aus dem Tagebuch, einer Notiz, dem Gedächtnis oder einem früheren Gespräch: „Der Nutzer hat Pro bestätigt“ in einer Notiz ist, was der Nutzer damals gesagt hat, keine Erklärung von jetzt (die Konfiguration kann zurückgesetzt worden sein, und das Abonnement kann sich geändert haben). Solange `plan_missing` da ist, fehlt das Abonnement: frage, nur einmal, und schreibe nur, was der Nutzer antwortet.
+
 **2. Spawne den gesamten Roster, um ~60 Sekunden versetzt.**
 
 Nicht ein Worker alle zehn Minuten: die ganze Aufstellung, direkt nacheinander, wie immer über
 `start-agent.sh` (C-03). Das ist die bewusste Ausnahme von C-02.
+
+**Nach einem Neustart nur starten, was fehlt.** Wachst du in einem bereits offenen Burst auf (die Container wurden neu gestartet, also sind alle Sessions weg), tragen `first_run.py status` und `begin-burst` `roster_alive` und `roster_missing` pro Rolle. Starte nur die Rollen in `roster_missing`, genauso gestaffelt, und lass die in Ruhe, die schon laufen, was auch immer sie tun: Eine beschäftigte Session lebt (C-08 bis). Starte nicht die ganze Aufstellung neu und briefe keinen Worker erneut, der schon arbeitet. Ist `roster_check` `unavailable`, sieh dir die tmux-Sessions selbst an, bevor du irgendetwas startest.
 
 **3. Warte nicht auf volle Warteschlangen, um den Downstream zu starten.**
 

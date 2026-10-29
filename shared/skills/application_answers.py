@@ -1252,10 +1252,13 @@ def _closer_sessions() -> list[str]:
     return [name for name in result.stdout.split() if name.startswith(CLOSER_SESSION_PREFIX)]
 
 
+# Seconds this caller waits for the transport before it sees the deadline (JHT_TMUX_SEND_WAIT_APPLICATION_ANSWERS_S; the old
+# JHT_TMUX_SEND_WAIT_S, one name for every caller, still sets it when the caller's own is absent).
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_APPLICATION_ANSWERS_S", os.environ.get("JHT_TMUX_SEND_WAIT_S", "20")))
+# >>> tmux_send_run bootstrap (the same text in every caller: shared/skills/tmux_send_run_bootstrap.txt, scripts/sync_tmux_send_bootstrap.py)
 # `subprocess.run(..., timeout=N)` KILLS jht-tmux-send at the deadline; between its paste and its Enter that
 # leaves a paste in the composer with no Enter (TEST 5, 27/10). tmux_send_run.py waits as long, raises the same
 # TimeoutExpired, and lets the transport finish; without the module the old call is kept.
-TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "20"))
 _tmux_send_run_module = None
 
 
@@ -1279,6 +1282,7 @@ def _transport_run(args, timeout, text=True):
     if _tmux_send_run_module:
         return _tmux_send_run_module.run(args, timeout, text=text)
     return subprocess.run(args, capture_output=True, text=text, timeout=timeout)
+# <<< tmux_send_run bootstrap
 
 
 def _tmux_send(session: str, text: str) -> bool:

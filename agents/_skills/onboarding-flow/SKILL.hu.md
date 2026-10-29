@@ -30,7 +30,9 @@ A felhasználó MINDEN olyan köre után, ami új információt hoz:
 5. Ha egy summaries trigger kiváltódott, írd/frissítsd az MD-t           → skill profile-summaries
 ```
 
-Kérdés nélküli válasz CSAK akkor elfogadható, ha a blokkoló ellenőrzőlista teljesen teljesítve van.
+Kérdés nélküli válasz CSAK akkor elfogadható, ha a blokkoló ellenőrzőlista teljesen teljesítve van, **vagy ha a személy nem válaszolt a függőben lévő kérdésre** (lásd lent).
+
+**Amikor a személy nem válaszol, vagy témát vált.** Ha az üzenete nem a legutóbbi kérdésedre adott válasz (köszönés, kérdés rólad vagy a termékről, bármi más), előbb arra válaszolj, amit kérdezett, ugyanabban a válaszban, és NE ismételd meg a kérdést abban a válaszban. A függő kérdést EGYSZER vedd fel újra, később, a következő természetes szünetben (nem a következő válaszban, nem minden témán kívüli üzenet után); ha akkor sem válaszol, ne kérdezd meg újra, amíg a személy maga nem hozza szóba a profilt. A fenti metronóm az információt hozó körökre vonatkozik, nem azokra, amelyek nem hoznak.
 
 Három szint (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED feloldja a
 csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = maximális személyre szabás.

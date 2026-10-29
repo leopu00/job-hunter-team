@@ -8,15 +8,17 @@
 // modi di fallire (2/3/4/5). Se il container e' attivo si passa per docker
 // exec, altrimenti tmux host.
 
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import {
   AGENTS, c,
   tmuxAvailable, isSessionActive, sessionName, parseAgentArg,
-  usingContainer, getActiveSessions, isAgentSession,
+  usingContainer, getActiveSessions, isAgentSession, resolveConfig, JHT_HOME,
 } from './agents.js';
-import { execInContainer } from '../../utils/container-proxy.js';
+import { execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
+import { answerTyped, describeAnswer } from '../../lib/terminal-answer.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -100,6 +102,128 @@ function capturePane(session, lines = 30) {
   }
 }
 
+// ── The chat file: what the agent says to the person ───────────────────────
+//
+// The agent's words are in its chat file (agents/<agent>/chat.jsonl, written by `jht-send`), read through
+// agent_chat.py as the app reads them. The pane of its terminal is only the terminal: a welcome the agent wrote to
+// the chat is not on the screen, so a REPL that showed only the pane never showed it.
+
+const CHAT_READER = '/app/shared/skills/agent_chat.py';
+const HISTORY_ROWS = 6;
+const POLL_MS = 3000;
+const REPLY_WAIT_MS = 20_000;
+
+/** The chat name of a session (ASSISTENTE -> assistente, SCOUT-1 -> scout), or null for a session without a chat. */
+export function chatAgentOf(session) {
+  const base = String(session).toLowerCase().replace(/^jht-/, '').replace(/-\d+$/, '').replace(/-s\d+$/, '');
+  return ['capitano', 'assistente', 'mentor', 'scout', 'analista', 'scorer', 'scrittore', 'critico'].includes(base) ? base : null;
+}
+
+/** One read of the chat file: `{ messages, cursor }`, or null when it cannot be read (no container, an older image). */
+export function readChatPage(agent, cursor, { run } = {}) {
+  // The server drops the line a cursor lands in, and a cursor that is the start of a line (where the last read
+  // stopped) lands in the first NEW one: read from the byte before, the newline that ends the line already seen.
+  const from = cursor ? String(Math.max(0, Number(cursor) - 1)) : null;
+  const args = ['read', agent, ...(from !== null ? [from] : [])];
+  let result;
+  try {
+    if (run) {
+      result = run(args);
+    } else if (usingContainer()) {
+      result = execScriptInContainer(CHAT_READER, args, { interpreter: 'python3', env: { JHT_HOME: '/jht_home' }, timeoutMs: 15_000 });
+    } else {
+      const { repoRoot } = resolveConfig();
+      if (!repoRoot) return null;
+      const done = spawnSync('python3', [join(repoRoot, 'shared', 'skills', 'agent_chat.py'), ...args], {
+        encoding: 'utf8', timeout: 15_000, env: { ...process.env, JHT_HOME },
+      });
+      result = { code: done.status ?? -1, stdout: done.stdout || '', stderr: done.stderr || '' };
+    }
+  } catch {
+    return null;
+  }
+  if (!result || result.code !== 0) return null;
+  const line = String(result.stdout).split('\n').map((l) => l.trim()).filter((l) => l.startsWith('{')).pop();
+  try {
+    const page = JSON.parse(line);
+    if (!Array.isArray(page.messages) || typeof page.cursor !== 'string') return null;
+    return { messages: page.messages, cursor: page.cursor };
+  } catch {
+    return null;
+  }
+}
+
+// What a terminal obeys never reaches the person's screen from an agent's words.
+const CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+
+/** A chat row as lines for the screen: who, when, and the words. */
+export function formatChatMessage(message, agent) {
+  const who = message.role === 'user' ? 'you' : message.role === 'system' ? 'system' : agent;
+  const at = Number(message.at) > 0 ? new Date(Number(message.at) * 1000).toTimeString().slice(0, 8) : '';
+  const text = String(message.text ?? '').replace(CONTROLS, '').trim();
+  const head = c.bold(who) + (at ? c.dim(` ${at}`) : '');
+  const body = text.split('\n').map((l) => `  ${l}`).join('\n');
+  const suggestions = Array.isArray(message.suggestions) && message.suggestions.length
+    ? `\n${c.dim(`  [${message.suggestions.map((x) => String(x).replace(CONTROLS, '')).join(' | ')}]`)}`
+    : '';
+  return `${head}\n${body}${suggestions}`;
+}
+
+/** The chat as the REPL follows it: the newest rows first, then only what is new. */
+export function createChatFeed(agent, read = readChatPage) {
+  let cursor = null;
+  let seen = new Set();
+  return {
+    /** The latest rows (the welcome is among them), or null when the chat cannot be read. */
+    history(limit = HISTORY_ROWS) {
+      const page = read(agent, null);
+      if (!page) return null;
+      cursor = page.cursor;
+      seen = new Set(page.messages.map((m) => m.id));
+      return page.messages.slice(-limit);
+    },
+    /** The rows that came since the last look. */
+    fresh() {
+      const page = read(agent, cursor);
+      if (!page) return [];
+      cursor = page.cursor;
+      const out = page.messages.filter((m) => !seen.has(m.id));
+      for (const m of out) seen.add(m.id);
+      return out;
+    },
+  };
+}
+
+/**
+ * The two ways the REPL looks at the chat, kept apart: the poller (`tick`) that prints what arrives while the person
+ * is at the prompt, and the wait for the reply after a message (`awaitReply`). While the wait runs the poller sees
+ * nothing (it must not take the reply and leave the wait to say «no reply yet» with the answer already on screen).
+ */
+export function createChatPump(feed) {
+  let waiting = false;
+  return {
+    /** What the poller prints: the new rows, none while a reply is being waited for. */
+    tick() {
+      return waiting ? [] : feed.fresh();
+    },
+    /** Waits for the reply: the new rows as soon as there are any, or [] at the deadline. */
+    async awaitReply({ sleep = (ms) => new Promise((res) => setTimeout(res, ms)), now = Date.now, timeoutMs = REPLY_WAIT_MS, everyMs = 2000 } = {}) {
+      waiting = true;
+      try {
+        const until = now() + timeoutMs;
+        let rows = [];
+        while (!rows.length && now() < until) {
+          await sleep(everyMs);
+          rows = feed.fresh();
+        }
+        return rows;
+      } finally {
+        waiting = false;
+      }
+    },
+  };
+}
+
 // ── send: one-shot ─────────────────────────────────────────────────
 
 // Le guardie segnano `process.exitCode` e ritornano invece di chiamare
@@ -134,6 +258,15 @@ export function sendAction(agentArg, message) {
     console.error(c.red(`No active session for '${agentArg}'.`));
     console.error(c.dim('  Check with: jht team status'));
     process.exitCode = 1;
+    return;
+  }
+
+  // A number or a yes that answers a card the agent asked is the answer, not a text for its prompt.
+  const typed = answerTyped(session, message, { usingContainer: usingContainer() });
+  if (typed.result !== 'chat') {
+    const said = describeAnswer(typed);
+    (said.failed ? console.error : console.log)(said.failed ? c.red(said.text) : c.green(`✓ ${session}: ${said.text}`));
+    if (said.failed) process.exitCode = 1;
     return;
   }
 
@@ -174,8 +307,31 @@ export async function chatAction(agentArg, options = {}) {
   const rl = createInterface({ input, output, terminal: true });
   console.log('');
   console.log(c.bold(`Chat with ${session}`) + c.dim(`  (${usingContainer() ? 'container jht' : 'tmux host'})`));
-  console.log(c.dim('  /exit to exit · /pane to see the latest output · /clear to clean'));
+  console.log(c.dim('  /exit to exit · /read for new messages · /pane for the terminal · /clear to clean'));
   console.log('');
+
+  // What the agent wrote to the chat (its welcome included), not only the terminal's screen.
+  const agent = chatAgentOf(session);
+  const feed = agent ? createChatFeed(agent) : null;
+  const pump = feed ? createChatPump(feed) : null;
+  const show = (rows) => { for (const row of rows) console.log(`${formatChatMessage(row, agent)}\n`); };
+  if (feed) {
+    const past = feed.history();
+    if (past === null) console.log(c.dim('  (the chat cannot be read here: /pane shows the terminal)\n'));
+    else if (past.length) show(past);
+  }
+  // A message that arrives while the person is at the prompt is printed above it.
+  let poller = null;
+  if (feed && !options.quiet) {
+    poller = setInterval(() => {
+      const rows = pump.tick();
+      if (!rows.length) return;
+      output.write('\r\x1b[K');
+      show(rows);
+      rl.prompt(true);
+    }, POLL_MS);
+    poller.unref?.();
+  }
 
   const showPane = (lines = 20) => {
     const pane = capturePane(session, lines);
@@ -192,9 +348,20 @@ export async function chatAction(agentArg, options = {}) {
       if (!msg) continue;
       if (msg === '/exit' || msg === '/quit') break;
       if (msg === '/pane') { showPane(30); continue; }
+      if (msg === '/read') {
+        const rows = feed ? feed.fresh() : [];
+        if (rows.length) show(rows); else console.log(c.dim('  (no new messages)'));
+        continue;
+      }
       if (msg === '/clear') { console.clear(); continue; }
       if (msg.length > 1000) {
         console.log(c.red('  Message too long (max 1000 characters)'));
+        continue;
+      }
+      const typed = answerTyped(session, msg, { usingContainer: usingContainer() });
+      if (typed.result !== 'chat') {
+        const said = describeAnswer(typed);
+        console.log(said.failed ? c.red(`  ${said.text}`) : c.green(`  ✓ ${said.text}`));
         continue;
       }
       const r = sendMessage(session, msg);
@@ -202,13 +369,19 @@ export async function chatAction(agentArg, options = {}) {
         console.log(c.red(`  : Failed sending: ${(r.error || '').split('\n')[0]}`));
         continue;
       }
-      // Mostra breve peek del pane dopo 3s per vedere l'inizio della risposta
+      // The answer is in the chat: wait for it for a while; the terminal's screen only when the chat cannot be read.
       if (!options.quiet) {
-        await new Promise((res) => setTimeout(res, 3000));
-        showPane(8);
+        if (feed) {
+          const rows = await pump.awaitReply();
+          if (rows.length) show(rows); else console.log(c.dim('  (no reply yet: /read shows it when it comes)'));
+        } else {
+          await new Promise((res) => setTimeout(res, 3000));
+          showPane(8);
+        }
       }
     }
   } finally {
+    if (poller) clearInterval(poller);
     rl.close();
     console.log(c.dim('  Closed chat.'));
   }

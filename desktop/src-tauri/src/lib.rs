@@ -22,6 +22,7 @@ mod existing_team_register;
 mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;
+mod local_swipe;
 mod mail;
 mod onboarding;
 #[cfg(test)]
@@ -29,9 +30,11 @@ mod onboarding_attestation_tests;
 mod podman;
 #[cfg(windows)]
 mod private_acl;
+mod private_copy;
 mod profile_import;
 mod profile_migration;
 mod release_channel;
+mod resources;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
@@ -41,6 +44,8 @@ mod team_backup;
 mod team_export;
 mod team_owner;
 mod chat_attachment;
+mod profile_progress;
+mod team_start;
 mod work_stats;
 mod text_file_export;
 mod voice_input;
@@ -69,6 +74,10 @@ pub fn run() {
             // inside the work area of its monitor, at any scale
             window_fit::fit_main_window(app.handle());
             voice_input::attach(app.handle())?;
+            // the folder of the private copies a document is opened from (and the sweep of what an earlier run left)
+            if let Ok(dir) = tauri::Manager::path(app).app_local_data_dir() {
+                std::thread::spawn(move || private_copy::init(dir));
+            }
             // what a crash left of the pipe-free ssh calls (Windows only), off the start's path
             std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
             Ok(())
@@ -87,6 +96,8 @@ pub fn run() {
             account_scope::runtime_playground_local_reset,
             team_owner::runtime_local_team_owner_identity,
             team_owner::runtime_local_team_owner,
+            profile_progress::profile_progress_read,
+            team_start::team_start_read,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
@@ -110,6 +121,10 @@ pub fn run() {
             app_update::latest_app_version,
             public_pages::open_public_page,
             team_document::team_document_save,
+            team_document::team_document_text,
+            team_document::team_document_pages,
+            team_document::team_document_page,
+            team_document::team_document_open,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,
@@ -179,11 +194,18 @@ pub fn run() {
             team_backup::backup_inspect,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
+            local_swipe::local_swipe_deck_read,
+            local_swipe::local_team_position_judge,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
             voice_input::voice_input_stop
         ])
-        .run(application_context())
-        .expect("error while running JHT Desktop");
+        .build(application_context())
+        .expect("error while running JHT Desktop")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                private_copy::sweep_private_copies();
+            }
+        });
 }

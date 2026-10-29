@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { localeLabels, locales, type Locale } from "@/i18n/config";
-import { appLocale } from "../lib/app-locale";
+import { appLocale, languagePickedAtStart } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
 import { fill } from "../lib/text-slots";
 import {
@@ -43,7 +43,20 @@ export default function TeamLanguagePrompt({
       const team = await readTeamLanguage();
       if (cancelled) return;
       if (team) {
-        if (shouldAskTeamLanguage(team, appLocale())) setAsking(appLocale());
+        if (shouldAskTeamLanguage(team, appLocale())) {
+          // The person already said the language on the app's first screen: that was the answer, and the team
+          // follows it without a question. If the team refuses (a read-only link, a VPS not claimed yet), the
+          // question is asked as before, with the refusal told.
+          if (languagePickedAtStart()) {
+            const done = await setTeamLanguage(appLocale());
+            if (cancelled) return;
+            if (done.ok) {
+              rememberTeamLanguageAsked(identityKey);
+              return;
+            }
+          }
+          setAsking(appLocale());
+        }
         return;
       }
       if (attempt + 1 < ATTEMPTS) timer = setTimeout(() => void look(attempt + 1), retryMs);

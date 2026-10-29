@@ -5,6 +5,9 @@ import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { DesktopWriteProvider } from "@/lib/desktop-write";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
+import { useLocalTeamData } from "../lib/local-team-data";
+import { LOCAL_TEAM_DATA_TEXT } from "../lib/local-team-data.i18n";
+import { LocalTeamStoppedBar } from "./LocalTeamStoppedBar";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
 import {
@@ -33,6 +36,7 @@ import NavStrip from "./NavStrip";
 import { beginPageLoad } from "../lib/page-timing";
 import { forgetReadsInFlight } from "../lib/read-deadline";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
+import DocumentPreviewHost from "../pages/positions/DocumentPreviewHost";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
 
@@ -190,6 +194,12 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
   const notFullReason = readOnlyTeam ? existingTeamNotFullReason(readOnlyTeam) : null;
   const readNotice = useExistingTeamReadNotice();
   const readOnly = linkedTeam !== null;
+  // A profile with no cloud account: the pages show the team of this computer, which they only read.
+  const localTeam = useLocalTeamData();
+  const localReadOnly = useMemo(
+    () => (localTeam ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly } : { readOnly: false, reason: "" }),
+    [localTeam],
+  );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
 
@@ -213,6 +223,8 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
   const page = Page && (
     <SignOutContext.Provider value={onLogout ?? null}>
       <Page key={path} params={match.params} search={params} />
+      {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
+      <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>
   );
   if (linkedTeam) {
@@ -279,6 +291,7 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
     return (
       <DashboardI18nProvider>
         <DesktopWriteProvider value={{ canChange: true }}>
+          <ReadOnlyActionsProvider value={localReadOnly}>
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
             {/* The bars take what they need up to a third of the window and scroll beyond it: the page under them always keeps room, and the navbar above is never pushed out. */}
@@ -287,6 +300,7 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
               <NewVersionBanner />
               <TeamOffBanner />
               <LocalTeamOwnerBanner onSwitch={onLogout} />
+              <LocalTeamStoppedBar />
               <WriteAccessRestoredBanner />
         {identityKey && <AwayGreeting identityKey={identityKey} />}
             </div>
@@ -294,6 +308,7 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
               {page}
             </main>
           </div>
+          </ReadOnlyActionsProvider>
         </DesktopWriteProvider>
       </DashboardI18nProvider>
     );
@@ -301,16 +316,19 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
   return (
     <DashboardI18nProvider>
       <DesktopWriteProvider value={{ canChange: true }}>
+        <ReadOnlyActionsProvider value={localReadOnly}>
         <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
           <NewVersionBanner />
           <TeamOffBanner />
           <LocalTeamOwnerBanner onSwitch={onLogout} />
+          <LocalTeamStoppedBar />
             <WriteAccessRestoredBanner />
         {identityKey && <AwayGreeting identityKey={identityKey} />}
           <MainChrome>{page}</MainChrome>
         </div>
+        </ReadOnlyActionsProvider>
       </DesktopWriteProvider>
     </DashboardI18nProvider>
   );

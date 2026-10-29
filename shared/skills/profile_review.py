@@ -19,6 +19,7 @@ only from ``status`` after a valid, owner-only envelope has been read.
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import copy
 import fcntl
@@ -529,11 +530,68 @@ def _catalog() -> tuple[Any, Any]:
     return t, tf
 
 
+def _parsed(value: Any, edges: str) -> Any:
+    """The structure a text holds (`{'region': 'EU'}`, as str() writes it, or JSON), or None while it is not one."""
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not (text.startswith(edges[0]) and text.endswith(edges[1])) or len(text) > 600:
+        return None
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+        return None
+
+
+def _flat_record(value: Any) -> dict[str, Any] | None:
+    """A record of plain values, from a dict or from the text of one: the profile file may hold either.
+    Anything else, nested or longer than a card line, is not one."""
+    value = _parsed(value, "{}")
+    if not isinstance(value, dict) or not value or len(value) > 12:
+        return None
+    if any(not isinstance(k, str) or not isinstance(v, (str, int, float, bool)) for k, v in value.items()):
+        return None
+    return value
+
+
+def _flat_records(value: Any) -> list[dict[str, Any]] | None:
+    """A list of flat records (the profile schema keeps work_authorization so), from a list or from its text; each
+    item may itself be the text of a record. None when any item is not one."""
+    value = _parsed(value, "[]")
+    if not isinstance(value, list) or not value or len(value) > 6:
+        return None
+    records = [_flat_record(item) for item in value]
+    return None if any(record is None for record in records) else records  # type: ignore[return-value]
+
+
+def _field_label(t: Any, name: str) -> str:
+    """A profile field named for the person: the catalog's words for the ones it has (a nested name by its last part),
+    else the name without underscores."""
+    for candidate in (name, name.rsplit(".", 1)[-1]):
+        key = f"profile_confirm.field.{candidate}"
+        label = t(key)
+        if label and label != key:
+            return label
+    spaced = name.replace("_", " ").replace(".", " ").strip()
+    return spaced[:1].upper() + spaced[1:]
+
+
+def _record_words(name: str, record: dict[str, Any], t: Any) -> str:
+    """A record said in words, not as the program holds it: what the person is allowed first and where in brackets
+    (work authorization), any other as `Name: value` pairs."""
+    if name.rsplit(".", 1)[-1] == "work_authorization" and set(record) == {"region", "status"}:
+        region = _text(record["region"])
+        if region.isalpha() and len(region) <= 3:  # a region code is written in capitals, whatever the Assistant wrote
+            region = region.upper()
+        return f"{_text(record['status'])} ({region})"
+    return ", ".join(f"{_field_label(t, str(k))}: {_text(v)}" for k, v in record.items())
+
+
 def _short(value: Any) -> str:
     if isinstance(value, (list, tuple)):
         text = ", ".join(_text(item) for item in value if _text(item))
     elif isinstance(value, dict):
-        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        text = ", ".join(f"{str(k).replace('_', ' ')}: {_text(v)}" for k, v in sorted(value.items(), key=lambda kv: str(kv[0])))
     else:
         text = _text(value)
     text = " ".join(text.split())
@@ -554,6 +612,8 @@ def _inferred_names(raw: str, review: dict[str, Any]) -> list[str]:
     fields nor a field of the review is refused: a typo must not silently drop the mark."""
     names = [item.strip() for item in raw.split(",") if item.strip()]
     known = set(FIELDS) | {change["field"] for change in review["changes"]}
+    # a record the review expanded (`work_authorization.region`, `work_authorization.status`) can be named as a whole
+    known |= {".".join(parts[:i]) for field in list(known) for parts in [field.split(".")] for i in range(1, len(parts))}
     if any(name not in known for name in names):
         raise ProfileReviewError("inferred_unknown")
     return names
@@ -579,9 +639,11 @@ def summary_text(envelope: dict[str, Any], inferred: list[str]) -> str:
     for name in inferred:  # a deduced preference the eight fields do not carry: said by its own name
         if name in shown_fields or name in FIELDS:
             continue
-        value = _short(_value_at(envelope["profile"], name))
+        raw = _value_at(envelope["profile"], name)
+        records = _flat_records(raw) or ([_flat_record(raw)] if _flat_record(raw) else [])
+        value = _short("; ".join(_record_words(name, record, t) for record in records) if records else raw)
         if value:
-            lines.append(f"- {name}: {value}{mark}")
+            lines.append(f"- {_field_label(t, name)}: {value}{mark}")
     missing = [t(_MISSING_LABEL[field]) for field in envelope.get("missing", []) if field in _MISSING_LABEL]
     if missing:
         lines += ["", tf("profile_confirm.missing", ", ".join(missing))]

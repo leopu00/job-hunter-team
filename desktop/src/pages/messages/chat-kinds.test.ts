@@ -351,3 +351,35 @@ describe("the sight of the agent working", () => {
     expect(sightAfter(held, "working")).toEqual({ working: true, misses: 0 });
   });
 });
+
+describe("cleanMessage and the Assistant's mood tag", () => {
+  const agent = (text: string) => cleanMessage({ id: "a", role: "agent", text, at: 1 } as DirectChatMessage);
+
+  it("takes a leading tag of the list out of the agent's text and keeps it as the message's emotion", () => {
+    expect(agent("[caldo] Benvenuto!")).toMatchObject({ text: "Benvenuto!", emotion: "caldo" });
+    expect(agent("[pensieroso]   Vediamo…")).toMatchObject({ text: "Vediamo…", emotion: "pensieroso" });
+    expect(agent("[severo] Attenzione.")).toMatchObject({ text: "Attenzione.", emotion: "severo" });
+  });
+
+  it("leaves everything that is not one tag at the start, as written, with no emotion", () => {
+    for (const text of ["Ciao [caldo]", "[caldo][neutro] due", "[CALDO] maiuscolo", "[nota] fuori lista", "[caldo](https://example.test) link", "Senza tag"]) {
+      const out = agent(text);
+      expect(out.text, text).toBe(text === "[caldo][neutro] due" ? "[neutro] due" : text);
+      if (text !== "[caldo][neutro] due") expect(out.emotion, text).toBeUndefined();
+    }
+  });
+
+  it("does not touch the person's own words or a system line", () => {
+    const user = cleanMessage({ id: "u", role: "user", text: "[caldo] scritto da me", at: 1 } as DirectChatMessage);
+    expect(user.text).toBe("[caldo] scritto da me");
+    expect(user.emotion).toBeUndefined();
+    const system = cleanMessage({ id: "s", role: "system", text: "[caldo] riga", at: 1 } as DirectChatMessage);
+    expect(system.text).toBe("[caldo] riga");
+    expect(system.emotion).toBeUndefined();
+  });
+
+  it("keeps a message that was only a tag as it came: an empty bubble says less", () => {
+    expect(agent("[caldo]")).toMatchObject({ text: "[caldo]" });
+    expect(agent("[caldo]   ").emotion).toBeUndefined();
+  });
+});

@@ -13,6 +13,9 @@ const it = {
   providerTitle: "Provider",
   providerText: "Il provider (Codex) con cui lavorano gli agenti della squadra di questo computer. Cambialo o accedi di nuovo: si riapre il passo «Provider» della configurazione e la squadra usa la tua scelta.",
   providerButton: "Configura il provider",
+  localLinkTitle: "Profilo locale non collegato",
+  localLinkText: "Su questo Mac c’è un profilo locale che non hai collegato al tuo account Google: i suoi dati e la sua squadra restano come sono. Puoi collegarlo adesso.",
+  localLinkButton: "Collega il profilo locale",
 };
 
 const vpsConnectionIt = {
@@ -68,6 +71,9 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     providerTitle: "Provider",
     providerText: "The provider (Codex) the agents of this computer's team work with. Change it or sign in again: the setup's «Provider» step opens again and the team uses your choice.",
     providerButton: "Set up the provider",
+    localLinkTitle: "Local profile not linked",
+    localLinkText: "This Mac has a local profile that you did not link to your Google account: its data and its team stay as they are. You can link it now.",
+    localLinkButton: "Link the local profile",
   },
   de: {
     navLabel: "Einstellungen",
@@ -76,6 +82,9 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     providerTitle: "Anbieter",
     providerText: "Der Anbieter (Codex), mit dem die Agenten des Teams auf diesem Computer arbeiten. Ändere ihn oder melde dich neu an: Der Schritt «Anbieter» der Einrichtung öffnet sich erneut und das Team verwendet deine Wahl.",
     providerButton: "Anbieter einrichten",
+    localLinkTitle: "Lokales Profil nicht verbunden",
+    localLinkText: "Auf diesem Mac gibt es ein lokales Profil, das du nicht mit deinem Google-Konto verbunden hast: Seine Daten und sein Team bleiben, wie sie sind. Du kannst es jetzt verbinden.",
+    localLinkButton: "Lokales Profil verbinden",
   },
   fr: {
     navLabel: "Paramètres",
@@ -84,6 +93,9 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     providerTitle: "Fournisseur",
     providerText: "Le fournisseur (Codex) avec lequel travaillent les agents de l’équipe de cet ordinateur. Change-le ou reconnecte-toi : l’étape « Fournisseur » de la configuration se rouvre et l’équipe utilise ton choix.",
     providerButton: "Configurer le fournisseur",
+    localLinkTitle: "Profil local non relié",
+    localLinkText: "Ce Mac contient un profil local que tu n’as pas relié à ton compte Google : ses données et son équipe restent comme elles sont. Tu peux le relier maintenant.",
+    localLinkButton: "Relier le profil local",
   },
   es: {
     navLabel: "Ajustes",
@@ -92,6 +104,9 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     providerTitle: "Proveedor",
     providerText: "El proveedor (Codex) con el que trabajan los agentes del equipo de este ordenador. Cámbialo o vuelve a iniciar sesión: se abre de nuevo el paso «Proveedor» de la configuración y el equipo usa tu elección.",
     providerButton: "Configurar el proveedor",
+    localLinkTitle: "Perfil local sin conectar",
+    localLinkText: "Este Mac tiene un perfil local que no has conectado a tu cuenta de Google: sus datos y su equipo se quedan como están. Puedes conectarlo ahora.",
+    localLinkButton: "Conectar el perfil local",
   },
   pt: {
     navLabel: "Configurações",
@@ -100,6 +115,9 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     providerTitle: "Fornecedor",
     providerText: "O fornecedor (Codex) com que trabalham os agentes da equipa deste computador. Muda-o ou volta a iniciar sessão: o passo «Fornecedor» da configuração abre-se de novo e a equipa usa a tua escolha.",
     providerButton: "Configurar o fornecedor",
+    localLinkTitle: "Perfil local não ligado",
+    localLinkText: "Este Mac tem um perfil local que não ligaste à tua conta Google: os dados e a equipa dele ficam como estão. Podes ligá-lo agora.",
+    localLinkButton: "Ligar o perfil local",
   },
   hu: {
     navLabel: "Beállítások",
@@ -108,6 +126,9 @@ export const SETTINGS_TEXT: Record<Locale, SettingsText> = {
     providerTitle: "Szolgáltató",
     providerText: "A szolgáltató (Codex), amellyel a számítógép csapatának ügynökei dolgoznak. Módosítsd, vagy jelentkezz be újra: a beállítás «Szolgáltató» lépése újra megnyílik, és a csapat az általad választottat használja.",
     providerButton: "Szolgáltató beállítása",
+    localLinkTitle: "Nem összekapcsolt helyi profil",
+    localLinkText: "Ezen a Macen van egy helyi profil, amelyet nem kapcsoltál össze a Google-fiókoddal: az adatai és a csapata úgy maradnak, ahogy vannak. Most összekapcsolhatod.",
+    localLinkButton: "Helyi profil összekapcsolása",
   },
 };
 

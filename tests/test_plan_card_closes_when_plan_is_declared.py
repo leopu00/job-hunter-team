@@ -88,7 +88,8 @@ def test_a_second_tick_finds_nothing_to_close(box):
 
     again = run(box, "plan-question-check")
 
-    assert again["action"] == "none"
+    # nothing left to close; the plan is declared and the first run not open, so the net now waits to tell the Capitano
+    assert again["action"] in {"waiting", "start"}
     assert len(answer_rows(box)) == 1 and stored_answer(box, qid)["scelte"] == ["plus"]
 
 

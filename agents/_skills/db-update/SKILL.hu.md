@@ -120,6 +120,22 @@ dashboardján. Más ágensek:
 E kapu nélkül a Capitano jelenthet "12 ready"-t szóban, miközben a
 DB még 0-t mutat — pontosan az az eltérés, amit a bug #21 javított.
 
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+A záró `TXT`-t az első oszlopba írd, egyedül a sorában, szóközök nélkül (ha a behúzást is átmásolod, a heredoc soha nem záródik le: a `TXT` sorral végződő szöveget elutasítja, nem megy el semmi).
+
 ## Biztonsági szabályok
 
 1. **Először olvass.** Futtasd a `db-query position <id>`-t (vagy `application`-t), hogy lásd az aktuális állapotot írás előtt. A vak felülírások inkonzisztens rekordokat eredményeznek.

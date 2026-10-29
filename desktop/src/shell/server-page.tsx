@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { appLocale } from "../lib/app-locale";
 import { readOnce, withReadDeadline } from "../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "./CloudDataNotice";
+import { useLocalTeamData } from "../lib/local-team-data";
 import { SHELL_TEXT } from "./shell.i18n";
 import { useLocation, useRefresh } from "./router";
 
@@ -28,7 +29,10 @@ type State = { state: "loading" } | { state: "ready"; node: ReactNode } | { stat
 
 export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
   const [result, setResult] = useState<State>({ state: "loading" });
-  const blocked = useCloudDataBlocked();
+  // A local profile's team is read from this computer (the shims answer from its database): nothing to block.
+  // Both hooks run on every render (never one inside the `&&`): the cloud session can come and go under the page.
+  const localTeam = useLocalTeamData();
+  const blocked = useCloudDataBlocked() && !localTeam;
   const { path } = useLocation();
   // what is read, for the page and its filters: asking again while this read runs waits for it
   const readKey = `server-page:${path}?${runKey ?? ""}`;

@@ -26,6 +26,37 @@ export function explicitLocale(): Locale | null {
   return null;
 }
 
+const PICKED_KEY = "jht-lang-picked";
+
+/**
+ * Keeps the person's choice of language (the cookie the language menu writes, and the older `jht-lang`) and
+ * says that it was made on the app's first screen. True when the choice can be read back: with no cookie and no
+ * storage it cannot, and the screen says so.
+ */
+export function chooseAppLocale(locale: Locale): boolean {
+  try {
+    document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+  } catch {
+    /* no cookies */
+  }
+  try {
+    localStorage.setItem("jht-lang", locale);
+    localStorage.setItem(PICKED_KEY, "1");
+  } catch {
+    /* no storage */
+  }
+  return explicitLocale() === locale;
+}
+
+/** The language was said on the app's first screen (not changed later in Settings): the team follows it without asking again. */
+export function languagePickedAtStart(): boolean {
+  try {
+    return localStorage.getItem(PICKED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /** The first system language the app has, by its primary subtag ("it-IT" → it). */
 export function systemLocale(languages: readonly string[] = navigatorLanguages()): Locale {
   for (const tag of languages) {

@@ -99,6 +99,16 @@ export const T = {
     hu: "Direktíva hozzáadva",
     pt: "Diretiva adicionada",
   },
+  // `{n}`: how many orders the board shows when the read stopped short (the rest did not fit in one reply).
+  truncated: {
+    it: "Mostro le prime {n} direttive: le altre non stanno in una lettura.",
+    en: "Showing the first {n} directives: the rest do not fit in one read.",
+    es: "Muestro las primeras {n} directivas: el resto no cabe en una lectura.",
+    fr: "J'affiche les {n} premières directives : le reste ne tient pas dans une lecture.",
+    de: "Ich zeige die ersten {n} Direktiven: der Rest passt nicht in eine Abfrage.",
+    hu: "Az első {n} direktívát mutatom: a többi nem fér el egy lekérdezésben.",
+    pt: "A mostrar as primeiras {n} diretivas: as restantes não cabem numa leitura.",
+  },
   archivedMsg: {
     it: "Direttiva archiviata",
     en: "Directive archived",
