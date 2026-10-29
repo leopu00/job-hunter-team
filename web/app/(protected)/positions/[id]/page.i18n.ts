@@ -267,6 +267,15 @@ export const T = {
     fr: "Télécharger la lettre de motivation (PDF)",
     pt: "Descarregar carta de apresentação (PDF)",
   },
+  preview_document: {
+    it: "Anteprima",
+    en: "Preview",
+    hu: "Előnézet",
+    es: "Vista previa",
+    de: "Vorschau",
+    fr: "Aperçu",
+    pt: "Pré-visualização",
+  },
   cv_preparing: {
     it: "Preparazione…",
     en: "Preparing…",

@@ -1366,6 +1366,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The export file was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
   ),
+  private_copy_failed: copy(
+    "Non sono riuscito a preparare una copia del documento da aprire.",
+    "Riprova; se continua a non funzionare, controlla che il computer abbia spazio libero.",
+    "The app could not prepare a copy of the document to open.",
+    "Try again; if it keeps failing, check that the computer has free space.",
+  ),
+  document_open_failed: copy(
+    "Il computer non è riuscito ad aprire il documento.",
+    "Controlla di avere un programma per questo tipo di file, poi riprova.",
+    "The computer could not open the document.",
+    "Check that you have a program for this type of file, then try again.",
+  ),
   private_unavailable: copy(
     "Questo posto non permette file privati.",
     "Scegline un altro, per esempio una cartella di questo computer.",
@@ -1413,6 +1425,42 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Scegli una cartella in cui puoi scrivere e con spazio libero, poi riprova.",
     "The document was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
+  ),
+  document_preview_unavailable: copy(
+    "L’anteprima di questo documento non è disponibile per questa squadra.",
+    "Puoi salvarlo o aprirlo nel lettore del tuo computer.",
+    "The preview of this document is not available for this team.",
+    "You can save it or open it in your computer’s reader.",
+  ),
+  document_unreadable: copy(
+    "Non riesco a leggere questo documento: potrebbe essere danneggiato o protetto.",
+    "Chiedi alla squadra di prepararlo di nuovo, oppure salvalo e aprilo con un altro lettore.",
+    "This document cannot be read: it may be damaged or protected.",
+    "Ask the team to prepare it again, or save it and open it with another reader.",
+  ),
+  document_preview_timeout: copy(
+    "L’anteprima ci ha messo troppo tempo.",
+    "Riprova fra un minuto, oppure salva il documento.",
+    "The preview took too long.",
+    "Try again in a minute, or save the document.",
+  ),
+  document_preview_not_found: copy(
+    "Non trovo questo documento tra quelli della squadra.",
+    "Aggiorna la pagina della posizione e riprova; se non c’è più, chiedi alla squadra di prepararlo di nuovo.",
+    "This document is not among the team’s documents.",
+    "Refresh the position page and try again; if it is gone, ask the team to prepare it again.",
+  ),
+  document_preview_too_large: copy(
+    "Il documento è troppo grande per l’anteprima.",
+    "Salvalo e aprilo nel lettore, oppure chiedi alla squadra una versione più leggera.",
+    "The document is too large for a preview.",
+    "Save it and open it in your reader, or ask the team for a lighter version.",
+  ),
+  document_preview_changed: copy(
+    "Il documento è cambiato mentre lo mostravo.",
+    "Riapri l’anteprima fra un minuto, quando la squadra avrà finito di scriverlo.",
+    "The document changed while it was being shown.",
+    "Open the preview again in a minute, when the team has finished writing it.",
   ),
   not_cloud: copy(
     "Questo account non è collegato al cloud: non ci sono dati dell’account da esportare.",
