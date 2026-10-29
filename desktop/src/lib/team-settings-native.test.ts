@@ -170,4 +170,3 @@ describe("the facts that explain a silence of the team", () => {
     expect((mixed as { settings: { quiet: object } }).settings.quiet).toEqual({ containment: true, providerReady: false });
   });
 });
-
