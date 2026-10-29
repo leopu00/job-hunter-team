@@ -22,7 +22,8 @@ test('the chat is read through agent_chat.py: the agent, then the cursor when th
   const run = (args) => { calls.push(args); return { code: 0, stdout: `${JSON.stringify({ messages: [welcome], cursor: '120' })}\n`, stderr: '' }; };
   assert.deepEqual(readChatPage('assistente', null, { run }), { messages: [welcome], cursor: '120' });
   readChatPage('assistente', '120', { run });
-  assert.deepEqual(calls, [['read', 'assistente'], ['read', 'assistente', '120']]);
+  // from the byte before the cursor: the server drops the line a cursor lands in
+  assert.deepEqual(calls, [['read', 'assistente'], ['read', 'assistente', '119']]);
 });
 
 test('a chat that cannot be read is null, not a crash and not an empty chat', () => {
@@ -112,4 +113,28 @@ test('after the wait ends the poller prints again; a wait with no reply ends at 
   const rows = await pump.awaitReply({ sleep: async () => { clock += 2000; }, now: () => clock, timeoutMs: 4000 });
   assert.deepEqual(rows, [], 'two looks, nothing, the deadline');
   assert.deepEqual(pump.tick(), [later], 'the poller is back once the wait is over');
+});
+
+test('read for real, as the REPL does: the replies that come after the history are all shown, the first one too', () => {
+  const home = mkdtempSync(join(tmpdir(), 'jht-chat-'));
+  mkdirSync(join(home, 'agents', 'assistente'), { recursive: true });
+  const file = join(home, 'agents', 'assistente', 'chat.jsonl');
+  const row = (i, text) => `${JSON.stringify({ role: 'agent', text, ts: 1793186140 + i, message_id: `m${i}` })}\n`;
+  writeFileSync(file, row(1, 'Benvenuto!'));
+  const script = `
+    import { appendFileSync } from 'node:fs';
+    import { createChatFeed } from '${resolve(import.meta.dirname, '../src/commands/team/chat.js')}';
+    const row = (i, text) => JSON.stringify({ role: 'agent', text, ts: 1793186140 + i, message_id: 'm' + i }) + '\\n';
+    const feed = createChatFeed('assistente');
+    const out = { history: feed.history().map((m) => m.text) };
+    appendFileSync(${JSON.stringify(file)}, row(2, 'Got it.'));
+    out.one = feed.fresh().map((m) => m.text);
+    appendFileSync(${JSON.stringify(file)}, row(3, 'profile prepared') + row(4, 'Altro.'));
+    out.two = feed.fresh().map((m) => m.text);
+    out.none = feed.fresh().map((m) => m.text);
+    process.stdout.write(JSON.stringify(out));`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    encoding: 'utf8', timeout: 60000, env: { PATH: process.env.PATH, HOME: home, JHT_HOME: home, NO_COLOR: '1' },
+  });
+  assert.deepEqual(JSON.parse(r.stdout), { history: ['Benvenuto!'], one: ['Got it.'], two: ['profile prepared', 'Altro.'], none: [] }, r.stderr);
 });
