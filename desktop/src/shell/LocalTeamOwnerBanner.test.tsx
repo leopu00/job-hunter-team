@@ -2,7 +2,9 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LOCAL_PROFILES_TEXT } from "../components/local-profiles.i18n";
-import { LocalTeamOwnerBanner, readNativeTeamOwnerView, readTeamOwnerView } from "./LocalTeamOwnerBanner";
+import { ONBOARDING_TEXT } from "../onboarding/onboarding.i18n";
+import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
+import { LocalTeamOwnerBanner, readNativeTeamOwnerView, readTeamOwnerView, startAgain } from "./LocalTeamOwnerBanner";
 
 const V2 = "jht.desktop.local-profiles.v2";
 
@@ -234,13 +236,15 @@ describe("data that no profile owns", () => {
     expect(probe).not.toHaveBeenCalled();
   });
 
-  it("says its own sentence, not «the team is another profile's», and offers no profile to switch to", async () => {
+  it("says its own sentence, not «the team is another profile's», and offers no profile to switch to but a way out", async () => {
     saveReal();
     render(<LocalTeamOwnerBanner locale="it" readNative={async () => ({ owner: "nobody" })} onSwitch={vi.fn(async () => undefined)} />);
     const banner = await screen.findByTestId("local-team-owner-banner");
     expect(banner).toHaveTextContent(LOCAL_PROFILES_TEXT.it.ownerBannerNobody);
     expect(banner).not.toHaveTextContent(LOCAL_PROFILES_TEXT.it.ownerBannerUnknown);
-    expect(screen.queryByRole("button")).toBeNull();
+    // no profile to switch to; the one thing to do is the set-aside
+    expect(screen.queryByRole("button", { name: LOCAL_PROFILES_TEXT.it.switchProfile })).toBeNull();
+    expect(screen.getByRole("button", { name: ONBOARDING_TEXT.it.dataAside })).toBeInTheDocument();
   });
 
   it.each(Object.keys(LOCAL_PROFILES_TEXT) as (keyof typeof LOCAL_PROFILES_TEXT)[])("%s: has the sentence, and it is not one of the others", async (locale) => {
@@ -251,5 +255,112 @@ describe("data that no profile owns", () => {
     expect(banner).toHaveTextContent(t.ownerBannerNobody);
     expect(t.ownerBannerNobody).not.toBe(t.ownerBannerUnknown);
     expect(t.ownerBannerNobody).not.toBe(t.ownerBannerAccount);
+  });
+});
+
+describe("what to do about data that no profile owns", () => {
+  const nobody = async () => ({ owner: "nobody" } as const);
+  const it_ = ONBOARDING_TEXT.it;
+  const folder = "jht-data-set-aside-20261029-101500";
+
+  function band(overrides: Partial<React.ComponentProps<typeof LocalTeamOwnerBanner>> = {}) {
+    const setAside = vi.fn(async () => folder);
+    const restart = vi.fn();
+    render(<LocalTeamOwnerBanner locale="it" readNative={nobody} setAside={setAside} restart={restart} {...overrides} />);
+    return { setAside, restart };
+  }
+
+  it("offers «set it aside and start again», and does nothing until the person confirms", async () => {
+    const user = userEvent.setup();
+    const { setAside } = band();
+    await user.click(await screen.findByRole("button", { name: it_.dataAside }));
+    const confirm = screen.getByRole("group", { name: it_.dataAsideAria });
+    expect(confirm).toHaveTextContent(it_.dataAsideTitle);
+    // what happens is said before it happens: the folder is moved with the date, nothing deleted or copied
+    expect(confirm).toHaveTextContent("niente viene cancellato né copiato");
+    expect(setAside).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: it_.cancel }));
+    expect(screen.queryByRole("group")).toBeNull();
+    expect(screen.getByRole("button", { name: it_.dataAside })).toBeInTheDocument();
+    expect(setAside).not.toHaveBeenCalled();
+  });
+
+  it("sets the data aside once, says where they went, and opens the app again on «Continua»", async () => {
+    const user = userEvent.setup();
+    const { setAside, restart } = band();
+    await user.click(await screen.findByRole("button", { name: it_.dataAside }));
+    await user.dblClick(screen.getByRole("button", { name: it_.dataAsideYes }));
+    expect(setAside).toHaveBeenCalledTimes(1);
+    const done = await screen.findByTestId("local-data-aside-done");
+    expect(done).toHaveTextContent(`in «${folder}». Non è stato cancellato niente.`);
+    expect(restart).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: it_.continue }));
+    expect(restart).toHaveBeenCalledTimes(1);
+  });
+
+  it("says why it did not go in the catalog's words, touches nothing, and lets the person try again or leave it", async () => {
+    const user = userEvent.setup();
+    const setAside = vi.fn().mockRejectedValueOnce({ code: "local_data_set_aside_failed" }).mockResolvedValueOnce(folder);
+    band({ setAside });
+    await user.click(await screen.findByRole("button", { name: it_.dataAside }));
+    await user.click(screen.getByRole("button", { name: it_.dataAsideYes }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("I dati locali non sono stati messi da parte: non è stato toccato niente.");
+    expect(screen.getByRole("group", { name: it_.dataAsideAria })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: it_.dataAsideYes }));
+    expect(await screen.findByTestId("local-data-aside-done")).toBeInTheDocument();
+    expect(setAside).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads an error that is a plain string, or nothing recognisable, as the set-aside failure", async () => {
+    const user = userEvent.setup();
+    band({ setAside: vi.fn().mockRejectedValueOnce("local_account_owner_unavailable") });
+    await user.click(await screen.findByRole("button", { name: it_.dataAside }));
+    await user.click(screen.getByRole("button", { name: it_.dataAsideYes }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("has no such button for another profile's team, an account's, or the person's own", async () => {
+    for (const view of [{ owner: "other", name: "Ada" }, { owner: "other", name: null, account: true }, { owner: "self" }, { owner: "none" }] as const) {
+      const { unmount } = render(<LocalTeamOwnerBanner locale="it" readNative={async () => view} />);
+      await act(async () => undefined);
+      expect(screen.queryByTestId("local-data-aside")).toBeNull();
+      unmount();
+    }
+  });
+
+  it.each(Object.keys(ONBOARDING_TEXT) as (keyof typeof ONBOARDING_TEXT)[])("%s: the button, the confirmation and the answer are in the person's language", async (locale) => {
+    const user = userEvent.setup();
+    const t = ONBOARDING_TEXT[locale];
+    render(<LocalTeamOwnerBanner locale={locale} readNative={nobody} setAside={vi.fn(async () => folder)} restart={vi.fn()} />);
+    await user.click(await screen.findByRole("button", { name: t.dataAside }));
+    expect(screen.getByRole("group", { name: t.dataAsideAria })).toHaveTextContent(t.dataAsideTitle);
+    await user.click(screen.getByRole("button", { name: t.dataAsideYes }));
+    expect(await screen.findByTestId("local-data-aside-done")).toHaveTextContent(folder);
+    expect(screen.getByRole("button", { name: t.continue })).toBeInTheDocument();
+  });
+});
+
+describe("starting again once the data are set aside", () => {
+  it("tells the app what it tells when the runtime was removed, which takes it back to its first start, and reloads if nothing answered", () => {
+    vi.useFakeTimers();
+    try {
+      const heard = vi.fn();
+      window.addEventListener(LOCAL_RUNTIME_REMOVED_EVENT, heard);
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+      try {
+        startAgain();
+        expect(heard).toHaveBeenCalledTimes(1);
+        expect(reload).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(600);
+        expect(reload).toHaveBeenCalledTimes(1);
+      } finally {
+        Object.defineProperty(window, "location", { configurable: true, value: original });
+        window.removeEventListener(LOCAL_RUNTIME_REMOVED_EVENT, heard);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

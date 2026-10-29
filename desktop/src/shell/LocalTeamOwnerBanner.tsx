@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Locale } from "@/i18n/config";
 import { LOCAL_PROFILES_TEXT } from "../components/local-profiles.i18n";
 import { appLocale } from "../lib/app-locale";
+import { describeError } from "../lib/error-catalog";
+import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
+import { setAsideUnassignedLocalData } from "../lib/onboarding-runtime";
+import { ONBOARDING_TEXT } from "../onboarding/onboarding.i18n";
 import { waitAtMost } from "../lib/wait-at-most";
 import { probeDesktopLocalTeamOwner } from "../lib/desktop-account-scope";
 import { readDesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
@@ -64,6 +68,92 @@ export async function readNativeTeamOwnerView(
 }
 
 /**
+ * Back to the first start, as the app does when the runtime was removed: DashboardApp listens for this, forgets
+ * the profile's setup marker, goes to the dashboard and reloads, so the gate asks for a setup on the empty Mac.
+ * If nothing is listening (no profile in use) the page is only reloaded.
+ */
+export function startAgain(): void {
+  window.dispatchEvent(new CustomEvent(LOCAL_RUNTIME_REMOVED_EVENT));
+  window.setTimeout(() => window.location.reload(), 500);
+}
+
+/** The code a failed native call carries, a string for a thrown plain one; the catalog has the rest. */
+function codeOf(error: unknown): string {
+  if (typeof error === "string") return error;
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : "local_data_set_aside_failed";
+}
+
+/**
+ * What to do about data on this Mac that no profile owns and this one may not take: set them aside and
+ * start again. After a confirmation that says what happens (the folder is moved to one named with the date,
+ * nothing is deleted or copied), the native side moves it, the person is told where it went, and the app is
+ * opened again so its setup finds an empty Mac. The words are the setup's own for the same choice.
+ */
+function SetAsideData({
+  locale,
+  setAside,
+  restart,
+}: {
+  locale: Locale;
+  setAside: () => Promise<string>;
+  restart: () => void;
+}) {
+  const t = ONBOARDING_TEXT[locale];
+  const [step, setStep] = useState<"idle" | "confirm" | "busy" | "done">("idle");
+  const [folder, setFolder] = useState("");
+  const [failure, setFailure] = useState<string | null>(null);
+  const taken = useRef(false);
+
+  async function confirm() {
+    if (taken.current) return;
+    taken.current = true;
+    setStep("busy");
+    setFailure(null);
+    try {
+      setFolder(await setAside());
+      setStep("done");
+    } catch (error) {
+      const { text, action } = describeError(codeOf(error), { locale, fallback: "local_data_set_aside_failed" });
+      setFailure(`${text} ${action}`);
+      setStep("confirm");
+    } finally {
+      taken.current = false;
+    }
+  }
+
+  const button = "rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)] disabled:opacity-60";
+  if (step === "done") {
+    return (
+      <span data-testid="local-data-aside-done" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span>{t.dataAsideDone.replace("{folder}", () => folder)}</span>
+        <button type="button" data-testid="local-data-aside-continue" className={button} onClick={restart}>{t.continue}</button>
+      </span>
+    );
+  }
+  if (step === "idle") {
+    return (
+      <button type="button" data-testid="local-data-aside" className={button} onClick={() => setStep("confirm")}>
+        {t.dataAside}
+      </button>
+    );
+  }
+  return (
+    <span role="group" aria-label={t.dataAsideAria} data-testid="local-data-aside-confirm" className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1">
+      <strong>{t.dataAsideTitle}</strong>
+      <span className="text-[var(--color-muted)]">{t.dataAsideText}</span>
+      {failure && <span role="alert" data-testid="local-data-aside-failed">{failure}</span>}
+      <button type="button" data-testid="local-data-aside-yes" className={button} disabled={step === "busy"} onClick={() => void confirm()}>
+        {step === "busy" ? t.dataBusy : t.dataAsideYes}
+      </button>
+      <button type="button" data-testid="local-data-aside-cancel" className={button} disabled={step === "busy"} onClick={() => { setFailure(null); setStep("idle"); }}>
+        {t.cancel}
+      </button>
+    </span>
+  );
+}
+
+/**
  * The band inside the app while the profile in use does not own the team of this computer: it says
  * whose the team is and offers the way to that profile (signing out of this one leads to the choice).
  * A profile that does not own the team uses the pages all the same; this is the reason the team is
@@ -73,6 +163,8 @@ export function LocalTeamOwnerBanner({
   read = readTeamOwnerView,
   readNative = readNativeTeamOwnerView,
   onSwitch,
+  setAside = setAsideUnassignedLocalData,
+  restart = startAgain,
   locale: localeOverride,
 }: {
   read?: () => TeamOwnerView;
@@ -80,6 +172,10 @@ export function LocalTeamOwnerBanner({
   readNative?: () => Promise<TeamOwnerView | null>;
   /** the app's own sign-out: for a local profile it leaves it and opens the choice of profile */
   onSwitch?: () => Promise<void>;
+  /** «set it aside and start again» for data no profile owns: resolves with the name of the folder they went to */
+  setAside?: () => Promise<string>;
+  /** takes the app back to its first start once the data are set aside, so its setup runs on an empty Mac */
+  restart?: () => void;
   locale?: Locale;
 }) {
   const locale = localeOverride ?? appLocale();
@@ -119,6 +215,7 @@ export function LocalTeamOwnerBanner({
       style={{ background: "var(--color-panel)", color: "var(--color-white)" }}
     >
       <span>{text}</span>
+      {view.owner === "nobody" && <SetAsideData locale={locale} setAside={setAside} restart={restart} />}
       {onSwitch && view.owner === "other" && (
         <button
           type="button"
