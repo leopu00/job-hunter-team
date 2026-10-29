@@ -756,7 +756,7 @@ mod tests {
     use super::{append, entry, failure_cause, redact_support_draft, save_onboarding_support_draft, utc, RuntimeLog};
     use std::{
         fs,
-        time::{Duration, UNIX_EPOCH},
+        time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
     fn dir(name: &str) -> std::path::PathBuf {
