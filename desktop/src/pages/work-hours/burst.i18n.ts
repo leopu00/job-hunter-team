@@ -2,23 +2,23 @@ import type { Locale } from "@/i18n/config";
 
 /**
  * «Work flat out until HH:MM» (the burst): one gesture on the Hours page and in the agents' panel, next to
- * «Stop the team». 7 languages; Italian is the source and its shape is the type. The word for «flat out» is
- * the one the agents' panel already uses for the same thing (burnOn / burnEnding in AgentsPanel.i18n.ts), so
- * one thing has one name. `{time}` is the team's wall clock HH:MM, filled in by the page. The two refusals
+ * «Stop the team». 7 languages; Italian is the source and its shape is the type. The Italian says «a tutta», the
+ * operator's own words for this gesture ("Lavora a tutta fino alle HH:MM"); the agents' panel keeps its
+ * «a tutto gas» for the burn that the Captain turns on. `{time}` is the team's wall clock HH:MM, filled in by the page. The two refusals
  * (a time too near, a time too far) are in the error catalog, not here.
  */
 const it = {
-  burstTitle: "A tutto gas, fino a un’ora",
-  burstIntro: "Un gesto solo: la squadra lavora a tutto gas fino all’ora scelta, anche fuori dagli orari. Alla scadenza tornano da soli gli orari di prima, anche se l’app è chiusa.",
+  burstTitle: "A tutta, fino a un’ora",
+  burstIntro: "Un gesto solo: la squadra lavora a tutta fino all’ora scelta, anche fuori dagli orari. Alla scadenza tornano da soli gli orari di prima, anche se l’app è chiusa.",
   burstUntilLabel: "Fino alle",
-  burstStart: "Lavora a tutto gas fino alle {time}",
-  burstStartShort: "Lavora a tutto gas",
+  burstStart: "Lavora a tutta fino alle {time}",
+  burstStartShort: "Lavora a tutta",
   burstNeedsTime: "Scegli l’ora.",
   burstLimit: "Da 15 minuti a 12 ore da adesso.",
-  burstActive: "A tutto gas fino alle {time}",
+  burstActive: "A tutta fino alle {time}",
   burstActiveNote: "Alla scadenza tornano gli orari di prima.",
   burstStop: "Ferma adesso",
-  burstStarted: "Partito: la squadra lavora a tutto gas fino alle {time}.",
+  burstStarted: "Partito: la squadra lavora a tutta fino alle {time}.",
   burstStopped: "Fermato: sono tornati gli orari di prima.",
   burstBusy: "Un momento…",
 };
