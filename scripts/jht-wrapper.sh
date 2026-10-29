@@ -4746,8 +4746,14 @@ fi
 # (P-07, 2026-08-10). Un'eccezione per il solo `--help` avrebbe tappato il buco
 # lasciando la forma: e' il ramo informativo che va prima di tutto.
 case "$SUB" in
-  -h|--help|help|'')
+  -h|--help|'')
     serve_help_without_docker --help
+    exit $?
+    ;;
+
+  # `jht help` is the LONG list: the short help sends the person to it, so it must not answer with the short one.
+  help)
+    serve_help_without_docker help
     exit $?
     ;;
 

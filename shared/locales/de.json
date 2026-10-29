@@ -71,6 +71,7 @@
   "wizard.provider.install_failed_continue": "CLI-Installation fehlgeschlagen. Konfiguration trotzdem speichern und manuell erledigen?",
   "wizard.oauth.notify_title": "%s-Login (in einem anderen Terminal)",
   "wizard.oauth.notify_body": "Öffne jetzt ein anderes Terminal auf deinem Computer, verbinde dich per SSH mit dem VPS\n(derselbe ssh-Befehl wie am Anfang) und führe aus:\n\n      jht oauth-login\n\nDas %s-TUI öffnet sich:\n  1. öffne die ausgegebene URL im Browser\n  2. melde dich mit deinem %s-Konto an\n  3. füge den Code ein und beende mit /quit, wenn du \"authenticated\" siehst\n\nIch überwache das Dateisystem: sobald ich die Anmeldedaten erkenne,\nmache ich automatisch weiter. Hier ist nichts zu drücken.",
+  "wizard.oauth.notify_body_local": "Öffne jetzt ein anderes Terminal auf diesem Computer und führe aus:\n\n      jht oauth-login\n\nDas %s-TUI öffnet sich:\n  1. öffne die ausgegebene URL im Browser\n  2. melde dich mit deinem %s-Konto an\n  3. füge den Code ein und beende mit /quit, wenn du \"authenticated\" siehst\n\nIch überwache das Dateisystem: sobald ich die Anmeldedaten erkenne,\nmache ich automatisch weiter. Hier ist nichts zu drücken.",
   "wizard.oauth.waiting": "Warte auf %s-Login...",
   "wizard.oauth.timeout": "Timeout (30 Min.). Login nicht erkannt.",
   "wizard.oauth.detected": "%s-Login erkannt (%s)",

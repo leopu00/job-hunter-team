@@ -72,6 +72,7 @@
   "wizard.provider.install_failed_continue": "CLI telepítés sikertelen. Mégis mentsem a konfigurációt, és kezeled kézzel?",
   "wizard.oauth.notify_title": "%s bejelentkezés (másik terminálban)",
   "wizard.oauth.notify_body": "Most nyiss egy másik terminált a számítógépeden, SSH-zz a VPS-re\n(ugyanaz az ssh parancs, amivel az elején bejelentkeztél), és futtasd:\n\n      jht oauth-login\n\nA %s TUI megnyílik:\n  1. nyisd meg a kiírt URL-t a böngészőben\n  2. jelentkezz be a %s fiókoddal\n  3. illeszd be a kódot és amikor látod a \"authenticated\" üzenetet, lépj ki /quit-tel\n\nFigyelem a fájlrendszert: amint észlelem a hitelesítő adatokat,\nautomatikusan tovább megyek. Itt semmit nem kell megnyomnod.",
+  "wizard.oauth.notify_body_local": "Most nyiss egy másik terminált ezen a számítógépen, és futtasd:\n\n      jht oauth-login\n\nA %s TUI megnyílik:\n  1. nyisd meg a kiírt URL-t a böngészőben\n  2. jelentkezz be a %s fiókoddal\n  3. illeszd be a kódot és amikor látod a \"authenticated\" üzenetet, lépj ki /quit-tel\n\nFigyelem a fájlrendszert: amint észlelem a hitelesítő adatokat,\nautomatikusan tovább megyek. Itt semmit nem kell megnyomnod.",
   "wizard.oauth.waiting": "Várom a %s bejelentkezést...",
   "wizard.oauth.timeout": "Időtúllépés (30 perc). A bejelentkezés nem észlelhető.",
   "wizard.oauth.detected": "%s bejelentkezés észlelve (%s)",

@@ -71,6 +71,7 @@
   "wizard.provider.install_failed_continue": "Installation du CLI échouée. Sauvegarder la configuration quand même et la gérer manuellement ?",
   "wizard.oauth.notify_title": "Connexion %s (dans un autre terminal)",
   "wizard.oauth.notify_body": "Ouvre maintenant un autre terminal sur ton ordinateur, fais un SSH vers le VPS\n(la même commande ssh que tu as utilisée au début), et lance :\n\n      jht oauth-login\n\nLe TUI %s s'ouvre :\n  1. ouvre l'URL affichée dans ton navigateur\n  2. connecte-toi avec ton compte %s\n  3. colle le code et quand tu vois \"authenticated\" sors avec /quit\n\nJe surveille le système de fichiers : dès que je détecte les identifiants\nje continue tout seul. Rien à appuyer ici.",
+  "wizard.oauth.notify_body_local": "Ouvre maintenant un autre terminal sur cet ordinateur et lance :\n\n      jht oauth-login\n\nLe TUI %s s'ouvre :\n  1. ouvre l'URL affichée dans ton navigateur\n  2. connecte-toi avec ton compte %s\n  3. colle le code et quand tu vois \"authenticated\" sors avec /quit\n\nJe surveille le système de fichiers : dès que je détecte les identifiants\nje continue tout seul. Rien à appuyer ici.",
   "wizard.oauth.waiting": "En attente de la connexion %s...",
   "wizard.oauth.timeout": "Délai dépassé (30 min). Connexion non détectée.",
   "wizard.oauth.detected": "Connexion %s détectée (%s)",

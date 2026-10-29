@@ -159,7 +159,7 @@ def test_cli_canonical_local_sequence_and_provider_ids_are_explicit():
     _in_order(
         cli,
         "runJhtSubcommand(['providers', 'update', updateProviderId]",
-        "waitForOauthCredentials(oauthCmd",
+        "runProviderLoginStep({",
         "runJhtSubcommand(['team', 'start']",
     )
     assert "spawnSync(process.execPath, [entry, ...args]" in cli
