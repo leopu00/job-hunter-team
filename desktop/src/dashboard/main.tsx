@@ -16,6 +16,7 @@ import { installDocumentPreview, installDocumentSave } from "../lib/team-documen
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
 import AppExitDialog from "../components/AppExitDialog";
+import AppMenu from "../components/AppMenu";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
 import "./dashboard.css";
 
@@ -37,5 +38,6 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <DashboardEntrypoint />
     <AppExitDialog />
+    <AppMenu />
   </StrictMode>,
 );
