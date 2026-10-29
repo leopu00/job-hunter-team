@@ -304,3 +304,61 @@ def test_the_retry_can_be_switched_off(chat, monkeypatch):
 
     monkeypatch.setattr(chat.subprocess, "Popen", boom)
     chat._spawn_wake_retry("capitano", "q1")
+
+
+# ── A message of the system left unsent in the box does not shut the wake out (TEST 19f) ─────────────────────────────
+
+UNBLOCK_TEXT = ("[@dottore -> @assistente] [UNBLOCK] CAPITANO is idle with no message for 45 minutes: forward its question "
+                "to the user on the in-app channel and bring the answer back.")
+
+
+def unblock_pane(text: str = UNBLOCK_TEXT) -> str:
+    return f"• Done.\n\n› {text}\n\n  gpt-5.6-sol high · ~/agents/assistente\n"
+
+
+def remember_pasted(chat, text: str, session: str = "ASSISTENTE", age_s: float = 5.0) -> None:
+    """What the transport writes when it pastes: the fingerprint of the text without spaces, with the time."""
+    import hashlib
+    import re
+    import time
+    folder = chat._test_home / "locks"
+    folder.mkdir(parents=True, exist_ok=True)
+    sha = hashlib.sha256("".join(text.split()).encode()).hexdigest()
+    slug = re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+    (folder / f"tmux-send-fingerprints-{slug}.log").write_text(f"{int(time.time() - age_s)} {sha}\n", encoding="utf-8")
+
+
+def test_a_signed_message_of_the_system_left_unsent_is_pasted_behind_and_the_wake_goes(chat, monkeypatch):
+    """The Dottore's [UNBLOCK] stayed in the Assistente's box without its Enter; the wake of the card found a «text» and the
+    answer to the card was not heard for ten minutes. A signed message the transport itself pasted is not a draft."""
+    remember_pasted(chat, UNBLOCK_TEXT)
+    term = terminal(chat, monkeypatch, [unblock_pane()], flush="refuses")
+    assert chat._wake_attempt("assistente", "ASSISTENTE") == "sent"
+    assert term.flushed == 1 and term.typed == [WAKE.replace("capitano", "assistente")]
+
+
+def test_the_same_envelope_the_transport_never_pasted_is_still_a_text_the_wake_stays_away_from(chat, monkeypatch):
+    term = terminal(chat, monkeypatch, [unblock_pane()], flush="refuses")
+    assert chat._wake_attempt("assistente", "ASSISTENTE") == "text"
+    assert term.typed == []
+
+
+def test_a_fingerprint_older_than_a_day_does_not_make_a_text_the_systems(chat, monkeypatch):
+    remember_pasted(chat, UNBLOCK_TEXT, age_s=2 * 86400)
+    term = terminal(chat, monkeypatch, [unblock_pane()], flush="refuses")
+    assert chat._wake_attempt("assistente", "ASSISTENTE") == "text"
+    assert term.typed == []
+
+
+def test_a_persons_words_next_to_a_known_message_are_never_pasted_over(chat, monkeypatch):
+    remember_pasted(chat, UNBLOCK_TEXT)
+    term = terminal(chat, monkeypatch, [unblock_pane(UNBLOCK_TEXT + " e poi volevo dirti che sto scrivendo io")], flush="refuses")
+    assert chat._wake_attempt("assistente", "ASSISTENTE") == "text"
+    assert term.typed == []
+
+
+def test_a_plain_draft_of_a_person_is_never_a_system_message(chat, monkeypatch):
+    remember_pasted(chat, "una bozza della persona")
+    term = terminal(chat, monkeypatch, [unblock_pane("una bozza della persona")], flush="refuses")
+    assert chat._wake_attempt("assistente", "ASSISTENTE") == "text"
+    assert term.typed == []

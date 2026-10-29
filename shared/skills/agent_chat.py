@@ -1753,6 +1753,30 @@ def _wake_log(agent: str, code: str) -> None:
         pass
 
 
+def _signed_text_waiting(session: str, pane: str) -> bool:
+    """True when the composer holds ONLY signed text that the transport itself pasted (or whose token it explains):
+    the same judgement as ``jht-tmux-send`` (``tmux_send_composer.signed_only`` over its pending record and its
+    fingerprints of the last day), read from the same files. Anything uncertain is False."""
+    try:
+        import tmux_send_composer  # noqa: PLC0415  (it imports this module: not at the top)
+        folder = Path(os.environ.get("JHT_TMUX_LOCK_DIR") or (jht_home() / "locks"))
+        slug = re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+        try:
+            record = (folder / f"tmux-send-pending-{slug}.sha").read_text(encoding="utf-8").split()
+        except OSError:
+            record = []
+        try:
+            seen = (folder / f"tmux-send-fingerprints-{slug}.log").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            seen = []
+        now = time.time()
+        return tmux_send_composer.signed_only(
+            composer_text(pane), tmux_send_composer.registry_token_ok(record, now, 600.0),
+            tmux_send_composer.fingerprints_known(seen, now, 86400))
+    except Exception:  # noqa: BLE001 - uncertain is "no": the wake stays away from the text
+        return False
+
+
 def _wake_attempt(agent: str, session: str) -> str:
     """One try to wake the agent: ``sent`` or the closed code of why not.
 
@@ -1765,18 +1789,25 @@ def _wake_attempt(agent: str, session: str) -> str:
         if pane is None:
             return "no_pane"
         gate = delivery_gate(pane)
+        signed = False
         if gate == "text":
             try:
                 flush_ours(session)
             except Refusal:
-                return "text"
-            pane = capture_pane(session)
-            if pane is None:
-                return "no_pane"
-            gate = delivery_gate(pane)
-        if gate == "text":
+                # A message of the system left unsent in the box (the Dottore's [UNBLOCK], a bridge line) is not a
+                # person's draft: the transport pastes the wake behind it and one Enter sends both (TEST 19f: the wake
+                # was refused for ten minutes against such a line).  Anything else in the box is still left alone.
+                signed = _signed_text_waiting(session, pane)
+                if not signed:
+                    return "text"
+            else:
+                pane = capture_pane(session)
+                if pane is None:
+                    return "no_pane"
+                gate = delivery_gate(pane)
+        if gate == "text" and not signed:
             return "text"
-        if gate != "empty":
+        if gate != "empty" and not signed:
             # a menu, a sign-in, or a screen with no composer to be seen: nothing is typed on a guess (a chat send
             # may go on over an unknown composer because it proves the submit; this line is not worth that)
             return "blocked"
