@@ -2,6 +2,8 @@ import { memo } from "react";
 import type { DirectChatMessage } from "./direct-chat-contract";
 import type { DirectChatText } from "./direct-chat.i18n";
 import { ENTER_AGAIN_MAX, fullStamp, KIND_COLOR, timeLabel, type Outcome } from "./chat-kinds";
+import { appLocale } from "../../lib/app-locale";
+import { readableRecordText } from "./chat-readable-record";
 import { renderChatMarkdown } from "./chat-text";
 import { systemLineText } from "./chat-line-text";
 
@@ -147,7 +149,7 @@ function ChatMessageRowView({
           {timeLabel(message.at, dateLocale)}
         </time>
       </div>
-      {renderChatMarkdown(systemLineText(message, t.codes))}
+      {renderChatMarkdown(message.role === "user" ? systemLineText(message, t.codes) : readableRecordText(systemLineText(message, t.codes), appLocale()))}
       {message.role === "agent" && message.suggestions && (
         <div role="group" aria-label={t.suggestionsLabel} className="mt-2 flex flex-wrap gap-1.5 whitespace-normal">
           {message.suggestions.map((line) => (

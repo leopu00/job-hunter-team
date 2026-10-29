@@ -31,6 +31,7 @@ type Copy = {
   stopping: string;
   stopped: string;
   unavailable: string;
+  checking: string;
   heartbeat: string;
   never: string;
   stop: string;
@@ -52,6 +53,7 @@ const EN: Copy = {
   stopping: "Stopping…",
   stopped: "Stopped",
   unavailable: "Status unavailable",
+  checking: "Checking…",
   heartbeat: "Last device heartbeat",
   never: "not received",
   stop: "Emergency stop",
@@ -78,6 +80,7 @@ const T: Record<Locale, Copy> = {
     stopping: "Arresto in corso…",
     stopped: "Fermo",
     unavailable: "Stato non disponibile",
+    checking: "Controllo in corso…",
     heartbeat: "Ultimo segnale del dispositivo",
     never: "mai ricevuto",
     stop: "Stop d'emergenza",
@@ -102,6 +105,7 @@ const T: Record<Locale, Copy> = {
     stopping: "Deteniendo…",
     stopped: "Detenido",
     unavailable: "Estado no disponible",
+    checking: "Comprobando…",
     heartbeat: "Última señal del dispositivo",
     never: "no recibida",
     stop: "Parada de emergencia",
@@ -126,6 +130,7 @@ const T: Record<Locale, Copy> = {
     stopping: "Arrêt en cours…",
     stopped: "Arrêtée",
     unavailable: "État indisponible",
+    checking: "Vérification en cours…",
     heartbeat: "Dernier signal de l'appareil",
     never: "jamais reçu",
     stop: "Arrêt d'urgence",
@@ -150,6 +155,7 @@ const T: Record<Locale, Copy> = {
     stopping: "Wird gestoppt…",
     stopped: "Gestoppt",
     unavailable: "Status nicht verfügbar",
+    checking: "Wird geprüft…",
     heartbeat: "Letztes Gerätesignal",
     never: "nicht empfangen",
     stop: "Not-Aus",
@@ -173,6 +179,7 @@ const T: Record<Locale, Copy> = {
     stopping: "Leállítás…",
     stopped: "Leállítva",
     unavailable: "Az állapot nem érhető el",
+    checking: "Ellenőrzés…",
     heartbeat: "Utolsó eszközjelzés",
     never: "nem érkezett",
     stop: "Vészleállítás",
@@ -196,6 +203,7 @@ const T: Record<Locale, Copy> = {
     stopping: "A parar…",
     stopped: "Parada",
     unavailable: "Estado indisponível",
+    checking: "A verificar…",
     heartbeat: "Último sinal do dispositivo",
     never: "não recebido",
     stop: "Paragem de emergência",
@@ -338,7 +346,7 @@ export default function MobileTeamStatus({ showHeartbeat = true }: { showHeartbe
   }, [load]);
 
   const status = mobileTeamStatus(state);
-  const statusLabel = loaded ? t[status] : "…";
+  const statusLabel = loaded ? t[status] : t.checking;
   const heartbeat = useMemo(
     () => relativeTime(state?.last_heartbeat_at ?? null, locale),
     [state?.last_heartbeat_at, locale],
