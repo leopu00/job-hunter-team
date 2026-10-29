@@ -1812,6 +1812,7 @@ export default function DashboardApp() {
     const shell = (
       <Shell
         key={identityKey}
+        identityKey={identityKey ?? undefined}
         onLogout={logout}
         // A team connected in full has no way «back»; a read-only one of a set-up profile neither
         // (its setup is done: the chat's «Collega il team» opens the full connection).
@@ -1962,7 +1963,7 @@ export default function DashboardApp() {
         <ProviderSetupContext.Provider value={providerSetup}>
           <LocalProfileLinkContext.Provider value={localProfileLink}>
             <ConnectTeamContext.Provider value={connectTeamEntry}>
-              <Shell key={identityKey} onLogout={logout} />
+              <Shell key={identityKey} identityKey={identityKey ?? undefined} onLogout={logout} />
             </ConnectTeamContext.Provider>
           </LocalProfileLinkContext.Provider>
         </ProviderSetupContext.Provider>
