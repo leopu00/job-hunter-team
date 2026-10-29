@@ -442,7 +442,7 @@ mod tests {
         let link = folder.join(format!("{}.pdf", "9".repeat(32)));
         symlink(&outside, &link).unwrap();
         age_link(&link, 3 * 3600);
-        sweep_dir(&dir);
+        unix::sweep_dir(&dir);
         assert!(!old.exists(), "older than an hour");
         assert!(std::fs::symlink_metadata(&link).is_err(), "an old link with one of our names goes, as a link");
         let kept: Vec<_> = fresh.iter().filter(|p| p.exists()).collect();
