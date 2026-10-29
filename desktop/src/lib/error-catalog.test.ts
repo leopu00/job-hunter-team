@@ -58,6 +58,13 @@ const NOT_ERRORS: Record<string, string> = {
       "extension of the private copy of a document (private_copy.rs), never shown as an error",
     ]),
   ),
+  // app_exit.rs: the codes the exit dialog receives. It tells the person its own sentence for any failure
+  // (AppExitDialog.i18n.ts `failed`, seven languages) and keeps the app open: the code itself is never shown.
+  app_exit_down_failed: "the exit dialog says its own sentence and keeps the app open",
+  app_exit_no_container: "the exit dialog says its own sentence and keeps the app open",
+  app_exit_order_not_sent: "the exit dialog says its own sentence and keeps the app open",
+  app_exit_unanswered: "the exit dialog says its own sentence and keeps the app open",
+  app_exit_vps_untouched: "the exit dialog says its own sentence and keeps the app open",
   // team_settings.rs: the verbs of `jht team-settings`, the keys of the settings the page edits, and the
   // box's own word for a refused value, which is mapped to team_settings_value_invalid before the person sees it.
   apply: "verb of the team-settings command, not an error",

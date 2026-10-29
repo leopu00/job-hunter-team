@@ -1,4 +1,5 @@
 mod account_scope;
+mod app_exit;
 mod auth_login;
 mod auth_store;
 mod broker_view;
@@ -194,6 +195,12 @@ pub fn run() {
             team_backup::backup_create,
             team_backup::backup_cancel,
             team_backup::backup_inspect,
+            app_exit::app_exit_ack,
+            app_exit::app_exit_cancel,
+            app_exit::app_exit_state,
+            app_exit::app_exit_order,
+            app_exit::app_exit_poll,
+            app_exit::app_exit_finish,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
             local_swipe::local_swipe_deck_read,
@@ -203,11 +210,29 @@ pub fn run() {
             voice_input::voice_input_status,
             voice_input::voice_input_stop
         ])
-        .build(application_context())
-        .expect("error while running JHT Desktop")
-        .run(|_app, event| {
-            if matches!(event, tauri::RunEvent::Exit) {
-                private_copy::sweep_private_copies();
+        // the close button leaves nothing running unasked: the page is asked first (app_exit.rs)
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if !app_exit::request_goes_through(std::time::Instant::now()) {
+                        api.prevent_close();
+                        app_exit::ask_the_page(tauri::Manager::app_handle(window));
+                    }
+                }
             }
+        })
+        .build(application_context())
+        .expect("error while building JHT Desktop")
+        .run(|app, event| match event {
+            // ⌘Q and the app menu's Quit come here, not through the window
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                if !app_exit::request_goes_through(std::time::Instant::now()) {
+                    api.prevent_exit();
+                    app_exit::ask_the_page(app);
+                }
+            }
+            // the app is really leaving: the private copies of documents go with it
+            tauri::RunEvent::Exit => private_copy::sweep_private_copies(),
+            _ => {}
         });
 }

@@ -258,6 +258,15 @@ pub(crate) fn jht_machine_memory_is_low(home: &std::path::Path) -> bool {
         .any(|config| machine_config_memory_is_low(&config))
 }
 
+/// Stops the JHT Podman machine, the virtual machine that holds the runtime's memory (`podman machine stop`). Best
+/// effort: a machine that is not there, already stopped or slow to stop is not an error the person can act on, and the
+/// container was brought down before. Never touches another machine.
+pub(crate) fn stop_jht_machine(timeout: Duration) {
+    // the machine is named in the call itself (`machine stop <name>` takes it as its argument, not as a connection)
+    let stop = args(&["machine", "stop", &jht_machine()]);
+    let _ = command(&stop, timeout, None, false);
+}
+
 fn valid_machine_name(name: &str) -> bool {
     // A name that starts with '-' would be read as an option.
     name.len() <= 64
@@ -425,11 +434,15 @@ mod tests {
         for call in calls {
             assert!(
                 call.starts_with("command(&args(&[\"--version\"])")
-                    || call.starts_with("command(&info"),
+                    || call.starts_with("command(&info")
+                    || call.starts_with("command(&stop"),
                 "engine call without the JHT connection: {call}"
             );
         }
         assert!(!production.contains("args(&[\"info\""));
+        // the one call that goes with `stop` names the JHT machine itself, and no other `machine` command exists
+        assert_eq!(production.matches("args(&[\"machine\"").count(), 1);
+        assert!(production.contains("args(&[\"machine\", \"stop\", &jht_machine()])"));
     }
 
     #[test]

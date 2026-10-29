@@ -15,6 +15,7 @@ import { installCsvExport } from "../lib/export-csv";
 import { installDocumentPreview, installDocumentSave } from "../lib/team-document";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
+import AppExitDialog from "../components/AppExitDialog";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
 import "./dashboard.css";
 
@@ -35,5 +36,6 @@ installDocumentPreview();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <DashboardEntrypoint />
+    <AppExitDialog />
   </StrictMode>,
 );
