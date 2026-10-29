@@ -87,8 +87,11 @@ def close_panel(session: str, presses: int = CLOSE_PRESSES, wait: float = CLOSE_
             return False, "pane_unreadable"
         if agent_chat.composer_snapshot(pane)[1]:
             return False, "turn_started"          # Escape would interrupt it
-        if agent_chat.delivery_gate(pane) == "empty":
+        gate = agent_chat.delivery_gate(pane)
+        if gate == "empty":
             return True, "closed"
+        if gate == "text":
+            return False, "draft"                 # a draft appeared while the panel was open: Escape could clear it
         if not _tmux("send-keys", "-t", "=" + session + ":", "Escape"):
             return False, "send_failed"
         time.sleep(wait)

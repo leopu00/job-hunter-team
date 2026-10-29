@@ -32,8 +32,10 @@ if s.get("draft"):
     IDLE = IDLE.replace("│ ❯  │", "│ ❯ something the person was typing │")
 PANEL = "\n".join(["  Context Usage", "  claude-opus-4  24.9k/1m tokens (2%)", "", "  Esc to cancel"])
 BUSY = "Working… (esc to interrupt)\n"
+PANEL_DRAFT = "\n".join(["  Context Usage", "  claude-opus-4  24.9k/1m tokens (2%)", "", "╭" + "─" * 46 + "╮",
+                         "│ ❯ [DA @SISTEMA A @SCORER-2] [RIPRENDI] wake │", "╰" + "─" * 46 + "╯", "  ? for shortcuts"])
 if a[0] == "capture-pane":
-    print({"idle": IDLE, "panel": PANEL, "busy": BUSY}[s["mode"]])
+    print({"idle": IDLE, "panel": PANEL, "busy": BUSY, "panel_draft": PANEL_DRAFT}[s["mode"]])
 elif a[0] == "send-keys":
     key = a[-1]
     if "-l" in a:
@@ -104,6 +106,13 @@ def test_nothing_is_typed_into_a_session_that_is_not_idle_with_an_empty_composer
     assert out["reason"] == "not_idle" and out["closed"] is True and keys() == []
     make(mode="busy")                     # a turn is running
     assert session_context.read("SCORER-2", "claude")["reason"] == "not_idle" and keys() == []
+
+
+def test_escape_is_never_pressed_on_a_draft_that_appeared_while_the_panel_was_open(pane):
+    make, seen, keys = pane
+    make(after_enter="panel_draft")       # the panel is open and somebody's text is in the composer
+    out = session_context.read("SCORER-2", "claude")
+    assert "Escape" not in keys() and out["closed"] is False and out["reason"] == "draft"
 
 
 def test_escape_is_never_pressed_on_a_turn_that_started(pane):
