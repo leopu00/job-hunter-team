@@ -1668,8 +1668,25 @@ fn find_trusted_tool(name: &str, roots: &[&Path]) -> Option<PathBuf> {
 #[cfg(target_os = "macos")]
 fn mac_config_hash(runtime: &Path, timeout: Duration) -> Result<String, &'static str> {
     // The same source as the wrapper: the host values file of the runtime folder, and only if there is none, `host.env`.
-    let host_values = read_host_values(&runtime.join("host-values"));
-    mac_config_hash_in(runtime, timeout, host_values.or_else(read_host_env).as_deref(), &|key| std::env::var(key).ok())
+    let inherited = |key: &str| std::env::var(key).ok();
+    let text = match read_host_values(&runtime.join("host-values")) {
+        Some(values) => Some(values),
+        // None yet: the wrapper will record `host.env` (or the environment) on its first run, and a Mac is never a «vps»
+        None => {
+            let host_env = read_host_env();
+            host_env_as_the_wrapper_records_it(host_env.as_deref(), &inherited).or(host_env)
+        }
+    };
+    mac_config_hash_in(runtime, timeout, text.as_deref(), &inherited)
+}
+
+/// What `jht_record_host_values` makes of a Mac whose host type in use is `vps` (from `host.env` or from the environment):
+/// the record says `local` (the wrapper tells it on the terminal and in `host-values.log`). The text of `host.env` followed by a
+/// last valid line `JHT_HOST_TYPE=local`, which wins, or `None` when nothing changes.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn host_env_as_the_wrapper_records_it(host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Option<String> {
+    let vps = wrapper_compose_environment(host_env, inherited).iter().any(|(key, value)| *key == "JHT_HOST_TYPE" && value == "vps");
+    vps.then(|| format!("{}\nJHT_HOST_TYPE=local\n", host_env.unwrap_or("")))
 }
 
 /// Whether the reason a check could not be made may pass by itself: the probe or the plan did not run or
@@ -4440,6 +4457,29 @@ mod tests {
         assert_eq!(host_environment(None, &[("JHT_LANG", "")]), defaults);
     }
 
+    #[test]
+    fn a_mac_that_says_vps_is_recorded_as_local_like_the_wrapper_does() {
+        use super::host_env_as_the_wrapper_records_it;
+        let none = |_: &str| None;
+        // from host.env, with the last valid line winning, quoted or not
+        for text in ["JHT_HOST_TYPE=vps\n", "JHT_HOST_TYPE=local\nJHT_HOST_TYPE=vps\n", "JHT_HOST_TYPE=\"vps\"\n"] {
+            let recorded = host_env_as_the_wrapper_records_it(Some(text), &none).expect(text);
+            assert_eq!(host_environment(Some(&recorded), &[]).iter().find(|(key, _)| *key == "JHT_HOST_TYPE").unwrap().1, "local", "{text}");
+        }
+        // from the environment of the process, with no host.env
+        let inherited = |key: &str| (key == "JHT_HOST_TYPE").then(|| "vps".to_owned());
+        let recorded = host_env_as_the_wrapper_records_it(None, &inherited).unwrap();
+        assert_eq!(host_environment(Some(&recorded), &[("JHT_HOST_TYPE", "vps")]).iter().find(|(key, _)| *key == "JHT_HOST_TYPE").unwrap().1, "local");
+        // the language and the time zone are not touched
+        let recorded = host_env_as_the_wrapper_records_it(Some("JHT_HOST_TYPE=vps\nJHT_LANG=it\nJHT_USER_TZ=Europe/Rome\n"), &none).unwrap();
+        let environment = host_environment(Some(&recorded), &[]);
+        assert_eq!(environment, vec![("JHT_HOST_TYPE", "local".to_owned()), ("JHT_LANG", "it".to_owned()), ("JHT_USER_TZ", "Europe/Rome".to_owned())]);
+        // nothing to change: local, unknown, nothing at all, a value out of its domain
+        for text in [Some("JHT_HOST_TYPE=local\n"), Some("JHT_LANG=it\n"), None, Some("JHT_HOST_TYPE=server\n")] {
+            assert_eq!(host_env_as_the_wrapper_records_it(text, &none), None, "{text:?}");
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn the_host_values_of_the_runtime_folder_are_read_only_as_the_wrapper_reads_them() {
@@ -4458,7 +4498,7 @@ mod tests {
         write(0o600, "JHT_HOST_TYPE=local\nJHT_LANG=it\n");
         assert_eq!(read_host_values(&file).as_deref(), Some("JHT_HOST_TYPE=local\nJHT_LANG=it\n"));
         // writable by the group or by others: not read
-        for mode in [0o660, 0o606, 0o666, 0o620] {
+        for mode in [0o660, 0o606, 0o666, 0o620, 0o602, 0o662, 0o664, 0o622] {
             write(mode, "JHT_HOST_TYPE=vps\n");
             assert_eq!(read_host_values(&file), None, "{mode:o}");
         }
@@ -4483,7 +4523,7 @@ mod tests {
         // the source in the hash is the wrapper's: the file of the runtime folder first, host.env second
         let source = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/direct_chat.rs")).unwrap();
         let hash = source.split("fn mac_config_hash(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(hash.contains("read_host_values(&runtime.join(\"host-values\"))") && hash.contains(".or_else(read_host_env)"));
+        assert!(hash.contains("read_host_values(&runtime.join(\"host-values\"))") && hash.contains("read_host_env()") && hash.contains("host_env_as_the_wrapper_records_it("));
         let _ = fs::remove_dir_all(&dir);
     }
 

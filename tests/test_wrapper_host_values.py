@@ -13,6 +13,8 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from test_wrapper_attest_cache import _calls, _complete, _fresh, _panel, _read
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +98,7 @@ def test_a_value_out_of_its_domain_is_not_used(tmp_path: Path):
     assert "--user" not in execs
 
 
-def test_a_file_that_is_a_link_or_writable_by_others_is_neither_read_nor_overwritten(tmp_path: Path):
+def test_a_file_that_is_a_link_is_neither_read_nor_overwritten(tmp_path: Path):
     wrapper, env, log, runtime = _panel(tmp_path)
     _host_env(tmp_path, env, "JHT_HOST_TYPE=local\nJHT_LANG=fr\nJHT_USER_TZ=UTC\n")
     target = tmp_path / "elsewhere"
@@ -105,13 +107,65 @@ def test_a_file_that_is_a_link_or_writable_by_others_is_neither_read_nor_overwri
     _read(wrapper, env)
     assert os.path.islink(_values(runtime)) and target.read_text(encoding="utf-8") == "JHT_HOST_TYPE=vps\n"
     assert _host_type_of_exec(log) == "local", "the link is not the source"
-    _values(runtime).unlink()
+
+
+@pytest.mark.parametrize("mode", (0o666, 0o662, 0o664, 0o620, 0o602, 0o660, 0o606, 0o622))
+def test_a_file_the_group_or_the_others_can_write_is_neither_read_nor_overwritten(tmp_path: Path, mode: int):
+    """Any write bit of the group or of the others, alone as well as together: the find with `-perm -022` let 0620 and 0602 through."""
+    wrapper, env, log, runtime = _panel(tmp_path)
+    _host_env(tmp_path, env, "JHT_HOST_TYPE=local\nJHT_LANG=fr\nJHT_USER_TZ=UTC\n")
     _values(runtime).write_text("JHT_HOST_TYPE=vps\n", encoding="utf-8")
-    _values(runtime).chmod(0o666)
-    _fresh(log)
+    _values(runtime).chmod(mode)
     _read(wrapper, env)
-    assert _host_type_of_exec(log) == "local", "writable by others: not trusted"
+    assert _host_type_of_exec(log) == "local", oct(mode)
     assert _values(runtime).read_text(encoding="utf-8") == "JHT_HOST_TYPE=vps\n", "and not overwritten"
+
+
+@pytest.mark.parametrize("mode", (0o600, 0o640, 0o644, 0o400))
+def test_a_file_nobody_else_can_write_is_read(tmp_path: Path, mode: int):
+    wrapper, env, log, runtime = _panel(tmp_path)
+    _host_env(tmp_path, env, "JHT_HOST_TYPE=local\n")
+    _values(runtime).write_text("JHT_HOST_TYPE=vps\nJHT_LANG=en\nJHT_USER_TZ=UTC\n", encoding="utf-8")
+    _values(runtime).chmod(mode)
+    _read(wrapper, env)
+    assert _host_type_of_exec(log) == "vps", oct(mode)
+
+
+def _record(tmp_path: Path, kernel: str, host_type: str):
+    """The wrapper's own `jht_record_host_values`, alone, as if the kernel were `kernel` and the value in use `host_type`."""
+    import re
+
+    source = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    function = re.search(r"^jht_record_host_values\(\) \{\n.*?^\}\n", source, re.S | re.M).group(0)
+    runtime = tmp_path / f"rt-{kernel}-{host_type}"
+    runtime.mkdir(mode=0o700)
+    script = (
+        "set -u\n"
+        f'HOST_KERNEL={kernel}; RUNTIME_DIR="{runtime}"; HOST_VALUES_FILE="{runtime}/host-values"\n'
+        f"JHT_HOST_TYPE={host_type}; JHT_LANG=en; JHT_USER_TZ=UTC\n" + function + 'jht_record_host_values\nprintf "type=%s\\n" "$JHT_HOST_TYPE"\n'
+    )
+    done = subprocess.run(["bash", "-c", script], env={"PATH": "/usr/bin:/bin"}, text=True, capture_output=True, timeout=20, check=False)
+    assert done.returncode == 0, done.stderr
+    return runtime, done
+
+
+def test_on_a_mac_a_vps_taken_from_host_env_is_recorded_as_local_and_it_is_told(tmp_path: Path):
+    runtime, done = _record(tmp_path, "Darwin", "vps")
+    assert "type=local" in done.stdout
+    assert (runtime / "host-values").read_text(encoding="utf-8") == "JHT_HOST_TYPE=local\nJHT_LANG=en\nJHT_USER_TZ=UTC\n"
+    assert "vps" in done.stderr and "local" in done.stderr, done.stderr
+    log = (runtime / "host-values.log").read_text(encoding="utf-8")
+    assert "JHT_HOST_TYPE=vps" in log and "registrato local" in log
+    assert stat.S_IMODE((runtime / "host-values.log").stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("kernel,host_type", (("Linux", "vps"), ("Darwin", "local"), ("Darwin", "unknown"), ("Linux", "local")))
+def test_every_other_case_is_recorded_as_it_is_and_told_nothing(tmp_path: Path, kernel: str, host_type: str):
+    runtime, done = _record(tmp_path, kernel, host_type)
+    assert f"type={host_type}" in done.stdout
+    assert (runtime / "host-values").read_text(encoding="utf-8").startswith(f"JHT_HOST_TYPE={host_type}\n")
+    assert done.stderr == ""
+    assert not (runtime / "host-values.log").exists()
 
 
 def test_host_setup_writes_the_same_values_next_to_host_env_and_in_the_runtime_folder(tmp_path: Path):

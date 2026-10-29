@@ -195,6 +195,26 @@ jht_read_host_env_value() {
 # storico senza eseguire il contenuto del file.
 HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
 
+runtime_stat() {
+  if [ "$HOST_KERNEL" = "Darwin" ]; then
+    stat -f '%u %Lp' "$1" 2>/dev/null
+  else
+    stat -c '%u %a' "$1" 2>/dev/null
+  fi
+}
+
+runtime_node_safe() {
+  local path="$1" kind="$2" metadata owner mode mode_num
+  [ ! -L "$path" ] || return 1
+  case "$kind" in dir) [ -d "$path" ] ;; file) [ -f "$path" ] ;; esac || return 1
+  metadata="$(runtime_stat "$path")" || return 1
+  owner="${metadata%% *}"
+  mode="${metadata#* }"
+  [ "$owner" = "$HOST_UID" ] || return 1
+  mode_num=$((8#$mode))
+  [ $((mode_num & 0022)) -eq 0 ]
+}
+
 # I tre valori che decidono come il container viene CREATO e ATTESTATO (tipo di host, lingua, fuso) NON vengono da host.env:
 # ~/.jht e' montata read-write nel container, quindi un agente puo' scriverci JHT_HOST_TYPE=vps (alla prossima creazione il
 # runtime locale diventa «vps»: pairing, daemon cloud, watcher di cloud.json) o cambiare lingua e fuso (l'hash atteso cambia e
@@ -205,9 +225,10 @@ HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
 # altri non si legge e non si sovrascrive: si torna ai valori di host.env, come prima.
 HOST_VALUES_FILE="$RUNTIME_DIR/host-values"
 
+# Lo stesso controllo dei nodi del runtime (non e' un link, e' un file dell'utente, ne' il gruppo ne' gli altri possono scriverlo:
+# anche 0620 e 0602 sono rifiutati) e, sul Mac, lo stesso dell'app.
 jht_host_values_trusted() {
-  [ -f "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ] && [ -O "$HOST_VALUES_FILE" ] || return 1
-  [ -z "$(find "$HOST_VALUES_FILE" -maxdepth 0 -perm -022 2>/dev/null)" ]
+  runtime_node_safe "$HOST_VALUES_FILE" file
 }
 
 jht_load_host_values() {
@@ -230,6 +251,14 @@ jht_load_host_values() {
 # del runtime esiste ed e' dell'utente; scrive un temporaneo e lo rinomina.
 jht_record_host_values() {
   [ ! -e "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ] || return 0
+  # Un Mac non e' mai una VPS: un «vps» preso da host.env (scrivibile dagli agenti) alla prima registrazione diventa «local», e lo
+  # si dice, sul terminale e nel registro accanto al file (l'app calcola l'hash atteso allo stesso modo, direct_chat.rs).
+  if [ "$HOST_KERNEL" = "Darwin" ] && [ "$JHT_HOST_TYPE" = "vps" ]; then
+    JHT_HOST_TYPE="local"
+    # (warn() e i colori sono definiti piu' sotto: qui si scrive su stderr direttamente)
+    printf 'warn:  %s\n' "su un Mac il tipo di host non puo' essere «vps»: JHT_HOST_TYPE letto da host.env o dall'ambiente e' stato registrato come «local»" >&2
+    ( umask 077; printf '%s host.env o ambiente dicevano JHT_HOST_TYPE=vps su macOS: registrato local\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$RUNTIME_DIR/host-values.log" ) 2>/dev/null || true
+  fi
   [ -d "$RUNTIME_DIR" ] && [ ! -L "$RUNTIME_DIR" ] && [ -O "$RUNTIME_DIR" ] || return 0
   local tmp="$HOST_VALUES_FILE.tmp.$$"
   (
@@ -283,26 +312,6 @@ attested_raw_base() {
     | head -n 1)"
   printf '%s' "$sha" | grep -Eq '^[0-9a-fA-F]{40}$' || return 1
   printf 'https://raw.githubusercontent.com/leopu00/job-hunter-team/%s\n' "$sha"
-}
-
-runtime_stat() {
-  if [ "$HOST_KERNEL" = "Darwin" ]; then
-    stat -f '%u %Lp' "$1" 2>/dev/null
-  else
-    stat -c '%u %a' "$1" 2>/dev/null
-  fi
-}
-
-runtime_node_safe() {
-  local path="$1" kind="$2" metadata owner mode mode_num
-  [ ! -L "$path" ] || return 1
-  case "$kind" in dir) [ -d "$path" ] ;; file) [ -f "$path" ] ;; esac || return 1
-  metadata="$(runtime_stat "$path")" || return 1
-  owner="${metadata%% *}"
-  mode="${metadata#* }"
-  [ "$owner" = "$HOST_UID" ] || return 1
-  mode_num=$((8#$mode))
-  [ $((mode_num & 0022)) -eq 0 ]
 }
 
 runtime_manifest_value() {
