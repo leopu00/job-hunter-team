@@ -33,39 +33,61 @@ test('`status` runs the script with that one word and gives its line and its exi
   assert.equal(PROVIDER_SIGNIN_SCRIPT, '/app/shared/skills/provider_signin.py');
 });
 
-test('`logout` stops the team FIRST and only then takes the sign-in off', () => {
+test('`logout` stops the team, then the Assistant, and only then takes the sign-in off', () => {
   const calls = [];
   const exec = (script, argv, options) => {
     calls.push([script, argv, options.interpreter]);
-    return { ok: true, stdout: script === AGENT_CONTROL_SCRIPT ? '{"ok":true,"op":"stop-team","session":null,"result":"team_stopped"}\n' : '{"ok":true,"provider":"codex","authenticated":false,"removed":1}\n', stderr: '', code: 0 };
+    return { ok: true, stdout: script === AGENT_CONTROL_SCRIPT ? '{"ok":true,"op":"stop","session":null,"result":"stopped"}\n' : '{"ok":true,"provider":"codex","authenticated":false,"removed":1}\n', stderr: '', code: 0 };
   };
   const { exit, text } = door(['logout'], exec);
   assert.equal(exit, 0);
   assert.equal(text, '{"ok":true,"provider":"codex","authenticated":false,"removed":1}\n');
-  assert.deepEqual(calls, [[AGENT_CONTROL_SCRIPT, ['stop-team'], 'python3'], [PROVIDER_SIGNIN_SCRIPT, ['logout'], 'python3']]);
+  assert.deepEqual(calls, [
+    [AGENT_CONTROL_SCRIPT, ['stop-team'], 'python3'],
+    [AGENT_CONTROL_SCRIPT, ['stop', 'ASSISTENTE'], 'python3'],
+    [PROVIDER_SIGNIN_SCRIPT, ['logout'], 'python3'],
+  ]);
 });
 
-test('a stop that did not work removes nothing: the panel\'s closed answer comes back and the sign-in script is never run', () => {
-  for (const [answer, code] of [['{"ok":false,"op":"stop-team","session":null,"error":"team_stop_failed"}\n', 121], ['{"ok":false,"op":"stop-team","session":null,"error":"agent_control_busy"}\n', 102]]) {
+test('a stop that did not work removes nothing: the panel\'s closed answer comes back and the next steps are never run', () => {
+  const cases = [
+    // the team's stop fails: neither the Assistant's stop nor the removal
+    [0, '{"ok":false,"op":"stop-team","session":null,"error":"team_stop_failed"}\n', 121, 1],
+    [0, '{"ok":false,"op":"stop-team","session":null,"error":"agent_control_busy"}\n', 102, 1],
+    // the Assistant's stop fails: no removal
+    [1, '{"ok":false,"op":"stop","session":"ASSISTENTE","error":"agent_stop_failed"}\n', 106, 2],
+  ];
+  for (const [failing, answer, code, expectedCalls] of cases) {
     const calls = [];
-    const exec = (script) => {
-      calls.push(script);
-      return { ok: true, stdout: answer, stderr: '', code };
+    const exec = (script, argv) => {
+      calls.push([script, argv]);
+      const failsNow = calls.length - 1 === failing;
+      return { ok: true, stdout: failsNow ? answer : '{"ok":true}\n', stderr: '', code: failsNow ? code : 0 };
     };
     const { exit, text } = door(['logout'], exec);
     assert.equal(exit, code);
     assert.equal(text, answer);
-    assert.deepEqual(calls, [AGENT_CONTROL_SCRIPT]);
+    assert.equal(calls.length, expectedCalls);
+    assert.ok(calls.every(([script]) => script === AGENT_CONTROL_SCRIPT), 'the sign-in script is never run');
   }
-  // a stop that could not run at all is told as the panel tells it
-  const calls = [];
-  const { exit, text } = door(['logout'], (script) => {
-    calls.push(script);
-    return { ok: false, stdout: '', stderr: 'container is not running', code: -1 };
-  });
-  assert.equal(exit, 113);
-  assert.deepEqual(JSON.parse(text), { ok: false, error: 'agent_control_no_team' });
-  assert.deepEqual(calls, [AGENT_CONTROL_SCRIPT]);
+  // a stop that could not run at all is told as the panel tells it, for either step
+  for (const failing of [0, 1]) {
+    const calls = [];
+    const { exit, text } = door(['logout'], (script) => {
+      calls.push(script);
+      return calls.length - 1 === failing ? { ok: false, stdout: '', stderr: 'container is not running', code: -1 } : { ok: true, stdout: '{"ok":true}\n', stderr: '', code: 0 };
+    });
+    assert.equal(exit, 113);
+    assert.deepEqual(JSON.parse(text), { ok: false, error: 'agent_control_no_team' });
+    assert.equal(calls.length, failing + 1);
+    assert.ok(!calls.includes(PROVIDER_SIGNIN_SCRIPT));
+  }
+});
+
+test('`status` stops nothing', () => {
+  const exec = answering('{"ok":true,"provider":"codex","authenticated":true}\n');
+  door(['status'], exec);
+  assert.deepEqual(exec.calls.map((call) => call.script), [PROVIDER_SIGNIN_SCRIPT]);
 });
 
 test('a closed failure of the script keeps its exit code and its line', () => {

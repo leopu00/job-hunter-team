@@ -29,22 +29,25 @@ use std::{
 use tauri::State;
 
 /// `status` is one look at two files. `logout` stops the team first (the box's door waits up to 180 s for the
-/// panel's `stop-team`, one session at a time) and then removes the files (30 s): the app waits for both, and
-/// 5 s more, so it never gives up on a logout whose stop already worked and whose removal is still to come.
+/// panel's `stop-team`, one session at a time), then the Assistant's chat (30 s) and then removes the files
+/// (30 s): the app waits for the three, and 5 s more, so it never gives up on a logout whose stop already worked
+/// and whose removal is still to come.
 const STATUS_TIMEOUT: Duration = Duration::from_secs(30);
-const LOGOUT_TIMEOUT: Duration = Duration::from_secs(215);
+const LOGOUT_TIMEOUT: Duration = Duration::from_secs(245);
 const REQUEST_MAX_BYTES: usize = 256;
 const PROVIDERS: [&str; 3] = ["claude", "codex", "kimi"];
 /// The most files the box lists for one provider.
 const REMOVED_MAX: u64 = 8;
 /// What the box says when a logout is not done, and that is the person's business to read: the four of the
-/// sign-in, and the two of the panel's stop of the team that comes first (`team_stop_failed`, `agent_control_busy`).
-const BOX_CODES: [&str; 6] = [
+/// sign-in, and the three of the panel's stops that come first (`team_stop_failed`, `agent_stop_failed`,
+/// `agent_control_busy`).
+const BOX_CODES: [&str; 7] = [
     "provider_unknown",
     "provider_not_subscription",
     "provider_logout_incomplete",
     "provider_logout_failed",
     "team_stop_failed",
+    "agent_stop_failed",
     "agent_control_busy",
 ];
 
@@ -389,15 +392,18 @@ mod tests {
 
     #[test]
     fn a_logout_waits_for_the_stop_of_the_team_and_the_removal_that_follows_and_a_status_does_not() {
-        // the door gives the panel's stop 180 s and the removal 30 s (cli/src/lib/provider-logout.js)
+        // the door gives the panel's stop of the team 180 s, the stop of the Assistant 30 s and the removal 30 s
+        // (cli/src/lib/provider-logout.js)
         let door = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../cli/src/lib/provider-logout.js")).unwrap();
         let wait = |script: &str| -> u64 {
             let line = door.lines().find(|line| line.contains(script)).unwrap_or_else(|| panic!("{script}"));
             let digits: String = line.split("timeoutMs:").nth(1).unwrap().chars().filter(|c| c.is_ascii_digit()).take(9).collect();
             digits.parse::<u64>().unwrap() / 1000
         };
-        let door_total = wait("AGENT_CONTROL_SCRIPT, ['stop-team']") + wait("PROVIDER_SIGNIN_SCRIPT, [op]");
-        assert_eq!(door_total, 210);
+        let door_total = door.matches("[['stop-team'], 180_000]").count() as u64 * 180
+            + door.matches("[['stop', 'ASSISTENTE'], 30_000]").count() as u64 * 30
+            + wait("PROVIDER_SIGNIN_SCRIPT, [op]");
+        assert_eq!(door_total, 240);
         let logout = Request::Logout { confirmed: true }.timeout().as_secs();
         assert!(logout > door_total, "the app must outwait the door: {logout} s against {door_total} s");
         assert_eq!(Request::Status {}.timeout().as_secs(), 30);
