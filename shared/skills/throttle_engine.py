@@ -564,6 +564,23 @@ def _daily_halt_active() -> bool:
     return False
 
 
+# Lo Scout che ha esaurito il tetto del primo passaggio (first_run.sourcing_cap) resta fermo questo tanto per
+# volta: il gradino 13 minuti della ladder, un giro ogni tanto per accorgersi che il burst e' finito.
+FIRST_PASS_HOLD_SEC = 780
+
+
+def _first_pass_cap(agent: str):
+    """Il conto del primo passaggio se `agent` e' uno Scout nel burst del primo avvio, altrimenti None. Mai solleva."""
+    if _role_of(agent) != "scout":
+        return None
+    try:
+        mod = _load_shared("first_run", "first_run.py")
+        return mod.sourcing_cap() if mod is not None else None
+    except Exception as exc:  # noqa: BLE001 — senza il conto resta la pausa di sempre
+        _log("could not read the first pass cap: %s" % exc)
+        return None
+
+
 # ── Registrazione (la chiama l'agente, e ritorna SUBITO) ──────────────────
 def register(agent: str, seconds=None, reason=None, session=None,
              now=None) -> dict:
@@ -601,6 +618,14 @@ def register(agent: str, seconds=None, reason=None, session=None,
             if held is None:
                 shortened_from, applied = applied, USER_WORK_PAUSE_SEC
                 empty_streak = streak + 1
+    # Il tetto del primo passaggio e' raggiunto: lo Scout non ha piu' niente da inserire (db_insert glielo
+    # rifiuta), e ogni giro di ricerca che fa da qui e' budget senza posizioni. Resta fermo FIRST_PASS_HOLD_SEC
+    # per volta, e riprova da solo quando il burst finisce. Dopo la regola dell'unita' vuota, che altrimenti
+    # accorcerebbe questa pausa a un minuto.
+    first_pass = _first_pass_cap(agent)
+    first_pass_held = first_pass is not None and first_pass["reached"] and applied < FIRST_PASS_HOLD_SEC
+    if first_pass_held:
+        applied, shortened_from, held = FIRST_PASS_HOLD_SEC, None, None
     if applied <= 0:
         # Throttle 0 = nessuna pausa (il core interattivo ci sta per scelta:
         # deve restare reattivo per la chat dell'utente). L'agente resta ACTIVE
@@ -642,6 +667,8 @@ def register(agent: str, seconds=None, reason=None, session=None,
                  if shortened_from is not None else {})
     if held is not None:
         shortened = {"empty_unit_kept": held}
+    if first_pass_held:
+        shortened = {"first_pass_cap": first_pass}
     emit("armed", agent=agent, ts=now, applied_sec=applied, until=until,
          reason=reason, **shortened)
     emit_pause("start", agent, now, id=pause_id,
