@@ -164,3 +164,123 @@ def test_the_cli_refuses_more_than_ten_mib_on_stdin(tmp_path: Path):
     done = _cli(tmp_path, b"a" * (LIMIT + 1), "--stdin", "--name", "big.pdf")
     assert done.returncode == 2 and b"10 MB" in done.stderr
     assert list((tmp_path / "data" / "allegati").iterdir()) == []
+
+
+# ── `jht ticket open ... --attach FILE`: the same hand-over, the ticket text and flags untouched ────
+
+def _tickets(calls: list[str]) -> list[str]:
+    return [line for line in calls if "ticket open" in line]
+
+
+def test_the_ticket_attachment_goes_on_stdin_and_the_rest_of_the_ask_stays_as_it_was(tmp_path: Path):
+    source = _file(tmp_path)
+    done, calls, copy = _run(tmp_path, "ticket", "open", "42", "please look at it", "--kind", "custom", "--attach", str(source))
+    assert done.returncode == 0, done.stderr
+    (call,) = _tickets(calls)
+    assert call.startswith("docker exec -i aaaaaaaaaaaa node ")
+    assert call.endswith("ticket open 42 please look at it --kind custom --attach-stdin --attach-name cv.pdf")
+    assert str(source) not in call and "--attach " not in call, "the container is never given a host path"
+    assert copy.read_bytes() == PDF
+
+
+def test_the_attach_may_come_first_or_as_attach_equals(tmp_path: Path):
+    source = _file(tmp_path)
+    done, calls, copy = _run(tmp_path, "ticket", "open", "--attach", str(source), "7", "text")
+    assert done.returncode == 0, done.stderr
+    assert _tickets(calls)[0].endswith("ticket open 7 text --attach-stdin --attach-name cv.pdf")
+    assert copy.read_bytes() == PDF
+
+    again = _sub(tmp_path, "equals")
+    source = _file(again)
+    done, calls, copy = _run(again, "ticket", "open", "7", "text", f"--attach={source}")
+    assert done.returncode == 0, done.stderr
+    assert _tickets(calls)[0].endswith("ticket open 7 text --attach-stdin --attach-name cv.pdf")
+    assert copy.read_bytes() == PDF
+
+
+def test_the_ticket_attachment_has_the_same_limits_as_the_upload(tmp_path: Path):
+    over = _sub(tmp_path, "over")
+    done, calls, _ = _run(over, "ticket", "open", "1", "t", "--attach", str(_file(over, b"a" * (LIMIT + 1), "big.pdf")))
+    assert done.returncode == 1 and "10 MB" in done.stderr and _tickets(calls) == []
+
+    missing = _sub(tmp_path, "missing")
+    done, calls, _ = _run(missing, "ticket", "open", "1", "t", "--attach", str(missing / "nope.pdf"))
+    assert done.returncode == 1 and "file regolare" in done.stderr and _tickets(calls) == []
+
+    linked = _sub(tmp_path, "linked")
+    link = linked / "link.pdf"
+    link.symlink_to(_file(linked, PDF, "real.pdf"))
+    done, calls, _ = _run(linked, "ticket", "open", "1", "t", "--attach", str(link))
+    assert done.returncode == 1 and "link" in done.stderr and _tickets(calls) == []
+
+
+def test_an_attach_without_a_file_or_given_twice_answers_2_and_runs_nothing(tmp_path: Path):
+    done, calls, _ = _run(tmp_path, "ticket", "open", "1", "t", "--attach")
+    assert done.returncode == 2, done.stderr
+    assert _tickets(calls) == []
+
+    twice = _sub(tmp_path, "twice")
+    source = _file(twice)
+    done, calls, _ = _run(twice, "ticket", "open", "1", "t", "--attach", str(source), "--attach", str(source))
+    assert done.returncode == 2, done.stderr
+    assert _tickets(calls) == []
+
+
+def test_a_ticket_without_attachment_and_the_other_ticket_verbs_go_to_the_cli_unchanged(tmp_path: Path):
+    done, calls, _ = _run(tmp_path, "ticket", "open", "9", "no file", "--kind", "custom")
+    assert done.returncode == 0, done.stderr
+    assert _tickets(calls)[0].endswith("ticket open 9 no file --kind custom")
+    assert all("--attach-stdin" not in line for line in calls)
+
+    done, calls, _ = _run(_sub(tmp_path, "help"), "ticket", "open", "--help")
+    assert done.returncode == 0, done.stderr
+    assert any(line.endswith("ticket open --help") for line in calls)
+
+    done, calls, _ = _run(_sub(tmp_path, "list"), "ticket", "list")
+    assert done.returncode == 0, done.stderr
+    assert any(line.endswith("ticket list") for line in calls)
+
+
+def test_a_dash_dash_ends_the_options_so_a_text_named_attach_stays_text(tmp_path: Path):
+    done, calls, _ = _run(tmp_path, "ticket", "open", "--kind", "custom", "--", "1", "--attach")
+    assert done.returncode == 0, done.stderr
+    assert _tickets(calls)[0].endswith("ticket open --kind custom -- 1 --attach")
+    assert all("--attach-stdin" not in line for line in calls)
+
+
+def _ticket_cli(area: Path, data: bytes, *args: str) -> subprocess.CompletedProcess:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    bin_dir = area / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    if not (bin_dir / "node").exists():
+        (bin_dir / "node").symlink_to(node)
+    env = {"PATH": str(bin_dir) + os.pathsep + "/usr/bin:/bin", "HOME": str(area), "JHT_ARTIFACT_ROOT": str(area / "data"), "NO_COLOR": "1"}
+    (area / "data" / "allegati").mkdir(parents=True, exist_ok=True)
+    return subprocess.run([node, str(JHT), "ticket", "open", *args], input=data, env=env, capture_output=True, timeout=60, check=False)
+
+
+def test_the_ticket_cli_uploads_the_bytes_it_is_given_before_it_asks_for_the_ticket(tmp_path: Path):
+    # the ticket skill itself needs the database; what is proved here is the hand-over, which happens first
+    _ticket_cli(tmp_path, PDF, "1", "text", "--attach-stdin", "--attach-name", "cv.pdf")
+    assert (tmp_path / "data" / "allegati" / "cv.pdf").read_bytes() == PDF
+
+
+def test_the_ticket_cli_refuses_a_stdin_attachment_without_a_name_or_with_a_path(tmp_path: Path):
+    assert _ticket_cli(tmp_path, PDF, "1", "text", "--attach-stdin").returncode == 2
+    assert _ticket_cli(tmp_path, PDF, "1", "text", "--attach-stdin", "--attach-name", "cv.pdf", "--attach", "other.pdf").returncode == 2
+    assert list((tmp_path / "data" / "allegati").iterdir()) == []
+
+
+def test_the_new_options_come_before_a_dash_dash_so_the_cli_reads_them_as_options(tmp_path: Path):
+    source = _file(tmp_path)
+    done, calls, copy = _run(tmp_path, "ticket", "open", "--attach", str(source), "--", "1", "a text")
+    assert done.returncode == 0, done.stderr
+    assert _tickets(calls)[0].endswith("ticket open --attach-stdin --attach-name cv.pdf -- 1 a text")
+    assert copy.read_bytes() == PDF
+
+
+def test_the_ticket_cli_reads_the_options_before_a_dash_dash(tmp_path: Path):
+    _ticket_cli(tmp_path, PDF, "--attach-stdin", "--attach-name", "cv.pdf", "--", "1", "text")
+    assert (tmp_path / "data" / "allegati" / "cv.pdf").read_bytes() == PDF

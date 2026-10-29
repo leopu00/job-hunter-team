@@ -114,6 +114,12 @@ case "$1" in
         case "$3:$4:$5" in profile:import:--stdin|profile:validate:--stdin|artifact:upload:--stdin)
           if [ -n "${JHT_TEST_STDIN_COPY:-}" ]; then cat > "$JHT_TEST_STDIN_COPY"; fi ;;
         esac
+        # `ticket open ... --attach-stdin`: the same, with the flag after the ticket text
+        if [ "$3:$4" = ticket:open ]; then
+          for value in "$@"; do
+            if [ "$value" = --attach-stdin ] && [ -n "${JHT_TEST_STDIN_COPY:-}" ]; then cat > "$JHT_TEST_STDIN_COPY"; fi
+          done
+        fi
         exit 0 ;;
       python3:-I) [ "${JHT_TEST_NO_SCRIPT:-0}" != 1 ] || exit 2; exit 0 ;;   # 2: python3's, no such file
       python3:-c|sh:-c|bash:) exit 0 ;;
