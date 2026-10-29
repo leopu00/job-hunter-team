@@ -1,0 +1,77 @@
+/*
+ * The Assistant's portrait. Never still: it comes in (a slide and a fade), breathes (a scale of
+ * +-0.6% on a slow sine), tilts a hair, settles at every line, and crossfades between expressions
+ * in 150 ms. A person who asked the system for less motion gets the portrait and the crossfade as a
+ * cut, and nothing else.
+ */
+.assistant-portrait {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 640 / 869;
+  animation: assistant-portrait-enter 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.assistant-portrait__body {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  animation: assistant-portrait-breathe 4.6s ease-in-out infinite alternate,
+    assistant-portrait-tilt 7.4s ease-in-out infinite alternate;
+}
+
+.assistant-portrait__face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 50% 100%;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.assistant-portrait__face[data-current="true"] {
+  opacity: 1;
+}
+
+/* while she speaks she breathes faster and a little deeper */
+.assistant-portrait[data-speaking="true"] .assistant-portrait__body {
+  animation-name: assistant-portrait-breathe-speaking, assistant-portrait-tilt;
+  animation-duration: 2.2s, 5.2s;
+}
+
+@keyframes assistant-portrait-breathe-speaking {
+  from { transform: scale(1); }
+  to { transform: scale(1.013); }
+}
+
+@keyframes assistant-portrait-enter {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes assistant-portrait-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.006); }
+}
+
+@keyframes assistant-portrait-tilt {
+  from { rotate: -0.25deg; }
+  to { rotate: 0.25deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-portrait,
+  .assistant-portrait__body,
+  .assistant-portrait[data-speaking="true"] .assistant-portrait__body {
+    animation: none;
+  }
+
+  .assistant-portrait__face {
+    transition: none;
+  }
+}

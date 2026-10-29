@@ -12,6 +12,8 @@ import { fill } from "../../lib/text-slots";
 import { FIRST_MESSAGE_LABEL, FIRST_MESSAGE_NOTE, FIRST_MESSAGE_PLACEHOLDER } from "./AssistantOnboarding.i18n";
 import { ASSISTANT_GUIDE_TEXT } from "./AssistantOnboarding.guide.i18n";
 import { VoiceInputControl } from "../../voice-input";
+import AssistantPortrait from "../../components/assistant-portrait/AssistantPortrait";
+import TypewriterText from "../../components/assistant-portrait/TypewriterText";
 import "./assistant-onboarding.css";
 
 function validInitialState(state: AssistantOnboardingState | undefined): AssistantOnboardingState {
@@ -41,6 +43,9 @@ export default function AssistantOnboarding({
   const guide = path ? t.guides[path][state.step - 1] : null;
   const pathLabel = path ? t.paths[path] : "";
   const visibleProgress = state.step === 4 && !completionVerified ? 3 : state.step;
+
+  // her face follows what is happening: warm when she greets and when the first message goes, thoughtful while it is opened
+  const expression = completing ? "pensieroso" : completionVerified ? "divertito" : state.step === 0 || state.step === 4 ? "caldo" : "neutro";
 
   useEffect(() => {
     if (state.step > 0) dialogueTitle.current?.focus();
@@ -113,8 +118,8 @@ export default function AssistantOnboarding({
 
       <div className="assistant-onboarding__body" style={{ overflowY: "auto" }}>
         <aside className="assistant-onboarding__identity" aria-label={fill(t.identityAria, { name: assistantName })}>
-          <div className="assistant-onboarding__portrait" aria-hidden="true">
-            <span>AI</span>
+          <div className="assistant-onboarding__portrait">
+            <AssistantPortrait expression={expression} line={`${state.path ?? ""}:${state.step}`} />
           </div>
           <div>
             <p className="assistant-onboarding__role">{t.role}</p>
@@ -128,7 +133,7 @@ export default function AssistantOnboarding({
             <>
               <p className="assistant-onboarding__speaker">{assistantName}</p>
               <h2 ref={dialogueTitle} tabIndex={-1}>{t.startTitle}</h2>
-              <p className="assistant-onboarding__message">{t.startMessage}</p>
+              <p className="assistant-onboarding__message"><TypewriterText text={t.startMessage} /></p>
               <div className="assistant-onboarding__choices" role="group" aria-label={t.choicesAria}>
                 <button type="button" onClick={() => choose("tour")}>
                   <span>01</span>
@@ -155,7 +160,7 @@ export default function AssistantOnboarding({
               </div>
               <p className="assistant-onboarding__speaker">{assistantName} · {guide.eyebrow}</p>
               <h2 ref={dialogueTitle} tabIndex={-1}>{guide.title}</h2>
-              <p className="assistant-onboarding__message" aria-live="polite">{guide.message}</p>
+              <p className="assistant-onboarding__message" aria-live="polite"><TypewriterText text={guide.message} /></p>
               {state.step === 4 && (
                 <div className="assistant-onboarding__composer">
                   <label htmlFor="assistant-first-message">{FIRST_MESSAGE_LABEL[locale]}</label>
