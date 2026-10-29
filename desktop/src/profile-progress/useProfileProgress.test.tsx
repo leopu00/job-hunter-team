@@ -60,6 +60,42 @@ describe("the profile progress, read while the card is there", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
+  it("stops reading once the profile is complete, and looks once more when the window is seen again", async () => {
+    const results = [reading(7), reading(8)];
+    const read = vi.fn(async () => results.shift() ?? reading(8));
+    const { result } = renderHook(() => useProfileProgress(read));
+    await tick(0);
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(result.current.filled).toBe(8);
+    expect(read).toHaveBeenCalledTimes(2);
+    await tick(PROFILE_PROGRESS_EVERY_MS * 10);
+    expect(read).toHaveBeenCalledTimes(2);
+    setVisibility("hidden");
+    setVisibility("visible");
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(3);
+    await tick(PROFILE_PROGRESS_EVERY_MS * 10);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it("starts reading again when the profile it finds on the look is no longer complete", async () => {
+    const results = [reading(8), reading(5)];
+    const read = vi.fn(async () => results.shift() ?? reading(5));
+    const { result } = renderHook(() => useProfileProgress(read));
+    await tick(0);
+    setVisibility("hidden");
+    setVisibility("visible");
+    await tick(0);
+    expect(result.current.filled).toBe(5);
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it("reads no faster than every 15 s while the profile is not complete", () => {
+    expect(PROFILE_PROGRESS_EVERY_MS).toBeGreaterThanOrEqual(15_000);
+    expect(PROFILE_PROGRESS_EVERY_MS).toBeLessThanOrEqual(30_000);
+  });
+
   it("stops with the card", async () => {
     const read = vi.fn(async () => reading(2));
     const { unmount } = renderHook(() => useProfileProgress(read));

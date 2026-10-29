@@ -499,15 +499,48 @@ describe("DirectChatScreen", () => {
     expect(reads()).toBe(refused + 1);
   });
 
-  it("on a VPS reached through the ssh master (macOS, Linux) keeps reading every 1.5 s, hidden or refused", async () => {
+  it("on a link that is not slow reads every 1.5 s, also when refused, but not while the window is hidden, and reads at once when it is back", async () => {
     const { mock, after, reads } = await slowLinkPage({ state: "ready" });
-    setVisibility("hidden");
     await after(1_500);
     expect(reads()).toBe(2);
+    setVisibility("hidden");
+    await after(120_000);
+    expect(reads()).toBe(2);
+    setVisibility("visible");
+    await after(0);
+    expect(reads()).toBe(3);
+    await after(1_500);
+    expect(reads()).toBe(4);
     vi.mocked(mock.read).mockRejectedValue({ code: "ssh_rate_limited" });
     await after(1_500);
     await after(1_500);
-    expect(reads()).toBe(4);
+    expect(reads()).toBe(6);
+  });
+
+  it("on a link that is not slow a window that only lost the focus keeps reading", async () => {
+    const { after, reads } = await slowLinkPage({ state: "ready" });
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    await after(1_500);
+    await after(1_500);
+    expect(reads()).toBe(3);
+  });
+
+  it("holds one read at a time: a read that is still going is not joined by the next one", async () => {
+    const { mock, flush, after } = await slowLinkPage({ state: "ready" });
+    // the reads of the chat open; the unread count reads the other agents on its own rotation
+    const own = () => vi.mocked(mock.read).mock.calls.filter(([request]) => request.agentId === "assistente").length;
+    const waiting: Array<(page: { messages: [] }) => void> = [];
+    vi.mocked(mock.read).mockImplementation(() => new Promise((resolve) => void waiting.push(resolve as (page: { messages: [] }) => void)));
+    await after(1_500);
+    expect(own()).toBe(2);
+    await after(30_000);
+    expect(own()).toBe(2);
+    for (const finish of waiting) finish({ messages: [] });
+    await flush();
+    await after(1_500);
+    expect(own()).toBe(3);
   });
 
   it("on a slow link gives the next read the cursor of the last one, and only there", async () => {

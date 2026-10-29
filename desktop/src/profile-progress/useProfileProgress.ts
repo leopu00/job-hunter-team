@@ -4,12 +4,14 @@ import { EMPTY_PROFILE_PROGRESS, progressFromReading, type ProfileProgress } fro
 import { readProfileProgress, type ProfileProgressRead } from "./read";
 import { PROFILE_PROGRESS_TEXT } from "./profile-progress.i18n";
 
-/** How often the card reads the profile again while the page is open and the window is in view. */
-export const PROFILE_PROGRESS_EVERY_MS = 4_000;
+/** How often the card reads the profile again while the profile is not complete, the page is open and the window is in view. */
+export const PROFILE_PROGRESS_EVERY_MS = 20_000;
 
 /**
  * The profile's progress, read-only, while the component that uses it is mounted: once at once, then every few
- * seconds, and not at all while the window is hidden (it reads at once when it comes back). A read that fails
+ * seconds while the profile is not complete, and not at all while the window is hidden (it reads at once when it
+ * comes back) or once a read has found every field filled (the card is gone; the next look at the window reads
+ * once more, and stops again if it is still complete). A read that fails
  * after one that worked leaves what was read; one that fails first says `unavailable`, which the card tells
  * without breaking the page. `read` and `everyMs` are for the tests.
  */
@@ -22,6 +24,7 @@ export function useProfileProgress(
 
   useEffect(() => {
     let live = true;
+    let complete = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const again = async () => {
       if (!live) return;
@@ -32,15 +35,17 @@ export function useProfileProgress(
           const done = await read();
           if (!live) return;
           if (done.ok) {
+            complete = done.reading.done >= done.reading.required;
             setProgress(progressFromReading(done.reading, PROFILE_PROGRESS_TEXT[appLocale()].fields));
           } else {
+            complete = false;
             setProgress((current) => (current.state === "ready" ? current : { ...EMPTY_PROFILE_PROGRESS, state: "unavailable" }));
           }
         } finally {
           reading.current = false;
         }
       }
-      if (live) timer = setTimeout(() => void again(), everyMs);
+      if (live && !complete) timer = setTimeout(() => void again(), everyMs);
     };
     const seen = () => {
       if (document.visibilityState === "visible") void again();
