@@ -32,6 +32,7 @@ import { TeamOffBanner } from "./TeamOffBanner";
 import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
+import PageErrorBoundary from "./PageErrorBoundary";
 import { EXIT_OPEN_EVENT } from "../lib/app-exit";
 import { APP_EXIT_TEXT } from "../components/AppExitDialog.i18n";
 import { beginPageLoad } from "../lib/page-timing";
@@ -225,7 +226,9 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const Page = match?.route.page;
   const page = Page && (
     <SignOutContext.Provider value={onLogout ?? null}>
-      <Page key={path} params={match.params} search={params} />
+      <PageErrorBoundary key={path} onHome={() => navigate(readOnly ? READ_ONLY_HOME : HOME)}>
+        <Page params={match.params} search={params} />
+      </PageErrorBoundary>
       {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
       <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>
