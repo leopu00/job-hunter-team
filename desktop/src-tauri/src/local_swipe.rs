@@ -538,7 +538,7 @@ pub(crate) async fn local_swipe_deck_read(
                 Ok(())
             },
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
-            || wrapper.borrow().as_ref().is_some_and(team_is_up),
+            || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
         )
     })
     .await)
@@ -568,7 +568,7 @@ pub(crate) async fn local_team_position_judge(
                 Ok(())
             },
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
-            || wrapper.borrow().as_ref().is_some_and(team_is_up),
+            || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
         )
     })
     .await)
