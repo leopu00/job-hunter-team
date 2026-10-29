@@ -88,7 +88,13 @@ describe("the window that shows a CV or a letter", () => {
     await screen.findByText(/body/);
     expect(container.querySelector("script,iframe,object,embed,a")).toBeNull();
     expect(container.querySelectorAll("img")).toHaveLength(0);
-    expect(container.innerHTML).not.toMatch(/onerror|javascript:\w/);
+    // the address of a link is shown as text, by design; what must never happen is an attribute that carries it
+    for (const element of Array.from(container.querySelectorAll("*"))) {
+      for (const attribute of Array.from(element.attributes)) {
+        expect(attribute.name, element.tagName).not.toMatch(/^on/i);
+        expect(attribute.value, `${element.tagName}[${attribute.name}]`).not.toMatch(/javascript:|onerror/i);
+      }
+    }
   });
 
   it("closes with Escape and gives the focus back to what opened it", async () => {
