@@ -111,13 +111,14 @@ def test_a_link_is_not_read_as_the_persons_language(home: Path):
 
 
 def test_a_regular_host_env_is_replaced_with_the_three_values_and_no_temporary_is_left(home: Path):
-    (home / ".jht" / "host.env").write_text("JHT_LANG=it\nJHT_USER_TZ=Europe/Rome\n", encoding="utf-8")
+    # a zone no machine running the tests is in: the one chosen earlier has to win over the machine's
+    (home / ".jht" / "host.env").write_text("JHT_LANG=it\nJHT_USER_TZ=Pacific/Auckland\n", encoding="utf-8")
 
     done = _setup(home)
 
     assert done.returncode == 0, done.stderr
     text = _assert_regular_host_env(home).read_text(encoding="utf-8")
-    assert "JHT_LANG=it" in text and "JHT_USER_TZ=Europe/Rome" in text
+    assert "JHT_LANG=it" in text and "JHT_USER_TZ=Pacific/Auckland" in text
     _no_leftovers(home)
 
 
@@ -201,3 +202,13 @@ def test_the_wrapper_does_not_read_through_a_link_either(home: Path):
 
     assert read(link).returncode != 0 and read(link).stdout == ""
     assert read(plain).stdout == "local"
+
+
+def test_a_zone_chosen_earlier_survives_the_first_write_of_the_language(home: Path):
+    # the first write of host-setup.sh only has the language: it must not drop the zone before it is read
+    (home / ".jht" / "host.env").write_text("JHT_USER_TZ=Asia/Kolkata\n", encoding="utf-8")
+
+    done = _setup(home)
+
+    assert done.returncode == 0, done.stderr
+    assert "JHT_USER_TZ=Asia/Kolkata" in _assert_regular_host_env(home).read_text(encoding="utf-8")

@@ -208,7 +208,14 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 # scelta resta valida. Il blocco "host type + swap" piu' giu' aggiunge
 # JHT_HOST_TYPE allo stesso file.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
-printf 'JHT_LANG=%s\n' "$JHT_LANG" | jht_write_host_env
+# Questa prima scrittura riscrive il file: il fuso gia' scelto in un'installazione precedente (priorita' massima piu' sotto,
+# punto 3 del fuso) si legge PRIMA e si tiene, se no resta quello della macchina.
+PRESERVED_TZ=""
+PRESERVED_TZ="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_USER_TZ)" || PRESERVED_TZ=""
+{
+  printf 'JHT_LANG=%s\n' "$JHT_LANG"
+  if [ -n "$PRESERVED_TZ" ]; then printf 'JHT_USER_TZ=%s\n' "$PRESERVED_TZ"; fi
+} | jht_write_host_env
 if ! jht_read_i18n_locale "$I18N_PREFS_PATH" >/dev/null 2>&1; then
   I18N_PREFS_TMP="$I18N_PREFS_PATH.tmp-$$"
   printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" > "$I18N_PREFS_TMP"
