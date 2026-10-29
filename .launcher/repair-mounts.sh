@@ -15,7 +15,9 @@
 # with <dispatch> exactly:
 #   if [ -x /app/.launcher/repair-mounts.sh ]; then exec /app/.launcher/repair-mounts.sh; else echo mount_repair_unsupported; fi
 #
-# Root, but only CAP_CHOWN, no network, and only these two folders. Caller:
+# Root, but only CAP_CHOWN, no network, and only these two folders. Linux with Docker (a normal user,
+# no sudo: scripts/install.sh and scripts/jht-wrapper.sh) adds CAP_DAC_READ_SEARCH, search and read only, so
+# that root can walk a folder the user keeps private (mode 700); nothing else changes. Callers:
 # scripts/jht-wrapper.ps1 (Repair-MountOwnership), before every `up`. It is
 # the only path that starts a local container on Windows: the Tauri desktop
 # refuses a local runtime there (onboarding.rs install_local,

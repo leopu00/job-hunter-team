@@ -2838,6 +2838,7 @@ ensure_bind_owner() {
   local home_dir="${JHT_HOME_HOST:-$HOME/.jht}"
   local user_dir="${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"
   mkdir -p "$home_dir" "$user_dir" 2>/dev/null || true
+  local stuck=()
   for d in "$home_dir" "$user_dir"; do
     [ -d "$d" ] || continue
     local cur_uid
@@ -2846,11 +2847,38 @@ ensure_bind_owner() {
       info "Allineo owner di $d a $target (era uid $cur_uid)..."
       if [ "$(id -u)" = "0" ]; then
         chown -R "$target" "$d" 2>/dev/null || warn "chown fallito su $d"
+      elif [ "$target" = "1001:1001" ] && repair_owner_in_container "$home_dir" "$user_dir"; then
+        break  # un container una tantum ha sistemato entrambe le cartelle: niente sudo
       else
         sudo chown -R "$target" "$d" 2>/dev/null || warn "sudo chown fallito su $d (potrebbe servire 'sudo $0 up')"
       fi
+      cur_uid=$(stat -c '%u' "$d" 2>/dev/null || echo "")
+      [ "$cur_uid" = "$target_uid" ] || stuck+=("$d")
     fi
   done
+  # Il container gira come $target: con le cartelle di un altro utente parte e muore subito
+  # (mount_not_writable, EACCES) in un ciclo di riavvii. Meglio fermarsi qui, dicendo cosa fare.
+  if [ "${#stuck[@]}" -gt 0 ]; then
+    err "mount_repair_failed: ${stuck[*]} non si puo' rendere scrivibile al container (gira come uid $target_uid) e non e' stato avviato niente. Fai una volta: sudo chown -R $target ${stuck[*]} oppure metti questo utente nel gruppo 'docker' e riesegui 'jht up'."
+    exit 1
+  fi
+}
+
+# Un utente normale (uid diverso da 1001, senza sudo) con Docker su Linux: lo stesso container una tantum del
+# wrapper Windows (.launcher/repair-mounts.sh, una ricevuta per cartella). Root dentro, ma solo CAP_CHOWN e
+# CAP_DAC_READ_SEARCH (la seconda per entrare in una cartella che l'utente tiene privata, 700), senza rete,
+# senza nuovi privilegi e con montate solo le due cartelle. Vero solo se entrambe sono confermate.
+MOUNT_REPAIR_DISPATCH='if [ -x /app/.launcher/repair-mounts.sh ]; then exec /app/.launcher/repair-mounts.sh; else echo mount_repair_unsupported; fi'
+repair_owner_in_container() {
+  local home_dir="$1" user_dir="$2" receipts
+  [ "$CONTAINER_RUNTIME" = "docker" ] || return 1
+  receipts="$(docker run --rm --user 0:0 --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --network none \
+      --security-opt no-new-privileges \
+      -v "$home_dir:/jht_home" -v "$user_dir:/jht_user" \
+      --entrypoint /bin/sh "${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}" -c "$MOUNT_REPAIR_DISPATCH" 2>/dev/null)" || return 1
+  printf '%s\n' "$receipts" | grep -Eqx 'mount_(ok|repaired) /jht_home' || return 1
+  printf '%s\n' "$receipts" | grep -Eqx 'mount_(ok|repaired) /jht_user' || return 1
+  ! printf '%s\n' "$receipts" | grep -Eqv 'mount_(ok|repaired) /jht_(home|user)'
 }
 
 # Le cartelle dei dati sono fisse: docker-compose.yml monta ${HOME}/.jht e
