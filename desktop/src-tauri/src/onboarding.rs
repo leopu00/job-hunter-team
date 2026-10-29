@@ -7885,10 +7885,14 @@ mod tests {
             assert_eq!(error.code, code);
             assert_eq!(error.retryable, retryable, "{code}");
         }
-        // a failure of the step itself keeps the step's code
+        // a failure of the step itself keeps the step's code; a timeout says so, as everywhere else
+        assert_eq!(
+            ensure_remote_success(Err("storage_unavailable"), "container_start_failed").unwrap_err().code,
+            "container_start_failed"
+        );
         assert_eq!(
             ensure_remote_success(Err("process_timeout"), "container_start_failed").unwrap_err().code,
-            "container_start_failed"
+            "timeout"
         );
     }
 

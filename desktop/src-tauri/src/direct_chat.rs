@@ -3774,7 +3774,9 @@ mod tests {
             (exited(255), "tunnel_verify_failed"),
             (exited(1), "tunnel_verify_failed"),
             (Err("process_timeout"), "tunnel_verify_failed"),
-            (Err("ssh_client_missing"), "tunnel_verify_failed"),
+            // a way in that has a sentence of its own is passed on, not folded into the generic one
+            (Err("ssh_client_missing"), "ssh_client_missing"),
+            (Err("ssh_auth_failed"), "ssh_auth_failed"),
             (Err("ssh_rate_limited"), "ssh_rate_limited"),
         ] {
             let error = open_vps_link(&host, VpsLink::PerCommand, |_| outcome).unwrap_err();
