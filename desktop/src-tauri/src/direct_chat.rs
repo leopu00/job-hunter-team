@@ -1646,6 +1646,13 @@ fn find_trusted_tool(name: &str, roots: &[&Path]) -> Option<PathBuf> {
     roots.iter().map(|root| root.join("bin").join(name)).find(|path| tool_is_trusted(path, roots))
 }
 
+/// The `podman` of this Mac's install (Homebrew's, or the Podman installer's), trusted as the engine calls need, or None. An
+/// app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin` for a PATH: the bare name `podman` is not found there.
+#[cfg(target_os = "macos")]
+pub(crate) fn trusted_podman() -> Option<PathBuf> {
+    find_trusted_tool("podman", &TOOL_ROOTS.map(Path::new))
+}
+
 /// The hash the running container has to carry, or why it could not be worked out: a reason in the fixed
 /// words of `runtime_log::ATTEST_REASONS`. A reason that waiting may cure (a probe that did not run, a
 /// plan that did not come) is told apart from one that waiting will not (another version, a missing file),
