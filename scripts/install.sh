@@ -2003,7 +2003,10 @@ final_message() {
         "$RUNTIME_DIR" "$IMAGE" "$RUNTIME_DIR" "$BIN_DIR"
       podman_native_mode || printf "  ${DIM}  (the Podman machine and Colima are both kept)${RESET}\n"
     else
-      printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
+      # `jht uninstall` removes the containers, the networks and the VOLUMES of the project (broker, secrets, deps…: the
+      # ten host-runtime_jht-* that `jht down && rm -rf` left behind, TEST 19i A2), then the runtime, the PATH lines and itself.
+      printf "  ${DIM}  jht uninstall --confirm && docker rmi %s${RESET}\n" "$IMAGE"
+      printf "  ${DIM}  (it also deletes the mail password and the Telegram tokens saved for the team)${RESET}\n"
     fi
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
