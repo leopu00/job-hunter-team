@@ -1,5 +1,5 @@
 // Comando team start
-import { execSync, spawn } from 'node:child_process';
+import { execSync, spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, copyFileSync, unlinkSync } from 'node:fs';
 import {
@@ -126,6 +126,67 @@ function refuseIfDiskLow(label) {
   if (!refusal) return false;
   console.log(`  ${c.red('✗')} ${label} — ${refusal.code}${refusal.message ? `: ${refusal.message}` : ''}`);
   return true;
+}
+
+// The roster names a session without the host's JHT- prefix, in both modes.
+function rosterSession(role, instance) {
+  const agent = AGENTS.find((a) => a.role === role);
+  if (!agent) return null;
+  return agent.multi && instance ? `${agent.prefix}-${instance}` : agent.prefix;
+}
+
+// «Stop» in the app holds the agent down (a hold by the user in the roster): the watchdog stops again
+// whatever is started while the hold stands. A start the user asks for here lifts those holds, all of
+// them for the whole team or the named agent's for a single start; the holds of the Captain, the doctor,
+// the budget or a security check are not the user's to lift and stay. If it cannot be done the start
+// goes on and says so: it is what happened before, not a new refusal.
+export function releaseUserHolds(agentArg, containerMode, { run } = {}) {
+  let sessions = [];
+  if (agentArg) {
+    const parsed = parseAgentArg(agentArg);
+    const session = parsed ? rosterSession(parsed.role, parsed.instance) : null;
+    if (!session) return { ok: true, lifted: [] };
+    sessions = [session];
+  }
+  const args = ['release-user', ...sessions];
+  let result;
+  try {
+    if (run) {
+      result = run(args);
+    } else if (containerMode) {
+      result = execScriptInContainer('/app/shared/skills/team_roster.py', args, {
+        interpreter: 'python3', env: { JHT_HOME: '/jht_home' },
+      });
+    } else {
+      const { repoRoot } = resolveConfig();
+      if (!repoRoot) return { ok: false, lifted: [], error: 'the team folder was not found' };
+      const script = join(repoRoot, 'shared', 'skills', 'team_roster.py');
+      const done = spawnSync('python3', [script, ...args], {
+        encoding: 'utf8', timeout: 30_000, env: { ...process.env, JHT_HOME },
+      });
+      result = { code: done.status ?? -1, stdout: done.stdout || '', stderr: done.stderr || '' };
+    }
+  } catch (err) {
+    return { ok: false, lifted: [], error: err?.message || String(err) };
+  }
+  if (result.code !== 0) {
+    return { ok: false, lifted: [], error: String(result.stderr || result.stdout || `exit code ${result.code}`).trim() };
+  }
+  try {
+    const lifted = JSON.parse(String(result.stdout).trim() || '[]');
+    return { ok: true, lifted: Array.isArray(lifted) ? lifted : [] };
+  } catch {
+    return { ok: false, lifted: [], error: 'unreadable answer' };
+  }
+}
+
+function reportUserHolds(agentArg, containerMode) {
+  const done = releaseUserHolds(agentArg, containerMode);
+  if (!done.ok) {
+    console.log(c.dim(`  ℹ holds set by Stop not lifted: ${done.error.split('\n').slice(-1)[0]}`));
+  } else if (done.lifted.length) {
+    console.log(c.dim(`  ℹ lifted the Stop on ${done.lifted.join(', ')}`));
+  }
 }
 
 // Uno stop globale crea il gate nel runtime che possiede gli agenti. Start
@@ -307,6 +368,8 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
       deferred++;
     } else {
+      // a single start never lifts the global stop, but the agent's own Stop by the user goes
+      reportUserHolds(agentArg, true);
       const result = launchInContainer({ role: parsed.role, instance: parsed.instance, mode });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
@@ -423,6 +486,8 @@ export async function startAction(agentArg, options) {
         return false;
       }
     }
+    // the person's per-agent Stop goes with it, once the start can really go ahead
+    reportUserHolds(agentArg, containerMode);
     return true;
   };
 

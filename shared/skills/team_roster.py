@@ -61,6 +61,7 @@ CLI::
     python3 team_roster.py retire SCOUT-3 --reason "scale-down"
     python3 team_roster.py contain SCRITTORE-2 --by capitano --reason "unsafe output" --evidence /path/to/pane.txt
     python3 team_roster.py release SCRITTORE-2 --by operatore --reason "incident resolved"
+    python3 team_roster.py release-user [SESSION ...]   # an explicit start by the user
     python3 team_roster.py is-contained SCRITTORE-2
     python3 team_roster.py contained-live --tsv
     python3 team_roster.py missing            # JSON: attesi ma senza sessione
@@ -374,6 +375,48 @@ def release(session: str, by: str, reason: str,
     except OSError as exc:
         raise OSError("could not remove the sticky containment marker") from exc
     return entry, original_by
+
+
+# Who the app's «Stop» records as the holder (agent_control.USER). A hold with this
+# author is the person's own decision, and the person's next explicit start undoes it;
+# every other author (the Captain, the doctor, the budget, a security check) is not theirs
+# to lift with a click on Start.
+USER_HOLD_BY = "user"
+USER_START_RELEASE_REASON = "started by the user"
+
+
+def release_user_holds(sessions: list[str] | None = None,
+                       path: Path | None = None) -> list[str]:
+    """Lift the holds the user put with Stop (by=user), all of them or those of
+    the sessions named. An explicit start by the user (`jht team start`, the
+    app's Start, Resume or the wizard) must not be undone by the watchdog a few
+    seconds later: the hold is what tells it to kill what the user just started.
+    Holds by anyone else, and holds for a team mode, stay. A hold that cannot be
+    lifted stays too and is left out of the answer: the caller says so."""
+    wanted = None if sessions is None else {s.strip().upper() for s in sessions if s.strip()}
+    state = load(path)
+    held = {sess for sess, entry in state.get("agents", {}).items()
+            if entry.get("status") == "contained"}
+    marker_dir = containment_marker("placeholder", path).parent
+    try:
+        held |= {m.name.removesuffix(".hold.json") for m in marker_dir.glob("*.hold.json")}
+    except OSError:
+        pass
+    lifted = []
+    for sess in sorted(held):
+        if wanted is not None and sess not in wanted:
+            continue
+        entry = state.get("agents", {}).get(sess) or {}
+        marker = _load_containment_marker(sess, path)
+        by = marker.get("by") or entry.get("contained_by")
+        if by != USER_HOLD_BY or marker.get("while_mode"):
+            continue
+        try:
+            release(sess, USER_HOLD_BY, USER_START_RELEASE_REASON, path)
+        except (ValueError, OSError):
+            continue
+        lifted.append(sess)
+    return lifted
 
 
 # The team modes (enrichment_policy.MODES), repeated here so that the roster
@@ -837,6 +880,11 @@ def main(argv=None) -> int:
     prelease.add_argument("--by", required=True)
     prelease.add_argument("--reason", required=True)
 
+    pru = sub.add_parser("release-user",
+                         help="lift the holds the user put with Stop (an explicit start)")
+    pru.add_argument("sessions", nargs="*",
+                     help="only these sessions (none = every hold of the user)")
+
     pic = sub.add_parser("is-contained", help="exit 0 only for a contained session")
     pic.add_argument("session")
 
@@ -892,6 +940,10 @@ def main(argv=None) -> int:
             print(f"team_roster: {exc}", file=sys.stderr)
             return 1
         print(json.dumps({"entry": entry, "original_by": original_by}, ensure_ascii=False))
+        return 0
+    if args.cmd == "release-user":
+        lifted = release_user_holds(args.sessions or None)
+        print(json.dumps(lifted, ensure_ascii=False))
         return 0
     if args.cmd == "release-expired":
         lifted = release_expired()

@@ -395,3 +395,83 @@ def test_watchdog_lifts_an_expired_mode_hold_says_so_and_does_not_recapture_it(t
         logs / "watchdog.log").read_text(encoding="utf-8")
     assert "CAPITANO [CONTAINMENT] SENTINELLA was held down for mode saving" in sender_calls.read_text(encoding="utf-8")
     assert not tmux_calls.exists()
+
+
+# ── an explicit start by the user lifts the user's own Stop, and only that ────
+def _roster_with(path: Path, *sessions: tuple[str, int | None]) -> None:
+    for role, instance in sessions:
+        roster.record(role, instance, src="test", path=path)
+
+
+def test_a_start_by_the_user_lifts_the_stop_the_user_put_and_the_agents_stay_up(tmp_path):
+    path = tmp_path / "team-roster.json"
+    _roster_with(path, ("assistente", None), ("capitano", None))
+    # what the app's Stop writes (agent_control.stop): a hold by "user"
+    for session in ("ASSISTENTE", "CAPITANO"):
+        roster.contain(session, "user", "stopped by the user from the app", "desktop-panel", path=path)
+    live = {"ASSISTENTE", "CAPITANO"}
+    # while the hold stands the watchdog stops what is started again
+    assert [e["session"] for e in roster.contained_live(path=path, live=live)] == ["ASSISTENTE", "CAPITANO"]
+
+    assert roster.release_user_holds(path=path) == ["ASSISTENTE", "CAPITANO"]
+
+    for session in live:
+        assert not roster.is_contained(session, path=path)
+        assert not roster.containment_marker(session, path).exists()
+    assert roster.contained_live(path=path, live=live) == []
+    # the journal says who lifted it and why
+    last = _state(path)["agents"]["CAPITANO"]["containment_history"][-1]
+    assert (last["action"], last["by"], last["reason"]) == ("released", "user", "started by the user")
+
+
+def test_a_start_by_the_user_leaves_the_automatic_holds_where_they_are(tmp_path):
+    path = tmp_path / "team-roster.json"
+    _roster_with(path, ("assistente", None), ("capitano", None), ("scrittore", 1), ("scout", 1), ("scout", 2))
+    roster.contain("ASSISTENTE", "user", "stopped by the user from the app", "desktop-panel", path=path)
+    roster.contain("CAPITANO", "CAPITANO", "unsafe output", "/evidence/pane.txt", path=path)
+    roster.contain("SCRITTORE-1", "DOTTORE", "budget guard", "/evidence/budget.txt", path=path)
+    roster.contain("SCOUT-1", "WATCHDOG", "security check", "/evidence/sec.txt", path=path)
+    roster.contain("SCOUT-2", "user", "saving", "desktop-panel", path=path, while_mode="saving")
+
+    assert roster.release_user_holds(path=path) == ["ASSISTENTE"]
+
+    assert not roster.is_contained("ASSISTENTE", path=path)
+    for session in ("CAPITANO", "SCRITTORE-1", "SCOUT-1", "SCOUT-2"):
+        assert roster.is_contained(session, path=path), session
+    assert _state(path)["agents"]["CAPITANO"]["contained_by"] == "CAPITANO"
+
+
+def test_the_start_of_one_agent_lifts_only_that_agents_stop(tmp_path):
+    path = tmp_path / "team-roster.json"
+    _roster_with(path, ("assistente", None), ("capitano", None))
+    for session in ("ASSISTENTE", "CAPITANO"):
+        roster.contain(session, "user", "stopped by the user from the app", "desktop-panel", path=path)
+
+    assert roster.release_user_holds(["assistente"], path=path) == ["ASSISTENTE"]
+    assert not roster.is_contained("ASSISTENTE", path=path)
+    assert roster.is_contained("CAPITANO", path=path)
+    # naming an agent that is not held, or not in the roster, changes nothing
+    assert roster.release_user_holds(["SCOUT-9", "assistente"], path=path) == []
+    assert roster.is_contained("CAPITANO", path=path)
+
+
+def test_lifting_the_users_stop_with_nothing_held_is_a_no_op(tmp_path):
+    path = tmp_path / "team-roster.json"
+    assert roster.release_user_holds(path=path) == []
+    _roster_with(path, ("assistente", None))
+    assert roster.release_user_holds(path=path) == []
+    assert roster.release_user_holds([], path=path) == []
+
+
+def test_the_release_user_command_prints_what_it_lifted(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    roster.record("assistente", None, src="test")
+    roster.record("capitano", None, src="test")
+    roster.contain("ASSISTENTE", "user", "stopped by the user from the app", "desktop-panel")
+    roster.contain("CAPITANO", "CAPITANO", "unsafe output", "/evidence/pane.txt")
+
+    assert roster.main(["release-user"]) == 0
+    assert json.loads(capsys.readouterr().out) == ["ASSISTENTE"]
+    assert roster.is_contained("CAPITANO")
+    assert roster.main(["release-user", "capitano"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
