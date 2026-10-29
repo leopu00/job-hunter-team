@@ -2454,7 +2454,8 @@ attest_why() {
 #   non puo' scriverlo. Modo 0600, rename atomico, lettura a campi chiusi.
 # - La chiave e' il digest di tutto quello che entra nella riga attesa: compose, pin dell'immagine, manifest del
 #   runtime e wrapper, le variabili del chiamante che cambiano l'hash (PODMAN_CALLER_ENV, con il VALORE in digest), il
-#   progetto, l'identita' dei binari podman e podman-compose (percorso, dimensione, data), uid, modalita'.
+#   progetto, l'identita' dei binari podman e podman-compose (percorso, dimensione, data, inode, ctime), uid, modalita', e le
+#   variabili che il compose sostituisce da solo: HOME e JHT_HOST_TYPE / JHT_LANG / JHT_USER_TZ (queste tre da ~/.jht/host.env).
 # - Scade in 30 secondi (attest_cache_ttl); si cancella a ogni compose che non sia una lettura (up, down, stop, restart…),
 #   a ogni confronto che non torna, a ogni attestazione completa che fallisce. In caso di dubbio: attestazione completa.
 # - Non e' autenticata: protegge dal container, non da un processo dello stesso utente (che puo' gia' scrivere il
@@ -2528,6 +2529,10 @@ runtime=$CONTAINER_RUNTIME $PODMAN_RUNTIME_MODE $PODMAN_MACHINE_NAME
 project=$project
 podman=$(attest_cache_binary_identity "$podman_bin")
 podman-compose=$(attest_cache_binary_identity "$compose_bin")
+home=$HOME
+host-type=${JHT_HOST_TYPE:-}
+lang=${JHT_LANG:-}
+user-tz=${JHT_USER_TZ:-}
 manifest:
 $(<"$RUNTIME_MANIFEST")"
   if [ "$PODMAN_RUNTIME_MODE" != machine ]; then

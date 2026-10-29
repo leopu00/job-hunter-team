@@ -347,3 +347,67 @@ def test_the_cache_file_is_read_and_written_by_the_same_closed_class_in_the_c_lo
     # the wrapper itself refuses a runtime folder that is not plain ASCII today (with the cache off as well), so a
     # non-ASCII path is not a case that reaches the cache; this only keeps the two sides from disagreeing
     assert "[:print:]" not in parse
+
+
+@pytest.mark.parametrize("variable", ("JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"))
+def test_a_variable_the_compose_substitutes_from_the_host_env_changes_the_key(tmp_path: Path, variable: str):
+    wrapper, env, log, _ = _panel(tmp_path)
+    _read(wrapper, env)
+    # a second read with the same values is served from the cache
+    _fresh(log)
+    _read(wrapper, env)
+    assert not _complete(_calls(log))
+    _fresh(log)
+    env[variable] = "synthetic-other-value"
+    _read(wrapper, env)
+    assert _complete(_calls(log)), variable
+
+
+def _key(tmp_path: Path, **env: str) -> str:
+    """The cache key the wrapper's own function computes, alone, for a given environment (the real functions, stub tools)."""
+    import re
+
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    functions = "\n".join(
+        re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", source, re.S | re.M).group(0)
+        for name in ("attest_cache_key", "attest_cache_text_digest", "attest_cache_binary_identity")
+    )
+    manifest = tmp_path / "manifest"
+    manifest.write_text("version=1\ndocker-compose.yml=" + "a" * 64 + "\n", encoding="utf-8")
+    script = (
+        "set -u\n"
+        f"HOST_KERNEL=Linux; HOST_UID=501; CONTAINER_RUNTIME=podman; PODMAN_RUNTIME_MODE=machine; PODMAN_MACHINE_NAME=jht-podman\n"
+        f'RUNTIME_MANIFEST="{manifest}"; PODMAN_CALLER_ENV="OPENAI_API_KEY"\n'
+        "podman_binary() { echo /bin/ls; }; podman_compose_binary() { echo /bin/cat; }; compose_project_name() { echo jht; }\n"
+        + functions
+        + "\nattest_cache_key jht\n"
+    )
+    done = subprocess.run(["bash", "-c", script], env={"PATH": "/usr/bin:/bin", **env}, text=True, capture_output=True, timeout=20, check=False)
+    assert done.returncode == 0, done.stderr
+    assert re.fullmatch(r"[0-9a-f]{64}", done.stdout.strip()), done.stdout
+    return done.stdout.strip()
+
+
+def test_a_different_home_changes_the_key(tmp_path: Path):
+    """The compose mounts `${HOME}/.jht`: the text of HOME is in the hash, so it is in the key."""
+    base = {"HOME": "/home/one", "JHT_HOST_TYPE": "local", "JHT_LANG": "en", "JHT_USER_TZ": "UTC"}
+    assert _key(tmp_path, **base) == _key(tmp_path, **base), "the same environment, the same key"
+    assert _key(tmp_path, **{**base, "HOME": "/home/two"}) != _key(tmp_path, **base)
+    # and each of the three the host.env gives, alone
+    for name in ("JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"):
+        assert _key(tmp_path, **{**base, name: "other"}) != _key(tmp_path, **base), name
+
+
+def test_the_key_names_every_variable_the_compose_substitutes():
+    """Whatever `${NAME}` the compose holds is either in the callers' list, a host.env value, HOME, or JHT_IMAGE."""
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    wrapper = (root / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    names = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", compose))
+    caller = re.search(r'^PODMAN_CALLER_ENV="([^"]*)"', wrapper, re.M).group(1).split()
+    key = wrapper.split("attest_cache_key() {")[1].split("\n}\n")[0]
+    for name in sorted(names):
+        covered = name in caller or f"${{{name}:-}}" in key or (name == "HOME" and "home=$HOME" in key) or (name == "JHT_IMAGE" and "JHT_IMAGE" in key)
+        assert covered, f"{name} enters the expected hash and is not in the cache key"
