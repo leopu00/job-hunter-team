@@ -2467,6 +2467,19 @@ attest_cache_ttl() {
   printf '%s' 30
 }
 
+# The folders the container mounts (the compose mounts ~/.jht and ~/Documents/Job Hunter Team, or the ones the wrapper was told
+# with JHT_HOME_HOST / JHT_USER_DIR_HOST): an agent can write there, so no cache lives in or under them.
+attest_cache_folder_ok() {
+  local mounted
+  for mounted in "${JHT_HOME_HOST:-$HOME/.jht}" "${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}" "$HOME/.jht" "$HOME/Documents/Job Hunter Team"; do
+    mounted="${mounted%/}"
+    [ -n "$mounted" ] || return 1
+    case "$RUNTIME_DIR/" in "$mounted"/*) return 1 ;; esac
+    case "$mounted/" in "$RUNTIME_DIR"/*) return 1 ;; esac
+  done
+  return 0
+}
+
 # One file per service (the agents' container and the broker are attested one after the other).
 attest_cache_path() {
   printf '%s/.attest-cache.%s' "$RUNTIME_DIR" "$1"
@@ -2492,9 +2505,9 @@ attest_cache_text_digest() {
 attest_cache_binary_identity() {
   local meta
   if [ "$HOST_KERNEL" = Darwin ]; then
-    meta="$(stat -f '%z %m' "$1" 2>/dev/null)" || return 1
+    meta="$(stat -f '%z %m %i %c' "$1" 2>/dev/null)" || return 1
   else
-    meta="$(stat -c '%s %Y' "$1" 2>/dev/null)" || return 1
+    meta="$(stat -c '%s %Y %i %Z' "$1" 2>/dev/null)" || return 1
   fi
   printf '%s %s' "$1" "$meta"
 }
@@ -2544,16 +2557,16 @@ env:$name=-"
   attest_cache_text_digest "$facts"
 }
 
-# The cache file, read once and with no process: only the six names it writes, the first line of each, printable bytes
-# only. Sets ATTEST_V, ATTEST_KEY, ATTEST_EXPIRES, ATTEST_ID, ATTEST_FULLID, ATTEST_STARTED, ATTEST_LINE; non-zero if any is missing.
+# The cache file, read once and with no process: only the seven names it writes, the first line of each, no control
+# character (bytes above 0x7e are fine: a path may be in any language; the C locale makes that the same on every machine). Sets ATTEST_V, ATTEST_KEY, ATTEST_EXPIRES, ATTEST_ID, ATTEST_FULLID, ATTEST_STARTED, ATTEST_LINE; non-zero if any is missing.
 attest_cache_parse() {
-  local row name value
+  local LC_ALL=C row name value
   ATTEST_V="" ATTEST_KEY="" ATTEST_EXPIRES="" ATTEST_ID="" ATTEST_FULLID="" ATTEST_STARTED="" ATTEST_LINE=""
   while IFS= read -r row || [ -n "$row" ]; do
     name="${row%%=*}"
     value="${row#*=}"
     case "$row" in *=*) ;; *) return 1 ;; esac
-    case "$row" in *[![:print:]]*) return 1 ;; esac
+    case "$row" in *[[:cntrl:]]*) return 1 ;; esac
     case "$name" in
       v) [ -n "$ATTEST_V" ] || ATTEST_V="$value" ;;
       key) [ -n "$ATTEST_KEY" ] || ATTEST_KEY="$value" ;;
@@ -2574,6 +2587,7 @@ attest_cache_parse() {
 attest_cache_store() {
   local service="$1" found="$2" expected_line="$3" key identity full_id started file tmp now
   case "$service" in ''|*[!a-z-]*) return 1 ;; esac
+  attest_cache_folder_ok || return 1
   key="$(attest_cache_key "$service")" || return 1
   identity="$(docker inspect --type container "$found" --format '{{.Id}}|{{.State.StartedAt}}' 2>/dev/null)" || return 1
   full_id="${identity%%|*}"
@@ -2608,6 +2622,7 @@ attest_cache_store() {
 attest_cache_lookup() {
   local service="$1" file key now details seen_full seen_started
   case "$service" in ''|*[!a-z-]*) return 1 ;; esac
+  attest_cache_folder_ok || return 1
   file="$(attest_cache_path "$service")"
   [ -e "$file" ] || [ -L "$file" ] || return 1
   runtime_node_safe "$file" file || { attest_cache_clear "$service"; return 1; }

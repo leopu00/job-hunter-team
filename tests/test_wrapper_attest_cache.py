@@ -260,7 +260,7 @@ def test_the_cache_is_only_for_the_exact_check_of_podman_and_the_source_says_so(
     # the cache folder is the runtime's, never the home the container mounts
     path = helpers.split("attest_cache_path() {")[1].split("}")[0]
     assert '"$RUNTIME_DIR"' in path and ".attest-cache." in path
-    assert "/.jht" not in helpers and "Documents" not in helpers and "JHT_HOME" not in helpers
+    assert "/.jht" not in path and "Documents" not in path and "JHT_HOME" not in path
 
 
 def test_the_agents_and_the_broker_each_have_their_own_file_and_do_not_wipe_each_other(tmp_path: Path):
@@ -294,3 +294,56 @@ def test_the_switch_turns_the_cache_off_and_nothing_turns_it_on_harder(tmp_path:
     assert not _complete(_calls(log))
     source = (Path(__file__).resolve().parents[1] / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
     assert source.count("JHT_ATTEST_CACHE") == 3 and "JHT_ATTEST_CACHE:-1}\" != 0" in source
+
+
+def test_a_binary_replaced_with_the_same_size_and_date_is_still_another_binary(tmp_path: Path):
+    """The identity of podman-compose is path, size, date of modification, inode and change time: a `touch -r` puts the
+    date back, the inode and the change time do not come back."""
+    wrapper, env, log, runtime = _panel(tmp_path)
+    _read(wrapper, env)
+    binary = wrapper.parent / "podman-compose"
+    before = binary.stat()
+    clone = binary.with_name("podman-compose.clone")
+    clone.write_bytes(binary.read_bytes())
+    clone.chmod(binary.stat().st_mode)
+    os.utime(clone, ns=(before.st_atime_ns, before.st_mtime_ns))
+    os.replace(clone, binary)
+    after = binary.stat()
+    assert (after.st_size, after.st_mtime_ns) == (before.st_size, before.st_mtime_ns)
+    _fresh(log)
+    _read(wrapper, env)
+    assert _complete(_calls(log))
+
+
+def test_no_cache_is_written_or_read_in_or_under_a_folder_the_container_mounts(tmp_path: Path):
+    wrapper, env, log, runtime = _panel(tmp_path)
+    # the runtime folder is under the folder the wrapper is told the container mounts as the home
+    env["JHT_HOME_HOST"] = str(runtime.parent)
+    done = _read(wrapper, env)
+    assert done.returncode == 0, done.stderr
+    assert not any(runtime.glob(".attest-cache.*"))
+    # and a cache that was there is not read either
+    del env["JHT_HOME_HOST"]
+    _read(wrapper, env)
+    assert _cache(runtime).is_file()
+    env["JHT_USER_DIR_HOST"] = str(runtime)
+    _fresh(log)
+    _read(wrapper, env)
+    assert _complete(_calls(log))
+    # the home folder of the compose itself
+    del env["JHT_USER_DIR_HOST"]
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    guard = source.split("attest_cache_folder_ok() {")[1].split("\n}\n")[0]
+    assert '$HOME/.jht' in guard and '$HOME/Documents/Job Hunter Team' in guard and "JHT_HOME_HOST" in guard and "JHT_USER_DIR_HOST" in guard
+
+
+def test_the_cache_file_is_read_and_written_by_the_same_closed_class_in_the_c_locale():
+    """A path may hold any byte but a control character; reading and writing agree, in any locale of the machine."""
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
+    parse = source.split("attest_cache_parse() {")[1].split("\n}\n")[0]
+    assert "local LC_ALL=C" in parse and "*[[:cntrl:]]*) return 1" in parse
+    store = source.split("attest_cache_store() {")[1].split("\n}\n")[0]
+    assert store.count("LC_ALL=C tr -d '\\040-\\176\\200-\\377'") >= 1
+    # the wrapper itself refuses a runtime folder that is not plain ASCII today (with the cache off as well), so a
+    # non-ASCII path is not a case that reaches the cache; this only keeps the two sides from disagreeing
+    assert "[:print:]" not in parse

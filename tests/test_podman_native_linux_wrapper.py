@@ -26,7 +26,7 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 FUNCTIONS = (
     "version_leading_numbers", "version_at_least", "podman_version_number", "podman_compose_version_number",
     "podman_compose_pair_supported", "podman_native_override_path", "podman_native_override_ensure",
-    "compose_project_name", "podman_binary", "podman_compose_binary", "podman_native_rootless", "compose_file", "compose_file_run", "attest_cache_clear", "attest_cache_path",
+    "compose_project_name", "podman_binary", "podman_compose_binary", "podman_native_rootless", "compose_file", "compose_file_run", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok",
     "podman_native_no_pod_arg", "podman_expected_config_hash", "runtime_image_pin_value",
 )
 
