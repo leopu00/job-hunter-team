@@ -17,6 +17,7 @@ import {
   usingContainer, getActiveSessions, isAgentSession,
 } from './agents.js';
 import { execInContainer } from '../../utils/container-proxy.js';
+import { answerTyped, describeAnswer } from '../../lib/terminal-answer.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -137,6 +138,15 @@ export function sendAction(agentArg, message) {
     return;
   }
 
+  // A number or a yes that answers a card the agent asked is the answer, not a text for its prompt.
+  const typed = answerTyped(session, message, { usingContainer: usingContainer() });
+  if (typed.result !== 'chat') {
+    const said = describeAnswer(typed);
+    (said.failed ? console.error : console.log)(said.failed ? c.red(said.text) : c.green(`✓ ${session}: ${said.text}`));
+    if (said.failed) process.exitCode = 1;
+    return;
+  }
+
   const r = sendMessage(session, message);
   if (!r.ok) {
     console.error(c.red(`Failed sending: ${(r.error || '').split('\n')[0]}`));
@@ -195,6 +205,12 @@ export async function chatAction(agentArg, options = {}) {
       if (msg === '/clear') { console.clear(); continue; }
       if (msg.length > 1000) {
         console.log(c.red('  Message too long (max 1000 characters)'));
+        continue;
+      }
+      const typed = answerTyped(session, msg, { usingContainer: usingContainer() });
+      if (typed.result !== 'chat') {
+        const said = describeAnswer(typed);
+        console.log(said.failed ? c.red(`  ${said.text}`) : c.green(`  ✓ ${said.text}`));
         continue;
       }
       const r = sendMessage(session, msg);
