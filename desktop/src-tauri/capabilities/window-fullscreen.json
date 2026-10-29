@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "window-fullscreen",
+  "description": "Allow only the main window to go to full screen and back (F11, the ESC menu)",
+  "windows": ["main"],
+  "permissions": ["core:window:allow-set-fullscreen", "core:window:allow-is-fullscreen"]
+}

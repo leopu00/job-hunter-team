@@ -24,6 +24,7 @@ import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
 import { cloudClient } from "../../lib/cloud-client";
 import { useLocalTeamData } from "../../lib/local-team-data";
+import OfficeGreeting from "./OfficeGreeting";
 import { readThisComputerAgents } from "../../lib/this-computer-agents";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
@@ -331,6 +332,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     // the shell gives the office the whole window under the navbar (Route.fullBleed);
     // the status line sits above the scene, never over it
     <div className="flex h-full flex-col" data-testid="office-page">
+      {source === "this-computer" && <OfficeGreeting />}
       {status && (
         <p
           role={statusIsAlert ? "alert" : "status"}
@@ -360,17 +362,19 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
           {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
         </div>
         {panel && (
-          <OfficePanel
-            target={panel}
-            layout={assets.layout}
-            snapshot={snapshot}
-            statuses={statuses}
-            client={source === "cloud" ? cloudClient() : NO_CLOUD}
-            source={source === "cloud" ? "cloud" : "vps"}
-            onClose={() => setPanel(null)}
-            onOpen={setPanel}
-            onNavigate={navigate}
-          />
+          <div data-esc-owner style={{ display: "contents" }}>
+            <OfficePanel
+              target={panel}
+              layout={assets.layout}
+              snapshot={snapshot}
+              statuses={statuses}
+              client={source === "cloud" ? cloudClient() : NO_CLOUD}
+              source={source === "cloud" ? "cloud" : "vps"}
+              onClose={() => setPanel(null)}
+              onOpen={setPanel}
+              onNavigate={navigate}
+            />
+          </div>
         )}
       </div>
     </div>
