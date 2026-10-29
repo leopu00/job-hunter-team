@@ -2960,6 +2960,25 @@ host_data_dirs_supported() {
   fi
 }
 
+# `jht team stop`: stopping the team must work whenever `jht down` does. A container of ours whose config-hash is not the
+# expected one (a caller's environment, a reinstall) is attested by every other label and is used here, for the stop only;
+# the same rule `container_down` has. An absent container, or anything else, goes the old way (ensure_up).
+ensure_up_for_stop() {
+  local status=0 found
+  if container_up; then
+    return 0
+  else
+    status=$?
+  fi
+  if [ "$status" -ne 3 ] && [ "$CONTAINER_RUNTIME" = podman ] \
+      && found="$(read_only_service_id "$CONTAINER_SERVICE" any-config 2>/dev/null)"; then
+    ATTESTED_CONTAINER_ID="$found"
+    warn "config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo."
+    return 0
+  fi
+  ensure_up
+}
+
 ensure_up() {
   local status=0
   if container_up; then
@@ -5231,6 +5250,14 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
+  # `jht team stop`: si deve poter fermare anche un container che non si attesta per la sola hash (vedi ensure_up_for_stop).
+  team)
+    require_compose_file
+    require_docker
+    if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 

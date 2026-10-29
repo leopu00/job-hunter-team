@@ -1785,3 +1785,41 @@ def test_every_call_of_the_provider_makes_sure_podman_is_on_the_path():
         body = _wrapper_functions(name)
         assert "podman_ensure_on_path" in body, name
     assert "podman_ensure_on_path\n    podman_bin=\"$(podman_binary)\"" in text            # compose_file
+
+
+# ── The team can always be stopped from the terminal (TEST 19g) ─────────────────────────────────────
+
+def _team(tmp_path: Path, *args: str, key: str | None, made_with: str | None):
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+        env.pop(name, None)
+    if made_with is not None:
+        made = hashlib.sha256((env["JHT_FIXTURE_CONFIG_HASH"] + made_with).encode()).hexdigest()
+        path = Path(env["JHT_FIXTURE_CONTAINER_METADATA"])
+        path.write_text(json.dumps({**json.loads(path.read_text(encoding="utf-8")), "config_hash": made}), encoding="utf-8")
+    if key is not None:
+        env["OPENAI_API_KEY"] = key
+    return _run(wrapper, env, "team", *args), create_marker
+
+
+def test_team_stop_works_for_a_container_that_only_its_hash_does_not_attest(tmp_path: Path):
+    """A container made with another key is not «exactly ours» for `status`, and `jht team stop --all` answered «avvio automatico
+    negato»: the person could not stop the team. Every other label still attests it, as for `jht down`."""
+    result, created = _team(tmp_path, "stop", "--all", key="sk-test-terminal", made_with="sk-another")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "avvio automatico negato" not in result.stderr and "config_changed_while_running" in result.stderr
+    assert not created.exists()
+
+
+def test_team_stop_still_refuses_a_container_that_is_not_ours_by_any_other_label(tmp_path: Path):
+    wrapper, env, _, created = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-working-dir"
+    result = _run(wrapper, env, "team", "stop", "--all")
+    assert result.returncode != 0 and not created.exists()
+
+
+def test_other_team_commands_still_need_the_exact_attestation(tmp_path: Path):
+    result, created = _team(tmp_path, "status", key="sk-test-terminal", made_with="sk-another")
+    assert result.returncode != 0 and "avvio automatico negato" in result.stderr
+    assert not created.exists()
