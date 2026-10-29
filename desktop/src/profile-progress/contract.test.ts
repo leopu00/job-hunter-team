@@ -72,4 +72,11 @@ describe("the reply of the profile's read", () => {
     ]);
     expect(progress.fields[0].label).toBe("Nome");
   });
+
+  it("shows no value for the email even if a reading carries one: the card never holds the address", () => {
+    const reading = parseProfileProgressReply(reply())!;
+    const withText = { ...reading, fields: reading.fields.map((row) => (row.key === "email" ? { ...row, preview: "someone@example.org", count: 1 } : row)) };
+    const email = progressFromReading(withText, PROFILE_PROGRESS_TEXT.it.fields).fields.find((field) => field.key === "email");
+    expect(email?.value).toBeNull();
+  });
 });
