@@ -121,7 +121,10 @@ export function chatAgentOf(session) {
 
 /** One read of the chat file: `{ messages, cursor }`, or null when it cannot be read (no container, an older image). */
 export function readChatPage(agent, cursor, { run } = {}) {
-  const args = ['read', agent, ...(cursor ? [String(cursor)] : [])];
+  // The server drops the line a cursor lands in, and a cursor that is the start of a line (where the last read
+  // stopped) lands in the first NEW one: read from the byte before, the newline that ends the line already seen.
+  const from = cursor ? String(Math.max(0, Number(cursor) - 1)) : null;
+  const args = ['read', agent, ...(from !== null ? [from] : [])];
   let result;
   try {
     if (run) {
