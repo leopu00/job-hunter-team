@@ -65,7 +65,7 @@ type Read = (request: { agentId: string }) => Promise<DirectChatPage>;
  * on screen. The open chat is read by the page, and counts as read while the window is in view. The others are looked
  * at one by one, slowly (never on a link where every read is a new connection, and never while the window is hidden),
  * and a chat seen for the first time starts at zero: its old history is not «news». The marks are kept in the
- * window's own storage, so a restart does not bring the whole history back as unread.
+ * window's own storage, so a restart does not bring the whole history back as unread. It also says when any agent last wrote.
  */
 export function useChatUnread({
   agents,
@@ -81,10 +81,12 @@ export function useChatUnread({
   read: Read;
   /** False while the chat is not connected, on a slow link, or in a pane that has no list of agents. */
   peeking: boolean;
-}): { counts: Readonly<Record<string, number>>; total: number } {
+}): { counts: Readonly<Record<string, number>>; total: number; lastAgentAt: number } {
   const marks = useRef<SeenMarks | null>(null);
   if (marks.current === null) marks.current = loadSeen();
   const [counts, setCounts] = useState<Readonly<Record<string, number>>>({});
+  // The newest message any agent wrote, in the time of the messages (0: none seen): the team's last sign of life.
+  const [lastAgentAt, setLastAgentAt] = useState(0);
 
   const setCount = (agent: string, count: number) =>
     setCounts((current) => (current[agent] === count || (!current[agent] && count === 0) ? current : { ...current, [agent]: count }));
@@ -100,6 +102,7 @@ export function useChatUnread({
     const apply = () => {
       const newest = newestAgentAt(openMessages);
       if (newest === 0) return;
+      setLastAgentAt((current) => Math.max(current, newest));
       if (document.visibilityState === "hidden" && m[openAgent] !== undefined) {
         setCountRef.current(openAgent, unreadAfter(openMessages, m[openAgent]));
         return;
@@ -131,6 +134,8 @@ export function useChatUnread({
           const page = await readRef.current({ agentId: agent });
           if (!active) return;
           const m = marks.current!;
+          const newest = newestAgentAt(page.messages);
+          if (newest > 0) setLastAgentAt((current) => Math.max(current, newest));
           if (m[agent] === undefined) {
             // first sight: what is there already is not news
             m[agent] = newestAgentAt(page.messages);
@@ -153,5 +158,5 @@ export function useChatUnread({
   }, [others, peeking]);
 
   const total = useMemo(() => Object.values(counts).reduce((sum, count) => sum + count, 0), [counts]);
-  return { counts, total };
+  return { counts, total, lastAgentAt };
 }
