@@ -110,7 +110,8 @@ describe("AppExitDialog", () => {
   it("«Fermali in ordine» gives the order, waits for the Capitano's flag and only then stops", async () => {
     team({ polls: [{ ready: false, active: 5 }, { ready: false, active: 2 }, { ready: true, active: 0 }] });
     const user = userEvent.setup();
-    render(<AppExitDialog pollMs={5} />);
+    // slow enough that the first look has not answered yet when the «waiting» text is read
+    render(<AppExitDialog pollMs={100} />);
     await closeButton();
     await user.click(await screen.findByTestId("app-exit-ordered"));
     expect(await screen.findByTestId("app-exit-waiting")).toHaveTextContent(fill(T.waiting, { count: 0 }));
