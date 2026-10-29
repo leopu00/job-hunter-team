@@ -374,9 +374,15 @@ def test_without_a_burst_a_worker_waits_what_the_floor_and_the_captain_give_it(t
     assert throttle.get_agent("scout-1") == 300 and throttle.get_agent("analista-1") == 780
 
 
+def two_hours_from_now() -> str:
+    """An end the burst accepts at any hour: the pause is read on the real clock, so the burst starts on it too."""
+    from zoneinfo import ZoneInfo
+    return (datetime.now(timezone.utc).astimezone(ZoneInfo(ROME)) + timedelta(hours=2)).strftime("%H:%M")
+
+
 def test_during_the_burst_no_pause_is_longer_than_the_lowest_step_of_the_ladder(home, throttle):
     put_config(home, OFFICE)
-    burst.start("23:00", now=NOW)
+    burst.start(two_hours_from_now(), now=datetime.now(timezone.utc))
     cap = burst.BURST_PAUSE_SEC
     assert cap == 60 and burn_intent.pace_cap() == 60
     assert throttle.get_agent("scout-1") == cap and throttle.get_agent("analista-1") == cap
@@ -386,7 +392,7 @@ def test_during_the_burst_no_pause_is_longer_than_the_lowest_step_of_the_ladder(
 
 def test_the_pause_comes_back_when_the_burst_ends_or_is_stopped(home, throttle):
     put_config(home, OFFICE)
-    burst.start("23:00", now=datetime.now(timezone.utc))
+    burst.start(two_hours_from_now(), now=datetime.now(timezone.utc))
     assert throttle.get_agent("scout-1") == 60
     burst.stop()
     assert throttle.get_agent("scout-1") == 300 and throttle.get_agent("analista-1") == 780
