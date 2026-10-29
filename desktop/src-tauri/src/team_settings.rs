@@ -21,6 +21,11 @@
 //! by itself, app closed or not (`shared/skills/burst.py`, at the sentinel's tick). A read answers with
 //! the burst when the box sends it, in its closed shape; a box that does not is read as without one.
 //!
+//! A read also brings, when the box sends them, the facts that explain a silence of the team (`quiet`:
+//! the provider's work window as two numbers, whether an agent is held by a containment, whether the
+//! provider has a login). Read only, numbers and booleans in a closed shape; a fact out of its shape is
+//! left out, never read as «all is well» (`shared/skills/team_quiet.py`).
+//!
 //! The model is a CLASS (`sol`, `terra`, `luna`), never the name of a model: which model a class
 //! means is the team's provider's business.
 
@@ -237,7 +242,39 @@ fn settings_of(out: &Map<String, Value>) -> Option<Value> {
     if let Some(burst) = burst_of(out) {
         settings["burst"] = burst;
     }
+    // The facts that explain a silence are optional as well, each on its own.
+    if let Some(quiet) = quiet_of(out) {
+        settings["quiet"] = quiet;
+    }
     Some(settings)
+}
+
+/// The most the provider's window can read (a share of it, in percent) and the latest time it can reopen at (year 2100).
+const USAGE_MAX: f64 = 1000.0;
+const RESET_MAX: u64 = 4_102_444_800;
+
+/// {"budget": {"usagePct", "resetAtUnix"}, "containment": bool, "providerReady": bool}, each fact only if whole and none required;
+/// `None` when nothing is left. A fact out of its shape is dropped alone: the others still tell what they know.
+fn quiet_of(out: &Map<String, Value>) -> Option<Value> {
+    let quiet = out.get("quiet")?.as_object()?;
+    let mut kept = Map::new();
+    if let Some(budget) = quiet.get("budget").and_then(Value::as_object) {
+        let usage = budget.get("usagePct").and_then(Value::as_f64).filter(|u| (0.0..=USAGE_MAX).contains(u));
+        let reset = match budget.get("resetAtUnix") {
+            Some(Value::Null) => Some(Value::Null),
+            Some(value) => value.as_u64().filter(|r| (1..=RESET_MAX).contains(r)).map(Value::from),
+            None => None,
+        };
+        if let (Some(usage), Some(reset), 2) = (usage, reset, budget.len()) {
+            kept.insert("budget".into(), json!({ "usagePct": usage, "resetAtUnix": reset }));
+        }
+    }
+    for key in ["containment", "providerReady"] {
+        if let Some(flag) = quiet.get(key).and_then(Value::as_bool) {
+            kept.insert(key.into(), Value::Bool(flag));
+        }
+    }
+    (!kept.is_empty()).then(|| Value::Object(kept))
 }
 
 /// {"active": false}, or {"active": true, "until": <UTC timestamp>, "untilLocal": "HH:MM"}, and nothing else.
@@ -655,6 +692,55 @@ mod tests {
             assert_eq!(out["ok"], true, "{bad}");
             assert!(out.get("burst").is_none(), "{bad}");
         }
+    }
+
+    fn quiet_held(quiet: Value) -> String {
+        json!({"ok": true, "working_hours": hours(), "role_models": {}, "lists": lists(), "quiet": quiet}).to_string()
+    }
+
+    #[test]
+    fn the_facts_that_explain_a_silence_come_through_in_their_closed_shape() {
+        let ran = Cell::new(0);
+        let read = |quiet: Value| drive(json!({"op": "read"}), None, done(&quiet_held(quiet)), &ran);
+        let whole = json!({"budget": {"usagePct": 97.5, "resetAtUnix": 1790000000u64}, "containment": false, "providerReady": true});
+        assert_eq!(read(whole.clone())["quiet"], whole);
+        let no_time = json!({"budget": {"usagePct": 100.0, "resetAtUnix": null}});
+        assert_eq!(read(no_time.clone())["quiet"], no_time);
+        // each fact stands alone
+        assert_eq!(read(json!({"containment": true}))["quiet"], json!({"containment": true}));
+        // a box older than the field does not send it: no `quiet`, and a page that reads that as «nothing to say»
+        let ran2 = Cell::new(0);
+        let old = drive(json!({"op": "read"}), None, done(&burst_held(json!({"active": false}))), &ran2);
+        assert!(old.get("quiet").is_none());
+    }
+
+    #[test]
+    fn a_fact_out_of_its_shape_is_left_out_alone_and_never_read_as_all_is_well() {
+        let ran = Cell::new(0);
+        let read = |quiet: Value| drive(json!({"op": "read"}), None, done(&quiet_held(quiet)), &ran);
+        for bad in [
+            json!(null),
+            json!("down"),
+            json!([]),
+            json!({}),
+            json!({"containment": "no"}),
+            json!({"providerReady": 1}),
+            json!({"budget": {"usagePct": "97", "resetAtUnix": 1}}),
+            json!({"budget": {"usagePct": -1.0, "resetAtUnix": 1}}),
+            json!({"budget": {"usagePct": 5000.0, "resetAtUnix": 1}}),
+            json!({"budget": {"usagePct": 97.0}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 0}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 1.5}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 99999999999u64}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 1, "status": "locked out for someone@example.com"}}),
+        ] {
+            let out = read(bad.clone());
+            assert_eq!(out["ok"], true, "{bad}");
+            assert!(out.get("quiet").is_none(), "{bad}");
+        }
+        // one bad fact does not take the good ones with it; and nothing else the box says travels on
+        let mixed = read(json!({"budget": {"usagePct": "x", "resetAtUnix": 1}, "containment": true, "agent": "SCOUT", "path": "/jht_home/x", "providerReady": false}));
+        assert_eq!(mixed["quiet"], json!({"containment": true, "providerReady": false}));
     }
 
     #[test]

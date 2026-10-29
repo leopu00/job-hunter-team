@@ -46,6 +46,16 @@ export type EffectiveModels = Record<Role, EffectiveRole>;
 /** A burst that is running (`until` is a UTC timestamp, `untilLocal` the team's wall clock HH:MM), or none. */
 export type Burst = { active: false } | { active: true; until: string; untilLocal: string };
 
+/**
+ * What the box says to explain a silence of the team, every fact optional and on its own: the provider's work window (how much of it is
+ * used, and when it reopens as a Unix time, or null), whether an agent is held by a safety containment, whether the provider has a login.
+ */
+export interface QuietReading {
+  budget?: { usagePct: number; resetAtUnix: number | null };
+  containment?: boolean;
+  providerReady?: boolean;
+}
+
 export interface TeamSettings {
   /** Where the team is: this computer, or a VPS. */
   target: "local" | "vps";
@@ -60,6 +70,8 @@ export interface TeamSettings {
   classApplies?: boolean | null;
   /** The «work flat out» burst; absent when the box does not say (do not read that as «none»). */
   burst?: Burst;
+  /** The facts that explain a silence; absent when the box does not say (an older one): never read as «nothing to explain». */
+  quiet?: QuietReading;
 }
 
 /** What a write changes: a role is changed by sending its entry, and `{}` puts it back on the default. */
@@ -163,6 +175,26 @@ function pickEffective(value: unknown): EffectiveModels | null {
 
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
+const USAGE_MAX = 1000;
+const RESET_MAX = 4_102_444_800;
+
+/** The `quiet` block of a read: each fact kept only if whole, none required; null when none is left. */
+function pickQuiet(value: unknown): QuietReading | null {
+  if (!isRecord(value)) return null;
+  const quiet: QuietReading = {};
+  const budget = value.budget;
+  if (isRecord(budget) && Object.keys(budget).length === 2) {
+    const { usagePct, resetAtUnix } = budget;
+    if (typeof usagePct === "number" && Number.isFinite(usagePct) && usagePct >= 0 && usagePct <= USAGE_MAX &&
+        (resetAtUnix === null || (typeof resetAtUnix === "number" && Number.isInteger(resetAtUnix) && resetAtUnix >= 1 && resetAtUnix <= RESET_MAX))) {
+      quiet.budget = { usagePct, resetAtUnix };
+    }
+  }
+  if (typeof value.containment === "boolean") quiet.containment = value.containment;
+  if (typeof value.providerReady === "boolean") quiet.providerReady = value.providerReady;
+  return Object.keys(quiet).length > 0 ? quiet : null;
+}
+
 /** The `burst` block of a read in its closed shape, or null («not known»). */
 function pickBurst(value: unknown): Burst | null {
   if (!isRecord(value)) return null;
@@ -196,6 +228,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
     return unavailable;
   }
   const burst = pickBurst(reply.burst);
+  const quiet = pickQuiet(reply.quiet);
   const provider = reply.provider === "codex" || reply.provider === "claude" || reply.provider === "kimi" ? reply.provider : null;
   return {
     ok: true,
@@ -208,6 +241,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
       provider,
       classApplies: typeof reply.classApplies === "boolean" ? reply.classApplies : null,
       ...(burst ? { burst } : {}),
+      ...(quiet ? { quiet } : {}),
     },
   };
 }
