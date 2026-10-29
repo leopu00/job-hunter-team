@@ -1429,7 +1429,7 @@ mod tests {
     use super::{
         decode_base64, encode_base64, parse_scanned_host_key, probe_status, ssh_base_args,
         valid_address,
-        valid_user, write_pinned_host_key, ExecutionHost, HostKeyError, ScannedHostKey,
+        valid_user, write_pinned_host_key, ExecutionHost, HostKeyError, ProcessResult, ScannedHostKey,
         SshHostKeyProbe,
     };
     use crate::account_scope::AccountScopeState;

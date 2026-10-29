@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { describeError, ERROR_LOCALES } from "./error-catalog";
 import { existingTeamErrorCode } from "./existing-team";
 import { stopsTheWatch } from "./notify/watch";
-import { REOPEN_NO_RETRY } from "@/pages/messages/DirectChatScreen";
+import { REOPEN_NO_RETRY } from "../pages/messages/DirectChatScreen";
 import { chatMayStillCome } from "./direct-chat-wait";
 
 const WAY_IN = ["ssh_auth_failed", "ssh_connection_refused", "ssh_host_unreachable", "host_key_changed", "ssh_unavailable"] as const;
