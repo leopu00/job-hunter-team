@@ -1180,6 +1180,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "A chosen value is not one of the allowed ones: nothing was saved.",
     "Check the hours and the models, then try again.",
   ),
+  team_settings_burst_too_soon: copy(
+    "L’ora scelta è troppo vicina: servono almeno 15 minuti.",
+    "Scegli un’ora più avanti e riprova.",
+    "The time you chose is too close: it must be at least 15 minutes away.",
+    "Choose a later time and try again.",
+  ),
+  team_settings_burst_too_far: copy(
+    "L’ora scelta è oltre le 12 ore da adesso, che è il massimo.",
+    "Scegli un’ora entro 12 ore e riprova.",
+    "The time you chose is more than 12 hours from now, which is the maximum.",
+    "Choose a time within 12 hours and try again.",
+  ),
   team_settings_read_only: copy(
     "Questa squadra è collegata in sola lettura: orari e modelli non si cambiano da qui.",
     "Collega la squadra con «Conferma e collega» e riprova.",
