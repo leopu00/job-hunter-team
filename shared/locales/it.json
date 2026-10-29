@@ -147,6 +147,7 @@
   "profile_confirm.correct": "Voglio correggere qualcosa",
   "profile_confirm.name": "Nome",
   "profile_confirm.email": "Email",
+  "profile_confirm.field.work_authorization": "Autorizzazione al lavoro",
   "plan.none_known": "nessun piano noto",
   "plan.weekly_cap": "tetto settimanale",
   "plan.no_weekly_cap": "nessun tetto settimanale",

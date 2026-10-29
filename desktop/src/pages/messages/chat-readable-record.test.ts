@@ -8,6 +8,12 @@ describe("a record the Assistant wrote as the program holds it", () => {
     expect(readableRecordText(raw, "it")).toBe("- Autorizzazione al lavoro: Italian citizen - free movement (EU)");
   });
 
+  it("says the line of the profile card as the Assistant wrote it, with the note that follows the record", () => {
+    const raw = "work_authorization: {'region': 'EU', 'status': 'Italian citizen - free movement'} (deduced by me, it is not in your CV)";
+    expect(readableRecordText(raw, "en")).toBe("Work authorization: Italian citizen - free movement (EU) (deduced by me, it is not in your CV)");
+    expect(readableRecordText(raw, "it")).toBe("Autorizzazione al lavoro: Italian citizen - free movement (EU) (deduced by me, it is not in your CV)");
+  });
+
   it("says any other flat record as its pairs, with double quotes and plain values too", () => {
     expect(readableRecordText("notice_period: {\"weeks\": 4, 'remote': True}", "en")).toBe("Notice period: Weeks: 4, Remote: True");
   });
