@@ -1673,7 +1673,10 @@ def test_a_container_made_with_the_same_key_is_still_ours_for_that_terminal(tmp_
 
 def test_a_container_made_with_another_key_is_not_a_free_pass(tmp_path: Path):
     result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-another")
-    assert result.returncode != 0 and "non attivo" in result.stdout
+    assert result.returncode != 0
+    # a container that is there and cannot be attested is not «non attivo»: it says so and names the variable (not its value)
+    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
+    assert "OPENAI_API_KEY" in result.stdout and "unset" in result.stdout and "sk-test-terminal" not in result.stdout
 
 
 def test_a_wrong_hash_is_refused_with_a_key_exported_too(tmp_path: Path):
@@ -1682,7 +1685,7 @@ def test_a_wrong_hash_is_refused_with_a_key_exported_too(tmp_path: Path):
     env["OPENAI_API_KEY"] = "sk-test-terminal"
     env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
     result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attivo" in result.stdout
+    assert result.returncode != 0 and "non attestabile" in result.stdout and "OPENAI_API_KEY" in result.stdout
 
 
 def test_the_caller_variables_the_wrapper_sets_aside_are_those_the_compose_takes():
@@ -1695,3 +1698,21 @@ def test_the_caller_variables_the_wrapper_sets_aside_are_those_the_compose_takes
     # by the wrapper itself before any compose runs (so they do not follow the caller).
     taken -= {"HOME", "JHT_IMAGE", "JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"}
     assert listed == taken, (sorted(listed ^ taken))
+
+
+def test_status_with_no_container_at_all_still_says_not_active(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0 and "non attivo" in result.stdout and "non attestabile" not in result.stdout
+
+
+def test_status_of_an_unattestable_container_without_a_caller_variable_names_none(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+        env.pop(name, None)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0 and "non attestabile" in result.stdout
+    assert "sono impostate" not in result.stdout and "non attivo" not in result.stdout
+

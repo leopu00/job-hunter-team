@@ -1063,7 +1063,7 @@ compose_file() {
     # the provider inherits it and therefore emits `podman ps`/`podman run`
     # against the named machine without depending on the mutable default.
     local podman_bin compose_bin
-    podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
+      podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
     if ! compose_bin="$(podman_compose_binary)"; then
       if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
         # `podman compose` non basta: delega al primo provider che trova (docker-compose,
@@ -2327,6 +2327,15 @@ podman_caller_env_set() {
     [ -z "${!name:-}" ] || return 0
   done
   return 1
+}
+
+# The NAMES (never the values) of the variables above that the caller's environment sets, space separated.
+podman_caller_env_names() {
+  local name found=""
+  for name in $PODMAN_CALLER_ENV; do
+    [ -z "${!name:-}" ] || found="${found:+$found }$name"
+  done
+  printf '%s' "$found"
 }
 
 podman_expected_config_hash() {
@@ -5072,7 +5081,16 @@ case "$SUB" in
       docker inspect "$container_id" --format \
         'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
     else
-      printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      # 3 = the project has no such container; anything else = a container is there and cannot be attested.
+      # Saying «non attivo» for the second hid a team that was running (TEST 19g).
+      if [ "$?" -eq 3 ]; then
+        printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      else
+        printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
+          printf "  Nell'ambiente di questo terminale sono impostate: %s. Il container e' stato creato senza: togli la variabile (unset) e riprova.\n" "$(podman_caller_env_names)"
+        fi
+      fi
       exit 1
     fi
     ;;
