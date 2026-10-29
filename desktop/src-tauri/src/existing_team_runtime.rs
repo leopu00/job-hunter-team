@@ -2897,7 +2897,7 @@ fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &
 }
 
 /// The host wrapper a read of this computer's team goes through, once this account is the runtime's owner.
-fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope) -> Result<std::path::PathBuf, &'static str> {
+pub(crate) fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope) -> Result<std::path::PathBuf, &'static str> {
     let marker = crate::account_scope::local_owner_marker_path(app)?;
     crate::account_scope::verify_local_runtime_owner(&marker, scope)?;
     let wrapper = crate::onboarding::verified_local_wrapper_path(app)?;

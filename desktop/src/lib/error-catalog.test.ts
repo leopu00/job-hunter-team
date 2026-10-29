@@ -27,6 +27,14 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // local_swipe.rs: the names of the fields of a deck and of the verdict's answer, and the start of the owner
+  // codes the write turns into «read only». They are keys of a JSON the page reads, never a sentence.
+  ...Object.fromEntries(
+    [
+      "cloud_synced", "fb_score", "previous_status", "remote_type", "salary_declared_currency", "salary_declared_max",
+      "salary_declared_min", "salary_estimated_currency", "salary_estimated_max", "salary_estimated_min", "local_account_owner",
+    ].map((word) => [word, "a key of the Swipe's deck or of a verdict's answer, or a prefix compared in code; never shown"]),
+  ),
   // team_start.rs: a value of the phase the first start is in, read by the page, not an error.
   awaiting_profile: "a phase of the team's first start (the team waits for the profile), never an error",
   // runtime_log.rs ATTEST_REASONS: the step of the container check a failed chat read stopped at, written beside
