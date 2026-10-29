@@ -10,11 +10,12 @@ import { pluralText } from "../../lib/plural";
 import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 import { cloudClient } from "../../lib/cloud-client";
 import { readOnce, withReadDeadline } from "../../lib/read-deadline";
-import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
+import { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import type { PageProps } from "../types";
 import { LinkedinLoginCard } from "./LinkedinLoginCard";
+import LocalProfile from "./LocalProfile";
 import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
 import { loadProfile, profileExport, type ProfileData } from "./load-profile";
 
@@ -57,8 +58,8 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   );
 
   const t = getProfileT(locale);
-  // No cloud session (a local profile): the notice is the page, not a bare line on a black screen.
-  if (blocked) return <CloudDataNotice />;
+  // No cloud session (a local profile): the page is the team's own profile on this computer, not a sign-in notice.
+  if (blocked) return <LocalProfile />;
   if (load.state === "loading") return <ProfileLoading />;
   if (load.state === "signed-out")
     // A readable session that no longer answers as signed in is an expired one; with no cloud session at
