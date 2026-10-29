@@ -35,6 +35,7 @@ import {
   type Outcome,
 } from "./chat-kinds";
 import { sameAsBefore } from "./same-as-before";
+import { unreadLabel, useChatUnread } from "./chat-unread";
 import { systemLineText, withoutAttachmentPath } from "./chat-line-text";
 import { ChatMessageRow } from "./ChatMessageRow";
 import { renderChatText } from "./chat-text";
@@ -313,6 +314,14 @@ export default function DirectChatScreen({
   const t = DIRECT_CHAT_TEXT[locale];
   const agents = AGENT_IDS.map((id) => ({ id, label: t.agents[id] }));
   const selected = agents.find((agent) => agent.id === agentId)!;
+  // How many messages of each agent the person has not read: the chat on screen is read, the others are looked at slowly.
+  const unread = useChatUnread({
+    agents: AGENT_IDS,
+    openAgent: agentId,
+    openMessages: messages,
+    read: (request) => client.read({ agentId: request.agentId as DirectChatAgentId }),
+    peeking: !embedded && status.state === "ready" && !slowLink,
+  });
 
   useEffect(() => {
     setAgentId(initialAgentId);
@@ -803,7 +812,20 @@ export default function DirectChatScreen({
                 background: agent.id === agentId ? "var(--color-card)" : "transparent",
               }}
             >
-              {agent.label}
+              <span className="flex items-center justify-between gap-2">
+                <span>{agent.label}</span>
+                {unread.counts[agent.id] > 0 && (
+                  <span
+                    data-testid={`unread-${agent.id}`}
+                    role="img"
+                    aria-label={t.unreadAria.replace("{count}", String(unread.counts[agent.id]))}
+                    className="min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold leading-5"
+                    style={{ background: "var(--color-green)", color: "var(--color-void)" }}
+                  >
+                    {unreadLabel(unread.counts[agent.id])}
+                  </span>
+                )}
+              </span>
             </button>
           ))}
         </nav>
@@ -825,7 +847,11 @@ export default function DirectChatScreen({
               onChange={(event) => setAgentId(event.target.value as typeof agentId)}
               className="ml-2 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-[13px] text-[var(--color-bright)]"
             >
-              {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.label}</option>)}
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {unread.counts[agent.id] > 0 ? `${agent.label} (${unreadLabel(unread.counts[agent.id])})` : agent.label}
+                </option>
+              ))}
             </select>
           </label>
         </header>
