@@ -284,7 +284,8 @@ def test_a_burst_that_runs_past_midnight_on_a_nearly_day_long_window_is_split_in
 def during(hours, now, until):
     """The minutes of `hours` that fall inside the burst, from `now` to `until` (hours already over do not count)."""
     start = now.weekday() * 24 * 60 + now.hour * 60 + now.minute
-    span = int((until - now).total_seconds() // 60)
+    minute = lambda t: t.replace(second=0, microsecond=0)            # noqa: E731
+    span = int((minute(until) - minute(now)).total_seconds() // 60)
     mine = covered(hours)
     return {m for m in ((start + k) % WEEK for k in range(span)) if m in mine}
 
@@ -313,10 +314,39 @@ def test_whatever_the_hours_and_the_moment_the_stretch_is_covered_and_no_hour_of
             windows.append({"days": days, "start": burst._clock(start), "end": burst._clock(start + length)})
         previous = {"timezone": ROME, "windows": windows}
         assert burst.valid_hours(previous), previous
-        now = wall(rng.randrange(7), rng.randrange(24 * 60))
-        until = now + timedelta(minutes=rng.randrange(15, 12 * 60 + 1))
+        # The person gives an HH:MM, the moment of the click has seconds: the end is still exactly that minute.
+        now = wall(rng.randrange(7), rng.randrange(24 * 60)) + timedelta(seconds=rng.randrange(60))
+        until = (now + timedelta(minutes=rng.randrange(15, 12 * 60 + 1))).replace(second=0, microsecond=0)
         wide = burst.widened(previous, now, until, (until - now).total_seconds() / 3600)
         assert burst.valid_hours(wide), (previous, now, until, wide)
         # Every minute of the burst is allowed, and every minute the team already had during it still is.
         everything = {"windows": [{"days": list(burst.WEEKDAYS), "start": "00:00", "end": "00:00"}]}
         assert during(everything, now, until) <= during(wide, now, until), (previous, now, until, wide)
+
+
+def reads(hours, moment):
+    """What the scheduler answers (working_hours.is_within_working_hours) for `hours` at `moment`."""
+    import working_hours
+    return working_hours.is_within_working_hours(moment, {"team": {"working_hours": hours}})
+
+
+def test_a_burst_to_half_past_midnight_ends_at_half_past_midnight_and_the_scheduler_reads_it_across_midnight(home):
+    put_config(home, OFFICE)
+    now = wall(3, 17 * 60 + 31) + timedelta(seconds=45)          # Thursday 17:31:45 in Rome
+    burst.start("00:30", now=now)
+    wide = hours_now(home)
+    assert burst.valid_hours(wide)
+    # One window of the day it starts on, ending the next morning: the schema's way to cross midnight.
+    assert {"days": ["thu"], "start": "09:00", "end": "00:30"} in wide["windows"]
+    for day, minute, allowed in [(3, 9 * 60, True), (3, 23 * 60 + 59, True), (4, 0, True), (4, 29, True),
+                                 (4, 30, False), (4, 31, False), (4, 8 * 60 + 59, False), (4, 9 * 60, True)]:
+        assert reads(wide, wall(day, minute)) is allowed, (day, minute)
+
+
+def test_the_end_is_the_minute_asked_with_the_seconds_of_the_click_and_on_a_day_with_no_window(home):
+    put_config(home, OFFICE)
+    now = wall(5, 22 * 60) + timedelta(seconds=59)               # Saturday 22:00:59 in Rome
+    burst.start("23:30", now=now)
+    wide = hours_now(home)
+    assert {"days": ["sat"], "start": "19:30", "end": "23:30"} in wide["windows"]
+    assert reads(wide, wall(5, 23 * 60 + 29)) and not reads(wide, wall(5, 23 * 60 + 30))

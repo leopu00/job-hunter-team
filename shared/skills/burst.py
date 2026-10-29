@@ -304,8 +304,11 @@ def widened(previous, now_local: datetime, until_local: datetime, span_hours: fl
     long_enough = timedelta(hours=min(23, max(MIN_WINDOW_HOURS, math.ceil(span_hours))))
 
     def place(begin: datetime):
+        # The end is counted on the wall clock, minute against minute: with the seconds of `begin` in it
+        # (17:31:45 to 00:30:00) the count falls a minute short and the window ends at 00:29.
         start = begin.hour * 60 + begin.minute
-        return WEEKDAYS[begin.weekday()], start, start + int((until_local - begin).total_seconds() // 60)
+        wall = lambda t: t.replace(tzinfo=None, second=0, microsecond=0)    # noqa: E731
+        return WEEKDAYS[begin.weekday()], start, start + int((wall(until_local) - wall(begin)).total_seconds() // 60)
 
     day, start, end = place(now_local if WEEKDAYS[now_local.weekday()] in per_day else until_local - long_enough)
     if day in per_day:
