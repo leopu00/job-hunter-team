@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { chatAgentOf, createChatFeed, formatChatMessage, readChatPage } from '../src/commands/team/chat.js';
+import { chatAgentOf, createChatFeed, createChatPump, formatChatMessage, readChatPage } from '../src/commands/team/chat.js';
 
 const welcome = { id: 'm1', role: 'agent', text: 'Ciao! Sono l’Assistente.', at: Date.UTC(2026, 9, 29, 11, 15, 40) / 1000 };
 
@@ -88,4 +88,28 @@ test('read for real: the welcome in the chat file of the Assistente comes throug
   assert.equal(out.history.length, 1, r.stderr);
   assert.equal(out.history[0].text, 'Benvenuto! Sono l’Assistente.');
   assert.deepEqual(out.fresh, []);
+});
+
+test('while a reply is waited for the poller sees nothing: the wait gets the reply, never «no reply yet» with it on screen', async () => {
+  const reply = { id: 'r1', role: 'agent', text: 'Fatto.', at: 0 };
+  const queue = [[reply]];
+  const feed = { fresh: () => queue.shift() ?? [] };
+  const pump = createChatPump(feed);
+  const printedByThePoller = [];
+  // the poller fires in the middle of the wait, before the wait's own look
+  const sleep = async () => { printedByThePoller.push(...pump.tick()); };
+  const rows = await pump.awaitReply({ sleep, now: () => 0, timeoutMs: 1000 });
+  assert.deepEqual(printedByThePoller, []);
+  assert.deepEqual(rows, [reply]);
+});
+
+test('after the wait ends the poller prints again; a wait with no reply ends at the deadline with nothing', async () => {
+  const later = { id: 'r2', role: 'agent', text: 'Eccomi.', at: 0 };
+  let calls = 0;
+  const feed = { fresh: () => (++calls === 3 ? [later] : []) };
+  const pump = createChatPump(feed);
+  let clock = 0;
+  const rows = await pump.awaitReply({ sleep: async () => { clock += 2000; }, now: () => clock, timeoutMs: 4000 });
+  assert.deepEqual(rows, [], 'two looks, nothing, the deadline');
+  assert.deepEqual(pump.tick(), [later], 'the poller is back once the wait is over');
 });

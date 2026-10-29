@@ -190,6 +190,36 @@ export function createChatFeed(agent, read = readChatPage) {
   };
 }
 
+/**
+ * The two ways the REPL looks at the chat, kept apart: the poller (`tick`) that prints what arrives while the person
+ * is at the prompt, and the wait for the reply after a message (`awaitReply`). While the wait runs the poller sees
+ * nothing (it must not take the reply and leave the wait to say «no reply yet» with the answer already on screen).
+ */
+export function createChatPump(feed) {
+  let waiting = false;
+  return {
+    /** What the poller prints: the new rows, none while a reply is being waited for. */
+    tick() {
+      return waiting ? [] : feed.fresh();
+    },
+    /** Waits for the reply: the new rows as soon as there are any, or [] at the deadline. */
+    async awaitReply({ sleep = (ms) => new Promise((res) => setTimeout(res, ms)), now = Date.now, timeoutMs = REPLY_WAIT_MS, everyMs = 2000 } = {}) {
+      waiting = true;
+      try {
+        const until = now() + timeoutMs;
+        let rows = [];
+        while (!rows.length && now() < until) {
+          await sleep(everyMs);
+          rows = feed.fresh();
+        }
+        return rows;
+      } finally {
+        waiting = false;
+      }
+    },
+  };
+}
+
 // ── send: one-shot ─────────────────────────────────────────────────
 
 // Le guardie segnano `process.exitCode` e ritornano invece di chiamare
@@ -270,6 +300,7 @@ export async function chatAction(agentArg, options = {}) {
   // What the agent wrote to the chat (its welcome included), not only the terminal's screen.
   const agent = chatAgentOf(session);
   const feed = agent ? createChatFeed(agent) : null;
+  const pump = feed ? createChatPump(feed) : null;
   const show = (rows) => { for (const row of rows) console.log(`${formatChatMessage(row, agent)}\n`); };
   if (feed) {
     const past = feed.history();
@@ -280,7 +311,7 @@ export async function chatAction(agentArg, options = {}) {
   let poller = null;
   if (feed && !options.quiet) {
     poller = setInterval(() => {
-      const rows = feed.fresh();
+      const rows = pump.tick();
       if (!rows.length) return;
       output.write('\r\x1b[K');
       show(rows);
@@ -322,12 +353,7 @@ export async function chatAction(agentArg, options = {}) {
       // The answer is in the chat: wait for it for a while; the terminal's screen only when the chat cannot be read.
       if (!options.quiet) {
         if (feed) {
-          const until = Date.now() + REPLY_WAIT_MS;
-          let rows = [];
-          while (!rows.length && Date.now() < until) {
-            await new Promise((res) => setTimeout(res, 2000));
-            rows = feed.fresh();
-          }
+          const rows = await pump.awaitReply();
           if (rows.length) show(rows); else console.log(c.dim('  (no reply yet: /read shows it when it comes)'));
         } else {
           await new Promise((res) => setTimeout(res, 3000));
