@@ -1951,6 +1951,13 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["A szolgáltatói bejelentkezést nem sikerült eltávolítani.", "Próbáld újra egy pillanat múlva; ha így marad, nézd meg a csapat állapotát."],
     ["Não foi possível retirar o acesso do fornecedor.", "Tenta novamente daqui a pouco; se continuar assim, vê o estado da equipa."],
   ),
+  provider_changed: tr(
+    ["Der Anbieter des Teams hat sich geändert, während du bestätigt hast: Das getrennte Konto ist nicht das, das du gewählt hattest.", "Prüfe den Anbieter im Schritt «Anbieter» und versuche es erneut."],
+    ["El proveedor del equipo cambió mientras confirmabas: la cuenta desconectada no es la que elegiste.", "Revisa el proveedor en el paso «Proveedor» y vuelve a intentarlo."],
+    ["Le fournisseur de l’équipe a changé pendant que tu confirmais : le compte déconnecté n’est pas celui que tu avais choisi.", "Vérifie le fournisseur à l’étape « Fournisseur » et réessaie."],
+    ["A csapat szolgáltatója megváltozott, miközben megerősítetted: a leválasztott fiók nem az, amelyet választottál.", "Ellenőrizd a szolgáltatót a «Szolgáltató» lépésben, és próbáld újra."],
+    ["O fornecedor da equipa mudou enquanto confirmavas: a conta desligada não é a que escolheste.", "Verifica o fornecedor no passo «Fornecedor» e tenta novamente."],
+  ),
   local_container_not_attested: tr(
     ["Der laufende Container ist nicht der, den Job Hunter Team installiert hat.", "Aus Sicherheitsgründen wird er nicht verwendet: Wiederhole den Laufzeitschritt der Einrichtung."],
     ["El contenedor en marcha no es el que instaló Job Hunter Team.", "Por seguridad no se usa: repite el paso del entorno de ejecución de la configuración."],

@@ -1877,6 +1877,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The provider’s sign-in could not be taken off.",
     "Try again in a moment; if it stays so, look at the team’s state.",
   ),
+  provider_changed: copy(
+    "Il provider della squadra è cambiato mentre confermavi: l’account disconnesso non è quello che avevi scelto.",
+    "Controlla il provider nel passo «Provider» e riprova.",
+    "The team’s provider changed while you were confirming: the account disconnected is not the one you chose.",
+    "Check the provider in the «Provider» step and try again.",
+  ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
     "Per sicurezza non lo uso: rifai il passo Runtime della configurazione.",

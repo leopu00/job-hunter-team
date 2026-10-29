@@ -6,6 +6,7 @@ import { ProviderSetupContext } from "../../lib/provider-setup";
 import type { ProviderOutcome } from "../../lib/team-provider";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
 import ProviderSignOut from "./ProviderSignOut";
+import { PROVIDER_SIGNOUT_TEXT } from "./provider-signout.i18n";
 import SettingsPage from "./index";
 
 // «Disconnect the account» in the Settings «Provider» card: only where the team is signed in, asks first,
@@ -36,13 +37,15 @@ describe("ProviderSignOut", () => {
 
   it("names the provider, asks first, and sends nothing until «Sì, disconnetti»", async () => {
     const user = userEvent.setup();
-    const signOut = vi.fn(async () => signedOut());
+    const signOut = vi.fn(async () => signedOut("claude"));
     render(<ProviderSignOut read={async () => signedIn("claude")} signOut={signOut} />);
     expect(await screen.findByText("Accesso effettuato a Claude.")).toBeInTheDocument();
     await user.click(screen.getByTestId("provider-signout-open"));
     const confirm = screen.getByTestId("provider-signout-confirm");
     expect(within(confirm).getByText("Disconnettere l’account di Claude?")).toBeInTheDocument();
-    expect(confirm).toHaveTextContent("Gli agenti in corso si fermano");
+    // the team is stopped before the sign-in is taken off, and the person is told so; the access at the provider stays
+    expect(confirm).toHaveTextContent("La squadra si ferma");
+    expect(confirm).not.toHaveTextContent("al prossimo messaggio");
     expect(confirm).toHaveTextContent("non viene revocato");
     expect(signOut).not.toHaveBeenCalled();
     // «Annulla» goes back and still sends nothing
@@ -67,6 +70,40 @@ describe("ProviderSignOut", () => {
     expect(screen.queryByTestId("provider-signout-done")).toBeNull();
     // the person is where the sign-in still is, and can try again
     expect(screen.getByTestId("provider-signout-open")).toBeEnabled();
+  });
+
+  it("an answer about ANOTHER provider than the one confirmed is an error, never «disconnected»", async () => {
+    const user = userEvent.setup();
+    // the person confirmed Claude; the team now answers for Codex (the config changed in between)
+    render(<ProviderSignOut read={async () => signedIn("claude")} signOut={async () => signedOut("codex")} />);
+    await user.click(await screen.findByTestId("provider-signout-open"));
+    await user.click(screen.getByTestId("provider-signout-yes"));
+    const told = describeError("provider_changed", { locale: "it" });
+    expect(told.known).toBe(true);
+    expect(await screen.findByTestId("provider-signout-error")).toHaveTextContent(told.text);
+    expect(screen.queryByTestId("provider-signout-done")).toBeNull();
+    // the person is back where the sign-in is, with the provider they were shown
+    expect(screen.getByText("Accesso effettuato a Claude.")).toBeInTheDocument();
+  });
+
+  it("the confirmation says the team stops, in the seven languages, and none of them says the agents stop at their next message", () => {
+    for (const locale of Object.keys(PROVIDER_SIGNOUT_TEXT) as (keyof typeof PROVIDER_SIGNOUT_TEXT)[]) {
+      const text = PROVIDER_SIGNOUT_TEXT[locale].confirmText;
+      expect(text, locale).not.toMatch(/prossimo messaggio|next message|nächsten Nachricht|próximo mensaje|prochain message|következő üzenet|mensagem seguinte/i);
+    }
+    expect(PROVIDER_SIGNOUT_TEXT.it.confirmText).toMatch(/^La squadra si ferma/);
+    expect(PROVIDER_SIGNOUT_TEXT.en.confirmText).toMatch(/^The team stops/);
+    expect(PROVIDER_SIGNOUT_TEXT.de.confirmText).toMatch(/^Das Team hält an/);
+    expect(PROVIDER_SIGNOUT_TEXT.es.confirmText).toMatch(/^El equipo se detiene/);
+    expect(PROVIDER_SIGNOUT_TEXT.fr.confirmText).toMatch(/^L’équipe s’arrête/);
+    expect(PROVIDER_SIGNOUT_TEXT.hu.confirmText).toMatch(/^A csapat leáll/);
+    expect(PROVIDER_SIGNOUT_TEXT.pt.confirmText).toMatch(/^A equipa para/);
+  });
+
+  it("the codes of the stop that comes first have their sentences in the catalog", () => {
+    for (const code of ["team_stop_failed", "agent_control_busy", "provider_changed"]) {
+      expect(describeError(code, { locale: "it" }).known, code).toBe(true);
+    }
   });
 
   it("an answer that says «ok» and still signed in is not «disconnected» either", async () => {

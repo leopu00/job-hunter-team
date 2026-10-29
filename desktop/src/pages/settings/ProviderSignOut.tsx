@@ -19,8 +19,8 @@ type State =
  * The «Disconnect the account» part of the Provider card: only where the team of this computer is signed in
  * with its provider, never anywhere else (a read that fails shows nothing). The click asks first, in words:
  * the agents at work stop and the access at the provider is not revoked. Only «Yes» sends the request, and
- * what is told afterwards is what the team holds after it: a sign-in that is still there is an error, never
- * «disconnected». `read` and `signOut` are for the tests.
+ * what is told afterwards is what the team holds after it: a sign-in that is still there, or an answer about
+ * another provider than the one confirmed, is an error, never «disconnected». `read` and `signOut` are for the tests.
  */
 export default function ProviderSignOut({
   read = readProviderSignIn,
@@ -49,9 +49,10 @@ export default function ProviderSignOut({
     setError(null);
     setState({ step: "working", provider });
     const result = await signOut().catch((): ProviderOutcome => ({ ok: false, code: "team_provider_unavailable" }));
-    if (result.ok && !result.value.authenticated) return setState({ step: "done" });
+    // «disconnected» only if the answer is about the provider the person confirmed and says no sign-in is left
+    if (result.ok && result.value.provider === provider && !result.value.authenticated) return setState({ step: "done" });
     // not done: say why, and leave the person where the sign-in still is
-    setError(result.ok ? "provider_logout_incomplete" : result.code);
+    setError(result.ok ? (result.value.provider !== provider ? "provider_changed" : "provider_logout_incomplete") : result.code);
     setState({ step: "signed-in", provider });
   };
 

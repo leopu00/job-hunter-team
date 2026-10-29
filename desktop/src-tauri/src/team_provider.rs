@@ -8,10 +8,11 @@
 //!   computer's team (an existing team's VPS and the app's own VPS are not reached here), the account being
 //!   the owner of the folder (`Mine`), the wrapper that knows `agent-control`, and the attested container
 //!   (the wrapper never starts it);
-//! - the app names NO provider and NO file: the box's door (`jht agent-control provider ...`, cli/src/lib/
-//!   provider-logout.js) takes the team's active provider and removes its closed list of credential files,
+//! - the app names NO provider and NO file: the box's door (`jht agent-control provider ...`) stops the team
+//!   first (a provider CLI that keeps running writes its file again when it renews its token), then takes the
+//!   team's active provider and removes its closed list of credential files (shared/skills/provider_signin.py),
 //!   and says whether anything of it is left;
-//! - the answer is closed again here: a provider of the three, a number of files 0..=8, a code of the four the
+//! - the answer is closed again here: a provider of the three, a number of files 0..=8, a code of the six the
 //!   box has. The text of the box never reaches the page, and neither does the name of a file.
 use crate::{
     account_scope::{AccountScope, AccountScopeState},
@@ -32,8 +33,16 @@ const REQUEST_MAX_BYTES: usize = 256;
 const PROVIDERS: [&str; 3] = ["claude", "codex", "kimi"];
 /// The most files the box lists for one provider.
 const REMOVED_MAX: u64 = 8;
-/// What the box says when a logout is not done, and that is the person's business to read.
-const BOX_CODES: [&str; 4] = ["provider_unknown", "provider_not_subscription", "provider_logout_incomplete", "provider_logout_failed"];
+/// What the box says when a logout is not done, and that is the person's business to read: the four of the
+/// sign-in, and the two of the panel's stop of the team that comes first (`team_stop_failed`, `agent_control_busy`).
+const BOX_CODES: [&str; 6] = [
+    "provider_unknown",
+    "provider_not_subscription",
+    "provider_logout_incomplete",
+    "provider_logout_failed",
+    "team_stop_failed",
+    "agent_control_busy",
+];
 
 fn failure(code: &str) -> Value {
     json!({ "ok": false, "error": code })
