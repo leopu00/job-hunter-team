@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,22 @@ ITALIAN_MESSAGE = "[@utente -> @analista] [MSG] Ciao, per favore scrivimi in ita
 def _bash(script: str, home: Path, **env: str) -> subprocess.CompletedProcess[str]:
     base = {k: v for k, v in os.environ.items() if k not in ("JHT_LANG", "JHT_HOME", "JHT_HOST_ENV_FILE")}
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**base, "JHT_HOME": str(home), **env}, check=False)
+
+
+def _written(path: Path, timeout: float = 15.0) -> str:
+    """What the stubbed `setsid` wrote. The library starts it in the background and lets go of it (`&`, then
+    `disown`) on purpose, so the shell is back before the stub has run: on a busy machine the file is not there yet
+    when the test looks. Wait for it, with a ceiling, instead of reading at once; nothing in the product changes."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            text = ""
+        if text:
+            return text
+        time.sleep(0.02)
+    pytest.fail(f"{path.name} was not written within {timeout:.0f} s")
 
 
 def _prefs(home: Path, locale: str) -> None:
@@ -107,7 +124,7 @@ def _kickoff_message(tmp_path: Path, msg: str) -> str:
     )
     shell = _bash(script, tmp_path, TEST_MESSAGE=msg)
     assert shell.returncode == 0, shell.stderr
-    return out.read_text(encoding="utf-8")
+    return _written(out)
 
 
 def test_the_kickoff_says_english_by_name_with_an_italian_message(tmp_path):
@@ -132,7 +149,7 @@ def test_the_doctor_and_maintainer_kickoff_carries_the_line_in_one_line(tmp_path
     out = tmp_path / "prompt.txt"
     script = f". '{SPAWN_LIB}'; setsid() {{ printf '%s' \"$JHT_SPAWN_PROMPT\" > '{out}'; }}; jht_spawn_kickoff SESS 'Read AGENTS.md and run the cycle.'"
     assert _bash(script, tmp_path).returncode == 0
-    pasted = out.read_text(encoding="utf-8")
+    pasted = _written(out)
     assert pasted.startswith("Read AGENTS.md and run the cycle. [TEAM-LANGUAGE] French (fr).")
     assert "\n" not in pasted
 
