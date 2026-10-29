@@ -383,7 +383,10 @@ _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
 # Codex at rest puts the model and folder under the composer (the «·» line); in the middle of a turn that line
 # becomes «tab to queue message ... 80% context left», with no «·». Without these two phrases a composer in a
 # working Codex is not a composer at all: the text pasted into it is «another draft» and nothing presses Enter.
-_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|\s{6,}\d{1,3}% context left\s*$)")
+# A third footer: after a turn that ended in a plan-like answer Codex offers «Create a plan?  shift + tab use Plan mode
+# esc dismiss» in place of the model line (TEST 19b, 29/10, the Capitano): the composer above it was not found, the
+# text pasted into it was «another draft», and the transport left it there with no Enter for six minutes.
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|^\s*Create a plan\?\s+shift\s*\+\s*tab\b|\s{6,}\d{1,3}% context left\s*$)")
 _CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
 _NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
 

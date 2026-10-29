@@ -274,3 +274,128 @@ def test_a_burst_the_capitano_opens_while_the_reminder_is_being_recorded_is_not_
 
     final = json.loads((box.home / "state" / "first-run.json").read_text(encoding="utf-8"))
     assert final["phase"] == "burst" and final["roster"] and final["burst_started_at"], final
+
+
+# ── the reminder must be SENT, not left in the composer (TEST 19b, 29/10) ────────────────────────────────────────
+# The transport took the reminder, the Capitano's composer kept it, nobody pressed Enter and the first run waited six
+# minutes. The check below looks at the composer after the transport, and between two reminders, and presses Enter on
+# a composer that holds exactly our text, a limited number of times.
+
+MESSAGE = (
+    "The subscription plan is declared and the candidate profile is complete: the team can start. "
+    "Run first_run.py begin-burst and follow your first-run-burst skill."
+)
+RULE = "─" * 170
+PLAN_OFFER = "  Create a plan?  shift + tab use Plan mode   esc dismiss"
+
+
+@pytest.fixture()
+def capitano(sender):
+    """A tmux whose CAPITANO pane shows the composer in `state` and takes `FAKE_ENTERS_NEEDED` Enter to empty it."""
+    box = sender
+    folder = box.home / "fake-tmux"
+    folder.mkdir()
+    (folder / "bin").mkdir()
+    panes = {
+        "stuck": f"\n• waiting for the plan\n\n{RULE}\n\n\n› {MESSAGE}\n\n{PLAN_OFFER}\n",
+        "empty": f"\n• working\n\n{RULE}\n\n\n› \x1b[2mFind and fix a bug in @filename\x1b[0m\n\n{PLAN_OFFER}\n",
+        "typing": f"\n{RULE}\n\n\n› a person is writing something else here\n\n{PLAN_OFFER}\n",
+    }
+    for name, text in panes.items():
+        (folder / f"pane-{name}").write_text(text, encoding="utf-8")
+    script = folder / "bin" / "tmux"
+    script.write_text(
+        "#!/bin/sh\n"
+        f'D="{folder}"\n'
+        'case "$1" in\n'
+        '  capture-pane) cat "$D/pane-$(cat "$D/state")" ;;\n'
+        '  send-keys)\n'
+        '    echo "$*" >> "$D/keys"\n'
+        '    n=$(( $(cat "$D/enters" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$D/enters"\n'
+        '    if [ "$n" -ge "${FAKE_ENTERS_NEEDED:-1}" ]; then echo empty > "$D/state"; fi ;;\n'
+        'esac\n',
+        encoding="utf-8",
+    )
+    script.chmod(script.stat().st_mode | stat.S_IEXEC)
+    box.env["PATH"] = f"{folder / 'bin'}{os.pathsep}{box.env.get('PATH', os.environ.get('PATH', ''))}"
+    box.env["JHT_FIRST_RUN_ENTER_WAIT_S"] = "0"
+    (folder / "state").write_text("empty", encoding="utf-8")
+
+    def put(state: str, enters_needed: int = 1) -> None:
+        (folder / "state").write_text(state, encoding="utf-8")
+        box.env["FAKE_ENTERS_NEEDED"] = str(enters_needed)
+
+    box.pane = put
+    box.enters = lambda: int((folder / "enters").read_text()) if (folder / "enters").exists() else 0
+    box.keys = lambda: (folder / "keys").read_text().splitlines() if (folder / "keys").exists() else []
+    return box
+
+
+def test_a_reminder_the_transport_took_but_the_composer_kept_gets_its_enter(capitano):
+    """The transport said 0 and the text is still in the composer: the check presses Enter on it, and the reminder counts as sent."""
+    box = capitano
+    declared_after_the_click(box)
+    box.pane("empty")                    # nothing there before the transport
+    # the transport (fake) leaves the text in the composer: the pane turns to «stuck» when it is called
+    sender_script = box.home / "fake-tmux-send"
+    body = sender_script.read_text(encoding="utf-8")
+    state = box.home / "fake-tmux" / "state"
+    sender_script.write_text(body.replace('exit "${FAKE_SENDER_EXIT:-0}"', f'echo stuck > "{state}"\nexit "${{FAKE_SENDER_EXIT:-0}}"'), encoding="utf-8")
+    box.env["FAKE_ENTERS_NEEDED"] = "1"
+
+    out = run(box, "plan-question-check")
+
+    assert out["action"] == "start" and out["sent"] is True and out["pressed"] == 1, out
+    assert box.enters() == 1 and box.keys() == ["send-keys -t =CAPITANO: Enter"], box.keys()
+    assert len(box.calls()) == 1
+
+
+def test_a_composer_that_ignores_the_enter_is_pressed_a_few_times_and_then_left_to_the_person(capitano):
+    box = capitano
+    declared_after_the_click(box)
+    box.pane("stuck", enters_needed=999)             # nothing takes the Enter
+
+    first = run(box, "plan-question-check")
+    assert first["action"] == "start" and first["sent"] is False, first
+    # the reminder is not pasted over its own text: the Enter is what is pressed, three times at most
+    assert first["pressed"] == 3 and box.enters() == 3 and box.calls() == [], (first, box.calls())
+
+    # between two reminders the check looks again, and presses again until six in all
+    second = run(box, "plan-question-check")
+    assert second["action"] == "waiting" and second["pressed"] == 3 and second["freed"] is False, second
+    assert box.enters() == 6
+    third = run(box, "plan-question-check")
+    assert third["action"] == "waiting" and "pressed" not in third, third
+    assert box.enters() == 6, "a limited number of tries for the plan: no more after six"
+
+
+def test_the_enter_is_pressed_between_two_reminders_as_soon_as_the_text_is_seen_and_not_five_minutes_later(capitano):
+    box = capitano
+    declared_after_the_click(box)
+    box.pane("empty")
+    assert run(box, "plan-question-check")["action"] == "start"          # the transport took it and the composer is free
+    assert box.enters() == 0
+    box.pane("stuck", enters_needed=1)                                   # then the text is back in the composer
+    out = run(box, "plan-question-check")
+    assert out["action"] == "waiting" and out["pressed"] == 1 and out["freed"] is True, out
+    assert box.enters() == 1 and len(box.calls()) == 1
+
+
+def test_enter_is_never_pressed_on_anything_but_our_reminder(capitano):
+    box = capitano
+    declared_after_the_click(box)
+    box.pane("typing", enters_needed=1)
+    out = run(box, "plan-question-check")
+    assert out["action"] == "start" and out["pressed"] == 0, out
+    assert box.enters() == 0, "a person writing something else is not ours to send"
+    move_the_last_reminder_back(box)
+    out = run(box, "plan-question-check")
+    assert box.enters() == 0 and out["pressed"] == 0
+
+
+def test_a_free_composer_after_the_transport_needs_no_enter(capitano):
+    box = capitano
+    declared_after_the_click(box)
+    box.pane("empty")
+    out = run(box, "plan-question-check")
+    assert out["sent"] is True and out["pressed"] == 0 and box.enters() == 0, out

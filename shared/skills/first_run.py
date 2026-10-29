@@ -576,6 +576,9 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
 START_NUDGE_SETTLE_S = 45   # after the plan is written: the one who wrote it is still confirming it
 START_NUDGE_EVERY_S = 300   # between two reminders to the Capitano
 START_NUDGE_MAX = 3         # for one declared plan; then the Capitano is on its own, and so is the person (they can write)
+START_ENTER_TRIES = 3       # Enter pressed by hand on our own reminder left in the composer, each time it is looked at
+START_ENTER_WAIT_S = float(os.environ.get("JHT_FIRST_RUN_ENTER_WAIT_S") or 2)
+START_ENTER_MAX = 6         # for one declared plan, all together: a composer that never takes it is the person's to look at
 START_NUDGE_SEND_S = float(os.environ.get("JHT_FIRST_RUN_SEND_S") or 25)  # the transport may hang: the watchdog's tick (respawns, bridges, mail) does not wait for it for long
 START_MESSAGE = (
     "The subscription plan is declared and the candidate profile is complete: the team can start. "
@@ -613,10 +616,53 @@ def _plan_declared_at() -> Optional[float]:
         return None
 
 
-def _tell_the_capitano(message: str, timeout: float = START_NUDGE_SEND_S) -> bool:
+def _capitano_pane() -> Optional[str]:
+    """The Capitano's screen as the transport reads it, or None when tmux cannot say."""
+    try:
+        done = subprocess.run(["tmux", "capture-pane", "-e", "-t", "=CAPITANO:", "-p"],
+                              capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def _reminder_is_left(message: str) -> bool:
+    """True when the Capitano's composer holds EXACTLY our reminder, unsent (spaces apart: a wrapped row loses one)."""
+    pane = _capitano_pane()
+    composer = _load_module("tmux_send_composer", "tmux_send_composer.py")
+    if pane is None or composer is None:
+        return False
+    try:
+        return composer.composer_relation(pane, message)[0] == "ours"
+    except Exception:
+        return False
+
+
+def _press_enter_on_the_reminder(message: str, allowed: int) -> tuple[int, bool]:
+    """Enter, one at a time and at most `allowed` (and START_ENTER_TRIES), on a composer that holds exactly our reminder,
+    looking again after each one. (Enter pressed, whether the composer is free of the reminder.) It never presses on
+    anything else: a person typing, a menu, an empty composer. The transport does this by itself when it can tell the
+    text is its own; this is the check that does not depend on that (a footer the reader did not know made the text
+    «another draft» and left it six minutes with no Enter: TEST 19b)."""
+    import time
+
+    pressed = 0
+    while pressed < min(allowed, START_ENTER_TRIES) and _reminder_is_left(message):
+        try:
+            subprocess.run(["tmux", "send-keys", "-t", "=CAPITANO:", "Enter"], capture_output=True, timeout=5, check=False)
+        except (OSError, subprocess.SubprocessError):
+            break
+        pressed += 1
+        time.sleep(START_ENTER_WAIT_S)
+    return pressed, not _reminder_is_left(message)
+
+
+def _tell_the_capitano(message: str, timeout: float = START_NUDGE_SEND_S, allowed: int = START_ENTER_MAX) -> tuple[bool, int]:
     """Type `message` into the Capitano's terminal as the person's console (the way `jht profile import` does: the
-    envelope of an agent is not ours to wear). True when the transport took it; False when it did not, or did not
-    answer in `timeout` seconds (it is then left to finish: `tmux_send_run` does not kill it between its paste and its Enter)."""
+    envelope of an agent is not ours to wear), then look at the composer: if our text is still there, press Enter on
+    it, a few times. (Sent, Enter pressed by hand.) Sent is True when the transport took it, or when the Enter pressed
+    here emptied the composer; False when neither did, or the transport did not answer in `timeout` seconds (it is
+    then left to finish: `tmux_send_run` does not kill it between its paste and its Enter)."""
     sender = os.environ.get("JHT_TMUX_SENDER") or shutil.which("jht-tmux-send")
     if not sender:
         for candidate in (Path("/app/agents/_skills/tmux-send/jht-tmux-send"),
@@ -625,19 +671,26 @@ def _tell_the_capitano(message: str, timeout: float = START_NUDGE_SEND_S) -> boo
                 sender = str(candidate)
                 break
     if not sender:
-        return False
+        return False, 0
+    # a reminder of ours that stayed in the composer is not pasted over: it gets its Enter
+    if _reminder_is_left(message):
+        pressed, freed = _press_enter_on_the_reminder(message, allowed)
+        return freed, pressed
     # this process is a short tick of its own: the environment is what the transport reads
     os.environ["JHT_TMUX_SEND_FROM"] = "user-console"
     os.environ["JHT_TMUX_FOREIGN_WAIT"] = "0"
     runner = _load_module("tmux_send_run", "tmux_send_run.py")
+    took = False
     try:
         if runner is not None:
             done = runner.run([sender, "CAPITANO", message], timeout, text=False)
         else:
             done = subprocess.run([sender, "CAPITANO", message], capture_output=True, timeout=timeout, check=False)
+        took = done.returncode == 0
     except (OSError, subprocess.SubprocessError):
-        return False
-    return done.returncode == 0
+        took = False
+    pressed, freed = _press_enter_on_the_reminder(message, allowed)
+    return (took and freed) or (pressed > 0 and freed), pressed
 
 
 def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[float] = None) -> dict:
@@ -662,6 +715,13 @@ def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[floa
             last = last.replace(tzinfo=timezone.utc)
         left = START_NUDGE_EVERY_S - (now - last).total_seconds()
         if left > 0:
+            # between two reminders: our last one, if it is still unsent in the composer, gets its Enter now and not
+            # five minutes later (a limited number of times for the plan: the rest is the person's)
+            pressed_so_far = record.get("pressed") if isinstance(record.get("pressed"), int) else 0
+            if count >= 1 and pressed_so_far < START_ENTER_MAX and _reminder_is_left(START_MESSAGE):
+                pressed, freed = _press_enter_on_the_reminder(START_MESSAGE, START_ENTER_MAX - pressed_so_far)
+                _write_nudge({**record, "pressed": pressed_so_far + pressed})
+                return {"action": "waiting", "seconds_left": int(left), "pressed": pressed, "freed": freed}
             return {"action": "waiting", "seconds_left": int(left)}
     # the phase is read again, now: the Capitano may have opened the run since `state` was read, and the reminder
     # is for a run that has not opened
@@ -669,8 +729,12 @@ def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[floa
         return {"action": "none", "reason": "the first run opened meanwhile"}
     # written (in the file of the reminders, never in first-run.json) before it is sent: a transport that hangs or a
     # crash must not become a reminder every tick
-    _write_nudge({"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds")})
-    return {"action": "start", "plan": plan, "count": count + 1, "sent": _tell_the_capitano(START_MESSAGE)}
+    pressed_so_far = record.get("pressed") if record.get("plan") == plan and isinstance(record.get("pressed"), int) else 0
+    _write_nudge({"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds"), "pressed": pressed_so_far})
+    sent, pressed = _tell_the_capitano(START_MESSAGE, allowed=max(0, START_ENTER_MAX - pressed_so_far))
+    if pressed:
+        _write_nudge({"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds"), "pressed": pressed_so_far + pressed})
+    return {"action": "start", "plan": plan, "count": count + 1, "sent": sent, "pressed": pressed}
 
 
 def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,
