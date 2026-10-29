@@ -115,22 +115,35 @@ jht_read_host_env_value() {
   printf '%s' "$result"
 }
 
-# host.env si scrive in un file temporaneo della stessa cartella e poi con `mv -f`: il rename sostituisce il file
-# (o un LINK messo li' da un agente, che dentro il container e' pendente e sull'host punta a un file dell'utente),
-# mentre `>` lo avrebbe seguito e troncato (.zshrc, authorized_keys). Il contenuto arriva su stdin.
+# host.env si scrive in un file temporaneo FUORI dalla cartella montata nel container (la home non lo e'), poi si mette al
+# suo posto. Dentro ~/.jht un agente potrebbe cambiare il temporaneo con un link appena compare, e `cat >` o `chmod` per percorso
+# lo seguirebbero (un file della home troncato, una chiave resa leggibile). Un link messo al posto di host.env (che dentro il
+# container e' pendente e sull'host punta a un file dell'utente) si toglie come link, mai seguito, e il file entra con `ln`,
+# che con -n (non seguire un link) fallisce se nel frattempo c'e' di nuovo qualcosa, invece di metterlo dentro la cartella
+# indicata da un link, come farebbero `mv` e `ln` senza -n.
+# Il contenuto arriva su stdin.
 jht_write_host_env() {
   local dir tmp
-  dir="$(dirname "$HOST_ENV_PATH")"
+  dir="$(dirname "$JHT_HOME_HOST")"
   if [ -d "$HOST_ENV_PATH" ] && [ ! -L "$HOST_ENV_PATH" ]; then
     warn "$HOST_ENV_PATH is a directory: not writing it"
     return 1
   fi
-  tmp="$(mktemp "$dir/.host.env.XXXXXX")" || return 1
+  tmp="$(mktemp "$dir/.jht-host-env.XXXXXX")" || { warn "cannot create a temporary file in $dir: not writing $HOST_ENV_PATH"; return 1; }
   # Il container lo legge con un altro utente: i permessi di sempre (umask), non quelli riservati di mktemp.
   if ! cat > "$tmp" || ! chmod 644 "$tmp"; then rm -f "$tmp"; return 1; fi
-  # Un link che punta a una cartella farebbe entrare il file li' dentro: il link si toglie prima (solo il link).
-  if [ -L "$HOST_ENV_PATH" ]; then rm -f "$HOST_ENV_PATH"; fi
-  if ! mv -f "$tmp" "$HOST_ENV_PATH"; then rm -f "$tmp"; return 1; fi
+  if [ -e "$HOST_ENV_PATH" ] || [ -L "$HOST_ENV_PATH" ]; then
+    rm -f "$HOST_ENV_PATH" || { rm -f "$tmp"; return 1; }
+  fi
+  if ln -n "$tmp" "$HOST_ENV_PATH" 2>/dev/null; then
+    rm -f "$tmp"
+  elif [ ! -e "$HOST_ENV_PATH" ] && [ ! -L "$HOST_ENV_PATH" ] && mv -f "$tmp" "$HOST_ENV_PATH"; then
+    : # una cartella senza hard link (raro): la rinomina, con l'entrata ancora vuota
+  else
+    rm -f "$tmp"
+    warn "$HOST_ENV_PATH changed while it was being written: not writing it"
+    return 1
+  fi
 }
 
 I18N_PREFS_PATH="$JHT_HOME_HOST/i18n-prefs.json"

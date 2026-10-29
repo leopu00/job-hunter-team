@@ -43,6 +43,8 @@ def test_the_installer_no_longer_writes_host_env_with_set_content():
     assert "Write-HostEnvFile -Path $hostEnvFile" in source
     writer = _function(source, "Write-HostEnvFile")
     assert "Move-Item -LiteralPath $tmp -Destination $Path" in writer and "ReparsePoint" in writer
+    assert "Get-Item" not in writer, "Get-Item can miss a link whose target is gone"
+    assert "Split-Path -Parent (Split-Path -Parent $Path)" in writer, "the temporary must not sit in the mounted folder"
 
 
 # ── the real function, in both shells ──────────────────────────────────
@@ -125,6 +127,27 @@ def test_a_symbolic_link_to_a_file_is_replaced_and_the_file_stays_intact(shell: 
 
     assert done.returncode == 0, done.stdout + done.stderr
     assert victim.read_bytes() == VICTIM.encode("ascii"), "the file the link named was written through"
+    assert link.is_file() and not link.is_symlink() and "JHT_HOST_TYPE=local" in link.read_text(encoding="utf-8-sig")
+    assert _leftovers(mounted) == ["host.env"]
+
+
+@windows_only
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_symbolic_link_to_a_file_that_is_not_there_creates_nothing_where_it_points(shell: str, tmp_path: Path):
+    # the usual one: in the container the target does not exist, on the host it names a file of the person's profile
+    missing = tmp_path / "profile" / "authorized_keys"
+    (tmp_path / "profile").mkdir()
+    mounted = tmp_path / "jht"
+    mounted.mkdir()
+    link = mounted / "host.env"
+    made = _run(shell, f"New-Item -ItemType SymbolicLink -Path '{link}' -Target '{missing}' | Out-Null", tmp_path)
+    if made.returncode != 0:
+        pytest.skip("this account cannot create symbolic links: " + made.stderr.strip()[:120])
+
+    done = _run(shell, _writer_script(link), tmp_path)
+
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not missing.exists(), "the link was followed and its target created"
     assert link.is_file() and not link.is_symlink() and "JHT_HOST_TYPE=local" in link.read_text(encoding="utf-8-sig")
     assert _leftovers(mounted) == ["host.env"]
 
