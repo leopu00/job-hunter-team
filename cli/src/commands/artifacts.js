@@ -157,6 +157,18 @@ function readStdinDocument() {
   return Buffer.concat(chunks);
 }
 
+/**
+ * Il documento che il wrapper dell'host ha messo su stdin: il nome lo dice lui, i byte arrivano qui. Stessa strada per
+ * `artifact upload` e per `ticket open --attach`, con lo stesso tetto.
+ */
+export function uploadStdinDocument(name) {
+  const data = readStdinDocument();
+  if (data === null) {
+    return { ok: false, code: EXIT_USAGE, error: c.red(': the document is larger than 10 MB') };
+  }
+  return uploadBytesToTeam(basename(String(name)), data);
+}
+
 function uploadAction(file, options) {
   let outcome;
   if (options.stdin) {
@@ -166,13 +178,7 @@ function uploadAction(file, options) {
       process.exitCode = EXIT_USAGE;
       return;
     }
-    const data = readStdinDocument();
-    if (data === null) {
-      console.error(c.red(': the document is larger than 10 MB'));
-      process.exitCode = EXIT_USAGE;
-      return;
-    }
-    outcome = uploadBytesToTeam(basename(String(options.name)), data);
+    outcome = uploadStdinDocument(options.name);
   } else {
     if (!file) {
       console.error(c.red(': usage: jht artifact upload <file>'));
