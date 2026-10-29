@@ -824,7 +824,7 @@ maybe_plan_question() {
   local out
   out="$(JHT_HOME="$JHT_HOME" python3 "$FIRST_RUN_TOOL" plan-question-check 2>/dev/null)" || return 0
   case "$out" in
-    *'"action": "asked"'*|*'"action": "declared"'*|*'"action": "closed"'*|*'"action": "start"'*)
+    *'"action": "asked"'*|*'"action": "declared"'*|*'"action": "closed"'*|*'"action": "start"'*|*'"pressed": '[1-9]*)
       plan_question_failures=0
       log "plan question: $(printf '%s' "$out" | tr -d '\n' | tr -s ' ' | cut -c1-200)" ;;
     *'"action": "stopped"'*)
