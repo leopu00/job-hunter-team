@@ -331,30 +331,41 @@ enum MachineState {
     Unknown,
 }
 
-/// What `podman machine inspect <name> --format {{.State}}` came to, given whether the machine's own configuration is
-/// on this computer (`machine_config_exists`: Some(false) = there is no such machine; None = could not be looked at).
-/// A machine that is not there is off. An inspect that fails for a machine that IS there says nothing about whether it
-/// is on, and it is not taken for off.
-fn machine_state_from(configured: Option<bool>, outcome: Option<Result<CommandOutcome, CommandFailure>>) -> MachineState {
-    if configured == Some(false) {
-        return MachineState::Off;
-    }
+/// What `podman machine inspect <name> --format {{.State}}` came to. A machine is off when the call says it is stopped, or
+/// when it fails saying that machine does not exist (stderr «does not exist»): nothing to stop. Any other failure of the
+/// call (Podman not found where the app looks, a timeout, an error of another kind) says nothing about whether the machine
+/// is on, and it is NOT taken for off.
+fn machine_state_from(outcome: Result<CommandOutcome, CommandFailure>, stderr: &str) -> MachineState {
     match outcome {
-        Some(Ok(output)) if output.success => {
+        Ok(output) if output.success => {
             let state = String::from_utf8_lossy(&output.stdout).trim().to_ascii_lowercase();
             if matches!(state.as_str(), "stopped" | "configured") { MachineState::Off } else { MachineState::Running }
         }
+        Ok(_) if stderr.to_ascii_lowercase().contains("does not exist") => MachineState::Off,
         _ => MachineState::Unknown,
     }
 }
 
-fn machine_state(home: Option<&std::path::Path>, timeout: Duration) -> MachineState {
-    let configured = home.map(jht_machine_exists);
-    if configured == Some(false) {
-        return machine_state_from(configured, None);
-    }
+fn machine_state(timeout: Duration) -> MachineState {
     let inspect = args(&["machine", "inspect", &jht_machine(), "--format", "{{.State}}"]);
-    machine_state_from(configured, Some(command(&inspect, timeout, None, true)))
+    let said = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let sink = std::sync::Arc::clone(&said);
+    let outcome = command_inner(
+        &inspect,
+        timeout,
+        None,
+        true,
+        Some(Box::new(move |line: &str| {
+            if let Ok(mut text) = sink.lock() {
+                if text.len() < 2_048 {
+                    text.push_str(line);
+                    text.push('\n');
+                }
+            }
+        })),
+    );
+    let stderr = said.lock().map(|text| text.clone()).unwrap_or_default();
+    machine_state_from(outcome, &stderr)
 }
 
 /// What to do with the machine, from what is known of it: the end, or to stop it. It falls on the safe side: a machine
@@ -380,8 +391,8 @@ fn machine_plan(state: MachineState, others: Option<usize>) -> MachinePlan {
 /// not there or already stopped is stopped. A machine that is on and cannot be asked what runs on it is not stopped, and
 /// one whose state cannot be read is not said to be off: nothing is stopped and the caller says the state is unknown.
 /// Never touches another machine.
-pub(crate) fn stop_jht_machine(home: Option<&std::path::Path>, timeout: Duration) -> MachineStop {
-    let state = machine_state(home, LISTING_TIMEOUT);
+pub(crate) fn stop_jht_machine(timeout: Duration) -> MachineStop {
+    let state = machine_state(LISTING_TIMEOUT);
     let others = (state == MachineState::Running).then(|| other_containers_on_jht_machine(LISTING_TIMEOUT)).flatten();
     match machine_plan(state, others) {
         MachinePlan::Done(done) => done,
@@ -594,29 +605,35 @@ mod tests {
     }
 
     #[test]
-    fn the_state_of_the_machine_is_read_and_only_a_machine_that_is_not_there_is_off_without_asking() {
-        let said = |configured, result| machine_state_from(configured, Some(result));
-        assert_eq!(said(Some(true), outcome(true, "running\n")), MachineState::Running);
-        assert_eq!(said(Some(true), outcome(true, "Running")), MachineState::Running);
-        assert_eq!(said(Some(true), outcome(true, "starting\n")), MachineState::Running, "anything that is not off may have containers");
-        assert_eq!(said(Some(true), outcome(true, "")), MachineState::Running);
-        assert_eq!(said(Some(true), outcome(true, "stopped\n")), MachineState::Off);
-        assert_eq!(said(Some(true), outcome(true, "configured\n")), MachineState::Off);
-        // no configuration of that machine on this computer: there is no machine, whatever the call said
-        assert_eq!(machine_state_from(Some(false), None), MachineState::Off);
-        assert_eq!(said(Some(false), outcome(false, "")), MachineState::Off);
+    fn the_state_of_the_machine_is_read_from_the_inspect() {
+        let said = |result, stderr| machine_state_from(result, stderr);
+        assert_eq!(said(outcome(true, "running\n"), ""), MachineState::Running);
+        assert_eq!(said(outcome(true, "Running"), ""), MachineState::Running);
+        assert_eq!(said(outcome(true, "starting\n"), ""), MachineState::Running, "anything that is not off may have containers");
+        assert_eq!(said(outcome(true, ""), ""), MachineState::Running);
+        assert_eq!(said(outcome(true, "stopped\n"), ""), MachineState::Off);
+        assert_eq!(said(outcome(true, "configured\n"), ""), MachineState::Off);
     }
 
     #[test]
-    fn an_inspect_that_fails_for_a_machine_that_is_there_does_not_make_it_off() {
-        let said = |configured, result| machine_state_from(configured, Some(result));
-        for configured in [Some(true), None] {
-            assert_eq!(said(configured, outcome(false, "")), MachineState::Unknown, "the call failed: not told whether it is on");
-            assert_eq!(said(configured, Err(CommandFailure::NotFound)), MachineState::Unknown);
-            assert_eq!(said(configured, Err(CommandFailure::TimedOut)), MachineState::Unknown);
-            assert_eq!(said(configured, Err(CommandFailure::Failed)), MachineState::Unknown);
+    fn a_machine_is_off_after_a_failed_inspect_only_when_podman_says_it_does_not_exist() {
+        let said = |result, stderr| machine_state_from(result, stderr);
+        assert_eq!(said(outcome(false, ""), "Error: jht-podman: VM does not exist\n"), MachineState::Off);
+        assert_eq!(said(outcome(false, ""), "ERROR: machine DOES NOT EXIST"), MachineState::Off);
+        // any other failure of the call says nothing about whether the machine is on
+        for stderr in ["", "Error: cannot connect to the socket\n", "Error: permission denied\n", "something does exist\n"] {
+            assert_eq!(said(outcome(false, ""), stderr), MachineState::Unknown, "{stderr:?}");
         }
-        assert_eq!(machine_state_from(None, None), MachineState::Unknown);
+    }
+
+    #[test]
+    fn podman_not_found_is_not_a_machine_that_is_off() {
+        // the Podman of a Mac may stand outside the folders the app trusts (/opt/local, ~/bin): not found there
+        // says nothing about the machine, which may be on
+        assert_eq!(machine_state_from(Err(CommandFailure::NotFound), ""), MachineState::Unknown);
+        assert_eq!(machine_state_from(Err(CommandFailure::NotFound), "does not exist"), MachineState::Unknown, "stderr counts only when the call ran");
+        assert_eq!(machine_state_from(Err(CommandFailure::TimedOut), ""), MachineState::Unknown);
+        assert_eq!(machine_state_from(Err(CommandFailure::Failed), ""), MachineState::Unknown);
     }
 
     #[test]

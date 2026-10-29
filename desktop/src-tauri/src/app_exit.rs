@@ -325,7 +325,7 @@ pub(crate) async fn app_exit_finish(
                         return Err("app_exit_down_failed");
                     }
                 }
-                Step::MachineStop => match crate::podman::stop_jht_machine(app.path().home_dir().ok().as_deref(), MACHINE_TIMEOUT) {
+                Step::MachineStop => match crate::podman::stop_jht_machine(MACHINE_TIMEOUT) {
                     // off, or on for the containers that are not the team's (the page said so before the choice)
                     crate::podman::MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}
                     // a machine that did not stop is told, not hidden: the app stays open
