@@ -5,6 +5,7 @@ import {
   operatingSystem, readSetupSupportContext, type ProblemCategory, type SetupSupportReport,
 } from "../lib/onboarding-support";
 import { SUPPORT_REPORT_COPY } from "../onboarding/SetupSupportReport";
+import { SupportCopyNote } from "../onboarding/SupportCopyNote";
 import { REPORT_PROBLEM_TEXT, type ReportProblemText } from "./report-problem.i18n";
 
 const CATEGORY_KEY: Record<ProblemCategory, keyof ReportProblemText> = {
@@ -25,7 +26,7 @@ export default function ReportProblem({ id }: { id: string }) {
   const [description, setDescription] = useState("");
   const [report, setReport] = useState<SetupSupportReport | null>(null);
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<{ message: string; href?: string; saved?: string | null; attach?: boolean } | null>(null);
+  const [outcome, setOutcome] = useState<{ message: string; href?: string; saved?: string | null; attach?: boolean; copyFailed?: boolean } | null>(null);
   const ready = description.trim().length >= PROBLEM_MIN_CHARS;
 
   async function prepare() {
@@ -43,11 +44,11 @@ export default function ReportProblem({ id }: { id: string }) {
     setBusy(true);
     const next = await deliverSetupSupportReport(report);
     setBusy(false);
-    if (next.kind === "sent") { setOutcome({ message: `${status.sent}: ${next.ticket}`, saved: next.savedReport }); setReport(null); setDescription(""); return; }
+    if (next.kind === "sent") { setOutcome({ message: `${status.sent}: ${next.ticket}`, saved: next.savedReport, copyFailed: next.copyFailed }); setReport(null); setDescription(""); return; }
     if (next.kind === "mailto") {
       // the person already confirmed: hand the prepared message to their mail app without a second click
       window.location.assign(next.href);
-      setOutcome({ message: status.mail, saved: next.savedReport, attach: next.attach }); setReport(null); return;
+      setOutcome({ message: status.mail, saved: next.savedReport, attach: next.attach, copyFailed: next.copyFailed }); setReport(null); return;
     }
     setOutcome({ message: status.failed });
   }
@@ -89,7 +90,7 @@ export default function ReportProblem({ id }: { id: string }) {
             {t.reportFieldLabel}
             <textarea className={field} rows={5} maxLength={PROBLEM_MAX_CHARS} value={description} onChange={(event) => setDescription(event.target.value)} data-testid="report-problem-description" />
           </label>
-          {outcome && <p role="status" className="text-[11px] text-[var(--color-muted)]">{outcome.message} {outcome.saved && <span>{outcome.attach ? status.saved : status.copy}: <code>{outcome.saved}</code></span>}</p>}
+          {outcome && <p role="status" className="text-[11px] text-[var(--color-muted)]">{outcome.message} <SupportCopyNote saved={outcome.saved} failed={outcome.copyFailed} attach={outcome.attach} copy={status} /></p>}
           <div>
             <button type="button" className={button} disabled={busy || !ready} data-testid="report-problem-preview-button" onClick={() => void prepare()}>{busy ? status.preparing : t.reportShowPreview}</button>
           </div>

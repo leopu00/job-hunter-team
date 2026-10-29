@@ -232,20 +232,35 @@ export async function readSetupSupportContext(): Promise<SetupSupportContext> {
   return { appVersion: safeText(raw.appVersion, 40) || "unknown", logTail: typeof raw.logTail === "string" ? raw.logTail : "" };
 }
 
-async function saveLongReport(markdown: string): Promise<string | null> {
-  if (!isTauri()) return null;
+/** The copy kept on this computer: the file's name (never a path), or why there is none. Outside the app there is no copy and nothing failed. */
+async function saveReportCopy(markdown: string): Promise<{ name: string | null; failed: boolean }> {
+  if (!isTauri()) return { name: null, failed: false };
   try {
-    const logicalPath = await invoke<unknown>("onboarding_support_report_save", { draft: { markdown } });
-    return typeof logicalPath === "string" && logicalPath.trim() ? logicalPath : null;
+    const name = await invoke<unknown>("onboarding_support_report_save", { draft: { markdown } });
+    return typeof name === "string" && name.trim() ? { name, failed: false } : { name: null, failed: true };
   } catch {
-    return null;
+    return { name: null, failed: true };
   }
 }
 
-/** `savedReport` is the logical path of the redacted copy kept on this computer (null where the app cannot write it). */
+/** Shows the folder of the saved reports in the file manager. `false` when there is none yet or it did not open. */
+export async function showSupportReportsFolder(): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    await invoke("onboarding_support_reports_open");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `savedReport` is the file name of the redacted copy kept on this computer, and `copyFailed` says the app tried
+ * and could not keep it (a copy that was not asked for, outside the app, is neither).
+ */
 export type SupportDelivery =
-  | { kind: "sent"; ticket: string; savedReport: string | null }
-  | { kind: "mailto"; href: string; savedReport: string | null; /** the mail carries only a summary: the saved copy is what to attach */ attach: boolean }
+  | { kind: "sent"; ticket: string; savedReport: string | null; copyFailed: boolean }
+  | { kind: "mailto"; href: string; savedReport: string | null; copyFailed: boolean; /** the mail carries only a summary: the saved copy is what to attach */ attach: boolean }
   | { kind: "failed" };
 
 /**
@@ -253,17 +268,17 @@ export type SupportDelivery =
  * reported. Then POST first; only an unavailable endpoint opens the user's mail app.
  */
 export async function deliverSetupSupportReport(report: SetupSupportReport): Promise<SupportDelivery> {
-  const savedReport = await saveLongReport(report.preview);
+  const { name: savedReport, failed: copyFailed } = await saveReportCopy(report.preview);
   try {
     const response = await fetch(SETUP_SUPPORT_ENDPOINT, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report.payload),
     });
     const data = await response.json().catch(() => null) as { ticket?: unknown } | null;
-    if (response.ok && typeof data?.ticket === "string" && data.ticket) return { kind: "sent", ticket: data.ticket, savedReport };
+    if (response.ok && typeof data?.ticket === "string" && data.ticket) return { kind: "sent", ticket: data.ticket, savedReport, copyFailed };
   } catch { /* mail fallback below */ }
 
   const direct = mailtoForSetupSupport(report);
-  if (direct) return { kind: "mailto", href: direct, savedReport, attach: false };
+  if (direct) return { kind: "mailto", href: direct, savedReport, copyFailed, attach: false };
   // The mail client gets a compact, redacted summary. The complete redacted
   // report remains in the private attachment folder instead of overflowing a
   // mailto URL.
@@ -271,8 +286,8 @@ export async function deliverSetupSupportReport(report: SetupSupportReport): Pro
   const fallback = `mailto:${SETUP_SUPPORT_MAILBOX}?${new URLSearchParams({
     subject: report.subject ?? SETUP_SUPPORT_SUBJECT,
     body: `${summary}\n\n${savedReport
-      ? `The complete redacted report is ready to attach from: ${savedReport}`
+      ? `The complete redacted report is saved on this computer, in the support-reports folder of the app's data folder, as ${savedReport}: please attach it.`
       : "The complete report could not be saved automatically. Please retry the support report."}`,
   })}`;
-  return { kind: "mailto", href: fallback, savedReport, attach: true };
+  return { kind: "mailto", href: fallback, savedReport, copyFailed, attach: true };
 }
