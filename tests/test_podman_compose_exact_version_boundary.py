@@ -351,6 +351,9 @@ def run_podman(subcommand, *tail):
     # Exact 1.6.0 edge: custom podman args are appended after the subcommand.
     return subprocess.run([podman, subcommand, *podman_args, *tail], check=False)
 
+if command == "ps" and os.environ.get("JHT_FIXTURE_PS_FAILS"):
+    print(os.environ["JHT_FIXTURE_PS_FAILS"], file=sys.stderr)
+    raise SystemExit(1)
 if command == "ps":
     # 1.6.0 accepts ps options but no Docker-Compose-style service operand.
     if any(not value.startswith("-") for value in rest):
@@ -1735,6 +1738,20 @@ def _tools_outside_path(tmp_path: Path) -> Path:
     return tools
 
 
+def _minimal_path(tmp_path: Path) -> Path:
+    """A PATH that holds only what the probe itself needs (bash, sed, head), as links: no /usr/bin, so that a podman the machine
+    happens to have there (the CI runner has a real one) can never be found. The test must not depend on the machine."""
+    import shutil as _shutil
+    folder = tmp_path / "minimal-path"
+    folder.mkdir()
+    for tool in ("bash", "sed", "head", "tr", "cut", "cat"):
+        found = _shutil.which(tool)
+        assert found, tool
+        (folder / tool).symlink_to(found)
+    assert not (folder / "podman").exists()
+    return folder
+
+
 def _wrapper_functions(*names: str) -> str:
     import re
     text = WRAPPER.read_text(encoding="utf-8")
@@ -1748,8 +1765,9 @@ def _wrapper_functions(*names: str) -> str:
 
 def _probe_version(tmp_path: Path, *, ensure: bool) -> subprocess.CompletedProcess[str]:
     tools = _tools_outside_path(tmp_path)
+    minimal = _minimal_path(tmp_path)
     script = (
-        f'PATH="/usr/bin:/bin"\nPODMAN_RUNTIME_MODE=machine\nPODMAN_MACHINE_NAME=m\n'
+        f'PATH="{minimal}"\nPODMAN_RUNTIME_MODE=machine\nPODMAN_MACHINE_NAME=m\n'
         f'podman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
         + _wrapper_functions("podman_ensure_on_path", "podman_compose_version_number")
         + (f'\npodman_compose_version_number "{tools}/podman-compose"\n' if ensure else
@@ -1770,13 +1788,14 @@ def test_without_the_directory_of_podman_the_probe_fails_which_is_the_case_of_th
 
 def test_the_directory_of_podman_goes_at_the_end_of_the_path_and_only_once(tmp_path: Path):
     tools = _tools_outside_path(tmp_path)
+    minimal = _minimal_path(tmp_path)
     script = (
-        f'PATH="/usr/bin:/bin"\npodman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
+        f'PATH="{minimal}"\npodman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
         + _wrapper_functions("podman_ensure_on_path")
         + "\npodman_ensure_on_path; podman_ensure_on_path; printf '%s' \"$PATH\"\n"
     )
     done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
-    assert done.stdout == f"/usr/bin:/bin:{tools}", done.stdout
+    assert done.stdout == f"{minimal}:{tools}", done.stdout
 
 
 def test_every_call_of_the_provider_makes_sure_podman_is_on_the_path():
@@ -1823,3 +1842,44 @@ def test_other_team_commands_still_need_the_exact_attestation(tmp_path: Path):
     result, created = _team(tmp_path, "status", key="sk-test-terminal", made_with="sk-another")
     assert result.returncode != 0 and "avvio automatico negato" in result.stderr
     assert not created.exists()
+
+
+# ── `jht status` says what the provider said (TEST 19h) ──────────────────────────────────────────────
+
+def test_status_shows_the_first_line_the_provider_printed_when_it_cannot_list_the_project(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_PS_FAILS"] = "\n  ERROR:podman_compose:failed to check if podman is installed: 'podman'\nsecond line\n"
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0
+    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
+    assert "Il provider ha detto: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
+    assert "second line" not in result.stdout
+
+
+def test_status_cuts_a_long_provider_line_and_drops_control_characters(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_PS_FAILS"] = "x" * 500 + "\x1b[31mred\x07"
+    result = _run(wrapper, env, "status")
+    said = next(line for line in result.stdout.splitlines() if "Il provider ha detto:" in line)
+    assert len(said.split("Il provider ha detto: ", 1)[1]) <= 200
+    assert "\x1b" not in result.stdout and "\x07" not in result.stdout
+
+
+def test_status_of_a_provider_that_says_nothing_gives_its_exit_code(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_PS_FAILS"] = " "
+    result = _run(wrapper, env, "status")
+    assert "Il provider ha detto: provider exit code 1, nothing said" in result.stdout
+
+
+def test_the_reason_file_is_left_behind_by_no_one(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    tmp = tmp_path / "scratch"
+    tmp.mkdir()
+    env["TMPDIR"] = str(tmp)
+    env["JHT_FIXTURE_PS_FAILS"] = "boom"
+    _run(wrapper, env, "status")
+    ok_env = dict(env)
+    ok_env.pop("JHT_FIXTURE_PS_FAILS")
+    _run(wrapper, ok_env, "status")
+    assert list(tmp.iterdir()) == []
