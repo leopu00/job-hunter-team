@@ -105,6 +105,17 @@ function buildContainerBootstrap() {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// The Mentor has no record to walk until the first positions have a score, and its first wake at every start
+// would be spent on nothing: it is not started while the first run is open (`first_run.py mentor-due` says 1),
+// and the agent watchdog starts it within a minute of the run becoming steady. Any other answer (the script
+// missing, a crash, no state) counts as due: the Mentor then starts as it always did.
+export function mentorDeferred(run = execArgvInContainer) {
+  const r = run(['python3', '/app/shared/skills/first_run.py', 'mentor-due'], { timeoutMs: 15_000 });
+  return r?.code === 1;
+}
+
+const MENTOR_WAITING = 'not yet active (it starts when the first positions have a score)';
+
 // Disco quasi pieno (< 3% libero): nessun NUOVO avvio. Si chiede PRIMA di far
 // nascere una sessione, dopo che il controllo «gia' attiva» ha lasciato stare
 // quelle vive: un agente in corso non viene toccato. Il codice e' chiuso
@@ -186,6 +197,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   let started = 0;
   let skipped = 0;
   let errored = 0;
+  let deferred = 0;
   // La UI definisce il team operativo dalla presenza del CAPITANO. Tenere
   // separato questo esito dal conteggio aggregato evita il falso successo
   // osservato in #129: Assistente/Sentinella partivano, CAPITANO falliva, ma
@@ -200,14 +212,16 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // processi sani proprio mentre l'utente cercava soltanto conferma. I
     // watchdog del container sorvegliano separatamente bridge e worker: con i
     // quattro agenti core vivi, Start e' quindi un no-op idempotente.
-    const coreSessions = ['ASSISTENTE', 'SENTINELLA', 'MENTOR', 'CAPITANO'];
+    const mentorWaits = !isSessionActive('MENTOR') && mentorDeferred();
+    const coreSessions = ['ASSISTENTE', 'SENTINELLA', ...(mentorWaits ? [] : ['MENTOR']), 'CAPITANO'];
     if (coreSessions.every((session) => isSessionActive(session))) {
       for (const session of coreSessions) {
         console.log(`  ${c.yellow('⏭')} ${session} — already active`);
       }
       if (!releaseHaltGate()) return;
       console.log('');
-      console.log(`Result: ${c.green('0 started')}, ${c.yellow('4 already active')}`);
+      console.log(`Result: ${c.green('0 started')}, ${c.yellow(`${coreSessions.length} already active`)}`);
+      if (mentorWaits) console.log(c.dim(`  MENTOR ${MENTOR_WAITING}`));
       console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
       console.log('');
       return;
@@ -268,6 +282,11 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // 41 secondi di attesa non protegge nulla e fa sembrare morto il click.
     let previousStarted = false;
     for (const item of bootstrap) {
+      if (item.role === 'mentor' && mentorWaits) {
+        console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
+        deferred++;
+        continue;
+      }
       if (previousStarted && item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Waiting ${Math.round(item.preDelayMs / 1000)}s before ${item.session}...`));
         await sleep(item.preDelayMs);
@@ -284,6 +303,9 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     if (!parsed) {
       console.log(`  ${c.red('✗')} ${agentArg} — unrecognized role`);
       errored++;
+    } else if (parsed.role === 'mentor' && !isSessionActive('MENTOR') && mentorDeferred()) {
+      console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
+      deferred++;
     } else {
       const result = launchInContainer({ role: parsed.role, instance: parsed.instance, mode });
       if (result === 'started') started++;
@@ -314,7 +336,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   // che registra. Il codice osservato non cambia: questa è l'ultima istruzione
   // della funzione. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if ((useBootstrap && !coordinatorReady)
-      || (!useBootstrap && started === 0 && skipped === 0)) {
+      || (!useBootstrap && started === 0 && skipped === 0 && deferred === 0)) {
     process.exitCode = 1;
   }
 }

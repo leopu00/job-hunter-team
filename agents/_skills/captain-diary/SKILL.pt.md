@@ -23,6 +23,8 @@ Imprime as notas de **ontem** (ou as do último dia trabalhado) mais o que já
 esteja registado **hoje**. Herdas as lições → **não repitas os mesmos erros**.
 Se não houver nada, és o primeiro: começa a registar.
 
+Imprime no máximo as **últimas 30 notas** de cada dia (8 KiB), com uma linha a dizer quantas notas mais antigas ficaram de fora: cada reinício volta a lê-las, por isso mantém as notas curtas e põe a lição primeiro.
+
 ## Durante o dia — regista os eventos SIGNIFICATIVOS
 
 Uma linha, sempre que acontecer algo que traga uma lição. NÃO um diário de tudo:

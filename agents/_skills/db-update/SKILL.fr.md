@@ -108,6 +108,22 @@ Vous n'avez rien à faire — le wrapper s'en charge. Ne le contournez pas avec 
 
 Sans cette porte, le Capitano peut rapporter "12 ready" verbalement tandis que la DB montre toujours 0 — exactement la divergence que le bug #21 a corrigée.
 
+## Un `$` dans le texte : apostrophes simples ou stdin
+
+Entre guillemets doubles, le shell lit `$1` et `$2` comme ses propres arguments et les remplace par rien **avant que l'outil ne démarre** : « Plus — $20/month ; Pro — $200/month » arrive chez l'utilisateur comme « Plus — 0/month ; Pro — 00/month », et personne en aval ne peut rendre les chiffres. Si le texte contient un `$` (prix, montants), écris-le entre apostrophes simples ou passe-le par stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+Écris le `TXT` de fermeture en première colonne, seul sur sa ligne, sans espaces devant (si tu copies le retrait, le heredoc ne se ferme jamais : un texte qui finit par une ligne `TXT` est refusé, rien n'est envoyé).
+
 ## Règles de sécurité
 
 1. **Lire d'abord.** Exécuter `db-query position <id>` (ou `application`) pour voir l'état actuel avant d'écrire. Les écrasements aveugles produisent des enregistrements incohérents.

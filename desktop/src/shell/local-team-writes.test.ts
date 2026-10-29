@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LOCAL_TEAM_NON_GET_ALLOWED, notInDesktop, shellApi } from "./api-bridge";
@@ -77,7 +77,8 @@ describe("the local mode's «signed in» is not an identity", () => {
   it("is read only by the places that answer «no cloud here» or gate the activity read, and none of them picks data or a host by it", () => {
     const callers = sources()
       .filter((file) => /\bteamDataFromTheTeam\(|\blocalTeamData\(/.test(readFileSync(file, "utf-8")))
-      .map((file) => relative(src, file))
+      // the same path on every system: a Windows one is spelled with backslashes
+      .map((file) => relative(src, file).split(sep).join("/"))
       .sort();
     expect(callers).toEqual([
       "lib/existing-team-positions.ts",

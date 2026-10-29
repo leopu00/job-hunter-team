@@ -291,7 +291,10 @@ def test_the_net_does_not_post_over_a_card_the_capitano_already_posted(box):
 def test_the_net_does_nothing_once_the_plan_is_declared_or_the_first_run_is_over(box):
     import_profile(box, minutes_ago=60)
     configure(box, plan="pro")
-    assert run(box, "plan-question-check")["action"] == "none"
+    # the plan is declared and the first run has not opened: no card, and the Capitano is told to open it
+    # (after a short wait for the one who wrote the plan; tests/test_first_run_start_after_the_card.py)
+    assert run(box, "plan-question-check")["action"] in {"waiting", "start"}
+    assert questions(box) == []
 
     configure(box)
     steady(box)

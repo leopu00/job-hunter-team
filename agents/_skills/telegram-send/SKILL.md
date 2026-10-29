@@ -69,6 +69,22 @@ jht-telegram-send --from mentor --html "<b>Step di crescita</b> della settimana:
 jht-telegram-send --html "<b>CV per Acme — Senior FE</b> pronto.\nLo trovi in <code>~/Documents/Job Hunter Team/output/2026-05-12/acme-senior-fe/</code>."
 ```
 
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-telegram-send 'Plus — $20/month; Pro — $100/month'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $
+jht-telegram-send - <<'TXT'
+Plus — $20/month; Pro — $100/month
+TXT
+```
+
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).
+
 ## Escape sequences (`\n`, `\t`, `\r`)
 
 The wrapper interprets `\n`, `\t`, `\r` in your message as **real newlines/tabs/CRs** before sending to Telegram. So you can write:

@@ -15,6 +15,16 @@ Salary V2:
 Tracking temporale:
   python3 db_update.py application 42 --written-at "2026-02-20 14:30"
   python3 db_update.py application 42 --response "rejected" --response-at "2026-02-25"
+
+Un `$` nel testo: tra virgolette doppie la shell legge `$1`..`$9` come suoi argomenti e li sostituisce con niente
+PRIMA che parta il comando («$120k» arriva come «20k»). Un campo di testo libero (position: --notes, --jd-text,
+--jd-summary, --requirements, --location-notes · company: --red-flags, --culture-notes · application:
+--critic-notes, --response) con `-` legge il testo da stdin; un campo solo per comando. Il delimitatore tra
+apici lascia ogni `$` com'e', e la riga `TXT` di chiusura sta in PRIMA colonna (con un rientro il heredoc non si
+chiude e il testo che finisce con una riga `TXT` viene rifiutato):
+python3 db_update.py position 42 --notes - <<'TXT'
+Offerta fino a $120k, bonus $10k
+TXT
 """
 
 import argparse
@@ -1104,6 +1114,42 @@ def _zip_set_clauses(set_clauses, params):
             yield c, None
 
 
+# The free-text options, per entity, that can take their text from stdin (`-`). Between double quotes the shell
+# reads `$1`..`$9` as its own arguments and replaces them with nothing BEFORE this command starts ("$120k"
+# reaches the database as "20k"), and nothing here can bring the digits back: a heredoc with a quoted delimiter
+# (<<'TXT') leaves every `$` alone.
+STDIN_TEXT_OPTIONS = {
+    'position': ('notes', 'jd_text', 'jd_summary', 'requirements', 'location_notes'),
+    'company': ('red_flags', 'culture_notes'),
+    'application': ('critic_notes', 'response'),
+}
+
+
+def read_text_from_stdin(args):
+    """`--notes -` (and the other free-text options): the text comes from stdin. One option per command: stdin is one."""
+    names = [n for n in STDIN_TEXT_OPTIONS.get(args.entity, ()) if getattr(args, n, None) == '-']
+    if not names:
+        return
+    if len(names) > 1:
+        flags = ', '.join('--' + n.replace('_', '-') for n in names)
+        print(f"db_update: only one option can read stdin, and {flags} all asked for it: nothing was written.",
+              file=sys.stderr)
+        sys.exit(2)
+    text = sys.stdin.read().removesuffix('\n')
+    flag = '--' + names[0].replace('_', '-')
+    if not text.strip():
+        print(f"db_update: the text on stdin for {flag} is empty: nothing was written.", file=sys.stderr)
+        sys.exit(2)
+    lines = text.rstrip().splitlines()
+    if lines[-1].strip() == 'TXT':
+        # an indented closing `TXT`: the heredoc never closed and the shell passed on the delimiter line too
+        print(f"db_update: the text for {flag} ends with a `TXT` line: the closing line of the heredoc was indented, "
+              "so it never closed. Nothing was written. Put `TXT` in the first column, alone on its line.",
+              file=sys.stderr)
+        sys.exit(2)
+    setattr(args, names[0], text)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Update data in jobs.db')
     sub = parser.add_subparsers(dest='entity', required=True)
@@ -1203,6 +1249,7 @@ def main():
     a.add_argument('--interview-round', type=int, help='Interview stage (1, 2, 3...)')
 
     args = parser.parse_args()
+    read_text_from_stdin(args)
 
     if args.entity == 'position':
         update_position(args)
