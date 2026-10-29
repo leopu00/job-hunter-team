@@ -8,6 +8,7 @@
 //   jht agent-control answer <QUESTION_ID> <OPTION_ID>
 //   jht agent-control settings get | apply | burst-start | burst-stop   (working hours and role models, and
 //     «work flat out until HH:MM»; `apply` and `burst-start` read stdin)
+//   jht agent-control provider status | logout   (the sign-in of the team's active provider; shared/skills/provider_signin.py)
 //
 // One JSON line on stdout and a closed exit code, both from
 // shared/skills/agent_control.py, which holds every rule (see its header).
@@ -17,6 +18,7 @@
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { execScriptInContainer } from '../utils/container-proxy.js';
+import { runProvider } from '../lib/provider-logout.js';
 import { applyResult, burstStartResult, burstStopResult, getResult, withBurst } from './team-settings.js';
 import {
   AGENT_CONTROL_SCRIPT, EXIT_INVALID, agentControlArgv, unansweredReply,
@@ -58,6 +60,7 @@ export function runSettings(args, { write, readStdin = () => readFileSync(0, 'ut
 
 export function runAgentControl(args, { exec = execScriptInContainer, write = (s) => process.stdout.write(s), readStdin } = {}) {
   if (Array.isArray(args) && args[0] === 'settings') return runSettings(args.slice(1), { write, readStdin, exec });
+  if (Array.isArray(args) && args[0] === 'provider') return runProvider(args.slice(1), { write, exec });
   const argv = agentControlArgv(args);
   if (!argv) {
     write(`${JSON.stringify({ ok: false, error: 'agent_control_invalid' })}\n`);
