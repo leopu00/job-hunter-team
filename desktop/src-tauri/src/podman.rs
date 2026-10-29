@@ -457,7 +457,7 @@ pub(crate) async fn check_podman(
 #[cfg(test)]
 mod tests {
     use super::{
-        args, jht_engine_args, jht_machine, normalized_version, read_bounded_output,
+        args, count_other_containers, jht_engine_args, jht_machine, normalized_version, read_bounded_output,
         read_stderr_lines, valid_machine_name, MAX_CAPTURE_BYTES, MAX_STDERR_LINE_BYTES,
     };
     use std::sync::{Arc, Mutex};
