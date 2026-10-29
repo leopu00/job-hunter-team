@@ -730,6 +730,21 @@ podman_binary() {
   return 1
 }
 
+# podman-compose 1.6.0 looks for `podman` in PATH at its own start (`podman version`), whatever --podman-path says. The wrapper
+# finds podman by its usual places (/opt/homebrew/bin, /usr/local/bin) when the caller's PATH has none of them: a terminal
+# opened from the app, a script, `env -i`. Then every call of the provider, the `--version` probes included, died with
+# «failed to check if podman is installed», the wrapper read that as «no provider» and `status` said «container 'jht' non
+# attivo» for a team that was running (TEST 19g). The directory of the podman it found goes at the END of PATH, for the provider only.
+podman_ensure_on_path() {
+  local podman_bin dir
+  podman_bin="$(podman_binary)" || return 0
+  dir="${podman_bin%/*}"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) PATH="$PATH:$dir"; export PATH ;;
+  esac
+}
+
 podman_compose_binary() {
   local candidate=""
   for candidate in "$(command -v podman-compose 2>/dev/null || true)" \
@@ -788,6 +803,7 @@ podman_version_number() {
 
 podman_compose_version_number() {
   local compose_bin="$1" out
+  podman_ensure_on_path
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     out="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" "$compose_bin" --version 2>/dev/null)" || return 1
   else
@@ -798,6 +814,7 @@ podman_compose_version_number() {
 
 podman_compose_pair_supported() {
   local podman_bin="$1" compose_bin="$2" podman_version compose_version
+  podman_ensure_on_path
   if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
     podman_version="$(podman_version_number "$podman_bin")" || return 1
     version_at_least "$podman_version" "$PODMAN_NATIVE_MIN_VERSION" || return 1
@@ -1063,6 +1080,7 @@ compose_file() {
     # the provider inherits it and therefore emits `podman ps`/`podman run`
     # against the named machine without depending on the mutable default.
     local podman_bin compose_bin
+    podman_ensure_on_path
     podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
     if ! compose_bin="$(podman_compose_binary)"; then
       if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
@@ -2329,8 +2347,18 @@ podman_caller_env_set() {
   return 1
 }
 
+# The NAMES (never the values) of the variables above that the caller's environment sets, space separated.
+podman_caller_env_names() {
+  local name found=""
+  for name in $PODMAN_CALLER_ENV; do
+    [ -z "${!name:-}" ] || found="${found:+$found }$name"
+  done
+  printf '%s' "$found"
+}
+
 podman_expected_config_hash() {
   local file="$1" service="${2:-jht}" env_mode="${3:-caller}" podman_bin compose_bin resolved hashes hash pinned_image=""
+  podman_ensure_on_path
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
@@ -2958,6 +2986,25 @@ host_data_dirs_supported() {
     err "data_dir_moved: JHT_USER_DIR_HOST=$JHT_USER_DIR_HOST non e' $expected_user. Il team usa sempre $expected_user: lo monta il compose, e su macOS e' l'unica cartella documenti che la macchina Podman vede. Togli JHT_USER_DIR_HOST, oppure sposta i documenti in $expected_user."
     return 1
   fi
+}
+
+# `jht team stop`: stopping the team must work whenever `jht down` does. A container of ours whose config-hash is not the
+# expected one (a caller's environment, a reinstall) is attested by every other label and is used here, for the stop only;
+# the same rule `container_down` has. An absent container, or anything else, goes the old way (ensure_up).
+ensure_up_for_stop() {
+  local status=0 found
+  if container_up; then
+    return 0
+  else
+    status=$?
+  fi
+  if [ "$status" -ne 3 ] && [ "$CONTAINER_RUNTIME" = podman ] \
+      && found="$(read_only_service_id "$CONTAINER_SERVICE" any-config 2>/dev/null)"; then
+    ATTESTED_CONTAINER_ID="$found"
+    warn "config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo."
+    return 0
+  fi
+  ensure_up
 }
 
 ensure_up() {
@@ -5100,7 +5147,16 @@ case "$SUB" in
       docker inspect "$container_id" --format \
         'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
     else
-      printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      # 3 = the project has no such container; anything else = a container is there and cannot be attested.
+      # Saying «non attivo» for the second hid a team that was running (TEST 19g).
+      if [ "$?" -eq 3 ]; then
+        printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      else
+        printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
+          printf "  Nell'ambiente di questo terminale sono impostate: %s. Il container e' stato creato senza: togli la variabile (unset) e riprova.\n" "$(podman_caller_env_names)"
+        fi
+      fi
       exit 1
     fi
     ;;
@@ -5222,6 +5278,14 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
+  # `jht team stop`: si deve poter fermare anche un container che non si attesta per la sola hash (vedi ensure_up_for_stop).
+  team)
+    require_compose_file
+    require_docker
+    if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
