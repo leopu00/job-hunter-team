@@ -1,5 +1,5 @@
 import type { PositionWithScore } from "@/lib/types";
-import { readVpsPositionsShared } from "../../lib/existing-team-positions-shared";
+import { readVpsPilesShared, readVpsPositionsShared } from "../../lib/existing-team-positions-shared";
 import type { DeptId, Piles } from "../contract";
 import {
   BOARD_STATES,
@@ -143,11 +143,15 @@ export function placesOf(rows: PositionWithScore[], top = 15): PlacesData {
 }
 
 /**
- * The piles of the scene, read when the office opens from the same shared read
- * as the panels and the globe. A team that could not be read has no piles:
- * unknown (null), never zero.
+ * The piles of the scene, read when the office opens: five counts in one read of
+ * the core (kept for a few seconds, shared with whoever asks meanwhile). A team that
+ * could not be read has no piles: unknown (null), never zero.
  */
 export async function readVpsPiles(): Promise<Piles | null> {
+  const counted = await readVpsPilesShared();
+  if (counted.source === "vps") return counted.data;
+  // a core that does not know the count yet: the piles are counted from the team's list, as they always were
+  if (counted.source !== "unavailable" || counted.code !== "positions_request_invalid") return null;
   const read = await readVpsPositionsShared();
   return read.source === "vps" ? pilesOf(read.data) : null;
 }

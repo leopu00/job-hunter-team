@@ -1,7 +1,7 @@
 // Pixi 8 compiles its shaders' uniform uploads with `new Function`, which the
 // app's CSP (no 'unsafe-eval') refuses: this swaps in the eval-free versions.
 import "pixi.js/unsafe-eval";
-import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, TilingSprite } from "pixi.js";
+import { Application, Assets, Container, Graphics, Rectangle, Sprite, Text, Texture, Ticker, TilingSprite } from "pixi.js";
 import type {
   AgentPose,
   AgentStatuses,
@@ -17,6 +17,7 @@ import type {
   Rect,
 } from "../contract";
 import { attachControls, elementPoint } from "./controls";
+import { OFFICE_MAX_FPS, pauseWhenHidden, sceneResolution } from "./frame-pace";
 import { toWorld } from "./camera";
 import { hitTest, layoutHits, rectOf, sameTarget, type Hit } from "./hit";
 import { advanceEffects, START_EFFECTS, watchReducedMotion } from "./motion";
@@ -62,13 +63,19 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     background: BACKGROUND,
     antialias: true,
     autoDensity: true,
-    resolution: window.devicePixelRatio || 1,
+    resolution: sceneResolution(window.devicePixelRatio),
     width: host.clientWidth || 800,
     height: host.clientHeight || 600,
     preference: "webgl",
   });
   host.appendChild(app.canvas);
   app.canvas.style.display = "block";
+  // not drawn faster than 30 frames a second, and not at all while the window is hidden (frame-pace.ts)
+  app.ticker.maxFPS = OFFICE_MAX_FPS;
+  Ticker.shared.maxFPS = OFFICE_MAX_FPS;
+  // the loop Pixi keeps for its events and its texture clean-up runs at the display's rate too (the second rAF loop of the page)
+  Ticker.system.maxFPS = OFFICE_MAX_FPS;
+  const stopPause = pauseWhenHidden([app.ticker, Ticker.shared, Ticker.system]);
 
   const furniture = allFurniture(layout);
   const backdrop = layout.backdrop ?? [];
@@ -523,6 +530,7 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
       sizeGrade(width, height);
     },
     destroy() {
+      stopPause();
       motion.stop();
       app.canvas.removeEventListener("pointermove", onPointerMove);
       app.canvas.removeEventListener("pointerleave", onPointerLeave);

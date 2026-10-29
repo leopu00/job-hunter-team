@@ -31,7 +31,9 @@ import { NewVersionBanner } from "./NewVersionBanner";
 import { TeamOffBanner } from "./TeamOffBanner";
 import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
+import { AwayGreeting } from "./AwayGreeting";
 import NavStrip from "./NavStrip";
+import PageErrorBoundary from "./PageErrorBoundary";
 import { EXIT_OPEN_EVENT } from "../lib/app-exit";
 import { APP_EXIT_TEXT } from "../components/AppExitDialog.i18n";
 import { beginPageLoad } from "../lib/page-timing";
@@ -176,6 +178,8 @@ export interface ShellProps {
   onLogout?: () => Promise<void>;
   /** Leaves the read-only view of an existing team (back to the setup). */
   onCloseReadOnly?: () => void;
+  /** Whose app this is (the account or the local profile): what the greeting on coming back remembers is theirs. */
+  identityKey?: string;
 }
 
 /** A full-bleed page's column: as tall as the window, the navbar and its bars on top, the page in the rest, no page scroll. */
@@ -188,7 +192,7 @@ const FULL_BLEED_COLUMN: CSSProperties = {
   overflow: "hidden",
 };
 
-export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
+export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellProps) {
   const { path, search } = useLocation();
   // The existing team's VPS is what the pages read, in either kind of link; only the read-only one
   // disables what writes (a team connected in full has the same pages, with their controls on).
@@ -225,7 +229,9 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const Page = match?.route.page;
   const page = Page && (
     <SignOutContext.Provider value={onLogout ?? null}>
-      <Page key={path} params={match.params} search={params} />
+      <PageErrorBoundary key={path} onHome={() => navigate(readOnly ? READ_ONLY_HOME : HOME)}>
+        <Page params={match.params} search={params} />
+      </PageErrorBoundary>
       {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
       <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>
@@ -257,6 +263,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         )}
         <VpsLinkBar onCloseReadOnly={onCloseReadOnly} />
         <WriteAccessRestoredBanner />
+        {identityKey && <AwayGreeting identityKey={identityKey} />}
       </>
     );
     return (
@@ -304,6 +311,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               <LocalTeamOwnerBanner onSwitch={onLogout} />
               <LocalTeamStoppedBar />
               <WriteAccessRestoredBanner />
+        {identityKey && <AwayGreeting identityKey={identityKey} />}
             </div>
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
@@ -326,6 +334,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
           <LocalTeamOwnerBanner onSwitch={onLogout} />
           <LocalTeamStoppedBar />
             <WriteAccessRestoredBanner />
+        {identityKey && <AwayGreeting identityKey={identityKey} />}
           <MainChrome>{page}</MainChrome>
         </div>
         </ReadOnlyActionsProvider>

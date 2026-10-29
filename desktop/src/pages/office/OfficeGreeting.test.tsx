@@ -2,8 +2,9 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OfficeGreeting from "./OfficeGreeting";
 
-const read = vi.hoisted(() => ({ reading: vi.fn() }));
+const read = vi.hoisted(() => ({ reading: vi.fn(), local: vi.fn() }));
 vi.mock("../../profile-progress/read", () => ({ readProfileProgress: read.reading }));
+vi.mock("../../lib/local-profile", () => ({ readLocalProfile: read.local }));
 
 const fields = (name: { ok: boolean; preview?: string }) => ({
   ok: true,
@@ -20,6 +21,8 @@ const at = (hour: number) => () => new Date(2026, 9, 29, hour, 0, 0);
 beforeEach(() => {
   document.cookie = "NEXT_LOCALE=it; path=/";
   read.reading.mockReset();
+  read.local.mockReset();
+  read.local.mockReturnValue(null);
 });
 afterEach(cleanup);
 
@@ -49,5 +52,22 @@ describe("OfficeGreeting", () => {
     render(<OfficeGreeting now={at(9)} />);
     await waitFor(() => expect(read.reading).toHaveBeenCalled());
     expect(screen.queryByTestId("office-greeting")).toBeNull();
+  });
+
+  it("greets by the display name of the local profile and reads nothing for it", async () => {
+    read.local.mockReturnValue({ profileId: "p", displayName: "Leone Puglisi" });
+    read.reading.mockResolvedValue(fields({ ok: true, preview: "Altro Nome" }));
+    render(<OfficeGreeting now={at(15)} />);
+    expect((await screen.findByTestId("office-greeting")).textContent).toBe("Buon pomeriggio, Leone");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(read.reading).not.toHaveBeenCalled();
+    expect(screen.getByTestId("office-greeting").textContent).not.toContain("Altro");
+  });
+
+  it("falls back to the Assistant's name when the display name is no name", async () => {
+    read.local.mockReturnValue({ profileId: "p", displayName: "42 !!" });
+    read.reading.mockResolvedValue(fields({ ok: true, preview: "Ada Lovelace" }));
+    render(<OfficeGreeting now={at(9)} />);
+    expect((await screen.findByTestId("office-greeting")).textContent).toBe("Buongiorno, Ada");
   });
 });

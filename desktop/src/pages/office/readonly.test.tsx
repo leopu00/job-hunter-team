@@ -64,8 +64,10 @@ const TEAM_ROWS = [
   { id: "13", legacy_id: 13, title: "CV con pass", company: "Gamma", status: "ready", location: "Roma", found_at: "2026-10-15T09:00:00Z", score: 88, critic_verdict: "pass", critic_score: 9, written_at: "2026-10-16T12:00:00Z" },
   { id: "14", legacy_id: 14, title: "Candidatura inviata", company: "Delta", status: "applied", location: "Torino", found_at: "2026-10-14T09:00:00Z", score: 81, written_at: "2026-10-15T12:00:00Z", critic_verdict: "pass" },
 ];
-let positions: () => Promise<unknown>;
+let positions: (op: string) => Promise<unknown>;
 const positionReads = () => native.invoke.mock.calls.filter(([command]) => command === POSITIONS);
+// the office counts its piles with one read of the core (op piles); a panel reads the list (op list)
+const readsOf = (op: string) => positionReads().filter(([, args]) => (args as { request: { op: string } }).request.op === op);
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 let answer: () => Promise<unknown>;
 let applied: OfficeEvent[];
@@ -89,13 +91,15 @@ beforeEach(() => {
   native.isTauri.mockReturnValue(true);
   native.invoke.mockReset();
   answer = async () => realSnapshotReply();
-  positions = async () => ({ ok: true, data: { items: TEAM_ROWS, total: TEAM_ROWS.length } });
+  positions = async (op) => (op === "piles"
+    ? { ok: true, data: { scout: 1, analisti: 0, scorer: 1, scrittori: 0, critici: 1 } }
+    : { ok: true, data: { items: TEAM_ROWS, total: TEAM_ROWS.length } });
   resetVpsPositionsShared();
   resetTeamAgentsShared();
   agentsReply = async () => ({ ok: false, error: "agents_unavailable" });
-  native.invoke.mockImplementation(async (command: string) => {
+  native.invoke.mockImplementation(async (command: string, args?: { request?: { op?: string } }) => {
     if (command === COMMAND) return answer();
-    if (command === POSITIONS) return positions();
+    if (command === POSITIONS) return positions(args?.request?.op ?? "");
     if (command === AGENTS) return agentsReply();
     throw new Error(`unexpected native command ${command}`);
   });
@@ -224,13 +228,15 @@ describe("the office of an existing team, over its VPS", () => {
   it("a pile opens its panel with the team's positions of that phase, read from the VPS, and the cloud is not asked", async () => {
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
-    // the piles of the scene came with the office: the one read, which the panel below reuses
-    await waitFor(() => expect(positionReads()).toHaveLength(1));
+    // the piles of the scene came with the office: five counts, not the list
+    await waitFor(() => expect(readsOf("piles")).toHaveLength(1));
+    expect(readsOf("list")).toHaveLength(0);
     act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
     const panel = await panelOf();
     expect(await within(panel).findByText("Cercatore di nuovi · Alfa")).toBeInTheDocument();
     expect(within(panel).queryByText("Da punteggiare · Beta")).toBeNull();
-    expect(positionReads()).toHaveLength(1);
+    expect(readsOf("list")).toHaveLength(1);
+    expect(readsOf("piles")).toHaveLength(1);
     expect(cloud.touched).toEqual([]);
   });
 
@@ -259,7 +265,7 @@ describe("the office of an existing team, over its VPS", () => {
     expect(places.getByText("Roma").nextElementSibling).toHaveTextContent("2");
 
     // one list served all of them
-    expect(positionReads()).toHaveLength(1);
+    expect(readsOf("list")).toHaveLength(1);
     expect(cloud.touched).toEqual([]);
   });
 
@@ -287,21 +293,23 @@ describe("the office of an existing team, over its VPS", () => {
     // a second click replaces the line, it does not add one
     act(() => scene.options!.onClick({ kind: "agent", uid: "assistente", role: "assistente" }));
     expect(screen.getAllByTestId("office-agent-note")).toHaveLength(1);
-    expect(positionReads()).toHaveLength(1); // only the office's own, none for a panel
+    expect(readsOf("piles")).toHaveLength(1); // only the office's own, none for a panel
+    expect(readsOf("list")).toHaveLength(0);
     expect(cloud.touched).toEqual([]);
   });
 
-  it("the piles of the scene are counted from the team's positions, with the read the panels share", async () => {
+  it("the piles of the scene are the core's own counts, and a panel opened afterwards reads the list once", async () => {
     mount();
     await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
     const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
     // new 1, scored 1 (not asked to write), ready with a pass 1; the sent one is on no pile
     expect(piles).toEqual({ scout: 1, analisti: 0, scorer: 1, scrittori: 0, critici: 1 });
-    expect(positionReads()).toHaveLength(1);
-    // a panel opened afterwards reuses the read
+    expect(readsOf("piles")).toHaveLength(1);
+    expect(readsOf("list")).toHaveLength(0);
+    // a panel opened afterwards reads the list, once
     act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
     await within(await panelOf()).findByText("Cercatore di nuovi · Alfa");
-    expect(positionReads()).toHaveLength(1);
+    expect(readsOf("list")).toHaveLength(1);
     expect(cloud.touched).toEqual([]);
   });
 
@@ -309,7 +317,7 @@ describe("the office of an existing team, over its VPS", () => {
     positions = async () => ({ ok: false, error: "ssh_unavailable" });
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
-    await waitFor(() => expect(positionReads()).toHaveLength(1));
+    await waitFor(() => expect(readsOf("piles")).toHaveLength(1));
     const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
     expect(Object.values(piles)).toEqual([null, null, null, null, null]);
   });
@@ -335,13 +343,13 @@ describe("the office of an existing team, over its VPS", () => {
     expect(panel).not.toHaveTextContent("cloud");
   });
 
-  it("reads and never writes: the VPS is asked for a list only, and no request leaves for the cloud", async () => {
+  it("reads and never writes: the VPS is asked for the counts and for a list only, and no request leaves for the cloud", async () => {
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
     act(() => scene.options!.onClick({ kind: "pile", dept: "scout" }));
     await panelOf();
-    await waitFor(() => expect(positionReads()).toHaveLength(1));
-    for (const [, args] of positionReads()) expect((args as { request: { op: string } }).request.op).toBe("list");
+    await waitFor(() => expect(readsOf("list")).toHaveLength(1));
+    for (const [, args] of positionReads()) expect(["piles", "list"]).toContain((args as { request: { op: string } }).request.op);
     const commands = native.invoke.mock.calls.map(([command]) => command);
     expect(new Set(commands)).toEqual(new Set([COMMAND, POSITIONS, AGENTS]));
     // the agents are asked for their list only: never a terminal, never a write
