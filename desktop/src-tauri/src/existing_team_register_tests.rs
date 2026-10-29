@@ -3132,7 +3132,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         ("onboarding_ssh_host_key_probe", "a read of the host's key"),
         ("onboarding_ssh_host_key_confirm", "pins the key on this computer"),
         ("team_settings", "has its own read-only mode (destination_mode)"),
-        ("app_exit_state", "a read of where the team is, for the exit dialog; acts on nothing, and the window's own check comes first"),
+        ("app_exit_state", "a read of where the team is, for the exit dialog; it does not act on the team and does not claim the folder (with no owner marker the answer is «no team» before the destination's own check, which would claim it) and the window's own check comes first"),
         ("app_exit_order", "the exit dialog asks the person first (the dialog is the question; test lib/app-exit-callers) and it acts only on this computer's team: any other destination answers app_exit_vps_untouched"),
         ("app_exit_poll", "only after the order the person chose in the exit dialog (test lib/app-exit-callers), a read of the flag, and only on this computer's team"),
         ("app_exit_finish", "the exit dialog asks the person first (the dialog is the question; test lib/app-exit-callers) and the plan refuses a VPS (app_exit_vps_untouched); detach runs nothing"),
@@ -3149,6 +3149,12 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         assert!(text.find("!= TeamHost::Local").unwrap() < text.find("exec_local(").unwrap(), "{name}: not this computer's team, nothing is run");
         assert!(text.contains("app_exit_vps_untouched"), "{name}");
     }
+    let local_destination = exit.split("fn local_destination(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
+    assert!(
+        local_destination.find("local_owner_marker_path(").unwrap() < local_destination.find("destination(app, scope)").unwrap()
+            && local_destination.contains("TeamHost::None"),
+        "looking at the team never claims the folder: no marker, no team"
+    );
     let plan = exit.split("fn plan(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
     assert!(plan.contains("(_, TeamHost::Vps) => Err(\"app_exit_vps_untouched\")"), "no step is planned for a VPS");
     assert!(body(&exit, "app_exit_finish").contains("plan(mode, host)"), "leaving goes through the plan");
