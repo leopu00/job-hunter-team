@@ -124,6 +124,19 @@ export async function runSetupWizard(prompter) {
       ],
     });
     if (action === 'keep') {
+      // Kept values do not say there is a login: the wait for it may have run out before (30 minutes) and the setup
+      // be run again. The kept provider is asked for its login the same way, and a login that is there ends it at once.
+      const keptProvider = AI_PROVIDERS.find((p) => p.value === baseConfig.active_provider);
+      const keptCmd = keptProvider && PROVIDER_OAUTH_CMD[keptProvider.value];
+      if (keptCmd) {
+        const keptLogin = await runProviderLoginStep({
+          cmdName: keptCmd, label: keptProvider.label, isVps: (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps', prompter, t, tf,
+        });
+        if (!keptLogin) {
+          await prompter.outro(t('wizard.oauth.aborted'));
+          return;
+        }
+      }
       await prompter.outro(t('wizard.config_kept'));
       return;
     }
