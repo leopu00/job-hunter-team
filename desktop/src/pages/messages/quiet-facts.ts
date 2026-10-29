@@ -1,4 +1,4 @@
-import { readTeamSettings } from "../../lib/team-settings-native";
+import { readTeamSettings, type TeamSettingsResult } from "../../lib/team-settings-native";
 import type { QuietFacts } from "./team-quiet";
 
 /**
@@ -6,8 +6,8 @@ import type { QuietFacts } from "./team-quiet";
  * provider's work window, a containment and the provider's login when the box says them. A team that does not answer gives nothing
  * (never «no reason»), and a fact the box leaves out is left out here.
  */
-export async function loadQuietFacts(): Promise<QuietFacts | null> {
-  const reply = await readTeamSettings();
+export async function loadQuietFacts(read: () => Promise<TeamSettingsResult> = readTeamSettings): Promise<QuietFacts | null> {
+  const reply = await read();
   if (!reply.ok) return null;
   const { workingHours, burst, quiet } = reply.settings;
   return {
