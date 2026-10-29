@@ -461,3 +461,19 @@ def test_the_assistente_stages_and_asks_with_the_card_and_does_not_name_the_left
 
     assert "ask-confirm" in route and "candidate_profile.yml" in route
     assert not re.search(r"left panel|pannello (a )?sinistra|panel izquierdo|panneau de gauche|linke Panel|bal panel|painel à esquerda", text)
+
+
+PASTED = {"en": "pasted text", "it": "incollato come testo", "es": "texto pegado", "fr": "texte collé", "de": "eingefügt", "hu": "beillesztett", "pt": "texto colado"}
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_a_cv_pasted_as_text_goes_through_the_review_and_the_card_like_an_uploaded_one(lang: str):
+    """Gate CLI Linux 19i (A7): a CV pasted as text was written straight into the profile and validated, with no card.
+
+    The exception to the direct write is for the file AND for the CV that comes as text; the facts told one at a time are
+    still written at once. The heading says so too."""
+    text = (ROOT / "agents" / "_skills" / "profile-yaml" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
+    exception = next(line for line in text.splitlines() if "[FILE ALLEGATI]" in line)
+
+    assert PASTED[lang] in exception, (lang, exception)
+    assert "profile-review.yml" in text and "ask-confirm --inferred" in text

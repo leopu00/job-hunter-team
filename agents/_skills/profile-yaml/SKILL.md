@@ -34,9 +34,9 @@ The frontend polls the file every ~2s. Do not wait until the end of the conversa
 
 Each new datum = one `Write` or `Edit` on the file. Then validate. Then keep the conversation moving.
 
-### Uploaded CVs are reviewed before they become persisted profile data
+### Uploaded or pasted CVs are reviewed before they become persisted profile data
 
-A message containing `[FILE ALLEGATI]` is the one exception to the direct-write rule. After reading the CV:
+A message containing `[FILE ALLEGATI]`, and a message that carries the CV itself as pasted text (the whole work history and education, not one fact), are the exceptions to the direct-write rule: facts the person tells you one at a time are still written at once. After reading the CV:
 
 1. Write only the extracted fields to `$JHT_AGENT_DIR/profile-review.yml`. Never write them directly to `candidate_profile.yml`.
 2. Run `python3 /app/shared/skills/profile_review.py stage`.

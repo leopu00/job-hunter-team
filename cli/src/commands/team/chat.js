@@ -119,23 +119,19 @@ export function chatAgentOf(session) {
   return ['capitano', 'assistente', 'mentor', 'scout', 'analista', 'scorer', 'scrittore', 'critico'].includes(base) ? base : null;
 }
 
-/** One read of the chat file: `{ messages, cursor }`, or null when it cannot be read (no container, an older image). */
-export function readChatPage(agent, cursor, { run } = {}) {
-  // The server drops the line a cursor lands in, and a cursor that is the start of a line (where the last read
-  // stopped) lands in the first NEW one: read from the byte before, the newline that ends the line already seen.
-  const from = cursor ? String(Math.max(0, Number(cursor) - 1)) : null;
-  const args = ['read', agent, ...(from !== null ? [from] : [])];
+/** Runs agent_chat.py with `args` (in the container, or on the host) and returns the JSON line it printed, or null. */
+function runChatScript(args, { run, timeoutMs = 15_000 } = {}) {
   let result;
   try {
     if (run) {
       result = run(args);
     } else if (usingContainer()) {
-      result = execScriptInContainer(CHAT_READER, args, { interpreter: 'python3', env: { JHT_HOME: '/jht_home' }, timeoutMs: 15_000 });
+      result = execScriptInContainer(CHAT_READER, args, { interpreter: 'python3', env: { JHT_HOME: '/jht_home' }, timeoutMs });
     } else {
       const { repoRoot } = resolveConfig();
       if (!repoRoot) return null;
       const done = spawnSync('python3', [join(repoRoot, 'shared', 'skills', 'agent_chat.py'), ...args], {
-        encoding: 'utf8', timeout: 15_000, env: { ...process.env, JHT_HOME },
+        encoding: 'utf8', timeout: timeoutMs, env: { ...process.env, JHT_HOME },
       });
       result = { code: done.status ?? -1, stdout: done.stdout || '', stderr: done.stderr || '' };
     }
@@ -145,12 +141,30 @@ export function readChatPage(agent, cursor, { run } = {}) {
   if (!result || result.code !== 0) return null;
   const line = String(result.stdout).split('\n').map((l) => l.trim()).filter((l) => l.startsWith('{')).pop();
   try {
-    const page = JSON.parse(line);
-    if (!Array.isArray(page.messages) || typeof page.cursor !== 'string') return null;
-    return { messages: page.messages, cursor: page.cursor };
+    return JSON.parse(line);
   } catch {
     return null;
   }
+}
+
+/** One read of the chat file: `{ messages, cursor }`, or null when it cannot be read (no container, an older image). */
+export function readChatPage(agent, cursor, { run } = {}) {
+  // The server drops the line a cursor lands in, and a cursor that is the start of a line (where the last read
+  // stopped) lands in the first NEW one: read from the byte before, the newline that ends the line already seen.
+  const from = cursor ? String(Math.max(0, Number(cursor) - 1)) : null;
+  const page = runChatScript(['read', agent, ...(from !== null ? [from] : [])], { run });
+  if (!page || !Array.isArray(page.messages) || typeof page.cursor !== 'string') return null;
+  return { messages: page.messages, cursor: page.cursor };
+}
+
+/**
+ * The open cards of the agent (`agent_chat.py questions`): the questions it asked and nobody answered, whatever channel
+ * they were delivered by. [] when there are none, null when they cannot be read (an older image has no such command).
+ */
+export function readOpenCards(agent, { run } = {}) {
+  const found = runChatScript(['questions', agent], { run });
+  if (!found || !Array.isArray(found.questions)) return null;
+  return found.questions.filter((q) => q && typeof q.id === 'string' && Array.isArray(q.options) && q.options.length);
 }
 
 // What a terminal obeys never reaches the person's screen from an agent's words.
@@ -169,27 +183,57 @@ export function formatChatMessage(message, agent) {
   return `${head}\n${body}${suggestions}`;
 }
 
-/** The chat as the REPL follows it: the newest rows first, then only what is new. */
-export function createChatFeed(agent, read = readChatPage) {
+/** An open card as lines for the screen: its code, its text and its options numbered, and how to answer. */
+export function formatCard(card) {
+  const clean = (value) => String(value ?? '').replace(CONTROLS, '').trim();
+  const head = c.bold('question') + c.dim(` ${clean(card.code)}  ${clean(card.subject)}`);
+  const body = clean(card.text).split('\n').map((l) => `  ${l}`).join('\n');
+  const options = card.options.map((option, index) => `  ${index + 1}) ${clean(option)}`).join('\n');
+  const how = card.multiple
+    ? c.dim('  Several options can be chosen on this card: answer it in the app.')
+    : c.dim(`  Answer with the number (several cards open: write the code first, e.g. «${clean(card.code)} 1»).`);
+  return `${head}\n${body}\n${options}\n${how}`;
+}
+
+/**
+ * The chat as the REPL follows it: the newest rows first, then only what is new. The agent's open cards come with the
+ * rows as `{ card }`, each once: the card of the plan is not in the chat file when it was delivered by the app, and a
+ * person at a terminal would otherwise have to guess the number.
+ */
+export function createChatFeed(agent, read = readChatPage, readCards = () => []) {
   let cursor = null;
   let seen = new Set();
+  const shown = new Set();
+  const newCards = () => {
+    const cards = readCards(agent) || [];
+    const fresh = cards.filter((card) => !shown.has(card.id));
+    for (const card of fresh) shown.add(card.id);
+    return fresh.map((card) => ({ card }));
+  };
   return {
-    /** The latest rows (the welcome is among them), or null when the chat cannot be read. */
+    /** The latest rows (the welcome is among them) and the open cards, or null when the chat cannot be read. */
     history(limit = HISTORY_ROWS) {
       const page = read(agent, null);
       if (!page) return null;
       cursor = page.cursor;
       seen = new Set(page.messages.map((m) => m.id));
-      return page.messages.slice(-limit);
+      return [...page.messages.slice(-limit), ...newCards()];
     },
-    /** The rows that came since the last look. */
+    /** The rows that came since the last look, and the cards that opened. */
     fresh() {
       const page = read(agent, cursor);
-      if (!page) return [];
-      cursor = page.cursor;
-      const out = page.messages.filter((m) => !seen.has(m.id));
-      for (const m of out) seen.add(m.id);
-      return out;
+      const out = [];
+      if (page) {
+        cursor = page.cursor;
+        for (const m of page.messages) if (!seen.has(m.id)) { seen.add(m.id); out.push(m); }
+      }
+      return [...out, ...newCards()];
+    },
+    /** Every card open now, shown before or not (`/cards`). */
+    open() {
+      const cards = readCards(agent) || [];
+      for (const card of cards) shown.add(card.id);
+      return cards.map((card) => ({ card }));
     },
   };
 }
@@ -307,14 +351,14 @@ export async function chatAction(agentArg, options = {}) {
   const rl = createInterface({ input, output, terminal: true });
   console.log('');
   console.log(c.bold(`Chat with ${session}`) + c.dim(`  (${usingContainer() ? 'container jht' : 'tmux host'})`));
-  console.log(c.dim('  /exit to exit · /read for new messages · /pane for the terminal · /clear to clean'));
+  console.log(c.dim('  /exit to exit · /read for new messages · /cards for the open questions · /pane for the terminal · /clear to clean'));
   console.log('');
 
   // What the agent wrote to the chat (its welcome included), not only the terminal's screen.
   const agent = chatAgentOf(session);
-  const feed = agent ? createChatFeed(agent) : null;
+  const feed = agent ? createChatFeed(agent, readChatPage, readOpenCards) : null;
   const pump = feed ? createChatPump(feed) : null;
-  const show = (rows) => { for (const row of rows) console.log(`${formatChatMessage(row, agent)}\n`); };
+  const show = (rows) => { for (const row of rows) console.log(`${row.card ? formatCard(row.card) : formatChatMessage(row, agent)}\n`); };
   if (feed) {
     const past = feed.history();
     if (past === null) console.log(c.dim('  (the chat cannot be read here: /pane shows the terminal)\n'));
@@ -351,6 +395,11 @@ export async function chatAction(agentArg, options = {}) {
       if (msg === '/read') {
         const rows = feed ? feed.fresh() : [];
         if (rows.length) show(rows); else console.log(c.dim('  (no new messages)'));
+        continue;
+      }
+      if (msg === '/cards') {
+        const rows = feed ? feed.open() : [];
+        if (rows.length) show(rows); else console.log(c.dim('  (no open questions)'));
         continue;
       }
       if (msg === '/clear') { console.clear(); continue; }
