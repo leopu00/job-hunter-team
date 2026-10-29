@@ -386,7 +386,12 @@ _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
 # A third footer: after a turn that ended in a plan-like answer Codex offers «Create a plan?  shift + tab use Plan mode
 # esc dismiss» in place of the model line (TEST 19b, 29/10, the Capitano): the composer above it was not found, the
 # text pasted into it was «another draft», and the transport left it there with no Enter for six minutes.
-_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|^\s*Create a plan\?\s+shift\s*\+\s*tab\b|\s{6,}\d{1,3}% context left\s*$)")
+# A fourth: after ONE Escape pressed with text in the composer Codex draws «esc again to edit previous message» in place of
+# the model line (vega, 29/10, the Scout and two Analisti): the throttle's wake-up that sat in the box was read as a menu
+# («shows a menu, login, or permission request», rc=3) and stayed there unsent for five rounds, until the session was
+# recreated.
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|^\s*Create a plan\?\s+shift\s*\+\s*tab\b|^\s*esc again to edit previous message\b|\s{6,}\d{1,3}% context left\s*$)")
+_ESC_AGAIN = re.compile(r"^\s*esc again to edit previous message\b")
 _CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
 _NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
 
@@ -459,7 +464,12 @@ def _status_line_busy(line: str) -> bool:
 
 
 def _composer_match(line: str):
-    return _BOXED_COMPOSER.match(line) or _PLAIN_COMPOSER.match(line)
+    match = _BOXED_COMPOSER.match(line) or _PLAIN_COMPOSER.match(line)
+    # «>_» is the banner of Codex («│ >_ OpenAI Codex (v0.147.0)») that the card of /status draws inside its box, not a
+    # prompt: with the card in the scrollback it was read as a boxed composer holding «OpenAI Codex ...» as a draft.
+    if match and match.group(1) == ">" and match.group(2).startswith("_"):
+        return None
+    return match
 
 
 def _only_faint_content(raw: str, plain: str, marker_at: int, boxed: bool) -> bool:
@@ -526,6 +536,8 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
     run: list[str] = []
     consumed = 0
     for offset, (_raw, plain) in enumerate(lines[index + 1:], 1):
+        if _ESC_AGAIN.match(plain):
+            break                 # the footer sits right under the draft, no blank row between: it is not the draft's
         if not plain.strip():
             # A message that holds an empty line (the Dottore's [UNBLOCK], TEST 19f) is drawn with a blank row between
             # its rows. One blank row does not end the draft when more text follows it; it ends it when nothing
