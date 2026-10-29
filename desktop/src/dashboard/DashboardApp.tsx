@@ -758,7 +758,7 @@ export default function DashboardApp() {
           if (!active || activeIdentityKeyRef.current !== identityKey) return;
           // No first-run file yet (phase null) is a first run that waits for the profile; only an unreadable state is null.
           const firstRun: FirstRunSignal | null = read
-            ? { phase: read.phase ?? "awaiting_profile", workers: read.workers, planDeclared: read.planDeclared }
+            ? { phase: read.phase === null ? "awaiting_profile" : read.phase, workers: read.workers, planDeclared: read.planDeclared }
             : null;
           setGuidedSignals({ profileReady: snapshot.profileReady, captainRunning: snapshot.captainRunning, firstRun });
           teamIsUp = teamStarted({ captainRunning: snapshot.captainRunning, firstRun });
