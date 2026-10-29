@@ -1,4 +1,4 @@
-"""A Codex that says «esc again to edit previous message» under its composer still has a composer (vega, 29/10).
+"""A Codex that says «esc again to edit previous message» under its composer still has a composer (a first run, 29/10).
 
 The Dottore's round typed `/status` into the sessions and pressed one Escape with the throttle's wake-up waiting in the
 composer. Codex then draws «esc again to edit previous message» where the model line was. The reader did not know that

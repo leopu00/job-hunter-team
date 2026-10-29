@@ -1,6 +1,6 @@
 """The context of a session is read without leaving a panel open on it.
 
-vega, 29/10: the Dottore's round typed `/status` into the pane of every session and pressed ONE Escape without
+A first run, 29/10: the Dottore's round typed `/status` into the pane of every session and pressed ONE Escape without
 looking; a card that stayed open under the composer made every wake-up of the throttle come back rc=3 until the
 session was recreated. `session_context.py` reads the context from the logs of the CLI (no key at all) and, for the
 one provider whose logs do not say it, opens the panel and closes it UNTIL THE SCREEN SHOWS THE COMPOSER AGAIN.

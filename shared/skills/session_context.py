@@ -3,7 +3,7 @@
 
 The Dottore's round (skill session-refresh, step 1.5) measured the context by typing `/status` into the pane of
 every session, capturing, and pressing ONE Escape without looking at the screen. A card that stayed open under the
-composer made every wake-up of the throttle come back rc=3 until the session was recreated (vega, 29/10: eleven
+composer made every wake-up of the throttle come back rc=3 until the session was recreated (a first run, 29/10: eleven
 sessions down to seven, the database still for an hour).
 
 This is the one way to read it:

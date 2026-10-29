@@ -387,7 +387,7 @@ _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
 # esc dismiss» in place of the model line (TEST 19b, 29/10, the Capitano): the composer above it was not found, the
 # text pasted into it was «another draft», and the transport left it there with no Enter for six minutes.
 # A fourth: after ONE Escape pressed with text in the composer Codex draws «esc again to edit previous message» in place of
-# the model line (vega, 29/10, the Scout and two Analisti): the throttle's wake-up that sat in the box was read as a menu
+# the model line (a first run, 29/10, a Scout and two Analisti): the throttle's wake-up that sat in the box was read as a menu
 # («shows a menu, login, or permission request», rc=3) and stayed there unsent for five rounds, until the session was
 # recreated.
 _CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|^\s*Create a plan\?\s+shift\s*\+\s*tab\b|^\s*esc again to edit previous message\b|\s{6,}\d{1,3}% context left\s*$)")
