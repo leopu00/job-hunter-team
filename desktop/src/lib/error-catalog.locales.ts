@@ -1598,6 +1598,20 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A szolgáltató nem adott használható választ: ez nem az előfizetésed korlátja.", "Magam újrapróbálom. Ha folytatódik, nézd meg a szolgáltató állapotát."],
     pt: ["O fornecedor não deu uma resposta utilizável: não é um limite da tua subscrição.", "Tento de novo sozinho. Se continuar, verifica o estado do fornecedor."],
   },
+  "The time you chose is too close: it must be at least 15 minutes away.": {
+    de: ["Die gewählte Uhrzeit ist zu nah: Es braucht mindestens 15 Minuten.", "Wähle eine spätere Uhrzeit und versuche es erneut."],
+    es: ["La hora elegida está demasiado cerca: hacen falta al menos 15 minutos.", "Elige una hora más tarde e inténtalo de nuevo."],
+    fr: ["L’heure choisie est trop proche : il faut au moins 15 minutes.", "Choisis une heure plus tard et réessaie."],
+    hu: ["A választott időpont túl közel van: legalább 15 perc kell.", "Válassz későbbi időpontot, és próbáld újra."],
+    pt: ["A hora escolhida está demasiado perto: são precisos pelo menos 15 minutos.", "Escolhe uma hora mais à frente e tenta de novo."],
+  },
+  "The time you chose is more than 12 hours from now, which is the maximum.": {
+    de: ["Die gewählte Uhrzeit liegt mehr als 12 Stunden entfernt, das ist das Maximum.", "Wähle eine Uhrzeit innerhalb von 12 Stunden und versuche es erneut."],
+    es: ["La hora elegida pasa de las 12 horas desde ahora, que es el máximo.", "Elige una hora dentro de las próximas 12 horas e inténtalo de nuevo."],
+    fr: ["L’heure choisie dépasse 12 heures à partir de maintenant, qui est le maximum.", "Choisis une heure dans les 12 heures et réessaie."],
+    hu: ["A választott időpont több mint 12 órára van, ez a maximum.", "Válassz 12 órán belüli időpontot, és próbáld újra."],
+    pt: ["A hora escolhida passa das 12 horas a partir de agora, que é o máximo.", "Escolhe uma hora dentro das próximas 12 horas e tenta de novo."],
+  },
 };
 
 function translated(englishText: string): ErrorTranslations {
@@ -1762,6 +1776,41 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["A csapat ezen a számítógépen nem fut.", "Indítsd el a csapatot, majd próbáld újra."],
     ["A equipa deste computador não está em funcionamento.", "Inicia a equipa e tenta novamente."],
   ),
+  deck_outdated: tr(
+    ["Der Stapel, den du ansiehst, ist nicht mehr der des Teams.", "Aktualisiere die Seite, um ihn neu zu lesen, und bewerte erneut."],
+    ["La baraja que estás viendo ya no es la del equipo.", "Actualiza la página para volver a leerla y valora de nuevo."],
+    ["Le paquet que tu regardes n’est plus celui de l’équipe.", "Actualise la page pour le relire, puis juge de nouveau."],
+    ["A pakli, amit nézel, már nem a csapaté.", "Frissítsd az oldalt az újraolvasáshoz, és értékelj újra."],
+    ["O baralho que estás a ver já não é o da equipa.", "Atualiza a página para o ler de novo e avalia outra vez."],
+  ),
+  position_not_found: tr(
+    ["Diese Position ist nicht mehr im Team.", "Aktualisiere die Seite: Der Stapel wird neu gelesen."],
+    ["Esta posición ya no está en el equipo.", "Actualiza la página: la baraja se vuelve a leer."],
+    ["Ce poste n’est plus dans l’équipe.", "Actualise la page : le paquet est relu."],
+    ["Ez a pozíció már nincs a csapatnál.", "Frissítsd az oldalt: a paklit újraolvassa."],
+    ["Esta posição já não está na equipa.", "Atualiza a página: o baralho é lido de novo."],
+  ),
+  feedback_refused: tr(
+    ["Das Team hat die Bewertung nicht gespeichert.", "Aktualisiere die Seite und versuche es erneut; bleibt es so, sieh dir den Zustand des Teams an."],
+    ["El equipo no registró la valoración.", "Actualiza la página y vuelve a intentarlo; si sigue igual, mira el estado del equipo."],
+    ["L’équipe n’a pas enregistré le jugement.", "Actualise la page et réessaie ; si cela persiste, regarde l’état de l’équipe."],
+    ["A csapat nem rögzítette az értékelést.", "Frissítsd az oldalt, és próbáld újra; ha így marad, nézd meg a csapat állapotát."],
+    ["A equipa não registou a avaliação.", "Atualiza a página e tenta novamente; se continuar assim, vê o estado da equipa."],
+  ),
+  exclude_refused: tr(
+    ["Das Team hat die Position nicht ausgeschlossen.", "Aktualisiere die Seite und versuche es erneut; bleibt es so, sieh dir den Zustand des Teams an."],
+    ["El equipo no excluyó la posición.", "Actualiza la página y vuelve a intentarlo; si sigue igual, mira el estado del equipo."],
+    ["L’équipe n’a pas exclu le poste.", "Actualise la page et réessaie ; si cela persiste, regarde l’état de l’équipe."],
+    ["A csapat nem zárta ki a pozíciót.", "Frissítsd az oldalt, és próbáld újra; ha így marad, nézd meg a csapat állapotát."],
+    ["A equipa não excluiu a posição.", "Atualiza a página e tenta novamente; se continuar assim, vê o estado da equipa."],
+  ),
+  note_invalid: tr(
+    ["Die Notiz ist kein Text, den das Team akzeptiert.", "Schreibe sie noch einmal, einfacher."],
+    ["La nota no es un texto que el equipo acepte.", "Escríbela de nuevo, más sencilla."],
+    ["La note n’est pas un texte que l’équipe accepte.", "Écris-la de nouveau, plus simple."],
+    ["A jegyzet nem olyan szöveg, amelyet a csapat elfogad.", "Írd meg újra, egyszerűbben."],
+    ["A nota não é um texto que a equipa aceite.", "Escreve-a de novo, mais simples."],
+  ),
   profile_progress_invalid: tr(
     ["Der Fortschritt des Profils lässt sich nicht lesen.", "Versuche es gleich noch einmal; bleibt es so, sieh dir den Zustand des Teams an."],
     ["No se puede leer el avance del perfil.", "Vuelve a intentarlo en un momento; si sigue igual, mira el estado del equipo."],
@@ -1893,6 +1942,8 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   stats_clear_failed: translated("The statistics were not cleared."),
   team_settings_request_invalid: translated("The request is not valid and was not sent to the team."),
   team_settings_value_invalid: translated("A chosen value is not one of the allowed ones: nothing was saved."),
+  team_settings_burst_too_soon: translated("The time you chose is too close: it must be at least 15 minutes away."),
+  team_settings_burst_too_far: translated("The time you chose is more than 12 hours from now, which is the maximum."),
   team_settings_read_only: translated("This team is connected read only: hours and models cannot be changed from here."),
   team_settings_unavailable: translated("The team's hours and models could not be read or saved."),
   cloud_token_read_only: translated("To renew the token the team must be connected in full."),

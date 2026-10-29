@@ -2023,6 +2023,43 @@ def answer(agent: str, question_id: str, raw: str) -> dict:
     return {"questionId": question_id, "accepted": True, "at": at}
 
 
+def reply(agent: str, text: str) -> dict:
+    """A line typed in a terminal to this agent (``jht team chat``, ``jht team send``): an answer to one of ITS open
+    questions, or just chat.
+
+    The number of an option, ``Q#### <number>``, an option's exact label, or a yes in words for the card that asks to
+    save the profile (``agent_questions.resolve_terminal_reply``) is the person's answer, recorded the way the app's
+    button records it and followed by the same wake line to the agent. The answer is
+    ``{"result": "answered", "questionId", "label"}``, ``{"result": "invalid", "reason", "code"}`` (it meant a
+    question and is not one of its options: the line is NOT sent on), ``{"result": "closed"}`` (answered or expired
+    meanwhile) or ``{"result": "chat"}``: everything else, and every case where the answer cannot be given
+    (an image without questions, no database): the caller sends the line to the agent as text, as it always did."""
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file() or not text.strip():
+        return {"result": "chat"}
+    try:
+        conn = sqlite3.connect(str(path), timeout=10)
+    except sqlite3.Error:
+        return {"result": "chat"}
+    try:
+        try:
+            typed = aq.resolve_terminal_reply(conn, agent, text)
+        except (aq.QuestionRejected, aq.AnswerRejected, sqlite3.Error):
+            return {"result": "chat"}
+    finally:
+        conn.close()
+    if typed.status == "recorded":
+        if _wake_for_answer(agent, AGENTS[agent]) != "sent":
+            _spawn_wake_retry(agent, typed.id_domanda)
+        return {"result": "answered", "questionId": typed.id_domanda, "label": typed.label}
+    if typed.status == "invalid":
+        return {"result": "invalid", "reason": typed.code, "code": typed.answer_code}
+    if typed.status in ("already_answered", "expired"):
+        return {"result": "closed"}
+    return {"result": "chat"}
+
+
 def _answer_stdin() -> str:
     data = sys.stdin.buffer.read(MAX_ANSWER_STDIN + 1)
     if len(data) > MAX_ANSWER_STDIN:
@@ -2043,6 +2080,8 @@ def run(argv: list[str]) -> dict:
         return enter(agent_of(argv[1]), argv[2])
     if len(argv) == 3 and argv[0] == "answer":
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
+    if len(argv) == 2 and argv[0] == "reply":
+        return reply(agent_of(argv[1]), _answer_stdin())
     if len(argv) == 3 and argv[0] == "wake":
         return wake(agent_of(argv[1]), argv[2])
     if len(argv) == 2 and argv[0] == "drain":

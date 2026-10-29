@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LOCAL_TEAM_NON_GET_ALLOWED, notInDesktop, shellApi } from "./api-bridge";
+import { LOCAL_TEAM_NON_GET_ALLOWED, localTeamNonGetAllowed, notInDesktop, shellApi } from "./api-bridge";
 import { setLocalTeamData } from "../lib/local-team-data";
 import { createClient as clientSide } from "../web-shims/server/supabase-client";
 import { createClient as serverSide } from "../web-shims/server/supabase-server";
@@ -56,7 +56,7 @@ describe("a local profile never writes through /api", () => {
     for (const { route, methods } of withWrites) {
       const path = `/api/${route.replace(/\[[^\]]+\]/g, "7")}`;
       for (const method of methods) {
-        if (Object.hasOwn(LOCAL_TEAM_NON_GET_ALLOWED, path)) continue;
+        if (localTeamNonGetAllowed(method, path)) continue;
         const answer = await api(path, { method });
         expect(answer.status, `${method} ${path}`).toBe(403);
         expect(await answer.json(), `${method} ${path}`).toEqual({ error: "read_only" });
@@ -65,11 +65,40 @@ describe("a local profile never writes through /api", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("lists each exception with a reason, and the list is only the language cookie", () => {
-    expect(Object.keys(LOCAL_TEAM_NON_GET_ALLOWED)).toEqual(["/api/i18n"]);
+  it("lists each exception with a reason, and the list is the language cookie and the three verdicts of the Swipe", () => {
+    expect(Object.keys(LOCAL_TEAM_NON_GET_ALLOWED)).toEqual([
+      "/api/i18n",
+      "POST /api/positions/[legacyId]/feedback",
+      "POST /api/positions/[legacyId]/user-exclude",
+      "DELETE /api/positions/[legacyId]/user-exclude",
+    ]);
     for (const [path, reason] of Object.entries(LOCAL_TEAM_NON_GET_ALLOWED)) {
       expect(reason.length, path).toBeGreaterThan(30);
     }
+  });
+});
+
+describe("the verdicts of the Swipe are the only positions routes a local profile may write", () => {
+  it("lets the three verdict calls through to the link that answers them, by method, and refuses the rest of the position's routes", async () => {
+    setLocalTeamData("local:abc");
+    const next = vi.fn(async () => new Response("{}", { status: 200 }));
+    const api = shellApi(next);
+    for (const [method, path] of [["POST", "/api/positions/7/feedback"], ["POST", "/api/positions/7/user-exclude"], ["DELETE", "/api/positions/7/user-exclude"]] as const) {
+      expect((await api(path, { method })).status, `${method} ${path}`).toBe(200);
+    }
+    expect(next).toHaveBeenCalledTimes(3);
+    next.mockClear();
+    for (const [method, path] of [
+      ["PUT", "/api/positions/7/feedback"], ["DELETE", "/api/positions/7/feedback"], ["PATCH", "/api/positions/7/user-exclude"],
+      ["POST", "/api/positions/7/user-note"], ["DELETE", "/api/positions/7/user-note"], ["POST", "/api/positions/7/write-request"],
+      ["POST", "/api/positions/7/apply-request"], ["POST", "/api/positions/7/recheck-request"], ["POST", "/api/positions/7/mark-applied"],
+      ["POST", "/api/positions/7/ticket"], ["POST", "/api/positions/7/feedback/extra"], ["POST", "/api/positions/feedback"],
+    ] as const) {
+      const answer = await api(path, { method });
+      expect(answer.status, `${method} ${path}`).toBe(403);
+      expect(await answer.json()).toEqual({ error: "read_only" });
+    }
+    expect(next).not.toHaveBeenCalled();
   });
 });
 
@@ -82,8 +111,10 @@ describe("the local mode's «signed in» is not an identity", () => {
       .sort();
     expect(callers).toEqual([
       "lib/existing-team-positions.ts",
+      "lib/local-judgement-api.ts",
       "lib/local-team-data.ts",
       "pages/map/map-api.ts",
+      "pages/swipe/load-swipe.ts",
       "pages/team/local-team-api.ts",
       "shell/api-bridge.ts",
       "web-shims/server/auth.ts",

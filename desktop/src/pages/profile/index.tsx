@@ -9,12 +9,18 @@ import { appLocale } from "../../lib/app-locale";
 import { pluralText } from "../../lib/plural";
 import { cloudSessionReadable } from "../../lib/auth-storage-lock";
 import { cloudClient } from "../../lib/cloud-client";
+import { useLocalTeamData } from "../../lib/local-team-data";
 import { readOnce, withReadDeadline } from "../../lib/read-deadline";
-import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
+import { useCloudDataBlocked } from "../../shell/CloudDataNotice";
+import { ProfileProgressCard } from "../../profile-progress/ProfileProgressCard";
+import type { ProfileProgressRead } from "../../profile-progress/read";
+import { useProfileProgress } from "../../profile-progress/useProfileProgress";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
+import ExistingTeamProfilePage from "../existing-team/profile";
 import type { PageProps } from "../types";
 import { LinkedinLoginCard } from "./LinkedinLoginCard";
+import LocalProfile from "./LocalProfile";
 import { PROFILE_PAGE_TEXT } from "./profile-page.i18n";
 import { loadProfile, profileExport, type ProfileData } from "./load-profile";
 
@@ -57,8 +63,8 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   );
 
   const t = getProfileT(locale);
-  // No cloud session (a local profile): the notice is the page, not a bare line on a black screen.
-  if (blocked) return <CloudDataNotice />;
+  // No cloud session (a local profile): the page is the team's own profile on this computer, not a sign-in notice.
+  if (blocked) return <LocalProfile />;
   if (load.state === "loading") return <ProfileLoading />;
   if (load.state === "signed-out")
     // A readable session that no longer answers as signed in is an expired one; with no cloud session at
@@ -102,6 +108,29 @@ export function ProfilePage({ client = cloudClient() }: { client?: SupabaseClien
   );
 }
 
-export default function ProfileRoute(_props: PageProps) {
-  return <ProfilePage />;
+/**
+ * The Profile page with the team on this computer: the candidate profile the team holds (the same page as an
+ * existing team's) and, above it, the bar of what the profile still needs, until it is complete. A bar that cannot
+ * be read yet shows nothing: the page below tells its own read failure. `read` is for the tests.
+ */
+export function LocalTeamProfile({ read, ...props }: PageProps & { read?: () => Promise<ProfileProgressRead> }) {
+  const progress = useProfileProgress(read);
+  const incomplete = progress.state === "ready" && progress.filled < progress.total;
+  return (
+    <>
+      {incomplete && (
+        <section className="max-w-xl mx-auto px-5 pt-16" data-testid="local-team-profile-progress">
+          <ProfileProgressCard progress={progress} />
+        </section>
+      )}
+      <ExistingTeamProfilePage {...props} />
+    </>
+  );
+}
+
+export default function ProfileRoute(props: PageProps) {
+  // With the team on this computer (no cloud account) the profile is read from the team's own container; with
+  // neither a team nor a cloud account the page is the local profile's, with the bar of what it still needs.
+  const localTeam = useLocalTeamData();
+  return localTeam ? <LocalTeamProfile {...props} /> : <ProfilePage />;
 }

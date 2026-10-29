@@ -1180,6 +1180,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "A chosen value is not one of the allowed ones: nothing was saved.",
     "Check the hours and the models, then try again.",
   ),
+  team_settings_burst_too_soon: copy(
+    "L’ora scelta è troppo vicina: servono almeno 15 minuti.",
+    "Scegli un’ora più avanti e riprova.",
+    "The time you chose is too close: it must be at least 15 minutes away.",
+    "Choose a later time and try again.",
+  ),
+  team_settings_burst_too_far: copy(
+    "L’ora scelta è oltre le 12 ore da adesso, che è il massimo.",
+    "Scegli un’ora entro 12 ore e riprova.",
+    "The time you chose is more than 12 hours from now, which is the maximum.",
+    "Choose a time within 12 hours and try again.",
+  ),
   team_settings_read_only: copy(
     "Questa squadra è collegata in sola lettura: orari e modelli non si cambiano da qui.",
     "Collega la squadra con «Conferma e collega» e riprova.",
@@ -1712,6 +1724,37 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Avvia la squadra e riprova.",
     "The team on this computer is not running.",
     "Start the team and try again.",
+  ),
+  // The Swipe of this computer's team: a verdict is written only on the deck it was read from.
+  deck_outdated: copy(
+    "Il mazzo che stai guardando non è più quello del team.",
+    "Aggiorna la pagina per rileggerlo e giudica di nuovo.",
+    "The deck you are looking at is no longer the team's.",
+    "Refresh the page to read it again and judge again.",
+  ),
+  position_not_found: copy(
+    "Questa posizione non c’è più nel team.",
+    "Aggiorna la pagina: il mazzo si rilegge.",
+    "This position is no longer in the team.",
+    "Refresh the page: the deck is read again.",
+  ),
+  feedback_refused: copy(
+    "Il team non ha registrato il giudizio.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not record the verdict.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  exclude_refused: copy(
+    "Il team non ha escluso la posizione.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not exclude the position.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  note_invalid: copy(
+    "La nota non è un testo che il team accetta.",
+    "Scrivila di nuovo, più semplice.",
+    "The note is not a text the team accepts.",
+    "Write it again, simpler.",
   ),
   profile_progress_invalid: copy(
     "Non riesco a leggere a che punto è il profilo.",

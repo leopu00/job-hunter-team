@@ -62,7 +62,7 @@ EXPIRED_PREFIX = "exp:"
 VERSION = 1
 
 TIPI = ("urgente", "blocco", "domanda", "completamento", "comunicazione")
-CANALI = ("telegram", "desktop", "web", "gioco", "tool")
+CANALI = ("telegram", "desktop", "web", "gioco", "tool", "cli")
 RINVIA = "_rinvia"
 
 MAX_OBJECT = 120
@@ -1033,11 +1033,12 @@ def _bot_questions(conn: sqlite3.Connection, bot_role: str, *, answered: bool) -
 
 
 def _record_typed(
-    conn: sqlite3.Connection, question: dict, choice: str, now: datetime | None, *, explicit: bool
+    conn: sqlite3.Connection, question: dict, choice: str, now: datetime | None, *, explicit: bool,
+    canale: str = "telegram",
 ) -> Typed:
     code = answer_code(question["id"])
     try:
-        answered = record_answer(conn, question["id"], [choice], "", canale="telegram", now=now)
+        answered = record_answer(conn, question["id"], [choice], "", canale=canale, now=now)
     except AnswerRejected as error:
         return Typed("invalid", question["id"], error.code, answer_code=code) if explicit else Typed("not_an_answer")
     label = _labels(question["payload"], [choice])
@@ -1074,7 +1075,21 @@ def resolve_typed_reply(
     reply = " ".join(str(text or "").split())
     if not reply:
         return Typed("not_an_answer")
-    open_questions = _bot_questions(conn, bot_role, answered=False)
+    return _resolve_among(conn, _bot_questions(conn, bot_role, answered=False), reply, reply_to_text,
+                          explicit_only=explicit_only, now=now, canale="telegram")
+
+
+def _resolve_among(
+    conn: sqlite3.Connection,
+    open_questions: list[dict],
+    reply: str,
+    reply_to_text: str | None,
+    *,
+    explicit_only: bool,
+    now: datetime | None,
+    canale: str,
+) -> Typed:
+    """`resolve_typed_reply` over a given list of open questions (see there for the rules)."""
     if not open_questions:
         return Typed("not_an_answer")
     by_code: dict[str, list[dict]] = {}
@@ -1106,7 +1121,47 @@ def resolve_typed_reply(
         if explicit and (coded or error.code != "reply_not_an_option"):
             return Typed("invalid", target["id"], error.code, answer_code=answer_code(target["id"]))
         return Typed("not_an_answer")
-    return _record_typed(conn, target, choice, now, explicit=explicit)
+    return _record_typed(conn, target, choice, now, explicit=explicit, canale=canale)
+
+
+# A yes in words, typed in a terminal, answers the ONE question open for that agent when it has a «confirm» option
+# (the card that asks to save the profile): the person sees that card as a numbered list and may just as well write
+# «yes, save». A closed list of forms that SAY what they do, normalised (case, punctuation and spaces apart); a bare
+# «yes» or «ok» is not in it: a person who writes «ok» to the Assistente for something else must not save the profile.
+AFFIRMATIVE_REPLIES = frozenset({
+    "yes save", "yes confirm", "confirm", "confirm and save",
+    "sì salva", "si salva", "conferma", "confermo", "conferma e salva", "ok salva",
+    "sí guarda", "ja speichern", "oui enregistre", "igen mentsd", "sim guarda",
+})
+CONFIRM_OPTION_ID = "confirm"
+
+
+def _affirmative(text: str) -> bool:
+    words = re.sub(r"[^\w ]+", " ", str(text or "").casefold())
+    return " ".join(words.split()) in AFFIRMATIVE_REPLIES
+
+
+def resolve_terminal_reply(
+    conn: sqlite3.Connection, agent: str, text: str, *, now: datetime | None = None
+) -> Typed:
+    """Does a line typed in a terminal (`jht team chat`, `jht team send`) answer one of THIS agent's open questions?
+
+    The same three forms as a reply typed on Telegram (the option's number, `Q#### <number>`, the exact label), over
+    the questions of the one agent the line is written to, and then the yes of `AFFIRMATIVE_REPLIES` for a question
+    that has a `confirm` option. With several questions open and no code it is chat. The answer is the same as the
+    app's button: `record_answer`, the first answer wins, an expired question takes its default."""
+    reply = " ".join(str(text or "").split())
+    if not reply:
+        return Typed("not_an_answer")
+    mine = [q for q in _bot_questions(conn, bot_role_for(agent), answered=False)
+            if str(q["row"].get("agent") or "").lower() == agent.lower()]
+    found = _resolve_among(conn, mine, reply, None, explicit_only=False, now=now, canale="cli")
+    if found.status != "not_an_answer" or not _affirmative(reply) or len(mine) != 1:
+        return found
+    option_ids = [o["id"] for o in mine[0]["payload"]["opzioni"]]
+    if CONFIRM_OPTION_ID not in option_ids or mine[0]["payload"]["multipla"]:
+        return found
+    return _record_typed(conn, mine[0], CONFIRM_OPTION_ID, now, explicit=True, canale="cli")
 
 
 def resolve_callback(conn: sqlite3.Connection, bot_role: str, data: Any, now: datetime | None = None) -> Typed:

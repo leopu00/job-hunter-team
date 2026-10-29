@@ -981,6 +981,24 @@ def _burn_intent_sweep():
         return None
 
 
+_BURST_MOD = None
+
+
+def _burst_sweep():
+    """Chiude una fascia «a tutta fino alle HH:MM» finita: rimette gli orari di prima.
+
+    Qui e non nell'app: deve succedere anche con l'app chiusa. Lo stato sta su disco
+    (`.burst.json`), quindi se il container era spento alla scadenza il ripristino avviene
+    al primo tick dopo l'avvio. Non solleva mai: un errore si riprova al tick dopo."""
+    global _BURST_MOD
+    try:
+        if _BURST_MOD is None:
+            _BURST_MOD = _load_skill_module("burst", "burst.py")
+        return _BURST_MOD.sweep() if _BURST_MOD else None
+    except Exception:                                       # noqa: BLE001
+        return None
+
+
 def _burn_intent_notify_user():
     """Avvisa l'UTENTE (JHT-T33): un'ora prima che la deroga scada, e quando è scaduta.
 
@@ -3173,6 +3191,7 @@ def main():
         # tick: sotto, ogni freno di spesa legge `_bi` e nessuno lo ri-calcola.
         _burn_intent_notify_user()
         _burn_intent_sweep()
+        _burst_sweep()
         _bi = _burn_intent_status()
         _bi_on = bool(_bi.get("active"))
         _burn_intent_announce(state, _bi)

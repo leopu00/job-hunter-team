@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { LATEST_CONFIG_VERSION } from '../../../cli/src/commands/migrate.js';
 
 // Mock node:fs e setup-helpers per evitare scritture reali.
 vi.mock('node:fs');
@@ -130,7 +131,8 @@ describe('runSetupWizard — provider OpenAI (subscription)', () => {
     expect(savedConfig.active_provider).toBe('openai');
     expect(savedConfig.providers.openai.auth_method).toBe('subscription');
     expect(savedConfig.providers.openai.model).toBe('gpt-4o');
-    expect(savedConfig.version).toBe(1);
+    // a new config is born at the latest version: nothing to migrate for the first `jht doctor`
+    expect(savedConfig.version).toBe(LATEST_CONFIG_VERSION);
   });
 });
 

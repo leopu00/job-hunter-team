@@ -53,6 +53,24 @@ const MIGRATIONS = [
   },
 ];
 
+/** The version a config has once every migration is applied. */
+export const LATEST_CONFIG_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+
+/**
+ * A config brought to the latest version in memory (the migrations are idempotent). What a fresh install writes
+ * goes through here, so that the first `jht doctor` does not announce an update for a config that has just been made.
+ */
+export function migrateToLatest(config) {
+  let current = config.version || 1;
+  let migrated = config;
+  for (const migration of MIGRATIONS) {
+    if (migration.version <= current) continue;
+    migrated = migration.up(migrated);
+    current = migration.version;
+  }
+  return migrated;
+}
+
 async function handleMigrate(options) {
   if (!(await fileExists(CONFIG_PATH))) {
     console.error('  Config not found. Run: jht setup');

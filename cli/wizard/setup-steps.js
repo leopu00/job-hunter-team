@@ -12,6 +12,7 @@ import { describeSecret } from './secret-ref.js';
 import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 import { t } from './i18n.js';
+import { migrateToLatest } from '../src/commands/migrate.js';
 
 /**
  * Setup Telegram CONSIGLIATO ma OPZIONALE (direction shift "interaction
@@ -127,12 +128,13 @@ export async function assembleAndSaveConfig(prompter, params) {
   }
   providerConfig.model = model;
 
-  const config = {
+  // a new config is born at the latest version: `jht doctor` must not offer a migration for it
+  const config = migrateToLatest({
     version: 1,
     active_provider: providerChoice,
     providers: { ...baseProviders, [providerChoice]: providerConfig },
     channels: {},
-  };
+  });
 
   // Working hours: presenti solo se l'utente ha scelto un preset (no 24/7).
   // Quando assenti il team gira 24/7 (default storico).
