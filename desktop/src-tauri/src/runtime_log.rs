@@ -27,6 +27,8 @@ const STREAM_TAIL_BYTES: usize = 16 * 1024;
 const SUPPORT_LOG_TAIL_LINES: usize = 120;
 const SUPPORT_REPORT_MAX_BYTES: usize = 128 * 1024;
 static SUPPORT_REPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+/// The saved support reports kept: the newest ones, the older are deleted when a new one is saved.
+const SUPPORT_REPORTS_KEPT: usize = 50;
 
 #[derive(Clone)]
 pub(crate) struct RuntimeLog {
@@ -611,18 +613,29 @@ pub(crate) struct OnboardingSupportDraft {
     markdown: String,
 }
 
-/// Saves the already-redacted long report for a manual mail attachment. The
-/// UI gets only this logical path, never the user-specific filesystem path.
+/// Saves the already-redacted report as a private copy on this computer, whatever the person does with
+/// it next (sent, mail). The UI gets only the file's name, never a path, and says when the copy could not
+/// be kept: the codes are `support_report_invalid`, `support_report_dir_unavailable` and
+/// `support_report_write_failed`.
 #[tauri::command]
 pub(crate) fn onboarding_support_report_save(
     app: tauri::AppHandle,
     draft: OnboardingSupportDraft,
-) -> Option<String> {
+) -> Result<String, String> {
     if draft.markdown.is_empty() || draft.markdown.len() > SUPPORT_REPORT_MAX_BYTES || draft.markdown.contains('\0') {
-        return None;
+        return Err("support_report_invalid".into());
     }
-    let root = app.path().app_local_data_dir().ok()?;
-    save_onboarding_support_draft(&root.join("support-reports"), &redact_support_draft(draft.markdown))
+    let root = app.path().app_local_data_dir().map_err(|_| "support_report_dir_unavailable".to_string())?;
+    save_onboarding_support_draft(&root.join("support-reports"), &redact_support_draft(draft.markdown)).map_err(str::to_string)
+}
+
+/// Shows the folder of the saved reports in the file manager, with the newest report selected. No argument
+/// comes from the page: the folder is the app's own, and a link or a stray file in it is never followed.
+#[tauri::command]
+pub(crate) fn onboarding_support_reports_open(app: tauri::AppHandle) -> Result<(), String> {
+    let root = app.path().app_local_data_dir().map_err(|_| "support_report_dir_unavailable".to_string())?;
+    let newest = newest_support_report(&root.join("support-reports")).ok_or("support_report_none")?;
+    reveal(&newest).map_err(|_| "support_report_open_failed".to_string())
 }
 
 /// The renderer's preview is redacted too, but a Tauri command is an IPC
@@ -644,16 +657,59 @@ fn redact_support_draft(markdown: String) -> String {
     labelled_id.replace_all(&text, "id: [id]").into_owned()
 }
 
-fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Option<String> {
-    match fs::symlink_metadata(&directory) {
-        Ok(metadata) if metadata.file_type().is_dir() => {}
-        Ok(_) => return None,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => fs::create_dir_all(&directory).ok()?,
-        Err(_) => return None,
+/// The reports this app saved: regular files (a link is not one) with the names it gives them, the
+/// oldest first. The name carries the UTC time and a counter, so the name order is the time order.
+fn support_reports(directory: &Path) -> Vec<(SystemTime, PathBuf)> {
+    // the folder itself must be a real folder: a link in its place is not followed
+    if !fs::symlink_metadata(directory).is_ok_and(|metadata| metadata.file_type().is_dir()) {
+        return Vec::new();
     }
-    set_private_dir_permissions(&directory).ok()?;
+    let mut found = fs::read_dir(directory)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            if !name.ends_with(".md") || !(name.starts_with("support-report-") || name.starts_with("desktop-setup-")) {
+                return None;
+            }
+            let metadata = fs::symlink_metadata(entry.path()).ok()?;
+            metadata.file_type().is_file().then(|| (metadata.modified().unwrap_or(UNIX_EPOCH), entry.path()))
+        })
+        .collect::<Vec<_>>();
+    found.sort();
+    found
+}
+
+fn newest_support_report(directory: &Path) -> Option<PathBuf> {
+    support_reports(directory).pop().map(|(_, path)| path)
+}
+
+/// Deletes the oldest reports past the ones kept, never the one just saved (`keep`): the order is the files'
+/// modification time, and a clock that was ahead once must not make the new report the oldest. Best effort:
+/// a report that cannot be deleted never fails the save of the new one.
+fn prune_support_reports(directory: &Path, keep: &str) {
+    let found = support_reports(directory);
+    let excess = found.len().saturating_sub(SUPPORT_REPORTS_KEPT);
+    for (_, path) in found.iter().filter(|(_, path)| path.file_name().and_then(|name| name.to_str()) != Some(keep)).take(excess) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Result<String, &'static str> {
+    match fs::symlink_metadata(directory) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => return Err("support_report_dir_unavailable"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(directory).map_err(|_| "support_report_dir_unavailable")?
+        }
+        Err(_) => return Err("support_report_dir_unavailable"),
+    }
+    set_private_dir_permissions(directory).map_err(|_| "support_report_dir_unavailable")?;
+    let stamp = utc(SystemTime::now()).replace(['-', ':'], "");
     for _ in 0..128 {
-        let file_name = format!("desktop-setup-{}.md", SUPPORT_REPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed));
+        let sequence = SUPPORT_REPORT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let file_name = format!("support-report-{stamp}-{sequence:06}.md");
         let path = directory.join(&file_name);
         let mut options = fs::OpenOptions::new();
         options.write(true).create_new(true);
@@ -665,14 +721,15 @@ fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Option<Str
         let mut file = match options.open(&path) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(_) => return None,
+            Err(_) => return Err("support_report_write_failed"),
         };
-        file.write_all(markdown.as_bytes()).ok()?;
-        file.sync_all().ok()?;
-        set_private_permissions(&path).ok()?;
-        return Some(format!("Job Hunter Team/Support reports/{file_name}"));
+        file.write_all(markdown.as_bytes()).map_err(|_| "support_report_write_failed")?;
+        file.sync_all().map_err(|_| "support_report_write_failed")?;
+        set_private_permissions(&path).map_err(|_| "support_report_write_failed")?;
+        prune_support_reports(directory, &file_name);
+        return Ok(file_name);
     }
-    None
+    Err("support_report_write_failed")
 }
 
 #[cfg(windows)]
@@ -696,7 +753,7 @@ pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{append, entry, failure_cause, redact_support_draft, save_onboarding_support_draft, utc, RuntimeLog, SUPPORT_REPORT_SEQUENCE};
+    use super::{append, entry, failure_cause, redact_support_draft, save_onboarding_support_draft, utc, RuntimeLog};
     use std::{
         fs,
         time::{Duration, UNIX_EPOCH},
@@ -1095,17 +1152,16 @@ mod tests {
     }
 
     #[test]
-    fn a_long_support_report_is_saved_privately_but_returns_only_a_logical_path() {
+    fn a_support_report_is_saved_privately_and_returns_only_its_name() {
         let root = dir("support-draft");
         let actual = root.join("Ada").join("support-reports");
         fs::create_dir_all(&actual).unwrap();
-        SUPPORT_REPORT_SEQUENCE.store(42, std::sync::atomic::Ordering::Relaxed);
         fs::write(actual.join("desktop-setup-42.md"), "older report").unwrap();
         let raw = "# report\nfailed 203.0.113.70 token=synthetic-secret-value at /Users/ada/.jht/runtime.log host=customer-vps.example.invalid account_id=person-123\n";
-        let logical = save_onboarding_support_draft(&actual, &redact_support_draft(raw.into())).unwrap();
-        assert_eq!(logical, "Job Hunter Team/Support reports/desktop-setup-43.md");
-        assert!(!logical.contains("Ada") && !logical.contains(&actual.display().to_string()));
-        let file = actual.join("desktop-setup-43.md");
+        let name = save_onboarding_support_draft(&actual, &redact_support_draft(raw.into())).unwrap();
+        assert!(name.starts_with("support-report-") && name.ends_with(".md") && name.len() == "support-report-20261029T180309Z-000001.md".len(), "{name}");
+        assert!(!name.contains('/') && !name.contains('\\') && !name.contains("Ada"));
+        let file = actual.join(&name);
         let saved = fs::read_to_string(&file).unwrap();
         for sensitive in ["203.0.113.70", "synthetic-secret-value", "/Users/ada", "customer-vps.example.invalid", "person-123"] {
             assert!(!saved.contains(sensitive), "saved draft exposed {sensitive}");
@@ -1116,6 +1172,84 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(fs::metadata(file).unwrap().permissions().mode() & 0o777, 0o600);
         }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn only_the_newest_fifty_reports_are_kept_and_old_ones_never_block_a_save() {
+        let root = dir("support-prune");
+        let reports = root.join("support-reports");
+        fs::create_dir_all(&reports).unwrap();
+        // reports left by earlier runs, the old naming included
+        for number in 1..=60 {
+            fs::write(reports.join(format!("desktop-setup-{number}.md")), "old").unwrap();
+        }
+        fs::write(reports.join("notes.md"), "not a report").unwrap();
+        fs::write(reports.join("support-report-x.txt"), "not a report").unwrap();
+        let last = (0..30)
+            .map(|_| save_onboarding_support_draft(&reports, "# report\n").expect("a save after many reports still works"))
+            .last()
+            .unwrap();
+        let kept = super::support_reports(&reports);
+        assert_eq!(kept.len(), super::SUPPORT_REPORTS_KEPT);
+        assert!(reports.join(&last).is_file(), "the report just saved is never the one deleted");
+        assert!(reports.join("notes.md").is_file() && reports.join("support-report-x.txt").is_file(), "only the app's own reports are deleted");
+        assert_eq!(super::newest_support_report(&reports), Some(reports.join(&last)));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_report_just_saved_survives_the_cap_even_when_older_files_are_dated_in_the_future() {
+        let root = dir("support-future");
+        let reports = root.join("support-reports");
+        fs::create_dir_all(&reports).unwrap();
+        let ahead = SystemTime::now() + Duration::from_secs(3 * 86_400);
+        for number in 1..=55 {
+            let path = reports.join(format!("desktop-setup-{number}.md"));
+            fs::write(&path, "old").unwrap();
+            fs::OpenOptions::new().write(true).open(&path).unwrap().set_modified(ahead).unwrap();
+        }
+        let name = save_onboarding_support_draft(&reports, "# report\n").unwrap();
+        assert!(reports.join(&name).is_file(), "the new report is never the one deleted");
+        assert_eq!(super::support_reports(&reports).len(), super::SUPPORT_REPORTS_KEPT);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_place_of_the_reports_folder_is_not_followed() {
+        let root = dir("support-folder-link");
+        let elsewhere = root.join("elsewhere");
+        fs::create_dir_all(&elsewhere).unwrap();
+        fs::write(elsewhere.join("support-report-20261029T180309Z-000001.md"), "x").unwrap();
+        let link = root.join("support-reports");
+        std::os::unix::fs::symlink(&elsewhere, &link).unwrap();
+        assert_eq!(super::newest_support_report(&link), None);
+        assert_eq!(save_onboarding_support_draft(&link, "# report\n"), Err("support_report_dir_unavailable"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_save_that_fails_says_so_with_a_code() {
+        let root = dir("support-fail");
+        let blocker = root.join("support-reports");
+        fs::write(&blocker, "a file where the folder should be").unwrap();
+        assert_eq!(save_onboarding_support_draft(&blocker, "# report\n"), Err("support_report_dir_unavailable"));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_folder_to_show_never_follows_a_link_and_has_nothing_to_show_when_empty() {
+        let root = dir("support-open");
+        let reports = root.join("support-reports");
+        fs::create_dir_all(&reports).unwrap();
+        assert_eq!(super::newest_support_report(&reports), None);
+        let outside = root.join("outside.md");
+        fs::write(&outside, "elsewhere").unwrap();
+        std::os::unix::fs::symlink(&outside, reports.join("support-report-99999999T000000Z-000001.md")).unwrap();
+        assert_eq!(super::newest_support_report(&reports), None, "a link is not a report");
+        assert_eq!(super::newest_support_report(&root.join("missing")), None);
         let _ = fs::remove_dir_all(&root);
     }
 

@@ -10,6 +10,8 @@ const native = vi.hoisted(() => ({
   isTauri: () => true,
   invoke: vi.fn(async (command: string) => {
     if (command === "onboarding_support_context") return { appVersion: "0.4.0", logTail: "token=log-secret-token-value\nat 203.0.113.9 failed" };
+    if (command === "onboarding_support_report_save") return "support-report-20261029T180309Z-000003.md";
+    if (command === "onboarding_support_reports_open") return null;
     throw new Error(`unexpected command ${command}`);
   }),
 }));
@@ -55,7 +57,27 @@ describe("Report a problem (Help and Settings)", () => {
     expect(body.diagnostics).toBe(preview.value);
     expect(body.client).toBe("tauri-desktop");
     expect(JSON.stringify(body)).not.toContain("story-secret-token-value");
+    // the ticket, and the copy kept on this computer: the redacted text the person saw
     expect(await screen.findByRole("status")).toHaveTextContent("Report sent: JHT-77");
+    expect(screen.getByRole("status")).toHaveTextContent("Copy kept on this computer: support-report-20261029T180309Z-000003.md");
+    // no path that does not exist: the file's name, and a button to the real folder
+    expect(screen.getByRole("status")).not.toHaveTextContent("Support reports/");
+    await userEvent.click(screen.getByRole("button", { name: "Show in folder" }));
+    expect(native.invoke).toHaveBeenCalledWith("onboarding_support_reports_open");
+    expect(screen.getByRole("status")).not.toHaveTextContent("could not be opened");
+    expect(native.invoke).toHaveBeenCalledWith("onboarding_support_report_save", { draft: { markdown: preview.value } });
+  });
+
+  it("says when the copy could not be kept, and when the folder could not be opened", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: "JHT-78" }), { status: 200 })));
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "onboarding_support_context") return { appVersion: "0.4.0", logTail: "" };
+      throw "support_report_write_failed";
+    });
+    await fillAndPreview("it stopped");
+    await userEvent.click(screen.getByTestId("report-problem-send"));
+    expect(await screen.findByTestId("support-copy-failed")).toHaveTextContent("The copy could not be saved on this computer.");
+    expect(screen.queryByRole("button", { name: "Show in folder" })).toBeNull();
   });
 
   it("goes back from the preview without sending", async () => {

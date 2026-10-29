@@ -180,6 +180,7 @@ pub fn run() {
             saved_vps::saved_vps_remove,
             runtime_log::onboarding_support_context,
             runtime_log::onboarding_support_report_save,
+            runtime_log::onboarding_support_reports_open,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,
