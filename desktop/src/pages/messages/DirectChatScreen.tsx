@@ -36,6 +36,8 @@ import {
 } from "./chat-kinds";
 import { sameAsBefore } from "./same-as-before";
 import { unreadLabel, useChatUnread } from "./chat-unread";
+import TeamQuietNotice from "./TeamQuietNotice";
+import type { QuietFacts } from "./team-quiet";
 import { systemLineText, withoutAttachmentPath } from "./chat-line-text";
 import { ChatMessageRow } from "./ChatMessageRow";
 import { renderChatText } from "./chat-text";
@@ -236,6 +238,7 @@ export default function DirectChatScreen({
   embedded = false,
   writeLocked = false,
   onConnect,
+  loadQuietFacts,
 }: {
   client: DirectChatClient;
   voiceInputBridge?: VoiceInputBridge;
@@ -249,6 +252,8 @@ export default function DirectChatScreen({
   writeLocked?: boolean;
   /** With `writeLocked`: where the invitation's button goes (the way to the full connection). */
   onConnect?: () => void;
+  /** What the team says about itself to explain a long silence (hours, budget...); without it the chat does not explain one. */
+  loadQuietFacts?: () => Promise<QuietFacts | null>;
 }) {
   const [agentId, setAgentId] = useState<DirectChatAgentId>(initialAgentId);
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
@@ -858,6 +863,9 @@ export default function DirectChatScreen({
         )}
 
         <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} onReadAgain={readAgain} />
+        {loadQuietFacts && !embedded && status.state === "ready" && (
+          <TeamQuietNotice lastAgentAt={unread.lastAgentAt} loadFacts={loadQuietFacts} />
+        )}
         {!writeLocked && isOwnVpsClaimCode(operationError) && (
           <div className="shrink-0 px-4 pt-3">
             <OwnVpsClaim reason={operationError} onClaimed={() => setOperationError(null)} />

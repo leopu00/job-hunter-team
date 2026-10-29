@@ -7,6 +7,7 @@ import type { PageProps } from "../types";
 import DirectChatScreen, { isDirectChatAgentId } from "./DirectChatScreen";
 import ExistingTeamReconfirmDialog from "./ExistingTeamReconfirmDialog";
 import { directChatClient } from "./direct-chat-client";
+import { loadQuietFacts } from "./quiet-facts";
 
 /**
  * The desktop Messages route talks only through the direct VPS bridge. In the read-only view of an
@@ -25,7 +26,7 @@ export default function MessagesPage({ search, reconfirmBridge, embedded }: Page
   const onConnect = readOnly ? (reconfirm ? () => setConfirming(true) : leaveReadOnly ?? undefined) : undefined;
   return (
     <>
-      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} />
+      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} loadQuietFacts={loadQuietFacts} />
       {readOnly && reconfirm && confirming && (
         <ExistingTeamReconfirmDialog reconfirm={reconfirm} onClose={() => setConfirming(false)} bridge={reconfirmBridge} />
       )}
