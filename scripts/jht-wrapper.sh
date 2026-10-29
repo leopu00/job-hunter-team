@@ -2313,8 +2313,24 @@ mail_command() {
 # il create-plan a contenere la label anche quando il container esiste gia'.
 # L'output verbose puo' contenere variabili risolte: resta confinato in memoria
 # e ne estraiamo solo un singolo SHA-256, mai stdout/stderr grezzo.
+# The variables docker-compose.yml takes from the CALLER's environment (`${NAME:-default}`): provider keys, the
+# coordinator database, the screen port, the Telegram limits. podman-compose 1.6.0 puts their resolved values in the
+# config-hash of the service, so a terminal that has one of them set (an `export OPENAI_API_KEY=…` for a login test) gets
+# another expected hash than the app that created the container with a clean environment, and every read said «container
+# non attivo» while the team ran (TEST 19g). docker-compose.yml and this list are held equal by a test.
+PODMAN_CALLER_ENV="ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
+
+# 0 when the caller's environment sets (non-empty) at least one of them: only then does a «clean» hash differ.
+podman_caller_env_set() {
+  local name
+  for name in $PODMAN_CALLER_ENV; do
+    [ -z "${!name:-}" ] || return 0
+  done
+  return 1
+}
+
 podman_expected_config_hash() {
-  local file="$1" service="${2:-jht}" podman_bin compose_bin resolved hashes hash pinned_image=""
+  local file="$1" service="${2:-jht}" env_mode="${3:-caller}" podman_bin compose_bin resolved hashes hash pinned_image=""
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
@@ -2329,6 +2345,7 @@ podman_expected_config_hash() {
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
+      [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
       PODMAN_COMPOSE_WARNING_LOGS=false \
@@ -2342,6 +2359,7 @@ podman_expected_config_hash() {
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       unset CONTAINER_CONNECTION
+      [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
@@ -2381,7 +2399,7 @@ read_only_service_id() {
   local service="$1" config_check="${2:-exact}"
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
-  local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped
+  local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped seen_hash clean_hash
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     # podman-compose 1.6.0 non accetta un operando service su `ps`: elenca
     # tutti i container del progetto, e il servizio lo dice l'inspect
@@ -2437,6 +2455,20 @@ read_only_service_id() {
         any-config|stopped-stale-config)
           expected_hash="${details##*|}"
           printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
+          ;;
+      esac
+      # The hash this wrapper expects follows the environment of whoever asks. A container made with a clean
+      # environment (the app's) is ours for a terminal that has a key exported: the hash of the SAME compose resolved
+      # without the caller's variables is accepted too. Never more than that: another value still refuses.
+      case "$config_check" in
+        any-config|stopped-stale-config) ;;
+        *)
+          seen_hash="${details##*|}"
+          if [ "$seen_hash" != "$expected_hash" ] && podman_caller_env_set \
+              && printf '%s' "$seen_hash" | grep -Eq '^[0-9a-f]{64}$'; then
+            clean_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service" clean 2>/dev/null)" || clean_hash=""
+            [ -z "$clean_hash" ] || [ "$seen_hash" != "$clean_hash" ] || expected_hash="$seen_hash"
+          fi
           ;;
       esac
       [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \

@@ -392,6 +392,9 @@ if command == "up" and dry_run and rest and rest[0] == "-d":
         if "# candidate-release" in Path(compose_file).read_text(encoding="utf-8")
         else os.environ["JHT_FIXTURE_CONFIG_HASH"]
     )
+    if os.environ.get("JHT_FIXTURE_ENV_IN_HASH") == "1" and os.environ.get("OPENAI_API_KEY"):
+        # 1.6.0 resolves ${OPENAI_API_KEY:-} of the compose from the caller's environment into the hash
+        config_hash = hashlib.sha256((config_hash + os.environ["OPENAI_API_KEY"]).encode()).hexdigest()
     # 1.6.0 hashes each service's own configuration, and the plan of a service prints the create of its
     # dependency first, with its own hash (jht depends on jht-telegram), then the create of the service asked
     service = rest[-1]
@@ -1630,3 +1633,65 @@ def test_installer_version_mismatch_precedes_every_machine_or_provider_action(
     assert all(call == (MACHINE, ["--version"]) for call in compose_calls)
     if variable == "JHT_FIXTURE_COMPOSE_VERSION":
         assert compose_calls
+
+
+# ── The hash follows the caller's environment (TEST 19g) ────────────────────────────────────────────
+# podman-compose 1.6.0 puts the resolved ${OPENAI_API_KEY:-} (and the other variables the compose takes from the caller)
+# in the config-hash. A terminal with a key exported expected another hash than the app that made the container with a
+# clean environment, and every read said «container non attivo» while the team ran.
+
+def _status(tmp_path: Path, *, key: str | None, label_made_with: str | None):
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+        env.pop(name, None)
+    if label_made_with is not None:
+        made = hashlib.sha256((env["JHT_FIXTURE_CONFIG_HASH"] + label_made_with).encode()).hexdigest()
+        path = Path(env["JHT_FIXTURE_CONTAINER_METADATA"])
+        path.write_text(json.dumps({**json.loads(path.read_text(encoding="utf-8")), "config_hash": made}), encoding="utf-8")
+    if key is not None:
+        env["OPENAI_API_KEY"] = key
+    return _run(wrapper, env, "status"), create_marker
+
+
+def test_a_key_exported_in_the_terminal_does_not_make_the_running_team_inactive(tmp_path: Path):
+    result, created = _status(tmp_path, key="sk-test-terminal", label_made_with=None)   # made clean, asked with a key
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "non attivo" not in result.stdout and "status=running" in result.stdout
+    assert not created.exists()
+
+
+def test_the_same_container_with_no_key_anywhere_is_as_before(tmp_path: Path):
+    result, _ = _status(tmp_path, key=None, label_made_with=None)
+    assert result.returncode == 0 and "status=running" in result.stdout
+
+
+def test_a_container_made_with_the_same_key_is_still_ours_for_that_terminal(tmp_path: Path):
+    result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-test-terminal")
+    assert result.returncode == 0 and "status=running" in result.stdout
+
+
+def test_a_container_made_with_another_key_is_not_a_free_pass(tmp_path: Path):
+    result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-another")
+    assert result.returncode != 0 and "non attivo" in result.stdout
+
+
+def test_a_wrong_hash_is_refused_with_a_key_exported_too(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
+    env["OPENAI_API_KEY"] = "sk-test-terminal"
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0 and "non attivo" in result.stdout
+
+
+def test_the_caller_variables_the_wrapper_sets_aside_are_those_the_compose_takes():
+    import re
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    wrapper = WRAPPER.read_text(encoding="utf-8")
+    listed = set(re.search(r'^PODMAN_CALLER_ENV="([^"]+)"', wrapper, re.M).group(1).split())
+    taken = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)(?::-[^}]*)?\}", compose))
+    # HOME is the same for everyone who asks; JHT_IMAGE comes from the channel pin; the three below are read from host.env
+    # by the wrapper itself before any compose runs (so they do not follow the caller).
+    taken -= {"HOME", "JHT_IMAGE", "JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"}
+    assert listed == taken, (sorted(listed ^ taken))
