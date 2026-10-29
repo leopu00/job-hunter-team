@@ -734,7 +734,8 @@ podman_binary() {
 # finds podman by its usual places (/opt/homebrew/bin, /usr/local/bin) when the caller's PATH has none of them: a terminal
 # opened from the app, a script, `env -i`. Then every call of the provider, the `--version` probes included, died with
 # «failed to check if podman is installed», the wrapper read that as «no provider» and `status` said «container 'jht' non
-# attivo» for a team that was running (TEST 19g). The directory of the podman it found goes at the END of PATH, for the provider only.
+# attivo» for a team that was running (TEST 19g). The directory of the podman it found goes at the END of the wrapper's own PATH (it
+# takes priority from nothing that is there; what runs in a $(...) loses it, what runs directly keeps it until the wrapper ends).
 podman_ensure_on_path() {
   local podman_bin dir
   podman_bin="$(podman_binary)" || return 0
