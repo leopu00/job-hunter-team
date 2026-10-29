@@ -4,6 +4,7 @@ import { registerAuthStorageProbe } from "../../lib/auth-storage-lock";
 import { setLocalTeamData, useLocalTeamStopped } from "../../lib/local-team-data";
 import { profileReply } from "../../test-support/existing-team-profile-fixture";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
+import { PROFILE_PROGRESS_EVERY_MS } from "../../profile-progress/useProfileProgress";
 import ProfileRoute from ".";
 
 // «Profilo» of a local profile (no cloud account): the candidate profile is read from the container of the team
@@ -143,7 +144,7 @@ describe("Profilo, the bar of what the profile still needs", () => {
       expect(await screen.findByTestId("local-team-profile-progress")).toBeInTheDocument();
       progress = () => reading(8);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5_000);
+        await vi.advanceTimersByTimeAsync(PROFILE_PROGRESS_EVERY_MS);
       });
       await waitFor(() => expect(screen.queryByTestId("local-team-profile-progress")).toBeNull());
       expect(screen.getByTestId("profile-view")).toBeInTheDocument();
