@@ -5928,12 +5928,21 @@ fn plan_operation_on_host(
 /// Reads the plans on the team's host. `host`: the one being set up; none = the saved one.
 #[tauri::command]
 pub(crate) async fn onboarding_plans(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     host: Option<ExecutionHost>,
 ) -> Result<PlanChoice, OnboardingError> {
     let expected = scopes.active().map_err(failure)?;
+    // It reaches the team's host (the named one, or the saved one): on an existing team, only on the full link.
+    let refusal = match &host {
+        Some(host) => crate::agent_control::host_action_refusal(&app, window.label(), &expected, host),
+        None => crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected),
+    };
+    if let Some(code) = refusal {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -5967,6 +5976,7 @@ pub(crate) async fn onboarding_plans(
 /// checked against the registry's ids before it reaches any command line; nothing else is written.
 #[tauri::command]
 pub(crate) async fn onboarding_plan_declare(
+    window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
@@ -5975,6 +5985,14 @@ pub(crate) async fn onboarding_plan_declare(
 ) -> Result<PlanOption, OnboardingError> {
     let id = known_plan_id(&plan).ok_or_else(|| failure("plan_declare_failed"))?;
     let expected = scopes.active().map_err(failure)?;
+    // It writes the plan on the team's host (the named one, or the saved one): on an existing team, only on the full link.
+    let refusal = match &host {
+        Some(host) => crate::agent_control::host_action_refusal(&app, window.label(), &expected, host),
+        None => crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected),
+    };
+    if let Some(code) = refusal {
+        return Err(failure(code));
+    }
     if state
         .preparing
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
