@@ -392,6 +392,40 @@ fn previous_local_data_at(home: &Path) -> bool {
         && fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_dir())
         && home_holds_only_leftovers(home) == Ok(false)
         && recognized_legacy_local_home(home) == Ok(true)
+        && home_holds_data_to_say_so(home) == Ok(true)
+}
+
+/// What makes the onboarding say «Job Hunter Team data is already on this computer». A list of its own, shorter
+/// than the one that decides who may claim the home (`recognized_legacy_local_home`, untouched): `host.env` is
+/// written by the installer of THIS version and `runtime` is the mount point the wrapper creates at every start,
+/// so a home with only those holds what a run leaves before a profile takes the home, not the data of someone
+/// who used the product before. Configuration, profile, credentials, the provider logins and the database are.
+fn home_holds_data_to_say_so(home: &Path) -> Result<bool, &'static str> {
+    const FILE_MARKERS: &[&str] = &["jht.config.json", ".local-token", "cloud.json", "jobs.db"];
+    const DIRECTORY_MARKERS: &[&str] = &[
+        ".npm-global",
+        ".claude",
+        ".codex",
+        ".kimi",
+        "credentials",
+        "profile",
+        "src",
+    ];
+    for (names, want_dir) in [(FILE_MARKERS, false), (DIRECTORY_MARKERS, true)] {
+        for name in names {
+            match fs::symlink_metadata(home.join(name)) {
+                Ok(metadata) => {
+                    let kind = metadata.file_type();
+                    if (want_dir && kind.is_dir()) || (!want_dir && kind.is_file()) {
+                        return Ok(true);
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => return Err("local_account_owner_unavailable"),
+            }
+        }
+    }
+    Ok(false)
 }
 
 /// The closed list of what a home may hold and still count as empty: a home
@@ -1658,6 +1692,75 @@ mod tests {
         std::fs::write(home.join(".desktop-account-scope"), "x").unwrap();
         assert!(!super::previous_local_data_at(&home));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn temp_home(label: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "jht-previous-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let home = root.join(".jht");
+        std::fs::create_dir_all(&home).unwrap();
+        home
+    }
+
+    /// What this version's own installer and wrapper leave in a home before a profile takes it (`host.env` from the
+    /// installer, `runtime` the mount point of the wrapper) is not «data already on this computer»: the onboarding
+    /// said so for a home that held only that, with the configuration and the database removed.
+    #[test]
+    fn a_home_with_only_what_this_version_leaves_does_not_say_data_is_already_here() {
+        let home = temp_home("own-leftovers");
+        std::fs::write(home.join("host.env"), "JHT_HOST_TYPE=local\n").unwrap();
+        std::fs::create_dir_all(home.join("runtime")).unwrap();
+        // The more of its own folders around, the same: state, agents, stats and secrets are not markers either.
+        std::fs::create_dir_all(home.join("state")).unwrap();
+        std::fs::write(home.join("state").join("first-run.json"), "{}").unwrap();
+        std::fs::create_dir_all(home.join("agents")).unwrap();
+        std::fs::create_dir_all(home.join("secrets")).unwrap();
+        std::fs::create_dir_all(home.join("stats")).unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        // The list that decides who may claim the home is NOT changed by this: those two are still markers there.
+        assert_eq!(super::recognized_legacy_local_home(&home), Ok(true));
+        let _ = std::fs::remove_dir_all(home.parent().unwrap());
+    }
+
+    #[test]
+    fn a_provider_login_alone_is_data_already_here() {
+        let home = temp_home("login-only");
+        std::fs::create_dir_all(home.join(".codex")).unwrap();
+        std::fs::write(home.join(".codex").join("auth.json"), "{}").unwrap();
+        std::fs::write(home.join("host.env"), "JHT_HOST_TYPE=local\n").unwrap();
+        std::fs::create_dir_all(home.join("runtime")).unwrap();
+        assert!(super::previous_local_data_at(&home));
+        let _ = std::fs::remove_dir_all(home.parent().unwrap());
+    }
+
+    #[test]
+    fn each_marker_of_the_notice_is_enough_and_a_link_or_a_wrong_kind_is_not() {
+        for file in ["jht.config.json", ".local-token", "cloud.json", "jobs.db"] {
+            let home = temp_home("file-marker");
+            std::fs::write(home.join(file), "x").unwrap();
+            assert!(super::previous_local_data_at(&home), "{file}");
+            let _ = std::fs::remove_dir_all(home.parent().unwrap());
+        }
+        for dir in [".npm-global", ".claude", ".codex", ".kimi", "credentials", "profile", "src"] {
+            let home = temp_home("dir-marker");
+            std::fs::create_dir_all(home.join(dir)).unwrap();
+            std::fs::write(home.join(dir).join("x"), "x").unwrap();
+            assert!(super::previous_local_data_at(&home), "{dir}");
+            let _ = std::fs::remove_dir_all(home.parent().unwrap());
+        }
+        // A folder where a file marker is expected (and the reverse) is not that marker.
+        let home = temp_home("wrong-kind");
+        std::fs::create_dir_all(home.join("jobs.db")).unwrap();
+        std::fs::write(home.join("profile"), "x").unwrap();
+        std::fs::write(home.join("notes.txt"), "x").unwrap();
+        assert!(!super::previous_local_data_at(&home));
+        let _ = std::fs::remove_dir_all(home.parent().unwrap());
     }
 
     /// The upgrade the end-to-end tester runs on Windows: the v0.3.9 game
