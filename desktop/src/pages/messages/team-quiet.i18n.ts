@@ -36,7 +36,7 @@ export const TEAM_QUIET_TEXT: Record<Locale, TeamQuietText> = {
     budgetNear: "The provider's work window is at {pct}%: the team slows down and it reopens {when}.",
     inMinutes: "in {n} min",
     inHours: "in {h} h {m} min",
-    containment: "An agent of the team is held by a safety containment: it cannot be restarted from the app.",
+    containment: "An agent of the team is in safety containment: it cannot be restarted from the app.",
     provider: "The team's provider has no valid login: the team cannot work until you sign in again.",
   },
   de: {
@@ -47,7 +47,7 @@ export const TEAM_QUIET_TEXT: Record<Locale, TeamQuietText> = {
     budgetNear: "Das Arbeitsfenster des Anbieters ist zu {pct} % voll: Das Team wird langsamer, es öffnet sich wieder {when}.",
     inMinutes: "in {n} Min.",
     inHours: "in {h} Std. {m} Min.",
-    containment: "Ein Agent des Teams ist wegen einer Sicherheitssperre angehalten: Er lässt sich nicht aus der App neu starten.",
+    containment: "Ein Agent des Teams ist in Sicherheitsverwahrung: Er lässt sich nicht aus der App neu starten.",
     provider: "Der Anbieter des Teams hat keine gültige Anmeldung: Das Team kann nicht arbeiten, bis du dich neu anmeldest.",
   },
   fr: {
@@ -91,7 +91,7 @@ export const TEAM_QUIET_TEXT: Record<Locale, TeamQuietText> = {
     budgetNear: "A szolgáltató munkaablaka {pct}%-on áll: a csapat lassul, újra megnyílik {when}.",
     inMinutes: "{n} perc múlva",
     inHours: "{h} óra {m} perc múlva",
-    containment: "A csapat egyik ügynöke biztonsági elzárás miatt áll: az alkalmazásból nem indítható újra.",
+    containment: "A csapat egyik ügynöke biztonsági okból el van különítve: az alkalmazásból nem indítható újra.",
     provider: "A csapat szolgáltatójához nincs érvényes bejelentkezés: a csapat nem dolgozhat, amíg újra be nem jelentkezel.",
   },
 };

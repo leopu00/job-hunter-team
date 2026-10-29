@@ -168,4 +168,19 @@ describe("the unread badge in the chat", () => {
     await advance(50);
     expect(screen.queryByTestId("unread-mentor")).toBeNull();
   });
+
+  it("says one message in the singular and more in the plural, in the person's language", async () => {
+    window.localStorage.setItem("jht.desktop.chat.seen.v1", JSON.stringify({ mentor: 5 }));
+    const one = render(<DirectChatScreen client={client({ mentor: [agent("m1", 5), agent("m2", 6)], capitano: [agent("c1", 1)] })} />);
+    await advance(10);
+    await advance(UNREAD_FIRST_PEEK_MS + UNREAD_PEEK_MS + 1_000);
+    expect(screen.getByTestId("unread-mentor")).toHaveAttribute("aria-label", "1 messaggio non letto");
+    one.unmount();
+
+    document.cookie = "NEXT_LOCALE=en; path=/";
+    render(<DirectChatScreen client={client({ mentor: [agent("m1", 5), agent("m2", 6), agent("m3", 7)], capitano: [agent("c1", 1)] })} />);
+    await advance(10);
+    await advance(UNREAD_FIRST_PEEK_MS + UNREAD_PEEK_MS + 1_000);
+    expect(screen.getByTestId("unread-mentor")).toHaveAttribute("aria-label", "2 unread messages");
+  });
 });

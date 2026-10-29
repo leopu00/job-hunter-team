@@ -36,6 +36,7 @@ import {
 } from "./chat-kinds";
 import { sameAsBefore } from "./same-as-before";
 import { unreadLabel, useChatUnread } from "./chat-unread";
+import { pluralText } from "../../lib/plural";
 import TeamQuietNotice from "./TeamQuietNotice";
 import type { QuietFacts } from "./team-quiet";
 import { systemLineText, withoutAttachmentPath } from "./chat-line-text";
@@ -823,7 +824,7 @@ export default function DirectChatScreen({
                   <span
                     data-testid={`unread-${agent.id}`}
                     role="img"
-                    aria-label={t.unreadAria.replace("{count}", String(unread.counts[agent.id]))}
+                    aria-label={pluralText(locale, unread.counts[agent.id], t.unreadAria)}
                     className="min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold leading-5"
                     style={{ background: "var(--color-green)", color: "var(--color-void)" }}
                   >
