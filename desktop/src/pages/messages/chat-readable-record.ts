@@ -72,8 +72,10 @@ export function readableRecordText(text: string, locale: Locale): string {
       const match = LINE.exec(line);
       if (!match) return line;
       const [, lead, name, colon, rest] = match;
-      const pairs = flatRecord(rest);
-      if (pairs) return `${lead}${humanName(name, locale)}: ${recordInWords(name, pairs, locale)}`;
+      // the record, then whatever the line says after it (a note like «(deduced by me, it is not in your CV)»)
+      const split = /^(\{[^{}]*\})(.*)$/.exec(rest.trim());
+      const pairs = split ? flatRecord(split[1]) : null;
+      if (pairs && split) return `${lead}${humanName(name, locale)}: ${recordInWords(name, pairs, locale)}${split[2]}`;
       // a plain value: the name is put in words only for a field the profile has, never for a line of code
       return Object.prototype.hasOwnProperty.call(LABELS, name) && !rest.trim().startsWith("{")
         ? `${lead}${humanName(name, locale)}${colon.trimEnd()} ${rest}`.trimEnd()
