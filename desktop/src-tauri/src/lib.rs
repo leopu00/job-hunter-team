@@ -197,7 +197,7 @@ pub fn run() {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     if !app_exit::request_goes_through(std::time::Instant::now()) {
                         api.prevent_close();
-                        app_exit::ask_the_page(window.app_handle());
+                        app_exit::ask_the_page(tauri::Manager::app_handle(window));
                     }
                 }
             }

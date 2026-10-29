@@ -37,8 +37,9 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
   // the phase the requests below see: a request while the agents are being waited for, or the stop is on, changes nothing
   const busyRef = useRef(false);
 
-  const leave = useCallback(async (mode: ExitMode, run: number) => {
-    setPhase({ kind: "stopping" });
+  // `quiet`: nothing was asked, so nothing is shown while the window closes (no team here, or the remembered choice)
+  const leave = useCallback(async (mode: ExitMode, run: number, quiet = false) => {
+    if (!quiet) setPhase({ kind: "stopping" });
     try {
       await exitFinish(mode);
     } catch {
@@ -71,12 +72,12 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
     }
   }, [leave, pollMs, slowMs]);
 
-  const run = useCallback((mode: ExitMode, remember: boolean) => {
+  const run = useCallback((mode: ExitMode, remember: boolean, quiet = false) => {
     rememberExit(remember ? mode : null);
     setRemembered(remember ? mode : null);
     const id = ++runRef.current;
     if (mode === "ordered") void stopInOrder(id);
-    else void leave(mode, id);
+    else void leave(mode, id, quiet);
   }, [leave, stopInOrder]);
 
   const request = useCallback(async (fromWindow: boolean) => {
@@ -86,11 +87,11 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
     const team = await exitTeam();
     if (runRef.current !== id) return;
     // nothing of the team here to decide about (none, on a VPS, or not told): the window closes
-    if (team !== "local") return void (await leave("detach", id));
+    if (team !== "local") return void (await leave("detach", id, true));
     const choice = rememberedExit();
     setRemembered(choice);
     // the close button applies what the person asked to remember; the navbar button always asks
-    if (fromWindow && choice) return run(choice, true);
+    if (fromWindow && choice) return run(choice, true, true);
     setPhase({ kind: "choose", remember: choice !== null });
   }, [leave, run]);
 
@@ -109,6 +110,9 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
       window.removeEventListener(EXIT_OPEN_EVENT, fromButton);
     };
   }, [request]);
+
+  // a wait that is still running when the dialog goes away must not go on asking the team
+  useEffect(() => () => { runRef.current += 1; }, []);
 
   const stay = () => {
     runRef.current += 1;

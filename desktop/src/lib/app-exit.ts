@@ -59,7 +59,7 @@ export function parseExitProgress(value: unknown): ExitProgress | null {
 /** The native side's refusal: `{ code }`. Anything else is an unanswered call. */
 export function exitErrorCode(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === "string" && code ? code : "app_exit_unanswered";
+  return typeof code === "string" && code ? code : "agent_control_unanswered";
 }
 
 /** Where the team is. Resolves to null when it cannot be told (no account yet, not the desktop): the window then just closes. */
@@ -90,7 +90,7 @@ export const exitCancel = () => call<void>("app_exit_cancel");
 export const exitOrder = () => call<void>("app_exit_order");
 export async function exitPoll(): Promise<ExitProgress> {
   const progress = parseExitProgress(await call<unknown>("app_exit_poll"));
-  if (!progress) throw { code: "app_exit_unanswered" };
+  if (!progress) throw { code: "agent_control_unanswered" };
   return progress;
 }
 /** Leaves. `ordered` and `forced` stop the container and the machine first; a failure keeps the app open. */

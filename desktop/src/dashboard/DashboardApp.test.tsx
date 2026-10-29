@@ -1331,7 +1331,7 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument();
 
     // leaving the account is offered, and is the app's own sign-out
-    await user.click(screen.getByRole("button", { name: /esci dall.account/i }));
+    await user.click(screen.getByRole("button", { name: /disconnetti/i }));
     expect(signOut).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
     first.unmount();
