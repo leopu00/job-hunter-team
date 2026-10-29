@@ -730,6 +730,21 @@ podman_binary() {
   return 1
 }
 
+# podman-compose 1.6.0 looks for `podman` in PATH at its own start (`podman version`), whatever --podman-path says. The wrapper
+# finds podman by its usual places (/opt/homebrew/bin, /usr/local/bin) when the caller's PATH has none of them: a terminal
+# opened from the app, a script, `env -i`. Then every call of the provider, the `--version` probes included, died with
+# «failed to check if podman is installed», the wrapper read that as «no provider» and `status` said «container 'jht' non
+# attivo» for a team that was running (TEST 19g). The directory of the podman it found goes at the END of PATH, for the provider only.
+podman_ensure_on_path() {
+  local podman_bin dir
+  podman_bin="$(podman_binary)" || return 0
+  dir="${podman_bin%/*}"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) PATH="$PATH:$dir"; export PATH ;;
+  esac
+}
+
 podman_compose_binary() {
   local candidate=""
   for candidate in "$(command -v podman-compose 2>/dev/null || true)" \
@@ -788,6 +803,7 @@ podman_version_number() {
 
 podman_compose_version_number() {
   local compose_bin="$1" out
+  podman_ensure_on_path
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     out="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" "$compose_bin" --version 2>/dev/null)" || return 1
   else
@@ -798,6 +814,7 @@ podman_compose_version_number() {
 
 podman_compose_pair_supported() {
   local podman_bin="$1" compose_bin="$2" podman_version compose_version
+  podman_ensure_on_path
   if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
     podman_version="$(podman_version_number "$podman_bin")" || return 1
     version_at_least "$podman_version" "$PODMAN_NATIVE_MIN_VERSION" || return 1
@@ -1063,7 +1080,8 @@ compose_file() {
     # the provider inherits it and therefore emits `podman ps`/`podman run`
     # against the named machine without depending on the mutable default.
     local podman_bin compose_bin
-      podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
+    podman_ensure_on_path
+    podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
     if ! compose_bin="$(podman_compose_binary)"; then
       if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
         # `podman compose` non basta: delega al primo provider che trova (docker-compose,
@@ -2340,6 +2358,7 @@ podman_caller_env_names() {
 
 podman_expected_config_hash() {
   local file="$1" service="${2:-jht}" env_mode="${3:-caller}" podman_bin compose_bin resolved hashes hash pinned_image=""
+  podman_ensure_on_path
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1

@@ -1716,3 +1716,72 @@ def test_status_of_an_unattestable_container_without_a_caller_variable_names_non
     assert result.returncode != 0 and "non attestabile" in result.stdout
     assert "sono impostate" not in result.stdout and "non attivo" not in result.stdout
 
+
+# ── podman-compose looks for podman in PATH at its own start (TEST 19g) ──────────────────────────────
+# The wrapper finds podman in /opt/homebrew/bin when the caller's PATH has none of it (`env -i`, a terminal opened from the app),
+# but podman-compose 1.6.0 runs `podman version` through PATH whatever --podman-path says: its `--version` probe died, the wrapper read
+# «no provider» and `status` said «container 'jht' non attivo» for a team that was running.
+
+def _tools_outside_path(tmp_path: Path) -> Path:
+    tools = tmp_path / "tools-not-on-path"
+    tools.mkdir()
+    _write_executable(tools / "podman", "#!/bin/sh\necho 'podman version 6.1.3'\n")
+    _write_executable(
+        tools / "podman-compose",
+        "#!/bin/bash\n"
+        "command -v podman >/dev/null 2>&1 || { echo \"ERROR:podman_compose:failed to check if podman is installed: 'podman'\" >&2; exit 1; }\n"
+        "echo 'podman-compose version 1.6.0'\n",
+    )
+    return tools
+
+
+def _wrapper_functions(*names: str) -> str:
+    import re
+    text = WRAPPER.read_text(encoding="utf-8")
+    out = []
+    for name in names:
+        match = re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M)
+        assert match, name
+        out.append(match.group(0))
+    return "\n".join(out)
+
+
+def _probe_version(tmp_path: Path, *, ensure: bool) -> subprocess.CompletedProcess[str]:
+    tools = _tools_outside_path(tmp_path)
+    script = (
+        f'PATH="/usr/bin:/bin"\nPODMAN_RUNTIME_MODE=machine\nPODMAN_MACHINE_NAME=m\n'
+        f'podman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
+        + _wrapper_functions("podman_ensure_on_path", "podman_compose_version_number")
+        + (f'\npodman_compose_version_number "{tools}/podman-compose"\n' if ensure else
+           f'\npodman_ensure_on_path() {{ :; }}\npodman_compose_version_number "{tools}/podman-compose"\n')
+    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
+
+
+def test_the_version_probe_of_podman_compose_works_when_podman_is_not_on_the_callers_path(tmp_path: Path):
+    done = _probe_version(tmp_path, ensure=True)
+    assert done.returncode == 0 and done.stdout.strip() == "1.6.0", (done.stdout, done.stderr)
+
+
+def test_without_the_directory_of_podman_the_probe_fails_which_is_the_case_of_the_report(tmp_path: Path):
+    done = _probe_version(tmp_path, ensure=False)
+    assert done.stdout.strip() == "", done.stdout
+
+
+def test_the_directory_of_podman_goes_at_the_end_of_the_path_and_only_once(tmp_path: Path):
+    tools = _tools_outside_path(tmp_path)
+    script = (
+        f'PATH="/usr/bin:/bin"\npodman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
+        + _wrapper_functions("podman_ensure_on_path")
+        + "\npodman_ensure_on_path; podman_ensure_on_path; printf '%s' \"$PATH\"\n"
+    )
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
+    assert done.stdout == f"/usr/bin:/bin:{tools}", done.stdout
+
+
+def test_every_call_of_the_provider_makes_sure_podman_is_on_the_path():
+    text = WRAPPER.read_text(encoding="utf-8")
+    for name in ("podman_compose_version_number", "podman_compose_pair_supported", "podman_expected_config_hash"):
+        body = _wrapper_functions(name)
+        assert "podman_ensure_on_path" in body, name
+    assert "podman_ensure_on_path\n    podman_bin=\"$(podman_binary)\"" in text            # compose_file
