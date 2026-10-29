@@ -196,22 +196,53 @@ jht_read_host_env_value() {
 # per scegliere il runtime. Le assegnazioni esplicite preservano il contratto
 # storico senza eseguire il contenuto del file.
 HOST_ENV_FILE="${JHT_HOST_ENV_FILE:-$HOME/.jht/host.env}"
-if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE)"; then
-  JHT_HOST_TYPE="$host_env_value"
-fi
-if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_LANG)"; then
-  JHT_LANG="$host_env_value"
-fi
-if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_USER_TZ)"; then
-  JHT_USER_TZ="$host_env_value"
-fi
-unset host_env_value
-JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
-JHT_LANG="${JHT_LANG:-en}"
-# Bug #15: timezone utente esplicita dal setup wizard. Default UTC se mai
-# configurata — niente hardcoding geografico (l'utente potrebbe stare
-# ovunque). Il container la usa via format_time skill.
-JHT_USER_TZ="${JHT_USER_TZ:-UTC}"
+
+# I tre valori che decidono come il container viene CREATO e ATTESTATO (tipo di host, lingua, fuso) NON vengono da host.env:
+# ~/.jht e' montata read-write nel container, quindi un agente puo' scriverci JHT_HOST_TYPE=vps (alla prossima creazione il
+# runtime locale diventa «vps»: pairing, daemon cloud, watcher di cloud.json) o cambiare lingua e fuso (l'hash atteso cambia e
+# l'app non attesta piu'). Vengono da $RUNTIME_DIR/host-values: la cartella del runtime NON e' montata, e' dell'utente (0700), e
+# il file lo scrive host-setup.sh insieme a host.env. host.env resta il file che leggono i componenti DENTRO il container.
+# Un'installazione precedente non ha host-values: la prima esecuzione lo crea dai valori di host.env (validati) e da quel
+# momento host.env non conta piu' per il wrapper. Un host-values che non e' del proprietario, e' un link o e' scrivibile da
+# altri non si legge e non si sovrascrive: si torna ai valori di host.env, come prima.
+HOST_VALUES_FILE="$RUNTIME_DIR/host-values"
+
+jht_host_values_trusted() {
+  [ -f "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ] && [ -O "$HOST_VALUES_FILE" ] || return 1
+  [ -z "$(find "$HOST_VALUES_FILE" -maxdepth 0 -perm -022 2>/dev/null)" ]
+}
+
+jht_load_host_values() {
+  local source_file="$HOST_ENV_FILE" key value
+  ! jht_host_values_trusted || source_file="$HOST_VALUES_FILE"
+  for key in JHT_HOST_TYPE JHT_LANG JHT_USER_TZ; do
+    if value="$(jht_read_host_env_value "$source_file" "$key")"; then
+      printf -v "$key" '%s' "$value"
+    fi
+  done
+  JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
+  JHT_LANG="${JHT_LANG:-en}"
+  # Bug #15: timezone utente esplicita dal setup wizard. Default UTC se mai
+  # configurata — niente hardcoding geografico (l'utente potrebbe stare
+  # ovunque). Il container la usa via format_time skill.
+  JHT_USER_TZ="${JHT_USER_TZ:-UTC}"
+}
+
+# Prima esecuzione dopo un aggiornamento: registra i valori ora in uso. Solo se il file non c'e' (ne' come link) e la cartella
+# del runtime esiste ed e' dell'utente; scrive un temporaneo e lo rinomina.
+jht_record_host_values() {
+  [ ! -e "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ] || return 0
+  [ -d "$RUNTIME_DIR" ] && [ ! -L "$RUNTIME_DIR" ] && [ -O "$RUNTIME_DIR" ] || return 0
+  local tmp="$HOST_VALUES_FILE.tmp.$$"
+  (
+    umask 077
+    printf 'JHT_HOST_TYPE=%s\nJHT_LANG=%s\nJHT_USER_TZ=%s\n' "$JHT_HOST_TYPE" "$JHT_LANG" "$JHT_USER_TZ" > "$tmp"
+  ) 2>/dev/null && chmod 600 "$tmp" 2>/dev/null && mv -f -- "$tmp" "$HOST_VALUES_FILE" 2>/dev/null || rm -f -- "$tmp" 2>/dev/null
+  return 0
+}
+
+jht_load_host_values
+jht_record_host_values
 # Export per docker compose: il compose file fa `${JHT_HOST_TYPE:-}` /
 # `${JHT_LANG:-}` / `${JHT_USER_TZ:-}` substitution per passare i valori al
 # container. Senza export restano variabili di shell e compose non le vede.
@@ -5644,17 +5675,8 @@ case "$SUB" in
     # Rileggi host.env DOPO host-setup.sh: al primo setup il file non esiste
     # ancora quando parte il wrapper. Anche qui resta input non fidato e passa
     # esclusivamente dallo stesso parser allowlist, mai dalla shell.
-    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE)"; then
-      JHT_HOST_TYPE="$host_env_value"
-    fi
-    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_LANG)"; then
-      JHT_LANG="$host_env_value"
-    fi
-    if host_env_value="$(jht_read_host_env_value "$HOST_ENV_FILE" JHT_USER_TZ)"; then
-      JHT_USER_TZ="$host_env_value"
-    fi
-    unset host_env_value
-    JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
+    jht_load_host_values
+    jht_record_host_values
     ensure_up
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     rc=$?
