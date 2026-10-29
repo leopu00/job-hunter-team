@@ -1234,8 +1234,10 @@ container_down() {
       # No `jht` container. That is nothing to stop only when the WHOLE project is empty: status 3 also means that only the
       # agent service is missing, while the broker (the mail password) or Telegram still run, and a `jht down && rm -rf <runtime>`
       # would delete the compose that was needed to stop them. So the whole project is asked: a failed answer is a refusal, an
-      # empty one is «niente da fermare» (and the chain of the uninstall goes on, TEST 19i A1), a non-empty one goes on to `compose down`.
-      local rest
+      # empty one is «niente da fermare» (and the chain of the uninstall goes on, TEST 19i A1), a non-empty one goes on to `compose down`
+      # only once the services left are attested like the agent's: `compose down` stops every container of the project, so one that
+      # does not attest (or one of a service the compose does not have) is said and nothing is touched.
+      local rest svc svc_status leftover=0 refused=""
       if ! rest="$(compose ps -q 2>/dev/null)"; then
         err "Container JHT non attestabile; arresto negato."
         return 1
@@ -1243,6 +1245,23 @@ container_down() {
       if [ -z "$rest" ]; then
         info "niente da fermare: nessun container del progetto."
         return 0
+      fi
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE"; do
+        svc_status=0
+        read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
+        case "$svc_status" in
+          0) leftover=1 ;;
+          3) ;;
+          *) refused="${refused:+$refused, }$svc" ;;
+        esac
+      done
+      if [ -n "$refused" ]; then
+        err "Il servizio '$refused' del progetto gira ma non e' attestabile come nostro: non lo tocco e non fermo nient'altro."
+        return 1
+      fi
+      if [ "$leftover" -eq 0 ]; then
+        err "Il progetto ha container che non sono ne' il team ne' i suoi servizi attestati: non li tocco."
+        return 1
       fi
       info "il container '$CONTAINER_SERVICE' non c'e', ma altri servizi del progetto girano: li fermo."
     else
@@ -3033,6 +3052,16 @@ host_setup_can_write() {
   [ -e "$dir" ] || return 0
   [ -d "$dir" ] && [ -w "$dir" ] && [ -x "$dir" ] || return 1
   [ ! -e "$HOST_ENV_FILE" ] || [ -w "$HOST_ENV_FILE" ]
+}
+
+# What `jht setup` says when it skips host-setup.sh because it cannot write host.env: «already done» only when host.env says
+# the type of host; otherwise the preflight was not done and the type stays unknown, and that is what is said.
+host_setup_skip_note() {
+  if jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE >/dev/null 2>&1; then
+    info "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto."
+  else
+    warn "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'."
+  fi
 }
 
 # `jht team stop`: stopping the team must work whenever `jht down` does. A container of ours whose config-hash is not the
@@ -5268,7 +5297,7 @@ case "$SUB" in
       if [ -x "$HOST_SETUP_SCRIPT" ] && ! host_setup_can_write; then
         # On Linux with Docker the installer hands ~/.jht to the container's uid (1001), mode 700: this user cannot write
         # host.env, and host-setup.sh died on «host.env: Permission denied» (TEST 19i, A3). What it writes is already there.
-        info "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto."
+        host_setup_skip_note
       elif [ -x "$HOST_SETUP_SCRIPT" ]; then
         bash "$HOST_SETUP_SCRIPT" || warn "host-setup.sh terminato con errore — proseguo"
       else
