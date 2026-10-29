@@ -167,7 +167,7 @@ class Clock:
         self.now += seconds
 
 
-def run_loop(chat, codes, *, seen_after=None, **options):
+def run_loop(chat, codes, *, seen_after=None, working=lambda now: False, **options):
     clock = Clock()
     tries: list[float] = []
     queue = list(codes)
@@ -180,7 +180,8 @@ def run_loop(chat, codes, *, seen_after=None, **options):
         return seen_after is not None and clock.now >= seen_after
 
     result = chat.wake_until_seen("capitano", "q1", "CAPITANO", attempt=attempt, seen=seen,
-                                  sleep=clock.sleep, clock=clock, every=30, window=600, quiet=120, **options)
+                                  sleep=clock.sleep, clock=clock, every=30, window=600, quiet=120,
+                                  working=lambda session: working(clock.now), **options)
     return result, tries, clock
 
 
@@ -196,6 +197,33 @@ def test_a_line_that_landed_is_not_typed_again_within_the_quiet_time_but_is_afte
     assert result == "gave_up"
     assert tries[0] == 0.0 and tries[1] == 120.0, "the next line only after the quiet time"
     assert all(b - a >= 120 for a, b in zip(tries, tries[1:])), tries
+
+
+def test_a_line_that_landed_is_not_typed_again_while_the_agent_is_still_in_its_turn(chat):
+    # the agent works until t=500: the line it was given waits in its queue, a second one would be read after it
+    result, tries, _clock = run_loop(chat, ["sent"] * 10, seen_after=None, working=lambda now: now < 500)
+    assert result == "gave_up"
+    assert tries[0] == 0.0
+    assert all(at >= 500 for at in tries[1:]), tries
+    assert len(tries) >= 2, "once the turn is over the line is typed again, the answer has not been read"
+
+
+def test_a_try_that_did_not_land_is_made_whether_or_not_the_agent_works(chat):
+    # nothing has been given to it yet: an empty composer takes the line even mid-turn (the CLI queues it)
+    result, tries, _clock = run_loop(chat, ["busy", "text", "sent"], seen_after=100, working=lambda now: True)
+    assert tries[:3] == [0.0, 30.0, 60.0]
+
+
+def test_the_retrying_process_leaves_the_first_try_to_the_answer_that_started_it(chat):
+    result, tries, _clock = run_loop(chat, ["sent"] * 10, seen_after=None, start_after=30)
+    assert tries[0] == 30.0, "the answer has just made the first try; the same line is not typed again at once"
+
+
+def test_the_wake_command_starts_after_the_usual_wait(chat, monkeypatch):
+    called = []
+    monkeypatch.setattr(chat, "wake_until_seen", lambda *a, **k: called.append(k) or "seen")
+    assert chat.wake("capitano", "q9") == {"result": "seen"}
+    assert called == [{"start_after": chat.WAKE_RETRY_EVERY_S}]
 
 
 def test_an_answer_already_read_asks_for_nothing(chat):

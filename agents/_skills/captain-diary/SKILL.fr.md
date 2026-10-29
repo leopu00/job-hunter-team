@@ -24,6 +24,8 @@ ainsi que ce qui est déjà consigné **aujourd'hui**. Tu hérites des leçons �
 **ne répète pas les mêmes erreurs**. S'il n'y a rien, tu es le premier :
 commence à consigner.
 
+Il affiche au plus les **30 dernières notes** de chaque jour (8 Kio), avec une ligne qui dit combien de notes plus anciennes ont été laissées de côté : chaque redémarrage les relit, donc garde tes notes courtes et mets la leçon en premier.
+
 ## Pendant la journée — consigne les événements SIGNIFICATIFS
 
 Une ligne, chaque fois qu'il se passe quelque chose qui porte une leçon. PAS un

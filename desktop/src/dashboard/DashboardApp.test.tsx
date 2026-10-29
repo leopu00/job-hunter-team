@@ -1,3 +1,4 @@
+import { localTeamData } from "../lib/local-team-data";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -136,7 +137,9 @@ vi.mock("../shell/Shell", async () => {
   const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
   const { useConnectTeam } = await import("../lib/connect-team");
   const { useProviderSetup } = await import("../lib/provider-setup");
+  const { useLocalProfileLink } = await import("../lib/local-profile-link");
   const { useTeamOff } = await import("../lib/team-off");
+  const { localTeamData } = await import("../lib/local-team-data");
   const ready = (profileReady: boolean) => ({
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
@@ -148,11 +151,14 @@ vi.mock("../shell/Shell", async () => {
     const connectTeam = useConnectTeam();
     // What Settings › Provider reaches: only the Shell of the team of this computer has it.
     const providerSetup = useProviderSetup();
+    // What Settings › «Link the local profile» reaches: only an account that went in without linking has it.
+    const localProfileLink = useLocalProfileLink();
     // What the team-off banner reaches: the way back to «start the team».
     const teamOff = useTeamOff();
     return (
       <main data-testid="shell">
         Shell
+        <span data-testid="local-team-data">{String(localTeamData())}</span>
         {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
         {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
         {connectTeam && <button type="button" onClick={connectTeam.open}>connect-a-team</button>}
@@ -162,6 +168,7 @@ vi.mock("../shell/Shell", async () => {
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true)).catch(() => undefined)}>reconfirm-connected-checked</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
         {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
+        {localProfileLink && <button type="button" onClick={() => localProfileLink.link()}>link-the-local-profile</button>}
         {teamOff?.startTeam && <button type="button" onClick={teamOff.startTeam}>team-off-start</button>}
         {teamOff && <button type="button" onClick={() => void teamOff.wakeRuntime().catch(() => undefined)}>team-off-wake</button>}
       </main>
@@ -202,6 +209,9 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.calm && <p>calm-card</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
+        {props.draft && <p>draft:{props.draft.step}:{props.draft.host.kind}:{props.draft.provider}</p>}
+        {props.onDraftChange && <button type="button" onClick={() => props.onDraftChange?.({ step: 2, host: { kind: "local" }, provider: "codex" })}>remember-draft</button>}
+        {props.onDraftChange && <button type="button" onClick={() => props.onDraftChange?.(null)}>forget-draft</button>}
         {props.onOpenWithoutTeam && <button type="button" onClick={props.onOpenWithoutTeam}>open-without-team</button>}
         {props.onResumeInterrupted && <button type="button" onClick={() => void props.onResumeInterrupted?.().catch(() => undefined)}>resume-interrupted</button>}
         {props.onDiscardInterruption && <button type="button" onClick={() => props.onDiscardInterruption?.()}>discard-interruption</button>}
@@ -493,6 +503,26 @@ describe("DashboardApp onboarding router", () => {
     expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
   });
 
+  it("opens the pages on the team of this computer for a local profile, and not for a Google account", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({ profileId: "opaque-ready-local-profile", displayName: "Ada Locale" });
+    localStorage.setItem("jht.desktop.onboarding.local:opaque-ready-local-profile", "subscription-v1");
+    const local = render(<DashboardApp />);
+    expect(await screen.findByTestId("local-team-data")).toHaveTextContent("true");
+    local.unmount();
+    expect(localTeamData()).toBe(false);
+  });
+
+  it("does not turn the local-data mode on for a signed-in account", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(localIdentitySelected).mockReturnValue(false);
+    vi.mocked(readLocalProfile).mockReturnValue(null);
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("local-team-data")).toHaveTextContent("false");
+  });
+
   it("requires an explicit gesture before migrating local ownership to Google", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
     let saved: { profileId: string; displayName: string } | null = {
@@ -632,6 +662,65 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
   });
 
+  describe("going in without linking is kept for the profile", () => {
+    function targetExists() {
+      vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+      vi.mocked(readLocalProfile).mockReturnValue({
+        profileId: "opaque-local-profile",
+        displayName: "Synthetic Local",
+      });
+      vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_target_exists" });
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+      requireOnboarding();
+    }
+    afterEach(() => localStorage.removeItem("jht.desktop.unlinked-local-profile.v1"));
+
+    it("the next start goes straight in: no check, no page", async () => {
+      targetExists();
+      const user = userEvent.setup();
+      const first = render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "Entra con Google senza collegare" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(localStorage.getItem("jht.desktop.unlinked-local-profile.v1")).toBe('{"profileId":"opaque-local-profile"}');
+      first.unmount();
+
+      vi.mocked(probeDesktopLocalProfileMigration).mockClear();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("local-migration")).not.toBeInTheDocument();
+      expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+    });
+
+    it("another local profile is still asked", async () => {
+      targetExists();
+      localStorage.setItem("jht.desktop.unlinked-local-profile.v1", '{"profileId":"another-profile"}');
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("local-migration")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+    });
+
+    it("Settings takes the choice back and the page that offers the link comes again", async () => {
+      targetExists();
+      localStorage.setItem("jht.desktop.unlinked-local-profile.v1", '{"profileId":"opaque-local-profile"}');
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "link-the-local-profile" }));
+
+      expect(await screen.findByTestId("local-migration")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+      expect(localStorage.getItem("jht.desktop.unlinked-local-profile.v1")).toBeNull();
+    });
+
+    it("the way back from Settings is only there for an account that went in without linking", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("complete-account"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "link-the-local-profile" })).not.toBeInTheDocument();
+    });
+  });
+
   it("offers «Sign in with Google without linking» only where the account already has its data here", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
     vi.mocked(readLocalProfile).mockReturnValue({
@@ -678,6 +767,17 @@ describe("DashboardApp onboarding router", () => {
 
       expect(await screen.findByTestId("shell")).toBeInTheDocument();
       expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    });
+
+    it("a folder whose data belong to nobody and this profile cannot take is not the setup's to enter either", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("nobody");
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(markOnboardingReady).not.toHaveBeenCalled();
     });
 
     it.each(["self", "none"] as const)("the owner (%s) gets the setup as always", async (owner) => {
@@ -1741,6 +1841,35 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
   });
 
+  it("the setup that finds the disk short says the room it needs and the room there is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-disk-account"));
+    requireOnboarding();
+    const GIB = 1024 ** 3;
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "disk_low",
+      message: "raw native message",
+      retryable: true,
+      resources: { requiredBytes: 26 * GIB, availableBytes: Math.floor(20.55 * GIB) },
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Gli agenti richiedono almeno 26 GiB di disco — disponibili: 20,5 GiB.")).toBeInTheDocument();
+    expect(screen.queryByText("raw native message")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("a disk refusal without numbers keeps the plain sentence, never a placeholder", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-disk-plain-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({ code: "disk_low", message: "raw native message", retryable: true });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Gli agenti richiedono più spazio su disco di quello disponibile.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/[{}]/);
+  });
+
   it("a failed local step says its own cause instead of the catalog's guess about the network", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("runtime-cause-account"));
     requireOnboarding();
@@ -1838,6 +1967,70 @@ describe("DashboardApp onboarding router", () => {
     await userEvent.click(screen.getByRole("button", { name: "discard-interruption" }));
     expect(screen.queryByText(/^interrupted:/)).not.toBeInTheDocument();
     expect(localStorage.getItem("jht.desktop.onboarding.interrupted.interrupted-account")).toBe("");
+  });
+
+  describe("the wizard's step and choices", () => {
+    const DRAFT_KEY = (id: string) => `jht.desktop.onboarding.draft.${id}`;
+
+    it("are kept as the wizard reports them, and given back to it when the app is reopened", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-account"));
+      requireOnboarding();
+      const first = render(<DashboardApp />);
+      expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+      await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-account")) ?? "null")).toMatchObject({ step: 2, host: { kind: "local" }, provider: "codex", savedAt: expect.any(Number) });
+      first.unmount();
+
+      render(<DashboardApp />);
+      expect(await screen.findByText("draft:2:local:codex")).toBeInTheDocument();
+    });
+
+    it("are the account's own: another account opens on the welcome", async () => {
+      localStorage.setItem(DRAFT_KEY("draft-account-a"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex", savedAt: Date.now() }));
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-account-b"));
+      requireOnboarding();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+    });
+
+    it("go with the account that leaves: signed out, or another account in, the one before keeps nothing", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-leaving-account"));
+      requireOnboarding();
+      const view = render(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: "remember-draft" }));
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-leaving-account")) ?? "null")).not.toBeNull();
+
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      view.rerender(<DashboardApp />);
+      await waitFor(() => expect(localStorage.getItem(DRAFT_KEY("draft-leaving-account"))).toBe(""));
+
+      // another account takes its place: the one it replaced is cleared too
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-first-account"));
+      view.rerender(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: "remember-draft" }));
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-second-account"));
+      view.rerender(<DashboardApp />);
+      await waitFor(() => expect(localStorage.getItem(DRAFT_KEY("draft-first-account"))).toBe(""));
+    });
+
+    it("go when the wizard says it started over, and when the whole setup is started over", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-restart-account"));
+      requireOnboarding();
+      localStorage.setItem(DRAFT_KEY("draft-restart-account"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex", savedAt: Date.now() }));
+      render(<DashboardApp />);
+      expect(await screen.findByText("draft:3:local:codex")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "forget-draft" }));
+      expect(localStorage.getItem(DRAFT_KEY("draft-restart-account"))).toBe("");
+
+      // restarting the running setup: the marker is reset (mocked here), the steps reached go with it
+      await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
+      vi.mocked(prepareOnboardingRuntime).mockReturnValue(new Promise(() => undefined));
+      await userEvent.click(screen.getByRole("button", { name: "submit-onboarding" }));
+      await userEvent.click(await screen.findByRole("button", { name: "restart-onboarding" }));
+      expect(localStorage.getItem(DRAFT_KEY("draft-restart-account"))).toBe("");
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.getByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+    });
   });
 
   it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {
@@ -2096,6 +2289,26 @@ describe("DashboardApp onboarding router", () => {
     expect(document.body).not.toHaveTextContent("native text that must not show");
     expect(document.body).not.toHaveTextContent("{time}");
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("the guard that refuses the team start on a full disk says the room it keeps and the room there is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("start-disk-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockRejectedValue({
+      code: "disk_low",
+      message: "native text that must not show",
+      retryable: true,
+      resources: { requiredBytes: 8 * 1024 ** 3, availableBytes: Math.floor(1.65 * 1024 ** 3) },
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent("Gli agenti richiedono almeno 8 GiB di disco — disponibili: 1,6 GiB.");
+    expect(document.body).not.toHaveTextContent("native text that must not show");
+    expect(document.body).not.toHaveTextContent(/[{}%]/);
   });
 
   it("names the next day when exhausted provider limits free after midnight", async () => {

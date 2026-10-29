@@ -189,6 +189,69 @@ def plan_gap(state: dict) -> dict:
     return {"plan_missing": True, "reason": info.get("reason", "plan not declared"), "hint": info["hint"]}
 
 
+def mentor_check() -> dict:
+    """{"mentor_due", "phase"}: whether the Mentor has anything to read yet. Until the first run is over (`steady`:
+    there are scored positions on screen) the Mentor has no record to walk, and its first wake at every start would
+    be spent on nothing; the agent watchdog turns it on when the run closes. The phase is read ONCE, here: a state
+    that cannot be read counts as due (phase "unknown"), so the Mentor is then started as it always was."""
+    try:
+        phase = status().get("phase")
+    except Exception:
+        return {"mentor_due": True, "phase": "unknown"}
+    return {"mentor_due": phase == PHASE_STEADY, "phase": phase}
+
+
+def mentor_due() -> bool:
+    return mentor_check()["mentor_due"]
+
+
+def _live_sessions() -> Optional[list[str]]:
+    """Names (lower case) of the tmux sessions running, [] when there is no tmux server, None when it cannot
+    be asked (no tmux, no answer)."""
+    try:
+        done = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"],
+                              capture_output=True, text=True, timeout=4)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode == 0:
+        return [line.strip().lower() for line in done.stdout.splitlines() if line.strip()]
+    return [] if "no server running" in done.stderr or "no sessions" in done.stderr else None
+
+
+def roster_gap(state: dict) -> dict:
+    """In a burst, which roles of the roster have a session and which do not: after a restart of the
+    containers every session is gone, and the Capitano must start the MISSING ones, not the whole roster over
+    again (a worker that is up is not spawned over, whatever it is doing). `roster_alive` and `roster_missing`
+    count per role; `roster_check: "unavailable"` when tmux cannot be asked, and then nothing is assumed."""
+    roster = state.get("roster")
+    if state.get("phase") != PHASE_BURST or not isinstance(roster, dict):
+        return {}
+    names = _live_sessions()
+    if names is None:
+        return {"roster_check": "unavailable"}
+    # The state file is a file on disk: a role or a count that is not what begin-burst wrote is left out, and the
+    # answer is about the roles that are well formed (nothing is guessed about the others).
+    wanted = {role: want for role, want in roster.items()
+              if isinstance(role, str) and isinstance(want, int) and not isinstance(want, bool) and want >= 0}
+    alive = {role: sum(1 for n in names if re.fullmatch(rf"{re.escape(role)}-\d+", n)) for role in wanted}
+    return {"roster_alive": alive, "roster_missing": {role: max(0, want - alive[role]) for role, want in wanted.items()}}
+
+
+def _plan_hint(state: dict, info: dict) -> str:
+    """How an agent declares the missing plan: write the pick the person already made on the card, else ask with the card."""
+    fallback = info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"
+    registry = _load_module("plan_registry", "plan_registry.py")
+    provider = (registry.question_options() or {}).get("provider") if registry is not None else None
+    if not provider:
+        return fallback
+    try:
+        kind, answer = _plan_question_state(state, provider)
+    except sqlite3.Error:
+        return fallback
+    picked = _named_choice(answer, provider) if kind == "answered" else None
+    return _answered_plan_hint(provider, picked) if picked is not None else fallback
+
+
 def begin_burst() -> dict:
     """Profilo pronto → si apre la fase di burst. Idempotente.
 
@@ -200,13 +263,13 @@ def begin_burst() -> dict:
     if state["phase"] == PHASE_STEADY:
         return dict(state, note="first run has already been completed")
     if state["phase"] == PHASE_BURST:
-        return dict(state, note="burst already in progress", **plan_gap(state))
+        return dict(state, note="burst already in progress", **plan_gap(state), **roster_gap(state))
 
     info = plan_info()
     if not info.get("ok"):
         return {"ok": False, "phase": state["phase"],
                 "reason": info.get("reason", "plan not declared"),
-                "hint": info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"}
+                "hint": _plan_hint(state, info)}
 
     with contextlib.suppress(Exception):  # the card is a courtesy to the user: it never stops the burst
         close_plan_question()  # the plan is declared: the card that asked for it has nothing left to ask
@@ -461,6 +524,27 @@ def close_plan_question(now: Optional[datetime] = None) -> dict:
         return _close_plan_question(info, now)
 
 
+def _named_choice(answer: Optional[dict], provider: str) -> Optional[str]:
+    """The plan the person picked on the card (its option id) when the answer names one of the provider's plans, else None.
+
+    «I do not know», a card answered by the system, an answer with two choices: none of them names a plan."""
+    registry = _load_module("plan_registry", "plan_registry.py")
+    chosen = (answer or {}).get("scelte")
+    choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
+    if registry is None or choice is None or registry.find_plan(provider, choice) is None:
+        return None
+    return choice
+
+
+def _answered_plan_hint(provider: str, choice: str) -> str:
+    """What to tell an agent whose plan is not written yet while the person has ALREADY picked it on the card:
+    write that pick, never ask again (the person answered; a new question or «pick it in the card above» is a
+    stale request for what they already did)."""
+    return (f"the user already picked their plan on the card: `{choice}`. Do NOT ask again and do not point them to the card. "
+            f"Write exactly that pick with `python3 /app/shared/skills/plan_registry.py set {provider}:{choice}`"
+            " and run begin-burst again")
+
+
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
              now: Optional[datetime] = None) -> dict:
     """Ask the user which plan they have: the one way to do it, for any agent. The card goes to the chat where the
@@ -498,6 +582,10 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             holder = record.get("agent") or "capitano"
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
                     "question_id": record["id"], "agent": holder, "in_your_chat": holder == agent}
+        picked = _named_choice(answer, card["provider"]) if kind == "answered" else None
+        if picked is not None:  # the person already picked: the plan only waits to be written, nobody asks again
+            return {"ok": True, "asked": False, "answered": True, "choice": picked,
+                    "reason": _answered_plan_hint(card["provider"], picked)}
         cards = _cards_asked(state, card["provider"])
         if cards >= MAX_PLAN_CARDS:
             return {"ok": True, "asked": False, "limit": True,
@@ -517,6 +605,176 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
         _write(state)
         return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]],
                 "agent": chat, "in_your_chat": chat == agent}
+
+
+# The first run opens when the Capitano runs `begin-burst`, and the Capitano is told once, by `jht profile import`,
+# that the profile is ready. If the plan was not declared yet, that run refused; when the person then picks their plan
+# on the card (the Assistente writes it, the card shows «picked up»), nothing told the Capitano again, and the team
+# stayed in `awaiting_profile` until the person wrote «start the team» (TEST 18c, 28/10: the plan was saved 10 s after
+# the click and the burst opened four minutes later, by hand). The net tells the Capitano again, from the watchdog's
+# tick, once the profile is imported and the plan is declared and the first run has not opened.
+START_NUDGE_SETTLE_S = 45   # after the plan is written: the one who wrote it is still confirming it
+START_NUDGE_EVERY_S = 300   # between two reminders to the Capitano
+START_NUDGE_MAX = 3         # for one declared plan; then the Capitano is on its own, and so is the person (they can write)
+START_ENTER_TRIES = 3       # Enter pressed by hand on our own reminder left in the composer, each time it is looked at
+START_ENTER_WAIT_S = float(os.environ.get("JHT_FIRST_RUN_ENTER_WAIT_S") or 2)
+START_ENTER_MAX = 6         # for one declared plan, all together: a composer that never takes it is the person's to look at
+START_NUDGE_SEND_S = float(os.environ.get("JHT_FIRST_RUN_SEND_S") or 25)  # the transport may hang: the watchdog's tick (respawns, bridges, mail) does not wait for it for long
+START_MESSAGE = (
+    "The subscription plan is declared and the candidate profile is complete: the team can start. "
+    "Run first_run.py begin-burst and follow your first-run-burst skill."
+)
+# The reminders are written in a file of their own, never in first-run.json: that file is the Capitano's (begin-burst
+# rewrites all of it), and the watchdog that rewrote it from a state read a moment before could put back
+# `awaiting_profile` over a burst the Capitano had just opened, with no roster (found by the guardian, 29/10).
+NUDGE_PATH = JHT_HOME / "state" / "first-run-nudge.json"
+
+
+def _read_nudge() -> dict:
+    try:
+        with NUDGE_PATH.open(encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_nudge(record: dict) -> None:
+    NUDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = NUDGE_PATH.with_suffix(f".json.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(record, f)
+        f.write("\n")
+    tmp.replace(NUDGE_PATH)
+
+
+def _plan_declared_at() -> Optional[float]:
+    registry = _load_module("plan_registry", "plan_registry.py")
+    try:
+        return Path(registry._config_path()).stat().st_mtime if registry is not None else None
+    except (OSError, AttributeError):
+        return None
+
+
+def _capitano_pane() -> Optional[str]:
+    """The Capitano's screen as the transport reads it, or None when tmux cannot say."""
+    try:
+        done = subprocess.run(["tmux", "capture-pane", "-e", "-t", "=CAPITANO:", "-p"],
+                              capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def _reminder_is_left(message: str) -> bool:
+    """True when the Capitano's composer holds EXACTLY our reminder, unsent (spaces apart: a wrapped row loses one)."""
+    pane = _capitano_pane()
+    composer = _load_module("tmux_send_composer", "tmux_send_composer.py")
+    if pane is None or composer is None:
+        return False
+    try:
+        return composer.composer_relation(pane, message)[0] == "ours"
+    except Exception:
+        return False
+
+
+def _press_enter_on_the_reminder(message: str, allowed: int) -> tuple[int, bool]:
+    """Enter, one at a time and at most `allowed` (and START_ENTER_TRIES), on a composer that holds exactly our reminder,
+    looking again after each one. (Enter pressed, whether the composer is free of the reminder.) It never presses on
+    anything else: a person typing, a menu, an empty composer. The transport does this by itself when it can tell the
+    text is its own; this is the check that does not depend on that (a footer the reader did not know made the text
+    «another draft» and left it six minutes with no Enter: TEST 19b)."""
+    import time
+
+    pressed = 0
+    while pressed < min(allowed, START_ENTER_TRIES) and _reminder_is_left(message):
+        try:
+            subprocess.run(["tmux", "send-keys", "-t", "=CAPITANO:", "Enter"], capture_output=True, timeout=5, check=False)
+        except (OSError, subprocess.SubprocessError):
+            break
+        pressed += 1
+        time.sleep(START_ENTER_WAIT_S)
+    return pressed, not _reminder_is_left(message)
+
+
+def _tell_the_capitano(message: str, timeout: float = START_NUDGE_SEND_S, allowed: int = START_ENTER_MAX) -> tuple[bool, int]:
+    """Type `message` into the Capitano's terminal as the person's console (the way `jht profile import` does: the
+    envelope of an agent is not ours to wear), then look at the composer: if our text is still there, press Enter on
+    it, a few times. (Sent, Enter pressed by hand.) Sent is True when the transport took it, or when the Enter pressed
+    here emptied the composer; False when neither did, or the transport did not answer in `timeout` seconds (it is
+    then left to finish: `tmux_send_run` does not kill it between its paste and its Enter)."""
+    sender = os.environ.get("JHT_TMUX_SENDER") or shutil.which("jht-tmux-send")
+    if not sender:
+        for candidate in (Path("/app/agents/_skills/tmux-send/jht-tmux-send"),
+                          Path(__file__).resolve().parents[2] / "agents" / "_skills" / "tmux-send" / "jht-tmux-send"):
+            if candidate.is_file():
+                sender = str(candidate)
+                break
+    if not sender:
+        return False, 0
+    # a reminder of ours that stayed in the composer is not pasted over: it gets its Enter
+    if _reminder_is_left(message):
+        pressed, freed = _press_enter_on_the_reminder(message, allowed)
+        return freed, pressed
+    # this process is a short tick of its own: the environment is what the transport reads
+    os.environ["JHT_TMUX_SEND_FROM"] = "user-console"
+    os.environ["JHT_TMUX_FOREIGN_WAIT"] = "0"
+    runner = _load_module("tmux_send_run", "tmux_send_run.py")
+    took = False
+    try:
+        if runner is not None:
+            done = runner.run([sender, "CAPITANO", message], timeout, text=False)
+        else:
+            done = subprocess.run([sender, "CAPITANO", message], capture_output=True, timeout=timeout, check=False)
+        took = done.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        took = False
+    pressed, freed = _press_enter_on_the_reminder(message, allowed)
+    return (took and freed) or (pressed > 0 and freed), pressed
+
+
+def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[float] = None) -> dict:
+    """The plan is declared and the profile imported: while the first run has not opened, tell the Capitano to open it."""
+    if state["phase"] != PHASE_AWAITING:
+        return {"action": "none", "reason": "the plan is declared"}
+    # the wait counts from the later of the two: a plan declared before the profile was ready is not news at the
+    # moment the Capitano is itself told the profile is ready
+    declared = max((moment for moment in (_plan_declared_at(), imported) if moment is not None), default=None)
+    if declared is not None and now.timestamp() - declared < START_NUDGE_SETTLE_S:
+        return {"action": "waiting", "seconds_left": int(START_NUDGE_SETTLE_S - (now.timestamp() - declared))}
+    record = _read_nudge()
+    plan = info.get("plan")
+    count, last = 0, None
+    if record.get("plan") == plan:
+        count = record.get("count") if isinstance(record.get("count"), int) else 0
+        last = _parse(record.get("last_at"))
+    if count >= START_NUDGE_MAX:
+        return {"action": "none", "reason": f"the Capitano was told {count} times; the person can say it in the chat"}
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        left = START_NUDGE_EVERY_S - (now - last).total_seconds()
+        if left > 0:
+            # between two reminders: our last one, if it is still unsent in the composer, gets its Enter now and not
+            # five minutes later (a limited number of times for the plan: the rest is the person's)
+            pressed_so_far = record.get("pressed") if isinstance(record.get("pressed"), int) else 0
+            if count >= 1 and pressed_so_far < START_ENTER_MAX and _reminder_is_left(START_MESSAGE):
+                pressed, freed = _press_enter_on_the_reminder(START_MESSAGE, START_ENTER_MAX - pressed_so_far)
+                _write_nudge({**record, "pressed": pressed_so_far + pressed})
+                return {"action": "waiting", "seconds_left": int(left), "pressed": pressed, "freed": freed}
+            return {"action": "waiting", "seconds_left": int(left)}
+    # the phase is read again, now: the Capitano may have opened the run since `state` was read, and the reminder
+    # is for a run that has not opened
+    if _read().get("phase", PHASE_AWAITING) != PHASE_AWAITING:
+        return {"action": "none", "reason": "the first run opened meanwhile"}
+    # written (in the file of the reminders, never in first-run.json) before it is sent: a transport that hangs or a
+    # crash must not become a reminder every tick
+    pressed_so_far = record.get("pressed") if record.get("plan") == plan and isinstance(record.get("pressed"), int) else 0
+    _write_nudge({"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds"), "pressed": pressed_so_far})
+    sent, pressed = _tell_the_capitano(START_MESSAGE, allowed=max(0, START_ENTER_MAX - pressed_so_far))
+    if pressed:
+        _write_nudge({"plan": plan, "count": count + 1, "last_at": now.isoformat(timespec="seconds"), "pressed": pressed_so_far + pressed})
+    return {"action": "start", "plan": plan, "count": count + 1, "sent": sent, "pressed": pressed}
 
 
 def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,
@@ -546,7 +804,7 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
         return {"action": "none", "reason": "the first run is complete"}
     info = plan_info()
     if info.get("ok"):
-        return {"action": "none", "reason": "the plan is declared"}
+        return _start_nudge(state, info, now, imported)
     if not info.get("hint"):
         return {"action": "none", "reason": "the plan table cannot be read"}
     registry = _load_module("plan_registry", "plan_registry.py")
@@ -559,9 +817,8 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
         return {"action": "none", "reason": "the database cannot be read"}
     if kind == "open":
         return {"action": "none", "reason": "a question about the plan is open"}
-    chosen = (answer or {}).get("scelte")
-    choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
-    if kind == "answered" and choice and registry.find_plan(provider, choice) is not None:
+    choice = _named_choice(answer, provider) if kind == "answered" else None
+    if choice is not None:
         left = after_s - (now - (_answered_at(answer) or now)).total_seconds()
         if left > 0:
             return {"action": "waiting", "seconds_left": int(left)}
@@ -585,7 +842,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="First-run status")
     ap.add_argument("command", nargs="?", default="status",
                     choices=["status", "begin-burst", "check", "complete", "reset",
-                             "plan", "ask-plan", "plan-question-check"])
+                             "plan", "ask-plan", "plan-question-check", "mentor-due"])
     ap.add_argument("--reason", default="closed manually")
     ap.add_argument("--agent", choices=PLAN_ASKERS, default="capitano",
                     help="ask-plan: whose chat the card goes to (the agent the person is talking to)")
@@ -597,9 +854,13 @@ def main(argv: list[str]) -> int:
 
     if args.command == "status":
         state = status()
-        out = dict(state, **plan_gap(state))
+        out = dict(state, **plan_gap(state), **roster_gap(state))
     elif args.command == "plan":
         out = plan_info()
+    elif args.command == "mentor-due":
+        answer = mentor_check()
+        print(json.dumps(answer))
+        return 0 if answer["mentor_due"] else 1
     elif args.command == "begin-burst":
         out = begin_burst()
     elif args.command == "check":

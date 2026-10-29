@@ -119,6 +119,22 @@ Outros agentes:
 Sem esta porta, o Capitano pode reportar "12 ready" verbalmente enquanto o
 DB ainda mostra 0 — exatamente a divergência que o bug #21 corrigiu.
 
+## Um `$` no texto: aspas simples ou stdin
+
+Entre aspas duplas a shell lê `$1` e `$2` como argumentos seus e substitui-os por nada **antes de a ferramenta arrancar**: «Plus — $20/month; Pro — $200/month» chega ao utilizador como «Plus — 0/month; Pro — 00/month», e mais adiante ninguém consegue devolver os dígitos. Se o texto tiver um `$` (preços, montantes), escreve-o entre aspas simples ou passa-o por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+Escreve o `TXT` de fecho na primeira coluna, sozinho na linha, sem espaços antes (se copiares o avanço, o heredoc nunca fecha: um texto que acaba numa linha `TXT` é recusado, não sai nada).
+
 ## Regras de segurança
 
 1. **Ler primeiro.** Execute `db-query position <id>` (ou `application`) para ver o estado atual antes de escrever. Sobrescritas cegas produzem registos inconsistentes.

@@ -52,3 +52,10 @@ it("leaves the web's card as it was when no controls are given", async () => {
   expect(await screen.findByRole("button", { name: /Stop d'emergenza/ })).toBeInTheDocument();
   expect(screen.queryByTestId("team-controls-link")).toBeNull();
 });
+
+it("while the status is being read the card says so in words, never a bare «…»", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+  render(<MobileTeamStatus />);
+  expect(screen.getByText("Controllo in corso…")).toBeInTheDocument();
+  expect(screen.queryByText("…")).toBeNull();
+});

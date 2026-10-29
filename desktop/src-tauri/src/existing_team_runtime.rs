@@ -156,13 +156,16 @@ LIST_KEYS=('id','legacy_id','title','company','location','remote_type','source',
 def light(item): return {key:item.get(key) for key in LIST_KEYS}
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
-if not isinstance(req,dict) or set(req)-{'op','filters','id','offset'}: fail('positions_request_invalid')
+if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync','map'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
+DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
+if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
+if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','profile','cloud_sync') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 if op=='cloud_sync':
  # How the box's push to the website is going: its periodic push keeps the last outcome in
@@ -325,6 +328,92 @@ if op=='facets':
    rows.append({'id':sid(row[0]),'status':row[1],'title':row[2],'company':row[3],'role_family':row[4],'loc_country':row[5],'loc_city':row[6],'score':row[7],'critic_score':row[8],'source':row[9]})
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':rows}})
+if op=='directives':
+ # The standing orders the user gave the team (the board of the Team page), as the web's own local reader gives
+ # them: the columns it reads, in its order, at most LIMIT rows with each text bounded. A database without the
+ # table, or without its id or text, has none.
+ # The reply carries as many as fit in the byte budget of the map's reply (what the app takes is 2 MiB), in that
+ # order, and says when it stopped short: a team with a great many long orders gets the first ones, never a failure.
+ LIMIT=500; BUDGET=1363148
+ try:
+  have=columns('team_directives'); wanted=[name for name in ('id','body','kind','status','sort_order','created_by','created_at','updated_at','archived_at') if name in have]
+  order=', '.join(name+' ASC' for name in ('status','sort_order','created_at') if name in have)
+  items=[]; used=0; truncated=False
+  if 'id' in wanted and 'body' in wanted:
+   for raw in db.execute('SELECT '+', '.join(wanted)+' FROM team_directives'+(' ORDER BY '+order if order else '')+' LIMIT '+str(LIMIT+1)):
+    row=as_dict(raw); row['body']=trunc(row['body'],4000)
+    for name in ('kind','status','created_by','created_at','updated_at','archived_at'):
+     if name in row: row[name]=trunc(row[name],60)
+    used+=len(json.dumps(row,separators=(',',':')))+1
+    if len(items)>=LIMIT or (items and used>BUDGET): truncated=True; break
+    items.append(row)
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'items':items,'truncated':truncated}})
+if op=='team_activity':
+ # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
+ # newest events with the position they touched. The columns are the ones the web's own local reader reads
+ # (found_at/last_checked of positions, scored_at of scores, written_at and critic_reviewed_at of applications);
+ # a database without one of them counts none for it. Counts are made here, so the reply does not grow with the
+ # history; the newest EVENTS rows are the feed and the timeline.
+ EVENTS=2500; DAYS=366; first=req['from']; last=req['to']
+ sources=(('scout','positions','found_at','found_by','id','id'),('analista','positions','last_checked',None,'id','id'),('scorer','scores','scored_at','scored_by','position_id','position_id'),('scrittore','applications','written_at','written_by','position_id','position_id'),('critico','applications','critic_reviewed_at','reviewed_by','position_id','position_id'))
+ try:
+  from datetime import date
+  if (date.fromisoformat(last)-date.fromisoformat(first)).days>DAYS: fail('positions_request_invalid')
+ except ValueError: fail('positions_request_invalid')
+ try:
+  daily=[]; newest=[]
+  for role,table,column,actor,pid,_ in sources:
+   have=columns(table)
+   if column not in have: continue
+   who=actor if actor and actor in have else 'NULL'
+   where=' FROM '+table+' WHERE '+column+' IS NOT NULL AND substr('+column+',1,10) BETWEEN ? AND ?'
+   for row in db.execute('SELECT '+who+' AS actor, substr('+column+',1,10) AS day, COUNT(*) AS n'+where+' GROUP BY actor, day',(first,last)):
+    daily.append({'role':role,'actor':trunc(row['actor'],40),'day':row['day'],'n':row['n']})
+   for row in db.execute('SELECT '+who+' AS actor, '+column+' AS ts, '+pid+' AS pid'+where+' ORDER BY '+column+' DESC LIMIT '+str(EVENTS),(first,last)):
+    newest.append({'role':role,'actor':trunc(row['actor'],40),'ts':trunc(row['ts'],40),'pid':None if row['pid'] is None else sid(row['pid'])})
+  # also the last time each instance was seen, whatever the range (the web shows it next to the instance)
+  seen=[]
+  for role,table,column,actor,pid,_ in sources:
+   have=columns(table)
+   if column not in have: continue
+   who=actor if actor and actor in have else 'NULL'
+   for row in db.execute('SELECT '+who+' AS actor, MAX('+column+') AS last FROM '+table+' WHERE '+column+' IS NOT NULL GROUP BY actor'):
+    seen.append({'role':role,'actor':trunc(row['actor'],40),'last':trunc(row['last'],40)})
+  newest.sort(key=lambda item:item['ts'] or '',reverse=True); newest=newest[:EVENTS]
+  # The reply must fit in the byte budget of the map's reply. An instance is a name an agent writes, so there may be
+  # a great many: when it does not fit, the feed first shrinks, then the instances that did least are counted under
+  # their role (no event is lost from a count), down to no instance at all. Nothing here fails for volume.
+  BUDGET=1363148
+  def fold(rows,keep,merge):
+   if keep is None: return rows
+   total={}
+   for row in base_daily: total[(row['role'],row['actor'])]=total.get((row['role'],row['actor']),0)+row['n']
+   kept=set()
+   for role in {key[0] for key in total}:
+    ranked=sorted((key for key in total if key[0]==role and key[1] is not None),key=lambda key:(-total[key],key[1]))
+    kept.update(ranked[:keep])
+   merged={}
+   for row in rows:
+    key=(row['role'],row['actor'] if (row['role'],row['actor']) in kept else None)+((row['day'],) if 'day' in row else ())
+    if key in merged: merge(merged[key],row)
+    else: merged[key]=dict(row,actor=key[1])
+   return list(merged.values())
+  def add_n(into,row): into['n']+=row['n']
+  def later(into,row): into['last']=max(into['last'] or '',row['last'] or '') or None
+  base_daily,base_seen,base_newest=daily,seen,newest
+  for rows,keep in ((EVENTS,None),(500,None),(500,12),(500,6),(500,3),(500,0)):
+   newest=base_newest[:rows]; daily=fold(base_daily,keep,add_n); seen=fold(base_seen,keep,later)
+   if len(json.dumps({'daily':daily,'newest':newest,'seen':seen},separators=(',',':')))<=BUDGET: break
+  else: fail('positions_unavailable')
+  pids=[item['pid'] for item in newest[:40] if item['pid'] is not None]
+  meta={}
+  have=columns('positions'); wanted=[name for name in ('id','legacy_id','title','company') if name in have]
+  if pids and 'id' in wanted:
+   for row in db.execute('SELECT '+', '.join(wanted)+' FROM positions WHERE id IN ('+','.join('?'*len(pids))+')',[int(pid) for pid in pids if pid.isdigit()]):
+    meta[sid(row['id'])]={'legacy_id':row['legacy_id'] if 'legacy_id' in wanted else None,'title':trunc(row['title'],200) if 'title' in wanted else None,'company':trunc(row['company'],120) if 'company' in wanted else None}
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':{'daily':daily,'newest':newest,'seen':seen,'meta':meta}})
 if op=='map':
  # What the globe needs of every position that is not excluded, and nothing else, in the list's order
  # (the pins of one city are laid out by that order). One reply carries as many as fit in the byte
@@ -408,6 +497,14 @@ enum PositionsRequest {
         offset: u32,
     },
     Profile,
+    /// What each role did per day and instance in a range of days, and the newest events (see the script's `team_activity`).
+    #[serde(rename = "team_activity")]
+    TeamActivity {
+        from: String,
+        to: String,
+    },
+    /// The standing orders of the user's board (the script's `directives`), read only.
+    Directives,
     /// How the box's push to the website is going (its periodic push's last outcome).
     #[serde(rename = "cloud_sync")]
     CloudSync,
@@ -544,6 +641,8 @@ impl PositionsRequest {
             Self::Map { .. } => 4,
             Self::Profile => 5,
             Self::CloudSync => 6,
+            Self::TeamActivity { .. } => 7,
+            Self::Directives => 8,
         }]
     }
 
@@ -554,9 +653,17 @@ impl PositionsRequest {
                 (1..=20).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit())
             }
             Self::Map { offset } => *offset <= 1_000_000,
-            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync => true,
+            Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
+            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync | Self::Directives => true,
         }
     }
+}
+
+/// A calendar day as the activity range names it: `YYYY-MM-DD`, digits only (the reader checks the date itself).
+fn valid_day(day: &str) -> bool {
+    let bytes = day.as_bytes();
+    bytes.len() == 10
+        && bytes.iter().enumerate().all(|(index, byte)| if index == 4 || index == 7 { *byte == b'-' } else { byte.is_ascii_digit() })
 }
 
 fn object_or_null(value: Option<&Value>) -> bool {
@@ -578,7 +685,7 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
         return false;
     };
     match request {
-        PositionsRequest::List { .. } | PositionsRequest::Facets => data
+        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives => data
             .as_object()
             .and_then(|data| data.get("items"))
             .is_some_and(|items| {
@@ -608,6 +715,13 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                             && part.get("of").is_some_and(Value::is_u64)
                     })
                 })
+        }),
+        PositionsRequest::TeamActivity { .. } => data.as_object().is_some_and(|data| {
+            data.len() == 4
+                && ["daily", "newest", "seen"]
+                    .iter()
+                    .all(|key| data.get(*key).and_then(Value::as_array).is_some_and(|items| items.iter().all(Value::is_object)))
+                && data.get("meta").is_some_and(Value::is_object)
         }),
         PositionsRequest::CloudSync => data.as_object().is_some_and(|data| {
             let text_or_null = |key: &str| data.get(key).is_some_and(|value| value.is_null() || value.is_string());
@@ -2644,6 +2758,10 @@ pub(crate) fn positions_read_for_scope(
         Ok(validated) => validated,
         Err(error) => return positions_failure(error),
     };
+    // This computer's team: no SSH, no pinned target; the same reader runs in its container.
+    if matches!(validated, crate::runtime_host::ValidatedHost::Local) {
+        return positions_read_local(app, scope, &request, &request_bytes);
+    }
     let selected = match selected_or_own(app, scope, &host) {
         Ok(selected) => selected,
         Err(error) => return positions_failure(error),
@@ -2740,6 +2858,75 @@ fn read_unless_blocked(block_key: Option<String>, pinned: Option<String>, read: 
     reply
 }
 
+/// How long the check «is the team's container up» may take, once a read failed.
+const LOCAL_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The read of this computer's team. The reader and the request travel on stdin to the host wrapper's
+/// `desktop-chat python`, the channel the chat and «Export my data» use: it finds the attested container, runs
+/// the reader in it and never starts anything. Before it runs, this account must own the runtime's folder (a
+/// check only: the read never claims it) and the wrapper must speak the chat's protocol.
+fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &PositionsRequest, request_bytes: &[u8]) -> Value {
+    let started = Instant::now();
+    let wrapper = match local_reader_wrapper(app, scope) {
+        Ok(wrapper) => wrapper,
+        Err(error) => return positions_failure(error),
+    };
+    let reply = positions_read_local_with(
+        request,
+        request_bytes,
+        |input| crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "python"], Some(input), READ_TIMEOUT),
+        || {
+            crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "probe"], None, LOCAL_PROBE_TIMEOUT)
+                .map(|probe| probe.success())
+                .unwrap_or(false)
+        },
+    );
+    if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+        log.record_positions_read(&crate::runtime_log::PositionsReadTiming {
+            op: request.op(),
+            shared: false,
+            checks_skipped: false,
+            ok: reply.get("ok") == Some(&Value::Bool(true)),
+            total: started.elapsed(),
+            ssh: Duration::ZERO,
+            bytes_out: request_bytes.len(),
+            bytes_in: 0,
+        });
+    }
+    reply
+}
+
+/// The host wrapper a read of this computer's team goes through, once this account is the runtime's owner.
+fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope) -> Result<std::path::PathBuf, &'static str> {
+    let marker = crate::account_scope::local_owner_marker_path(app)?;
+    crate::account_scope::verify_local_runtime_owner(&marker, scope)?;
+    let wrapper = crate::onboarding::verified_local_wrapper_path(app)?;
+    if !crate::onboarding::wrapper_has_desktop_chat(&wrapper) {
+        return Err("local_chat_wrapper_outdated");
+    }
+    Ok(wrapper)
+}
+
+/// One run of the reader in this computer's container, then its reply. A run that fails is told apart by asking
+/// whether the team is up (`team_is_up`, asked only then): a container that is off says so, in the chat's own
+/// words; anything else is the reader's failure.
+fn positions_read_local_with(
+    request: &PositionsRequest,
+    request_bytes: &[u8],
+    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+    team_is_up: impl FnOnce() -> bool,
+) -> Value {
+    let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
+    input.push(b'\n');
+    input.extend_from_slice(request_bytes);
+    input.push(b'\n');
+    match run(&input) {
+        Ok(output) if output.success() => positions_reply_from_output(request, output),
+        _ if !team_is_up() => positions_failure("local_team_not_running"),
+        _ => positions_answer_failure("positions_unavailable"),
+    }
+}
+
 /// The read once the host and the pinned target are known: one SSH run, then
 /// its reply. A failed run says why, in vps_link's kinds: the network (retried
 /// by the app), the team, a team that is not the pinned one, a changed SSH key.
@@ -2763,6 +2950,12 @@ fn positions_read_with(
             ))
         }
     };
+    positions_reply_from_output(request, output)
+}
+
+/// What the reader printed, as the page's reply: a bounded, well-formed answer of the shape the request asked
+/// for, or why it is not one. The same for the VPS and for this computer's container.
+fn positions_reply_from_output(request: &PositionsRequest, output: ProcessResult) -> Value {
     if output.stdout.len() > 2 * 1024 * 1024 {
         return positions_answer_failure("positions_unavailable");
     }
@@ -3803,6 +3996,70 @@ mod tests {
     }
 
     #[test]
+    fn the_team_activity_read_takes_only_a_closed_range_of_days_and_answers_the_shape_the_page_expects() {
+        let good = json!({"op": "team_activity", "from": "2026-10-05", "to": "2026-10-15"});
+        let parsed = parse_positions_request(good.clone()).unwrap();
+        assert_eq!(parsed.op(), "team_activity");
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), good);
+        for bad in [
+            json!({"op": "team_activity"}),
+            json!({"op": "team_activity", "from": "2026-10-05"}),
+            json!({"op": "team_activity", "from": "2026-10-15", "to": "2026-10-05"}),
+            json!({"op": "team_activity", "from": "2026-10-5", "to": "2026-10-15"}),
+            json!({"op": "team_activity", "from": "2026-10-05", "to": "2026-10-15", "limit": 3}),
+            json!({"op": "team_activity", "from": "2026-10-05\n", "to": "2026-10-15"}),
+            json!({"op": "team_activity", "from": "x026-10-05", "to": "2026-10-15"}),
+        ] {
+            assert!(parse_positions_request(bad.clone()).is_err(), "{bad}");
+        }
+        let request = parsed;
+        let ok = json!({"ok": true, "data": {"daily": [], "newest": [{"role": "scout"}], "seen": [], "meta": {}}});
+        assert!(valid_positions_reply(&request, &ok));
+        for broken in [
+            json!({"ok": true, "data": {"daily": [], "newest": [], "seen": []}}),
+            json!({"ok": true, "data": {"daily": [], "newest": [], "seen": [], "meta": [], "extra": 1}}),
+            json!({"ok": true, "data": {"daily": [1], "newest": [], "seen": [], "meta": {}}}),
+            json!({"ok": true, "data": {"daily": {}, "newest": [], "seen": [], "meta": {}}}),
+            json!({"ok": false, "error": "positions_unavailable"}),
+        ] {
+            assert!(!valid_positions_reply(&request, &broken), "{broken}");
+        }
+        // the reader that runs on the host takes the range as a parameter, reads read-only and never `SELECT *`
+        let reader = POSITIONS_READ_PY.split("if op=='team_activity':").nth(1).unwrap().split("if op=='map':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && !reader.contains("p.*"));
+        assert!(reader.contains("(first,last)"));
+    }
+
+    #[test]
+    fn the_board_read_takes_no_argument_and_answers_a_list_of_rows() {
+        let parsed = parse_positions_request(json!({"op": "directives"})).unwrap();
+        assert_eq!(parsed.op(), "directives");
+        assert_eq!(serde_json::to_value(&parsed).unwrap(), json!({"op": "directives"}));
+        // a key it does not take is never sent on: what goes to the reader is the request alone
+        for extra in [
+            json!({"op": "directives", "id": "3"}),
+            json!({"op": "directives", "filters": {}}),
+            json!({"op": "directives", "from": "2026-10-01", "to": "2026-10-02"}),
+        ] {
+            if let Ok(kept) = parse_positions_request(extra.clone()) {
+                assert_eq!(serde_json::to_value(&kept).unwrap(), json!({"op": "directives"}), "{extra}");
+            }
+        }
+        assert!(valid_positions_reply(&parsed, &json!({"ok": true, "data": {"items": [{"id": 1, "body": "x"}]}})));
+        for broken in [
+            json!({"ok": true, "data": {"items": [1]}}),
+            json!({"ok": true, "data": {"rows": []}}),
+            json!({"ok": true, "data": []}),
+        ] {
+            assert!(!valid_positions_reply(&parsed, &broken), "{broken}");
+        }
+        let reader = POSITIONS_READ_PY.split("if op=='directives':").nth(1).unwrap().split("if op=='team_activity':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && reader.contains("LIMIT"));
+        // every kind of read has its name in the load-times log
+        assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[8], "directives");
+    }
+
+    #[test]
     fn a_failed_positions_read_says_network_application_version_or_blocked() {
         let failure = |code: &str, kind: &str| json!({"ok": false, "error": code, "kind": kind});
         assert_eq!(read_stats(Err("process_timeout"), None), (failure("timeout", "network"), 0));
@@ -3825,6 +4082,79 @@ mod tests {
         // a pin file that no longer reads blocks before anything runs
         assert_eq!(positions_failure("host_key_mismatch"), failure("host_key_mismatch", "blocked"));
         assert_eq!(positions_failure("host_not_configured"), failure("host_not_configured", "application"));
+    }
+
+    /// The read of this computer's team, with the fixed reader on stdin and the team's state asked only after a failure.
+    fn read_local(run: Result<ProcessResult, &'static str>, team_is_up: bool) -> (Value, usize) {
+        let mut asked = 0;
+        let reply = positions_read_local_with(
+            &PositionsRequest::Facets,
+            br#"{"op":"facets"}"#,
+            |input| {
+                // the same reader and request as the VPS gets, on stdin: the reader in hex, then the request
+                let text = String::from_utf8(input.to_vec()).unwrap();
+                let (script, request) = text.split_once('\n').unwrap();
+                assert_eq!(script, hex_encode(POSITIONS_READ_PY.as_bytes()));
+                assert_eq!(request, "{\"op\":\"facets\"}\n");
+                run
+            },
+            || {
+                asked += 1;
+                team_is_up
+            },
+        );
+        (reply, asked)
+    }
+
+    #[test]
+    fn the_read_of_this_computers_team_returns_the_readers_answer_without_asking_whether_the_team_is_up() {
+        let answer = r#"{"ok":true,"data":{"items":[]}}"#;
+        assert_eq!(read_local(exited(0, answer), true), (json!({"ok": true, "data": {"items": []}}), 0));
+        // the same checks as the VPS: a reply that is not the shape asked for is not an answer
+        let failure = |code: &str| json!({"ok": false, "error": code, "kind": "application"});
+        assert_eq!(read_local(exited(0, "not json"), true), (failure("positions_unavailable"), 0));
+        assert_eq!(read_local(exited(0, r#"{"ok":true,"data":{"rows":[]}}"#), true), (failure("positions_unavailable"), 0));
+        assert_eq!(
+            read_local(exited(0, r#"{"ok":false,"error":"positions_request_invalid"}"#), true),
+            (failure("positions_request_invalid"), 0)
+        );
+    }
+
+    #[test]
+    fn a_failed_read_of_this_computers_team_says_the_team_is_not_running_only_when_it_is_not() {
+        let failure = |code: &str| json!({"ok": false, "error": code, "kind": "application"});
+        // the container is off (the wrapper found none): the chat's own code, which the pages turn into «Start the team»
+        assert_eq!(read_local(exited(1, ""), false), (failure("local_team_not_running"), 1));
+        assert_eq!(read_local(Err("process_timeout"), false), (failure("local_team_not_running"), 1));
+        assert_eq!(read_local(Err("runtime_missing"), false), (failure("local_team_not_running"), 1));
+        // the team is up and the reader failed: not «start the team», and no host-key or network kind
+        assert_eq!(read_local(exited(1, ""), true), (failure("positions_unavailable"), 1));
+        assert_eq!(read_local(exited(255, ""), true), (failure("positions_unavailable"), 1));
+        assert_eq!(read_local(Err("process_timeout"), true), (failure("positions_unavailable"), 1));
+    }
+
+    #[test]
+    fn this_computers_team_is_read_before_any_pinned_target_or_ssh_and_the_vps_path_is_the_one_it_was() {
+        let source = include_str!("existing_team_runtime.rs");
+        let body = source.split("pub(crate) fn positions_read_for_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let local = body.find("positions_read_local(app, scope, &request, &request_bytes)").unwrap();
+        // the branch is taken on the validated host, ahead of everything that belongs to a VPS
+        for vps_only in ["selected_or_own(", "read_command_for(", "shared_master(", "run_ssh_command(", "read_unless_blocked("] {
+            assert!(local < body.find(vps_only).unwrap(), "{vps_only}");
+        }
+        assert!(body[..local].contains("ValidatedHost::Local"));
+        // the VPS still reads through positions_read_with, and the local read never reaches an ssh function
+        assert!(body.contains("positions_read_with("));
+        let local_fn = source.split("fn positions_read_local(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        for forbidden in ["run_ssh_command", "ssh", "selected_or_own", "claim"] {
+            assert!(!local_fn.replace("ssh: Duration::ZERO", "").contains(forbidden), "{forbidden}");
+        }
+        // it checks the owner without claiming the folder, and the wrapper's chat protocol, before anything runs
+        let wrapper_fn = source.split("fn local_reader_wrapper(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(wrapper_fn.contains("verify_local_runtime_owner") && !wrapper_fn.contains("validate_local_runtime"));
+        assert!(wrapper_fn.contains("wrapper_has_desktop_chat"));
+        // read only: the reader opens the database that way and the wrapper's channel starts nothing
+        assert!(POSITIONS_READ_PY.contains("mode=ro") && POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
     }
 
     #[test]

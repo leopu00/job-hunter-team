@@ -33,6 +33,10 @@ ALLOWED = {
         "guarda soltanto se un Godot del progetto e' gia' aperto, per fermarsi: "
         "non uccide niente (game/ e' legacy)"
     ),
+    ("shared/skills/boot_cost.py", "jq kill ls mkdir mv node npm pgrep pkill ps"): (
+        "il vocabolario chiuso dei nomi che lo script RICONOSCE e stampa nel conto del boot: una lista di parole, "
+        "non un comando; lo script non esegue niente"
+    ),
     ("desktop/scripts/dev-server.test.mjs", "someone else's pkill"): (
         "il titolo di un test che descrive la difesa dal pkill di un altro team"
     ),

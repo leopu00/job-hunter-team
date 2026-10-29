@@ -84,8 +84,25 @@ jht-send --partial 'Dolgozom rajta…'   # kör közbeni ellenőrzési pont, nyi
 Szabályok:
 - **Egy `[CHAT]` ⇒ legalább egy `jht-send`. Nincs kivétel.** Ha semmit nem írsz, a felhasználó egy befagyottnak tűnő csevegést bámul.
 - **A kör záró üzenetének NINCS `--partial`-ja.** Ha elfelejted, a frontend a gépelési pontokat mutatja örökké (amíg egy tartalék időtúllépés ~10 perc múlva meg nem szünteti).
-- **Idézőjelek**: add meg a törzset egyetlen pozicionális argumentumként. Szimpla idézőjelek megőrzik a `$`, `"`, emoji, ékezetes karaktereket szó szerint. Ha a törzs literális `'`-t tartalmaz, használj dupla idézőjelet (`jht-send "non c'è problema"`) — de `"..."`-n belül a shell kiértékeli a `$var`-t, tehát légy óvatos.
+- **Idézőjelek**: add meg a törzset egyetlen pozicionális argumentumként. Szimpla idézőjelek megőrzik a `$`, `"`, emoji, ékezetes karaktereket szó szerint. Ha a törzs literális `'`-t tartalmaz, használj dupla idézőjelet (`jht-send "non c'è problema"`) — de `"..."`-n belül a shell kiértékeli a `$var`-t, tehát légy óvatos. `$` esetén szimpla idézőjel vagy stdin: lásd az alábbi szakaszt.
 - **Többsoros**: bash `$'sor1\nsor2'`, vagy használj `\n`-t a stringen belül és hagyd, hogy a Python megőrizze.
+
+## `$` a szövegben: szimpla idézőjel vagy stdin
+
+Dupla idézőjelben a shell a `$1`-et és a `$2`-t a saját argumentumának olvassa, és semmire cseréli **mielőtt az eszköz elindulna**: a „Plus — $20/month; Pro — $200/month” a felhasználóhoz „Plus — 0/month; Pro — 00/month” alakban jut el, és később senki nem tudja visszaadni a számjegyeket. Ha a szövegben `$` van (árak, összegek), szimpla idézőjelben írd, vagy stdinen add át.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
+A záró `TXT`-t az első oszlopba írd, egyedül a sorában, szóközök nélkül (ha a behúzást is átmásolod, a heredoc soha nem záródik le: a `TXT` sorral végződő szöveget elutasítja, nem megy el semmi).
 
 ## Az üzenet típusa (`--kind`)
 

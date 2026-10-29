@@ -1,7 +1,10 @@
+import { setLocalTeamData } from "../lib/local-team-data";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import { LocalMigrationPage } from "./LocalMigrationPage";
+import { LocalProfileLinkContext, type LocalProfileLink } from "../lib/local-profile-link";
+import { forgetLocalProfileUnlinked, leaveLocalProfileUnlinked, localProfileLeftUnlinked } from "../lib/unlinked-local-profile";
 import { appLocale } from "../lib/app-locale";
 import { cleanImages } from "../lib/clean-images";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
@@ -50,11 +53,15 @@ import {
   loadOnboardingGate,
   markOnboardingReady,
   markOnboardingStarted,
+  clearOnboardingDraft,
   clearOnboardingInterruption,
+  readOnboardingDraft,
+  recordOnboardingDraft,
   recordOnboardingInterruption,
   resetOnboardingMarker,
   runtimeStateFromSnapshot,
   type OnboardingActivityState,
+  type OnboardingDraft,
   type OnboardingGateState,
   type OnboardingProviderLoginAction,
   type OnboardingProviderLoginState,
@@ -101,11 +108,12 @@ import MessagesPage from "../pages/messages";
 import { readTeamStart } from "../guided-onboarding/deps";
 import GuidedOnboardingPage from "../guided-onboarding/GuidedOnboardingPage";
 import { teamStarted, type FirstRunSignal } from "../guided-onboarding/moments";
+import { AssistantChatFrame } from "../onboarding/AssistantChatFrame";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
 import { navigate } from "../shell/router";
-import { describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
+import { describeError, errorAmountsOf, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
 import { isReadableCause } from "../lib/failure-cause";
 import { openRuntimeLog, runtimeLogPath } from "../lib/runtime-log";
 
@@ -240,7 +248,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
   }
   // The sentence comes from the app's catalog, never from the native message;
   // the cause is the step's own line, redacted on the native side.
-  const described = describeError(value.code, { locale: appLocale(), machine: errorMachineOf(error) });
+  const described = describeError(value.code, { locale: appLocale(), machine: errorMachineOf(error), amounts: errorAmountsOf(error) });
   // The team already runs: nothing failed and nothing was changed, the person stops it and presses the button again.
   const calm = value.code === "local_team_running"
     ? { title: stateText().teamRunningTitle, calm: true as const }
@@ -260,7 +268,7 @@ function localRuntimeFailure(error: unknown): OnboardingRuntimeState {
 function catalogFailure(stage: OnboardingRuntimeStage, error: unknown): OnboardingRuntimeState | null {
   const code = errorCodeOf(error);
   if (!code) return null;
-  const described = describeError(code, { resetsAt: errorResetsAt(error), locale: appLocale(), machine: errorMachineOf(error) });
+  const described = describeError(code, { resetsAt: errorResetsAt(error), locale: appLocale(), machine: errorMachineOf(error), amounts: errorAmountsOf(error) });
   if (!described.known) return null;
   const retryable = typeof error === "object" && error !== null &&
     typeof (error as { retryable?: unknown }).retryable === "boolean"
@@ -379,10 +387,15 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
   return null;
 }
 
-/** The native side says the team of this computer belongs to someone else. An answer that cannot be had is not «yes»: the setup decides, as before. */
-async function ownedByAnother(): Promise<boolean> {
+/**
+ * The native side says the team of this computer is not for this profile to set up: it belongs to someone else
+ * (`other`), or its data belong to nobody and this profile cannot take them (`nobody`). An answer that cannot be
+ * had is not «yes»: the setup decides, as before.
+ */
+async function teamIsNotThisProfiles(): Promise<boolean> {
   try {
-    return (await probeDesktopLocalTeamOwner()) === "other";
+    const owner = await probeDesktopLocalTeamOwner();
+    return owner === "other" || owner === "nobody";
   } catch {
     return false;
   }
@@ -419,6 +432,9 @@ export default function DashboardApp() {
     ? `local:${localProfile.profileId}`
     : session ? `google:${session.user.id}` : null;
   const markerId = localProfile ? `local:${localProfile.profileId}` : session?.user.id ?? null;
+  // The wizard's step and choices (lib/onboarding.ts): read once per account, then kept here as the wizard changes
+  // them, so the wizard opens where it was left also when it is mounted again (the existing-team form replaces it).
+  const draftRef = useRef<{ id: string; draft: OnboardingDraft | undefined } | null>(null);
   // supabase-js publishes the same session again as a new object (on every return of the window to the
   // foreground, on every token refresh): what starts the account over is the account, never that object.
   const sessionRef = useRef(session);
@@ -475,6 +491,8 @@ export default function DashboardApp() {
   accountScopeRef.current = accountScope;
   const [localMigration, setLocalMigration] = useState<LocalMigrationGate | null>(null);
   const [leavingMigration, setLeavingMigration] = useState<"idle" | "leaving" | "failed">("idle");
+  /** Counts the times the person asked the link again from Settings: the check of the saved profile runs once more. */
+  const [migrationAsk, setMigrationAsk] = useState(0);
   const submissionRef = useRef<OnboardingSubmission | null>(null);
   const providerSessionRef = useRef<string | null>(null);
   const providerSessionIdentityRef = useRef<string | null>(null);
@@ -527,7 +545,7 @@ export default function DashboardApp() {
       // The team of this computer is another profile's (or account's): this one goes in without setting up a
       // team here, and the shell says whose the team is. The setup would stop at its first step with the
       // owner's refusal. Nothing is written: the day this profile owns a team, the setup is still there.
-      if (next?.phase === "required" && !next.existingTeam && await ownedByAnother()) next = { phase: "ready" };
+      if (next?.phase === "required" && !next.existingTeam && await teamIsNotThisProfiles()) next = { phase: "ready" };
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
@@ -541,6 +559,11 @@ export default function DashboardApp() {
       return;
     }
     const profileId = migrationProfile.profileId;
+    // The person went in with the account without linking this profile, and it stays so until they ask the link.
+    if (localProfileLeftUnlinked(profileId)) {
+      setLocalMigration({ identityKey, profileId, phase: "unlinked" });
+      return;
+    }
     let active = true;
     setLocalMigration({ identityKey, profileId, phase: "checking" });
     void probeDesktopLocalProfileMigration(profileId).then((required) => {
@@ -561,7 +584,7 @@ export default function DashboardApp() {
       });
     });
     return () => { active = false; };
-  }, [identityKey, migrationProfile?.profileId]);
+  }, [identityKey, migrationAsk, migrationProfile?.profileId]);
 
   const confirmLocalMigration = useCallback(async () => {
     if (!identityKey || !localMigration || localMigration.identityKey !== identityKey ||
@@ -607,8 +630,21 @@ export default function DashboardApp() {
   const enterWithoutLinking = useCallback(() => {
     if (!identityKey || !localMigration || localMigration.identityKey !== identityKey || localMigration.phase !== "error" ||
         localMigration.code !== "local_migration_target_exists") return;
+    leaveLocalProfileUnlinked(localMigration.profileId);
     setLocalMigration({ identityKey, profileId: localMigration.profileId, phase: "unlinked" });
   }, [identityKey, localMigration]);
+
+  // From Settings: the choice is taken back and the page that offers the link comes again.
+  const localProfileLink = useMemo<LocalProfileLink | null>(() => {
+    if (!identityKey || !migrationProfile || localMigration?.identityKey !== identityKey || localMigration.phase !== "unlinked") return null;
+    const profileId = migrationProfile.profileId;
+    return {
+      link() {
+        forgetLocalProfileUnlinked(profileId);
+        setMigrationAsk((count) => count + 1);
+      },
+    };
+  }, [identityKey, localMigration?.identityKey, localMigration?.phase, migrationProfile?.profileId]);
 
   // «Back to sign in»: leaves the account the person just chose; the sign-in page is where they pick again.
   const leaveMigration = useCallback(async () => {
@@ -1103,7 +1139,12 @@ export default function DashboardApp() {
     if (providerSession) await closeOnboardingProviderLogin(providerSession).catch(() => undefined);
     // The reopened Provider step is not a first setup: «Restart» there starts that step over and leaves the
     // marker alone, or the team that works would be set up again from scratch at the next start.
-    if (providerSetupKeyRef.current !== identityKey) resetOnboardingMarker(markerId);
+    if (providerSetupKeyRef.current !== identityKey) {
+      resetOnboardingMarker(markerId);
+      // Starting the setup over leaves nothing of the steps reached before.
+      clearOnboardingDraft(markerId);
+    }
+    draftRef.current = { id: markerId, draft: undefined };
     submissionRef.current = null;
     savedTeamFailureRef.current = false;
     resumeAttemptedIdentityRef.current = identityKey;
@@ -1203,6 +1244,11 @@ export default function DashboardApp() {
     resumeAttemptedIdentityRef.current = null;
     void initializeAccount();
   }, [initializeAccount]);
+  // A local profile has no cloud account: once the app is open, the pages show the team of this computer. Set while
+  // rendering, before the Shell's pages read in their effects (see lib/local-team-data.ts).
+  setLocalTeamData(localProfile && gate.phase === "ready" && linkedView === null ? identityKey : null);
+  // The mode ends with the app's screen (signing out, another account): nothing is left on for the next one.
+  useEffect(() => () => setLocalTeamData(null), []);
   const teamOff = useMemo<TeamOff | null>(
     () => (teamOffKey !== null && teamOffKey === identityKey ? { teamOff: true, wakeRuntime: wakeRuntimeAndConnect, startTeam: startTeamFromTeamOff } : null),
     [teamOffKey, identityKey, startTeamFromTeamOff, wakeRuntimeAndConnect],
@@ -1555,6 +1601,20 @@ export default function DashboardApp() {
     });
   }, [markerId]);
 
+  // The account changed (signed out, another one in): the one before leaves nothing of its wizard behind.
+  const previousMarkerRef = useRef<string | null>(markerId);
+  useEffect(() => {
+    const previous = previousMarkerRef.current;
+    previousMarkerRef.current = markerId;
+    if (previous && previous !== markerId) clearOnboardingDraft(previous);
+  }, [markerId]);
+  const rememberDraft = useCallback((next: OnboardingDraft | null) => {
+    if (!markerId) return;
+    draftRef.current = { id: markerId, draft: next ?? undefined };
+    if (next) recordOnboardingDraft(markerId, next); else clearOnboardingDraft(markerId);
+  }, [markerId]);
+  if (markerId && draftRef.current?.id !== markerId) draftRef.current = { id: markerId, draft: readOnboardingDraft(markerId) };
+
   const runtimeAction = useCallback(async (stage: "provider-login" | "team-start" | "assistant") => {
     if (stage === "provider-login") return loginProvider();
     if (stage === "team-start") return resumeTeam();
@@ -1638,7 +1698,14 @@ export default function DashboardApp() {
     [gate.phase, identityKey, localTeamPlatform, openProviderSetup, vpsSetupKey],
   );
 
+  // Leaving the account takes the wizard's step and choices with it.
+  const forgetDraft = () => {
+    if (!markerId) return;
+    draftRef.current = { id: markerId, draft: undefined };
+    clearOnboardingDraft(markerId);
+  };
   const logout = localProfile ? async () => {
+    forgetDraft();
     leaveExistingTeamReadOnly();
     await clearDesktopAccountScope();
     clearLocalIdentitySelection();
@@ -1785,7 +1852,7 @@ export default function DashboardApp() {
               <button type="button" className="existing-team-modal__secondary" onClick={() => setSavedTeamOpening({ identityKey, phase: "done" })}>
                 {stateText().continueWithoutTeam}
               </button>
-              <button type="button" className="existing-team-modal__secondary" onClick={() => void Promise.resolve((logout ?? signOut)()).catch(() => undefined)}>
+              <button type="button" className="existing-team-modal__secondary" onClick={() => { forgetDraft(); void Promise.resolve((logout ?? signOut)()).catch(() => undefined); }}>
                 {stateText().signOut}
               </button>
             </div>
@@ -1799,13 +1866,13 @@ export default function DashboardApp() {
       // A team connected in full keeps the chat alone; after a setup of this computer the person is guided on two columns.
       if (connectedExistingTeamKey === identityKey) {
         return (
-          <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
+          <AssistantChatFrame label={stateText().assistantOnboardingAria}>
             <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />
-          </main>
+          </AssistantChatFrame>
         );
       }
       return (
-        <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
+        <AssistantChatFrame label={stateText().assistantOnboardingAria}>
           <GuidedOnboardingPage
             profileReady={guidedSignals.profileReady}
             captainRunning={guidedSignals.captainRunning}
@@ -1814,7 +1881,7 @@ export default function DashboardApp() {
           >
             <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} embedded />
           </GuidedOnboardingPage>
-        </main>
+        </AssistantChatFrame>
       );
     }
     const manualExistingHost = gate.account.identity === "local" && manualExistingTeam?.identityKey === identityKey
@@ -1870,6 +1937,8 @@ export default function DashboardApp() {
         interruption={interruption}
         onResumeInterrupted={interruption ? resumeInterrupted : undefined}
         onDiscardInterruption={interruption ? discardInterruption : undefined}
+        draft={draftRef.current?.id === markerId ? draftRef.current?.draft : undefined}
+        onDraftChange={rememberDraft}
         onRestart={restartOnboarding}
         onExitFailure={exitTechnicalFailure}
         onOpenWithoutTeam={openWithoutTeam}
@@ -1881,9 +1950,11 @@ export default function DashboardApp() {
     <>
       <TeamOffContext.Provider value={teamOff}>
         <ProviderSetupContext.Provider value={providerSetup}>
-          <ConnectTeamContext.Provider value={connectTeamEntry}>
-            <Shell key={identityKey} onLogout={logout} />
-          </ConnectTeamContext.Provider>
+          <LocalProfileLinkContext.Provider value={localProfileLink}>
+            <ConnectTeamContext.Provider value={connectTeamEntry}>
+              <Shell key={identityKey} onLogout={logout} />
+            </ConnectTeamContext.Provider>
+          </LocalProfileLinkContext.Provider>
         </ProviderSetupContext.Provider>
       </TeamOffContext.Provider>
       {connectDialogElement}

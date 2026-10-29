@@ -6,7 +6,8 @@ import {
   type SetupSupportReport,
 } from "../lib/onboarding-support";
 
-const COPY: Record<Locale, Record<string, string>> = {
+/** The status lines (preparing, sending, sent, mail, saved, failed, cancel, preview) are reused by the Help and Settings report. */
+export const SUPPORT_REPORT_COPY: Record<Locale, Record<string, string>> = {
   it: { open: "Segnala al supporto", title: "Segnalazione al supporto", intro: "Controlla l’anteprima redatta prima dell’invio.", preview: "Anteprima del report", cancel: "Annulla", confirm: "Conferma e invia", preparing: "Preparo il report…", sending: "Invio…", sent: "Segnalazione inviata", mail: "Apri l’app email", saved: "Report da allegare", failed: "Non riesco a preparare la segnalazione. Riprova." },
   en: { open: "Report to support", title: "Support report", intro: "Review the redacted preview before it is sent.", preview: "Report preview", cancel: "Cancel", confirm: "Confirm and send", preparing: "Preparing report…", sending: "Sending…", sent: "Report sent", mail: "Open email app", saved: "Report to attach", failed: "The report could not be prepared. Try again." },
   de: { open: "Support kontaktieren", title: "Supportmeldung", intro: "Prüfe die bereinigte Vorschau vor dem Senden.", preview: "Vorschau", cancel: "Abbrechen", confirm: "Bestätigen und senden", preparing: "Bericht wird vorbereitet…", sending: "Wird gesendet…", sent: "Meldung gesendet", mail: "E-Mail-App öffnen", saved: "Anzuhängender Bericht", failed: "Der Bericht konnte nicht vorbereitet werden. Bitte erneut versuchen." },
@@ -17,7 +18,7 @@ const COPY: Record<Locale, Record<string, string>> = {
 };
 
 export function SetupSupportReport({ stage, code, locale }: { stage: OperationalStage | "host" | "provider"; code?: string; locale: Locale }) {
-  const t = COPY[locale];
+  const t = SUPPORT_REPORT_COPY[locale];
   const [report, setReport] = useState<SetupSupportReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ message: string; href?: string; saved?: string | null } | null>(null);

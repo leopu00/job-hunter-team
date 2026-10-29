@@ -16,7 +16,7 @@ import { RUNTIME_TEXT } from "./onboarding-runtime.i18n";
 import { STATE_TEXT } from "./onboarding-state.i18n";
 
 const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
-const ONBOARDING_RUST = ["onboarding.rs", "windows_runtime.rs", "profile_import.rs"];
+const ONBOARDING_RUST = ["onboarding.rs", "windows_runtime.rs", "profile_import.rs", "resources.rs"];
 
 /** The string literals of Rust source, without its tests module. */
 export function rustLiterals(source: string): string[] {

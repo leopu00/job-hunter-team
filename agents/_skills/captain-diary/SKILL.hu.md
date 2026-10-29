@@ -23,6 +23,8 @@ Kiírja a **tegnapi** jegyzeteket (vagy az utolsó ledolgozott napét), plusz az
 ami **ma** már rögzítve van. Örökölöd a tanulságokat → **ne ismételd meg
 ugyanazokat a hibákat**. Ha nincs semmi, te vagy az első: kezdd el a rögzítést.
 
+Naponta legfeljebb az **utolsó 30 jegyzetet** írja ki (8 KiB), egy sorral, amely megmondja, hány régebbi jegyzet maradt ki: minden újraindítás újra beolvassa őket, ezért tartsd rövidnek a jegyzeteidet, és a tanulságot írd előre.
+
 ## A nap folyamán — rögzítsd a LÉNYEGES eseményeket
 
 Egy sor, valahányszor történik valami, ami tanulságot hordoz. NEM mindenről
