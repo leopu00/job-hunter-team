@@ -133,6 +133,12 @@ describe("the office of an existing team, over its VPS", () => {
     expect(cloud.touched).toEqual([]);
   });
 
+  it("has no tour of the office: the team seen is somebody else's", async () => {
+    mount();
+    await waitFor(() => expect(entered()).toEqual(["capitano", "assistente"]));
+    expect(screen.queryByTestId("office-tour")).toBeNull();
+  });
+
   it("a team that is off: an empty office and the Squadra page's sentence", async () => {
     answer = async () => realSnapshotReply({ containerRunning: false });
     mount();

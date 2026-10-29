@@ -279,6 +279,21 @@ describe("the office page", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
+  it("offers the tour of the office, and a stop brings the scene's camera to it", async () => {
+    try { localStorage.removeItem("jht.desktop.office-tour.v1"); } catch { /* the store is optional */ }
+    scene.focus.mockClear();
+    render(<OfficePage params={{}} search={new URLSearchParams()} />);
+    await waitFor(() => expect(scene.options).not.toBeNull());
+    expect(await screen.findByTestId("office-tour")).toHaveAttribute("data-status", "offer");
+    expect(scene.focus).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByTestId("office-tour-start"));
+    await userEvent.click(screen.getByTestId("office-tour-next"));
+    expect(scene.focus).toHaveBeenLastCalledWith({ kind: "department", dept: "scout" });
+    await userEvent.click(screen.getByTestId("office-tour-pause"));
+    expect(scene.focus).toHaveBeenLastCalledWith(null);
+    try { localStorage.removeItem("jht.desktop.office-tour.v1"); } catch { /* the store is optional */ }
+  });
+
   it("the scene is destroyed when the page goes", async () => {
     const { unmount } = render(<OfficePage params={{}} search={new URLSearchParams()} />);
     await waitFor(() => expect(scene.options).not.toBeNull());

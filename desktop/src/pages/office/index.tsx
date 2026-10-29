@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Piles, Vec } from "../../office/contract";
+import type { AgentStatuses, OfficeClick, OfficeAgent, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Piles, Vec } from "../../office/contract";
 import { createLiveOffice, createReadScheduler, subscribeOffice, type LiveOffice, type ReadScheduler } from "../../office/live";
 import { watchReducedMotion } from "../../office/scene/motion";
 import OfficePanel from "../../office/panel/OfficePanel";
+import OfficeTour from "../../office-tour/OfficeTour";
 import type { PanelClient } from "../../office/panel/types";
 import OfficeKeyboard from "../../office/panel/OfficeKeyboard";
 import OfficeTooltip, { tooltipFor } from "../../office/panel/OfficeTooltip";
@@ -359,6 +360,8 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
             onFocusTarget={focusTarget}
             onOpen={(t, button) => openPanel(t, button)}
           />
+          {/* The tour is for the team of this person; the existing team's read-only view has none. */}
+          {source !== "team-probe" && <OfficeTour roster={snapshot?.roster ?? NO_ROSTER} onFocus={focusTarget} />}
           {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
         </div>
         {panel && (
@@ -396,6 +399,9 @@ function teamOffMessage(agents: number): string {
   const t = officeText();
   return agents === 0 ? t.teamOffEmpty : t.teamOffRecent;
 }
+
+/** The roster before the first snapshot: stable, so the tour does not see a new list at every render. */
+const NO_ROSTER: OfficeAgent[] = [];
 
 /** What the panels get over an existing team's VPS: the cloud is never asked, and a use of it is a failure. */
 const NO_CLOUD = new Proxy({} as PanelClient, {

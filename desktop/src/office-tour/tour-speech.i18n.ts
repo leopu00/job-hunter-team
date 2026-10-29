@@ -1,0 +1,240 @@
+import type { LocaleDict } from "@/lib/i18n-dict";
+
+/**
+ * What the Assistant and the colleagues say on the tour of the office. The lines are the ones the Godot game's
+ * tour already says (game/scripts, keys tour.invite and tour.guide.*), in the same seven languages; the game's
+ * Doctor is not here because the app's office has none. The words of the buttons are the app's own (tour.i18n.ts).
+ */
+export type TourStopSlug = "assistente" | "scout" | "analista" | "scorer" | "scrittore" | "critico" | "mentor" | "capitano";
+
+/** What the Assistant says on arriving at a stop (greet), and what the colleague answers (reply). */
+export const TOUR_SPEECH: Record<TourStopSlug, { greet: LocaleDict; reply: LocaleDict | null }> = {
+  assistente: {
+    greet: {
+      en: "Come meet your new team.",
+      it: "Vieni, ti presento il tuo nuovo team.",
+      hu: "Gyere, bemutatom az új csapatodat.",
+      es: "Ven, te presento a tu nuevo equipo.",
+      de: "Komm, ich stelle dir dein neues Team vor.",
+      fr: "Viens, je te présente ta nouvelle équipe.",
+      pt: "Vem, apresento-te a tua nova equipa.",
+    },
+    reply: null,
+  },
+  scout: {
+    greet: {
+      en: "This is Research. Meet one of our Researchers.",
+      it: "Questo è il reparto Ricerca. Ti presento uno dei nostri Ricercatori.",
+      hu: "Ez a Kutatás részleg. Bemutatom az egyik Kutatónkat.",
+      es: "Este es el equipo de Investigación. Te presento a uno de nuestros Investigadores.",
+      de: "Das ist die Recherche. Ich stelle dir einen unserer Rechercheure vor.",
+      fr: "Voici le pôle Recherche. Je te présente l’un de nos Chercheurs.",
+      pt: "Este é o departamento de Pesquisa. Apresento-te um dos nossos Pesquisadores.",
+    },
+    reply: {
+      en: "Nice to meet you. I'll show you how we look for opportunities that suit you.",
+      it: "Piacere. Ti racconto come cerchiamo le opportunità per te.",
+      hu: "Örülök, hogy megismerhetlek. Elmondom, hogyan keresünk neked való lehetőségeket.",
+      es: "Encantado. Te cuento cómo buscamos oportunidades que encajen contigo.",
+      de: "Freut mich. Ich zeige dir, wie wir passende Chancen für dich finden.",
+      fr: "Ravi de faire ta connaissance. Je t’explique comment nous cherchons les occasions qui te correspondent.",
+      pt: "Prazer. Explico-te como procuramos oportunidades que combinam contigo.",
+    },
+  },
+  analista: {
+    greet: {
+      en: "This is Analysis. One of our Analysts will show you what happens here.",
+      it: "Questo è il reparto Analisi. Una collega ti spiega che cosa succede qui.",
+      hu: "Ez az Elemzés részleg. Az egyik Elemzőnk elmondja, mi történik itt.",
+      es: "Este es el equipo de Análisis. Uno de nuestros Analistas te explica lo que sucede aquí.",
+      de: "Das ist die Analyse. Einer unserer Analysten erklärt dir, was hier geschieht.",
+      fr: "Voici le pôle Analyse. Un Analyste t’explique ce qui se passe ici.",
+      pt: "Este é o departamento de Análise. Um dos nossos Analistas explica-te o que acontece aqui.",
+    },
+    reply: {
+      en: "Welcome. We turn cluttered listings into clear information.",
+      it: "Benvenuto. Qui trasformiamo gli annunci confusi in informazioni chiare.",
+      hu: "Üdvözöllek. Itt a zavaros álláshirdetésekből világos információt készítünk.",
+      es: "Bienvenido. Aquí convertimos ofertas confusas en información clara.",
+      de: "Willkommen. Hier machen wir aus unübersichtlichen Stellenanzeigen klare Informationen.",
+      fr: "Bienvenue. Ici, nous transformons les annonces confuses en informations claires.",
+      pt: "Bem-vindo. Aqui transformamos anúncios confusos em informação clara.",
+    },
+  },
+  scorer: {
+    greet: {
+      en: "This is Compatibility. Meet one of our Consultants.",
+      it: "Siamo nel reparto Compatibilità. Ti presento uno dei Consulenti.",
+      hu: "A Kompatibilitás részlegen vagyunk. Bemutatom az egyik Tanácsadónkat.",
+      es: "Estamos en Compatibilidad. Te presento a uno de los Consultores.",
+      de: "Wir sind in der Kompatibilität. Ich stelle dir einen unserer Berater vor.",
+      fr: "Nous sommes au pôle Compatibilité. Je te présente l’un de nos Consultants.",
+      pt: "Estamos no departamento de Compatibilidade. Apresento-te um dos nossos Consultores.",
+    },
+    reply: {
+      en: "Nice to meet you. Here, we work out which opportunities could truly fit you.",
+      it: "Piacere. Qui capiamo quali occasioni sono davvero adatte a te.",
+      hu: "Örülök, hogy megismerhetlek. Itt azt nézzük meg, mely lehetőségek illenek hozzád igazán.",
+      es: "Encantado. Aquí vemos qué oportunidades encajan de verdad contigo.",
+      de: "Freut mich. Hier finden wir heraus, welche Chancen wirklich zu dir passen.",
+      fr: "Ravi de faire ta connaissance. Ici, nous évaluons les occasions qui te correspondent vraiment.",
+      pt: "Prazer. Aqui percebemos que oportunidades combinam verdadeiramente contigo.",
+    },
+  },
+  scrittore: {
+    greet: {
+      en: "This is Applications. I'll hand you over to one of our Writers.",
+      it: "Questo è il reparto Candidature. Lascio la parola a un Redattore.",
+      hu: "Ez a Jelentkezések részleg. Átadom a szót az egyik Szerkesztőnknek.",
+      es: "Este es el equipo de Candidaturas. Le cedo la palabra a uno de los Redactores.",
+      de: "Das ist die Bewerbungsabteilung. Ich übergebe an einen unserer Redakteure.",
+      fr: "Voici le pôle Candidatures. Je laisse la parole à l’un de nos Rédacteurs.",
+      pt: "Este é o departamento de Candidaturas. Passo a palavra a um dos nossos Redatores.",
+    },
+    reply: {
+      en: "Welcome. I'll show you how we tailor each application.",
+      it: "Benvenuto. Ti mostro come prepariamo ogni candidatura su misura.",
+      hu: "Üdvözöllek. Megmutatom, hogyan szabjuk rád minden jelentkezést.",
+      es: "Bienvenido. Te muestro cómo adaptamos cada candidatura.",
+      de: "Willkommen. Ich zeige dir, wie wir jede Bewerbung auf dich zuschneiden.",
+      fr: "Bienvenue. Je te montre comment nous adaptons chaque candidature.",
+      pt: "Bem-vindo. Mostro-te como adaptamos cada candidatura a ti.",
+    },
+  },
+  critico: {
+    greet: {
+      en: "This is Quality Check. One of our Reviewers will tell you about their work.",
+      it: "Qui c'è il Controllo qualità. Un Revisore ti racconta il suo lavoro.",
+      hu: "Itt a Minőségellenőrzés. Az egyik Lektorunk beszél a munkájáról.",
+      es: "Aquí está Control de calidad. Un Revisor te cuenta su trabajo.",
+      de: "Hier ist die Qualitätskontrolle. Ein Lektor erzählt dir von seiner Arbeit.",
+      fr: "Voici le Contrôle qualité. Un Relecteur va te parler de son travail.",
+      pt: "Aqui fica o Controlo de qualidade. Um Revisor conta-te como trabalha.",
+    },
+    reply: {
+      en: "Nice to meet you. Our job is to catch weak applications before they reach you.",
+      it: "Piacere. Il nostro compito è non lasciare passare candidature deboli.",
+      hu: "Örülök, hogy megismerhetlek. Az a dolgunk, hogy ne engedjünk át gyenge jelentkezéseket.",
+      es: "Encantado. Nuestra tarea es que no se nos escapen candidaturas débiles.",
+      de: "Freut mich. Unsere Aufgabe ist es, schwache Bewerbungen nicht durchrutschen zu lassen.",
+      fr: "Ravi de faire ta connaissance. Notre rôle est de ne pas laisser passer de candidatures fragiles.",
+      pt: "Prazer. O nosso trabalho é não deixar passar candidaturas frágeis.",
+    },
+  },
+  mentor: {
+    greet: {
+      en: "And now I'll leave you in very good hands. I'll be at my desk.",
+      it: "E qui ti lascio in ottime mani. Io sono alla mia scrivania.",
+      hu: "És most jó kezekben hagylak. Az íróasztalomnál leszek.",
+      es: "Y aquí te dejo en muy buenas manos. Estaré en mi escritorio.",
+      de: "Und jetzt lasse ich dich in besten Händen. Ich bin an meinem Schreibtisch.",
+      fr: "Et maintenant, je te laisse entre de très bonnes mains. Je serai à mon bureau.",
+      pt: "E agora deixo-te em muito boas mãos. Estarei na minha secretária.",
+    },
+    reply: {
+      en: "Come in. I've been expecting you.",
+      it: "Accomodati. Ti aspettavo.",
+      hu: "Foglalj helyet. Vártalak.",
+      es: "Pasa. Te estaba esperando.",
+      de: "Komm herein. Ich habe dich erwartet.",
+      fr: "Entre donc. Je t’attendais.",
+      pt: "Entra. Estava à tua espera.",
+    },
+  },
+  capitano: {
+    greet: {
+      en: "Final stop: the operations room.",
+      it: "Ultima tappa: la sala operativa.",
+      hu: "Utolsó állomás: az operatív terem.",
+      es: "Última parada: la sala de operaciones.",
+      de: "Letzte Station: der Einsatzraum.",
+      fr: "Dernière étape : la salle des opérations.",
+      pt: "Última paragem: a sala de operações.",
+    },
+    reply: {
+      en: "I've been expecting you.",
+      it: "Vi stavo aspettando.",
+      hu: "Vártalak.",
+      es: "Te estaba esperando.",
+      de: "Ich habe dich erwartet.",
+      fr: "Je t’attendais.",
+      pt: "Estava à tua espera.",
+    },
+  },
+};
+
+/** How each speaker is named on the tour: the game's role names (role.*), with the article. */
+export const TOUR_ROLE_NAME: Record<TourStopSlug, LocaleDict> = {
+  assistente: {
+    en: "The Assistant",
+    it: "L'Assistente",
+    hu: "Az Asszisztens",
+    es: "La Asistente",
+    de: "Die Assistentin",
+    fr: "L'Assistante",
+    pt: "A Assistente",
+  },
+  scout: {
+    en: "The Researcher",
+    it: "Il Ricercatore",
+    hu: "A Kutató",
+    es: "El Investigador",
+    de: "Der Rechercheur",
+    fr: "Le Chercheur",
+    pt: "O Pesquisador",
+  },
+  analista: {
+    en: "The Analyst",
+    it: "L'Analista",
+    hu: "Az Elemző",
+    es: "El Analista",
+    de: "Der Analyst",
+    fr: "L'Analyste",
+    pt: "O Analista",
+  },
+  scorer: {
+    en: "The Consultant",
+    it: "Il Consulente",
+    hu: "A Tanácsadó",
+    es: "El Consultor",
+    de: "Der Berater",
+    fr: "Le Consultant",
+    pt: "O Consultor",
+  },
+  scrittore: {
+    en: "The Writer",
+    it: "Il Redattore",
+    hu: "A Szerkesztő",
+    es: "El Redactor",
+    de: "Der Redakteur",
+    fr: "Le Rédacteur",
+    pt: "O Redator",
+  },
+  critico: {
+    en: "The Reviewer",
+    it: "Il Revisore",
+    hu: "A Lektor",
+    es: "El Revisor",
+    de: "Der Lektor",
+    fr: "Le Relecteur",
+    pt: "O Revisor",
+  },
+  mentor: {
+    en: "The Mentor",
+    it: "Il Mentor",
+    hu: "A Mentor",
+    es: "El Mentor",
+    de: "Der Mentor",
+    fr: "Le Mentor",
+    pt: "O Mentor",
+  },
+  capitano: {
+    en: "The Coordinator",
+    it: "Il Coordinatore",
+    hu: "A Koordinátor",
+    es: "El Coordinador",
+    de: "Der Koordinator",
+    fr: "Le Coordinateur",
+    pt: "O Coordenador",
+  },
+};
