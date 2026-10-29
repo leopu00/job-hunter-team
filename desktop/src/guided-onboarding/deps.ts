@@ -1,12 +1,11 @@
 /**
  * Where the guided onboarding takes the pieces other people write: the profile card (profile-progress), the
- * team start read (lib/team-start) and the portrait (components/assistant-portrait). The profile card is the
- * real one; the other two are stand-ins in ./stubs, with the types of their contracts, until they are in
- * master-arthur: when each arrives, only its line here changes.
+ * team start read (lib/team-start) and the portrait (components/assistant-portrait). Its one import point: a
+ * test replaces what it needs here.
  */
 export { ProfileProgressCard } from "../profile-progress/ProfileProgressCard";
 export { useProfileProgress } from "../profile-progress/useProfileProgress";
 export type { ProfileProgress, ProfileProgressField } from "../profile-progress/contract";
-export { readTeamStart } from "./stubs/team-start";
-export type { TeamStart } from "./stubs/team-start";
-export { AssistantPortrait } from "./stubs/assistant-portrait";
+export { readTeamStart } from "../lib/team-start";
+export type { TeamStart } from "../lib/team-start";
+export { AssistantPortrait } from "../components/assistant-portrait";

@@ -51,7 +51,7 @@ describe("the screen after the setup", () => {
     expect(profile).toContainElement(screen.getByTestId("profile-progress"));
     const assistant = screen.getByRole("region", { name: "Chat with the Assistant" });
     expect(assistant).toContainElement(screen.getByTestId("the-chat"));
-    expect(assistant).toContainElement(screen.getByTestId("assistant-portrait-stub"));
+    expect(assistant).toContainElement(screen.getByTestId("assistant-portrait"));
     expect(profile).not.toContainElement(screen.getByTestId("the-chat"));
   });
 
