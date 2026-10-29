@@ -9,6 +9,27 @@ import { ProfilePage } from ".";
 import { loadProfile, openContacts, profileExport } from "./load-profile";
 import { getProfileT, languageLevelLabel } from "@/lib/profile-i18n";
 
+const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => false) }));
+vi.mock("@tauri-apps/api/core", () => native);
+
+// What the app reads from the local profile file (profile_progress_read): five of the eight fields there.
+const LOCAL_READING = {
+  ok: true,
+  required: 8,
+  done: 5,
+  ready: false,
+  fields: [
+    { key: "name", ok: true, preview: "Persona Di Prova" },
+    { key: "email", ok: true },
+    { key: "target_role", ok: true, preview: "Sviluppatrice" },
+    { key: "location", ok: false },
+    { key: "experience_years", ok: true, preview: "6" },
+    { key: "seniority_target", ok: false },
+    { key: "skills", ok: true, count: 3 },
+    { key: "languages", ok: false, count: 0 },
+  ],
+};
+
 // Profilo sintetico: nessun dato vero.
 const PROFILE = {
   user_id: "00000000-0000-4000-8000-000000000001",
@@ -130,14 +151,35 @@ describe("ProfilePage, a session that never answers", () => {
 });
 
 describe("ProfilePage, with no cloud session", () => {
-  afterEach(() => registerAuthStorageProbe(() => true));
+  afterEach(() => {
+    registerAuthStorageProbe(() => true);
+    native.isTauri.mockReturnValue(false);
+  });
 
-  it("tells a profile that never signed in where the data comes from, not that its session expired", async () => {
+  it("shows a local profile its own profile, the fields and the bar, and never asks it to sign in", async () => {
     registerAuthStorageProbe(() => false);
+    native.isTauri.mockReturnValue(true);
+    native.invoke.mockResolvedValue(LOCAL_READING);
+    const { client, queries } = fakeSupabase(respond, null);
+    render(<ProfilePage client={client} />);
+    expect(await screen.findByTestId("profile-progress-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("profile-progress")).toHaveAttribute("data-state", "ready");
+    expect(screen.getByTestId("profile-progress-counter")).toHaveTextContent("5");
+    expect(screen.getByText("Persona Di Prova")).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Questi dati arrivano dal cloud/)).not.toBeInTheDocument();
+    expect(screen.queryByText(getProfileT("it")("session_expired"))).not.toBeInTheDocument();
+    expect(queries).toHaveLength(0);
+  });
+
+  it("a local profile the team has not written yet is told in a line, still without a sign-in notice", async () => {
+    registerAuthStorageProbe(() => false);
+    native.isTauri.mockReturnValue(true);
+    native.invoke.mockResolvedValue({ ok: false, error: "profile_unavailable" });
     const { client } = fakeSupabase(respond, null);
     render(<ProfilePage client={client} />);
-    expect(await screen.findByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
-    expect(screen.queryByText(getProfileT("it")("session_expired"))).not.toBeInTheDocument();
+    expect(await screen.findByTestId("profile-progress-unavailable")).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("still says the session expired to someone who had one", async () => {
