@@ -14,6 +14,7 @@ mod app_update;
 mod public_pages;
 mod team_document;
 mod existing_team_judgement;
+mod team_provider;
 mod team_settings;
 mod export_file;
 mod existing_team_register;
@@ -128,6 +129,7 @@ pub fn run() {
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,
+            team_provider::team_provider,
             team_settings::team_settings,
             export_file::export_csv_save,
             direct_chat::direct_chat_answer,
