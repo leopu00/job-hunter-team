@@ -1231,11 +1231,20 @@ container_down() {
     if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null; then
       warn "config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo."
     elif [ "$up_status" -eq 3 ]; then
-      # No container of the project: there is nothing to stop. It is not a refusal, and a `jht down && rm -rf …` (the
-      # uninstall the installer printed) must go on (TEST 19i, A1). A container that is there and cannot be attested
-      # (status 1) is still refused below.
-      info "niente da fermare: il container '$CONTAINER_SERVICE' non c'e'."
-      return 0
+      # No `jht` container. That is nothing to stop only when the WHOLE project is empty: status 3 also means that only the
+      # agent service is missing, while the broker (the mail password) or Telegram still run, and a `jht down && rm -rf <runtime>`
+      # would delete the compose that was needed to stop them. So the whole project is asked: a failed answer is a refusal, an
+      # empty one is «niente da fermare» (and the chain of the uninstall goes on, TEST 19i A1), a non-empty one goes on to `compose down`.
+      local rest
+      if ! rest="$(compose ps -q 2>/dev/null)"; then
+        err "Container JHT non attestabile; arresto negato."
+        return 1
+      fi
+      if [ -z "$rest" ]; then
+        info "niente da fermare: nessun container del progetto."
+        return 0
+      fi
+      info "il container '$CONTAINER_SERVICE' non c'e', ma altri servizi del progetto girano: li fermo."
     else
       err "Container JHT non attestabile; arresto negato."
       return 1

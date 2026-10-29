@@ -136,7 +136,7 @@ def wrapper(tmp_path):
 
     def run(body: str, *, running_hash: str = OLD_HASH, working_dir: str | None = None, down_stderr: str = "",
             down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False, no_container: bool = False,
-            ps_fails: bool = False, runtime_kind: str = "podman"):
+            ps_fails: bool = False, runtime_kind: str = "podman", only_broker: bool = False, second_ps_fails: bool = False):
         compose_file = runtime / "docker-compose.yml"
         override = runtime / "podman-native-override.yml"
         details = "|".join([
@@ -171,6 +171,12 @@ compose_file() {{
   shift
   case "$1" in
     ps) if [ "{int(ps_fails)}" = 1 ]; then return 1; fi
+        n=$(( $(cat "{calls}.ps" 2>/dev/null || echo 0) + 1 )); echo "$n" > "{calls}.ps"
+        if [ "{int(second_ps_fails)}" = 1 ] && [ "$n" -ge 2 ]; then return 1; fi
+        if [ "{int(only_broker)}" = 1 ] && ! grep -qx down "{calls}" 2>/dev/null; then
+          if [ "${{3:-}}" = jht ]; then return 0; fi   # Docker: `ps -q jht` lists only that service
+          echo fedcba987654; return 0
+        fi
         if [ "{int(no_container)}" = 1 ]; then return 0; fi
         if grep -qx down "{calls}" 2>/dev/null; then
           if [ "{int(broker_left)}" = 1 ]; then echo fedcba987654; return 0; fi
@@ -280,3 +286,24 @@ def test_a_chain_that_starts_with_down_goes_on_when_there_is_no_container(wrappe
 def test_a_container_of_ours_with_another_hash_is_still_stopped_by_down(wrapper):
     done = wrapper.run("container_down; echo rc=$?", running_hash=OLD_HASH)
     assert "rc=0" in done.stdout and wrapper.downs() == ["down"]
+
+
+# ── Only the agent service is missing: the broker and Telegram are still a team to stop ──────────
+
+@pytest.mark.parametrize("kind", ["podman", "docker"])
+def test_down_with_the_agent_gone_but_the_broker_running_still_runs_compose_down(wrapper, kind):
+    done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind=kind)
+    assert "rc=0" in done.stdout, done.stderr
+    assert wrapper.downs() == ["down"]
+    assert "niente da fermare" not in done.stderr and "altri servizi del progetto girano" in done.stderr
+
+
+def test_down_refuses_when_it_cannot_ask_for_the_whole_project(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", no_container=True, second_ps_fails=True)
+    assert "rc=1" in done.stdout and wrapper.downs() == []
+    assert "arresto negato" in done.stderr and "niente da fermare" not in done.stderr
+
+
+def test_the_uninstall_chain_stops_when_down_refuses_so_the_compose_file_stays(wrapper):
+    done = wrapper.run("container_down && echo went-on", no_container=True, second_ps_fails=True)
+    assert "went-on" not in done.stdout
