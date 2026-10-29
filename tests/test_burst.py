@@ -57,19 +57,54 @@ def hours_now(home):
     return json.loads((home / "jht.config.json").read_text(encoding="utf-8"))["team"].get("working_hours")
 
 
-def test_a_team_on_office_hours_gets_one_window_every_day_ending_at_the_chosen_time(home):
+def test_the_burst_adds_its_stretch_to_the_hours_the_team_has_and_never_takes_one_away(home):
     put_config(home, OFFICE)
-    out = burst.start("03:00", now=NOW)
+    out = burst.start("03:00", now=NOW)           # Thursday 22:00 in Rome
     assert out["ok"] and out["burst"]["active"] and out["burst"]["untilLocal"] == "03:00"
     assert out["burst"]["until"] == "2026-10-30T02:00:00+00:00"
     wide = hours_now(home)
-    assert burst.valid_hours(wide)
-    (window,) = wide["windows"]
-    assert window["days"] == list(burst.WEEKDAYS) and window["end"] == "03:00" and window["start"] == "22:00"
-    assert wide["timezone"] == ROME
+    assert burst.valid_hours(wide) and wide["timezone"] == ROME
+    # Every other day keeps its window; Thursday's holds its own hours and the stretch up to 03:00.
+    assert wide["windows"] == [
+        {"days": ["mon", "tue", "wed", "fri"], "start": "09:00", "end": "18:00"},
+        {"days": ["thu"], "start": "09:00", "end": "03:00"},
+    ]
     assert burn_intent.status(NOW)["active"] and burn_intent.status(NOW)["expires_at"] == "2026-10-30T02:00:00+00:00"
     saved = json.loads((home / ".burst.json").read_text(encoding="utf-8"))
     assert saved["previous_hours"] == OFFICE and saved["written_hours"] == wide
+
+
+def test_a_burst_inside_the_hours_the_team_already_has_changes_nothing(home):
+    put_config(home, OFFICE)
+    at_1053 = datetime(2026, 10, 29, 9, 53, tzinfo=timezone.utc)        # Thursday 10:53 in Rome
+    out = burst.start("14:53", now=at_1053)
+    assert out["burst"]["active"] and burn_intent.status(at_1053)["active"]
+    assert hours_now(home) == OFFICE
+    assert burst.sweep(at_1053 + timedelta(hours=4, minutes=1)) == "restored" and hours_now(home) == OFFICE
+
+
+def test_a_burst_that_runs_past_the_end_of_the_day_extends_that_window_and_the_old_hours_come_back(home):
+    put_config(home, OFFICE)
+    at_17 = datetime(2026, 10, 29, 16, 0, tzinfo=timezone.utc)          # Thursday 17:00 in Rome
+    burst.start("22:00", now=at_17)
+    wide = hours_now(home)
+    assert burst.valid_hours(wide)
+    assert wide["windows"] == [
+        {"days": ["mon", "tue", "wed", "fri"], "start": "09:00", "end": "18:00"},
+        {"days": ["thu"], "start": "09:00", "end": "22:00"},
+    ]
+    assert burst.sweep(at_17 + timedelta(hours=5, minutes=1)) == "restored"
+    assert hours_now(home) == OFFICE
+
+
+def test_a_day_with_no_window_of_its_own_gets_the_stretch_and_the_four_hours_the_rule_wants(home):
+    put_config(home, OFFICE)
+    saturday = datetime(2026, 10, 31, 21, 0, tzinfo=timezone.utc)       # Saturday 22:00 in Rome
+    burst.start("23:30", now=saturday)
+    wide = hours_now(home)
+    assert burst.valid_hours(wide)
+    assert {"days": ["sat"], "start": "19:30", "end": "23:30"} in wide["windows"]
+    assert {"days": ["mon", "tue", "wed", "thu", "fri"], "start": "09:00", "end": "18:00"} in wide["windows"]
 
 
 def test_the_rest_of_the_config_is_left_alone(home):
@@ -77,13 +112,6 @@ def test_the_rest_of_the_config_is_left_alone(home):
     burst.start("03:00", now=NOW)
     cfg = json.loads((home / "jht.config.json").read_text(encoding="utf-8"))
     assert cfg["other"] == 1 and cfg["team"]["role_models"] == {"scout": {"model": "luna"}}
-
-
-def test_a_short_stretch_is_widened_to_the_four_hours_the_hours_rule_wants(home):
-    put_config(home, OFFICE)
-    burst.start("23:30", now=NOW)
-    (window,) = hours_now(home)["windows"]
-    assert (window["start"], window["end"]) == ("19:30", "23:30") and burst.valid_hours(hours_now(home))
 
 
 def test_a_team_that_was_already_24_7_gets_only_the_burn(home):
