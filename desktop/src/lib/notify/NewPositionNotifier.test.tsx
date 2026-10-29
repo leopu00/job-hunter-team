@@ -1,6 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../existing-team-readonly";
+import { setLocalTeamData } from "../local-team-data";
 import { writeNotifyPrefs } from "./prefs";
 
 const w = vi.hoisted(() => ({ stopCloud: vi.fn(), stopVps: vi.fn() }));
@@ -21,7 +22,10 @@ beforeEach(() => {
   w.stopCloud.mockClear();
   w.stopVps.mockClear();
 });
-afterEach(() => act(() => leaveExistingTeamReadOnly()));
+afterEach(() => {
+  act(() => leaveExistingTeamReadOnly());
+  act(() => setLocalTeamData(null));
+});
 
 describe("NewPositionNotifier", () => {
   it("with the switch off nothing watches and nothing is read", () => {
@@ -51,5 +55,16 @@ describe("NewPositionNotifier", () => {
     // the view closes: no VPS watch is left
     act(() => leaveExistingTeamReadOnly());
     expect(w.stopVps).toHaveBeenCalledTimes(2);
+  });
+
+  it("a local profile watches this computer's team, never the cloud, and stops when it leaves", async () => {
+    writeNotifyPrefs({ enabled: true });
+    await act(async () => setLocalTeamData("local:abc"));
+    render(<NewPositionNotifier />);
+    expect(watchVpsPositions).toHaveBeenCalledTimes(1);
+    expect(watchCloudPositions).not.toHaveBeenCalled();
+    await act(async () => setLocalTeamData(null));
+    expect(w.stopVps).toHaveBeenCalledTimes(1);
+    expect(watchCloudPositions).toHaveBeenCalledTimes(1);
   });
 });
