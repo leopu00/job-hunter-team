@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
- * The conversation opens on its latest line and stays there, until the person scrolls up: then
- * nothing moves under their eyes, the new lines are counted, and a round button brings them back
- * down. «At the bottom» survives what makes the list taller under it (a question card, a resized
- * window, a tab shown again), not a scroll up.
+ * The conversation opens on its latest line and stays there, until the person scrolls up BY HAND (the wheel, a
+ * touch, a key, the scroll bar): then nothing moves under their eyes, the new lines are counted, and a round
+ * button brings them back down. «At the bottom» survives what makes the list taller or shorter under it (a
+ * question card, a resized window, a tab shown again) and every scroll the page itself made; a person who never
+ * scrolled away always finds the newest line or card in view.
  */
 
 /** Within how many pixels of the end the list counts as at the bottom. */
@@ -25,6 +26,12 @@ export function afterScroll(atBottom: boolean, previousTop: number, m: ScrollMea
   if (distanceFromBottom(m) <= BOTTOM_SLACK_PX) return true;
   return m.scrollTop < previousTop - 1 ? false : atBottom;
 }
+
+/** How long after the person's last wheel, touch or key a scroll still counts as theirs. */
+export const GESTURE_MS = 1000;
+
+/** The gestures that move a list by hand; a scroll with none of them behind it was the page's own (a clamp, an anchor, our own jump). */
+const GESTURE_EVENTS = ["wheel", "touchmove", "keydown"] as const;
 
 /** How many new lines to count when the last one changes: none at the bottom, else how many came (at least one). */
 export function arrivedSince(atBottom: boolean, countBefore: number, countNow: number): number {
@@ -58,6 +65,9 @@ export function useStickToBottom({ conversation, last, count }: { conversation: 
   const [unseen, setUnseen] = useState(0);
   const previousTop = useRef(0);
   const before = useRef({ last, count });
+  // the person's hand on the list: a gesture just made, or the scroll bar held down
+  const gestureAt = useRef(0);
+  const holding = useRef(false);
 
   const mark = useCallback((value: boolean) => {
     bottom.current = value;
@@ -85,14 +95,40 @@ export function useStickToBottom({ conversation, last, count }: { conversation: 
     if (node && bottom.current) stick();
   }, [node, stick]);
 
-  // a new line: at the bottom it stays in view, above it is counted
+  // a new line or card (even one that lands before the last, by its time): at the bottom it stays in view, above it is counted
   useLayoutEffect(() => {
     const prev = before.current;
     before.current = { last, count };
-    if (last === prev.last) return;
+    if (last === prev.last && count === prev.count) return;
     if (bottom.current) stick();
-    else setUnseen((n) => n + arrivedSince(false, prev.count, count));
+    else if (count > prev.count || last !== prev.last) setUnseen((n) => n + arrivedSince(false, prev.count, count));
   }, [last, count, stick]);
+
+  // the person's own gestures: only they can take the list away from the bottom
+  useEffect(() => {
+    if (!node) return;
+    const touched = () => {
+      gestureAt.current = Date.now();
+    };
+    const down = () => {
+      holding.current = true;
+      touched();
+    };
+    const up = () => {
+      holding.current = false;
+      touched();
+    };
+    for (const name of GESTURE_EVENTS) node.addEventListener(name, touched, { passive: true });
+    node.addEventListener("pointerdown", down, { passive: true });
+    window.addEventListener("pointerup", up, { passive: true });
+    window.addEventListener("pointercancel", up, { passive: true });
+    return () => {
+      for (const name of GESTURE_EVENTS) node.removeEventListener(name, touched);
+      node.removeEventListener("pointerdown", down);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, [node]);
 
   // the height changes under it (a card grows, the window is resized): at the bottom it stays there
   useEffect(() => {
@@ -117,10 +153,16 @@ export function useStickToBottom({ conversation, last, count }: { conversation: 
   const onScroll = useCallback(() => {
     const c = container.current;
     if (!c) return;
+    const byHand = holding.current || Date.now() - gestureAt.current < GESTURE_MS;
     const now = afterScroll(bottom.current, previousTop.current, c);
     previousTop.current = c.scrollTop;
+    // a scroll the person did not make never takes the list away from the bottom: it is put back
+    if (!now && bottom.current && !byHand) {
+      stick();
+      return;
+    }
     if (now !== bottom.current) mark(now);
-  }, [mark]);
+  }, [mark, stick]);
 
   const jump = useCallback(() => {
     const c = container.current;

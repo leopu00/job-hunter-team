@@ -105,6 +105,7 @@ import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
 import { TeamOffContext, type TeamOff } from "../lib/team-off";
 import MessagesPage from "../pages/messages";
+import { AssistantChatFrame } from "../onboarding/AssistantChatFrame";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
@@ -1820,9 +1821,9 @@ export default function DashboardApp() {
   if (gate.phase === "required") {
     if (assistantChatIdentityKey === identityKey) {
       return (
-        <main data-testid="onboarding-assistant-chat" aria-label={stateText().assistantOnboardingAria}>
+        <AssistantChatFrame label={stateText().assistantOnboardingAria}>
           <MessagesPage params={{}} search={new URLSearchParams("agent=assistente")} />
-        </main>
+        </AssistantChatFrame>
       );
     }
     const manualExistingHost = gate.account.identity === "local" && manualExistingTeam?.identityKey === identityKey

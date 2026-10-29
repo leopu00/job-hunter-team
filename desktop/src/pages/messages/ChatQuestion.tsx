@@ -2,6 +2,8 @@ import { useState, type MouseEvent } from "react";
 import type { DirectChatQuestion } from "./direct-chat-contract";
 import type { DirectChatText } from "./direct-chat.i18n";
 import { answerableHere, answerProblem, fullStamp, KIND_COLOR, timeLabel } from "./chat-kinds";
+import { appLocale } from "../../lib/app-locale";
+import { readableRecordText } from "./chat-readable-record";
 import { renderChatMarkdown } from "./chat-text";
 
 /**
@@ -97,7 +99,7 @@ export default function ChatQuestion({
         )}
       </div>
       {question.subject && <p className="m-0 mb-1 font-semibold text-[var(--color-white)]">{question.subject}</p>}
-      <div>{renderChatMarkdown(question.text)}</div>
+      <div>{renderChatMarkdown(readableRecordText(question.text, appLocale()))}</div>
 
       {question.options.length > 0 && (
       <div role="group" aria-label={question.subject ?? question.text} className="mt-2 flex flex-wrap gap-1.5">
