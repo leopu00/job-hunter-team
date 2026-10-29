@@ -2092,14 +2092,36 @@ align_bind_ownership() {
     mkdir -p "$jht_user_dir" 2>/dev/null
     ok "Ownership of $jht_home and $jht_user_dir stays with this user (macOS)"
   elif command -v chown >/dev/null 2>&1; then
-    chown -R 1001:1001 "$jht_home" 2>/dev/null && \
-      ok "Ownership $jht_home → 1001:1001 (container UID)" || \
-      warn "chown $jht_home failed — pairing may require a manual fix"
     mkdir -p "$jht_user_dir" 2>/dev/null
-    chown -R 1001:1001 "$jht_user_dir" 2>/dev/null && \
-      ok "Ownership $jht_user_dir → 1001:1001 (container UID)" || \
-      warn "chown $jht_user_dir failed — team start may fail on mkdir output/"
+    if chown -R 1001:1001 "$jht_home" "$jht_user_dir" 2>/dev/null; then
+      ok "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID)"
+    elif repair_bind_ownership_in_container "$jht_home" "$jht_user_dir"; then
+      ok "Ownership $jht_home and $jht_user_dir → 1001:1001 (container UID, set by a one-shot container: no sudo needed)"
+    elif [ "$USE_DOCKER" -ne 1 ]; then
+      warn "chown to 1001 failed — nothing runs in a container here (--no-docker), so nothing needs it"
+    else
+      # A normal user cannot chown to 1001 (EPERM) and without the repair above the container would start and die
+      # on «mount_not_writable» in a restart loop (Gate CLI, 29/10): stop here, saying what to do.
+      fail "mount_repair_failed: $jht_home and $jht_user_dir cannot be made writable for the Job Hunter Team container (it runs as uid 1001) and nothing was started. Either let Docker run for this account (add it to the 'docker' group, then log in again), or run once: sudo chown -R 1001:1001 \"$jht_home\" \"$jht_user_dir\" — then run this installer again."
+    fi
   fi
+}
+
+# The fix for a normal user (uid != 1001, no sudo) on Linux with Docker: the same one-shot container the Windows
+# wrapper uses (.launcher/repair-mounts.sh, one receipt per folder). Root inside it, but with CAP_CHOWN and
+# CAP_DAC_READ_SEARCH only (the second one so it can walk a folder this user keeps private, mode 700), no network,
+# no new privileges, and only the two folders mounted. Succeeds only when both folders are confirmed.
+MOUNT_REPAIR_DISPATCH='if [ -x /app/.launcher/repair-mounts.sh ]; then exec /app/.launcher/repair-mounts.sh; else echo mount_repair_unsupported; fi'
+repair_bind_ownership_in_container() {
+  local jht_home="$1" jht_user_dir="$2" receipts
+  command -v docker >/dev/null 2>&1 || return 1
+  receipts="$(docker run --rm --user 0:0 --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --network none \
+      --security-opt no-new-privileges \
+      -v "$jht_home:/jht_home" -v "$jht_user_dir:/jht_user" \
+      --entrypoint /bin/sh "$IMAGE" -c "$MOUNT_REPAIR_DISPATCH" 2>/dev/null)" || return 1
+  printf '%s\n' "$receipts" | grep -Eqx 'mount_(ok|repaired) /jht_home' || return 1
+  printf '%s\n' "$receipts" | grep -Eqx 'mount_(ok|repaired) /jht_user' || return 1
+  ! printf '%s\n' "$receipts" | grep -Eqv 'mount_(ok|repaired) /jht_(home|user)'
 }
 
 run_host_setup() {

@@ -530,17 +530,23 @@ def _catalog() -> tuple[Any, Any]:
     return t, tf
 
 
+def _parsed(value: Any, edges: str) -> Any:
+    """The structure a text holds (`{'region': 'EU'}`, as str() writes it, or JSON), or None while it is not one."""
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not (text.startswith(edges[0]) and text.endswith(edges[1])) or len(text) > 600:
+        return None
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+        return None
+
+
 def _flat_record(value: Any) -> dict[str, Any] | None:
-    """A record of plain values, from a dict or from the text of one (`{'region': 'EU'}`, as str() of a dict writes it,
-    or JSON): the profile file may hold either. Anything else, nested or longer than a card line, is not one."""
-    if isinstance(value, str):
-        text = value.strip()
-        if not (text.startswith("{") and text.endswith("}")) or len(text) > 600:
-            return None
-        try:
-            value = ast.literal_eval(text)
-        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
-            return None
+    """A record of plain values, from a dict or from the text of one: the profile file may hold either.
+    Anything else, nested or longer than a card line, is not one."""
+    value = _parsed(value, "{}")
     if not isinstance(value, dict) or not value or len(value) > 12:
         return None
     if any(not isinstance(k, str) or not isinstance(v, (str, int, float, bool)) for k, v in value.items()):
@@ -548,12 +554,24 @@ def _flat_record(value: Any) -> dict[str, Any] | None:
     return value
 
 
+def _flat_records(value: Any) -> list[dict[str, Any]] | None:
+    """A list of flat records (the profile schema keeps work_authorization so), from a list or from its text; each
+    item may itself be the text of a record. None when any item is not one."""
+    value = _parsed(value, "[]")
+    if not isinstance(value, list) or not value or len(value) > 6:
+        return None
+    records = [_flat_record(item) for item in value]
+    return None if any(record is None for record in records) else records  # type: ignore[return-value]
+
+
 def _field_label(t: Any, name: str) -> str:
-    """A profile field named for the person: the catalog's words for the ones it has, else the name without underscores."""
-    key = f"profile_confirm.field.{name}"
-    label = t(key)
-    if label and label != key:
-        return label
+    """A profile field named for the person: the catalog's words for the ones it has (a nested name by its last part),
+    else the name without underscores."""
+    for candidate in (name, name.rsplit(".", 1)[-1]):
+        key = f"profile_confirm.field.{candidate}"
+        label = t(key)
+        if label and label != key:
+            return label
     spaced = name.replace("_", " ").replace(".", " ").strip()
     return spaced[:1].upper() + spaced[1:]
 
@@ -561,8 +579,11 @@ def _field_label(t: Any, name: str) -> str:
 def _record_words(name: str, record: dict[str, Any], t: Any) -> str:
     """A record said in words, not as the program holds it: what the person is allowed first and where in brackets
     (work authorization), any other as `Name: value` pairs."""
-    if name == "work_authorization" and set(record) == {"region", "status"}:
-        return f"{_text(record['status'])} ({_text(record['region'])})"
+    if name.rsplit(".", 1)[-1] == "work_authorization" and set(record) == {"region", "status"}:
+        region = _text(record["region"])
+        if region.isalpha() and len(region) <= 3:  # a region code is written in capitals, whatever the Assistant wrote
+            region = region.upper()
+        return f"{_text(record['status'])} ({region})"
     return ", ".join(f"{_field_label(t, str(k))}: {_text(v)}" for k, v in record.items())
 
 
@@ -619,8 +640,8 @@ def summary_text(envelope: dict[str, Any], inferred: list[str]) -> str:
         if name in shown_fields or name in FIELDS:
             continue
         raw = _value_at(envelope["profile"], name)
-        record = _flat_record(raw)
-        value = _short(_record_words(name, record, t) if record else raw)
+        records = _flat_records(raw) or ([_flat_record(raw)] if _flat_record(raw) else [])
+        value = _short("; ".join(_record_words(name, record, t) for record in records) if records else raw)
         if value:
             lines.append(f"- {_field_label(t, name)}: {value}{mark}")
     missing = [t(_MISSING_LABEL[field]) for field in envelope.get("missing", []) if field in _MISSING_LABEL]

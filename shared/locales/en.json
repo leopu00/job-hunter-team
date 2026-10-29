@@ -406,5 +406,6 @@
   "onb.company.opt.enterprise": "Large enterprise / multinational",
   "onb.company.opt.public": "Public sector, research or non-profit",
   "onb.company.opt.any": "No preference: the role matters",
-  "onb.role.other_prompt": "Write me in one line what kind of work you are looking for."
+  "onb.role.other_prompt": "Write me in one line what kind of work you are looking for.",
+  "onb.preferences.title": "Work preferences"
 }

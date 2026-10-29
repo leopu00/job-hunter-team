@@ -351,6 +351,9 @@ def run_podman(subcommand, *tail):
     # Exact 1.6.0 edge: custom podman args are appended after the subcommand.
     return subprocess.run([podman, subcommand, *podman_args, *tail], check=False)
 
+if command == "ps" and os.environ.get("JHT_FIXTURE_PS_FAILS"):
+    print(os.environ["JHT_FIXTURE_PS_FAILS"], file=sys.stderr)
+    raise SystemExit(1)
 if command == "ps":
     # 1.6.0 accepts ps options but no Docker-Compose-style service operand.
     if any(not value.startswith("-") for value in rest):
@@ -392,6 +395,9 @@ if command == "up" and dry_run and rest and rest[0] == "-d":
         if "# candidate-release" in Path(compose_file).read_text(encoding="utf-8")
         else os.environ["JHT_FIXTURE_CONFIG_HASH"]
     )
+    if os.environ.get("JHT_FIXTURE_ENV_IN_HASH") == "1" and os.environ.get("OPENAI_API_KEY"):
+        # 1.6.0 resolves ${OPENAI_API_KEY:-} of the compose from the caller's environment into the hash
+        config_hash = hashlib.sha256((config_hash + os.environ["OPENAI_API_KEY"]).encode()).hexdigest()
     # 1.6.0 hashes each service's own configuration, and the plan of a service prints the create of its
     # dependency first, with its own hash (jht depends on jht-telegram), then the create of the service asked
     service = rest[-1]
@@ -1630,3 +1636,250 @@ def test_installer_version_mismatch_precedes_every_machine_or_provider_action(
     assert all(call == (MACHINE, ["--version"]) for call in compose_calls)
     if variable == "JHT_FIXTURE_COMPOSE_VERSION":
         assert compose_calls
+
+
+# ── The hash follows the caller's environment (TEST 19g) ────────────────────────────────────────────
+# podman-compose 1.6.0 puts the resolved ${OPENAI_API_KEY:-} (and the other variables the compose takes from the caller)
+# in the config-hash. A terminal with a key exported expected another hash than the app that made the container with a
+# clean environment, and every read said «container non attivo» while the team ran.
+
+def _status(tmp_path: Path, *, key: str | None, label_made_with: str | None):
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+        env.pop(name, None)
+    if label_made_with is not None:
+        made = hashlib.sha256((env["JHT_FIXTURE_CONFIG_HASH"] + label_made_with).encode()).hexdigest()
+        path = Path(env["JHT_FIXTURE_CONTAINER_METADATA"])
+        path.write_text(json.dumps({**json.loads(path.read_text(encoding="utf-8")), "config_hash": made}), encoding="utf-8")
+    if key is not None:
+        env["OPENAI_API_KEY"] = key
+    return _run(wrapper, env, "status"), create_marker
+
+
+def test_a_key_exported_in_the_terminal_does_not_make_the_running_team_inactive(tmp_path: Path):
+    result, created = _status(tmp_path, key="sk-test-terminal", label_made_with=None)   # made clean, asked with a key
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "non attivo" not in result.stdout and "status=running" in result.stdout
+    assert not created.exists()
+
+
+def test_the_same_container_with_no_key_anywhere_is_as_before(tmp_path: Path):
+    result, _ = _status(tmp_path, key=None, label_made_with=None)
+    assert result.returncode == 0 and "status=running" in result.stdout
+
+
+def test_a_container_made_with_the_same_key_is_still_ours_for_that_terminal(tmp_path: Path):
+    result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-test-terminal")
+    assert result.returncode == 0 and "status=running" in result.stdout
+
+
+def test_a_container_made_with_another_key_is_not_a_free_pass(tmp_path: Path):
+    result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-another")
+    assert result.returncode != 0
+    # a container that is there and cannot be attested is not «non attivo»: it says so and names the variable (not its value)
+    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
+    assert "OPENAI_API_KEY" in result.stdout and "unset" in result.stdout and "sk-test-terminal" not in result.stdout
+
+
+def test_a_wrong_hash_is_refused_with_a_key_exported_too(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
+    env["OPENAI_API_KEY"] = "sk-test-terminal"
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0 and "non attestabile" in result.stdout and "OPENAI_API_KEY" in result.stdout
+
+
+def test_the_caller_variables_the_wrapper_sets_aside_are_those_the_compose_takes():
+    import re
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    wrapper = WRAPPER.read_text(encoding="utf-8")
+    listed = set(re.search(r'^PODMAN_CALLER_ENV="([^"]+)"', wrapper, re.M).group(1).split())
+    taken = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)(?::-[^}]*)?\}", compose))
+    # HOME is the same for everyone who asks; JHT_IMAGE comes from the channel pin; the three below are read from host.env
+    # by the wrapper itself before any compose runs (so they do not follow the caller).
+    taken -= {"HOME", "JHT_IMAGE", "JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"}
+    assert listed == taken, (sorted(listed ^ taken))
+
+
+def test_status_with_no_container_at_all_still_says_not_active(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0 and "non attivo" in result.stdout and "non attestabile" not in result.stdout
+
+
+def test_status_of_an_unattestable_container_without_a_caller_variable_names_none(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+        env.pop(name, None)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0 and "non attestabile" in result.stdout
+    assert "sono impostate" not in result.stdout and "non attivo" not in result.stdout
+
+
+# ── podman-compose looks for podman in PATH at its own start (TEST 19g) ──────────────────────────────
+# The wrapper finds podman in /opt/homebrew/bin when the caller's PATH has none of it (`env -i`, a terminal opened from the app),
+# but podman-compose 1.6.0 runs `podman version` through PATH whatever --podman-path says: its `--version` probe died, the wrapper read
+# «no provider» and `status` said «container 'jht' non attivo» for a team that was running.
+
+def _tools_outside_path(tmp_path: Path) -> Path:
+    tools = tmp_path / "tools-not-on-path"
+    tools.mkdir()
+    _write_executable(tools / "podman", "#!/bin/sh\necho 'podman version 6.1.3'\n")
+    _write_executable(
+        tools / "podman-compose",
+        "#!/bin/bash\n"
+        "command -v podman >/dev/null 2>&1 || { echo \"ERROR:podman_compose:failed to check if podman is installed: 'podman'\" >&2; exit 1; }\n"
+        "echo 'podman-compose version 1.6.0'\n",
+    )
+    return tools
+
+
+def _minimal_path(tmp_path: Path) -> Path:
+    """A PATH that holds only what the probe itself needs (bash, sed, head), as links: no /usr/bin, so that a podman the machine
+    happens to have there (the CI runner has a real one) can never be found. The test must not depend on the machine."""
+    import shutil as _shutil
+    folder = tmp_path / "minimal-path"
+    folder.mkdir()
+    for tool in ("bash", "sed", "head", "tr", "cut", "cat"):
+        found = _shutil.which(tool)
+        assert found, tool
+        (folder / tool).symlink_to(found)
+    assert not (folder / "podman").exists()
+    return folder
+
+
+def _wrapper_functions(*names: str) -> str:
+    import re
+    text = WRAPPER.read_text(encoding="utf-8")
+    out = []
+    for name in names:
+        match = re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M)
+        assert match, name
+        out.append(match.group(0))
+    return "\n".join(out)
+
+
+def _probe_version(tmp_path: Path, *, ensure: bool) -> subprocess.CompletedProcess[str]:
+    tools = _tools_outside_path(tmp_path)
+    minimal = _minimal_path(tmp_path)
+    script = (
+        f'PATH="{minimal}"\nPODMAN_RUNTIME_MODE=machine\nPODMAN_MACHINE_NAME=m\n'
+        f'podman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
+        + _wrapper_functions("podman_ensure_on_path", "podman_compose_version_number")
+        + (f'\npodman_compose_version_number "{tools}/podman-compose"\n' if ensure else
+           f'\npodman_ensure_on_path() {{ :; }}\npodman_compose_version_number "{tools}/podman-compose"\n')
+    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
+
+
+def test_the_version_probe_of_podman_compose_works_when_podman_is_not_on_the_callers_path(tmp_path: Path):
+    done = _probe_version(tmp_path, ensure=True)
+    assert done.returncode == 0 and done.stdout.strip() == "1.6.0", (done.stdout, done.stderr)
+
+
+def test_without_the_directory_of_podman_the_probe_fails_which_is_the_case_of_the_report(tmp_path: Path):
+    done = _probe_version(tmp_path, ensure=False)
+    assert done.stdout.strip() == "", done.stdout
+
+
+def test_the_directory_of_podman_goes_at_the_end_of_the_path_and_only_once(tmp_path: Path):
+    tools = _tools_outside_path(tmp_path)
+    minimal = _minimal_path(tmp_path)
+    script = (
+        f'PATH="{minimal}"\npodman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
+        + _wrapper_functions("podman_ensure_on_path")
+        + "\npodman_ensure_on_path; podman_ensure_on_path; printf '%s' \"$PATH\"\n"
+    )
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
+    assert done.stdout == f"{minimal}:{tools}", done.stdout
+
+
+def test_every_call_of_the_provider_makes_sure_podman_is_on_the_path():
+    text = WRAPPER.read_text(encoding="utf-8")
+    for name in ("podman_compose_version_number", "podman_compose_pair_supported", "podman_expected_config_hash"):
+        body = _wrapper_functions(name)
+        assert "podman_ensure_on_path" in body, name
+    assert "podman_ensure_on_path\n    podman_bin=\"$(podman_binary)\"" in text            # compose_file
+
+
+# ── The team can always be stopped from the terminal (TEST 19g) ─────────────────────────────────────
+
+def _team(tmp_path: Path, *args: str, key: str | None, made_with: str | None):
+    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
+    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
+        env.pop(name, None)
+    if made_with is not None:
+        made = hashlib.sha256((env["JHT_FIXTURE_CONFIG_HASH"] + made_with).encode()).hexdigest()
+        path = Path(env["JHT_FIXTURE_CONTAINER_METADATA"])
+        path.write_text(json.dumps({**json.loads(path.read_text(encoding="utf-8")), "config_hash": made}), encoding="utf-8")
+    if key is not None:
+        env["OPENAI_API_KEY"] = key
+    return _run(wrapper, env, "team", *args), create_marker
+
+
+def test_team_stop_works_for_a_container_that_only_its_hash_does_not_attest(tmp_path: Path):
+    """A container made with another key is not «exactly ours» for `status`, and `jht team stop --all` answered «avvio automatico
+    negato»: the person could not stop the team. Every other label still attests it, as for `jht down`."""
+    result, created = _team(tmp_path, "stop", "--all", key="sk-test-terminal", made_with="sk-another")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "avvio automatico negato" not in result.stderr and "config_changed_while_running" in result.stderr
+    assert not created.exists()
+
+
+def test_team_stop_still_refuses_a_container_that_is_not_ours_by_any_other_label(tmp_path: Path):
+    wrapper, env, _, created = _runtime(tmp_path)
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-working-dir"
+    result = _run(wrapper, env, "team", "stop", "--all")
+    assert result.returncode != 0 and not created.exists()
+
+
+def test_other_team_commands_still_need_the_exact_attestation(tmp_path: Path):
+    result, created = _team(tmp_path, "status", key="sk-test-terminal", made_with="sk-another")
+    assert result.returncode != 0 and "avvio automatico negato" in result.stderr
+    assert not created.exists()
+
+
+# ── `jht status` says what the provider said (TEST 19h) ──────────────────────────────────────────────
+
+def test_status_shows_the_first_line_the_provider_printed_when_it_cannot_list_the_project(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_PS_FAILS"] = "\n  ERROR:podman_compose:failed to check if podman is installed: 'podman'\nsecond line\n"
+    result = _run(wrapper, env, "status")
+    assert result.returncode != 0
+    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
+    assert "Il provider ha detto: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
+    assert "second line" not in result.stdout
+
+
+def test_status_cuts_a_long_provider_line_and_drops_control_characters(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_PS_FAILS"] = "x" * 500 + "\x1b[31mred\x07"
+    result = _run(wrapper, env, "status")
+    said = next(line for line in result.stdout.splitlines() if "Il provider ha detto:" in line)
+    assert len(said.split("Il provider ha detto: ", 1)[1]) <= 200
+    assert "\x1b" not in result.stdout and "\x07" not in result.stdout
+
+
+def test_status_of_a_provider_that_says_nothing_gives_its_exit_code(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    env["JHT_FIXTURE_PS_FAILS"] = " "
+    result = _run(wrapper, env, "status")
+    assert "Il provider ha detto: provider exit code 1, nothing said" in result.stdout
+
+
+def test_the_reason_file_is_left_behind_by_no_one(tmp_path: Path):
+    wrapper, env, _, _ = _runtime(tmp_path)
+    tmp = tmp_path / "scratch"
+    tmp.mkdir()
+    env["TMPDIR"] = str(tmp)
+    env["JHT_FIXTURE_PS_FAILS"] = "boom"
+    _run(wrapper, env, "status")
+    ok_env = dict(env)
+    ok_env.pop("JHT_FIXTURE_PS_FAILS")
+    _run(wrapper, ok_env, "status")
+    assert list(tmp.iterdir()) == []

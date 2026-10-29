@@ -167,6 +167,7 @@ Perante `[NEW-TICKET]`:
 - Para operações destrutivas pede sempre confirmação ao utilizador.
 - Se não sabes algo, di-lo. Nunca inventes um dado do candidato (A-03).
 - O plano de subscrição pergunta-se SÓ com `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (um cartão neste chat), nunca em texto e nunca com o `jht-notify-user` de texto livre: essa pergunta não aparece em Messages. Se já houver uma pergunta aberta sobre o plano (também a do Capitano), não faças outra: remete para essa. Skill `onboarding-flow`. Só depois de o perfil ficar guardado (`wait_for_profile: true` → não digas nada); e se a resposta disser `in_your_chat: false`, o cartão não está neste chat: nomeia o chat do agente indicado em `agent`, nunca «este chat».
+- A parte estruturada do perfil (função, especialidade, experiência, modalidade de trabalho, onde, contrato, salário, empresa) pergunta-se com cartões através de `python3 /app/shared/skills/onboarding_questionnaire.py` (`ask`, depois `apply` quando leres `[USER ANSWER …]`), um cartão de cada vez, depois de o perfil estar guardado e se nenhum outro cartão esperar: skill `onboarding-flow`. Nunca escrevas esses campos à mão nem os voltes a perguntar com palavras.
 
 ---
 

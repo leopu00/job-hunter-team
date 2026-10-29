@@ -12,7 +12,7 @@ import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
 import { installCookieMirror } from "../lib/cookie-mirror";
 import { installCsvExport } from "../lib/export-csv";
-import { installDocumentSave } from "../lib/team-document";
+import { installDocumentPreview, installDocumentSave } from "../lib/team-document";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
 import { initializeTheme } from "../shell/theme";
 import { DashboardEntrypoint } from "./DashboardEntrypoint";
@@ -30,6 +30,7 @@ installApiBridge(shellApi(localTeamApi(localJudgementApi(vpsJudgementApi(mapApi(
 initializeTheme();
 installCsvExport();
 installDocumentSave();
+installDocumentPreview();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

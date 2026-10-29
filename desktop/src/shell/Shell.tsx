@@ -35,6 +35,7 @@ import NavStrip from "./NavStrip";
 import { beginPageLoad } from "../lib/page-timing";
 import { forgetReadsInFlight } from "../lib/read-deadline";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
+import DocumentPreviewHost from "../pages/positions/DocumentPreviewHost";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
 
@@ -219,6 +220,8 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const page = Page && (
     <SignOutContext.Provider value={onLogout ?? null}>
       <Page key={path} params={match.params} search={params} />
+      {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
+      <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>
   );
   if (linkedTeam) {

@@ -524,10 +524,17 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
     if width < _WRAPPED_MARKER_MIN:
         return 0
     run: list[str] = []
-    for _raw, plain in lines[index + 1:]:
+    consumed = 0
+    for offset, (_raw, plain) in enumerate(lines[index + 1:], 1):
         if not plain.strip():
+            # A message that holds an empty line (the Dottore's [UNBLOCK], TEST 19f) is drawn with a blank row between
+            # its rows. One blank row does not end the draft when more text follows it; it ends it when nothing
+            # (or only the model line) does.
+            if offset - consumed == 1 and _text_row_follows(lines[index + 1 + offset:]):
+                continue
             break
         run.append(plain)
+        consumed = offset
     if not run or len(run) > _WRAPPED_ROWS_MAX:
         return 0
     if any(_composer_match(row) or _BORDER.match(row) or _status_line_busy(row)
@@ -535,7 +542,16 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
         return 0
     if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
         return 0
-    return len(run)
+    return consumed
+
+
+def _text_row_follows(below: list[tuple[str, str]]) -> bool:
+    """The next non-blank row is text (not the model line or a hint of the footer, not a border)."""
+    for _raw, plain in below:
+        if plain.strip():
+            return not (_CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain) or _BORDER.match(plain)
+                        or _composer_match(plain) or _NUMBERED_OPTION.match(plain) or _status_line_busy(plain))
+    return False
 
 
 def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
@@ -1753,6 +1769,30 @@ def _wake_log(agent: str, code: str) -> None:
         pass
 
 
+def _signed_text_waiting(session: str, pane: str) -> bool:
+    """True when the composer holds ONLY signed text that the transport itself pasted (or whose token it explains):
+    the same judgement as ``jht-tmux-send`` (``tmux_send_composer.signed_only`` over its pending record and its
+    fingerprints of the last day), read from the same files. Anything uncertain is False."""
+    try:
+        import tmux_send_composer  # noqa: PLC0415  (it imports this module: not at the top)
+        folder = Path(os.environ.get("JHT_TMUX_LOCK_DIR") or (jht_home() / "locks"))
+        slug = re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+        try:
+            record = (folder / f"tmux-send-pending-{slug}.sha").read_text(encoding="utf-8").split()
+        except OSError:
+            record = []
+        try:
+            seen = (folder / f"tmux-send-fingerprints-{slug}.log").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            seen = []
+        now = time.time()
+        return tmux_send_composer.signed_only(
+            composer_text(pane), tmux_send_composer.registry_token_ok(record, now, 600.0),
+            tmux_send_composer.fingerprints_known(seen, now, 86400))
+    except Exception:  # noqa: BLE001 - uncertain is "no": the wake stays away from the text
+        return False
+
+
 def _wake_attempt(agent: str, session: str) -> str:
     """One try to wake the agent: ``sent`` or the closed code of why not.
 
@@ -1765,18 +1805,25 @@ def _wake_attempt(agent: str, session: str) -> str:
         if pane is None:
             return "no_pane"
         gate = delivery_gate(pane)
+        signed = False
         if gate == "text":
             try:
                 flush_ours(session)
             except Refusal:
-                return "text"
-            pane = capture_pane(session)
-            if pane is None:
-                return "no_pane"
-            gate = delivery_gate(pane)
-        if gate == "text":
+                # A message of the system left unsent in the box (the Dottore's [UNBLOCK], a bridge line) is not a
+                # person's draft: the transport pastes the wake behind it and one Enter sends both (TEST 19f: the wake
+                # was refused for ten minutes against such a line).  Anything else in the box is still left alone.
+                signed = _signed_text_waiting(session, pane)
+                if not signed:
+                    return "text"
+            else:
+                pane = capture_pane(session)
+                if pane is None:
+                    return "no_pane"
+                gate = delivery_gate(pane)
+        if gate == "text" and not signed:
             return "text"
-        if gate != "empty":
+        if gate != "empty" and not signed:
             # a menu, a sign-in, or a screen with no composer to be seen: nothing is typed on a guess (a chat send
             # may go on over an unknown composer because it proves the submit; this line is not worth that)
             return "blocked"

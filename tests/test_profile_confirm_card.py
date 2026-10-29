@@ -152,6 +152,38 @@ def test_the_exact_line_of_the_collaudo_is_said_in_english_with_the_deduced_mark
     assert "- Work authorization: Italian citizen - free movement (EU) (deduced by me, it is not in your CV)" in card["payload"]["testo"].splitlines()
 
 
+# the profile schema keeps work_authorization as a LIST of records, and the Assistant writes the region in lower case
+COLLAUDO_19G = "{'region': 'eu', 'status': 'Italian citizen - free movement'}"
+WORK_AUTH_LINE_EN = "- Work authorization: Italian citizen - free movement (EU) (deduced by me, it is not in your CV)"
+
+
+@pytest.mark.parametrize("held", [
+    [{"region": "eu", "status": "Italian citizen - free movement"}],
+    [COLLAUDO_19G],
+    f"[{COLLAUDO_19G}]",
+    COLLAUDO_19G,
+    {"region": "eu", "status": "Italian citizen - free movement"},
+])
+def test_the_collaudo_19g_record_is_said_in_words_whatever_form_the_profile_holds_it(box, held):
+    stage(box, patch(work_authorization=held))
+
+    ask(box, "work_authorization", lang="en")
+
+    text = cards(box)[0]["payload"]["testo"]
+    assert WORK_AUTH_LINE_EN in text.splitlines()
+    assert "{" not in text and "'region'" not in text and "'eu'" not in text
+
+
+def test_several_records_are_said_one_after_the_other_and_a_nested_name_has_its_label(box):
+    held = [{"region": "eu", "status": "Italian citizen - free movement"}, {"region": "uk", "status": "needs sponsorship"}]
+    stage(box, patch(preferences={"work_authorization": held}))
+
+    ask(box, "preferences.work_authorization", lang="en")
+
+    line = next(l for l in cards(box)[0]["payload"]["testo"].splitlines() if "sponsorship" in l)
+    assert line == "- Work authorization: Italian citizen - free movement (EU); needs sponsorship (UK) (deduced by me, it is not in your CV)"
+
+
 def test_another_flat_record_is_said_as_pairs(box):
     stage(box, patch(notice_period={"weeks": 4, "remote": True}))
     ask(box, "notice_period", lang="en")

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useReadOnlyActions } from "@/lib/read-only-actions";
 
 /**
@@ -18,6 +18,11 @@ type ButtonState = "idle" | "loading" | "error";
 
 /** The desktop listens to this event and saves the PDF natively (desktop/src/lib/team-document.ts). */
 const SAVE_DOCUMENT_EVENT = "jht:save-document";
+/**
+ * The desktop also shows the document inside the app. The button asks first (`probe`): only a desktop that answers
+ * `supported` gets the «Preview» button; the web never does. The request carries two plain file names and the kind.
+ */
+const PREVIEW_DOCUMENT_EVENT = "jht:preview-document";
 
 // Scarica via <a> anchor invece di window.open: l'apertura del file avviene
 // DOPO il polling async (fuori dal gesto del click) e in quel contesto i
@@ -38,15 +43,35 @@ export function CvDownloadButton({
   cloudMode,
   color,
   labels,
+  previewKind,
+  textName = null,
 }: {
   fileName: string;
   cloudMode: boolean;
   color: string;
-  labels: { idle: string; preparing: string; error: string };
+  labels: { idle: string; preparing: string; error: string; preview?: string };
+  /** What kind of document this is; the preview button needs it and the desktop. */
+  previewKind?: "cv" | "letter";
+  /** The markdown the PDF was made from, when the application has one. */
+  textName?: string | null;
 }) {
   const readOnly = useReadOnlyActions();
   const [state, setState] = useState<ButtonState>("idle");
   const [reason, setReason] = useState<string | null>(null);
+  const [canPreview, setCanPreview] = useState(false);
+
+  useEffect(() => {
+    if (!previewKind || !labels.preview) return;
+    const detail: { probe: boolean; supported?: boolean } = { probe: true };
+    window.dispatchEvent(new CustomEvent(PREVIEW_DOCUMENT_EVENT, { detail, cancelable: true }));
+    setCanPreview(detail.supported === true);
+  }, [previewKind, labels.preview]);
+
+  const preview = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent(PREVIEW_DOCUMENT_EVENT, { detail: { name: fileName, textName, kind: previewKind }, cancelable: true }),
+    );
+  }, [fileName, textName, previewKind]);
 
   // In the desktop the PDF is read from the team and saved where the person picks (the bridge below needs a
   // key the app does not have). Nobody listening (the web): false, and the button goes on as it did.
@@ -160,6 +185,16 @@ export function CvDownloadButton({
           {text}
         </span>
       </button>
+      {canPreview && previewKind && labels.preview && (
+        <button
+          type="button"
+          onClick={preview}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)] bg-transparent cursor-pointer"
+          style={{ borderColor: color, color }}
+        >
+          {labels.preview}
+        </button>
+      )}
       {isError && reason && (
         <p role="alert" className="w-full text-[10px] text-[var(--color-red)]">
           {reason}

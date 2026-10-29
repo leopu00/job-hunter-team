@@ -1,0 +1,204 @@
+/* The window that shows a CV or a letter inside the app. The sheet is paper on purpose: it is the DOCUMENT, and it
+   must not look like the app's own words. */
+.docprev {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+}
+.docprev__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 880px);
+  max-height: min(100%, 940px);
+  min-height: 0;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 10px;
+  background: var(--color-panel, #15161a);
+  color: var(--color-bright, #e8e8ea);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+  outline: none;
+}
+.docprev__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border, #333);
+}
+.docprev__header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.docprev__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 16px;
+}
+.docprev__tabs,
+.docprev__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.docprev button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.docprev button:hover:not(:disabled) {
+  background: var(--color-card, #1d1f25);
+}
+.docprev button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.docprev button:focus-visible {
+  outline: 2px solid var(--color-green, #4ade80);
+  outline-offset: 2px;
+}
+.docprev__tab--on {
+  border-color: var(--color-green, #4ade80);
+  background: var(--color-card, #1d1f25);
+}
+.docprev__status,
+.docprev__error {
+  margin: 0;
+  padding: 0 16px 8px;
+  font-size: 12px;
+  color: var(--color-muted, #9a9aa3);
+}
+.docprev__status:empty {
+  display: none;
+}
+.docprev__error {
+  color: var(--color-red, #f87171);
+}
+.docprev__retry {
+  margin-left: 4px;
+}
+.docprev__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background: var(--color-card, #1d1f25);
+  border-radius: 0 0 10px 10px;
+}
+/* the document: paper, in both themes */
+.docprev__sheet {
+  box-sizing: border-box;
+  width: min(100%, 780px);
+  min-height: 160px;
+  margin: 0 auto;
+  padding: 24px 28px;
+  background: #fff;
+  color: #17171a;
+  box-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
+}
+.docprev__page {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 0 12px;
+  border: 1px solid #d8d8dc;
+}
+.docprev__note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #55555c;
+}
+.docmd {
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.docmd p,
+.docmd blockquote {
+  margin: 0 0 10px;
+  white-space: pre-line;
+}
+.docmd__heading {
+  margin: 14px 0 6px;
+  line-height: 1.25;
+}
+.docmd__heading--1 { font-size: 20px; }
+.docmd__heading--2 { font-size: 16px; }
+.docmd__heading--3 { font-size: 14px; }
+.docmd__list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.docmd__list li {
+  position: relative;
+  margin: 0 0 3px;
+  padding-left: calc(18px + var(--level, 0) * 16px);
+}
+.docmd__list li::before {
+  position: absolute;
+  left: calc(var(--level, 0) * 16px + 4px);
+  content: "•";
+}
+.docmd__list--ordered li::before {
+  content: attr(data-marker);
+  left: calc(var(--level, 0) * 16px);
+}
+.docmd blockquote {
+  padding-left: calc(10px + var(--level, 1) * 6px);
+  border-left: 3px solid #c9c9cf;
+  color: #44444b;
+}
+.docmd code,
+.docmd pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: #f1f1f3;
+}
+.docmd pre {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre;
+}
+.docmd hr {
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px solid #c9c9cf;
+}
+.docmd__address {
+  color: #55555c;
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .docprev {
+    padding: 0;
+  }
+  .docprev__dialog {
+    width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+  .docprev__panel {
+    padding: 8px;
+  }
+  .docprev__sheet {
+    padding: 16px;
+  }
+}

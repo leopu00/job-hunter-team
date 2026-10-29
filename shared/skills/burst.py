@@ -12,8 +12,9 @@ Cosa fa `start --until HH:MM`:
 
   1. salva gli orari di prima (`team.working_hours` di jht.config.json, o «24/7») in
      `$JHT_HOME/.burst.json`, con gli orari che ha scritto e la scadenza;
-  2. allarga gli orari: una finestra sola, tutti i giorni, che finisce all'ora scelta (almeno 4 ore,
-     come la regola dei `jht wh`); se il team era già 24/7 non scrive niente;
+  2. allarga gli orari, senza mai restringerli: le fasce che il team ha restano tutte e si aggiunge la
+     fascia da adesso fino all'ora scelta (unione). Solo un giorno senza fascia propria la vuole di
+     almeno 4 ore, come la regola dei `jht wh`; se il team era già 24/7 non scrive niente;
   3. concede il burn (`burn_intent.grant`) fino a quell'ora: stesso file, stesso tetto di 12 ore.
 
 Cosa fa `sweep` (a ogni tick del sentinel): se la fascia è finita (scaduta, o il burn è stato
@@ -61,6 +62,7 @@ AUDIT_LOG = JHT_HOME / "logs" / "burst.jsonl"
 MIN_MINUTES = 15
 MAX_HOURS = burn_intent.MAX_HOURS
 MIN_WINDOW_HOURS = 4
+DAY_MINUTES = 24 * 60
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 READ_MAX_BYTES = 1024 * 1024
@@ -269,15 +271,70 @@ def next_occurrence(hhmm: str, zone, now: datetime) -> datetime:
     return candidate
 
 
-def widened(previous, until_local: datetime, span_hours: float):
-    """The hours of a burst: one window, every day, ending at `until_local`; None when the team is 24/7."""
+def _minutes(hhmm: str) -> int:
+    h, m = (int(x) for x in hhmm.split(":"))
+    return h * 60 + m
+
+
+def _clock(minutes: int) -> str:
+    minutes %= 24 * 60
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def widened(previous, now_local: datetime, until_local: datetime, span_hours: float):
+    """The hours of a burst: the hours the team has, plus the stretch from now to `until_local`; None when 24/7.
+
+    The burst only ever ADDS: every window of the team stays, and the day the stretch starts on gets the one
+    window that holds both its own window (if it has one) and the stretch. Only a day with no window of its own
+    needs the four hours the hours rule wants, so the stretch is lengthened backwards to them. The schema allows
+    one window per day and a window shorter than a day:
+      - when the stretch does not touch that day's window, the window also covers the time between them, which
+        is either already past or still before `until_local`;
+      - when that makes it a day or more, it is split in two: this day up to midnight and the next day from
+        midnight (with the next day's own window kept in it), so the end is exactly the one asked for;
+      - when even that cannot hold both (windows of almost a day), the day gets the stretch alone, four hours
+        at least: the stretch is what the person asked for, and the hours of before come back at its end.
+    """
     if _is_24_7(previous):
         return None
-    length = min(23, max(MIN_WINDOW_HOURS, math.ceil(span_hours)))
-    begin = until_local - timedelta(hours=length)
+    per_day: dict[str, tuple[int, int]] = {}
+    for w in previous["windows"]:
+        for d in w["days"]:
+            per_day[d] = (_minutes(w["start"]), _minutes(w["end"]))
+    long_enough = timedelta(hours=min(23, max(MIN_WINDOW_HOURS, math.ceil(span_hours))))
+
+    def place(begin: datetime):
+        start = begin.hour * 60 + begin.minute
+        return WEEKDAYS[begin.weekday()], start, start + int((until_local - begin).total_seconds() // 60)
+
+    day, start, end = place(now_local if WEEKDAYS[now_local.weekday()] in per_day else until_local - long_enough)
+    if day in per_day:
+        s0, e0 = per_day[day]
+        if e0 <= s0:
+            e0 += DAY_MINUTES
+        start, end = min(start, s0), max(end, e0)
+    if end - start < DAY_MINUTES:
+        per_day[day] = (start, end % DAY_MINUTES)
+    else:
+        nxt = WEEKDAYS[(WEEKDAYS.index(day) + 1) % len(WEEKDAYS)]
+        second_end = end - DAY_MINUTES
+        if nxt in per_day:
+            s1, e1 = per_day[nxt]
+            second_end = max(second_end, e1 if e1 > s1 else e1 + DAY_MINUTES)
+        first = min(start, DAY_MINUTES - MIN_WINDOW_HOURS * 60)
+        if MIN_WINDOW_HOURS * 60 <= second_end < DAY_MINUTES and first > 0:    # 00:00-00:00 is not a window
+            per_day[day] = (first, 0)
+            per_day[nxt] = (0, second_end)
+        else:
+            day, start, end = place(until_local - long_enough)
+            per_day[day] = (start, end % DAY_MINUTES)
+    groups: dict[tuple[int, int], list[str]] = {}
+    for d in WEEKDAYS:
+        if d in per_day:
+            groups.setdefault(per_day[d], []).append(d)
     return {
         "timezone": previous["timezone"],
-        "windows": [{"days": list(WEEKDAYS), "start": begin.strftime("%H:%M"), "end": until_local.strftime("%H:%M")}],
+        "windows": [{"days": days, "start": _clock(sh), "end": _clock(eh)} for (sh, eh), days in groups.items()],
     }
 
 
@@ -322,7 +379,7 @@ def start(until: str, now: Optional[datetime] = None) -> dict:
         raise Refused("until_too_soon")
     if minutes / 60 > MAX_HOURS:
         raise Refused("until_too_far")
-    written = widened(previous, end_local, minutes / 60)
+    written = widened(previous, moment.astimezone(zone), end_local, minutes / 60)
     record = {
         "started_at": moment.isoformat(timespec="seconds"),
         "until": end_local.astimezone(timezone.utc).isoformat(timespec="seconds"),
