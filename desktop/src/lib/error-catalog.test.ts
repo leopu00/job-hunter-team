@@ -50,6 +50,9 @@ const NOT_ERRORS: Record<string, string> = {
   working_hours: "key of the team settings JSON, not an error",
   min_window_hours: "key of the lists the team settings answer with, not an error",
   value_invalid: "the box's word for a refused value (team_settings.rs), mapped to team_settings_value_invalid",
+  until_invalid: "the box's word for a burst time it refuses (team_settings.rs), mapped to team_settings_value_invalid",
+  until_too_soon: "the box's word for a burst time under 15 minutes away (team_settings.rs), mapped to team_settings_burst_too_soon",
+  until_too_far: "the box's word for a burst time over 12 hours away (team_settings.rs), mapped to team_settings_burst_too_far",
   // public_pages.rs and app_update.rs: the page reads `ok` and says its own sentence (lib/public-pages.ts); the
   // other word is a field of the project's public release list.
   public_page_unknown: "reply of open_public_page: the page only reads ok and says its own sentence",

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { fill } from "@/lib/text-slots";
+import { fill } from "../../lib/text-slots";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { burstTimeIsValid, readTeamSettings, startBurst, stopBurst, type TeamSettings, type TeamSettingsResult } from "../../lib/team-settings-native";
