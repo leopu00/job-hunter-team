@@ -54,7 +54,20 @@ const READ_ONLY_PATHS = new Set([
  */
 export const LOCAL_TEAM_NON_GET_ALLOWED: Readonly<Record<string, string>> = {
   "/api/i18n": "the window's language cookie: it writes nothing to the team, the VPS or the cloud (answered above, before the gate)",
+  // A key with a method in front allows that method of that path alone; a position's number is written as the route's folder does.
+  "POST /api/positions/[legacyId]/feedback":
+    "the person's verdict on a position of the Swipe: answered by lib/local-judgement-api.ts through local_team_position_judge, which writes it in the database of the team on this computer, on the deck it was read from; never the cloud",
+  "POST /api/positions/[legacyId]/user-exclude":
+    "the person's «not interested» on a position of the Swipe, with its reason: the same native command, an exclusion in the team's own database",
+  "DELETE /api/positions/[legacyId]/user-exclude":
+    "putting an excluded position back: the same native command, the state it had before",
 };
+
+/** Whether a non-GET call is one of those listed above: the path alone, or its method and path with the position's number as the route folder writes it. */
+export function localTeamNonGetAllowed(method: string, path: string): boolean {
+  const generic = path.replace(/^\/api\/positions\/\d+\//, "/api/positions/[legacyId]/");
+  return Object.hasOwn(LOCAL_TEAM_NON_GET_ALLOWED, path) || Object.hasOwn(LOCAL_TEAM_NON_GET_ALLOWED, `${method.toUpperCase()} ${generic}`);
+}
 
 /**
  * web/app/api/i18n/route.ts POST, as the web serves it: a language the app has
@@ -95,7 +108,7 @@ export function shellApi(next: ApiFetch): ApiFetch {
     // The team of this computer is only read, and a local profile has no cloud account to write to: every
     // /api route that is not a GET is refused, except the ones LOCAL_TEAM_NON_GET_ALLOWED lists with its reason.
     // A route added tomorrow is refused with no change here (local-team-writes.test.ts walks them all).
-    if (localTeamData() && path && method !== "GET" && !Object.hasOwn(LOCAL_TEAM_NON_GET_ALLOWED, path)) {
+    if (localTeamData() && path && method !== "GET" && !localTeamNonGetAllowed(method, path)) {
       return json({ error: "read_only" }, 403);
     }
     if (path === "/api/i18n" && method === "GET") {
