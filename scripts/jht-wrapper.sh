@@ -1066,6 +1066,18 @@ require_compose_file() {
 }
 
 compose_file() {
+  # a compose that can change the containers (up, down, stop, restart, rm…) leaves no attestation behind, before or after
+  case "${2:-}" in
+    ps|config|version) compose_file_run "$@"; return $? ;;
+  esac
+  local status=0
+  attest_cache_clear
+  compose_file_run "$@" || status=$?
+  attest_cache_clear
+  return "$status"
+}
+
+compose_file_run() {
   local file="$1"
   shift
   local project
@@ -2428,6 +2440,214 @@ attest_why() {
   printf '%s\n' "$line" > "$JHT_ATTEST_WHY_FILE" 2>/dev/null || true
 }
 
+# ── Cache dell'attestazione (solo Podman, solo il controllo `exact`) ──────────────
+#
+# Ogni lettura dell'app attestava il container da zero: `podman info`, `podman-compose ps -q`, un dry run di
+# podman-compose per ricalcolare la config-hash attesa (oltre un secondo di CPU) e `podman inspect`. Qui si riusa
+# solo cio' che si RICALCOLA (la riga attesa, con la sua hash), mai cio' che si CONFRONTA: a ogni chiamata resta
+# l'inspect dell'id noto e il confronto della riga COMPLETA (progetto, servizio, numero, working_dir, config_files,
+# versione, unit, config-hash, Running) con la riga attesa salvata, piu' l'identita' del container (Id intero e
+# StartedAt: un container ricreato o riavviato non e' piu' quello). L'exec parte sempre per id.
+#
+# - Il file sta nella cartella del runtime (0700, del proprietario, verificata da runtime_bundle_trusted), FUORI da
+#   ogni cartella montata nel container (~/.jht e ~/Documents sono scrivibili dagli agenti, la cache no): un agente
+#   non puo' scriverlo. Modo 0600, rename atomico, lettura a campi chiusi.
+# - La chiave e' il digest di tutto quello che entra nella riga attesa: compose, pin dell'immagine, manifest del
+#   runtime e wrapper, le variabili del chiamante che cambiano l'hash (PODMAN_CALLER_ENV, con il VALORE in digest), il
+#   progetto, l'identita' dei binari podman e podman-compose (percorso, dimensione, data), uid, modalita'.
+# - Scade in 30 secondi (attest_cache_ttl); si cancella a ogni compose che non sia una lettura (up, down, stop, restart…),
+#   a ogni confronto che non torna, a ogni attestazione completa che fallisce. In caso di dubbio: attestazione completa.
+# - Non e' autenticata: protegge dal container, non da un processo dello stesso utente (che puo' gia' scrivere il
+#   wrapper e il suo manifest).
+attest_inspect_format() {
+  printf '%s' '{{.Name}}|{{.State.Running}}|{{index .Config.Labels "io.podman.compose.project"}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "io.podman.compose.service"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.container-number"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "io.podman.compose.version"}}|{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}|{{index .Config.Labels "io.podman.compose.config-hash"}}'
+}
+
+attest_cache_ttl() {
+  printf '%s' 30
+}
+
+# The folders the container mounts (the compose mounts ~/.jht and ~/Documents/Job Hunter Team, or the ones the wrapper was told
+# with JHT_HOME_HOST / JHT_USER_DIR_HOST): an agent can write there, so no cache lives in or under them.
+attest_cache_folder_ok() {
+  local mounted
+  for mounted in "${JHT_HOME_HOST:-$HOME/.jht}" "${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}" "$HOME/.jht" "$HOME/Documents/Job Hunter Team"; do
+    mounted="${mounted%/}"
+    [ -n "$mounted" ] || return 1
+    case "$RUNTIME_DIR/" in "$mounted"/*) return 1 ;; esac
+    case "$mounted/" in "$RUNTIME_DIR"/*) return 1 ;; esac
+  done
+  return 0
+}
+
+# One file per service (the agents' container and the broker are attested one after the other).
+attest_cache_path() {
+  printf '%s/.attest-cache.%s' "$RUNTIME_DIR" "$1"
+}
+
+# With a service: its file. Without: every one of them (a compose that changes the containers).
+attest_cache_clear() {
+  if [ -n "${1:-}" ]; then
+    rm -f -- "$(attest_cache_path "$1")" 2>/dev/null || true
+  else
+    rm -f -- "$RUNTIME_DIR"/.attest-cache.* 2>/dev/null || true
+  fi
+}
+
+attest_cache_text_digest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | awk '{print $1}'
+  else
+    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+  fi
+}
+
+attest_cache_binary_identity() {
+  local meta
+  if [ "$HOST_KERNEL" = Darwin ]; then
+    meta="$(stat -f '%z %m %i %c' "$1" 2>/dev/null)" || return 1
+  else
+    meta="$(stat -c '%s %Y %i %Z' "$1" 2>/dev/null)" || return 1
+  fi
+  printf '%s %s' "$1" "$meta"
+}
+
+# The key, or non-zero when something it needs cannot be read (then there is no cache).
+attest_cache_key() {
+  local service="$1" podman_bin compose_bin name value facts project override=""
+  podman_bin="$(podman_binary 2>/dev/null)" || return 1
+  compose_bin="$(podman_compose_binary 2>/dev/null)" || return 1
+  project="$(compose_project_name 2>/dev/null)" || return 1
+  # The manifest lists the digest of the compose file, the wrapper, the host setup, the runtime selection, the machine,
+  # the docker shim and the image pin, and runtime_bundle_trusted has just checked each against its file: its text IS
+  # their digests, read without a process.
+  facts="attest-cache-v1
+service=$service
+uid=$HOST_UID
+runtime=$CONTAINER_RUNTIME $PODMAN_RUNTIME_MODE $PODMAN_MACHINE_NAME
+project=$project
+podman=$(attest_cache_binary_identity "$podman_bin")
+podman-compose=$(attest_cache_binary_identity "$compose_bin")
+manifest:
+$(<"$RUNTIME_MANIFEST")"
+  if [ "$PODMAN_RUNTIME_MODE" != machine ]; then
+    override="$(podman_native_override_path)" || return 1
+    if [ -f "$override" ]; then
+      facts="$facts
+override=$(runtime_sha256 "$override")"
+    else
+      facts="$facts
+override=none"
+    fi
+  fi
+  if [ -n "${JHT_IMAGE:-}" ]; then
+    facts="$facts
+image=$(attest_cache_text_digest "$JHT_IMAGE")"
+  fi
+  for name in $PODMAN_CALLER_ENV; do
+    value="${!name:-}"
+    if [ -n "$value" ]; then
+      facts="$facts
+env:$name=$(attest_cache_text_digest "$value")"
+    else
+      facts="$facts
+env:$name=-"
+    fi
+  done
+  attest_cache_text_digest "$facts"
+}
+
+# The cache file, read once and with no process: only the seven names it writes, the first line of each, no control
+# character (bytes above 0x7e are fine: a path may be in any language; the C locale makes that the same on every machine). Sets ATTEST_V, ATTEST_KEY, ATTEST_EXPIRES, ATTEST_ID, ATTEST_FULLID, ATTEST_STARTED, ATTEST_LINE; non-zero if any is missing.
+attest_cache_parse() {
+  local LC_ALL=C row name value
+  ATTEST_V="" ATTEST_KEY="" ATTEST_EXPIRES="" ATTEST_ID="" ATTEST_FULLID="" ATTEST_STARTED="" ATTEST_LINE=""
+  while IFS= read -r row || [ -n "$row" ]; do
+    name="${row%%=*}"
+    value="${row#*=}"
+    case "$row" in *=*) ;; *) return 1 ;; esac
+    case "$row" in *[[:cntrl:]]*) return 1 ;; esac
+    case "$name" in
+      v) [ -n "$ATTEST_V" ] || ATTEST_V="$value" ;;
+      key) [ -n "$ATTEST_KEY" ] || ATTEST_KEY="$value" ;;
+      expires) [ -n "$ATTEST_EXPIRES" ] || ATTEST_EXPIRES="$value" ;;
+      id) [ -n "$ATTEST_ID" ] || ATTEST_ID="$value" ;;
+      fullid) [ -n "$ATTEST_FULLID" ] || ATTEST_FULLID="$value" ;;
+      started) [ -n "$ATTEST_STARTED" ] || ATTEST_STARTED="$value" ;;
+      line) [ -n "$ATTEST_LINE" ] || ATTEST_LINE="$value" ;;
+      *) return 1 ;;
+    esac
+  done < "$1"
+  [ -n "$ATTEST_V" ] && [ -n "$ATTEST_KEY" ] && [ -n "$ATTEST_EXPIRES" ] && [ -n "$ATTEST_ID" ] \
+    && [ -n "$ATTEST_FULLID" ] && [ -n "$ATTEST_STARTED" ] && [ -n "$ATTEST_LINE" ]
+}
+
+# Stores what the complete attestation found: the container id as `ps -q` gave it, its full Id and StartedAt, and
+# the exact line it matched. Non-zero if anything cannot be read: the caller then leaves no cache.
+attest_cache_store() {
+  local service="$1" found="$2" expected_line="$3" key identity full_id started file tmp now
+  case "$service" in ''|*[!a-z-]*) return 1 ;; esac
+  attest_cache_folder_ok || return 1
+  key="$(attest_cache_key "$service")" || return 1
+  identity="$(docker inspect --type container "$found" --format '{{.Id}}|{{.State.StartedAt}}' 2>/dev/null)" || return 1
+  full_id="${identity%%|*}"
+  started="${identity#*|}"
+  printf '%s' "$full_id" | grep -Eq '^[0-9a-f]{64}$' || return 1
+  printf '%s' "$started" | grep -Eq '^[0-9TZ:.+ A-Za-z_=-]{1,64}$' || return 1
+  printf '%s' "$found" | grep -Eq '^[0-9a-f]{12,64}$' || return 1
+  case "$full_id" in "$found"*) ;; *) return 1 ;; esac
+  [ -z "$(printf '%s' "$expected_line" | LC_ALL=C tr -d '\040-\176\200-\377')" ] || return 1
+  now="$(date +%s)" || return 1
+  file="$(attest_cache_path "$service")"
+  tmp="$file.tmp.$$"
+  (
+    umask 077
+    {
+      printf 'v=1\n'
+      printf 'key=%s\n' "$key"
+      printf 'expires=%s\n' "$((now + $(attest_cache_ttl)))"
+      printf 'id=%s\n' "$found"
+      printf 'fullid=%s\n' "$full_id"
+      printf 'started=%s\n' "$started"
+      printf 'line=%s\n' "$expected_line"
+    } > "$tmp"
+  ) 2>/dev/null || { rm -f -- "$tmp"; return 1; }
+  chmod 600 "$tmp" 2>/dev/null || { rm -f -- "$tmp"; return 1; }
+  mv -f -- "$tmp" "$file" 2>/dev/null || { rm -f -- "$tmp"; return 1; }
+}
+
+# Prints the container id when a cache written within the last 30 seconds still holds in full: same
+# key, same container (Id, StartedAt), and the container's labels equal the saved expected line, field by field.
+# Any other answer clears the cache and returns non-zero: the complete attestation follows.
+attest_cache_lookup() {
+  local service="$1" file key now details seen_full seen_started
+  case "$service" in ''|*[!a-z-]*) return 1 ;; esac
+  attest_cache_folder_ok || return 1
+  file="$(attest_cache_path "$service")"
+  [ -e "$file" ] || [ -L "$file" ] || return 1
+  runtime_node_safe "$file" file || { attest_cache_clear "$service"; return 1; }
+  attest_cache_parse "$file" || { attest_cache_clear "$service"; return 1; }
+  [ "$ATTEST_V" = 1 ] || { attest_cache_clear "$service"; return 1; }
+  key="$(attest_cache_key "$service")" || { attest_cache_clear "$service"; return 1; }
+  [ "$ATTEST_KEY" = "$key" ] || { attest_cache_clear "$service"; return 1; }
+  [[ "$ATTEST_EXPIRES" =~ ^[0-9]{1,12}$ ]] || { attest_cache_clear "$service"; return 1; }
+  [[ "$ATTEST_ID" =~ ^[0-9a-f]{12,64}$ ]] || { attest_cache_clear "$service"; return 1; }
+  [[ "$ATTEST_FULLID" =~ ^[0-9a-f]{64}$ ]] || { attest_cache_clear "$service"; return 1; }
+  now="$(date +%s)" || return 1
+  { [ "$now" -lt "$ATTEST_EXPIRES" ] && [ "$((ATTEST_EXPIRES - now))" -le "$(attest_cache_ttl)" ]; } || { attest_cache_clear "$service"; return 1; }
+  case "$ATTEST_LINE" in "$service|true|"*) ;; *) attest_cache_clear "$service"; return 1 ;; esac
+  # the container is read again, by id, with the same format the complete attestation compares
+  details="$(docker inspect --type container "$ATTEST_ID" --format "$(attest_inspect_format)|{{.Id}}|{{.State.StartedAt}}" 2>/dev/null)" \
+    || { attest_cache_clear "$service"; return 1; }
+  seen_started="${details##*|}"
+  details="${details%|*}"
+  seen_full="${details##*|}"
+  details="${details%|*}"
+  [ "$seen_full" = "$ATTEST_FULLID" ] && [ "$seen_started" = "$ATTEST_STARTED" ] && [ "$details" = "$ATTEST_LINE" ] \
+    || { attest_cache_clear "$service"; return 1; }
+  printf '%s\n' "$ATTEST_ID"
+}
+
 # Risolve il container di un servizio tramite l'esatto progetto Compose JHT
 # senza bootstrap, wake o auto-up. Un container omonimo non e' mai sufficiente.
 # Il progetto ha due servizi: `jht` (agenti) e `jht-broker` (segreti dei
@@ -2436,8 +2656,26 @@ attest_why() {
 # progetto JHT la cui config-hash non e' piu' quella del compose attuale, cioe'
 # avviato prima di una reinstallazione. Ogni altra etichetta resta obbligatoria.
 read_only_service_id() {
-  local service="$1" config_check="${2:-exact}"
+  local service="$1" config_check="${2:-exact}" cached="" status=0
   runtime_bundle_trusted || return 1
+  # Podman recalculates the expected configuration hash with a dry run of podman-compose (more than a second of CPU)
+  # on every call. What is reused is what is RECALCULATED; what is COMPARED is still compared in full, every time
+  # (see attest_cache_lookup). Anything else, and any failure, is the complete attestation below.
+  # JHT_ATTEST_CACHE=0 turns it off (only off: nothing in the environment can make it more trusting).
+  if [ "$CONTAINER_RUNTIME" = podman ] && [ "$config_check" = exact ] && [ "${JHT_ATTEST_CACHE:-1}" != 0 ]; then
+    if cached="$(attest_cache_lookup "$service")" && [ -n "$cached" ]; then
+      printf '%s\n' "$cached"
+      return 0
+    fi
+  fi
+  read_only_service_id_attest "$service" "$config_check" || status=$?
+  # A refusal never leaves a cache behind
+  [ "$status" -eq 0 ] || attest_cache_clear "$service"
+  return "$status"
+}
+
+read_only_service_id_attest() {
+  local service="$1" config_check="${2:-exact}" cacheable=0 expected_line=""
   docker_reachable || return 1
   local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped seen_hash clean_hash
   if [ "$CONTAINER_RUNTIME" = podman ]; then
@@ -2477,7 +2715,7 @@ read_only_service_id() {
   fi
   for container_id in $ids; do
     if [ "$CONTAINER_RUNTIME" = podman ]; then
-      details="$(docker inspect --type container "$container_id" --format '{{.Name}}|{{.State.Running}}|{{index .Config.Labels "io.podman.compose.project"}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "io.podman.compose.service"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{index .Config.Labels "com.docker.compose.container-number"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "io.podman.compose.version"}}|{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}|{{index .Config.Labels "io.podman.compose.config-hash"}}' 2>/dev/null)" \
+      details="$(docker inspect --type container "$container_id" --format "$(attest_inspect_format)" 2>/dev/null)" \
         || return 1
       # Quinto campo: il servizio. Un altro servizio del compose (jht o
       # jht-broker) si salta; un servizio che il compose non ha e' un
@@ -2519,8 +2757,10 @@ read_only_service_id() {
           fi
           ;;
       esac
-      [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
-        || return 1
+      expected_line="$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash"
+      [ "$details" = "$expected_line" ] || return 1
+      # what a later call may reuse (attest_cache_store): a running container that matched the line in full
+      [ "$stopped" -ne 0 ] || [ "$config_check" != exact ] || cacheable=1
       # A stopped container is not a running one, except for the checks that stop or recreate it.
       case "$config_check" in
         any-config|stopped-stale-config) ;;
@@ -2537,6 +2777,9 @@ read_only_service_id() {
     found="$container_id"
   done
   [ -n "$found" ] || return 3
+  if [ "$cacheable" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] && [ "${JHT_ATTEST_CACHE:-1}" != 0 ]; then
+    attest_cache_store "$service" "$found" "$expected_line" || attest_cache_clear "$service"
+  fi
   printf '%s\n' "$found"
 }
 
