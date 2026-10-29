@@ -71,6 +71,7 @@
   "wizard.provider.install_failed_continue": "Instalación de la CLI fallida. ¿Guardar la configuración igualmente y gestionarlo a mano?",
   "wizard.oauth.notify_title": "Inicio de sesión %s (en otra terminal)",
   "wizard.oauth.notify_body": "Ahora abre otra terminal en tu ordenador, entra por SSH al VPS\n(el mismo comando ssh que usaste al inicio), y ejecuta:\n\n      jht oauth-login\n\nSe abre el TUI de %s:\n  1. abre en el navegador la URL impresa\n  2. inicia sesión con tu cuenta %s\n  3. pega el código y cuando veas \"authenticated\" sal con /quit\n\nEstoy vigilando el sistema de archivos: en cuanto detecte las credenciales\nseguiré automáticamente. Aquí no hay que pulsar nada.",
+  "wizard.oauth.notify_body_local": "Ahora abre otra terminal en este ordenador y ejecuta:\n\n      jht oauth-login\n\nSe abre el TUI de %s:\n  1. abre en el navegador la URL impresa\n  2. inicia sesión con tu cuenta %s\n  3. pega el código y cuando veas \"authenticated\" sal con /quit\n\nEstoy vigilando el sistema de archivos: en cuanto detecte las credenciales\nseguiré automáticamente. Aquí no hay que pulsar nada.",
   "wizard.oauth.waiting": "Esperando el inicio de sesión %s...",
   "wizard.oauth.timeout": "Tiempo agotado (30 min). Inicio de sesión no detectado.",
   "wizard.oauth.detected": "Inicio de sesión %s detectado (%s)",

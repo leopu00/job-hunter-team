@@ -3113,8 +3113,13 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control')) {
 # `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
 # cioe' il primo comando di chi non ha ancora deciso se installare (P-07).
 switch ($Sub) {
-  { $_ -in @('-h', '--help', 'help', '') } {
+  { $_ -in @('-h', '--help', '') } {
     exit (Invoke-HelpWithoutDocker '--help')
+  }
+
+  # `jht help` is the LONG list: the short help sends the person to it, so it must not answer with the short one.
+  'help' {
+    exit (Invoke-HelpWithoutDocker 'help')
   }
 
   { $_ -in @('-V', '--version', 'version') } {
