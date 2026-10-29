@@ -2417,6 +2417,17 @@ podman_expected_config_hash() {
   printf '%s\n' "$hash"
 }
 
+# Why the provider could not list the project (the first line of what it said, or its exit code), for `jht status` to show:
+# written to the file named by JHT_ATTEST_WHY_FILE when there is one, nowhere else. At most 200 characters, control characters
+# out, never the environment: it is what podman-compose prints to stderr.
+attest_why() {
+  local status="$1" file="$2" line=""
+  [ -n "${JHT_ATTEST_WHY_FILE:-}" ] || return 0
+  [ "$file" = /dev/null ] || line="$(sed -n '/[^[:space:]]/{p;q;}' "$file" 2>/dev/null | LC_ALL=C tr -d '\000-\037\177' | sed 's/^[[:space:]]*//' | cut -c1-200)"
+  [ -n "$line" ] || line="provider exit code $status, nothing said"
+  printf '%s\n' "$line" > "$JHT_ATTEST_WHY_FILE" 2>/dev/null || true
+}
+
 # Risolve il container di un servizio tramite l'esatto progetto Compose JHT
 # senza bootstrap, wake o auto-up. Un container omonimo non e' mai sufficiente.
 # Il progetto ha due servizi: `jht` (agenti) e `jht-broker` (segreti dei
@@ -2433,7 +2444,15 @@ read_only_service_id() {
     # podman-compose 1.6.0 non accetta un operando service su `ps`: elenca
     # tutti i container del progetto, e il servizio lo dice l'inspect
     # attestato qui sotto.
-    ids="$(compose_file "$COMPOSE_FILE" ps -q 2>/dev/null)" || return 1
+    local ps_err="" ps_status=0
+    ps_err="$(mktemp "${TMPDIR:-/tmp}/jht-attest.XXXXXX" 2>/dev/null)" || ps_err=/dev/null
+    ids="$(compose_file "$COMPOSE_FILE" ps -q 2>"$ps_err")" || ps_status=$?
+    if [ "$ps_status" -ne 0 ]; then
+      attest_why "$ps_status" "$ps_err"
+      [ "$ps_err" = /dev/null ] || rm -f -- "$ps_err"
+      return 1
+    fi
+    [ "$ps_err" = /dev/null ] || rm -f -- "$ps_err"
   else
     ids="$(compose_file "$COMPOSE_FILE" ps -q "$service" 2>/dev/null)" || return 1
   fi
@@ -5116,20 +5135,30 @@ case "$SUB" in
       printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
       exit 1
     fi
+    why_file="$(mktemp "${TMPDIR:-/tmp}/jht-why.XXXXXX" 2>/dev/null)" || why_file=""
+    JHT_ATTEST_WHY_FILE="$why_file"
     if container_id="$(read_only_container_id)"; then
+      JHT_ATTEST_WHY_FILE=""
+      [ -z "$why_file" ] || rm -f -- "$why_file"
       docker inspect "$container_id" --format \
         'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
     else
+      attest_status=$?
+      JHT_ATTEST_WHY_FILE=""
       # 3 = the project has no such container; anything else = a container is there and cannot be attested.
       # Saying «non attivo» for the second hid a team that was running (TEST 19g).
-      if [ "$?" -eq 3 ]; then
+      if [ "$attest_status" -eq 3 ]; then
         printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
       else
         printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
         if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
           printf "  Nell'ambiente di questo terminale sono impostate: %s. Il container e' stato creato senza: togli la variabile (unset) e riprova.\n" "$(podman_caller_env_names)"
         fi
+        if [ -n "$why_file" ] && [ -s "$why_file" ]; then
+          printf "  Il provider ha detto: %s\n" "$(head -n 1 "$why_file")"
+        fi
       fi
+      [ -z "$why_file" ] || rm -f -- "$why_file"
       exit 1
     fi
     ;;
