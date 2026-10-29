@@ -490,12 +490,13 @@ export default function DirectChatScreen({
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
-    // Slow link only: the wait after ssh_rate_limited (0: none), and whether the window can be seen.
+    // Slow link only: the wait after ssh_rate_limited (0: none). Whether the window can be seen counts on every link.
     let backoff = 0;
     let visible = document.visibilityState !== "hidden";
     let focused = true;
     let waitingForWindow = false;
-    const paused = () => slowLink && !(visible && focused);
+    // A window that cannot be seen reads nothing, on any link; only the slow link also waits for the focus.
+    const paused = () => (slowLink ? !(visible && focused) : !visible);
     const pace = () => {
       if (!slowLink) return HISTORY_POLL_MS;
       return Date.now() - lastSentAt.current > AFTER_SEND_FAST_MS ? SLOW_LINK_IDLE_MS : SLOW_LINK_AFTER_SEND_MS;
