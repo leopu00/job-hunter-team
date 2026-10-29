@@ -86,19 +86,17 @@ export default function DocumentPreview({
     };
   }, [api, request.name, attempt]);
 
-  // The text, when its tab is asked for.
+  // The text, when its tab is asked for: once, and it lands whichever tab the person is on by then.
+  const textAsked = useRef(false);
   useEffect(() => {
-    if (tab !== "text" || text.state !== "idle" || !request.textName) return;
-    let live = true;
+    if (tab !== "text" || textAsked.current || !request.textName) return;
+    textAsked.current = true;
     setText({ state: "loading" });
     api.text(request.textName).then(
-      (markdown) => { if (live) setText({ state: "ready", value: parseMarkdown(markdown) }); },
-      (error) => { if (live) setText({ state: "failed", code: previewErrorCode(error) }); },
+      (markdown) => { if (alive.current) setText({ state: "ready", value: parseMarkdown(markdown) }); },
+      (error) => { if (alive.current) setText({ state: "failed", code: previewErrorCode(error) }); },
     );
-    return () => {
-      live = false;
-    };
-  }, [api, request.textName, tab, text.state]);
+  }, [api, request.textName, tab]);
 
   const act = useCallback(
     async (kind: "save" | "open") => {

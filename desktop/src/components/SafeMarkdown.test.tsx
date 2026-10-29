@@ -41,7 +41,11 @@ describe("a document drawn in the app", () => {
         expect(attribute.value, `${element.tagName}[${attribute.name}]`).not.toMatch(/javascript:|data:|https?:/i);
       }
     }
-    const text = container.textContent ?? "";
+    // a code block shows its text as text, so the markup check looks at everything else
+    const outside = container.cloneNode(true) as HTMLElement;
+    outside.querySelectorAll("pre").forEach((block) => block.remove());
+    const text = outside.textContent ?? "";
+    expect(container.querySelector("pre code")?.textContent).toBe("<script>alert(2)</script>");
     expect(text).toContain("Title");
     expect(text).toContain("click me");
     expect(text).toContain("(javascript:alert(1");

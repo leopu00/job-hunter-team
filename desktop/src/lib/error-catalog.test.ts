@@ -40,6 +40,14 @@ const NOT_ERRORS: Record<string, string> = {
       "label_image", "label_windows",
     ].map((word) => [word, "reason word of runtime.log beside a container check failure, never shown to the person"]),
   ),
+  // private_copy.rs: the extensions a private copy of a document can have, from a fixed list in the module. Words of a file
+  // name, never an error the person is told.
+  ...Object.fromEntries(
+    ["pdf", "docx", "odt", "rtf", "xlsx", "ods", "pptx", "odp", "png", "jpg", "gif", "webp", "txt", "md"].map((extension) => [
+      extension,
+      "extension of the private copy of a document (private_copy.rs), never shown as an error",
+    ]),
+  ),
   // team_settings.rs: the verbs of `jht team-settings`, the keys of the settings the page edits, and the
   // box's own word for a refused value, which is mapped to team_settings_value_invalid before the person sees it.
   apply: "verb of the team-settings command, not an error",
