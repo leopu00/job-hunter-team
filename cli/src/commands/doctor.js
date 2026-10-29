@@ -7,6 +7,7 @@ import pc from 'picocolors'
 import { JHT_HOME } from '../jht-paths.js';
 import { isInteractive } from './_colors.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
+import { LATEST_CONFIG_VERSION } from './migrate.js'
 
 /**
  * Spinner solo su TTY. [CLI-OUTPUT-NOT-MACHINE-SAFE]
@@ -66,7 +67,7 @@ async function checkConfig() {
   const cfg = await readConfigAsync()
   if (!cfg) return { ok: false, msg: 'Invalid config JSON', hint: 'Run: jht setup --reset' }
   const v = cfg.version ?? 1
-  if (v < 4) return { warn: true, msg: `Config v${v} — update available`, hint: 'Run: jht migrate' }
+  if (v < LATEST_CONFIG_VERSION) return { warn: true, msg: `Config v${v} — update available`, hint: 'Run: jht migrate' }
   return { ok: true, msg: `Config v${v} valid` }
 }
 
