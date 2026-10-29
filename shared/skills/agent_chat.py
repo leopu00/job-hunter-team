@@ -524,10 +524,17 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
     if width < _WRAPPED_MARKER_MIN:
         return 0
     run: list[str] = []
-    for _raw, plain in lines[index + 1:]:
+    consumed = 0
+    for offset, (_raw, plain) in enumerate(lines[index + 1:], 1):
         if not plain.strip():
+            # A message that holds an empty line (the Dottore's [UNBLOCK], TEST 19f) is drawn with a blank row between
+            # its rows. One blank row does not end the draft when more text follows it; it ends it when nothing
+            # (or only the model line) does.
+            if offset - consumed == 1 and _text_row_follows(lines[index + 1 + offset:]):
+                continue
             break
         run.append(plain)
+        consumed = offset
     if not run or len(run) > _WRAPPED_ROWS_MAX:
         return 0
     if any(_composer_match(row) or _BORDER.match(row) or _status_line_busy(row)
@@ -535,7 +542,16 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
         return 0
     if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
         return 0
-    return len(run)
+    return consumed
+
+
+def _text_row_follows(below: list[tuple[str, str]]) -> bool:
+    """The next non-blank row is text (not the model line or a hint of the footer, not a border)."""
+    for _raw, plain in below:
+        if plain.strip():
+            return not (_CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain) or _BORDER.match(plain)
+                        or _composer_match(plain) or _NUMBERED_OPTION.match(plain) or _status_line_busy(plain))
+    return False
 
 
 def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
