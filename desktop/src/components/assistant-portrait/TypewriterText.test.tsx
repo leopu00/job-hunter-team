@@ -54,6 +54,16 @@ describe("the typewriter", () => {
     expect(result.current.done).toBe(true);
   });
 
+  it("keeps the rest it showed on skip when the timer ticks again, and stops the timer", async () => {
+    const { result } = renderHook(() => useTypewriter("Una battuta abbastanza lunga da non finire subito."));
+    await advance(100);
+    act(() => result.current.skip());
+    await advance(100);
+    expect(result.current.shown).toBe("Una battuta abbastanza lunga da non finire subito.");
+    expect(result.current.done).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("is all there from the first frame when it is off, or for a person who asked for less motion", () => {
     const off = renderHook(() => useTypewriter("Tutto subito", { enabled: false }));
     expect(off.result.current).toMatchObject({ shown: "Tutto subito", done: true });
