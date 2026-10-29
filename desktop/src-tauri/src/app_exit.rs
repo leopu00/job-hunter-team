@@ -163,6 +163,11 @@ pub(crate) struct ExitError {
 }
 
 fn local_destination(app: &tauri::AppHandle, scope: &crate::account_scope::AccountScope) -> Result<TeamHost, &'static str> {
+    // No owner marker in this computer's JHT folder: no team lives here yet, so there is nothing to stop, and looking
+    // must not claim the folder for whoever closes the app first (the destination's own check claims an unowned one).
+    if crate::account_scope::local_owner_marker_path(app).is_ok_and(|marker| !marker.exists()) {
+        return Ok(TeamHost::None);
+    }
     match destination(app, scope) {
         Ok((Destination::Local { .. }, _)) => Ok(TeamHost::Local),
         Ok(_) => Ok(TeamHost::Vps),
