@@ -23,17 +23,19 @@ const T = APP_EXIT_TEXT.it;
 
 interface Team {
   host?: "local" | "vps" | "none";
+  /** Containers that are not the team's on its machine, as the native side counts them. */
+  others?: unknown;
   /** What each poll answers, in order; the last one repeats. */
   polls?: { ready: boolean; active: number }[];
   failing?: Record<string, string>;
 }
 
 /** The native side as a team on `host`. */
-function team({ host = "local", polls = [{ ready: true, active: 0 }], failing = {} }: Team = {}) {
+function team({ host = "local", others, polls = [{ ready: true, active: 0 }], failing = {} }: Team = {}) {
   let poll = 0;
   native.invoke.mockImplementation(async (command: string) => {
     if (failing[command]) throw { code: failing[command] };
-    if (command === "app_exit_state") return { team: host };
+    if (command === "app_exit_state") return others === undefined ? { team: host } : { team: host, otherContainers: others };
     if (command === "app_exit_poll") return polls[Math.min(poll++, polls.length - 1)];
     return undefined;
   });
@@ -75,6 +77,42 @@ describe("AppExitDialog", () => {
     expect(calls()).toEqual(["app_exit_ack", "app_exit_state"]);
     await userEvent.click(await screen.findByTestId(`app-exit-${mode}`));
     await waitFor(() => expect(calls()).toContain(expected));
+  });
+
+  it("says before the choice that the machine stays on when other containers use it", async () => {
+    team({ others: 2 });
+    render(<AppExitDialog />);
+    await closeButton();
+    expect(await screen.findByTestId("app-exit-others")).toHaveTextContent(fill(T.othersKept, { count: 2 }));
+    // the three ways are still offered, and the note is not an obstacle
+    for (const mode of ["ordered", "forced", "detach"]) expect(screen.getByTestId(`app-exit-${mode}`)).toBeInTheDocument();
+  });
+
+  it.each([[0], [undefined], ["2"], [-1], [1.5]])("says nothing about other containers when the native side says %s", async (others) => {
+    team({ others });
+    render(<AppExitDialog />);
+    await closeButton();
+    await screen.findByTestId("app-exit-ordered");
+    expect(screen.queryByTestId("app-exit-others")).toBeNull();
+  });
+
+  it("says the state of the machine is unknown, and not the generic failure, when the native side could not read it", async () => {
+    team({ failing: { app_exit_finish: "app_exit_machine_state_unknown" } });
+    render(<AppExitDialog />);
+    await closeButton();
+    await userEvent.click(await screen.findByTestId("app-exit-forced"));
+    expect(await screen.findByTestId("app-exit-failed")).toHaveTextContent(T.machineUnknown);
+    expect(screen.getByTestId("app-exit-failed")).not.toHaveTextContent(T.failed);
+    // the app stays open and the three ways are offered again
+    for (const mode of ["ordered", "forced", "detach"]) expect(screen.getByTestId(`app-exit-${mode}`)).toBeInTheDocument();
+  });
+
+  it("keeps the generic sentence for any other failure of the stop", async () => {
+    team({ failing: { app_exit_finish: "app_exit_machine_not_stopped" } });
+    render(<AppExitDialog />);
+    await closeButton();
+    await userEvent.click(await screen.findByTestId("app-exit-forced"));
+    expect(await screen.findByTestId("app-exit-failed")).toHaveTextContent(T.failed);
   });
 
   it("offers the three ways for a team on this computer", async () => {

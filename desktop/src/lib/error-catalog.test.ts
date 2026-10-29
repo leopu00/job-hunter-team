@@ -69,6 +69,8 @@ const NOT_ERRORS: Record<string, string> = {
   // app_exit.rs: the codes the exit dialog receives. It tells the person its own sentence for any failure
   // (AppExitDialog.i18n.ts `failed`, seven languages) and keeps the app open: the code itself is never shown.
   app_exit_down_failed: "the exit dialog says its own sentence and keeps the app open",
+  app_exit_machine_state_unknown: "the exit dialog says its own sentence (the state of the machine is unknown) and keeps the app open",
+  app_exit_machine_not_stopped: "the exit dialog says its own sentence and keeps the app open",
   app_exit_no_container: "the exit dialog says its own sentence and keeps the app open",
   app_exit_order_not_sent: "the exit dialog says its own sentence and keeps the app open",
   app_exit_unanswered: "the exit dialog says its own sentence and keeps the app open",

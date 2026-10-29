@@ -22,7 +22,7 @@ describe("the exit's native commands are reachable only from the exit dialog", (
   });
 
   it("calls those wrappers from the dialog and from nowhere else", () => {
-    expect(filesUsing(/\b(?:exitOrder|exitPoll|exitFinish|exitTeam)\b/)).toEqual(["components/AppExitDialog.tsx", "lib/app-exit.ts"]);
+    expect(filesUsing(/\b(?:exitOrder|exitPoll|exitFinish|exitState)\b/)).toEqual(["components/AppExitDialog.tsx", "lib/app-exit.ts"]);
   });
 
   it("calls them inside the dialog only from the paths a choice opens (the three ways and the wait of the ordered one)", () => {
