@@ -388,11 +388,26 @@ def record_round(round_id: str, found: int, cleared: int, duration_sec=None,
 
 # ── scan ─────────────────────────────────────────────────────────────────────
 
+def team_started(home: Path | None = None) -> bool:
+    """False SOLO quando il primo avvio dice che il team non e' ancora partito (`awaiting_profile`: il profilo o il
+    piano mancano e nessuno ha aperto il burst). Prima di allora un Capitano muto e gli operativi fermi sono lo stato
+    NORMALE, non un blocco: lo sblocco del Dottore scriveva «CAPITANO is idle» all'Assistente (TEST 19f), che lo
+    lasciava nella casella e non sentiva piu' la risposta della persona alla card. Uno stato che non si legge, o
+    assente, vale «partito»: il comportamento di sempre."""
+    path = (home or jht_home()) / "state" / "first-run.json"
+    try:
+        phase = json.loads(path.read_text(encoding="utf-8")).get("phase")
+    except (OSError, ValueError, AttributeError):
+        return True
+    return phase != "awaiting_profile"
+
+
 def build_scan(pane_states: dict, messages: list, now=None,
-               mute_after_min: int = 45) -> dict:
+               mute_after_min: int = 45, started: bool = True) -> dict:
     """Funzione PURA: dai pane + messages.jsonl, l'elenco dei blocchi.
 
-    `pane_states` = {SESSION: classify_pane(...)}.
+    `pane_states` = {SESSION: classify_pane(...)}. `started` e' `team_started()`: con il team non ancora partito
+    il silenzio del Capitano e gli operativi fermi non sono blocchi (restano quelli di un pane con una riga appesa).
     """
     now = now or _now()
     blocks = []
@@ -425,7 +440,7 @@ def build_scan(pane_states: dict, messages: list, now=None,
     operatives = [s for s in pane_states
                   if any(s == p or s.startswith(p + "-") for p in OPERATIVE_PREFIXES)]
     idle_ops = [s for s in operatives if pane_states[s].get("state") == "idle"]
-    if operatives and len(idle_ops) == len(operatives):
+    if started and operatives and len(idle_ops) == len(operatives):
         blocks.append({
             "kind": "all_operatives_idle", "session": ",".join(sorted(idle_ops)),
             "cure": "kick off operational roles WITHOUT waiting for the coordinator",
@@ -440,7 +455,7 @@ def build_scan(pane_states: dict, messages: list, now=None,
         ts = _parse_iso(d.get("ts"))
         if ts and (last_captain is None or ts > last_captain):
             last_captain = ts
-    if last_captain is None or (now - last_captain) > timedelta(minutes=mute_after_min):
+    if started and (last_captain is None or (now - last_captain) > timedelta(minutes=mute_after_min)):
         if "CAPITANO" in pane_states:
             blocks.append({
                 "kind": "mute_coordinator", "session": "CAPITANO",
@@ -457,7 +472,7 @@ def scan() -> dict:
     states = {}
     for s in agent_sessions():
         states[s] = classify_pane(capture(s))
-    return build_scan(states, read_messages())
+    return build_scan(states, read_messages(), started=team_started())
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
