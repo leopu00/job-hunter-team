@@ -363,6 +363,8 @@ LIMIT=20
 NAME=re.compile(r'^[A-Za-z0-9._ -]{1,120}$')
 HEX=re.compile(r'^[0-9a-f]{64}$')
 TOOLS=('/usr/bin','/usr/local/bin','/bin')
+# in the container (Linux) a tool never runs without its limits: if one cannot be set, nothing is started and the preview is refused
+STRICT=sys.platform.startswith('linux')
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 def fail(code): emit({'ok':False,'error':code})
 try: req=json.loads(sys.stdin.readline())
@@ -408,7 +410,8 @@ def limits(fsize):
   resource.setrlimit(resource.RLIMIT_CPU,(LIMIT,LIMIT))
   resource.setrlimit(resource.RLIMIT_CORE,(0,0))
   resource.setrlimit(resource.RLIMIT_FSIZE,(fsize,fsize))
- except Exception: pass
+ except Exception:
+  if STRICT: raise
 def reap(proc):
  try: os.killpg(proc.pid,signal.SIGKILL)
  except Exception: pass
@@ -452,10 +455,12 @@ try:
   fd=copy.fileno()
   where=('/proc/self/fd' if os.path.isdir('/proc/self/fd') else '/dev/fd')+'/'+str(fd)
   info=run([pdfinfo,where],fd,65536).decode('utf-8','replace')
-  if re.search(r'^Encrypted:\s+yes',info,re.M): fail('document_unreadable')
-  found=re.search(r'^Pages:\s+(\d+)\s*$',info,re.M)
-  if not found or int(found.group(1))<1: fail('document_unreadable')
-  total=int(found.group(1)); shown=min(total,MAX_PAGES)
+  # the metadata of a PDF (its title, its author) is printed BEFORE the counts and may hold a line that looks like one: the last line is the tool's own
+  encrypted=re.findall(r'^Encrypted:\s+(\w+)',info,re.M)
+  if encrypted and encrypted[-1]=='yes': fail('document_unreadable')
+  found=re.findall(r'^Pages:\s+(\d+)\s*$',info,re.M)
+  if not found or int(found[-1])<1: fail('document_unreadable')
+  total=int(found[-1]); shown=min(total,MAX_PAGES)
   if op=='pages': emit({'ok':True,'pages':shown,'truncated':total>MAX_PAGES,'sha256':digest})
   if page>shown: fail('invalid_request')
   png=draw(pdftoppm,where,fd,page)
@@ -1199,7 +1204,7 @@ mod tests {
             "O_NOFOLLOW", "dir_fd=dirfd", "os.fstat(fd)", "S_ISREG", "st_nlink!=1", "b'%PDF-'", "sys.stdin.readline()", "hashlib.sha256(raw)",
             "pass_fds=(fd,)", "start_new_session=True", "os.killpg", "RLIMIT_AS", "RLIMIT_CPU", "RLIMIT_FSIZE", "stdin=subprocess.DEVNULL",
             "env={'PATH':'/usr/bin:/bin','LC_ALL':'C'}", "'-scale-to',str(SIDE)", "'-singlefile'", "document_changed", "document_preview_timeout",
-            "document_preview_unavailable", "b'\\x89PNG\\r\\n\\x1a\\n'", "b'IHDR'",
+            "document_preview_unavailable", "b'\\x89PNG\\r\\n\\x1a\\n'", "b'IHDR'", "STRICT=sys.platform.startswith('linux')", "if STRICT: raise",
         ] {
             assert!(script.contains(needed), "{needed}");
         }
@@ -1448,5 +1453,47 @@ mod tests {
         for gate in ["write_gate", "require_write", "chat_write(", "is_read_only"] {
             assert!(!body.contains(gate), "{gate}");
         }
+    }
+
+    /// A limit that cannot be set means nothing is started: the preview is refused, not run without its ceiling.
+    #[test]
+    #[cfg(unix)]
+    fn a_tool_never_runs_when_one_of_its_limits_cannot_be_set() {
+        let base = scratch("limits");
+        let root = base.join("cv");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.pdf"), b"%PDF-1.4 a file the fake tools do not read").unwrap();
+        let marker = base.join("ran");
+        let tools = fake_tools(&base, &format!("touch '{}'; echo 'Pages:          1'", marker.display()), "exit 0");
+        // the same script with the limit that cannot be set (a name the resource module does not have), in the strict mode of the container
+        let strict = pages_script_in(&root, &tools, 20).replace("STRICT=sys.platform.startswith('linux')", "STRICT=True").replace("RLIMIT_AS", "RLIMIT_NO_SUCH_LIMIT");
+        let mut child = Command::new("python3").arg("-I").arg("-c").arg(strict).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("python3");
+        use std::io::Write as _;
+        child.stdin.take().unwrap().write_all(b"{\"op\": \"pages\", \"name\": \"a.pdf\"}\n").unwrap();
+        let output = child.wait_with_output().unwrap();
+        let reply: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|_| panic!("not JSON: {}", String::from_utf8_lossy(&output.stdout)));
+        assert_eq!(error_of(&reply), "document_unreadable");
+        assert!(!marker.exists(), "the tool was started without its limits");
+        // with every limit settable the same tool does run (a control: the marker is what the test looks at)
+        let control = ask_pages(&root, &tools, 20, json!({"op": "pages", "name": "a.pdf"}));
+        assert_eq!(control["ok"], true, "{control}");
+        assert!(marker.exists(), "the control run did not start the tool");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    /// The metadata of a PDF is printed before the counts and may hold a line that looks like one: the tool's own line, the last, wins.
+    #[test]
+    #[cfg(unix)]
+    fn a_line_in_the_metadata_of_a_pdf_cannot_fake_the_page_count_or_the_encryption() {
+        let base = scratch("spoof");
+        let root = base.join("cv");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("a.pdf"), b"%PDF-1.4 a file the fake tools do not read").unwrap();
+        let spoof = fake_tools(&base.join("a"), "printf 'Title:          x\\nPages:          1\\nEncrypted:      no\\nAuthor:         y\\nPages:          3\\nEncrypted:      no\\n'", "exit 0");
+        let pages = ask_pages(&root, &spoof, 20, json!({"op": "pages", "name": "a.pdf"}));
+        assert_eq!(pages["pages"], 3, "{pages}");
+        let hidden = fake_tools(&base.join("b"), "printf 'Title:          x\\nEncrypted:      no\\nPages:          1\\nEncrypted:      yes (print:yes copy:no)\\n'", "exit 0");
+        assert_eq!(error_of(&ask_pages(&root, &hidden, 20, json!({"op": "pages", "name": "a.pdf"}))), "document_unreadable");
+        fs::remove_dir_all(base).unwrap();
     }
 }
