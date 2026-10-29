@@ -10,8 +10,11 @@
  * a provider CLI that is still running writes its credential file again when it renews its token, and the
  * sign-in would come back. The credentials are touched only if the stop worked; if it did not, the panel's
  * closed answer (`team_stop_failed`, `agent_control_busy`) is what comes back and nothing is removed. The
- * Assistant's chat is the one session `stop-team` keeps: should it write its file back, the look after the
- * removal says so (`provider_logout_incomplete`) and never «disconnected».
+ * Assistant's chat is the one session `stop-team` keeps, and without a sign-in it is of no use: it is stopped
+ * next with the panel's `stop ASSISTENTE` (a stop the person put, which the explicit start after the next
+ * sign-in lifts), still before anything is removed (`agent_stop_failed` if it does not go down). Should
+ * anything write the file back after all, the look after the removal says so (`provider_logout_incomplete`)
+ * and never «disconnected».
  */
 import { execScriptInContainer } from '../utils/container-proxy.js';
 import { AGENT_CONTROL_SCRIPT, EXIT_INVALID, unansweredReply } from './agent-control-args.js';
@@ -25,15 +28,22 @@ export function runProvider(args, { write, exec = execScriptInContainer }) {
     return EXIT_INVALID;
   }
   if (op === 'logout') {
-    const stopped = exec(AGENT_CONTROL_SCRIPT, ['stop-team'], { interpreter: 'python3', timeoutMs: 180_000 });
-    if (!stopped.ok || stopped.code < 0) {
-      const { code, reply } = unansweredReply(stopped);
-      write(`${JSON.stringify(reply)}\n`);
-      return code;
-    }
-    if (stopped.code !== 0) {
-      write(stopped.stdout);
-      return stopped.code;
+    // the team, then the Assistant's chat; each one must have worked before the next step, and before any removal
+    const stops = [
+      [['stop-team'], 180_000],
+      [['stop', 'ASSISTENTE'], 30_000],
+    ];
+    for (const [argv, timeoutMs] of stops) {
+      const stopped = exec(AGENT_CONTROL_SCRIPT, argv, { interpreter: 'python3', timeoutMs });
+      if (!stopped.ok || stopped.code < 0) {
+        const { code, reply } = unansweredReply(stopped);
+        write(`${JSON.stringify(reply)}\n`);
+        return code;
+      }
+      if (stopped.code !== 0) {
+        write(stopped.stdout);
+        return stopped.code;
+      }
     }
   }
   const result = exec(PROVIDER_SIGNIN_SCRIPT, [op], { interpreter: 'python3', timeoutMs: 30_000 });

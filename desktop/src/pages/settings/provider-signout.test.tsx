@@ -101,7 +101,7 @@ describe("ProviderSignOut", () => {
   });
 
   it("the codes of the stop that comes first have their sentences in the catalog", () => {
-    for (const code of ["team_stop_failed", "agent_control_busy", "provider_changed"]) {
+    for (const code of ["team_stop_failed", "agent_stop_failed", "agent_control_busy", "provider_changed"]) {
       expect(describeError(code, { locale: "it" }).known, code).toBe(true);
     }
   });
