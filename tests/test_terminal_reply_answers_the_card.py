@@ -78,8 +78,8 @@ def test_the_first_run_leaves_awaiting_the_profile_after_a_1_from_the_terminal(b
     assert after.get("wait_for_profile") is not True and after.get("asked") is True, after
 
 
-@pytest.mark.parametrize("text", ["yes", "Yes!", "sì", "Sì, salva", "ok", "oui", "ja"])
-def test_a_yes_in_words_confirms_the_one_card_that_asks_to_save(box, text):
+@pytest.mark.parametrize("text", ["yes, save", "Yes save!", "sì, salva", "Conferma", "confirm and save", "oui, enregistre", "ja, speichern"])
+def test_a_yes_that_says_what_it_does_confirms_the_one_card_that_asks_to_save(box, text):
     stage(box)
     posted = ask(box)
 
@@ -87,6 +87,15 @@ def test_a_yes_in_words_confirms_the_one_card_that_asks_to_save(box, text):
 
     assert out["result"] == "answered" and out["questionId"] == posted["question_id"], out
     assert stored_answers(box)[0]["scelte"] == ["confirm"]
+
+
+@pytest.mark.parametrize("text", ["yes", "Yes!", "ok", "okay", "y", "sì", "si", "oui", "ja", "igen", "sim", "sí"])
+def test_a_bare_yes_or_ok_is_chat_and_never_saves_the_profile(box, text):
+    """«ok» written to the Assistente for something else while the card is open must not confirm it."""
+    stage(box)
+    ask(box)
+    assert reply(box, "assistente", text) == {"result": "chat"}
+    assert stored_answers(box) == []
 
 
 def test_the_second_option_is_the_number_2(box):

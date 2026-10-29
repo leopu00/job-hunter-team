@@ -1126,11 +1126,12 @@ def _resolve_among(
 
 # A yes in words, typed in a terminal, answers the ONE question open for that agent when it has a «confirm» option
 # (the card that asks to save the profile): the person sees that card as a numbered list and may just as well write
-# «yes». A closed list, normalised (case, accents of «sì», punctuation and spaces apart); anything else is chat.
+# «yes, save». A closed list of forms that SAY what they do, normalised (case, punctuation and spaces apart); a bare
+# «yes» or «ok» is not in it: a person who writes «ok» to the Assistente for something else must not save the profile.
 AFFIRMATIVE_REPLIES = frozenset({
-    "yes", "y", "ok", "okay", "yes save", "yes confirm", "confirm", "confirm and save",
-    "si", "sì", "si salva", "sì salva", "conferma", "confermo", "ok salva",
-    "sí", "sí guarda", "ja", "ja speichern", "oui", "oui enregistre", "igen", "igen mentsd", "sim", "sim guarda",
+    "yes save", "yes confirm", "confirm", "confirm and save",
+    "sì salva", "si salva", "conferma", "confermo", "conferma e salva", "ok salva",
+    "sí guarda", "ja speichern", "oui enregistre", "igen mentsd", "sim guarda",
 })
 CONFIRM_OPTION_ID = "confirm"
 
