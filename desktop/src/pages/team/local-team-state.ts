@@ -1,6 +1,9 @@
 import type { TeamState } from "@/app/(protected)/team/MobileTeamStatus";
 import { readPanelList, readTeamState } from "../../lib/agent-control";
 
+/** How long the card waits for the native read of the team before it says the status is not available. */
+export const LOCAL_TEAM_STATE_READ_MS = 10_000;
+
 /**
  * The status card's row for the team of this computer, from what the agents' panel already reads of it (the
  * native agent_control: who is up, and whether the person stopped the team). The card was written for the cloud's
@@ -10,7 +13,14 @@ import { readPanelList, readTeamState } from "../../lib/agent-control";
  * Null when the team cannot be read: the card then says it is not available.
  */
 export async function localTeamState(): Promise<TeamState | null> {
-  const [list, team] = await Promise.all([readPanelList(), readTeamState()]);
+  // a read that never answers must not leave the card on «checking» for ever: after this long it says «not available»
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), LOCAL_TEAM_STATE_READ_MS);
+  });
+  const read = await Promise.race([Promise.all([readPanelList(), readTeamState()]), slow]).finally(() => clearTimeout(timer));
+  if (read === null) return null;
+  const [list, team] = read;
   if (!list.ok || !team.ok) return null;
   const anyoneUp = list.value.agents.some((agent) => agent.state.state !== "spento");
   return {

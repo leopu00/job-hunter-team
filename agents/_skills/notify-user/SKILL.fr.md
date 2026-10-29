@@ -83,6 +83,8 @@ Plus — $20/month; Pro — $100/month
 TXT
 ```
 
+Écris le `TXT` de fermeture en première colonne, seul sur sa ligne, sans espaces devant (si tu copies le retrait, le heredoc ne se ferme jamais : un texte qui finit par une ligne `TXT` est refusé, rien n'est envoyé).
+
 ## Types
 
 | Type | Quand | Rendu tableau de bord |

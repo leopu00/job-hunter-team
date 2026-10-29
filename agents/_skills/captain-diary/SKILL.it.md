@@ -23,6 +23,8 @@ Stampa le note di **ieri** (o quelle dell'ultimo giorno lavorato) più quanto è
 già registrato **oggi**. Erediti le lezioni → **non ripetere gli stessi
 errori**. Se non c'è niente, sei il primo: comincia a registrare.
 
+Stampa al massimo le **ultime 30 note** di ciascun giorno (8 KiB), con una riga che dice quante note più vecchie sono state lasciate fuori: ogni riavvio le rilegge, quindi tieni le note brevi e metti la lezione per prima.
+
 ## Durante la giornata — registra gli eventi SIGNIFICATIVI
 
 Una riga, ogni volta che succede qualcosa che porta una lezione. NON un diario

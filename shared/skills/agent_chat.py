@@ -383,7 +383,10 @@ _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
 # Codex at rest puts the model and folder under the composer (the «·» line); in the middle of a turn that line
 # becomes «tab to queue message ... 80% context left», with no «·». Without these two phrases a composer in a
 # working Codex is not a composer at all: the text pasted into it is «another draft» and nothing presses Enter.
-_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|\s{6,}\d{1,3}% context left\s*$)")
+# A third footer: after a turn that ended in a plan-like answer Codex offers «Create a plan?  shift + tab use Plan mode
+# esc dismiss» in place of the model line (TEST 19b, 29/10, the Capitano): the composer above it was not found, the
+# text pasted into it was «another draft», and the transport left it there with no Enter for six minutes.
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|^\s*Create a plan\?\s+shift\s*\+\s*tab\b|\s{6,}\d{1,3}% context left\s*$)")
 _CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
 _NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
 
@@ -1813,19 +1816,29 @@ def _answer_seen(question_id: str) -> bool:
     return bool(row and row[0])
 
 
+def _agent_working(session: str) -> bool:
+    """True when the agent's terminal says it is in the middle of a turn."""
+    pane = capture_pane(session)
+    return pane is not None and composer_snapshot(pane)[1]
+
+
 def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake_attempt, seen=_answer_seen,
                     sleep=time.sleep, clock=time.monotonic, every: float | None = None,
-                    window: float | None = None, quiet: float | None = None) -> str:
+                    window: float | None = None, quiet: float | None = None, working=_agent_working,
+                    start_after: float = 0.0) -> str:
     """Wake the agent again until it has read the answer, or the window is over: ``seen`` or ``gave_up``.
 
-    After a line that landed it waits ``quiet`` before another (the agent may be working through its queue);
-    a try that did not land is repeated every ``every`` seconds.
+    After a line that landed it waits ``quiet`` before another, and then until the agent is out of its turn: the line
+    it was given is waiting in its queue and a second one would only be read after it, twice.  A try that did not
+    land is repeated every ``every`` seconds.  ``start_after`` is how long to leave the first try when somebody has
+    just made one (the answer itself does, and the retrying process must not type the same line again at once).
     """
     every = WAKE_RETRY_EVERY_S if every is None else every
     window = WAKE_RETRY_FOR_S if window is None else window
     quiet = WAKE_QUIET_AFTER_SENT_S if quiet is None else quiet
     deadline = clock() + window
-    next_try = clock()
+    next_try = clock() + start_after
+    landed = False
     while True:
         if seen(question_id):
             return "seen"
@@ -1833,10 +1846,14 @@ def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake
         if now >= deadline:
             return "gave_up"
         if now >= next_try:
-            code = attempt(agent, session)
-            if code != "sent":
-                _wake_log(agent, code)
-            next_try = clock() + (quiet if code == "sent" else every)
+            if landed and working(session):
+                next_try = clock() + every
+            else:
+                code = attempt(agent, session)
+                if code != "sent":
+                    _wake_log(agent, code)
+                landed = landed or code == "sent"
+                next_try = clock() + (quiet if code == "sent" else every)
         sleep(min(every, max(0.0, deadline - clock())))
 
 
@@ -1872,7 +1889,8 @@ def wake(agent: str, question_id: str) -> dict:
     if lock is None:
         return {"result": "running"}
     try:
-        return {"result": wake_until_seen(agent, question_id, AGENTS[agent])}
+        # the answer made the first try a moment ago and it did not land: the next one is after the usual wait
+        return {"result": wake_until_seen(agent, question_id, AGENTS[agent], start_after=WAKE_RETRY_EVERY_S)}
     finally:
         try:
             lock.unlink()

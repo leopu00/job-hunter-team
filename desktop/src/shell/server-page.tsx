@@ -30,7 +30,9 @@ type State = { state: "loading" } | { state: "ready"; node: ReactNode } | { stat
 export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
   const [result, setResult] = useState<State>({ state: "loading" });
   // A local profile's team is read from this computer (the shims answer from its database): nothing to block.
-  const blocked = useCloudDataBlocked() && !useLocalTeamData();
+  // Both hooks run on every render (never one inside the `&&`): the cloud session can come and go under the page.
+  const localTeam = useLocalTeamData();
+  const blocked = useCloudDataBlocked() && !localTeam;
   const { path } = useLocation();
   // what is read, for the page and its filters: asking again while this read runs waits for it
   const readKey = `server-page:${path}?${runKey ?? ""}`;

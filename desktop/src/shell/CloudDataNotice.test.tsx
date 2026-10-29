@@ -69,6 +69,34 @@ describe("the line of the pages that read the cloud, for a profile with no sign-
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
+  it("keeps the same hooks when the cloud session goes and comes back under a server page that stays mounted", async () => {
+    // a hook called only when the first one says yes is a different number of hooks at the next render
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    registerAuthStorageProbe(() => true);
+    const page = <ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />;
+    const view = render(page);
+    expect(await screen.findByRole("heading", { name: "page" })).toBeInTheDocument();
+    registerAuthStorageProbe(() => false);
+    view.rerender(<ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />);
+    await act(async () => undefined);
+    expect(screen.getByRole("note")).toHaveTextContent("Questi dati arrivano dal cloud");
+    registerAuthStorageProbe(() => true);
+    view.rerender(<ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />);
+    await act(async () => undefined);
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    // and the same for a local profile coming in and going out
+    setLocalTeamData("local:synthetic");
+    registerAuthStorageProbe(() => false);
+    view.rerender(<ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />);
+    await act(async () => undefined);
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    setLocalTeamData(null);
+    await act(async () => undefined);
+    expect(screen.getByRole("note")).toBeInTheDocument();
+    expect(errors.mock.calls.some(([message]) => String(message).includes("hooks"))).toBe(false);
+    errors.mockRestore();
+  });
+
   it("leaves a server page as it is with a cloud session", async () => {
     registerAuthStorageProbe(() => true);
     render(<ServerPage render={() => <h1>page</h1>} fallback={<p>skeleton</p>} />);

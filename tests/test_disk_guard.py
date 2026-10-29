@@ -1185,13 +1185,14 @@ def test_the_closed_codes_are_in_the_desktop_catalog_with_every_translation():
     low = catalog[catalog.index("  disk_low: copy("):]
     low = low[: low.index("\n  ),")]
     assert "Cestino" in low and "Trash" in low and "più spazio su disco" in low and "more disk space" in low
+    assert "Docker/Podman" in low and low.count("Docker/Podman") == 2  # tolgono le immagini vecchie, in italiano e in inglese
     assert "%" not in low  # nessuna percentuale
     english = "The agents need more disk space than is available."
     block = locales[locales.index(f'"{english}": {{'):]
     block = block[: block.index("\n  },")]
     for lang, word in (("de", "Papierkorb"), ("es", "papelera"), ("fr", "corbeille"), ("hu", "Kuká"), ("pt", "Lixo")):
         row = next(line for line in block.splitlines() if line.strip().startswith(f"{lang}:"))
-        assert word in row, (lang, row)
+        assert word in row and "Docker/Podman" in row, (lang, row)  # libera spazio: anche le immagini vecchie
     # `disk_low` ha un emettitore (il pulsante «Libera spazio», `jht team start` lo porta all'app):
     # NON sta in NOT_EMITTED. `disk_warning` non ne ha ancora, e il catalogo lo dichiara, non lo finge.
     not_emitted = catalog[catalog.index("export const NOT_EMITTED"):]

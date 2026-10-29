@@ -26,6 +26,8 @@ export type LocalProfilesCopy = {
   ownerBannerUnknown: string;
   /** The same band when the owner of the team is a Google account, not a local profile. No name. */
   ownerBannerAccount: string;
+  /** The same band when the data of this Mac belongs to no profile and this profile cannot take it: no one to switch to, no name. */
+  ownerBannerNobody: string;
   /** Button in the band: it leads to the choice of the profile. */
   switchProfile: string;
 };
@@ -43,6 +45,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "Su questo Mac la squadra risulta di {name}: passa a quel profilo per usarla.",
     ownerBannerUnknown: "Su questo Mac la squadra risulta di un altro profilo: passa a quel profilo per usarla.",
     ownerBannerAccount: "Su questo Mac la squadra risulta di un account Google: passa a quel profilo per usarla.",
+    ownerBannerNobody: "Su questo Mac ci sono dati che non sono di nessun profilo: questo profilo non può prenderli.",
     switchProfile: "Cambia profilo",
   },
   en: {
@@ -56,6 +59,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "On this Mac, the team appears to belong to {name}: switch to that profile to use it.",
     ownerBannerUnknown: "On this Mac, the team appears to belong to another profile: switch to that profile to use it.",
     ownerBannerAccount: "On this Mac, the team appears to belong to a Google account: switch to that profile to use it.",
+    ownerBannerNobody: "There is data on this Mac that belongs to no profile: this profile cannot take it over.",
     switchProfile: "Switch profile",
   },
   de: {
@@ -69,6 +73,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "Auf diesem Mac scheint das Team {name} zu gehören: Wechsle zu diesem Profil, um es zu nutzen.",
     ownerBannerUnknown: "Auf diesem Mac scheint das Team einem anderen Profil zu gehören: Wechsle zu diesem Profil, um es zu nutzen.",
     ownerBannerAccount: "Auf diesem Mac scheint das Team zu einem Google-Konto zu gehören: Wechsle zu diesem Profil, um es zu nutzen.",
+    ownerBannerNobody: "Auf diesem Mac liegen Daten, die keinem Profil gehören: Dieses Profil kann sie nicht übernehmen.",
     switchProfile: "Profil wechseln",
   },
   fr: {
@@ -82,6 +87,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "Sur ce Mac, l'équipe semble appartenir à {name} : passe à ce profil pour l'utiliser.",
     ownerBannerUnknown: "Sur ce Mac, l'équipe semble appartenir à un autre profil : passe à ce profil pour l'utiliser.",
     ownerBannerAccount: "Sur ce Mac, l'équipe semble appartenir à un compte Google : passe à ce profil pour l'utiliser.",
+    ownerBannerNobody: "Sur ce Mac, il y a des données qui n'appartiennent à aucun profil : ce profil ne peut pas les reprendre.",
     switchProfile: "Changer de profil",
   },
   es: {
@@ -95,6 +101,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "En este Mac el equipo figura como de {name}: cambia a ese perfil para usarlo.",
     ownerBannerUnknown: "En este Mac el equipo figura como de otro perfil: cambia a ese perfil para usarlo.",
     ownerBannerAccount: "En este Mac el equipo figura como de una cuenta de Google: cambia a ese perfil para usarlo.",
+    ownerBannerNobody: "En este Mac hay datos que no son de ningún perfil: este perfil no puede hacerse cargo de ellos.",
     switchProfile: "Cambiar de perfil",
   },
   pt: {
@@ -108,6 +115,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "Neste Mac, a equipa consta como sendo de {name}: muda para esse perfil para a usar.",
     ownerBannerUnknown: "Neste Mac, a equipa consta como sendo de outro perfil: muda para esse perfil para a usar.",
     ownerBannerAccount: "Neste Mac, a equipa consta como sendo de uma conta Google: muda para esse perfil para a usar.",
+    ownerBannerNobody: "Neste Mac há dados que não são de nenhum perfil: este perfil não os pode assumir.",
     switchProfile: "Mudar de perfil",
   },
   hu: {
@@ -121,6 +129,7 @@ export const LOCAL_PROFILES_TEXT: Record<Locale, LocalProfilesCopy> = {
     ownerBanner: "Ezen a Macen a csapat {name} profiljához tartozónak tűnik: válts arra a profilra a használatához.",
     ownerBannerUnknown: "Ezen a Macen a csapat egy másik profilhoz tartozónak tűnik: válts arra a profilra a használatához.",
     ownerBannerAccount: "Ezen a Macen a csapat egy Google-fiókhoz tartozónak tűnik: válts arra a profilra a használatához.",
+    ownerBannerNobody: "Ezen a Macen vannak adatok, amelyek egyetlen profilhoz sem tartoznak: ez a profil nem veheti át őket.",
     switchProfile: "Profil váltása",
   },
 };
