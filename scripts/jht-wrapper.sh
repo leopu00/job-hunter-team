@@ -2759,6 +2759,93 @@ profile_import_command() {
   docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" profile import --stdin ${extra[@]+"${extra[@]}"} < "$file"
 }
 
+# jht artifact upload FILE: il file e' della persona, sull'host; dentro il container (dove gira il CLI) quel percorso non esiste
+# e il comando moriva con ENOENT (Gate CLI Linux 19i, A5). Il wrapper lo legge con i permessi dell'utente (regolare, non un
+# link, al massimo 10 MiB come la skill) e lo passa su stdin: la cartella allegati/ resta del container, nessun sudo.
+artifact_upload_max_bytes=10485760
+
+artifact_upload_has_file() {
+  local arg has=1
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) return 1 ;;
+      -*) ;;
+      *) has=0 ;;
+    esac
+  done
+  return "$has"
+}
+
+# Il file della persona, sull'host, e' un documento da consegnare: regolare, non un link, leggibile, al massimo 10 MiB.
+host_document_ok() {
+  local file="$1" size
+  if [ -L "$file" ] || [ ! -f "$file" ]; then
+    err "il documento deve essere un file regolare, non un link: $file"; return 1
+  fi
+  if [ ! -r "$file" ]; then
+    err "non riesco a leggere il documento: $file"; return 1
+  fi
+  size="$(wc -c < "$file" | tr -d ' ')"
+  if [ -z "$size" ] || [ "$size" -gt "$artifact_upload_max_bytes" ]; then
+    err "il documento supera i 10 MB"; return 1
+  fi
+  return 0
+}
+
+# jht ticket open ... --attach FILE: stesso passaggio dell'upload (il file e' sull'host, dentro il container non esiste).
+# Il wrapper toglie --attach FILE, legge il file e lo da' al CLI su stdin con il nome; gli altri argomenti vanno com'erano,
+# con le due opzioni nuove prima dell'eventuale `--` (dopo, il CLI le leggerebbe come argomenti).
+ticket_open_has_attach() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --) return 1 ;;
+      --help|-h) return 1 ;;
+      --attach|--attach=*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+ticket_open_command() {
+  local file="" seen=0 want=0 literal=0 arg name
+  local -a keep=() tail=()
+  for arg in "$@"; do
+    if [ "$want" = 1 ]; then file="$arg"; want=0; continue; fi
+    if [ "$literal" = 1 ]; then tail+=("$arg"); continue; fi
+    case "$arg" in
+      --) literal=1; tail+=("$arg") ;;
+      --attach|--attach=*)
+        if [ "$seen" = 1 ]; then err "uso: jht ticket open POSIZIONE TESTO [--kind TIPO] [--attach FILE]"; return 2; fi
+        seen=1
+        if [ "$arg" = --attach ]; then want=1; else file="${arg#--attach=}"; fi ;;
+      *) keep+=("$arg") ;;
+    esac
+  done
+  if [ "$want" = 1 ] || [ -z "$file" ]; then err "uso: jht ticket open POSIZIONE TESTO [--kind TIPO] [--attach FILE]"; return 2; fi
+  host_document_ok "$file" || return $?
+  name="${file##*/}"
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ticket open ${keep[@]+"${keep[@]}"} --attach-stdin --attach-name "$name" ${tail[@]+"${tail[@]}"} < "$file"
+}
+
+artifact_upload_command() {
+  local file="" flag name
+  local -a extra=()
+  for flag in "$@"; do
+    case "$flag" in
+      --json) extra+=("$flag") ;;
+      -*) err "opzione non riconosciuta: $flag"; return 2 ;;
+      *)
+        if [ -n "$file" ]; then err "uso: jht artifact upload FILE [--json]"; return 2; fi
+        file="$flag" ;;
+    esac
+  done
+  if [ -z "$file" ]; then err "uso: jht artifact upload FILE [--json]"; return 2; fi
+  host_document_ok "$file" || return $?
+  name="${file##*/}"
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" artifact upload --stdin --name "$name" ${extra[@]+"${extra[@]}"} < "$file"
+}
+
 # jht profile validate FILE: stesso passaggio del file di import; non scrive niente.
 # Senza FILE il CLI controlla il profilo del team (dentro il container): si inoltra
 # com'e'. Chiamato solo quando c'e' un FILE (vedi profile_validate_has_file).
@@ -5272,6 +5359,28 @@ case "$SUB" in
     require_docker
     ensure_up
     handle_host_download "$ATTESTED_CONTAINER_ID" "${@:2}"
+    ;;
+
+  # `jht artifact upload FILE`: il file dell'host lo legge il wrapper (vedi artifact_upload_command); gli altri verbi vanno al CLI.
+  artifact)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = upload ] && artifact_upload_has_file "${@:3}"; then
+      artifact_upload_command "${@:3}"; exit $?
+    fi
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
+  # `jht ticket open ... --attach FILE`: come l'upload, il file dell'host lo legge il wrapper (vedi ticket_open_command).
+  ticket)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = open ] && ticket_open_has_attach "${@:3}"; then
+      ticket_open_command "${@:3}"; exit $?
+    fi
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
   profile)

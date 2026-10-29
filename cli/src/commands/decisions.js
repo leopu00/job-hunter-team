@@ -15,13 +15,15 @@
 
 import { Command } from 'commander';
 import { runSkill } from './positions.js';
-import { reportUploadFailure, uploadFileToTeam } from './artifacts.js';
+import { c } from './_colors.js';
+import { reportUploadFailure, uploadFileToTeam, uploadStdinDocument } from './artifacts.js';
 
 // L'esito si posa su `process.exitCode` e si lascia terminare il processo da
 // solo. Con `process.exit()` l'uscita era immediata, e l'output della skill —
 // che `runSkill` scrive con `process.stdout.write` quando passa dal container —
 // poteva restare in un buffer di pipe mai drenato: l'agente che legge il JSON
 // riceveva una riga tagliata a metà. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
+const EXIT_USAGE = 2;
 const run = (skill, args) => { process.exitCode = runSkill(skill, args); };
 
 export function registerTicketCommand(program) {
@@ -33,10 +35,19 @@ export function registerTicketCommand(program) {
     .description('Open a ticket for the Capitano')
     .option('--kind <type>', 'ticket category', 'custom')
     .option('--attach <file>', 'upload this file and attach it to the ticket')
+    .option('--attach-stdin', 'attach the document read from standard input (the host wrapper uses it for a file on the host)')
+    .option('--attach-name <name>', 'with --attach-stdin: the file name the document goes by')
     .action((positionId, text, options) => {
       const args = ['open', String(positionId), text, '--kind', options.kind];
-      if (options.attach) {
-        const upload = uploadFileToTeam(options.attach);
+      if (options.attachStdin && (options.attach || !options.attachName)) {
+        console.error(c.red(': usage: jht ticket open <position_id> <text> --attach-stdin --attach-name <file name>   (the host wrapper uses it)'));
+        process.exitCode = EXIT_USAGE;
+        return;
+      }
+      if (options.attach || options.attachStdin) {
+        const upload = options.attachStdin
+          ? uploadStdinDocument(options.attachName)
+          : uploadFileToTeam(options.attach);
         if (!upload.ok) {
           reportUploadFailure(upload);
           process.exitCode = upload.code;
