@@ -15,7 +15,8 @@ Cosa fa `start --until HH:MM`:
   2. allarga gli orari, senza mai restringerli: le fasce che il team ha restano tutte e si aggiunge la
      fascia da adesso fino all'ora scelta (unione). Solo un giorno senza fascia propria la vuole di
      almeno 4 ore, come la regola dei `jht wh`; se il team era già 24/7 non scrive niente;
-  3. concede il burn (`burn_intent.grant`) fino a quell'ora: stesso file, stesso tetto di 12 ore.
+  3. concede il burn (`burn_intent.grant`) fino a quell'ora: stesso file, stesso tetto di 12 ore. Il burn dice
+     anche «a tutta»: la pausa del throttle di ogni agente non supera BURST_PAUSE_SEC (`pace_cap_sec`).
 
 Cosa fa `sweep` (a ogni tick del sentinel): se la fascia è finita (scaduta, o il burn è stato
 revocato prima) rimette gli orari di prima e toglie lo stato. Se nel frattempo gli orari sono stati
@@ -62,6 +63,10 @@ AUDIT_LOG = JHT_HOME / "logs" / "burst.jsonl"
 MIN_MINUTES = 15
 MAX_HOURS = burn_intent.MAX_HOURS
 MIN_WINDOW_HOURS = 4
+# «A tutta»: the pause of the throttle after each unit of work is at most this. 60 s is the lowest step of the
+# ladder (throttle-config), the pause that stays a checkpoint between two units: without a cap the workers kept
+# the 300 s the Captain or the floor gave them and a burst made a position every five or six minutes.
+BURST_PAUSE_SEC = 60
 DAY_MINUTES = 24 * 60
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -304,8 +309,11 @@ def widened(previous, now_local: datetime, until_local: datetime, span_hours: fl
     long_enough = timedelta(hours=min(23, max(MIN_WINDOW_HOURS, math.ceil(span_hours))))
 
     def place(begin: datetime):
+        # The end is counted on the wall clock, minute against minute: with the seconds of `begin` in it
+        # (17:31:45 to 00:30:00) the count falls a minute short and the window ends at 00:29.
         start = begin.hour * 60 + begin.minute
-        return WEEKDAYS[begin.weekday()], start, start + int((until_local - begin).total_seconds() // 60)
+        wall = lambda t: t.replace(tzinfo=None, second=0, microsecond=0)    # noqa: E731
+        return WEEKDAYS[begin.weekday()], start, start + int((wall(until_local) - wall(begin)).total_seconds() // 60)
 
     day, start, end = place(now_local if WEEKDAYS[now_local.weekday()] in per_day else until_local - long_enough)
     if day in per_day:
@@ -394,7 +402,8 @@ def start(until: str, now: Optional[datetime] = None) -> dict:
     try:
         if written is not None:
             _write_json(CONFIG_FILE, _with_hours(cfg, written))
-        burn_intent.grant(minutes / 60, reason=f"burst until {until}", granted_by="user", now=moment)
+        burn_intent.grant(minutes / 60, reason=f"burst until {until}", granted_by="user", now=moment,
+                          pace_cap_sec=BURST_PAUSE_SEC)
     except Exception:                       # noqa: BLE001 — nothing half done
         try:
             _write_json(CONFIG_FILE, cfg)

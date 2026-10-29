@@ -203,6 +203,17 @@ def _burn_intent_active() -> bool:
         return False
 
 
+def _burn_pace_cap():
+    """Il tetto alla pausa che la deroga in corso ha chiesto («a tutta»), o None."""
+    if not _burn_intent_active():
+        return None
+    try:
+        cap = getattr(_BURN_INTENT_MOD, "pace_cap", None)
+        return cap() if cap else None
+    except Exception:  # noqa: BLE001 — senza tetto resta la pausa chiesta
+        return None
+
+
 def effective(agent: str, seconds: int) -> int:
     """Valore EFFETTIVO per l'agente: ladder + worker floor, salvo deroghe.
 
@@ -214,7 +225,9 @@ def effective(agent: str, seconds: int) -> int:
     """
     v = max(MIN_SLEEP, min(MAX_SLEEP, seconds))
     if _burn_intent_active():
-        return v
+        # «A tutta» (burst) mette un tetto alla pausa: quella chiesta, config o agente, non lo supera.
+        cap = _burn_pace_cap()
+        return v if cap is None else min(v, cap)
     floor = WORKER_FLOOR if (_is_worker(agent) and not _floor_exempt(agent)) \
         else MIN_SLEEP
     # L'esente salta anche la ladder: quantize() aggancerebbe comunque a 300
