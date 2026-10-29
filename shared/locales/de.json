@@ -147,6 +147,7 @@
   "profile_confirm.correct": "Ich möchte etwas korrigieren",
   "profile_confirm.name": "Name",
   "profile_confirm.email": "E-Mail",
+  "profile_confirm.field.work_authorization": "Arbeitserlaubnis",
   "plan.none_known": "keine bekannten Tarife",
   "plan.weekly_cap": "Wochenlimit",
   "plan.no_weekly_cap": "kein Wochenlimit",

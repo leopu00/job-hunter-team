@@ -148,6 +148,7 @@
   "profile_confirm.correct": "Szeretnék javítani valamit",
   "profile_confirm.name": "Név",
   "profile_confirm.email": "E-mail",
+  "profile_confirm.field.work_authorization": "Munkavállalási engedély",
   "plan.none_known": "nincsenek ismert csomagok",
   "plan.weekly_cap": "heti korlát",
   "plan.no_weekly_cap": "nincs heti korlát",

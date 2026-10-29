@@ -115,14 +115,47 @@ def test_the_card_never_names_a_panel_and_never_carries_the_email(box):
     assert EMAIL not in everything and "ada test" not in everything
 
 
-def test_a_preference_the_eight_fields_do_not_carry_is_said_by_its_name_and_marked(box):
+def test_a_preference_the_eight_fields_do_not_carry_is_said_by_its_name_in_words_and_marked(box):
     stage(box, patch(location_preferences=["Milan", "remote"]))
 
     ask(box, "location_preferences")
 
     (card,) = cards(box)
-    line = next(l for l in card["payload"]["testo"].splitlines() if l.startswith("- location_preferences"))
+    line = next(l for l in card["payload"]["testo"].splitlines() if l.startswith("- Location preferences"))
     assert "Milan, remote" in line and "dedotto" in line
+
+
+WORK_AUTH_TEXT = "{'region': 'EU', 'status': 'Italian citizen - free movement'}"
+
+
+@pytest.mark.parametrize("held", [{"region": "EU", "status": "Italian citizen - free movement"}, WORK_AUTH_TEXT, json.dumps({"region": "EU", "status": "Italian citizen - free movement"})])
+def test_a_record_the_profile_holds_is_said_in_words_in_the_language_of_the_person(box, held):
+    # the profile file may hold the record as a mapping, as the text str() writes (single quotes) or as JSON
+    stage(box, patch(work_authorization=held))
+
+    ask(box, "work_authorization", lang="it")
+
+    (card,) = cards(box)
+    catalog = json.loads((LOCALES / "it.json").read_text(encoding="utf-8"))
+    lines = [l for l in card["payload"]["testo"].splitlines() if "Italian citizen" in l]
+    assert lines == [f"- {catalog['profile_confirm.field.work_authorization']}: Italian citizen - free movement (EU) ({catalog['profile_confirm.deduced']})"]
+    text = card["payload"]["testo"]
+    assert "{" not in text and "'region'" not in text and "work_authorization" not in text
+
+
+def test_the_exact_line_of_the_collaudo_is_said_in_english_with_the_deduced_mark(box):
+    stage(box, patch(work_authorization=WORK_AUTH_TEXT))
+
+    ask(box, "work_authorization", lang="en")
+
+    (card,) = cards(box)
+    assert "- Work authorization: Italian citizen - free movement (EU) (deduced by me, it is not in your CV)" in card["payload"]["testo"].splitlines()
+
+
+def test_another_flat_record_is_said_as_pairs(box):
+    stage(box, patch(notice_period={"weeks": 4, "remote": True}))
+    ask(box, "notice_period", lang="en")
+    assert "- Notice period: Remote: True, Weeks: 4 (deduced by me, it is not in your CV)" in cards(box)[0]["payload"]["testo"].splitlines()
 
 
 def test_what_is_still_missing_is_on_the_card_and_the_card_still_goes(box):
@@ -302,7 +335,7 @@ def test_the_card_is_in_the_language_of_the_person(box, lang: str):
 
 KEYS = [
     "subject", "intro", "role", "seniority", "location", "years", "years_value", "skills", "languages",
-    "deduced", "missing", "outro", "confirm", "correct", "name", "email",
+    "deduced", "missing", "outro", "confirm", "correct", "name", "email", "field.work_authorization",
 ]
 
 
