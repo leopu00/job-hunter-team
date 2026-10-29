@@ -26,6 +26,7 @@ import {
 const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
 const REQUEST_MAX_BYTES = 65536;
 const BURST_SCRIPT = '/app/shared/skills/burst.py';
+const QUIET_SCRIPT = '/app/shared/skills/team_quiet.py';
 const BURST_TIMEOUT_MS = 30_000;
 const UNTIL = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -128,6 +129,46 @@ function runBurst(argv, exec) {
   return refuse('burst_unavailable');
 }
 
+/** A number in a closed range, or null: the facts of the team's silence are numbers and booleans, never text. */
+function numberIn(value, min, max) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
+/**
+ * The team_quiet skill's facts in their closed shape (the budget window as two numbers, two booleans); a fact out of
+ * its shape is left out, and one the skill does not send is not made up. Null when nothing is left.
+ */
+export function closedQuiet(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const quiet = {};
+  const budget = value.budget;
+  if (budget !== null && typeof budget === 'object' && !Array.isArray(budget) && Object.keys(budget).length === 2) {
+    const usagePct = numberIn(budget.usagePct, 0, 1000);
+    const reset = budget.resetAtUnix === null ? null : numberIn(budget.resetAtUnix, 1, 4_102_444_800);
+    if (usagePct !== null && (budget.resetAtUnix === null || (reset !== null && Number.isInteger(reset)))) {
+      quiet.budget = { usagePct, resetAtUnix: reset };
+    }
+  }
+  if (typeof value.containment === 'boolean') quiet.containment = value.containment;
+  if (typeof value.providerReady === 'boolean') quiet.providerReady = value.providerReady;
+  return Object.keys(quiet).length > 0 ? quiet : null;
+}
+
+/** A `get` result with the facts that explain the team's silence when they can be read; without them, as it was. Read only. */
+export function withQuiet(result, exec = execScriptInContainer) {
+  if (!result.out.ok) return result;
+  const r = exec(QUIET_SCRIPT, ['status'], { interpreter: 'python3', timeoutMs: BURST_TIMEOUT_MS });
+  if (!r || !r.ok || r.code < 0) return result;
+  let answer;
+  try {
+    answer = JSON.parse(String(r.stdout).trim().split('\n').pop());
+  } catch {
+    return result;
+  }
+  const quiet = answer && answer.ok === true ? closedQuiet(answer.quiet) : null;
+  return quiet ? { exit: result.exit, out: { ...result.out, quiet } } : result;
+}
+
 /** A `get` or `apply` result with the burst added when it can be read; without it, as it was. */
 export function withBurst(result, exec = execScriptInContainer) {
   if (!result.out.ok) return result;
@@ -171,7 +212,7 @@ export function registerTeamSettingsCommand(program) {
   const cmd = program
     .command('team-settings')
     .description('Working hours and the model and effort of each role, as JSON (for the desktop app)');
-  cmd.command('get').description('Print the settings and the lists of allowed values').action(() => print(withBurst(getResult())));
+  cmd.command('get').description('Print the settings and the lists of allowed values').action(() => print(withQuiet(withBurst(getResult()))));
   cmd.command('apply')
     .description('Apply {"settings": {...}} read from stdin, whole or not at all, then print what the box holds')
     .action(() => {

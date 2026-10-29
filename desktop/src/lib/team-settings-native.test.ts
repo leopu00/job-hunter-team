@@ -148,3 +148,26 @@ describe("the burst («work flat out until HH:MM»)", () => {
     for (const bad of ["", "3:00", "24:00", "03:60", "03:00:00", "0300", " 03:00"]) expect(burstTimeIsValid(bad)).toBe(false);
   });
 });
+
+describe("the facts that explain a silence of the team", () => {
+  const QUIET = { budget: { usagePct: 97.5, resetAtUnix: 1790000000 }, containment: false, providerReady: true };
+
+  it("are read in their closed shape, and a box that does not say has no quiet key (never «nothing to explain»)", () => {
+    expect(pickTeamSettings(reply({ quiet: QUIET }))).toMatchObject({ ok: true, settings: { quiet: QUIET } });
+    expect(pickTeamSettings(reply({ quiet: { budget: { usagePct: 100, resetAtUnix: null } } }))).toMatchObject({ ok: true, settings: { quiet: { budget: { usagePct: 100, resetAtUnix: null } } } });
+    expect("quiet" in (pickTeamSettings(reply()) as { settings: object }).settings).toBe(false);
+  });
+
+  it("drop a fact out of its shape alone, and keep nothing else the box says", () => {
+    for (const broken of [null, "down", [], {}, { containment: "no" }, { providerReady: 1 }, { budget: { usagePct: "97", resetAtUnix: 1 } },
+                          { budget: { usagePct: -1, resetAtUnix: 1 } }, { budget: { usagePct: 5000, resetAtUnix: 1 } }, { budget: { usagePct: 97 } },
+                          { budget: { usagePct: 97, resetAtUnix: 0 } }, { budget: { usagePct: 97, resetAtUnix: 1.5 } },
+                          { budget: { usagePct: 97, resetAtUnix: 1, status: "locked out for someone@example.com" } }]) {
+      expect("quiet" in (pickTeamSettings(reply({ quiet: broken })) as { settings: object }).settings, JSON.stringify(broken)).toBe(false);
+    }
+    const mixed = pickTeamSettings(reply({ quiet: { budget: { usagePct: "x", resetAtUnix: 1 }, containment: true, agent: "SCOUT", path: "/jht_home/x", providerReady: false } }));
+    expect(mixed).toMatchObject({ ok: true, settings: { quiet: { containment: true, providerReady: false } } });
+    expect((mixed as { settings: { quiet: object } }).settings.quiet).toEqual({ containment: true, providerReady: false });
+  });
+});
+
