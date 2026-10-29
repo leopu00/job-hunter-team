@@ -8,6 +8,7 @@ import {
   readDesktopVpsPosition,
   readDesktopVpsPositionFacets,
   readDesktopVpsMap,
+  readDesktopVpsPiles,
   readDesktopVpsPositions,
   resetCachedReads,
   readDesktopVpsPositionsWindow,
@@ -78,6 +79,22 @@ describe("existing-team positions bridge", () => {
       { q: "synthetic", sort: "score", limit: 600, offset: 600 },
       { q: "synthetic", sort: "score", limit: 100, offset: 1200 },
     ]);
+  });
+
+  it("reads the five pile counts of the office in one request that carries nothing but the op", async () => {
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { scout: 4, analisti: 3, scorer: 2, scrittori: 1, critici: 0, extra: "ignored" } });
+    expect(await readDesktopVpsPiles()).toEqual({ source: "vps", data: { scout: 4, analisti: 3, scorer: 2, scrittori: 1, critici: 0 } });
+    expect(native.invoke).toHaveBeenCalledTimes(1);
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "piles" } });
+  });
+
+  it("refuses counts that are not five whole numbers, and passes on the core's own refusal", async () => {
+    for (const data of [{}, { scout: 1 }, { scout: -1, analisti: 0, scorer: 0, scrittori: 0, critici: 0 }, { scout: "3", analisti: 0, scorer: 0, scrittori: 0, critici: 0 }, { scout: 1.5, analisti: 0, scorer: 0, scrittori: 0, critici: 0 }, [], null]) {
+      native.invoke.mockResolvedValueOnce({ ok: true, data });
+      expect(await readDesktopVpsPiles(), JSON.stringify(data)).toEqual({ source: "unavailable", code: "desktop_bad_reply" });
+    }
+    native.invoke.mockResolvedValueOnce({ ok: false, error: "positions_request_invalid" });
+    expect(await readDesktopVpsPiles()).toEqual({ source: "unavailable", code: "positions_request_invalid" });
   });
 
   it("reads what the globe draws in one request, and follows `next` for a team that does not fit in one reply", async () => {

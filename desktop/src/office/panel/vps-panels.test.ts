@@ -3,8 +3,8 @@ import type { PositionWithScore } from "@/lib/types";
 
 // The office's panels over an existing team's VPS: the same lists and counts
 // as the cloud's, from the list of positions the core serves. Synthetic rows.
-const shared = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock("../../lib/existing-team-positions-shared", () => ({ readVpsPositionsShared: shared.read }));
+const shared = vi.hoisted(() => ({ read: vi.fn(), piles: vi.fn() }));
+vi.mock("../../lib/existing-team-positions-shared", () => ({ readVpsPositionsShared: shared.read, readVpsPilesShared: shared.piles }));
 
 import { boardOf, cvShelfOf, foundPerDayOf, panelPositionOf, phaseOf, pilesOf, placesOf, readVpsPiles, vpsPanelLoaders } from "./vps-panels";
 import { PANEL_LIST_MAX } from "./load-panels";
@@ -65,6 +65,7 @@ describe("the phases, as the piles count them", () => {
 });
 
 describe("the piles of the scene", () => {
+  beforeEach(() => { shared.read.mockReset(); shared.piles.mockReset(); });
   it("count the same positions as the phase lists, with no bound on the count", () => {
     const rows = [
       ...Array.from({ length: PANEL_LIST_MAX + 40 }, () => row({ status: "new" })),
@@ -78,12 +79,22 @@ describe("the piles of the scene", () => {
     expect(phaseOf(rows, "scout")).toHaveLength(PANEL_LIST_MAX);
   });
 
-  it("are read from the shared read, and are unknown, not zero, when the team could not be read", async () => {
+  it("are read as five counts, and are unknown, not zero, when the team could not be read", async () => {
+    shared.piles.mockResolvedValue({ source: "vps", data: { scout: 1, analisti: 0, scorer: 0, scrittori: 0, critici: 0 } });
+    expect(await readVpsPiles()).toMatchObject({ scout: 1, analisti: 0 });
+    expect(shared.read).not.toHaveBeenCalled();
+    shared.piles.mockResolvedValue({ source: "unavailable", code: "ssh_unavailable" });
+    expect(await readVpsPiles()).toBeNull();
+    shared.piles.mockResolvedValue({ source: "not_desktop" });
+    expect(await readVpsPiles()).toBeNull();
+    expect(shared.read).not.toHaveBeenCalled();
+  });
+
+  it("are counted from the list only when the core does not know the count", async () => {
+    shared.piles.mockResolvedValue({ source: "unavailable", code: "positions_request_invalid" });
     shared.read.mockResolvedValue({ source: "vps", data: [row({ status: "new" })] });
     expect(await readVpsPiles()).toMatchObject({ scout: 1, analisti: 0 });
     shared.read.mockResolvedValue({ source: "unavailable", code: "ssh_unavailable" });
-    expect(await readVpsPiles()).toBeNull();
-    shared.read.mockResolvedValue({ source: "not_desktop" });
     expect(await readVpsPiles()).toBeNull();
   });
 });
