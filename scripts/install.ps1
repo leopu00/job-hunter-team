@@ -463,6 +463,27 @@ function Add-ToUserPath {
 }
 
 # ── Step 5: host.env + pairing token ──────────────────────────────────────
+# host.env sta in una cartella montata nel container: un agente puo' metterci al posto del file un LINK (che nel container
+# e' pendente e sull'host punta a un file dell'utente). Si scrive in un temporaneo della stessa cartella e poi Move-Item:
+# il link, se c'e', viene tolto (solo lui) e mai seguito.
+function Write-HostEnvFile {
+  param([string]$Path, [string]$Content)
+  $dir = Split-Path -Parent $Path
+  $tmp = Join-Path $dir (".host.env.{0}.tmp" -f [guid]::NewGuid().ToString('N'))
+  try {
+    Set-Content -LiteralPath $tmp -Value $Content -Encoding UTF8
+    $existing = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($existing -and (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+      if ($existing.PSIsContainer) { [IO.Directory]::Delete($Path) } else { [IO.File]::Delete($Path) }
+    } elseif ($existing -and $existing.PSIsContainer) {
+      throw "host.env is a directory: $Path"
+    }
+    Move-Item -LiteralPath $tmp -Destination $Path -Force
+  } finally {
+    if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+  }
+}
+
 function Write-HostEnv {
   Write-Step 5 $TotalSteps "Writing host.env"
 
@@ -500,7 +521,7 @@ JHT_USER_TZ=$tz
   if ($DryRun) {
     Write-Dry "Set-Content $hostEnvFile (JHT_HOST_TYPE=$hostType, JHT_USER_TZ=$tz)"
   } else {
-    Set-Content -Path $hostEnvFile -Value $content -Encoding UTF8
+    Write-HostEnvFile -Path $hostEnvFile -Content $content
     Write-Ok "host.env written: $hostEnvFile (mode=$hostType, tz=$tz)"
   }
 

@@ -93,6 +93,8 @@ jht_host_env_value_valid() {
 jht_read_host_env_value() {
   local file="$1" requested="$2" line key value result=""
   local found=1
+  # Un link non e' il file di host-setup: lo ha messo un agente, e non si legge quello che indica.
+  [ ! -L "$file" ] || return 1
   [ -f "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"
@@ -111,6 +113,24 @@ jht_read_host_env_value() {
   done < "$file"
   [ "$found" -eq 0 ] || return 1
   printf '%s' "$result"
+}
+
+# host.env si scrive in un file temporaneo della stessa cartella e poi con `mv -f`: il rename sostituisce il file
+# (o un LINK messo li' da un agente, che dentro il container e' pendente e sull'host punta a un file dell'utente),
+# mentre `>` lo avrebbe seguito e troncato (.zshrc, authorized_keys). Il contenuto arriva su stdin.
+jht_write_host_env() {
+  local dir tmp
+  dir="$(dirname "$HOST_ENV_PATH")"
+  if [ -d "$HOST_ENV_PATH" ] && [ ! -L "$HOST_ENV_PATH" ]; then
+    warn "$HOST_ENV_PATH is a directory: not writing it"
+    return 1
+  fi
+  tmp="$(mktemp "$dir/.host.env.XXXXXX")" || return 1
+  # Il container lo legge con un altro utente: i permessi di sempre (umask), non quelli riservati di mktemp.
+  if ! cat > "$tmp" || ! chmod 644 "$tmp"; then rm -f "$tmp"; return 1; fi
+  # Un link che punta a una cartella farebbe entrare il file li' dentro: il link si toglie prima (solo il link).
+  if [ -L "$HOST_ENV_PATH" ]; then rm -f "$HOST_ENV_PATH"; fi
+  if ! mv -f "$tmp" "$HOST_ENV_PATH"; then rm -f "$tmp"; return 1; fi
 }
 
 I18N_PREFS_PATH="$JHT_HOME_HOST/i18n-prefs.json"
@@ -175,7 +195,7 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 # scelta resta valida. Il blocco "host type + swap" piu' giu' aggiunge
 # JHT_HOST_TYPE allo stesso file.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
-printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
+printf 'JHT_LANG=%s\n' "$JHT_LANG" | jht_write_host_env
 if ! jht_read_i18n_locale "$I18N_PREFS_PATH" >/dev/null 2>&1; then
   I18N_PREFS_TMP="$I18N_PREFS_PATH.tmp-$$"
   printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" > "$I18N_PREFS_TMP"
@@ -334,7 +354,7 @@ mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
   printf 'JHT_LANG=%s\n' "$JHT_LANG"
   printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
   printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
-} > "$HOST_ENV_PATH"
+} | jht_write_host_env
 
 if [ "$HOST_TYPE" = "local" ]; then
   ok "Host: $(ts host_setup.host.local 'local computer') — $(ts host_setup.swap_not_needed 'no swap configuration needed')"
