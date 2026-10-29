@@ -237,6 +237,21 @@ def roster_gap(state: dict) -> dict:
     return {"roster_alive": alive, "roster_missing": {role: max(0, want - alive[role]) for role, want in wanted.items()}}
 
 
+def _plan_hint(state: dict, info: dict) -> str:
+    """How an agent declares the missing plan: write the pick the person already made on the card, else ask with the card."""
+    fallback = info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"
+    registry = _load_module("plan_registry", "plan_registry.py")
+    provider = (registry.question_options() or {}).get("provider") if registry is not None else None
+    if not provider:
+        return fallback
+    try:
+        kind, answer = _plan_question_state(state, provider)
+    except sqlite3.Error:
+        return fallback
+    picked = _named_choice(answer, provider) if kind == "answered" else None
+    return _answered_plan_hint(provider, picked) if picked is not None else fallback
+
+
 def begin_burst() -> dict:
     """Profilo pronto → si apre la fase di burst. Idempotente.
 
@@ -254,7 +269,7 @@ def begin_burst() -> dict:
     if not info.get("ok"):
         return {"ok": False, "phase": state["phase"],
                 "reason": info.get("reason", "plan not declared"),
-                "hint": info.get("hint") or "ask the user with first_run.py ask-plan, then write the plan with plan_registry.py set"}
+                "hint": _plan_hint(state, info)}
 
     with contextlib.suppress(Exception):  # the card is a courtesy to the user: it never stops the burst
         close_plan_question()  # the plan is declared: the card that asked for it has nothing left to ask
@@ -509,6 +524,27 @@ def close_plan_question(now: Optional[datetime] = None) -> dict:
         return _close_plan_question(info, now)
 
 
+def _named_choice(answer: Optional[dict], provider: str) -> Optional[str]:
+    """The plan the person picked on the card (its option id) when the answer names one of the provider's plans, else None.
+
+    «I do not know», a card answered by the system, an answer with two choices: none of them names a plan."""
+    registry = _load_module("plan_registry", "plan_registry.py")
+    chosen = (answer or {}).get("scelte")
+    choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
+    if registry is None or choice is None or registry.find_plan(provider, choice) is None:
+        return None
+    return choice
+
+
+def _answered_plan_hint(provider: str, choice: str) -> str:
+    """What to tell an agent whose plan is not written yet while the person has ALREADY picked it on the card:
+    write that pick, never ask again (the person answered; a new question or «pick it in the card above» is a
+    stale request for what they already did)."""
+    return (f"the user already picked their plan on the card: `{choice}`. Do NOT ask again and do not point them to the card. "
+            f"Write exactly that pick with `python3 /app/shared/skills/plan_registry.py set {provider}:{choice}`"
+            " and run begin-burst again")
+
+
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
              now: Optional[datetime] = None) -> dict:
     """Ask the user which plan they have: the one way to do it, for any agent. The card goes to the chat where the
@@ -546,6 +582,10 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             holder = record.get("agent") or "capitano"
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
                     "question_id": record["id"], "agent": holder, "in_your_chat": holder == agent}
+        picked = _named_choice(answer, card["provider"]) if kind == "answered" else None
+        if picked is not None:  # the person already picked: the plan only waits to be written, nobody asks again
+            return {"ok": True, "asked": False, "answered": True, "choice": picked,
+                    "reason": _answered_plan_hint(card["provider"], picked)}
         cards = _cards_asked(state, card["provider"])
         if cards >= MAX_PLAN_CARDS:
             return {"ok": True, "asked": False, "limit": True,
@@ -777,9 +817,8 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
         return {"action": "none", "reason": "the database cannot be read"}
     if kind == "open":
         return {"action": "none", "reason": "a question about the plan is open"}
-    chosen = (answer or {}).get("scelte")
-    choice = chosen[0] if isinstance(chosen, list) and len(chosen) == 1 and isinstance(chosen[0], str) else None
-    if kind == "answered" and choice and registry.find_plan(provider, choice) is not None:
+    choice = _named_choice(answer, provider) if kind == "answered" else None
+    if choice is not None:
         left = after_s - (now - (_answered_at(answer) or now)).total_seconds()
         if left > 0:
             return {"action": "waiting", "seconds_left": int(left)}
