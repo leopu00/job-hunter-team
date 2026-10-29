@@ -9,7 +9,8 @@ lavorare. Tre cose lo spiegano e stanno nella scatola, non nell'app:
                 (`logs/sentinel-data.jsonl`): quanto e' piena e a che ora si riapre;
   containment   un agente tenuto fermo da un contenimento di sicurezza (un marker
                 `logs/containment/<SESSIONE>.hold.json`);
-  providerReady il provider attivo ha un accesso su disco (il file delle credenziali esiste e non e' vuoto).
+  providerReady il provider attivo accede con un file (abbonamento) e quel file esiste e non e' vuoto, in uno dei posti
+                dove il controllo d'avvio dell'app lo cerca. Con una chiave API il fatto manca: il team lavora senza file.
 
 Esce SOLO numeri e booleani, mai un percorso, un nome di agente, un'email o un testo libero. Un fatto che
 non si legge manca dalla risposta: non diventa mai «tutto a posto» ne' «guasto».
@@ -29,15 +30,20 @@ from pathlib import Path
 TAIL_BYTES = 64 * 1024
 USAGE_MAX = 1000.0
 
-# Dove il provider tiene l'accesso, dentro la home del team.
+# Dove il provider tiene l'accesso, dentro la home del team: la STESSA lista del controllo d'avvio dell'app
+# (game/scripts/setup/setup_service.gd, AUTH_PATHS), perche' un accesso valido in uno qualsiasi di questi posti
+# vale come «collegato». Il nome-vendor (openai/anthropic/moonshot) e il nome-CLI (codex/claude/kimi) sono lo stesso provider.
+_CLAUDE = [".claude/.credentials.json", ".claude/credentials.json", ".config/claude/credentials.json", ".config/claude/auth.json"]
+_CODEX = [".codex/auth.json", ".codex/credentials.json", ".config/codex/credentials.json"]
+_KIMI = [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json", ".kimi/kimi.json",
+         ".kimi/config.json", ".kimi/credentials.json", ".config/kimi/config.json"]
 AUTH_FILES = {
-    "claude": [".claude/.credentials.json"],
-    "anthropic": [".claude/.credentials.json"],
-    "openai": [".codex/auth.json", ".codex/credentials.json"],
-    "codex": [".codex/auth.json", ".codex/credentials.json"],
-    "kimi": [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json"],
-    "moonshot": [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json"],
+    "claude": _CLAUDE, "anthropic": _CLAUDE,
+    "openai": _CODEX, "codex": _CODEX,
+    "kimi": _KIMI, "moonshot": _KIMI,
 }
+# Solo con questi metodi l'accesso sta in un file: con una chiave API non c'e' nessun file e il team lavora lo stesso.
+FILE_AUTH_METHODS = ("subscription", "cli")
 
 
 def jht_home() -> Path:
@@ -94,13 +100,21 @@ def containment(home: Path) -> bool | None:
 
 
 def provider_ready(home: Path) -> bool | None:
-    """Il provider attivo ha un accesso su disco. None se non si sa quale provider sia, o non lo conosciamo."""
+    """Il provider attivo ha un accesso su disco. None (fatto mancante, mai «non collegato») se non si sa quale provider sia,
+    se non lo conosciamo, o se non accede con un file (chiave API, metodo mancante o sconosciuto)."""
     try:
         config = json.loads((home / "jht.config.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    active = config.get("active_provider") if isinstance(config, dict) else None
-    files = AUTH_FILES.get(str(active or "").strip().lower())
+    if not isinstance(config, dict):
+        return None
+    active = str(config.get("active_provider") or "").strip()
+    providers = config.get("providers")
+    entry = providers.get(active) if isinstance(providers, dict) else None
+    method = entry.get("auth_method") if isinstance(entry, dict) else None
+    if method not in FILE_AUTH_METHODS:
+        return None
+    files = AUTH_FILES.get(active.lower())
     if not files:
         return None
     for name in files:

@@ -83,8 +83,15 @@ def test_a_containment_is_a_hold_marker_and_nothing_else(home):
     assert team_quiet.containment(home) is True
 
 
+def config(home: Path, provider: str, method: str | None = "subscription", **extra: object) -> None:
+    entry: dict = dict(extra)
+    if method is not None:
+        entry["auth_method"] = method
+    (home / "jht.config.json").write_text(json.dumps({"active_provider": provider, "providers": {provider: entry}}))
+
+
 def test_the_login_is_a_credentials_file_that_is_not_empty_for_the_active_provider(home):
-    (home / "jht.config.json").write_text(json.dumps({"active_provider": "codex"}))
+    config(home, "codex")
     assert team_quiet.provider_ready(home) is False
     (home / ".codex").mkdir()
     (home / ".codex" / "auth.json").write_text("")
@@ -92,20 +99,55 @@ def test_the_login_is_a_credentials_file_that_is_not_empty_for_the_active_provid
     (home / ".codex" / "auth.json").write_text("{}")
     assert team_quiet.provider_ready(home) is True
     # the login of another provider does not count
-    (home / "jht.config.json").write_text(json.dumps({"active_provider": "claude"}))
+    config(home, "claude")
     assert team_quiet.provider_ready(home) is False
 
 
-@pytest.mark.parametrize("config", ["", "not json", "[]", json.dumps({}), json.dumps({"active_provider": "unknown"}), json.dumps({"active_provider": None})])
-def test_a_provider_that_is_not_known_gives_no_answer(home, config):
-    (home / "jht.config.json").write_text(config)
+@pytest.mark.parametrize("provider,where", [
+    ("claude", ".claude/.credentials.json"), ("claude", ".claude/credentials.json"),
+    ("claude", ".config/claude/credentials.json"), ("claude", ".config/claude/auth.json"),
+    ("anthropic", ".config/claude/auth.json"),
+    ("codex", ".codex/credentials.json"), ("openai", ".config/codex/credentials.json"),
+    ("kimi", ".kimi/credentials/kimi-code.json"), ("kimi", ".kimi/kimi.json"), ("kimi", ".config/kimi/config.json"),
+    ("moonshot", ".kimi/credentials.json"),
+])
+def test_a_login_in_any_place_the_start_check_looks_in_counts(home, provider, where):
+    config(home, provider)
+    assert team_quiet.provider_ready(home) is False
+    target = home / where
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("{}")
+    assert team_quiet.provider_ready(home) is True
+
+
+def test_the_cli_login_is_a_file_login_too(home):
+    config(home, "claude", method="cli")
+    (home / ".claude").mkdir()
+    (home / ".claude" / ".credentials.json").write_text("{}")
+    assert team_quiet.provider_ready(home) is True
+
+
+@pytest.mark.parametrize("method", ["api_key", "", "oauth2", None, 5])
+def test_a_provider_that_does_not_log_in_with_a_file_gives_no_answer_never_not_connected(home, method):
+    # with an API key there is no credentials file and the team works all the same
+    config(home, "claude", method=method, api_key="synthetic-key")
+    assert team_quiet.provider_ready(home) is None
+    assert "providerReady" not in team_quiet.status(home)["quiet"]
+
+
+@pytest.mark.parametrize("raw", ["", "not json", "[]", json.dumps({}), json.dumps({"active_provider": "unknown"}), json.dumps({"active_provider": None}),
+                                 json.dumps({"active_provider": "claude"}), json.dumps({"active_provider": "claude", "providers": []}),
+                                 json.dumps({"active_provider": "claude", "providers": {"claude": "subscription"}}),
+                                 json.dumps({"active_provider": "unknown", "providers": {"unknown": {"auth_method": "subscription"}}})])
+def test_a_provider_that_is_not_known_gives_no_answer(home, raw):
+    (home / "jht.config.json").write_text(raw)
     assert team_quiet.provider_ready(home) is None
 
 
 def test_what_cannot_be_read_is_missing_from_the_answer(home):
     assert team_quiet.status(home) == {"ok": True, "quiet": {"containment": False}}
     samples(home, {"usage": 100, "reset_at_unix": 1790000000})
-    (home / "jht.config.json").write_text(json.dumps({"active_provider": "kimi"}))
+    config(home, "kimi")
     assert team_quiet.status(home) == {
         "ok": True,
         "quiet": {"budget": {"usagePct": 100.0, "resetAtUnix": 1790000000}, "containment": False, "providerReady": False},
@@ -117,7 +159,7 @@ def test_the_answer_carries_no_path_name_or_free_text(home):
     folder = home / "logs" / "containment"
     folder.mkdir()
     (folder / "ANALISTA.hold.json").write_text(json.dumps({"reason": "secret reason", "by": "bob"}))
-    (home / "jht.config.json").write_text(json.dumps({"active_provider": "claude", "email": "carol@example.com"}))
+    config(home, "claude", email="carol@example.com")
     text = json.dumps(team_quiet.status(home))
     for leaked in (str(home), "alice", "ANALISTA", "secret", "bob", "carol", "example.com"):
         assert leaked not in text
