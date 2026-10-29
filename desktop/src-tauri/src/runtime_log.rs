@@ -38,7 +38,7 @@ pub(crate) struct RuntimeLog {
 }
 
 /// The kinds of read the load-times log names, in the order of the core's operations.
-pub(crate) const POSITIONS_READ_KINDS: [&str; 9] = ["list", "detail", "facets", "stats", "map", "profile", "cloud_sync", "team_activity", "directives"];
+pub(crate) const POSITIONS_READ_KINDS: [&str; 10] = ["list", "detail", "facets", "stats", "map", "profile", "cloud_sync", "team_activity", "directives", "piles"];
 const POSITIONS_READ_OTHER: &str = "other";
 
 /// The pages whose load time is written down, as the load-times log names them.
