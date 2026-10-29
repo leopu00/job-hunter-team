@@ -135,7 +135,8 @@ def wrapper(tmp_path):
     calls = tmp_path / "compose-calls.txt"
 
     def run(body: str, *, running_hash: str = OLD_HASH, working_dir: str | None = None, down_stderr: str = "",
-            down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False):
+            down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False, no_container: bool = False,
+            ps_fails: bool = False, runtime_kind: str = "podman"):
         compose_file = runtime / "docker-compose.yml"
         override = runtime / "podman-native-override.yml"
         details = "|".join([
@@ -144,7 +145,7 @@ def wrapper(tmp_path):
         ])
         stubs = f"""
 set -u
-CONTAINER_RUNTIME=podman
+CONTAINER_RUNTIME={runtime_kind}
 PODMAN_RUNTIME_MODE=native
 CONTAINER_SERVICE=jht
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
@@ -152,6 +153,7 @@ RUNTIME_DIR="{runtime}"
 COMPOSE_FILE="{compose_file}"
 err()  {{ echo "error: $*" >&2; }}
 warn() {{ echo "warn: $*" >&2; }}
+info() {{ echo "info: $*" >&2; }}
 runtime_bundle_trusted() {{ return 0; }}
 docker_reachable() {{ return 0; }}
 compose_project_name() {{ echo jht; }}
@@ -168,7 +170,9 @@ docker() {{
 compose_file() {{
   shift
   case "$1" in
-    ps) if grep -qx down "{calls}" 2>/dev/null; then
+    ps) if [ "{int(ps_fails)}" = 1 ]; then return 1; fi
+        if [ "{int(no_container)}" = 1 ]; then return 0; fi
+        if grep -qx down "{calls}" 2>/dev/null; then
           if [ "{int(broker_left)}" = 1 ]; then echo fedcba987654; return 0; fi
           if [ "{int(not left_after_down)}" = 1 ]; then return 0; fi
         fi
@@ -251,3 +255,28 @@ def test_any_other_down_error_passes_as_it_is_with_its_exit(wrapper):
     assert "rc=3" in done.stdout
     assert "Error: removing container abc network: 1 error occurred:\n\t* something else" in done.stderr
     assert done.stderr.count("Error:") == 1
+
+
+# ── `jht down` with no container: nothing to stop, and the uninstall chain goes on (Linux Gate CLI 19i, A1) ──
+
+@pytest.mark.parametrize("kind", ["podman", "docker"])
+def test_down_with_no_container_exits_zero_and_says_there_is_nothing_to_stop(wrapper, kind):
+    done = wrapper.run("container_down; echo rc=$?", no_container=True, runtime_kind=kind)
+    assert "rc=0" in done.stdout, done.stderr
+    assert "niente da fermare" in done.stderr
+    assert wrapper.downs() == [] and "arresto negato" not in done.stderr
+
+
+def test_down_that_cannot_ask_the_provider_is_still_a_refusal_not_a_nothing_to_stop(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", ps_fails=True)
+    assert "rc=1" in done.stdout and "arresto negato" in done.stderr and "niente da fermare" not in done.stderr
+
+
+def test_a_chain_that_starts_with_down_goes_on_when_there_is_no_container(wrapper):
+    done = wrapper.run("container_down && echo went-on", no_container=True)
+    assert "went-on" in done.stdout
+
+
+def test_a_container_of_ours_with_another_hash_is_still_stopped_by_down(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=OLD_HASH)
+    assert "rc=0" in done.stdout and wrapper.downs() == ["down"]

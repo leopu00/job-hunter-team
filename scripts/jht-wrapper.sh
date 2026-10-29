@@ -1225,9 +1225,17 @@ stale_config_hint() {
 # reinstallazione (stesso progetto, solo la config-hash e' cambiata): fermarlo
 # e' l'unica strada per ripartire con la configurazione nuova.
 container_down() {
-  if ! container_up >/dev/null; then
+  local up_status=0
+  container_up >/dev/null || up_status=$?
+  if [ "$up_status" -ne 0 ]; then
     if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null; then
       warn "config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo."
+    elif [ "$up_status" -eq 3 ]; then
+      # No container of the project: there is nothing to stop. It is not a refusal, and a `jht down && rm -rf …` (the
+      # uninstall the installer printed) must go on (TEST 19i, A1). A container that is there and cannot be attested
+      # (status 1) is still refused below.
+      info "niente da fermare: il container '$CONTAINER_SERVICE' non c'e'."
+      return 0
     else
       err "Container JHT non attestabile; arresto negato."
       return 1
