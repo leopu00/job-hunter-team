@@ -1828,6 +1828,55 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team's first start cannot be read.",
     "Try again in a moment; if it stays so, look at the team's state.",
   ),
+  // The sign-in of this computer's team with its provider (Settings, «Provider»): see, and take off.
+  team_provider_request_invalid: copy(
+    "La richiesta non era valida e non è stata mandata alla squadra.",
+    "Riprova. Se si ripete, aggiorna l’app.",
+    "The request was not valid and was not sent to the team.",
+    "Try again. If it happens again, update the app.",
+  ),
+  team_provider_window_refused: copy(
+    "Questo gesto si fa solo dalla finestra principale dell’app.",
+    "Torna alla finestra principale e riprova.",
+    "This can be done only from the app’s main window.",
+    "Go back to the main window and try again.",
+  ),
+  team_provider_read_only: copy(
+    "Questa squadra non è quella del tuo profilo su questo computer: l’accesso non si cambia da qui.",
+    "Apri l’app con il profilo che ha creato la squadra.",
+    "This team is not your profile’s team on this computer: the sign-in cannot be changed from here.",
+    "Open the app with the profile that created the team.",
+  ),
+  team_provider_unavailable: copy(
+    "Non riesco a leggere o togliere l’accesso del provider.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
+    "The provider’s sign-in cannot be read or taken off.",
+    "Try again in a moment; if it stays so, look at the team’s state.",
+  ),
+  provider_unknown: copy(
+    "La squadra non ha un provider riconosciuto.",
+    "Scegli il provider dal passo «Provider» della configurazione.",
+    "The team has no provider the app knows.",
+    "Pick the provider from the setup’s «Provider» step.",
+  ),
+  provider_not_subscription: copy(
+    "La squadra usa una chiave e non un abbonamento: non c’è un accesso da disconnettere.",
+    "La chiave si cambia dal passo «Provider» della configurazione.",
+    "The team uses a key and not a subscription: there is no sign-in to disconnect.",
+    "The key is changed from the setup’s «Provider» step.",
+  ),
+  provider_logout_incomplete: copy(
+    "L’accesso non è stato tolto del tutto: qualcosa è rimasto, o un agente lo ha scritto di nuovo.",
+    "Ferma gli agenti dal Pannello Agenti e riprova.",
+    "The sign-in was not taken off completely: something is left, or an agent wrote it again.",
+    "Stop the agents from the Agents panel and try again.",
+  ),
+  provider_logout_failed: copy(
+    "Non sono riuscito a togliere l’accesso del provider.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
+    "The provider’s sign-in could not be taken off.",
+    "Try again in a moment; if it stays so, look at the team’s state.",
+  ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
     "Per sicurezza non lo uso: rifai il passo Runtime della configurazione.",
