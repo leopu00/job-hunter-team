@@ -49,6 +49,19 @@ export function parseExitTeam(value: unknown): ExitTeam | null {
   return TEAMS.find((known) => known === team) ?? null;
 }
 
+/** What the native side tells before the question: where the team is, and how many containers that are not the team's share its machine. */
+export interface ExitState {
+  team: ExitTeam;
+  otherContainers: number;
+}
+
+export function parseExitState(value: unknown): ExitState | null {
+  const team = parseExitTeam(value);
+  if (!team) return null;
+  const others = (value as { otherContainers?: unknown }).otherContainers;
+  return { team, otherContainers: typeof others === "number" && Number.isSafeInteger(others) && others > 0 ? others : 0 };
+}
+
 export function parseExitProgress(value: unknown): ExitProgress | null {
   if (!value || typeof value !== "object") return null;
   const { ready, active } = value as { ready?: unknown; active?: unknown };
@@ -63,10 +76,10 @@ export function exitErrorCode(error: unknown): string {
 }
 
 /** Where the team is. Resolves to null when it cannot be told (no account yet, not the desktop): the window then just closes. */
-export async function exitTeam(): Promise<ExitTeam | null> {
+export async function exitState(): Promise<ExitState | null> {
   if (!isTauri()) return null;
   try {
-    return parseExitTeam(await invoke("app_exit_state"));
+    return parseExitState(await invoke("app_exit_state"));
   } catch {
     return null;
   }
