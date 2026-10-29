@@ -3132,7 +3132,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         ("onboarding_ssh_host_key_probe", "a read of the host's key"),
         ("onboarding_ssh_host_key_confirm", "pins the key on this computer"),
         ("team_settings", "has its own read-only mode (destination_mode)"),
-        ("app_exit_state", "a read of where the team is, for the exit dialog; acts on nothing, and the window's own check comes first"),
+        ("app_exit_state", "a read of where the team is, for the exit dialog; it does not act on the team (it goes through the same local-runtime check as every local step, which may claim an unclaimed folder) and the window's own check comes first"),
         ("app_exit_order", "the exit dialog asks the person first (the dialog is the question; test lib/app-exit-callers) and it acts only on this computer's team: any other destination answers app_exit_vps_untouched"),
         ("app_exit_poll", "only after the order the person chose in the exit dialog (test lib/app-exit-callers), a read of the flag, and only on this computer's team"),
         ("app_exit_finish", "the exit dialog asks the person first (the dialog is the question; test lib/app-exit-callers) and the plan refuses a VPS (app_exit_vps_untouched); detach runs nothing"),
