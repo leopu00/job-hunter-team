@@ -1232,6 +1232,7 @@ mod tests {
     #[test]
     fn a_save_that_fails_says_so_with_a_code() {
         let root = dir("support-fail");
+        fs::create_dir_all(&root).unwrap();
         let blocker = root.join("support-reports");
         fs::write(&blocker, "a file where the folder should be").unwrap();
         assert_eq!(save_onboarding_support_draft(&blocker, "# report\n"), Err("support_report_dir_unavailable"));
