@@ -350,3 +350,57 @@ def test_the_end_is_the_minute_asked_with_the_seconds_of_the_click_and_on_a_day_
     wide = hours_now(home)
     assert {"days": ["sat"], "start": "19:30", "end": "23:30"} in wide["windows"]
     assert reads(wide, wall(5, 23 * 60 + 29)) and not reads(wide, wall(5, 23 * 60 + 30))
+
+
+# ── «a tutta»: the pause of the throttle ──────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def throttle(home, monkeypatch):
+    """throttle-config.py (a hyphen in the name) on a config of its own, reading the burn of this test."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("throttle_config_burst", SKILLS_DIR / "throttle-config.py")
+    tc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tc)
+    tc.CONFIG_DIR = home / "config"
+    tc.CONFIG_FILE = home / "config" / "throttle.json"
+    tc._FLOOR_EXEMPT_FILE = home / "config" / "throttle-floor-exempt.txt"
+    tc._BURN_INTENT_MOD = burn_intent
+    tc.CONFIG_DIR.mkdir()
+    tc.CONFIG_FILE.write_text(json.dumps({"scout-1": 300, "analista-1": 780, "capitano": 0}), encoding="utf-8")
+    return tc
+
+
+def test_without_a_burst_a_worker_waits_what_the_floor_and_the_captain_give_it(throttle):
+    assert throttle.get_agent("scout-1") == 300 and throttle.get_agent("analista-1") == 780
+
+
+def test_during_the_burst_no_pause_is_longer_than_the_lowest_step_of_the_ladder(home, throttle):
+    put_config(home, OFFICE)
+    burst.start("23:00", now=NOW)
+    cap = burst.BURST_PAUSE_SEC
+    assert cap == 60 and burn_intent.pace_cap() == 60
+    assert throttle.get_agent("scout-1") == cap and throttle.get_agent("analista-1") == cap
+    assert throttle.effective("scout-1", 600) == cap, "a number written by hand in a prompt is capped too"
+    assert throttle.effective("scout-1", 30) == 30 and throttle.get_agent("capitano") == 0, "the cap never lengthens"
+
+
+def test_the_pause_comes_back_when_the_burst_ends_or_is_stopped(home, throttle):
+    put_config(home, OFFICE)
+    burst.start("23:00", now=datetime.now(timezone.utc))
+    assert throttle.get_agent("scout-1") == 60
+    burst.stop()
+    assert throttle.get_agent("scout-1") == 300 and throttle.get_agent("analista-1") == 780
+
+
+def test_a_burn_that_does_not_say_a_tutta_leaves_the_pauses_as_they_are(home, throttle):
+    burn_intent.grant(hours=2, reason="stanotte spremete")
+    assert burn_intent.pace_cap() is None
+    assert throttle.get_agent("scout-1") == 300 and throttle.get_agent("analista-1") == 780
+
+
+def test_a_cap_that_is_not_a_number_is_no_cap(home):
+    burn_intent.grant(hours=2)
+    flag = json.loads(burn_intent.INTENT_FLAG.read_text(encoding="utf-8"))
+    for bad in ("60", -5, True, None, 1.5):
+        burn_intent.INTENT_FLAG.write_text(json.dumps({**flag, "pace_cap_sec": bad}), encoding="utf-8")
+        assert burn_intent.pace_cap() is None, bad
