@@ -48,7 +48,7 @@ describe("the screen after the setup", () => {
   it("puts the profile card on the left and the chat with the Assistant on the right", () => {
     page("interview");
     const profile = screen.getByRole("complementary");
-    expect(profile).toContainElement(screen.getByTestId("profile-progress-stub"));
+    expect(profile).toContainElement(screen.getByTestId("profile-progress"));
     const assistant = screen.getByRole("region", { name: "Chat with the Assistant" });
     expect(assistant).toContainElement(screen.getByTestId("the-chat"));
     expect(assistant).toContainElement(screen.getByTestId("assistant-portrait-stub"));
