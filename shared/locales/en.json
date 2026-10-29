@@ -177,6 +177,7 @@
   "profile_confirm.correct": "I want to correct something",
   "profile_confirm.name": "Name",
   "profile_confirm.email": "Email",
+  "profile_confirm.field.work_authorization": "Work authorization",
   "plan.none_known": "no known plans",
   "plan.weekly_cap": "weekly cap",
   "plan.no_weekly_cap": "no weekly cap",

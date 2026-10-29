@@ -42,6 +42,8 @@ mod team_backup;
 mod team_export;
 mod team_owner;
 mod chat_attachment;
+mod profile_progress;
+mod team_start;
 mod work_stats;
 mod text_file_export;
 mod voice_input;
@@ -88,6 +90,8 @@ pub fn run() {
             account_scope::runtime_playground_local_reset,
             team_owner::runtime_local_team_owner_identity,
             team_owner::runtime_local_team_owner,
+            profile_progress::profile_progress_read,
+            team_start::team_start_read,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,

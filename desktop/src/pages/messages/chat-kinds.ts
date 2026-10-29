@@ -1,3 +1,4 @@
+import { splitEmotion } from "../../lib/assistant-emotion";
 import type {
   ChatKind,
   DirectChatAnswer,
@@ -60,13 +61,20 @@ export function suggestionsOf(value: unknown): string[] | undefined {
   return lines.length >= SUGGESTION_LIMITS.min && lines.length <= SUGGESTION_LIMITS.max ? lines : undefined;
 }
 
-/** A message with only what the screen can trust: the kind from the list and the suggestions, on the agent's rows only. */
+/** A message with only what the screen can trust: the kind from the list and the suggestions, on the agent's rows only,
+ *  and the agent's leading mood tag taken out of its text (the text shown never carries it; the portrait shows it). */
 export function cleanMessage(message: DirectChatMessage): DirectChatMessage {
   const { kind, suggestions, ...rest } = message as DirectChatMessage & Record<string, unknown>;
   // a message has no subject yet: only the questions have one
   delete (rest as Record<string, unknown>).subject;
   const out: DirectChatMessage = { ...(rest as DirectChatMessage) };
   if (message.role === "agent") {
+    const { emotion, text } = splitEmotion(message.text);
+    // a message that was only a tag keeps its text: an empty bubble says less than the tag does
+    if (emotion && text.trim()) {
+      out.text = text;
+      out.emotion = emotion;
+    }
     out.kind = messageKind(kind);
     const lines = suggestionsOf(suggestions);
     if (lines) out.suggestions = lines;
