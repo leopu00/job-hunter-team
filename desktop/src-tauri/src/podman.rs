@@ -287,6 +287,8 @@ pub(crate) enum MachineStop {
     KeptForOthers(usize),
     /// The stop did not run or did not finish: the machine may still be on.
     NotStopped,
+    /// Whether the machine is on could not be told (its state could not be read): nothing was stopped.
+    StateUnknown,
 }
 
 /// The team's containers, by the names the compose file fixes (`container_name`): the container, the broker and the Telegram
@@ -329,22 +331,30 @@ enum MachineState {
     Unknown,
 }
 
-/// What `podman machine inspect <name> --format {{.State}}` came to. A machine that is not there makes the call fail
-/// (nothing to stop), and so does a Podman that is not installed.
-fn machine_state_from(outcome: Result<CommandOutcome, CommandFailure>) -> MachineState {
+/// What `podman machine inspect <name> --format {{.State}}` came to, given whether the machine's own configuration is
+/// on this computer (`machine_config_exists`: Some(false) = there is no such machine; None = could not be looked at).
+/// A machine that is not there is off. An inspect that fails for a machine that IS there says nothing about whether it
+/// is on, and it is not taken for off.
+fn machine_state_from(configured: Option<bool>, outcome: Option<Result<CommandOutcome, CommandFailure>>) -> MachineState {
+    if configured == Some(false) {
+        return MachineState::Off;
+    }
     match outcome {
-        Ok(output) if output.success => {
+        Some(Ok(output)) if output.success => {
             let state = String::from_utf8_lossy(&output.stdout).trim().to_ascii_lowercase();
             if matches!(state.as_str(), "stopped" | "configured") { MachineState::Off } else { MachineState::Running }
         }
-        Ok(_) | Err(CommandFailure::NotFound) => MachineState::Off,
-        Err(CommandFailure::TimedOut) | Err(CommandFailure::Failed) => MachineState::Unknown,
+        _ => MachineState::Unknown,
     }
 }
 
-fn machine_state(timeout: Duration) -> MachineState {
+fn machine_state(home: Option<&std::path::Path>, timeout: Duration) -> MachineState {
+    let configured = home.map(jht_machine_exists);
+    if configured == Some(false) {
+        return machine_state_from(configured, None);
+    }
     let inspect = args(&["machine", "inspect", &jht_machine(), "--format", "{{.State}}"]);
-    machine_state_from(command(&inspect, timeout, None, true))
+    machine_state_from(configured, Some(command(&inspect, timeout, None, true)))
 }
 
 /// What to do with the machine, from what is known of it: the end, or to stop it. It falls on the safe side: a machine
@@ -358,7 +368,7 @@ enum MachinePlan {
 fn machine_plan(state: MachineState, others: Option<usize>) -> MachinePlan {
     match (state, others) {
         (MachineState::Off, _) => MachinePlan::Done(MachineStop::Stopped),
-        (MachineState::Unknown, _) => MachinePlan::Done(MachineStop::NotStopped),
+        (MachineState::Unknown, _) => MachinePlan::Done(MachineStop::StateUnknown),
         (MachineState::Running, Some(0)) => MachinePlan::Stop,
         (MachineState::Running, Some(others)) => MachinePlan::Done(MachineStop::KeptForOthers(others)),
         (MachineState::Running, None) => MachinePlan::Done(MachineStop::NotStopped),
@@ -367,10 +377,11 @@ fn machine_plan(state: MachineState, others: Option<usize>) -> MachinePlan {
 
 /// Stops the JHT Podman machine, the virtual machine that holds the runtime's memory (`podman machine stop`), unless
 /// containers that are not the team's run on it: then it stays on for them, and the caller says so. A machine that is
-/// not there or already stopped is stopped. A machine that is on and cannot be asked what runs on it is not stopped.
+/// not there or already stopped is stopped. A machine that is on and cannot be asked what runs on it is not stopped, and
+/// one whose state cannot be read is not said to be off: nothing is stopped and the caller says the state is unknown.
 /// Never touches another machine.
-pub(crate) fn stop_jht_machine(timeout: Duration) -> MachineStop {
-    let state = machine_state(LISTING_TIMEOUT);
+pub(crate) fn stop_jht_machine(home: Option<&std::path::Path>, timeout: Duration) -> MachineStop {
+    let state = machine_state(home, LISTING_TIMEOUT);
     let others = (state == MachineState::Running).then(|| other_containers_on_jht_machine(LISTING_TIMEOUT)).flatten();
     match machine_plan(state, others) {
         MachinePlan::Done(done) => done,
@@ -583,19 +594,29 @@ mod tests {
     }
 
     #[test]
-    fn the_state_of_the_machine_is_read_and_a_missing_one_is_off() {
-        assert_eq!(machine_state_from(outcome(true, "running\n")), MachineState::Running);
-        assert_eq!(machine_state_from(outcome(true, "Running")), MachineState::Running);
-        assert_eq!(machine_state_from(outcome(true, "starting\n")), MachineState::Running, "anything that is not off may have containers");
-        assert_eq!(machine_state_from(outcome(true, "")), MachineState::Running);
-        assert_eq!(machine_state_from(outcome(true, "stopped\n")), MachineState::Off);
-        assert_eq!(machine_state_from(outcome(true, "configured\n")), MachineState::Off);
-        // not there: the call fails, and so does a Podman that is not installed
-        assert_eq!(machine_state_from(outcome(false, "")), MachineState::Off);
-        assert_eq!(machine_state_from(Err(CommandFailure::NotFound)), MachineState::Off);
-        // no answer: not known
-        assert_eq!(machine_state_from(Err(CommandFailure::TimedOut)), MachineState::Unknown);
-        assert_eq!(machine_state_from(Err(CommandFailure::Failed)), MachineState::Unknown);
+    fn the_state_of_the_machine_is_read_and_only_a_machine_that_is_not_there_is_off_without_asking() {
+        let said = |configured, result| machine_state_from(configured, Some(result));
+        assert_eq!(said(Some(true), outcome(true, "running\n")), MachineState::Running);
+        assert_eq!(said(Some(true), outcome(true, "Running")), MachineState::Running);
+        assert_eq!(said(Some(true), outcome(true, "starting\n")), MachineState::Running, "anything that is not off may have containers");
+        assert_eq!(said(Some(true), outcome(true, "")), MachineState::Running);
+        assert_eq!(said(Some(true), outcome(true, "stopped\n")), MachineState::Off);
+        assert_eq!(said(Some(true), outcome(true, "configured\n")), MachineState::Off);
+        // no configuration of that machine on this computer: there is no machine, whatever the call said
+        assert_eq!(machine_state_from(Some(false), None), MachineState::Off);
+        assert_eq!(said(Some(false), outcome(false, "")), MachineState::Off);
+    }
+
+    #[test]
+    fn an_inspect_that_fails_for_a_machine_that_is_there_does_not_make_it_off() {
+        let said = |configured, result| machine_state_from(configured, Some(result));
+        for configured in [Some(true), None] {
+            assert_eq!(said(configured, outcome(false, "")), MachineState::Unknown, "the call failed: not told whether it is on");
+            assert_eq!(said(configured, Err(CommandFailure::NotFound)), MachineState::Unknown);
+            assert_eq!(said(configured, Err(CommandFailure::TimedOut)), MachineState::Unknown);
+            assert_eq!(said(configured, Err(CommandFailure::Failed)), MachineState::Unknown);
+        }
+        assert_eq!(machine_state_from(None, None), MachineState::Unknown);
     }
 
     #[test]
@@ -609,9 +630,9 @@ mod tests {
         assert_eq!(machine_plan(MachineState::Running, Some(2)), Done(MachineStop::KeptForOthers(2)));
         // on and the listing did not answer: the safe side, it is not stopped under whoever may be on it
         assert_eq!(machine_plan(MachineState::Running, None), Done(MachineStop::NotStopped));
-        // not known whether it is on: not stopped either
-        assert_eq!(machine_plan(MachineState::Unknown, None), Done(MachineStop::NotStopped));
-        assert_eq!(machine_plan(MachineState::Unknown, Some(0)), Done(MachineStop::NotStopped));
+        // not known whether it is on: nothing is stopped and the state is said to be unknown
+        assert_eq!(machine_plan(MachineState::Unknown, None), Done(MachineStop::StateUnknown));
+        assert_eq!(machine_plan(MachineState::Unknown, Some(0)), Done(MachineStop::StateUnknown));
     }
 
     #[test]

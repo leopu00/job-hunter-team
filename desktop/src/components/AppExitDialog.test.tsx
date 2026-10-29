@@ -96,6 +96,25 @@ describe("AppExitDialog", () => {
     expect(screen.queryByTestId("app-exit-others")).toBeNull();
   });
 
+  it("says the state of the machine is unknown, and not the generic failure, when the native side could not read it", async () => {
+    team({ failing: { app_exit_finish: "app_exit_machine_state_unknown" } });
+    render(<AppExitDialog />);
+    await closeButton();
+    await userEvent.click(await screen.findByTestId("app-exit-forced"));
+    expect(await screen.findByTestId("app-exit-failed")).toHaveTextContent(T.machineUnknown);
+    expect(screen.getByTestId("app-exit-failed")).not.toHaveTextContent(T.failed);
+    // the app stays open and the three ways are offered again
+    for (const mode of ["ordered", "forced", "detach"]) expect(screen.getByTestId(`app-exit-${mode}`)).toBeInTheDocument();
+  });
+
+  it("keeps the generic sentence for any other failure of the stop", async () => {
+    team({ failing: { app_exit_finish: "app_exit_machine_not_stopped" } });
+    render(<AppExitDialog />);
+    await closeButton();
+    await userEvent.click(await screen.findByTestId("app-exit-forced"));
+    expect(await screen.findByTestId("app-exit-failed")).toHaveTextContent(T.failed);
+  });
+
   it("offers the three ways for a team on this computer", async () => {
     team();
     render(<AppExitDialog />);

@@ -325,11 +325,13 @@ pub(crate) async fn app_exit_finish(
                         return Err("app_exit_down_failed");
                     }
                 }
-                Step::MachineStop => match crate::podman::stop_jht_machine(MACHINE_TIMEOUT) {
+                Step::MachineStop => match crate::podman::stop_jht_machine(app.path().home_dir().ok().as_deref(), MACHINE_TIMEOUT) {
                     // off, or on for the containers that are not the team's (the page said so before the choice)
                     crate::podman::MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}
                     // a machine that did not stop is told, not hidden: the app stays open
                     crate::podman::MachineStop::NotStopped => return Err("app_exit_machine_not_stopped"),
+                    // whether the machine is on could not be read: it is not said to be off, and nothing was stopped
+                    crate::podman::MachineStop::StateUnknown => return Err("app_exit_machine_state_unknown"),
                 },
             }
         }
@@ -456,5 +458,7 @@ mod tests {
         let finish = source.split("fn app_exit_finish(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(finish.contains("MachineStop::NotStopped => return Err(\"app_exit_machine_not_stopped\")"));
         assert!(finish.contains("MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}"));
+        // a state that could not be read is its own answer, not a machine said to be off
+        assert!(finish.contains("MachineStop::StateUnknown => return Err(\"app_exit_machine_state_unknown\")"));
     }
 }

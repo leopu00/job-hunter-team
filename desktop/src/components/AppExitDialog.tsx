@@ -4,6 +4,7 @@ import {
   EXIT_OPEN_EVENT,
   exitAcknowledge,
   exitCancel,
+  exitErrorCode,
   exitFinish,
   exitOrder,
   exitPoll,
@@ -25,7 +26,7 @@ type Phase =
   | { kind: "choose"; remember: boolean }
   | { kind: "waiting"; active: number; slow: boolean }
   | { kind: "stopping" }
-  | { kind: "failed" };
+  | { kind: "failed"; code?: string };
 
 /** Asks how to leave: the window's close button and ⌘Q come here first (native side), and so does the navbar button. */
 export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { pollMs?: number; slowMs?: number }) {
@@ -44,8 +45,8 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
     if (!quiet) setPhase({ kind: "stopping" });
     try {
       await exitFinish(mode);
-    } catch {
-      if (runRef.current === run) setPhase({ kind: "failed" });
+    } catch (error) {
+      if (runRef.current === run) setPhase({ kind: "failed", code: exitErrorCode(error) });
     }
   }, []);
 
@@ -158,7 +159,7 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
         {(phase.kind === "choose" || phase.kind === "failed") && (
           <>
             {phase.kind === "failed" && (
-              <p role="alert" data-testid="app-exit-failed" className="text-[11px] text-[var(--color-red)]">{t.failed}</p>
+              <p role="alert" data-testid="app-exit-failed" className="text-[11px] text-[var(--color-red)]">{phase.code === "app_exit_machine_state_unknown" ? t.machineUnknown : t.failed}</p>
             )}
             {others > 0 && (
               <p data-testid="app-exit-others" className="text-[11px] text-[var(--color-muted)]">{fill(t.othersKept, { count: others })}</p>
