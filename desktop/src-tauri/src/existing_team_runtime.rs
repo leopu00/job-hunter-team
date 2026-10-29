@@ -158,14 +158,14 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','piles','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
 DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
 if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
 if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','piles','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 if op=='cloud_sync':
  # How the box's push to the website is going: its periodic push keeps the last outcome in
@@ -283,6 +283,17 @@ def dash_rows(sql,args=()):
   application=applications_by.get(pid) if applications_by is not None else one('SELECT * FROM applications WHERE position_id=?',(pid,))
   out.append(dash_row(raw,score,application))
  return out
+if op=='piles':
+ # What the office draws as the piles of the roles: one aggregate over the positions, five counts. The phase of a position is
+ # its status; a scored one the writer was already asked for is the writer's, a ready one is the critic's only when the critic
+ # passed it (the verdict of the position's first application; none = not passed). Nothing else leaves the team.
+ try:
+  requested='COALESCE(p.write_requested,0)' if 'write_requested' in columns('positions') else '0'
+  joined=('LEFT JOIN (SELECT position_id,critic_verdict FROM applications WHERE rowid IN (SELECT MIN(rowid) FROM applications GROUP BY position_id)) a ON a.position_id=p.id' if 'critic_verdict' in columns('applications') and 'position_id' in columns('applications') else '')
+  passed="COALESCE(lower(a.critic_verdict)='pass',0)" if joined else '0'
+  row=db.execute("SELECT SUM(p.status='new'),SUM(p.status='checked'),SUM(p.status='scored' AND NOT "+requested+"),SUM(p.status='review' OR (p.status='ready' AND NOT "+passed+")),SUM(p.status='ready' AND "+passed+") FROM positions p "+joined).fetchone()
+ except sqlite3.Error: fail('positions_unavailable')
+ emit({'ok':True,'data':dict(zip(('scout','analisti','scorer','scrittori','critici'),[int(value or 0) for value in row]))})
 if op=='stats':
  POINTS=2000; EVENTS=3000; live="(p.status IS NULL OR p.status!='excluded')"
  try:
@@ -491,6 +502,8 @@ enum PositionsRequest {
     },
     Facets,
     Stats,
+    /// How many positions each role of the pipeline has to work on (the office's piles): five counts, nothing else.
+    Piles,
     /// What the globe needs of every position, from `offset` on (see the script's `map`).
     Map {
         #[serde(default)]
@@ -643,6 +656,7 @@ impl PositionsRequest {
             Self::CloudSync => 6,
             Self::TeamActivity { .. } => 7,
             Self::Directives => 8,
+            Self::Piles => 9,
         }]
     }
 
@@ -654,7 +668,7 @@ impl PositionsRequest {
             }
             Self::Map { offset } => *offset <= 1_000_000,
             Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
-            Self::Facets | Self::Stats | Self::Profile | Self::CloudSync | Self::Directives => true,
+            Self::Facets | Self::Stats | Self::Piles | Self::Profile | Self::CloudSync | Self::Directives => true,
         }
     }
 }
@@ -699,6 +713,9 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
                 && data["items"].as_array().is_some_and(|items| items.iter().all(Value::is_object))
                 && data.get("total").is_some_and(Value::is_u64)
                 && data.get("next").is_some_and(|next| next.is_null() || next.is_u64())
+        }),
+        PositionsRequest::Piles => data.as_object().is_some_and(|data| {
+            data.len() == 5 && ["scout", "analisti", "scorer", "scrittori", "critici"].iter().all(|key| data.get(*key).is_some_and(Value::is_u64))
         }),
         PositionsRequest::Stats => data.as_object().is_some_and(|data| {
             data.len() == 7
@@ -3739,6 +3756,37 @@ mod tests {
             // what the native side forwards is what the page asked, nothing added or dropped
             assert_eq!(serde_json::from_slice::<Value>(&wire).expect("wire is json"), payload);
         }
+    }
+
+    #[test]
+    fn piles_is_a_closed_read_only_op_that_answers_five_counts_and_nothing_else() {
+        assert!(matches!(parse_positions_request(json!({"op": "piles"})), Ok(PositionsRequest::Piles)));
+        // like stats: whatever else a caller adds is gone before the reader, which refuses it anyway
+        let forwarded = parse_positions_request(json!({"op": "piles", "filters": {}, "id": "1"}))
+            .map(|request| serde_json::to_value(request).expect("request serializes"));
+        assert_eq!(forwarded, Ok(json!({"op": "piles"})));
+        assert!(PositionsRequest::Piles.valid());
+        let good = json!({"ok": true, "data": {"scout": 3, "analisti": 1, "scorer": 2, "scrittori": 7, "critici": 0}});
+        assert!(valid_positions_reply(&PositionsRequest::Piles, &good));
+        for broken in [
+            json!({"ok": true, "data": {"scout": 3, "analisti": 1, "scorer": 2, "scrittori": 7}}),
+            json!({"ok": true, "data": {"scout": 3, "analisti": 1, "scorer": 2, "scrittori": 7, "critici": 0, "rows": []}}),
+            json!({"ok": true, "data": {"scout": -1, "analisti": 1, "scorer": 2, "scrittori": 7, "critici": 0}}),
+            json!({"ok": true, "data": {"scout": 1.5, "analisti": 1, "scorer": 2, "scrittori": 7, "critici": 0}}),
+            json!({"ok": true, "data": {"scout": "3", "analisti": 1, "scorer": 2, "scrittori": 7, "critici": 0}}),
+            json!({"ok": true, "data": {"scout": 3, "analisti": 1, "scorer": 2, "scrittori": 7, "critici": null}}),
+            json!({"ok": true, "data": {"scout": 3, "analisti": 1, "scorer": 2, "scrittori": 7, "other": 0}}),
+            json!({"ok": true, "data": [3, 1, 2, 7, 0]}),
+            json!({"ok": true, "data": null}),
+            json!({"ok": true, "data": {"scout": 0, "analisti": 0, "scorer": 0, "scrittori": 0, "critici": 0}, "extra": 1}),
+        ] {
+            assert!(!valid_positions_reply(&PositionsRequest::Piles, &broken), "{broken}");
+        }
+        // the reader knows the op, takes no field but `op`, and every kind of read has its name in the load-times log
+        assert!(POSITIONS_READ_PY.contains("if op=='piles':"));
+        assert!(POSITIONS_READ_PY.contains("('facets','stats','piles','profile','cloud_sync','directives') and set(req)!={'op'}"));
+        assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[9], "piles");
+        assert_eq!(PositionsRequest::Piles.op(), "piles");
     }
 
     #[test]
