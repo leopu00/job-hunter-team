@@ -158,6 +158,30 @@ def test_another_flat_record_is_said_as_pairs(box):
     assert "- Notice period: Remote: True, Weeks: 4 (deduced by me, it is not in your CV)" in cards(box)[0]["payload"]["testo"].splitlines()
 
 
+def _profile_review_module():
+    import importlib
+
+    for path in (str(Path(yaml.__file__).resolve().parent.parent), str(HELPER.parent), str(HELPER.parent.parent)):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    return importlib.import_module("profile_review")
+
+
+@pytest.mark.parametrize("text", ["{[]: 1}", "{{}: 1}", "{'a': [1]}", "{'a': {'b': 1}}", "{'a'", "{}", "{1: 2}"])
+def test_a_text_that_is_not_a_flat_record_is_none_and_never_a_traceback(text):
+    # a key that cannot be hashed makes ast.literal_eval raise TypeError: the card must still go
+    assert _profile_review_module()._flat_record(text) is None
+
+
+def test_a_card_whose_deduced_value_is_such_a_text_still_goes_with_the_text_as_it_is(box):
+    stage(box, patch(work_authorization="{[]: 1}"))
+
+    ask(box, "work_authorization", lang="en")
+
+    (card,) = cards(box)
+    assert "- Work authorization: {[]: 1} (deduced by me, it is not in your CV)" in card["payload"]["testo"].splitlines()
+
+
 def test_what_is_still_missing_is_on_the_card_and_the_card_still_goes(box):
     stage(box, patch(experience_years=None, languages=[]))
 

@@ -539,7 +539,7 @@ def _flat_record(value: Any) -> dict[str, Any] | None:
             return None
         try:
             value = ast.literal_eval(text)
-        except (ValueError, SyntaxError, MemoryError, RecursionError):
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
             return None
     if not isinstance(value, dict) or not value or len(value) > 12:
         return None
