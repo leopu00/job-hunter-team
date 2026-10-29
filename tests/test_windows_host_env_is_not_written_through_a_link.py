@@ -137,12 +137,16 @@ def test_a_symbolic_link_to_a_file_that_is_not_there_creates_nothing_where_it_po
     # the usual one: in the container the target does not exist, on the host it names a file of the person's profile
     missing = tmp_path / "profile" / "authorized_keys"
     (tmp_path / "profile").mkdir()
+    missing.write_bytes(VICTIM.encode("ascii"))
     mounted = tmp_path / "jht"
     mounted.mkdir()
     link = mounted / "host.env"
+    # Windows PowerShell 5.1 does not make a symbolic link to a path that is not there: the target is made, linked, then removed
     made = _run(shell, f"New-Item -ItemType SymbolicLink -Path '{link}' -Target '{missing}' | Out-Null", tmp_path)
     if made.returncode != 0:
         pytest.skip("this account cannot create symbolic links: " + made.stderr.strip()[:120])
+    missing.unlink()
+    assert os.path.lexists(link) and not link.exists(), "the link should dangle now"
 
     done = _run(shell, _writer_script(link), tmp_path)
 
