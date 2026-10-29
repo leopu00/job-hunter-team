@@ -28,13 +28,13 @@ export const T = {
     pt: "Sessão iniciada com {provider}",
   },
   logout: {
-    it: "Esci",
+    it: "Disconnetti",
     en: "Sign out",
     hu: "Kijelentkezés",
     es: "Cerrar sesión",
     de: "Abmelden",
     fr: "Se déconnecter",
-    pt: "Sair",
+    pt: "Terminar sessão",
   },
   language: {
     it: "Lingua",

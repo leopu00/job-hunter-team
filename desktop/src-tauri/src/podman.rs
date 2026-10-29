@@ -258,6 +258,13 @@ pub(crate) fn jht_machine_memory_is_low(home: &std::path::Path) -> bool {
         .any(|config| machine_config_memory_is_low(&config))
 }
 
+/// Stops the JHT Podman machine, the virtual machine that holds the runtime's memory (`podman machine stop`). Best
+/// effort: a machine that is not there, already stopped or slow to stop is not an error the person can act on, and the
+/// container was brought down before. Never touches another machine.
+pub(crate) fn stop_jht_machine(timeout: Duration) {
+    let _ = command(&args(&["machine", "stop", &jht_machine()]), timeout, None, false);
+}
+
 fn valid_machine_name(name: &str) -> bool {
     // A name that starts with '-' would be read as an option.
     name.len() <= 64

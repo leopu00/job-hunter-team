@@ -70,7 +70,7 @@ const it = {
   leavingToSignIn: "Esco…",
   leaveFailed: "Non sono riuscito a tornare ad Accedi. Riprova.",
   errorCodeLabel: "Codice",
-  signOut: "Esci dall’account",
+  signOut: "Disconnetti",
   continueWithoutTeam: "Continua senza la squadra",
   rebindTeam: "Ricollega la squadra",
   loadingDashboard: "Caricamento dashboard",
