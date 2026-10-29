@@ -3062,12 +3062,14 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         source[at..].split("\n}\n").next().unwrap().to_owned()
     };
     // (source, command, the refusal it must call, the first thing it does that has an effect or takes a slot)
-    let commands: [(&str, &str, &str, &[&str]); 9] = [
+    let commands: [(&str, &str, &str, &[&str]); 11] = [
         (&onboarding, "onboarding_prepare", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "prepare_impl("]),
         (&onboarding, "onboarding_team_start", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_resume_team_start", "saved_host_action_refusal(", &["compare_exchange", "spawn_blocking", "load_persisted_host("]),
         (&onboarding, "onboarding_assistant_open", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_clean_images", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
+        (&onboarding, "onboarding_plans", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
+        (&onboarding, "onboarding_plan_declare", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["state\n        .interactive", "validate_host(", "spawn("]),
         (&onboarding, "onboarding_provider_login_input", "host_action_refusal(&app, window.label(), scope.scope(), &session.host)", &["write_provider_input("]),
         (&mail, "mail_save_password", "saved_host_action_refusal(", &["spawn_blocking", "active_host("]),

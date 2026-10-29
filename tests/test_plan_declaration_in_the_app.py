@@ -121,6 +121,36 @@ def test_the_capitano_skill_tells_what_to_do_when_the_burst_refuses(lang: str):
         assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
 
 
+# ── `plan_registry.py suggest`: what the app proposes, never what it writes ─────────────────
+
+def _reading(home: Path, plan_type: str, age: float = 60) -> None:
+    (home / "logs").mkdir(exist_ok=True)
+    (home / "logs" / "codex-plan-reading.json").write_text(
+        json.dumps({"plan_type": plan_type, "single_weekly": True, "observed_at": time.time() - age}), encoding="utf-8")
+
+
+def test_suggest_names_the_plan_codex_reports_and_declares_nothing(home: Path):
+    _reading(home, "prolite")
+    done = _run("plan_registry.py", "suggest", "codex", home=home)
+    assert (done.returncode, done.stdout.strip()) == (0, "pro")
+    assert _run("plan_registry.py", "get", home=home).returncode == 1
+    assert json.loads((home / "jht.config.json").read_text(encoding="utf-8")) == {"active_provider": "codex"}
+
+
+@pytest.mark.parametrize("case", ["no reading", "a plan the table does not know", "a reading older than 30 days", "another provider"])
+def test_suggest_says_nothing_when_there_is_nothing_to_suggest(home: Path, case: str):
+    provider = "codex"
+    if case == "a plan the table does not know":
+        _reading(home, "enterprise")
+    elif case == "a reading older than 30 days":
+        _reading(home, "prolite", age=31 * 86400)
+    elif case == "another provider":
+        _reading(home, "prolite")
+        provider = "kimi"
+    done = _run("plan_registry.py", "suggest", provider, home=home)
+    assert (done.returncode, done.stdout.strip()) == (1, "")
+
+
 # ── a burst that runs with no plan declared is told, not left silent ─────────────────────────
 
 def _state(home: Path, phase: str) -> None:
