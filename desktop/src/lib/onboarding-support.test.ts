@@ -9,6 +9,9 @@ import {
   SETUP_SUPPORT_MAILTO_MAX,
 } from "./onboarding-support";
 
+const native = vi.hoisted(() => ({ tauri: false, invoke: vi.fn(async (..._args: unknown[]): Promise<unknown> => null) }));
+vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => native.tauri, invoke: native.invoke }));
+
 const sensitiveLog = [
   "failed to reach 203.0.113.70",
   "token=super-secret-token-value",
@@ -24,7 +27,7 @@ function report(logTail = sensitiveLog) {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); native.tauri = false; native.invoke.mockReset(); native.invoke.mockResolvedValue(null); });
 
 describe("desktop setup support report", () => {
   it("redacts IP, token and user path from the preview and endpoint payload", () => {
@@ -59,6 +62,38 @@ describe("desktop setup support report", () => {
     expect(decoded).not.toContain("person-123");
   });
 
+  it("keeps a redacted copy on this computer whatever happens next: sent, short mail, long mail", async () => {
+    native.tauri = true;
+    native.invoke.mockResolvedValue("Job Hunter Team/Support reports/desktop-setup-0.md");
+    const saved = "Job Hunter Team/Support reports/desktop-setup-0.md";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: "JHT-9" }), { status: 200 })));
+    const value = report();
+    expect(await deliverSetupSupportReport(value)).toEqual({ kind: "sent", ticket: "JHT-9", savedReport: saved });
+    // the copy is the previewed text, the one the person saw: nothing unredacted is handed to the native side
+    expect(native.invoke).toHaveBeenCalledWith("onboarding_support_report_save", { draft: { markdown: value.preview } });
+    expect(value.preview).not.toContain("super-secret-token-value");
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    expect(await deliverSetupSupportReport(value)).toMatchObject({ kind: "mailto", savedReport: saved, attach: false });
+    const long = await deliverSetupSupportReport(report(`${"log line\n".repeat(5_000)}`));
+    expect(long).toMatchObject({ kind: "mailto", savedReport: saved, attach: true });
+  });
+
+  it("still sends when the copy cannot be saved, and says there is none", async () => {
+    native.tauri = true;
+    native.invoke.mockRejectedValue(new Error("disk full"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: "JHT-10" }), { status: 200 })));
+    expect(await deliverSetupSupportReport(report())).toEqual({ kind: "sent", ticket: "JHT-10", savedReport: null });
+  });
+
+  it("says it was reported while the setup was running when no failure code comes", () => {
+    const running = createSetupSupportReport({ stage: "runtime", code: undefined, appVersion: "0.4.0", platform: "Windows 10.0", locale: "en", logTail: "" });
+    expect(running.payload.happened).toBe("Desktop setup reported while at runtime.");
+    expect(running.preview).toContain("- Code: none (the setup had not failed)");
+    expect(running.preview).not.toContain("unknown");
+    expect(report().payload.happened).toBe("Desktop setup stopped at runtime (runtime_install_failed).");
+  });
+
   it("does not put a long report into a mailto URL", () => {
     const value = report(`token=${"x".repeat(32)}\n${"log line\n".repeat(5_000)}`);
     expect(mailtoForSetupSupport(value)).toBeNull();
@@ -82,7 +117,7 @@ describe("desktop setup support report", () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: "JHT-OK" }), { status: 200 }));
     vi.stubGlobal("fetch", fetch);
     const result = await deliverSetupSupportReport(report());
-    expect(result).toEqual({ kind: "sent", ticket: "JHT-OK" });
+    expect(result).toEqual({ kind: "sent", ticket: "JHT-OK", savedReport: null });
     const body = String(fetch.mock.calls[0][1].body);
     expect(body).not.toContain("203.0.113.70");
     expect(body).not.toContain("super-secret-token-value");
@@ -143,7 +178,7 @@ describe("desktop problem report (Help and Settings)", () => {
   it("posts only redacted data after the person confirms, and uses the problem subject in the mail fallback", async () => {
     const ok = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ticket: "JHT-P1" }), { status: 200 }));
     vi.stubGlobal("fetch", ok);
-    expect(await deliverSetupSupportReport(problem())).toEqual({ kind: "sent", ticket: "JHT-P1" });
+    expect(await deliverSetupSupportReport(problem())).toEqual({ kind: "sent", ticket: "JHT-P1", savedReport: null });
     expect(String(ok.mock.calls[0][1].body)).not.toContain("very-secret-token-value");
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const result = await deliverSetupSupportReport(problem({ logTail: "", description: "short problem text" }));
