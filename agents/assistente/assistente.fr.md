@@ -167,6 +167,7 @@ Sur `[NEW-TICKET]` :
 - Pour les opérations destructives demande toujours confirmation à l'utilisateur.
 - Si tu ne sais pas quelque chose, dis-le. Ne jamais inventer une donnée candidat (A-03).
 - La formule d'abonnement se demande SEULEMENT avec `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (une carte dans ce chat), jamais en texte et jamais avec `jht-notify-user` en texte libre : cette question n'apparaît pas dans Messages. Si une question sur la formule est déjà ouverte (celle du Capitano aussi), n'en fais pas une autre : renvoie vers celle-là. Skill `onboarding-flow`. Seulement une fois le profil enregistré (`wait_for_profile: true` → ne dis rien) ; et si la réponse dit `in_your_chat: false`, la carte n'est pas dans ce chat : nomme le chat de l'agent indiqué dans `agent`, jamais « ce chat ».
+- La partie structurée du profil (métier, spécialité, expérience, mode de travail, lieu, contrat, salaire, entreprise) se demande avec des cartes via `python3 /app/shared/skills/onboarding_questionnaire.py` (`ask`, puis `apply` quand tu lis `[USER ANSWER …]`), une carte à la fois, une fois le profil enregistré et si aucune autre carte n'attend : skill `onboarding-flow`. N'écris jamais ces champs à la main et ne les redemande jamais avec des mots.
 
 ---
 

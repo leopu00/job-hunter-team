@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocole conversationnel que l'Assistente suit pour intégrer l'utilisateur — premier message, rythme itératif une-question-par-tour, checklist bloquante (le plancher qui débloque le tableau de bord) vs checklist riche (ce qui rend les Scrittore vraiment utiles), style de question agnostique du secteur (JAMAIS supposer IT), et la séquence de checkpoint obligatoire quand l'utilisateur upload des fichiers. Étroitement couplé avec `profile-yaml` (chaque réponse = un Write+validate) et `profile-summaries` (MDs narratifs après les jalons clés). Ouvrir cette skill au début d'une session d'onboarding et à chaque tour utilisateur qui apporte une nouvelle info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
 ---
 <!-- @translation: fr, ai-translated 2026-06-06 -->
 
@@ -120,6 +120,18 @@ L'équipe ne peut pas ouvrir son premier tour tant que la formule d'abonnement d
 4. **Il ne sait pas ?** (l'option « Je ne sais pas ») N'en choisis pas une toi-même. Dis-lui que la formule figure sur la page d'abonnement du fournisseur ; le système la redemande plus tard (la carte revient après une heure, trois fois au plus).
 
 N'écris jamais une formule que l'utilisateur n'a pas choisie, ne la déduis jamais d'autre chose, ne redemande jamais quand `get` en affiche une. N'utilise que `get` et `set` du registre et `ask-plan` de `first_run.py`.
+
+## Cartes du questionnaire — la partie structurée du profil, posée avec des boutons
+
+Métier, spécialité, expérience, situation actuelle, mode de travail, lieu, déménagement, contrat, salaire et type d'entreprise se demandent avec des **cartes**, une à la fois, via `python3 /app/shared/skills/onboarding_questionnaire.py`. Tu ne formules pas ces questions et tu n'écris pas ces champs toi-même : l'outil publie la carte (dans ton chat, avec les mots dans la langue de la personne) et écrit le clic de la personne, le SIEN.
+
+**Quand :** une fois le profil enregistré (`profile_review.py apply-confirmed` a répondu `ok: true`), jamais dans les premiers messages et jamais pendant qu'une autre carte attend une réponse (celle de la formule comprise : deux cartes ouvertes à la fois troublent la personne).
+
+1. **Demande.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → une ligne : la prochaine carte est dans le chat. `open: true` ou `answered: true` → rien de nouveau à publier (une carte attend, ou sa réponse n'est pas encore appliquée : va au point 2). `done: true` → le questionnaire est terminé : continue avec la checklist.
+2. **Applique la réponse.** Quand tu lis `[USER ANSWER …]` pour une carte : `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → confirme en UNE ligne ce qui a été défini, avec les mots de la personne, puis `ask` de nouveau pour la carte suivante. `ask_in_chat` liste les champs du profil que la carte te laisse (par exemple le lieu) : demande-les en UNE question avec des mots et écris-les avec la skill du profil. `write_in_chat` (le choix « autre ») : propose à la personne son `prompt` dans le chat ; ce qu'elle écrit va avec `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<ses mots>"`, puis `ask` de nouveau.
+3. **Quand rien n'a été appliqué.** `waiting: true` ou « not the person's own » → n'écris rien et ne dis rien. `words: true` → elle a répondu à la carte avec des mots : si ses mots désignent clairement UN choix, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>` ; sinon `ask` repropose la carte.
+
+N'écris jamais ces champs à la main tant qu'une carte est ouverte, ne choisis jamais à la place de la personne, ne répète jamais avec des mots une question que la carte a déjà posée. L'outil est le seul à écrire ces champs : s'il répond `ok: false`, n'en parle pas et continue avec la checklist.
 
 ## Agnostique du secteur — NE JAMAIS supposer IT
 

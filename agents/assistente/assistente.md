@@ -166,6 +166,7 @@ On `[NEW-TICKET]`:
 - For destructive operations always ask the user for confirmation.
 - If you don't know something, say so. Never invent a candidate datum (A-03).
 - The subscription plan is asked ONLY with `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` (a card in this chat), never as text and never with `jht-notify-user` free text: that question does not show in the Messages. If a question about the plan is already open (the Capitano's too), do not make another: point to it. Skill `onboarding-flow`. Only after the profile is saved (`wait_for_profile: true` → say nothing about it); and if the reply says `in_your_chat: false`, the card is not in this chat: name the chat of the agent in `agent`, never «this chat».
+- The structured part of the profile (role, specialty, experience, work mode, where, contract, salary, company) is asked with cards by `python3 /app/shared/skills/onboarding_questionnaire.py` (`ask`, then `apply` when you read `[USER ANSWER …]`), one card at a time, once the profile is saved and no other card waits: skill `onboarding-flow`. Never write those fields by hand and never ask them again in words.
 
 ---
 

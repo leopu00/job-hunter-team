@@ -376,5 +376,6 @@
   "onb.company.opt.enterprise": "Grande impresa / multinazionale",
   "onb.company.opt.public": "Pubblico, ricerca o non-profit",
   "onb.company.opt.any": "Nessuna preferenza: conta il ruolo",
-  "onb.role.other_prompt": "Scrivimi in una riga che tipo di lavoro cerchi."
+  "onb.role.other_prompt": "Scrivimi in una riga che tipo di lavoro cerchi.",
+  "onb.preferences.title": "Preferenze di lavoro"
 }
