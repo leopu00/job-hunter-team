@@ -222,3 +222,102 @@ export function buildTeamActivity(
     timeline,
   };
 }
+
+// ── The same activity, from counts made at the source ───────────────────
+// A reader that sits next to the team's database (the desktop's, for a profile with no cloud account) counts
+// per role, instance and day there, so that its reply does not grow with the history. This builds from them
+// what `buildTeamActivity` builds from every event: the same days, the same totals, the same instances.
+export interface TeamActivityCounts {
+  /** Events per role, raw instance id and day, inside the range. */
+  daily: { role: string; actor: string | null; day: string; n: number }[];
+  /** The newest events inside the range, any order. */
+  newest: { role: string; actor: string | null; ts: string | null; pid: string | null }[];
+  /** The last event of each instance, whatever the range. */
+  seen: { role: string; actor: string | null; last: string | null }[];
+  /** The positions of the newest events: what the feed shows next to them. */
+  meta: Record<string, { legacy_id: number | null; title: string | null; company: string | null }>;
+}
+
+const KNOWN_ROLES = new Set<string>(TEAM_ACTIVITY_ROLES);
+
+export function buildTeamActivityFromCounts(
+  counts: TeamActivityCounts,
+  fromKey: string,
+  toKey: string,
+): TeamActivity {
+  const dates: string[] = [];
+  const dayIndex = new Map<string, number>();
+  let cur = fromKey;
+  let guard = 0;
+  while (cur <= toKey && guard <= ACTIVITY_RANGE_MAX_DAYS + 1) {
+    dayIndex.set(cur, dates.length);
+    dates.push(cur);
+    cur = addDaysKey(cur, 1);
+    guard++;
+  }
+  const actorMap = new Map<string, TeamActivityActor>();
+  const roleDaily: TeamActivityRoleDay[] = dates.map((date) => ({ date, counts: emptyCounts() }));
+  const roleTotals = emptyCounts();
+  let totalAll = 0;
+  const actorOf = (role: TeamActivityRole, raw: string | null): TeamActivityActor => {
+    const actor = normActor(role, raw);
+    const key = `${role} ${actor}`;
+    let found = actorMap.get(key);
+    if (!found) {
+      found = { actor, role, daily: new Array(dates.length).fill(0), total: 0, lastActiveAt: null };
+      actorMap.set(key, found);
+    }
+    return found;
+  };
+
+  for (const row of counts.seen) {
+    if (!KNOWN_ROLES.has(row.role)) continue;
+    const a = actorOf(row.role as TeamActivityRole, row.actor);
+    if (row.last && (!a.lastActiveAt || row.last > a.lastActiveAt)) a.lastActiveAt = row.last;
+  }
+  for (const row of counts.daily) {
+    if (!KNOWN_ROLES.has(row.role) || !Number.isInteger(row.n) || row.n < 0) continue;
+    const idx = dayIndex.get(row.day);
+    if (idx === undefined) continue;
+    const role = row.role as TeamActivityRole;
+    const a = actorOf(role, row.actor);
+    a.daily[idx] += row.n;
+    a.total += row.n;
+    roleDaily[idx].counts[role] += row.n;
+    roleTotals[role] += row.n;
+    totalAll += row.n;
+  }
+
+  const pool: TeamActivityEvent[] = counts.newest
+    .filter((ev): ev is typeof ev & { ts: string } => KNOWN_ROLES.has(ev.role) && !!ev.ts && ev.ts.length >= 10)
+    .map((ev) => ({
+      role: ev.role as TeamActivityRole,
+      actor: normActor(ev.role as TeamActivityRole, ev.actor),
+      ts: ev.ts,
+      pid: ev.pid,
+    }));
+  pool.sort((x, y) => (x.ts < y.ts ? 1 : x.ts > y.ts ? -1 : 0));
+  const recent: RecentActivityEvent[] = pool.slice(0, RECENT_LIMIT);
+  for (const ev of recent) {
+    const m = ev.pid ? counts.meta[ev.pid] : undefined;
+    if (m) {
+      ev.title = m.title;
+      ev.company = m.company;
+      ev.legacyId = m.legacy_id;
+    }
+  }
+  return {
+    from: fromKey,
+    to: toKey,
+    days: dates.length,
+    generatedAt: new Date().toISOString(),
+    dates,
+    roles: TEAM_ACTIVITY_ROLES,
+    actors: [...actorMap.values()],
+    roleDaily,
+    roleTotals,
+    totalAll,
+    recent,
+    timeline: pool.slice(0, TIMELINE_LIMIT),
+  };
+}

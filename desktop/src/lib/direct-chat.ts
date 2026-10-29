@@ -1,5 +1,6 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { ExecutionHost } from "./onboarding";
+import type { Emotion } from "./assistant-emotion";
 
 export type DirectChatState = "disconnected" | "connecting" | "ready" | "error";
 /** `link: "per-command"`: every read is a new ssh connection (Windows to a VPS), so the page reads less often. */
@@ -23,6 +24,8 @@ export interface DirectChatMessage {
   kind?: MessageKind;
   /** On the agent's rows: replies it suggests (2 to 5, one line each); a click sends one as a message. */
   suggestions?: string[];
+  /** On the agent's rows: the mood it began the message with (the tag is not in `text`); the portrait shows it. */
+  emotion?: Emotion;
 }
 export interface DirectChatQuestionOption { id: string; label: string }
 export interface DirectChatAnswer {

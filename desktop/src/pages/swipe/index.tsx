@@ -2,9 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
 import SwipeDeck from "@/app/(protected)/swipe/SwipeDeck";
 import { appLocale } from "../../lib/app-locale";
+import { useLocalTeamData } from "../../lib/local-team-data";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { cloudClient } from "../../lib/cloud-client";
-import { withReadDeadline } from "../../lib/read-deadline";
+import { readOnce, withReadDeadline } from "../../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
@@ -22,10 +23,11 @@ type Load = { state: "loading" } | { state: "ready"; deck: SwipeDeckProps } | { 
  */
 export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const blocked = useCloudDataBlocked();
+  // A local profile has no cloud account, and its deck is read from the team on this computer: no cloud notice.
+  const blocked = useCloudDataBlocked() && !useLocalTeamData();
 
   const read = useCallback(() => {
-    withReadDeadline(loadSwipe(client))
+    withReadDeadline(readOnce("swipe", () => loadSwipe(client)))
       .then((deck) => setLoad({ state: "ready", deck }))
       .catch(() => setLoad((prev) => (prev.state === "ready" ? prev : { state: "failed" })));
   }, [client]);
@@ -48,7 +50,7 @@ export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient 
           className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
           onClick={() => { setLoad({ state: "loading" }); read(); }}
         >
-          {SHELL_TEXT[appLocale()].refresh}
+          {SHELL_TEXT[appLocale()].retry}
         </button>
       </div>
     );
@@ -59,7 +61,8 @@ export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient 
         data-testid="desktop-swipe-page"
         className="desktop-swipe-page min-h-0 overflow-hidden"
         style={{
-          height: "calc(100svh / var(--zoom, 1) - 3.5rem)",
+          // the whole of the space the Shell gives it: the window under the navbar and its bars
+          height: "100%",
           animation: "fade-in 0.35s ease both",
         }}
       >

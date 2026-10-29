@@ -7,13 +7,14 @@ import type { PageProps } from "../types";
 import DirectChatScreen, { isDirectChatAgentId } from "./DirectChatScreen";
 import ExistingTeamReconfirmDialog from "./ExistingTeamReconfirmDialog";
 import { directChatClient } from "./direct-chat-client";
+import { loadQuietFacts } from "./quiet-facts";
 
 /**
  * The desktop Messages route talks only through the direct VPS bridge. In the read-only view of an
  * existing team it shows the history and the replies and says how to write; the refusal to write is
  * the native side's, this only tells the person first.
  */
-export default function MessagesPage({ search, reconfirmBridge }: PageProps & { reconfirmBridge?: ExistingTeamBridge }) {
+export default function MessagesPage({ search, reconfirmBridge, embedded }: PageProps & { reconfirmBridge?: ExistingTeamBridge; embedded?: boolean }) {
   const requestedAgent = search.get("agent");
   const initialAgentId = isDirectChatAgentId(requestedAgent) ? requestedAgent : "capitano";
   const readOnly = useExistingTeamReadOnly() !== null;
@@ -25,7 +26,7 @@ export default function MessagesPage({ search, reconfirmBridge }: PageProps & { 
   const onConnect = readOnly ? (reconfirm ? () => setConfirming(true) : leaveReadOnly ?? undefined) : undefined;
   return (
     <>
-      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} writeLocked={readOnly} onConnect={onConnect} />
+      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} loadQuietFacts={loadQuietFacts} />
       {readOnly && reconfirm && confirming && (
         <ExistingTeamReconfirmDialog reconfirm={reconfirm} onClose={() => setConfirming(false)} bridge={reconfirmBridge} />
       )}

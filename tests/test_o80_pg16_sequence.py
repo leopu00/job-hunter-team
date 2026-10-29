@@ -1,6 +1,7 @@
 """Real PostgreSQL 16 oracles for O-80 exact-once directive events."""
 import concurrent.futures
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -21,6 +22,15 @@ def _final_postgres_server_is_ready(logs):
     return logs.count(POSTGRES_READY_MARKER) >= 2
 
 
+def _docker_is_unreachable(stderr):
+    """The docker client could not talk to an engine: socket refused or no daemon."""
+    return any(sign in stderr for sign in (
+        "permission denied while trying to connect to the docker API",
+        "Cannot connect to the Docker daemon",
+        "Is the docker daemon running",
+    ))
+
+
 @pytest.fixture(scope="module")
 def pg16_server():
     if not shutil.which("docker"):
@@ -39,6 +49,13 @@ def pg16_server():
         "-e", "POSTGRES_PASSWORD=x", "postgres:16-alpine",
     ], check=False)
     if started.returncode:
+        # `docker` on the PATH is not a docker the user can talk to: a machine
+        # where the socket is refused to this user (or the engine is off) has
+        # no PostgreSQL 16 to give, like one without docker. Only that case
+        # skips, and never on the CI, where it would be a gate that does not
+        # run; a failed pull or a postgres that does not start still fails.
+        if _docker_is_unreachable(started.stderr) and not os.environ.get("CI"):
+            pytest.skip(f"docker non accessibile: {started.stderr.strip()[:160]}")
         pytest.fail(f"postgres:16 non avviato: {started.stderr}")
 
     def sql(statement, check=True, database="postgres"):
@@ -62,6 +79,17 @@ def pg16_server():
         pytest.fail(f"postgres:16 non pronto: {logs}")
     finally:
         run(["docker", "rm", "-f", "-v", name], check=False)
+
+
+def test_a_docker_that_cannot_be_reached_is_told_from_a_postgres_that_failed():
+    assert _docker_is_unreachable(
+        "docker: permission denied while trying to connect to the docker API at unix:///var/run/docker.sock"
+    )
+    assert _docker_is_unreachable(
+        "docker: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+    )
+    assert not _docker_is_unreachable("Error response from daemon: pull access denied for postgres")
+    assert not _docker_is_unreachable("docker: Error response from daemon: Conflict. The container name is already in use")
 
 
 def test_pg16_readiness_rejects_the_temporary_initdb_server():

@@ -1,4 +1,5 @@
 mod account_scope;
+mod app_exit;
 mod auth_login;
 mod auth_store;
 mod broker_view;
@@ -14,6 +15,7 @@ mod app_update;
 mod public_pages;
 mod team_document;
 mod existing_team_judgement;
+mod team_provider;
 mod team_settings;
 mod export_file;
 mod existing_team_register;
@@ -22,6 +24,7 @@ mod existing_team_register;
 mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;
+mod local_swipe;
 mod mail;
 mod onboarding;
 #[cfg(test)]
@@ -29,9 +32,11 @@ mod onboarding_attestation_tests;
 mod podman;
 #[cfg(windows)]
 mod private_acl;
+mod private_copy;
 mod profile_import;
 mod profile_migration;
 mod release_channel;
+mod resources;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
@@ -41,6 +46,8 @@ mod team_backup;
 mod team_export;
 mod team_owner;
 mod chat_attachment;
+mod profile_progress;
+mod team_start;
 mod work_stats;
 mod text_file_export;
 mod voice_input;
@@ -69,6 +76,10 @@ pub fn run() {
             // inside the work area of its monitor, at any scale
             window_fit::fit_main_window(app.handle());
             voice_input::attach(app.handle())?;
+            // the folder of the private copies a document is opened from (and the sweep of what an earlier run left)
+            if let Ok(dir) = tauri::Manager::path(app).app_local_data_dir() {
+                std::thread::spawn(move || private_copy::init(dir));
+            }
             // what a crash left of the pipe-free ssh calls (Windows only), off the start's path
             std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
             Ok(())
@@ -76,6 +87,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             account_scope::onboarding_local_data_adopt,
             account_scope::onboarding_local_data_set_aside,
+            account_scope::onboarding_local_owner_probe,
+            account_scope::onboarding_local_owner_confirm,
+            account_scope::onboarding_local_owner_return,
+            account_scope::onboarding_local_owner_take_over,
             account_scope::onboarding_previous_local_data,
             account_scope::runtime_account_scope_reset,
             account_scope::runtime_account_scope_set,
@@ -87,6 +102,8 @@ pub fn run() {
             account_scope::runtime_playground_local_reset,
             team_owner::runtime_local_team_owner_identity,
             team_owner::runtime_local_team_owner,
+            profile_progress::profile_progress_read,
+            team_start::team_start_read,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
@@ -110,9 +127,14 @@ pub fn run() {
             app_update::latest_app_version,
             public_pages::open_public_page,
             team_document::team_document_save,
+            team_document::team_document_text,
+            team_document::team_document_pages,
+            team_document::team_document_page,
+            team_document::team_document_open,
             existing_team_runtime::existing_team_link_identity,
             existing_team_agents::existing_team_agents_read,
             agent_control::agent_control,
+            team_provider::team_provider,
             team_settings::team_settings,
             export_file::export_csv_save,
             direct_chat::direct_chat_answer,
@@ -147,6 +169,8 @@ pub fn run() {
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
             onboarding::onboarding_clean_images,
+            onboarding::onboarding_plans,
+            onboarding::onboarding_plan_declare,
             onboarding::onboarding_local_uninstall_available,
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
@@ -158,6 +182,7 @@ pub fn run() {
             saved_vps::saved_vps_remove,
             runtime_log::onboarding_support_context,
             runtime_log::onboarding_support_report_save,
+            runtime_log::onboarding_support_reports_open,
             onboarding::onboarding_prepare,
             onboarding::onboarding_provider_login,
             onboarding::onboarding_provider_login_close,
@@ -177,13 +202,44 @@ pub fn run() {
             team_backup::backup_create,
             team_backup::backup_cancel,
             team_backup::backup_inspect,
+            app_exit::app_exit_ack,
+            app_exit::app_exit_cancel,
+            app_exit::app_exit_state,
+            app_exit::app_exit_order,
+            app_exit::app_exit_poll,
+            app_exit::app_exit_finish,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
+            local_swipe::local_swipe_deck_read,
+            local_swipe::local_team_position_judge,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
             voice_input::voice_input_stop
         ])
-        .run(application_context())
-        .expect("error while running JHT Desktop");
+        // the close button leaves nothing running unasked: the page is asked first (app_exit.rs)
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if !app_exit::request_goes_through(std::time::Instant::now()) {
+                        api.prevent_close();
+                        app_exit::ask_the_page(tauri::Manager::app_handle(window));
+                    }
+                }
+            }
+        })
+        .build(application_context())
+        .expect("error while building JHT Desktop")
+        .run(|app, event| match event {
+            // ⌘Q and the app menu's Quit come here, not through the window
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                if !app_exit::request_goes_through(std::time::Instant::now()) {
+                    api.prevent_exit();
+                    app_exit::ask_the_page(app);
+                }
+            }
+            // the app is really leaving: the private copies of documents go with it
+            tauri::RunEvent::Exit => private_copy::sweep_private_copies(),
+            _ => {}
+        });
 }

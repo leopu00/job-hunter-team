@@ -7,12 +7,17 @@
 // them would refuse is refused here, whole: nothing is half applied. A config that cannot be
 // read, or holds a value out of the lists, is an error, never a default made up.
 //
+// `burst-start` / `burst-stop` are the «work flat out until HH:MM» gesture (shared/skills/burst.py,
+// which runs in the container: it puts the usual hours back by itself when the time is up, app closed
+// or not). `get` and `apply` answer with the burst too, when it can be read.
+//
 // Output is ONE JSON line: {"ok":true, ...} or {"ok":false,"code":<closed code>}.
 // Exit 0 done, 1 refused, 2 the request itself is not valid.
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
+import { execScriptInContainer } from '../utils/container-proxy.js';
 import {
   EFFORTS, MIN_WINDOW_HOURS, MODEL_CLASSES, ROLES, WEEKDAYS,
   applySettings, effectiveSettings, validRoleModels, validSettings, validWorkingHours,
@@ -20,6 +25,16 @@ import {
 
 const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
 const REQUEST_MAX_BYTES = 65536;
+const BURST_SCRIPT = '/app/shared/skills/burst.py';
+const QUIET_SCRIPT = '/app/shared/skills/team_quiet.py';
+const BURST_TIMEOUT_MS = 30_000;
+const UNTIL = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+// What the skill may refuse with. Anything else it says is «burst_unavailable»: free text never travels on.
+const BURST_CODES = Object.freeze([
+  'until_invalid', 'until_too_soon', 'until_too_far',
+  'config_missing', 'config_unreadable', 'config_invalid', 'write_failed',
+]);
 
 export const LISTS = Object.freeze({
   roles: ROLES, models: MODEL_CLASSES, efforts: EFFORTS, weekdays: WEEKDAYS, min_window_hours: MIN_WINDOW_HOURS,
@@ -81,6 +96,113 @@ export function applyResult(raw, path = CONFIG_FILE) {
   return getResult(path);
 }
 
+/**
+ * The burst skill's answer in its closed shape: {"active":false} or {"active":true,"until","untilLocal"};
+ * null for anything else (a doubtful reading is not a reading).
+ */
+function closedBurst(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (value.active === false && Object.keys(value).length === 1) return { active: false };
+  if (value.active === true && Object.keys(value).length === 3 &&
+      typeof value.until === 'string' && TIMESTAMP.test(value.until) &&
+      typeof value.untilLocal === 'string' && UNTIL.test(value.untilLocal)) {
+    return { active: true, until: value.until, untilLocal: value.untilLocal };
+  }
+  return null;
+}
+
+/** Runs the skill in the container; { burst } when it answered in the closed shape, else a closed refusal. */
+function runBurst(argv, exec) {
+  const r = exec(BURST_SCRIPT, argv, { interpreter: 'python3', timeoutMs: BURST_TIMEOUT_MS });
+  if (!r || !r.ok || r.code < 0) return refuse('burst_unavailable');
+  let answer;
+  try {
+    answer = JSON.parse(String(r.stdout).trim().split('\n').pop());
+  } catch {
+    return refuse('burst_unavailable');
+  }
+  if (answer && answer.ok === true) {
+    const burst = closedBurst(answer.burst);
+    return burst ? { burst } : refuse('burst_unavailable');
+  }
+  if (answer && answer.ok === false && BURST_CODES.includes(answer.code)) return refuse(answer.code);
+  return refuse('burst_unavailable');
+}
+
+/** A number in a closed range, or null: the facts of the team's silence are numbers and booleans, never text. */
+function numberIn(value, min, max) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
+/**
+ * The team_quiet skill's facts in their closed shape (the budget window as two numbers, two booleans); a fact out of
+ * its shape is left out, and one the skill does not send is not made up. Null when nothing is left.
+ */
+export function closedQuiet(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const quiet = {};
+  const budget = value.budget;
+  if (budget !== null && typeof budget === 'object' && !Array.isArray(budget) && Object.keys(budget).length === 2) {
+    const usagePct = numberIn(budget.usagePct, 0, 1000);
+    const reset = budget.resetAtUnix === null ? null : numberIn(budget.resetAtUnix, 1, 4_102_444_800);
+    if (usagePct !== null && (budget.resetAtUnix === null || (reset !== null && Number.isInteger(reset)))) {
+      quiet.budget = { usagePct, resetAtUnix: reset };
+    }
+  }
+  if (typeof value.containment === 'boolean') quiet.containment = value.containment;
+  if (typeof value.providerReady === 'boolean') quiet.providerReady = value.providerReady;
+  return Object.keys(quiet).length > 0 ? quiet : null;
+}
+
+/** A `get` result with the facts that explain the team's silence when they can be read; without them, as it was. Read only. */
+export function withQuiet(result, exec = execScriptInContainer) {
+  if (!result.out.ok) return result;
+  const r = exec(QUIET_SCRIPT, ['status'], { interpreter: 'python3', timeoutMs: BURST_TIMEOUT_MS });
+  if (!r || !r.ok || r.code < 0) return result;
+  let answer;
+  try {
+    answer = JSON.parse(String(r.stdout).trim().split('\n').pop());
+  } catch {
+    return result;
+  }
+  const quiet = answer && answer.ok === true ? closedQuiet(answer.quiet) : null;
+  return quiet ? { exit: result.exit, out: { ...result.out, quiet } } : result;
+}
+
+/** A `get` or `apply` result with the burst added when it can be read; without it, as it was. */
+export function withBurst(result, exec = execScriptInContainer) {
+  if (!result.out.ok) return result;
+  const ran = runBurst(['status'], exec);
+  return ran.burst ? { exit: result.exit, out: { ...result.out, burst: ran.burst } } : result;
+}
+
+/** `raw` is the one JSON line of stdin: {"until": "HH:MM"}, and nothing else. */
+export function burstStartResult(raw, exec = execScriptInContainer, path = CONFIG_FILE) {
+  let request;
+  try {
+    if (Buffer.byteLength(raw) > 64) return refuse('request_invalid', 2);
+    request = JSON.parse(raw);
+  } catch {
+    return refuse('request_invalid', 2);
+  }
+  if (request === null || typeof request !== 'object' || Array.isArray(request) ||
+      Object.keys(request).length !== 1 || typeof request.until !== 'string' || !UNTIL.test(request.until)) {
+    return refuse('request_invalid', 2);
+  }
+  const ran = runBurst(['start', '--until', request.until], exec);
+  if (!ran.burst) return ran;
+  // What the box holds now, read again: that is what the app shows, not what it sent.
+  const read = getResult(path);
+  return read.out.ok ? { exit: 0, out: { ...read.out, burst: ran.burst } } : read;
+}
+
+export function burstStopResult(exec = execScriptInContainer, path = CONFIG_FILE) {
+  const ran = runBurst(['stop'], exec);
+  if (!ran.burst) return ran;
+  const read = getResult(path);
+  return read.out.ok ? { exit: 0, out: { ...read.out, burst: ran.burst } } : read;
+}
+
 function print({ exit, out }) {
   process.stdout.write(`${JSON.stringify(out)}\n`);
   process.exitCode = exit;
@@ -90,7 +212,7 @@ export function registerTeamSettingsCommand(program) {
   const cmd = program
     .command('team-settings')
     .description('Working hours and the model and effort of each role, as JSON (for the desktop app)');
-  cmd.command('get').description('Print the settings and the lists of allowed values').action(() => print(getResult()));
+  cmd.command('get').description('Print the settings and the lists of allowed values').action(() => print(withQuiet(withBurst(getResult()))));
   cmd.command('apply')
     .description('Apply {"settings": {...}} read from stdin, whole or not at all, then print what the box holds')
     .action(() => {
@@ -100,6 +222,20 @@ export function registerTeamSettingsCommand(program) {
       } catch {
         return print(refuse('request_invalid', 2));
       }
-      print(applyResult(raw.trim()));
+      print(withBurst(applyResult(raw.trim())));
     });
+  cmd.command('burst-start')
+    .description('Work flat out until HH:MM: reads {"until": "HH:MM"} from stdin, widens the hours and grants the burn; the team puts the usual hours back by itself')
+    .action(() => {
+      let raw = '';
+      try {
+        raw = readFileSync(0, 'utf-8');
+      } catch {
+        return print(refuse('request_invalid', 2));
+      }
+      print(burstStartResult(raw.trim()));
+    });
+  cmd.command('burst-stop')
+    .description('End the burst now: the usual hours back, the burn revoked')
+    .action(() => print(burstStopResult()));
 }

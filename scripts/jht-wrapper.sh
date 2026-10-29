@@ -730,6 +730,22 @@ podman_binary() {
   return 1
 }
 
+# podman-compose 1.6.0 looks for `podman` in PATH at its own start (`podman version`), whatever --podman-path says. The wrapper
+# finds podman by its usual places (/opt/homebrew/bin, /usr/local/bin) when the caller's PATH has none of them: a terminal
+# opened from the app, a script, `env -i`. Then every call of the provider, the `--version` probes included, died with
+# «failed to check if podman is installed», the wrapper read that as «no provider» and `status` said «container 'jht' non
+# attivo» for a team that was running (TEST 19g). The directory of the podman it found goes at the END of the wrapper's own PATH (it
+# takes priority from nothing that is there; what runs in a $(...) loses it, what runs directly keeps it until the wrapper ends).
+podman_ensure_on_path() {
+  local podman_bin dir
+  podman_bin="$(podman_binary)" || return 0
+  dir="${podman_bin%/*}"
+  case ":$PATH:" in
+    *":$dir:"*) ;;
+    *) PATH="$PATH:$dir"; export PATH ;;
+  esac
+}
+
 podman_compose_binary() {
   local candidate=""
   for candidate in "$(command -v podman-compose 2>/dev/null || true)" \
@@ -788,6 +804,7 @@ podman_version_number() {
 
 podman_compose_version_number() {
   local compose_bin="$1" out
+  podman_ensure_on_path
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     out="$(CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" "$compose_bin" --version 2>/dev/null)" || return 1
   else
@@ -798,6 +815,7 @@ podman_compose_version_number() {
 
 podman_compose_pair_supported() {
   local podman_bin="$1" compose_bin="$2" podman_version compose_version
+  podman_ensure_on_path
   if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
     podman_version="$(podman_version_number "$podman_bin")" || return 1
     version_at_least "$podman_version" "$PODMAN_NATIVE_MIN_VERSION" || return 1
@@ -1063,6 +1081,7 @@ compose_file() {
     # the provider inherits it and therefore emits `podman ps`/`podman run`
     # against the named machine without depending on the mutable default.
     local podman_bin compose_bin
+    podman_ensure_on_path
     podman_bin="$(podman_binary)" || { err "Podman non trovato: reinstalla il runtime JHT."; return 127; }
     if ! compose_bin="$(podman_compose_binary)"; then
       if [ "$PODMAN_RUNTIME_MODE" = "native" ]; then
@@ -1378,7 +1397,11 @@ telegram_legacy() {
 
 read_hidden_tty() {
   (
-    local prompt="${1:-}" value="" tty_state="" read_rc=0
+    local prompt="${1:-}" value="" chunk="" read_rc=0 started=0
+    # Not `local`: bash 3.2 (macOS /bin/bash) drops the locals of the function
+    # before it runs the EXIT trap of the subshell on `exit 130`, and with
+    # `set -u` restore_tty then failed on tty_state and left the echo off.
+    tty_state=""
     [ -t 0 ] || return 2
     tty_state="$(stty -g <&0)" || return 1
     restore_tty() {
@@ -1388,8 +1411,24 @@ read_hidden_tty() {
     trap 'exit 130' HUP INT TERM
     stty -echo <&0 || return 1
     printf '%s' "$prompt" >&2
-    IFS= read -r value
-    read_rc=$?
+    # A Ctrl-C that lands between the prompt and the read(2) of `read` is kept
+    # by bash as a pending trap, and a `read` already blocked is not woken by
+    # it: the script would stay here with the echo off. With -t `read` comes
+    # back to the shell every 2 s, the pending trap runs (exit 130, the EXIT
+    # trap puts the terminal back) and a typed line is not lost: on a terminal
+    # nothing is handed to `read` before Enter.
+    # Bash >= 4 answers a timeout with a status above 128 and keeps what was
+    # read; bash 3.2 (the macOS /bin/bash) answers 1, like an end of file, so
+    # there a status 1 after 2 s of waiting is the timeout.
+    while :; do
+      started=$SECONDS
+      IFS= read -r -t 2 chunk
+      read_rc=$?
+      value="$value$chunk"
+      [ "$read_rc" -gt 128 ] && continue
+      [ "${BASH_VERSINFO[0]}" -lt 4 ] && [ "$read_rc" -eq 1 ] && [ $((SECONDS - started)) -ge 2 ] && continue
+      break
+    done
     printf '\n' >&2
     restore_tty
     trap - EXIT HUP INT TERM
@@ -2293,8 +2332,34 @@ mail_command() {
 # il create-plan a contenere la label anche quando il container esiste gia'.
 # L'output verbose puo' contenere variabili risolte: resta confinato in memoria
 # e ne estraiamo solo un singolo SHA-256, mai stdout/stderr grezzo.
+# The variables docker-compose.yml takes from the CALLER's environment (`${NAME:-default}`): provider keys, the
+# coordinator database, the screen port, the Telegram limits. podman-compose 1.6.0 puts their resolved values in the
+# config-hash of the service, so a terminal that has one of them set (an `export OPENAI_API_KEY=…` for a login test) gets
+# another expected hash than the app that created the container with a clean environment, and every read said «container
+# non attivo» while the team ran (TEST 19g). docker-compose.yml and this list are held equal by a test.
+PODMAN_CALLER_ENV="ANTHROPIC_API_KEY OPENAI_API_KEY MOONSHOT_API_KEY NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY NEXT_PUBLIC_JHT_DEPLOY JHT_SCOUT_COORD_DB JHT_LIVE_SCREEN_PORT JHT_TELEGRAM_SERVICE_ENABLED JHT_TELEGRAM_BURST_LIMIT JHT_TELEGRAM_DAILY_LIMIT"
+
+# 0 when the caller's environment sets (non-empty) at least one of them: only then does a «clean» hash differ.
+podman_caller_env_set() {
+  local name
+  for name in $PODMAN_CALLER_ENV; do
+    [ -z "${!name:-}" ] || return 0
+  done
+  return 1
+}
+
+# The NAMES (never the values) of the variables above that the caller's environment sets, space separated.
+podman_caller_env_names() {
+  local name found=""
+  for name in $PODMAN_CALLER_ENV; do
+    [ -z "${!name:-}" ] || found="${found:+$found }$name"
+  done
+  printf '%s' "$found"
+}
+
 podman_expected_config_hash() {
-  local file="$1" service="${2:-jht}" podman_bin compose_bin resolved hashes hash pinned_image=""
+  local file="$1" service="${2:-jht}" env_mode="${3:-caller}" podman_bin compose_bin resolved hashes hash pinned_image=""
+  podman_ensure_on_path
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
@@ -2309,6 +2374,7 @@ podman_expected_config_hash() {
   if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
+      [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
       PODMAN_COMPOSE_WARNING_LOGS=false \
@@ -2322,6 +2388,7 @@ podman_expected_config_hash() {
     resolved="$({
       cd "$RUNTIME_DIR" || return 1
       unset CONTAINER_CONNECTION
+      [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
@@ -2350,6 +2417,17 @@ podman_expected_config_hash() {
   printf '%s\n' "$hash"
 }
 
+# Why the provider could not list the project (the first line of what it said, or its exit code), for `jht status` to show:
+# written to the file named by JHT_ATTEST_WHY_FILE when there is one, nowhere else. At most 200 characters, control characters
+# out, never the environment: it is what podman-compose prints to stderr.
+attest_why() {
+  local status="$1" file="$2" line=""
+  [ -n "${JHT_ATTEST_WHY_FILE:-}" ] || return 0
+  [ "$file" = /dev/null ] || line="$(sed -n '/[^[:space:]]/{p;q;}' "$file" 2>/dev/null | LC_ALL=C tr -d '\000-\037\177' | sed 's/^[[:space:]]*//' | cut -c1-200)"
+  [ -n "$line" ] || line="provider exit code $status, nothing said"
+  printf '%s\n' "$line" > "$JHT_ATTEST_WHY_FILE" 2>/dev/null || true
+}
+
 # Risolve il container di un servizio tramite l'esatto progetto Compose JHT
 # senza bootstrap, wake o auto-up. Un container omonimo non e' mai sufficiente.
 # Il progetto ha due servizi: `jht` (agenti) e `jht-broker` (segreti dei
@@ -2361,12 +2439,20 @@ read_only_service_id() {
   local service="$1" config_check="${2:-exact}"
   runtime_bundle_trusted || return 1
   docker_reachable || return 1
-  local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped
+  local ids container_id details expected_hash expected_project expected_unit found="" seen_service stopped seen_hash clean_hash
   if [ "$CONTAINER_RUNTIME" = podman ]; then
     # podman-compose 1.6.0 non accetta un operando service su `ps`: elenca
     # tutti i container del progetto, e il servizio lo dice l'inspect
     # attestato qui sotto.
-    ids="$(compose_file "$COMPOSE_FILE" ps -q 2>/dev/null)" || return 1
+    local ps_err="" ps_status=0
+    ps_err="$(mktemp "${TMPDIR:-/tmp}/jht-attest.XXXXXX" 2>/dev/null)" || ps_err=/dev/null
+    ids="$(compose_file "$COMPOSE_FILE" ps -q 2>"$ps_err")" || ps_status=$?
+    if [ "$ps_status" -ne 0 ]; then
+      attest_why "$ps_status" "$ps_err"
+      [ "$ps_err" = /dev/null ] || rm -f -- "$ps_err"
+      return 1
+    fi
+    [ "$ps_err" = /dev/null ] || rm -f -- "$ps_err"
   else
     ids="$(compose_file "$COMPOSE_FILE" ps -q "$service" 2>/dev/null)" || return 1
   fi
@@ -2417,6 +2503,20 @@ read_only_service_id() {
         any-config|stopped-stale-config)
           expected_hash="${details##*|}"
           printf '%s' "$expected_hash" | grep -Eq '^[0-9a-f]{64}$' || return 1
+          ;;
+      esac
+      # The hash this wrapper expects follows the environment of whoever asks. A container made with a clean
+      # environment (the app's) is ours for a terminal that has a key exported: the hash of the SAME compose resolved
+      # without the caller's variables is accepted too. Never more than that: another value still refuses.
+      case "$config_check" in
+        any-config|stopped-stale-config) ;;
+        *)
+          seen_hash="${details##*|}"
+          if [ "$seen_hash" != "$expected_hash" ] && podman_caller_env_set \
+              && printf '%s' "$seen_hash" | grep -Eq '^[0-9a-f]{64}$'; then
+            clean_hash="$(podman_expected_config_hash "$COMPOSE_FILE" "$service" clean 2>/dev/null)" || clean_hash=""
+            [ -z "$clean_hash" ] || [ "$seen_hash" != "$clean_hash" ] || expected_hash="$seen_hash"
+          fi
           ;;
       esac
       [ "$details" = "$service|true|$expected_project|$expected_project|$service|$service|1|$RUNTIME_DIR|$expected_files|$expected_version|$expected_unit|$expected_hash" ] \
@@ -2838,6 +2938,7 @@ ensure_bind_owner() {
   local home_dir="${JHT_HOME_HOST:-$HOME/.jht}"
   local user_dir="${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"
   mkdir -p "$home_dir" "$user_dir" 2>/dev/null || true
+  local stuck=()
   for d in "$home_dir" "$user_dir"; do
     [ -d "$d" ] || continue
     local cur_uid
@@ -2846,11 +2947,38 @@ ensure_bind_owner() {
       info "Allineo owner di $d a $target (era uid $cur_uid)..."
       if [ "$(id -u)" = "0" ]; then
         chown -R "$target" "$d" 2>/dev/null || warn "chown fallito su $d"
+      elif [ "$target" = "1001:1001" ] && repair_owner_in_container "$home_dir" "$user_dir"; then
+        break  # un container una tantum ha sistemato entrambe le cartelle: niente sudo
       else
         sudo chown -R "$target" "$d" 2>/dev/null || warn "sudo chown fallito su $d (potrebbe servire 'sudo $0 up')"
       fi
+      cur_uid=$(stat -c '%u' "$d" 2>/dev/null || echo "")
+      [ "$cur_uid" = "$target_uid" ] || stuck+=("$d")
     fi
   done
+  # Il container gira come $target: con le cartelle di un altro utente parte e muore subito
+  # (mount_not_writable, EACCES) in un ciclo di riavvii. Meglio fermarsi qui, dicendo cosa fare.
+  if [ "${#stuck[@]}" -gt 0 ]; then
+    err "mount_repair_failed: ${stuck[*]} non si puo' rendere scrivibile al container (gira come uid $target_uid) e non e' stato avviato niente. Fai una volta: sudo chown -R $target ${stuck[*]} oppure metti questo utente nel gruppo 'docker' e riesegui 'jht up'."
+    exit 1
+  fi
+}
+
+# Un utente normale (uid diverso da 1001, senza sudo) con Docker su Linux: lo stesso container una tantum del
+# wrapper Windows (.launcher/repair-mounts.sh, una ricevuta per cartella). Root dentro, ma solo CAP_CHOWN e
+# CAP_DAC_READ_SEARCH (la seconda per entrare in una cartella che l'utente tiene privata, 700), senza rete,
+# senza nuovi privilegi e con montate solo le due cartelle. Vero solo se entrambe sono confermate.
+MOUNT_REPAIR_DISPATCH='if [ -x /app/.launcher/repair-mounts.sh ]; then exec /app/.launcher/repair-mounts.sh; else echo mount_repair_unsupported; fi'
+repair_owner_in_container() {
+  local home_dir="$1" user_dir="$2" receipts
+  [ "$CONTAINER_RUNTIME" = "docker" ] || return 1
+  receipts="$(docker run --rm --user 0:0 --cap-drop ALL --cap-add CHOWN --cap-add DAC_READ_SEARCH --network none \
+      --security-opt no-new-privileges \
+      -v "$home_dir:/jht_home" -v "$user_dir:/jht_user" \
+      --entrypoint /bin/sh "${JHT_IMAGE:-$DEFAULT_RUNTIME_IMAGE}" -c "$MOUNT_REPAIR_DISPATCH" 2>/dev/null)" || return 1
+  printf '%s\n' "$receipts" | grep -Eqx 'mount_(ok|repaired) /jht_home' || return 1
+  printf '%s\n' "$receipts" | grep -Eqx 'mount_(ok|repaired) /jht_user' || return 1
+  ! printf '%s\n' "$receipts" | grep -Eqv 'mount_(ok|repaired) /jht_(home|user)'
 }
 
 # Le cartelle dei dati sono fisse: docker-compose.yml monta ${HOME}/.jht e
@@ -2878,6 +3006,25 @@ host_data_dirs_supported() {
     err "data_dir_moved: JHT_USER_DIR_HOST=$JHT_USER_DIR_HOST non e' $expected_user. Il team usa sempre $expected_user: lo monta il compose, e su macOS e' l'unica cartella documenti che la macchina Podman vede. Togli JHT_USER_DIR_HOST, oppure sposta i documenti in $expected_user."
     return 1
   fi
+}
+
+# `jht team stop`: stopping the team must work whenever `jht down` does. A container of ours whose config-hash is not the
+# expected one (a caller's environment, a reinstall) is attested by every other label and is used here, for the stop only;
+# the same rule `container_down` has. An absent container, or anything else, goes the old way (ensure_up).
+ensure_up_for_stop() {
+  local status=0 found
+  if container_up; then
+    return 0
+  else
+    status=$?
+  fi
+  if [ "$status" -ne 3 ] && [ "$CONTAINER_RUNTIME" = podman ] \
+      && found="$(read_only_service_id "$CONTAINER_SERVICE" any-config 2>/dev/null)"; then
+    ATTESTED_CONTAINER_ID="$found"
+    warn "config_changed_while_running: il team gira con una configurazione diversa da quella attesa; la uso solo per fermarlo."
+    return 0
+  fi
+  ensure_up
 }
 
 ensure_up() {
@@ -3438,6 +3585,18 @@ DISK_WARN_FREE_KIB=20971520
 DISK_BLOCK_FREE_PERMILLE=30
 DISK_BLOCK_FREE_KIB=8388608
 DISK_LOW_PERMILLE=""
+DISK_LOW_AVAIL_KIB=""
+
+# KiB -> «GiB» a un decimale con la virgola italiana («8», «5,2»). Per DIFETTO: non si
+# promette piu' spazio di quello che c'e'. In interi, come le soglie.
+disk_gib_text() {
+  local tenths=$(( $1 * 10 / 1048576 ))
+  if [ $(( tenths % 10 )) -eq 0 ]; then
+    printf '%s' $(( tenths / 10 ))
+  else
+    printf '%s,%s' $(( tenths / 10 )) $(( tenths % 10 ))
+  fi
+}
 
 # Stampa «<per mille liberi> <KiB liberi>» del volume che contiene $1.
 disk_free_measure() {
@@ -3486,16 +3645,18 @@ disk_level_of() {
 }
 
 # 0 = almeno un volume misurato e' sotto il 3% E sotto 8 GiB (in
-# DISK_LOW_PERMILLE il valore); 1 = tutti sani oppure non misurabili.
+# DISK_LOW_PERMILLE il valore e in DISK_LOW_AVAIL_KIB lo spazio libero); 1 = tutti sani oppure non misurabili.
 disk_low() {
   local volume measure permille avail_kib
   DISK_LOW_PERMILLE=""
+  DISK_LOW_AVAIL_KIB=""
   for volume in "${JHT_HOME_HOST:-$HOME/.jht}" "$(disk_engine_path)"; do
     [ -n "$volume" ] || continue
     measure="$(disk_free_measure "$volume")" || continue
     read -r permille avail_kib <<<"$measure"
     if [ "$(disk_level_of "$permille" "$avail_kib")" = "low" ]; then
       DISK_LOW_PERMILLE="$permille"
+      DISK_LOW_AVAIL_KIB="$avail_kib"
       return 0
     fi
   done
@@ -4195,7 +4356,7 @@ handle_runtime_upgrade() {
   # corso, e gli agenti che ci girano, restano intatti. Il codice e' chiuso
   # (`disk_low`); la frase la mostra l'app dalla sua tabella codice->frase.
   if disk_low; then
-    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: meno del 3% di disco libero (${DISK_LOW_PERMILLE} per mille) e meno di 8 GiB. Per liberare spazio esegui 'jht clean-images' (toglie solo le vecchie versioni di Job Hunter Team), svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova: non e' stato scaricato ne' modificato niente."
+    [ "$UPGRADE_JSON" = "1" ] || err "disk_low: Gli agenti richiedono almeno $(disk_gib_text "$DISK_BLOCK_FREE_KIB") GiB di disco — disponibili: $(disk_gib_text "$DISK_LOW_AVAIL_KIB") GiB. Per liberare spazio esegui 'jht clean-images' (toglie solo le vecchie versioni di Job Hunter Team), svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova: non e' stato scaricato ne' modificato niente."
     upgrade_result false false preflight "$old_version" "$old_image" "$old_version" "$old_image" false "disk_low" false
     return 1
   fi
@@ -4732,8 +4893,14 @@ fi
 # (P-07, 2026-08-10). Un'eccezione per il solo `--help` avrebbe tappato il buco
 # lasciando la forma: e' il ramo informativo che va prima di tutto.
 case "$SUB" in
-  -h|--help|help|'')
+  -h|--help|'')
     serve_help_without_docker --help
+    exit $?
+    ;;
+
+  # `jht help` is the LONG list: the short help sends the person to it, so it must not answer with the short one.
+  help)
+    serve_help_without_docker help
     exit $?
     ;;
 
@@ -4996,11 +5163,30 @@ case "$SUB" in
       printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
       exit 1
     fi
+    why_file="$(mktemp "${TMPDIR:-/tmp}/jht-why.XXXXXX" 2>/dev/null)" || why_file=""
+    JHT_ATTEST_WHY_FILE="$why_file"
     if container_id="$(read_only_container_id)"; then
+      JHT_ATTEST_WHY_FILE=""
+      [ -z "$why_file" ] || rm -f -- "$why_file"
       docker inspect "$container_id" --format \
         'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
     else
-      printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      attest_status=$?
+      JHT_ATTEST_WHY_FILE=""
+      # 3 = the project has no such container; anything else = a container is there and cannot be attested.
+      # Saying «non attivo» for the second hid a team that was running (TEST 19g).
+      if [ "$attest_status" -eq 3 ]; then
+        printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      else
+        printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
+        if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
+          printf "  Nell'ambiente di questo terminale sono impostate: %s. Il container e' stato creato senza: togli la variabile (unset) e riprova.\n" "$(podman_caller_env_names)"
+        fi
+        if [ -n "$why_file" ] && [ -s "$why_file" ]; then
+          printf "  Il provider ha detto: %s\n" "$(head -n 1 "$why_file")"
+        fi
+      fi
+      [ -z "$why_file" ] || rm -f -- "$why_file"
       exit 1
     fi
     ;;
@@ -5122,6 +5308,14 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
+  # `jht team stop`: si deve poter fermare anche un container che non si attesta per la sola hash (vedi ensure_up_for_stop).
+  team)
+    require_compose_file
+    require_docker
+    if [ "${2:-}" = stop ]; then ensure_up_for_stop; else ensure_up; fi
     docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 

@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Conversational protocol the Assistente follows to onboard the user — first message, iterative one-question-per-turn pacing, blocking checklist (the floor that unlocks the dashboard) vs rich checklist (what makes Writers actually useful), settore-agnostic question style (NEVER assume IT), and the mandatory checkpoint sequence when the user uploads files. Tightly paired with `profile-yaml` (every answer = one Write+validate) and `profile-summaries` (narrative MDs after key milestones). Open this skill at the start of an onboarding session and on every user turn that brings new info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
 ---
 
 # onboarding-flow — how the Assistente moves the conversation
@@ -29,7 +29,9 @@ After EVERY user turn that brings new information:
 5. If a summaries trigger fired, write/refresh the MD                  → skill profile-summaries
 ```
 
-A response without a next question is acceptable ONLY when the blocking checklist is fully satisfied.
+A response without a next question is acceptable ONLY when the blocking checklist is fully satisfied, **or when the person did not answer the pending question** (see below).
+
+**When the person does not answer, or changes the subject.** If their message is not the answer to your last question (a greeting, a question about you or the product, anything else), answer what they asked first, in the same reply, and do NOT repeat the question in that reply. Take the pending question back ONCE, later, at the next natural pause (not in the next reply, not after every off-topic message); if it is still unanswered after that, do not ask it again until the person brings the profile up themselves. The metronome above is for turns that bring information, not for the ones that do not.
 
 Tre livelli (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED sblocca il
 team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misura massima.
@@ -120,6 +122,18 @@ The team cannot open its first run until the user's subscription plan is declare
 4. **They do not know?** (the option «I do not know») Do not pick one. Tell them the plan is on the provider's subscription page; the system asks again later (the card comes back after an hour, three times at most).
 
 Never write a plan the user did not choose, never infer it from anything else, never ask again once `get` prints one. Use only `get` and `set` of the registry and `ask-plan` of `first_run.py`.
+
+## Questionnaire cards — the structured part of the profile, asked with buttons
+
+Role, specialty, experience, how the person stands now, work mode, where, relocation, contract, salary and kind of company are asked with **cards**, one at a time, by `python3 /app/shared/skills/onboarding_questionnaire.py`. You do not word these questions and you do not write these fields yourself: the tool posts the card (in your chat, the words are in the person's language) and writes the person's OWN click.
+
+**When:** once the profile is saved (`profile_review.py apply-confirmed` said `ok: true`), never in the first messages, and never while another card waits for an answer (the plan's included: two cards open at once confuse the person).
+
+1. **Ask.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → one line: the next card is in the chat. `open: true` or `answered: true` → nothing new to post (a card waits, or its answer is not applied yet: go to 2). `done: true` → the questionnaire is over: go on with the checklist.
+2. **Apply the answer.** When you read `[USER ANSWER …]` for a card: `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → confirm in ONE line what was set, in the person's words, then `ask` again for the next card. `ask_in_chat` lists the profile fields the card leaves to you (e.g. the place): ask them as ONE question in words and write them with the profile skill. `write_in_chat` (the choice «other»): put its `prompt` to the person in the chat; what they write goes with `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<their words>"`, then `ask` again.
+3. **When nothing was applied.** `waiting: true` or «not the person's own» → write nothing and say nothing. `words: true` → they answered the card in words: if the words clearly name ONE choice, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>`; otherwise `ask` the card again.
+
+Never write these fields by hand while a card is open, never choose for the person, never repeat in words a question the card has asked. The tool is the only writer of these fields: if it answers `ok: false`, say nothing about it and go on with the checklist.
 
 ## Settore-agnostic — NEVER default to IT
 

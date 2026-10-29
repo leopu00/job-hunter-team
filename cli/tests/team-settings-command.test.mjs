@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 // Synthetic config only; JHT_HOME points at a scratch folder.
 const home = mkdtempSync(join(tmpdir(), 'jht-team-settings-'));
 process.env.JHT_HOME = home;
-const { applyResult, getResult, LISTS } = await import('../src/commands/team-settings.js');
+const { applyResult, burstStartResult, burstStopResult, closedQuiet, getResult, withBurst, withQuiet, LISTS } = await import('../src/commands/team-settings.js');
+const { runSettings } = await import('../src/commands/agent-control.js');
 const CONFIG = join(home, 'jht.config.json');
 
 const base = () => ({
@@ -240,4 +241,169 @@ test('effective: the defaults are the ones the launcher uses (get_agent_info and
     assert.equal(effective[role].modelName, modelName, role);
     assert.equal(effective[role].effort, effort, role);
   }
+});
+
+// «Work flat out until HH:MM»: the skill runs in the container (shared/skills/burst.py, tested by
+// tests/test_burst.py); here only the shape of the call and of the answer. A fake exec stands in for it.
+const UNTIL = '2026-10-30T02:00:00+00:00';
+const skill = (answer, code = 0) => {
+  const calls = [];
+  const exec = (script, argv, opts) => {
+    calls.push({ script, argv, opts });
+    return { ok: true, stdout: `${typeof answer === 'string' ? answer : JSON.stringify(answer)}\n`, stderr: '', code };
+  };
+  return { exec, calls };
+};
+const running = { ok: true, burst: { active: true, until: UNTIL, untilLocal: '03:00' } };
+const idle = { ok: true, burst: { active: false } };
+
+test('burst-start: asks the skill for exactly that time, then answers with the hours the box holds and the burst', () => {
+  put(base());
+  const { exec, calls } = skill(running);
+  const { exit, out } = burstStartResult(JSON.stringify({ until: '03:00' }), exec);
+  assert.equal(exit, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].script, '/app/shared/skills/burst.py');
+  assert.deepEqual(calls[0].argv, ['start', '--until', '03:00']);
+  assert.equal(calls[0].opts.interpreter, 'python3');
+  assert.deepEqual(out.burst, { active: true, until: UNTIL, untilLocal: '03:00' });
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.role_models, base().team.role_models);
+});
+
+test('burst-start: a request that is not exactly {"until":"HH:MM"} never reaches the skill', () => {
+  put(base());
+  for (const raw of ['', 'x', '[]', '{}', '{"until":"3:00"}', '{"until":"24:00"}', '{"until":"03:00","x":1}',
+                     '{"until":3}', '{"until":"03:00; id"}', `{"until":"03:00","pad":"${'x'.repeat(80)}"}`]) {
+    const { exec, calls } = skill(running);
+    assert.deepEqual(burstStartResult(raw, exec), { exit: 2, out: { ok: false, code: 'request_invalid' } }, raw);
+    assert.equal(calls.length, 0, raw);
+  }
+});
+
+test('burst-start: the skill’s refusals come through as their closed code; anything else is burst_unavailable', () => {
+  put(base());
+  for (const code of ['until_invalid', 'until_too_soon', 'until_too_far', 'config_unreadable', 'write_failed']) {
+    assert.deepEqual(burstStartResult('{"until":"03:00"}', skill({ ok: false, code }).exec),
+      { exit: 1, out: { ok: false, code } });
+  }
+  for (const answer of [{ ok: false, code: 'rm -rf /' }, { ok: false }, 'not json', '', { ok: true },
+                        { ok: true, burst: { active: true } }, { ok: true, burst: { active: true, until: 'x', untilLocal: '03:00' } },
+                        { ok: true, burst: { active: false, extra: 1 } }]) {
+    assert.deepEqual(burstStartResult('{"until":"03:00"}', skill(answer).exec),
+      { exit: 1, out: { ok: false, code: 'burst_unavailable' } }, JSON.stringify(answer));
+  }
+  const down = () => ({ ok: false, stdout: '', stderr: 'no container', code: -1 });
+  assert.equal(burstStartResult('{"until":"03:00"}', down).out.code, 'burst_unavailable');
+});
+
+test('burst-stop: stops, then answers with what the box holds', () => {
+  put(base());
+  const { exec, calls } = skill(idle);
+  const { exit, out } = burstStopResult(exec);
+  assert.equal(exit, 0);
+  assert.deepEqual(calls.map((c) => c.argv), [['stop']]);
+  assert.deepEqual(out.burst, { active: false });
+  assert.deepEqual(out.role_models, base().team.role_models);
+});
+
+test('get and apply carry the burst when it can be read, and are what they were when it cannot', () => {
+  put(base());
+  assert.deepEqual(withBurst(getResult(), skill(running).exec).out.burst, { active: true, until: UNTIL, untilLocal: '03:00' });
+  assert.deepEqual(withBurst(getResult(), skill(idle).exec).out.burst, { active: false });
+  assert.deepEqual(withBurst(getResult(), skill('garbage').exec), getResult());
+  assert.equal('burst' in withBurst(getResult(), skill({ ok: false, code: 'config_missing' }).exec).out, false);
+  rmSync(CONFIG, { force: true });
+  const { exec, calls } = skill(running);
+  assert.equal(withBurst(getResult(), exec).out.code, 'config_missing');
+  assert.equal(calls.length, 0);
+});
+
+test('agent-control settings: the two new verbs are the only additions, and unknown ones are still refused', () => {
+  put(base());
+  const run = (args, stdin, exec) => {
+    let written = '';
+    const exit = runSettings(args, { write: (s) => { written += s; }, readStdin: () => stdin, exec });
+    return { exit, out: JSON.parse(written) };
+  };
+  const { exec, calls } = skill(running);
+  const started = run(['burst-start'], '{"until":"03:00"}\n', exec);
+  assert.equal(started.exit, 0);
+  assert.equal(started.out.burst.untilLocal, '03:00');
+  assert.deepEqual(calls[0].argv, ['start', '--until', '03:00']);
+  const stopped = run(['burst-stop'], '', skill(idle).exec);
+  assert.deepEqual(stopped.out.burst, { active: false });
+  assert.deepEqual(run(['burst-start'], '{"until":"99:99"}', exec), { exit: 2, out: { ok: false, error: 'request_invalid' } });
+  assert.deepEqual(run(['burst-start', 'x'], '', exec).out, { ok: false, error: 'agent_control_invalid' });
+  assert.deepEqual(run(['burst'], '', exec).out, { ok: false, error: 'agent_control_invalid' });
+  assert.equal(run(['get'], '', skill(running).exec).out.burst.active, true);
+});
+
+// The facts that explain the team's silence (shared/skills/team_quiet.py, tested by tests/test_team_quiet.py): read only, numbers and
+// booleans. Here the shape of the call and of the answer.
+const QUIET = { ok: true, quiet: { budget: { usagePct: 97.5, resetAtUnix: 1790000000 }, containment: false, providerReady: true } };
+
+test('quiet: get carries the facts when the skill gives them, asked with `status` and nothing else', () => {
+  put(base());
+  const { exec, calls } = skill(QUIET);
+  const { out } = withQuiet(getResult(), exec);
+  assert.deepEqual(out.quiet, QUIET.quiet);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].script, '/app/shared/skills/team_quiet.py');
+  assert.deepEqual(calls[0].argv, ['status']);
+  assert.equal(calls[0].opts.interpreter, 'python3');
+});
+
+test('quiet: a skill that does not answer, answers badly or refuses leaves the result as it was', () => {
+  put(base());
+  const was = getResult();
+  assert.deepEqual(withQuiet(getResult(), skill('garbage').exec), was);
+  assert.deepEqual(withQuiet(getResult(), skill({ ok: false, code: 'request_invalid' }).exec), was);
+  assert.deepEqual(withQuiet(getResult(), skill({ ok: true, quiet: {} }).exec), was);
+  assert.deepEqual(withQuiet(getResult(), skill({ ok: true, quiet: [] }).exec), was);
+  assert.deepEqual(withQuiet(getResult(), skill(QUIET, 1).exec).out.quiet, QUIET.quiet);
+  assert.deepEqual(withQuiet(getResult(), () => ({ ok: false, code: -1, stdout: '' })), was);
+  assert.deepEqual(withQuiet(getResult(), () => null), was);
+});
+
+test('quiet: nothing is asked of the box when the settings themselves could not be read', () => {
+  rmSync(CONFIG, { force: true });
+  const { exec, calls } = skill(QUIET);
+  assert.equal(withQuiet(getResult(), exec).out.code, 'config_missing');
+  assert.equal(calls.length, 0);
+});
+
+test('quiet: only the closed shape goes on: a fact out of its shape is left out, an extra key or text never travels', () => {
+  assert.deepEqual(closedQuiet(QUIET.quiet), QUIET.quiet);
+  assert.deepEqual(closedQuiet({ budget: { usagePct: 100, resetAtUnix: null } }), { budget: { usagePct: 100, resetAtUnix: null } });
+  assert.deepEqual(closedQuiet({ containment: true }), { containment: true });
+  assert.deepEqual(closedQuiet({ budget: { usagePct: '97', resetAtUnix: 1 }, containment: 'yes', providerReady: 1 }), null);
+  for (const budget of [{ usagePct: 97 }, { usagePct: 97, resetAtUnix: 1.5 }, { usagePct: -1, resetAtUnix: 1 }, { usagePct: 2000, resetAtUnix: 1 },
+                        { usagePct: 97, resetAtUnix: 0 }, { usagePct: 97, resetAtUnix: 1, status: 'locked out for someone@example.com' }, null, []]) {
+    assert.equal(closedQuiet({ budget, containment: true }).budget, undefined, JSON.stringify(budget));
+    assert.equal(closedQuiet({ budget, containment: true }).containment, true);
+  }
+  const wide = closedQuiet({ ...QUIET.quiet, agent: 'SCOUT', path: '/jht_home/x', note: 'free text' });
+  assert.deepEqual(Object.keys(wide).sort(), ['budget', 'containment', 'providerReady']);
+  assert.equal(closedQuiet(null), null);
+  assert.equal(closedQuiet('x'), null);
+});
+
+test('quiet: the panel’s `settings get` answers with the facts, and `apply` does not ask for them', () => {
+  put(base());
+  const run = (args, stdin, exec) => {
+    let written = '';
+    const exit = runSettings(args, { write: (s) => { written += s; }, readStdin: () => stdin, exec });
+    return { exit, out: JSON.parse(written) };
+  };
+  const both = (script) => (script.endsWith('team_quiet.py') ? { ok: true, stdout: `${JSON.stringify(QUIET)}\n`, stderr: '', code: 0 } : { ok: true, stdout: `${JSON.stringify(idle)}\n`, stderr: '', code: 0 });
+  const seen = [];
+  const exec = (script, argv, opts) => { seen.push(script); return both(script, argv, opts); };
+  const got = run(['get'], '', exec);
+  assert.equal(got.exit, 0);
+  assert.deepEqual(got.out.quiet, QUIET.quiet);
+  assert.deepEqual(got.out.burst, { active: false });
+  seen.length = 0;
+  run(['apply'], request({ role_models: { scout: { model: 'luna' } } }), exec);
+  assert.equal(seen.some((script) => script.endsWith('team_quiet.py')), false);
 });

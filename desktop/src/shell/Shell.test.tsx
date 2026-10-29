@@ -12,6 +12,7 @@ import { THEME_STORAGE_KEY } from "./theme";
 import { downgradeExistingTeamToReadOnly, enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { announceRestoredWriteAccess, reportWriteAccessRemovalFailed, writeAccessNotice } from "../lib/write-access-restored";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
+import { EXIT_OPEN_EVENT } from "../lib/app-exit";
 import Shell from "./Shell";
 import { SHELL_TEXT } from "./shell.i18n";
 
@@ -60,11 +61,24 @@ describe("Shell navbar language", () => {
     expect(within(actions).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
     expect(within(actions).getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(within(actions).queryByRole("button", { name: "Aggiorna" })).not.toBeInTheDocument();
-    expect(within(actions).queryByRole("button", { name: "Esci" })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole("button", { name: "Disconnetti" })).not.toBeInTheDocument();
   });
 });
 
 describe("Shell", () => {
+  it("has a button that leaves the app apart from the one that leaves the account, and it asks the exit dialog", async () => {
+    navigate("/", { replace: true });
+    render(<Shell />);
+    const actions = within(await screen.findByTestId("navbar-actions"));
+    expect(actions.getByRole("button", { name: "Disconnetti" })).toBeInTheDocument();
+    const asked = vi.fn();
+    window.addEventListener(EXIT_OPEN_EVENT, asked);
+    await userEvent.setup().click(actions.getByRole("button", { name: "Esci da Job Hunter Team" }));
+    window.removeEventListener(EXIT_OPEN_EVENT, asked);
+    expect(asked).toHaveBeenCalledOnce();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it("lands on the dashboard when the hash says nothing", async () => {
     navigate("/", { replace: true });
     render(<Shell />);
@@ -134,12 +148,12 @@ describe("Shell", () => {
     }
   });
 
-  it("says what «Esci» does and does not remove: the person, not the data", async () => {
+  it("says what «Disconnetti» does and does not remove: the person, not the data", async () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);
     await screen.findByRole("heading", { name: "Dashboard" });
 
-    const button = screen.getByRole("button", { name: "Esci" });
+    const button = screen.getByRole("button", { name: "Disconnetti" });
     expect(button).toHaveAttribute("title", SHELL_TEXT.it.signOutNote);
     // True for a team on this computer and on a VPS alike: it says what is not deleted, not where it is.
     expect(SHELL_TEXT.it.signOutNote).toMatch(/non vengono cancellati/);
@@ -153,10 +167,10 @@ describe("Shell", () => {
     render(<Shell />);
     await screen.findByRole("heading", { name: "Dashboard" });
 
-    await user.click(screen.getByRole("button", { name: "Esci" }));
+    await user.click(screen.getByRole("button", { name: "Disconnetti" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta bloccato/i);
-    expect(screen.getByRole("button", { name: "Esci" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Disconnetti" })).toBeEnabled();
   });
 
   it("uses the local logout boundary and keeps Shell mounted if its teardown fails", async () => {
@@ -166,12 +180,12 @@ describe("Shell", () => {
     render(<Shell onLogout={localLogout} />);
     await screen.findByRole("heading", { name: "Dashboard" });
 
-    await user.click(screen.getByRole("button", { name: "Esci" }));
+    await user.click(screen.getByRole("button", { name: "Disconnetti" }));
 
     expect(localLogout).toHaveBeenCalledOnce();
     expect(signOut).not.toHaveBeenCalled();
     expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta bloccato/i);
-    expect(screen.getByRole("button", { name: "Esci" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Disconnetti" })).toBeEnabled();
   });
 
   it.each([820, 480])(
@@ -194,7 +208,7 @@ describe("Shell", () => {
       expect(links.className).toMatch(/overflow-x-auto/);
       expect(actions.className).toMatch(/flex-shrink-0/);
       expect(within(actions).getByRole("button", { name: "Aggiorna" })).toBeInTheDocument();
-      expect(within(actions).getByRole("button", { name: "Esci" })).toBeInTheDocument();
+      expect(within(actions).getByRole("button", { name: "Disconnetti" })).toBeInTheDocument();
       expect(within(nav).queryByRole("link", { name: /Team locale/i })).not.toBeInTheDocument();
     },
   );
@@ -234,7 +248,7 @@ describe("Shell", () => {
       const inStrip = within(strip).getAllByRole("link").filter((link) => (link as HTMLElement).style.display !== "none");
       expect(inStrip.length).toBeLessThan(within(strip).getAllByRole("link", { hidden: true }).length);
       // the controls stay where they were
-      expect(within(screen.getByTestId("navbar-actions")).getByRole("button", { name: "Esci" })).toBeInTheDocument();
+      expect(within(screen.getByTestId("navbar-actions")).getByRole("button", { name: "Disconnetti" })).toBeInTheDocument();
 
       await userEvent.setup().click(more);
       const inMenu = within(screen.getByRole("menu")).getAllByRole("menuitem");
@@ -384,7 +398,7 @@ describe("Shell", () => {
     render(<Shell />);
     const dashboard = await screen.findByRole("heading", { name: "Dashboard" });
     expect(dashboard.closest("main")).not.toHaveAttribute("data-testid", "full-bleed");
-    expect(ROUTES.filter((r) => r.fullBleed).map((r) => r.path).sort()).toEqual(["/messages", "/office"]);
+    expect(ROUTES.filter((r) => r.fullBleed).map((r) => r.path).sort()).toEqual(["/messages", "/office", "/swipe"]);
   });
 
   it("gives the office the whole window in the read-only view of an existing team too, its bars above it", async () => {

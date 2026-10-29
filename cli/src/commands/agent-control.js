@@ -6,7 +6,9 @@
 //   jht agent-control list | screen <SESSION> | team | history
 //   jht agent-control exclusions | exclusion-accept <CODE> | exclusion-withdraw <CODE>
 //   jht agent-control answer <QUESTION_ID> <OPTION_ID>
-//   jht agent-control settings get | apply   (working hours and role models; `apply` reads stdin)
+//   jht agent-control settings get | apply | burst-start | burst-stop   (working hours and role models, and
+//     «work flat out until HH:MM»; `apply` and `burst-start` read stdin)
+//   jht agent-control provider status | logout   (the sign-in of the team's active provider; shared/skills/provider_signin.py)
 //
 // One JSON line on stdout and a closed exit code, both from
 // shared/skills/agent_control.py, which holds every rule (see its header).
@@ -16,7 +18,8 @@
 import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { execScriptInContainer } from '../utils/container-proxy.js';
-import { applyResult, getResult } from './team-settings.js';
+import { runProvider } from '../lib/provider-logout.js';
+import { applyResult, burstStartResult, burstStopResult, getResult, withBurst, withQuiet } from './team-settings.js';
 import {
   AGENT_CONTROL_SCRIPT, EXIT_INVALID, agentControlArgv, unansweredReply,
 } from '../lib/agent-control-args.js';
@@ -30,15 +33,17 @@ const TIMEOUT_MS = 180_000;
  * runs this in the container and never starts anything). The rules and the write are
  * team-settings.js's; here only the shape of the call and the panel's reply: {"ok":false,"error":code}.
  */
-export function runSettings(args, { write, readStdin = () => readFileSync(0, 'utf-8') }) {
+export function runSettings(args, { write, readStdin = () => readFileSync(0, 'utf-8'), exec = execScriptInContainer }) {
   const op = args.length === 1 ? args[0] : null;
-  if (op !== 'get' && op !== 'apply') {
+  if (!['get', 'apply', 'burst-start', 'burst-stop'].includes(op)) {
     write(`${JSON.stringify({ ok: false, error: 'agent_control_invalid' })}\n`);
     return EXIT_INVALID;
   }
   let result;
   if (op === 'get') {
-    result = getResult();
+    result = withQuiet(withBurst(getResult(), exec), exec);
+  } else if (op === 'burst-stop') {
+    result = burstStopResult(exec);
   } else {
     let raw = '';
     try {
@@ -46,7 +51,7 @@ export function runSettings(args, { write, readStdin = () => readFileSync(0, 'ut
     } catch {
       raw = '';
     }
-    result = applyResult(String(raw).trim());
+    result = op === 'apply' ? withBurst(applyResult(String(raw).trim()), exec) : burstStartResult(String(raw).trim(), exec);
   }
   const out = result.out.ok ? result.out : { ok: false, error: result.out.code };
   write(`${JSON.stringify(out)}\n`);
@@ -54,7 +59,8 @@ export function runSettings(args, { write, readStdin = () => readFileSync(0, 'ut
 }
 
 export function runAgentControl(args, { exec = execScriptInContainer, write = (s) => process.stdout.write(s), readStdin } = {}) {
-  if (Array.isArray(args) && args[0] === 'settings') return runSettings(args.slice(1), { write, readStdin });
+  if (Array.isArray(args) && args[0] === 'settings') return runSettings(args.slice(1), { write, readStdin, exec });
+  if (Array.isArray(args) && args[0] === 'provider') return runProvider(args.slice(1), { write, exec });
   const argv = agentControlArgv(args);
   if (!argv) {
     write(`${JSON.stringify({ ok: false, error: 'agent_control_invalid' })}\n`);

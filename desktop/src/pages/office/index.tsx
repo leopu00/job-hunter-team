@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
-import type { AgentStatuses, OfficeClick, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Piles, Vec } from "../../office/contract";
+import type { AgentStatuses, OfficeClick, OfficeAgent, OfficeEngine, OfficeEvent, OfficeScene, OfficeSnapshot, Piles, Vec } from "../../office/contract";
 import { createLiveOffice, createReadScheduler, subscribeOffice, type LiveOffice, type ReadScheduler } from "../../office/live";
 import { watchReducedMotion } from "../../office/scene/motion";
 import OfficePanel from "../../office/panel/OfficePanel";
+import OfficeTour from "../../office-tour/OfficeTour";
 import type { PanelClient } from "../../office/panel/types";
 import OfficeKeyboard from "../../office/panel/OfficeKeyboard";
 import OfficeTooltip, { tooltipFor } from "../../office/panel/OfficeTooltip";
@@ -23,6 +24,9 @@ import { readTeamStatus } from "../../lib/existing-team-status";
 import { officeFromTeamProbe } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
 import { cloudClient } from "../../lib/cloud-client";
+import { useLocalTeamData } from "../../lib/local-team-data";
+import OfficeGreeting from "./OfficeGreeting";
+import { readThisComputerAgents } from "../../lib/this-computer-agents";
 import { navigate, useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 
@@ -40,7 +44,8 @@ type Load = { state: "loading" } | { state: "ready"; ready: Ready } | { state: "
  * panel's secondary links change page.
  */
 export default function OfficePage(_props: PageProps) {
-  return <OfficeLoader source="cloud" />;
+  // A local profile has no cloud account: its office is drawn from the team on this computer.
+  return <OfficeLoader source={useLocalTeamData() ? "this-computer" : "cloud"} />;
 }
 
 /**
@@ -53,7 +58,10 @@ export default function OfficePage(_props: PageProps) {
  * the cloud; an agent's panel is not opened (its moves are not in what the VPS
  * reports) and a speech bubble over it says so.
  */
-export type OfficeSource = "cloud" | "team-probe";
+export type OfficeSource = "cloud" | "team-probe" | "this-computer";
+
+/** How often the office of the team on this computer reads it again, while the window is in view. */
+export const THIS_COMPUTER_OFFICE_READ_MS = 20_000;
 
 export function OfficeLoader({ source }: { source: OfficeSource }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -117,9 +125,10 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   // A click or a key on the office. Over an existing team's VPS an agent has no panel (its moves
   // are not in what the VPS reports): a line above the scene says so, never a panel with nothing in it.
   const openPanel = (click: OfficeClick | null, button?: HTMLButtonElement) => {
-    if (click && source === "team-probe" && click.kind === "agent") {
+    if (click && source !== "cloud" && click.kind === "agent") {
       if (noteTimer.current) clearTimeout(noteTimer.current);
-      setNote(EXISTING_TEAM_READONLY_TEXT[appLocale()].officeAgentNoMoves);
+      const said = EXISTING_TEAM_READONLY_TEXT[appLocale()];
+      setNote(source === "this-computer" ? said.officeAgentNoMovesHere : said.officeAgentNoMoves);
       noteTimer.current = setTimeout(() => setNote(null), 8000);
       setPanel(null);
       return;
@@ -262,7 +271,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     probePiles.current = null;
     probeAgents.current = null;
     if (result.kind === "read" && result.fields.containerRunning) {
-      const [piles, agents] = await Promise.all([readVpsPiles(), readTeamAgentsShared()]);
+      const [piles, agents] = await Promise.all([readVpsPiles(), source === "this-computer" ? readThisComputerAgents() : readTeamAgentsShared()]);
       if (probeRead.current !== mine) return;
       probePiles.current = piles;
       probeAgents.current = agents;
@@ -272,19 +281,25 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const probeShow = useRef(showProbe);
   probeShow.current = showProbe;
   useEffect(() => {
-    if (source !== "team-probe") return;
+    if (source === "cloud") return;
     if (!parts.data) {
       setStatus(officeText().notWired);
       return;
     }
     void readProbe();
+    // The team on this computer is read often enough to follow its agents (as the Agents page does); an existing
+    // team's VPS is read when the page opens and when «Refresh» asks, never on a timer of its own.
+    const every = source === "this-computer"
+      ? setInterval(() => { if (document.visibilityState === "visible") void readProbe(); }, THIS_COMPUTER_OFFICE_READ_MS)
+      : undefined;
     return () => {
+      if (every !== undefined) clearInterval(every);
       probeRead.current++;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, parts.data]);
   useEffect(() => {
-    if (source === "team-probe" && reading.current.kind !== "unknown") probeShow.current();
+    if (source !== "cloud" && reading.current.kind !== "unknown") probeShow.current();
   }, [source, connection]);
   // «Aggiorna» asks for a read too: the gap holds for it as well
   useRefresh(() => (source === "cloud" ? scheduler.current?.poke() : void readProbe()));
@@ -318,6 +333,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     // the shell gives the office the whole window under the navbar (Route.fullBleed);
     // the status line sits above the scene, never over it
     <div className="flex h-full flex-col" data-testid="office-page">
+      {source === "this-computer" && <OfficeGreeting />}
       {status && (
         <p
           role={statusIsAlert ? "alert" : "status"}
@@ -344,20 +360,24 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
             onFocusTarget={focusTarget}
             onOpen={(t, button) => openPanel(t, button)}
           />
+          {/* The tour is for the team of this person; the existing team's read-only view has none. */}
+          {source !== "team-probe" && <OfficeTour roster={snapshot?.roster ?? NO_ROSTER} onFocus={focusTarget} />}
           {tag && !panel && <OfficeTooltip target={tag.target} at={tag.at} layout={assets.layout} snapshot={snapshot} statuses={statuses} />}
         </div>
         {panel && (
-          <OfficePanel
-            target={panel}
-            layout={assets.layout}
-            snapshot={snapshot}
-            statuses={statuses}
-            client={source === "cloud" ? cloudClient() : NO_CLOUD}
-            source={source === "cloud" ? "cloud" : "vps"}
-            onClose={() => setPanel(null)}
-            onOpen={setPanel}
-            onNavigate={navigate}
-          />
+          <div data-esc-owner style={{ display: "contents" }}>
+            <OfficePanel
+              target={panel}
+              layout={assets.layout}
+              snapshot={snapshot}
+              statuses={statuses}
+              client={source === "cloud" ? cloudClient() : NO_CLOUD}
+              source={source === "cloud" ? "cloud" : "vps"}
+              onClose={() => setPanel(null)}
+              onOpen={setPanel}
+              onNavigate={navigate}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -379,6 +399,9 @@ function teamOffMessage(agents: number): string {
   const t = officeText();
   return agents === 0 ? t.teamOffEmpty : t.teamOffRecent;
 }
+
+/** The roster before the first snapshot: stable, so the tour does not see a new list at every render. */
+const NO_ROSTER: OfficeAgent[] = [];
 
 /** What the panels get over an existing team's VPS: the cloud is never asked, and a use of it is a failure. */
 const NO_CLOUD = new Proxy({} as PanelClient, {

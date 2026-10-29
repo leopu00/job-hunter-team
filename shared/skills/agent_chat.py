@@ -383,7 +383,10 @@ _PLAIN_COMPOSER = re.compile(r"^\s*([❯›▌])(.*?)\s*$")
 # Codex at rest puts the model and folder under the composer (the «·» line); in the middle of a turn that line
 # becomes «tab to queue message ... 80% context left», with no «·». Without these two phrases a composer in a
 # working Codex is not a composer at all: the text pasted into it is «another draft» and nothing presses Enter.
-_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|\s{6,}\d{1,3}% context left\s*$)")
+# A third footer: after a turn that ended in a plan-like answer Codex offers «Create a plan?  shift + tab use Plan mode
+# esc dismiss» in place of the model line (TEST 19b, 29/10, the Capitano): the composer above it was not found, the
+# text pasted into it was «another draft», and the transport left it there with no Enter for six minutes.
+_CODEX_HINT = re.compile(r"(?:\? for shortcuts\b|← for agents\b|^\s*tab to queue message\b|^\s*Create a plan\?\s+shift\s*\+\s*tab\b|\s{6,}\d{1,3}% context left\s*$)")
 _CODEX_DOT_FOOTER = re.compile(r"^\s+.*·.*$")
 _NUMBERED_OPTION = re.compile(r"^\s*\d{1,3}[.)]\s+")
 
@@ -521,10 +524,17 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
     if width < _WRAPPED_MARKER_MIN:
         return 0
     run: list[str] = []
-    for _raw, plain in lines[index + 1:]:
+    consumed = 0
+    for offset, (_raw, plain) in enumerate(lines[index + 1:], 1):
         if not plain.strip():
+            # A message that holds an empty line (the Dottore's [UNBLOCK], TEST 19f) is drawn with a blank row between
+            # its rows. One blank row does not end the draft when more text follows it; it ends it when nothing
+            # (or only the model line) does.
+            if offset - consumed == 1 and _text_row_follows(lines[index + 1 + offset:]):
+                continue
             break
         run.append(plain)
+        consumed = offset
     if not run or len(run) > _WRAPPED_ROWS_MAX:
         return 0
     if any(_composer_match(row) or _BORDER.match(row) or _status_line_busy(row)
@@ -532,7 +542,16 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
         return 0
     if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
         return 0
-    return len(run)
+    return consumed
+
+
+def _text_row_follows(below: list[tuple[str, str]]) -> bool:
+    """The next non-blank row is text (not the model line or a hint of the footer, not a border)."""
+    for _raw, plain in below:
+        if plain.strip():
+            return not (_CODEX_DOT_FOOTER.match(plain) or _CODEX_HINT.search(plain) or _BORDER.match(plain)
+                        or _composer_match(plain) or _NUMBERED_OPTION.match(plain) or _status_line_busy(plain))
+    return False
 
 
 def _claude_box(lines: list[tuple[str, str]], index: int, boxed: bool) -> bool:
@@ -723,6 +742,22 @@ def delivery_gate(pane: str) -> str:
     return state
 
 
+def new_turn_gate(pane: str) -> str:
+    """``delivery_gate`` for a turn about to be typed: a composer that holds only SIGNED text (one message or
+    several, whoever sent them, left unsent) is ``signed``, not ``text``: the transport pastes ours behind it and
+    one Enter takes them all. Text typed by hand, a paste token the transport does not explain, a menu: as in
+    ``delivery_gate``. The turns already typed and waiting for their Enter keep ``delivery_gate`` (their
+    composer holds OUR text, which the transport proves from its own record)."""
+    gate = delivery_gate(pane)
+    if gate != "text":
+        return gate
+    try:
+        import tmux_send_composer
+    except ImportError:
+        return gate               # without the helper, as it always was
+    return "signed" if tmux_send_composer.signed_only(composer_text(pane)) else gate
+
+
 def composer_text(pane: str) -> str | None:
     """The visible draft in the last recognised composer, or ``None``.
 
@@ -808,9 +843,9 @@ def require_prompt(session: str, *, wait: bool = True) -> None:
         if pane is None:
             raise Refusal("agent_unavailable")
         state, busy = composer_snapshot(pane)
-        gate = delivery_gate(pane)
+        gate = new_turn_gate(pane)
         saw_busy = saw_busy or busy
-        if gate in {"empty", "none"}:
+        if gate in {"empty", "none", "signed"}:
             return
         if gate == "text":
             raise Refusal("composer_has_text")
@@ -1256,7 +1291,7 @@ def flush_queue(agent: str, session: str) -> None:
                     if _settle_typed(agent, session, row, held, pane):
                         continue
                     return
-                if pane is not None and not composer_snapshot(pane)[1] and delivery_gate(pane) == "text":
+                if pane is not None and not composer_snapshot(pane)[1] and new_turn_gate(pane) == "text":
                     # A text of ours left in the box (a bridge's paste nobody submitted) would hold the turn for
                     # ever: once, the transport submits it if it can prove it is its own, then the box is looked at again.
                     try:
@@ -1264,7 +1299,7 @@ def flush_queue(agent: str, session: str) -> None:
                     except Refusal:
                         return
                     pane = capture_pane(session)
-                if pane is None or composer_snapshot(pane)[1] or delivery_gate(pane) not in {"empty", "none"}:
+                if pane is None or composer_snapshot(pane)[1] or new_turn_gate(pane) not in {"empty", "none", "signed"}:
                     return
                 try:
                     taken, signature = deliver(agent, session, str(row.get("text") or ""))
@@ -1373,7 +1408,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
             pane = capture_pane(session)
             if pane is None:
                 raise Refusal("agent_unavailable")
-            gate = delivery_gate(pane)
+            gate = new_turn_gate(pane)
             if gate == "text":
                 # The text may have appeared while we waited: the same single try, outside the lock.
                 if flushed:
@@ -1381,7 +1416,7 @@ def send(agent: str, client_id: str, raw_text: str) -> dict:
                 retry_outside_lock = True
             elif gate == "blocked":
                 raise Refusal("agent_not_at_prompt")
-            elif gate not in {"empty", "none"}:
+            elif gate not in {"empty", "none", "signed"}:
                 retry_outside_lock = True
             elif composer_snapshot(pane)[1]:
                 # The turn started while we waited for the lock: not now, and not past the deadline.
@@ -1734,6 +1769,30 @@ def _wake_log(agent: str, code: str) -> None:
         pass
 
 
+def _signed_text_waiting(session: str, pane: str) -> bool:
+    """True when the composer holds ONLY signed text that the transport itself pasted (or whose token it explains):
+    the same judgement as ``jht-tmux-send`` (``tmux_send_composer.signed_only`` over its pending record and its
+    fingerprints of the last day), read from the same files. Anything uncertain is False."""
+    try:
+        import tmux_send_composer  # noqa: PLC0415  (it imports this module: not at the top)
+        folder = Path(os.environ.get("JHT_TMUX_LOCK_DIR") or (jht_home() / "locks"))
+        slug = re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+        try:
+            record = (folder / f"tmux-send-pending-{slug}.sha").read_text(encoding="utf-8").split()
+        except OSError:
+            record = []
+        try:
+            seen = (folder / f"tmux-send-fingerprints-{slug}.log").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            seen = []
+        now = time.time()
+        return tmux_send_composer.signed_only(
+            composer_text(pane), tmux_send_composer.registry_token_ok(record, now, 600.0),
+            tmux_send_composer.fingerprints_known(seen, now, 86400))
+    except Exception:  # noqa: BLE001 - uncertain is "no": the wake stays away from the text
+        return False
+
+
 def _wake_attempt(agent: str, session: str) -> str:
     """One try to wake the agent: ``sent`` or the closed code of why not.
 
@@ -1746,18 +1805,25 @@ def _wake_attempt(agent: str, session: str) -> str:
         if pane is None:
             return "no_pane"
         gate = delivery_gate(pane)
+        signed = False
         if gate == "text":
             try:
                 flush_ours(session)
             except Refusal:
-                return "text"
-            pane = capture_pane(session)
-            if pane is None:
-                return "no_pane"
-            gate = delivery_gate(pane)
-        if gate == "text":
+                # A message of the system left unsent in the box (the Dottore's [UNBLOCK], a bridge line) is not a
+                # person's draft: the transport pastes the wake behind it and one Enter sends both (TEST 19f: the wake
+                # was refused for ten minutes against such a line).  Anything else in the box is still left alone.
+                signed = _signed_text_waiting(session, pane)
+                if not signed:
+                    return "text"
+            else:
+                pane = capture_pane(session)
+                if pane is None:
+                    return "no_pane"
+                gate = delivery_gate(pane)
+        if gate == "text" and not signed:
             return "text"
-        if gate != "empty":
+        if gate != "empty" and not signed:
             # a menu, a sign-in, or a screen with no composer to be seen: nothing is typed on a guess (a chat send
             # may go on over an unknown composer because it proves the submit; this line is not worth that)
             return "blocked"
@@ -1797,19 +1863,29 @@ def _answer_seen(question_id: str) -> bool:
     return bool(row and row[0])
 
 
+def _agent_working(session: str) -> bool:
+    """True when the agent's terminal says it is in the middle of a turn."""
+    pane = capture_pane(session)
+    return pane is not None and composer_snapshot(pane)[1]
+
+
 def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake_attempt, seen=_answer_seen,
                     sleep=time.sleep, clock=time.monotonic, every: float | None = None,
-                    window: float | None = None, quiet: float | None = None) -> str:
+                    window: float | None = None, quiet: float | None = None, working=_agent_working,
+                    start_after: float = 0.0) -> str:
     """Wake the agent again until it has read the answer, or the window is over: ``seen`` or ``gave_up``.
 
-    After a line that landed it waits ``quiet`` before another (the agent may be working through its queue);
-    a try that did not land is repeated every ``every`` seconds.
+    After a line that landed it waits ``quiet`` before another, and then until the agent is out of its turn: the line
+    it was given is waiting in its queue and a second one would only be read after it, twice.  A try that did not
+    land is repeated every ``every`` seconds.  ``start_after`` is how long to leave the first try when somebody has
+    just made one (the answer itself does, and the retrying process must not type the same line again at once).
     """
     every = WAKE_RETRY_EVERY_S if every is None else every
     window = WAKE_RETRY_FOR_S if window is None else window
     quiet = WAKE_QUIET_AFTER_SENT_S if quiet is None else quiet
     deadline = clock() + window
-    next_try = clock()
+    next_try = clock() + start_after
+    landed = False
     while True:
         if seen(question_id):
             return "seen"
@@ -1817,10 +1893,14 @@ def wake_until_seen(agent: str, question_id: str, session: str, *, attempt=_wake
         if now >= deadline:
             return "gave_up"
         if now >= next_try:
-            code = attempt(agent, session)
-            if code != "sent":
-                _wake_log(agent, code)
-            next_try = clock() + (quiet if code == "sent" else every)
+            if landed and working(session):
+                next_try = clock() + every
+            else:
+                code = attempt(agent, session)
+                if code != "sent":
+                    _wake_log(agent, code)
+                landed = landed or code == "sent"
+                next_try = clock() + (quiet if code == "sent" else every)
         sleep(min(every, max(0.0, deadline - clock())))
 
 
@@ -1856,7 +1936,8 @@ def wake(agent: str, question_id: str) -> dict:
     if lock is None:
         return {"result": "running"}
     try:
-        return {"result": wake_until_seen(agent, question_id, AGENTS[agent])}
+        # the answer made the first try a moment ago and it did not land: the next one is after the usual wait
+        return {"result": wake_until_seen(agent, question_id, AGENTS[agent], start_after=WAKE_RETRY_EVERY_S)}
     finally:
         try:
             lock.unlink()
@@ -1989,6 +2070,43 @@ def answer(agent: str, question_id: str, raw: str) -> dict:
     return {"questionId": question_id, "accepted": True, "at": at}
 
 
+def reply(agent: str, text: str) -> dict:
+    """A line typed in a terminal to this agent (``jht team chat``, ``jht team send``): an answer to one of ITS open
+    questions, or just chat.
+
+    The number of an option, ``Q#### <number>``, an option's exact label, or a yes in words for the card that asks to
+    save the profile (``agent_questions.resolve_terminal_reply``) is the person's answer, recorded the way the app's
+    button records it and followed by the same wake line to the agent. The answer is
+    ``{"result": "answered", "questionId", "label"}``, ``{"result": "invalid", "reason", "code"}`` (it meant a
+    question and is not one of its options: the line is NOT sent on), ``{"result": "closed"}`` (answered or expired
+    meanwhile) or ``{"result": "chat"}``: everything else, and every case where the answer cannot be given
+    (an image without questions, no database): the caller sends the line to the agent as text, as it always did."""
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file() or not text.strip():
+        return {"result": "chat"}
+    try:
+        conn = sqlite3.connect(str(path), timeout=10)
+    except sqlite3.Error:
+        return {"result": "chat"}
+    try:
+        try:
+            typed = aq.resolve_terminal_reply(conn, agent, text)
+        except (aq.QuestionRejected, aq.AnswerRejected, sqlite3.Error):
+            return {"result": "chat"}
+    finally:
+        conn.close()
+    if typed.status == "recorded":
+        if _wake_for_answer(agent, AGENTS[agent]) != "sent":
+            _spawn_wake_retry(agent, typed.id_domanda)
+        return {"result": "answered", "questionId": typed.id_domanda, "label": typed.label}
+    if typed.status == "invalid":
+        return {"result": "invalid", "reason": typed.code, "code": typed.answer_code}
+    if typed.status in ("already_answered", "expired"):
+        return {"result": "closed"}
+    return {"result": "chat"}
+
+
 def _answer_stdin() -> str:
     data = sys.stdin.buffer.read(MAX_ANSWER_STDIN + 1)
     if len(data) > MAX_ANSWER_STDIN:
@@ -2009,6 +2127,8 @@ def run(argv: list[str]) -> dict:
         return enter(agent_of(argv[1]), argv[2])
     if len(argv) == 3 and argv[0] == "answer":
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
+    if len(argv) == 2 and argv[0] == "reply":
+        return reply(agent_of(argv[1]), _answer_stdin())
     if len(argv) == 3 and argv[0] == "wake":
         return wake(agent_of(argv[1]), argv[2])
     if len(argv) == 2 and argv[0] == "drain":

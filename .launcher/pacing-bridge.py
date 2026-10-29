@@ -1178,19 +1178,24 @@ def format_message(d: dict) -> str:
     return " | ".join(parts)
 
 
+# Seconds this caller waits for the transport before it sees the deadline (JHT_TMUX_SEND_WAIT_PACING_S; the old
+# JHT_TMUX_SEND_WAIT_S, one name for every caller, still sets it when the caller's own is absent).
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_PACING_S", os.environ.get("JHT_TMUX_SEND_WAIT_S", "30")))
+# >>> tmux_send_run bootstrap (the same text in every caller: shared/skills/tmux_send_run_bootstrap.txt, scripts/sync_tmux_send_bootstrap.py)
 # `subprocess.run(..., timeout=N)` KILLS jht-tmux-send at the deadline; between its paste and its Enter that
-# leaves a paste in the composer with no Enter (TEST 5, 27/10). shared/skills/tmux_send_run.py waits as long,
-# raises the same TimeoutExpired, and lets the transport finish; without the module the old call is kept.
-TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "30"))
+# leaves a paste in the composer with no Enter (TEST 5, 27/10). tmux_send_run.py waits as long, raises the same
+# TimeoutExpired, and lets the transport finish; without the module the old call is kept.
 _tmux_send_run_module = None
 
 
 def _transport_run(args, timeout, text=True):
     global _tmux_send_run_module
     if _tmux_send_run_module is None:
+        import importlib.util
         _tmux_send_run_module = False
-        for cand in (Path("/app/shared/skills/tmux_send_run.py"),
-                     Path(__file__).resolve().parent.parent / "shared" / "skills" / "tmux_send_run.py"):
+        here = Path(__file__).resolve().parent
+        for cand in (here / "tmux_send_run.py", Path("/app/shared/skills/tmux_send_run.py"),
+                     here.parent / "shared" / "skills" / "tmux_send_run.py"):
             if cand.is_file():
                 try:
                     spec = importlib.util.spec_from_file_location("tmux_send_run", cand)
@@ -1203,6 +1208,7 @@ def _transport_run(args, timeout, text=True):
     if _tmux_send_run_module:
         return _tmux_send_run_module.run(args, timeout, text=text)
     return subprocess.run(args, capture_output=True, text=text, timeout=timeout)
+# <<< tmux_send_run bootstrap
 
 
 

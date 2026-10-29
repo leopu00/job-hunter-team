@@ -3,7 +3,7 @@ import DashboardSkeleton from "@/app/(protected)/_components/DashboardSkeleton";
 import type { Locale } from "@/i18n/config";
 import { readLocaleCookie } from "@/lib/use-locale";
 import { cloudClient } from "../../lib/cloud-client";
-import { withReadDeadline } from "../../lib/read-deadline";
+import { readOnce, withReadDeadline } from "../../lib/read-deadline";
 import CloudDataNotice, { useCloudDataBlocked } from "../../shell/CloudDataNotice";
 import { useRefresh } from "../../shell/router";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
@@ -14,6 +14,7 @@ import { describeError } from "../../lib/error-catalog";
 import { ExistingTeamDashboardError, loadExistingTeamDashboard } from "../../lib/existing-team-dashboard";
 import { useConnectTeam } from "../../lib/connect-team";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
+import { useLocalTeamData } from "../../lib/local-team-data";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { CONNECT_TEAM_PROMPT_TEXT } from "./connect-team.i18n";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
@@ -29,14 +30,17 @@ export default function DashboardPage(_props: PageProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const request = useRef(0);
   // An existing team that is only read: its own VPS answers, the cloud is not asked.
-  const existingTeam = useExistingTeamView() !== null;
-  const blocked = useCloudDataBlocked();
+  // (and a local profile's team, read from this computer: no cloud account to ask)
+  const localTeam = useLocalTeamData();
+  const existingTeam = useExistingTeamView() !== null || localTeam;
+  // The cloud notice is for a profile with nothing to show: the team of this computer is read from its own database.
+  const blocked = useCloudDataBlocked() && !localTeam;
   // A set-up profile with no team linked: the way to link the one that is already on a VPS.
   const connectTeam = useConnectTeam();
 
   const read = useCallback(() => {
     const mine = ++request.current;
-    withReadDeadline(existingTeam ? loadExistingTeamDashboard() : loadDashboard(cloudClient()))
+    withReadDeadline(readOnce(`dashboard:${existingTeam ? "vps" : "cloud"}`, () => (existingTeam ? loadExistingTeamDashboard() : loadDashboard(cloudClient()))))
       .then((data) => {
         if (request.current === mine) setLoad({ state: "ready", data });
       })
@@ -75,7 +79,7 @@ export default function DashboardPage(_props: PageProps) {
           className="mt-3 border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]"
           onClick={() => { setLoad({ state: "loading" }); read(); }}
         >
-          {SHELL_TEXT[appLocale()].refresh}
+          {SHELL_TEXT[appLocale()].retry}
         </button>
       </div>
     );

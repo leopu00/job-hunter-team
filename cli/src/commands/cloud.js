@@ -31,6 +31,7 @@ import { summarizeOutOfRange } from '../lib/score-ranges.js';
 import { coalescingGuardedLane, createHaltGate, guardedLane } from '../lib/halt-gate.js';
 import { applyAppliedBackflow } from '../lib/applied-backflow.js';
 import { syncProfileExclusions } from '../lib/profile-exclusions-sync.js';
+import { replyColumnsForCloud } from '../lib/local-only-replies.js';
 import { runSkillCaptured } from './positions.js';
 import { createExclusiveRunner } from '../lib/exclusive-runner.js';
 import { boundedBackoffDelay } from '../lib/bounded-backoff.js';
@@ -1505,10 +1506,12 @@ async function performPush(options) {
       // [JHT-CHAT-UNIFY] `author`/`chat_ts` viaggiano col push solo se lo
       // schema locale le ha: un jobs.db più vecchio del codice non deve far
       // fallire il tick (stesso trattamento dei logo_*).
+      // La risposta libera a una domanda semplice resta sul Mac: per quelle
+      // righe i tre campi della risposta escono NULL (local-only-replies.js).
       const msgCols = [
         'id', 'agent', 'body', 'kind', 'related_position_id',
         'delivered_via', 'delivered_at', 'acknowledged_at',
-        'user_reply', 'user_reply_at', 'agent_seen_reply_at',
+        ...replyColumnsForCloud((c) => sqliteHasColumn(db, 'pending_user_messages', c)),
         'created_at',
       ];
       for (const c of ['author', 'chat_ts']) {

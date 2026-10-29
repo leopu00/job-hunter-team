@@ -119,6 +119,26 @@ describe("SSH host-key consent contract", () => {
     expect(parseOnboardingNativeProgress({ ...runtimeStarted, code: "unexpected" })).toBeNull();
   });
 
+  it("writes the numbers of a short-memory notice in the app's language and never shows a placeholder", () => {
+    const GIB = 1024 ** 3;
+    const notice = { ...runtimeStarted, status: "notice", code: null, retryable: null };
+    const told = parseOnboardingNativeProgress({
+      ...notice, message: "ui_notice_ram_low", amounts: { requiredBytes: 6 * GIB, availableBytes: 3 * GIB + GIB / 4 },
+    });
+    expect(told?.message).toBe("Gli agenti richiedono almeno 6 GiB di memoria — disponibili: 3,2 GiB. Potrebbe andare lento o fermarsi: chiudi le app che non ti servono.");
+    const swapping = parseOnboardingNativeProgress({
+      ...notice, message: "ui_notice_ram_low_swap", amounts: { requiredBytes: 6 * GIB, availableBytes: 2 * GIB },
+    });
+    expect(swapping?.message).toMatch(/disponibili: 2 GiB.*swap.*riavvia il computer/);
+    // numbers that did not arrive valid: the event is dropped, not shown with {required}
+    for (const amounts of [undefined, null, {}, { requiredBytes: "6", availableBytes: 3 }, { requiredBytes: -1, availableBytes: 3 }]) {
+      expect(parseOnboardingNativeProgress({ ...notice, message: "ui_notice_ram_low", amounts })).toBeNull();
+    }
+    // a message without placeholders ignores the amounts
+    expect(parseOnboardingNativeProgress({ ...runtimeStarted, amounts: { requiredBytes: 1, availableBytes: 2 } })?.message)
+      .toBe(parseOnboardingNativeProgress(runtimeStarted)?.message);
+  });
+
   it("probes without sending a pairing token or confirmation", async () => {
     vi.mocked(invoke).mockResolvedValue(firstSeen);
 

@@ -108,6 +108,22 @@ No tienes que hacer nada — el wrapper lo maneja. No lo evites con SQL crudo: u
 
 Sin esta puerta, el Capitano puede reportar "12 ready" verbalmente mientras la DB aún muestra 0 — exactamente la divergencia que corrigió el bug #21.
 
+## Un `$` en el texto: comillas simples o stdin
+
+Entre comillas dobles la shell lee `$1` y `$2` como argumentos suyos y los sustituye por nada **antes de que arranque la herramienta**: «Plus — $20/month; Pro — $200/month» llega al usuario como «Plus — 0/month; Pro — 00/month», y nadie más adelante puede devolver las cifras. Si el texto lleva un `$` (precios, importes), escríbelo entre comillas simples o pásalo por stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+Escribe el `TXT` de cierre en la primera columna, solo en su línea, sin espacios delante (si copias la sangría el heredoc nunca se cierra: un texto que acaba en una línea `TXT` se rechaza, no se envía nada).
+
 ## Reglas de seguridad
 
 1. **Leer primero.** Ejecuta `db-query position <id>` (o `application`) para ver el estado actual antes de escribir. Sobrescrituras ciegas producen registros inconsistentes.

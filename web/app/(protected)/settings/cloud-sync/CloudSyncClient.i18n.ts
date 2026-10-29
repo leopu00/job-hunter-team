@@ -178,7 +178,7 @@ export const T = {
     es: "Cerrar sesión",
     de: "Abmelden",
     fr: "Déconnexion",
-    pt: "Sair",
+    pt: "Terminar sessão",
   },
   state: {
     it: "Stato",

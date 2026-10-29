@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import type { PluralForms } from "../../lib/plural";
 
 /**
  * The direct chat's own words: the agent list, the status bar, the transcript
@@ -10,6 +11,8 @@ export interface DirectChatText {
   agents: Record<"capitano" | "assistente" | "mentor" | "scout" | "analista" | "scorer" | "scrittore" | "critico", string>;
   agentsHeading: string;
   agentsNavAria: string;
+  /** The count beside an agent whose messages were not read yet, for a screen reader. {count} */
+  unreadAria: PluralForms;
   agentSelect: string;
   /** The button of the chat in the Agents page: the same chat with the same agent, on the whole page. */
   title: string;
@@ -116,6 +119,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Capitano", assistente: "Assistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Scrittore", critico: "Critico" },
     agentsHeading: "Agenti",
     agentsNavAria: "Chat agenti",
+    unreadAria: { one: "{count} messaggio non letto", other: "{count} messaggi non letti" },
     agentSelect: "Agente",
     title: "Chat diretta",
     conversationWith: "Conversazione con {name}",
@@ -182,6 +186,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Captain", assistente: "Assistant", mentor: "Mentor", scout: "Scout", analista: "Analyst", scorer: "Scorer", scrittore: "Writer", critico: "Critic" },
     agentsHeading: "Agents",
     agentsNavAria: "Agent chats",
+    unreadAria: { one: "{count} unread message", other: "{count} unread messages" },
     agentSelect: "Agent",
     title: "Direct chat",
     conversationWith: "Conversation with {name}",
@@ -248,6 +253,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Kapitän", assistente: "Assistent", mentor: "Mentor", scout: "Scout", analista: "Analyst", scorer: "Scorer", scrittore: "Schreiber", critico: "Kritiker" },
     agentsHeading: "Agenten",
     agentsNavAria: "Agenten-Chats",
+    unreadAria: { one: "{count} ungelesene Nachricht", other: "{count} ungelesene Nachrichten" },
     agentSelect: "Agent",
     title: "Direktchat",
     conversationWith: "Unterhaltung mit {name}",
@@ -314,6 +320,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Capitaine", assistente: "Assistant", mentor: "Mentor", scout: "Scout", analista: "Analyste", scorer: "Scorer", scrittore: "Rédacteur", critico: "Critique" },
     agentsHeading: "Agents",
     agentsNavAria: "Discussions avec les agents",
+    unreadAria: { one: "{count} message non lu", other: "{count} messages non lus" },
     agentSelect: "Agent",
     title: "Discussion directe",
     conversationWith: "Conversation avec {name}",
@@ -380,6 +387,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Capitán", assistente: "Asistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Redactor", critico: "Crítico" },
     agentsHeading: "Agentes",
     agentsNavAria: "Chats con agentes",
+    unreadAria: { one: "{count} mensaje sin leer", other: "{count} mensajes sin leer" },
     agentSelect: "Agente",
     title: "Chat directo",
     conversationWith: "Conversación con {name}",
@@ -446,6 +454,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Capitão", assistente: "Assistente", mentor: "Mentor", scout: "Scout", analista: "Analista", scorer: "Scorer", scrittore: "Redator", critico: "Crítico" },
     agentsHeading: "Agentes",
     agentsNavAria: "Conversas com agentes",
+    unreadAria: { one: "{count} mensagem por ler", other: "{count} mensagens por ler" },
     agentSelect: "Agente",
     title: "Conversa direta",
     conversationWith: "Conversa com {name}",
@@ -512,6 +521,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     agents: { capitano: "Kapitány", assistente: "Asszisztens", mentor: "Mentor", scout: "Felderítő", analista: "Elemző", scorer: "Pontozó", scrittore: "Író", critico: "Kritikus" },
     agentsHeading: "Ügynökök",
     agentsNavAria: "Ügynökök csevegései",
+    unreadAria: { one: "{count} olvasatlan üzenet", other: "{count} olvasatlan üzenet" },
     agentSelect: "Ügynök",
     title: "Közvetlen csevegés",
     conversationWith: "Beszélgetés: {name}",

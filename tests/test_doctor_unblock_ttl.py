@@ -895,3 +895,43 @@ def test_sender_exit_codes_are_documented():
     # Le due funzioni della verifica: il submit si CONTROLLA, non si presume.
     assert "_submitted" in src
     assert "_composer_line" in src
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. Il team non e' ancora partito: nessun blocco da sbloccare (TEST 19f)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _first_run_phase(home, phase):
+    (home / "state").mkdir(parents=True, exist_ok=True)
+    (home / "state" / "first-run.json").write_text(json.dumps({"phase": phase}), encoding="utf-8")
+
+
+def test_07_before_the_first_run_a_silent_captain_and_idle_operatives_are_not_blocks(home):
+    """The Dottore read the Capitano's silence, while the team waited for the profile or the plan, as `mute_coordinator`
+    and wrote «CAPITANO is idle» to the Assistente, who left it unsent in its box."""
+    panes = {s: {"state": "idle"} for s in ("SCOUT-1", "ANALISTA-1", "CAPITANO")}
+    _first_run_phase(home, "awaiting_profile")
+    assert au.team_started(home) is False
+
+    waiting = au.build_scan(panes, messages=[], now=_now(), started=au.team_started(home))
+    assert waiting["blocks"] == []
+
+    _first_run_phase(home, "burst")
+    assert au.team_started(home) is True
+    running = au.build_scan(panes, messages=[], now=_now(), started=au.team_started(home))
+    assert {b["kind"] for b in running["blocks"]} == {"all_operatives_idle", "mute_coordinator"}
+
+
+def test_07b_a_state_that_cannot_be_read_counts_as_started_the_old_behaviour(home):
+    assert au.team_started(home) is True                                  # no file
+    (home / "state").mkdir(parents=True, exist_ok=True)
+    (home / "state" / "first-run.json").write_text("not json", encoding="utf-8")
+    assert au.team_started(home) is True
+    (home / "state" / "first-run.json").write_text("[]", encoding="utf-8")
+    assert au.team_started(home) is True
+
+
+def test_07c_a_line_left_in_a_box_is_still_a_block_before_the_first_run(home):
+    panes = {"CAPITANO": {"state": "draft_agent", "draft": "[@x -> @capitano] hi"}, "ASSISTENTE": {"state": "idle"}}
+    out = au.build_scan(panes, messages=[], now=_now(), started=False)
+    assert [b["kind"] for b in out["blocks"]] == ["pending_agent_input"]

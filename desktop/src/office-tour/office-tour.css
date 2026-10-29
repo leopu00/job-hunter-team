@@ -1,0 +1,70 @@
+.office-tour {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 15;
+  max-width: min(460px, calc(100% - 24px));
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-base);
+  background: color-mix(in srgb, var(--color-panel) 96%, transparent);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+}
+
+.office-tour--pill {
+  display: block;
+  padding: 6px;
+}
+
+.office-tour__portrait {
+  width: 72px;
+}
+
+.office-tour__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.office-tour__counter {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.office-tour__line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.office-tour__reply {
+  color: var(--color-bright);
+}
+
+.office-tour__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.office-tour button {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--color-bright);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-card);
+  cursor: pointer;
+}
+
+.office-tour button:hover,
+.office-tour button:focus-visible {
+  border-color: var(--color-bright);
+}

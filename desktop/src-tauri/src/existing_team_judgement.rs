@@ -41,7 +41,7 @@ pub(crate) enum FeedbackValue {
 }
 
 impl FeedbackValue {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Like => "like",
             Self::Dislike => "dislike",
@@ -61,7 +61,7 @@ pub(crate) enum FeedbackDirection {
 }
 
 impl FeedbackDirection {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::MoreLikeThis => "more_like_this",
             Self::LessLikeThis => "less_like_this",

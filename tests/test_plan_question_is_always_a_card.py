@@ -291,7 +291,10 @@ def test_the_net_does_not_post_over_a_card_the_capitano_already_posted(box):
 def test_the_net_does_nothing_once_the_plan_is_declared_or_the_first_run_is_over(box):
     import_profile(box, minutes_ago=60)
     configure(box, plan="pro")
-    assert run(box, "plan-question-check")["action"] == "none"
+    # the plan is declared and the first run has not opened: no card, and the Capitano is told to open it
+    # (after a short wait for the one who wrote the plan; tests/test_first_run_start_after_the_card.py)
+    assert run(box, "plan-question-check")["action"] in {"waiting", "start"}
+    assert questions(box) == []
 
     configure(box)
     steady(box)
@@ -514,3 +517,51 @@ def test_the_catalog_has_the_card_in_every_language(lang: str):
             assert catalog[key] != english[key], (lang, key)
     assert len(catalog["plan.question_subject"]) <= 120
     assert "first_run.py ask-plan" in catalog["plan.select_hint"]
+
+
+# ── The person already picked: nobody sends them back to the card ──────────────────────────────────
+
+def test_ask_plan_after_a_named_answer_says_the_plan_is_picked_and_not_to_ask_again(box):
+    """Between the answer on the card and the plan being written (the net waits for whoever should write it) the
+    agent that ran `ask-plan` read «answered without naming a plan, asked again later» and sent the person back to
+    «the card above», which they had just answered (collaudo 19c)."""
+    configure(box)
+    first = run(box, "ask-plan")
+    answer(box, first["question_id"], "pro_max")
+
+    again = run(box, "ask-plan")
+
+    assert again["ok"] and not again["asked"] and again["answered"] and again["choice"] == "pro_max", again
+    assert "seconds_left" not in again and "without naming" not in again["reason"]
+    assert "plan_registry.py set openai:pro_max" in again["reason"] and "Do NOT ask again" in again["reason"]
+    assert len(questions(box)) == 1
+
+
+def test_ask_plan_after_an_i_do_not_know_still_waits_the_hour(box):
+    configure(box)
+    first = run(box, "ask-plan")
+    answer(box, first["question_id"], "unknown")
+
+    soon = run(box, "ask-plan")
+
+    assert not soon["asked"] and not soon.get("answered") and 3000 < soon["seconds_left"] <= 3600, soon
+
+
+def test_begin_burst_with_the_plan_picked_but_not_written_tells_to_write_it_and_not_to_ask(box):
+    configure(box)
+    first = run(box, "ask-plan")
+    answer(box, first["question_id"], "pro_max")
+
+    refused = run(box, "begin-burst")
+
+    assert not refused["ok"], refused
+    assert "plan_registry.py set openai:pro_max" in refused["hint"] and "Do NOT ask again" in refused["hint"]
+    assert "ask-plan" not in refused["hint"]
+
+
+def test_begin_burst_with_no_answer_still_says_to_ask_with_the_card(box):
+    configure(box)
+
+    refused = run(box, "begin-burst")
+
+    assert not refused["ok"] and "ask-plan" in refused["hint"], refused

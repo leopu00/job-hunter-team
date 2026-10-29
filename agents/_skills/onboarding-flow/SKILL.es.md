@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que el Assistente sigue para dar de alta al usuario — primer mensaje, pacing iterativo de una-pregunta-por-turno, checklist bloqueante (el piso que desbloquea el dashboard) vs checklist rica (lo que hace que los Writers sean realmente útiles), estilo de preguntas agnóstico de sector (NUNCA asumir IT), y la secuencia obligatoria de checkpoints cuando el usuario sube archivos. Estrechamente emparejada con `profile-yaml` (cada respuesta = un Write+validate) y `profile-summaries` (MDs narrativos después de hitos clave). Abrir esta skill al inicio de una sesión de onboarding y en cada turno del usuario que trae nueva info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
 ---
 <!-- @translation: es, ai-translated 2026-06-06 -->
 
@@ -30,7 +30,9 @@ Después de CADA turno del usuario que trae nueva información:
 5. Si se disparó un trigger de resúmenes, escribir/refrescar el MD        → skill profile-summaries
 ```
 
-Una respuesta sin siguiente pregunta es aceptable SOLO cuando la checklist bloqueante está completamente satisfecha.
+Una respuesta sin siguiente pregunta es aceptable SOLO cuando la checklist bloqueante está completamente satisfecha, **o cuando la persona no ha respondido a la pregunta pendiente** (ver abajo).
+
+**Cuando la persona no responde o cambia de tema.** Si su mensaje no es la respuesta a tu última pregunta (un saludo, una pregunta sobre ti o sobre el producto, cualquier otra cosa), responde primero a lo que ha preguntado, en la misma respuesta, y NO repitas la pregunta en esa respuesta. Retoma la pregunta pendiente UNA SOLA VEZ, más adelante, en la próxima pausa natural (no en la respuesta siguiente, no tras cada mensaje fuera de tema); si sigue sin respuesta incluso entonces, no la vuelvas a hacer hasta que sea la persona quien hable del perfil. El metrónomo de arriba vale para los turnos que aportan información, no para los que no la aportan.
 
 Tres niveles (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED desbloquea el
 equipo · 🟡 RECOMMENDED no bloquea pero mejora mucho · 🟢 OPTIONAL = máxima personalización.
@@ -118,6 +120,18 @@ El equipo no puede abrir su primera ronda hasta que el plan de suscripción del 
 4. **¿No lo sabe?** (la opción «No lo sé») No elijas uno tú. Dile que el plan aparece en la página de suscripción del proveedor; el sistema lo vuelve a preguntar más tarde (la tarjeta vuelve tras una hora, tres veces como máximo).
 
 Nunca escribas un plan que el usuario no eligió, nunca lo deduzcas de otra cosa, nunca vuelvas a preguntar cuando `get` imprime uno. Usa solo `get` y `set` del registro y `ask-plan` de `first_run.py`.
+
+## Tarjetas del cuestionario — la parte estructurada del perfil, preguntada con botones
+
+Rol, especialidad, experiencia, situación actual, modalidad de trabajo, dónde, traslado, contrato, salario y tipo de empresa se preguntan con **tarjetas**, de una en una, con `python3 /app/shared/skills/onboarding_questionnaire.py`. Tú no formulas estas preguntas ni escribes estos campos: la herramienta publica la tarjeta (en tu chat, con las palabras en el idioma de la persona) y escribe el clic de la persona, el SUYO.
+
+**Cuándo:** una vez guardado el perfil (`profile_review.py apply-confirmed` respondió `ok: true`), nunca en los primeros mensajes y nunca mientras otra tarjeta espera respuesta (la del plan incluida: dos tarjetas abiertas a la vez confunden a la persona).
+
+1. **Pregunta.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → una línea: la siguiente tarjeta está en el chat. `open: true` o `answered: true` → nada nuevo que publicar (una tarjeta espera, o su respuesta aún no está aplicada: ve al punto 2). `done: true` → el cuestionario terminó: sigue con la checklist.
+2. **Aplica la respuesta.** Cuando leas `[USER ANSWER …]` de una tarjeta: `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → confirma en UNA línea lo que se fijó, con las palabras de la persona, y luego `ask` otra vez para la siguiente tarjeta. `ask_in_chat` lista los campos del perfil que la tarjeta te deja a ti (por ejemplo el lugar): pídelos con UNA pregunta en palabras y escríbelos con la skill del perfil. `write_in_chat` (la opción «otro»): propón a la persona su `prompt` en el chat; lo que escriba va con `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<sus palabras>"`, y luego `ask` otra vez.
+3. **Cuando no se aplicó nada.** `waiting: true` o «not the person's own» → no escribas ni digas nada. `words: true` → respondió a la tarjeta con palabras: si las palabras nombran claramente UNA opción, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>`; si no, `ask` vuelve a proponer la tarjeta.
+
+Nunca escribas estos campos a mano mientras una tarjeta esté abierta, nunca elijas por la persona, nunca repitas con palabras una pregunta que la tarjeta ya hizo. La herramienta es la única que escribe estos campos: si responde `ok: false`, no lo menciones y sigue con la checklist.
 
 ## Agnóstico de sector — NUNCA predeterminar a IT
 

@@ -28,6 +28,8 @@ import { WINDOWS_SETUP } from "./windows-setup";
 import { savedVpsBridge, type SavedVps } from "../lib/saved-vps";
 import { SetupSupportReport } from "./SetupSupportReport";
 import RuntimePhaseDetail, { pullBar } from "./RuntimePhaseDetail";
+import PlanChoice from "./PlanChoice";
+import { isUntouched, wizardStart } from "./wizard-draft";
 import "./onboarding.css";
 
 function emptyVpsHost(): ExecutionHost {
@@ -147,15 +149,21 @@ function PathWithBreaks({ path }: { path: string }) {
   return <>{(path.match(/[^\\/]*[\\/]?/g)?.filter(Boolean) ?? [path]).map((part, index) => <Fragment key={index}>{index > 0 && <wbr />}{part}</Fragment>)}</>;
 }
 
-function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onUseLocalData" | "onSetAsideLocalData" | "onFreeDiskSpace" | "runtimeLogPath" | "onOpenRuntimeLog" | "onOpenWithoutTeam"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
+function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, localOwner, onFreeDiskSpace, onLoadPlans, onDeclarePlan, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam }: Pick<OnboardingFlowProps, "platform" | "runtime" | "activity" | "onRetry" | "onRestart" | "onExitFailure" | "onRuntimeAction" | "providerLogin" | "sshHostKey" | "onConfirmHostKey" | "onCancelHostKey" | "onProviderInput" | "onProviderClose" | "onProviderRestart" | "onRecreatePodmanMachine" | "onUseLocalData" | "onSetAsideLocalData" | "localOwner" | "onFreeDiskSpace" | "onLoadPlans" | "onDeclarePlan" | "runtimeLogPath" | "onOpenRuntimeLog" | "onOpenWithoutTeam"> & { host: ExecutionHost; t: OnboardingCopy; locale: Locale }) {
   const [pending, setPending] = useState(false);
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [confirmingFreeSpace, setConfirmingFreeSpace] = useState(false);
   // The choice for data no profile has taken: which one is being confirmed, and what it said.
   const [confirmingData, setConfirmingData] = useState<"use" | "aside" | null>(null);
   const [dataResult, setDataResult] = useState<{ ok: boolean; text: string } | null>(null);
+  // Data of another profile: whether its owner is a local profile that can be named, and which of the
+  // two ways is being confirmed.
+  const [ownerKnown, setOwnerKnown] = useState(false);
+  const [confirmingOwner, setConfirmingOwner] = useState<"return" | "take" | null>(null);
   const [freeSpaceResult, setFreeSpaceResult] = useState<DescribedError | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
+  // The plan is still to be chosen: the team does not start before the person chooses it or leaves it to the chat.
+  const [planBlocked, setPlanBlocked] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pendingRef = useRef(false);
   // Which call of `invoke` is the latest: a screen that changed ends the calls started before it, so one that
@@ -239,6 +247,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   // checks what is already there, so it is offered as «Resume» and says what is already in place.
   const resumable = failed && runtime.retryable !== false &&
     (completedSteps > 0 || !!activity?.events.some((event) => event.status === "completed"));
+  // After the provider's login, before the team starts: the plan the Capitano's first run needs is chosen here.
+  const planAsked = runtime.stage === "team-start" && actionRequired && !!onLoadPlans && !!onDeclarePlan;
   const currentActivity = !failed && activity?.current?.stage === runtime.stage ? activity.current : undefined;
   const currentActivityName = currentActivity ? t.activityStages[currentActivity.nativeStage] : undefined;
   const elapsed = activity ? formatElapsed(now - activity.startedAt) : "00:00";
@@ -334,6 +344,40 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     }
     // The setup starts again; what it finds is its own to say.
     if (done) await onRetry().catch(() => setActionFailed(true));
+  }
+  // Another profile's data: the two ways out are offered only when the owner is a local profile of this
+  // app (a probe the native side answers), each one after a confirmation.
+  const ownerMismatch = failed && runtime.code === "local_account_owner_mismatch" && host.kind === "local" && localOwner !== undefined;
+  useEffect(() => {
+    setOwnerKnown(false);
+    setConfirmingOwner(null);
+    if (!ownerMismatch || !localOwner) return;
+    let active = true;
+    void localOwner.probe().then((known) => { if (active) setOwnerKnown(known); }).catch(() => {});
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerMismatch, failureKey]);
+  const ownerWays = ownerMismatch && ownerKnown ? localOwner : undefined;
+  async function chooseOwner(choice: "return" | "take") {
+    if (pendingRef.current || !ownerWays) return;
+    pendingRef.current = true;
+    setPending(true); setDataResult(null);
+    let done = false;
+    try {
+      if (choice === "return") await ownerWays.returnToOwner();
+      else await ownerWays.takeOver();
+      done = true;
+    } catch (error) {
+      const { text, action } = describeError(errorCodeOf(error), { locale, fallback: "local_owner_change_failed" });
+      setDataResult({ ok: false, text: `${text} ${action}` });
+    } finally {
+      setConfirmingOwner(null);
+      pendingRef.current = false;
+      setPending(false);
+    }
+    // Back to the owner: the profile changed and the setup starts again by itself for it. Taking over: the
+    // setup tries again with the data now the current profile's.
+    if (done && choice === "take") await onRetry().catch(() => setActionFailed(true));
   }
   const freeSpaceConfirm = describeError(
     platform === "macos" && host.kind === "local" ? "clean_images_confirm_vm" : "clean_images_confirm", { locale });
@@ -495,7 +539,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </dl>
             </details>
           )}
-          {failed && <SetupSupportReport stage={runtime.stage} code={runtime.code} locale={locale} />}
+          {/* always there, not only after a failure: a step that hangs without failing needs a way to be reported too */}
+          <SetupSupportReport stage={runtime.stage} code={failed ? (runtime.code ?? "unknown") : undefined} locale={locale} />
           {runtime.stage === "ssh-host-key" && sshHostKey && (
             <section className="onboarding-provider-console" aria-label={t.hostKeyAria}>
               <div className="onboarding-provider-console__heading"><div><strong>{t.hostKeyTitle}</strong><small>{t.hostKeyText}</small></div></div>
@@ -515,6 +560,16 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               <div className="onboarding-provider-console__heading"><div><strong>{t.dataAsideTitle}</strong><small>{t.dataAsideText}</small></div></div>
             </section>
           )}
+          {confirmingOwner === "return" && ownerWays && (
+            <section className="onboarding-provider-console" aria-label={t.ownerReturnAria}>
+              <div className="onboarding-provider-console__heading"><div><strong>{t.ownerReturnTitle}</strong><small>{t.ownerReturnText}</small></div></div>
+            </section>
+          )}
+          {confirmingOwner === "take" && ownerWays && (
+            <section className="onboarding-provider-console" aria-label={t.ownerTakeAria}>
+              <div className="onboarding-provider-console__heading"><div><strong>{t.ownerTakeTitle}</strong><small>{t.ownerTakeText}</small></div></div>
+            </section>
+          )}
           {dataResult && <p className={dataResult.ok ? "onboarding-free-space" : "onboarding-error"} role={dataResult.ok ? "status" : "alert"} data-testid="local-data-result">{dataResult.text}</p>}
           {freeDiskSpace && confirmingFreeSpace && (
             <section className="onboarding-provider-console" aria-label={t.freeSpaceAria}>
@@ -525,6 +580,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
           {actionFailed && <p className="onboarding-error" role="alert">{t.actionFailed}</p>}
           {failed && runtime.retryable === false && !runtime.action && runtime.code !== "container_version_incompatible" && <p className="onboarding-error">{t.fixData}</p>}
           {resumable && <p className="onboarding-hint" data-testid="onboarding-resume-note">{t.resumeNote}</p>}
+          {planAsked && onLoadPlans && onDeclarePlan && <PlanChoice t={t} load={onLoadPlans} declare={onDeclarePlan} onBlock={setPlanBlocked} />}
           <div className="onboarding-runtime-actions" ref={actionsRef}>
             {!failed && <button className="onboarding-secondary" type="button" onClick={() => invoke(onRestart)} disabled={pending}>
               {t.restart}
@@ -554,6 +610,20 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </button>
               </>
             )}
+            {ownerWays && confirmingOwner === null && (
+              <>
+              <button className="onboarding-secondary" type="button" data-testid="local-owner-take" onClick={() => setConfirmingOwner("take")} disabled={pending}>{t.ownerTake}</button>
+              <button className="onboarding-primary" type="button" data-testid="local-owner-return" onClick={() => setConfirmingOwner("return")} disabled={pending}>{t.ownerReturn}<span aria-hidden="true">→</span></button>
+              </>
+            )}
+            {ownerWays && confirmingOwner !== null && (
+              <>
+              <button className="onboarding-secondary" type="button" data-testid="local-owner-cancel" onClick={() => setConfirmingOwner(null)} disabled={pending}>{t.cancel}</button>
+              <button className="onboarding-primary" type="button" data-testid="local-owner-confirm" onClick={() => void chooseOwner(confirmingOwner)} disabled={pending}>
+                {pending ? t.dataBusy : confirmingOwner === "return" ? t.ownerReturnYes : t.ownerTakeYes}<span aria-hidden="true">→</span>
+              </button>
+              </>
+            )}
             {freeDiskSpace && !confirmingFreeSpace && (
               <button className="onboarding-secondary" type="button" onClick={() => setConfirmingFreeSpace(true)} disabled={pending}>
                 {pending ? t.freeSpacing : t.freeSpace}
@@ -570,7 +640,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
             {((failed && runtime.retryable !== false) || actionRequired) && (
               <>
               {runtime.stage === "ssh-host-key" && !failed && <button className="onboarding-secondary" type="button" onClick={onCancelHostKey} disabled={pending}>{t.cancel}</button>}
-              <button className="onboarding-primary" type="button" onClick={() => invoke(action, !failed)} disabled={pending}>
+              <button className="onboarding-primary" type="button" onClick={() => invoke(action, !failed)} disabled={pending || (planAsked && planBlocked)}>
                 {pending ? failed ? t.verifying : t.wait : failed ? resumable ? t.resumeSetup : t.retryPrepare : actionLabel}<span aria-hidden="true">→</span>
               </button>
               </>
@@ -582,7 +652,7 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
   );
 }
 
-export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, onFreeDiskSpace, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
+export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtime, activity, onSubmit, onConnectExistingTeam, onSignInWithGoogle, onRetry, onRestart, onExitFailure, onRuntimeAction, providerLogin, sshHostKey, onConfirmHostKey, onCancelHostKey, onProviderInput, onProviderClose, onProviderRestart, onRecreatePodmanMachine, onUseLocalData, onSetAsideLocalData, localOwner, onFreeDiskSpace, onLoadPlans, onDeclarePlan, runtimeLogPath, onOpenRuntimeLog, onOpenWithoutTeam, previousLocalData = false, interruption, onResumeInterrupted, onDiscardInterruption, draft, onDraftChange, providerOnly, locale: localeOverride }: OnboardingFlowProps) {
   const locale = localeOverride ?? appLocale();
   const t = ONBOARDING_TEXT[locale];
   const providerChoices = providers(t);
@@ -591,9 +661,20 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const interruptionReason = interruptionCause?.known ? interruptionCause.text : t.interruptedUnknown;
   // Windows runs the team locally too, with Podman inside WSL.
   const localRuntimeSupported = platform === "macos" || platform === "linux" || platform === "windows";
-  const [step, setStep] = useState(providerOnly ? 2 : 0);
-  const [host, setHost] = useState<ExecutionHost>(() => localRuntimeSupported ? { kind: "local" } : emptyVpsHost());
-  const [provider, setProvider] = useState<SubscriptionProvider | null>(providerOnly ? null : PROPOSED_PROVIDER);
+  // What a first visit finds, and where a reopened app picks up (the step and choices the person had reached).
+  const freshChoices = (): { host: ExecutionHost; provider: SubscriptionProvider | null } => ({
+    host: localRuntimeSupported ? { kind: "local" } : emptyVpsHost(),
+    provider: providerOnly ? null : PROPOSED_PROVIDER,
+  });
+  const [start] = useState(() => providerOnly
+    ? { step: 2, ...freshChoices(), restored: false }
+    : wizardStart(draft, freshChoices(), selectableProviders, localRuntimeSupported, Boolean(interruption)));
+  const [step, setStep] = useState(start.step);
+  const [host, setHost] = useState<ExecutionHost>(start.host);
+  const [provider, setProvider] = useState<SubscriptionProvider | null>(start.provider);
+  const [draftNote, setDraftNote] = useState(start.restored);
+  const draftChangeRef = useRef(onDraftChange);
+  draftChangeRef.current = onDraftChange;
   const [submitting, setSubmitting] = useState(false);
   const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
@@ -602,6 +683,17 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const [savingVps, setSavingVps] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const shellRef = useRef<HTMLElement>(null);
+
+  // The step and the choices are kept when the step changes (not at every key typed), so a reopened app does not
+  // start again from the welcome. The reopened Provider step is not a first setup: it keeps nothing.
+  useEffect(() => {
+    if (providerOnly || isUntouched({ step, host, provider }, freshChoices())) return;
+    draftChangeRef.current?.({ step, host, provider });
+    // the choices are those of the render the step changed in; freshChoices only reads the platform and the mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+  // The note about the picked-up step is for that step: leaving it ends it.
+  useEffect(() => { if (step !== start.step) setDraftNote(false); }, [step, start.step]);
 
   useEffect(() => { setProfileName(account.displayName ?? ""); }, [account.displayName]);
   useEffect(() => { void Promise.resolve().then(() => savedVpsBridge.list()).then((list) => setSavedVps(Array.isArray(list) ? list : [])).catch(() => setSavedVps([])); }, []);
@@ -623,7 +715,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [step, assistanceOpen]);
 
-  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onUseLocalData={account.identity === "local" ? onUseLocalData : undefined} onSetAsideLocalData={onSetAsideLocalData} onFreeDiskSpace={onFreeDiskSpace} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
+  if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onUseLocalData={account.identity === "local" ? onUseLocalData : undefined} onSetAsideLocalData={onSetAsideLocalData} localOwner={account.identity === "local" ? localOwner : undefined} onFreeDiskSpace={onFreeDiskSpace} onLoadPlans={onLoadPlans} onDeclarePlan={onDeclarePlan} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
 
   if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
     <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>
@@ -676,6 +768,14 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
     } catch { setSubmitError(true); } finally { setSubmitting(false); }
   }
 
+  // «Start over»: the welcome, the first visit's choices, and nothing left of the steps reached.
+  function startOver() {
+    const fresh = freshChoices();
+    setStep(0); setHost(fresh.host); setProvider(fresh.provider);
+    setSubmitError(false); setDraftNote(false);
+    onDraftChange?.(null);
+  }
+
   function exitFailure() {
     setStep(providerOnly ? 2 : 1);
     setSubmitError(false);
@@ -700,6 +800,10 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
 
         <section className="onboarding-card">
           <div className="onboarding-card__step">{String(step + 1).padStart(2, "0")} / {String(COLLECTION_STEP_COUNT).padStart(2, "0")}</div>
+          {draftNote && step > 0 && <div className="onboarding-aside" role="note" data-testid="onboarding-draft-note">
+            <p>{t.draftRestored}</p>
+            <button className="onboarding-secondary" type="button" data-testid="onboarding-draft-start-over" onClick={startOver}>{t.startOver}</button>
+          </div>}
           {step === 0 && <form onSubmit={next} className="onboarding-panel">
             <OnboardingArtwork name={collectionArtwork(step, host)} />
             <div className="onboarding-account-mark" aria-hidden="true">{(account.displayName || "J").trim().charAt(0).toUpperCase() || "J"}</div>
@@ -717,7 +821,7 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
                 reason: interruptionReason,
               })}</p>
               <div className="onboarding-actions">
-                <button className="onboarding-secondary" type="button" onClick={() => onDiscardInterruption?.()}>{t.startOver}</button>
+                <button className="onboarding-secondary" type="button" onClick={() => { startOver(); onDiscardInterruption?.(); }}>{t.startOver}</button>
                 <button className="onboarding-primary" type="button" onClick={() => void onResumeInterrupted()}>{t.resumeSetup} <span aria-hidden="true">→</span></button>
               </div>
             </div>}

@@ -5,6 +5,9 @@ import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { DesktopWriteProvider } from "@/lib/desktop-write";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
+import { useLocalTeamData } from "../lib/local-team-data";
+import { LOCAL_TEAM_DATA_TEXT } from "../lib/local-team-data.i18n";
+import { LocalTeamStoppedBar } from "./LocalTeamStoppedBar";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
 import {
@@ -29,8 +32,12 @@ import { TeamOffBanner } from "./TeamOffBanner";
 import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import NavStrip from "./NavStrip";
+import { EXIT_OPEN_EVENT } from "../lib/app-exit";
+import { APP_EXIT_TEXT } from "../components/AppExitDialog.i18n";
 import { beginPageLoad } from "../lib/page-timing";
+import { forgetReadsInFlight } from "../lib/read-deadline";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
+import DocumentPreviewHost from "../pages/positions/DocumentPreviewHost";
 import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
 
@@ -152,6 +159,10 @@ function Navbar({
               {readOnlyText.back}
             </button>
           )}
+          {/* leaving the app, not the account: it asks what to do with the team (components/AppExitDialog) */}
+          <button type="button" className={button} data-testid="app-exit-button" onClick={() => window.dispatchEvent(new Event(EXIT_OPEN_EVENT))}>
+            {APP_EXIT_TEXT[appLocale()].menu}
+          </button>
           <button type="button" className={button} onClick={() => void logout()} disabled={signingOut} title={shellText.signOutNote}>
             {signingOut ? shellText.signingOut : shellText.signOut}
           </button>
@@ -186,8 +197,20 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const notFullReason = readOnlyTeam ? existingTeamNotFullReason(readOnlyTeam) : null;
   const readNotice = useExistingTeamReadNotice();
   const readOnly = linkedTeam !== null;
+  // A profile with no cloud account: the pages show the team of this computer, which they only read.
+  const localTeam = useLocalTeamData();
+  const localReadOnly = useMemo(
+    () => (localTeam ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly } : { readOnly: false, reason: "" }),
+    [localTeam],
+  );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
+
+  // The shell is made again for every account (it is keyed by it): a read the last account started is never the one the next waits for.
+  useEffect(() => {
+    forgetReadsInFlight();
+    return forgetReadsInFlight;
+  }, []);
 
   // An empty or unknown hash lands on the dashboard.
   useEffect(() => {
@@ -203,13 +226,15 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const page = Page && (
     <SignOutContext.Provider value={onLogout ?? null}>
       <Page key={path} params={match.params} search={params} />
+      {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
+      <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>
   );
   if (linkedTeam) {
     const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
-    const bars = (
+    const navbar = <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />;
+    const strips = (
       <>
-        <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />
         {readOnlyTeam && (
           <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)]">
             <p
@@ -239,16 +264,20 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
         <ReadOnlyActionsProvider value={readOnlyTeam ? { readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) } : { readOnly: false, reason: "" }}>
           <LeaveReadOnlyContext.Provider value={onCloseReadOnly ?? null}>
           {match?.route.fullBleed ? (
-            // the office: the same window-tall column as in the full shell, the read-only bars under the navbar
+            // a full-bleed page: the same window-tall column as in the full shell; the read-only bars under the navbar take a third of the window at most and scroll past it
             <div style={FULL_BLEED_COLUMN}>
-              {bars}
+              {navbar}
+              <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
+                {strips}
+              </div>
               <main className="relative min-h-0 flex-1" data-testid="full-bleed">
                 {page}
               </main>
             </div>
           ) : (
             <div style={{ position: "relative", zIndex: 1 }}>
-              {bars}
+              {navbar}
+              {strips}
               <MainChrome>{page}</MainChrome>
             </div>
           )}
@@ -264,6 +293,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
     return (
       <DashboardI18nProvider>
         <DesktopWriteProvider value={{ canChange: true }}>
+          <ReadOnlyActionsProvider value={localReadOnly}>
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
             {/* The bars take what they need up to a third of the window and scroll beyond it: the page under them always keeps room, and the navbar above is never pushed out. */}
@@ -272,12 +302,14 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               <NewVersionBanner />
               <TeamOffBanner />
               <LocalTeamOwnerBanner onSwitch={onLogout} />
+              <LocalTeamStoppedBar />
               <WriteAccessRestoredBanner />
             </div>
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
             </main>
           </div>
+          </ReadOnlyActionsProvider>
         </DesktopWriteProvider>
       </DashboardI18nProvider>
     );
@@ -285,15 +317,18 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   return (
     <DashboardI18nProvider>
       <DesktopWriteProvider value={{ canChange: true }}>
+        <ReadOnlyActionsProvider value={localReadOnly}>
         <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
           <NewVersionBanner />
           <TeamOffBanner />
           <LocalTeamOwnerBanner onSwitch={onLogout} />
+          <LocalTeamStoppedBar />
             <WriteAccessRestoredBanner />
           <MainChrome>{page}</MainChrome>
         </div>
+        </ReadOnlyActionsProvider>
       </DesktopWriteProvider>
     </DashboardI18nProvider>
   );

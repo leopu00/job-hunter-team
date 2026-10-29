@@ -173,6 +173,10 @@ pub(crate) enum LocalCliOperation {
     LinkedinLoginStop,
     LinkedinStatus,
     CleanImages,
+    /// `jht providers plan --json`: the plans of the active provider, the declared one, the suggestion.
+    ProviderPlans,
+    /// `jht providers plan <id> --json`: declares the plan the person chose (an id of `KNOWN_PLAN_IDS`).
+    ProviderPlanSet(&'static str),
 }
 
 impl LocalCliOperation {
@@ -193,6 +197,8 @@ impl LocalCliOperation {
             Self::LinkedinLoginStop => vec!["linkedin", "login", "--stop"],
             Self::LinkedinStatus => vec!["linkedin", "status", "--json"],
             Self::CleanImages => vec!["clean-images", "--json"],
+            Self::ProviderPlans => vec!["providers", "plan", "--json"],
+            Self::ProviderPlanSet(id) => vec!["providers", "plan", id, "--json"],
         }
     }
 
@@ -213,6 +219,8 @@ impl LocalCliOperation {
             Self::LinkedinLoginStop => "linkedin-login-stop",
             Self::LinkedinStatus => "linkedin-status",
             Self::CleanImages => "clean-images",
+            Self::ProviderPlans => "provider-plans",
+            Self::ProviderPlanSet(_) => "provider-plan-set",
         }
     }
 }
@@ -446,6 +454,9 @@ pub(crate) struct OnboardingProgress {
     /// While the runtime image is pulled: the layers finished and the bytes podman printed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pull: Option<crate::windows_runtime::PullProgress>,
+    /// The room a notice names (the memory that looks short): the screen writes the numbers in the person's language.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    amounts: Option<crate::resources::Shortfall>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -917,6 +928,10 @@ pub(crate) struct OnboardingError {
     /// when they could be listed (existing_team_register::choice_failure).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) choices: Option<Box<[crate::existing_team_register::ContainerChoice]>>,
+    /// The room the agents need and the room there is, only for `disk_low` (resources.rs): the screen says
+    /// both, in the person's language. The memory that looks short is a notice with its own amounts, not an error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resources: Option<crate::resources::Shortfall>,
 }
 
 #[derive(Serialize)]
@@ -1050,6 +1065,7 @@ pub(crate) fn failure(code: &'static str) -> OnboardingError {
         machine: None,
         detail: None,
         choices: None,
+        resources: None,
     }
 }
 
@@ -1193,7 +1209,31 @@ impl ProgressReporter {
             retryable: error.map(|value| value.retryable),
             phase,
             pull,
+            amounts: None,
         });
+    }
+
+    /// A notice that names an amount, shown at once and kept on screen (the memory looks short). Outside a step
+    /// it is dropped, like `phase`.
+    fn notice_with_amounts(&self, message: &'static str, amounts: crate::resources::Shortfall) {
+        let running = {
+            let current = self.current.lock().unwrap_or_else(|e| e.into_inner());
+            current.as_ref().map(|(stage, started, _)| (*stage, *started))
+        };
+        if let Some((stage, started)) = running {
+            (self.emit)(OnboardingProgress {
+                stage,
+                status: OnboardingProgressStatus::Notice,
+                message,
+                sequence: self.sequence.fetch_add(1, Ordering::Relaxed),
+                elapsed_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                code: None,
+                retryable: None,
+                phase: None,
+                pull: None,
+                amounts: Some(amounts),
+            });
+        }
     }
 
     fn run<T>(
@@ -1345,6 +1385,12 @@ fn wrapper_has_protocol(source: &str, protocol: &str) -> bool {
         .lines()
         .map(|line| line.trim_end_matches('\r'))
         .any(|line| line == protocol)
+}
+
+/// Whether this account's wrapper speaks the desktop chat's protocol (`desktop-chat python`, `probe`: they
+/// find the attested container and never start it).
+pub(crate) fn wrapper_has_desktop_chat(path: &Path) -> bool {
+    wrapper_source(path).is_some_and(|source| wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1"))
 }
 
 /// Whether this account's wrapper has the agent control panel's own branch,
@@ -2397,6 +2443,7 @@ const REMOTE_PROVIDER_CURRENT: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/d
 const REMOTE_PROVIDER_LIMITS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers limits --json"#;
 const REMOTE_TEAM_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start"#;
 const REMOTE_CLEAN_IMAGES: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" clean-images --json"#;
+const REMOTE_PROVIDER_PLANS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers plan --json"#;
 const REMOTE_ASSISTANT_START: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" team start assistente"#;
 pub(crate) const REMOTE_LINKEDIN_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login"#;
 pub(crate) const REMOTE_LINKEDIN_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login --stop"#;
@@ -2846,6 +2893,64 @@ fn provider_step_verdict(snapshot: &OnboardingSnapshot, reason: Option<String>) 
     Err(OnboardingError { detail: Some(detail), ..failure("provider_config_failed") })
 }
 
+/// What is already on this computer, to ask only for what is still missing (resources.rs).
+#[cfg(target_os = "macos")]
+fn local_installed_state(app: &tauri::AppHandle, home: &Path) -> crate::resources::Installed {
+    let machine = crate::podman::jht_machine_exists(home);
+    // A runtime the update would replace counts as not installed: its new image is asked for again.
+    let current = release_channel::current().ok().zip(local_runtime_dir(app).ok()).is_some_and(|(channel, dir)| {
+        release_channel::installed_runtime_reusable(channel.as_ref(), &dir)
+    });
+    // Podman not found on the PATH of an app opened from the Finder says nothing about the machine: it is not
+    // taken for stopped (a stopped machine asks for its memory again, a running one has it).
+    let machine_running = machine && {
+        let status = crate::podman::check_podman_sync();
+        status.ready || !status.installed
+    };
+    crate::resources::Installed { machine, runtime: host_wrapper_path(app).is_some() && current, machine_running }
+}
+
+/// Linux has no Podman machine: nothing to create on the disk and no memory taken for it. The runtime counts as
+/// not installed yet (its image is asked for).
+#[cfg(target_os = "linux")]
+fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
+    crate::resources::Installed { machine: true, runtime: false, machine_running: true }
+}
+
+/// Windows' machine (WSL) is not looked for: it counts as there and its memory as not taken yet.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
+    crate::resources::Installed { machine: true, runtime: false, machine_running: false }
+}
+
+/// Before anything is installed or started on this computer: is there room? The disk refuses: the setup does
+/// not even try and says what it needs and what there is (`disk_low`, with the amounts). The memory only warns
+/// (its measure moves with the pressure of the moment): the notice to show, with the amounts, and the setup goes on.
+fn local_resources_check(
+    app: &tauri::AppHandle,
+) -> Result<Option<(&'static str, crate::resources::Shortfall)>, OnboardingError> {
+    let Ok(home) = app.path().home_dir() else { return Ok(None) };
+    let needs = crate::resources::needs(local_installed_state(app, &home));
+    let measure = crate::resources::measure_now(&home);
+    if let Some((code, shortfall)) = crate::resources::verdict(needs, measure) {
+        trace_local_runtime("resources", code);
+        return Err(OnboardingError { resources: Some(shortfall), ..failure(code) });
+    }
+    Ok(crate::resources::ram_advice(needs, measure))
+}
+
+/// The disk guard's refusal at the start of the team names the amounts too: the margin it keeps and what is free.
+fn attach_disk_amounts(error: OnboardingError, shortfall: Option<crate::resources::Shortfall>) -> OnboardingError {
+    // Only when the free space measured here really is under the margin: the guard may have refused on the engine's
+    // own volume, and «needs 8, available 40» would be a sentence that contradicts itself.
+    let under = shortfall.filter(|amounts| amounts.available_bytes < amounts.required_bytes);
+    if error.code == "disk_low" && error.resources.is_none() {
+        OnboardingError { resources: under, ..error }
+    } else {
+        error
+    }
+}
+
 fn prepare_impl(
     app: tauri::AppHandle,
     scope: AccountScope,
@@ -2876,6 +2981,11 @@ fn prepare_impl(
             let validated = validate_host(&app, &submission.host).map_err(failure)?;
             let wrapper = match &validated {
                 ValidatedHost::Local => Some({
+                    // Room first: nothing is installed or started on a computer that cannot hold it. A memory that looks
+                    // short is told and the setup goes on.
+                    if let Some((notice, amounts)) = local_resources_check(&app)? {
+                        reporter.notice_with_amounts(notice, amounts);
+                    }
                     // The pull of the runtime image reports its progress through the reporter while install_local runs.
                     let pull_reporter = reporter.clone();
                     crate::windows_runtime::with_pull_sink(
@@ -5182,7 +5292,10 @@ fn start_team_impl(
             if let (false, Some(log)) = (through_wrapper.get(), log) {
                 log.record_result("jht team start (attested container)", &result, &[], started.elapsed());
             }
-            ensure_team_started(result)
+            ensure_team_started(result).map_err(|error| {
+                let shortfall = app.path().home_dir().ok().and_then(|home| crate::resources::guard_shortfall(&home));
+                attach_disk_amounts(error, shortfall)
+            })
         }
         ValidatedHost::Vps { .. } => ensure_team_started(run_ssh(
             validated,
@@ -5665,6 +5778,254 @@ pub(crate) async fn onboarding_clean_images(
     result
 }
 
+// ── The subscription plan, chosen in the setup ──────────────────────────────────────────────
+//
+// The Capitano's first run does not open without a declared plan, and the plan is the person's to
+// declare: the setup asks after the provider's login and before the team starts. The table of plans
+// is the registry's (shared/skills/plan_registry.py), reached through `jht providers plan --json` on
+// the team's host, local wrapper or SSH, as the limits and the cleaning are. Reading writes nothing;
+// declaring writes exactly the plan the person chose, and only an id of the registry.
+
+/// Every plan id of the registry (`PLANS` of plan_registry.py): the only ids the app passes on to
+/// `jht providers plan <id>`, so the id that reaches the command line is one of these constants.
+const KNOWN_PLAN_IDS: &[&str] = &[
+    "adagio", "moderato", "allegretto", "allegro", "vivace", "pro", "max5", "max20", "plus", "pro-max",
+];
+
+fn known_plan_id(id: &str) -> Option<&'static str> {
+    KNOWN_PLAN_IDS.iter().find(|known| **known == id).copied()
+}
+
+/// One plan as the setup shows it: the registry's own name and price, in the registry's language.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PlanOption {
+    id: String,
+    label: String,
+    price: String,
+}
+
+/// What the setup shows when the plan is not declared yet: the plans to choose from and, when the
+/// account's Codex reading names one the table has, the one to propose (the person confirms it).
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PlanChoice {
+    provider: String,
+    declared: Option<PlanOption>,
+    plans: Vec<PlanOption>,
+    suggested: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PlanReplyOption {
+    id: String,
+    label: String,
+    #[serde(default)]
+    price: String,
+}
+
+#[derive(Deserialize)]
+struct PlansReply {
+    ok: bool,
+    provider: Option<String>,
+    declared: Option<PlanReplyOption>,
+    #[serde(default, rename = "declaredUnreadable")]
+    declared_unreadable: bool,
+    #[serde(default)]
+    plans: Vec<PlanReplyOption>,
+    suggested: Option<String>,
+    plan: Option<PlanReplyOption>,
+}
+
+const PLAN_TEXT_MAX: usize = 48;
+const PLANS_MAX: usize = 12;
+
+fn plan_option(reply: PlanReplyOption) -> Option<PlanOption> {
+    let text_ok = |text: &str, empty: bool| {
+        (empty || !text.is_empty()) && text.chars().count() <= PLAN_TEXT_MAX && !text.chars().any(char::is_control)
+    };
+    let id = known_plan_id(&reply.id)?;
+    (text_ok(&reply.label, false) && text_ok(&reply.price, true)).then(|| PlanOption {
+        id: id.to_owned(),
+        label: reply.label,
+        price: reply.price,
+    })
+}
+
+/// The one JSON line of `jht providers plan --json` (the last one starting with `{`). An answer the
+/// app cannot rely on (a CLI that does not know `--json`, a plan the app does not know, no plans, a
+/// declared plan that cannot be read) is `plans_unavailable`: the setup then goes on without the
+/// choice and the Assistente asks in the chat.
+fn parse_plans(result: &ProcessResult) -> Result<PlanChoice, &'static str> {
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let line = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('{'))
+        .last()
+        .ok_or("plans_unavailable")?;
+    let reply: PlansReply = serde_json::from_str(line).map_err(|_| "plans_unavailable")?;
+    if !result.success() || !reply.ok || reply.declared_unreadable {
+        return Err("plans_unavailable");
+    }
+    let provider = reply.provider.filter(|name| !name.is_empty() && name.len() <= 16 && name.chars().all(|c| c.is_ascii_lowercase()));
+    let plans: Vec<PlanOption> = reply.plans.into_iter().map(plan_option).collect::<Option<_>>().ok_or("plans_unavailable")?;
+    let declared = match reply.declared {
+        Some(declared) => Some(plan_option(PlanReplyOption { price: String::new(), ..declared }).ok_or("plans_unavailable")?),
+        None => None,
+    };
+    if plans.is_empty() || plans.len() > PLANS_MAX {
+        return Err("plans_unavailable");
+    }
+    // A suggestion is one of the plans shown, never anything else.
+    let suggested = reply.suggested.filter(|id| plans.iter().any(|plan| plan.id == *id));
+    Ok(PlanChoice { provider: provider.ok_or("plans_unavailable")?, declared, plans, suggested })
+}
+
+/// The reply of `jht providers plan <id> --json`: it counts only if it declared the plan asked for.
+fn parse_plan_declared(result: &ProcessResult, asked: &str) -> Result<PlanOption, &'static str> {
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let line = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with('{'))
+        .last()
+        .ok_or("plan_declare_failed")?;
+    let reply: PlansReply = serde_json::from_str(line).map_err(|_| "plan_declare_failed")?;
+    if !result.success() || !reply.ok {
+        return Err("plan_declare_failed");
+    }
+    reply
+        .plan
+        .and_then(plan_option)
+        .filter(|plan| plan.id == asked)
+        .ok_or("plan_declare_failed")
+}
+
+fn remote_provider_plan_set(id: &'static str) -> String {
+    format!(
+        r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" providers plan {id} --json"#
+    )
+}
+
+fn plan_operation_on_host(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    validated: &ValidatedHost,
+    operation: LocalCliOperation,
+) -> Result<ProcessResult, &'static str> {
+    match validated {
+        ValidatedHost::Local => {
+            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            run_scoped_local(app, scope, &wrapper, operation, SNAPSHOT_TIMEOUT)
+        }
+        ValidatedHost::Vps { .. } => match operation {
+            LocalCliOperation::ProviderPlanSet(id) => {
+                run_ssh_command(validated, &remote_provider_plan_set(id), None, SNAPSHOT_TIMEOUT, None)
+            }
+            _ => run_ssh(validated, REMOTE_PROVIDER_PLANS, None, SNAPSHOT_TIMEOUT, None),
+        },
+    }
+}
+
+/// Reads the plans on the team's host. `host`: the one being set up; none = the saved one.
+#[tauri::command]
+pub(crate) async fn onboarding_plans(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    host: Option<ExecutionHost>,
+) -> Result<PlanChoice, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    // It reaches the team's host (the named one, or the saved one): on an existing team, only on the full link.
+    let refusal = match &host {
+        Some(host) => crate::agent_control::host_action_refusal(&app, window.label(), &expected, host),
+        None => crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected),
+    };
+    if let Some(code) = refusal {
+        return Err(failure(code));
+    }
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let host = match host {
+            Some(host) => host,
+            None => crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?,
+        };
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        match plan_operation_on_host(&app, &worker_expected, &validated, LocalCliOperation::ProviderPlans) {
+            Ok(result) => parse_plans(&result).map_err(failure),
+            Err("process_timeout") => Err(failure("timeout")),
+            Err(error) => Err(local_failure(error, "plans_unavailable")),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("plans_unavailable")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+/// Declares the plan the person chose: `jht providers plan <id> --json` on the team's host. The id is
+/// checked against the registry's ids before it reaches any command line; nothing else is written.
+#[tauri::command]
+pub(crate) async fn onboarding_plan_declare(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    host: Option<ExecutionHost>,
+    plan: String,
+) -> Result<PlanOption, OnboardingError> {
+    let id = known_plan_id(&plan).ok_or_else(|| failure("plan_declare_failed"))?;
+    let expected = scopes.active().map_err(failure)?;
+    // It writes the plan on the team's host (the named one, or the saved one): on an existing team, only on the full link.
+    let refusal = match &host {
+        Some(host) => crate::agent_control::host_action_refusal(&app, window.label(), &expected, host),
+        None => crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected),
+    };
+    if let Some(code) = refusal {
+        return Err(failure(code));
+    }
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
+        let host = match host {
+            Some(host) => host,
+            None => crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?,
+        };
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        match plan_operation_on_host(&app, &worker_expected, &validated, LocalCliOperation::ProviderPlanSet(id)) {
+            Ok(result) => parse_plan_declared(&result, id).map_err(failure),
+            Err("process_timeout") => Err(failure("timeout")),
+            Err(error) => Err(local_failure(error, "plan_declare_failed")),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("plan_declare_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+
 /// How long «Remove JHT from this computer» may take: the Podman machine's
 /// deletion is the slow part.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -5999,6 +6360,10 @@ mod tests {
     use super::{
         clean_images_with, ensure_team_started, parse_clean_images, CleanImagesOutcome,
         CLEAN_IMAGES_TIMEOUT, REMOTE_CLEAN_IMAGES,
+    };
+    use super::{
+        known_plan_id, parse_plan_declared, parse_plans, remote_provider_plan_set, KNOWN_PLAN_IDS,
+        REMOTE_PROVIDER_PLANS,
     };
     use super::{
         ensure_success, ensure_success_with_timeout, recreate_podman_machine_with,
@@ -6681,6 +7046,45 @@ mod tests {
         assert_eq!(value["status"], "notice");
     }
 
+    /// The memory that looks short is a notice of the running step with the amounts; the step goes on and ends done,
+    /// and outside a step nothing is sent.
+    #[test]
+    fn a_short_memory_is_a_notice_with_the_amounts_and_the_step_goes_on() {
+        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&events);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        let amounts = crate::resources::Shortfall { required_bytes: 6 << 30, available_bytes: 3 << 30 };
+        reporter.notice_with_amounts("ui_notice_ram_low", amounts);
+        assert!(events.lock().unwrap().is_empty(), "outside a step it is dropped");
+        let inside = reporter.clone();
+        reporter
+            .run_with_interval(
+                OnboardingProgressStage::Engine,
+                "ui_engine_start",
+                "ui_engine_progress",
+                "ui_engine_done",
+                Duration::from_secs(1),
+                move || {
+                    inside.notice_with_amounts("ui_notice_ram_low", amounts);
+                    Ok::<_, super::OnboardingError>(())
+                },
+            )
+            .unwrap();
+        let events = events.lock().unwrap();
+        let notices: Vec<_> = events.iter().filter(|event| event.status == OnboardingProgressStatus::Notice).collect();
+        assert_eq!(notices.len(), 1);
+        assert_eq!(notices[0].message, "ui_notice_ram_low");
+        assert_eq!(notices[0].stage, OnboardingProgressStage::Engine);
+        assert!(notices[0].code.is_none() && notices[0].retryable.is_none());
+        let value = serde_json::to_value(notices[0]).unwrap();
+        assert_eq!(value["amounts"]["requiredBytes"], 6u64 << 30);
+        assert_eq!(value["amounts"]["availableBytes"], 3u64 << 30);
+        assert_eq!(events.last().unwrap().status, OnboardingProgressStatus::Done);
+        assert!(events.iter().filter(|event| event.status != OnboardingProgressStatus::Notice).all(|event| event.amounts.is_none()));
+    }
+
     #[test]
     fn the_native_windows_build_reader_accepts_only_a_build_number() {
         assert_eq!(super::windows_build_number("22000\0"), Some(22000));
@@ -6715,6 +7119,7 @@ mod tests {
                 retryable: None,
                 phase: None,
                 pull: None,
+                amounts: None,
             });
         }
         let failed_process = outcome(false);
@@ -6829,6 +7234,7 @@ mod tests {
             retryable: None,
             phase: None,
             pull: None,
+            amounts: None,
         });
         assert!(fs::read_to_string(&vps_sink.path)
             .unwrap()
@@ -6867,6 +7273,7 @@ mod tests {
             retryable: Some(true),
             phase: None,
             pull: None,
+            amounts: None,
         });
         assert_eq!(fs::read(&sentinel).unwrap(), b"unchanged");
         assert!(fs::symlink_metadata(&sink.path)
@@ -7604,6 +8011,80 @@ mod tests {
         }
     }
 
+    fn plans_reply(extra: &str) -> String {
+        format!(
+            r#"{{"ok":true,"provider":"openai","declared":null,"plans":[{{"id":"plus","label":"Plus","price":"20 $/month"}},{{"id":"pro","label":"Pro","price":"100 $/month"}},{{"id":"pro-max","label":"Pro 20x","price":"200 $/month"}}]{extra}}}"#
+        )
+    }
+
+    #[test]
+    fn the_plans_are_read_from_the_json_line_of_the_wrapper() {
+        // A line printed before the JSON is ignored.
+        let reply = printed(0, &format!("note\n{}\n", plans_reply(r#","suggested":"pro""#)));
+        let choice = parse_plans(&reply).unwrap();
+        assert_eq!(choice.provider, "openai");
+        assert!(choice.declared.is_none());
+        assert_eq!(choice.plans.iter().map(|plan| plan.id.as_str()).collect::<Vec<_>>(), ["plus", "pro", "pro-max"]);
+        assert_eq!(choice.suggested.as_deref(), Some("pro"));
+        let json = serde_json::to_value(&choice).unwrap();
+        assert_eq!(json["plans"][1]["price"], "100 $/month");
+        assert_eq!(json["suggested"], "pro");
+        // No reading, no suggestion.
+        assert_eq!(parse_plans(&printed(0, &plans_reply(r#","suggested":null"#))).unwrap().suggested, None);
+        assert_eq!(parse_plans(&printed(0, &plans_reply(""))).unwrap().suggested, None);
+        // A plan already declared is told as it is.
+        let declared = plans_reply("").replace(r#""declared":null"#, r#""declared":{"id":"plus","label":"Plus"}"#);
+        assert_eq!(parse_plans(&printed(0, &declared)).unwrap().declared.unwrap().id, "plus");
+    }
+
+    #[test]
+    fn a_suggestion_outside_the_plans_shown_is_dropped_and_an_unreliable_answer_is_unavailable() {
+        assert_eq!(parse_plans(&printed(0, &plans_reply(r#","suggested":"max20""#))).unwrap().suggested, None);
+        for stdout in [
+            "".to_string(),
+            "not json".to_string(),
+            r#"{"ok":false,"code":"no_active_provider"}"#.to_string(),
+            plans_reply(r#","declaredUnreadable":true"#),
+            // a plan the app does not know, a text that is a control character, an empty list
+            plans_reply("").replace(r#""id":"plus""#, r#""id":"platinum""#),
+            plans_reply("").replace("Plus", "Pl\\u0007us"),
+            r#"{"ok":true,"provider":"openai","declared":null,"plans":[]}"#.to_string(),
+            r#"{"ok":true,"declared":null,"plans":[{"id":"plus","label":"Plus","price":""}]}"#.to_string(),
+        ] {
+            assert_eq!(parse_plans(&printed(0, &stdout)).unwrap_err(), "plans_unavailable", "{stdout}");
+        }
+        // The exit code counts: a CLI that failed is not an answer, whatever it printed.
+        assert_eq!(parse_plans(&printed(1, &plans_reply(""))).unwrap_err(), "plans_unavailable");
+    }
+
+    #[test]
+    fn a_plan_is_declared_only_when_the_wrapper_says_it_declared_the_one_asked() {
+        let said = |plan: &str| format!(r#"{{"ok":true,"provider":"openai","plan":{{"id":"{plan}","label":"Plus"}}}}"#);
+        assert_eq!(parse_plan_declared(&printed(0, &said("plus")), "plus").unwrap().id, "plus");
+        // Another plan than the one asked, a refusal, a failed exit: none of them is "declared".
+        assert_eq!(parse_plan_declared(&printed(0, &said("pro")), "plus").unwrap_err(), "plan_declare_failed");
+        assert_eq!(parse_plan_declared(&printed(1, r#"{"ok":false,"code":"unknown_plan"}"#), "plus").unwrap_err(), "plan_declare_failed");
+        assert_eq!(parse_plan_declared(&printed(1, &said("plus")), "plus").unwrap_err(), "plan_declare_failed");
+        assert_eq!(parse_plan_declared(&printed(0, ""), "plus").unwrap_err(), "plan_declare_failed");
+    }
+
+    #[test]
+    fn only_the_registrys_ids_reach_the_command_line_and_it_asks_for_json_only() {
+        assert_eq!(LocalCliOperation::ProviderPlans.argv(), ["providers", "plan", "--json"]);
+        assert_eq!(LocalCliOperation::ProviderPlanSet("pro-max").argv(), ["providers", "plan", "pro-max", "--json"]);
+        assert!(REMOTE_PROVIDER_PLANS.ends_with(r#"exec "$JHT_BIN" providers plan --json"#));
+        assert!(remote_provider_plan_set("plus").ends_with(r#"exec "$JHT_BIN" providers plan plus --json"#));
+        for id in ["plus", "pro", "pro-max", "adagio", "max20"] {
+            assert_eq!(known_plan_id(id), Some(id));
+        }
+        for refused in ["", "Plus", "plus --replace", "plus;reboot", "$(id)", "../plus", "plus\n", " plus", "platinum"] {
+            assert_eq!(known_plan_id(refused), None, "{refused:?}");
+        }
+        for id in KNOWN_PLAN_IDS {
+            assert!(id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'), "{id}");
+        }
+    }
+
     #[test]
     fn a_team_start_refused_for_the_disk_says_disk_low() {
         let refused = printed(1, "\n  \u{2717} team \u{2014} disk_low: Il disco e' quasi pieno\n\n");
@@ -7619,6 +8100,48 @@ mod tests {
         );
         assert!(ensure_team_started(Ok(printed(0, "disk_low mentioned in a log\n"))).is_ok());
         assert_eq!(ensure_team_started(Err("process_timeout")).unwrap_err().code, "timeout");
+    }
+
+    #[test]
+    fn the_guards_refusal_carries_the_amounts_and_no_other_error_does() {
+        use crate::onboarding::{attach_disk_amounts, OnboardingError};
+        let shortfall = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 5 << 30 };
+        let refused = attach_disk_amounts(failure("disk_low"), Some(shortfall));
+        assert_eq!(refused.resources, Some(shortfall));
+        // the guard refused on another volume than the one measured here: «needs 8, available 40» is not said
+        let roomy = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 40 << 30 };
+        assert!(attach_disk_amounts(failure("disk_low"), Some(roomy)).resources.is_none());
+        let exact = crate::resources::Shortfall { required_bytes: 8 << 30, available_bytes: 8 << 30 };
+        assert!(attach_disk_amounts(failure("disk_low"), Some(exact)).resources.is_none());
+        assert!(attach_disk_amounts(failure("team_start_failed"), Some(shortfall)).resources.is_none());
+        // a measure that could not be taken leaves the plain code: the screen falls back to the sentence without numbers
+        assert!(attach_disk_amounts(failure("disk_low"), None).resources.is_none());
+        // the amounts the setup measured itself are not overwritten
+        let own = crate::resources::Shortfall { required_bytes: 26 << 30, available_bytes: 20 << 30 };
+        let measured = OnboardingError { resources: Some(own), ..failure("disk_low") };
+        assert_eq!(attach_disk_amounts(measured, Some(shortfall)).resources, Some(own));
+    }
+
+    #[test]
+    fn the_amounts_reach_the_screen_as_numbers_in_bytes_and_are_absent_otherwise() {
+        use crate::onboarding::OnboardingError;
+        let error = OnboardingError {
+            resources: Some(crate::resources::Shortfall { required_bytes: 27917287424, available_bytes: 21474836480 }),
+            ..failure("disk_low")
+        };
+        let json = serde_json::to_value(&error).unwrap();
+        assert_eq!(json["resources"]["requiredBytes"], 27917287424u64);
+        assert_eq!(json["resources"]["availableBytes"], 21474836480u64);
+        assert!(serde_json::to_value(failure("disk_low")).unwrap().get("resources").is_none());
+    }
+
+    #[test]
+    fn the_setup_checks_the_room_before_it_installs_anything() {
+        let source = include_str!("onboarding.rs");
+        let prepare = source.split("fn prepare_impl(").nth(1).and_then(|rest| rest.split("pub(crate) async fn onboarding_prepare(").next()).unwrap();
+        let check = prepare.find("local_resources_check(&app)?").expect("prepare checks the room");
+        let install = prepare.find("install_local(").expect("prepare installs");
+        assert!(check < install, "the check comes before install_local");
     }
 
     #[test]
@@ -8267,6 +8790,26 @@ exit 0
 
     /// The wake on its own: this computer's runtime is turned on, a failure is its own error, and a VPS or a
     /// saved team is refused without anything being run.
+    #[cfg(unix)]
+    #[test]
+    fn only_a_wrapper_that_speaks_the_desktop_chat_protocol_is_read_through() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-wrapper-chat-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let write = |name: &str, text: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            path
+        };
+        assert!(crate::onboarding::wrapper_has_desktop_chat(&write("with", "#!/bin/sh\nJHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("without", "#!/bin/sh\nexit 0\n")));
+        // a mention in a comment or in a longer line is not the marker
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("quoted", "#!/bin/sh\n# JHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
+        assert!(!crate::onboarding::wrapper_has_desktop_chat(&dir.join("missing")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn the_runtime_wake_runs_only_for_this_computer() {
         use std::cell::Cell;

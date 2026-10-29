@@ -1015,7 +1015,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       idle: t("download_cv"),
                       preparing: t("cv_preparing"),
                       error: t("cv_dl_error"),
+                      preview: t("preview_document"),
                     }}
+                    previewKind="cv"
+                    textName={application?.cv_path?.split("/").pop() || null}
                   />
                 )}
                 {clFileName && (
@@ -1027,7 +1030,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       idle: t("download_cl"),
                       preparing: t("cv_preparing"),
                       error: t("cv_dl_error"),
+                      preview: t("preview_document"),
                     }}
+                    previewKind="letter"
+                    textName={application?.cl_path?.split("/").pop() || null}
                   />
                 )}
                 {application.cv_drive_id && (

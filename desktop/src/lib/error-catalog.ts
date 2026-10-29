@@ -72,7 +72,7 @@ const BUSY = copy(
 );
 const ACCOUNT_SCOPE = copy(
   "Non riesco a verificare a quale account appartiene questa operazione.",
-  "Esci e rientra con il tuo account, poi riprova.",
+  "Disconnettiti e rientra con il tuo account, poi riprova.",
   "I cannot verify which account this operation belongs to.",
   "Sign out and back in with your account, then try again.",
 );
@@ -254,7 +254,7 @@ const LOCAL_PROFILE = copy(
 );
 const SESSION = copy(
   "La sessione del tuo account non è più valida.",
-  "Esci e rientra con il tuo account.",
+  "Disconnettiti e rientra con il tuo account.",
   "Your account session is no longer valid.",
   "Sign out and back in with your account.",
 );
@@ -264,7 +264,7 @@ const SESSION = copy(
  */
 const PAIRING_ACCOUNT = copy(
   "Una squadra su VPS ha bisogno del tuo account Google.",
-  "Esci e continua con Google, poi riprova.",
+  "Disconnettiti e continua con Google, poi riprova.",
   "A team on a VPS needs your Google account.",
   "Sign out and continue with Google, then try again.",
 );
@@ -431,6 +431,20 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   local_account_owner_invalid: LOCAL_OWNER,
   local_account_owner_mismatch: LOCAL_OWNER,
+  // The two ways out of «another profile's data» (back to the owner, take it over): a refusal or a
+  // failure leaves everything as it was.
+  local_owner_change_refused: copy(
+    "Il profilo non è stato cambiato: non è stato toccato niente.",
+    "La conferma vale una volta sola e per poco tempo. Ricomincia la scelta, se vuoi ancora farla.",
+    "The profile was not changed: nothing was touched.",
+    "The confirmation is valid once and only for a short time. Start the choice again if you still want it.",
+  ),
+  local_owner_change_failed: copy(
+    "Il profilo non è stato cambiato: non è stato spostato né cancellato niente.",
+    "Riprova. Se si ripete, riavvia Job Hunter Team.",
+    "The profile could not be changed: nothing was moved or deleted.",
+    "Try again. If it happens again, restart Job Hunter Team.",
+  ),
 
   // ── Runtime installation (local) ─────────────────────────────────────────
   podman_missing: copy(
@@ -1180,6 +1194,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "A chosen value is not one of the allowed ones: nothing was saved.",
     "Check the hours and the models, then try again.",
   ),
+  team_settings_burst_too_soon: copy(
+    "L’ora scelta è troppo vicina: servono almeno 15 minuti.",
+    "Scegli un’ora più avanti e riprova.",
+    "The time you chose is too close: it must be at least 15 minutes away.",
+    "Choose a later time and try again.",
+  ),
+  team_settings_burst_too_far: copy(
+    "L’ora scelta è oltre le 12 ore da adesso, che è il massimo.",
+    "Scegli un’ora entro 12 ore e riprova.",
+    "The time you chose is more than 12 hours from now, which is the maximum.",
+    "Choose a time within 12 hours and try again.",
+  ),
   team_settings_read_only: copy(
     "Questa squadra è collegata in sola lettura: orari e modelli non si cambiano da qui.",
     "Collega la squadra con «Conferma e collega» e riprova.",
@@ -1366,6 +1392,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The export file was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
   ),
+  private_copy_failed: copy(
+    "Non sono riuscito a preparare una copia del documento da aprire.",
+    "Riprova; se continua a non funzionare, controlla che il computer abbia spazio libero.",
+    "The app could not prepare a copy of the document to open.",
+    "Try again; if it keeps failing, check that the computer has free space.",
+  ),
+  document_open_failed: copy(
+    "Il computer non è riuscito ad aprire il documento.",
+    "Controlla di avere un programma per questo tipo di file, poi riprova.",
+    "The computer could not open the document.",
+    "Check that you have a program for this type of file, then try again.",
+  ),
   private_unavailable: copy(
     "Questo posto non permette file privati.",
     "Scegline un altro, per esempio una cartella di questo computer.",
@@ -1413,6 +1451,42 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Scegli una cartella in cui puoi scrivere e con spazio libero, poi riprova.",
     "The document was not saved.",
     "Choose a folder you can write to and that has free space, then try again.",
+  ),
+  document_preview_unavailable: copy(
+    "L’anteprima di questo documento non è disponibile per questa squadra.",
+    "Puoi salvarlo o aprirlo nel lettore del tuo computer.",
+    "The preview of this document is not available for this team.",
+    "You can save it or open it in your computer’s reader.",
+  ),
+  document_unreadable: copy(
+    "Non riesco a leggere questo documento: potrebbe essere danneggiato o protetto.",
+    "Chiedi alla squadra di prepararlo di nuovo, oppure salvalo e aprilo con un altro lettore.",
+    "This document cannot be read: it may be damaged or protected.",
+    "Ask the team to prepare it again, or save it and open it with another reader.",
+  ),
+  document_preview_timeout: copy(
+    "L’anteprima ci ha messo troppo tempo.",
+    "Riprova fra un minuto, oppure salva il documento.",
+    "The preview took too long.",
+    "Try again in a minute, or save the document.",
+  ),
+  document_preview_not_found: copy(
+    "Non trovo questo documento tra quelli della squadra.",
+    "Aggiorna la pagina della posizione e riprova; se non c’è più, chiedi alla squadra di prepararlo di nuovo.",
+    "This document is not among the team’s documents.",
+    "Refresh the position page and try again; if it is gone, ask the team to prepare it again.",
+  ),
+  document_preview_too_large: copy(
+    "Il documento è troppo grande per l’anteprima.",
+    "Salvalo e aprilo nel lettore, oppure chiedi alla squadra una versione più leggera.",
+    "The document is too large for a preview.",
+    "Save it and open it in your reader, or ask the team for a lighter version.",
+  ),
+  document_preview_changed: copy(
+    "Il documento è cambiato mentre lo mostravo.",
+    "Riapri l’anteprima fra un minuto, quando la squadra avrà finito di scriverlo.",
+    "The document changed while it was being shown.",
+    "Open the preview again in a minute, when the team has finished writing it.",
   ),
   not_cloud: copy(
     "Questo account non è collegato al cloud: non ci sono dati dell’account da esportare.",
@@ -1658,6 +1732,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent is not running.",
     "Start the team, then send the message again.",
   ),
+  mentor_not_active: copy(
+    "Il Mentor non è attivo in questo momento.",
+    "Il team lo accende da solo, quando le prime posizioni hanno un punteggio o, se si era fermato, a breve: scrivigli allora.",
+    "The Mentor is not active at the moment.",
+    "The team switches it on by itself, once the first positions have a score or, if it had stopped, shortly after: write to it then.",
+  ),
   team_not_running: copy(
     "Il team non è acceso.",
     "Accendi il team, poi rimanda il messaggio.",
@@ -1718,6 +1798,116 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Avvia la squadra e riprova.",
     "The team on this computer is not running.",
     "Start the team and try again.",
+  ),
+  // The Swipe of this computer's team: a verdict is written only on the deck it was read from.
+  deck_outdated: copy(
+    "Il mazzo che stai guardando non è più quello del team.",
+    "Aggiorna la pagina per rileggerlo e giudica di nuovo.",
+    "The deck you are looking at is no longer the team's.",
+    "Refresh the page to read it again and judge again.",
+  ),
+  position_not_found: copy(
+    "Questa posizione non c’è più nel team.",
+    "Aggiorna la pagina: il mazzo si rilegge.",
+    "This position is no longer in the team.",
+    "Refresh the page: the deck is read again.",
+  ),
+  feedback_refused: copy(
+    "Il team non ha registrato il giudizio.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not record the verdict.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  exclude_refused: copy(
+    "Il team non ha escluso la posizione.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not exclude the position.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  note_invalid: copy(
+    "La nota non è un testo che il team accetta.",
+    "Scrivila di nuovo, più semplice.",
+    "The note is not a text the team accepts.",
+    "Write it again, simpler.",
+  ),
+  profile_progress_invalid: copy(
+    "Non riesco a leggere a che punto è il profilo.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The profile's progress cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
+  profile_unavailable: copy(
+    "Non riesco a leggere il profilo del team.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The team's profile cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
+  profile_unreadable: copy(
+    "Il file del profilo c’è ma non si legge.",
+    "Chiedi all’Assistente di riscriverlo, o controlla il file dal team.",
+    "The profile file is there but cannot be read.",
+    "Ask the Assistant to write it again, or check the file from the team.",
+  ),
+  team_start_unavailable: copy(
+    "Non riesco a leggere a che punto è la prima partenza del team.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The team's first start cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
+  // The sign-in of this computer's team with its provider (Settings, «Provider»): see, and take off.
+  team_provider_request_invalid: copy(
+    "La richiesta non era valida e non è stata mandata alla squadra.",
+    "Riprova. Se si ripete, aggiorna l’app.",
+    "The request was not valid and was not sent to the team.",
+    "Try again. If it happens again, update the app.",
+  ),
+  team_provider_window_refused: copy(
+    "Questo gesto si fa solo dalla finestra principale dell’app.",
+    "Torna alla finestra principale e riprova.",
+    "This can be done only from the app’s main window.",
+    "Go back to the main window and try again.",
+  ),
+  team_provider_read_only: copy(
+    "Questa squadra non è quella del tuo profilo su questo computer: l’accesso non si cambia da qui.",
+    "Apri l’app con il profilo che ha creato la squadra.",
+    "This team is not your profile’s team on this computer: the sign-in cannot be changed from here.",
+    "Open the app with the profile that created the team.",
+  ),
+  team_provider_unavailable: copy(
+    "Non riesco a leggere o togliere l’accesso del provider.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
+    "The provider’s sign-in cannot be read or taken off.",
+    "Try again in a moment; if it stays so, look at the team’s state.",
+  ),
+  provider_unknown: copy(
+    "La squadra non ha un provider riconosciuto.",
+    "Scegli il provider dal passo «Provider» della configurazione.",
+    "The team has no provider the app knows.",
+    "Pick the provider from the setup’s «Provider» step.",
+  ),
+  provider_not_subscription: copy(
+    "La squadra usa una chiave e non un abbonamento: non c’è un accesso da disconnettere.",
+    "La chiave si cambia dal passo «Provider» della configurazione.",
+    "The team uses a key and not a subscription: there is no sign-in to disconnect.",
+    "The key is changed from the setup’s «Provider» step.",
+  ),
+  provider_logout_incomplete: copy(
+    "L’accesso non è stato tolto del tutto: qualcosa è rimasto, o un agente lo ha scritto di nuovo.",
+    "Ferma gli agenti dal Pannello Agenti e riprova.",
+    "The sign-in was not taken off completely: something is left, or an agent wrote it again.",
+    "Stop the agents from the Agents panel and try again.",
+  ),
+  provider_logout_failed: copy(
+    "Non sono riuscito a togliere l’accesso del provider.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
+    "The provider’s sign-in could not be taken off.",
+    "Try again in a moment; if it stays so, look at the team’s state.",
+  ),
+  provider_changed: copy(
+    "Il provider della squadra è cambiato mentre confermavi: l’account disconnesso non è quello che avevi scelto.",
+    "Controlla il provider nel passo «Provider» e riprova.",
+    "The team’s provider changed while you were confirming: the account disconnected is not the one you chose.",
+    "Check the provider in the «Provider» step and try again.",
   ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
@@ -2120,10 +2310,16 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Free some space, or the team will stop starting new agents and updates.",
   ),
   disk_low: copy(
-    "Il disco è quasi pieno, quindi non parte nessun nuovo agente né aggiornamento.",
-    "Svuota il Cestino ed elimina i file grandi che non ti servono, come vecchi download o immagini Docker/Podman inutilizzate, poi riprova. Gli agenti già avviati continuano a lavorare.",
-    "The disk is almost full, so no new agent or update will start.",
-    "Empty the Trash and delete large files you no longer need, such as old downloads or unused Docker/Podman images, then try again. Agents already running keep working.",
+    "Gli agenti richiedono più spazio su disco di quello disponibile.",
+    "Libera spazio: svuota il Cestino, rimuovi le vecchie immagini Docker/Podman ed elimina i file grandi che non ti servono, poi riprova. Gli agenti già avviati continuano a lavorare.",
+    "The agents need more disk space than is available.",
+    "Free up space: empty the Trash, remove old Docker/Podman images and delete large files you no longer need, then try again. Agents already running keep working.",
+  ),
+  disk_low_sized: copy(
+    "Gli agenti richiedono almeno {required} GiB di disco — disponibili: {available} GiB.",
+    "Libera spazio: svuota il Cestino, rimuovi le vecchie immagini Docker/Podman ed elimina i file grandi che non ti servono, poi riprova. Gli agenti già avviati continuano a lavorare.",
+    "The agents need at least {required} GiB of disk — available: {available} GiB.",
+    "Free up space: empty the Trash, remove old Docker/Podman images and delete large files you no longer need, then try again. Agents already running keep working.",
   ),
 
   // ── «Free up space» on disk_low: `jht clean-images --json` (onboarding_clean_images) ──
@@ -2224,6 +2420,19 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Cleaning from the app is not available on this system yet.",
     "To free up space, empty the Trash and delete large files you no longer need, then try again.",
   ),
+  // ── The subscription plan chosen in the setup: `jht providers plan --json` (onboarding_plans, onboarding_plan_declare) ──
+  plans_unavailable: copy(
+    "Non riesco a leggere i piani di abbonamento adesso.",
+    "Puoi andare avanti: l’Assistente ti chiederà il piano in chat.",
+    "The subscription plans cannot be read right now.",
+    "You can go on: the Assistant asks you for the plan in the chat.",
+  ),
+  plan_declare_failed: copy(
+    "Non sono riuscito a salvare il piano di abbonamento.",
+    "Riprova, oppure scegli più tardi: te lo chiederà l’Assistente in chat.",
+    "The subscription plan could not be saved.",
+    "Try again, or choose later: the Assistant asks you in the chat.",
+  ),
 };
 
 /**
@@ -2238,6 +2447,8 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "command_timeout",
   // TS: handled by the UI, produced by no backend.
   "podman_other_machine_running_named",
+  // The sentence describeError picks for `disk_low` when the error carries the amounts (SIZED_VARIANTS).
+  "disk_low_sized",
   "container_version_incompatible",
   "account_team_mismatch",
   // The runtime, the hub and the web say them; the app reads them in the 2nd cut (T10).
@@ -2313,13 +2524,16 @@ export function describeError(
     machine?: string | null;
     /** The size an outcome names (`{size}`, the space «Free up space» freed), in bytes. */
     bytes?: number | null;
+    /** The room an error asks for and the room there is (`{required}`, `{available}`), in bytes (errorAmountsOf). */
+    amounts?: ResourceAmounts | null;
   } = {},
 ): DescribedError {
   const locale = localeOf(options.locale);
   const key = typeof code === "string" ? code : "unknown";
   const has = (value: string) => Object.prototype.hasOwnProperty.call(ERROR_CATALOG, value);
   const machine = validMachine(options.machine);
-  const named = machine && key in NAMED_VARIANTS ? NAMED_VARIANTS[key] : null;
+  const amounts = validAmounts(options.amounts);
+  const named = machine && key in NAMED_VARIANTS ? NAMED_VARIANTS[key] : amounts && key in SIZED_VARIANTS ? SIZED_VARIANTS[key] : null;
   const entry = named ? ERROR_CATALOG[named] : key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
   const fallbackCode = options.fallback && has(options.fallback) ? options.fallback : "unknown";
   const fallback = ERROR_CATALOG[fallbackCode];
@@ -2333,7 +2547,8 @@ export function describeError(
   const needsSize = text.includes("{size}") || action.includes("{size}");
   const bytes = options.bytes;
   const hasSize = typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0;
-  if ((needsTime && !hasTime) || (needsSize && !hasSize)) {
+  const needsAmounts = text.includes("{required}") || text.includes("{available}") || action.includes("{required}") || action.includes("{available}");
+  if ((needsTime && !hasTime) || (needsSize && !hasSize) || (needsAmounts && !amounts)) {
     chosen = UNKNOWN_ERROR;
     chosenCode = "unknown";
     [text, action] = localizedCopy(chosenCode, chosen, locale);
@@ -2341,9 +2556,53 @@ export function describeError(
   }
   const time = hasTime ? formatTime(resetsAt as number, locale, options.now ?? Date.now()) : "";
   const size = hasSize ? formatSize(bytes as number, locale) : "";
+  const required = amounts ? formatGib(amounts.requiredBytes, locale) : "";
+  const available = amounts ? formatGib(amounts.availableBytes, locale) : "";
   const fill = (value: string) =>
-    value.replaceAll("{time}", time).replaceAll("{machine}", machine ?? "").replaceAll("{size}", size);
+    value.replaceAll("{time}", time).replaceAll("{machine}", machine ?? "").replaceAll("{size}", size)
+      .replaceAll("{required}", required).replaceAll("{available}", available);
   return { code: key, text: fill(text), action: fill(action), known };
+}
+
+/** Codes with a variant that says the amounts (`{required}`, `{available}`), picked when the error carries them. */
+const SIZED_VARIANTS: Readonly<Record<string, string>> = {
+  disk_low: "disk_low_sized",
+};
+
+/** The room an error asks for and the room there is, in bytes. */
+export interface ResourceAmounts {
+  requiredBytes: number;
+  availableBytes: number;
+}
+
+function validAmounts(value: unknown): ResourceAmounts | null {
+  if (!value || typeof value !== "object") return null;
+  const { requiredBytes, availableBytes } = value as Partial<ResourceAmounts>;
+  const valid = (bytes: unknown): bytes is number => typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0;
+  return valid(requiredBytes) && valid(availableBytes) ? { requiredBytes, availableBytes } : null;
+}
+
+/** GiB with one decimal, rounded DOWN (never more room than there is), with the decimal mark of the language. */
+function formatGib(bytes: number, locale: ErrorLocale): string {
+  const tenths = Math.floor((bytes * 10) / 1024 ** 3);
+  return new Intl.NumberFormat(LOCALE_TAGS[locale], { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(tenths / 10);
+}
+
+/**
+ * The sentence with `{required}` and `{available}` written in the person's language (GiB, one decimal, rounded down).
+ * A text with no placeholder, or no valid amounts, comes back as it is.
+ */
+export function fillAmounts(text: string, amounts: unknown, locale?: string | null): string {
+  const valid = validAmounts(amounts);
+  if (!valid) return text;
+  const language = localeOf(locale);
+  return text.replaceAll("{required}", formatGib(valid.requiredBytes, language)).replaceAll("{available}", formatGib(valid.availableBytes, language));
+}
+
+/** The amounts a native error carries (`resources`), when they are valid numbers. */
+export function errorAmountsOf(error: unknown): ResourceAmounts | null {
+  if (!error || typeof error !== "object") return null;
+  return validAmounts((error as { resources?: unknown }).resources);
 }
 
 /** Codes with a variant that names the machine, picked when one is given. */

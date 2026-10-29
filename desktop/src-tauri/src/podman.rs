@@ -226,22 +226,45 @@ pub(crate) fn machine_config_memory_is_low(config: &str) -> bool {
         .is_some_and(|memory| memory < MACHINE_MEMORY_MIB)
 }
 
+/// Where Podman keeps the configuration of its machines (`machine/<provider>/<name>.json`).
+fn machine_config_root(home: &std::path::Path) -> std::path::PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .unwrap_or_else(|| home.join(".config"))
+        .join("containers/podman/machine")
+}
+
+/// Whether the JHT Podman machine exists on this computer (its configuration file is there). Reads files only.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn jht_machine_exists(home: &std::path::Path) -> bool {
+    let file = format!("{}.json", jht_machine());
+    std::fs::read_dir(machine_config_root(home))
+        .map(|providers| providers.flatten().any(|provider| provider.path().join(&file).is_file()))
+        .unwrap_or(false)
+}
+
 /// Whether the machine the JHT team runs on already exists with less memory
 /// than it needs (created by an earlier installer, or by hand). Reads the
 /// configuration files only: nothing is started, nothing is changed.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(crate) fn jht_machine_memory_is_low(home: &std::path::Path) -> bool {
-    let config_home = std::env::var_os("XDG_CONFIG_HOME")
-        .map(std::path::PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .unwrap_or_else(|| home.join(".config"));
-    let root = config_home.join("containers/podman/machine");
+    let root = machine_config_root(home);
     let file = format!("{}.json", jht_machine());
     let Ok(providers) = std::fs::read_dir(root) else { return false };
     providers
         .flatten()
         .filter_map(|provider| std::fs::read_to_string(provider.path().join(&file)).ok())
         .any(|config| machine_config_memory_is_low(&config))
+}
+
+/// Stops the JHT Podman machine, the virtual machine that holds the runtime's memory (`podman machine stop`). Best
+/// effort: a machine that is not there, already stopped or slow to stop is not an error the person can act on, and the
+/// container was brought down before. Never touches another machine.
+pub(crate) fn stop_jht_machine(timeout: Duration) {
+    // the machine is named in the call itself (`machine stop <name>` takes it as its argument, not as a connection)
+    let stop = args(&["machine", "stop", &jht_machine()]);
+    let _ = command(&stop, timeout, None, false);
 }
 
 fn valid_machine_name(name: &str) -> bool {
@@ -411,11 +434,15 @@ mod tests {
         for call in calls {
             assert!(
                 call.starts_with("command(&args(&[\"--version\"])")
-                    || call.starts_with("command(&info"),
+                    || call.starts_with("command(&info")
+                    || call.starts_with("command(&stop"),
                 "engine call without the JHT connection: {call}"
             );
         }
         assert!(!production.contains("args(&[\"info\""));
+        // the one call that goes with `stop` names the JHT machine itself, and no other `machine` command exists
+        assert_eq!(production.matches("args(&[\"machine\"").count(), 1);
+        assert!(production.contains("args(&[\"machine\", \"stop\", &jht_machine()])"));
     }
 
     #[test]
@@ -492,10 +519,12 @@ mod tests {
         let saved = std::env::var_os("XDG_CONFIG_HOME");
         std::env::remove_var("XDG_CONFIG_HOME");
         let low = jht_machine_memory_is_low(&home);
+        let exists = super::jht_machine_exists(&home);
         std::fs::write(&file, r#"{"Resources":{"Memory":4096}}"#).unwrap();
         let enough = jht_machine_memory_is_low(&home);
         std::fs::remove_file(&file).unwrap();
         let absent = jht_machine_memory_is_low(&home);
+        let gone = !super::jht_machine_exists(&home);
         if let Some(value) = saved {
             std::env::set_var("XDG_CONFIG_HOME", value);
         }
@@ -504,5 +533,6 @@ mod tests {
         assert!(low, "2048 MiB is below the team size");
         assert!(!enough, "4096 MiB is the team size");
         assert!(!absent, "no machine file, nothing to report (another machine's file does not count)");
+        assert!(exists && gone, "the machine exists while its file is there, and another machine's file does not count");
     }
 }

@@ -15,6 +15,17 @@
 //! - the box answers with what it holds after the write, read again: the page shows that, not what it sent;
 //! - a config that cannot be read, or an image without the command, is an error, never a made-up default.
 //!
+//! «Work flat out until HH:MM» (`burst_start`, `burst_stop`) goes by the same door and with the same
+//! rules as a write: the full link and the connection key. The app sends only the time (HH:MM) on
+//! stdin; the box widens the hours, grants the burn and, when the time is up, puts the usual hours back
+//! by itself, app closed or not (`shared/skills/burst.py`, at the sentinel's tick). A read answers with
+//! the burst when the box sends it, in its closed shape; a box that does not is read as without one.
+//!
+//! A read also brings, when the box sends them, the facts that explain a silence of the team (`quiet`:
+//! the provider's work window as two numbers, whether an agent is held by a containment, whether the
+//! provider has a login). Read only, numbers and booleans in a closed shape; a fact out of its shape is
+//! left out, never read as «all is well» (`shared/skills/team_quiet.py`).
+//!
 //! The model is a CLASS (`sol`, `terra`, `luna`), never the name of a model: which model a class
 //! means is the team's provider's business.
 
@@ -52,6 +63,27 @@ enum Request {
         #[serde(rename = "connectionKey")]
         connection_key: String,
     },
+    BurstStart {
+        until: String,
+        #[serde(rename = "connectionKey")]
+        connection_key: String,
+    },
+    BurstStop {
+        #[serde(rename = "connectionKey")]
+        connection_key: String,
+    },
+}
+
+impl Request {
+    /// The key a request that changes the box must carry; a read has none.
+    fn connection_key(&self) -> Option<&str> {
+        match self {
+            Request::Read {} => None,
+            Request::Write { connection_key, .. }
+            | Request::BurstStart { connection_key, .. }
+            | Request::BurstStop { connection_key } => Some(connection_key),
+        }
+    }
 }
 
 fn time_of_day(text: &str) -> bool {
@@ -130,9 +162,14 @@ fn valid_settings(settings: &Value) -> bool {
 
 fn stdin_of(request: &Request) -> Option<Vec<u8>> {
     match request {
-        Request::Read {} => None,
+        Request::Read {} | Request::BurstStop { .. } => None,
         Request::Write { settings, .. } => {
             let mut line = serde_json::to_vec(&json!({ "settings": settings })).ok()?;
+            line.push(b'\n');
+            Some(line)
+        }
+        Request::BurstStart { until, .. } => {
+            let mut line = serde_json::to_vec(&json!({ "until": until })).ok()?;
             line.push(b'\n');
             Some(line)
         }
@@ -143,6 +180,8 @@ fn verb(request: &Request) -> &'static str {
     match request {
         Request::Read {} => "get",
         Request::Write { .. } => "apply",
+        Request::BurstStart { .. } => "burst-start",
+        Request::BurstStop { .. } => "burst-stop",
     }
 }
 
@@ -199,7 +238,66 @@ fn settings_of(out: &Map<String, Value>) -> Option<Value> {
         settings["classApplies"] = class_applies;
         settings["effective"] = effective;
     }
+    // The burst is optional too: absent or out of its closed shape, the page shows none.
+    if let Some(burst) = burst_of(out) {
+        settings["burst"] = burst;
+    }
+    // The facts that explain a silence are optional as well, each on its own.
+    if let Some(quiet) = quiet_of(out) {
+        settings["quiet"] = quiet;
+    }
     Some(settings)
+}
+
+/// The most the provider's window can read (a share of it, in percent) and the latest time it can reopen at (year 2100).
+const USAGE_MAX: f64 = 1000.0;
+const RESET_MAX: u64 = 4_102_444_800;
+
+/// {"budget": {"usagePct", "resetAtUnix"}, "containment": bool, "providerReady": bool}, each fact only if whole and none required;
+/// `None` when nothing is left. A fact out of its shape is dropped alone: the others still tell what they know.
+fn quiet_of(out: &Map<String, Value>) -> Option<Value> {
+    let quiet = out.get("quiet")?.as_object()?;
+    let mut kept = Map::new();
+    if let Some(budget) = quiet.get("budget").and_then(Value::as_object) {
+        let usage = budget.get("usagePct").and_then(Value::as_f64).filter(|u| (0.0..=USAGE_MAX).contains(u));
+        let reset = match budget.get("resetAtUnix") {
+            Some(Value::Null) => Some(Value::Null),
+            Some(value) => value.as_u64().filter(|r| (1..=RESET_MAX).contains(r)).map(Value::from),
+            None => None,
+        };
+        if let (Some(usage), Some(reset), 2) = (usage, reset, budget.len()) {
+            kept.insert("budget".into(), json!({ "usagePct": usage, "resetAtUnix": reset }));
+        }
+    }
+    for key in ["containment", "providerReady"] {
+        if let Some(flag) = quiet.get(key).and_then(Value::as_bool) {
+            kept.insert(key.into(), Value::Bool(flag));
+        }
+    }
+    (!kept.is_empty()).then(|| Value::Object(kept))
+}
+
+/// {"active": false}, or {"active": true, "until": <UTC timestamp>, "untilLocal": "HH:MM"}, and nothing else.
+fn burst_of(out: &Map<String, Value>) -> Option<Value> {
+    let burst = out.get("burst")?.as_object()?;
+    match burst.get("active")?.as_bool()? {
+        false => (burst.len() == 1).then(|| json!({ "active": false })),
+        true => {
+            let until = burst.get("until")?.as_str()?;
+            let local = burst.get("untilLocal")?.as_str()?;
+            (burst.len() == 3 && timestamp_ok(until) && time_of_day(local))
+                .then(|| json!({ "active": true, "until": until, "untilLocal": local }))
+        }
+    }
+}
+
+/// An ISO timestamp as the box writes it (`2026-10-30T02:00:00+00:00`): digits, `-`, `:`, `T`, `+`, `.` and `Z` only.
+fn timestamp_ok(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    (20..=40).contains(&bytes.len())
+        && bytes[..4].iter().all(u8::is_ascii_digit)
+        && bytes[10] == b'T'
+        && bytes.iter().all(|b| b.is_ascii_digit() || b"-:T+.Z".contains(b))
 }
 
 fn name_ok(text: &str) -> bool {
@@ -263,7 +361,9 @@ fn reply(result: Result<ProcessResult, &'static str>, target: &str, key: &str) -
     }
     let code = out.get("error").or_else(|| out.get("code")).and_then(Value::as_str).and_then(closed);
     match code {
-        Some("value_invalid") => failure("team_settings_value_invalid"),
+        Some("value_invalid") | Some("until_invalid") => failure("team_settings_value_invalid"),
+        Some("until_too_soon") => failure("team_settings_burst_too_soon"),
+        Some("until_too_far") => failure("team_settings_burst_too_far"),
         // the door does not know the verb: an image older than this command
         Some("agent_control_invalid") | Some("request_invalid") => failure("existing_team_runtime_outdated"),
         _ => failure("team_settings_unavailable"),
@@ -291,11 +391,16 @@ fn team_settings_with(
             return failure("team_settings_value_invalid");
         }
     }
+    if let Request::BurstStart { until, .. } = &request {
+        if !time_of_day(until) {
+            return failure("team_settings_value_invalid");
+        }
+    }
     let (mode, claim, key, target) = match destination() {
         Ok(found) => found,
         Err(error) => return failure(error),
     };
-    if let Request::Write { connection_key, .. } = &request {
+    if let Some(connection_key) = request.connection_key() {
         // the app's own VPS with no mark: the page's invitation to claim it, not a generic «read only»
         if let Some(code) = claim {
             return failure(code);
@@ -303,7 +408,7 @@ fn team_settings_with(
         if mode == Some(VpsMode::ReadOnly) {
             return failure("team_settings_read_only");
         }
-        if *connection_key != key {
+        if connection_key != key {
             return failure("existing_team_runtime_target_changed");
         }
     }
@@ -485,6 +590,157 @@ mod tests {
         assert_eq!(out["role_models"], json!({"scout": {"model": "terra"}}));
         assert_eq!(out["working_hours"], Value::Null);
         assert_eq!(ran.get(), 1);
+    }
+
+    fn burst_held(burst: Value) -> String {
+        json!({"ok": true, "working_hours": hours(), "role_models": {}, "lists": lists(), "burst": burst}).to_string()
+    }
+
+    fn burst_start(until: &str) -> Value {
+        json!({"op": "burst_start", "until": until, "connectionKey": KEY})
+    }
+
+    #[test]
+    fn a_burst_start_sends_only_the_time_on_stdin_and_answers_with_what_the_box_reads_back() {
+        let ran = Cell::new(0);
+        let running = json!({"active": true, "until": "2026-10-30T02:00:00+00:00", "untilLocal": "03:00"});
+        let out = team_settings_with(burst_start("03:00"), true, || at(Some(VpsMode::Full)), |request| {
+            ran.set(ran.get() + 1);
+            assert_eq!(verb(request), "burst-start");
+            let stdin = stdin_of(request).unwrap();
+            assert_eq!(stdin, b"{\"until\":\"03:00\"}\n".to_vec());
+            done(&burst_held(running.clone()))
+        });
+        assert_eq!(out["ok"], true);
+        assert_eq!(out["burst"], running);
+        assert_eq!(out["connectionKey"], KEY);
+        assert_eq!(ran.get(), 1);
+        let stopped = team_settings_with(json!({"op": "burst_stop", "connectionKey": KEY}), true, || at(None), |request| {
+            assert_eq!(verb(request), "burst-stop");
+            assert!(stdin_of(request).is_none());
+            done(&burst_held(json!({"active": false})))
+        });
+        assert_eq!(stopped["burst"], json!({"active": false}));
+    }
+
+    #[test]
+    fn a_burst_is_a_write_it_needs_the_full_link_and_the_key_and_a_time_of_day() {
+        let ran = Cell::new(0);
+        let ok = burst_held(json!({"active": false}));
+        let read_only = drive(burst_start("03:00"), Some(VpsMode::ReadOnly), done(&ok), &ran);
+        assert_eq!(read_only["error"], "team_settings_read_only");
+        let stale = json!({"op": "burst_start", "until": "03:00", "connectionKey": "print-2"});
+        assert_eq!(drive(stale, None, done(&ok), &ran)["error"], "existing_team_runtime_target_changed");
+        let stale_stop = json!({"op": "burst_stop", "connectionKey": "print-2"});
+        assert_eq!(drive(stale_stop, Some(VpsMode::Full), done(&ok), &ran)["error"], "existing_team_runtime_target_changed");
+        for until in ["", "3:00", "24:00", "03:60", "03:00; id", "0300", "03:00:00", "ab:cd", "03:00\n"] {
+            assert_eq!(drive(burst_start(until), None, done(&ok), &ran)["error"], "team_settings_value_invalid", "{until:?}");
+        }
+        for request in [
+            json!({"op": "burst_start", "connectionKey": KEY}),
+            json!({"op": "burst_start", "until": "03:00"}),
+            json!({"op": "burst_start", "until": "03:00", "connectionKey": KEY, "hours": 5}),
+            json!({"op": "burst_stop"}),
+            json!({"op": "burst_stop", "connectionKey": KEY, "until": "03:00"}),
+        ] {
+            assert_eq!(drive(request.clone(), None, done(&ok), &ran)["error"], "team_settings_request_invalid", "{request}");
+        }
+        assert_eq!(ran.get(), 0);
+    }
+
+    #[test]
+    fn the_refusals_of_a_burst_come_back_as_closed_codes_the_page_has_words_for() {
+        let ran = Cell::new(0);
+        for (said, code) in [
+            ("until_invalid", "team_settings_value_invalid"),
+            ("until_too_soon", "team_settings_burst_too_soon"),
+            ("until_too_far", "team_settings_burst_too_far"),
+            ("write_failed", "team_settings_unavailable"),
+            ("burst_unavailable", "team_settings_unavailable"),
+            ("agent_control_invalid", "existing_team_runtime_outdated"),
+        ] {
+            let body = json!({"ok": false, "error": said}).to_string();
+            let out = drive(burst_start("03:00"), None, Ok(ProcessResult { code: 1, stdout: body.into_bytes() }), &ran);
+            assert_eq!(out["error"], code, "{said}");
+        }
+    }
+
+    #[test]
+    fn a_burst_the_box_sends_out_of_its_closed_shape_is_read_as_no_burst() {
+        let ran = Cell::new(0);
+        let read = |burst: Value| drive(json!({"op": "read"}), None, done(&burst_held(burst)), &ran);
+        for good in [
+            json!({"active": false}),
+            json!({"active": true, "until": "2026-10-30T02:00:00+00:00", "untilLocal": "03:00"}),
+        ] {
+            assert_eq!(read(good.clone())["burst"], good);
+        }
+        for bad in [
+            json!(null),
+            json!("on"),
+            json!({}),
+            json!({"active": "yes"}),
+            json!({"active": false, "until": "2026-10-30T02:00:00+00:00"}),
+            json!({"active": true}),
+            json!({"active": true, "until": "2026-10-30T02:00:00+00:00"}),
+            json!({"active": true, "until": "tomorrow", "untilLocal": "03:00"}),
+            json!({"active": true, "until": "2026-10-30T02:00:00+00:00", "untilLocal": "3am"}),
+            json!({"active": true, "until": "2026-10-30T02:00:00+00:00; rm", "untilLocal": "03:00"}),
+            json!({"active": true, "until": "2026-10-30T02:00:00+00:00", "untilLocal": "03:00", "x": 1}),
+        ] {
+            let out = read(bad.clone());
+            assert_eq!(out["ok"], true, "{bad}");
+            assert!(out.get("burst").is_none(), "{bad}");
+        }
+    }
+
+    fn quiet_held(quiet: Value) -> String {
+        json!({"ok": true, "working_hours": hours(), "role_models": {}, "lists": lists(), "quiet": quiet}).to_string()
+    }
+
+    #[test]
+    fn the_facts_that_explain_a_silence_come_through_in_their_closed_shape() {
+        let ran = Cell::new(0);
+        let read = |quiet: Value| drive(json!({"op": "read"}), None, done(&quiet_held(quiet)), &ran);
+        let whole = json!({"budget": {"usagePct": 97.5, "resetAtUnix": 1790000000u64}, "containment": false, "providerReady": true});
+        assert_eq!(read(whole.clone())["quiet"], whole);
+        let no_time = json!({"budget": {"usagePct": 100.0, "resetAtUnix": null}});
+        assert_eq!(read(no_time.clone())["quiet"], no_time);
+        // each fact stands alone
+        assert_eq!(read(json!({"containment": true}))["quiet"], json!({"containment": true}));
+        // a box older than the field does not send it: no `quiet`, and a page that reads that as «nothing to say»
+        let ran2 = Cell::new(0);
+        let old = drive(json!({"op": "read"}), None, done(&burst_held(json!({"active": false}))), &ran2);
+        assert!(old.get("quiet").is_none());
+    }
+
+    #[test]
+    fn a_fact_out_of_its_shape_is_left_out_alone_and_never_read_as_all_is_well() {
+        let ran = Cell::new(0);
+        let read = |quiet: Value| drive(json!({"op": "read"}), None, done(&quiet_held(quiet)), &ran);
+        for bad in [
+            json!(null),
+            json!("down"),
+            json!([]),
+            json!({}),
+            json!({"containment": "no"}),
+            json!({"providerReady": 1}),
+            json!({"budget": {"usagePct": "97", "resetAtUnix": 1}}),
+            json!({"budget": {"usagePct": -1.0, "resetAtUnix": 1}}),
+            json!({"budget": {"usagePct": 5000.0, "resetAtUnix": 1}}),
+            json!({"budget": {"usagePct": 97.0}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 0}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 1.5}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 99999999999u64}}),
+            json!({"budget": {"usagePct": 97.0, "resetAtUnix": 1, "status": "locked out for someone@example.com"}}),
+        ] {
+            let out = read(bad.clone());
+            assert_eq!(out["ok"], true, "{bad}");
+            assert!(out.get("quiet").is_none(), "{bad}");
+        }
+        // one bad fact does not take the good ones with it; and nothing else the box says travels on
+        let mixed = read(json!({"budget": {"usagePct": "x", "resetAtUnix": 1}, "containment": true, "agent": "SCOUT", "path": "/jht_home/x", "providerReady": false}));
+        assert_eq!(mixed["quiet"], json!({"containment": true, "providerReady": false}));
     }
 
     #[test]

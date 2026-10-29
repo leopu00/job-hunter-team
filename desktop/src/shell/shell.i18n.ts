@@ -5,6 +5,8 @@ export interface ShellText {
   /** The accessible name of the navigation. */
   navAria: string;
   refresh: string;
+  /** The button inside a page that could not read its data: another word than the navbar's `refresh`, so the two are not told apart only by where they are. */
+  retry: string;
   /** The button that holds the links that do not fit the navbar. */
   more: string;
   signOut: string;
@@ -21,16 +23,18 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   it: {
     navAria: "Navigazione app",
     refresh: "Aggiorna",
+    retry: "Riprova",
     more: "Altro",
-    signOut: "Esci",
-    signingOut: "Uscita…",
+    signOut: "Disconnetti",
+    signingOut: "Disconnessione…",
     signOutFailed: "Disconnessione non riuscita. Il runtime resta bloccato su questo account.",
-    signOutNote: "Esci da questo account. Il team collegato e i tuoi dati non vengono cancellati.",
+    signOutNote: "Disconnettiti da questo account. Il team collegato e i tuoi dati non vengono cancellati.",
     pageReadFailed: (refresh) => `Non riesco a leggere questa pagina. Controlla la connessione e premi «${refresh}».`,
   },
   en: {
     navAria: "App navigation",
     refresh: "Refresh",
+    retry: "Try again",
     more: "More",
     signOut: "Sign out",
     signingOut: "Signing out…",
@@ -41,6 +45,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   de: {
     navAria: "App-Navigation",
     refresh: "Aktualisieren",
+    retry: "Erneut versuchen",
     more: "Mehr",
     signOut: "Abmelden",
     signingOut: "Abmelden…",
@@ -51,28 +56,31 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   hu: {
     navAria: "Alkalmazásnavigáció",
     refresh: "Frissítés",
+    retry: "Próbáld újra",
     more: "Továbbiak",
-    signOut: "Kilépés",
-    signingOut: "Kilépés…",
+    signOut: "Kijelentkezés",
+    signingOut: "Kijelentkezés…",
     signOutFailed: "A kijelentkezés nem sikerült. A futtatókörnyezet ehhez a fiókhoz kötve marad.",
-    signOutNote: "Kilépés ebből a fiókból. A csatolt csapat és az adataid nem törlődnek.",
+    signOutNote: "Kijelentkezés ebből a fiókból. A csatolt csapat és az adataid nem törlődnek.",
     pageReadFailed: (refresh) => `Az oldal nem olvasható. Ellenőrizd a kapcsolatot, és nyomd meg a(z) „${refresh}” gombot.`,
   },
   es: {
     navAria: "Navegación de la app",
     refresh: "Actualizar",
+    retry: "Reintentar",
     more: "Más",
-    signOut: "Salir",
-    signingOut: "Saliendo…",
+    signOut: "Cerrar sesión",
+    signingOut: "Cerrando sesión…",
     signOutFailed: "No se pudo cerrar la sesión. El entorno de ejecución sigue bloqueado en esta cuenta.",
-    signOutNote: "Sal de esta cuenta. El equipo vinculado y tus datos no se borran.",
+    signOutNote: "Cierra la sesión de esta cuenta. El equipo vinculado y tus datos no se borran.",
     pageReadFailed: (refresh) => `No se pudo leer esta página. Revisa la conexión y pulsa «${refresh}».`,
   },
   fr: {
     navAria: "Navigation de l’app",
     refresh: "Actualiser",
+    retry: "Réessayer",
     more: "Plus",
-    signOut: "Quitter",
+    signOut: "Se déconnecter",
     signingOut: "Déconnexion…",
     signOutFailed: "La déconnexion a échoué. L’environnement d’exécution reste verrouillé sur ce compte.",
     signOutNote: "Déconnecte-toi de ce compte. L’équipe liée et tes données ne sont pas supprimées.",
@@ -81,9 +89,10 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
   pt: {
     navAria: "Navegação da app",
     refresh: "Atualizar",
+    retry: "Tentar novamente",
     more: "Mais",
-    signOut: "Sair",
-    signingOut: "A sair…",
+    signOut: "Terminar sessão",
+    signingOut: "A terminar sessão…",
     signOutFailed: "Não foi possível terminar a sessão. O ambiente de execução continua bloqueado nesta conta.",
     signOutNote: "Termina a sessão desta conta. A equipa ligada e os teus dados não são apagados.",
     pageReadFailed: (refresh) => `Não foi possível ler esta página. Verifica a ligação e prime «${refresh}».`,

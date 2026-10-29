@@ -5,6 +5,7 @@ export {
   readDesktopVpsPositionFacets,
   readDesktopVpsPositions,
   readDesktopVpsPositionsWindow,
+  readDesktopVpsTeamActivity,
 } from "../../lib/existing-team-positions";
 export type {
   DesktopVpsPositionsWindow,

@@ -123,6 +123,7 @@ DEFAULT_HOURS = 5.0
 # configurazione va scritta nel config, non lasciata in un flag di deroga.
 MAX_HOURS = 12.0
 MIN_HOURS = 0.25
+THROTTLE_MAX_SEC = 3600      # il tetto della pausa del throttle (throttle-config MAX_SLEEP)
 
 # Documentazione ESEGUIBILE (vedi tests/test_burn_intent.py): i freni che
 # restano attivi anche in deroga. Chi aggiunge un consumatore di questo modulo
@@ -204,6 +205,22 @@ def is_active(now: Optional[datetime] = None) -> bool:
         return False
 
 
+def pace_cap(now: Optional[datetime] = None) -> Optional[int]:
+    """Secondi oltre i quali la pausa del throttle non va finché la deroga dura, o None.
+
+    None se la deroga non c'è, è scaduta, o non dice «a tutta». Mai solleva: un valore
+    illeggibile non è un tetto (la pausa resta quella che l'agente ha chiesto)."""
+    try:
+        if not is_active(now):
+            return None
+        cap = (read() or {}).get("pace_cap_sec")
+        if isinstance(cap, bool) or not isinstance(cap, int) or cap < 0:
+            return None
+        return min(cap, THROTTLE_MAX_SEC)
+    except Exception:      # noqa: BLE001
+        return None
+
+
 def banner(now: Optional[datetime] = None) -> str:
     """Riga unica per log e messaggi agli agenti. Vuota se la deroga non è attiva."""
     st = status(now)
@@ -251,11 +268,16 @@ def _atomic_write(payload: dict) -> None:
 
 
 def grant(hours: float = DEFAULT_HOURS, reason: str = "",
-          granted_by: str = "user", now: Optional[datetime] = None) -> dict:
+          granted_by: str = "user", now: Optional[datetime] = None,
+          pace_cap_sec: Optional[int] = None) -> dict:
     """Concede la deroga per `hours` ore. Ritorna il payload scritto.
 
     `hours` è sempre clampato in [MIN_HOURS, MAX_HOURS]: non esiste una deroga
     permanente, nemmeno chiedendola.
+
+    `pace_cap_sec`: la deroga dice anche «a tutta». La pausa del throttle di
+    ogni agente non supera quel valore finché la deroga dura (`pace_cap`).
+    Senza, una deroga lascia la pausa com'è: chi la tiene a 300 s la tiene.
     """
     try:
         h = float(hours)
@@ -273,6 +295,8 @@ def grant(hours: float = DEFAULT_HOURS, reason: str = "",
         # che la deroga non è mai stata totale.
         "never_yields": list(NEVER_YIELDS),
     }
+    if pace_cap_sec is not None:
+        payload["pace_cap_sec"] = max(0, min(THROTTLE_MAX_SEC, int(pace_cap_sec)))
     _atomic_write(payload)
     _audit("granted", hours=payload["hours"], expires_at=payload["expires_at"],
            reason=payload["reason"], granted_by=granted_by)

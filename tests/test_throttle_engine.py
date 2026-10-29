@@ -562,6 +562,21 @@ def test_6d_la_chiamata_dellagente_e_identica_nei_due_casi(home, burn,
     assert derogated["applied_sec"] != plain["applied_sec"]
 
 
+def test_6e_nel_burst_la_pausa_dopo_una_posizione_non_supera_il_gradino_piu_basso(home, burn, monkeypatch):
+    """«A tutta» (burst): il Capitano o il floor tengono lo Scout a 300 s e la squadra faceva una posizione ogni
+    cinque o sei minuti. La deroga che dice `pace_cap_sec` mette un tetto alla pausa che il motore arma."""
+    set_config(home, **{"scout-1": 300})
+    burn.grant(hours=2, reason="burst until 23:00", pace_cap_sec=60)
+    eng._MODULE_CACHE.clear()
+    tc = _load("throttle_config_burst_cap", SKILLS_DIR / "throttle-config.py")
+    tc._BURN_INTENT_MOD = burn
+    monkeypatch.setattr(eng, "_throttle_config", lambda: tc)
+
+    res = eng.register("scout-1", reason="post-position", now=T0)
+    assert res["applied_sec"] == 60 and res["until"] == int(T0 + 60)
+    assert eng.register("scout-1", seconds=300, reason="post-position", now=T0)["applied_sec"] == 60
+
+
 # ── Gate di sicurezza: svegliare è spendere ──────────────────────────────
 @pytest.mark.parametrize("flag_path", [".team-halted.flag", ".team-standby.flag",
                                        "logs/daily-halt.flag",

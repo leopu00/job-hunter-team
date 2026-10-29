@@ -26,3 +26,16 @@ Rules:
 - `jht-reply-options` is the final reply for that turn. Do not follow it with
   `jht-send`, or the buttons would correctly disappear below the newer reply.
 - For open-ended questions or a direct answer, use `jht-send` as usual.
+
+## A `$` in the text: single quotes or stdin
+
+Inside double quotes the shell reads `$1` and `$2` as its own arguments and replaces them with nothing **before the tool runs**: "Plus — $20/month; Pro — $200/month" reaches the user as "Plus — 0/month; Pro — 00/month", and nothing downstream can bring the digits back. Whenever the text has a `$` (prices, amounts), write it between single quotes, or pass it on stdin.
+
+```bash
+# Single quotes for the labels; the prompt from stdin: "-" reads it, the quoted delimiter keeps every $
+jht-reply-options --prompt - 'Plus — $20/month' 'Pro — $100/month' <<'TXT'
+Which plan do you want? Plus — $20/month; Pro — $100/month
+TXT
+```
+
+Write the closing `TXT` in the first column, alone on its line, with no spaces before it (copy the indentation and the heredoc never closes: a text that ends in a `TXT` line is refused, nothing is sent).

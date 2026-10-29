@@ -16,7 +16,7 @@ describe("the shell's own words", () => {
 
   it("keep the Italian wording the app had before", () => {
     const it = SHELL_TEXT.it;
-    expect([it.navAria, it.refresh, it.signOut, it.signingOut]).toEqual(["Navigazione app", "Aggiorna", "Esci", "Uscita…"]);
+    expect([it.navAria, it.refresh, it.signOut, it.signingOut]).toEqual(["Navigazione app", "Aggiorna", "Disconnetti", "Disconnessione…"]);
     expect(it.pageReadFailed("Aggiorna")).toBe("Non riesco a leggere questa pagina. Controlla la connessione e premi «Aggiorna».");
   });
 
@@ -30,5 +30,14 @@ describe("the shell's own words", () => {
   it("do not leave the English app with Italian buttons", () => {
     const en = SHELL_TEXT.en;
     for (const word of [en.refresh, en.signOut, en.signingOut]) expect(word).not.toMatch(/Aggiorna|Esci|Uscita/);
+  });
+});
+
+describe("the button inside a page that could not read", () => {
+  it.each(Object.keys(SHELL_TEXT) as (keyof typeof SHELL_TEXT)[])("%s: is a word of its own, short, and not the navbar's", (locale) => {
+    const t = SHELL_TEXT[locale];
+    expect(t.retry.trim(), locale).not.toBe("");
+    expect(t.retry.length, locale).toBeLessThanOrEqual(16);
+    expect(t.retry, locale).not.toBe(t.refresh);
   });
 });
