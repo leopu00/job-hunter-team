@@ -41,6 +41,8 @@ const NOT_ERRORS: Record<string, string> = {
       "salary_declared_min", "salary_estimated_currency", "salary_estimated_max", "salary_estimated_min", "local_account_owner",
     ].map((word) => [word, "a key of the Swipe's deck or of a verdict's answer, or a prefix compared in code; never shown"]),
   ),
+  // team_provider.rs: the verb the box's door is asked for (`agent-control provider logout`), never shown.
+  logout: "a verb of the box's door for the provider's sign-in, not an error",
   // team_start.rs: a value of the phase the first start is in, read by the page, not an error.
   awaiting_profile: "a phase of the team's first start (the team waits for the profile), never an error",
   // runtime_log.rs ATTEST_REASONS: the step of the container check a failed chat read stopped at, written beside

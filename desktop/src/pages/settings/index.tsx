@@ -4,6 +4,7 @@ import { appLocale } from "../../lib/app-locale";
 import { navigate } from "../../shell/router";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { useProviderSetup } from "../../lib/provider-setup";
+import ProviderSignOut from "./ProviderSignOut";
 import { useLocalProfileLink } from "../../lib/local-profile-link";
 import type { PageProps } from "../types";
 import { BACKUP_TEXT } from "../backup/backup.i18n";
@@ -138,6 +139,7 @@ export default function SettingsPage(_props: PageProps) {
               {t.providerButton}
             </button>
           </div>
+          <ProviderSignOut />
         </section>
       )}
     </section>
