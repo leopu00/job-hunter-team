@@ -2929,7 +2929,7 @@ fn t50_the_sign_out_and_the_switch_of_account_call_it_and_leftover_temporary_fil
     let reset = source.split("pub(crate) fn runtime_account_scope_reset(").nth(1).unwrap().split("\n}\n").next().unwrap();
     assert!(reset.find("active.take()").unwrap() < reset.find("direct_chat::teardown").unwrap());
     assert!(reset.find("direct_chat::teardown").unwrap() < reset.find("forget_write_access_of(").unwrap(), "after the handles are closed");
-    let switch = source.split("fn activate_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
+    let switch = source.split("fn activate_scope_from(").nth(1).unwrap().split("\n}\n").next().unwrap();
     assert!(switch.find("active.take()").unwrap() < switch.find("forget_write_access_of(").unwrap());
     assert!(switch.find("forget_write_access_of(").unwrap() < switch.find("*active = Some(next)").unwrap());
 
