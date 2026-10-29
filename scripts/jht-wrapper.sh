@@ -169,6 +169,8 @@ jht_host_env_value_valid() {
 jht_read_host_env_value() {
   local file="$1" requested="$2" line key value result=""
   local found=1
+  # Un link al posto di host.env lo puo' aver messo un agente: non si legge quello che indica (come in host-setup.sh).
+  [ ! -L "$file" ] || return 1
   [ -f "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"

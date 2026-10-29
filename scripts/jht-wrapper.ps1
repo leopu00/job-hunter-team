@@ -376,6 +376,18 @@ $AclHelperPath = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
 # Formato file: VAR=value per riga, ignora # e righe vuote.
 $HostEnvFile = if ($env:JHT_HOST_ENV_FILE) { $env:JHT_HOST_ENV_FILE } else { Join-Path $env:USERPROFILE '.jht\host.env' }
 $AllowedHostEnvNames = @('JHT_HOST_TYPE', 'JHT_LANG', 'JHT_USER_TZ')
+# host.env lo possono scrivere gli agenti: un valore finisce in `-e "JHT_HOST_TYPE=..."` di docker exec, e in Windows
+# PowerShell 5.1 le virgolette dentro un argomento nativo diventano argomenti in piu'. Stesso dominio del wrapper .sh
+# (jht_host_env_value_valid): tipo local|vps, le 7 lingue, il fuso con i caratteri di un nome IANA. Fuori dominio = ignorato.
+function Test-HostEnvValue {
+  param([string]$Name, [string]$Value)
+  switch -CaseSensitive ($Name.ToUpperInvariant()) {
+    'JHT_HOST_TYPE' { return ($Value -ceq 'local' -or $Value -ceq 'vps') }
+    'JHT_LANG'      { return ($Value -cmatch '^(en|it|hu|es|de|fr|pt)\z') }
+    'JHT_USER_TZ'   { return ($Value -cmatch '^[A-Za-z0-9_+./-]+\z') }
+  }
+  return $false
+}
 if (Test-Path $HostEnvFile) {
   Get-Content $HostEnvFile | ForEach-Object {
     if ($_ -match '^\s*#') { return }
@@ -384,6 +396,7 @@ if (Test-Path $HostEnvFile) {
       $name  = $Matches[1]
       $value = $Matches[2].Trim('"').Trim("'")
       if ($AllowedHostEnvNames -notcontains $name) { return }
+      if (-not (Test-HostEnvValue -Name $name -Value $value)) { return }
       Set-Item -Path "env:$name" -Value $value -ErrorAction SilentlyContinue
     }
   }
