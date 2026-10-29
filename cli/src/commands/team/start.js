@@ -150,18 +150,24 @@ export function releaseUserHolds(agentArg, containerMode, { run } = {}) {
   }
   const args = ['release-user', ...sessions];
   let result;
-  if (run) {
-    result = run(args);
-  } else if (containerMode) {
-    result = execScriptInContainer('/app/shared/skills/team_roster.py', args, {
-      interpreter: 'python3', env: { JHT_HOME: '/jht_home' },
-    });
-  } else {
-    const script = join(resolveConfig().repoRoot, 'shared', 'skills', 'team_roster.py');
-    const done = spawnSync('python3', [script, ...args], {
-      encoding: 'utf8', timeout: 30_000, env: { ...process.env, JHT_HOME },
-    });
-    result = { code: done.status ?? -1, stdout: done.stdout || '', stderr: done.stderr || '' };
+  try {
+    if (run) {
+      result = run(args);
+    } else if (containerMode) {
+      result = execScriptInContainer('/app/shared/skills/team_roster.py', args, {
+        interpreter: 'python3', env: { JHT_HOME: '/jht_home' },
+      });
+    } else {
+      const { repoRoot } = resolveConfig();
+      if (!repoRoot) return { ok: false, lifted: [], error: 'the team folder was not found' };
+      const script = join(repoRoot, 'shared', 'skills', 'team_roster.py');
+      const done = spawnSync('python3', [script, ...args], {
+        encoding: 'utf8', timeout: 30_000, env: { ...process.env, JHT_HOME },
+      });
+      result = { code: done.status ?? -1, stdout: done.stdout || '', stderr: done.stderr || '' };
+    }
+  } catch (err) {
+    return { ok: false, lifted: [], error: err?.message || String(err) };
   }
   if (result.code !== 0) {
     return { ok: false, lifted: [], error: String(result.stderr || result.stdout || `exit code ${result.code}`).trim() };

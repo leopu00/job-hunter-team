@@ -105,6 +105,9 @@ test('a roster that cannot answer is said, not hidden, and does not stop the sta
   assert.equal(failed.ok, false);
   assert.match(failed.error, /invalid choice/);
   assert.equal(releaseUserHolds(undefined, true, { run: () => ({ code: 0, stdout: 'not json', stderr: '' }) }).ok, false);
+  // whatever goes wrong inside is an answer too, never a crash of the start
+  const thrown = releaseUserHolds(undefined, true, { run: () => { throw new TypeError('path is null'); } });
+  assert.deepEqual(thrown, { ok: false, lifted: [], error: 'path is null' });
 });
 
 function holdBox() {

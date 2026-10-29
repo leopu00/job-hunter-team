@@ -16,6 +16,7 @@ Run with: pytest tests/test_disk_guard_team_start.py -v
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -184,7 +185,7 @@ def test_at_2_percent_an_agent_already_running_is_left_alone(cli_copy, tmp_path)
     assert "SCOUT-1 — already active" in done.stdout
     assert "disk_low" not in done.stdout
     assert spawned(calls) == []
-    assert not any("kill" in call for call in calls), calls
+    assert not any(re.search(r"\bkill\b", call) for call in calls), calls
 
 
 def test_at_2_percent_a_running_team_start_is_still_the_idempotent_no_op(cli_copy, tmp_path):
