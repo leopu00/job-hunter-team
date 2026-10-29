@@ -110,8 +110,8 @@ case "$1" in
       tmux:has-session) exit 0 ;;
       test:-f) exit 0 ;;
       node:*)
-        # `profile import|validate --stdin`: the file the wrapper handed over, kept for the test that reads it
-        case "$3:$4:$5" in profile:import:--stdin|profile:validate:--stdin)
+        # `profile import|validate --stdin`, `artifact upload --stdin`: the file the wrapper handed over, kept for the test that reads it
+        case "$3:$4:$5" in profile:import:--stdin|profile:validate:--stdin|artifact:upload:--stdin)
           if [ -n "${JHT_TEST_STDIN_COPY:-}" ]; then cat > "$JHT_TEST_STDIN_COPY"; fi ;;
         esac
         exit 0 ;;

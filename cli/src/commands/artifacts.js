@@ -16,7 +16,7 @@
 // `docker exec`, che è un canale di testo.
 
 import { Command } from 'commander';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { runSkillCaptured } from './positions.js';
 import { c } from './_colors.js';
@@ -107,10 +107,18 @@ export function uploadFileToTeam(file) {
     return { ok: false, code: EXIT_USAGE,
       error: c.red(`: cannot read ${file}: ${error.message}`) };
   }
+  return uploadBytesToTeam(basename(file), data);
+}
+
+/**
+ * Lo stesso passaggio per dei byte che non stanno su un file raggiungibile da qui: il wrapper dell'host legge il file
+ * della persona (che dentro il container non esiste: ENOENT) e li passa su stdin, come fa `profile import --stdin`.
+ */
+export function uploadBytesToTeam(name, data) {
   // Il nome viaggia separato dai byte: la skill decide se l'estensione è
   // ammessa, qui non si giudica niente.
   const result = runSkillCaptured('artifact.py',
-    ['upload', '--name', basename(file)],
+    ['upload', '--name', name],
     { input: data.toString('base64'), maxBuffer: MAX_BUFFER });
   const parsed = parseSkillJson(result.stdout);
   if (result.code !== 0 || !parsed || !parsed.ok) {
@@ -125,8 +133,54 @@ export function reportUploadFailure(outcome) {
   else reportSkillFailure(outcome.result, outcome.parsed);
 }
 
+// Il tetto della skill (artifact.py MAX_BYTES): più di così non è un documento, e non si legge tutto stdin per saperlo.
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+function readStdinDocument() {
+  const chunks = [];
+  let total = 0;
+  const chunk = Buffer.alloc(64 * 1024);
+  for (;;) {
+    let read;
+    try {
+      read = readSync(0, chunk, 0, chunk.length, null);
+    } catch (error) {
+      if (error.code === 'EAGAIN') continue;
+      if (error.code === 'EOF') break;
+      throw error;
+    }
+    if (read === 0) break;
+    total += read;
+    if (total > MAX_DOCUMENT_BYTES) return null;
+    chunks.push(Buffer.from(chunk.subarray(0, read)));
+  }
+  return Buffer.concat(chunks);
+}
+
 function uploadAction(file, options) {
-  const outcome = uploadFileToTeam(file);
+  let outcome;
+  if (options.stdin) {
+    // Il wrapper dell'host consegna qui un file della persona: il nome lo dice lui, i byte arrivano su stdin.
+    if (file || !options.name) {
+      console.error(c.red(': usage: jht artifact upload --stdin --name <file name>   (the host wrapper uses it)'));
+      process.exitCode = EXIT_USAGE;
+      return;
+    }
+    const data = readStdinDocument();
+    if (data === null) {
+      console.error(c.red(': the document is larger than 10 MB'));
+      process.exitCode = EXIT_USAGE;
+      return;
+    }
+    outcome = uploadBytesToTeam(basename(String(options.name)), data);
+  } else {
+    if (!file) {
+      console.error(c.red(': usage: jht artifact upload <file>'));
+      process.exitCode = EXIT_USAGE;
+      return;
+    }
+    outcome = uploadFileToTeam(file);
+  }
   if (!outcome.ok) {
     reportUploadFailure(outcome);
     process.exitCode = outcome.code;
@@ -165,9 +219,11 @@ export function registerArtifactCommand(program) {
     .action(fetchAction);
 
   cmd
-    .command('upload <file>')
+    .command('upload [file]')
     .description('Hand a document (CV, cover letter) to the team drop-zone')
     .option('--json', 'print the skill answer as-is')
+    .option('--stdin', 'read the document from standard input (the host wrapper uses it for a file on the host)')
+    .option('--name <name>', 'with --stdin: the file name the document goes by')
     .action(uploadAction);
 
   cmd

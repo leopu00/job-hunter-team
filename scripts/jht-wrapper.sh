@@ -2759,6 +2759,50 @@ profile_import_command() {
   docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" profile import --stdin ${extra[@]+"${extra[@]}"} < "$file"
 }
 
+# jht artifact upload FILE: il file e' della persona, sull'host; dentro il container (dove gira il CLI) quel percorso non esiste
+# e il comando moriva con ENOENT (Gate CLI Linux 19i, A5). Il wrapper lo legge con i permessi dell'utente (regolare, non un
+# link, al massimo 10 MiB come la skill) e lo passa su stdin: la cartella allegati/ resta del container, nessun sudo.
+artifact_upload_max_bytes=10485760
+
+artifact_upload_has_file() {
+  local arg has=1
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) return 1 ;;
+      -*) ;;
+      *) has=0 ;;
+    esac
+  done
+  return "$has"
+}
+
+artifact_upload_command() {
+  local file="" flag size name
+  local -a extra=()
+  for flag in "$@"; do
+    case "$flag" in
+      --json) extra+=("$flag") ;;
+      -*) err "opzione non riconosciuta: $flag"; return 2 ;;
+      *)
+        if [ -n "$file" ]; then err "uso: jht artifact upload FILE [--json]"; return 2; fi
+        file="$flag" ;;
+    esac
+  done
+  if [ -z "$file" ]; then err "uso: jht artifact upload FILE [--json]"; return 2; fi
+  if [ -L "$file" ] || [ ! -f "$file" ]; then
+    err "il documento deve essere un file regolare, non un link: $file"; return 1
+  fi
+  if [ ! -r "$file" ]; then
+    err "non riesco a leggere il documento: $file"; return 1
+  fi
+  size="$(wc -c < "$file" | tr -d ' ')"
+  if [ -z "$size" ] || [ "$size" -gt "$artifact_upload_max_bytes" ]; then
+    err "il documento supera i 10 MB"; return 1
+  fi
+  name="${file##*/}"
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" artifact upload --stdin --name "$name" ${extra[@]+"${extra[@]}"} < "$file"
+}
+
 # jht profile validate FILE: stesso passaggio del file di import; non scrive niente.
 # Senza FILE il CLI controlla il profilo del team (dentro il container): si inoltra
 # com'e'. Chiamato solo quando c'e' un FILE (vedi profile_validate_has_file).
@@ -5272,6 +5316,17 @@ case "$SUB" in
     require_docker
     ensure_up
     handle_host_download "$ATTESTED_CONTAINER_ID" "${@:2}"
+    ;;
+
+  # `jht artifact upload FILE`: il file dell'host lo legge il wrapper (vedi artifact_upload_command); gli altri verbi vanno al CLI.
+  artifact)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = upload ] && artifact_upload_has_file "${@:3}"; then
+      artifact_upload_command "${@:3}"; exit $?
+    fi
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
   profile)
