@@ -660,6 +660,10 @@ fn redact_support_draft(markdown: String) -> String {
 /// The reports this app saved: regular files (a link is not one) with the names it gives them, the
 /// oldest first. The name carries the UTC time and a counter, so the name order is the time order.
 fn support_reports(directory: &Path) -> Vec<(SystemTime, PathBuf)> {
+    // the folder itself must be a real folder: a link in its place is not followed
+    if !fs::symlink_metadata(directory).is_ok_and(|metadata| metadata.file_type().is_dir()) {
+        return Vec::new();
+    }
     let mut found = fs::read_dir(directory)
         .into_iter()
         .flatten()
@@ -681,11 +685,13 @@ fn newest_support_report(directory: &Path) -> Option<PathBuf> {
     support_reports(directory).pop().map(|(_, path)| path)
 }
 
-/// Deletes the oldest reports past the ones kept. Best effort: a report that cannot be deleted never fails
-/// the save of the new one.
-fn prune_support_reports(directory: &Path) {
+/// Deletes the oldest reports past the ones kept, never the one just saved (`keep`): the order is the files'
+/// modification time, and a clock that was ahead once must not make the new report the oldest. Best effort:
+/// a report that cannot be deleted never fails the save of the new one.
+fn prune_support_reports(directory: &Path, keep: &str) {
     let found = support_reports(directory);
-    for (_, path) in found.iter().take(found.len().saturating_sub(SUPPORT_REPORTS_KEPT)) {
+    let excess = found.len().saturating_sub(SUPPORT_REPORTS_KEPT);
+    for (_, path) in found.iter().filter(|(_, path)| path.file_name().and_then(|name| name.to_str()) != Some(keep)).take(excess) {
         let _ = fs::remove_file(path);
     }
 }
@@ -720,7 +726,7 @@ fn save_onboarding_support_draft(directory: &Path, markdown: &str) -> Result<Str
         file.write_all(markdown.as_bytes()).map_err(|_| "support_report_write_failed")?;
         file.sync_all().map_err(|_| "support_report_write_failed")?;
         set_private_permissions(&path).map_err(|_| "support_report_write_failed")?;
-        prune_support_reports(directory);
+        prune_support_reports(directory, &file_name);
         return Ok(file_name);
     }
     Err("support_report_write_failed")
@@ -1189,6 +1195,37 @@ mod tests {
         assert!(reports.join(&last).is_file(), "the report just saved is never the one deleted");
         assert!(reports.join("notes.md").is_file() && reports.join("support-report-x.txt").is_file(), "only the app's own reports are deleted");
         assert_eq!(super::newest_support_report(&reports), Some(reports.join(&last)));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_report_just_saved_survives_the_cap_even_when_older_files_are_dated_in_the_future() {
+        let root = dir("support-future");
+        let reports = root.join("support-reports");
+        fs::create_dir_all(&reports).unwrap();
+        let ahead = SystemTime::now() + Duration::from_secs(3 * 86_400);
+        for number in 1..=55 {
+            let path = reports.join(format!("desktop-setup-{number}.md"));
+            fs::write(&path, "old").unwrap();
+            fs::OpenOptions::new().write(true).open(&path).unwrap().set_modified(ahead).unwrap();
+        }
+        let name = save_onboarding_support_draft(&reports, "# report\n").unwrap();
+        assert!(reports.join(&name).is_file(), "the new report is never the one deleted");
+        assert_eq!(super::support_reports(&reports).len(), super::SUPPORT_REPORTS_KEPT);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_place_of_the_reports_folder_is_not_followed() {
+        let root = dir("support-folder-link");
+        let elsewhere = root.join("elsewhere");
+        fs::create_dir_all(&elsewhere).unwrap();
+        fs::write(elsewhere.join("support-report-20261029T180309Z-000001.md"), "x").unwrap();
+        let link = root.join("support-reports");
+        std::os::unix::fs::symlink(&elsewhere, &link).unwrap();
+        assert_eq!(super::newest_support_report(&link), None);
+        assert_eq!(save_onboarding_support_draft(&link, "# report\n"), Err("support_report_dir_unavailable"));
         let _ = fs::remove_dir_all(&root);
     }
 

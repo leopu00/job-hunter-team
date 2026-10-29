@@ -27,6 +27,12 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // runtime_log.rs: why a copy of a support report was not kept or its folder not shown. The report's box
+  // answers in its own seven-language lines (copyFailed, showFailed); the code is never put in front of the person.
+  ...Object.fromEntries(
+    ["support_report_invalid", "support_report_dir_unavailable", "support_report_write_failed", "support_report_none", "support_report_open_failed"]
+      .map((code) => [code, "the support report's box says it in its own lines (copy not kept, folder not shown); the code is never shown"]),
+  ),
   // local_swipe.rs: the names of the fields of a deck and of the verdict's answer, and the start of the owner
   // codes the write turns into «read only». They are keys of a JSON the page reads, never a sentence.
   ...Object.fromEntries(
