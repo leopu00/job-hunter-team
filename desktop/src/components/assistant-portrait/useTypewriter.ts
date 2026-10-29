@@ -1,0 +1,45 @@
+import { useEffect, useState } from "react";
+
+/** Characters a second: a line is read as it comes, about the pace of the game's dialogue box. */
+export const TYPEWRITER_CHARS_PER_SECOND = 55;
+const FRAME_MS = 1000 / 30;
+
+function reducedMotion(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * The text as a typewriter writes it: the part of `text` shown so far, and `done`. A new `text`
+ * starts again from nothing; `skip()` shows the rest at once. With `enabled` false, or for a person
+ * who asked the system for less motion, the whole text is there from the first frame. Characters
+ * are counted as people see them (a letter with an accent, an emoji, is one), never cut in two.
+ */
+export function useTypewriter(
+  text: string,
+  { enabled = true, charsPerSecond = TYPEWRITER_CHARS_PER_SECOND }: { enabled?: boolean; charsPerSecond?: number } = {},
+): { shown: string; done: boolean; skip: () => void } {
+  const letters = Array.from(text);
+  const total = letters.length;
+  const instant = !enabled || charsPerSecond <= 0 || reducedMotion();
+  // what was shown, and of which text: a new text is read as nothing shown yet, in its very first frame
+  const [progress, setProgress] = useState({ text, count: 0 });
+  const count = instant ? total : progress.text === text ? Math.min(progress.count, total) : 0;
+
+  useEffect(() => {
+    if (instant || total === 0) return;
+    const start = Date.now();
+    const tick = window.setInterval(() => {
+      const next = Math.min(total, Math.floor(((Date.now() - start) / 1000) * charsPerSecond));
+      setProgress({ text, count: next });
+      if (next >= total) window.clearInterval(tick);
+    }, FRAME_MS);
+    return () => window.clearInterval(tick);
+  }, [text, total, instant, charsPerSecond]);
+
+  return {
+    shown: letters.slice(0, count).join(""),
+    done: count >= total,
+    skip: () => setProgress({ text, count: total }),
+  };
+}
