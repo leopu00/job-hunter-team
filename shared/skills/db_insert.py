@@ -30,6 +30,7 @@ from external_content import (
 )
 import maintenance_log
 import profile_exclusions
+import first_run
 
 # I flag di `db_insert.py position` che NON vengono dalla pagina: li sceglie
 # un agente nostro (o argparse, con `choices`/`type=int`). Gli altri sono
@@ -320,6 +321,20 @@ def insert_position(args):
     conn.isolation_level = None
     conn.execute("BEGIN IMMEDIATE")
     try:
+        # Il tetto del primo passaggio (first_run.sourcing_cap): durante il burst del primo avvio uno Scout non
+        # inserisce oltre `scout_cap_first_pass`. Il conto si legge QUI, dentro la transazione, cosi' due Scout
+        # non si prendono insieme l'ultimo posto; lo scrive il codice, non dipende da un messaggio del Capitano.
+        actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
+        if first_run.is_scout(actor):
+            cap = first_run.sourcing_cap(conn)
+            if cap and cap["reached"]:
+                _rollback_quietly(conn)
+                conn.close()
+                print(f"FIRST_PASS_CAP_REACHED: {cap['found']}/{cap['cap']} positions found in the first pass. "
+                      "INSERT refused. STOP sourcing: do not look for more positions and do not insert this one. "
+                      "Tell the Capitano in one line that your share is done, then throttle at the maximum "
+                      "(jht-throttle) and wait: the Analista and the Scorer have the positions to work on.")
+                sys.exit(3)
         # Check duplicati PRIMA dell'inserimento (bug #25 SC-05: 4 livelli)
         existing, match_type = check_duplicate(
             conn, args.url, args.company, args.title, getattr(args, 'location', None),
@@ -355,7 +370,6 @@ def insert_position(args):
         # da "scored" come stato visibile più antico — pessimo per metriche
         # di throughput a livello pipeline.
         position_id = cur.lastrowid
-        actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
         conn.execute(
             "INSERT INTO position_state_transitions "
             "(position_id, from_state, to_state, by_agent, notes) "
