@@ -43,6 +43,22 @@ pub(crate) fn command(
     command_inner(args, timeout, stdin, capture_stdout, None)
 }
 
+/// The program that is the engine's CLI, and the PATH it runs with. An app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin`
+/// for a PATH, without Homebrew's: the bare name `podman` is then not found, and the stop of the machine at exit was
+/// silently never run (the machine stayed on). On a Mac the trusted install's `podman` is used by its path, and it runs with a
+/// fixed PATH, its own folder first (Podman finds its helpers, vfkit and gvproxy, through it). Elsewhere, the name.
+fn engine_program() -> (OsString, Option<OsString>) {
+    #[cfg(target_os = "macos")]
+    if let Some(podman) = crate::direct_chat::trusted_podman() {
+        let path = podman.parent().and_then(|dir| {
+            // a fixed PATH: the trusted folder, then the system's; the one the app was opened with is not inherited
+            std::env::join_paths(std::iter::once(dir).chain(["/usr/bin", "/bin", "/usr/sbin", "/sbin"].map(std::path::Path::new))).ok()
+        });
+        return (podman.into_os_string(), path);
+    }
+    (OsString::from("podman"), None)
+}
+
 type StderrLineCallback = Box<dyn Fn(&str) + Send + 'static>;
 
 fn command_inner(
@@ -52,7 +68,11 @@ fn command_inner(
     capture_stdout: bool,
     on_stderr_line: Option<StderrLineCallback>,
 ) -> Result<CommandOutcome, CommandFailure> {
-    let mut command = Command::new("podman");
+    let (program, search_path) = engine_program();
+    let mut command = Command::new(program);
+    if let Some(path) = search_path {
+        command.env("PATH", path);
+    }
     command.args(args).stderr(if on_stderr_line.is_some() {
         Stdio::piped()
     } else {
@@ -258,13 +278,111 @@ pub(crate) fn jht_machine_memory_is_low(home: &std::path::Path) -> bool {
         .any(|config| machine_config_memory_is_low(&config))
 }
 
-/// Stops the JHT Podman machine, the virtual machine that holds the runtime's memory (`podman machine stop`). Best
-/// effort: a machine that is not there, already stopped or slow to stop is not an error the person can act on, and the
-/// container was brought down before. Never touches another machine.
-pub(crate) fn stop_jht_machine(timeout: Duration) {
-    // the machine is named in the call itself (`machine stop <name>` takes it as its argument, not as a connection)
-    let stop = args(&["machine", "stop", &jht_machine()]);
-    let _ = command(&stop, timeout, None, false);
+/// What the stop of the JHT machine came to.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum MachineStop {
+    /// `podman machine stop` ran and the machine is off (or was already).
+    Stopped,
+    /// Containers that are not Job Hunter Team's run on it: it stays on for them.
+    KeptForOthers(usize),
+    /// The stop did not run or did not finish: the machine may still be on.
+    NotStopped,
+}
+
+/// The team's containers, by the names the compose file fixes (`container_name`): the container, the broker and the Telegram
+/// bridge. A container of the person's own that happens to be called `jht-something` is not one of them.
+const JHT_CONTAINERS: [&str; 3] = ["jht", "jht-broker", "jht-telegram"];
+
+fn is_jht_container(name: &str) -> bool {
+    JHT_CONTAINERS.contains(&name)
+}
+
+/// How many containers a `podman ps --format {{.Names}}` answer names that are not the team's.
+pub(crate) fn count_other_containers(stdout: &[u8]) -> usize {
+    String::from_utf8_lossy(stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|name| !name.is_empty() && !is_jht_container(name))
+        .count()
+}
+
+/// The look at the containers is short: a machine that is on answers at once.
+const LISTING_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The containers running on the JHT machine that are not the team's (the team's own are stopped before this is asked).
+/// None when the machine cannot be asked: not running, not installed, no answer in time.
+pub(crate) fn other_containers_on_jht_machine(timeout: Duration) -> Option<usize> {
+    let ps = jht_engine_args(&jht_machine(), &["ps", "--format", "{{.Names}}"]);
+    match command(&ps, timeout, None, true) {
+        Ok(output) if output.success => Some(count_other_containers(&output.stdout)),
+        _ => None,
+    }
+}
+
+/// Whether the JHT machine is on.
+#[derive(Debug, PartialEq, Eq)]
+enum MachineState {
+    Running,
+    /// Stopped, or not there at all.
+    Off,
+    /// The question did not get an answer.
+    Unknown,
+}
+
+/// What `podman machine inspect <name> --format {{.State}}` came to. A machine that is not there makes the call fail
+/// (nothing to stop), and so does a Podman that is not installed.
+fn machine_state_from(outcome: Result<CommandOutcome, CommandFailure>) -> MachineState {
+    match outcome {
+        Ok(output) if output.success => {
+            let state = String::from_utf8_lossy(&output.stdout).trim().to_ascii_lowercase();
+            if matches!(state.as_str(), "stopped" | "configured") { MachineState::Off } else { MachineState::Running }
+        }
+        Ok(_) | Err(CommandFailure::NotFound) => MachineState::Off,
+        Err(CommandFailure::TimedOut) | Err(CommandFailure::Failed) => MachineState::Unknown,
+    }
+}
+
+fn machine_state(timeout: Duration) -> MachineState {
+    let inspect = args(&["machine", "inspect", &jht_machine(), "--format", "{{.State}}"]);
+    machine_state_from(command(&inspect, timeout, None, true))
+}
+
+/// What to do with the machine, from what is known of it: the end, or to stop it. It falls on the safe side: a machine
+/// that may be on with containers nobody could list is not stopped.
+#[derive(Debug, PartialEq, Eq)]
+enum MachinePlan {
+    Done(MachineStop),
+    Stop,
+}
+
+fn machine_plan(state: MachineState, others: Option<usize>) -> MachinePlan {
+    match (state, others) {
+        (MachineState::Off, _) => MachinePlan::Done(MachineStop::Stopped),
+        (MachineState::Unknown, _) => MachinePlan::Done(MachineStop::NotStopped),
+        (MachineState::Running, Some(0)) => MachinePlan::Stop,
+        (MachineState::Running, Some(others)) => MachinePlan::Done(MachineStop::KeptForOthers(others)),
+        (MachineState::Running, None) => MachinePlan::Done(MachineStop::NotStopped),
+    }
+}
+
+/// Stops the JHT Podman machine, the virtual machine that holds the runtime's memory (`podman machine stop`), unless
+/// containers that are not the team's run on it: then it stays on for them, and the caller says so. A machine that is
+/// not there or already stopped is stopped. A machine that is on and cannot be asked what runs on it is not stopped.
+/// Never touches another machine.
+pub(crate) fn stop_jht_machine(timeout: Duration) -> MachineStop {
+    let state = machine_state(LISTING_TIMEOUT);
+    let others = (state == MachineState::Running).then(|| other_containers_on_jht_machine(LISTING_TIMEOUT)).flatten();
+    match machine_plan(state, others) {
+        MachinePlan::Done(done) => done,
+        MachinePlan::Stop => {
+            // the machine is named in the call itself (`machine stop <name>` takes it as its argument, not as a connection)
+            let stop = args(&["machine", "stop", &jht_machine()]);
+            match command(&stop, timeout, None, false) {
+                Ok(output) if output.success => MachineStop::Stopped,
+                _ => MachineStop::NotStopped,
+            }
+        }
+    }
 }
 
 fn valid_machine_name(name: &str) -> bool {
@@ -397,8 +515,9 @@ pub(crate) async fn check_podman(
 #[cfg(test)]
 mod tests {
     use super::{
-        args, jht_engine_args, jht_machine, normalized_version, read_bounded_output,
-        read_stderr_lines, valid_machine_name, MAX_CAPTURE_BYTES, MAX_STDERR_LINE_BYTES,
+        args, count_other_containers, jht_engine_args, jht_machine, machine_plan, machine_state_from, normalized_version,
+        read_bounded_output, read_stderr_lines, valid_machine_name, CommandFailure, CommandOutcome, MachinePlan, MachineState,
+        MachineStop, MAX_CAPTURE_BYTES, MAX_STDERR_LINE_BYTES,
     };
     use std::sync::{Arc, Mutex};
 
@@ -435,14 +554,82 @@ mod tests {
             assert!(
                 call.starts_with("command(&args(&[\"--version\"])")
                     || call.starts_with("command(&info")
-                    || call.starts_with("command(&stop"),
+                    || call.starts_with("command(&stop")
+                    || call.starts_with("command(&ps")
+                    || call.starts_with("command(&inspect"),
                 "engine call without the JHT connection: {call}"
             );
         }
         assert!(!production.contains("args(&[\"info\""));
-        // the one call that goes with `stop` names the JHT machine itself, and no other `machine` command exists
-        assert_eq!(production.matches("args(&[\"machine\"").count(), 1);
+        // the only `machine` commands are a stop and an inspect, each naming the JHT machine itself
+        assert_eq!(production.matches("args(&[\"machine\"").count(), 2);
         assert!(production.contains("args(&[\"machine\", \"stop\", &jht_machine()])"));
+        assert!(production.contains("args(&[\"machine\", \"inspect\", &jht_machine(), \"--format\", \"{{.State}}\"])"));
+    }
+
+    #[test]
+    fn only_the_team_s_own_containers_are_not_others() {
+        assert_eq!(count_other_containers(b"jht\njht-broker\njht-telegram\n"), 0);
+        assert_eq!(count_other_containers(b""), 0);
+        assert_eq!(count_other_containers(b"\n  \n"), 0);
+        assert_eq!(count_other_containers(b"jht\npostgres\njht-broker\nredis-cache\n"), 2);
+        // the compose file fixes three names: a name that only starts like them is the person's own
+        assert_eq!(count_other_containers(b"jhtx\njhtml\njht-dev\njht-broker-2\njht-telegram-test\n"), 5);
+        assert_eq!(count_other_containers(b"  postgres  \r\n"), 1);
+    }
+
+    fn outcome(success: bool, stdout: &str) -> Result<CommandOutcome, CommandFailure> {
+        Ok(CommandOutcome { success, stdout: stdout.as_bytes().to_vec() })
+    }
+
+    #[test]
+    fn the_state_of_the_machine_is_read_and_a_missing_one_is_off() {
+        assert_eq!(machine_state_from(outcome(true, "running\n")), MachineState::Running);
+        assert_eq!(machine_state_from(outcome(true, "Running")), MachineState::Running);
+        assert_eq!(machine_state_from(outcome(true, "starting\n")), MachineState::Running, "anything that is not off may have containers");
+        assert_eq!(machine_state_from(outcome(true, "")), MachineState::Running);
+        assert_eq!(machine_state_from(outcome(true, "stopped\n")), MachineState::Off);
+        assert_eq!(machine_state_from(outcome(true, "configured\n")), MachineState::Off);
+        // not there: the call fails, and so does a Podman that is not installed
+        assert_eq!(machine_state_from(outcome(false, "")), MachineState::Off);
+        assert_eq!(machine_state_from(Err(CommandFailure::NotFound)), MachineState::Off);
+        // no answer: not known
+        assert_eq!(machine_state_from(Err(CommandFailure::TimedOut)), MachineState::Unknown);
+        assert_eq!(machine_state_from(Err(CommandFailure::Failed)), MachineState::Unknown);
+    }
+
+    #[test]
+    fn the_machine_is_stopped_only_when_it_is_known_that_nobody_else_is_on_it() {
+        use MachinePlan::{Done, Stop};
+        // off or not there: nothing to do, and that is stopped
+        assert_eq!(machine_plan(MachineState::Off, None), Done(MachineStop::Stopped));
+        assert_eq!(machine_plan(MachineState::Off, Some(3)), Done(MachineStop::Stopped));
+        // on, and listed: alone it is stopped, with others it is kept
+        assert_eq!(machine_plan(MachineState::Running, Some(0)), Stop);
+        assert_eq!(machine_plan(MachineState::Running, Some(2)), Done(MachineStop::KeptForOthers(2)));
+        // on and the listing did not answer: the safe side, it is not stopped under whoever may be on it
+        assert_eq!(machine_plan(MachineState::Running, None), Done(MachineStop::NotStopped));
+        // not known whether it is on: not stopped either
+        assert_eq!(machine_plan(MachineState::Unknown, None), Done(MachineStop::NotStopped));
+        assert_eq!(machine_plan(MachineState::Unknown, Some(0)), Done(MachineStop::NotStopped));
+    }
+
+    #[test]
+    fn the_listing_of_the_machine_names_the_jht_connection() {
+        let source = include_str!("podman.rs");
+        let production = &source[..source.find("#[cfg(test)]").unwrap()];
+        assert!(production.contains("jht_engine_args(&jht_machine(), &[\"ps\", \"--format\", \"{{.Names}}\"])"));
+    }
+
+    #[test]
+    fn the_engine_is_run_by_the_path_of_the_install_when_the_path_of_the_app_has_no_homebrew() {
+        // the cause of the machine that stayed on after «Exit»: the bare name is not found from an app opened from Finder
+        let source = include_str!("podman.rs");
+        let production = &source[..source.find("#[cfg(test)]").unwrap()];
+        assert!(production.contains("Command::new(program)") && !production.contains("Command::new(\"podman\")"));
+        assert!(production.contains("crate::direct_chat::trusted_podman()"));
+        // the child runs with a fixed PATH, not the one the app was opened with
+        assert!(production.contains("[\"/usr/bin\", \"/bin\", \"/usr/sbin\", \"/sbin\"]") && !production.contains("env::var_os(\"PATH\")"));
     }
 
     #[test]

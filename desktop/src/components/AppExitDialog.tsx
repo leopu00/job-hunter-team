@@ -7,7 +7,7 @@ import {
   exitFinish,
   exitOrder,
   exitPoll,
-  exitTeam,
+  exitState,
   onExitRequested,
   rememberExit,
   rememberedExit,
@@ -31,6 +31,8 @@ type Phase =
 export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { pollMs?: number; slowMs?: number }) {
   const [phase, setPhase] = useState<Phase>({ kind: "closed" });
   const [remembered, setRemembered] = useState<ExitMode | null>(null);
+  // containers that are not the team's on its machine: stopping leaves the machine on for them, and the dialog says it
+  const [others, setOthers] = useState(0);
   // a new request, or a cancel, ends the wait that was running
   const runRef = useRef(0);
   const firstRef = useRef<HTMLButtonElement>(null);
@@ -84,10 +86,11 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
     await exitAcknowledge().catch(() => {});
     if (busyRef.current) return;
     const id = ++runRef.current;
-    const team = await exitTeam();
+    const state = await exitState();
     if (runRef.current !== id) return;
     // nothing of the team here to decide about (none, on a VPS, or not told): the window closes
-    if (team !== "local") return void (await leave("detach", id, true));
+    if (state?.team !== "local") return void (await leave("detach", id, true));
+    setOthers(state.otherContainers);
     const choice = rememberedExit();
     setRemembered(choice);
     // the close button applies what the person asked to remember; the navbar button always asks
@@ -156,6 +159,9 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
           <>
             {phase.kind === "failed" && (
               <p role="alert" data-testid="app-exit-failed" className="text-[11px] text-[var(--color-red)]">{t.failed}</p>
+            )}
+            {others > 0 && (
+              <p data-testid="app-exit-others" className="text-[11px] text-[var(--color-muted)]">{fill(t.othersKept, { count: others })}</p>
             )}
             <div className="flex flex-col gap-2">
               {choices.map((choice, index) => (
