@@ -18,6 +18,7 @@ import {
 import { AWAY_GREETING_TEXT } from "../lib/away-greeting.i18n";
 import { existingTeamConnectionKey, useExistingTeamView } from "../lib/existing-team-readonly";
 import { readDesktopVpsStats } from "../lib/existing-team-positions";
+import { useLocalTeamData } from "../lib/local-team-data";
 import { withReadDeadline } from "../lib/read-deadline";
 import Link from "../web-shims/next-link";
 import { useCloudDataBlocked } from "./CloudDataNotice";
@@ -55,11 +56,13 @@ export function AwayGreeting({
   const locale = localeOverride ?? appLocale();
   const text = AWAY_GREETING_TEXT[locale];
   const viaTeam = useExistingTeamView() !== null;
-  // A profile with no cloud session reads its own team (when that read can answer; if not, there is no greeting).
+  // This computer's team, read as the pages read it (a profile with no cloud account), or a profile with no cloud session at all:
+  // the team's own database answers, and when that read cannot answer there is no greeting.
+  const local = useLocalTeamData();
   const blocked = useCloudDataBlocked();
-  const source = viaTeam ? `team:${existingTeamConnectionKey() ?? ""}` : blocked ? "team:local" : "cloud";
+  const source = viaTeam ? `team:${existingTeamConnectionKey() ?? ""}` : local || blocked ? "team:local" : "cloud";
   const key = `${identityKey}|${source}`;
-  const reader = readStats ?? (viaTeam || blocked ? readTeamStats : readCloudStats);
+  const reader = readStats ?? (viaTeam || local || blocked ? readTeamStats : readCloudStats);
   const readerRef = useRef(reader);
   readerRef.current = reader;
   const nowRef = useRef(now);
