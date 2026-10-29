@@ -45,6 +45,10 @@ def stubs(tmp_path: Path, *, owner_of_1001: str | None, self_uid: str, dir_uid: 
     if docker is not None:
         (tmp_path / "docker.out").write_text(docker + "\n" if docker else "")
         scripts["docker"] = f'#!/bin/sh\necho "$@" >> {tmp_path / "docker.log"}\ncat {tmp_path / "docker.out"}\nexit 0\n'
+    else:
+        # No docker here: a docker of the machine running the test (a CI runner has one) must not answer instead,
+        # it would pull the image and the test would wait for it.
+        scripts["docker"] = "#!/bin/sh\nexit 127\n"
     for name, body in scripts.items():
         (bin_dir / name).write_text(body)
         (bin_dir / name).chmod(0o755)
