@@ -61,6 +61,22 @@ describe("AppExitDialog", () => {
     expect(calls().some((call) => call.startsWith("app_exit_finish"))).toBe(false);
   });
 
+  it.each([
+    ["ordered", "app_exit_order"],
+    ["forced", 'app_exit_finish:{"mode":"forced"}'],
+    ["detach", 'app_exit_finish:{"mode":"detach"}'],
+  ])("sends nothing but the acknowledgement and the state while the question shows; «%s» is sent only after the click", async (mode, expected) => {
+    team();
+    render(<AppExitDialog />);
+    await closeButton();
+    await screen.findByRole("dialog");
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 60)); });
+    // the exit's other native commands (order, poll, finish) wait for the person's choice
+    expect(calls()).toEqual(["app_exit_ack", "app_exit_state"]);
+    await userEvent.click(await screen.findByTestId(`app-exit-${mode}`));
+    await waitFor(() => expect(calls()).toContain(expected));
+  });
+
   it("offers the three ways for a team on this computer", async () => {
     team();
     render(<AppExitDialog />);

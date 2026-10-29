@@ -3132,7 +3132,26 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         ("onboarding_ssh_host_key_probe", "a read of the host's key"),
         ("onboarding_ssh_host_key_confirm", "pins the key on this computer"),
         ("team_settings", "has its own read-only mode (destination_mode)"),
+        ("app_exit_state", "a read of where the team is, for the exit dialog; acts on nothing, and the window's own check comes first"),
+        ("app_exit_order", "the exit dialog asks the person first (the dialog is the question; test lib/app-exit-callers) and it acts only on this computer's team: any other destination answers app_exit_vps_untouched"),
+        ("app_exit_poll", "only after the order the person chose in the exit dialog (test lib/app-exit-callers), a read of the flag, and only on this computer's team"),
+        ("app_exit_finish", "the exit dialog asks the person first (the dialog is the question; test lib/app-exit-callers) and the plan refuses a VPS (app_exit_vps_untouched); detach runs nothing"),
     ];
+    // what those four reasons rest on, read from the exit's own code: the window is judged first, and nothing is run on a
+    // destination that is not this computer's
+    let exit = include_str!("app_exit.rs").split("#[cfg(test)]").next().unwrap().replace("\r\n", "\n");
+    let on_scope = exit.split("async fn on_scope").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
+    assert!(on_scope.find("window_refusal(window.label())").unwrap() < on_scope.find("spawn_blocking").unwrap(), "the exit judges the window first");
+    let exec_local = exit.split("fn exec_local(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
+    assert!(exec_local.contains("_ => Err(\"app_exit_vps_untouched\")"), "a destination that is not this computer's runs nothing");
+    for name in ["app_exit_order", "app_exit_poll"] {
+        let text = body(&exit, name);
+        assert!(text.find("!= TeamHost::Local").unwrap() < text.find("exec_local(").unwrap(), "{name}: not this computer's team, nothing is run");
+        assert!(text.contains("app_exit_vps_untouched"), "{name}");
+    }
+    let plan = exit.split("fn plan(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
+    assert!(plan.contains("(_, TeamHost::Vps) => Err(\"app_exit_vps_untouched\")"), "no step is planned for a VPS");
+    assert!(body(&exit, "app_exit_finish").contains("plan(mode, host)"), "leaving goes through the plan");
     let commands = every_command();
     assert!(commands.len() > 80, "the scan finds the commands of the app: {}", commands.len());
     let mut stale: Vec<&str> = not_guarded.iter().map(|(name, _)| *name).filter(|name| !commands.iter().any(|(_, function, _)| function == name)).collect();
