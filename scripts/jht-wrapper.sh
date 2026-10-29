@@ -3016,6 +3016,16 @@ host_data_dirs_supported() {
   fi
 }
 
+# 0 when host-setup.sh can write what it writes: the folder of host.env is missing (it makes it), or this user can write the
+# folder and, if host.env is there, the file. 1 otherwise (the folder belongs to the container's uid).
+host_setup_can_write() {
+  local dir
+  dir="$(dirname "$HOST_ENV_FILE")"
+  [ -e "$dir" ] || return 0
+  [ -d "$dir" ] && [ -w "$dir" ] && [ -x "$dir" ] || return 1
+  [ ! -e "$HOST_ENV_FILE" ] || [ -w "$HOST_ENV_FILE" ]
+}
+
 # `jht team stop`: stopping the team must work whenever `jht down` does. A container of ours whose config-hash is not the
 # expected one (a caller's environment, a reinstall) is attested by every other label and is used here, for the stop only;
 # the same rule `container_down` has. An absent container, or anything else, goes the old way (ensure_up).
@@ -5246,7 +5256,11 @@ case "$SUB" in
     # del wizard sono espliciti, niente domande possibili) o env esplicita.
     if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
        && ! printf '%s\n' "$@" | grep -q -- '--non-interactive'; then
-      if [ -x "$HOST_SETUP_SCRIPT" ]; then
+      if [ -x "$HOST_SETUP_SCRIPT" ] && ! host_setup_can_write; then
+        # On Linux with Docker the installer hands ~/.jht to the container's uid (1001), mode 700: this user cannot write
+        # host.env, and host-setup.sh died on «host.env: Permission denied» (TEST 19i, A3). What it writes is already there.
+        info "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto."
+      elif [ -x "$HOST_SETUP_SCRIPT" ]; then
         bash "$HOST_SETUP_SCRIPT" || warn "host-setup.sh terminato con errore — proseguo"
       else
         info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
