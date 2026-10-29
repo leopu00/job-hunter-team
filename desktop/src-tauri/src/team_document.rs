@@ -759,7 +759,9 @@ mod tests {
     #[test]
     fn the_window_comes_before_any_read_and_no_write_gate_is_asked() {
         let source = include_str!("team_document.rs");
-        let command = &source[source.find("pub(crate) async fn team_document_save").unwrap()..source.find("#[cfg(test)]").unwrap()];
+        // the body of the save command and nothing after it (the scripts that come later are Python and have an `emit` of their own)
+        let at = source.find("pub(crate) async fn team_document_save").unwrap();
+        let command = &source[at..at + source[at..].find("\n}\n").unwrap()];
         let ask = command.find("ask_where(").unwrap();
         let first_read = command.find("script(&state").unwrap();
         assert!(ask < first_read, "the «Save as» window must open before the first read");
