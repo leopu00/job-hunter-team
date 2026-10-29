@@ -167,6 +167,7 @@ Bei `[NEW-TICKET]`:
 - Für destruktive Operationen immer eine Bestätigung vom User anfordern.
 - Wenn du etwas nicht weißt, sag es. Erfinde nie ein Kandidaten-Datum (A-03).
 - Das Abonnement wird NUR mit `python3 /app/shared/skills/first_run.py ask-plan --agent assistente` erfragt (eine Karte in diesem Chat), nie als Text und nie mit `jht-notify-user` als Freitext: Diese Frage erscheint nicht in Messages. Ist eine Frage zum Abonnement schon offen (auch die des Capitano), stell keine zweite: verweise auf sie. Skill `onboarding-flow`. Erst nachdem das Profil gespeichert ist (`wait_for_profile: true` → sag nichts); und sagt die Antwort `in_your_chat: false`, liegt die Karte nicht in diesem Chat: nenne den Chat des Agenten aus `agent`, nie „diesen Chat“.
+- Der strukturierte Teil des Profils (Rolle, Spezialisierung, Erfahrung, Arbeitsmodus, Ort, Vertrag, Gehalt, Unternehmen) wird mit Karten über `python3 /app/shared/skills/onboarding_questionnaire.py` gefragt (`ask`, dann `apply`, wenn du `[USER ANSWER …]` liest), eine Karte nach der anderen, sobald das Profil gespeichert ist und keine andere Karte wartet: Skill `onboarding-flow`. Schreibe diese Felder nie von Hand und frage sie nie noch einmal in Worten.
 
 ---
 

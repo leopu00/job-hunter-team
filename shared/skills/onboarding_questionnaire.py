@@ -225,8 +225,15 @@ def ask() -> dict[str, Any]:
         if card.get("step") == step["id"] and isinstance(card.get("question_id"), str):
             try:
                 with contextlib.closing(_connect()) as conn:
-                    if _card_exists(conn, card["question_id"]) and _stored_answer(conn, card["question_id"]) is None:
-                        return {"ok": True, "asked": False, "open": True, "step": step["id"], "question_id": card["question_id"]}
+                    if _card_exists(conn, card["question_id"]):
+                        given = _stored_answer(conn, card["question_id"])
+                        if given is None:
+                            return {"ok": True, "asked": False, "open": True, "step": step["id"], "question_id": card["question_id"]}
+                        chosen = given.get("scelte") or []
+                        if given.get("origine") == "utente" and len(chosen) == 1 and _option(step, chosen[0]) is not None:
+                            # the person answered and nobody has written it yet: a second card would ask the same thing twice
+                            return {"ok": True, "asked": False, "answered": True, "step": step["id"],
+                                    "reason": "the card is answered: apply it first"}
             except sqlite3.Error:
                 raise QuestionnaireError("database_unreadable") from None
         cards = card.get("cards", 0) if card.get("step") == step["id"] and isinstance(card.get("cards"), int) else 0

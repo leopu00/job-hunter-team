@@ -239,3 +239,16 @@ def test_it_resumes_where_it_stopped(box):
     out = ok(box, "status")
 
     assert out["answers"] == {"role": "software"} and out["next"] == "specialty_sw" and out["answered"] == 1
+
+
+def test_ask_does_not_post_the_same_step_again_while_an_answer_waits_to_be_applied(box):
+    put_profile(box)
+    asked = ok(box, "ask")
+    click(box, asked["question_id"], "software")
+
+    again = ok(box, "ask")
+
+    assert not again["asked"] and again["answered"] and "apply" in again["reason"]
+    assert len(cards(box)) == 1
+    assert ok(box, "apply")["applied"]
+    assert ok(box, "ask")["step"] == "specialty_sw"

@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Társalgási protokoll, amelyet az Assistente követ a felhasználó bevezető folyamatában — első üzenet, iteratív egy-kérdés-per-kör ütemezés, blokkoló ellenőrzőlista (a küszöb, ami feloldja a dashboardot) vs gazdag ellenőrzőlista (amitől a Writer-ek valóban hasznosak lesznek), szektoragnosztikus kérdésstílus (SOHA ne feltételezd, hogy IT), és a kötelező ellenőrzőpont-szekvencia, amikor a felhasználó fájlokat tölt fel. Szorosan összepárosítva a `profile-yaml`-lal (minden válasz = egy Write+validate) és a `profile-summaries`-szal (narratív MD-k kulcsfontosságú mérföldkövek után). Nyisd meg ezt a skillt egy onboarding munkamenet elején és minden olyan felhasználói körnél, ami új információt hoz.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
@@ -120,6 +120,18 @@ A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési
 4. **Nem tudja?** (a „Nem tudom” opció) Ne válassz helyette. Mondd meg, hogy a csomag a szolgáltató előfizetési oldalán látható; a rendszer később újra rákérdez (a kártya egy óra múlva jön vissza, legfeljebb háromszor).
 
 Soha ne írj be olyan csomagot, amelyet a felhasználó nem választott, soha ne következtess rá másból, soha ne kérdezz újra, ha a `get` kiír egyet. Csak a nyilvántartás `get` és `set` parancsát, valamint a `first_run.py` `ask-plan` parancsát használd.
+
+## A kérdőív kártyái — a profil strukturált része, gombokkal kérdezve
+
+A szerepet, a szakirányt, a tapasztalatot, a jelenlegi helyzetet, a munkavégzés módját, a helyet, a költözést, a szerződést, a fizetést és a cég típusát **kártyákkal** kérdezed, egyenként, a `python3 /app/shared/skills/onboarding_questionnaire.py` eszközzel. Ezeket a kérdéseket nem te fogalmazod meg, és ezeket a mezőket nem te írod: az eszköz kiteszi a kártyát (a te chatedben, a személy nyelvén), és a személy SAJÁT kattintását írja be.
+
+**Mikor:** miután a profil el van mentve (a `profile_review.py apply-confirmed` `ok: true`-t válaszolt), soha nem az első üzenetekben, és soha nem, amíg egy másik kártya választ vár (a csomagé sem: két egyszerre nyitott kártya összezavarja a személyt).
+
+1. **Kérdezz.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → egy sor: a következő kártya a chatben van. `open: true` vagy `answered: true` → nincs mit kitenni (egy kártya vár, vagy a válasza még nincs alkalmazva: lépj a 2. pontra). `done: true` → a kérdőív véget ért: folytasd a checklisttel.
+2. **Alkalmazd a választ.** Amikor egy kártyához `[USER ANSWER …]`-t olvasol: `python3 /app/shared/skills/onboarding_questionnaire.py apply`. `applied: true` → erősítsd meg EGY sorban, mi lett beállítva, a személy szavaival, majd újra `ask` a következő kártyához. Az `ask_in_chat` felsorolja a profil azon mezőit, amelyeket a kártya rád hagy (például a helyet): kérdezd meg őket EGY kérdéssel, szavakkal, és írd be a profil skillel. A `write_in_chat` («más» választás): add a személy elé a `prompt`-ját a chatben; amit ír, azt a `python3 /app/shared/skills/onboarding_questionnaire.py answer-text <step> "<a szavai>"` viszi, majd újra `ask`.
+3. **Ha semmi nem lett alkalmazva.** `waiting: true` vagy «not the person's own» → ne írj és ne mondj semmit. `words: true` → szavakkal válaszolt a kártyára: ha a szavak egyértelműen EGY választást neveznek meg, `python3 /app/shared/skills/onboarding_questionnaire.py apply --option <id>`; különben az `ask` újra felteszi a kártyát.
+
+Soha ne írd ezeket a mezőket kézzel, amíg egy kártya nyitva van, soha ne válassz a személy helyett, soha ne ismételj szavakkal olyan kérdést, amelyet a kártya már feltett. Ezeket a mezőket egyedül az eszköz írja: ha `ok: false`-t válaszol, ne beszélj róla, és folytasd a checklisttel.
 
 ## Szektoragnosztikus — SOHA ne alapértelmezd IT-re
 
