@@ -241,3 +241,82 @@ def test_the_script_runs_as_the_container_runs_it(home):
     r = subprocess.run([sys.executable, str(SKILLS_DIR / "burst.py"), "status"], capture_output=True, text=True,
                        env={"JHT_HOME": str(home), "PATH": "/usr/bin:/bin"}, timeout=30)
     assert r.returncode == 0 and json.loads(r.stdout) == {"ok": True, "burst": {"active": False}}
+
+
+# ── the burst adds, to the minute: what the person asked is covered and nothing the team had is taken away ──
+
+WEEK = 7 * 24 * 60
+
+
+def covered(hours):
+    """The minutes of the week (from Monday 00:00) that `hours` lets the team work."""
+    minutes = set()
+    for w in hours["windows"]:
+        s, e = burst._minutes(w["start"]), burst._minutes(w["end"])
+        length = e - s if e > s else e + 24 * 60 - s
+        for day in w["days"]:
+            base = burst.WEEKDAYS.index(day) * 24 * 60 + s
+            minutes.update((base + k) % WEEK for k in range(length))
+    return minutes
+
+
+def wall(day_index, minute_of_day):
+    """A wall-clock moment in Rome: 2026-10-26 is a Monday (CET, UTC+1 from the 25th)."""
+    return datetime(2026, 10, 26, tzinfo=timezone(timedelta(hours=1))) + timedelta(days=day_index, minutes=minute_of_day)
+
+
+def test_a_burst_that_runs_past_midnight_on_a_nearly_day_long_window_is_split_in_two_days_not_cut(home):
+    friday_long = {"timezone": ROME, "windows": [{"days": ["fri"], "start": "08:00", "end": "07:59"}]}
+    put_config(home, friday_long)
+    now = wall(4, 21 * 60)                                       # Friday 21:00 in Rome
+    burst.start("08:10", now=now)                                # Saturday 08:10
+    wide = hours_now(home)
+    assert burst.valid_hours(wide)
+    assert wide["windows"] == [
+        {"days": ["fri"], "start": "08:00", "end": "00:00"},
+        {"days": ["sat"], "start": "00:00", "end": "08:10"},
+    ]
+    until = covered({"windows": [{"days": ["fri"], "start": "21:00", "end": "08:10"}]})
+    assert until <= covered(wide) and covered(friday_long) <= covered(wide)
+    assert burst.sweep(now + timedelta(hours=12)) == "restored" and hours_now(home) == friday_long
+
+
+def during(hours, now, until):
+    """The minutes of `hours` that fall inside the burst, from `now` to `until` (hours already over do not count)."""
+    start = now.weekday() * 24 * 60 + now.hour * 60 + now.minute
+    span = int((until - now).total_seconds() // 60)
+    mine = covered(hours)
+    return {m for m in ((start + k) % WEEK for k in range(span)) if m in mine}
+
+
+def test_a_long_window_of_the_next_day_is_kept_when_the_stretch_reaches_into_it(home):
+    long_days = {"timezone": ROME, "windows": [{"days": ["fri", "sat"], "start": "06:00", "end": "05:59"}]}
+    put_config(home, long_days)
+    now, until = wall(4, 22 * 60), wall(5, 9 * 60)               # Friday 22:00 -> Saturday 09:00
+    burst.start("09:00", now=now)
+    wide = hours_now(home)
+    assert burst.valid_hours(wide)
+    assert during(long_days, now, until) <= during(wide, now, until)
+    assert during({"windows": [{"days": ["fri"], "start": "22:00", "end": "09:00"}]}, now, until) <= during(wide, now, until)
+
+
+def test_whatever_the_hours_and_the_moment_the_stretch_is_covered_and_no_hour_of_it_is_taken_away():
+    import random
+    rng = random.Random(20261029)
+    for _ in range(3000):
+        windows, free = [], list(burst.WEEKDAYS)
+        rng.shuffle(free)
+        while free and len(windows) < rng.randint(1, 4):
+            days = [free.pop() for _ in range(rng.randint(1, min(3, len(free))))]
+            start = rng.randrange(0, 24 * 60, 5)
+            length = rng.choice([4, 6, 8, 10, 14, 18, 22]) * 60 + rng.choice([0, 30, 59])
+            windows.append({"days": days, "start": burst._clock(start), "end": burst._clock(start + length)})
+        previous = {"timezone": ROME, "windows": windows}
+        assert burst.valid_hours(previous), previous
+        now = wall(rng.randrange(7), rng.randrange(24 * 60))
+        until = now + timedelta(minutes=rng.randrange(15, 12 * 60 + 1))
+        wide = burst.widened(previous, now, until, (until - now).total_seconds() / 3600)
+        assert burst.valid_hours(wide), (previous, now, until, wide)
+        # Every minute of the burst is allowed, and every minute the team already had during it still is.
+        everything = {"windows": [{"days": list(burst.WEEKDAYS), "start": "00:00", "end": "00:00"}]}
+        assert during(everything, now, until) <= during(wide, now, until), (previous, now, until, wide)
