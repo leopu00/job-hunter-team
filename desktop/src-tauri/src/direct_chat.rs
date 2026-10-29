@@ -1563,6 +1563,21 @@ fn wrapper_compose_environment(host_env: Option<&str>, inherited: &dyn Fn(&str) 
         .collect()
 }
 
+/// The file the wrapper takes the host type, the language and the time zone from (`jht_load_host_values`): in the runtime
+/// folder, which the container does not mount, so an agent cannot write it. A plain file of the user, not writable by
+/// others, small; anything else is not read (and then `host.env` is, as the wrapper does).
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn read_host_values(path: &Path) -> Option<String> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = fs::symlink_metadata(path).ok()?;
+    // SAFETY: geteuid has no arguments and cannot fail.
+    if !metadata.file_type().is_file() || metadata.len() > 65_536 || metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o022 != 0 {
+        return None;
+    }
+    fs::read_to_string(path).ok()
+}
+
 /// `host.env` where the wrapper reads it: `$JHT_HOST_ENV_FILE`, else `~/.jht/host.env`; a regular file, small.
 #[cfg(target_os = "macos")]
 fn read_host_env() -> Option<String> {
@@ -1652,7 +1667,9 @@ fn find_trusted_tool(name: &str, roots: &[&Path]) -> Option<PathBuf> {
 /// see `attest_reason_may_pass`.
 #[cfg(target_os = "macos")]
 fn mac_config_hash(runtime: &Path, timeout: Duration) -> Result<String, &'static str> {
-    mac_config_hash_in(runtime, timeout, read_host_env().as_deref(), &|key| std::env::var(key).ok())
+    // The same source as the wrapper: the host values file of the runtime folder, and only if there is none, `host.env`.
+    let host_values = read_host_values(&runtime.join("host-values"));
+    mac_config_hash_in(runtime, timeout, host_values.or_else(read_host_env).as_deref(), &|key| std::env::var(key).ok())
 }
 
 /// Whether the reason a check could not be made may pass by itself: the probe or the plan did not run or
@@ -4421,6 +4438,53 @@ mod tests {
         );
         // an empty inherited value is the default, as `${X:-default}` has it
         assert_eq!(host_environment(None, &[("JHT_LANG", "")]), defaults);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_host_values_of_the_runtime_folder_are_read_only_as_the_wrapper_reads_them() {
+        use super::read_host_values;
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let dir = std::env::temp_dir().join(format!("jht-host-values-{}-{}", std::process::id(), line!()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("host-values");
+        let write = |mode: u32, text: &str| {
+            let _ = fs::remove_file(&file);
+            fs::write(&file, text).unwrap();
+            fs::set_permissions(&file, fs::Permissions::from_mode(mode)).unwrap();
+        };
+        // a plain file of the user, private: read
+        write(0o600, "JHT_HOST_TYPE=local\nJHT_LANG=it\n");
+        assert_eq!(read_host_values(&file).as_deref(), Some("JHT_HOST_TYPE=local\nJHT_LANG=it\n"));
+        // writable by the group or by others: not read
+        for mode in [0o660, 0o606, 0o666, 0o620] {
+            write(mode, "JHT_HOST_TYPE=vps\n");
+            assert_eq!(read_host_values(&file), None, "{mode:o}");
+        }
+        // too big
+        write(0o600, &"JHT_LANG=it\n".repeat(6000));
+        assert_eq!(read_host_values(&file), None);
+        // a link, to a good file or not
+        let target = dir.join("target");
+        fs::write(&target, "JHT_HOST_TYPE=vps\n").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let _ = fs::remove_file(&file);
+        symlink(&target, &file).unwrap();
+        assert_eq!(read_host_values(&file), None);
+        // nothing there
+        let _ = fs::remove_file(&file);
+        assert_eq!(read_host_values(&file), None);
+        // and the environment of the compose takes the values of this file, not of host.env, when it is there
+        let agent = "JHT_HOST_TYPE=vps\nJHT_LANG=pt\nJHT_USER_TZ=UTC\n";
+        let mine = "JHT_HOST_TYPE=local\nJHT_LANG=it\nJHT_USER_TZ=Europe/Rome\n";
+        let chosen = Some(mine).or(Some(agent));
+        assert_eq!(host_environment(chosen, &[]), vec![("JHT_HOST_TYPE", "local".to_owned()), ("JHT_LANG", "it".to_owned()), ("JHT_USER_TZ", "Europe/Rome".to_owned())]);
+        // the source in the hash is the wrapper's: the file of the runtime folder first, host.env second
+        let source = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/direct_chat.rs")).unwrap();
+        let hash = source.split("fn mac_config_hash(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(hash.contains("read_host_values(&runtime.join(\"host-values\"))") && hash.contains(".or_else(read_host_env)"));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

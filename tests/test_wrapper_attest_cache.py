@@ -349,16 +349,22 @@ def test_the_cache_file_is_read_and_written_by_the_same_closed_class_in_the_c_lo
     assert "[:print:]" not in parse
 
 
-@pytest.mark.parametrize("variable", ("JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"))
-def test_a_variable_the_compose_substitutes_from_the_host_env_changes_the_key(tmp_path: Path, variable: str):
-    wrapper, env, log, _ = _panel(tmp_path)
+@pytest.mark.parametrize("variable,other", (("JHT_HOST_TYPE", "vps"), ("JHT_LANG", "pt"), ("JHT_USER_TZ", "Europe/Rome")))
+def test_a_variable_the_compose_substitutes_from_the_host_values_changes_the_key(tmp_path: Path, variable: str, other: str):
+    wrapper, env, log, runtime = _panel(tmp_path)
     _read(wrapper, env)
+    values = runtime / "host-values"
+    lines = values.read_text(encoding="utf-8").splitlines()
+    assert any(line.startswith(variable + "=") and line != f"{variable}={other}" for line in lines), lines
     # a second read with the same values is served from the cache
     _fresh(log)
     _read(wrapper, env)
     assert not _complete(_calls(log))
     _fresh(log)
-    env[variable] = "synthetic-other-value"
+    values.write_text(
+        "\n".join(f"{variable}={other}" if line.startswith(variable + "=") else line for line in lines) + "\n", encoding="utf-8"
+    )
+    values.chmod(0o600)
     _read(wrapper, env)
     assert _complete(_calls(log)), variable
 

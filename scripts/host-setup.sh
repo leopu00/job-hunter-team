@@ -336,6 +336,29 @@ mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
   printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
 } > "$HOST_ENV_PATH"
 
+# Gli stessi tre valori, per il wrapper, nella cartella del runtime: NON e' montata nel container (host.env si', e un agente puo'
+# riscriverlo). Sono questi a decidere come il container viene creato e attestato. Temporaneo + rename, 0600; la cartella del
+# runtime e' quella di questo script, o JHT_RUNTIME_DIR, o il percorso che il wrapper usa di default.
+if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
+  HOST_VALUES_DIR="$JHT_RUNTIME_DIR"
+elif [ "$(uname -s)" = "Darwin" ]; then
+  HOST_VALUES_DIR="$HOME/Library/Application Support/Job Hunter Team/host-runtime"
+else
+  HOST_VALUES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
+fi
+if [ -d "$HOST_VALUES_DIR" ] && [ ! -L "$HOST_VALUES_DIR" ] && [ -O "$HOST_VALUES_DIR" ]; then
+  HOST_VALUES_TMP="$HOST_VALUES_DIR/host-values.tmp.$$"
+  (
+    umask 077
+    {
+      printf 'JHT_LANG=%s\n' "$JHT_LANG"
+      printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
+      printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
+    } > "$HOST_VALUES_TMP"
+  ) 2>/dev/null && chmod 600 "$HOST_VALUES_TMP" 2>/dev/null && mv -f -- "$HOST_VALUES_TMP" "$HOST_VALUES_DIR/host-values" 2>/dev/null \
+    || { rm -f -- "$HOST_VALUES_TMP" 2>/dev/null; warn "host-values non scritto in $HOST_VALUES_DIR — il wrapper lo creera' da host.env"; }
+fi
+
 if [ "$HOST_TYPE" = "local" ]; then
   ok "Host: $(ts host_setup.host.local 'local computer') — $(ts host_setup.swap_not_needed 'no swap configuration needed')"
   exit 0
