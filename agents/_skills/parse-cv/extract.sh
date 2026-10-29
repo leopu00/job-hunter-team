@@ -141,4 +141,4 @@ esac
 # stamperebbe un confine diverso da quello che le regole del team descrivono —
 # e chi legge non avrebbe modo di sapere quale delle due è la vera.
 FENCE="$(dirname "$0")/../../../shared/skills/external_content.py"
-printf '%s' "$OUT" | python3 "$FENCE" --label CV_UPLOAD
+printf '%s' "$OUT" | python3 "$FENCE" --label "${EXTRACT_LABEL:-CV_UPLOAD}"

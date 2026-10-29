@@ -42,6 +42,7 @@ mod team_control;
 mod team_backup;
 mod team_export;
 mod team_owner;
+mod attachment_index;
 mod attachment_kind;
 mod chat_attachment;
 mod work_stats;
@@ -124,6 +125,8 @@ pub fn run() {
             export_file::export_csv_save,
             direct_chat::direct_chat_answer,
             direct_chat::direct_chat_attach,
+            direct_chat::direct_chat_attachments,
+            direct_chat::direct_chat_attachment_open,
             direct_chat::direct_chat_attach_state,
             direct_chat::direct_chat_close,
             direct_chat::direct_chat_connect,

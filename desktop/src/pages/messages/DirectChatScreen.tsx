@@ -680,7 +680,15 @@ export default function DirectChatScreen({
         if (receipt) setOutcomes((current) => new Map(current).set(receipt.messageId, outcomeOf(receipt, 0)));
         readSoon.current?.();
       } else if (done.outcome === "saved_not_sent") {
-        setAttachNote({ kind: "warn", text: withName(t.attachSavedNotSent, done.displayName ?? "") });
+        const names = (done.files ?? []).map((file) => file.displayName).filter((name): name is string => Boolean(name));
+        setAttachNote({ kind: "warn", text: withName(t.attachSavedNotSent, names.join(", ")) });
+      } else if (done.outcome === "refused") {
+        // nothing was copied: the reason, and which file of the choice when it is about one (by its place, never its name)
+        const words: Record<string, string> = { ...t.attachOff, ...t.attachErrors };
+        const code = done.code ?? "";
+        const reason = Object.prototype.hasOwnProperty.call(words, code) ? words[code] : t.attachErrors.attach_failed;
+        const which = typeof done.position === "number" ? t.attachFilePosition.replace("{n}", String(done.position + 1)) : "";
+        setAttachNote({ kind: "error", text: `${which}${reason}` });
       }
     } catch (error) {
       const code = errorCode(error);
@@ -1122,6 +1130,11 @@ export default function DirectChatScreen({
           {attachHere && attachState && !attachState.available && attachState.code && attachState.code in t.attachOff && (
             <p data-testid="direct-chat-attach-off" className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-muted)]">
               {t.attachOff[attachState.code as keyof typeof t.attachOff]}
+            </p>
+          )}
+          {attachHere && attachState?.available && (
+            <p data-testid="direct-chat-attach-privacy" className="w-full m-0 mb-1.5 text-[12px] text-[var(--color-muted)]">
+              {t.attachPrivacy}
             </p>
           )}
           {attachNote && (

@@ -122,6 +122,120 @@ pub(crate) fn display_name(original: &str) -> Option<String> {
     (!shown.is_empty()).then_some(shown)
 }
 
+/// The word for a kind in the sentence the person reads, in their language (an unknown language is English). The
+/// table is closed: the page never gives a text that reaches the message.
+fn kind_word(locale: &str, kind: Kind) -> &'static str {
+    match (locale, kind) {
+        (_, Kind::Pdf) => "PDF",
+        ("it", Kind::Word) => "documento",
+        ("de", Kind::Word) => "Dokument",
+        ("es", Kind::Word) => "documento",
+        ("fr", Kind::Word) => "document",
+        ("hu", Kind::Word) => "dokumentum",
+        ("pt", Kind::Word) => "documento",
+        (_, Kind::Word) => "document",
+        ("it", Kind::Sheet) => "foglio di calcolo",
+        ("de", Kind::Sheet) => "Tabelle",
+        ("es", Kind::Sheet) => "hoja de cálculo",
+        ("fr", Kind::Sheet) => "tableur",
+        ("hu", Kind::Sheet) => "táblázat",
+        ("pt", Kind::Sheet) => "folha de cálculo",
+        (_, Kind::Sheet) => "spreadsheet",
+        ("it", Kind::Slides) => "presentazione",
+        ("de", Kind::Slides) => "Präsentation",
+        ("es", Kind::Slides) => "presentación",
+        ("fr", Kind::Slides) => "présentation",
+        ("hu", Kind::Slides) => "prezentáció",
+        ("pt", Kind::Slides) => "apresentação",
+        (_, Kind::Slides) => "presentation",
+        ("it", Kind::Image) => "immagine",
+        ("de", Kind::Image) => "Bild",
+        ("es", Kind::Image) => "imagen",
+        ("fr", Kind::Image) => "image",
+        ("hu", Kind::Image) => "kép",
+        ("pt", Kind::Image) => "imagem",
+        (_, Kind::Image) => "image",
+        ("it", Kind::Text) => "testo",
+        ("de", Kind::Text) => "Text",
+        ("es", Kind::Text) => "texto",
+        ("fr", Kind::Text) => "texte",
+        ("hu", Kind::Text) => "szöveg",
+        ("pt", Kind::Text) => "texto",
+        (_, Kind::Text) => "text",
+        ("it", Kind::Other) => "file",
+        ("de", Kind::Other) => "Datei",
+        ("es", Kind::Other) => "archivo",
+        ("fr", Kind::Other) => "fichier",
+        ("hu", Kind::Other) => "fájl",
+        ("pt", Kind::Other) => "ficheiro",
+        (_, Kind::Other) => "file",
+    }
+}
+
+fn attached_verb(locale: &str) -> &'static str {
+    match locale {
+        "it" => "Ho allegato",
+        "de" => "Angehängt",
+        "es" => "He adjuntado",
+        "fr" => "Joint",
+        "hu" => "Csatolva",
+        "pt" => "Anexei",
+        _ => "Attached",
+    }
+}
+
+/// The message of an attachment. The person reads one short sentence in their language, «Attached: PDF, image ×2.»
+/// (the kinds in the order of the choice, a kind that comes more than once with its number); behind it, on the same
+/// line, the Assistant gets one entry per file: the path of OUR copy in its container, its kind and its size, in
+/// English whatever the language (the page hides that bracket: `parseAttachments` in the chat reads exactly this
+/// shape). Nothing of the person's file names or contents is in it.
+pub(crate) fn message(locale: &str, saved: &[Saved]) -> String {
+    let mut counted: Vec<(Kind, usize)> = Vec::new();
+    for one in saved {
+        match counted.iter_mut().find(|(kind, _)| *kind == one.kind) {
+            Some((_, n)) => *n += 1,
+            None => counted.push((one.kind, 1)),
+        }
+    }
+    let kinds: Vec<String> = counted
+        .iter()
+        .map(|(kind, n)| if *n > 1 { format!("{} ×{n}", kind_word(locale, *kind)) } else { kind_word(locale, *kind).to_string() })
+        .collect();
+    let entries: Vec<String> = saved
+        .iter()
+        .map(|one| format!("/jht_user/{FOLDER}/{} ({}, {} bytes)", one.file, one.kind.word(), one.size))
+        .collect();
+    format!("{}: {}. [attachments: {}]", attached_verb(locale), kinds.join(", "), entries.join("; "))
+}
+
+/// Whether one of our files may be opened by the person with a click, decided on the bytes read NOW from the
+/// folder the agent can write in: the name, the index and the line of the message are not believed. The content must
+/// still be what the name says, of a kind the system shows without running anything (not `other`, not a table of
+/// text), and the extension must be the closed one that kind gets.
+pub(crate) fn openable_kind(file: &str, bytes: &[u8]) -> Result<crate::private_copy::CopyKind, &'static str> {
+    if !is_our_name(file) {
+        return Err("attachment_open_failed");
+    }
+    let extension = file.rsplit_once('.').map(|(_, e)| e).unwrap_or_default();
+    let decided = attachment_kind::classify(extension, bytes).map_err(|_| "attachment_open_failed")?;
+    if decided.extension != extension || !decided.kind.opens_with_a_click(decided.extension) {
+        return Err("attachment_open_failed");
+    }
+    crate::private_copy::CopyKind::from_extension(decided.extension).ok_or("attachment_open_failed")
+}
+
+/// Opens one of our files from a private copy: the bytes are read from the folder, checked again, and given to
+/// `open` (the real one makes the private copy and starts the system's program).
+pub(crate) fn open_own(
+    user_dir: &std::path::Path,
+    file: &str,
+    open: impl FnOnce(crate::private_copy::CopyKind, &[u8]) -> Result<(), &'static str>,
+) -> Result<(), &'static str> {
+    let bytes = read_own(user_dir, file)?;
+    let kind = openable_kind(file, &bytes)?;
+    open(kind, &bytes)
+}
+
 /// The seconds of the clock on this computer's wall: `unix_seconds` plus the zone's offset at that
 /// moment (summer time included). The name of the copy reads like the person's own clock; `stamp`
 /// then only turns those seconds into a date, with no zone of its own.
@@ -360,6 +474,47 @@ mod unix {
         Ok(saved)
     }
 
+    /// Which of our names are in the folder now (a regular file, not a link), without making the folder.
+    pub(crate) fn present(user_dir: &Path, files: &[String]) -> Vec<bool> {
+        let directory = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+        let opened = open(user_dir, directory, Mode::empty())
+            .and_then(|root| openat(&root, FOLDER, directory | OFlags::NOFOLLOW, Mode::empty()));
+        let Ok(folder) = opened else { return vec![false; files.len()] };
+        files
+            .iter()
+            .map(|file| {
+                is_our_name(file)
+                    && statat(&folder, file.as_str(), AtFlags::SYMLINK_NOFOLLOW)
+                        .map(|stat| FileType::from_raw_mode(stat.st_mode) == FileType::RegularFile)
+                        .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    /// The bytes of one of our files, read from one descriptor opened inside the folder without following a link:
+    /// `attachment_missing` when it is not there, `attachment_open_failed` for anything that is not a regular file of
+    /// ours up to the limit. The agent can write in this folder; what is read here is checked again by the caller.
+    pub(crate) fn read_own(user_dir: &Path, file: &str) -> Result<Vec<u8>, &'static str> {
+        if !is_our_name(file) {
+            return Err("attachment_open_failed");
+        }
+        let directory = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+        let root = open(user_dir, directory, Mode::empty()).map_err(|_| "attachment_missing")?;
+        let folder = openat(&root, FOLDER, directory | OFlags::NOFOLLOW, Mode::empty()).map_err(|_| "attachment_missing")?;
+        let fd = openat(&folder, file, OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK, Mode::empty())
+            .map_err(|error| if error == Errno::NOENT { "attachment_missing" } else { "attachment_open_failed" })?;
+        let stat = fstat(&fd).map_err(|_| "attachment_open_failed")?;
+        if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile || stat.st_size < 0 || stat.st_size as u64 > MAX_BYTES {
+            return Err("attachment_open_failed");
+        }
+        let mut bytes = Vec::new();
+        std::fs::File::from(fd).take(MAX_BYTES + 1).read_to_end(&mut bytes).map_err(|_| "attachment_open_failed")?;
+        if bytes.len() as u64 > MAX_BYTES {
+            return Err("attachment_open_failed");
+        }
+        Ok(bytes)
+    }
+
     /// Takes back a copy this run made (the team did not see it): only that name, relative to the
     /// folder, a link there is removed as a link.
     pub(crate) fn remove(user_dir: &Path, file: &str) {
@@ -373,7 +528,7 @@ mod unix {
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub(crate) use unix::{remove, store_all};
+pub(crate) use unix::{present, read_own, remove, store_all};
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub(crate) fn store_all(
@@ -387,6 +542,16 @@ pub(crate) fn store_all(
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub(crate) fn remove(_user_dir: &Path, _file: &str) {}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) fn present(_user_dir: &Path, files: &[String]) -> Vec<bool> {
+    vec![false; files.len()]
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub(crate) fn read_own(_user_dir: &Path, _file: &str) -> Result<Vec<u8>, &'static str> {
+    Err("attach_platform")
+}
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 use std::path::Path;
@@ -865,5 +1030,109 @@ mod tests {
         assert!(theirs.exists());
         remove(&s.user(), &saved.file);
         assert!(!s.user().join(FOLDER).join(&saved.file).exists());
+    }
+
+    fn saved_as(file: &str, size: u64, kind: Kind) -> Saved {
+        Saved { file: file.into(), size, kind, display: None }
+    }
+
+    #[test]
+    fn the_person_reads_one_sentence_in_their_language_and_the_assistant_gets_one_entry_per_file_behind_it() {
+        let one = [saved_as("allegato-20261029-101500.pdf", 123_456, Kind::Pdf)];
+        let two = [
+            saved_as("allegato-20261029-101500.pdf", 123_456, Kind::Pdf),
+            saved_as("allegato-20261029-101500.png", 45_678, Kind::Image),
+        ];
+        assert_eq!(
+            message("it", &one),
+            "Ho allegato: PDF. [attachments: /jht_user/allegati/allegato-20261029-101500.pdf (pdf, 123456 bytes)]"
+        );
+        assert_eq!(
+            message("en", &two),
+            "Attached: PDF, image. [attachments: /jht_user/allegati/allegato-20261029-101500.pdf (pdf, 123456 bytes); \
+             /jht_user/allegati/allegato-20261029-101500.png (image, 45678 bytes)]"
+        );
+        let three = [
+            saved_as("allegato-20261029-101500.png", 1, Kind::Image),
+            saved_as("allegato-20261029-101500-2.png", 2, Kind::Image),
+            saved_as("allegato-20261029-101500.xlsx", 3, Kind::Sheet),
+        ];
+        assert!(message("en", &three).starts_with("Attached: image ×2, spreadsheet. ["));
+        assert!(message("it", &three).starts_with("Ho allegato: immagine ×2, foglio di calcolo. ["));
+        // the same line, in every language, with the English bracket; the sentence is the person's, no path in it
+        for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
+            let text = message(locale, &two);
+            assert!(!text.contains('\n') && text.len() < 400, "{locale}");
+            let (visible, bracket) = text.split_once(" [attachments: ").unwrap();
+            assert!(bracket.ends_with(']') && bracket.contains("(pdf, 123456 bytes)"), "{locale}");
+            assert!(!visible.contains('/') && !visible.contains('[') && !visible.contains("allegato") && visible.ends_with('.'), "{locale}: {visible}");
+        }
+        // seven languages, seven different sentences (an unknown one and the empty one are English)
+        let said: std::collections::HashSet<_> = ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""]
+            .iter()
+            .map(|l| message(l, &two).split_once(" [attachments").unwrap().0.to_string())
+            .collect();
+        assert_eq!(said.len(), 7);
+        // no word of the table is missing in any language, for any kind
+        for locale in ["it", "en", "de", "es", "fr", "hu", "pt"] {
+            for kind in [Kind::Pdf, Kind::Word, Kind::Sheet, Kind::Slides, Kind::Image, Kind::Text, Kind::Other] {
+                assert!(!kind_word(locale, kind).is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_in_the_folder_opens_only_if_its_content_is_still_what_its_name_says_and_is_shown_without_running() {
+        let png = png();
+        assert_eq!(openable_kind("allegato-20261029-101500.png", &png), Ok(crate::private_copy::CopyKind::Png));
+        assert_eq!(openable_kind("cv-20261028-153045.pdf", &pdf()), Ok(crate::private_copy::CopyKind::Pdf));
+        assert_eq!(openable_kind("allegato-20261029-101500.txt", b"hello"), Ok(crate::private_copy::CopyKind::Txt));
+        // a name that is perfect and bytes that are not: the agent can write in the folder
+        for (name, bytes) in [
+            ("allegato-20261029-101500.pdf", b"\x7fELF\x02\x01\x01\x00".to_vec()),
+            ("allegato-20261029-101500.pdf", b"<html><script>x</script></html>".to_vec()),
+            ("allegato-20261029-101500.pdf", b"PK\x03\x04 a zip".to_vec()),
+            ("allegato-20261029-101500.png", pdf()),
+            ("allegato-20261029-101500.pdf", Vec::new()),
+            ("allegato-20261029-101500.docx", b"MZ\x90\x00".to_vec()),
+        ] {
+            assert_eq!(openable_kind(name, &bytes), Err("attachment_open_failed"), "{name}");
+        }
+        // other and the tables of text are not opened with a click, nor a name of another form
+        assert_eq!(openable_kind("allegato-20261029-101500.bin", &[1, 2, 3, 4]), Err("attachment_open_failed"));
+        assert_eq!(openable_kind("allegato-20261029-101500.csv", b"a,b\n=1+1,2"), Err("attachment_open_failed"));
+        assert_eq!(openable_kind("allegato-20261029-101500.tsv", b"a\tb"), Err("attachment_open_failed"));
+        for bad in ["../allegato-20261029-101500.pdf", "/etc/passwd", "evil.pdf", "allegato-20261029-101500.pdf/x"] {
+            assert_eq!(openable_kind(bad, &pdf()), Err("attachment_open_failed"), "{bad}");
+        }
+    }
+
+    #[test]
+    fn what_is_opened_is_read_from_the_folder_by_our_name_and_a_link_a_missing_file_or_a_non_file_never_opens() {
+        let s = Scratch::new();
+        let source = s.put("cv.pdf", &pdf());
+        let saved = run(&s, &source, 1).unwrap();
+        let mut got = None;
+        open_own(&s.user(), &saved.file, |kind, bytes| {
+            got = Some((kind, bytes.to_vec()));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(got, Some((crate::private_copy::CopyKind::Pdf, pdf())));
+        let never = |_: crate::private_copy::CopyKind, _: &[u8]| -> Result<(), &'static str> { panic!("must not open") };
+        assert_eq!(open_own(&s.user(), "allegato-20261029-101500.pdf", never), Err("attachment_missing"));
+        let folder = s.user().join(FOLDER);
+        let outside = s.put("outside.pdf", &pdf());
+        symlink(&outside, folder.join("allegato-20261029-101501.pdf")).unwrap();
+        assert_eq!(open_own(&s.user(), "allegato-20261029-101501.pdf", never), Err("attachment_open_failed"));
+        fs::create_dir(folder.join("allegato-20261029-101502.pdf")).unwrap();
+        assert_eq!(open_own(&s.user(), "allegato-20261029-101502.pdf", never), Err("attachment_open_failed"));
+        // the content forged by the agent under a perfect name
+        fs::write(folder.join("allegato-20261029-101503.pdf"), b"\x7fELF\x02\x01\x01\x00").unwrap();
+        assert_eq!(open_own(&s.user(), "allegato-20261029-101503.pdf", never), Err("attachment_open_failed"));
+        // present: regular files only
+        let names: Vec<String> = vec![saved.file.clone(), "allegato-20261029-101501.pdf".into(), "allegato-20261029-101502.pdf".into(), "allegato-20261029-101504.pdf".into()];
+        assert_eq!(present(&s.user(), &names), vec![true, false, false, false]);
+        assert_eq!(present(&s.0.join("nowhere"), &names), vec![false; 4]);
     }
 }

@@ -49,7 +49,7 @@ describe("the paperclip in the Assistant's chat", () => {
       attached = true;
       return {
         outcome: "sent" as const,
-        displayName: "Mario Rossi CV.pdf",
+        files: [{ file: "allegato-20261029-101500.pdf", kind: "pdf", bytes: 1, displayName: "Mario Rossi CV.pdf" }],
         receipt: { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, taken: true },
       };
     });
@@ -90,7 +90,7 @@ describe("the paperclip in the Assistant's chat", () => {
     const ALL = ["direct-chat-sent", "direct-chat-queued", "direct-chat-not-sent", "direct-chat-taken-unknown"];
     for (const [label, extra, expected] of cases) {
       const receipt = extra && { clientMessageId: "c", accepted: true as const, messageId: "m", at: 1, ...extra };
-      const attach: Attach = vi.fn(async () => ({ outcome: "sent" as const, displayName: "cv.pdf", ...(receipt ? { receipt } : {}) }));
+      const attach: Attach = vi.fn(async () => ({ outcome: "sent" as const, files: [{ file: "allegato-20261029-101500.pdf", kind: "pdf", bytes: 1, displayName: "cv.pdf" }], ...(receipt ? { receipt } : {}) }));
       const mock = client(attach, on);
       vi.mocked(mock.read).mockResolvedValue({ messages: [{ id: "m", role: "user" as const, text: "I attached my CV. [attachment for my profile: /jht_user/allegati/cv-20261028-153045.pdf]", at: 1 }], cursor: "1" });
       await ready(mock);
@@ -111,7 +111,7 @@ describe("the paperclip in the Assistant's chat", () => {
   });
 
   it("takes a warning away when the person sends a message, and not before", async () => {
-    const attach: Attach = vi.fn(async () => ({ outcome: "saved_not_sent" as const, displayName: "cv.pdf", code: "agent_busy" }));
+    const attach: Attach = vi.fn(async () => ({ outcome: "saved_not_sent" as const, files: [{ file: "allegato-20261029-101500.pdf", kind: "pdf", bytes: 1, displayName: "cv.pdf" }], code: "agent_busy" }));
     const mock = client(attach, on);
     vi.mocked(mock.send).mockResolvedValue({ clientMessageId: "x", accepted: true as const, messageId: "m2", at: 2 });
     await ready(mock);
@@ -183,7 +183,7 @@ describe("the paperclip in the Assistant's chat", () => {
   });
 
   it("says when the file is in the folder but the Assistant was not told", async () => {
-    const attach: Attach = vi.fn(async () => ({ outcome: "saved_not_sent" as const, displayName: "cv.pdf", code: "agent_busy" }));
+    const attach: Attach = vi.fn(async () => ({ outcome: "saved_not_sent" as const, files: [{ file: "allegato-20261029-101500.pdf", kind: "pdf", bytes: 1, displayName: "cv.pdf" }], code: "agent_busy" }));
     await ready(client(attach, on));
     const button = await screen.findByTestId("direct-chat-attach");
     await waitFor(() => expect(button).toBeEnabled());
@@ -259,5 +259,63 @@ describe("the attachment in the conversation", () => {
     expect(document.body.textContent).not.toContain("[attachment for my profile");
     // what the Assistant wrote about its file is its own text
     expect(document.body.textContent).toContain(`Ho letto ${PATH}`);
+  });
+});
+
+
+describe("the paperclip takes any file, several at once, and says which one was refused by its place", () => {
+  it("says the reason and the place of the file in the choice, never its name, when nothing was copied", async () => {
+    const attach: Attach = vi.fn(async () => ({ outcome: "refused" as const, code: "attachment_executable", position: 2 }));
+    await ready(client(attach, on));
+    const button = await screen.findByTestId("direct-chat-attach");
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    const note = await screen.findByTestId("direct-chat-attach-note");
+    expect(note.textContent).toBe("File 3: A program or a script cannot be attached.");
+    expect(note).toHaveAttribute("data-kind", "error");
+  });
+
+  it("has a sentence for every refusal the native side can give, in the seven languages", () => {
+    const codes = ["attachment_empty", "attachment_executable", "attachment_archive", "attachments_too_many", "attachments_too_big_together", "attachment_type", "attachment_too_big"] as const;
+    for (const [locale, text] of Object.entries(DIRECT_CHAT_TEXT)) {
+      for (const code of codes) expect(text.attachErrors[code], `${locale} ${code}`).toMatch(/\S/);
+      expect(text.attachFilePosition, locale).toContain("{n}");
+    }
+    expect(DIRECT_CHAT_TEXT.it.attachErrors.attachments_too_many).toBe("Al massimo 5 file per volta.");
+    expect(DIRECT_CHAT_TEXT.it.attachErrors.attachments_too_big_together).toBe("I file insieme superano i 15 MB.");
+  });
+
+  it("names the files that were saved but not told to the Assistant, as the person named them", async () => {
+    const attach: Attach = vi.fn(async () => ({
+      outcome: "saved_not_sent" as const,
+      code: "agent_busy",
+      files: [
+        { file: "allegato-20261029-101500.pdf", kind: "pdf", bytes: 1, displayName: "Alpha.pdf" },
+        { file: "allegato-20261029-101500.png", kind: "image", bytes: 2, displayName: null },
+        { file: "allegato-20261029-101500.txt", kind: "text", bytes: 3, displayName: "Beta.txt" },
+      ],
+    }));
+    await ready(client(attach, on));
+    const button = await screen.findByTestId("direct-chat-attach");
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    const note = await screen.findByTestId("direct-chat-attach-note");
+    expect(note.textContent).toContain("Alpha.pdf, Beta.txt");
+  });
+
+  it("always says, beside the paperclip, who reads the file and where its contents go, in the person's language", async () => {
+    await ready(client(vi.fn(async () => ({ outcome: "cancelled" as const })), on));
+    const line = await screen.findByTestId("direct-chat-attach-privacy");
+    expect(line.textContent).toBe(DIRECT_CHAT_TEXT.en.attachPrivacy);
+    for (const [locale, text] of Object.entries(DIRECT_CHAT_TEXT)) {
+      expect(text.attachPrivacy, locale).toMatch(/\S/);
+      expect(text.attachPrivacy, locale).not.toMatch(/[{}]/);
+    }
+    expect(DIRECT_CHAT_TEXT.it.attachPrivacy).toBe("Gli agenti della tua squadra leggono il file e il suo contenuto passa al fornitore AI che hai scelto.");
+  });
+
+  it("shows no such line where there is no paperclip", async () => {
+    await ready(client(vi.fn(async () => ({ outcome: "cancelled" as const })), on), { agent: "capitano" });
+    expect(screen.queryByTestId("direct-chat-attach-privacy")).toBeNull();
   });
 });

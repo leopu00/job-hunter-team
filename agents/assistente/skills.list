@@ -36,6 +36,9 @@ profile-schema
 profile-summaries
 onboarding-flow
 
+# Any file the person attaches in the app chat: read it by its kind, with the tools of the image
+read-attachment
+
 # Read-only DB lookups (e.g. show the user the state of their applications
 # if they ask). The Assistente never writes to the DB.
 db-query

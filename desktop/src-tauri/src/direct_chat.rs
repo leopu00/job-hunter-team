@@ -2994,17 +2994,29 @@ pub(crate) fn direct_chat_attach_state(
     Ok(DirectChatAttachState { available: code.is_none(), code })
 }
 
+/// One file of an attachment as the person's screen needs it: our name for it, what it is, its size, and the name the
+/// person gave it (for their screen only; never in the message, a log or an error).
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AttachedFile {
+    file: String,
+    kind: &'static str,
+    bytes: u64,
+    display_name: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DirectChatAttachment {
-    /// `sent`, `saved_not_sent` (the file is in the folder, the Assistant was not told: `code` says
-    /// why) or `cancelled` (the person closed the window: not an error).
+    /// `sent`, `saved_not_sent` (the files are in the folder, the Assistant was not told: `code` says why),
+    /// `refused` (nothing was copied: `code` says why and `position` which file of the choice it is about, from 0)
+    /// or `cancelled` (the person closed the window: not an error).
     outcome: &'static str,
-    /// The person's own file name, for their screen only.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    display_name: Option<String>,
+    files: Vec<AttachedFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    position: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     receipt: Option<DirectChatReceipt>,
 }
@@ -3025,35 +3037,6 @@ impl Drop for AttachGuard {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
     }
-}
-
-/// The message of an attachment. The person reads one short sentence in their language; behind it,
-/// on the same line, the Assistant gets the path of OUR copy in its container (the page hides that
-/// bracket: `withoutAttachmentPath` in DirectChatScreen.tsx reads exactly this shape). Nothing of the
-/// person's file name or content is in it. An unknown language gets English.
-/// «My CV» only for the kinds of file a CV comes in (a document); a picture or a plain text is not
-/// known to be one, and gets «a file».
-fn attachment_message(locale: &str, file: &str) -> String {
-    let document = file
-        .rsplit_once('.')
-        .is_some_and(|(_, extension)| crate::chat_attachment::DOCUMENT_EXTENSIONS.contains(&extension));
-    let said = match (locale, document) {
-        ("it", true) => "Ho allegato il mio CV.",
-        ("it", false) => "Ho allegato un file.",
-        ("de", true) => "Ich habe meinen Lebenslauf angehängt.",
-        ("de", false) => "Ich habe eine Datei angehängt.",
-        ("es", true) => "He adjuntado mi CV.",
-        ("es", false) => "He adjuntado un archivo.",
-        ("fr", true) => "J'ai joint mon CV.",
-        ("fr", false) => "J'ai joint un fichier.",
-        ("hu", true) => "Csatoltam az önéletrajzomat.",
-        ("hu", false) => "Csatoltam egy fájlt.",
-        ("pt", true) => "Anexei o meu CV.",
-        ("pt", false) => "Anexei um ficheiro.",
-        (_, true) => "I attached my CV.",
-        (_, false) => "I attached a file.",
-    };
-    format!("{said} [attachment for my profile: /jht_user/{}/{file}]", crate::chat_attachment::FOLDER)
 }
 
 /// Where the system's window opens: the Downloads folder of the person, where a CV usually is, and
@@ -3095,21 +3078,35 @@ fn attach_target(
     })
 }
 
-/// The copy is in the folder on this computer; the team must see the same file there. A mount that
-/// does not show it (another folder, an engine that shares less) takes the copy back: nothing is
+/// The copies are in the folder on this computer; the team must see the same files there. A mount that
+/// does not show one (another folder, an engine that shares less) takes the copies back: nothing is
 /// told to the Assistant about a file it cannot open.
-fn team_sees_the_copy(target: &AttachTarget, saved: &crate::chat_attachment::Saved) -> bool {
-    let path = format!("/jht_user/{}/{}", crate::chat_attachment::FOLDER, saved.file);
+fn team_sees_the_copies(target: &AttachTarget, saved: &[crate::chat_attachment::Saved]) -> bool {
     let Ok(team) = local_chat_team(&target.wrapper, &target.runtime, READ_TIMEOUT) else { return false };
-    matches!(
-        team.exec(&["stat", "-c", "%s", path.as_str()], None, READ_TIMEOUT),
-        Ok(done) if done.success() && String::from_utf8_lossy(&done.stdout).trim() == saved.size.to_string()
-    )
+    saved.iter().all(|one| {
+        let path = format!("/jht_user/{}/{}", crate::chat_attachment::FOLDER, one.file);
+        matches!(
+            team.exec(&["stat", "-c", "%s", path.as_str()], None, READ_TIMEOUT),
+            Ok(done) if done.success() && String::from_utf8_lossy(&done.stdout).trim() == one.size.to_string()
+        )
+    })
 }
 
-/// «Attach» in the Assistant's chat: the person chooses a file in the system's window (the page
-/// never names a path), it is checked and copied into the team's `allegati` folder, the team is
-/// asked to see it, and only then the Assistant gets a short message naming our copy.
+fn attached_files(saved: &[crate::chat_attachment::Saved]) -> Vec<AttachedFile> {
+    saved
+        .iter()
+        .map(|one| AttachedFile {
+            file: one.file.clone(),
+            kind: one.kind.word(),
+            bytes: one.size,
+            display_name: one.display.clone(),
+        })
+        .collect()
+}
+
+/// «Attach» in the Assistant's chat: the person chooses files in the system's window (the page never names a
+/// path), up to five, all are checked and copied into the team's `allegati` folder or none is, the team is
+/// asked to see them, and only then the Assistant gets ONE short message naming our copies.
 #[tauri::command]
 pub(crate) async fn direct_chat_attach(
     app: tauri::AppHandle,
@@ -3131,6 +3128,11 @@ pub(crate) async fn direct_chat_attach(
     }
     let expected = scopes.active().map_err(failure)?;
     let app_for_log = app.clone();
+    let index_path = app
+        .path()
+        .app_local_data_dir()
+        .ok()
+        .map(|root| crate::attachment_index::path_at(&root, &expected));
     let _busy = AttachGuard::take(&state.inner.attach_busy).ok_or_else(|| failure("attach_busy"))?;
     let scope_state = scopes.inner().clone();
     let target = {
@@ -3140,51 +3142,86 @@ pub(crate) async fn direct_chat_attach(
             .await
             .map_err(|_| failure("attach_failed"))??
     };
-    // The system's window is modal and waits for the person: never on the main thread.
+    // The system's window is modal and waits for the person: never on the main thread. Any file can be chosen: what is
+    // accepted is decided by the content, not by a filter on the names.
     let picker = window.clone();
     let start_dir = target.start_dir.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || {
-        let mut dialog = app
-            .dialog()
-            .file()
-            .set_parent(&picker)
-            .add_filter("Documents", &crate::chat_attachment::ALLOWED_EXTENSIONS);
+        let mut dialog = app.dialog().file().set_parent(&picker);
         if let Some(dir) = start_dir {
             dialog = dialog.set_directory(dir);
         }
-        dialog.blocking_pick_file()
+        dialog.blocking_pick_files()
     })
     .await
     .map_err(|_| failure("attach_failed"))?;
-    let Some(chosen) = chosen else {
-        return Ok(DirectChatAttachment { outcome: "cancelled", display_name: None, code: None, receipt: None });
+    let Some(chosen) = chosen.filter(|files| !files.is_empty()) else {
+        return Ok(DirectChatAttachment { outcome: "cancelled", files: Vec::new(), code: None, position: None, receipt: None });
     };
-    let source = chosen.into_path().map_err(|_| failure("attachment_unreadable"))?;
+    let sources = chosen
+        .into_iter()
+        .map(|file| file.into_path())
+        .collect::<Result<Vec<PathBuf>, _>>()
+        .map_err(|_| failure("attachment_unreadable"))?;
     let saved = {
         let user_dir = target.user_dir.clone();
-        // the name of the copy reads the clock of this computer, not UTC
+        // the names of the copies read the clock of this computer, not UTC
         let now = crate::chat_attachment::local_wall_clock(
             SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
         );
-        tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::store(&user_dir, &source, now, &mut |_| {}))
-            .await
-            .map_err(|_| failure("attach_failed"))?
-            .map_err(failure)?
+        let stored = tauri::async_runtime::spawn_blocking(move || {
+            crate::chat_attachment::store_all(&user_dir, &sources, now, &mut |_| {})
+        })
+        .await
+        .map_err(|_| failure("attach_failed"))?;
+        match stored {
+            Ok(saved) => saved,
+            Err(refusal) => {
+                return Ok(DirectChatAttachment {
+                    outcome: "refused",
+                    files: Vec::new(),
+                    code: Some(refusal.code),
+                    position: refusal.position,
+                    receipt: None,
+                })
+            }
+        }
     };
     let target = Arc::new(target);
     let seen = {
         let (target, saved_view) = (Arc::clone(&target), saved.clone());
-        tauri::async_runtime::spawn_blocking(move || team_sees_the_copy(&target, &saved_view))
+        tauri::async_runtime::spawn_blocking(move || team_sees_the_copies(&target, &saved_view))
             .await
             .unwrap_or(false)
     };
     if !seen {
-        let (user_dir, file) = (target.user_dir.clone(), saved.file.clone());
-        let _ = tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::remove(&user_dir, &file)).await;
+        // every copy THIS message made, by name, and nothing else
+        let (user_dir, names) = (target.user_dir.clone(), saved.iter().map(|one| one.file.clone()).collect::<Vec<_>>());
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            for file in &names {
+                crate::chat_attachment::remove(&user_dir, file);
+            }
+        })
+        .await;
         return Err(failure("attachment_not_shared"));
     }
-    let text = attachment_message(&locale, &saved.file);
-    let display_name = Some(saved.display.clone());
+    // the names the person gave, for their own screen: an index outside the folder the team reads
+    if let Some(path) = index_path {
+        let at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let entries: Vec<crate::attachment_index::Entry> = saved
+            .iter()
+            .map(|one| crate::attachment_index::Entry {
+                file: one.file.clone(),
+                kind: one.kind.word().to_string(),
+                bytes: one.size,
+                display_name: one.display.clone(),
+                at,
+            })
+            .collect();
+        let _ = tauri::async_runtime::spawn_blocking(move || crate::attachment_index::record(&path, &entries)).await;
+    }
+    let text = crate::chat_attachment::message(&locale, &saved);
+    let files = attached_files(&saved);
     let inner = Arc::clone(&state.inner);
     let worker_expected = expected.clone();
     let worker_scopes = scope_state.clone();
@@ -3206,13 +3243,90 @@ pub(crate) async fn direct_chat_attach(
     match sent {
         Ok(receipt) => {
             emit(&state.inner, DirectChatEvent::Send { receipt: receipt.clone() });
-            Ok(DirectChatAttachment { outcome: "sent", display_name, code: None, receipt: Some(receipt) })
+            Ok(DirectChatAttachment { outcome: "sent", files, code: None, position: None, receipt: Some(receipt) })
         }
         Err(error) => {
             log_chat_failure(&app_for_log, "send", error.code);
-            Ok(DirectChatAttachment { outcome: "saved_not_sent", display_name, code: Some(error.code), receipt: None })
+            Ok(DirectChatAttachment { outcome: "saved_not_sent", files, code: Some(error.code), position: None, receipt: None })
         }
     }
+}
+
+/// What the bubble of an attachment needs, for the names that the message carries: what each file is, its size,
+/// the name the person gave it, and whether it is still in the folder. The page gives names of our form only (at most
+/// twenty); it never gives a path, and what the index does not know is `null`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AttachmentInfo {
+    file: String,
+    kind: String,
+    bytes: u64,
+    display_name: Option<String>,
+    present: bool,
+}
+
+#[tauri::command]
+pub(crate) async fn direct_chat_attachments(
+    app: tauri::AppHandle,
+    window: tauri::Window,
+    scopes: State<'_, AccountScopeState>,
+    files: Vec<String>,
+) -> Result<Vec<AttachmentInfo>, DirectChatError> {
+    if !window_may_write(&window.label())
+        || files.is_empty()
+        || files.len() > 20
+        || !files.iter().all(|file| crate::chat_attachment::is_our_name(file))
+    {
+        return Err(failure("invalid_request"));
+    }
+    let scope = scopes.active().map_err(failure)?;
+    let root = app.path().app_local_data_dir().map_err(|_| failure("storage_unavailable"))?;
+    let home = std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| failure("attach_platform"))?;
+    let user_dir = home.join("Documents").join("Job Hunter Team");
+    tauri::async_runtime::spawn_blocking(move || {
+        let known = crate::attachment_index::lookup(&crate::attachment_index::path_at(&root, &scope), &files);
+        let here = crate::chat_attachment::present(&user_dir, &files);
+        files
+            .into_iter()
+            .zip(known)
+            .zip(here)
+            .map(|((file, entry), present)| match entry {
+                Some(entry) => AttachmentInfo { file, kind: entry.kind, bytes: entry.bytes, display_name: entry.display_name, present },
+                None => AttachmentInfo { file, kind: "other".to_string(), bytes: 0, display_name: None, present },
+            })
+            .collect()
+    })
+    .await
+    .map_err(|_| failure("attach_failed"))
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct AttachmentOpened {
+    opened: bool,
+}
+
+/// A click on a file of a bubble: the file is read again from the folder by OUR name, checked again, copied into a
+/// private folder of the app and opened from there with the system's program (`private_copy`). The page gives a name,
+/// never a path, and only the main window may ask.
+#[tauri::command]
+pub(crate) async fn direct_chat_attachment_open(
+    window: tauri::Window,
+    scopes: State<'_, AccountScopeState>,
+    file: String,
+) -> Result<AttachmentOpened, DirectChatError> {
+    if !window_may_write(&window.label()) || !crate::chat_attachment::is_our_name(&file) {
+        return Err(failure("invalid_request"));
+    }
+    scopes.active().map_err(failure)?;
+    let home = std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| failure("attach_platform"))?;
+    let user_dir = home.join("Documents").join("Job Hunter Team");
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::chat_attachment::open_own(&user_dir, &file, |kind, bytes| crate::private_copy::open_private_copy(kind, bytes))
+    })
+    .await
+    .map_err(|_| failure("attach_failed"))?
+    .map(|()| AttachmentOpened { opened: true })
+    .map_err(failure)
 }
 
 /// The last failure of each operation written to the runtime log: a read that fails every two
@@ -6118,46 +6232,6 @@ mod attachment_command_tests {
     }
 
     #[test]
-    fn the_person_reads_one_sentence_in_their_language_and_the_assistant_gets_the_path_behind_it() {
-        // a document says «my CV»; a picture or a plain text, which is not known to be one, says «a file»
-        for (file, cv) in [
-            ("cv-20261028-153045.pdf", true),
-            ("cv-20261028-153045.docx", true),
-            ("cv-20261028-153045.odt", true),
-            ("cv-20261028-153045.rtf", true),
-            ("cv-20261028-153045.txt", false),
-            ("cv-20261028-153045.md", false),
-            ("cv-20261028-153045.png", false),
-            ("cv-20261028-153045.jpg", false),
-            ("cv-20261028-153045-2.jpg", false),
-        ] {
-            let path = format!("/jht_user/allegati/{file}");
-            let mut said = std::collections::HashSet::new();
-            for locale in ["it", "en", "de", "es", "fr", "hu", "pt", "xx", ""] {
-                let text = attachment_message(locale, file);
-                // the Assistant gets the path of our copy, on one line, and what it is for
-                assert!(text.ends_with(&format!(" [attachment for my profile: {path}]")), "{locale} {file}");
-                assert!(!text.contains('\n') && !text.contains('{') && text.len() < 200, "{locale} {file}");
-                // the person gets a sentence: no path, no folder, no name of a file, no brackets
-                let (visible, _) = text.split_once(" [attachment").unwrap();
-                assert!(!visible.contains("jht_user") && !visible.contains(file) && !visible.contains('/') && !visible.contains('['), "{locale} {file}");
-                assert!(visible.ends_with('.') && visible.len() > 10, "{locale} {file}");
-                said.insert(visible.to_owned());
-            }
-            // seven languages, seven sentences (an unknown one and the empty one are English)
-            assert_eq!(said.len(), 7, "{file}");
-            let it = attachment_message("it", file);
-            assert_eq!(it.starts_with("Ho allegato il mio CV. ["), cv, "{file}");
-            assert_eq!(it.starts_with("Ho allegato un file. ["), !cv, "{file}");
-        }
-        // the Portuguese of Portugal, as the rest of the product
-        assert!(attachment_message("pt", "cv-1.pdf").starts_with("Anexei o meu CV. ["));
-        assert!(attachment_message("pt", "cv-1.png").starts_with("Anexei um ficheiro. ["));
-        assert!(attachment_message("xx", "cv-1.pdf").starts_with("I attached my CV. ["));
-        assert!(attachment_message("xx", "cv-1.png").starts_with("I attached a file. ["));
-    }
-
-    #[test]
     fn the_window_opens_on_downloads_when_the_person_has_that_folder_and_never_on_documents() {
         let home = std::env::temp_dir().join(format!("jht-downloads-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
@@ -6197,18 +6271,22 @@ mod attachment_command_tests {
         assert!(at("window_may_write(") < at("AttachGuard::take"));
         assert!(command.contains("agent_id != \"assistente\""));
         // the same gate as a message, then the window, then the copy, then the proof, then the message
-        assert!(at("attach_target(") < at("blocking_pick_file()"));
-        assert!(at("blocking_pick_file()") < at("chat_attachment::store("));
-        assert!(at("chat_attachment::store(") < at("team_sees_the_copy("));
-        assert!(at("team_sees_the_copy(") < at("send_impl("));
+        assert!(at("attach_target(") < at("blocking_pick_files()"));
+        assert!(at("blocking_pick_files()") < at("chat_attachment::store_all("));
+        assert!(at("chat_attachment::store_all(") < at("team_sees_the_copies("));
+        assert!(at("team_sees_the_copies(") < at("send_impl("));
         // a copy the team does not see is taken back, and nothing is told
         assert!(at("chat_attachment::remove(") < at("send_impl("));
-        // the text is ours: built from the name of our copy, never from the page or the person's file
-        assert!(command.contains("attachment_message(&locale, &saved.file)"));
+        // the text is ours: built from the names of our copies, never from the page or the person's files
+        assert!(command.contains("chat_attachment::message(&locale, &saved)"));
+        // no filter on the names: the content decides
+        assert!(!command.contains("add_filter("));
+        // the index of the names is written before the message, outside the folder the team reads
+        assert!(at("attachment_index::record(") < at("send_impl("));
         // the window opens where the person keeps downloads, and the copy is named by the local clock
         assert!(command.contains("set_directory(") && command.contains("target.start_dir"));
         assert!(command.contains("local_wall_clock("));
         // the person's own name goes back to their screen, never into the message or a log
-        assert!(!command.contains("attachment_message(&locale, &saved.display)"));
+        assert!(!command.contains("message(&locale, &saved.display"));
     }
 }

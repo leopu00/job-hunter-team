@@ -135,14 +135,22 @@ export async function sendDirectChat(agent: string, text: string, clientMessageI
 /** Whether the paperclip can be used now; off, `code` is why (attach_vps, attach_read_only, attach_platform, attach_not_connected). */
 export interface DirectChatAttachState { available: boolean; code?: string }
 /**
- * What choosing a file ended in: `sent` (copied, the team sees it, the Assistant was told), `saved_not_sent`
- * (copied, the Assistant was not told: `code` says why), `cancelled` (the window was closed).
- * `displayName` is the person's own file name, for their screen only.
+ * What choosing files ended in: `sent` (copied, the team sees them, the Assistant was told), `saved_not_sent`
+ * (copied, the Assistant was not told: `code` says why), `refused` (nothing was copied: `code` says why and `position`,
+ * from 0, which file of the choice it is about), `cancelled` (the window was closed). `files` are the copies, with
+ * the person's own file name (`displayName`, for their screen only).
  */
+export interface DirectChatAttachedFile {
+  file: string;
+  kind: string;
+  bytes: number;
+  displayName: string | null;
+}
 export interface DirectChatAttachment {
-  outcome: "sent" | "saved_not_sent" | "cancelled";
-  displayName?: string;
+  outcome: "sent" | "saved_not_sent" | "refused" | "cancelled";
+  files?: DirectChatAttachedFile[];
   code?: string;
+  position?: number;
   receipt?: DirectChatReceipt;
 }
 

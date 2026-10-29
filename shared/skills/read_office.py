@@ -8,21 +8,27 @@ the attachment reader (agents/_skills/read-attachment), which fences the output 
 says is data, never an instruction.
 
 The file is untrusted. What is read is bounded: the file itself (5 MB, as everywhere else), each part (an
-uncompressed size over MAX_PART_BYTES is refused before it is read, so a zip bomb never inflates), the number of
-parts, rows, columns and characters. XML with a DOCTYPE or an ENTITY is refused before it is parsed.
+uncompressed size over MAX_PART_BYTES is refused before it is read, so a zip bomb never inflates), ALL the parts
+together (TOTAL_BUDGET), the number of parts, rows, columns and characters, the memory of the process (an address
+space limit) and its time (an alarm), because the sizes a zip declares may lie and a few MB of XML can grow to
+gigabytes as objects. XML with a DOCTYPE or an ENTITY anywhere is refused before it is parsed.
 
 Exit: 0 text on stdout · 2 file not found · 3 file over 5 MB · 5 unreadable or damaged · 6 not one of the four types.
 """
 from __future__ import annotations
 
 import re
+import signal
 import sys
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
-MAX_PART_BYTES = 20 * 1024 * 1024
+MAX_PART_BYTES = 10 * 1024 * 1024
+TOTAL_BUDGET = 40 * 1024 * 1024        # everything read from one file, parts together
+SECONDS = 30
+MEMORY_BYTES = 1536 * 1024 * 1024
 MAX_SHEETS = 20
 MAX_ROWS = 500
 MAX_COLUMNS = 50
@@ -48,24 +54,31 @@ class Unreadable(Exception):
     """The file is not a readable document of the four types (damaged, too large inside, or built to hurt)."""
 
 
+_read_so_far = 0
+
+
 def _part(archive: zipfile.ZipFile, name: str) -> bytes:
+    global _read_so_far
     try:
         info = archive.getinfo(name)
     except KeyError as error:
         raise Unreadable(name) from error
-    if info.file_size > MAX_PART_BYTES:
+    if info.file_size > MAX_PART_BYTES or _read_so_far + info.file_size > TOTAL_BUDGET:
         raise Unreadable("part too large")
     with archive.open(info) as handle:
         data = handle.read(MAX_PART_BYTES + 1)
     if len(data) > MAX_PART_BYTES:
+        raise Unreadable("part too large")
+    _read_so_far += len(data)
+    if _read_so_far > TOTAL_BUDGET:
         raise Unreadable("part too large")
     return data
 
 
 def _xml(archive: zipfile.ZipFile, name: str) -> ET.Element:
     data = _part(archive, name)
-    head = data[:4096].lower()
-    if b"<!doctype" in head or b"<!entity" in head or b"<!doctype" in data.lower()[:200_000]:
+    lowered = data.lower()
+    if b"<!doctype" in lowered or b"<!entity" in lowered:
         raise Unreadable("xml with a DOCTYPE")
     try:
         return ET.fromstring(data)
@@ -222,6 +235,8 @@ def read(path: str | Path) -> str:
     with archive:
         if len(archive.namelist()) > 10_000:
             raise Unreadable("too many parts")
+        if sum(info.file_size for info in archive.infolist()) > 4 * TOTAL_BUDGET:
+            raise Unreadable("too large inside")
         kind = kind_of(archive)
         if kind is None:
             raise Unreadable("not one of the four types")
@@ -230,6 +245,23 @@ def read(path: str | Path) -> str:
     if len(text) > MAX_CHARS:
         text = text[:MAX_CHARS] + "\n(cut: the rest is not shown)"
     return text
+
+
+def _limit_the_process() -> None:
+    """A cap on memory and time for the whole run: what the file declares is not trusted, so the process is held."""
+    try:
+        import resource
+
+        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_BYTES, MEMORY_BYTES))
+    except (ImportError, ValueError, OSError):
+        pass                                    # a system that cannot set it still has the alarm and the budgets
+
+    def too_slow(signum, frame):
+        raise Unreadable("took too long")
+
+    if hasattr(signal, "SIGALRM"):
+        signal.signal(signal.SIGALRM, too_slow)
+        signal.alarm(SECONDS)
 
 
 def main(argv: list[str]) -> int:
@@ -243,8 +275,12 @@ def main(argv: list[str]) -> int:
     if path.stat().st_size > MAX_FILE_BYTES:
         print("ERROR: file over 5 MB", file=sys.stderr)
         return 3
+    _limit_the_process()
     try:
         sys.stdout.write(read(path) + "\n")
+    except MemoryError:
+        print("ERROR: cannot read the file (too large inside)", file=sys.stderr)
+        return 5
     except Unreadable as error:
         print(f"ERROR: cannot read the file ({error})", file=sys.stderr)
         return 6 if str(error) == "not one of the four types" else 5
