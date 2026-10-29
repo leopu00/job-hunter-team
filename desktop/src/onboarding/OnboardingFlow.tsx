@@ -539,7 +539,8 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
               </dl>
             </details>
           )}
-          {failed && <SetupSupportReport stage={runtime.stage} code={runtime.code} locale={locale} />}
+          {/* always there, not only after a failure: a step that hangs without failing needs a way to be reported too */}
+          <SetupSupportReport stage={runtime.stage} code={failed ? (runtime.code ?? "unknown") : undefined} locale={locale} />
           {runtime.stage === "ssh-host-key" && sshHostKey && (
             <section className="onboarding-provider-console" aria-label={t.hostKeyAria}>
               <div className="onboarding-provider-console__heading"><div><strong>{t.hostKeyTitle}</strong><small>{t.hostKeyText}</small></div></div>

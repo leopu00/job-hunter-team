@@ -101,7 +101,9 @@ export function createSetupSupportReport(input: {
   const code = safeCode(input.code);
   const appVersion = safeVersion(input.appVersion);
   const locale = safeLocale(input.locale);
-  const happened = `Desktop setup stopped at ${stage} (${code}).`;
+  // no code = the person reports while the setup is still running, not after a failure
+  const stopped = input.code != null;
+  const happened = stopped ? `Desktop setup stopped at ${stage} (${code}).` : `Desktop setup reported while at ${stage}.`;
   const rawLog = safeText(input.logTail, 16_000) || "(no runtime log was available)";
   const rawPlatform = safeText(input.platform, 120) || "Operating system unavailable";
   // One pass over the whole frame: the text previewed is the text sent, and nothing is redacted twice.
@@ -109,7 +111,7 @@ export function createSetupSupportReport(input: {
     "# Job Hunter Team desktop setup report",
     "",
     `- Step: ${stage}`,
-    `- Code: ${code}`,
+    stopped ? `- Code: ${code}` : "- Code: none (the setup had not failed)",
     `- OS: ${rawPlatform}`,
     `- App version: ${appVersion}`,
     "",
@@ -240,24 +242,28 @@ async function saveLongReport(markdown: string): Promise<string | null> {
   }
 }
 
+/** `savedReport` is the logical path of the redacted copy kept on this computer (null where the app cannot write it). */
 export type SupportDelivery =
-  | { kind: "sent"; ticket: string }
-  | { kind: "mailto"; href: string; savedReport: string | null }
+  | { kind: "sent"; ticket: string; savedReport: string | null }
+  | { kind: "mailto"; href: string; savedReport: string | null; /** the mail carries only a summary: the saved copy is what to attach */ attach: boolean }
   | { kind: "failed" };
 
-/** POST first; only an unavailable endpoint opens the user's mail app. */
+/**
+ * The copy stays on this computer whatever happens next (sent, mail, offline), so the person keeps what they
+ * reported. Then POST first; only an unavailable endpoint opens the user's mail app.
+ */
 export async function deliverSetupSupportReport(report: SetupSupportReport): Promise<SupportDelivery> {
+  const savedReport = await saveLongReport(report.preview);
   try {
     const response = await fetch(SETUP_SUPPORT_ENDPOINT, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report.payload),
     });
     const data = await response.json().catch(() => null) as { ticket?: unknown } | null;
-    if (response.ok && typeof data?.ticket === "string" && data.ticket) return { kind: "sent", ticket: data.ticket };
+    if (response.ok && typeof data?.ticket === "string" && data.ticket) return { kind: "sent", ticket: data.ticket, savedReport };
   } catch { /* mail fallback below */ }
 
   const direct = mailtoForSetupSupport(report);
-  if (direct) return { kind: "mailto", href: direct, savedReport: null };
-  const savedReport = await saveLongReport(report.preview);
+  if (direct) return { kind: "mailto", href: direct, savedReport, attach: false };
   // The mail client gets a compact, redacted summary. The complete redacted
   // report remains in the private attachment folder instead of overflowing a
   // mailto URL.
@@ -268,5 +274,5 @@ export async function deliverSetupSupportReport(report: SetupSupportReport): Pro
       ? `The complete redacted report is ready to attach from: ${savedReport}`
       : "The complete report could not be saved automatically. Please retry the support report."}`,
   })}`;
-  return { kind: "mailto", href: fallback, savedReport };
+  return { kind: "mailto", href: fallback, savedReport, attach: true };
 }

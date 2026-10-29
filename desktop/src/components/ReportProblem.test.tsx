@@ -10,6 +10,7 @@ const native = vi.hoisted(() => ({
   isTauri: () => true,
   invoke: vi.fn(async (command: string) => {
     if (command === "onboarding_support_context") return { appVersion: "0.4.0", logTail: "token=log-secret-token-value\nat 203.0.113.9 failed" };
+    if (command === "onboarding_support_report_save") return "Job Hunter Team/Support reports/desktop-setup-3.md";
     throw new Error(`unexpected command ${command}`);
   }),
 }));
@@ -55,7 +56,10 @@ describe("Report a problem (Help and Settings)", () => {
     expect(body.diagnostics).toBe(preview.value);
     expect(body.client).toBe("tauri-desktop");
     expect(JSON.stringify(body)).not.toContain("story-secret-token-value");
+    // the ticket, and the copy kept on this computer: the redacted text the person saw
     expect(await screen.findByRole("status")).toHaveTextContent("Report sent: JHT-77");
+    expect(screen.getByRole("status")).toHaveTextContent("Copy kept on this computer: Job Hunter Team/Support reports/desktop-setup-3.md");
+    expect(native.invoke).toHaveBeenCalledWith("onboarding_support_report_save", { draft: { markdown: preview.value } });
   });
 
   it("goes back from the preview without sending", async () => {
