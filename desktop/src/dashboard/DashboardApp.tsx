@@ -720,7 +720,10 @@ export default function DashboardApp() {
           guidedSnapshotRef.current = snapshot;
           const read = isOnboardingRuntimeReady(snapshot) ? await readTeamStart().catch(() => null) : null;
           if (!active || activeIdentityKeyRef.current !== identityKey) return;
-          const firstRun: FirstRunSignal | null = read && read.phase ? { phase: read.phase, workers: read.workers, planDeclared: read.planDeclared } : null;
+          // No first-run file yet (phase null) is a first run that waits for the profile; only an unreadable state is null.
+          const firstRun: FirstRunSignal | null = read
+            ? { phase: read.phase ?? "awaiting_profile", workers: read.workers, planDeclared: read.planDeclared }
+            : null;
           setGuidedSignals({ profileReady: snapshot.profileReady, captainRunning: snapshot.captainRunning, firstRun });
           teamIsUp = teamStarted({ captainRunning: snapshot.captainRunning, firstRun });
         }

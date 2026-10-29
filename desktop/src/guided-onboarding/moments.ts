@@ -8,7 +8,10 @@
  * is declared, the team has not started to work), `started` (it has).
  */
 
-/** What `shared/skills/first_run.py` writes in `state/first-run.json`, as far as the guide needs it. */
+/**
+ * What `shared/skills/first_run.py` writes in `state/first-run.json`, as far as the guide needs it. A first run with
+ * no file yet is `awaiting_profile` with no workers.
+ */
 export interface FirstRunSignal {
   phase: "awaiting_profile" | "burst" | "steady";
   /** How many workers the burst launched (the roster's count); 0 until it has launched one. */
@@ -47,7 +50,10 @@ export function guidedMoment(signals: GuidedSignals): GuidedMoment {
   if (!signals.profileReady) {
     return signals.profileTotal > 0 && signals.profileFilled >= signals.profileTotal ? "confirm" : "interview";
   }
-  if (!signals.firstRun?.planDeclared) return "plan";
+  // Nothing readable of the first run: wait as for a team that is starting (the column says it is late after the
+  // patience, and the way out is there) rather than ask for a plan that may be declared already.
+  if (!signals.firstRun) return "team";
+  if (!signals.firstRun.planDeclared) return "plan";
   return "team";
 }
 

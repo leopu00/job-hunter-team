@@ -52,8 +52,11 @@ describe("the moment is derived from what the machine says", () => {
   });
 
   it("plan once the profile is confirmed and the plan is not declared", () => {
-    expect(guidedMoment(signals({ profileReady: true, profileFilled: 8 }))).toBe("plan");
-    expect(guidedMoment(signals({ profileReady: true, firstRun: { phase: "awaiting_profile", workers: 0, planDeclared: false } }))).toBe("plan");
+    expect(guidedMoment(signals({ profileReady: true, profileFilled: 8, firstRun: { phase: "awaiting_profile", workers: 0, planDeclared: false } }))).toBe("plan");
+  });
+
+  it("team, not plan, when nothing can be read of the first run: it waits and says it is late, it does not ask what may be done", () => {
+    expect(guidedMoment(signals({ profileReady: true, profileFilled: 8, firstRun: null }))).toBe("team");
   });
 
   it("team once the plan is declared and nothing works yet", () => {
@@ -83,6 +86,7 @@ describe("the gate and its way out", () => {
       signals(),
       signals({ profileFilled: 8 }),
       signals({ profileReady: true, firstRun: null }),
+      signals({ profileReady: true, firstRun: { phase: "awaiting_profile", workers: 0, planDeclared: false } }),
       signals({ profileReady: true, captainRunning: false, firstRun: burst(0) }),
       signals({ profileReady: true, firstRun: burst(3) }),
       signals({ profileTotal: 0 }),

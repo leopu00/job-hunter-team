@@ -3267,9 +3267,11 @@ describe("DashboardApp onboarding router", () => {
     });
 
     it("«continue later» opens the app even when the marker cannot be written", async () => {
-      vi.mocked(markOnboardingStarted).mockImplementation(() => { throw new Error("marker-failed"); });
       const user = await toGuided("guided-later-marker", [{ ...TEAM_READY, profileReady: false }]);
-      await user.click(await screen.findByTestId("guided-continue-later"));
+      await screen.findByTestId("guided-continue-later");
+      // the setup is past: from here on the marker cannot be written (once, for the click)
+      vi.mocked(markOnboardingStarted).mockImplementationOnce(() => { throw new Error("marker-failed"); });
+      await user.click(screen.getByTestId("guided-continue-later"));
       expect(await screen.findByTestId("shell")).toBeInTheDocument();
     });
   });
