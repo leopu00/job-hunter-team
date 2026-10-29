@@ -35,9 +35,9 @@ A frontend ~2 masodpercenkent lekerdezi a fajlt. Ne vard meg a beszolgetes veget
 
 Minden uj adat = egy `Write` vagy `Edit` a fajlon. Aztan validald. Aztan folytasd a beszelgetest.
 
-### A feltoltott oneletrajz adatai csak ellenorzes utan kerulnek a mentett profilba
+### A feltoltott vagy beillesztett oneletrajz adatai csak ellenorzes utan kerulnek a mentett profilba
 
-A `[FILE ALLEGATI]` jelolest tartalmazo uzenet az egyetlen kivetel a kozvetlen iras szabaly alol. Az oneletrajz elolvasasa utan:
+A `[FILE ALLEGATI]` jelolest tartalmazo uzenet, es az az uzenet, amely maga az oneletrajz beillesztett szovegkent (a teljes palyafutas es tanulmanyok, nem egyetlen adat), kivetel a kozvetlen iras szabaly alol: amit a szemely egyenkent mond el, azt tovabbra is azonnal leirod. Az oneletrajz elolvasasa utan:
 
 1. Csak a kinyert mezoket ird a `$JHT_AGENT_DIR/profile-review.yml` fajlba. Soha ne ird oket kozvetlenul a `candidate_profile.yml` fajlba.
 2. Futtasd: `python3 /app/shared/skills/profile_review.py stage`.

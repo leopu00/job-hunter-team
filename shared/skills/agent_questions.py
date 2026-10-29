@@ -1141,6 +1141,30 @@ def _affirmative(text: str) -> bool:
     return " ".join(words.split()) in AFFIRMATIVE_REPLIES
 
 
+def open_cards(conn: sqlite3.Connection, agent: str, *, now: datetime | None = None) -> list[dict]:
+    """The open questions of ONE agent as a terminal shows them, oldest first: whatever channel they were delivered by
+    (the app's card, Telegram, nowhere yet), because a person at a terminal answers them by number just the same
+    (`resolve_terminal_reply`). Each is `{"id", "code", "subject", "text", "options": [labels], "multiple"}`. A question
+    past its deadline is not offered: it takes its default the next time anyone looks."""
+    moment = now or utc_now()
+    cards: list[dict] = []
+    for question in _bot_questions(conn, bot_role_for(agent), answered=False):
+        if str(question["row"].get("agent") or "").lower() != agent.lower():
+            continue
+        payload = question["payload"]
+        if payload.get("scadenza") is not None and parse_iso(payload["scadenza"]) <= moment:
+            continue
+        cards.append({
+            "id": question["id"],
+            "code": answer_code(question["id"]),
+            "subject": payload["oggetto"],
+            "text": payload["testo"],
+            "options": [option["label"] for option in payload["opzioni"]],
+            "multiple": payload["multipla"],
+        })
+    return cards
+
+
 def resolve_terminal_reply(
     conn: sqlite3.Connection, agent: str, text: str, *, now: datetime | None = None
 ) -> Typed:

@@ -2107,6 +2107,27 @@ def reply(agent: str, text: str) -> dict:
     return {"result": "chat"}
 
 
+def questions(agent: str) -> dict:
+    """The open questions of this agent, for ``jht team chat``: a card is shown to a person at a terminal whatever
+    channel it was delivered by (``agent_questions.open_cards``), so the options are on the screen and not to be
+    guessed. ``{"questions": [{"id", "code", "subject", "text", "options", "multiple"}]}``; an image without
+    questions or without a database has none."""
+    aq = _questions_module()
+    path = _db_path()
+    if aq is None or not path.is_file() or not hasattr(aq, "open_cards"):
+        return {"questions": []}
+    try:
+        conn = sqlite3.connect(str(path), timeout=10)
+    except sqlite3.Error:
+        return {"questions": []}
+    try:
+        return {"questions": aq.open_cards(conn, agent)}
+    except (aq.QuestionRejected, sqlite3.Error):
+        return {"questions": []}
+    finally:
+        conn.close()
+
+
 def _answer_stdin() -> str:
     data = sys.stdin.buffer.read(MAX_ANSWER_STDIN + 1)
     if len(data) > MAX_ANSWER_STDIN:
@@ -2127,6 +2148,8 @@ def run(argv: list[str]) -> dict:
         return enter(agent_of(argv[1]), argv[2])
     if len(argv) == 3 and argv[0] == "answer":
         return answer(agent_of(argv[1]), argv[2], _answer_stdin())
+    if len(argv) == 2 and argv[0] == "questions":
+        return questions(agent_of(argv[1]))
     if len(argv) == 2 and argv[0] == "reply":
         return reply(agent_of(argv[1]), _answer_stdin())
     if len(argv) == 3 and argv[0] == "wake":
