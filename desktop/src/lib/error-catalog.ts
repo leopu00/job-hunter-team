@@ -1180,6 +1180,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "A chosen value is not one of the allowed ones: nothing was saved.",
     "Check the hours and the models, then try again.",
   ),
+  team_settings_burst_too_soon: copy(
+    "L’ora scelta è troppo vicina: servono almeno 15 minuti.",
+    "Scegli un’ora più avanti e riprova.",
+    "The time you chose is too close: it must be at least 15 minutes away.",
+    "Choose a later time and try again.",
+  ),
+  team_settings_burst_too_far: copy(
+    "L’ora scelta è oltre le 12 ore da adesso, che è il massimo.",
+    "Scegli un’ora entro 12 ore e riprova.",
+    "The time you chose is more than 12 hours from now, which is the maximum.",
+    "Choose a time within 12 hours and try again.",
+  ),
   team_settings_read_only: copy(
     "Questa squadra è collegata in sola lettura: orari e modelli non si cambiano da qui.",
     "Collega la squadra con «Conferma e collega» e riprova.",
@@ -1694,6 +1706,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The agent is not running.",
     "Start the team, then send the message again.",
   ),
+  mentor_not_active: copy(
+    "Il Mentor non è attivo in questo momento.",
+    "Il team lo accende da solo, quando le prime posizioni hanno un punteggio o, se si era fermato, a breve: scrivigli allora.",
+    "The Mentor is not active at the moment.",
+    "The team switches it on by itself, once the first positions have a score or, if it had stopped, shortly after: write to it then.",
+  ),
   team_not_running: copy(
     "Il team non è acceso.",
     "Accendi il team, poi rimanda il messaggio.",
@@ -1754,6 +1772,61 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Avvia la squadra e riprova.",
     "The team on this computer is not running.",
     "Start the team and try again.",
+  ),
+  // The Swipe of this computer's team: a verdict is written only on the deck it was read from.
+  deck_outdated: copy(
+    "Il mazzo che stai guardando non è più quello del team.",
+    "Aggiorna la pagina per rileggerlo e giudica di nuovo.",
+    "The deck you are looking at is no longer the team's.",
+    "Refresh the page to read it again and judge again.",
+  ),
+  position_not_found: copy(
+    "Questa posizione non c’è più nel team.",
+    "Aggiorna la pagina: il mazzo si rilegge.",
+    "This position is no longer in the team.",
+    "Refresh the page: the deck is read again.",
+  ),
+  feedback_refused: copy(
+    "Il team non ha registrato il giudizio.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not record the verdict.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  exclude_refused: copy(
+    "Il team non ha escluso la posizione.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "The team did not exclude the position.",
+    "Refresh the page and try again; if it stays so, look at the team's state.",
+  ),
+  note_invalid: copy(
+    "La nota non è un testo che il team accetta.",
+    "Scrivila di nuovo, più semplice.",
+    "The note is not a text the team accepts.",
+    "Write it again, simpler.",
+  ),
+  profile_progress_invalid: copy(
+    "Non riesco a leggere a che punto è il profilo.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The profile's progress cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
+  profile_unavailable: copy(
+    "Non riesco a leggere il profilo del team.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The team's profile cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
+  ),
+  profile_unreadable: copy(
+    "Il file del profilo c’è ma non si legge.",
+    "Chiedi all’Assistente di riscriverlo, o controlla il file dal team.",
+    "The profile file is there but cannot be read.",
+    "Ask the Assistant to write it again, or check the file from the team.",
+  ),
+  team_start_unavailable: copy(
+    "Non riesco a leggere a che punto è la prima partenza del team.",
+    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "The team's first start cannot be read.",
+    "Try again in a moment; if it stays so, look at the team's state.",
   ),
   local_container_not_attested: copy(
     "Il container acceso non è quello installato da Job Hunter Team.",
@@ -2157,9 +2230,15 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   disk_low: copy(
     "Gli agenti richiedono più spazio su disco di quello disponibile.",
-    "Libera spazio: svuota il Cestino ed elimina i file grandi che non ti servono, poi riprova. Gli agenti già avviati continuano a lavorare.",
+    "Libera spazio: svuota il Cestino, rimuovi le vecchie immagini Docker/Podman ed elimina i file grandi che non ti servono, poi riprova. Gli agenti già avviati continuano a lavorare.",
     "The agents need more disk space than is available.",
-    "Free up space: empty the Trash and delete large files you no longer need, then try again. Agents already running keep working.",
+    "Free up space: empty the Trash, remove old Docker/Podman images and delete large files you no longer need, then try again. Agents already running keep working.",
+  ),
+  disk_low_sized: copy(
+    "Gli agenti richiedono almeno {required} GiB di disco — disponibili: {available} GiB.",
+    "Libera spazio: svuota il Cestino, rimuovi le vecchie immagini Docker/Podman ed elimina i file grandi che non ti servono, poi riprova. Gli agenti già avviati continuano a lavorare.",
+    "The agents need at least {required} GiB of disk — available: {available} GiB.",
+    "Free up space: empty the Trash, remove old Docker/Podman images and delete large files you no longer need, then try again. Agents already running keep working.",
   ),
 
   // ── «Free up space» on disk_low: `jht clean-images --json` (onboarding_clean_images) ──
@@ -2274,6 +2353,8 @@ export const NOT_EMITTED: ReadonlySet<string> = new Set([
   "command_timeout",
   // TS: handled by the UI, produced by no backend.
   "podman_other_machine_running_named",
+  // The sentence describeError picks for `disk_low` when the error carries the amounts (SIZED_VARIANTS).
+  "disk_low_sized",
   "container_version_incompatible",
   "account_team_mismatch",
   "ssh_auth_failed",
@@ -2350,13 +2431,16 @@ export function describeError(
     machine?: string | null;
     /** The size an outcome names (`{size}`, the space «Free up space» freed), in bytes. */
     bytes?: number | null;
+    /** The room an error asks for and the room there is (`{required}`, `{available}`), in bytes (errorAmountsOf). */
+    amounts?: ResourceAmounts | null;
   } = {},
 ): DescribedError {
   const locale = localeOf(options.locale);
   const key = typeof code === "string" ? code : "unknown";
   const has = (value: string) => Object.prototype.hasOwnProperty.call(ERROR_CATALOG, value);
   const machine = validMachine(options.machine);
-  const named = machine && key in NAMED_VARIANTS ? NAMED_VARIANTS[key] : null;
+  const amounts = validAmounts(options.amounts);
+  const named = machine && key in NAMED_VARIANTS ? NAMED_VARIANTS[key] : amounts && key in SIZED_VARIANTS ? SIZED_VARIANTS[key] : null;
   const entry = named ? ERROR_CATALOG[named] : key !== "unknown" && has(key) ? ERROR_CATALOG[key] : undefined;
   const fallbackCode = options.fallback && has(options.fallback) ? options.fallback : "unknown";
   const fallback = ERROR_CATALOG[fallbackCode];
@@ -2370,7 +2454,8 @@ export function describeError(
   const needsSize = text.includes("{size}") || action.includes("{size}");
   const bytes = options.bytes;
   const hasSize = typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0;
-  if ((needsTime && !hasTime) || (needsSize && !hasSize)) {
+  const needsAmounts = text.includes("{required}") || text.includes("{available}") || action.includes("{required}") || action.includes("{available}");
+  if ((needsTime && !hasTime) || (needsSize && !hasSize) || (needsAmounts && !amounts)) {
     chosen = UNKNOWN_ERROR;
     chosenCode = "unknown";
     [text, action] = localizedCopy(chosenCode, chosen, locale);
@@ -2378,9 +2463,53 @@ export function describeError(
   }
   const time = hasTime ? formatTime(resetsAt as number, locale, options.now ?? Date.now()) : "";
   const size = hasSize ? formatSize(bytes as number, locale) : "";
+  const required = amounts ? formatGib(amounts.requiredBytes, locale) : "";
+  const available = amounts ? formatGib(amounts.availableBytes, locale) : "";
   const fill = (value: string) =>
-    value.replaceAll("{time}", time).replaceAll("{machine}", machine ?? "").replaceAll("{size}", size);
+    value.replaceAll("{time}", time).replaceAll("{machine}", machine ?? "").replaceAll("{size}", size)
+      .replaceAll("{required}", required).replaceAll("{available}", available);
   return { code: key, text: fill(text), action: fill(action), known };
+}
+
+/** Codes with a variant that says the amounts (`{required}`, `{available}`), picked when the error carries them. */
+const SIZED_VARIANTS: Readonly<Record<string, string>> = {
+  disk_low: "disk_low_sized",
+};
+
+/** The room an error asks for and the room there is, in bytes. */
+export interface ResourceAmounts {
+  requiredBytes: number;
+  availableBytes: number;
+}
+
+function validAmounts(value: unknown): ResourceAmounts | null {
+  if (!value || typeof value !== "object") return null;
+  const { requiredBytes, availableBytes } = value as Partial<ResourceAmounts>;
+  const valid = (bytes: unknown): bytes is number => typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0;
+  return valid(requiredBytes) && valid(availableBytes) ? { requiredBytes, availableBytes } : null;
+}
+
+/** GiB with one decimal, rounded DOWN (never more room than there is), with the decimal mark of the language. */
+function formatGib(bytes: number, locale: ErrorLocale): string {
+  const tenths = Math.floor((bytes * 10) / 1024 ** 3);
+  return new Intl.NumberFormat(LOCALE_TAGS[locale], { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(tenths / 10);
+}
+
+/**
+ * The sentence with `{required}` and `{available}` written in the person's language (GiB, one decimal, rounded down).
+ * A text with no placeholder, or no valid amounts, comes back as it is.
+ */
+export function fillAmounts(text: string, amounts: unknown, locale?: string | null): string {
+  const valid = validAmounts(amounts);
+  if (!valid) return text;
+  const language = localeOf(locale);
+  return text.replaceAll("{required}", formatGib(valid.requiredBytes, language)).replaceAll("{available}", formatGib(valid.availableBytes, language));
+}
+
+/** The amounts a native error carries (`resources`), when they are valid numbers. */
+export function errorAmountsOf(error: unknown): ResourceAmounts | null {
+  if (!error || typeof error !== "object") return null;
+  return validAmounts((error as { resources?: unknown }).resources);
 }
 
 /** Codes with a variant that names the machine, picked when one is given. */

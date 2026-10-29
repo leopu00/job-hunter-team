@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
+import { ERROR_CATALOG, ERROR_LOCALES, NOT_EMITTED, describeError, errorAmountsOf, fillAmounts, errorCodeOf, errorMachineOf, errorResetsAt } from "./error-catalog";
 import { ERROR_CATALOG_LOCALES } from "./error-catalog.locales";
 import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
@@ -27,6 +27,16 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // local_swipe.rs: the names of the fields of a deck and of the verdict's answer, and the start of the owner
+  // codes the write turns into «read only». They are keys of a JSON the page reads, never a sentence.
+  ...Object.fromEntries(
+    [
+      "cloud_synced", "fb_score", "previous_status", "remote_type", "salary_declared_currency", "salary_declared_max",
+      "salary_declared_min", "salary_estimated_currency", "salary_estimated_max", "salary_estimated_min", "local_account_owner",
+    ].map((word) => [word, "a key of the Swipe's deck or of a verdict's answer, or a prefix compared in code; never shown"]),
+  ),
+  // team_start.rs: a value of the phase the first start is in, read by the page, not an error.
+  awaiting_profile: "a phase of the team's first start (the team waits for the profile), never an error",
   // runtime_log.rs ATTEST_REASONS: the step of the container check a failed chat read stopped at, written beside
   // the failure in runtime.log (`local_container_not_attested (label_project)`). The person is told the failure's
   // own code; these words are for whoever reads the log.
@@ -56,6 +66,9 @@ const NOT_ERRORS: Record<string, string> = {
   working_hours: "key of the team settings JSON, not an error",
   min_window_hours: "key of the lists the team settings answer with, not an error",
   value_invalid: "the box's word for a refused value (team_settings.rs), mapped to team_settings_value_invalid",
+  until_invalid: "the box's word for a burst time it refuses (team_settings.rs), mapped to team_settings_value_invalid",
+  until_too_soon: "the box's word for a burst time under 15 minutes away (team_settings.rs), mapped to team_settings_burst_too_soon",
+  until_too_far: "the box's word for a burst time over 12 hours away (team_settings.rs), mapped to team_settings_burst_too_far",
   // public_pages.rs and app_update.rs: the page reads `ok` and says its own sentence (lib/public-pages.ts); the
   // other word is a field of the project's public release list.
   public_page_unknown: "reply of open_public_page: the page only reads ok and says its own sentence",
@@ -94,6 +107,7 @@ const NOT_ERRORS: Record<string, string> = {
   // The reader's op cloud_sync and the fields of its reply (existing_team_runtime.rs): the page
   // shows them in its own words (cloud-sync-card), they are never a code to describe.
   cloud_sync: "op of the existing team's reader, not a code",
+  team_activity: "op of the reader of the team's database (the Team page of a local profile) and its load-times kind, not a code",
   absent: "state of the cloud_sync reply, shown by the team page's card",
   ok: "state of the cloud_sync reply, shown by the team page's card",
   auth_failed: "status of the box's periodic push in the cloud_sync reply, shown by the card",
@@ -969,6 +983,56 @@ describe("the provider that is not set up", () => {
       for (const part of [local.text, local.action]) expect(part, locale).not.toMatch(/VPS|jht setup|terminal|Terminal/);
       expect(local.action, locale).toContain(step[locale]);
       expect(local.text, locale).not.toBe(remote.text);
+    }
+  });
+});
+
+
+describe("the room the agents need, said in numbers", () => {
+  const GIB = 1024 ** 3;
+  // 26 GiB required, 20.55 GiB there: «26» and «20,5» (rounded DOWN to one decimal, never more room than there is)
+  const amounts = { requiredBytes: 26 * GIB, availableBytes: Math.floor(20.55 * GIB) };
+  const shown = { it: "20,5", en: "20.5", de: "20,5", es: "20,5", fr: "20,5", hu: "20,5", pt: "20,5" } as const;
+
+  it.each(ERROR_LOCALES)("says the disk required and available in %s, without a placeholder or a percentage", (locale) => {
+    const described = describeError("disk_low", { locale, amounts });
+    expect(described.known).toBe(true);
+    const all = `${described.text} ${described.action}`;
+    expect(all).toContain("26");
+    expect(all).toContain(shown[locale as keyof typeof shown]);
+    expect(all).not.toMatch(/[{}%]/);
+  });
+
+  it.each(ERROR_LOCALES)("falls back to the sentence without numbers in %s when the error carries none", (locale) => {
+    for (const options of [{ locale }, { locale, amounts: null }, { locale, amounts: { requiredBytes: -1, availableBytes: 3 } }]) {
+      const described = describeError("disk_low", options);
+      expect(described.known, locale).toBe(true);
+      expect(`${described.text} ${described.action}`).not.toMatch(/[{}\d%]/);
+    }
+  });
+
+  it("rounds down to one decimal with the decimal mark of the language", () => {
+    const quarter = { requiredBytes: 8 * GIB, availableBytes: 5 * GIB + GIB / 4 };
+    expect(describeError("disk_low", { locale: "en", amounts: quarter }).text).toContain("available: 5.2 GiB");
+    expect(describeError("disk_low", { locale: "it", amounts: quarter }).text).toContain("disponibili: 5,2 GiB");
+    expect(describeError("disk_low", { locale: "de", amounts: { requiredBytes: 8 * GIB, availableBytes: 2 * GIB - 1 } }).text).toContain("verfügbar: 1,9 GiB");
+    expect(describeError("disk_low", { locale: "en", amounts: { requiredBytes: 8 * GIB, availableBytes: 0 } }).text).toContain("available: 0 GiB");
+  });
+
+  it("writes the amounts into a notice, in the language, and leaves a text without placeholders alone", () => {
+    const text = "need {required} GiB, there {available} GiB";
+    expect(fillAmounts(text, { requiredBytes: 6 * GIB, availableBytes: 3 * GIB + GIB / 4 }, "en")).toBe("need 6 GiB, there 3.2 GiB");
+    expect(fillAmounts(text, { requiredBytes: 6 * GIB, availableBytes: 3 * GIB + GIB / 4 }, "it")).toBe("need 6 GiB, there 3,2 GiB");
+    expect(fillAmounts("no numbers here", { requiredBytes: 1, availableBytes: 2 }, "en")).toBe("no numbers here");
+    for (const bad of [null, undefined, {}, { requiredBytes: "6", availableBytes: 3 }, { requiredBytes: -1, availableBytes: 3 }]) {
+      expect(fillAmounts(text, bad, "en")).toBe(text);
+    }
+  });
+
+  it("reads the amounts of a native error only when they are numbers", () => {
+    expect(errorAmountsOf({ code: "disk_low", resources: { requiredBytes: 8, availableBytes: 3 } })).toEqual({ requiredBytes: 8, availableBytes: 3 });
+    for (const bad of [null, "x", {}, { resources: null }, { resources: { requiredBytes: "8", availableBytes: 3 } }, { resources: { requiredBytes: 8 } }, { resources: { requiredBytes: 1.5, availableBytes: 3 } }, { resources: { requiredBytes: -1, availableBytes: 3 } }]) {
+      expect(errorAmountsOf(bad)).toBeNull();
     }
   });
 });

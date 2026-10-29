@@ -1,7 +1,9 @@
+import { localTeamData } from "../lib/local-team-data";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
+import { readTeamStart } from "../guided-onboarding/deps";
 import { readTeamLanguage } from "../lib/team-language";
 import {
   activateDesktopAccountScope,
@@ -135,7 +137,9 @@ vi.mock("../shell/Shell", async () => {
   const { useReconfirmExistingTeam } = await import("../lib/reconfirm-existing-team");
   const { useConnectTeam } = await import("../lib/connect-team");
   const { useProviderSetup } = await import("../lib/provider-setup");
+  const { useLocalProfileLink } = await import("../lib/local-profile-link");
   const { useTeamOff } = await import("../lib/team-off");
+  const { localTeamData } = await import("../lib/local-team-data");
   const ready = (profileReady: boolean) => ({
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
@@ -147,11 +151,14 @@ vi.mock("../shell/Shell", async () => {
     const connectTeam = useConnectTeam();
     // What Settings › Provider reaches: only the Shell of the team of this computer has it.
     const providerSetup = useProviderSetup();
+    // What Settings › «Link the local profile» reaches: only an account that went in without linking has it.
+    const localProfileLink = useLocalProfileLink();
     // What the team-off banner reaches: the way back to «start the team».
     const teamOff = useTeamOff();
     return (
       <main data-testid="shell">
         Shell
+        <span data-testid="local-team-data">{String(localTeamData())}</span>
         {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
         {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
         {connectTeam && <button type="button" onClick={connectTeam.open}>connect-a-team</button>}
@@ -161,6 +168,7 @@ vi.mock("../shell/Shell", async () => {
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true)).catch(() => undefined)}>reconfirm-connected-checked</button>}
         {reconfirm && <button type="button" onClick={reconfirm.onSetup}>reconfirm-setup</button>}
         {providerSetup && <button type="button" onClick={providerSetup.open}>open-provider-setup</button>}
+        {localProfileLink && <button type="button" onClick={() => localProfileLink.link()}>link-the-local-profile</button>}
         {teamOff?.startTeam && <button type="button" onClick={teamOff.startTeam}>team-off-start</button>}
         {teamOff && <button type="button" onClick={() => void teamOff.wakeRuntime().catch(() => undefined)}>team-off-wake</button>}
       </main>
@@ -169,6 +177,11 @@ vi.mock("../shell/Shell", async () => {
   return { default: MockShell };
 });
 vi.mock("../pages/messages", () => ({ default: () => <section data-testid="assistant-chat">Assistente</section> }));
+// The read of the first-run state is another piece (the real one is native): the tests say what it answers.
+vi.mock("../guided-onboarding/deps", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../guided-onboarding/deps")>()),
+  readTeamStart: vi.fn(),
+}));
 vi.mock("../onboarding", () => ({
   OnboardingFlow: (props: OnboardingFlowProps) => {
     const stage = props.runtime.status === "ready" ? "" : `:${props.runtime.stage}`;
@@ -196,6 +209,9 @@ vi.mock("../onboarding", () => ({
         {props.runtime.status === "failed" && props.runtime.calm && <p>calm-card</p>}
         <button type="button" onClick={() => void props.onSubmit(SUBMISSION).catch(() => undefined)}>submit-onboarding</button>
         {props.interruption && <p>interrupted:{props.interruption.stage}:{props.interruption.provider}</p>}
+        {props.draft && <p>draft:{props.draft.step}:{props.draft.host.kind}:{props.draft.provider}</p>}
+        {props.onDraftChange && <button type="button" onClick={() => props.onDraftChange?.({ step: 2, host: { kind: "local" }, provider: "codex" })}>remember-draft</button>}
+        {props.onDraftChange && <button type="button" onClick={() => props.onDraftChange?.(null)}>forget-draft</button>}
         {props.onOpenWithoutTeam && <button type="button" onClick={props.onOpenWithoutTeam}>open-without-team</button>}
         {props.onResumeInterrupted && <button type="button" onClick={() => void props.onResumeInterrupted?.().catch(() => undefined)}>resume-interrupted</button>}
         {props.onDiscardInterruption && <button type="button" onClick={() => props.onDiscardInterruption?.()}>discard-interruption</button>}
@@ -334,6 +350,8 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(connectDirectChat).mockResolvedValue({ state: "ready" });
     vi.mocked(directChatStatus).mockResolvedValue({ state: "ready" });
     vi.mocked(reconnectDirectChat).mockResolvedValue({ state: "ready" });
+    // unless a test says otherwise, the team has started (the Captain runs in TEAM_READY and the burst is open with a worker)
+    vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 1, planDeclared: true });
     vi.mocked(resumeOnboardingTeamStart).mockResolvedValue(TEAM_READY);
     // no saved existing team unless a test says so: the usual resume
     vi.mocked(existingTeamBridge.reopen).mockRejectedValue({ code: "existing_team_runtime_candidate_required" });
@@ -485,6 +503,26 @@ describe("DashboardApp onboarding router", () => {
     expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE);
   });
 
+  it("opens the pages on the team of this computer for a local profile, and not for a Google account", async () => {
+    vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+    vi.mocked(localIdentitySelected).mockReturnValue(true);
+    vi.mocked(readLocalProfile).mockReturnValue({ profileId: "opaque-ready-local-profile", displayName: "Ada Locale" });
+    localStorage.setItem("jht.desktop.onboarding.local:opaque-ready-local-profile", "subscription-v1");
+    const local = render(<DashboardApp />);
+    expect(await screen.findByTestId("local-team-data")).toHaveTextContent("true");
+    local.unmount();
+    expect(localTeamData()).toBe(false);
+  });
+
+  it("does not turn the local-data mode on for a signed-in account", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+    vi.mocked(localIdentitySelected).mockReturnValue(false);
+    vi.mocked(readLocalProfile).mockReturnValue(null);
+    vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("local-team-data")).toHaveTextContent("false");
+  });
+
   it("requires an explicit gesture before migrating local ownership to Google", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
     let saved: { profileId: string; displayName: string } | null = {
@@ -624,6 +662,65 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
   });
 
+  describe("going in without linking is kept for the profile", () => {
+    function targetExists() {
+      vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+      vi.mocked(readLocalProfile).mockReturnValue({
+        profileId: "opaque-local-profile",
+        displayName: "Synthetic Local",
+      });
+      vi.mocked(probeDesktopLocalProfileMigration).mockRejectedValue({ code: "local_migration_target_exists" });
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("other");
+      requireOnboarding();
+    }
+    afterEach(() => localStorage.removeItem("jht.desktop.unlinked-local-profile.v1"));
+
+    it("the next start goes straight in: no check, no page", async () => {
+      targetExists();
+      const user = userEvent.setup();
+      const first = render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "Entra con Google senza collegare" }));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(localStorage.getItem("jht.desktop.unlinked-local-profile.v1")).toBe('{"profileId":"opaque-local-profile"}');
+      first.unmount();
+
+      vi.mocked(probeDesktopLocalProfileMigration).mockClear();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("local-migration")).not.toBeInTheDocument();
+      expect(migrateDesktopLocalProfileToAccount).not.toHaveBeenCalled();
+    });
+
+    it("another local profile is still asked", async () => {
+      targetExists();
+      localStorage.setItem("jht.desktop.unlinked-local-profile.v1", '{"profileId":"another-profile"}');
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("local-migration")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+    });
+
+    it("Settings takes the choice back and the page that offers the link comes again", async () => {
+      targetExists();
+      localStorage.setItem("jht.desktop.unlinked-local-profile.v1", '{"profileId":"opaque-local-profile"}');
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "link-the-local-profile" }));
+
+      expect(await screen.findByTestId("local-migration")).toBeInTheDocument();
+      expect(probeDesktopLocalProfileMigration).toHaveBeenCalledWith("opaque-local-profile");
+      expect(localStorage.getItem("jht.desktop.unlinked-local-profile.v1")).toBeNull();
+    });
+
+    it("the way back from Settings is only there for an account that went in without linking", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("complete-account"));
+      vi.mocked(loadOnboardingGate).mockResolvedValue({ phase: "ready" });
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "link-the-local-profile" })).not.toBeInTheDocument();
+    });
+  });
+
   it("offers «Sign in with Google without linking» only where the account already has its data here", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
     vi.mocked(readLocalProfile).mockReturnValue({
@@ -670,6 +767,17 @@ describe("DashboardApp onboarding router", () => {
 
       expect(await screen.findByTestId("shell")).toBeInTheDocument();
       expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+    });
+
+    it("a folder whose data belong to nobody and this profile cannot take is not the setup's to enter either", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("nobody");
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(markOnboardingReady).not.toHaveBeenCalled();
     });
 
     it.each(["self", "none"] as const)("the owner (%s) gets the setup as always", async (owner) => {
@@ -1733,6 +1841,35 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
   });
 
+  it("the setup that finds the disk short says the room it needs and the room there is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-disk-account"));
+    requireOnboarding();
+    const GIB = 1024 ** 3;
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({
+      code: "disk_low",
+      message: "raw native message",
+      retryable: true,
+      resources: { requiredBytes: 26 * GIB, availableBytes: Math.floor(20.55 * GIB) },
+    });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Gli agenti richiedono almeno 26 GiB di disco — disponibili: 20,5 GiB.")).toBeInTheDocument();
+    expect(screen.queryByText("raw native message")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("a disk refusal without numbers keeps the plain sentence, never a placeholder", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("room-disk-plain-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValue({ code: "disk_low", message: "raw native message", retryable: true });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("Gli agenti richiedono più spazio su disco di quello disponibile.")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/[{}]/);
+  });
+
   it("a failed local step says its own cause instead of the catalog's guess about the network", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("runtime-cause-account"));
     requireOnboarding();
@@ -1830,6 +1967,70 @@ describe("DashboardApp onboarding router", () => {
     await userEvent.click(screen.getByRole("button", { name: "discard-interruption" }));
     expect(screen.queryByText(/^interrupted:/)).not.toBeInTheDocument();
     expect(localStorage.getItem("jht.desktop.onboarding.interrupted.interrupted-account")).toBe("");
+  });
+
+  describe("the wizard's step and choices", () => {
+    const DRAFT_KEY = (id: string) => `jht.desktop.onboarding.draft.${id}`;
+
+    it("are kept as the wizard reports them, and given back to it when the app is reopened", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-account"));
+      requireOnboarding();
+      const first = render(<DashboardApp />);
+      expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+      await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-account")) ?? "null")).toMatchObject({ step: 2, host: { kind: "local" }, provider: "codex", savedAt: expect.any(Number) });
+      first.unmount();
+
+      render(<DashboardApp />);
+      expect(await screen.findByText("draft:2:local:codex")).toBeInTheDocument();
+    });
+
+    it("are the account's own: another account opens on the welcome", async () => {
+      localStorage.setItem(DRAFT_KEY("draft-account-a"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex", savedAt: Date.now() }));
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-account-b"));
+      requireOnboarding();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+    });
+
+    it("go with the account that leaves: signed out, or another account in, the one before keeps nothing", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-leaving-account"));
+      requireOnboarding();
+      const view = render(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: "remember-draft" }));
+      expect(JSON.parse(localStorage.getItem(DRAFT_KEY("draft-leaving-account")) ?? "null")).not.toBeNull();
+
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      view.rerender(<DashboardApp />);
+      await waitFor(() => expect(localStorage.getItem(DRAFT_KEY("draft-leaving-account"))).toBe(""));
+
+      // another account takes its place: the one it replaced is cleared too
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-first-account"));
+      view.rerender(<DashboardApp />);
+      await userEvent.click(await screen.findByRole("button", { name: "remember-draft" }));
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-second-account"));
+      view.rerender(<DashboardApp />);
+      await waitFor(() => expect(localStorage.getItem(DRAFT_KEY("draft-first-account"))).toBe(""));
+    });
+
+    it("go when the wizard says it started over, and when the whole setup is started over", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("draft-restart-account"));
+      requireOnboarding();
+      localStorage.setItem(DRAFT_KEY("draft-restart-account"), JSON.stringify({ step: 3, host: { kind: "local" }, provider: "codex", savedAt: Date.now() }));
+      render(<DashboardApp />);
+      expect(await screen.findByText("draft:3:local:codex")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "forget-draft" }));
+      expect(localStorage.getItem(DRAFT_KEY("draft-restart-account"))).toBe("");
+
+      // restarting the running setup: the marker is reset (mocked here), the steps reached go with it
+      await userEvent.click(screen.getByRole("button", { name: "remember-draft" }));
+      vi.mocked(prepareOnboardingRuntime).mockReturnValue(new Promise(() => undefined));
+      await userEvent.click(screen.getByRole("button", { name: "submit-onboarding" }));
+      await userEvent.click(await screen.findByRole("button", { name: "restart-onboarding" }));
+      expect(localStorage.getItem(DRAFT_KEY("draft-restart-account"))).toBe("");
+      expect(await screen.findByText("collecting:host")).toBeInTheDocument();
+      expect(screen.getByTestId("onboarding")).not.toHaveTextContent(/draft:/);
+    });
   });
 
   it("without a cause the catalog's action stays, and a code with its own instruction keeps it before the cause", async () => {
@@ -2088,6 +2289,26 @@ describe("DashboardApp onboarding router", () => {
     expect(document.body).not.toHaveTextContent("native text that must not show");
     expect(document.body).not.toHaveTextContent("{time}");
     expect(screen.getByRole("button", { name: "retry-runtime" })).toBeInTheDocument();
+  });
+
+  it("the guard that refuses the team start on a full disk says the room it keeps and the room there is", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("start-disk-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockRejectedValue({
+      code: "disk_low",
+      message: "native text that must not show",
+      retryable: true,
+      resources: { requiredBytes: 8 * 1024 ** 3, availableBytes: Math.floor(1.65 * 1024 ** 3) },
+    });
+
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:team-start")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent("Gli agenti richiedono almeno 8 GiB di disco — disponibili: 1,6 GiB.");
+    expect(document.body).not.toHaveTextContent("native text that must not show");
+    expect(document.body).not.toHaveTextContent(/[{}%]/);
   });
 
   it("names the next day when exhausted provider limits free after midnight", async () => {
@@ -3159,5 +3380,112 @@ describe("DashboardApp onboarding router", () => {
       .toBeLessThan(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[0]);
     expect(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(startOnboardingTeam).mock.invocationCallOrder[0]);
+  });
+
+  describe("the guided screen after the setup stays until the team works, and has a way out", () => {
+    async function toGuided(account: string, snapshots: OnboardingRuntimeSnapshot[]) {
+      vi.mocked(useSession).mockReturnValue(signedInAs(account));
+      requireOnboarding();
+      vi.mocked(prepareOnboardingRuntime).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+      vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+      vi.mocked(openOnboardingAssistant).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+      const read = vi.mocked(readOnboardingSnapshot);
+      for (const snapshot of snapshots) read.mockResolvedValueOnce(snapshot);
+      read.mockResolvedValue(snapshots[snapshots.length - 1]);
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await reachAssistant(user);
+      return user;
+    }
+
+    it("shows the two columns, with the chat inside, and keeps them while the team has not started", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 0, planDeclared: true });
+      await toGuided("guided-waiting", [{ ...TEAM_READY, profileReady: true }]);
+
+      expect(await screen.findByTestId("guided-onboarding")).toBeInTheDocument();
+      expect(screen.getByTestId("assistant-chat")).toBeInTheDocument();
+      await waitFor(() => expect(readTeamStart).toHaveBeenCalled(), { timeout: 3_500 });
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      // the profile is confirmed and the Assistant answers, yet the team has launched nothing: the gate stays required
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      expect(screen.getByTestId("guided-onboarding")).toHaveAttribute("data-moment", "team");
+    });
+
+    it("does not read the first-run state before the profile is confirmed", async () => {
+      await toGuided("guided-interview", [{ ...TEAM_READY, profileReady: false }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(readTeamStart).not.toHaveBeenCalled();
+      expect(screen.getByTestId("guided-onboarding")).toHaveAttribute("data-moment", "interview");
+    });
+
+    it("opens the app once the team has started: the Captain runs and the burst is open with a worker", async () => {
+      vi.mocked(readTeamStart)
+        .mockResolvedValueOnce({ phase: "awaiting_profile", workers: 0, planDeclared: false })
+        .mockResolvedValue({ phase: "burst", workers: 3, planDeclared: true });
+      await toGuided("guided-started", [{ ...TEAM_READY, profileReady: true }]);
+
+      await waitFor(() => expect(markOnboardingReady).toHaveBeenCalledWith(
+        "guided-started",
+        expect.objectContaining({ profileReady: true, captainRunning: true }),
+      ), { timeout: 6_000 });
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    });
+
+    it("does not take a team whose Captain is not running for a started one", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 3, planDeclared: true });
+      await toGuided("guided-no-captain", [{ ...TEAM_READY, profileReady: true, captainRunning: false }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("an unreadable first-run state is never a started team, and the way out is there", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue(null);
+      await toGuided("guided-unreadable", [{ ...TEAM_READY, profileReady: true }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+      expect(screen.getByTestId("guided-continue-later")).toBeInTheDocument();
+    });
+
+    it("a first-run read that fails does not stop the loop or the way out", async () => {
+      vi.mocked(readTeamStart).mockRejectedValue(new Error("native-down"));
+      await toGuided("guided-throws", [{ ...TEAM_READY, profileReady: true }]);
+      await screen.findByTestId("guided-onboarding");
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      expect(screen.getByTestId("guided-continue-later")).toBeInTheDocument();
+      expect(screen.getByTestId("guided-onboarding")).toHaveAttribute("data-moment", "team");
+    });
+
+    it("«continue later» during the interview opens the app and marks the setup as started, to come back", async () => {
+      const user = await toGuided("guided-later-interview", [{ ...TEAM_READY, profileReady: false }]);
+      await user.click(await screen.findByTestId("guided-continue-later"));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(markOnboardingStarted).toHaveBeenCalledWith("guided-later-interview");
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+    });
+
+    it("«continue later» with the profile confirmed marks the setup as ready and opens the app", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 0, planDeclared: true });
+      const user = await toGuided("guided-later-ready", [{ ...TEAM_READY, profileReady: true }]);
+      await waitFor(() => expect(readTeamStart).toHaveBeenCalled(), { timeout: 3_500 });
+      await user.click(await screen.findByTestId("guided-continue-later"));
+
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(markOnboardingReady).toHaveBeenCalledWith("guided-later-ready", expect.objectContaining({ profileReady: true }));
+    });
+
+    it("«continue later» opens the app even when the marker cannot be written", async () => {
+      const user = await toGuided("guided-later-marker", [{ ...TEAM_READY, profileReady: false }]);
+      await screen.findByTestId("guided-continue-later");
+      // the setup is past: from here on the marker cannot be written (once, for the click)
+      vi.mocked(markOnboardingStarted).mockImplementationOnce(() => { throw new Error("marker-failed"); });
+      await user.click(screen.getByTestId("guided-continue-later"));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    });
   });
 });

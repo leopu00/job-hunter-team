@@ -697,7 +697,7 @@ def _composer_refused(session):
         jht_tmux_send(CAPITANO_SESSION, msg)
 
 
-TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_S", "15"))
+TMUX_SEND_WAIT_S = float(os.environ.get("JHT_TMUX_SEND_WAIT_SENTINEL_S", os.environ.get("JHT_TMUX_SEND_WAIT_S", "15")))
 # Per sessione: il processo `jht-tmux-send` lasciato correre oltre l'attesa, e se serve liberare la casella.
 _tmux_send_running = {}
 _tmux_send_overran = set()
@@ -977,6 +977,24 @@ def _burn_intent_sweep():
         if _BURN_INTENT_MOD is None:
             _BURN_INTENT_MOD = _load_skill_module("burn_intent", "burn_intent.py")
         return _BURN_INTENT_MOD.sweep() if _BURN_INTENT_MOD else None
+    except Exception:                                       # noqa: BLE001
+        return None
+
+
+_BURST_MOD = None
+
+
+def _burst_sweep():
+    """Chiude una fascia «a tutta fino alle HH:MM» finita: rimette gli orari di prima.
+
+    Qui e non nell'app: deve succedere anche con l'app chiusa. Lo stato sta su disco
+    (`.burst.json`), quindi se il container era spento alla scadenza il ripristino avviene
+    al primo tick dopo l'avvio. Non solleva mai: un errore si riprova al tick dopo."""
+    global _BURST_MOD
+    try:
+        if _BURST_MOD is None:
+            _BURST_MOD = _load_skill_module("burst", "burst.py")
+        return _BURST_MOD.sweep() if _BURST_MOD else None
     except Exception:                                       # noqa: BLE001
         return None
 
@@ -3173,6 +3191,7 @@ def main():
         # tick: sotto, ogni freno di spesa legge `_bi` e nessuno lo ri-calcola.
         _burn_intent_notify_user()
         _burn_intent_sweep()
+        _burst_sweep()
         _bi = _burn_intent_status()
         _bi_on = bool(_bi.get("active"))
         _burn_intent_announce(state, _bi)

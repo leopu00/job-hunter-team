@@ -203,3 +203,53 @@ describe("the backend's answer over the renderer's copy", () => {
     expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent("risulta di un altro profilo");
   });
 });
+
+describe("data that no profile owns", () => {
+  const A = "a".repeat(64);
+  const B = "b".repeat(64);
+  function saveReal() {
+    localStorage.setItem(V2, JSON.stringify({
+      version: 2,
+      activeId: B,
+      teamOwnerId: null,
+      profiles: [{ profileId: B, displayName: "Bea", createdAt: 1 }],
+    }));
+    localStorage.setItem("jht.desktop.identity.v1", "local");
+  }
+
+  it("is nobody only when no marker names anyone and the backend says the data belong to no profile", async () => {
+    saveReal();
+    await expect(readNativeTeamOwnerView(async () => null, async () => "nobody")).resolves.toEqual({ owner: "nobody" });
+    // nobody has taken the team yet, or the probe cannot say: nothing to tell
+    await expect(readNativeTeamOwnerView(async () => null, async () => "none")).resolves.toEqual({ owner: "none" });
+    await expect(readNativeTeamOwnerView(async () => null, async () => "self")).resolves.toEqual({ owner: "none" });
+    await expect(readNativeTeamOwnerView(async () => null, async () => { throw { code: "local_team_owner_invalid" }; })).resolves.toEqual({ owner: "none" });
+  });
+
+  it("does not ask the second question when a marker names the owner", async () => {
+    saveReal();
+    const probe = vi.fn(async () => "nobody" as const);
+    await expect(readNativeTeamOwnerView(async () => ({ kind: "local", profileId: A }), probe)).resolves.toEqual({ owner: "other", name: null });
+    await expect(readNativeTeamOwnerView(async () => ({ kind: "local", profileId: B }), probe)).resolves.toEqual({ owner: "self" });
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("says its own sentence, not «the team is another profile's», and offers no profile to switch to", async () => {
+    saveReal();
+    render(<LocalTeamOwnerBanner locale="it" readNative={async () => ({ owner: "nobody" })} onSwitch={vi.fn(async () => undefined)} />);
+    const banner = await screen.findByTestId("local-team-owner-banner");
+    expect(banner).toHaveTextContent(LOCAL_PROFILES_TEXT.it.ownerBannerNobody);
+    expect(banner).not.toHaveTextContent(LOCAL_PROFILES_TEXT.it.ownerBannerUnknown);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it.each(Object.keys(LOCAL_PROFILES_TEXT) as (keyof typeof LOCAL_PROFILES_TEXT)[])("%s: has the sentence, and it is not one of the others", async (locale) => {
+    saveReal();
+    render(<LocalTeamOwnerBanner locale={locale} readNative={async () => ({ owner: "nobody" })} />);
+    const banner = await screen.findByTestId("local-team-owner-banner");
+    const t = LOCAL_PROFILES_TEXT[locale];
+    expect(banner).toHaveTextContent(t.ownerBannerNobody);
+    expect(t.ownerBannerNobody).not.toBe(t.ownerBannerUnknown);
+    expect(t.ownerBannerNobody).not.toBe(t.ownerBannerAccount);
+  });
+});

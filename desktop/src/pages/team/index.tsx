@@ -7,6 +7,8 @@ import { useState } from "react";
 import CloserDesktopPanel from "../../closer-desktop/CloserDesktopPanel";
 import { desktopCopy } from "../../closer-desktop/text";
 import TeamControlsLink from "./TeamControlsLink";
+import { LocalTeamActivity } from "./local-team-activity";
+import { useLocalTeamData } from "../../lib/local-team-data";
 
 /**
  * The web's /team (web/app/(protected)/team/page.tsx), run as it is: the
@@ -19,6 +21,8 @@ import TeamControlsLink from "./TeamControlsLink";
 export default function TeamPage({ search }: PageProps) {
   const [browserOpen, setBrowserOpen] = useState(false);
   const searchParams = Object.fromEntries(search);
+  // A local profile has no cloud account: the activity is counted in the team's own database.
+  const localTeam = useLocalTeamData();
   return (
     <>
       {/* on the right of the page's first row (the breadcrumb), not above it */}
@@ -27,7 +31,14 @@ export default function TeamPage({ search }: PageProps) {
           onClick={() => setBrowserOpen((open) => !open)}>{desktopCopy().open}</button>
       </div>
       {browserOpen && <CloserDesktopPanel onClose={() => setBrowserOpen(false)} />}
-      {/* the status card links to the agents' panel instead of stopping the team itself */}
+      {localTeam ? (
+        <ServerPage
+          runKey={search.toString()}
+          render={() => LocalTeamActivity({ searchParams: Promise.resolve(searchParams) })}
+          fallback={<TeamLoading />}
+        />
+      ) : (
+      // the status card links to the agents' panel instead of stopping the team itself
       <TeamStatusControls.Provider value={<TeamControlsLink />}>
         <ServerPage
           runKey={search.toString()}
@@ -35,6 +46,7 @@ export default function TeamPage({ search }: PageProps) {
           fallback={<TeamLoading />}
         />
       </TeamStatusControls.Provider>
+      )}
     </>
   );
 }

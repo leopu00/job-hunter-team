@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useCallback, useEffect, useState } from "react";
 import SwipeDeck from "@/app/(protected)/swipe/SwipeDeck";
 import { appLocale } from "../../lib/app-locale";
+import { useLocalTeamData } from "../../lib/local-team-data";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { cloudClient } from "../../lib/cloud-client";
 import { readOnce, withReadDeadline } from "../../lib/read-deadline";
@@ -22,7 +23,8 @@ type Load = { state: "loading" } | { state: "ready"; deck: SwipeDeckProps } | { 
  */
 export function SwipePage({ client = cloudClient() }: { client?: SupabaseClient }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const blocked = useCloudDataBlocked();
+  // A local profile has no cloud account, and its deck is read from the team on this computer: no cloud notice.
+  const blocked = useCloudDataBlocked() && !useLocalTeamData();
 
   const read = useCallback(() => {
     withReadDeadline(readOnce("swipe", () => loadSwipe(client)))

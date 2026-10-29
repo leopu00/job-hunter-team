@@ -13,6 +13,11 @@ import { invoke } from "@tauri-apps/api/core";
  * the team connected in full and that key. The answer to a write is what the box holds after it,
  * read again: show that, not what was sent. A reply that is not in the closed shape is an error, never
  * a default made up.
+ *
+ * «Work flat out until HH:MM» (`startBurst`, `stopBurst`) is a write like the others: the full link and
+ * the key. The app sends only the time; the team widens its hours, grants the burn and, when the time is
+ * up, puts the usual hours back by itself, app closed or not. A read carries the burst when the box
+ * sends it (`burst`); a box that does not is read as «not known», never as «none».
  */
 
 const COMMAND = "team_settings";
@@ -38,6 +43,9 @@ export type RoleModels = Partial<Record<Role, RoleModel>>;
 export interface EffectiveRole { model: ModelClass; modelName: string; effort: Effort; from: "config" | "default" }
 export type EffectiveModels = Record<Role, EffectiveRole>;
 
+/** A burst that is running (`until` is a UTC timestamp, `untilLocal` the team's wall clock HH:MM), or none. */
+export type Burst = { active: false } | { active: true; until: string; untilLocal: string };
+
 export interface TeamSettings {
   /** Where the team is: this computer, or a VPS. */
   target: "local" | "vps";
@@ -50,6 +58,8 @@ export interface TeamSettings {
   /** The team's provider; the class is applied only with Codex (`classApplies`). */
   provider?: "codex" | "claude" | "kimi" | null;
   classApplies?: boolean | null;
+  /** The «work flat out» burst; absent when the box does not say (do not read that as «none»). */
+  burst?: Burst;
 }
 
 /** What a write changes: a role is changed by sending its entry, and `{}` puts it back on the default. */
@@ -60,6 +70,8 @@ export type TeamSettingsError =
   | "team_settings_value_invalid"
   | "team_settings_read_only"
   | "team_settings_unavailable"
+  | "team_settings_burst_too_soon"
+  | "team_settings_burst_too_far"
   | "existing_team_runtime_outdated"
   | "existing_team_runtime_target_changed"
   | "own_vps_claim_required"
@@ -72,6 +84,7 @@ export type TeamSettingsResult = { ok: true; settings: TeamSettings } | { ok: fa
 
 const KNOWN_ERRORS: ReadonlySet<string> = new Set<TeamSettingsError>([
   "team_settings_request_invalid", "team_settings_value_invalid", "team_settings_read_only", "team_settings_unavailable",
+  "team_settings_burst_too_soon", "team_settings_burst_too_far",
   "existing_team_runtime_outdated", "existing_team_runtime_target_changed", "own_vps_claim_required", "own_vps_key_changed",
   "own_vps_claim_refused", "ssh_unavailable", "agent_control_window",
 ]);
@@ -148,6 +161,24 @@ function pickEffective(value: unknown): EffectiveModels | null {
   return out as EffectiveModels;
 }
 
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** The `burst` block of a read in its closed shape, or null («not known»). */
+function pickBurst(value: unknown): Burst | null {
+  if (!isRecord(value)) return null;
+  if (value.active === false) return Object.keys(value).length === 1 ? { active: false } : null;
+  if (value.active === true && Object.keys(value).length === 3 && typeof value.until === "string" && TIMESTAMP.test(value.until) &&
+      typeof value.untilLocal === "string" && TIME.test(value.untilLocal)) {
+    return { active: true, until: value.until, untilLocal: value.untilLocal };
+  }
+  return null;
+}
+
+/** Whether this is a time of day the native command accepts for a burst («03:00»; not «3:00», not «24:00»). */
+export function burstTimeIsValid(until: string): boolean {
+  return TIME.test(until);
+}
+
 /** The reply of the native command as the page uses it; anything off the closed shape is `team_settings_unavailable`. */
 export function pickTeamSettings(reply: unknown): TeamSettingsResult {
   const unavailable: TeamSettingsResult = { ok: false, error: "team_settings_unavailable" };
@@ -164,6 +195,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
       !sameList(lists.weekdays, WEEKDAYS) || lists.min_window_hours !== MIN_WINDOW_HOURS) {
     return unavailable;
   }
+  const burst = pickBurst(reply.burst);
   const provider = reply.provider === "codex" || reply.provider === "claude" || reply.provider === "kimi" ? reply.provider : null;
   return {
     ok: true,
@@ -175,6 +207,7 @@ export function pickTeamSettings(reply: unknown): TeamSettingsResult {
       effective: pickEffective(reply.effective),
       provider,
       classApplies: typeof reply.classApplies === "boolean" ? reply.classApplies : null,
+      ...(burst ? { burst } : {}),
     },
   };
 }
@@ -197,6 +230,24 @@ export async function writeTeamSettings(patch: TeamSettingsPatch, connectionKey:
   if (patch.roleModels !== undefined) settings.role_models = patch.roleModels;
   try {
     return pickTeamSettings(await call({ op: "write", settings, connectionKey }));
+  } catch {
+    return { ok: false, error: "team_settings_unavailable" };
+  }
+}
+
+/** Work flat out until HH:MM (the next time the team's clock reads it, 15 minutes to 12 hours from now); the result is what the box holds afterwards. */
+export async function startBurst(until: string, connectionKey: string, call: Call = nativeCall): Promise<TeamSettingsResult> {
+  try {
+    return pickTeamSettings(await call({ op: "burst_start", until, connectionKey }));
+  } catch {
+    return { ok: false, error: "team_settings_unavailable" };
+  }
+}
+
+/** End the burst now: the usual hours back and the burn revoked. */
+export async function stopBurst(connectionKey: string, call: Call = nativeCall): Promise<TeamSettingsResult> {
+  try {
+    return pickTeamSettings(await call({ op: "burst_stop", connectionKey }));
   } catch {
     return { ok: false, error: "team_settings_unavailable" };
   }

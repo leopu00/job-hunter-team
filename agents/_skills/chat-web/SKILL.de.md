@@ -84,8 +84,25 @@ jht-send --partial 'Arbeite daran…'   # Checkpoint mitten in der Runde, hält 
 Regeln:
 - **Ein `[CHAT]` ⇒ mindestens ein `jht-send`. Keine Ausnahmen.** Nichts zu schreiben lässt den Nutzer auf einen eingefroren wirkenden Chat starren.
 - **Die Abschlussnachricht der Runde hat KEIN `--partial`.** Wenn du es vergisst, zeigt das Frontend die Tipp-Punkte für immer an (bis ein Fallback-Timeout ~10 Min. später greift).
-- **Anführungszeichen**: Übergib den Body als einzelnes positionelles Argument. Einfache Anführungszeichen bewahren `$`, `"`, Emoji, Akzente wörtlich. Für einen Body, der ein wörtliches `'` enthält, verwende doppelte Anführungszeichen (`jht-send "non c'è problema"`) — aber innerhalb von `"..."` expandiert die Shell `$var`, also sei vorsichtig.
+- **Anführungszeichen**: Übergib den Body als einzelnes positionelles Argument. Einfache Anführungszeichen bewahren `$`, `"`, Emoji, Akzente wörtlich. Für einen Body, der ein wörtliches `'` enthält, verwende doppelte Anführungszeichen (`jht-send "non c'è problema"`) — aber innerhalb von `"..."` expandiert die Shell `$var`, also sei vorsichtig. Bei einem `$` einfache Anführungszeichen oder stdin verwenden: siehe der Abschnitt weiter unten.
 - **Mehrzeilig**: Bash `$'Zeile1\nZeile2'`, oder verwende `\n` innerhalb des Strings und lass Python es bewahren.
+
+## Ein `$` im Text: einfache Anführungszeichen oder stdin
+
+In doppelten Anführungszeichen liest die Shell `$1` und `$2` als eigene Argumente und ersetzt sie durch nichts, **bevor das Tool startet**: „Plus — $20/month; Pro — $200/month“ kommt beim Nutzer als „Plus — 0/month; Pro — 00/month“ an, und danach kann niemand die Ziffern zurückbringen. Steht im Text ein `$` (Preise, Beträge), schreibe ihn in einfache Anführungszeichen oder übergib ihn über stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+jht-send 'Plus — $20/month; Pro — $100/month'
+
+# A text with an apostrophe AND a $ cannot use single quotes: from stdin, "-" reads the text
+# and the quoted delimiter keeps every $
+jht-send - <<'TXT'
+It's $20/month, not $200
+TXT
+```
+
+Schreibe das schließende `TXT` in die erste Spalte, allein in der Zeile, ohne Leerzeichen davor (kopierst du die Einrückung, schließt das Heredoc nie: ein Text, der mit einer Zeile `TXT` endet, wird abgelehnt, es wird nichts gesendet).
 
 ## Nachrichtentyp (`--kind`)
 

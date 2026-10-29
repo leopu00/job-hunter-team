@@ -119,6 +119,22 @@ dell'utente. Gli altri agenti:
 Senza questo gate, il Capitano può riportare "12 ready" verbalmente mentre il
 DB mostra ancora 0 — esattamente la divergenza che il bug #21 ha fixato.
 
+## Un `$` nel testo: apici singoli o stdin
+
+Tra virgolette doppie la shell legge `$1` e `$2` come suoi argomenti e li sostituisce con niente **prima che il tool parta**: «Plus — $20/month; Pro — $200/month» arriva all'utente come «Plus — 0/month; Pro — 00/month», e a valle nessuno può ridare le cifre. Se il testo ha un `$` (prezzi, importi), scrivilo tra apici singoli oppure passalo da stdin.
+
+```bash
+# Single quotes: the shell leaves the $ alone
+python3 /app/shared/skills/db_update.py position 42 --notes 'Salary up to $120k, bonus $10k'
+
+# Or from stdin: "-" reads the text, the quoted delimiter keeps every $ (one text option per command)
+python3 /app/shared/skills/db_update.py position 42 --notes - <<'TXT'
+Salary up to $120k, bonus $10k
+TXT
+```
+
+Scrivi il `TXT` di chiusura in prima colonna, da solo sulla riga, senza spazi davanti (se copi il rientro il heredoc non si chiude mai: un testo che finisce con una riga `TXT` viene rifiutato, non parte niente).
+
 ## Regole di sicurezza
 
 1. **Leggi prima.** Esegui `db-query position <id>` (o `application`) per vedere lo stato corrente prima di scrivere. Sovrascritture alla cieca producono record inconsistenti.

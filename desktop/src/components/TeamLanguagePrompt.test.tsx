@@ -39,6 +39,32 @@ describe("TeamLanguagePrompt", () => {
     expect(teamLanguageAsked("a")).toBe(false);
   });
 
+  it("follows the language said on the app's first screen without asking, and remembers it for the account", async () => {
+    localStorage.setItem("jht-lang-picked", "1");
+    team("en", "en");
+    render(<TeamLanguagePrompt identityKey="a" />);
+    await waitFor(() => expect(teamLanguageAsked("a")).toBe(true));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "it" }]]);
+  });
+
+  it("asks as before when the team refuses what the first screen said", async () => {
+    localStorage.setItem("jht-lang-picked", "1");
+    team("en", "en", () => { throw { code: "read_only_link" }; });
+    render(<TeamLanguagePrompt identityKey="a" />);
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Lingua della squadra: Italiano?");
+    expect(teamLanguageAsked("a")).toBe(false);
+  });
+
+  it("does not touch a team that already speaks the app's language, even after the first screen", async () => {
+    localStorage.setItem("jht-lang-picked", "1");
+    team("it", "it");
+    render(<TeamLanguagePrompt identityKey="a" />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sets()).toEqual([]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("writes the language with the one set, closes, and is never asked again for that account", async () => {
     team("en", null);
     const { unmount } = render(<TeamLanguagePrompt identityKey="a" />);

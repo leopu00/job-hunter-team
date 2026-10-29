@@ -25,6 +25,8 @@ Tages) plus alles, was **heute** bereits erfasst ist. Du erbst die Lektionen →
 **wiederhole nicht dieselben Fehler**. Ist nichts da, bist du der Erste: fang an
 zu erfassen.
 
+Es gibt höchstens die **letzten 30 Notizen** jedes Tages aus (8 KiB), mit einer Zeile, die sagt, wie viele ältere Notizen weggelassen wurden: Jeder Neustart liest sie erneut, also halte deine Notizen kurz und stell die Lektion an den Anfang.
+
 ## Im Laufe des Tages — erfasse die BEDEUTSAMEN Ereignisse
 
 Eine Zeile, immer wenn etwas passiert, das eine Lektion enthält. KEIN Tagebuch

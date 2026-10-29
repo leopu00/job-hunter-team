@@ -12,6 +12,7 @@ import {
 } from "../../lib/team-settings-native";
 import { navigate } from "../../shell/router";
 import type { PageProps } from "../types";
+import BurstControl from "./BurstControl";
 import WorkStatsCard from "./WorkStatsCard";
 import { WORK_HOURS_TEXT } from "./work-hours.i18n";
 
@@ -96,7 +97,9 @@ function WorkHours() {
           <p className="text-[12px] text-[var(--color-yellow)]" data-testid="work-hours-unreadable">
             {t.unreadable}
           </p>
+          <BurstControl settings={loaded.settings} onSettings={(next) => setLoaded({ kind: "ready", settings: next })} />
           <WorkHoursPicker
+            key={JSON.stringify(loaded.settings.workingHours)}
             cloud={{
               workingHours: loaded.settings.workingHours,
               save,

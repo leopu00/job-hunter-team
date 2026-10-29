@@ -1229,3 +1229,34 @@ def test_b_a_codex_token_the_record_explains_is_signed_text_whatever_its_age(box
     _age_the_pending(box, 86400)
     done = box.run(MESSAGE_2)
     assert done.returncode == 0, done.stderr
+
+
+# -- Un messaggio BREVE non si riconosce nel pie' di pagina della TUI (TEST 19e: «1» all'Assistente) ---------------
+
+@pytest.mark.parametrize("short", ["5", "6", "gpt", "high"])
+def test_a_short_message_found_in_the_footer_of_the_box_is_still_pasted_and_pressed(box, short):
+    """The reply «1» to the card was refused with "il testo e' gia' nella casella: premo solo l'Invio": its whole text is
+    its signature, and a character of the model line under a Codex composer («gpt-5.6-sol high …») is not the text in the box."""
+    box.put("layout", "codex")
+    done = box.run(short)
+    assert done.returncode == 0, done.stderr
+    assert "gia' nella casella" not in done.stderr
+    assert len(box.typed()) == 1 and len(box.keys("Enter")) == 1
+
+
+def test_a_short_message_already_alone_in_the_box_is_not_typed_again(box):
+    """The real «already there» case still works for a short text: the box holds exactly it, Enter is the only key."""
+    box.put("layout", "codex")
+    box.put("composer", "5")
+    done = box.run("5")
+    assert done.returncode == 0, done.stderr
+    assert "gia' nella casella" in done.stderr
+    assert box.typed() == [] and len(box.keys("Enter")) == 1
+
+
+def test_a_short_message_next_to_a_draft_is_not_the_text_already_in_the_box(box):
+    box.put("layout", "codex")
+    box.put("composer", "una bozza della persona con un 5 dentro")
+    done = box.run("5")
+    assert done.returncode == 130, (done.returncode, done.stderr)
+    assert box.typed() == [] and box.keys("Enter") == []

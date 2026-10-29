@@ -33,6 +33,14 @@
 #
 # Uso:
 #   jht-tmux-send SESSION "[@capitano -> @scout-1] [MSG] ..."
+#   jht-tmux-send SESSION - <<'TXT'     # il messaggio da stdin: ogni `$` resta com'e'
+#   [@capitano -> @scout-1] [MSG] Budget: $120k, bonus $10k
+#   TXT
+#
+# Un `$` nel messaggio: tra virgolette doppie la shell legge `$1`..`$9` come suoi argomenti e li sostituisce con
+# niente PRIMA che parta questo script («$120k» arriva come «20k», e un ordine tra agenti cambia): apici singoli,
+# oppure `-` al posto del messaggio. La riga `TXT` di chiusura sta in PRIMA colonna: con un rientro il heredoc non
+# si chiude e un messaggio che finisce con una riga `TXT` viene rifiutato (exit 1, niente consegnato).
 #
 # Exit:
 #   0 → messaggio consegnato e submittato (submit VERIFICATO)
@@ -130,9 +138,26 @@ fi
 
 session="$1"
 shift
-# Supportiamo sia la forma "quotata" (un solo arg) sia lo splat accidentale
-# (piu' arg con spazi) — in quest'ultimo caso ricomponiamo con spazi.
-message="$*"
+if [ $# -eq 1 ] && [ "$1" = "-" ]; then
+  # Il messaggio da stdin: `$(cat)` toglie da se' gli a capo finali. Un messaggio vuoto non parte.
+  message="$(cat)"
+  if [ -z "${message//[[:space:]]/}" ]; then
+    echo "jht-tmux-send: the message on stdin is empty: not delivering" >&2
+    exit 1
+  fi
+  # Una riga di chiusura `TXT` con il rientro: il heredoc non si e' chiuso e la shell ha passato anche quella riga.
+  last_line="$(printf '%s\n' "$message" | awk 'NF { l = $0 } END { print l }')"
+  last_line="${last_line#"${last_line%%[![:space:]]*}"}"
+  last_line="${last_line%"${last_line##*[![:space:]]}"}"
+  if [ "$last_line" = "TXT" ]; then
+    echo "jht-tmux-send: the message ends with a TXT line: the closing line of the heredoc was indented, so it never closed. Not delivering: put TXT in the first column, alone on its line." >&2
+    exit 1
+  fi
+else
+  # Supportiamo sia la forma "quotata" (un solo arg) sia lo splat accidentale
+  # (piu' arg con spazi) — in quest'ultimo caso ricomponiamo con spazi.
+  message="$*"
+fi
 
 if ! tmux has-session -t "$session" 2>/dev/null; then
   echo "jht-tmux-send: sessione '$session' non esiste" >&2
@@ -549,6 +574,26 @@ _occurrences() {
 # Il NOSTRO testo e' nella casella: testa o coda della firma, anche se la TUI ha mandato a capo il
 # testo (si guarda la casella anche senza gli a capo), oppure il segnaposto di un incolla collassato
 # ("Pasted text", "Pasted Content") quando prima non c'era.
+# A SHORT message («1», «sì», «Q2 1») is its own whole signature, and a signature that short is found in any
+# screen: in the model line under a Codex composer («gpt-5.4 …  100% context left»), in a footer, in a hint. The
+# line scan of `_in_composer` then reads the footer as «our text is already in the box» and the transport presses
+# Enter on an empty one instead of pasting (TEST 19e: «1» to the Assistente). For such a message the composer's
+# own text is compared with it, exactly: `yes` (it is there, or being drawn), `no` (the box holds something else or
+# nothing), `unreadable` (the reader does not know this TUI: the scan below judges, as it always did).
+SHORT_MESSAGE_CHARS=16
+_short_message_in_composer() {
+  printf '%s\0%s' "$1" "$message" | python3 -I -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import agent_chat, tmux_send_composer as c
+pane, expected = sys.stdin.buffer.read().decode("utf-8", "replace").split("\0", 1)
+if agent_chat.composer_text(pane) is None:
+    print("unreadable")
+else:
+    print("yes" if c.composer_relation(pane, expected)[0] in ("ours", "partial") else "no")
+' "$CHAT_SKILLS"
+}
+
 _in_composer() {
   local line flat
   if [ -n "$signed_base" ]; then
@@ -558,6 +603,12 @@ _in_composer() {
     case "$(_composer_vs_ours "$1" | cut -d' ' -f1)" in
       ours|partial) return 0 ;;
       none) return 1 ;;
+    esac
+  fi
+  if [ "$enter_mode" -eq 0 ] && [ "${#message}" -lt "$SHORT_MESSAGE_CHARS" ]; then
+    case "$(_short_message_in_composer "$1")" in
+      yes) return 0 ;;
+      no) return 1 ;;
     esac
   fi
   line=$(_composer_line "$1")

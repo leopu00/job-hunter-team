@@ -22,6 +22,7 @@ mod existing_team_register;
 mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;
+mod local_swipe;
 mod mail;
 mod onboarding;
 #[cfg(test)]
@@ -33,6 +34,7 @@ mod private_copy;
 mod profile_import;
 mod profile_migration;
 mod release_channel;
+mod resources;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_log;
@@ -42,6 +44,8 @@ mod team_backup;
 mod team_export;
 mod team_owner;
 mod chat_attachment;
+mod profile_progress;
+mod team_start;
 mod work_stats;
 mod text_file_export;
 mod voice_input;
@@ -92,6 +96,8 @@ pub fn run() {
             account_scope::runtime_playground_local_reset,
             team_owner::runtime_local_team_owner_identity,
             team_owner::runtime_local_team_owner,
+            profile_progress::profile_progress_read,
+            team_start::team_start_read,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
             auth_login::auth_google_login,
@@ -188,6 +194,8 @@ pub fn run() {
             team_backup::backup_inspect,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
+            local_swipe::local_swipe_deck_read,
+            local_swipe::local_team_position_judge,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,

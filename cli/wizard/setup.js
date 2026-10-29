@@ -9,7 +9,6 @@
  *
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
-import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import {
   AI_PROVIDERS,
@@ -28,6 +27,7 @@ import {
 import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
+import { runProviderLoginStep } from './provider-login.js';
 
 // Mappa provider scelto nel wizard → ID accettato da `providers update`
 // (i providers.js usa "claude" / "codex" / "kimi" come keys).
@@ -80,38 +80,6 @@ function runProviderOauth(cmdName) {
   // Exit code variabile: claude 2.x esce 0 su /quit, !=0 su Ctrl+C.
   // Non blocchiamo il wizard sul exit code.
   return result.error ? false : true;
-}
-
-/**
- * Path dove i CLI provider salvano le credenziali OAuth dentro al
- * container. Il polling controlla esistenza + mtime per detectare un
- * login completato dopo l'inizio dell'attesa.
- */
-const PROVIDER_CRED_PATHS = {
-  claude: ['/jht_home/.claude/.credentials.json', '/home/jht/.claude/.credentials.json'],
-  codex:  ['/jht_home/.codex/.credentials.json',  '/home/jht/.codex/.credentials.json'],
-  kimi:   ['/jht_home/.config/kimi-cli/credentials.json', '/home/jht/.config/kimi-cli/credentials.json'],
-};
-
-/**
- * Polling: aspetta che il file credentials di `cmdName` venga creato o
- * aggiornato dopo `startEpochSec`. Ritorna il path trovato o null in
- * timeout. Sleep 3s tra check, max `timeoutMs`.
- */
-async function waitForOauthCredentials(cmdName, startEpochSec, timeoutMs) {
-  const candidates = PROVIDER_CRED_PATHS[cmdName] || [];
-  if (candidates.length === 0) return null;
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    for (const p of candidates) {
-      try {
-        const st = fs.statSync(p);
-        if (st.mtimeMs / 1000 >= startEpochSec - 1) return p;
-      } catch { /* ENOENT */ }
-    }
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  return null;
 }
 
 /**
@@ -276,21 +244,14 @@ export async function runSetupWizard(prompter) {
   // STEP 7: OAuth login (BLOCCANTE — wizard polla finche' rileva il login)
   // ────────────────────────────────────────────────────────────────────────
   const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
-  const startTs = Date.now() / 1000;
-  await prompter.note(
-    // wizard.oauth.notify_body uses %s × 2 (cli name + account label)
-    tf('wizard.oauth.notify_body', oauthCmd, selectedProvider.label),
-    tf('wizard.oauth.notify_title', selectedProvider.label),
-  );
-
-  const credSpinner = prompter.progress(tf('wizard.oauth.waiting', oauthCmd));
-  const credPath = await waitForOauthCredentials(oauthCmd, startTs, 30 * 60 * 1000);
-  if (!credPath) {
-    credSpinner.stop(t('wizard.oauth.timeout'));
+  // a login that is already there ends the step; otherwise the person is told where to log in
+  const loggedIn = await runProviderLoginStep({
+    cmdName: oauthCmd, label: selectedProvider.label, isVps, prompter, t, tf,
+  });
+  if (!loggedIn) {
     await prompter.outro(t('wizard.oauth.aborted'));
     return;
   }
-  credSpinner.stop(tf('wizard.oauth.detected', oauthCmd, credPath));
 
   // ────────────────────────────────────────────────────────────────────────
   // STEP 8: avvia il team automatically (no prompt)

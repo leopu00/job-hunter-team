@@ -4,6 +4,7 @@ import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i1
 import { fill } from "../../lib/text-slots";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import PublicPageLinks from "../../components/PublicPageLinks";
+import ReportProblem from "../../components/ReportProblem";
 import type { PageProps } from "../types";
 import { HELP_TEXT } from "./help.i18n";
 
@@ -59,6 +60,8 @@ export default function HelpPage(_props: PageProps) {
         <h2 id="help-trouble" className="text-[13px] font-semibold">{t.troubleTitle}</h2>
         <p>{fill(t.trouble, { refresh: SHELL_TEXT[locale].refresh, back: names.back })}</p>
       </section>
+
+      <ReportProblem id="help-report" />
 
       <PublicPageLinks className="m-0 text-[var(--color-muted)]" />
     </article>

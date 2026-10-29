@@ -38,6 +38,7 @@ import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
 import { Lanes, SessionHistory } from "./AgentHistory";
 import ActionLogSection from "./ActionLogSection";
+import { BurstStrip } from "../work-hours/BurstControl";
 import Link from "../../web-shims/next-link";
 import { isDirectChatAgentId, REOPEN_NO_RETRY, type DirectChatAgentId } from "../messages/DirectChatScreen";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
@@ -782,6 +783,11 @@ export default function AgentsPanel({ search }: PageProps) {
             <p data-testid="panel-team-help" className="text-[11px] -mt-2 mb-3 text-[var(--color-muted)]">
               {t.teamControlsHelp}
             </p>
+          )}
+          {!readOnly && team && !team.halted && (
+            <div className="mb-3">
+              <BurstStrip />
+            </div>
           )}
           {notices.team && (
             <p role={notices.team.ok ? "status" : "alert"} className="text-[11px] mb-2" style={{ color: notices.team.ok ? "var(--color-green)" : "var(--color-red)" }}>

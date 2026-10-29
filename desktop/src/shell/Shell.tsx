@@ -5,6 +5,9 @@ import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { DesktopWriteProvider } from "@/lib/desktop-write";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
+import { useLocalTeamData } from "../lib/local-team-data";
+import { LOCAL_TEAM_DATA_TEXT } from "../lib/local-team-data.i18n";
+import { LocalTeamStoppedBar } from "./LocalTeamStoppedBar";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
 import {
@@ -188,6 +191,12 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   const notFullReason = readOnlyTeam ? existingTeamNotFullReason(readOnlyTeam) : null;
   const readNotice = useExistingTeamReadNotice();
   const readOnly = linkedTeam !== null;
+  // A profile with no cloud account: the pages show the team of this computer, which they only read.
+  const localTeam = useLocalTeamData();
+  const localReadOnly = useMemo(
+    () => (localTeam ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly } : { readOnly: false, reason: "" }),
+    [localTeam],
+  );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   const params = useMemo(() => new URLSearchParams(search), [search]);
 
@@ -278,6 +287,7 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
     return (
       <DashboardI18nProvider>
         <DesktopWriteProvider value={{ canChange: true }}>
+          <ReadOnlyActionsProvider value={localReadOnly}>
           <div style={FULL_BLEED_COLUMN}>
             <Navbar onLogout={onLogout} />
             {/* The bars take what they need up to a third of the window and scroll beyond it: the page under them always keeps room, and the navbar above is never pushed out. */}
@@ -286,12 +296,14 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
               <NewVersionBanner />
               <TeamOffBanner />
               <LocalTeamOwnerBanner onSwitch={onLogout} />
+              <LocalTeamStoppedBar />
               <WriteAccessRestoredBanner />
             </div>
             <main className="relative min-h-0 flex-1" data-testid="full-bleed">
               {page}
             </main>
           </div>
+          </ReadOnlyActionsProvider>
         </DesktopWriteProvider>
       </DashboardI18nProvider>
     );
@@ -299,15 +311,18 @@ export default function Shell({ onLogout, onCloseReadOnly }: ShellProps) {
   return (
     <DashboardI18nProvider>
       <DesktopWriteProvider value={{ canChange: true }}>
+        <ReadOnlyActionsProvider value={localReadOnly}>
         <div style={{ position: "relative", zIndex: 1 }}>
         <Navbar onLogout={onLogout} />
           <MailRotationBanner />
           <NewVersionBanner />
           <TeamOffBanner />
           <LocalTeamOwnerBanner onSwitch={onLogout} />
+          <LocalTeamStoppedBar />
             <WriteAccessRestoredBanner />
           <MainChrome>{page}</MainChrome>
         </div>
+        </ReadOnlyActionsProvider>
       </DesktopWriteProvider>
     </DashboardI18nProvider>
   );
