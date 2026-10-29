@@ -108,7 +108,7 @@ def test_the_login_is_a_credentials_file_that_is_not_empty_for_the_active_provid
     ("claude", ".config/claude/credentials.json"), ("claude", ".config/claude/auth.json"),
     ("anthropic", ".config/claude/auth.json"),
     ("codex", ".codex/credentials.json"), ("openai", ".config/codex/credentials.json"),
-    ("kimi", ".kimi/credentials/kimi-code.json"), ("kimi", ".kimi/kimi.json"), ("kimi", ".config/kimi/config.json"),
+    ("kimi", ".kimi/credentials/kimi-code.json"), ("kimi", ".config/kimi-cli/credentials.json"), ("kimi", ".kimi/credentials.json"),
     ("moonshot", ".kimi/credentials.json"),
 ])
 def test_a_login_in_any_place_the_start_check_looks_in_counts(home, provider, where):
@@ -118,6 +118,16 @@ def test_a_login_in_any_place_the_start_check_looks_in_counts(home, provider, wh
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("{}")
     assert team_quiet.provider_ready(home) is True
+
+
+@pytest.mark.parametrize("where", [".kimi/kimi.json", ".kimi/config.json", ".config/kimi/config.json"])
+def test_the_configuration_files_of_kimi_are_not_a_login(home, where):
+    # what the logout leaves behind must not say «connected»
+    config(home, "kimi")
+    target = home / where
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("{}")
+    assert team_quiet.provider_ready(home) is False
 
 
 def test_the_cli_login_is_a_file_login_too(home):

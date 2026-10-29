@@ -30,13 +30,14 @@ from pathlib import Path
 TAIL_BYTES = 64 * 1024
 USAGE_MAX = 1000.0
 
-# Dove il provider tiene l'accesso, dentro la home del team: la STESSA lista del controllo d'avvio dell'app
+# Dove il provider tiene l'accesso, dentro la home del team: la lista del controllo d'avvio dell'app
 # (game/scripts/setup/setup_service.gd, AUTH_PATHS), perche' un accesso valido in uno qualsiasi di questi posti
 # vale come «collegato». Il nome-vendor (openai/anthropic/moonshot) e il nome-CLI (codex/claude/kimi) sono lo stesso provider.
 _CLAUDE = [".claude/.credentials.json", ".claude/credentials.json", ".config/claude/credentials.json", ".config/claude/auth.json"]
 _CODEX = [".codex/auth.json", ".codex/credentials.json", ".config/codex/credentials.json"]
-_KIMI = [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json", ".kimi/kimi.json",
-         ".kimi/config.json", ".kimi/credentials.json", ".config/kimi/config.json"]
+# Kimi: solo i file di LOGIN, gli stessi che toglie il logout (i due config.json sono configurazione, non accesso: dopo un
+# logout resterebbero e il fatto direbbe ancora «collegato»).
+_KIMI = [".kimi/credentials/kimi-code.json", ".config/kimi-cli/credentials.json", ".kimi/credentials.json"]
 AUTH_FILES = {
     "claude": _CLAUDE, "anthropic": _CLAUDE,
     "openai": _CODEX, "codex": _CODEX,
