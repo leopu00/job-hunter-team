@@ -171,12 +171,12 @@ describe("OnboardingFlow technical setup", () => {
     }));
   });
 
-  it("says before the setup that a local profile takes an earlier version's data as it is", async () => {
+  it("says before the setup that a local profile takes the data already on this computer as it is", async () => {
     const user = userEvent.setup();
     renderFlow({ account: { displayName: "Ada", identity: "local" }, platform: "windows", previousLocalData: true });
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
-    const note = screen.getByRole("note", { name: /versione precedente/i });
+    const note = screen.getByRole("note", { name: /dati già presenti/i });
     expect(note).toHaveTextContent(/riutilizziamo configurazione, profilo, accesso al provider e documenti/i);
     expect(note).toHaveTextContent(/cambia la password per app/i);
     // The v0.3.9 team may still run in Docker Desktop on the same data.
@@ -184,12 +184,12 @@ describe("OnboardingFlow technical setup", () => {
     expect(note).toHaveTextContent(/fermalo ed eliminalo da Docker Desktop/i);
   });
 
-  it("tells an account that only a local profile takes an earlier version's data", async () => {
+  it("tells an account that only a local profile takes the data already on this computer", async () => {
     const user = userEvent.setup();
     renderFlow({ account: { displayName: "Ada", identity: "google" }, previousLocalData: true });
     await reachProviderLocal(user);
     await user.click(screen.getByRole("button", { name: /rivedi il setup/i }));
-    expect(screen.getByRole("note", { name: /versione precedente/i })).toHaveTextContent(/lo riprende solo un profilo locale/i);
+    expect(screen.getByRole("note", { name: /dati già presenti/i })).toHaveTextContent(/li riprende solo un profilo locale/i);
   });
 
   it("lists, before the Windows setup starts, what it installs: the values are the script's", async () => {
