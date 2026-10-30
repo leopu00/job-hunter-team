@@ -135,7 +135,7 @@ def test_windows_wrapper_uses_nonce_control_plane_without_forced_kill():
         assert seam in source
     forbidden = ("taskkill", "Stop-Process", "docker stop", "Invoke-Compose down")
     lifecycle = source[source.index("# ── Client desktop nativo") : source.index(
-        "# Il CLI Node vive nel container"
+        "# `jht download`: scarica l'app desktop"
     )]
     for command in forbidden:
         assert command not in lifecycle

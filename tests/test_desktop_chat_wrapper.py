@@ -531,7 +531,6 @@ def test_an_image_without_the_script_gives_the_scripts_own_2_and_the_wrapper_doe
         (("--version",), "docker exec"),
         (("--help",), "docker exec"),
         (("setup", "--non-interactive"), "docker exec"),
-        (("download", "--os", "macos"), "docker exec"),
         (("providers", "current"), "docker exec"),
         (("providers", "limits", "--json"), "docker exec"),
     ),
@@ -566,6 +565,25 @@ def test_host_dispatcher_reuses_only_the_attested_container_id(
     )
     assert ownership_index < operation_index
     assert all("same-name-decoy" not in line for line in calls)
+
+
+def test_download_is_not_a_container_command_any_more(tmp_path: Path):
+    # `jht download` fetches and checks the release on the host (SEC-09): it does not exec, cp or inspect any container,
+    # the attested id or a name, and it does not need the runtime to be up.
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_RELEASE_BASE_URL"] = "http://127.0.0.1:9"
+    env["JHT_DOWNLOAD_HOST"] = "darwin-arm64"
+
+    done = subprocess.run(
+        [str(wrapper), "download", "--os", "macos", "--version", "0.3.5", "--output", str(tmp_path / "out" / "x.dmg")],
+        env=env, text=True, capture_output=True, timeout=30, check=False,
+    )
+
+    assert done.returncode == 1 and "download non riuscito" in done.stderr, done.stderr
+    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    assert [line for line in calls if line.startswith(("docker exec", "docker cp", "docker inspect", "docker logs"))] == []
+    assert not (tmp_path / "out" / "x.dmg").exists()
 
 
 def test_attested_container_disappearing_never_falls_back_to_a_name(tmp_path: Path):
