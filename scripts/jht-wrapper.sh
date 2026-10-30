@@ -3588,110 +3588,170 @@ handle_gui_command() {
   game_request foreground
 }
 
-# `download --output` indica un path dell'HOST, mentre il CLI Node gira nel
-# container. Inoltrarlo alla cieca (soprattutto `C:\\...` su Windows) crea il
-# file nel filesystem Linux del container e mente sul risultato. Il download
-# resta implementato e verificato una sola volta dal CLI canonico; il wrapper
-# gli assegna un path temporaneo interno, poi pubblica i byte sul path host con
-# docker cp + rename nello stesso filesystem della destinazione.
-handle_host_download() {
-  local container_id="$1" host_output="" container_tmp="" host_tmp="" arg next
-  shift
-  local -a rewritten=()
-  local -a download_env=()
+# `jht download`: scarica l'app desktop e la verifica SULL'HOST. Prima il download e lo SHA-256 stavano dentro il container, e
+# i byte verificati venivano poi copiati sull'host senza altra verifica (o lasciati in /jht_user/downloads, che gli agenti
+# scrivono): un agente poteva far arrivare alla persona un installer diverso da quello verificato. Ora l'host prende da solo
+# SHA256SUMS e l'installer dalla release (HTTPS), li tiene in una cartella privata fuori dai mount, confronta l'hash e pubblica
+# il file solo dopo, verso una cartella che gli agenti non scrivono. Il container non entra piu' nel comando.
+# JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
+download_usage() {
+  cat <<'USAGE'
+uso: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]
+  Scarica l'app desktop dalla release, ne verifica lo SHA-256 e la salva (di base in ~/Downloads).
+USAGE
+}
 
-  # Seam esplicita per mirror/test di integrita': resta confinata al download
-  # e permette al comando HOST di esercitare anche un manifest corrotto.
-  if [ -n "${JHT_RELEASE_BASE_URL:-}" ]; then
-    download_env=(-e "JHT_RELEASE_BASE_URL=$JHT_RELEASE_BASE_URL")
+# Il Mac di 0.4 e' solo Apple silicon: su un Intel il download non si apre, e si rifiuta prima di scaricare.
+# JHT_DOWNLOAD_HOST ("<piattaforma>-<arch>") fa le veci della macchina, per i test.
+download_host_is_intel_mac() {
+  if [ -n "${JHT_DOWNLOAD_HOST:-}" ]; then
+    [ "$JHT_DOWNLOAD_HOST" = "darwin-x64" ]
+    return $?
   fi
+  [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = x86_64 ] || return 1
+  # Sotto Rosetta uname dice x86_64 anche su Apple silicon: il kernel dice che il processo e' tradotto.
+  [ "$(/usr/sbin/sysctl -in sysctl.proc_translated 2>/dev/null || echo 0)" != 1 ]
+}
 
+# 0 se $1 sta dentro la cartella $2 (o e' la cartella stessa); i percorsi sono gia' risolti.
+download_path_inside() {
+  case "$1/" in "$2"/*) return 0 ;; esac
+  return 1
+}
+
+handle_host_download() {
+  local os="" version="" output="" deb=0 arg
   while [ "$#" -gt 0 ]; do
     arg="$1"
     case "$arg" in
-      --output)
-        if [ -n "$host_output" ]; then
-          err "--output specificato piu di una volta"
-          return 2
-        fi
-        if [ "$#" -lt 2 ] || [ -z "$2" ]; then
-          err "--output richiede un path"
-          return 2
-        fi
-        next="$2"
-        host_output="$next"
-        shift 2
-        ;;
-      --output=*)
-        if [ -n "$host_output" ]; then
-          err "--output specificato piu di una volta"
-          return 2
-        fi
-        host_output="${arg#--output=}"
-        if [ -z "$host_output" ]; then
-          err "--output richiede un path"
-          return 2
-        fi
-        shift
-        ;;
-      *)
-        rewritten+=("$arg")
-        shift
-        ;;
+      --help|-h) download_usage; return 0 ;;
+      --deb) deb=1; shift ;;
+      --os|--version|--output|-o)
+        if [ "$#" -lt 2 ] || [ -z "$2" ]; then err "$arg richiede un valore"; return 2; fi
+        case "$arg" in --os) os="$2" ;; --version) version="$2" ;; *) output="$2" ;; esac
+        shift 2 ;;
+      --os=*) os="${arg#--os=}"; shift ;;
+      --version=*) version="${arg#--version=}"; shift ;;
+      --output=*) output="${arg#--output=}"; shift ;;
+      *) err "argomento non riconosciuto: $arg"; download_usage >&2; return 2 ;;
     esac
   done
+  if [ -z "$os" ] || [ -z "$version" ]; then err "--os e --version sono obbligatori"; download_usage >&2; return 2; fi
 
-  # Senza output esplicito il default `/jht_user/downloads` e' gia un bind
-  # mount visibile sul computer host: nessuna copia aggiuntiva necessaria.
-  if [ -z "$host_output" ]; then
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
-      ${download_env[@]+"${download_env[@]}"} \
-      "$container_id" node "$NODE_ENTRY" download "${rewritten[@]}"
-    return $?
+  local platform asset
+  case "$(printf '%s' "$os" | tr '[:upper:]' '[:lower:]')" in
+    win|win32|windows) platform=windows ;;
+    darwin|mac|macos|osx) platform=macos ;;
+    linux) platform=linux ;;
+    *) err "sistema non supportato: $os. Usa windows, macos o linux."; return 2 ;;
+  esac
+  version="${version#v}"
+  if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+    err "versione non valida: $version. Esempio: 0.3.5."
+    return 2
   fi
-
-  if [ -e "$host_output" ] || [ -L "$host_output" ]; then
-    err "il file di destinazione esiste gia: $host_output"
+  if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "--deb vale solo per Linux."; return 2; fi
+  local major minor
+  major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"
+  if [ "$platform" = windows ] && { [ "$major" -gt 0 ] || [ "$minor" -ge 4 ]; }; then
+    err "Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e' stato scaricato niente."
     return 1
   fi
-
-  container_tmp="/tmp/jht-download-$$-${RANDOM:-0}"
-  rewritten+=(--output "$container_tmp")
-  local code
-  if docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" \
-      ${download_env[@]+"${download_env[@]}"} \
-      "$container_id" node "$NODE_ENTRY" download "${rewritten[@]}"; then
-    code=0
-  else
-    code=$?
-    docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
-    return "$code"
-  fi
-
-  local parent
-  parent="$(dirname -- "$host_output")"
-  if ! mkdir -p -- "$parent"; then
-    err "impossibile creare la directory di destinazione: $parent"
-    docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
+  if [ "$platform" = macos ] && download_host_is_intel_mac; then
+    err "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente."
     return 1
   fi
-  host_tmp="${host_output}.part-$$-${RANDOM:-0}"
-  if ! docker cp "$container_id:$container_tmp" "$host_tmp"; then
-    err "copia del download verificato verso l'host non riuscita"
-    rm -f -- "$host_tmp"
-    docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
-    return 1
-  fi
-  docker exec "$container_id" rm -f "$container_tmp" >/dev/null 2>&1 || true
+  case "$platform:$deb" in
+    windows:*) asset="job-hunter-team-windows-x64-setup.exe" ;;
+    macos:*) asset="job-hunter-team-macos-universal.dmg" ;;
+    linux:1) asset="job-hunter-team-linux-x64.deb" ;;
+    linux:*) asset="job-hunter-team-linux-x64.AppImage" ;;
+  esac
+  command -v curl >/dev/null 2>&1 || { err "curl non trovato: serve per scaricare la release."; return 1; }
 
-  # `mv -n` non sostituisce un file comparso durante il download. Se il temp
-  # esiste ancora dopo il comando, la pubblicazione non e' avvenuta.
-  if ! mv -n -- "$host_tmp" "$host_output" || [ -e "$host_tmp" ]; then
+  # Destinazione: di base ~/Downloads, mai una cartella condivisa con il team; un --output li dentro si rifiuta.
+  local dest parent real_parent
+  dest="${output:-$HOME/Downloads/$asset}"
+  case "$dest" in /*) ;; *) dest="$PWD/$dest" ;; esac
+  parent="$(dirname -- "$dest")"
+  mkdir -p -- "$parent" || { err "impossibile creare la directory di destinazione: $parent"; return 1; }
+  real_parent="$(cd -P -- "$parent" 2>/dev/null && pwd -P)" || { err "directory di destinazione non raggiungibile: $parent"; return 1; }
+  local shared real_shared
+  for shared in "$HOME/.jht" "${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"; do
+    real_shared="$(cd -P -- "$shared" 2>/dev/null && pwd -P)" || real_shared="$shared"
+    if download_path_inside "$real_parent" "$real_shared" || download_path_inside "$real_parent" "$shared"; then
+      err "la destinazione sta in una cartella condivisa con il team ($shared): scegline una fuori, come ~/Downloads."
+      return 1
+    fi
+  done
+  dest="$real_parent/$(basename -- "$dest")"
+  if [ -L "$dest" ]; then err "la destinazione e' un link: $dest"; return 1; fi
+  if [ -e "$dest" ] && [ ! -f "$dest" ]; then err "la destinazione esiste e non e' un file: $dest"; return 1; fi
+
+  local base tag work expected code=0 proto
+  base="${JHT_RELEASE_BASE_URL:-https://github.com/leopu00/job-hunter-team/releases/download}"
+  base="${base%/}/v$version"
+  proto="=https"
+  [ -z "${JHT_RELEASE_BASE_URL:-}" ] || proto="=https,http"
+  work="$(mktemp -d "${TMPDIR:-/tmp}/jht-download.XXXXXX")" || { err "cartella temporanea non creata"; return 1; }
+  chmod 700 "$work" 2>/dev/null || true
+
+  download_fetch() {
+    curl --fail --silent --show-error --location --proto "$proto" --proto-redir "$proto" --retry 2 \
+      --user-agent job-hunter-team-cli --output "$2" -- "$1"
+  }
+  download_cleanup() { rm -f -- "$work/SHA256SUMS" "$work/asset"; rmdir -- "$work" 2>/dev/null || true; }
+
+  if ! download_fetch "$base/SHA256SUMS" "$work/SHA256SUMS"; then
+    err "download non riuscito: SHA256SUMS di v$version"; download_cleanup; return 1
+  fi
+  local line sum rest
+  expected=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    sum="${line%%[[:space:]]*}"
+    rest="${line#"$sum"}"
+    rest="${rest#"${rest%%[![:space:]]*}"}"
+    rest="${rest#\*}"
+    if [[ "$sum" =~ ^[0-9a-fA-F]{64}$ ]] && [ "$rest" = "$asset" ]; then
+      expected="$(printf '%s' "$sum" | tr '[:upper:]' '[:lower:]')"
+      break
+    fi
+  done < "$work/SHA256SUMS"
+  if [ -z "$expected" ]; then err "SHA-256 dichiarato non trovato per $asset."; download_cleanup; return 1; fi
+
+  if [ -f "$dest" ]; then
+    if [ "$(runtime_sha256 "$dest")" = "$expected" ]; then
+      printf "\n  File gia' presente e verificato: %s\n  SHA-256 verificato: %s\n\n" "$dest" "$expected"
+      download_cleanup; return 0
+    fi
+    err "il file $dest esiste ma il suo SHA-256 non corrisponde: non e' stato sovrascritto."
+    download_cleanup; return 1
+  fi
+
+  printf "\n  Scarico %s...\n" "$asset"
+  if ! download_fetch "$base/$asset" "$work/asset"; then
+    err "download non riuscito: $asset"; download_cleanup; return 1
+  fi
+  local actual
+  actual="$(runtime_sha256 "$work/asset")"
+  if [ "$actual" != "$expected" ]; then
+    err "SHA-256 non valido per $asset: atteso $expected, ottenuto $actual."
+    download_cleanup; return 1
+  fi
+
+  # Pubblicazione: copia in un nome nuovo accanto alla destinazione (esclusiva) e rinomina senza sostituire.
+  local part="$dest.part-$$-${RANDOM:-0}"
+  if ! ( set -C; cat -- "$work/asset" > "$part" ); then
+    err "copia del download verificato verso la destinazione non riuscita"; rm -f -- "$part"; download_cleanup; return 1
+  fi
+  if ! mv -n -- "$part" "$dest" || [ -e "$part" ]; then
     err "la destinazione e' comparsa durante il download; non e' stata sovrascritta"
-    rm -f -- "$host_tmp"
-    return 1
+    rm -f -- "$part"; download_cleanup; return 1
   fi
-  printf "  Salvato sul computer host in: %s\n" "$host_output"
+  download_cleanup
+  printf "  SHA-256 verificato: %s\n  Salvato in: %s\n\n" "$actual" "$dest"
+  return "$code"
 }
 
 # ── Upgrade runtime, transazionale e host-side ────────────────────────────
@@ -5414,13 +5474,10 @@ case "$SUB" in
     exit "$rc"
     ;;
 
-  # Download verificato dal CLI nel container, pubblicato atomically sul path
-  # host quando l'utente passa --output.
+  # Download e verifica SHA-256 sull'host (il container non c'entra): vedi handle_host_download.
   download)
-    require_compose_file
-    require_docker
-    ensure_up
-    handle_host_download "$ATTESTED_CONTAINER_ID" "${@:2}"
+    handle_host_download "${@:2}"
+    exit $?
     ;;
 
   # `jht artifact upload FILE`: il file dell'host lo legge il wrapper (vedi artifact_upload_command); gli altri verbi vanno al CLI.
