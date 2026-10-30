@@ -225,3 +225,16 @@ def test_a_folder_turned_into_a_junction_after_it_was_queued_or_before_it_is_wri
         capture_output=True, text=True, env=env, timeout=240,
     )
     assert done.returncode == 0 and "RACE_LEFT_ALONE" in done.stdout, (done.stdout, done.stderr)
+
+
+def test_no_variable_is_followed_by_a_colon_in_a_string_of_the_acl_scripts():
+    """In PowerShell "$Which: text" reads `$Which:` as a variable with a scope and the whole script does not parse (the selftest of
+    the gate failed on it): the name goes in braces, "${Which}: text"."""
+    pattern = re.compile(r'"[^"\n]*\$[A-Za-z_][A-Za-z0-9_]*:[^"\n]*"')
+    for source in (SCRIPTS / "windows-config-acl-selftest.ps1", SCRIPTS / "windows-private-acl.ps1"):
+        for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line) and not re.search(r"\$(?:env|script|global|local|private|using|PSScriptRoot):", line):
+                found = [m for m in pattern.findall(line) if re.search(r"\$(?!env:|script:|global:|local:|using:)[A-Za-z_][A-Za-z0-9_]*:[ \"]", m)]
+                assert not found, (source.name, number, line.strip())
+    for text in (RUN, RACE):
+        assert not re.search(r'"[^"\n]*\$(?!env:)[A-Za-z_][A-Za-z0-9_]*: ', text)

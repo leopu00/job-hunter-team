@@ -117,11 +117,11 @@ try {
     Set-JhtAccessControl -Path $linkHome -Acl $acl
     Protect-JhtHomeAcl -Path $linkHome
     foreach ($made in @($linkHome, (Join-Path $linkHome 'sub'), (Join-Path $linkHome 'sub\plain.txt'))) {
-      if (-not (Test-PrivateJhtHomeAcl -Path $made)) { throw "$Which: not made private: $made" }
+      if (-not (Test-PrivateJhtHomeAcl -Path $made)) { throw "${Which}: not made private: $made" }
     }
-    if ((Get-Acl -LiteralPath $outside).Sddl -ne $before) { throw "$Which: the ACL of the folder a junction points at was rewritten" }
-    if ((Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl -ne $beforeFile) { throw "$Which: the ACL of a file behind a junction was rewritten" }
-    if ((Get-Acl -LiteralPath $outside).AreAccessRulesProtected) { throw "$Which: the folder a junction points at lost its inheritance" }
+    if ((Get-Acl -LiteralPath $outside).Sddl -ne $before) { throw "${Which}: the ACL of the folder a junction points at was rewritten" }
+    if ((Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl -ne $beforeFile) { throw "${Which}: the ACL of a file behind a junction was rewritten" }
+    if ((Get-Acl -LiteralPath $outside).AreAccessRulesProtected) { throw "${Which}: the folder a junction points at lost its inheritance" }
     Write-Host "ACL_LINK_LEFT_ALONE $Which"
   }
   Assert-LinkIsLeftAlone -Which 'helper'
