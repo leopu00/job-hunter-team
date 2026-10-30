@@ -2016,6 +2016,35 @@ final_message() {
   printf "\n"
 }
 
+# Writes stdin to a file in ~/.jht, which the container mounts read-write: an agent may have put a LINK there in place of the
+# file (dangling in the container, pointing into the person's home on the host), and `>`, `chmod` and `chown` by path would
+# follow it. The file is made in a temporary created in the home, which is not mounted, with its mode and owner set there; the
+# entry is removed (a link as a link) and the file takes its place with `ln -n`, which fails if something came back meanwhile
+# instead of putting the file inside the folder a link names. Same function as host-setup.sh's, which has to stay a single file.
+write_file_in_home() {
+  local target="$1" mode="$2" owner="${3:-}" dir tmp
+  dir="$(dirname "$(dirname "$target")")"
+  if [ -d "$target" ] && [ ! -L "$target" ]; then
+    warn "$target is a directory: not writing it"
+    return 1
+  fi
+  tmp="$(mktemp "$dir/.jht-host-file.XXXXXX")" || { warn "cannot create a temporary file in $dir: not writing $target"; return 1; }
+  if ! cat > "$tmp" || ! chmod "$mode" "$tmp"; then rm -f "$tmp"; return 1; fi
+  if [ -n "$owner" ]; then chown "$owner" "$tmp" 2>/dev/null || true; fi
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    rm -f "$target" || { rm -f "$tmp"; return 1; }
+  fi
+  if ln -n "$tmp" "$target" 2>/dev/null; then
+    rm -f "$tmp"
+  elif [ ! -e "$target" ] && [ ! -L "$target" ] && mv -f "$tmp" "$target"; then
+    : # a folder without hard links (rare): the rename, with the entry still empty
+  else
+    rm -f "$tmp"
+    warn "$target changed while it was being written: not writing it"
+    return 1
+  fi
+}
+
 save_pairing_token() {
   # Save the pairing token to $HOME/.jht/.pairing-token with perms 0600.
   # The container reads it on first run and exchanges the refresh_token →
@@ -2029,7 +2058,10 @@ save_pairing_token() {
     info "dry-run: would save the pairing token to $token_file"
     return 0
   fi
-  printf '%s' "$PAIRING_TOKEN" > "$token_file"
+  # (The mode and owner below are set on the temporary, before it takes the place of the file.)
+  local token_owner=""
+  podman_native_mode || [ "${OS:-}" = "macos" ] || token_owner="1001:1001"
+  printf '%s' "$PAIRING_TOKEN" | write_file_in_home "$token_file" 600 "$token_owner" || return 1
   # 0600 — it is a bearer credential (it is exchanged for a Supabase
   # access_token), so no other host user may read it. It used to be 0644
   # "because the container runs as a non-root UID (jht/1001)": the right fix
@@ -2038,9 +2070,7 @@ save_pairing_token() {
   # this file explicitly here so the order of those two steps stops mattering.
   # The file is deleted by `jht cloud pair` right after consumption
   # (cli/src/commands/cloud.js handlePair), so the window is short either way.
-  chmod 600 "$token_file" 2>/dev/null || true
   # (Nor on the Mac: see align_bind_ownership.)
-  podman_native_mode || [ "${OS:-}" = "macos" ] || chown 1001:1001 "$token_file" 2>/dev/null || true
   ok "Pairing token saved to $token_file (mode 0600)"
 }
 

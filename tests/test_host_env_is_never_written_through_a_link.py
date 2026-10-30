@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -55,7 +56,7 @@ def _assert_regular_host_env(home: Path):
 
 def _no_leftovers(home: Path):
     assert sorted(p.name for p in (home / ".jht").iterdir()) == ["host.env", "i18n-prefs.json"]
-    assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-env.")] == []
+    assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-file.")] == []
 
 
 @pytest.mark.parametrize("target", ("relative", "absolute"))
@@ -161,7 +162,7 @@ def test_the_temporary_is_created_outside_the_folder_the_agents_can_write(home: 
     done = _setup_with_path(home, shim_dir, MKTEMP_LOG=str(log))
 
     assert done.returncode == 0, done.stderr
-    templates = [line for line in log.read_text(encoding="utf-8").splitlines() if "host-env" in line]
+    templates = [line for line in log.read_text(encoding="utf-8").splitlines() if "host-file" in line]
     assert templates, "host.env was not written through a temporary"
     assert all(Path(t).parent == home for t in templates), templates
     _assert_regular_host_env(home)
@@ -181,7 +182,7 @@ def test_a_link_put_back_while_the_file_is_being_placed_is_not_followed_nor_fill
 
     assert done.returncode != 0, "the write went on although the path had changed"
     assert sorted(p.name for p in folder.iterdir()) == ["note.txt"], "the file went into the folder the link names"
-    assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-env.")] == []
+    assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-file.")] == []
 
 
 def test_the_wrapper_does_not_read_through_a_link_either(home: Path):
@@ -212,3 +213,53 @@ def test_a_zone_chosen_earlier_survives_the_first_write_of_the_language(home: Pa
 
     assert done.returncode == 0, done.stderr
     assert "JHT_USER_TZ=Asia/Kolkata" in _assert_regular_host_env(home).read_text(encoding="utf-8")
+
+
+# ── i18n-prefs.json, the other file host-setup.sh writes in ~/.jht ────────────
+
+def test_the_language_preferences_are_not_written_through_a_link_planted_for_the_pid(home: Path):
+    # the old temporary was «i18n-prefs.json.tmp-<pid>» inside the mounted folder: a link planted for the pid made
+    # the `>` truncate the file it names. The script is started with a known pid, the link is planted, then it runs.
+    victim = _victim(home)
+    prefs = home / ".jht" / "i18n-prefs.json"
+    prefs.write_text("not json", encoding="utf-8")                 # invalid: host-setup writes it again
+    pidfile, go = home.parent / "pid", home.parent / "go"
+    env = {**os.environ, "HOME": str(home), "JHT_HOME_HOST": str(home / ".jht"), "TERM": "dumb"}
+    for name in ("JHT_LANG", "JHT_USER_TZ", "JHT_HOST_TYPE", "JHT_SKIP_HOST_SETUP"):
+        env.pop(name, None)
+    script = (f'echo $$ > "{pidfile}"; while [ ! -e "{go}" ]; do sleep 0.02; done; '
+              f'exec bash "{HOST_SETUP}" --host-type=local --non-interactive')
+    proc = subprocess.Popen(["sh", "-c", script], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)
+    deadline = time.time() + 10
+    while not pidfile.exists() or not pidfile.read_text().strip():
+        assert time.time() < deadline, "the script did not start"
+        time.sleep(0.02)
+    pid = pidfile.read_text().strip()
+    (home / ".jht" / f"i18n-prefs.json.tmp-{pid}").symlink_to("../.ssh/authorized_keys")
+    go.write_text("", encoding="utf-8")
+    out, err = proc.communicate(timeout=30)
+
+    assert proc.returncode == 0, err
+    assert victim.read_bytes() == VICTIM, "the file the planted link names was written through"
+    assert not prefs.is_symlink() and '"locale"' in prefs.read_text(encoding="utf-8")
+    assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-file.")] == []
+
+
+def test_a_link_in_place_of_the_language_preferences_is_replaced_and_its_target_stays(home: Path):
+    victim = _victim(home)
+    prefs = home / ".jht" / "i18n-prefs.json"
+    prefs.symlink_to("../.ssh/authorized_keys")
+
+    done = _setup(home)
+
+    assert done.returncode == 0, done.stderr
+    assert victim.read_bytes() == VICTIM
+    assert not prefs.is_symlink() and '"locale"' in prefs.read_text(encoding="utf-8")
+    assert stat.S_IMODE(prefs.stat().st_mode) == 0o644
+
+
+def test_host_setup_writes_nothing_in_the_mounted_folder_by_a_redirect():
+    # every file host-setup.sh puts in ~/.jht goes through the one function; a `>` or a `mv` onto them is the old defect
+    source = HOST_SETUP.read_text(encoding="utf-8")
+    assert '> "$HOST_ENV_PATH"' not in source and '> "$I18N_PREFS' not in source
+    assert ".tmp-$$" not in source and "mv -f \"$I18N" not in source
