@@ -40,9 +40,15 @@ def _function(source: str, name: str) -> str:
 def test_the_installer_no_longer_writes_host_env_with_set_content():
     source = INSTALL.read_text(encoding="utf-8")
     assert "Set-Content -Path $hostEnvFile" not in source
-    assert "Write-HostEnvFile -Path $hostEnvFile" in source
-    writer = _function(source, "Write-HostEnvFile")
+    assert "Write-HostFile -Path $hostEnvFile" in source
+    writer = _function(source, "Write-HostFile")
     assert "Move-Item -LiteralPath $tmp -Destination $Path" in writer and "ReparsePoint" in writer
+    # the pairing token sits in the same mounted folder: it goes through the same function
+    assert "Set-Content -Path $tokenFile" not in source
+    assert "Write-HostFile -Path $tokenFile -Content $PairingToken -Encoding ASCII -NoNewline" in source
+    # the ACL of the token is set on the temporary, before it takes the place of the file
+    assert "[scriptblock]$Prepare" in writer and writer.index("& $Prepare $tmp") < writer.index("Move-Item")
+    assert "-Prepare $restrictAcl" in source and "Get-Acl $tokenFile" not in source
     assert "Get-Item" not in writer, "Get-Item can miss a link whose target is gone"
     assert "Split-Path -Parent (Split-Path -Parent $Path)" in writer, "the temporary must not sit in the mounted folder"
 
@@ -72,8 +78,8 @@ def _run(shell: str, script: str, tmp_path: Path, **env: str) -> subprocess.Comp
 
 
 def _writer_script(target: Path) -> str:
-    return (_function(INSTALL.read_text(encoding="utf-8"), "Write-HostEnvFile")
-            + f"\nWrite-HostEnvFile -Path '{target}' -Content \"JHT_HOST_TYPE=local`nJHT_LANG=en`nJHT_USER_TZ=UTC\"\n")
+    return (_function(INSTALL.read_text(encoding="utf-8"), "Write-HostFile")
+            + f"\nWrite-HostFile -Path '{target}' -Content \"JHT_HOST_TYPE=local`nJHT_LANG=en`nJHT_USER_TZ=UTC\"\n")
 
 
 def _leftovers(folder: Path) -> list[str]:
@@ -154,6 +160,39 @@ def test_a_symbolic_link_to_a_file_that_is_not_there_creates_nothing_where_it_po
     assert not missing.exists(), "the link was followed and its target created"
     assert link.is_file() and not link.is_symlink() and "JHT_HOST_TYPE=local" in link.read_text(encoding="utf-8-sig")
     assert _leftovers(mounted) == ["host.env"]
+
+
+@windows_only
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_pairing_token_is_written_as_it_is_and_through_the_same_function(shell: str, tmp_path: Path):
+    mounted = tmp_path / "jht"
+    mounted.mkdir()
+    token = mounted / ".pairing-token"
+    script = (_function(INSTALL.read_text(encoding="utf-8"), "Write-HostFile")
+              + f"\nWrite-HostFile -Path '{token}' -Content 'tok-123' -Encoding ASCII -NoNewline\n")
+    done = _run(shell, script, tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert token.read_bytes() == b"tok-123", "no BOM, no newline"
+    assert _leftovers(mounted) == [".pairing-token"]
+
+
+@windows_only
+@pytest.mark.parametrize("shell", SHELLS)
+def test_what_prepare_does_is_done_to_the_temporary_before_the_move(shell: str, tmp_path: Path):
+    mounted = tmp_path / "jht"
+    mounted.mkdir()
+    target = mounted / ".pairing-token"
+    seen = tmp_path / "seen.txt"
+    script = (_function(INSTALL.read_text(encoding="utf-8"), "Write-HostFile")
+              + f"\n$prepare = {{ param($file) Add-Content -LiteralPath '{seen}' -Value (\"$file|\" + (Test-Path -LiteralPath '{target}')) }}\n"
+              + f"Write-HostFile -Path '{target}' -Content 'tok' -Encoding ASCII -NoNewline -Prepare $prepare\n")
+    done = _run(shell, script, tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    (line,) = seen.read_text(encoding="utf-8-sig").splitlines()
+    file, existed = line.rsplit("|", 1)
+    assert Path(file).parent == tmp_path and Path(file).name.startswith(".jht-host-file."), "called on the temporary, outside the mounted folder"
+    assert existed == "False", "called before the file took its place"
+    assert target.read_bytes() == b"tok"
 
 
 @windows_only
