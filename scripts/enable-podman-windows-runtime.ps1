@@ -416,8 +416,14 @@ function Repair-LegacyBindMetadata {
   $running = (& { $ErrorActionPreference = 'Continue'; & $PodmanPath --connection $MachineName inspect jht --format '{{.State.Running}}' 2>$null } | Select-Object -First 1)
   if (([string]$running).Trim() -eq 'true') { Invoke-Checked $PodmanPath '--connection' $MachineName 'stop' 'jht' | Out-Null }
 
-  $backup = Join-Path $JhtHome ('podman-metadata-backup-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
-  New-Item -ItemType Directory -Path $backup -Force | Out-Null
+  # The folder of the backup is made new and under a name nobody can guess (a time was a name the agents, who write in this
+  # folder, could foresee and take with a link): `New-Item` without -Force refuses a name that exists, a link included, and a
+  # folder that is a reparse point once made is refused as well, so the data of the team never goes through one.
+  $backup = Join-Path $JhtHome ('podman-metadata-backup-' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() + '-' + [guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Path $backup -ErrorAction Stop | Out-Null
+  if (((Get-Item -LiteralPath $backup -Force -ErrorAction Stop).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "The backup folder is a reparse point: $backup"
+  }
   foreach ($target in $targets) {
     $name = Split-Path -Leaf $target
     $fresh = Join-Path $JhtHome ('.podman-fresh-' + [guid]::NewGuid().ToString('N'))

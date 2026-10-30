@@ -27,6 +27,7 @@ on:
       - 'tests/test_windows_host_env_is_not_written_through_a_link.py'
       - 'tests/test_windows_host_env_values_have_a_domain.py'
       - 'tests/test_windows_download_is_verified_on_the_host.py'
+      - 'tests/test_windows_acl_skips_links.py'
       - 'scripts/jht-uninstall-windows.ps1'
       - 'desktop/src-tauri/windows/installer-hooks.nsi'
       - 'tests/test_windows_app_uninstall.py'
@@ -67,8 +68,9 @@ jobs:
       # and Docker, under both shells: 5.1 drops the double quotes inside a
       # native argument + 10 cases of a native program writing on stderr under
       # 'Stop', which 5.1 turns into an error that stops the script + 18 cases of
-      # the same in the wrapper (jht.ps1), under both shells. The count may
-      # grow, never shrink.
+      # the same in the wrapper (jht.ps1), under both shells + 19 cases of the ACL walk (static
+      # checks, a junction in the folder, one turned into a junction while the
+      # walk runs, under both shells). The count may grow, never shrink.
       - name: Native Windows pieces of the Podman runtime
         shell: pwsh
         env:
@@ -83,13 +85,14 @@ jobs:
             tests/test_windows_host_env_is_not_written_through_a_link.py `
             tests/test_windows_host_env_values_have_a_domain.py `
             tests/test_windows_download_is_verified_on_the_host.py `
+            tests/test_windows_acl_skips_links.py `
             -n 4 -p no:cacheprovider -rs 2>&1
           $code = $LASTEXITCODE
           $out | ForEach-Object { "$_" }
           if ($code -ne 0) { exit $code }
           $summary = "$($out[-1])"
           if ($summary -notmatch '^=+ (\d+) passed(, \d+ warnings?)? in [0-9.]+s') { throw "unexpected pytest summary: $summary" }
-          if ([int]$Matches[1] -lt 93) { throw "only $($Matches[1]) native Windows tests ran, expected at least 93" }
+          if ([int]$Matches[1] -lt 112) { throw "only $($Matches[1]) native Windows tests ran, expected at least 112" }
 
       # Measures for T80: under 5.1 the step below takes 12.5 minutes here and
       # 2 on a real Windows PC, under pwsh 44 s. What one start of each shell
