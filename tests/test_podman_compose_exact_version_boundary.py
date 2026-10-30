@@ -602,6 +602,8 @@ esac
         "HOME": str(home),
         "PATH": f"{bin_dir}:/usr/bin:/bin",
         "JHT_RUNTIME_DIR": str(runtime),
+        # these tests hold the exact sequence of the COMPLETE attestation; the cache has its own tests (test_wrapper_attest_cache.py)
+        "JHT_ATTEST_CACHE": "0",
         "JHT_COMPOSE_FILE": str(compose),
         "JHT_WRAPPER_PATH": str(wrapper),
         "JHT_FIXTURE_COMPOSE_LOG": str(compose_log),
