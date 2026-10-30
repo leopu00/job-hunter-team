@@ -325,7 +325,9 @@ def insert_position(args):
         # inserisce oltre `scout_cap_first_pass`. Il conto si legge QUI, dentro la transazione, cosi' due Scout
         # non si prendono insieme l'ultimo posto; lo scrive il codice, non dipende da un messaggio del Capitano.
         actor = os.environ.get('JHT_AGENT_NAME') or args.found_by or 'unknown'
-        if first_run.is_scout(actor):
+        # Either name is enough to hold the cap: a Scout that declares another --found-by is still the Scout that
+        # the environment says it is (and the other way round). It is a control of cost, not a boundary.
+        if first_run.is_scout(actor) or first_run.is_scout(args.found_by):
             cap = first_run.sourcing_cap(conn)
             if cap and cap["reached"]:
                 _rollback_quietly(conn)

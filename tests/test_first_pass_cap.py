@@ -105,6 +105,24 @@ def test_only_scouts_are_held_to_it(tmp_path):
     assert insert(tmp_path, 3, agent="analista-1").returncode == 0
 
 
+def test_a_scout_that_declares_another_name_is_held_all_the_same(tmp_path):
+    burst_state(tmp_path, cap=1)
+    assert insert(tmp_path, 0).returncode == 0
+    # the environment says scout-1, the flag says somebody else; and the other way round
+    e = {**os.environ, "JHT_HOME": str(tmp_path), "JHT_AGENT_NAME": "scout-1"}
+    e.pop("JHT_DB", None)
+    out = subprocess.run([sys.executable, str(DB_INSERT), "position", "--title", "T", "--company", "C",
+                          "--url", "https://jobs.example/x", "--source", "test", "--found-by", "somebody"],
+                         capture_output=True, text=True, env=e, timeout=60)
+    assert out.returncode == 3
+    e["JHT_AGENT_NAME"] = "somebody"
+    out = subprocess.run([sys.executable, str(DB_INSERT), "position", "--title", "T", "--company", "C",
+                          "--url", "https://jobs.example/y", "--source", "test", "--found-by", "scout-3"],
+                         capture_output=True, text=True, env=e, timeout=60)
+    assert out.returncode == 3
+    assert rows(tmp_path) == 1
+
+
 def test_six_scouts_at_once_take_exactly_the_places_there_are(tmp_path):
     assert insert(tmp_path, 100, agent="scout-0").returncode == 0           # the schema is there before the race
     conn = sqlite3.connect(str(tmp_path / "jobs.db"))
