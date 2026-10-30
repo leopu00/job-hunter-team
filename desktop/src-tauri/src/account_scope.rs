@@ -21,6 +21,8 @@ use tauri::{Manager, State};
 
 const DIGEST_DOMAIN: &[u8] = b"jht-desktop-account-scope-v1\0";
 const LOCAL_DIGEST_DOMAIN: &[u8] = b"jht-desktop-local-profile-scope-v1\0";
+/// The name of the owner marker: the file in the app's own data (the truth) and its copy in `~/.jht` (a mirror).
+const OWNER_MARKER: &str = ".desktop-account-scope";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AccountScope {
@@ -292,11 +294,9 @@ pub(crate) fn validate_local_runtime(
     if !local_runtime_allowed(std::env::consts::OS) {
         return Err("local_runtime_unsupported");
     }
-    let home = local_owner_marker_path(app)?
-        .parent()
-        .ok_or("local_account_owner_unavailable")?
-        .to_path_buf();
-    validate_or_claim_local_owner(&home, scope)
+    let home = local_runtime_home(app)?;
+    let marker = local_owner_marker_path(app)?;
+    claim_or_validate_owner(&home, &marker, scope)
 }
 
 /// The team runs on this computer on macOS (Podman), Linux and Windows
@@ -307,11 +307,84 @@ fn local_runtime_allowed(target_os: &str) -> bool {
     matches!(target_os, "macos" | "linux" | "windows")
 }
 
-pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+/// The data folder of the team of this computer, `~/.jht`: the folder the container mounts, so the one agents write.
+pub(crate) fn local_runtime_home(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     app.path()
         .home_dir()
-        .map(|home| home.join(".jht").join(".desktop-account-scope"))
+        .map(|home| home.join(".jht"))
         .map_err(|_| "local_account_owner_unavailable")
+}
+
+/// Where the owner of the local runtime is written: in the data of the app (`app_local_data_dir`), which the container
+/// does not mount, so an agent can neither delete the marker nor write another account's into it. The copy in `~/.jht`
+/// is only a mirror: it is never read, except once, here, when the app has no marker of its own yet (an app from before
+/// this one kept it only there): that marker is taken as it is, the first time, and from then on only this one counts.
+pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
+    let marker = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|_| "local_account_owner_unavailable")?
+        .join("local-owner")
+        .join(OWNER_MARKER);
+    adopt_mirrored_owner(&local_runtime_home(app)?, &marker);
+    Ok(marker)
+}
+
+/// The marker of a version before the app kept its own, taken once. Never replaces a marker, whoever's; takes only a
+/// regular file of the user, read without following a link, with a digest in it; any failure leaves things as they were.
+fn adopt_mirrored_owner(home: &Path, marker: &Path) {
+    if fs::symlink_metadata(marker).is_ok() {
+        return;
+    }
+    let mirror = home.join(OWNER_MARKER);
+    if mirror == marker {
+        return;
+    }
+    if !fs::symlink_metadata(&mirror).is_ok_and(|metadata| metadata.file_type().is_file() && is_ours(&metadata)) {
+        return;
+    }
+    let Ok(Some(digest)) = read_owner_digest(&mirror) else {
+        return;
+    };
+    let Some(folder) = marker.parent() else {
+        return;
+    };
+    if !folder.exists() && create_private_dir(folder).is_err() {
+        return;
+    }
+    let _ = write_owner_digest(marker, &digest);
+}
+
+/// A copy of the marker in `~/.jht`, for the apps that read it there and for the adoption above. Best effort and never the
+/// truth: a new temporary file that does not follow a link, then a rename (which replaces whatever is at the mirror's name,
+/// a link included, and does not write through it).
+fn mirror_owner_marker(home: &Path, marker: &Path) {
+    let mirror = home.join(OWNER_MARKER);
+    if mirror == marker {
+        return;
+    }
+    let Ok(Some(digest)) = read_owner_digest(marker) else {
+        return;
+    };
+    if !fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_dir() && is_ours(&metadata)) {
+        return;
+    }
+    let temp = home.join(".desktop-account-scope.tmp-mirror");
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+    }
+    let Ok(mut file) = options.open(&temp) else {
+        return;
+    };
+    let written = file.write_all(digest.as_bytes()).and_then(|_| file.write_all(b"\n")).is_ok();
+    drop(file);
+    if !written || fs::rename(&temp, &mirror).is_err() {
+        let _ = fs::remove_file(&temp);
+    }
 }
 
 pub(crate) fn verify_local_runtime_owner(
@@ -321,17 +394,27 @@ pub(crate) fn verify_local_runtime_owner(
     verify_local_owner_marker(marker, scope)
 }
 
-fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<(), &'static str> {
-    let marker = home.join(".desktop-account-scope");
+/// `home` is the data folder the container mounts; `marker` is where the owner is written (see `local_owner_marker_path`).
+fn claim_or_validate_owner(home: &Path, marker: &Path, scope: &AccountScope) -> Result<(), &'static str> {
     if marker.exists() {
-        return verify_local_owner_marker(&marker, scope);
+        return verify_local_owner_marker(marker, scope);
     }
     unowned_home_may_be_claimed(home, scope)?;
     if !home.exists() {
         create_private_dir(home)?;
     }
-    write_owner_marker(&marker, scope)?;
-    verify_local_owner_marker(&marker, scope)
+    if let Some(folder) = marker.parent().filter(|folder| !folder.exists()) {
+        create_private_dir(folder)?;
+    }
+    write_owner_marker(&marker.to_path_buf(), scope)?;
+    mirror_owner_marker(home, marker);
+    verify_local_owner_marker(marker, scope)
+}
+
+/// The tests keep the marker inside the home they build.
+#[cfg(test)]
+fn validate_or_claim_local_owner(home: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+    claim_or_validate_owner(home, &home.join(OWNER_MARKER), scope)
 }
 
 /// Whether `scope` may claim a home that has no owner marker: a missing home, one that holds only what
@@ -380,15 +463,20 @@ pub(crate) fn unowned_home_may_be_claimed(
 /// and never in silence.
 #[tauri::command]
 pub(crate) fn onboarding_previous_local_data(app: tauri::AppHandle) -> bool {
-    local_owner_marker_path(&app)
-        .ok()
-        .and_then(|marker| marker.parent().map(Path::to_path_buf))
-        .is_some_and(|home| previous_local_data_at(&home))
+    match (local_runtime_home(&app), local_owner_marker_path(&app)) {
+        (Ok(home), Ok(marker)) => previous_local_data_with(&home, &marker),
+        _ => false,
+    }
 }
 
+#[cfg(test)]
 fn previous_local_data_at(home: &Path) -> bool {
+    previous_local_data_with(home, &home.join(OWNER_MARKER))
+}
+
+fn previous_local_data_with(home: &Path, marker: &Path) -> bool {
     let unowned = matches!(
-        fs::symlink_metadata(home.join(".desktop-account-scope")),
+        fs::symlink_metadata(marker),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound
     );
     unowned
@@ -525,13 +613,17 @@ fn halt_flag_is_the_products(path: &Path, length: u64) -> Result<bool, &'static 
 /// never takes data it did not make), only a real folder of this user, only
 /// when nobody owns it yet: an existing marker, whoever's, is checked and
 /// never replaced. The marker is written by the same function as always.
+#[cfg(test)]
 fn adopt_unassigned_local_home(home: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+    adopt_unassigned_local_home_with(home, &home.join(OWNER_MARKER), scope)
+}
+
+fn adopt_unassigned_local_home_with(home: &Path, marker: &Path, scope: &AccountScope) -> Result<(), &'static str> {
     if !scope.is_local_profile() {
         return Err("local_account_owner_missing");
     }
-    let marker = home.join(".desktop-account-scope");
-    match fs::symlink_metadata(&marker) {
-        Ok(_) => return verify_local_owner_marker(&marker, scope),
+    match fs::symlink_metadata(marker) {
+        Ok(_) => return verify_local_owner_marker(marker, scope),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return Err("local_account_owner_unavailable"),
     }
@@ -539,12 +631,16 @@ fn adopt_unassigned_local_home(home: &Path, scope: &AccountScope) -> Result<(), 
         Ok(metadata) if metadata.file_type().is_dir() && is_ours(&metadata) => {}
         Ok(_) => return Err("local_account_owner_unavailable"),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return validate_or_claim_local_owner(home, scope);
+            return claim_or_validate_owner(home, marker, scope);
         }
         Err(_) => return Err("local_account_owner_unavailable"),
     }
-    write_owner_marker(&marker, scope)?;
-    verify_local_owner_marker(&marker, scope)
+    if let Some(folder) = marker.parent().filter(|folder| !folder.exists()) {
+        create_private_dir(folder)?;
+    }
+    write_owner_marker(&marker.to_path_buf(), scope)?;
+    mirror_owner_marker(home, marker);
+    verify_local_owner_marker(marker, scope)
 }
 
 #[cfg(unix)]
@@ -564,9 +660,13 @@ fn is_ours(_metadata: &fs::Metadata) -> bool {
 /// removed; an existing name is never overwritten; the data keep their
 /// content. If the move fails nothing was touched. Returns the new name (not
 /// the path) for the person to read.
+#[cfg(test)]
 fn set_aside_unassigned_local_home(home: &Path, now_secs: u64) -> Result<String, &'static str> {
-    let marker = home.join(".desktop-account-scope");
-    match fs::symlink_metadata(&marker) {
+    set_aside_unassigned_local_home_with(home, &home.join(OWNER_MARKER), now_secs)
+}
+
+fn set_aside_unassigned_local_home_with(home: &Path, marker: &Path, now_secs: u64) -> Result<String, &'static str> {
+    match fs::symlink_metadata(marker) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         // Already someone's (or unreadable): not for this to move.
         _ => return Err("local_account_owner_unavailable"),
@@ -634,8 +734,8 @@ pub(crate) fn onboarding_local_data_adopt(
 ) -> Result<(), onboarding::OnboardingError> {
     let scope = scopes.lock_active().map_err(onboarding::failure)?;
     let marker = local_owner_marker_path(&app).map_err(onboarding::failure)?;
-    let home = marker.parent().ok_or_else(|| onboarding::failure("local_account_owner_unavailable"))?;
-    adopt_unassigned_local_home(home, scope.scope()).map_err(onboarding::failure)
+    let home = local_runtime_home(&app).map_err(onboarding::failure)?;
+    adopt_unassigned_local_home_with(&home, &marker, scope.scope()).map_err(onboarding::failure)
 }
 
 /// The confirmation of «Set it aside and start again»: the name of the folder
@@ -647,11 +747,11 @@ pub(crate) fn onboarding_local_data_set_aside(
 ) -> Result<String, onboarding::OnboardingError> {
     let _scope = scopes.lock_active().map_err(onboarding::failure)?;
     let marker = local_owner_marker_path(&app).map_err(onboarding::failure)?;
-    let home = marker.parent().ok_or_else(|| onboarding::failure("local_account_owner_unavailable"))?;
+    let home = local_runtime_home(&app).map_err(onboarding::failure)?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs());
-    set_aside_unassigned_local_home(home, now).map_err(onboarding::failure)
+    set_aside_unassigned_local_home_with(&home, &marker, now).map_err(onboarding::failure)
 }
 
 // ── The runtime of another profile: back to its owner, or take it over ───────
@@ -1028,8 +1128,11 @@ pub(crate) fn onboarding_local_owner_take_over(
     // The scope stays this one while the marker is written.
     let guard = scopes.lock_active().map_err(onboarding::failure)?;
     let (marker, profiles) = owner_change_context(&app).map_err(onboarding::failure)?;
-    take_over_with_token_at(&scopes, &token, guard.scope(), &marker, &profiles)
-        .map_err(onboarding::failure)
+    take_over_with_token_at(&scopes, &token, guard.scope(), &marker, &profiles).map_err(onboarding::failure)?;
+    if let Ok(home) = local_runtime_home(&app) {
+        mirror_owner_marker(&home, &marker);
+    }
+    Ok(())
 }
 
 fn recognized_legacy_local_home(home: &Path) -> Result<bool, &'static str> {
@@ -1107,6 +1210,10 @@ fn create_private_dir(path: &Path) -> Result<(), &'static str> {
 }
 
 fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'static str> {
+    write_owner_digest(marker, scope.digest())
+}
+
+fn write_owner_digest(marker: &Path, digest: &str) -> Result<(), &'static str> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -1116,7 +1223,7 @@ fn write_owner_marker(marker: &PathBuf, scope: &AccountScope) -> Result<(), &'st
     }
     match options.open(marker) {
         Ok(mut file) => {
-            file.write_all(scope.digest().as_bytes())
+            file.write_all(digest.as_bytes())
                 .and_then(|_| file.write_all(b"\n"))
                 .and_then(|_| file.sync_all())
                 .map_err(|_| "local_account_owner_unavailable")?;
@@ -1240,12 +1347,14 @@ fn local_profile_migration_paths(
         .home_dir()
         .map(|home| home.join(".jht"))
         .map_err(|_| "local_account_owner_unavailable")?;
+    let owner_marker = local_owner_marker_path(app)?;
     Ok(crate::profile_migration::MigrationPaths {
         source_capability: app_data
             .join("local-profiles")
             .join(format!("{profile_id}.json")),
         app_data,
         runtime_home,
+        owner_marker,
     })
 }
 
@@ -1343,6 +1452,7 @@ pub(crate) async fn runtime_local_profile_migrate_to_authenticated(
         || Ok(()),
     ) {
         Ok(committed) => {
+            mirror_owner_marker(&paths.runtime_home, &paths.owner_marker);
             *active = Some(target);
             Ok(committed)
         }
@@ -1503,6 +1613,14 @@ fn reset_playground_scope_at(
     Ok(())
 }
 
+/// The playground gives the marker up: its mirror goes too, or the next look at the marker would take it back.
+/// Removes the name, never what a link at that name points to.
+fn forget_owner_mirror(app: &tauri::AppHandle) {
+    if let Ok(home) = local_runtime_home(app) {
+        let _ = fs::remove_file(home.join(OWNER_MARKER));
+    }
+}
+
 /// DEV/test-only reset used by the onboarding playground. Release builds keep
 /// the command registered so an accidental call fails with a stable code,
 /// before any profile, scope or runtime path is inspected.
@@ -1524,7 +1642,9 @@ pub(crate) fn runtime_playground_local_reset(
             crate::live_screen::teardown(&app);
             crate::broker_view::teardown(&app);
         })
-        .map_err(failure)
+        .map_err(failure)?;
+        forget_owner_mirror(&app);
+        Ok(())
     }
 }
 
@@ -1546,13 +1666,17 @@ pub(crate) fn runtime_playground_local_orphan_recover(
             .map_err(|_| failure("local_profile_storage_unavailable"))?;
         let profiles = app_data.join("local-profiles");
         let marker = local_owner_marker_path(&app).map_err(failure)?;
-        recover_playground_orphan_at(true, &profiles, &app_data, &marker, &scopes, |_| {
+        let recovered = recover_playground_orphan_at(true, &profiles, &app_data, &marker, &scopes, |_| {
             direct_chat::teardown(&chat);
             onboarding::teardown(&onboarding);
             crate::live_screen::teardown(&app);
             crate::broker_view::teardown(&app);
         })
-        .map_err(failure)
+        .map_err(failure)?;
+        if recovered {
+            forget_owner_mirror(&app);
+        }
+        Ok(recovered)
     }
 }
 
@@ -2897,5 +3021,202 @@ mod owner_change_tests {
         let (id, scope) =
             resolve_owner_change_at(&state, &token, OwnerChange::Return, &current, &f.marker, &f.profiles).unwrap();
         assert_eq!((id, scope), (owner_id, owner));
+    }
+
+    // ── The owner marker lives in the data of the app; `~/.jht` only holds a mirror ──────────────────────────────
+
+    #[cfg(unix)]
+    struct OwnerLayout {
+        root: std::path::PathBuf,
+        home: std::path::PathBuf,
+        marker: std::path::PathBuf,
+    }
+
+    #[cfg(unix)]
+    impl OwnerLayout {
+        fn new(label: &str) -> Self {
+            use std::os::unix::fs::PermissionsExt;
+            let root = std::env::temp_dir().join(format!(
+                "jht-owner-store-{label}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            ));
+            let home = root.join("home").join(".jht");
+            std::fs::create_dir_all(&home).unwrap();
+            std::fs::set_permissions(&home, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let marker = root.join("app-data").join("local-owner").join(super::OWNER_MARKER);
+            Self { root, home, marker }
+        }
+
+        fn mirror(&self) -> std::path::PathBuf {
+            self.home.join(super::OWNER_MARKER)
+        }
+
+        fn write_mirror(&self, text: &str) {
+            let _ = std::fs::remove_file(self.mirror());
+            std::fs::write(self.mirror(), text).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for OwnerLayout {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_owner_is_written_in_the_data_of_the_app_and_only_copied_into_the_home() {
+        use std::os::unix::fs::PermissionsExt;
+        let f = OwnerLayout::new("claim");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
+        assert_eq!(std::fs::read_to_string(f.mirror()).unwrap().trim(), a.digest());
+        assert_eq!(std::fs::metadata(&f.marker).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(std::fs::metadata(f.marker.parent().unwrap()).unwrap().permissions().mode() & 0o777, 0o700);
+        assert_eq!(std::fs::metadata(f.mirror()).unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(!f.home.join(".desktop-account-scope.tmp-mirror").exists(), "the temporary is gone");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn what_an_agent_does_to_the_mirror_in_the_home_changes_nobodys_ownership() {
+        let f = OwnerLayout::new("agent");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        // it deletes the mirror: the owner is still the owner (the team is not locked out)...
+        std::fs::remove_file(f.mirror()).unwrap();
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_mismatch"));
+        // ...it writes another account's digest: that account does not become the owner...
+        f.write_mirror(&format!("{}\n", b.digest()));
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_mismatch"));
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        // ...and a mirror that is not even a marker, or a link, or a folder, is just as inert
+        f.write_mirror(&"x".repeat(500));
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        std::fs::remove_file(f.mirror()).unwrap();
+        std::os::unix::fs::symlink("/nonexistent/target", f.mirror()).unwrap();
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        std::fs::remove_file(f.mirror()).unwrap();
+        std::fs::create_dir(f.mirror()).unwrap();
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_mirror_is_never_written_through_a_link() {
+        use std::os::unix::fs::symlink;
+        let f = OwnerLayout::new("mirror-link");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let outside = f.root.join("a-file-of-the-user");
+        std::fs::write(&outside, "precious\n").unwrap();
+        // a link where the mirror goes (the owner is there already: a home with a link in it is no home to claim)
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        std::fs::remove_file(f.mirror()).unwrap();
+        symlink(&outside, f.mirror()).unwrap();
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &a), Ok(()));
+        super::mirror_owner_marker(&f.home, &f.marker);
+        assert_eq!(std::fs::read_to_string(&outside).unwrap(), "precious\n");
+        assert!(std::fs::symlink_metadata(f.mirror()).unwrap().file_type().is_file());
+        // a link at the name of the temporary: the mirror is skipped, the target is not touched
+        let g = OwnerLayout::new("temp-link");
+        let target = g.root.join("another-file");
+        std::fs::write(&target, "precious\n").unwrap();
+        symlink(&target, g.home.join(".desktop-account-scope.tmp-mirror")).unwrap();
+        std::fs::create_dir_all(g.marker.parent().unwrap()).unwrap();
+        super::write_owner_marker(&g.marker, &a).unwrap();
+        super::mirror_owner_marker(&g.home, &g.marker);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "precious\n");
+        assert!(!g.mirror().exists());
+        assert_eq!(std::fs::read_to_string(&g.marker).unwrap().trim(), a.digest(), "the truth is there all the same");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_marker_from_before_the_app_kept_its_own_is_taken_once_and_never_again() {
+        let f = OwnerLayout::new("adopt");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
+        f.write_mirror(&format!("{}\n", a.digest()));
+        assert!(!f.marker.exists());
+        super::adopt_mirrored_owner(&f.home, &f.marker);
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        // from now on the mirror does not count: rewritten, it is not taken
+        f.write_mirror(&format!("{}\n", b.digest()));
+        super::adopt_mirrored_owner(&f.home, &f.marker);
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_mirror_that_is_not_a_plain_marker_of_the_user_is_not_taken() {
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let cases: Vec<(&str, Box<dyn Fn(&OwnerLayout)>)> = vec![
+            ("not a digest", Box::new(|f| f.write_mirror("not a digest\n"))),
+            ("too long", Box::new(|f| f.write_mirror(&format!("{}\n{}\n", "a".repeat(64), "b".repeat(64))))),
+            ("empty", Box::new(|f| f.write_mirror(""))),
+            (
+                "a link to a good marker",
+                Box::new(|f| {
+                    let real = f.root.join("real");
+                    std::fs::write(&real, format!("{}\n", derive_scope(b"00000000-0000-4000-8000-000000000001").digest())).unwrap();
+                    std::os::unix::fs::symlink(real, f.mirror()).unwrap();
+                }),
+            ),
+            ("a folder", Box::new(|f| std::fs::create_dir(f.mirror()).unwrap())),
+        ];
+        let _ = a;
+        for (label, set_up) in cases {
+            let f = OwnerLayout::new("adopt-refused");
+            set_up(&f);
+            super::adopt_mirrored_owner(&f.home, &f.marker);
+            assert!(std::fs::symlink_metadata(&f.marker).is_err(), "{label}: nothing was taken");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_marker_that_is_there_is_never_replaced_by_the_mirror_or_by_a_claim() {
+        let f = OwnerLayout::new("never-replaced");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        f.write_mirror(&format!("{}\n", b.digest()));
+        super::adopt_mirrored_owner(&f.home, &f.marker);
+        super::mirror_owner_marker(&f.home, &f.marker);
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
+        // the mirror is made right again from the truth, not the other way round
+        assert_eq!(std::fs::read_to_string(f.mirror()).unwrap().trim(), a.digest());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_take_over_changes_the_marker_where_the_app_keeps_it() {
+        let f = OwnerLayout::new("take-over");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        super::take_over_marker_at(f.marker.parent().unwrap(), a.digest(), &b).unwrap();
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), b.digest());
+        super::mirror_owner_marker(&f.home, &f.marker);
+        assert_eq!(std::fs::read_to_string(f.mirror()).unwrap().trim(), b.digest());
+        super::claim_or_validate_owner(&f.home, &f.marker, &b).unwrap();
+    }
+
+    #[test]
+    fn nothing_but_the_gateway_reads_the_marker_from_the_home() {
+        // The mirror is read in one place only (the adoption); every other reader goes through `local_owner_marker_path`.
+        let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_scope.rs")).unwrap();
+        let production = source.split("#[cfg(test)]\nmod tests {").next().unwrap();
+        assert!(!production.contains("home_dir()\n        .map(|home| home.join(\".jht\").join(\".desktop-account-scope\"))"));
+        let path_fn = production.split("pub(crate) fn local_owner_marker_path(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(path_fn.contains("app_local_data_dir()") && path_fn.contains("adopt_mirrored_owner("));
     }
 }
