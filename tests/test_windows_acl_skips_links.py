@@ -136,7 +136,7 @@ def test_a_junction_in_the_folder_keeps_the_acl_of_what_it_points_at(shell, name
 @pytest.mark.parametrize("shell", SHELLS)
 def test_the_old_walk_would_have_failed_this_check(shell, tmp_path):
     """The proof that the check sees the defect: the old text, with -Recurse, rewrites the ACL behind the junction."""
-    old = (SCRIPTS / "windows-private-acl.ps1").read_text(encoding="utf-8")
+    old = (SCRIPTS / "windows-private-acl.ps1").read_text(encoding="utf-8").replace("\r\n", "\n")
     walk = old[old.index("  $rootFull = "):old.index("  foreach ($node in $nodes) {")]
     old_text = old.replace(walk, "  $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)\n")
     old_text = re.sub(r"    # looked at again right before the write.*?\n    if \(& \$underLink \$node\.FullName\) \{ continue \}\n", "", old_text, flags=re.S)
