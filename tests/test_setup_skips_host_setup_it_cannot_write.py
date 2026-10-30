@@ -67,13 +67,20 @@ def test_the_setup_command_skips_it_only_through_that_check_and_says_why():
 
 def note(tmp_path: Path, content: str | None, *, mode: int = 0o644) -> str:
     text = WRAPPER.read_text(encoding="utf-8")
+    # The type of host is the one the wrapper loaded at its start (the values file of the runtime, or host.env the first time):
+    # the functions that load it run first, as they do in the wrapper.
     functions = "\n".join(re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
-                          for name in ("jht_host_env_value_valid", "jht_read_host_env_value", "host_setup_skip_note"))
+                          for name in ("jht_host_env_value_valid", "jht_read_host_env_value", "runtime_stat", "runtime_node_safe",
+                                       "jht_host_values_trusted", "jht_host_values_log", "jht_a_mac_is_never_a_vps",
+                                       "jht_load_host_values", "host_setup_skip_note"))
     host_env = tmp_path / "host.env"
     if content is not None:
         host_env.write_text(content, encoding="utf-8")
         host_env.chmod(mode)
-    script = f'HOST_ENV_FILE="{host_env}"\ninfo() {{ echo "INFO: $*"; }}\nwarn() {{ echo "WARN: $*"; }}\n{functions}\nhost_setup_skip_note'
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(mode=0o700, exist_ok=True)
+    script = (f'HOST_ENV_FILE="{host_env}"\nHOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"; RUNTIME_DIR="{runtime}"; HOST_VALUES_FILE="{runtime}/host-values"\n'
+              f'info() {{ echo "INFO: $*"; }}\nwarn() {{ echo "WARN: $*"; }}\n{functions}\njht_load_host_values\nhost_setup_skip_note')
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30).stdout
 
 

@@ -3455,10 +3455,11 @@ host_setup_can_write() {
   [ ! -e "$HOST_ENV_FILE" ] || [ -w "$HOST_ENV_FILE" ]
 }
 
-# What `jht setup` says when it skips host-setup.sh because it cannot write host.env: «already done» only when host.env says
-# the type of host; otherwise the preflight was not done and the type stays unknown, and that is what is said.
+# What `jht setup` says when it skips host-setup.sh because it cannot write host.env: «already done» only when the type of host
+# is known (the value `jht_load_host_values` took from the values file of the runtime, or from host.env the first time);
+# otherwise the preflight was not done and the type stays unknown, and that is what is said.
 host_setup_skip_note() {
-  if jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE >/dev/null 2>&1; then
+  if [ "${JHT_HOST_TYPE:-unknown}" != unknown ]; then
     info "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto."
   else
     warn "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'."
