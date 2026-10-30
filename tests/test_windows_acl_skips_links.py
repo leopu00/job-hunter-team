@@ -41,15 +41,20 @@ def test_the_folder_is_walked_by_hand_and_a_link_is_neither_changed_nor_entered(
     assert "[IO.FileAttributes]::ReparsePoint" in body
     # the walk skips a reparse point and does not push it to be entered
     assert re.search(r"if \(\(\$child\.Attributes -band \[IO\.FileAttributes\]::ReparsePoint\) -ne 0\) \{ continue \}", body)
-    # and a node is looked at again right before it is written
-    assert body.index("Get-Item -LiteralPath $node.FullName -Force -ErrorAction SilentlyContinue") < body.index("Set-JhtAccessControl -Path $node.FullName")
+    # a folder is looked at again, with the folders above it, when it leaves the stack and BEFORE it is listed, and a node
+    # right before it is written
+    assert body.index("if (& $underLink $folder) { continue }") < body.index("Get-ChildItem -LiteralPath $folder -Force")
+    assert body.index("if (& $underLink $node.FullName) { continue }") < body.index("Set-JhtAccessControl -Path $node.FullName")
+    # up the path to the root: a reparse point on the way, or no way up, is a link
+    assert "$step = if ($step.PSIsContainer) { $step.Parent } else { $step.Directory }" in body
+    assert body.count("[IO.FileAttributes]::ReparsePoint") == 2
 
 
 def test_the_two_walks_are_the_same_text():
     """install.ps1 has to work alone (it is downloaded), so the walk is written twice: the lines of the walk are equal."""
     def walk(name):
         body = function_text(SCRIPTS / name, "Protect-JhtHomeAcl")
-        return body[body.index("  $nodes = New-Object"):body.index("    $acl = Get-Acl")]
+        return body[body.index("  $rootFull = "):body.index("    $acl = Get-Acl")]
     assert walk("install.ps1") == walk("windows-private-acl.ps1")
 
 
@@ -132,9 +137,9 @@ def test_a_junction_in_the_folder_keeps_the_acl_of_what_it_points_at(shell, name
 def test_the_old_walk_would_have_failed_this_check(shell, tmp_path):
     """The proof that the check sees the defect: the old text, with -Recurse, rewrites the ACL behind the junction."""
     old = (SCRIPTS / "windows-private-acl.ps1").read_text(encoding="utf-8")
-    walk = old[old.index("  $nodes = New-Object"):old.index("  foreach ($node in $nodes) {")]
+    walk = old[old.index("  $rootFull = "):old.index("  foreach ($node in $nodes) {")]
     old_text = old.replace(walk, "  $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)\n")
-    old_text = re.sub(r"    # looked at again right before the write.*?\n    \}\n", "", old_text, flags=re.S)
+    old_text = re.sub(r"    # looked at again right before the write.*?\n    if \(& \$underLink \$node\.FullName\) \{ continue \}\n", "", old_text, flags=re.S)
     old_copy = tmp_path / "old-acl.ps1"
     old_copy.write_text(old_text, encoding="utf-8")
     script = tmp_path / "run.ps1"
@@ -147,3 +152,76 @@ def test_the_old_walk_would_have_failed_this_check(shell, tmp_path):
     # 5.1 walks into the junction; 7 does not, so there only the static checks above hold the line
     if shell == "powershell":
         assert done.returncode != 0 and "LINKS_LEFT_ALONE" not in done.stdout, (done.stdout, done.stderr)
+
+
+# The folder is changed while the walk runs. `Get-ChildItem` and `Set-JhtAccessControl` are wrapped in the scope the function
+# runs in (a function wins over the cmdlet of the same name): the first call does its work and THEN the folder is replaced by
+# a junction, which is what an agent that writes in the folder could do between the stack and the write.
+RACE = r"""
+$ErrorActionPreference = 'Stop'
+$tokens = $null; $errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw "parse: $($errors[0])" }
+foreach ($wanted in @('Set-JhtAccessControl', 'Protect-JhtHomeAcl')) {
+  $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $wanted }, $true)
+  Invoke-Expression $fn.Extent.Text
+}
+$base = $env:JHT_FIXTURE
+$home_ = Join-Path $base 'home'
+$outside = Join-Path $base 'outside'
+New-Item -ItemType Directory -Path (Join-Path $home_ 'sub\deeper'), (Join-Path $home_ 'other'), $outside -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $home_ 'sub\plain.txt') -Value 'plain'
+Set-Content -LiteralPath (Join-Path $home_ 'sub\deeper\more.txt') -Value 'more'
+# what the junction will point at has the same names, and an ACL that must not change
+New-Item -ItemType Directory -Path (Join-Path $outside 'deeper') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $outside 'plain.txt') -Value 'outside'
+Set-Content -LiteralPath (Join-Path $outside 'deeper\more.txt') -Value 'outside'
+$watched = @($outside, (Join-Path $outside 'plain.txt'), (Join-Path $outside 'deeper'), (Join-Path $outside 'deeper\more.txt'))
+$before = @($watched | ForEach-Object { (Get-Acl -LiteralPath $_).Sddl })
+$script:swapped = $false
+function Swap-SubForAJunction {
+  if ($script:swapped) { return }
+  $script:swapped = $true
+  Remove-Item -LiteralPath (Join-Path $home_ 'sub') -Recurse -Force
+  New-Item -ItemType Junction -Path (Join-Path $home_ 'sub') -Target $outside | Out-Null
+}
+if ($env:JHT_RACE -eq 'queued') {
+  # the folders 'sub' and 'other' are queued by the first listing; 'sub' becomes a junction before it is listed
+  function Get-ChildItem {
+    $found = @(Microsoft.PowerShell.Management\Get-ChildItem @args)
+    Swap-SubForAJunction
+    $found
+  }
+} else {
+  # the walk is over; 'sub' becomes a junction when the first node is written, and its children are written through it
+  $original = (Get-Command Set-JhtAccessControl -CommandType Function).ScriptBlock
+  function Set-JhtAccessControl {
+    param([string]$Path, $Acl)
+    & $original -Path $Path -Acl $Acl
+    Swap-SubForAJunction
+  }
+}
+Protect-JhtHomeAcl -Path $home_
+if (-not $script:swapped) { throw 'the folder was never swapped: the test proves nothing' }
+$after = @($watched | ForEach-Object { (Get-Acl -LiteralPath $_).Sddl })
+for ($i = 0; $i -lt $watched.Count; $i++) {
+  if ($after[$i] -ne $before[$i]) { throw "the ACL behind the junction was rewritten: $($watched[$i])" }
+}
+if ((Get-Acl -LiteralPath $outside).AreAccessRulesProtected) { throw 'the folder behind the junction lost its inheritance' }
+Write-Output 'RACE_LEFT_ALONE'
+"""
+
+
+@pytest.mark.skipif(os.name != "nt", reason="ACLs and junctions of Windows")
+@pytest.mark.parametrize("race", ("queued", "written"))
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("name", COPIES)
+def test_a_folder_turned_into_a_junction_after_it_was_queued_or_before_it_is_written_is_left_alone(name, shell, race, tmp_path):
+    script = tmp_path / "race.ps1"
+    script.write_text(RACE, encoding="utf-8")
+    env = dict(os.environ, JHT_UNDER_TEST=str(SCRIPTS / name), JHT_FIXTURE=str(tmp_path / "fixture"), JHT_RACE=race)
+    done = subprocess.run(
+        [_shell(shell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+        capture_output=True, text=True, env=env, timeout=240,
+    )
+    assert done.returncode == 0 and "RACE_LEFT_ALONE" in done.stdout, (done.stdout, done.stderr)
