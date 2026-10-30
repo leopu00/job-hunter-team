@@ -137,7 +137,10 @@ def test_wrapper_setup_reload_does_not_execute_new_host_env(tmp_path):
         "set -eu\n"
         "JHT_HOST_SETUP_PROTOCOL=1\n"
         f"printf '%s' {shlex.quote(malicious_env(marker, host_type='vps'))} > "
-        f"{shlex.quote(str(host_env))}\n",
+        f"{shlex.quote(str(host_env))}\n"
+        # the real host-setup also records the three values where the agents cannot write
+        f"printf 'JHT_HOST_TYPE=vps\\nJHT_LANG=en\\nJHT_USER_TZ=UTC\\n' > {shlex.quote(str(runtime / 'host-values'))}\n"
+        f"chmod 600 {shlex.quote(str(runtime / 'host-values'))}\n",
         encoding="utf-8",
     )
     host_setup.chmod(0o755)

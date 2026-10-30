@@ -30,12 +30,14 @@ const BLOCK_KINDS: &[&str] = &[
 pub(crate) struct MigrationPaths {
     pub(crate) app_data: PathBuf,
     pub(crate) runtime_home: PathBuf,
+    /// The owner marker (see `account_scope::local_owner_marker_path`): in the data of the app, not in `runtime_home`.
+    pub(crate) owner_marker: PathBuf,
     pub(crate) source_capability: PathBuf,
 }
 
 impl MigrationPaths {
     fn owner(&self) -> PathBuf {
-        self.runtime_home.join(".desktop-account-scope")
+        self.owner_marker.clone()
     }
 
     fn profile(&self) -> PathBuf {
@@ -1170,6 +1172,7 @@ languages:
                 root,
                 paths: MigrationPaths {
                     app_data,
+                    owner_marker: runtime_home.join(".desktop-account-scope"),
                     runtime_home,
                     source_capability,
                 },

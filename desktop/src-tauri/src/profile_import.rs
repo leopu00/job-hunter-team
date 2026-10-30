@@ -23,6 +23,8 @@ const RECEIPT_SCHEMA_VERSION: u8 = 1;
 const PROFILE_HASH_DOMAIN: &[u8] = b"jht-vps-profile-import-v1\0";
 const RECEIPT_HASH_DOMAIN: &[u8] = b"jht-vps-profile-import-receipt-v1\0";
 const RECEIPT_NAME: &str = "vps-profile-import-receipt.json";
+const TARGET_NAME: &str = "candidate_profile.yml";
+const PENDING_REVIEW_NAME: &str = "pending-profile-review.json";
 
 const REMOTE_PROFILE_EXPORT: &str = r#"set -eu
 JHT_BIN="$(command -v jht 2>/dev/null || true)"
@@ -549,6 +551,202 @@ fn sync_dir(path: &Path) -> Result<(), &'static str> {
     }
 }
 
+/// The folder the profile is imported into (`~/.jht/profile`), which the container mounts and so an agent can replace with a
+/// link. It is opened once without following a link at its name, and everything done in it afterwards is relative to that
+/// open folder: a link that was put there makes the import fail, it never makes it chmod, stage in or publish into a folder
+/// somewhere else.
+#[cfg(unix)]
+struct ProfileDir {
+    fd: std::os::fd::OwnedFd,
+}
+
+#[cfg(unix)]
+impl ProfileDir {
+    const STORAGE: &'static str = "profile_import_storage_failed";
+
+    fn flags() -> rustix::fs::OFlags {
+        use rustix::fs::OFlags;
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC
+    }
+
+    /// The folder if it is there; `None` when it is not; a closed code for a link, a file, or anything unreadable.
+    fn open_existing(path: &Path) -> Result<Option<Self>, &'static str> {
+        use rustix::{fs::{open, Mode}, io::Errno};
+        match open(path, Self::flags(), Mode::empty()) {
+            Ok(fd) => Ok(Some(Self { fd })),
+            Err(Errno::NOENT) => Ok(None),
+            Err(_) => Err(Self::STORAGE),
+        }
+    }
+
+    /// The folder, made (private) if it is not there. Its parent, the folder of the user's runtime, is made as before.
+    fn open_or_create(path: &Path) -> Result<Self, &'static str> {
+        use rustix::{fs::{fchmod, mkdirat, Mode, CWD}, io::Errno};
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|_| Self::STORAGE)?;
+        }
+        let dir = match Self::open_existing(path)? {
+            Some(dir) => dir,
+            None => {
+                match mkdirat(CWD, path, Mode::RWXU) {
+                    Ok(()) | Err(Errno::EXIST) => {}
+                    Err(_) => return Err(Self::STORAGE),
+                }
+                Self::open_existing(path)?.ok_or(Self::STORAGE)?
+            }
+        };
+        fchmod(&dir.fd, Mode::RWXU).map_err(|_| Self::STORAGE)?;
+        Ok(dir)
+    }
+
+    /// Whether `name` is there, a link counted as there and never followed.
+    fn exists(&self, name: &str) -> Result<bool, &'static str> {
+        use rustix::{fs::{statat, AtFlags}, io::Errno};
+        match statat(&self.fd, name, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(_) => Ok(true),
+            Err(Errno::NOENT) => Ok(false),
+            Err(_) => Err(Self::STORAGE),
+        }
+    }
+
+    /// A new private file, which must not be there (a file or a link at that name is not opened, not truncated).
+    fn create_new(&self, name: &str) -> Result<fs::File, &'static str> {
+        use rustix::fs::{openat, Mode, OFlags};
+        openat(
+            &self.fd,
+            name,
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::RUSR | Mode::WUSR,
+        )
+        .map(fs::File::from)
+        .map_err(|_| Self::STORAGE)
+    }
+
+    /// The bytes of a regular file of 1 to `maximum` bytes, opened without following a link.
+    fn read_regular(&self, name: &str, maximum: u64) -> Result<Vec<u8>, &'static str> {
+        use rustix::fs::{openat, Mode, OFlags};
+        use std::io::Read;
+        const RECOVERY: &str = "profile_import_recovery_required";
+        let file = openat(&self.fd, name, OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC | OFlags::NONBLOCK, Mode::empty())
+            .map(fs::File::from)
+            .map_err(|_| RECOVERY)?;
+        let metadata = file.metadata().map_err(|_| RECOVERY)?;
+        if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > maximum {
+            return Err(RECOVERY);
+        }
+        let mut bytes = Vec::new();
+        file.take(maximum + 1).read_to_end(&mut bytes).map_err(|_| RECOVERY)?;
+        if bytes.len() as u64 > maximum {
+            return Err(RECOVERY);
+        }
+        Ok(bytes)
+    }
+
+    /// `from` becomes `to` only if `to` is not there.
+    fn rename_noreplace(&self, from: &str, to: &str) -> Result<(), &'static str> {
+        use rustix::{fs::{renameat_with, RenameFlags}, io::Errno};
+        renameat_with(&self.fd, from, &self.fd, to, RenameFlags::NOREPLACE).map_err(|error| {
+            if error == Errno::EXIST {
+                "target_profile_exists"
+            } else {
+                Self::STORAGE
+            }
+        })
+    }
+
+    fn remove(&self, name: &str) -> Result<(), &'static str> {
+        rustix::fs::unlinkat(&self.fd, name, rustix::fs::AtFlags::empty()).map_err(|_| "profile_import_recovery_required")
+    }
+
+    fn sync(&self) -> Result<(), &'static str> {
+        rustix::fs::fsync(&self.fd).map_err(|_| Self::STORAGE)
+    }
+}
+
+/// Where there is no open-folder handle (Windows), the same operations on the path, after refusing a folder that is a link
+/// or a reparse point (the junction an agent can make) before anything is changed in it.
+#[cfg(not(unix))]
+use std::path::PathBuf;
+
+#[cfg(not(unix))]
+struct ProfileDir {
+    path: PathBuf,
+}
+
+#[cfg(not(unix))]
+impl ProfileDir {
+    const STORAGE: &'static str = "profile_import_storage_failed";
+
+    fn plain_folder(path: &Path) -> Result<Option<()>, &'static str> {
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.file_type().is_dir() && !is_reparse_point(&metadata) => Ok(Some(())),
+            Ok(_) => Err(Self::STORAGE),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err(Self::STORAGE),
+        }
+    }
+
+    fn open_existing(path: &Path) -> Result<Option<Self>, &'static str> {
+        Ok(Self::plain_folder(path)?.map(|()| Self { path: path.to_path_buf() }))
+    }
+
+    fn open_or_create(path: &Path) -> Result<Self, &'static str> {
+        if Self::plain_folder(path)?.is_none() {
+            private_dir(path)?;
+            Self::plain_folder(path)?.ok_or(Self::STORAGE)?;
+        } else {
+            crate::runtime_host::set_private_dir_permissions(path).map_err(|_| Self::STORAGE)?;
+        }
+        Ok(Self { path: path.to_path_buf() })
+    }
+
+    fn exists(&self, name: &str) -> Result<bool, &'static str> {
+        match fs::symlink_metadata(self.path.join(name)) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(_) => Err(Self::STORAGE),
+        }
+    }
+
+    fn create_new(&self, name: &str) -> Result<fs::File, &'static str> {
+        OpenOptions::new().write(true).create_new(true).open(self.path.join(name)).map_err(|_| Self::STORAGE)
+    }
+
+    fn read_regular(&self, name: &str, maximum: u64) -> Result<Vec<u8>, &'static str> {
+        const RECOVERY: &str = "profile_import_recovery_required";
+        let path = self.path.join(name);
+        let metadata = fs::symlink_metadata(&path).map_err(|_| RECOVERY)?;
+        if !metadata.file_type().is_file() || is_reparse_point(&metadata) || metadata.len() == 0 || metadata.len() > maximum {
+            return Err(RECOVERY);
+        }
+        fs::read(&path).map_err(|_| RECOVERY)
+    }
+
+    fn rename_noreplace(&self, from: &str, to: &str) -> Result<(), &'static str> {
+        atomic_publish(&self.path.join(from), &self.path.join(to))
+    }
+
+    fn remove(&self, name: &str) -> Result<(), &'static str> {
+        fs::remove_file(self.path.join(name)).map_err(|_| "profile_import_recovery_required")
+    }
+
+    fn sync(&self) -> Result<(), &'static str> {
+        sync_dir(&self.path)
+    }
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
 fn atomic_private_write(path: &Path, bytes: &[u8]) -> Result<(), &'static str> {
     let parent = path.parent().ok_or("profile_import_storage_failed")?;
     private_dir(parent)?;
@@ -637,21 +835,15 @@ fn read_receipt(path: &Path) -> Result<ImportReceipt, &'static str> {
     Ok(receipt)
 }
 
-fn target_hash(path: &Path) -> Result<String, &'static str> {
-    let metadata = fs::symlink_metadata(path).map_err(|_| "profile_import_recovery_required")?;
-    if !metadata.file_type().is_file()
-        || metadata.len() == 0
-        || metadata.len() > MAX_PROFILE_BYTES as u64
-    {
-        return Err("profile_import_recovery_required");
-    }
-    let bytes = Zeroizing::new(fs::read(path).map_err(|_| "profile_import_recovery_required")?);
+fn target_hash(dir: &ProfileDir, name: &str) -> Result<String, &'static str> {
+    let bytes = Zeroizing::new(dir.read_regular(name, MAX_PROFILE_BYTES as u64)?);
     validate_profile_strict(&bytes).map_err(|_| "profile_import_recovery_required")?;
     Ok(profile_hash(&bytes))
 }
 
+/// The folder of the profile is there or not (`None`): a target in a folder that is not there is a target that is absent.
 fn recover_receipt(
-    target: &Path,
+    dir: Option<&ProfileDir>,
     receipt_path: &Path,
 ) -> Result<Option<ProfileImportSnapshot>, &'static str> {
     let receipt = match fs::symlink_metadata(receipt_path) {
@@ -659,10 +851,15 @@ fn recover_receipt(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err("profile_import_recovery_required"),
     };
-    let target_present = fs::symlink_metadata(target).is_ok();
+    let target_present = match dir {
+        Some(dir) => dir.exists(TARGET_NAME)?,
+        None => false,
+    };
+    // `dir` is there whenever the target is
+    let target_hash_in = || dir.map_or(Err("profile_import_recovery_required"), |dir| target_hash(dir, TARGET_NAME));
     match receipt.status {
         ReceiptStatus::Committed => {
-            if !target_present || target_hash(target)? != receipt.profile_sha256 {
+            if !target_present || target_hash_in()? != receipt.profile_sha256 {
                 return Err("profile_import_recovery_required");
             }
             Ok(Some(ProfileImportSnapshot {
@@ -675,7 +872,7 @@ fn recover_receipt(
             }))
         }
         ReceiptStatus::Prepared if target_present => {
-            if target_hash(target)? != receipt.profile_sha256 {
+            if target_hash_in()? != receipt.profile_sha256 {
                 return Err("profile_import_recovery_required");
             }
             let committed = signed_receipt(
@@ -712,16 +909,16 @@ fn recover_receipt(
 }
 
 fn rollback_published_target(
-    target: &Path,
+    dir: &ProfileDir,
     receipt_path: &Path,
     prepared: &ImportReceipt,
 ) -> Result<(), &'static str> {
     let persisted = read_receipt(receipt_path)?;
-    if persisted != *prepared || target_hash(target)? != prepared.profile_sha256 {
+    if persisted != *prepared || target_hash(dir, TARGET_NAME)? != prepared.profile_sha256 {
         return Err("profile_import_recovery_required");
     }
-    fs::remove_file(target).map_err(|_| "profile_import_recovery_required")?;
-    sync_dir(target.parent().ok_or("profile_import_recovery_required")?)?;
+    dir.remove(TARGET_NAME)?;
+    dir.sync()?;
     write_receipt(
         receipt_path,
         &signed_receipt(
@@ -733,6 +930,7 @@ fn rollback_published_target(
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(test)]
 fn atomic_publish(stage: &Path, target: &Path) -> Result<(), &'static str> {
     use rustix::fs::{renameat_with, RenameFlags, CWD};
     renameat_with(CWD, stage, CWD, target, RenameFlags::NOREPLACE).map_err(|error| {
@@ -782,20 +980,24 @@ fn preflight_import(
     profile_dir: &Path,
     receipt_path: &Path,
 ) -> Result<Option<ProfileImportSnapshot>, &'static str> {
-    let target = profile_dir.join("candidate_profile.yml");
-    let pending_review = profile_dir.join("pending-profile-review.json");
-    match fs::symlink_metadata(&pending_review) {
-        Ok(_) => return Err("target_profile_exists"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err("profile_import_storage_failed"),
+    preflight_in(ProfileDir::open_existing(profile_dir)?.as_ref(), receipt_path)
+}
+
+fn preflight_in(
+    dir: Option<&ProfileDir>,
+    receipt_path: &Path,
+) -> Result<Option<ProfileImportSnapshot>, &'static str> {
+    if let Some(dir) = dir {
+        if dir.exists(PENDING_REVIEW_NAME)? {
+            return Err("target_profile_exists");
+        }
     }
-    if let Some(recovered) = recover_receipt(&target, receipt_path)? {
+    if let Some(recovered) = recover_receipt(dir, receipt_path)? {
         return Ok(Some(recovered));
     }
-    match fs::symlink_metadata(&target) {
-        Ok(_) => Err("target_profile_exists"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(_) => Err("profile_import_storage_failed"),
+    match dir {
+        Some(dir) if dir.exists(TARGET_NAME)? => Err("target_profile_exists"),
+        _ => Ok(None),
     }
 }
 
@@ -805,46 +1007,36 @@ fn persist_import(
     profile: &[u8],
     fail_after_publish: bool,
 ) -> Result<ProfileImportSnapshot, &'static str> {
-    private_dir(profile_dir)?;
-    let target = profile_dir.join("candidate_profile.yml");
-    if let Some(recovered) = preflight_import(profile_dir, receipt_path)? {
+    let dir = ProfileDir::open_or_create(profile_dir)?;
+    if let Some(recovered) = preflight_in(Some(&dir), receipt_path)? {
         return Ok(recovered);
     }
 
     validate_profile_strict(profile)?;
     let operation_id = new_operation_id();
     let digest = profile_hash(profile);
-    let stage = profile_dir.join(format!(".candidate_profile.{operation_id}.stage"));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut stage_file = options
-        .open(&stage)
-        .map_err(|_| "profile_import_storage_failed")?;
+    let stage = format!(".candidate_profile.{operation_id}.stage");
+    let mut stage_file = dir.create_new(&stage)?;
     let stage_result = (|| {
         stage_file
             .write_all(profile)
             .and_then(|_| stage_file.sync_all())
             .map_err(|_| "profile_import_storage_failed")?;
-        if target_hash(&stage)? != digest {
+        if target_hash(&dir, &stage)? != digest {
             return Err("profile_import_storage_failed");
         }
         let prepared = signed_receipt(operation_id, ReceiptStatus::Prepared, digest.clone());
         write_receipt(receipt_path, &prepared)?;
         // One no-replace rename publishes the verified staging inode. A target
         // created by another process between preflight and commit wins.
-        atomic_publish(&stage, &target)?;
-        sync_dir(profile_dir)?;
+        dir.rename_noreplace(&stage, TARGET_NAME)?;
+        dir.sync()?;
         if fail_after_publish {
-            rollback_published_target(&target, receipt_path, &prepared)?;
+            rollback_published_target(&dir, receipt_path, &prepared)?;
             return Err("profile_import_storage_failed");
         }
-        if target_hash(&target)? != digest {
-            rollback_published_target(&target, receipt_path, &prepared)?;
+        if target_hash(&dir, TARGET_NAME)? != digest {
+            rollback_published_target(&dir, receipt_path, &prepared)?;
             return Err("profile_import_storage_failed");
         }
         let committed = signed_receipt(
@@ -853,7 +1045,7 @@ fn persist_import(
             prepared.profile_sha256.clone(),
         );
         if let Err(error) = write_receipt(receipt_path, &committed) {
-            rollback_published_target(&target, receipt_path, &prepared)?;
+            rollback_published_target(&dir, receipt_path, &prepared)?;
             return Err(error);
         }
         if read_receipt(receipt_path)? != committed {
@@ -868,7 +1060,7 @@ fn persist_import(
             receipt_verified: true,
         })
     })();
-    let _ = fs::remove_file(&stage);
+    let _ = dir.remove(&stage);
     stage_result
 }
 
@@ -1201,7 +1393,8 @@ blocks: []
             profile_hash(VALID_PROFILE),
         );
         write_receipt(&receipt, &prepared).unwrap();
-        let recovered = recover_receipt(&target, &receipt).unwrap().unwrap();
+        let dir = ProfileDir::open_existing(&profile_dir).unwrap().unwrap();
+        let recovered = recover_receipt(Some(&dir), &receipt).unwrap().unwrap();
         assert!(recovered.receipt_verified && recovered.target_valid);
         assert_eq!(
             read_receipt(&receipt).unwrap().status,
@@ -1209,10 +1402,107 @@ blocks: []
         );
         fs::write(&target, b"changed-outside-transaction\n").unwrap();
         assert_eq!(
-            recover_receipt(&target, &receipt),
+            recover_receipt(Some(&dir), &receipt),
             Err("profile_import_recovery_required")
         );
         assert_eq!(fs::read(&target).unwrap(), b"changed-outside-transaction\n");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    fn names(dir: &Path) -> Vec<String> {
+        let mut found: Vec<String> = fs::read_dir(dir).unwrap().map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        found.sort();
+        found
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_in_the_place_of_the_profile_folder_changes_nothing_outside_the_runtime() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+        let root = temp_root("folder-link");
+        let jht = root.join("home/.jht");
+        fs::create_dir_all(&jht).unwrap();
+        let receipt = root.join("app/accounts/opaque").join(RECEIPT_NAME);
+        // a folder of the user's, outside the mounts, that the link points to
+        let outside = root.join("documents-of-the-user");
+        fs::create_dir(&outside).unwrap();
+        fs::set_permissions(&outside, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(outside.join("notes.txt"), "mine\n").unwrap();
+        let profile_dir = jht.join("profile");
+        symlink(&outside, &profile_dir).unwrap();
+
+        assert_eq!(persist_import(&profile_dir, &receipt, VALID_PROFILE, false), Err("profile_import_storage_failed"));
+        assert_eq!(preflight_import(&profile_dir, &receipt), Err("profile_import_storage_failed"));
+        assert_eq!(mode_of(&outside), 0o755, "the folder the link points to is not chmod-ed");
+        assert_eq!(names(&outside), vec!["notes.txt".to_owned()], "nothing was staged or published there");
+        assert!(!receipt.exists(), "and no receipt says an import began");
+
+        // a link that points nowhere: nothing is created at its target either
+        fs::remove_file(&profile_dir).unwrap();
+        let nowhere = root.join("not-there-yet");
+        symlink(&nowhere, &profile_dir).unwrap();
+        assert_eq!(persist_import(&profile_dir, &receipt, VALID_PROFILE, false), Err("profile_import_storage_failed"));
+        assert!(!nowhere.exists());
+
+        // a file where the folder goes
+        fs::remove_file(&profile_dir).unwrap();
+        fs::write(&profile_dir, "not a folder\n").unwrap();
+        assert_eq!(persist_import(&profile_dir, &receipt, VALID_PROFILE, false), Err("profile_import_storage_failed"));
+        assert_eq!(fs::read_to_string(&profile_dir).unwrap(), "not a folder\n");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_profile_folder_that_is_there_is_made_private_and_one_that_is_not_is_made() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = temp_root("folder-private");
+        let profile_dir = root.join("home/.jht/profile");
+        fs::create_dir_all(&profile_dir).unwrap();
+        fs::set_permissions(&profile_dir, fs::Permissions::from_mode(0o755)).unwrap();
+        let receipt = root.join("app/accounts/opaque").join(RECEIPT_NAME);
+        persist_import(&profile_dir, &receipt, VALID_PROFILE, false).unwrap();
+        assert_eq!(mode_of(&profile_dir), 0o700);
+        let fresh = root.join("other/.jht/profile");
+        let receipt = root.join("app/accounts/other").join(RECEIPT_NAME);
+        persist_import(&fresh, &receipt, VALID_PROFILE, false).unwrap();
+        assert_eq!(mode_of(&fresh), 0o700);
+        assert_eq!(names(&fresh), vec!["candidate_profile.yml".to_owned()], "no stage is left");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_name_of_the_target_or_of_the_review_counts_as_there_and_is_not_followed() {
+        use std::os::unix::fs::symlink;
+        for name in [TARGET_NAME, PENDING_REVIEW_NAME] {
+            let root = temp_root("name-link");
+            let profile_dir = root.join("home/.jht/profile");
+            fs::create_dir_all(&profile_dir).unwrap();
+            let outside = root.join("a-file-of-the-user");
+            fs::write(&outside, "precious\n").unwrap();
+            symlink(&outside, profile_dir.join(name)).unwrap();
+            let receipt = root.join("app/accounts/opaque").join(RECEIPT_NAME);
+            assert_eq!(persist_import(&profile_dir, &receipt, VALID_PROFILE, false), Err("target_profile_exists"), "{name}");
+            assert_eq!(fs::read_to_string(&outside).unwrap(), "precious\n");
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_import_works_on_the_open_folder_and_never_on_the_path_of_a_name_in_it() {
+        let source = include_str!("profile_import.rs");
+        let code = source.split("#[cfg(test)]\nmod tests {").next().unwrap();
+        for function in ["fn persist_import(", "fn preflight_in(", "fn rollback_published_target("] {
+            let body = code.split(function).nth(1).unwrap().split("\n}\n").next().unwrap();
+            assert!(!body.contains(".join(") && !body.contains("set_permissions") && !body.contains("fs::remove_file"), "{function}");
+        }
     }
 }

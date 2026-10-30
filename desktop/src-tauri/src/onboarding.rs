@@ -6176,9 +6176,8 @@ pub(crate) async fn onboarding_resume_runtime_wake(
             matches!(validated, ValidatedHost::Local),
             || {
                 crate::account_scope::validate_local_runtime(&app, &worker_expected).map_err(failure)?;
-                let marker = crate::account_scope::local_owner_marker_path(&app).map_err(failure)?;
-                let home = marker.parent().ok_or_else(|| failure("container_start_failed"))?;
-                keep_team_halted(home)
+                let home = crate::account_scope::local_runtime_home(&app).map_err(|_| failure("container_start_failed"))?;
+                keep_team_halted(&home)
             },
             || wake_local_runtime(&app, &worker_expected, runtime_log.as_ref()),
         )

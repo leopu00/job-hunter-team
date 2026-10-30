@@ -297,7 +297,8 @@ def test_status_and_gui_probes_cannot_start_a_stopped_runtime():
     runtime_probe = _shell_function(wrapper, "read_only_container_id")
     # The agents' container is one service of the compose: the probe delegates
     # to the per-service attestation, and both bodies are the probe.
-    service_probe = _shell_function(wrapper, "read_only_service_id")
+    # the per-service attestation is the entry (cache, then the complete attestation) and the complete attestation itself
+    service_probe = _shell_function(wrapper, "read_only_service_id") + "\n" + _shell_function(wrapper, "read_only_service_id_attest")
     onboarding_probe = _shell_function(wrapper, "onboarding_snapshot")
     reachable = _shell_function(wrapper, "docker_reachable")
     snapshot = _local_snapshot(desktop)

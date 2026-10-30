@@ -1,4 +1,4 @@
-//! Who owns the team of this computer, read from the marker `~/.jht/.desktop-account-scope`:
+//! Who owns the team of this computer, read from the owner marker the app keeps in its own data (`account_scope::local_owner_marker_path`):
 //! `runtime_local_team_owner_identity` says whose it is (a local profile, with its id, or an account that
 //! signed in; the digest the marker holds does not leave) and `runtime_local_team_owner` says whether it is the active profile's.
 //!
@@ -8,7 +8,7 @@
 //! in, or «nobody» when the computer has no marker yet.
 
 use crate::account_scope::{
-    load_local_scope_at, local_owner_marker_path, local_profiles_dir, unowned_home_may_be_claimed,
+    load_local_scope_at, local_owner_marker_path, local_profiles_dir, local_runtime_home, unowned_home_may_be_claimed,
     valid_digest, valid_profile_id, AccountScope, AccountScopeState,
 };
 use serde::Serialize;
@@ -142,8 +142,8 @@ fn owner_at(marker: &Path, profiles_root: &Path) -> Result<Option<TeamOwner>, &'
 /// The marker of `home` against the active scope. «None» only when the home is the active scope's to claim
 /// (the rule of `validate_or_claim_local_owner`); a home with someone's data and no marker that this scope
 /// may not claim is «nobody», never «other» by guess. A marker or home that cannot be read stays a code.
-fn ownership_at(home: &Path, active: &AccountScope) -> Result<Ownership, &'static str> {
-    match marker_digest(&home.join(".desktop-account-scope"))? {
+fn ownership_with(home: &Path, marker: &Path, active: &AccountScope) -> Result<Ownership, &'static str> {
+    match marker_digest(marker)? {
         Some(digest) if digest == active.digest() => Ok(Ownership::Mine),
         Some(_) => Ok(Ownership::Other),
         None => match unowned_home_may_be_claimed(home, active) {
@@ -152,6 +152,12 @@ fn ownership_at(home: &Path, active: &AccountScope) -> Result<Ownership, &'stati
             Err(code) => Err(code),
         },
     }
+}
+
+/// The tests keep the marker inside the home they build.
+#[cfg(test)]
+fn ownership_at(home: &Path, active: &AccountScope) -> Result<Ownership, &'static str> {
+    ownership_with(home, &home.join(".desktop-account-scope"), active)
 }
 
 fn paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), &'static str> {
@@ -187,10 +193,8 @@ pub(crate) fn runtime_local_team_owner(
     }
     let active = scopes.active().map_err(failure)?;
     let marker = local_owner_marker_path(&app).map_err(failure)?;
-    let home = marker
-        .parent()
-        .ok_or_else(|| failure("local_account_owner_unavailable"))?;
-    ownership_at(home, &active)
+    let home = local_runtime_home(&app).map_err(failure)?;
+    ownership_with(&home, &marker, &active)
         .map(|owner| TeamOwnership { owner })
         .map_err(failure)
 }
