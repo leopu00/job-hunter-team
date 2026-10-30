@@ -295,6 +295,7 @@ _USER_REQUEST_ROLES = frozenset((_RULES.get("user_requests") or {}).get("roles")
 _EMPTY_UNIT = _RULES.get("empty_unit") or {}
 _EMPTY_UNIT_ROLES = frozenset(_EMPTY_UNIT.get("roles") or ())
 EMPTY_UNIT_MAX_STREAK = int(_EMPTY_UNIT.get("max_streak") or 0)
+EMPTY_UNIT_MAX_UNIT_SEC = int(_EMPTY_UNIT.get("max_unit_sec") or 0)     # 0: no limit on how long the unit was
 # Nel recupero dopo un congelamento la pausa del Capitano è un freno sulla
 # spesa (22/10, su un team di prova): uno Scout rimesso in piedi dopo il freeze ha preso il 69%
 # del consumo a 2,76 %/h perché le sue unità vuote accorciavano a 60 s la pausa
@@ -609,15 +610,21 @@ def register(agent: str, seconds=None, reason=None, session=None,
     started = previous.get("timer_armed_at") or previous.get("since")
     empty_streak = 0
     held = None
+    long_unit = None
     if (not waiting and applied > USER_WORK_PAUSE_SEC
             and _role_of(agent) in _EMPTY_UNIT_ROLES
             and isinstance(started, (int, float))):
         streak = int(previous.get("empty_streak") or 0)
+        unit_sec = now - float(started)
         if streak < EMPTY_UNIT_MAX_STREAK and inserted_since(agent, started) == 0:
-            held = captains_pause_stays(now)
-            if held is None:
-                shortened_from, applied = applied, USER_WORK_PAUSE_SEC
-                empty_streak = streak + 1
+            if EMPTY_UNIT_MAX_UNIT_SEC and unit_sec > EMPTY_UNIT_MAX_UNIT_SEC:
+                # Not a check of seconds: a search that spent budget and found nothing. The Capitano's pause.
+                long_unit = int(unit_sec)
+            else:
+                held = captains_pause_stays(now)
+                if held is None:
+                    shortened_from, applied = applied, USER_WORK_PAUSE_SEC
+                    empty_streak = streak + 1
     # Il tetto del primo passaggio e' raggiunto: lo Scout non ha piu' niente da inserire (db_insert glielo
     # rifiuta), e ogni giro di ricerca che fa da qui e' budget senza posizioni. Resta fermo FIRST_PASS_HOLD_SEC
     # per volta, e riprova da solo quando il burst finisce. Dopo la regola dell'unita' vuota, che altrimenti
@@ -667,6 +674,8 @@ def register(agent: str, seconds=None, reason=None, session=None,
                  if shortened_from is not None else {})
     if held is not None:
         shortened = {"empty_unit_kept": held}
+    if long_unit is not None:
+        shortened = {"empty_unit_long_sec": long_unit}
     if first_pass_held:
         shortened = {"first_pass_cap": first_pass}
     emit("armed", agent=agent, ts=now, applied_sec=applied, until=until,
