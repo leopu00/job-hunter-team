@@ -98,6 +98,33 @@ try {
   $tokens = $null; $errors = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseFile($standalone, [ref]$tokens, [ref]$errors)
   if ($errors.Count) { throw "standalone parse failed: $($errors[0])" }
+  # SEC-09 P1-2: a link left in the folder is neither changed nor entered. The folder a junction points at, outside the
+  # mounts, keeps its ACL (inheritance on, nothing removed), and so does what is in it; the folder itself is made private.
+  function Assert-LinkIsLeftAlone {
+    param([Parameter(Mandatory)][string]$Which)
+    $linkHome = Join-Path $root "link-home-$Which"
+    $outside = Join-Path $root "outside-the-home-$Which"
+    New-Item -ItemType Directory -Path $linkHome, $outside, (Join-Path $linkHome 'sub') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $outside 'kept.txt') -Value 'kept'
+    Set-Content -LiteralPath (Join-Path $linkHome 'sub\plain.txt') -Value 'plain'
+    New-Item -ItemType Junction -Path (Join-Path $linkHome 'junction') -Target $outside | Out-Null
+    New-Item -ItemType Junction -Path (Join-Path $linkHome 'sub\deep-junction') -Target $outside | Out-Null
+    $before = (Get-Acl -LiteralPath $outside).Sddl
+    $beforeFile = (Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl
+    $acl = Get-Acl -LiteralPath $linkHome
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+    Set-JhtAccessControl -Path $linkHome -Acl $acl
+    Protect-JhtHomeAcl -Path $linkHome
+    foreach ($made in @($linkHome, (Join-Path $linkHome 'sub'), (Join-Path $linkHome 'sub\plain.txt'))) {
+      if (-not (Test-PrivateJhtHomeAcl -Path $made)) { throw "${Which}: not made private: $made" }
+    }
+    if ((Get-Acl -LiteralPath $outside).Sddl -ne $before) { throw "${Which}: the ACL of the folder a junction points at was rewritten" }
+    if ((Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl -ne $beforeFile) { throw "${Which}: the ACL of a file behind a junction was rewritten" }
+    if ((Get-Acl -LiteralPath $outside).AreAccessRulesProtected) { throw "${Which}: the folder a junction points at lost its inheritance" }
+    Write-Host "ACL_LINK_LEFT_ALONE $Which"
+  }
+  Assert-LinkIsLeftAlone -Which 'helper'
   foreach ($installerFunctionName in @('Set-JhtAccessControl', 'Protect-JhtHomeAcl', 'Set-JhtNodeOwner')) {
     $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
     if (-not $fn) { throw "standalone $installerFunctionName function missing" }
@@ -109,6 +136,7 @@ try {
   $standaloneAcl = Get-Acl $standaloneFixture; $standaloneAcl.SetAccessRuleProtection($true, $false); $standaloneAcl.AddAccessRule($foreignRule); Set-Acl $standaloneFixture $standaloneAcl
   Protect-JhtHomeAcl -Path $standaloneFixture
   if (-not (Test-PrivateJhtHomeAcl -Path $standaloneFixture)) { throw 'standalone inline ACL repair failed' }
+  Assert-LinkIsLeftAlone -Which 'installer'
 
   # E03 CLEAN_START: exercise the real installer function with exact repository
   # bytes, then run the installed wrapper far enough to observe Docker. This is
