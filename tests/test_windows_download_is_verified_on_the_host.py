@@ -27,7 +27,7 @@ def _functions() -> str:
     import re
     text = WRAPPER.read_text(encoding="utf-8")
     out = []
-    for name in ("Test-DownloadInsideShared", "Invoke-HostDownload"):
+    for name in ("Test-DownloadInsideShared", "Get-DownloadSha256", "Invoke-HostDownload"):
         match = re.search(rf"^function {re.escape(name)} \{{.*?^\}}\n", text, re.S | re.M)
         assert match, name
         out.append(match.group(0))
@@ -41,7 +41,8 @@ def test_the_windows_download_no_longer_goes_through_the_container():
     function = _functions()
     for gone in ("docker cp", "docker exec", "$Container", "NodeEntry"):
         assert gone not in function, gone
-    for seam in ("Get-FileHash", "[IO.File]::Move($part, $destination)", "Test-DownloadInsideShared", "'SHA256SUMS'",
+    assert "Get-FileHash" not in function, "the hash must not depend on a module that a reduced environment may not find"
+    for seam in ("Get-DownloadSha256", "[Security.Cryptography.SHA256]::Create()", "[IO.File]::Move($part, $destination)", "Test-DownloadInsideShared", "'SHA256SUMS'",
                  "https://github.com/leopu00/job-hunter-team/releases/download"):
         assert seam in function, seam
     arm = source[source.index("  'download' {"):]

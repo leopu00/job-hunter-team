@@ -16,7 +16,7 @@ def test_powershell_wrapper_downloads_on_the_host_and_publishes_without_clobberi
     for seam in (
         "function Invoke-HostDownload",
         "[IO.File]::Move($part, $destination)",
-        "Get-FileHash",
+        "Get-DownloadSha256",
         "'download' {",
         "$env:JHT_RELEASE_BASE_URL",
     ):

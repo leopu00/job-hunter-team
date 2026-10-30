@@ -2552,6 +2552,18 @@ function Test-DownloadInsideShared {
   return $false
 }
 
+# L'hash con .NET e non con Get-FileHash: il cmdlet viene dal modulo Microsoft.PowerShell.Utility, che un ambiente ridotto o un
+# PSModulePath rotto puo' non far trovare, e la verifica non deve dipendere da un modulo.
+function Get-DownloadSha256 {
+  param([string]$Path)
+  $stream = [IO.File]::OpenRead($Path)
+  try {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return (($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) -join '') }
+    finally { $sha.Dispose() }
+  } finally { $stream.Dispose() }
+}
+
 function Invoke-HostDownload {
   param([string[]]$DownloadArgs)
 
@@ -2647,7 +2659,7 @@ function Invoke-HostDownload {
     if (-not $expected) { Write-Err "SHA-256 dichiarato non trovato per $asset."; return }
 
     if ($existing) {
-      if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -eq $expected) {
+      if ((Get-DownloadSha256 -Path $destination) -eq $expected) {
         Write-Host ''
         Write-Host "  File gia' presente e verificato: $destination"
         Write-Host "  SHA-256 verificato: $expected"
@@ -2661,7 +2673,7 @@ function Invoke-HostDownload {
     Write-Host "  Scarico $asset..."
     try { & $fetch "$base/$asset" (Join-Path $work 'asset') }
     catch { Write-Err "download non riuscito: $asset ($($_.Exception.Message))"; return }
-    $actual = (Get-FileHash -LiteralPath (Join-Path $work 'asset') -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actual = (Get-DownloadSha256 -Path (Join-Path $work 'asset'))
     if ($actual -ne $expected) { Write-Err "SHA-256 non valido per ${asset}: atteso $expected, ottenuto $actual."; return }
 
     # Pubblicazione: copia in un nome nuovo accanto alla destinazione e rinomina senza sostituire (File.Move a due
