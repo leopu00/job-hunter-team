@@ -1062,6 +1062,40 @@ def test_after_max_streak_short_pauses_the_brake_comes_back(home, monkeypatch):
     assert _unit("scout-2", start, "post-dedup-skip")["applied_sec"] == 60
 
 
+def _long_unit(agent: str, start: float, seconds: float, reason: str = "post-position") -> dict:
+    """A pause of the Capitano, the wake-up, a unit that lasts `seconds`, the pause after it."""
+    eng.tick(now=start)
+    eng.ack(agent, now=start + 1)
+    return eng.register(agent, reason=reason, now=start + 1 + seconds)
+
+
+def test_an_empty_unit_that_took_minutes_keeps_the_captains_pause(home, monkeypatch):
+    """The short pause is for a check of seconds. A Scout that searched for five minutes and inserted nothing spent
+    budget: waiting 60 s after it, again and again, left the pacing nowhere (a night run: ~39 % of the usage)."""
+    set_config(home, **{"scout-2": 660})
+    _jobs_db(home, monkeypatch)
+    limit = eng.EMPTY_UNIT_MAX_UNIT_SEC
+    assert limit == 120
+    eng.register("scout-2", now=T0)
+    res = _long_unit("scout-2", T0 + 660, 300)
+    assert res["applied_sec"] == 660 and res["empty_unit_long_sec"] == 300 and "shortened_from" not in res
+    assert flag("scout-2")["empty_streak"] == 0
+    # the edge: the limit itself is still a check, one second more is not
+    res = _long_unit("scout-2", T0 + 5000, limit)
+    assert res["applied_sec"] == 60 and res["empty_unit"] == 1
+    res = _long_unit("scout-2", T0 + 9000, limit + 1)
+    assert res["applied_sec"] == 660 and res["empty_unit_long_sec"] == limit + 1
+
+
+def test_a_short_empty_unit_after_a_long_one_gets_the_short_pause_again(home, monkeypatch):
+    set_config(home, **{"scout-2": 660})
+    _jobs_db(home, monkeypatch)
+    eng.register("scout-2", now=T0)
+    assert _long_unit("scout-2", T0 + 660, 20)["applied_sec"] == 60
+    assert _long_unit("scout-2", T0 + 800, 400)["applied_sec"] == 660
+    assert _long_unit("scout-2", T0 + 2000, 20)["applied_sec"] == 60
+
+
 def test_an_empty_unit_is_a_scout_rule_only(home, monkeypatch):
     # L'ANALISTA che non inserisce posizioni è la norma, non un'unità vuota.
     set_config(home, **{"analista-1": 780})

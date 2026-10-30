@@ -12,6 +12,10 @@
     "short_pause_sec, not the Capitano's pause. After max_streak short pauses in a row",
     "the Capitano's pause comes back: a Scout that finds nothing new is on a dry",
     "list, and the brake is his.",
+    "max_unit_sec (TUI only for now): the rule is for a check of SECONDS. A unit that took longer than",
+    "this was a search that spent budget and found nothing: it gets the Capitano's pause, not the",
+    "short one (0 or missing: no limit, as it was). Scouts that ran a few minutes per empty unit and",
+    "then waited 60 s were ~39 % of the usage on a night run, with the pacing gone.",
     "keep_captains_pause (TUI only for now: the signals are the TUI's): while the team is",
     "recovering from a freeze the Capitano's pause is a brake on the spend, not only a guard",
     "against empty rounds, so an empty unit does not shorten it. Two signals: a freeze or a",
@@ -26,6 +30,7 @@
   "empty_unit": {
     "roles": ["scout"],
     "max_streak": 10,
+    "max_unit_sec": 120,
     "keep_captains_pause": {
       "after_freeze_sec": 7200,
       "over_pace_pct_h": 1.0
