@@ -54,22 +54,16 @@ Nur für Sitzungen, die in Schritt 1.4 **nicht** das TTL ausgelöst haben.
 
 Zwei zwingende Anforderungen — ignorierst du sie, *verbrennst* du Budget, statt es zu sparen:
 - Die Sitzung MUSS **untätig** sein (kein aktiver Turn). Wenn ein Spinner / `esc to interrupt` zu sehen ist, arbeitet sie → ÜBERSPRINGE diese Runde (der nächste Doctor fängt sie ab). Sende niemals Tasten mitten im Turn.
-- **Leere zuerst die Eingabezeile.** Sonst verkettet sich der Befehl mit dem Resttext und wird als LLM-Prompt abgeschickt (verbrennt Tokens). Sende `Escape` dann `C-u` vor dem Tippen.
+- **Tippe `/status` oder `/context` nie selbst und drücke nie `Escape` auf ein Pane, ohne es anzusehen.** Nimm `session_context.py`: es liest den Prozentwert aus den Logs der CLI (Codex, Kimi: keine Taste); nur bei Claude öffnet es `/context` und schließt das Panel mit `Escape`, bis der Bildschirm wieder den leeren Composer zeigt (höchstens drei Mal). An ein Pane, das nicht idle mit leerem Composer ist, sendet es nichts. Exit `4` / `closed: false` heißt: ein Panel ist noch offen — melde es dem Capitano und gehe NICHT zur nächsten Sitzung, als wäre nichts offen (ein offenes Panel lässt jede Weckung dieser Sitzung scheitern).
 
 ```bash
-S=<session>
-# provider → command:  claude → /context   ·   codex → /status   ·   kimi → (verify on its TUI)
-tmux send-keys -t "$S" Escape; sleep 1
-tmux send-keys -t "$S" C-u;    sleep 1          # clear the input line (mandatory)
-tmux send-keys -t "$S" "/context"; sleep 1
-tmux send-keys -t "$S" Enter;  sleep 3
-PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
-tmux send-keys -t "$S" Escape                   # dismiss the panel
-echo "context=$PCT%"
+S=<session>      # the provider is the one of the session (claude, codex, kimi)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider>
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
 ```
-Entscheide anhand von `$PCT` (geparst aus einer Zeile wie `24.9k/1m tokens (2%)`):
-- **`PCT` ≤ 50** → ÜBERSPRINGEN, **außer das TTL hat in Schritt 1.4 ausgelöst**. Eine Sitzung unterhalb des TTL NICHT neu erstellen, auch wenn sie alt ist. Logge `action=skipped_lowctx` mit der gemessenen `%`. Gehe zur nächsten Sitzung.
-- **`PCT` > 50** → fahre mit dem Refresh fort (Schritte 2–7).
+Entscheide anhand von `pct` (geparst aus einer Zeile wie `24.9k/1m tokens (2%)`):
+- **`pct` ≤ 50** → ÜBERSPRINGEN, **außer das TTL hat in Schritt 1.4 ausgelöst**. Eine Sitzung unterhalb des TTL NICHT neu erstellen, auch wenn sie alt ist. Logge `action=skipped_lowctx` mit der gemessenen `%`. Gehe zur nächsten Sitzung.
+- **`pct` > 50** → fahre mit dem Refresh fort (Schritte 2–7).
 - **Befehl wurde nicht gerendert / Parsing fehlgeschlagen** → Rückfall auf die Alters-Heuristik (`age ≥ 40min` → Refresh) und logge `ctx=unparsed`.
 
 ## Schritt 1.6 — den Capitano einmal vor dem ersten Refresh informieren

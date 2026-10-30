@@ -24,6 +24,10 @@ export interface AppExitText {
   forceNow: string;
   /** A step failed and the app stayed open. */
   failed: string;
+  /** The state of the machine could not be read: it is not said to be off, and nothing of it was stopped. */
+  machineUnknown: string;
+  /** Containers that are not the team's run on its machine (`{count}`): stopping the team leaves the machine on for them. */
+  othersKept: string;
 }
 
 export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
@@ -44,6 +48,8 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "Gli agenti ci mettono più del previsto.",
     forceNow: "Forza lo stop",
     failed: "Non sono riuscito a fermare tutto, e l’app resta aperta. Puoi riprovare, forzare lo stop o lasciare la squadra al lavoro.",
+    othersKept: "Sullo stesso motore girano anche {count} container che non sono di Job Hunter Team: se fermi la squadra, il motore resta acceso per loro.",
+    machineUnknown: "Lo stato della macchina è sconosciuto: non riesco a leggere se è accesa, quindi non ho fermato niente e l’app resta aperta. Puoi riprovare o lasciare la squadra al lavoro.",
   },
   en: {
     menu: "Quit Job Hunter Team",
@@ -62,6 +68,8 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "The agents are taking longer than expected.",
     forceNow: "Force the stop",
     failed: "I could not stop everything, and the app stays open. You can try again, force the stop or leave the team working.",
+    othersKept: "{count} other container(s) that are not Job Hunter Team’s run on the same engine: if you stop the team, the engine stays on for them.",
+    machineUnknown: "The state of the machine is unknown: I cannot read whether it is on, so I stopped nothing and the app stays open. You can try again or leave the team working.",
   },
   hu: {
     menu: "Kilépés a Job Hunter Teamből",
@@ -80,6 +88,8 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "Az ügynököknek a vártnál tovább tart.",
     forceNow: "Kényszerített leállítás",
     failed: "Nem sikerült mindent leállítani, az alkalmazás nyitva marad. Próbálhatod újra, erőltetheted a leállítást, vagy hagyhatod dolgozni a csapatot.",
+    othersKept: "Ugyanezen a motoron {count} nem a Job Hunter Team-hez tartozó konténer is fut: ha leállítod a csapatot, a motor értük bekapcsolva marad.",
+    machineUnknown: "A gép állapota ismeretlen: nem tudom kiolvasni, hogy be van-e kapcsolva, ezért nem állítottam le semmit, és az alkalmazás nyitva marad. Próbálhatod újra, vagy hagyhatod dolgozni a csapatot.",
   },
   es: {
     menu: "Salir de Job Hunter Team",
@@ -98,6 +108,8 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "Los agentes tardan más de lo previsto.",
     forceNow: "Forzar la parada",
     failed: "No he podido detenerlo todo, y la app sigue abierta. Puedes reintentar, forzar la parada o dejar el equipo trabajando.",
+    othersKept: "En el mismo motor se ejecutan también {count} contenedor(es) que no son de Job Hunter Team: si detienes el equipo, el motor sigue encendido para ellos.",
+    machineUnknown: "El estado de la máquina es desconocido: no puedo leer si está encendida, así que no he detenido nada y la app sigue abierta. Puedes reintentar o dejar el equipo trabajando.",
   },
   de: {
     menu: "Job Hunter Team beenden",
@@ -116,6 +128,8 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "Die Agenten brauchen länger als erwartet.",
     forceNow: "Anhalten erzwingen",
     failed: "Ich konnte nicht alles anhalten, und die App bleibt offen. Du kannst es erneut versuchen, das Anhalten erzwingen oder das Team weiterarbeiten lassen.",
+    othersKept: "Auf demselben Motor laufen auch {count} Container, die nicht zu Job Hunter Team gehören: Wenn du das Team anhältst, bleibt der Motor für sie an.",
+    machineUnknown: "Der Zustand der Maschine ist unbekannt: Ich kann nicht lesen, ob sie an ist, deshalb habe ich nichts angehalten, und die App bleibt offen. Du kannst es erneut versuchen oder das Team weiterarbeiten lassen.",
   },
   fr: {
     menu: "Quitter Job Hunter Team",
@@ -134,6 +148,8 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "Les agents mettent plus de temps que prévu.",
     forceNow: "Forcer l’arrêt",
     failed: "Je n’ai pas pu tout arrêter, et l’app reste ouverte. Tu peux réessayer, forcer l’arrêt ou laisser l’équipe travailler.",
+    othersKept: "{count} autre(s) conteneur(s) qui ne sont pas ceux de Job Hunter Team tournent sur le même moteur : si tu arrêtes l’équipe, le moteur reste allumé pour eux.",
+    machineUnknown: "L’état de la machine est inconnu : je ne peux pas lire si elle est allumée, donc je n’ai rien arrêté et l’app reste ouverte. Tu peux réessayer ou laisser l’équipe travailler.",
   },
   pt: {
     menu: "Sair de Job Hunter Team",
@@ -152,5 +168,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     slow: "Os agentes demoram mais do que o previsto.",
     forceNow: "Forçar a paragem",
     failed: "Não consegui parar tudo, e a app fica aberta. Podes tentar de novo, forçar a paragem ou deixar a equipa a trabalhar.",
+    othersKept: "No mesmo motor correm também {count} contentor(es) que não são do Job Hunter Team: se paras a equipa, o motor fica ligado para eles.",
+    machineUnknown: "O estado da máquina é desconhecido: não consigo ler se está ligada, por isso não parei nada e a app fica aberta. Podes tentar de novo ou deixar a equipa a trabalhar.",
   },
 };

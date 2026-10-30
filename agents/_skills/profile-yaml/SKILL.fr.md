@@ -35,9 +35,9 @@ Le frontend interroge le fichier toutes les ~2s. N'attendez pas la fin de la con
 
 Chaque nouvelle donnée = un `Write` ou `Edit` sur le fichier. Puis validez. Puis continuez la conversation.
 
-### Les CV chargés sont vérifiés avant de devenir des données persistées
+### Les CV chargés ou collés sont vérifiés avant de devenir des données persistées
 
-Un message contenant `[FILE ALLEGATI]` est la seule exception à l'écriture directe. Après avoir lu le CV :
+Un message contenant `[FILE ALLEGATI]`, et un message qui porte le CV lui-même en texte collé (tout le parcours professionnel et la formation, pas une seule information), sont les exceptions à l'écriture directe : les informations que la personne te donne une à une s'écrivent toujours tout de suite. Après avoir lu le CV :
 
 1. Écrivez uniquement les champs extraits dans `$JHT_AGENT_DIR/profile-review.yml`. Ne les écrivez jamais directement dans `candidate_profile.yml`.
 2. Exécutez `python3 /app/shared/skills/profile_review.py stage`.

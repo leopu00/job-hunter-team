@@ -35,9 +35,9 @@ El frontend sondea el archivo cada ~2s. No esperes al final de la conversacion; 
 
 Cada nuevo dato = un `Write` o `Edit` en el archivo. Luego validar. Luego seguir moviendo la conversacion.
 
-### Los CV subidos se revisan antes de convertirse en datos persistidos
+### Los CV subidos o pegados se revisan antes de convertirse en datos persistidos
 
-Un mensaje que contiene `[FILE ALLEGATI]` es la unica excepcion a la escritura directa. Despues de leer el CV:
+Un mensaje que contiene `[FILE ALLEGATI]`, y un mensaje que trae el CV mismo como texto pegado (todo el recorrido laboral y los estudios, no un solo dato), son las excepciones a la escritura directa: los datos que la persona te dice uno a uno se siguen escribiendo al momento. Despues de leer el CV:
 
 1. Escribe solo los campos extraidos en `$JHT_AGENT_DIR/profile-review.yml`. Nunca los escribas directamente en `candidate_profile.yml`.
 2. Ejecuta `python3 /app/shared/skills/profile_review.py stage`.

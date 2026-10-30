@@ -24,6 +24,8 @@ on:
       - 'tests/test_windows_powershell51_native_quotes.py'
       - 'tests/test_windows_powershell51_native_stderr.py'
       - 'tests/test_windows_powershell51_wrapper_native_stderr.py'
+      - 'tests/test_windows_host_env_is_not_written_through_a_link.py'
+      - 'tests/test_windows_host_env_values_have_a_domain.py'
       - 'scripts/jht-uninstall-windows.ps1'
       - 'desktop/src-tauri/windows/installer-hooks.nsi'
       - 'tests/test_windows_app_uninstall.py'
@@ -77,6 +79,8 @@ jobs:
             tests/test_windows_powershell51_native_quotes.py `
             tests/test_windows_powershell51_native_stderr.py `
             tests/test_windows_powershell51_wrapper_native_stderr.py `
+            tests/test_windows_host_env_is_not_written_through_a_link.py `
+            tests/test_windows_host_env_values_have_a_domain.py `
             -n 4 -p no:cacheprovider -rs 2>&1
           $code = $LASTEXITCODE
           $out | ForEach-Object { "$_" }

@@ -35,9 +35,9 @@ Das Frontend fragt die Datei alle ~2s ab. Warten Sie nicht bis zum Ende des Gesp
 
 Jedes neue Datum = ein `Write` oder `Edit` auf der Datei. Dann validieren. Dann die Konversation fortsetzen.
 
-### Hochgeladene Lebensläufe werden vor dem Speichern geprüft
+### Hochgeladene oder eingefügte Lebensläufe werden vor dem Speichern geprüft
 
-Eine Nachricht mit `[FILE ALLEGATI]` ist die einzige Ausnahme von der direkten Schreibregel. Nach dem Lesen des Lebenslaufs:
+Eine Nachricht mit `[FILE ALLEGATI]` und eine Nachricht, die den Lebenslauf selbst als eingefügten Text enthält (den ganzen Werdegang und die Ausbildung, nicht eine einzelne Angabe), sind die Ausnahmen von der direkten Schreibregel: Angaben, die die Person dir einzeln nennt, schreibst du weiterhin sofort. Nach dem Lesen des Lebenslaufs:
 
 1. Nur die extrahierten Felder nach `$JHT_AGENT_DIR/profile-review.yml` schreiben. Niemals direkt nach `candidate_profile.yml` schreiben.
 2. `python3 /app/shared/skills/profile_review.py stage` ausführen.
