@@ -91,6 +91,16 @@ def _shell(name: str) -> str:
     pytest.skip(f"{name} not installed")
 
 
+def _child_env(shell: str, **extra: str) -> dict:
+    """The environment of the child. Windows PowerShell 5.1 started from the pwsh 7 that runs the gate inherits pwsh's
+    PSModulePath, cannot load Microsoft.PowerShell.Security from it (`Get-Acl: ... CouldNotAutoloadMatchingModule`) and the case
+    proves nothing: it works out its own, as it does when the app starts it."""
+    env = dict(os.environ, **extra)
+    if shell == "powershell":
+        env.pop("PSModulePath", None)
+    return env
+
+
 RUN = r"""
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
@@ -132,7 +142,7 @@ Write-Output 'LINKS_LEFT_ALONE'
 def test_a_junction_in_the_folder_keeps_the_acl_of_what_it_points_at(shell, name, tmp_path):
     script = tmp_path / "run.ps1"
     script.write_text(RUN, encoding="utf-8")
-    env = dict(os.environ, JHT_UNDER_TEST=str(SCRIPTS / name), JHT_FIXTURE=str(tmp_path / "fixture"))
+    env = _child_env(shell, JHT_UNDER_TEST=str(SCRIPTS / name), JHT_FIXTURE=str(tmp_path / "fixture"))
     done = subprocess.run(
         [_shell(shell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
         capture_output=True, text=True, env=env, timeout=240,
@@ -152,7 +162,7 @@ def test_the_old_walk_would_have_failed_this_check(shell, tmp_path):
     old_copy.write_text(old_text, encoding="utf-8")
     script = tmp_path / "run.ps1"
     script.write_text(RUN, encoding="utf-8")
-    env = dict(os.environ, JHT_UNDER_TEST=str(old_copy), JHT_FIXTURE=str(tmp_path / "fixture"))
+    env = _child_env(shell, JHT_UNDER_TEST=str(old_copy), JHT_FIXTURE=str(tmp_path / "fixture"))
     done = subprocess.run(
         [_shell(shell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
         capture_output=True, text=True, env=env, timeout=240,
@@ -227,7 +237,7 @@ Write-Output 'RACE_LEFT_ALONE'
 def test_a_folder_turned_into_a_junction_after_it_was_queued_or_before_it_is_written_is_left_alone(name, shell, race, tmp_path):
     script = tmp_path / "race.ps1"
     script.write_text(RACE, encoding="utf-8")
-    env = dict(os.environ, JHT_UNDER_TEST=str(SCRIPTS / name), JHT_FIXTURE=str(tmp_path / "fixture"), JHT_RACE=race)
+    env = _child_env(shell, JHT_UNDER_TEST=str(SCRIPTS / name), JHT_FIXTURE=str(tmp_path / "fixture"), JHT_RACE=race)
     done = subprocess.run(
         [_shell(shell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
         capture_output=True, text=True, env=env, timeout=240,
