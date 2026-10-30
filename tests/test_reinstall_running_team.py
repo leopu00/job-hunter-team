@@ -137,23 +137,33 @@ def wrapper(tmp_path):
     calls = tmp_path / "compose-calls.txt"
 
     def run(body: str, *, running_hash: str = OLD_HASH, working_dir: str | None = None, down_stderr: str = "",
-            down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False):
+            down_exit: int = 0, left_after_down: bool = False, broker_left: bool = False, no_container: bool = False,
+            ps_fails: bool = False, runtime_kind: str = "podman", only_broker: bool = False, second_ps_fails: bool = False,
+            broker_not_ours: bool = False, broker_service: str = "jht-broker"):
         compose_file = runtime / "docker-compose.yml"
         override = runtime / "podman-native-override.yml"
         details = "|".join([
             "jht", "true", "jht", "jht", "jht", "jht", "1", working_dir or str(runtime),
             f"{compose_file},{override}", "1.5.0", "podman-compose@" "jht.service", running_hash,
         ])
+        project = "jht"
+        unit = "podman-compose@" "jht.service"
+        broker_fields = [broker_service, "true", "other" if broker_not_ours else project, "other" if broker_not_ours else project,
+                         broker_service, broker_service, "1", str(runtime), f"{compose_file},{override}", "1.5.0", unit, NEW_HASH]
+        broker_details = "|".join(broker_fields)
         stubs = f"""
 set -u
-CONTAINER_RUNTIME=podman
+CONTAINER_RUNTIME={runtime_kind}
 PODMAN_RUNTIME_MODE=native
 CONTAINER_SERVICE=jht
 COMPOSE_SERVICES="jht jht-broker jht-telegram"
+BROKER_SERVICE=jht-broker
+TELEGRAM_SERVICE=jht-telegram
 RUNTIME_DIR="{runtime}"
 COMPOSE_FILE="{compose_file}"
 err()  {{ echo "error: $*" >&2; }}
 warn() {{ echo "warn: $*" >&2; }}
+info() {{ echo "info: $*" >&2; }}
 runtime_bundle_trusted() {{ return 0; }}
 docker_reachable() {{ return 0; }}
 compose_project_name() {{ echo jht; }}
@@ -163,14 +173,27 @@ podman_native_override_path() {{ echo "{override}"; }}
 podman_expected_config_hash() {{ echo {NEW_HASH}; }}
 docker() {{
   case "$*" in
-    *fedcba987654*) printf '%s\\n' 'jht-broker|true|jht|jht|jht-broker|jht-broker|1|x|x|1.5.0|x|{NEW_HASH}' ;;
+    *fedcba987654*)
+      if [ "$CONTAINER_RUNTIME" = docker ]; then
+        printf '%s\\n' 'true {broker_service}'
+      else
+        printf '%s\\n' '{broker_details}'
+      fi ;;
     *) printf '%s\\n' '{details}' ;;
   esac
 }}
 compose_file() {{
   shift
   case "$1" in
-    ps) if grep -qx down "{calls}" 2>/dev/null; then
+    ps) if [ "{int(ps_fails)}" = 1 ]; then return 1; fi
+        n=$(( $(cat "{calls}.ps" 2>/dev/null || echo 0) + 1 )); echo "$n" > "{calls}.ps"
+        if [ "{int(second_ps_fails)}" = 1 ] && [ "$n" -ge 2 ]; then return 1; fi
+        if [ "{int(only_broker)}" = 1 ] && ! grep -qx down "{calls}" 2>/dev/null; then
+          if [ -n "${{3:-}}" ] && [ "$3" != "{broker_service}" ]; then return 0; fi   # Docker: `ps -q <service>` lists only that service
+          echo fedcba987654; return 0
+        fi
+        if [ "{int(no_container)}" = 1 ]; then return 0; fi
+        if grep -qx down "{calls}" 2>/dev/null; then
           if [ "{int(broker_left)}" = 1 ]; then echo fedcba987654; return 0; fi
           if [ "{int(not left_after_down)}" = 1 ]; then return 0; fi
         fi
@@ -253,3 +276,81 @@ def test_any_other_down_error_passes_as_it_is_with_its_exit(wrapper):
     assert "rc=3" in done.stdout
     assert "Error: removing container abc network: 1 error occurred:\n\t* something else" in done.stderr
     assert done.stderr.count("Error:") == 1
+
+
+# ── `jht down` with no container: nothing to stop, and the uninstall chain goes on (Linux Gate CLI 19i, A1) ──
+
+@pytest.mark.parametrize("kind", ["podman", "docker"])
+def test_down_with_no_container_exits_zero_and_says_there_is_nothing_to_stop(wrapper, kind):
+    done = wrapper.run("container_down; echo rc=$?", no_container=True, runtime_kind=kind)
+    assert "rc=0" in done.stdout, done.stderr
+    assert "niente da fermare" in done.stderr
+    assert wrapper.downs() == [] and "arresto negato" not in done.stderr
+
+
+def test_down_that_cannot_ask_the_provider_is_still_a_refusal_not_a_nothing_to_stop(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", ps_fails=True)
+    assert "rc=1" in done.stdout and "arresto negato" in done.stderr and "niente da fermare" not in done.stderr
+
+
+def test_a_chain_that_starts_with_down_goes_on_when_there_is_no_container(wrapper):
+    done = wrapper.run("container_down && echo went-on", no_container=True)
+    assert "went-on" in done.stdout
+
+
+def test_a_container_of_ours_with_another_hash_is_still_stopped_by_down(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", running_hash=OLD_HASH)
+    assert "rc=0" in done.stdout and wrapper.downs() == ["down"]
+
+
+# ── Only the agent service is missing: the broker and Telegram are still a team to stop ──────────
+
+@pytest.mark.parametrize("kind", ["podman", "docker"])
+def test_down_with_the_agent_gone_but_the_broker_running_still_runs_compose_down(wrapper, kind):
+    done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind=kind)
+    assert "rc=0" in done.stdout, done.stderr
+    assert wrapper.downs() == ["down"]
+    assert "niente da fermare" not in done.stderr and "altri servizi del progetto girano" in done.stderr
+
+
+def test_down_refuses_when_it_cannot_ask_for_the_whole_project(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", no_container=True, second_ps_fails=True)
+    assert "rc=1" in done.stdout and wrapper.downs() == []
+    assert "arresto negato" in done.stderr and "niente da fermare" not in done.stderr
+
+
+def test_the_uninstall_chain_stops_when_down_refuses_so_the_compose_file_stays(wrapper):
+    done = wrapper.run("container_down && echo went-on", no_container=True, second_ps_fails=True)
+    assert "went-on" not in done.stdout
+
+
+def test_down_attests_the_services_left_before_it_stops_them(wrapper):
+    # the broker is attested like the agent: project, service, compose files and unit
+    done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind="podman")
+    assert "rc=0" in done.stdout, done.stderr
+    assert wrapper.downs() == ["down"]
+
+
+@pytest.mark.parametrize("kind", ["podman", "docker"])
+def test_down_does_not_touch_a_service_left_that_does_not_attest(wrapper, kind):
+    # a container of the project that is the broker for the compose but not ours by its labels (podman), or whose
+    # service is none of the compose's (docker): compose down would stop it with the rest, so nothing is stopped
+    done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind=kind,
+                       broker_not_ours=True, broker_service="jht-broker" if kind == "podman" else "other")
+    assert "rc=1" in done.stdout and wrapper.downs() == []
+    # podman names the service that does not attest; docker's `ps -q <service>` lists nothing for a service the compose
+    # does not have, so what is left there is said as containers that are neither the team nor its attested services
+    assert ("non e' attestabile" in done.stderr and "jht-broker" in done.stderr) if kind == "podman" \
+        else "non sono ne' il team ne' i suoi servizi attestati" in done.stderr
+    assert "li fermo" not in done.stderr
+
+
+def test_down_refuses_a_container_of_a_service_the_compose_does_not_have(wrapper):
+    done = wrapper.run("container_down; echo rc=$?", only_broker=True, runtime_kind="podman", broker_service="mailer")
+    assert "rc=1" in done.stdout and wrapper.downs() == []
+    assert "li fermo" not in done.stderr
+
+
+def test_the_uninstall_chain_stops_when_a_service_left_does_not_attest(wrapper):
+    done = wrapper.run("container_down && echo went-on", only_broker=True, runtime_kind="podman", broker_not_ours=True)
+    assert "went-on" not in done.stdout and wrapper.downs() == []

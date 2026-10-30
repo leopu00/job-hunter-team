@@ -54,22 +54,16 @@ Solo per le sessioni che **non** hanno fatto scattare il TTL allo Step 1.4.
 
 Due requisiti tassativi — ignorarli fa *bruciare* budget invece di risparmiarlo:
 - La sessione DEVE essere **idle** (nessun turno attivo). Se c'e' uno spinner / `esc to interrupt`, sta lavorando → SALTA questo giro (la prende il prossimo Dottore). Mai inviare tasti a turno in corso.
-- **Svuota prima la riga di input.** Altrimenti il comando si concatena col testo residuo e viene inviato come prompt all'LLM (brucia token). Manda `Escape` poi `C-u` prima di digitare.
+- **Non digitare mai `/status` o `/context` a mano, e non premere `Escape` su un pane senza guardarlo.** Usa `session_context.py`: legge la percentuale dai log della CLI (Codex, Kimi: nessun tasto); solo per Claude apre `/context`, e chiude il pannello con `Escape` finché lo schermo non mostra di nuovo il composer vuoto (al massimo tre pressioni). Non manda niente a un pane che non è idle con il composer vuoto. Uscita `4` / `closed: false` = un pannello è ancora aperto: dillo al Capitano e NON passare alla sessione dopo come se niente fosse (un pannello aperto fa fallire ogni sveglia di quella sessione).
 
 ```bash
-S=<session>
-# provider → comando:  claude → /context   ·   codex → /status   ·   kimi → (verifica sul suo TUI)
-tmux send-keys -t "$S" Escape; sleep 1
-tmux send-keys -t "$S" C-u;    sleep 1          # svuota la riga di input (obbligatorio)
-tmux send-keys -t "$S" "/context"; sleep 1
-tmux send-keys -t "$S" Enter;  sleep 3
-PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
-tmux send-keys -t "$S" Escape                   # chiudi il pannello
-echo "context=$PCT%"
+S=<session>      # the provider is the one of the session (claude, codex, kimi)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider>
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
 ```
-Decidi da `$PCT` (estratto da una riga tipo `24.9k/1m tokens (2%)`):
-- **`PCT` ≤ 50** → SALTA **a meno che il TTL non sia scattato allo Step 1.4**. NON ricreare una sessione sotto il TTL, anche se e' vecchiotta. Logga `action=skipped_lowctx` con la `%` misurata. Passa alla successiva.
-- **`PCT` > 50** → procedi al refresh (Step 2–7).
+Decidi da `pct` (estratto da una riga tipo `24.9k/1m tokens (2%)`):
+- **`pct` ≤ 50** → SALTA **a meno che il TTL non sia scattato allo Step 1.4**. NON ricreare una sessione sotto il TTL, anche se e' vecchiotta. Logga `action=skipped_lowctx` con la `%` misurata. Passa alla successiva.
+- **`pct` > 50** → procedi al refresh (Step 2–7).
 - **comando non renderizzato / parse fallito** → ricadi sull'euristica dell'eta' (`age ≥ 40min` → refresh) e logga `ctx=unparsed`.
 
 ## Step 1.6 — avvisa il Capitano una volta, prima del primo refresh

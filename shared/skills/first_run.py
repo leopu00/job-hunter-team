@@ -331,6 +331,45 @@ def check() -> dict:
     return dict(state, action="in corso", produced=produced, target=target)
 
 
+def sourcing_cap(conn=None) -> Optional[dict]:
+    """The first sourcing pass, counted: {"cap", "found", "reached"} during a burst that has a cap, else None.
+
+    `scout_cap_first_pass` was only a number the Capitano passed on to the Scouts, who were to report when they
+    reached it: a Scout that did not (the Capitano busy, the message lost) went on to 21 positions on a cap of 15.
+    The count is what the Scouts have inserted since the burst began, from the same table the pipeline reads, and
+    it is read INSIDE the insert's own transaction (db_insert), so two Scouts cannot both take the last place.
+    Never raises, and writes nothing: a state or a database that cannot be read is no cap, and the Scout goes on."""
+    try:
+        state = _read()
+        cap = state.get("scout_cap_first_pass")
+        began = _parse(state.get("burst_started_at"))
+        if (state.get("phase") != PHASE_BURST or began is None or isinstance(cap, bool)
+                or not isinstance(cap, int) or cap <= 0):
+            return None
+        since = began.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        own = conn is None
+        if own:
+            db = os.environ.get("JHT_DB") or str(JHT_HOME / "jobs.db")
+            if not Path(db).exists():
+                return None
+            conn = sqlite3.connect(db, timeout=10)
+        try:
+            found = int(conn.execute(
+                "SELECT COUNT(*) FROM position_state_transitions "
+                "WHERE from_state IS NULL AND to_state = 'new' AND ts >= ? "
+                "AND (by_agent = 'scout' OR by_agent LIKE 'scout-%')", (since,)).fetchone()[0])
+        finally:
+            if own:
+                conn.close()
+        return {"cap": cap, "found": found, "reached": found >= cap}
+    except Exception:  # noqa: BLE001 — a cap that cannot be read is no cap: the Scout is not stopped by a fault
+        return None
+
+
+def is_scout(agent) -> bool:
+    return bool(re.fullmatch(r"scout(-\d+)?", str(agent or "").strip().lower()))
+
+
 def reset() -> dict:
     try:
         STATE_PATH.unlink()

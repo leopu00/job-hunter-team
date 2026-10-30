@@ -38,6 +38,8 @@ pub(crate) const ORDER: &str = "[@utente -> @capitano] [SHUTDOWN] L'utente sta c
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const DOWN_TIMEOUT: Duration = Duration::from_secs(90);
 const MACHINE_TIMEOUT: Duration = Duration::from_secs(90);
+/// The look at the machine for the dialog's question: a machine that does not answer in this time has nothing to say.
+const STATE_TIMEOUT: Duration = Duration::from_secs(4);
 
 static EXIT_ALLOWED: AtomicBool = AtomicBool::new(false);
 static LAST_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
@@ -148,6 +150,8 @@ pub(crate) fn count_sessions(stdout: &[u8]) -> usize {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExitState {
     team: TeamHost,
+    /// Containers that are not the team's running on the team's machine: leaving does not stop the machine for them.
+    other_containers: usize,
 }
 
 #[derive(Serialize)]
@@ -241,7 +245,17 @@ pub(crate) async fn app_exit_state(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<ExitState, ExitError> {
-    on_scope(&window, &scopes, move |scope| local_destination(&app, scope).map(|team| ExitState { team })).await
+    on_scope(&window, &scopes, move |scope| {
+        let team = local_destination(&app, scope)?;
+        // only a team on this computer has a machine to speak of, and only a Mac or a Windows has one (Linux runs the container itself)
+        let other_containers = if team == TeamHost::Local && cfg!(any(target_os = "macos", windows)) {
+            crate::podman::other_containers_on_jht_machine(STATE_TIMEOUT).unwrap_or(0)
+        } else {
+            0
+        };
+        Ok(ExitState { team, other_containers })
+    })
+    .await
 }
 
 /// «Stop them in order», first half: the order goes to the Capitano. Returns once the order is typed; the agents
@@ -311,7 +325,14 @@ pub(crate) async fn app_exit_finish(
                         return Err("app_exit_down_failed");
                     }
                 }
-                Step::MachineStop => crate::podman::stop_jht_machine(MACHINE_TIMEOUT),
+                Step::MachineStop => match crate::podman::stop_jht_machine(MACHINE_TIMEOUT) {
+                    // off, or on for the containers that are not the team's (the page said so before the choice)
+                    crate::podman::MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}
+                    // a machine that did not stop is told, not hidden: the app stays open
+                    crate::podman::MachineStop::NotStopped => return Err("app_exit_machine_not_stopped"),
+                    // whether the machine is on could not be read: it is not said to be off, and nothing was stopped
+                    crate::podman::MachineStop::StateUnknown => return Err("app_exit_machine_state_unknown"),
+                },
             }
         }
         Ok(())
@@ -423,5 +444,21 @@ mod tests {
         assert_eq!(serde_json::to_string(&TeamHost::Local).unwrap(), "\"local\"");
         assert_eq!(serde_json::to_string(&TeamHost::Vps).unwrap(), "\"vps\"");
         assert_eq!(serde_json::to_string(&TeamHost::None).unwrap(), "\"none\"");
+    }
+
+    #[test]
+    fn the_state_says_how_many_containers_that_are_not_the_team_s_share_the_machine() {
+        let state = ExitState { team: TeamHost::Local, other_containers: 2 };
+        assert_eq!(serde_json::to_string(&state).unwrap(), r#"{"team":"local","otherContainers":2}"#);
+    }
+
+    #[test]
+    fn a_machine_that_did_not_stop_is_an_error_and_the_machine_with_others_is_not() {
+        let source = include_str!("app_exit.rs").split("#[cfg(test)]").next().unwrap().replace("\r\n", "\n");
+        let finish = source.split("fn app_exit_finish(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(finish.contains("MachineStop::NotStopped => return Err(\"app_exit_machine_not_stopped\")"));
+        assert!(finish.contains("MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}"));
+        // a state that could not be read is its own answer, not a machine said to be off
+        assert!(finish.contains("MachineStop::StateUnknown => return Err(\"app_exit_machine_state_unknown\")"));
     }
 }

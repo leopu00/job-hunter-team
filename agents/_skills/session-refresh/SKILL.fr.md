@@ -54,22 +54,16 @@ Uniquement pour les sessions qui n'ont **pas** déclenché le TTL à l'Étape 1.
 
 Deux exigences impératives — les ignorer *brûle* du budget au lieu d'en économiser :
 - La session DOIT être **inactive** (aucun tour en cours). Si un spinner / `esc to interrupt` s'affiche, elle travaille → IGNORE ce tour (le prochain Doctor la reprend). N'envoie jamais de touches en plein tour.
-- **Vide d'abord la ligne de saisie.** Sinon la commande se concatène au texte résiduel et est soumise comme prompt à l'LLM (brûle des tokens). Envoie `Escape` puis `C-u` avant de taper.
+- **Ne tape jamais `/status` ou `/context` à la main et n'appuie jamais sur `Escape` sur un pane sans le regarder.** Utilise `session_context.py` : il lit le pourcentage dans les logs de la CLI (Codex, Kimi : aucune touche) ; seulement pour Claude il ouvre `/context`, et ferme le panneau avec `Escape` jusqu'à ce que l'écran montre de nouveau le composer vide (trois appuis au plus). Il n'envoie rien à un pane qui n'est pas idle avec le composer vide. Sortie `4` / `closed: false` = un panneau est encore ouvert : dis-le au Capitano et ne passe PAS à la session suivante comme si de rien n'était (un panneau ouvert fait échouer chaque réveil de cette session).
 
 ```bash
-S=<session>
-# provider → command:  claude → /context   ·   codex → /status   ·   kimi → (verify on its TUI)
-tmux send-keys -t "$S" Escape; sleep 1
-tmux send-keys -t "$S" C-u;    sleep 1          # clear the input line (mandatory)
-tmux send-keys -t "$S" "/context"; sleep 1
-tmux send-keys -t "$S" Enter;  sleep 3
-PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
-tmux send-keys -t "$S" Escape                   # dismiss the panel
-echo "context=$PCT%"
+S=<session>      # the provider is the one of the session (claude, codex, kimi)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider>
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
 ```
-Décide à partir de `$PCT` (extrait d'une ligne comme `24.9k/1m tokens (2%)`) :
-- **`PCT` ≤ 50** → IGNORER **sauf si le TTL s'est déclenché à l'Étape 1.4**. NE recrée PAS une session sous le TTL, même si elle est vieille. Journalise `action=skipped_lowctx` avec le `%` mesuré. Passe à la session suivante.
-- **`PCT` > 50** → procède au rafraîchissement (Étapes 2–7).
+Décide à partir de `pct` (extrait d'une ligne comme `24.9k/1m tokens (2%)`) :
+- **`pct` ≤ 50** → IGNORER **sauf si le TTL s'est déclenché à l'Étape 1.4**. NE recrée PAS une session sous le TTL, même si elle est vieille. Journalise `action=skipped_lowctx` avec le `%` mesuré. Passe à la session suivante.
+- **`pct` > 50** → procède au rafraîchissement (Étapes 2–7).
 - **la commande ne s'est pas affichée / le parsing a échoué** → repli sur l'heuristique d'âge (`age ≥ 40min` → rafraîchir) et journalise `ctx=unparsed`.
 
 ## Étape 1.6 — prévenir le Capitano une fois, avant le premier rafraîchissement

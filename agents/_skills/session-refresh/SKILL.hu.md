@@ -54,22 +54,16 @@ Csak azoknál a munkameneteknél, amelyek a Step 1.4-ben **nem** váltották ki 
 
 Két kőkemény követelmény — ha figyelmen kívül hagyod őket, *elégeted* a keretet ahelyett, hogy spórolnál vele:
 - A munkamenetnek **tétlennek** kell lennie (nincs aktív kör). Ha egy spinner / `esc to interrupt` látszik, dolgozik → HAGYD KI ezt a kört (a következő Doctor elkapja). Soha ne küldj billentyűt kör közben.
-- **Előbb ürítsd ki a beviteli sort.** Különben a parancs összefűződik a maradék szöveggel, és LLM-promptként elküldődik (tokent éget). Küldj `Escape`-et, majd `C-u`-t gépelés előtt.
+- **Soha ne gépeld be kézzel a `/status`-t vagy a `/context`-et, és ne nyomj `Escape`-et egy panere anélkül, hogy megnéznéd.** Használd a `session_context.py`-t: a százalékot a CLI naplóiból olvassa (Codex, Kimi: egyetlen billentyű sem); csak Claude-nál nyitja meg a `/context`-et, és `Escape`-pel zárja a panelt, amíg a képernyő újra az üres composert nem mutatja (legfeljebb háromszor). Olyan panére nem küld semmit, amely nem idle üres composerrel. A `4` kilépési kód / `closed: false` azt jelenti, hogy egy panel még nyitva van: szólj a Capitanónak, és NE lépj a következő session-re, mintha semmi sem lenne nyitva (egy nyitott panel miatt a session minden ébresztése meghiúsul).
 
 ```bash
-S=<session>
-# provider → command:  claude → /context   ·   codex → /status   ·   kimi → (verify on its TUI)
-tmux send-keys -t "$S" Escape; sleep 1
-tmux send-keys -t "$S" C-u;    sleep 1          # clear the input line (mandatory)
-tmux send-keys -t "$S" "/context"; sleep 1
-tmux send-keys -t "$S" Enter;  sleep 3
-PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
-tmux send-keys -t "$S" Escape                   # dismiss the panel
-echo "context=$PCT%"
+S=<session>      # the provider is the one of the session (claude, codex, kimi)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider>
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
 ```
-Dönts a `$PCT` alapján (egy `24.9k/1m tokens (2%)` jellegű sorból kinyerve):
-- **`PCT` ≤ 50** → KIHAGYNI, **hacsak a TTL nem lépett életbe a Step 1.4-ben**. A TTL alatti munkamenetet NE hozd újra létre, még ha régi is. Naplózd: `action=skipped_lowctx` a mért `%`-kal. Lépj a következő munkamenetre.
-- **`PCT` > 50** → folytasd a frissítéssel (Step 2–7).
+Dönts a `pct` alapján (egy `24.9k/1m tokens (2%)` jellegű sorból kinyerve):
+- **`pct` ≤ 50** → KIHAGYNI, **hacsak a TTL nem lépett életbe a Step 1.4-ben**. A TTL alatti munkamenetet NE hozd újra létre, még ha régi is. Naplózd: `action=skipped_lowctx` a mért `%`-kal. Lépj a következő munkamenetre.
+- **`pct` > 50** → folytasd a frissítéssel (Step 2–7).
 - **a parancs nem renderelődött / a parse elbukott** → ess vissza a kor-heurisztikára (`age ≥ 40min` → frissítés), és naplózd: `ctx=unparsed`.
 
 ## Step 1.6 — értesítsd egyszer a Capitanót az első frissítés előtt

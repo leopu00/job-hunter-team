@@ -463,6 +463,34 @@ function Add-ToUserPath {
 }
 
 # ── Step 5: host.env + pairing token ──────────────────────────────────────
+# host.env sta in una cartella montata nel container: un agente puo' metterci al posto del file un LINK (che nel container
+# e' pendente e sull'host punta a un file dell'utente). Si scrive in un temporaneo fuori dalla cartella montata e poi Move-Item:
+# il link, se c'e', viene tolto (solo lui) e mai seguito.
+function Write-HostEnvFile {
+  param([string]$Path, [string]$Content)
+  # The temporary lives OUTSIDE the mounted folder (its parent, the profile, is not mounted): inside, an agent could swap it for a
+  # link as soon as it appears and the write by path would follow it.
+  $dir = Split-Path -Parent (Split-Path -Parent $Path)
+  $tmp = Join-Path $dir (".jht-host-env.{0}.tmp" -f [guid]::NewGuid().ToString('N'))
+  try {
+    Set-Content -LiteralPath $tmp -Value $Content -Encoding UTF8
+    # GetAttributes looks at the entry itself, so a link whose target is gone (the usual one, dangling in the container) is seen too.
+    $attributes = $null
+    try { $attributes = [IO.File]::GetAttributes($Path) } catch [IO.FileNotFoundException] { } catch [IO.DirectoryNotFoundException] { }
+    if ($null -ne $attributes) {
+      $isFolder = (($attributes -band [IO.FileAttributes]::Directory) -ne 0)
+      if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        if ($isFolder) { [IO.Directory]::Delete($Path) } else { [IO.File]::Delete($Path) }
+      } elseif ($isFolder) {
+        throw "host.env is a directory: $Path"
+      }
+    }
+    Move-Item -LiteralPath $tmp -Destination $Path -Force
+  } finally {
+    if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+  }
+}
+
 function Write-HostEnv {
   Write-Step 5 $TotalSteps "Writing host.env"
 
@@ -500,7 +528,7 @@ JHT_USER_TZ=$tz
   if ($DryRun) {
     Write-Dry "Set-Content $hostEnvFile (JHT_HOST_TYPE=$hostType, JHT_USER_TZ=$tz)"
   } else {
-    Set-Content -Path $hostEnvFile -Value $content -Encoding UTF8
+    Write-HostEnvFile -Path $hostEnvFile -Content $content
     Write-Ok "host.env written: $hostEnvFile (mode=$hostType, tz=$tz)"
   }
 

@@ -259,24 +259,34 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     setStatus(office.notice?.text ?? null);
     setStatusIsAlert(office.notice?.alert ?? false);
   };
-  const readProbe = async () => {
+  // one round of reads at a time: a tick that finds the last round still on its way waits for the next one (a slow
+  // team would otherwise pile rounds on top of each other, each one making the next slower)
+  const probeRunning = useRef(false);
+  const readProbe = async (asked = false) => {
+    // «Refresh» is the person asking: it takes over from a round still on its way (that one is then not shown)
+    if (probeRunning.current && !asked) return;
+    probeRunning.current = true;
     const mine = ++probeRead.current;
-    const result = await readTeamStatus();
-    // A read that finished after a newer one started, or after leaving the page, is not shown.
-    if (probeRead.current !== mine) return;
-    reading.current = result;
-    // The piles come from the team's list of positions, the one read the panels and the globe
-    // share; only a team whose container is up has one to read, and one that cannot be read
-    // has unknown piles, not empty ones.
-    probePiles.current = null;
-    probeAgents.current = null;
-    if (result.kind === "read" && result.fields.containerRunning) {
-      const [piles, agents] = await Promise.all([readVpsPiles(), source === "this-computer" ? readThisComputerAgents() : readTeamAgentsShared()]);
+    try {
+      const result = await readTeamStatus();
+      // A read that finished after a newer one started, or after leaving the page, is not shown.
       if (probeRead.current !== mine) return;
-      probePiles.current = piles;
-      probeAgents.current = agents;
+      reading.current = result;
+      // The piles are five counts read from the team (one read); only a team whose container is up
+      // has any, and one that cannot be read has unknown piles, not empty ones.
+      probePiles.current = null;
+      probeAgents.current = null;
+      if (result.kind === "read" && result.fields.containerRunning) {
+        const [piles, agents] = await Promise.all([readVpsPiles(), source === "this-computer" ? readThisComputerAgents() : readTeamAgentsShared()]);
+        if (probeRead.current !== mine) return;
+        probePiles.current = piles;
+        probeAgents.current = agents;
+      }
+      probeShow.current();
+    } finally {
+      // a round that was left behind (another effect started) does not free the one that replaced it
+      if (probeRead.current === mine) probeRunning.current = false;
     }
-    probeShow.current();
   };
   const probeShow = useRef(showProbe);
   probeShow.current = showProbe;
@@ -295,6 +305,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     return () => {
       if (every !== undefined) clearInterval(every);
       probeRead.current++;
+      probeRunning.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, parts.data]);
@@ -302,7 +313,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     if (source !== "cloud" && reading.current.kind !== "unknown") probeShow.current();
   }, [source, connection]);
   // «Aggiorna» asks for a read too: the gap holds for it as well
-  useRefresh(() => (source === "cloud" ? scheduler.current?.poke() : void readProbe()));
+  useRefresh(() => (source === "cloud" ? scheduler.current?.poke() : void readProbe(true)));
 
   // Esc closes the panel, as the Godot office's overlays.
   useEffect(() => {

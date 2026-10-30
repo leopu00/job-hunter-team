@@ -6,6 +6,7 @@ import { emptyEngine } from "../../office/parts";
 import { leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { setLocalTeamData } from "../../lib/local-team-data";
+import { refresh } from "../../shell/router";
 import { realSnapshotReply } from "../../test-support/snapshot-command-reply";
 import { locales } from "@/i18n/config";
 
@@ -65,6 +66,7 @@ const ROWS = [
 let agents: ReturnType<typeof agent>[];
 let controlReply: () => Promise<unknown>;
 let snapshotReply: () => Promise<unknown>;
+let positionsReply: (op: string) => unknown;
 let applied: OfficeEvent[];
 let load: ReturnType<typeof vi.fn>;
 const calls = (command: string) => native.invoke.mock.calls.filter(([name]) => name === command);
@@ -89,9 +91,13 @@ beforeEach(() => {
   snapshotReply = async () => realSnapshotReply();
   native.isTauri.mockReturnValue(true);
   native.invoke.mockReset();
-  native.invoke.mockImplementation(async (command: string) => {
+  // the core counts the piles itself (op piles); an older core answers positions_request_invalid and the list is read
+  positionsReply = (op) => (op === "piles"
+    ? { ok: true, data: { scout: 1, analisti: 0, scorer: 1, scrittori: 0, critici: 0 } }
+    : { ok: true, data: { items: ROWS, total: ROWS.length } });
+  native.invoke.mockImplementation(async (command: string, args?: { request?: { op?: string } }) => {
     if (command === SNAPSHOT) return snapshotReply();
-    if (command === POSITIONS) return { ok: true, data: { items: ROWS, total: ROWS.length } };
+    if (command === POSITIONS) return positionsReply(args?.request?.op ?? "");
     if (command === CONTROL) return controlReply();
     throw new Error(`unexpected native command ${command}`);
   });
@@ -134,19 +140,44 @@ describe("the office of a local profile", () => {
     expect(screen.queryByText(/cloud/i)).toBeNull();
   });
 
-  it("counts the piles from the team's own positions", async () => {
+  const ops = () => calls(POSITIONS).map(([, args]) => (args as { request: { op: string } }).request.op);
+
+  it("counts the piles with ONE read of the core, and never reads the team's whole list for them", async () => {
     mount();
     await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
     const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
     expect(piles.scout).toBe(1);
     expect(piles.scorer).toBe(1);
-    expect(calls(POSITIONS).length).toBeGreaterThan(0);
+    expect(ops()).toEqual(["piles"]);
+  });
+
+  it("with a core that does not know the count yet, the piles are counted from the list as before, once", async () => {
+    positionsReply = (op) => (op === "piles" ? { ok: false, error: "positions_request_invalid" } : { ok: true, data: { items: ROWS, total: ROWS.length } });
+    mount();
+    await waitFor(() => expect(applied.some((e) => e.type === "piles")).toBe(true));
+    const piles = applied.filter((e): e is Extract<OfficeEvent, { type: "piles" }> => e.type === "piles").at(-1)!.piles;
+    expect([piles.scout, piles.scorer]).toEqual([1, 1]);
+    expect(ops()).toEqual(["piles", "list"]);
+  });
+
+  it("a count that fails for any other reason leaves the piles unknown and does not read the list on top of it", async () => {
+    positionsReply = (op) => (op === "piles" ? { ok: false, error: "positions_unavailable" } : { ok: true, data: { items: ROWS, total: ROWS.length } });
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    expect(ops()).toEqual(["piles"]);
   });
 
   // Only the interval is faked, and before the page is mounted (an interval made with the real clock is not
   // moved by a fake one made later): the rest of the clock stays real, so the waits of the test still work.
   const fakeInterval = () => vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   const pass = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+  // waitFor polls with setInterval, which is the faked one here: wait on the real clock instead
+  const until = async (check: () => void) => {
+    for (let i = 0; i < 40; i++) {
+      try { return check(); } catch { await new Promise((resolve) => setTimeout(resolve, 50)); }
+    }
+    check();
+  };
 
   it("reads again by itself while the window is in view, and not while it is hidden", async () => {
     fakeInterval();
@@ -168,6 +199,36 @@ describe("the office of a local profile", () => {
     agents = [...agents, agent("SCORER-1", "scorer", "1", "lavora")];
     await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
     await waitFor(() => expect(entered()).toEqual(["capitano", "scorer-1", "scout-1"]));
+  });
+
+  it("a round of reads still on its way is not started again by the next tick", async () => {
+    fakeInterval();
+    let release: (value: unknown) => void = () => undefined;
+    snapshotReply = () => new Promise((resolve) => { release = resolve; });
+    mount();
+    await until(() => expect(calls(SNAPSHOT)).toHaveLength(1));
+    await pass(THIS_COMPUTER_OFFICE_READ_MS * 4 + 500);
+    expect(calls(SNAPSHOT)).toHaveLength(1);
+    snapshotReply = async () => realSnapshotReply();
+    release(await realSnapshotReply());
+    await until(() => expect(entered()).toHaveLength(2));
+    await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
+    await until(() => expect(calls(SNAPSHOT)).toHaveLength(2));
+  });
+
+  it("«Refresh» takes over from a round still on its way: the old round is not shown, the new one is", async () => {
+    let release: (value: unknown) => void = () => undefined;
+    snapshotReply = () => new Promise((resolve) => { release = resolve; });
+    mount();
+    await waitFor(() => expect(calls(SNAPSHOT)).toHaveLength(1));
+    snapshotReply = async () => realSnapshotReply();
+    await act(async () => refresh());
+    await waitFor(() => expect(calls(SNAPSHOT)).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    const before = applied.length;
+    release(await realSnapshotReply({ containerRunning: false }));
+    await act(async () => { await Promise.resolve(); });
+    expect(applied.length).toBe(before);
   });
 
   it("a click on an agent says its moves cannot be read from here, with no word about a VPS", async () => {

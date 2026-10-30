@@ -32,6 +32,11 @@ export function setLocalTeamData(key: string | null): void {
   queueMicrotask(emit);
 }
 
+/** Whose local team the pages read, for what is kept per team for a few seconds; null outside this mode. Never leaves the page. */
+export function localTeamDataKey(): string | null {
+  return identity;
+}
+
 export function localTeamData(): boolean {
   return identity !== null;
 }

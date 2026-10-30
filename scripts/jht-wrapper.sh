@@ -169,6 +169,8 @@ jht_host_env_value_valid() {
 jht_read_host_env_value() {
   local file="$1" requested="$2" line key value result=""
   local found=1
+  # Un link al posto di host.env lo puo' aver messo un agente: non si legge quello che indica (come in host-setup.sh).
+  [ ! -L "$file" ] || return 1
   [ -f "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"
@@ -1297,9 +1299,45 @@ stale_config_hint() {
 # reinstallazione (stesso progetto, solo la config-hash e' cambiata): fermarlo
 # e' l'unica strada per ripartire con la configurazione nuova.
 container_down() {
-  if ! container_up >/dev/null; then
+  local up_status=0
+  container_up >/dev/null || up_status=$?
+  if [ "$up_status" -ne 0 ]; then
     if [ "$CONTAINER_RUNTIME" = podman ] && read_only_service_id "$CONTAINER_SERVICE" any-config >/dev/null; then
       warn "config_changed_while_running: il team era stato avviato con la configurazione di prima della reinstallazione; lo fermo."
+    elif [ "$up_status" -eq 3 ]; then
+      # No `jht` container. That is nothing to stop only when the WHOLE project is empty: status 3 also means that only the
+      # agent service is missing, while the broker (the mail password) or Telegram still run, and a `jht down && rm -rf <runtime>`
+      # would delete the compose that was needed to stop them. So the whole project is asked: a failed answer is a refusal, an
+      # empty one is «niente da fermare» (and the chain of the uninstall goes on, TEST 19i A1), a non-empty one goes on to `compose down`
+      # only once the services left are attested like the agent's: `compose down` stops every container of the project, so one that
+      # does not attest (or one of a service the compose does not have) is said and nothing is touched.
+      local rest svc svc_status leftover=0 refused=""
+      if ! rest="$(compose ps -q 2>/dev/null)"; then
+        err "Container JHT non attestabile; arresto negato."
+        return 1
+      fi
+      if [ -z "$rest" ]; then
+        info "niente da fermare: nessun container del progetto."
+        return 0
+      fi
+      for svc in "$BROKER_SERVICE" "$TELEGRAM_SERVICE"; do
+        svc_status=0
+        read_only_service_id "$svc" any-config >/dev/null || svc_status=$?
+        case "$svc_status" in
+          0) leftover=1 ;;
+          3) ;;
+          *) refused="${refused:+$refused, }$svc" ;;
+        esac
+      done
+      if [ -n "$refused" ]; then
+        err "Il servizio '$refused' del progetto gira ma non e' attestabile come nostro: non lo tocco e non fermo nient'altro."
+        return 1
+      fi
+      if [ "$leftover" -eq 0 ]; then
+        err "Il progetto ha container che non sono ne' il team ne' i suoi servizi attestati: non li tocco."
+        return 1
+      fi
+      info "il container '$CONTAINER_SERVICE' non c'e', ma altri servizi del progetto girano: li fermo."
     else
       err "Container JHT non attestabile; arresto negato."
       return 1
@@ -3071,6 +3109,93 @@ profile_import_command() {
   docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" profile import --stdin ${extra[@]+"${extra[@]}"} < "$file"
 }
 
+# jht artifact upload FILE: il file e' della persona, sull'host; dentro il container (dove gira il CLI) quel percorso non esiste
+# e il comando moriva con ENOENT (Gate CLI Linux 19i, A5). Il wrapper lo legge con i permessi dell'utente (regolare, non un
+# link, al massimo 10 MiB come la skill) e lo passa su stdin: la cartella allegati/ resta del container, nessun sudo.
+artifact_upload_max_bytes=10485760
+
+artifact_upload_has_file() {
+  local arg has=1
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) return 1 ;;
+      -*) ;;
+      *) has=0 ;;
+    esac
+  done
+  return "$has"
+}
+
+# Il file della persona, sull'host, e' un documento da consegnare: regolare, non un link, leggibile, al massimo 10 MiB.
+host_document_ok() {
+  local file="$1" size
+  if [ -L "$file" ] || [ ! -f "$file" ]; then
+    err "il documento deve essere un file regolare, non un link: $file"; return 1
+  fi
+  if [ ! -r "$file" ]; then
+    err "non riesco a leggere il documento: $file"; return 1
+  fi
+  size="$(wc -c < "$file" | tr -d ' ')"
+  if [ -z "$size" ] || [ "$size" -gt "$artifact_upload_max_bytes" ]; then
+    err "il documento supera i 10 MB"; return 1
+  fi
+  return 0
+}
+
+# jht ticket open ... --attach FILE: stesso passaggio dell'upload (il file e' sull'host, dentro il container non esiste).
+# Il wrapper toglie --attach FILE, legge il file e lo da' al CLI su stdin con il nome; gli altri argomenti vanno com'erano,
+# con le due opzioni nuove prima dell'eventuale `--` (dopo, il CLI le leggerebbe come argomenti).
+ticket_open_has_attach() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --) return 1 ;;
+      --help|-h) return 1 ;;
+      --attach|--attach=*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+ticket_open_command() {
+  local file="" seen=0 want=0 literal=0 arg name
+  local -a keep=() tail=()
+  for arg in "$@"; do
+    if [ "$want" = 1 ]; then file="$arg"; want=0; continue; fi
+    if [ "$literal" = 1 ]; then tail+=("$arg"); continue; fi
+    case "$arg" in
+      --) literal=1; tail+=("$arg") ;;
+      --attach|--attach=*)
+        if [ "$seen" = 1 ]; then err "uso: jht ticket open POSIZIONE TESTO [--kind TIPO] [--attach FILE]"; return 2; fi
+        seen=1
+        if [ "$arg" = --attach ]; then want=1; else file="${arg#--attach=}"; fi ;;
+      *) keep+=("$arg") ;;
+    esac
+  done
+  if [ "$want" = 1 ] || [ -z "$file" ]; then err "uso: jht ticket open POSIZIONE TESTO [--kind TIPO] [--attach FILE]"; return 2; fi
+  host_document_ok "$file" || return $?
+  name="${file##*/}"
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ticket open ${keep[@]+"${keep[@]}"} --attach-stdin --attach-name "$name" ${tail[@]+"${tail[@]}"} < "$file"
+}
+
+artifact_upload_command() {
+  local file="" flag name
+  local -a extra=()
+  for flag in "$@"; do
+    case "$flag" in
+      --json) extra+=("$flag") ;;
+      -*) err "opzione non riconosciuta: $flag"; return 2 ;;
+      *)
+        if [ -n "$file" ]; then err "uso: jht artifact upload FILE [--json]"; return 2; fi
+        file="$flag" ;;
+    esac
+  done
+  if [ -z "$file" ]; then err "uso: jht artifact upload FILE [--json]"; return 2; fi
+  host_document_ok "$file" || return $?
+  name="${file##*/}"
+  docker exec -i "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" artifact upload --stdin --name "$name" ${extra[@]+"${extra[@]}"} < "$file"
+}
+
 # jht profile validate FILE: stesso passaggio del file di import; non scrive niente.
 # Senza FILE il CLI controlla il profilo del team (dentro il container): si inoltra
 # com'e'. Chiamato solo quando c'e' un FILE (vedi profile_validate_has_file).
@@ -3317,6 +3442,26 @@ host_data_dirs_supported() {
   if [ -n "${JHT_USER_DIR_HOST:-}" ] && ! host_data_dir_same "$JHT_USER_DIR_HOST" "$expected_user"; then
     err "data_dir_moved: JHT_USER_DIR_HOST=$JHT_USER_DIR_HOST non e' $expected_user. Il team usa sempre $expected_user: lo monta il compose, e su macOS e' l'unica cartella documenti che la macchina Podman vede. Togli JHT_USER_DIR_HOST, oppure sposta i documenti in $expected_user."
     return 1
+  fi
+}
+
+# 0 when host-setup.sh can write what it writes: the folder of host.env is missing (it makes it), or this user can write the
+# folder and, if host.env is there, the file. 1 otherwise (the folder belongs to the container's uid).
+host_setup_can_write() {
+  local dir
+  dir="$(dirname "$HOST_ENV_FILE")"
+  [ -e "$dir" ] || return 0
+  [ -d "$dir" ] && [ -w "$dir" ] && [ -x "$dir" ] || return 1
+  [ ! -e "$HOST_ENV_FILE" ] || [ -w "$HOST_ENV_FILE" ]
+}
+
+# What `jht setup` says when it skips host-setup.sh because it cannot write host.env: «already done» only when host.env says
+# the type of host; otherwise the preflight was not done and the type stays unknown, and that is what is said.
+host_setup_skip_note() {
+  if jht_read_host_env_value "$HOST_ENV_FILE" JHT_HOST_TYPE >/dev/null 2>&1; then
+    info "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto."
+  else
+    warn "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'."
   fi
 }
 
@@ -5550,7 +5695,11 @@ case "$SUB" in
     # del wizard sono espliciti, niente domande possibili) o env esplicita.
     if [ "${JHT_SKIP_HOST_SETUP:-0}" != "1" ] \
        && ! printf '%s\n' "$@" | grep -q -- '--non-interactive'; then
-      if [ -x "$HOST_SETUP_SCRIPT" ]; then
+      if [ -x "$HOST_SETUP_SCRIPT" ] && ! host_setup_can_write; then
+        # On Linux with Docker the installer hands ~/.jht to the container's uid (1001), mode 700: this user cannot write
+        # host.env, and host-setup.sh died on «host.env: Permission denied» (TEST 19i, A3). What it writes is already there.
+        host_setup_skip_note
+      elif [ -x "$HOST_SETUP_SCRIPT" ]; then
         bash "$HOST_SETUP_SCRIPT" || warn "host-setup.sh terminato con errore — proseguo"
       else
         info "host-setup.sh non trovato in $HOST_SETUP_SCRIPT — skip preflight host"
@@ -5575,6 +5724,28 @@ case "$SUB" in
     require_docker
     ensure_up
     handle_host_download "$ATTESTED_CONTAINER_ID" "${@:2}"
+    ;;
+
+  # `jht artifact upload FILE`: il file dell'host lo legge il wrapper (vedi artifact_upload_command); gli altri verbi vanno al CLI.
+  artifact)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = upload ] && artifact_upload_has_file "${@:3}"; then
+      artifact_upload_command "${@:3}"; exit $?
+    fi
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    ;;
+
+  # `jht ticket open ... --attach FILE`: come l'upload, il file dell'host lo legge il wrapper (vedi ticket_open_command).
+  ticket)
+    require_compose_file
+    require_docker
+    ensure_up
+    if [ "${2:-}" = open ] && ticket_open_has_attach "${@:3}"; then
+      ticket_open_command "${@:3}"; exit $?
+    fi
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
     ;;
 
   profile)

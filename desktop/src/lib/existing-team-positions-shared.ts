@@ -1,5 +1,6 @@
 import type { PositionWithScore } from "../../../web/lib/types";
-import { readDesktopVpsMap, readDesktopVpsPositions, type DesktopVpsMapRow, type DesktopVpsRead } from "./existing-team-positions";
+import { readDesktopVpsMap, readDesktopVpsPiles, readDesktopVpsPositions, type DesktopVpsMapRow, type DesktopVpsPiles, type DesktopVpsRead } from "./existing-team-positions";
+import { localTeamDataKey } from "./local-team-data";
 import { existingTeamConnectionKey } from "./existing-team-readonly";
 
 /** All the team's positions in one bounded read per page (the native side pages by 600). */
@@ -8,6 +9,15 @@ const ALL_ROWS = { limit: 20_000 } as const;
 export const SHARED_READ_MS = 5_000;
 
 let shared: { at: number; key: string; read: Promise<DesktopVpsRead<PositionWithScore[]>> } | null = null;
+let sharedPiles: { at: number; key: string; read: Promise<DesktopVpsRead<DesktopVpsPiles>> } | null = null;
+
+/** What a kept read belongs to: the existing team's connection, or the profile whose team is on this computer; null: nothing is kept. */
+function sharedKey(): string | null {
+  const view = existingTeamConnectionKey();
+  if (view !== null) return view;
+  const local = localTeamDataKey();
+  return local === null ? null : `this-computer:${local}`;
+}
 
 /**
  * The team's positions as the core serves them, one bounded read shared by
@@ -27,14 +37,14 @@ let shared: { at: number; key: string; read: Promise<DesktopVpsRead<PositionWith
  * queries (and the cloud client behind them) into their imports.
  */
 export function readVpsPositionsShared(now = Date.now()): Promise<DesktopVpsRead<PositionWithScore[]>> {
-  const key = existingTeamConnectionKey();
+  const key = sharedKey();
   if (key === null) {
     shared = null;
     return readDesktopVpsPositions(ALL_ROWS);
   }
   if (shared && shared.key === key && now - shared.at < SHARED_READ_MS) return shared.read;
   const read = readDesktopVpsPositions(ALL_ROWS).then((result): DesktopVpsRead<PositionWithScore[]> =>
-    existingTeamConnectionKey() === key ? result : { source: "unavailable", code: "existing_team_target_changed" });
+    sharedKey() === key ? result : { source: "unavailable", code: "existing_team_target_changed" });
   shared = { at: now, key, read };
   return read;
 }
@@ -63,4 +73,23 @@ export function readVpsMapShared(now = Date.now()): Promise<DesktopVpsRead<Deskt
 export function resetVpsPositionsShared(): void {
   shared = null;
   sharedMap = null;
+  sharedPiles = null;
+}
+
+/**
+ * The office's five pile counts: ONE read of the core (not the whole list), kept for SHARED_READ_MS for the
+ * connection or the local profile it was read on, with the same rules as the list above. A read that is still on its
+ * way is shared by whoever asks meanwhile, so two callers never make two reads.
+ */
+export function readVpsPilesShared(now = Date.now()): Promise<DesktopVpsRead<DesktopVpsPiles>> {
+  const key = sharedKey();
+  if (key === null) {
+    sharedPiles = null;
+    return readDesktopVpsPiles();
+  }
+  if (sharedPiles && sharedPiles.key === key && now - sharedPiles.at < SHARED_READ_MS) return sharedPiles.read;
+  const read = readDesktopVpsPiles().then((result): DesktopVpsRead<DesktopVpsPiles> =>
+    sharedKey() === key ? result : { source: "unavailable", code: "existing_team_target_changed" });
+  sharedPiles = { at: now, key, read };
+  return read;
 }

@@ -37,6 +37,7 @@ type Request =
   | { op: "detail"; id: string }
   | { op: "facets" }
   | { op: "stats" }
+  | { op: "piles" }
   | { op: "map"; offset: number }
   | { op: "team_activity"; from: string; to: string }
   | { op: "directives" };
@@ -153,6 +154,30 @@ export async function readDesktopVpsPositions(
     if (page.data.length < size) break;
   }
   return { source: "vps", data: rows };
+}
+
+/** The counts of the five piles of the office, as the core counts them (the rule of office/panel/vps-panels.ts inPhase). */
+export interface DesktopVpsPiles {
+  scout: number;
+  analisti: number;
+  scorer: number;
+  scrittori: number;
+  critici: number;
+}
+
+const PILE_KEYS = ["scout", "analisti", "scorer", "scrittori", "critici"] as const;
+
+/**
+ * The five numbers of the piles in ONE read, instead of the team's whole list (one reply per 600 positions, one
+ * after the other). An older core that does not know the op answers `positions_request_invalid`: the caller then
+ * counts from the list, as it always did.
+ */
+export async function readDesktopVpsPiles(): Promise<DesktopVpsRead<DesktopVpsPiles>> {
+  const value = await read<unknown>({ op: "piles" });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (!isRecord(data) || PILE_KEYS.some((key) => !isCount(data[key]))) return { source: "unavailable", code: "desktop_bad_reply" };
+  return { source: "vps", data: Object.fromEntries(PILE_KEYS.map((key) => [key, data[key]])) as unknown as DesktopVpsPiles };
 }
 
 /** What the globe needs of a position: the core's `map` read gives these and nothing more. */

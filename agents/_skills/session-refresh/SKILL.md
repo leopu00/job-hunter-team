@@ -61,22 +61,16 @@ Only for sessions that did **not** trip the TTL in Step 1.4.
 
 Two hard requirements — ignore them and you *burn* budget instead of saving it:
 - The session MUST be **idle** (no active turn). If a spinner / `esc to interrupt` is showing, it's working → SKIP this round (the next Doctor catches it). Never send keys mid-turn.
-- **Clear the input line first.** Otherwise the command concatenates with residual text and gets submitted as an LLM prompt (burns tokens). Send `Escape` then `C-u` before typing.
+- **Never type `/status` or `/context` yourself, and never press `Escape` on a pane without looking at it.** Use `session_context.py`: it reads the percentage from the logs of the CLI (Codex, Kimi: no key sent at all); only for Claude does it open `/context`, and it closes the panel with `Escape` until the screen shows the empty composer again (three presses at most). It sends nothing to a pane that is not idle with an empty composer. Exit `4` / `closed: false` means a panel is still open: say so to the Capitano and do NOT go on to the next session as if nothing was open (an open panel makes every wake-up of that session fail).
 
 ```bash
-S=<session>
-# provider → command:  claude → /context   ·   codex → /status   ·   kimi → (verify on its TUI)
-tmux send-keys -t "$S" Escape; sleep 1
-tmux send-keys -t "$S" C-u;    sleep 1          # clear the input line (mandatory)
-tmux send-keys -t "$S" "/context"; sleep 1
-tmux send-keys -t "$S" Enter;  sleep 3
-PCT=$(tmux capture-pane -p -t "$S" | grep -aoE '[0-9.]+k?/[0-9.]+[km] tokens \([0-9]+%\)' | tail -1 | grep -aoE '\([0-9]+%\)' | tr -dc '0-9')
-tmux send-keys -t "$S" Escape                   # dismiss the panel
-echo "context=$PCT%"
+S=<session>      # the provider is the one of the session (claude, codex, kimi)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider>
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
 ```
-Decide from `$PCT` (parsed from a line like `24.9k/1m tokens (2%)`):
-- **`PCT` ≤ 50** → SKIP **unless the TTL tripped in Step 1.4**. Do NOT recreate an under-TTL session, even if it is old-ish. Log `action=skipped_lowctx` with the measured `%`. Move to the next session.
-- **`PCT` > 50** → proceed to refresh (Steps 2–7).
+Decide from `pct` (parsed from a line like `24.9k/1m tokens (2%)`):
+- **`pct` ≤ 50** → SKIP **unless the TTL tripped in Step 1.4**. Do NOT recreate an under-TTL session, even if it is old-ish. Log `action=skipped_lowctx` with the measured `%`. Move to the next session.
+- **`pct` > 50** → proceed to refresh (Steps 2–7).
 - **command didn't render / parse failed** → fall back to the age heuristic (`age ≥ 40min` → refresh) and log `ctx=unparsed`.
 
 ## Step 1.6 — notify the Capitano once, before the first refresh

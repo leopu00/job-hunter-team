@@ -93,6 +93,8 @@ jht_host_env_value_valid() {
 jht_read_host_env_value() {
   local file="$1" requested="$2" line key value result=""
   local found=1
+  # Un link non e' il file di host-setup: lo ha messo un agente, e non si legge quello che indica.
+  [ ! -L "$file" ] || return 1
   [ -f "$file" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"
@@ -111,6 +113,37 @@ jht_read_host_env_value() {
   done < "$file"
   [ "$found" -eq 0 ] || return 1
   printf '%s' "$result"
+}
+
+# host.env si scrive in un file temporaneo FUORI dalla cartella montata nel container (la home non lo e'), poi si mette al
+# suo posto. Dentro ~/.jht un agente potrebbe cambiare il temporaneo con un link appena compare, e `cat >` o `chmod` per percorso
+# lo seguirebbero (un file della home troncato, una chiave resa leggibile). Un link messo al posto di host.env (che dentro il
+# container e' pendente e sull'host punta a un file dell'utente) si toglie come link, mai seguito, e il file entra con `ln`,
+# che con -n (non seguire un link) fallisce se nel frattempo c'e' di nuovo qualcosa, invece di metterlo dentro la cartella
+# indicata da un link, come farebbero `mv` e `ln` senza -n.
+# Il contenuto arriva su stdin.
+jht_write_host_env() {
+  local dir tmp
+  dir="$(dirname "$JHT_HOME_HOST")"
+  if [ -d "$HOST_ENV_PATH" ] && [ ! -L "$HOST_ENV_PATH" ]; then
+    warn "$HOST_ENV_PATH is a directory: not writing it"
+    return 1
+  fi
+  tmp="$(mktemp "$dir/.jht-host-env.XXXXXX")" || { warn "cannot create a temporary file in $dir: not writing $HOST_ENV_PATH"; return 1; }
+  # Il container lo legge con un altro utente: i permessi di sempre (umask), non quelli riservati di mktemp.
+  if ! cat > "$tmp" || ! chmod 644 "$tmp"; then rm -f "$tmp"; return 1; fi
+  if [ -e "$HOST_ENV_PATH" ] || [ -L "$HOST_ENV_PATH" ]; then
+    rm -f "$HOST_ENV_PATH" || { rm -f "$tmp"; return 1; }
+  fi
+  if ln -n "$tmp" "$HOST_ENV_PATH" 2>/dev/null; then
+    rm -f "$tmp"
+  elif [ ! -e "$HOST_ENV_PATH" ] && [ ! -L "$HOST_ENV_PATH" ] && mv -f "$tmp" "$HOST_ENV_PATH"; then
+    : # una cartella senza hard link (raro): la rinomina, con l'entrata ancora vuota
+  else
+    rm -f "$tmp"
+    warn "$HOST_ENV_PATH changed while it was being written: not writing it"
+    return 1
+  fi
 }
 
 I18N_PREFS_PATH="$JHT_HOME_HOST/i18n-prefs.json"
@@ -175,7 +208,14 @@ ok "Language / Lingua / Nyelv / Idioma / Sprache / Langue / Idioma: $JHT_LANG"
 # scelta resta valida. Il blocco "host type + swap" piu' giu' aggiunge
 # JHT_HOST_TYPE allo stesso file.
 mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
-printf 'JHT_LANG=%s\n' "$JHT_LANG" > "$HOST_ENV_PATH"
+# Questa prima scrittura riscrive il file: il fuso gia' scelto in un'installazione precedente (priorita' massima piu' sotto,
+# punto 3 del fuso) si legge PRIMA e si tiene, se no resta quello della macchina.
+PRESERVED_TZ=""
+PRESERVED_TZ="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_USER_TZ)" || PRESERVED_TZ=""
+{
+  printf 'JHT_LANG=%s\n' "$JHT_LANG"
+  if [ -n "$PRESERVED_TZ" ]; then printf 'JHT_USER_TZ=%s\n' "$PRESERVED_TZ"; fi
+} | jht_write_host_env
 if ! jht_read_i18n_locale "$I18N_PREFS_PATH" >/dev/null 2>&1; then
   I18N_PREFS_TMP="$I18N_PREFS_PATH.tmp-$$"
   printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" > "$I18N_PREFS_TMP"
@@ -334,7 +374,7 @@ mkdir -p "$JHT_HOME_HOST" 2>/dev/null || true
   printf 'JHT_LANG=%s\n' "$JHT_LANG"
   printf 'JHT_HOST_TYPE=%s\n' "$HOST_TYPE"
   printf 'JHT_USER_TZ=%s\n' "$JHT_USER_TZ"
-} > "$HOST_ENV_PATH"
+} | jht_write_host_env
 
 # Gli stessi tre valori, per il wrapper, nella cartella del runtime: NON e' montata nel container (host.env si', e un agente puo'
 # riscriverlo). Sono questi a decidere come il container viene creato e attestato. Temporaneo + rename, 0600; la cartella del
