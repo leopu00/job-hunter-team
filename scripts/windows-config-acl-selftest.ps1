@@ -104,20 +104,31 @@ try {
     param([Parameter(Mandatory)][string]$Which)
     $linkHome = Join-Path $root "link-home-$Which"
     $outside = Join-Path $root "outside-the-home-$Which"
-    New-Item -ItemType Directory -Path $linkHome, $outside, (Join-Path $linkHome 'sub') -Force | Out-Null
+    New-Item -ItemType Directory -Path $linkHome, $outside, (Join-Path $linkHome 'sub\deeper\deepest') -Force | Out-Null
     Set-Content -LiteralPath (Join-Path $outside 'kept.txt') -Value 'kept'
     Set-Content -LiteralPath (Join-Path $linkHome 'sub\plain.txt') -Value 'plain'
+    Set-Content -LiteralPath (Join-Path $linkHome 'sub\deeper\more.txt') -Value 'more'
+    Set-Content -LiteralPath (Join-Path $linkHome 'sub\deeper\deepest\last.txt') -Value 'last'
     New-Item -ItemType Junction -Path (Join-Path $linkHome 'junction') -Target $outside | Out-Null
     New-Item -ItemType Junction -Path (Join-Path $linkHome 'sub\deep-junction') -Target $outside | Out-Null
-    $before = (Get-Acl -LiteralPath $outside).Sddl
-    $beforeFile = (Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl
     $acl = Get-Acl -LiteralPath $linkHome
     $acl.SetAccessRuleProtection($true, $false)
     $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
     Set-JhtAccessControl -Path $linkHome -Acl $acl
+    # what the junctions point at is measured AFTER the fixture is set up: only what Protect-JhtHomeAcl does is on trial
+    $before = (Get-Acl -LiteralPath $outside).Sddl
+    $beforeFile = (Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl
     Protect-JhtHomeAcl -Path $linkHome
-    foreach ($made in @($linkHome, (Join-Path $linkHome 'sub'), (Join-Path $linkHome 'sub\plain.txt'))) {
-      if (-not (Test-PrivateJhtHomeAcl -Path $made)) { throw "${Which}: not made private: $made" }
+    # a file one level down, and folders and files two and three levels down: all of them made private
+    foreach ($made in @($linkHome, (Join-Path $linkHome 'sub'), (Join-Path $linkHome 'sub\plain.txt'), (Join-Path $linkHome 'sub\deeper'),
+                        (Join-Path $linkHome 'sub\deeper\more.txt'), (Join-Path $linkHome 'sub\deeper\deepest'), (Join-Path $linkHome 'sub\deeper\deepest\last.txt'))) {
+      if (-not (Test-PrivateJhtHomeAcl -Path $made)) {
+        # what the node holds, to read the failure from the log of the runner
+        $held = Get-Acl -LiteralPath $made
+        Write-Host "ACL_LINK_NODE which=${Which} path=$made protected=$($held.AreAccessRulesProtected) owner=$($held.Owner)"
+        foreach ($rule in $held.Access) { Write-Host "ACL_LINK_RULE identity=$($rule.IdentityReference) type=$($rule.AccessControlType) inherited=$($rule.IsInherited) rights=$($rule.FileSystemRights)" }
+        throw "${Which}: not made private: $made"
+      }
     }
     if ((Get-Acl -LiteralPath $outside).Sddl -ne $before) { throw "${Which}: the ACL of the folder a junction points at was rewritten" }
     if ((Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl -ne $beforeFile) { throw "${Which}: the ACL of a file behind a junction was rewritten" }

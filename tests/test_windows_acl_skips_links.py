@@ -46,7 +46,11 @@ def test_the_folder_is_walked_by_hand_and_a_link_is_neither_changed_nor_entered(
     assert body.index("if (& $underLink $folder) { continue }") < body.index("Get-ChildItem -LiteralPath $folder -Force")
     assert body.index("if (& $underLink $node.FullName) { continue }") < body.index("Set-JhtAccessControl -Path $node.FullName")
     # up the path to the root: a reparse point on the way, or no way up, is a link
-    assert "$step = if ($step.PSIsContainer) { $step.Parent } else { $step.Directory }" in body
+    assert "$step = if ($step -is [IO.DirectoryInfo]) { $step.Parent } else { $step.Directory }" in body
+    # the walk up must not depend on PSIsContainer: the folder `.Parent`/`.Directory` hands back has no such property, and a file
+    # two levels down was taken for "no way up" and left with its old ACL (the selftest of the gate was red on it)
+    up = body[body.index("$underLink = {"):body.index("$nodes = New-Object")]
+    assert "PSIsContainer" not in up.replace("not by PSIsContainer", "")
     assert body.count("[IO.FileAttributes]::ReparsePoint") == 2
 
 
@@ -103,12 +107,16 @@ $outside = Join-Path $base 'outside'
 New-Item -ItemType Directory -Path $home_, $outside, (Join-Path $home_ 'sub') -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $outside 'kept.txt') -Value 'kept'
 Set-Content -LiteralPath (Join-Path $home_ 'sub\plain.txt') -Value 'plain'
+New-Item -ItemType Directory -Path (Join-Path $home_ 'sub\deeper\deepest') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $home_ 'sub\deeper\more.txt') -Value 'more'
+Set-Content -LiteralPath (Join-Path $home_ 'sub\deeper\deepest\last.txt') -Value 'last'
 New-Item -ItemType Junction -Path (Join-Path $home_ 'junction') -Target $outside | Out-Null
 New-Item -ItemType Junction -Path (Join-Path $home_ 'sub\deep') -Target $outside | Out-Null
 $sddl = (Get-Acl -LiteralPath $outside).Sddl
 $fileSddl = (Get-Acl -LiteralPath (Join-Path $outside 'kept.txt')).Sddl
 Protect-JhtHomeAcl -Path $home_
-foreach ($made in @($home_, (Join-Path $home_ 'sub'), (Join-Path $home_ 'sub\plain.txt'))) {
+foreach ($made in @($home_, (Join-Path $home_ 'sub'), (Join-Path $home_ 'sub\plain.txt'), (Join-Path $home_ 'sub\deeper'),
+                    (Join-Path $home_ 'sub\deeper\more.txt'), (Join-Path $home_ 'sub\deeper\deepest'), (Join-Path $home_ 'sub\deeper\deepest\last.txt'))) {
   if (-not (Get-Acl -LiteralPath $made).AreAccessRulesProtected) { throw "not made private: $made" }
 }
 if ((Get-Acl -LiteralPath $outside).Sddl -ne $sddl) { throw 'the ACL of the folder a junction points at was rewritten' }

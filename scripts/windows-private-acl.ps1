@@ -24,7 +24,8 @@ function Protect-JhtHomeAcl {
     while ($step) {
       if ($step.FullName.TrimEnd('\') -eq $rootFull) { return $false }
       if (($step.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $true }
-      $step = if ($step.PSIsContainer) { $step.Parent } else { $step.Directory }
+      # by the type, not by PSIsContainer: that property is the provider's, and the folder this very line returns has none
+      $step = if ($step -is [IO.DirectoryInfo]) { $step.Parent } else { $step.Directory }
     }
     return $true
   }
