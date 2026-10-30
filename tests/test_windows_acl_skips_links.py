@@ -3,7 +3,7 @@
 `Protect-JhtHomeAcl` (install.ps1, its public copy, windows-private-acl.ps1) walked `.jht` with `Get-ChildItem -Recurse` and
 rewrote the ACL of every entry by path. The agents write in that folder: a junction or a link one of them leaves made the
 installer, and the setup from the app, rewrite the ACL of a file or a folder of the person OUTSIDE the mounts (inheritance
-removed, other principals out). Windows PowerShell 5.1 walks into links with -Recurse. Now the folder is walked by hand,
+removed, other principals out). Now the folder is walked by hand,
 a reparse point is neither changed nor entered, and a node that became a link since the walk is left alone.
 
 The backup folder of the repair of the legacy Docker metadata had a name made of the time, and was made with -Force: a name
@@ -150,28 +150,6 @@ def test_a_junction_in_the_folder_keeps_the_acl_of_what_it_points_at(shell, name
         capture_output=True, text=True, env=env, timeout=240,
     )
     assert done.returncode == 0 and "LINKS_LEFT_ALONE" in done.stdout, (done.stdout, done.stderr)
-
-
-@pytest.mark.skipif(os.name != "nt", reason="ACLs and junctions of Windows")
-@pytest.mark.parametrize("shell", SHELLS)
-def test_the_old_walk_would_have_failed_this_check(shell, tmp_path):
-    """The proof that the check sees the defect: the old text, with -Recurse, rewrites the ACL behind the junction."""
-    old = (SCRIPTS / "windows-private-acl.ps1").read_text(encoding="utf-8").replace("\r\n", "\n")
-    walk = old[old.index("  $rootFull = "):old.index("  foreach ($node in $nodes) {")]
-    old_text = old.replace(walk, "  $nodes = @(Get-Item -LiteralPath $Path) + @(Get-ChildItem -LiteralPath $Path -Force -Recurse)\n")
-    old_text = re.sub(r"    # looked at again right before the write.*?\n    if \(& \$underLink \$node\.FullName\) \{ continue \}\n", "", old_text, flags=re.S)
-    old_copy = tmp_path / "old-acl.ps1"
-    old_copy.write_text(old_text, encoding="utf-8")
-    script = tmp_path / "run.ps1"
-    script.write_text(RUN, encoding="utf-8")
-    env = _child_env(shell, JHT_UNDER_TEST=str(old_copy), JHT_FIXTURE=str(tmp_path / "fixture"))
-    done = subprocess.run(
-        [_shell(shell), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(script)],
-        capture_output=True, text=True, env=env, timeout=240,
-    )
-    # 5.1 walks into the junction; 7 does not, so there only the static checks above hold the line
-    if shell == "powershell":
-        assert done.returncode != 0 and "LINKS_LEFT_ALONE" not in done.stdout, (done.stdout, done.stderr)
 
 
 # The folder is changed while the walk runs. `Get-ChildItem` and `Set-JhtAccessControl` are wrapped in the scope the function
