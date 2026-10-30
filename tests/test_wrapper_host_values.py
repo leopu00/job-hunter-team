@@ -131,41 +131,121 @@ def test_a_file_nobody_else_can_write_is_read(tmp_path: Path, mode: int):
     assert _host_type_of_exec(log) == "vps", oct(mode)
 
 
-def _record(tmp_path: Path, kernel: str, host_type: str):
-    """The wrapper's own `jht_record_host_values`, alone, as if the kernel were `kernel` and the value in use `host_type`."""
+_LOADING = (
+    "jht_host_env_value_valid",
+    "jht_read_host_env_value",
+    "runtime_stat",
+    "runtime_node_safe",
+    "jht_host_values_trusted",
+    "jht_host_values_log",
+    "jht_a_mac_is_never_a_vps",
+    "jht_load_host_values",
+    "jht_record_host_values",
+)
+
+
+def _functions(names) -> str:
     import re
 
     source = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
-    function = re.search(r"^jht_record_host_values\(\) \{\n.*?^\}\n", source, re.S | re.M).group(0)
-    runtime = tmp_path / f"rt-{kernel}-{host_type}"
+    return "\n".join(re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", source, re.S | re.M).group(0) for name in names)
+
+
+def _load_and_record(tmp_path: Path, host_type: str, *, values: tuple[str, int] | None = None, log: str | None = None, name: str = "rt", extra_env: dict[str, str] | None = None):
+    """The wrapper's own functions that load and record the values, alone, with the kernel of this machine and a `host.env`
+    that says `host_type`. `values` is a host-values file already there (text, mode); `log` says what is at host-values.log."""
+    runtime = tmp_path / name
     runtime.mkdir(mode=0o700)
+    host_env = tmp_path / f"{name}-host.env"
+    host_env.write_text(f"JHT_HOST_TYPE={host_type}\nJHT_LANG=it\nJHT_USER_TZ=Europe/Rome\n", encoding="utf-8")
+    if values is not None:
+        (runtime / "host-values").write_text(values[0], encoding="utf-8")
+        (runtime / "host-values").chmod(values[1])
+    if log == "link":
+        target = tmp_path / f"{name}-elsewhere"
+        target.write_text("before\n", encoding="utf-8")
+        os.symlink(target, runtime / "host-values.log")
     script = (
         "set -u\n"
-        f'HOST_KERNEL={kernel}; RUNTIME_DIR="{runtime}"; HOST_VALUES_FILE="{runtime}/host-values"\n'
-        f"JHT_HOST_TYPE={host_type}; JHT_LANG=en; JHT_USER_TZ=UTC\n" + function + 'jht_record_host_values\nprintf "type=%s\\n" "$JHT_HOST_TYPE"\n'
+        f'HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"; RUNTIME_DIR="{runtime}"; HOST_VALUES_FILE="{runtime}/host-values"; HOST_ENV_FILE="{host_env}"\n'
+        + _functions(_LOADING)
+        + "\njht_load_host_values\njht_record_host_values\nprintf 'type=%s\\n' \"$JHT_HOST_TYPE\"\n"
     )
-    done = subprocess.run(["bash", "-c", script], env={"PATH": "/usr/bin:/bin"}, text=True, capture_output=True, timeout=20, check=False)
+    done = subprocess.run(["bash", "-c", script], env={"PATH": "/usr/bin:/bin", **(extra_env or {})}, text=True, capture_output=True, timeout=20, check=False)
     assert done.returncode == 0, done.stderr
     return runtime, done
 
 
+DARWIN = pytest.mark.skipif(os.uname().sysname != "Darwin", reason="the rule is for macOS; the kernel is the machine's own")
+
+
+@DARWIN
 def test_on_a_mac_a_vps_taken_from_host_env_is_recorded_as_local_and_it_is_told(tmp_path: Path):
-    runtime, done = _record(tmp_path, "Darwin", "vps")
+    runtime, done = _load_and_record(tmp_path, "vps")
     assert "type=local" in done.stdout
-    assert (runtime / "host-values").read_text(encoding="utf-8") == "JHT_HOST_TYPE=local\nJHT_LANG=en\nJHT_USER_TZ=UTC\n"
+    assert (runtime / "host-values").read_text(encoding="utf-8") == "JHT_HOST_TYPE=local\nJHT_LANG=it\nJHT_USER_TZ=Europe/Rome\n"
     assert "vps" in done.stderr and "local" in done.stderr, done.stderr
     log = (runtime / "host-values.log").read_text(encoding="utf-8")
-    assert "JHT_HOST_TYPE=vps" in log and "registrato local" in log
+    assert "JHT_HOST_TYPE=vps" in log and "usato local" in log
     assert stat.S_IMODE((runtime / "host-values.log").stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize("kernel,host_type", (("Linux", "vps"), ("Darwin", "local"), ("Darwin", "unknown"), ("Linux", "local")))
-def test_every_other_case_is_recorded_as_it_is_and_told_nothing(tmp_path: Path, kernel: str, host_type: str):
-    runtime, done = _record(tmp_path, kernel, host_type)
-    assert f"type={host_type}" in done.stdout
-    assert (runtime / "host-values").read_text(encoding="utf-8").startswith(f"JHT_HOST_TYPE={host_type}\n")
-    assert done.stderr == ""
+@DARWIN
+@pytest.mark.parametrize("mode", (0o666, 0o620, 0o602, 0o662))
+def test_on_a_mac_a_host_values_that_is_not_trusted_does_not_let_a_vps_of_host_env_through(tmp_path: Path, mode: int):
+    """The fallback to host.env is a source an agent writes: the same rule as at the first record, and the app does the same."""
+    runtime, done = _load_and_record(tmp_path, "vps", values=("JHT_HOST_TYPE=local\n", mode))
+    assert "type=local" in done.stdout, oct(mode)
+    assert (runtime / "host-values").read_text(encoding="utf-8") == "JHT_HOST_TYPE=local\n", "and the file is not overwritten"
+    assert done.stderr == "", "the message is for the first record, when the file is not there"
+    assert "JHT_HOST_TYPE=vps" in (runtime / "host-values.log").read_text(encoding="utf-8")
+
+
+@DARWIN
+def test_on_a_mac_a_host_values_that_is_trusted_and_says_vps_is_the_users_choice(tmp_path: Path):
+    runtime, done = _load_and_record(tmp_path, "local", values=("JHT_HOST_TYPE=vps\nJHT_LANG=en\nJHT_USER_TZ=UTC\n", 0o600))
+    assert "type=vps" in done.stdout
     assert not (runtime / "host-values.log").exists()
+
+
+@DARWIN
+def test_on_a_mac_a_trusted_host_values_that_does_not_say_the_type_does_not_let_a_vps_of_the_environment_through(tmp_path: Path):
+    runtime, done = _load_and_record(tmp_path, "local", values=("JHT_LANG=en\nJHT_USER_TZ=UTC\n", 0o600), extra_env={"JHT_HOST_TYPE": "vps"})
+    assert "type=local" in done.stdout
+    assert "JHT_HOST_TYPE=vps" in (runtime / "host-values.log").read_text(encoding="utf-8")
+
+
+@DARWIN
+def test_the_log_is_not_written_through_a_link_or_into_a_folder_that_is_not_the_users(tmp_path: Path):
+    runtime, done = _load_and_record(tmp_path, "vps", log="link", name="rt-link")
+    assert "type=local" in done.stdout
+    assert (tmp_path / "rt-link-elsewhere").read_text(encoding="utf-8") == "before\n", "the link was followed"
+    other = tmp_path / "rt-open"
+    other.mkdir()
+    other.chmod(0o777)
+    host_env = tmp_path / "rt-open-host.env"
+    host_env.write_text("JHT_HOST_TYPE=vps\n", encoding="utf-8")
+    script = (
+        "set -u\n"
+        f'HOST_KERNEL="$(uname -s)"; HOST_UID="$(id -u)"; RUNTIME_DIR="{other}"; HOST_VALUES_FILE="{other}/host-values"; HOST_ENV_FILE="{host_env}"\n'
+        + _functions(_LOADING)
+        + "\njht_load_host_values\nprintf 'type=%s\\n' \"$JHT_HOST_TYPE\"\n"
+    )
+    done = subprocess.run(["bash", "-c", script], env={"PATH": "/usr/bin:/bin"}, text=True, capture_output=True, timeout=20, check=False)
+    assert "type=local" in done.stdout and not (other / "host-values.log").exists()
+
+
+def test_the_rule_is_for_a_mac_only(tmp_path: Path):
+    """The rule alone, whatever machine this is: Darwin turns a vps into a local, any other kernel leaves it."""
+    for kernel, host_type, expected in (("Darwin", "vps", "local"), ("Linux", "vps", "vps"), ("Darwin", "local", "local"), ("Darwin", "unknown", "unknown")):
+        script = (
+            "set -u\n"
+            f'HOST_KERNEL={kernel}; JHT_HOST_TYPE={host_type}; HOST_VALUES_FILE="{tmp_path}/host-values"; RUNTIME_DIR="{tmp_path}"\n'
+            "jht_host_values_log() { :; }\n" + _functions(["jht_a_mac_is_never_a_vps"]) + '\njht_a_mac_is_never_a_vps\nprintf "%s" "$JHT_HOST_TYPE"\n'
+        )
+        done = subprocess.run(["bash", "-c", script], env={"PATH": "/usr/bin:/bin"}, text=True, capture_output=True, timeout=20, check=False)
+        assert done.stdout == expected, (kernel, host_type, done.stderr)
+        assert (done.stderr != "") == (kernel == "Darwin" and host_type == "vps")
 
 
 def test_host_setup_writes_the_same_values_next_to_host_env_and_in_the_runtime_folder(tmp_path: Path):

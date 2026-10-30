@@ -231,12 +231,38 @@ jht_host_values_trusted() {
   runtime_node_safe "$HOST_VALUES_FILE" file
 }
 
+# Una riga nel registro accanto a host-values, solo se la cartella del runtime e' dell'utente e il registro non e' un link (ne' un
+# file scrivibile da altri); un registro oltre i 64 KiB non cresce piu'.
+jht_host_values_log() {
+  local log="$RUNTIME_DIR/host-values.log" size=0
+  runtime_node_safe "$RUNTIME_DIR" dir || return 0
+  [ ! -L "$log" ] || return 0
+  [ ! -e "$log" ] || runtime_node_safe "$log" file || return 0
+  if [ -e "$log" ]; then size="$(wc -c < "$log" 2>/dev/null)" || size=0; size=$((size)); fi
+  [ "$size" -le 65536 ] || return 0
+  ( umask 077; printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$1" >> "$log" ) 2>/dev/null || true
+}
+
+# Un Mac non e' mai una VPS: un «vps» preso da host.env o dall'ambiente (scrivibili dagli agenti) diventa «local». Vale ogni volta che
+# il tipo non viene da host-values fidato: alla prima registrazione, se host-values c'e' ma non e' fidato, e se il file fidato non
+# dice il tipo; l'app fa lo stesso (direct_chat.rs). Il messaggio sul terminale una volta sola, quando host-values non c'e' ancora; il registro ogni volta.
+# (warn() e i colori sono definiti piu' sotto: qui si scrive su stderr direttamente)
+jht_a_mac_is_never_a_vps() {
+  if [ "$HOST_KERNEL" != "Darwin" ] || [ "$JHT_HOST_TYPE" != "vps" ]; then return 0; fi
+  JHT_HOST_TYPE="local"
+  if [ ! -e "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ]; then
+    printf 'warn:  %s\n' "su un Mac il tipo di host non puo' essere «vps»: JHT_HOST_TYPE letto da host.env o dall'ambiente e' stato registrato come «local»" >&2
+  fi
+  jht_host_values_log "host.env o ambiente dicevano JHT_HOST_TYPE=vps su macOS: usato local"
+}
+
 jht_load_host_values() {
-  local source_file="$HOST_ENV_FILE" key value
+  local source_file="$HOST_ENV_FILE" key value type_from_values=0
   ! jht_host_values_trusted || source_file="$HOST_VALUES_FILE"
   for key in JHT_HOST_TYPE JHT_LANG JHT_USER_TZ; do
     if value="$(jht_read_host_env_value "$source_file" "$key")"; then
       printf -v "$key" '%s' "$value"
+      if [ "$source_file" = "$HOST_VALUES_FILE" ] && [ "$key" = JHT_HOST_TYPE ]; then type_from_values=1; fi
     fi
   done
   JHT_HOST_TYPE="${JHT_HOST_TYPE:-unknown}"
@@ -245,20 +271,14 @@ jht_load_host_values() {
   # configurata — niente hardcoding geografico (l'utente potrebbe stare
   # ovunque). Il container la usa via format_time skill.
   JHT_USER_TZ="${JHT_USER_TZ:-UTC}"
+  # Il tipo che non viene dal file fidato (host.env, o l'ambiente quando il file non lo dice) passa dalla regola del Mac.
+  if [ "$type_from_values" -ne 1 ]; then jht_a_mac_is_never_a_vps; fi
 }
 
 # Prima esecuzione dopo un aggiornamento: registra i valori ora in uso. Solo se il file non c'e' (ne' come link) e la cartella
 # del runtime esiste ed e' dell'utente; scrive un temporaneo e lo rinomina.
 jht_record_host_values() {
   [ ! -e "$HOST_VALUES_FILE" ] && [ ! -L "$HOST_VALUES_FILE" ] || return 0
-  # Un Mac non e' mai una VPS: un «vps» preso da host.env (scrivibile dagli agenti) alla prima registrazione diventa «local», e lo
-  # si dice, sul terminale e nel registro accanto al file (l'app calcola l'hash atteso allo stesso modo, direct_chat.rs).
-  if [ "$HOST_KERNEL" = "Darwin" ] && [ "$JHT_HOST_TYPE" = "vps" ]; then
-    JHT_HOST_TYPE="local"
-    # (warn() e i colori sono definiti piu' sotto: qui si scrive su stderr direttamente)
-    printf 'warn:  %s\n' "su un Mac il tipo di host non puo' essere «vps»: JHT_HOST_TYPE letto da host.env o dall'ambiente e' stato registrato come «local»" >&2
-    ( umask 077; printf '%s host.env o ambiente dicevano JHT_HOST_TYPE=vps su macOS: registrato local\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" >> "$RUNTIME_DIR/host-values.log" ) 2>/dev/null || true
-  fi
   [ -d "$RUNTIME_DIR" ] && [ ! -L "$RUNTIME_DIR" ] && [ -O "$RUNTIME_DIR" ] || return 0
   local tmp="$HOST_VALUES_FILE.tmp.$$"
   (
