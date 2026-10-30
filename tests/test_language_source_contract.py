@@ -219,7 +219,8 @@ def test_host_preflight_only_bootstraps_the_canonical_preference():
 
     assert 'I18N_PREFS_PATH="$JHT_HOME_HOST/i18n-prefs.json"' in source
     assert 'jht_read_i18n_locale "$I18N_PREFS_PATH"' in source
-    assert 'mv -f "$I18N_PREFS_TMP" "$I18N_PREFS_PATH"' in source
+    # written through the one function that puts files in the mounted folder, not by a `>` and a `mv` of a temporary inside it
+    assert '| jht_write_host_file "$I18N_PREFS_PATH"' in source and "I18N_PREFS_TMP" not in source
     assert source.index("EXISTING_PREFS_LANG=") < source.index(
         'elif jht_host_env_value_valid JHT_LANG "${JHT_LANG:-}"'
     )
