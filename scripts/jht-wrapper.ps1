@@ -2523,100 +2523,161 @@ function Invoke-GuiCommand {
   return Invoke-GameRequest 'foreground'
 }
 
-# Il CLI Node vive nel container, ma `--output` e' un path del computer host.
-# Il core continua a possedere download e verifica SHA-256: qui assegniamo un
-# path temporaneo Linux e pubblichiamo i byte verificati con docker cp + move
-# atomico sullo stesso filesystem della destinazione Windows.
+# `jht download`: scarica l'app desktop e la verifica SULL'HOST. Prima il download e lo SHA-256 stavano dentro il container, e i
+# byte verificati venivano poi copiati sull'host con docker cp senza altra verifica (o lasciati in /jht_user/downloads, che gli
+# agenti scrivono): un agente poteva far arrivare alla persona un installer diverso da quello verificato. Ora l'host prende da
+# solo SHA256SUMS e l'installer dalla release (HTTPS), li tiene in una cartella privata fuori dai mount, confronta l'hash e
+# pubblica il file solo dopo, verso una cartella che gli agenti non scrivono. Il container non entra piu' nel comando.
+# JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
+function Test-DownloadInsideShared {
+  param([string]$Directory, [string[]]$Shared)
+  # Una cartella e' "dentro" se lei o un suo antenato e' una cartella condivisa; un antenato che e' un link (giunzione o
+  # collegamento simbolico) vale per quello che indica.
+  $current = [IO.Path]::GetFullPath($Directory).TrimEnd('\')
+  for ($depth = 0; $current -and $depth -lt 64; $depth++) {
+    foreach ($folder in $Shared) {
+      $root = [IO.Path]::GetFullPath($folder).TrimEnd('\')
+      if ($current -ieq $root) { return $true }
+    }
+    $item = Get-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+    if ($item -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -and $item.Target) {
+      $target = @($item.Target)[0]
+      if (-not [IO.Path]::IsPathRooted($target)) { $target = Join-Path (Split-Path -Parent $current) $target }
+      if (($depth -lt 8) -and (Test-DownloadInsideShared -Directory $target -Shared $Shared)) { return $true }
+    }
+    $parent = Split-Path -Parent $current
+    if (-not $parent -or $parent -eq $current) { break }
+    $current = $parent
+  }
+  return $false
+}
+
 function Invoke-HostDownload {
   param([string[]]$DownloadArgs)
 
-  # Un numero restituito da una funzione PowerShell viaggia sullo stesso
-  # success stream di stdout. Se `docker exec` ha gia stampato progresso, una
-  # assegnazione come `$code = Invoke-HostDownload` produce quindi un array e
-  # `exit $code` puo degradare a 0. Il codice vive in un canale scalare dedicato
-  # e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
+  # Un numero restituito da una funzione PowerShell viaggia sullo stesso success stream di stdout: il codice di uscita vive in
+  # un canale scalare dedicato e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
   $script:HostDownloadExitCode = 1
-  $hostOutput = ''
-  $downloadEnv = @()
-  if ($env:JHT_RELEASE_BASE_URL) {
-    $downloadEnv = @('-e', "JHT_RELEASE_BASE_URL=$env:JHT_RELEASE_BASE_URL")
-  }
-  $rewritten = [System.Collections.Generic.List[string]]::new()
+  $usage = "uso: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]"
+  $os = ''; $version = ''; $output = ''; $deb = $false
   for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
     $arg = $DownloadArgs[$i]
-    if ($arg -eq '--output') {
-      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; $script:HostDownloadExitCode = 2; return }
-      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) {
-        Write-Err '--output richiede un path'
-        $script:HostDownloadExitCode = 2
+    if ($arg -eq '--help' -or $arg -eq '-h') { Write-Host $usage; $script:HostDownloadExitCode = 0; return }
+    elseif ($arg -eq '--deb') { $deb = $true }
+    elseif ($arg -in @('--os', '--version', '--output', '-o')) {
+      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) { Write-Err "$arg richiede un valore"; $script:HostDownloadExitCode = 2; return }
+      $i += 1
+      if ($arg -eq '--os') { $os = $DownloadArgs[$i] } elseif ($arg -eq '--version') { $version = $DownloadArgs[$i] } else { $output = $DownloadArgs[$i] }
+    }
+    elseif ($arg.StartsWith('--os=')) { $os = $arg.Substring(5) }
+    elseif ($arg.StartsWith('--version=')) { $version = $arg.Substring(10) }
+    elseif ($arg.StartsWith('--output=')) { $output = $arg.Substring(9) }
+    else { Write-Err "argomento non riconosciuto: $arg"; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
+  }
+  if (-not $os -or -not $version) { Write-Err '--os e --version sono obbligatori'; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
+
+  $platform = switch ($os.ToLowerInvariant()) {
+    { $_ -in @('win', 'win32', 'windows') } { 'windows' }
+    { $_ -in @('darwin', 'mac', 'macos', 'osx') } { 'macos' }
+    'linux' { 'linux' }
+    default { $null }
+  }
+  if (-not $platform) { Write-Err "sistema non supportato: $os. Usa windows, macos o linux."; $script:HostDownloadExitCode = 2; return }
+  $version = $version -replace '^v', ''
+  if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err "versione non valida: $version. Esempio: 0.3.5."; $script:HostDownloadExitCode = 2; return }
+  if ($deb -and $platform -ne 'linux') { Write-Err '--deb vale solo per Linux.'; $script:HostDownloadExitCode = 2; return }
+  $parts = $version.Split('-')[0].Split('.')
+  if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
+    Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e'' stato scaricato niente.'
+    $script:HostDownloadExitCode = 1
+    return
+  }
+  if ($platform -eq 'macos' -and $env:JHT_DOWNLOAD_HOST -eq 'darwin-x64') {
+    Write-Err 'L''app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e'' un Mac Intel, non supportato nella 0.4. Non e'' stato scaricato niente.'
+    $script:HostDownloadExitCode = 1
+    return
+  }
+  $asset = if ($platform -eq 'windows') { 'job-hunter-team-windows-x64-setup.exe' }
+           elseif ($platform -eq 'macos') { 'job-hunter-team-macos-universal.dmg' }
+           elseif ($deb) { 'job-hunter-team-linux-x64.deb' }
+           else { 'job-hunter-team-linux-x64.AppImage' }
+
+  # Destinazione: di base Downloads del profilo, mai una cartella condivisa con il team; un --output li' dentro si rifiuta.
+  $destination = if ($output) { [IO.Path]::GetFullPath($output) } else { Join-Path (Join-Path $env:USERPROFILE 'Downloads') $asset }
+  $parent = Split-Path -Parent $destination
+  try { New-Item -ItemType Directory -Force -Path $parent -ErrorAction Stop | Out-Null }
+  catch { Write-Err "impossibile creare la directory di destinazione: $parent"; return }
+  $userData = if ($env:JHT_USER_DIR_HOST) { $env:JHT_USER_DIR_HOST } else { Join-Path $env:USERPROFILE 'Documents\Job Hunter Team' }
+  $jhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
+  if (Test-DownloadInsideShared -Directory $parent -Shared @($jhtHome, $userData)) {
+    Write-Err "la destinazione sta in una cartella condivisa con il team: scegline una fuori, come Downloads."
+    return
+  }
+  $existing = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+  if ($existing) {
+    if (($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Write-Err "la destinazione e' un link: $destination"; return }
+    if ($existing.PSIsContainer) { Write-Err "la destinazione esiste e non e' un file: $destination"; return }
+  }
+
+  $base = if ($env:JHT_RELEASE_BASE_URL) { $env:JHT_RELEASE_BASE_URL } else { 'https://github.com/leopu00/job-hunter-team/releases/download' }
+  $base = $base.TrimEnd('/') + "/v$version"
+  $seam = [bool]$env:JHT_RELEASE_BASE_URL
+  $work = Join-Path ([IO.Path]::GetTempPath()) ('jht-download-' + [guid]::NewGuid().ToString('N'))
+  $part = Join-Path $parent ('.' + (Split-Path -Leaf $destination) + '.part-' + [guid]::NewGuid().ToString('N'))
+  $previousProgress = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+  try {
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    New-Item -ItemType Directory -Path $work -ErrorAction Stop | Out-Null
+    $fetch = {
+      param($url, $file)
+      $response = Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -PassThru -UserAgent 'job-hunter-team-cli' -ErrorAction Stop
+      # L'indirizzo finale dopo i reindirizzamenti: ResponseUri in Windows PowerShell 5.1, RequestMessage.RequestUri in PowerShell 7.
+      $final = if ($response.BaseResponse.ResponseUri) { $response.BaseResponse.ResponseUri }
+               elseif ($response.BaseResponse.RequestMessage) { $response.BaseResponse.RequestMessage.RequestUri }
+               else { $null }
+      if (-not $seam -and $final -and $final.Scheme -ne 'https') { throw "la release e' arrivata senza HTTPS: $url" }
+    }
+    try { & $fetch "$base/SHA256SUMS" (Join-Path $work 'SHA256SUMS') }
+    catch { Write-Err "download non riuscito: SHA256SUMS di v$version ($($_.Exception.Message))"; return }
+    $expected = ''
+    foreach ($line in (Get-Content -LiteralPath (Join-Path $work 'SHA256SUMS'))) {
+      if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$' -and $Matches[2] -ceq $asset) { $expected = $Matches[1].ToLowerInvariant(); break }
+    }
+    if (-not $expected) { Write-Err "SHA-256 dichiarato non trovato per $asset."; return }
+
+    if ($existing) {
+      if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant() -eq $expected) {
+        Write-Host ''
+        Write-Host "  File gia' presente e verificato: $destination"
+        Write-Host "  SHA-256 verificato: $expected"
+        $script:HostDownloadExitCode = 0
         return
       }
-      $i += 1
-      $hostOutput = $DownloadArgs[$i]
-    } elseif ($arg.StartsWith('--output=')) {
-      if ($hostOutput) { Write-Err '--output specificato piu di una volta'; $script:HostDownloadExitCode = 2; return }
-      $hostOutput = $arg.Substring('--output='.Length)
-      if (-not $hostOutput) { Write-Err '--output richiede un path'; $script:HostDownloadExitCode = 2; return }
-    } else {
-      $rewritten.Add($arg)
-    }
-  }
-
-  # Il default `/jht_user/downloads` e' gia bind-mountato sul Documents host.
-  if (-not $hostOutput) {
-    # Windows PowerShell 5.1 converte lo stderr dei processi nativi in record
-    # Error. Con la preference globale Stop, la normale riga di progresso del
-    # downloader diventava una terminating exception prima della copia host.
-    $previousErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-      & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
-      $script:HostDownloadExitCode = $LASTEXITCODE
-    } finally {
-      $ErrorActionPreference = $previousErrorActionPreference
-    }
-    return
-  }
-
-  $hostOutput = [IO.Path]::GetFullPath($hostOutput)
-  if (Test-Path -LiteralPath $hostOutput) {
-    Write-Err "il file di destinazione esiste gia: $hostOutput"
-    return
-  }
-
-  $containerTemp = '/tmp/jht-download-' + $PID + '-' + [guid]::NewGuid().ToString('N')
-  $parent = Split-Path -Parent $hostOutput
-  $hostTemp = Join-Path $parent ('.' + (Split-Path -Leaf $hostOutput) + '.part-' + [guid]::NewGuid().ToString('N'))
-  $rewritten.Add('--output')
-  $rewritten.Add($containerTemp)
-
-  $previousErrorActionPreference = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  try {
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" @downloadEnv $Container node $NodeEntry download @rewritten
-    $innerCode = $LASTEXITCODE
-    if ($innerCode -ne 0) { $script:HostDownloadExitCode = $innerCode; return }
-
-    New-Item -ItemType Directory -Force -Path $parent -ErrorAction Stop | Out-Null
-    & docker cp "${Container}:$containerTemp" $hostTemp
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $hostTemp -PathType Leaf)) {
-      Write-Err 'copia del download verificato verso l host non riuscita'
+      Write-Err "il file $destination esiste ma il suo SHA-256 non corrisponde: non e' stato sovrascritto."
       return
     }
-    # File.Move a due argomenti e' no-clobber anche su Windows PowerShell 5.1:
-    # se il target compare durante il download l'operazione fallisce.
-    [IO.File]::Move($hostTemp, $hostOutput)
-    Write-Host "  Salvato sul computer host in: $hostOutput"
+
+    Write-Host "  Scarico $asset..."
+    try { & $fetch "$base/$asset" (Join-Path $work 'asset') }
+    catch { Write-Err "download non riuscito: $asset ($($_.Exception.Message))"; return }
+    $actual = (Get-FileHash -LiteralPath (Join-Path $work 'asset') -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { Write-Err "SHA-256 non valido per ${asset}: atteso $expected, ottenuto $actual."; return }
+
+    # Pubblicazione: copia in un nome nuovo accanto alla destinazione e rinomina senza sostituire (File.Move a due
+    # argomenti e' no-clobber anche su Windows PowerShell 5.1: se il target compare durante il download fallisce).
+    [IO.File]::Copy((Join-Path $work 'asset'), $part, $false)
+    [IO.File]::Move($part, $destination)
+    Write-Host "  SHA-256 verificato: $actual"
+    Write-Host "  Salvato in: $destination"
     $script:HostDownloadExitCode = 0
-    return
   } catch {
-    Write-Err "pubblicazione del download sull host non riuscita: $($_.Exception.Message)"
+    Write-Err "download sull'host non riuscito: $($_.Exception.Message)"
   } finally {
-    & { $ErrorActionPreference = 'Continue'; & docker exec $Container rm -f $containerTemp *> $null }
-    if (Test-Path -LiteralPath $hostTemp) {
-      Remove-Item -LiteralPath $hostTemp -Force -ErrorAction SilentlyContinue
-    }
-    $ErrorActionPreference = $previousErrorActionPreference
+    $ProgressPreference = $previousProgress
+    if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+    foreach ($name in 'SHA256SUMS', 'asset') { Remove-Item -LiteralPath (Join-Path $work $name) -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Force -ErrorAction SilentlyContinue }
   }
 }
 
@@ -3336,10 +3397,8 @@ switch ($Sub) {
     break
   }
 
+  # Download e verifica SHA-256 sull'host (il container non c'entra): vedi Invoke-HostDownload.
   'download' {
-    Require-ComposeFile
-    Require-Docker
-    Ensure-Up
     Invoke-HostDownload $Rest
     exit $script:HostDownloadExitCode
   }
