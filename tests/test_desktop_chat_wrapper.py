@@ -67,11 +67,18 @@ case "$1" in
       esac
     fi
     [ "$inspect_id" = aaaaaaaaaaaa ] || exit 91
+    # the identity the attestation cache binds to (full Id and StartedAt), asked alone or after the labels
+    identity="${JHT_TEST_FULL_ID:-aaaaaaaaaaaa$(printf '%052d' 0)}|${JHT_TEST_STARTED:-2026-10-30T10:00:00Z}"
+    suffix=""
+    case "$*" in *'|{{.Id}}|{{.State.StartedAt}}') suffix="|$identity" ;; esac
+    case "$*" in
+      *'--format {{.Id}}|{{.State.StartedAt}}') printf '%s\n' "$identity"; exit 0 ;;
+    esac
     case "$*" in
       *'.State.Running}}|{{index'*)
         [ "${JHT_TEST_INSPECT_FAIL:-0}" != 1 ] || exit 93
         if [ -n "${JHT_TEST_INSPECT_DETAILS:-}" ]; then
-          printf '%s\n' "$JHT_TEST_INSPECT_DETAILS"
+          printf '%s%s\n' "$JHT_TEST_INSPECT_DETAILS" "$suffix"
         else
           # config_files as podman-compose writes it: the files given to `-f`, joined by ",".
           running=true
@@ -82,8 +89,8 @@ case "$1" in
           if [ -n "${JHT_TEST_CONTAINER_HASH:-}" ] && { [ -z "${JHT_TEST_EXITED_STATE:-}" ] || [ ! -f "$JHT_TEST_EXITED_STATE" ]; }; then
             chash="$JHT_TEST_CONTAINER_HASH"
           fi
-          printf 'jht|%s|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s\n' \
-            "$running" "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$chash"
+          printf 'jht|%s|jht|jht|jht|jht|1|%s|%s|1.6.0|podman-compose%sjht.service|%s%s\n' \
+            "$running" "$JHT_RUNTIME_DIR" "${JHT_TEST_CONFIG_FILES:-$JHT_RUNTIME_DIR/docker-compose.yml}" "$(printf '\\100')" "$chash" "$suffix"
         fi
         if [ "${JHT_TEST_STOP_AFTER_INSPECT:-0}" = 1 ]; then : > "$JHT_TEST_CONTAINER_STOPPED"; fi ;;
       *'.State.Running}}'*)
@@ -781,9 +788,10 @@ def test_explicit_up_allows_zero_ids_then_verifies_the_created_container(tmp_pat
     calls = log.read_text(encoding="utf-8").splitlines()
     ps_calls = [line for line in calls if line.startswith("podman-compose ") and " ps -q" in line]
     action_calls = [line for line in calls if line.startswith("podman-compose ") and line.endswith(" up -d")]
-    # The check before `up` and the one after it, then the agent and broker
-    # lookups that hand the broker its web authorisations.
-    assert len(ps_calls) == 4
+    # The check before `up` and the one after it, then the lookup of the broker that hands it its web
+    # authorisations; the lookup of the agent container is served by the attestation cache the check after
+    # `up` wrote (it is compared in full again, see test_wrapper_attest_cache.py).
+    assert len(ps_calls) == 3
     assert len(action_calls) == 1
     assert " -p jht " in action_calls[0]
     assert not any("machine start" in line or " create" in line for line in calls)

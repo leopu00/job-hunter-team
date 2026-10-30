@@ -54,7 +54,8 @@ def _write_uname(bin_dir: Path, kernel: str) -> None:
 
 
 def _write_stat_adapter(bin_dir: Path) -> None:
-    """Answer both the BSD (`-f '%u %Lp'`) and GNU (`-c '%u %a'`) probes."""
+    """Answer both the BSD (`-f '%u %Lp'`) and GNU (`-c '%u %a'`) probes, and the BSD identity of a file the attestation cache
+    keys on (`-f '%z %m %i %c'`: size, modification date, inode, change time)."""
     stat = bin_dir / "stat"
     stat.write_text(
         """#!/usr/bin/env python3
@@ -64,6 +65,10 @@ import sys
 if len(sys.argv) == 4 and sys.argv[1:3] in (["-f", "%u %Lp"], ["-c", "%u %a"]):
     metadata = os.stat(sys.argv[3], follow_symlinks=False)
     print(f"{metadata.st_uid} {metadata.st_mode & 0o777:o}")
+    raise SystemExit(0)
+if len(sys.argv) == 4 and sys.argv[1:3] == ["-f", "%z %m %i %c"]:
+    metadata = os.stat(sys.argv[3], follow_symlinks=False)
+    print(f"{metadata.st_size} {int(metadata.st_mtime)} {metadata.st_ino} {int(metadata.st_ctime)}")
     raise SystemExit(0)
 os.execv("/usr/bin/stat", ["stat", *sys.argv[1:]])
 """,

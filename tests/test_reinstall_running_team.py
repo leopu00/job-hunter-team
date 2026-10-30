@@ -113,7 +113,9 @@ def test_the_check_runs_before_the_image_pull_and_any_file_is_published():
 # ── the wrapper: a team started before the re-install can still be stopped ──
 
 FUNCTIONS = (
-    "read_only_service_id", "read_only_container_id", "container_up", "container_mutation_preflight", "stale_config_hint",
+    "read_only_service_id", "read_only_service_id_attest", "attest_cache_lookup", "attest_cache_store", "attest_cache_key",
+    "attest_cache_parse", "attest_cache_clear", "attest_cache_path", "attest_cache_folder_ok", "attest_cache_text_digest",
+    "attest_cache_binary_identity", "attest_inspect_format", "attest_cache_ttl", "read_only_container_id", "container_up", "container_mutation_preflight", "stale_config_hint",
     "container_down", "rootless_netns_noise_filter",
 )
 
