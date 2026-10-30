@@ -97,7 +97,9 @@ def _child_env(shell: str, **extra: str) -> dict:
     proves nothing: it works out its own, as it does when the app starts it."""
     env = dict(os.environ, **extra)
     if shell == "powershell":
-        env.pop("PSModulePath", None)
+        # on Windows the keys of the copy of os.environ are upper case («PSMODULEPATH»): the name is matched without the case
+        for key in [key for key in env if key.upper() == "PSMODULEPATH"]:
+            del env[key]
     return env
 
 
@@ -256,3 +258,14 @@ def test_no_variable_is_followed_by_a_colon_in_a_string_of_the_acl_scripts():
                 assert not found, (source.name, number, line.strip())
     for text in (RUN, RACE):
         assert not re.search(r'"[^"\n]*\$(?!env:)[A-Za-z_][A-Za-z0-9_]*: ', text)
+
+
+def test_the_5_1_child_gets_no_module_path_whatever_the_case_of_the_name(monkeypatch):
+    """On Windows the copy of os.environ has «PSMODULEPATH» in capitals: popping «PSModulePath» removed nothing and the 5.1 child
+    still inherited pwsh 7's path (Get-Acl could not load its module in the gate)."""
+    for name in ("PSMODULEPATH", "PsModulePath"):
+        monkeypatch.setenv(name, "C:\\Program Files\\PowerShell\\7\\Modules")
+        env = _child_env("powershell", X="1")
+        assert not [key for key in env if key.upper() == "PSMODULEPATH"], env.keys()
+        assert env["X"] == "1"
+    assert any(key.upper() == "PSMODULEPATH" for key in _child_env("pwsh"))
