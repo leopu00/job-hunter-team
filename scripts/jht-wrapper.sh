@@ -2575,9 +2575,13 @@ attest_cache_binary_identity() {
 
 # The key, or non-zero when something it needs cannot be read (then there is no cache).
 attest_cache_key() {
-  local service="$1" podman_bin compose_bin name value facts project override=""
+  local service="$1" podman_bin compose_bin podman_identity compose_identity name value facts project override=""
   podman_bin="$(podman_binary 2>/dev/null)" || return 1
   compose_bin="$(podman_compose_binary 2>/dev/null)" || return 1
+  # An identity that cannot be read is no identity: no key, so no cache (inside the text below its failure would be lost and
+  # the key would not tell one binary from another).
+  podman_identity="$(attest_cache_binary_identity "$podman_bin")" || return 1
+  compose_identity="$(attest_cache_binary_identity "$compose_bin")" || return 1
   project="$(compose_project_name 2>/dev/null)" || return 1
   # The manifest lists the digest of the compose file, the wrapper, the host setup, the runtime selection, the machine,
   # the docker shim and the image pin, and runtime_bundle_trusted has just checked each against its file: its text IS
@@ -2587,8 +2591,8 @@ service=$service
 uid=$HOST_UID
 runtime=$CONTAINER_RUNTIME $PODMAN_RUNTIME_MODE $PODMAN_MACHINE_NAME
 project=$project
-podman=$(attest_cache_binary_identity "$podman_bin")
-podman-compose=$(attest_cache_binary_identity "$compose_bin")
+podman=$podman_identity
+podman-compose=$compose_identity
 home=$HOME
 host-type=${JHT_HOST_TYPE:-}
 lang=${JHT_LANG:-}

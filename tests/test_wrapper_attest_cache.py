@@ -315,6 +315,30 @@ def test_a_binary_replaced_with_the_same_size_and_date_is_still_another_binary(t
     assert _complete(_calls(log))
 
 
+def test_a_binary_whose_identity_cannot_be_read_gives_no_key_and_so_no_cache(tmp_path: Path):
+    """The identity is part of the key: if it cannot be read the key would be the same for any binary, so there is no key."""
+    wrapper, env, log, runtime = _panel(tmp_path)
+    tools = wrapper.parent
+    stat_tool = tools / "stat"
+    real = "/usr/bin/stat"
+    if stat_tool.exists():  # the host tools of a runner that is not a Mac answer the probes of the wrapper in a file of their own
+        stat_tool.rename(tools / "stat.real")
+        real = str(tools / "stat.real")
+    stat_tool.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in *"%z %m %i %c"*|*"%s %Y %i %Z"*) exit 1 ;; esac\n'
+        f'exec {real} "$@"\n',
+        encoding="utf-8",
+    )
+    stat_tool.chmod(0o700)
+    for _ in range(2):
+        _fresh(log)
+        done = _read(wrapper, env)
+        assert done.returncode == 0, done.stderr
+        assert _complete(_calls(log)), "every read attests from scratch"
+        assert not _cache(runtime).exists()
+
+
 def test_no_cache_is_written_or_read_in_or_under_a_folder_the_container_mounts(tmp_path: Path):
     wrapper, env, log, runtime = _panel(tmp_path)
     # the runtime folder is under the folder the wrapper is told the container mounts as the home
@@ -382,7 +406,7 @@ def _key(tmp_path: Path, **env: str) -> str:
     manifest.write_text("version=1\ndocker-compose.yml=" + "a" * 64 + "\n", encoding="utf-8")
     script = (
         "set -u\n"
-        f"HOST_KERNEL=Linux; HOST_UID=501; CONTAINER_RUNTIME=podman; PODMAN_RUNTIME_MODE=machine; PODMAN_MACHINE_NAME=jht-podman\n"
+        f"HOST_KERNEL=\"$(uname -s)\"; HOST_UID=501; CONTAINER_RUNTIME=podman; PODMAN_RUNTIME_MODE=machine; PODMAN_MACHINE_NAME=jht-podman\n"
         f'RUNTIME_MANIFEST="{manifest}"; PODMAN_CALLER_ENV="OPENAI_API_KEY"\n'
         "podman_binary() { echo /bin/ls; }; podman_compose_binary() { echo /bin/cat; }; compose_project_name() { echo jht; }\n"
         + functions
