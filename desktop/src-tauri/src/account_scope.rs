@@ -318,7 +318,9 @@ pub(crate) fn local_runtime_home(app: &tauri::AppHandle) -> Result<PathBuf, &'st
 /// Where the owner of the local runtime is written: in the data of the app (`app_local_data_dir`), which the container
 /// does not mount, so an agent can neither delete the marker nor write another account's into it. The copy in `~/.jht`
 /// is only a mirror: it is never read, except once, here, when the app has no marker of its own yet (an app from before
-/// this one kept it only there): that marker is taken as it is, the first time, and from then on only this one counts.
+/// this one kept it only there): the marker is taken the first time, and from then on only this one counts. It is taken only
+/// if its digest is the one of a local profile this app has a record of; the marker of an account is taken by that account
+/// when it signs in and claims (see `claim_or_validate_owner`), because only then is the digest checked against someone.
 pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     let marker = app
         .path()
@@ -326,13 +328,46 @@ pub(crate) fn local_owner_marker_path(app: &tauri::AppHandle) -> Result<PathBuf,
         .map_err(|_| "local_account_owner_unavailable")?
         .join("local-owner")
         .join(OWNER_MARKER);
-    adopt_mirrored_owner(&local_runtime_home(app)?, &marker);
+    adopt_mirror_of_a_known_profile(&local_runtime_home(app)?, &marker, local_profiles_dir(app).ok().as_deref());
     Ok(marker)
 }
 
+/// What the gateway does with the mirror of an earlier version: takes it if it names a local profile the app has a record of
+/// in `profiles_root` (no folder of profiles, nobody is known, nothing is taken).
+fn adopt_mirror_of_a_known_profile(home: &Path, marker: &Path, profiles_root: Option<&Path>) {
+    adopt_mirrored_owner(home, marker, &|digest| profiles_root.is_some_and(|root| local_profile_has_digest(root, digest)));
+}
+
+/// Whether one of the records of local profiles in `profiles_root` has this scope digest. Reads the folder as it is
+/// (no link followed), at most `PROFILE_RECORD_LIMIT` entries; anything it cannot read is «no».
+fn local_profile_has_digest(profiles_root: &Path, digest: &str) -> bool {
+    if !fs::symlink_metadata(profiles_root).is_ok_and(|metadata| metadata.file_type().is_dir()) {
+        return false;
+    }
+    let Ok(entries) = fs::read_dir(profiles_root) else {
+        return false;
+    };
+    for entry in entries.take(PROFILE_RECORD_LIMIT) {
+        let Ok(entry) = entry else {
+            return false;
+        };
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let Some(profile_id) = name.strip_suffix(".json").filter(|value| valid_profile_id(value)) else {
+            continue;
+        };
+        if load_local_scope_at(profiles_root, profile_id).is_ok_and(|scope| scope.digest() == digest) {
+            return true;
+        }
+    }
+    false
+}
+
 /// The marker of a version before the app kept its own, taken once. Never replaces a marker, whoever's; takes only a
-/// regular file of the user, read without following a link, with a digest in it; any failure leaves things as they were.
-fn adopt_mirrored_owner(home: &Path, marker: &Path) {
+/// regular file of the user, read without following a link, with a digest in it that `accepts`; any failure leaves things as
+/// they were.
+fn adopt_mirrored_owner(home: &Path, marker: &Path, accepts: &dyn Fn(&str) -> bool) {
     if fs::symlink_metadata(marker).is_ok() {
         return;
     }
@@ -346,6 +381,9 @@ fn adopt_mirrored_owner(home: &Path, marker: &Path) {
     let Ok(Some(digest)) = read_owner_digest(&mirror) else {
         return;
     };
+    if !accepts(&digest) {
+        return;
+    }
     let Some(folder) = marker.parent() else {
         return;
     };
@@ -370,6 +408,11 @@ fn mirror_owner_marker(home: &Path, marker: &Path) {
         return;
     }
     let temp = home.join(".desktop-account-scope.tmp-mirror");
+    // A leftover of a crash, or one an agent planted, would keep the mirror from ever being written again: the name is
+    // removed (a link goes, what it points to stays), unless it is a folder.
+    if fs::symlink_metadata(&temp).is_ok_and(|metadata| !metadata.file_type().is_dir()) {
+        let _ = fs::remove_file(&temp);
+    }
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -396,6 +439,9 @@ pub(crate) fn verify_local_runtime_owner(
 
 /// `home` is the data folder the container mounts; `marker` is where the owner is written (see `local_owner_marker_path`).
 fn claim_or_validate_owner(home: &Path, marker: &Path, scope: &AccountScope) -> Result<(), &'static str> {
+    // The mirror of an earlier version names this very scope: it is this scope's own marker (an account that owned the home
+    // before the app kept the marker in its own data), and the scope is the proof.
+    adopt_mirrored_owner(home, marker, &|digest| digest == scope.digest());
     if marker.exists() {
         return verify_local_owner_marker(marker, scope);
     }
@@ -3131,8 +3177,17 @@ mod owner_change_tests {
         std::fs::create_dir_all(g.marker.parent().unwrap()).unwrap();
         super::write_owner_marker(&g.marker, &a).unwrap();
         super::mirror_owner_marker(&g.home, &g.marker);
+        // the link at the name of the temporary is removed, not written through, and the mirror is written
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "precious\n");
-        assert!(!g.mirror().exists());
+        assert_eq!(std::fs::read_to_string(g.mirror()).unwrap().trim(), a.digest());
+        assert!(!g.home.join(".desktop-account-scope.tmp-mirror").exists());
+        // a folder at that name is left alone and the mirror is simply skipped
+        let h = OwnerLayout::new("temp-folder");
+        std::fs::create_dir(h.home.join(".desktop-account-scope.tmp-mirror")).unwrap();
+        std::fs::create_dir_all(h.marker.parent().unwrap()).unwrap();
+        super::write_owner_marker(&h.marker, &a).unwrap();
+        super::mirror_owner_marker(&h.home, &h.marker);
+        assert!(h.home.join(".desktop-account-scope.tmp-mirror").is_dir() && !h.mirror().exists());
         assert_eq!(std::fs::read_to_string(&g.marker).unwrap().trim(), a.digest(), "the truth is there all the same");
     }
 
@@ -3144,12 +3199,12 @@ mod owner_change_tests {
         let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
         f.write_mirror(&format!("{}\n", a.digest()));
         assert!(!f.marker.exists());
-        super::adopt_mirrored_owner(&f.home, &f.marker);
+        super::adopt_mirrored_owner(&f.home, &f.marker, &|_| true);
         assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
         super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
         // from now on the mirror does not count: rewritten, it is not taken
         f.write_mirror(&format!("{}\n", b.digest()));
-        super::adopt_mirrored_owner(&f.home, &f.marker);
+        super::adopt_mirrored_owner(&f.home, &f.marker, &|_| true);
         assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
         assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_mismatch"));
     }
@@ -3176,7 +3231,7 @@ mod owner_change_tests {
         for (label, set_up) in cases {
             let f = OwnerLayout::new("adopt-refused");
             set_up(&f);
-            super::adopt_mirrored_owner(&f.home, &f.marker);
+            super::adopt_mirrored_owner(&f.home, &f.marker, &|_| true);
             assert!(std::fs::symlink_metadata(&f.marker).is_err(), "{label}: nothing was taken");
         }
     }
@@ -3189,7 +3244,7 @@ mod owner_change_tests {
         let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
         super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
         f.write_mirror(&format!("{}\n", b.digest()));
-        super::adopt_mirrored_owner(&f.home, &f.marker);
+        super::adopt_mirrored_owner(&f.home, &f.marker, &|_| true);
         super::mirror_owner_marker(&f.home, &f.marker);
         assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
         // the mirror is made right again from the truth, not the other way round
@@ -3217,6 +3272,49 @@ mod owner_change_tests {
         let production = source.split("#[cfg(test)]\nmod tests {").next().unwrap();
         assert!(!production.contains("home_dir()\n        .map(|home| home.join(\".jht\").join(\".desktop-account-scope\"))"));
         let path_fn = production.split("pub(crate) fn local_owner_marker_path(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(path_fn.contains("app_local_data_dir()") && path_fn.contains("adopt_mirrored_owner("));
+        assert!(path_fn.contains("app_local_data_dir()") && path_fn.contains("adopt_mirror_of_a_known_profile("));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_gateway_takes_the_mirror_only_if_it_names_a_local_profile_the_app_knows() {
+        let f = OwnerLayout::new("known-profile");
+        let profiles = f.root.join("app-data").join("local-profiles");
+        let created = create_local_profile_at(&profiles).unwrap();
+        let known = load_local_scope_at(&profiles, &created.profile_id).unwrap();
+        let stranger = derive_scope(b"00000000-0000-4000-8000-0000000000aa");
+        assert!(super::local_profile_has_digest(&profiles, known.digest()) && !super::local_profile_has_digest(&profiles, stranger.digest()));
+        // a mirror that names a digest no profile record has (an account, or a forgery): not taken
+        f.write_mirror(&format!("{}\n", stranger.digest()));
+        super::adopt_mirror_of_a_known_profile(&f.home, &f.marker, Some(&profiles));
+        assert!(std::fs::symlink_metadata(&f.marker).is_err());
+        // with no folder of profiles to look in, nobody is known
+        f.write_mirror(&format!("{}\n", known.digest()));
+        super::adopt_mirror_of_a_known_profile(&f.home, &f.marker, None);
+        assert!(std::fs::symlink_metadata(&f.marker).is_err());
+        // the one of a known profile: taken
+        super::adopt_mirror_of_a_known_profile(&f.home, &f.marker, Some(&profiles));
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), known.digest());
+        // no folder of profiles, or one that is a link: nobody is known
+        assert!(!super::local_profile_has_digest(&f.root.join("missing"), known.digest()));
+        let linked = f.root.join("linked-profiles");
+        std::os::unix::fs::symlink(&profiles, &linked).unwrap();
+        assert!(!super::local_profile_has_digest(&linked, known.digest()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_account_takes_the_mirror_that_names_it_when_it_claims_and_no_other_does() {
+        let f = OwnerLayout::new("account-mirror");
+        let a = derive_scope(b"00000000-0000-4000-8000-000000000001");
+        let b = derive_scope(b"00000000-0000-4000-8000-000000000002");
+        f.write_mirror(&format!("{}\n", a.digest()));
+        // another account is not the owner the mirror names: nothing is taken, the home is somebody's
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_missing"));
+        assert!(std::fs::symlink_metadata(&f.marker).is_err());
+        // the account the mirror names takes it, once, and is the owner
+        super::claim_or_validate_owner(&f.home, &f.marker, &a).unwrap();
+        assert_eq!(std::fs::read_to_string(&f.marker).unwrap().trim(), a.digest());
+        assert_eq!(super::claim_or_validate_owner(&f.home, &f.marker, &b), Err("local_account_owner_mismatch"));
     }
 }
