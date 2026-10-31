@@ -68,7 +68,11 @@ pub(crate) fn classify_failure(
 ) -> LinkOutcome {
     match result {
         Err("process_timeout") => outcome(LinkKind::Network, "timeout"),
-        // The local `ssh` did not start or its pipes failed: nothing reached the VPS.
+        // ssh said why it could not connect: a refused connection or a host that cannot be reached is the
+        // network (retried with a backoff); a host key that is not the pinned one blocks, as a rescan would.
+        Err(code @ ("ssh_connection_refused" | "ssh_host_unreachable")) => outcome(LinkKind::Network, code),
+        Err("host_key_changed") => outcome(LinkKind::Blocked, "host_key_changed"),
+        // The local `ssh` did not start or its pipes failed (or a refused key): nothing reached the VPS.
         Err(code) => outcome(LinkKind::Application, code),
         Ok(value) => match value.code {
             0 => outcome(LinkKind::Application, otherwise),
@@ -245,6 +249,28 @@ mod tests {
         assert_eq!(
             failure_reply(outcome(LinkKind::Network, "timeout")),
             json!({"ok": false, "error": "timeout", "kind": "network"})
+        );
+    }
+
+    #[test]
+    fn a_way_in_that_ssh_explained_is_the_network_unless_it_is_a_key() {
+        assert_eq!(
+            classify_failure(&Err("ssh_connection_refused"), no_rescan, "positions_unavailable"),
+            outcome(LinkKind::Network, "ssh_connection_refused")
+        );
+        assert_eq!(
+            classify_failure(&Err("ssh_host_unreachable"), no_rescan, "positions_unavailable"),
+            outcome(LinkKind::Network, "ssh_host_unreachable")
+        );
+        // a changed key blocks without a rescan: ssh said it already
+        assert_eq!(
+            classify_failure(&Err("host_key_changed"), no_rescan, "positions_unavailable"),
+            outcome(LinkKind::Blocked, "host_key_changed")
+        );
+        // a refused key is not retried by the app: it is for the person to look at
+        assert_eq!(
+            classify_failure(&Err("ssh_auth_failed"), no_rescan, "positions_unavailable"),
+            outcome(LinkKind::Application, "ssh_auth_failed")
         );
     }
 }
