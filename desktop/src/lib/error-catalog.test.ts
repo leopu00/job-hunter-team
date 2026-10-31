@@ -90,6 +90,11 @@ const NOT_ERRORS: Record<string, string> = {
   // other word is a field of the project's public release list.
   public_page_unknown: "reply of open_public_page: the page only reads ok and says its own sentence",
   public_page_window_refused: "reply of open_public_page: the page only reads ok and says its own sentence",
+  // external_links.rs: the page reads `ok` and says its own sentence with the address (lib/external-links.ts).
+  ...Object.fromEntries(
+    ["external_url_invalid", "external_url_scheme", "external_url_credentials", "external_url_local", "external_url_window_refused"]
+      .map((code) => [code, "reply of open_external_url: the page only reads ok and says its own sentence"]),
+  ),
   tag_name: "field of the public release list read in app_update.rs, not an error",
   // What the start-up reopening did with the record of the full connection, for the runtime log only
   // (runtime_log.rs record_full_link; "restored" is the fourth word): the person sees the fixed row, not these.

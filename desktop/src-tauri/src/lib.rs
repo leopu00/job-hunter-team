@@ -18,6 +18,7 @@ mod existing_team_judgement;
 mod team_provider;
 mod team_settings;
 mod export_file;
+mod external_links;
 mod existing_team_register;
 // The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
 #[cfg(all(test, unix))]
@@ -126,6 +127,7 @@ pub fn run() {
             existing_team_cloud_token::existing_team_cloud_token_open_site,
             app_update::latest_app_version,
             public_pages::open_public_page,
+            external_links::open_external_url,
             team_document::team_document_save,
             team_document::team_document_text,
             team_document::team_document_pages,
