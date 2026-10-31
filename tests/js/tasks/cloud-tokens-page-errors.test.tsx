@@ -40,7 +40,8 @@ const TOKEN = {
   name: "box-sintetico",
   token_prefix: "jht_sync_ab",
   last_used_at: null,
-  created_at: "2026-10-01T10:00:00Z",
+  // created a day ago on the real clock: a fixed date ages past the 30-day inactivity notice and adds a second alert
+  created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
   expires_at: null,
   client_version: null,
   client_platform: null,
