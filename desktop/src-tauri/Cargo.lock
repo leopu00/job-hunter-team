@@ -2022,6 +2022,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-notification",
+ "url",
  "windows-sys 0.61.2",
  "zeroize",
 ]

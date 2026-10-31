@@ -11,6 +11,7 @@ import { messagesApi } from "../pages/messages/messages-api";
 import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
 import { installCookieMirror } from "../lib/cookie-mirror";
+import { installExternalLinks } from "../lib/external-links";
 import { installCsvExport } from "../lib/export-csv";
 import { installDocumentPreview, installDocumentSave } from "../lib/team-document";
 import { installApiBridge, shellApi } from "../shell/api-bridge";
@@ -31,6 +32,7 @@ installCookieMirror();
 installApiBridge(shellApi(localTeamApi(localJudgementApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase))))))))));
 initializeTheme();
 installCsvExport();
+installExternalLinks();
 installDocumentSave();
 installDocumentPreview();
 
