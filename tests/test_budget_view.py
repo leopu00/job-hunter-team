@@ -282,3 +282,76 @@ def test_the_skill_writes_nothing(home):
     code = (SKILLS / "budget_view.py").read_text(encoding="utf-8")
     for forbidden in ("open(", "write_text", "write_bytes", "os.replace", "subprocess", "os.system", "eval(", "exec("):
         assert forbidden not in code, forbidden
+
+
+# ── every file the read opens: a pipe or a link in its place neither holds the read nor is followed ──────────────
+
+FILES_OF_THE_READ = [
+    ("logs/sentinel-data.jsonl", "samples"),
+    ("logs/role-usage.json", "roles"),
+    ("jht.config.json", "config"),
+    (".burn-intent.flag", "burn"),
+    ("state/last-freeze.json", "freeze"),
+    ("logs/daily-halt.flag", "halt"),
+]
+
+
+def _replace(home, relative, how):
+    path = home / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        path.unlink()
+    if how == "pipe":
+        os.mkfifo(path)
+    else:
+        os.symlink("/dev/zero", path)
+
+
+@pytest.mark.parametrize("how", ["pipe", "link to /dev/zero"])
+@pytest.mark.parametrize("relative,what", FILES_OF_THE_READ)
+def test_a_pipe_or_a_link_in_place_of_any_file_of_the_read_neither_holds_it_nor_is_followed(home, relative, what, how):
+    put_samples(home, series(0.8, 7.0, 78, now=datetime.now(UTC).timestamp()), reset=datetime.now(UTC).timestamp() + 50 * 3600)
+    (home / "state").mkdir(exist_ok=True)
+    _replace(home, relative, how)
+    result = subprocess.run([sys.executable, str(SKILLS / "budget_view.py"), "read"], env={**os.environ, "JHT_HOME": str(home)},
+                            capture_output=True, text=True, timeout=30)       # a hang is a failed test, not a stuck suite
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert out["ok"] is True
+    if what == "samples":
+        assert out["week"] is None
+    else:
+        assert out["week"] is not None
+    if what == "burn":
+        assert out["burn"]["state"] == "off"
+    if what == "freeze":
+        assert "recovering_after_freeze" not in out["brakes"]
+    if what == "halt":
+        assert "daily_cap_stop" not in out["brakes"]
+    if what == "roles":
+        assert out["roles"] is None
+
+
+@pytest.mark.parametrize("how", ["pipe", "link to /dev/zero"])
+def test_the_flag_the_marker_and_the_notices_read_the_same_way_for_everyone_who_calls_them(home, how):
+    # the bridge calls these too: the fix is in the modules, not only in the page's read
+    code = ("import sys; sys.path.insert(0, %r); import burn_intent, freeze_marker; "
+            "print(burn_intent.read(), burn_intent.status()['state'], burn_intent.is_active(), freeze_marker.seconds_since(), "
+            "burn_intent._sent_notices({'granted_at': 'a', 'expires_at': 'b'}), burn_intent._team_zone())" % str(SKILLS))
+    for relative in (".burn-intent.flag", "state/last-freeze.json", ".burn-intent-notices.json", "jht.config.json"):
+        (home / "state").mkdir(exist_ok=True)
+        _replace(home, relative, how)
+    result = subprocess.run([sys.executable, "-c", code], env={**os.environ, "JHT_HOME": str(home)}, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "None off False None [] None"
+
+
+def test_a_real_flag_a_real_marker_and_real_notices_are_still_read(home):
+    burn_intent.grant(hours=2.0, reason="test", granted_by="user", now=datetime.fromtimestamp(NOW - 600, UTC))
+    assert burn_intent.read() is not None and burn_intent.status(datetime.fromtimestamp(NOW, UTC))["state"] == "active"
+    (home / "state").mkdir(exist_ok=True)
+    (home / "state" / "last-freeze.json").write_text(json.dumps({"ts": NOW - 90, "kind": "test"}), encoding="utf-8")
+    assert freeze_marker.seconds_since(NOW) == pytest.approx(90.0)
+    big = home / ".burn-intent.flag"
+    big.write_bytes(b" " * (burn_intent.FLAG_MAX_BYTES + 10))
+    assert burn_intent.read() is None, "a flag larger than a flag is not ours"

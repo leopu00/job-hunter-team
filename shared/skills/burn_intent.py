@@ -101,6 +101,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import plain_file  # noqa: E402  (the one way the team reads a file its agents can write: no link followed, no pipe waited on)
+
 
 JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
 # Stessa posizione e stessa forma di `.team-halted.flag`: chi deve leggerlo lo
@@ -122,6 +127,7 @@ DEFAULT_HOURS = 5.0
 # cancellarli. Oltre le 12h non è più "una notte", è una configurazione — e una
 # configurazione va scritta nel config, non lasciata in un flag di deroga.
 MAX_HOURS = 12.0
+FLAG_MAX_BYTES = 64 * 1024     # the flag and its notices are a few hundred bytes: a larger file is not ours
 MIN_HOURS = 0.25
 THROTTLE_MAX_SEC = 3600      # il tetto della pausa del throttle (throttle-config MAX_SLEEP)
 
@@ -159,12 +165,10 @@ def _parse_ts(value) -> Optional[datetime]:
 def read() -> Optional[dict]:
     """Payload del flag, o None se assente/illeggibile/malformato (fail-closed)."""
     try:
-        raw = INTENT_FLAG.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return None
-    try:
-        data = json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
+        # plain_file: a pipe or a link made in place of the flag by an agent must not hold the readers that protect the
+        # budget (the bridge, the app's Budget page); it reads as no flag, which is the fail-closed answer.
+        data = plain_file.read_json(INTENT_FLAG, max_size=FLAG_MAX_BYTES)
+    except (OSError, plain_file.NotPlain, UnicodeDecodeError, ValueError):
         return None
     if not isinstance(data, dict):
         return None
@@ -341,8 +345,8 @@ def _grant_key(data: dict) -> str:
 def _sent_notices(data: dict) -> list[str]:
     """Gli avvisi già inviati per QUESTA concessione; vuoto se il file è di un'altra o illeggibile."""
     try:
-        raw = json.loads(NOTICES_FILE.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError):
+        raw = plain_file.read_json(NOTICES_FILE, max_size=FLAG_MAX_BYTES)
+    except (OSError, plain_file.NotPlain, UnicodeDecodeError, ValueError):
         return []
     if not isinstance(raw, dict) or raw.get("key") != _grant_key(data):
         return []
@@ -424,7 +428,7 @@ def _user_zone():
 def _team_zone():
     """The zone the team works in (jht.config.json: team.working_hours.timezone), or None."""
     try:
-        name = json.loads((JHT_HOME / "jht.config.json").read_text(encoding="utf-8"))["team"]["working_hours"]["timezone"]
+        name = plain_file.read_json(JHT_HOME / "jht.config.json")["team"]["working_hours"]["timezone"]
     except Exception:                   # noqa: BLE001 — no config, or one without the field
         return None
     return _zone(name)
