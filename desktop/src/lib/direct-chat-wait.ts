@@ -18,7 +18,7 @@ export const FIRST_ROUND_POLL_MS = 3_000;
 const NOT_CURED_BY_WAITING = new Set([
   "local_container_not_attested", "local_chat_wrapper_outdated", "local_account_owner_mismatch",
   "local_account_owner_unavailable", "local_migration_host_invalid", "local_migration_host_not_local",
-  "local_migration_host_missing", "runtime_missing", "ssh_rate_limited", "ssh_client_missing",
+  "local_migration_host_missing", "runtime_missing", "ssh_rate_limited", "ssh_client_missing", "ssh_auth_failed",
   "process_start_failed", "tunnel_start_failed", "tunnel_path_unavailable",
 ]);
 

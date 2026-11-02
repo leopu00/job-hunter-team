@@ -1075,8 +1075,9 @@ fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError
 }
 
 /// The VPS link a connection starts with: the ssh master, or, where ssh has none (Windows), a check
-/// that one connection answers, with the same errors as the master: `tunnel_verify_failed`, or
-/// `ssh_rate_limited` when the server turns this computer away. `exit 0` means the same in every
+/// that one connection answers, with the same errors as the master: `tunnel_verify_failed`, or the
+/// code of the way in when ssh says why it failed (`ssh_rate_limited` when the server turns this
+/// computer away, a refused key, a refused connection, a host that cannot be reached). `exit 0` means the same in every
 /// shell, so the check assumes none.
 fn open_vps_link(
     host: &ValidatedHost,
@@ -1087,7 +1088,7 @@ fn open_vps_link(
         VpsLink::Master => open_tunnel(host).map(|(path, child)| (Some(path), Some(child))),
         VpsLink::PerCommand => match check(host) {
             Ok(result) if result.success() => Ok((None, None)),
-            Err(code @ "ssh_rate_limited") => Err(failure(code)),
+            Err(code) if crate::runtime_host::SSH_WAY_IN_CODES.contains(&code) => Err(failure(code)),
             _ => Err(failure("tunnel_verify_failed")),
         },
     }
@@ -3865,7 +3866,9 @@ mod tests {
             (exited(255), "tunnel_verify_failed"),
             (exited(1), "tunnel_verify_failed"),
             (Err("process_timeout"), "tunnel_verify_failed"),
-            (Err("ssh_client_missing"), "tunnel_verify_failed"),
+            // a way in that has a sentence of its own is passed on, not folded into the generic one
+            (Err("ssh_client_missing"), "ssh_client_missing"),
+            (Err("ssh_auth_failed"), "ssh_auth_failed"),
             (Err("ssh_rate_limited"), "ssh_rate_limited"),
         ] {
             let error = open_vps_link(&host, VpsLink::PerCommand, |_| outcome).unwrap_err();
