@@ -314,3 +314,20 @@ def test_a_count_in_the_file_that_is_not_a_whole_number_in_range_counts_as_one(b
 def test_counted_candidates_without_their_pass_are_counted_apart_by_their_count():
     out = report.fold([dict(_cand(T0, "area", opened=False), count=12)])
     assert out["orphan"] == {"greenhouse/nl": {"area": 12}}
+
+
+# ── the page of a list is not another question ───────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("a,b", [
+    ("praktik Sweden", "praktik Sweden offset=100"), ("praktik Sweden offset=0", "Praktik  Sweden OFFSET=200"),
+    ("intern Sweden page 2", "intern Sweden page 7"), ("utvecklare start=25", "utvecklare"), ("developer Sweden offset: 300", "developer Sweden"),
+])
+def test_the_same_words_on_another_page_are_the_same_query(a, b):
+    assert plog.query_hash(a) == plog.query_hash(b)
+
+
+@pytest.mark.parametrize("a,b", [
+    ("praktik Sweden", "intern Sweden"), ("python 3 developer", "python developer"), ("page designer", "designer"),
+    ("developer offset=100", "developer Malmö offset=100"),
+])
+def test_different_words_stay_different_queries(a, b):
+    assert plog.query_hash(a) != plog.query_hash(b)

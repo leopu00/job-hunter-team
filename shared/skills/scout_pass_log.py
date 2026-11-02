@@ -95,8 +95,15 @@ class Refused(ValueError):
     """A value outside the closed vocabularies: nothing is written."""
 
 
+# The page of a list is not another question. On a real run 13 of the 17 passes of one Scout on Platsbanken were the same few
+# queries at offset 0, 100, 200...: logged with their offset they would have counted as thirteen different queries and a portal
+# as covered by one question asked thirteen times. The words that name a page are taken out before the hash.
+_PAGE = re.compile(r"\b(?:offset|page|pagina|seite|start|skip|from)\s*[=:#]?\s*\d+\b")
+
+
 def query_hash(query: str) -> str:
-    return hashlib.sha256(" ".join(str(query).lower().split()).encode("utf-8")).hexdigest()[:10]
+    text = _PAGE.sub(" ", str(query).lower())
+    return hashlib.sha256(" ".join(text.split()).encode("utf-8")).hexdigest()[:10]
 
 
 def _agent(explicit):
