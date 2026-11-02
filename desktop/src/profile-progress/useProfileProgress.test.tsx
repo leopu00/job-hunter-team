@@ -1,7 +1,18 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(async () => ({ state: "up", since_ms: 0 })), isTauri: vi.fn(() => true) }));
+const handlers = new Map<string, (event: { payload: unknown }) => void>();
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async (name: string, handler: (event: { payload: unknown }) => void) => {
+    handlers.set(name, handler);
+    return () => handlers.delete(name);
+  }),
+}));
+
+import { resetStateStreamForTests, startStateStream } from "../lib/state-stream";
 import { PROFILE_FIELD_KEYS } from "./contract";
-import { PROFILE_PROGRESS_EVERY_MS, useProfileProgress } from "./useProfileProgress";
+import { PROFILE_PROGRESS_EVERY_MS, PROFILE_PROGRESS_STREAMED_MS, useProfileProgress } from "./useProfileProgress";
 import type { ProfileProgressRead } from "./read";
 
 function reading(done: number): ProfileProgressRead {
@@ -21,7 +32,17 @@ function setVisibility(state: "visible" | "hidden") {
   document.dispatchEvent(new Event("visibilitychange"));
 }
 
-beforeEach(() => vi.useFakeTimers());
+const emitHint = (payload: unknown) => act(() => handlers.get("state-stream://event")!({ payload }));
+const emitStatus = (state: string) => act(() => handlers.get("state-stream://status")!({ payload: { state, since_ms: 0 } }));
+async function up() {
+  await startStateStream();
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  resetStateStreamForTests();
+  handlers.clear();
+});
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -137,5 +158,89 @@ describe("the profile progress, read while the card is there", () => {
     expect(read).toHaveBeenCalledTimes(1);
     release!();
     await tick(0);
+  });
+});
+
+describe("the profile progress with the channel to the team", () => {
+  const status = (state: "up" | "fallback" | "off") => emitStatus(state);
+
+  it("reads at the hint, and the timer only backs it up, slower, while the channel is up", async () => {
+    await up();
+    const read = vi.fn(async () => reading(2));
+    renderHook(() => useProfileProgress(read));
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(read).toHaveBeenCalledTimes(1);
+    emitHint({ topic: "profile" });
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    await tick(PROFILE_PROGRESS_STREAMED_MS);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it("goes back to today's pace as soon as the channel is not up", async () => {
+    await up();
+    const read = vi.fn(async () => reading(2));
+    renderHook(() => useProfileProgress(read));
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    await tick(30_000);
+    status("fallback");
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(read).toHaveBeenCalledTimes(2);
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it("with no channel keeps the pace it always had and ignores a hint it should not hear", async () => {
+    await up();
+    status("off");
+    const read = vi.fn(async () => reading(2));
+    renderHook(() => useProfileProgress(read));
+    await tick(0);
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(read).toHaveBeenCalledTimes(2);
+    emitHint({ topic: "agents" });
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads once more at a hint even when the profile was complete, and the next hint stops listening on unmount", async () => {
+    await up();
+    const read = vi.fn(async () => reading(8));
+    const { unmount } = renderHook(() => useProfileProgress(read));
+    await tick(0);
+    await tick(PROFILE_PROGRESS_STREAMED_MS * 2);
+    expect(read).toHaveBeenCalledTimes(1);
+    emitHint({ topic: "profile" });
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    unmount();
+    emitHint({ topic: "profile" });
+    await tick(5_000);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("a hint that comes while a read is still on its way is not lost: one more read follows it", async () => {
+    await up();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const read = vi.fn(async () => {
+      if (++calls === 1) await held;
+      return reading(2);
+    });
+    renderHook(() => useProfileProgress(read));
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    emitHint({ topic: "profile" });
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    release();
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    await tick(PROFILE_PROGRESS_STREAMED_MS - 1_000);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 });

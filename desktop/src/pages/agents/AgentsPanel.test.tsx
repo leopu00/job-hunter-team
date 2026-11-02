@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeError } from "../../lib/error-catalog";
 import { tomorrowAtEightUtc } from "../../lib/agent-control";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { resetStateStreamForTests, startStateStream } from "../../lib/state-stream";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
 import { navigate } from "../../shell/router";
 import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
@@ -11,7 +12,7 @@ import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
 import { pluralText } from "../../lib/plural";
-import AgentsPanel, { identityLine, LIST_REFRESH_FAILURES, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
+import AgentsPanel, { identityLine, LIST_REFRESH_FAILURES, LIST_REFRESH_LOCAL_MS, LIST_REFRESH_STREAMED_MS, LIST_REFRESH_VPS_MS, TerminalText } from "./AgentsPanel";
 import { isDirectChatAgentId } from "../messages/DirectChatScreen";
 import { START_READ_WAITS } from "../../shell/StartTeamAction";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
@@ -22,6 +23,14 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true), Channel: class { onmessage: unknown = null } }));
 const fake = vi.hoisted(() => ({ current: null as ReturnType<typeof createPermissiveSupabase> | null }));
 vi.mock("@tauri-apps/api/core", () => native);
+// The channel to the team (lib/state-stream.ts): its events are sent by hand
+const channel = vi.hoisted(() => ({ handlers: new Map<string, (event: { payload: unknown }) => void>() }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (name: string, handler: (event: { payload: unknown }) => void) => {
+    channel.handlers.set(name, handler);
+    return () => channel.handlers.delete(name);
+  },
+}));
 vi.mock("../../lib/supabase", () => ({
   get supabase() {
     return fake.current!.client;
@@ -1282,6 +1291,10 @@ describe("«Agenti»: the list reads again by itself", () => {
     document.dispatchEvent(new Event("visibilitychange"));
   };
   const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  // Moves only the fake clock until the condition holds (never waits on the real one, which a loaded machine stretches).
+  const until = async (done: () => boolean) => {
+    for (let step = 0; step < 400 && !done(); step++) await advance(20);
+  };
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], shouldAdvanceTime: true });
@@ -1310,6 +1323,148 @@ describe("«Agenti»: the list reads again by itself", () => {
     await waitFor(() => expect(lists()).toBe(first + 2));
     // a quiet read: the button never says «refreshing» for it
     expect(screen.queryByText("Aggiorno…")).toBeNull();
+  });
+
+  describe("with the channel to the team", () => {
+    const status = (state: string) => act(() => channel.handlers.get("state-stream://status")!({ payload: { state, since_ms: 0 } }));
+    const hint = (payload: unknown = { topic: "agents" }) => act(() => channel.handlers.get("state-stream://event")!({ payload }));
+    beforeEach(async () => {
+      resetStateStreamForTests();
+      channel.handlers.clear();
+      await startStateStream();
+    });
+    afterEach(() => {
+      resetStateStreamForTests();
+      channel.handlers.clear();
+    });
+
+    it("up: it reads at the hint, and the timer backs it up every minute instead of every 20 s", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      await advance(LIST_REFRESH_LOCAL_MS + 5_000);
+      expect(lists()).toBe(1);
+      hint();
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
+      await advance(LIST_REFRESH_STREAMED_MS - 1_000);
+      expect(lists()).toBe(2);
+      await advance(2_000);
+      await until(() => lists() === 3);
+      expect(lists()).toBe(3);
+    });
+
+    it("a burst of hints (a team starting) is two reads, not one per hint", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      for (let i = 0; i < 12; i++) hint();
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
+      await advance(3_500);
+      await until(() => lists() === 3);
+      expect(lists()).toBe(3);
+      await advance(10_000);
+      expect(lists()).toBe(3);
+    });
+
+    it("a hint that comes while a read is still on its way is not lost: one more read follows it", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      // the list answers only when the test lets it: the read the first hint starts stays in flight
+      const answer = native.invoke.getMockImplementation()!;
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+        if (command === COMMAND && args.request.op === "list") await held;
+        return answer(command, args);
+      });
+      hint();
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
+      // the second hint of the burst is due while that read has not ended
+      hint();
+      await advance(3_500);
+      expect(lists()).toBe(2);
+      release();
+      await until(() => lists() === 3);
+      expect(lists()).toBe(3);
+      await advance(10_000);
+      expect(lists()).toBe(3);
+    });
+
+    it("a burst is not lost when the page changes its own pace in the middle of it (the polling is set up again)", async () => {
+      where = "vps";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      hint();
+      await until(() => lists() === 2);
+      // the rest of the burst waits for the gap...
+      hint();
+      // ...and meanwhile a read comes back from this computer: the pace of the page changes (60 s to 20 s) and its polling is set up again
+      where = "local";
+      fireEvent.click(screen.getByText("Aggiorna"));
+      await until(() => lists() === 3);
+      await advance(3_500);
+      await until(() => lists() === 4);
+      expect(lists()).toBe(4);
+      await advance(10_000);
+      expect(lists()).toBe(4);
+    });
+
+    it("a hint of another topic reads nothing, and a hidden window reads nothing", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      hint({ topic: "profile" });
+      await advance(0);
+      expect(lists()).toBe(1);
+      setVisibility("hidden");
+      hint();
+      await advance(0);
+      expect(lists()).toBe(1);
+    });
+
+    it("the channel dropping brings back the pace of 20 s from that moment", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      await advance(30_000);
+      expect(lists()).toBe(1);
+      status("fallback");
+      await advance(LIST_REFRESH_LOCAL_MS - 1_000);
+      expect(lists()).toBe(1);
+      await advance(2_000);
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
+    });
+
+    it("with the channel off it reads at 20 s and ignores hints it was never given", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("off");
+      await advance(LIST_REFRESH_LOCAL_MS + 1_000);
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
+    });
+
+    it("on a VPS the channel is off and the pace stays 60 s", async () => {
+      show();
+      await screen.findByTestId("panel-summary");
+      await advance(LIST_REFRESH_VPS_MS - 1_000);
+      expect(lists()).toBe(1);
+      await advance(2_000);
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
+    });
   });
 
   it("on a VPS it reads every 60 s: its reads go over ssh", async () => {
