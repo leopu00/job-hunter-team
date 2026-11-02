@@ -2222,16 +2222,15 @@ maybe_onboard() {
     return 0
   fi
 
-  # `curl | bash` connects stdin to the pipe, so `-t 0` is false and
-  # `read` cannot talk to the user. We reopen stdin from the
-  # controlling terminal (/dev/tty) so the wizard can read input:
-  # same pattern as rustup, nvm, oh-my-zsh.
-  # Without this escape hatch, after `curl | bash` the installer
-  # printed "Stdin is not an interactive terminal: skipping the
-  # wizard" and the user had to remember to re-run `jht setup`.
+  # `curl | bash` connects stdin to the pipe, so `-t 0` is false and `read` cannot talk to the user. The wizard reads
+  # from the controlling terminal (/dev/tty), and ONLY the wizard: `jht setup </dev/tty` below redirects that one
+  # command. Never `exec </dev/tty` here: with the script itself arriving on stdin, bash would go on reading the REST OF
+  # THE SCRIPT from the terminal, the installer would not give the prompt back until Ctrl-D, and what the person types
+  # would be run by the installer's own shell.
+  local wizard_from_tty=0
   if [ ! -t 0 ]; then
     if tty_can_be_opened; then
-      exec </dev/tty
+      wizard_from_tty=1
     else
       info "No interactive terminal (no /dev/tty): skipping the wizard."
       info "Run manually: jht setup"
@@ -2243,7 +2242,11 @@ maybe_onboard() {
   # the correct next action. Whoever wants to skip uses JHT_SKIP_ONBOARD=1.
   export PATH="$BIN_DIR:$PATH"
   printf "\n"
-  jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+  if [ "$wizard_from_tty" -eq 1 ]; then
+    jht setup </dev/tty || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+  else
+    jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+  fi
 }
 
 # ── Free disk space (Linux) ───────────────────────────────────────────────
