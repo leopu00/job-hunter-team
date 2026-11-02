@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { DashboardI18nProvider, useDashboardT } from "@/app/components/DashboardI18n";
 import MainChrome from "@/app/components/MainChrome";
-import NavLinks from "@/app/components/NavLinks";
 import Link from "../web-shims/next-link";
 import { DesktopWriteProvider } from "@/lib/desktop-write";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
@@ -21,9 +20,6 @@ import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n"
 import { LeaveReadOnlyContext } from "../lib/leave-read-only";
 import { ConnectInFull } from "./ConnectInFull";
 import { VpsLinkBar } from "./VpsLinkBar";
-import { localUninstallAvailable } from "../lib/local-uninstall";
-import { COMPUTER_TEXT } from "../pages/computer/computer.i18n";
-import { desktopLinks } from "./desktop-links";
 import { SHELL_TEXT } from "./shell.i18n";
 import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
@@ -40,45 +36,17 @@ import { beginPageLoad } from "../lib/page-timing";
 import { forgetReadsInFlight } from "../lib/read-deadline";
 import { matchRoute, navigate, refresh, useLocation } from "./router";
 import DocumentPreviewHost from "../pages/positions/DocumentPreviewHost";
-import { HOME, READ_ONLY_HOME, READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
+import { HOME, READ_ONLY_HOME, READ_ONLY_ROUTES, ROUTES } from "./routes";
 import ThemePicker from "./ThemePicker";
-
-/** The desktop's own pages (desktopLinks): same look as NavLinks' NavLink, active on the path. */
-function DesktopLinks() {
-  const { path } = useLocation();
-  // «This computer» (removing JHT) only where the removal can run.
-  const [computer, setComputer] = useState(false);
-  useEffect(() => {
-    let active = true;
-    void localUninstallAvailable().then((yes) => { if (active) setComputer(yes); });
-    return () => { active = false; };
-  }, []);
-  const own = desktopLinks(appLocale());
-  const links = computer ? [...own, { href: "/computer", label: COMPUTER_TEXT[appLocale()].navLabel }] : own;
-  return (
-    <div className="flex items-center gap-1">
-      {links.map(({ href, label }) => {
-        const active = path === href || path.startsWith(href + "/");
-        return (
-          <Link
-            key={href}
-            href={href}
-            aria-current={active ? "page" : undefined}
-            className="relative px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
-            style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
-          >
-            {label}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
+import MainNav from "./MainNav";
+import { redirectFor } from "./redirects";
+import UserMenu from "./UserMenu";
+import { ACCOUNT_MENU_ITEMS, NAV_ITEMS, READ_ONLY_ACCOUNT_MENU_ITEMS, READ_ONLY_NAV_ITEMS } from "./nav-items";
 
 /**
  * The signed-in app: the web's protected layout (navbar on top, MainChrome
  * around the page) with a client router in place of Next's. The navbar links
- * are the web's NavLinks, then the desktop's own pages. The centre strip is
+ * are the positions and the team (nav-items.ts); the person's own pages and the ways out are in the account menu. The centre strip is
  * the only horizontal overflow plane, so narrow windows keep the brand and
  * both actions fully visible while every destination remains reachable.
  */
@@ -129,27 +97,11 @@ function Navbar({
           <ThemePicker />
         </div>
         <NavStrip>
-          {readOnly ? (
-            READ_ONLY_NAV.map(({ href, label }) => {
-              const active = path === href || path.startsWith(href + "/");
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className="relative px-2 xl:px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] rounded transition-colors no-underline inline-block"
-                  style={{ color: active ? "var(--color-white)" : "var(--color-muted)" }}
-                >
-                  {label.startsWith("own:") ? readOnlyText[label.slice(4) as "team" | "profile" | "office" | "agents" | "settings" | "help"] : dashboardT(label)}
-                </Link>
-              );
-            })
-          ) : (
-            <>
-              <NavLinks />
-              <DesktopLinks />
-            </>
-          )}
+          <MainNav
+            items={readOnly ? READ_ONLY_NAV_ITEMS : NAV_ITEMS}
+            hasPage={(href) => matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, href) !== null}
+            webText={dashboardT}
+          />
         </NavStrip>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" data-testid="navbar-actions">
           <button type="button" className={button} onClick={refresh}>
@@ -162,12 +114,26 @@ function Navbar({
             </button>
           )}
           {/* leaving the app, not the account: it asks what to do with the team (components/AppExitDialog) */}
-          <button type="button" className={button} data-testid="app-exit-button" onClick={() => window.dispatchEvent(new Event(EXIT_OPEN_EVENT))}>
-            {APP_EXIT_TEXT[appLocale()].menu}
-          </button>
-          <button type="button" className={button} onClick={() => void logout()} disabled={signingOut} title={shellText.signOutNote}>
-            {signingOut ? shellText.signingOut : shellText.signOut}
-          </button>
+          <UserMenu
+            items={readOnly ? READ_ONLY_ACCOUNT_MENU_ITEMS : ACCOUNT_MENU_ITEMS}
+            webText={dashboardT}
+            className={button}
+            actions={[
+              {
+                key: "exit",
+                label: APP_EXIT_TEXT[appLocale()].menu,
+                testId: "app-exit-button",
+                onSelect: () => window.dispatchEvent(new Event(EXIT_OPEN_EVENT)),
+              },
+              {
+                key: "sign-out",
+                label: signingOut ? shellText.signingOut : shellText.signOut,
+                title: shellText.signOutNote,
+                disabled: signingOut,
+                onSelect: () => void logout(),
+              },
+            ]}
+          />
         </div>
       </nav>
     </header>
@@ -210,6 +176,8 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
     [localTeam],
   );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
+  // The old address of a page that is now a section of Settings: it goes on to the section, before anything is drawn.
+  const moved = redirectFor(path, search);
   const params = useMemo(() => new URLSearchParams(search), [search]);
 
   // The shell is made again for every account (it is keyed by it): a read the last account started is never the one the next waits for.
@@ -218,18 +186,19 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
     return forgetReadsInFlight;
   }, []);
 
-  // An empty or unknown hash lands on the dashboard.
+  // An old address goes on to its section; an empty or unknown hash lands on the dashboard.
   useEffect(() => {
-    if (!match) navigate(readOnly ? READ_ONLY_HOME : HOME, { replace: true });
-  }, [match, readOnly]);
+    if (moved) navigate(moved, { replace: true });
+    else if (!match) navigate(readOnly ? READ_ONLY_HOME : HOME, { replace: true });
+  }, [match, moved, readOnly]);
 
   // How long the page of a linked team takes to show its data (the load-times log, on this computer).
   useEffect(() => {
     beginPageLoad(readOnly ? path : "");
   }, [path, search, readOnly]);
 
-  const Page = match?.route.page;
-  const page = Page && (
+  const Page = moved ? undefined : match?.route.page;
+  const page = Page && match && (
     <SignOutContext.Provider value={onLogout ?? null}>
       <PageErrorBoundary key={path} onHome={() => navigate(readOnly ? READ_ONLY_HOME : HOME)}>
         <Page params={match.params} search={params} />

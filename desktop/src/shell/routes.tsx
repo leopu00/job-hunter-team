@@ -5,9 +5,6 @@ import ExistingTeamProfilePage from "../pages/existing-team/profile";
 import ExistingTeamOfficePage from "../pages/office/readonly";
 import DashboardPage from "../pages/dashboard";
 import MailPage from "../pages/mail";
-import BackupPage from "../pages/backup";
-import ComputerPage from "../pages/computer";
-import ExportPage from "../pages/export";
 import MapPage from "../pages/map";
 import MessagesPage from "../pages/messages";
 import OfficePage from "../pages/office";
@@ -16,10 +13,6 @@ import PositionsPage from "../pages/positions";
 import ProfilePage from "../pages/profile";
 import HelpPage from "../pages/help";
 import SettingsPage from "../pages/settings";
-import TeamSettingsPage from "../pages/team-settings";
-import WorkHoursPage from "../pages/work-hours";
-import { linkedTeamGate } from "../pages/settings/LinkedTeamGate";
-import VpsConnectionPage from "../pages/vps-connection";
 import SwipePage from "../pages/swipe";
 import TeamPage from "../pages/team";
 import {
@@ -75,25 +68,16 @@ export const ROUTES: Route[] = [
   { path: "/agents", page: AgentsPanel },
   { path: "/office", page: OfficePage, fullBleed: true },
   { path: "/mail", page: MailPage },
-  { path: "/settings", page: SettingsPage },
-  { path: "/settings/vps-connection", page: VpsConnectionPage },
-  // When the agents work (the web's /settings/team, its hours half).
-  { path: "/settings/hours", page: WorkHoursPage },
-  // The model and effort of each role (the web's /settings/team, its roles half).
-  { path: "/settings/team", page: TeamSettingsPage },
-  // The team's data and the account's in a file (the web's /export): only reads, so the read-only view has it too.
-  { path: "/export", page: ExportPage },
-  // A backup of the team's data on this computer (the web's /backup): making one only reads, so the read-only view has it too.
-  { path: "/backup", page: BackupPage },
+  // The technical pages are the sections of one Settings page (pages/settings); the addresses they had are
+  // redirected there (redirects.ts), so they are not routes.
+  { path: "/settings/:section", page: SettingsPage },
   { path: "/help", page: HelpPage },
-  // «Remove JHT from this computer» (Windows): linked only where it can run.
-  { path: "/computer", page: ComputerPage },
 ];
 
 export const READ_ONLY_ROUTES: Route[] = [
   // The map reads the team's positions from its VPS when this view is on. The office is not
   // in this list: the full shell's one reads the cloud (see the route below).
-  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id", "/export", "/backup"].includes(route.path)),
+  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id"].includes(route.path)),
   // Not the web's cloud Team page: the state the existing team's VPS reports about itself.
   { path: "/team", page: ExistingTeamStatusPage },
   // Not the web's cloud Profile page: the profile the existing team's VPS holds.
@@ -104,26 +88,9 @@ export const READ_ONLY_ROUTES: Route[] = [
   { path: "/agents", page: AgentsPanel },
   // Where «Chat with <agent>» of the Agents page leads: history and answers only, the composer is locked (MessagesPage).
   { path: "/messages", page: MessagesPage, fullBleed: true },
-  // The app's own language and currency: local choices, nothing reaches the team.
-  { path: "/settings", page: SettingsPage },
-  { path: "/settings/vps-connection", page: VpsConnectionPage },
-  // The hours and the models of the linked VPS's team: the pages on a team connected in full, the reason on the read-only link.
-  { path: "/settings/hours", page: linkedTeamGate(WorkHoursPage) },
-  { path: "/settings/team", page: linkedTeamGate(TeamSettingsPage) },
+  // The app's own language and currency, and the sections of the team on the linked VPS (the Team section
+  // says why the hours and the models do not open on the read-only link); backup and export only read.
+  { path: "/settings/:section", page: SettingsPage },
   // What the read-only view does: it says only that.
   { path: "/help", page: HelpPage },
 ];
-
-/** The navigation of that view, in the order of the web's own bar. */
-export const READ_ONLY_NAV = [
-  { href: "/dashboard", label: "nav_dashboard" },
-  { href: "/map", label: "nav_map" },
-  { href: "/positions", label: "nav_positions" },
-  { href: "/team", label: "own:team" },
-  { href: "/profile", label: "own:profile" },
-  // A desktop page, after the web's ones as in the full shell (DESKTOP_LINKS).
-  { href: "/office", label: "own:office" },
-  { href: "/agents", label: "own:agents" },
-  { href: "/settings", label: "own:settings" },
-  { href: "/help", label: "own:help" },
-] as const;

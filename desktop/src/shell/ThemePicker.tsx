@@ -21,6 +21,9 @@ import ThemeEditor from "./ThemeEditor";
 
 const MENU_ID = "desktop-theme-menu";
 
+/** Said by a picker that changed the palette, so the other one on screen (the navbar's and Settings') shows it too. */
+const THEME_CHANGED_EVENT = "jht-theme-changed";
+
 /** The menu's palettes in the order they are shown: «follow the system», [the person's own], the dark ones, the light ones. */
 const DARK_THEMES = THEMES.filter((entry) => entry.family === "dark");
 const LIGHT_THEMES = THEMES.filter((entry) => entry.family === "light");
@@ -76,6 +79,18 @@ export default function ThemePicker() {
 
   useEffect(() => applyTheme(theme), [theme]);
 
+  // The other picker on screen chose a palette: this one shows it.
+  useEffect(() => {
+    const follow = () => {
+      const next = readStoredPreference(window.localStorage);
+      setCustom(readStoredCustom(window.localStorage));
+      setPreference(next);
+      setTheme(resolveTheme(next));
+    };
+    window.addEventListener(THEME_CHANGED_EVENT, follow);
+    return () => window.removeEventListener(THEME_CHANGED_EVENT, follow);
+  }, []);
+
   // While the system decides, a change of its light/dark applies at once.
   useEffect(() => {
     if (preference !== SYSTEM_THEME) return;
@@ -111,6 +126,7 @@ export default function ThemePicker() {
   const choose = (next: ThemePreference) => {
     setPreference(next);
     setTheme(persistTheme(next));
+    window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
     setOpen(false);
     triggerRef.current?.focus();
   };
@@ -207,6 +223,7 @@ export default function ThemePicker() {
             setCustom(readStoredCustom(window.localStorage));
             setPreference(next);
             setTheme(resolveTheme(next));
+            window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
           }}
         />
       )}

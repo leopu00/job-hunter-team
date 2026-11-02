@@ -1,8 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { TeamControlState } from "../../lib/agent-control";
 import { EFFORTS, MODEL_CLASSES, ROLES, WEEKDAYS } from "../../lib/team-settings-native";
+import { ROUTES } from "../../shell/routes";
 import TeamCard from "./TeamCard";
 
 // «Work flat out until a time» is findable in Settings → Team, under the budget: that is where people
@@ -43,6 +44,9 @@ afterEach(() => {
 
 describe("«Lavora a tutta» in the team card of Settings", () => {
   it("sits under the budget, with its title, and starts from there", async () => {
+    const budget = { path: "/budget", page: () => null };
+    ROUTES.push(budget);
+    onTestFinished(() => void ROUTES.splice(ROUTES.indexOf(budget), 1));
     render(<TeamCard readOnly={false} read={read} />);
     const card = screen.getByTestId("settings-team");
     const start = await screen.findByTestId("burst-start");

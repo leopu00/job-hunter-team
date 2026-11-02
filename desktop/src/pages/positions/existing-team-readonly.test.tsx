@@ -145,7 +145,7 @@ describe("Posizioni on an existing team read only", () => {
     // the disabled judgement controls say where judging is done, with the onboarding's own button
     expect(screen.getByTestId("existing-team-judgement-how")).toHaveTextContent("«Conferma e collega»");
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Mappa", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti", "Impostazioni", "Guida"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Posizioni", "Mappa", "Squadra", "Ufficio"]);
     // The sidebar starts closed; opened, its dataset comes from the companion
     // through the web route, and its families are the team's own.
     await userEvent.setup().click(screen.getByRole("button", { name: /filtri/i }));

@@ -47,7 +47,7 @@ export default function AccountCard({ load = loadAccountIdentity }: { load?: () 
             {signingOut ? t.signingOut : t.signOut}
           </button>
         )}
-        <button type="button" className={buttonCls} onClick={() => navigate("/export")}>{t.exportAccount}</button>
+        <button type="button" className={buttonCls} onClick={() => navigate("/settings/data?at=export")}>{t.exportAccount}</button>
       </div>
     </section>
   );

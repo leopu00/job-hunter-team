@@ -71,8 +71,9 @@ const noticeIds = () =>
 describe("Profilo on an existing team read only", () => {
   it("is in the navigation, asks the core for the profile once and draws it with the web's own view", async () => {
     await open();
-    const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getByRole("link", { name: "Profilo" })).toHaveAttribute("aria-current", "page");
+    // the profile is in the account menu, and the menu's button is lit while the profile is open
+    await userEvent.setup().click(screen.getByTestId("account-menu-button"));
+    expect(screen.getByRole("menuitem", { name: "Profilo" })).toHaveAttribute("aria-current", "page");
     expect(await screen.findByTestId("profile-view")).toBeInTheDocument();
     expect(reads()).toHaveLength(1);
     expect(native.invoke).toHaveBeenCalledWith(COMMAND, { request: { op: "profile" } });
