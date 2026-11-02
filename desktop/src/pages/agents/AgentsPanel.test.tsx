@@ -1291,6 +1291,10 @@ describe("«Agenti»: the list reads again by itself", () => {
     document.dispatchEvent(new Event("visibilitychange"));
   };
   const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  // Moves only the fake clock until the condition holds (never waits on the real one, which a loaded machine stretches).
+  const until = async (done: () => boolean) => {
+    for (let step = 0; step < 50 && !done(); step++) await advance(20);
+  };
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], shouldAdvanceTime: true });
@@ -1376,13 +1380,15 @@ describe("«Agenti»: the list reads again by itself", () => {
         return answer(command, args);
       });
       hint();
-      await waitFor(() => expect(lists()).toBe(2));
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
       // the second hint of the burst is due while that read has not ended
       hint();
       await advance(3_500);
       expect(lists()).toBe(2);
       release();
-      await waitFor(() => expect(lists()).toBe(3));
+      await until(() => lists() === 3);
+      expect(lists()).toBe(3);
       await advance(10_000);
       expect(lists()).toBe(3);
     });
