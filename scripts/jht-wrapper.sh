@@ -299,6 +299,71 @@ export JHT_HOST_TYPE
 export JHT_LANG
 export JHT_USER_TZ
 
+# ── Testi nella lingua dell'utente ────────────────────────────────────────
+# L'installer e il wizard parlano la lingua scelta (JHT_LANG di host.env: en di base); questi testi del wrapper erano solo
+# italiani anche in un'installazione en. `jht_say CHIAVE [valori]` stampa il testo della lingua con i `%s` riempiti dai
+# valori. Qui ci sono en e it: ogni altra lingua ricade sull'inglese, come l'installer, e una chiave che manca in una lingua
+# si legge in inglese. Il testo it e' quello di sempre, byte per byte. Un testo nuovo per l'utente si scrive in tutte e due.
+# Solo `%s` nei testi: niente altro `%`, niente barre rovesciate (il testo e' il formato di printf).
+jht_text_en() {
+  case "$1" in
+    download.windows_missing) printf '%s' "Windows is not part of 0.4.0: the release has no installer for Windows (coming). Nothing was downloaded." ;;
+    download.release_no_app) printf '%s' "This release (v%s) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded." ;;
+    download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
+    uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
+    uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers and volumes, the host runtime and the jht command." ;;
+    uninstall.usage_stays) printf '%s' "Podman, podman-compose, Docker, Colima and Homebrew stay too." ;;
+    uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
+    uninstall.loss_purge) printf '%s' "The saved mail password and Telegram tokens are deleted too." ;;
+    uninstall.purge_loss) printf '%s' "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted too: configuration, database, CVs and output. There is no way back." ;;
+    uninstall.left.machine) printf '%s' "Not removed: the jht-podman Podman machine or JHT's containers and volumes, with the saved secrets. Run 'jht uninstall --confirm' again when Podman or Docker answer." ;;
+    uninstall.left.runtime) printf '%s' "Not removed: JHT's host runtime." ;;
+    uninstall.left.commands) printf '%s' "Not removed: the jht command or the PATH lines the installer added." ;;
+    uninstall.left.data) printf '%s' "The JHT data listed above was not deleted. The jht command and the runtime are still there: run 'jht uninstall --confirm --purge' again once it is sorted out." ;;
+    uninstall.bad_home) printf '%s' "HOME is not valid: removal refused." ;;
+    uninstall.runtime_choice_unreadable) printf '%s' "The JHT runtime choice cannot be read: nothing was removed." ;;
+    host_setup.skip_done) printf '%s' "host.env is in a folder owned by the container (uid 1001): the host preflight is already done, skipping it." ;;
+    host_setup.skip_unknown) printf '%s' "host.env is in a folder owned by the container (uid 1001) and this user cannot write to it: skipping the host preflight, but host.env cannot be read or does not say the host type (local or VPS): the type stays 'unknown'." ;;
+    container.starting) printf '%s' "Container '%s' is not running, starting it..." ;;
+    *) return 1 ;;
+  esac
+}
+
+jht_text_it() {
+  case "$1" in
+    download.windows_missing) printf '%s' "Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e' stato scaricato niente." ;;
+    download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
+    download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
+    uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
+    uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht." ;;
+    uninstall.usage_stays) printf '%s' "Restano anche Podman, podman-compose, Docker, Colima e Homebrew." ;;
+    uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
+    uninstall.loss_purge) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati." ;;
+    uninstall.purge_loss) printf '%s' "Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro." ;;
+    uninstall.left.machine) printf '%s' "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
+    uninstall.left.runtime) printf '%s' "Non rimosso: il runtime host di JHT." ;;
+    uninstall.left.commands) printf '%s' "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
+    uninstall.left.data) printf '%s' "Non cancellati i dati di JHT elencati sopra. Il comando jht e il runtime sono rimasti: rilancia 'jht uninstall --confirm --purge' dopo aver risolto." ;;
+    uninstall.bad_home) printf '%s' "HOME non valida: rimozione negata." ;;
+    uninstall.runtime_choice_unreadable) printf '%s' "Scelta del runtime JHT non leggibile: nessuna rimozione." ;;
+    host_setup.skip_done) printf '%s' "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto." ;;
+    host_setup.skip_unknown) printf '%s' "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'." ;;
+    container.starting) printf '%s' "Container '%s' non attivo, lo avvio..." ;;
+    *) return 1 ;;
+  esac
+}
+
+jht_say() {
+  local key="$1" format
+  shift
+  case "${JHT_LANG:-en}" in
+    it) format="$(jht_text_it "$key")" || format="$(jht_text_en "$key")" || format="$key" ;;
+    *) format="$(jht_text_en "$key")" || format="$key" ;;
+  esac
+  # shellcheck disable=SC2059
+  printf -- "$format" "$@"
+}
+
 # Colori solo se stdout e' un terminale.
 if [ -t 1 ]; then
   RED='\033[0;31m' YELLOW='\033[1;33m' DIM='\033[2m' BOLD='\033[1m' RESET='\033[0m'
@@ -3464,9 +3529,9 @@ host_setup_can_write() {
 # otherwise the preflight was not done and the type stays unknown, and that is what is said.
 host_setup_skip_note() {
   if [ "${JHT_HOST_TYPE:-unknown}" != unknown ]; then
-    info "host.env sta in una cartella del container (uid 1001): il preflight dell'host e' gia' fatto, lo salto."
+    info "$(jht_say host_setup.skip_done)"
   else
-    warn "host.env sta in una cartella del container (uid 1001) e questo utente non puo' scriverci: salto il preflight dell'host, ma host.env non si legge o non dice il tipo di host (locale o VPS): il tipo resta 'unknown'."
+    warn "$(jht_say host_setup.skip_unknown)"
   fi
 }
 
@@ -3501,7 +3566,7 @@ ensure_up() {
     stale_config_hint
     exit 1
   }
-  info "Container '$CONTAINER_SERVICE' non attivo, lo avvio..."
+  info "$(jht_say container.starting "$CONTAINER_SERVICE")"
   ensure_bind_owner
   telegram_prepare_legacy_inventory || {
     err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
@@ -3971,16 +4036,16 @@ handle_host_download() {
   local major minor
   major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"
   if [ "$platform" = windows ] && { [ "$major" -gt 0 ] || [ "$minor" -ge 4 ]; }; then
-    err "Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e' stato scaricato niente."
+    err "$(jht_say download.windows_missing)"
     return 1
   fi
   # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e Linux e' dalla 0.4.0.
   if [ "$platform" != windows ] && [ "$major" -eq 0 ] && [ "$minor" -lt 4 ]; then
-    err "Questa release (v$version) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente."
+    err "$(jht_say download.release_no_app "$version")"
     return 1
   fi
   if [ "$platform" = macos ] && download_host_is_intel_mac; then
-    err "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente."
+    err "$(jht_say download.intel_mac)"
     return 1
   fi
   case "$platform:$deb" in
@@ -5056,16 +5121,15 @@ JHT_UNINSTALL_PROTOCOL=1
 UNINSTALL_MACHINE_NAME="jht-podman"
 UNINSTALL_PROJECT="jht"
 UNINSTALL_RC_MARKER="# Added by JHT install.sh"
-UNINSTALL_LOSS="Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds."
-
-UNINSTALL_PURGE_LOSS="Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro."
+# I testi per l'utente sono in `jht_say` (uninstall.*): senza --purge ~/.jht e Documenti restano e lo si dice; con --purge no, perche'
+# si cancellano, e si dice solo il resto di cio' che va perso.
 
 uninstall_usage() {
-  err "uso: jht uninstall --confirm [--purge]"
-  info "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht."
-  info "$UNINSTALL_LOSS"
-  info "$UNINSTALL_PURGE_LOSS"
-  info "Restano anche Podman, podman-compose, Docker, Colima e Homebrew."
+  err "$(jht_say uninstall.usage)"
+  info "$(jht_say uninstall.usage_what)"
+  info "$(jht_say uninstall.loss)"
+  info "$(jht_say uninstall.purge_loss)"
+  info "$(jht_say uninstall.usage_stays)"
 }
 
 uninstall_phase() { printf 'JHT_PHASE %s\n' "$1"; }
@@ -5073,10 +5137,10 @@ uninstall_phase() { printf 'JHT_PHASE %s\n' "$1"; }
 uninstall_left() {
   printf 'JHT_LEFT %s\n' "$1"
   case "$1" in
-    machine) err "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
-    runtime) err "Non rimosso: il runtime host di JHT." ;;
-    commands) err "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
-    data) err "Non cancellati i dati di JHT elencati sopra. Il comando jht e il runtime sono rimasti: rilancia 'jht uninstall --confirm --purge' dopo aver risolto." ;;
+    machine) err "$(jht_say uninstall.left.machine)" ;;
+    runtime) err "$(jht_say uninstall.left.runtime)" ;;
+    commands) err "$(jht_say uninstall.left.commands)" ;;
+    data) err "$(jht_say uninstall.left.data)" ;;
   esac
 }
 
@@ -5416,7 +5480,7 @@ jht_uninstall() {
   esac
   case "$HOME" in
     /?*) ;;
-    *) err "HOME non valida: rimozione negata."; return 2 ;;
+    *) err "$(jht_say uninstall.bad_home)"; return 2 ;;
   esac
   runtime_dir="$(uninstall_runtime_dir)"
   if [ -e "$runtime_dir/container-runtime" ] || [ -L "$runtime_dir/container-runtime" ]; then
@@ -5426,14 +5490,19 @@ jht_uninstall() {
     case "$selection" in
       docker|podman) ;;
       *)
-        err "Scelta del runtime JHT non leggibile: nessuna rimozione."
+        err "$(jht_say uninstall.runtime_choice_unreadable)"
         uninstall_report_rest "$runtime_dir"
         return 24
         ;;
     esac
   fi
-  info "$UNINSTALL_LOSS"
-  [ "$purge" -eq 0 ] || warn "$UNINSTALL_PURGE_LOSS"
+  # Con --purge ~/.jht e Documenti NON restano: dirlo e subito dopo il contrario era una contraddizione nella stessa uscita.
+  if [ "$purge" -eq 1 ]; then
+    info "$(jht_say uninstall.loss_purge)"
+    warn "$(jht_say uninstall.purge_loss)"
+  else
+    info "$(jht_say uninstall.loss)"
+  fi
 
   uninstall_phase uninstall_machine
   if ! uninstall_machine "$selection"; then

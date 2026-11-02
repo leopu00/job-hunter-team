@@ -2027,13 +2027,14 @@ final_message() {
     else
       printf "  ${DIM}  jht uninstall --confirm --purge && docker rmi %s${RESET}\n" "$IMAGE"
     fi
+    # (`%b`, not `%s`: DIM and RESET hold the characters backslash-0-3-3, and only `%b` or the format string turns them into the escape.)
     # Last resort, only when the jht command is already gone. The text the person pastes keeps the variable: the shell expands
     # it in the right place, and a path with a space stays one word. (A tilde inside the quotes would not expand: TEST 19b.)
     printf "  ${DIM}  If the jht command is already gone (on Linux the container owns these folders, hence sudo):${RESET}\n"
-    printf '  %s  sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%s\n' "${DIM}" "${RESET}"
+    printf '  %b  sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%b\n' "${DIM}" "${RESET}"
   else
     # Native mode: nothing ran in a container, the folders are the person's own and `jht` has no uninstall.
-    printf '  %s  rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%s\n' "${DIM}" "${RESET}"
+    printf '  %b  rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%b\n' "${DIM}" "${RESET}"
   fi
   printf "\n"
 }

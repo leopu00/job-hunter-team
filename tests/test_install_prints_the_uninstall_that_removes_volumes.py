@@ -17,9 +17,13 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
 # ── A2 ──────────────────────────────────────────────────────────────────────
 
-def final_message(tmp_path: Path, *, runtime_choice: str, os_name: str = "linux", use_docker: int = 1) -> str:
+def raw_final_message(tmp_path: Path, *, runtime_choice: str, os_name: str = "linux", use_docker: int = 1,
+                      colours: bool = False) -> str:
+    """The message as the terminal gets it. `colours` sets the variables the way the installer sets them when stdout is a
+    terminal (the single-quoted backslash sequences), which a piped test run never does."""
+    palette = "DIM='\\033[2m'; RESET='\\033[0m'; BOLD='\\033[1m'\n" if colours else ""
     script = (
-        f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}"\n'
+        f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}"\n{palette}'
         f'USE_DOCKER={use_docker}; RUNTIME_CHOICE="{runtime_choice}"; OS={os_name}; BIN_DIR="{tmp_path}/bin"; '
         f'RUNTIME_DIR="{tmp_path}/host-runtime"; IMAGE="example.invalid/jht@sha256:{"1" * 64}"\n'
         "final_message\n"
@@ -27,7 +31,12 @@ def final_message(tmp_path: Path, *, runtime_choice: str, os_name: str = "linux"
     done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60,
                           env={**os.environ, "HOME": str(tmp_path), "NO_COLOR": "1"})
     assert done.returncode == 0, done.stderr
-    return re.sub(r"\x1b\[[0-9;]*m", "", done.stdout)
+    return done.stdout
+
+
+def final_message(tmp_path: Path, *, runtime_choice: str, os_name: str = "linux", use_docker: int = 1) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", raw_final_message(tmp_path, runtime_choice=runtime_choice, os_name=os_name,
+                                                              use_docker=use_docker))
 
 
 def test_the_docker_uninstall_the_installer_prints_removes_the_volumes_too(tmp_path):
@@ -121,3 +130,18 @@ def test_the_uninstall_command_exists_in_the_wrapper_and_removes_volumes_by_labe
     assert "JHT_UNINSTALL_PROTOCOL=1" in source
     assert 'UNINSTALL_PROJECTS="jht host-runtime"' in source          # the project the Linux Docker compose is named after
     assert 'volume) "$docker_bin" volume rm' in source
+
+
+@pytest.mark.parametrize("runtime_choice,use_docker,rm_line", [
+    ("podman", 1, 'sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"'),
+    ("", 1, 'sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"'),
+    ("", 0, 'rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"'),
+])
+def test_with_colours_the_fallback_line_has_real_escapes_not_the_printed_backslash_sequence(tmp_path, runtime_choice, use_docker, rm_line):
+    """TEST ritest Linux B3: with colours the last-resort line came out as `\\033[2m  sudo rm -rf ...\\033[0m` in plain text, and a
+    copy of it started with a word that is not a command. The text of the line must start at the command, whatever the colours."""
+    out = raw_final_message(tmp_path, runtime_choice=runtime_choice, use_docker=use_docker, colours=True)
+    assert "\\033" not in out and "[2m" not in out.replace("\x1b[2m", "") and "[0m" not in out.replace("\x1b[0m", "")
+    line = next(l for l in out.splitlines() if "rm -rf" in l and '"$HOME/.jht"' in l)
+    assert "\x1b[2m" in line and line.rstrip().endswith("\x1b[0m"), "the colour is a real escape"
+    assert re.sub(r"\x1b\[[0-9;]*m", "", line).strip() == rm_line
