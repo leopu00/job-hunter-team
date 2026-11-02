@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Csak a Dottore számára. Kontextus-frissítési kör: minden agent-munkamenethez olvasd be a kontextus valós telítettségét (a provider client-side parancsa, nulla token), és CSAK azokat a munkameneteket frissítsd, amelyek kontextusablaka 50% fölött van tele — végezz egy retrospektívet (capture + interjú + analitika), fűzz egy sűrű szintézist a folyamatosan bővülő napi naplóhoz, majd KILL + újra létrehozás + a munkamenet folytatása a folytatási kontextussal, így a kontextusablaka kitisztul anélkül, hogy elveszne, hol tartott. Munkaablakonként 2× fut le (+30 percnél és a felezőpontnál). Kihagyja a friss, alacsony kontextusú (≤50%) és a Capitano által félretett munkameneteket — KIVÉVE a 12 órás munkamenet-TTL-en túl (JHT_AGENT_MAX_SESSION_AGE_H), amely minden kihagyást felülír: kizárólag a kor dönt, kivétel nélkül."
+description: "Csak a Dottore számára. Kontextus-frissítési kör: minden agent-munkamenethez olvasd be a kontextus valós telítettségét (a provider client-side parancsa, nulla token), és CSAK azokat a munkameneteket frissítsd, amelyek kontextusablaka 50% fölött van tele — végezz egy retrospektívet (capture + interjú + analitika), fűzz egy sűrű szintézist a folyamatosan bővülő napi naplóhoz, majd KILL + újra létrehozás + a munkamenet folytatása a folytatási kontextussal, így a kontextusablaka kitisztul anélkül, hogy elveszne, hol tartott. Munkaablakonként 2× fut le (+30 percnél és a felezőpontnál). Kihagyja a friss, alacsony kontextusú (≤50%) és a Capitano által félretett munkameneteket — KIVÉVE a 24 órás munkamenet-TTL-en túl (JHT_AGENT_HARD_CAP_H), amely minden kihagyást felülír: kizárólag a kor dönt, kivétel nélkül."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -28,9 +28,9 @@ tmux list-sessions -F '#{session_name}|#{session_created}'
 - **Sorrend**: a worker-munkamenetek ELŐSZÖR (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), a koordinátorok UTOLJÁRA és óvatosan (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Az „óvatosan" azt jelenti, hogy **jól fogd be az állapotukat és tömörítsd őket — NE hagyd ki őket** (ők a legnagyobb fogyasztók; lásd a Szabályokat). Soha ne frissítsd a `DOTTORE` / `DOCTOR-WATCHDOG` munkamenetet (saját magadat / az ütemezőt).
 - **FRESH kihagyás** (olcsó előszűrő a kontextus-ellenőrzés előtt): `age = now - session_created`. Ha `age < 40 min` → teljesen KIHAGYNI (még nincs mit összefoglalni, és a frissítés eldobna egy épp elindult munkamenetet). Naplózd: `action=skipped_fresh`. Minden, ami átjut ezen az előszűrőn, a **Step 1.4-en (TTL)**, majd a **Step 1.5-en (kontextus-ellenőrzés)** megy keresztül — az a `>50%` mérés, nem a kor dönt a *szokásos* frissítésről.
 
-## Step 1.4 — TTL: **minden agent-munkamenet legfeljebb 12 óráig él**
+## Step 1.4 — TTL: **minden agent-munkamenet legfeljebb 24 óráig él**
 ```bash
-TTL_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+TTL_H="${JHT_AGENT_HARD_CAP_H:-24}"
 AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_created}') ) / 3600 ))
 [ "$AGE_H" -ge "$TTL_H" ] && echo "TTL LEJÁRT ($AGE_H h) → a frissítés KÖTELEZŐ"
 ```
@@ -38,7 +38,7 @@ AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_create
 
 | szokásos kihagyás | a TTL-en túl |
 |---|---|
-| `skipped_fresh` (age < 40min) | 12 órán túl lehetetlen, de a TTL amúgy is nyer |
+| `skipped_fresh` (age < 40min) | 24 órán túl lehetetlen, de a TTL amúgy is nyer |
 | `skipped_lowctx` (kontextus ≤ 50%) | **figyelmen kívül** — a 30 óra után 4%-on álló munkamenet is újraindul |
 | `skipped_parked` (PARKED, Step 4) | **figyelmen kívül** — parkolva vagy sem, a TTL érvényes |
 | «az agent dolgozik» | **figyelmen kívül** — mentsd az állapotát a seedbe, és hozd újra létre |
@@ -47,6 +47,8 @@ AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_create
 Naplózd: `action=recreated`, `reason=ttl` és a mért `session_age_h`. Utána menj egyenesen a Step 2 → 7 lépésekre (capture, analitika, szintézis, újra létrehozás + folytatás): **a Step 1.5-öt és a Step 4-et teljesen hagyd ki**, azok csak kihagyást tudnak eredményezni, itt pedig a kihagyás nem elérhető.
 
 Miért kizárólag a kor, egészség-heurisztika nélkül: a 2026-07-28/29-i incidensben a munkamenetek **38,5 · 29,5 · 27,0 · 14,5 · 14,2 órásak** voltak, minden heurisztika azt mondta, «egészséges», a csapat pedig tizenegy órája bénult volt. A kontextusok 50% alatt álltak, így egyetlen szabály sem nyúlt hozzájuk. Egy TTL-nek nincs heurisztikája, amit elronthatna.
+
+A TTL miatt lejárt munkamenetnél is rögzítsd a döntést a Step 6 előtt: `python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"` `refresh` választ ad `reason: ttl` értékkel (a kontextus-százalék itt nem számít). A naplósornak és az újralétrehozásnak szüksége van erre a döntésre.
 
 ## Step 1.5 — KONTEXTUS-ELLENŐRZÉS (a *szokásos* frissítés kiváltója: **>50%**)
 Csak azoknál a munkameneteknél, amelyek a Step 1.4-ben **nem** váltották ki a TTL-t.
@@ -110,7 +112,7 @@ Egy munkamenet **PARKED** (a Capitano szándékosan hagyta bekapcsolva, de nem h
 Ha PARKED → **NE hozd újra létre, hogy újraindítsd**. Írd meg a szintézist (Step 6) `action=skipped_parked` értékkel, és lépj tovább. (Az újra létrehozás egy szándékos parkolást olyan munkává változtatna, amit a Capitano nem akart.) Ha higiénia céljából mégis újra létrehozod, a resume üzenetnek KÖTELEZŐEN jeleznie kell, hogy tétlen volt: `[RESUME] you were in STANDBY — stay idle until the Capitano assigns you a queue.`
 
 **Két kötelező kivétel a PARKED alól — ez a szabály betű szerint írta le az incidenst, és pontosan akkor kötötte meg a Doctor kezét, amikor a csapatnak a legnagyobb szüksége lett volna rá:**
-1. **A TTL-en túl (Step 1.4) a PARKED nem érvényes.** Parkolva vagy sem, a 12 óránál idősebb munkamenet újraindul.
+1. **A TTL-en túl (Step 1.4) a PARKED nem érvényes.** Parkolva vagy sem, a 24 óránál idősebb munkamenet újraindul.
 2. **A blokkolt agent nem parkolt agent.** A «nem friss + produced == 0 + nincs friss Capitano-üzenet» ugyanúgy a széttört koordinációjú csapat pontos ujjlenyomata is. Az objektív jel, ami elválasztja őket: **az az agent, aki válasz nélkül próbálkozik újra és újra egy másiknál, nem parkolt, hanem blokkolt** (az `agent-unblock` scan `retry_loop` bejegyzései; a pane-en látszanak a próbálkozások). Ugyanez igaz arra, hogy «minden operatív áll, miközben van szabad kvóta». Ilyenkor NE naplózz `skipped_parked`-ot — oldd fel a blokkot (`agent-unblock`), majd folytasd a kört.
 
 ## Step 5 — az agent meginterjúvolása
@@ -124,30 +126,20 @@ tmux capture-pane -p -S -40 -t "$S" | tail -25   # read the reply
 ## Step 6 — a SŰRŰ szintézis hozzáfűzése (csak hozzáfűzés, naponta bővül)
 Munkamenetenként és körönként egy JSONL bejegyzés. Kombináld az analitikát + interjút egy tömör összefoglalóvá. SOHA ne írd felül — a nap során több Dottore is hozzáfűz.
 ```bash
-python3 - "$S" "$ROUND_ID" "$DAY" "$JOURNAL" <<'PY'
-import json, sys, datetime
-session, round_id, day, journal = sys.argv[1:5]
-entry = {
-  "ts": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z"),
-  "round_id": round_id, "day": day,
-  "timing": "start+30",          # or "mid"  — set to the slot you were spawned for
-  "session": session, "role": "<role>", "session_age_h": 0.0,
-  "analytics": { },              # paste the doctor_analytics.py JSON here
-  "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
-  "action": "recreated",         # recreated | skipped_lowctx | skipped_parked | skipped_fresh
-  "context_pct": 0,              # a Step 1.5-ben mért kontextus-telítettség (a >50% kapu)
-  "resume_msg_sent": False,
-}
-with open(journal, "a") as f:
-    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-print("appended", session)
-PY
+# analytics = the JSON of Step 3 saved to a file; interview = {"intoppi": "...", "imparato": "...", "summary_denso": "..."} saved to a file
+python3 /app/shared/skills/doctor_journal.py append "$S" --round-id "$ROUND_ID" --day "$DAY" \
+  --timing <start+30|mid> --role <role> --age-h "$AGE_H" \
+  --analytics-file /tmp/an_$S.json --interview-file /tmp/iv_$S.json
+# only for the two reasons the decision cannot see: add  --override skipped_parked  or  --override skipped_fresh
 ```
+A sor `action` és `context_pct` mezője az 1.5. lépés döntéséből származik, a szkript írja: te nem gépeled be, és a `refresh` döntés nélküli `recreated` sort elutasítja.
 
 ## Step 7 — újra létrehozás + folytatás (ha a TTL életbe lépett, VAGY kontextus **>50%** és NEM friss, NEM parkolt)
 Atomi frissítés — a kontextust már befogtad a Step 2-ben, így a kill biztonságos:
 ```bash
 ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
+# Only a `refresh` decision recreates: for a skip this exits 1 and nothing below runs.
+python3 /app/shared/skills/doctor_journal.py may-recreate "$S" || exit 1
 tmux kill-session -t "$S"
 bash /app/.launcher/start-agent.sh "$ROLE" "$N"
 sleep 8
@@ -159,10 +151,10 @@ if [ "$ROLE" = "capitano" ]; then MODE=" $(python3 /app/shared/skills/mode_banne
 LANGUAGE=" $(python3 /app/shared/skills/text_language.py line)"   # the team's language by name (RULE-T14): every role, not only the Capitano
 /app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$LANGUAGE$MODE"
 ```
-Állítsd be a naplóbejegyzésben: `resume_msg_sent=True`. Aztán lépj a következő munkamenetre (tempó: ~15-20s az agentek között).
+Ha a folytatási üzenet megérkezett, írd meg a sorát: `python3 /app/shared/skills/doctor_journal.py resume "$S" --round-id "$ROUND_ID" --timing <start+30|mid> --role <role>`. Aztán lépj a következő munkamenetre (tempó: ~15-20s az agentek között).
 
 ## Szabályok
-- **A 12 órás TTL-en nincs kiskapu és nincs kikapcsoló.** `JHT_AGENT_MAX_SESSION_AGE_H`, alapérték `12`. Sem a PARKED, sem a skip-fresh, sem a kontextusküszöb, sem az «éppen dolgozik», sem a munkaidő-kapu nem érvénytelenítheti. **Lépcsőzd**: a munkamenetek hullámokban születnek, és együtt járnának le — körönként legfeljebb EGY TTL-en túli munkamenetet frissíts, **csökkenő** kor szerinti sorrendben, így a legöregebb megy elsőként, és a csapat soha nem indul újra egyszerre.
+- **A 24 órás TTL-en nincs kiskapu és nincs kikapcsoló.** `JHT_AGENT_HARD_CAP_H`, alapérték `24`. Sem a PARKED, sem a skip-fresh, sem a kontextusküszöb, sem az «éppen dolgozik», sem a munkaidő-kapu nem érvénytelenítheti. **Lépcsőzd**: a munkamenetek hullámokban születnek, és együtt járnának le — körönként legfeljebb EGY TTL-en túli munkamenetet frissíts, **csökkenő** kor szerinti sorrendben, így a legöregebb megy elsőként, és a csapat soha nem indul újra egyszerre.
 - **A munkaablakon kívül a kör nem fut — a TTL viszont igen.** Éjjel a kört kihagyjuk, mert az agentek meginterjúvolása feleslegesen égetne keretet; egy 30 órás munkamenetet viszont akkor is újra létrehozunk, mert egy kick-off ára elenyésző egy elvesztett naphoz képest. Ugyanezt a plafont az `agent-watchdog.sh` determinisztikusan is kikényszeríti (ugyanaz az env-változó) arra az esetre, ha a Doctor áll, blokkolt vagy el sem indult — pontosan ez történt 2026-07-28/29-én. Mindkét útnak léteznie kell: ez a *gazdag* frissítés (retrospektíva + resume), az pedig a háló, ami mindenáron garantálja a plafont.
 - **A `working_hours: null` (vagy hiányzó, vagy üres) azt jelenti: SEMMILYEN időbeli korlátozás** — a csapat 24/7 üzemel, és a kör normálisan fut. Soha nem jelenti azt, hogy «mindig munkaidőn kívül». Az incidensben a `working_hours` épp azért volt null, mert a felhasználó időzónára adott válasza volt az a sor, ami bennragadt a Capitano composerében.
 - **Előbb oldd fel a blokkot, aztán frissíts.** Először futtasd az `agent-unblock` fázist: egy megbénult csapat frissítése csak tiszta kontextusablakkal reprodukálja a bénultságot.

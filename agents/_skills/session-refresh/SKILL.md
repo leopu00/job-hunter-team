@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Doctor-only. Context-refresh round: for each agent session read its real context occupancy (provider client-side command, zero tokens) and refresh ONLY sessions whose context window is >50% full — do a retrospective (capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context, so its context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh, low-context (≤50%), and Capitano-parked sessions — EXCEPT past the 12h session TTL (JHT_AGENT_MAX_SESSION_AGE_H), which overrides every skip: age alone decides, no exceptions."
+description: "Doctor-only. Context-refresh round: for each agent session read its real context occupancy (provider client-side command, zero tokens) and refresh ONLY sessions whose context window is >50% full — do a retrospective (capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context, so its context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh, low-context (≤50%), and Capitano-parked sessions — EXCEPT past the 24h session TTL (JHT_AGENT_HARD_CAP_H), which overrides every skip: age alone decides, no exceptions."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -28,9 +28,9 @@ tmux list-sessions -F '#{session_name}|#{session_created}'
 - **Order**: worker sessions FIRST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), coordinators LAST and with care (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "With care" means **capture their state well and compact them — NOT skip them** (they are the top consumers; see Rules). Never refresh `DOTTORE` / `DOCTOR-WATCHDOG` (yourself / the scheduler).
 - **FRESH skip** (cheap pre-filter before the context check): `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`. Everything that survives this pre-filter goes through **Step 1.4 (TTL)** and then **Step 1.5 (context check)** — that `>50%` measurement, not age, is what decides the *ordinary* refresh.
 
-## Step 1.4 — TTL: **every agent session lives at most 12 hours**
+## Step 1.4 — TTL: **every agent session lives at most 24 hours**
 ```bash
-TTL_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+TTL_H="${JHT_AGENT_HARD_CAP_H:-24}"
 AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_created}') ) / 3600 ))
 [ "$AGE_H" -ge "$TTL_H" ] && echo "TTL EXPIRED ($AGE_H h) → refresh MANDATORY"
 ```
@@ -40,7 +40,7 @@ override, no "but":
 
 | would normally skip | past the TTL |
 |---|---|
-| `skipped_fresh` (age < 40min) | impossible past 12h, but the TTL wins anyway |
+| `skipped_fresh` (age < 40min) | impossible past 24h, but the TTL wins anyway |
 | `skipped_lowctx` (context ≤ 50%) | **ignored** — a session at 4% after 30h is still refreshed |
 | `skipped_parked` (PARKED, Step 4) | **ignored** — parked or not, the TTL applies |
 | "the agent is working" | **ignored** — capture its state in the seed and recreate |
@@ -54,6 +54,8 @@ Why age alone, with no health heuristic on top: in the 2026-07-28/29 incident th
 were **38.5 · 29.5 · 27.0 · 14.5 · 14.2 hours** old, every heuristic reported "healthy", and
 the team was paralysed for eleven hours. Contexts were under 50%, so nothing touched them.
 A TTL has no heuristics to get wrong.
+
+For a TTL session, still record the decision before Step 6: `python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"` answers `refresh` with `reason: ttl` (the context percentage does not matter here). The journal row and the recreation need that decision.
 
 ## Step 1.5 — CONTEXT CHECK (the *ordinary* refresh trigger: **>50%**)
 Only for sessions that did **not** trip the TTL in Step 1.4.
@@ -117,7 +119,7 @@ A session is **PARKED** (the Capitano deliberately left it on but is not using i
 If PARKED → **do NOT recreate to restart it**. Write the synthesis (Step 6) with `action=skipped_parked` and move on. (Recreating it would turn a deliberate park into work the Capitano did not want.) If you do recreate it for hygiene, the resume message MUST say it was idle: `[RESUME] you were in STANDBY — stay idle until the Capitano assigns you a queue.`
 
 **Two hard exceptions to PARKED — this rule described the incident exactly and kept the Doctor's hands off precisely when the team needed it most:**
-1. **Past the TTL (Step 1.4), PARKED does not apply.** Parked or not, a 12h+ session gets recreated.
+1. **Past the TTL (Step 1.4), PARKED does not apply.** Parked or not, a 24h+ session gets recreated.
 2. **A blocked agent is not a parked agent.** "not fresh + produced == 0 + no recent captain message" is also the exact fingerprint of a team whose coordination is broken. The objective signal that separates them: **an agent retrying at another agent with no answer is not parked, it is blocked** (the `retry_loop` entries from `agent-unblock`'s scan, and the pane shows the attempts). Same for "every operative idle while quota is available". In those cases do NOT log `skipped_parked` — clear the block (`agent-unblock`), then continue this round.
 
 ## Step 5 — interview the agent
@@ -131,30 +133,20 @@ tmux capture-pane -p -S -40 -t "$S" | tail -25   # read the reply
 ## Step 6 — append the DENSE synthesis (append-only, grows daily)
 One JSONL entry per agent per round. Combine analytics + interview into a tight summary. NEVER overwrite — multiple Doctors across the day all append.
 ```bash
-python3 - "$S" "$ROUND_ID" "$DAY" "$JOURNAL" <<'PY'
-import json, sys, datetime
-session, round_id, day, journal = sys.argv[1:5]
-entry = {
-  "ts": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z"),
-  "round_id": round_id, "day": day,
-  "timing": "start+30",          # or "mid"  — set to the slot you were spawned for
-  "session": session, "role": "<role>", "session_age_h": 0.0,
-  "analytics": { },              # paste the doctor_analytics.py JSON here
-  "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
-  "action": "recreated",         # recreated | skipped_lowctx | skipped_parked | skipped_fresh
-  "context_pct": 0,              # measured context occupancy from Step 1.5 (the >50% gate)
-  "resume_msg_sent": False,
-}
-with open(journal, "a") as f:
-    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-print("appended", session)
-PY
+# analytics = the JSON of Step 3 saved to a file; interview = {"intoppi": "...", "imparato": "...", "summary_denso": "..."} saved to a file
+python3 /app/shared/skills/doctor_journal.py append "$S" --round-id "$ROUND_ID" --day "$DAY" \
+  --timing <start+30|mid> --role <role> --age-h "$AGE_H" \
+  --analytics-file /tmp/an_$S.json --interview-file /tmp/iv_$S.json
+# only for the two reasons the decision cannot see: add  --override skipped_parked  or  --override skipped_fresh
 ```
+The row's `action` and `context_pct` are the decision's of Step 1.5, written by the script: you do not type them, and a `recreated` row without a `refresh` decision is refused.
 
 ## Step 7 — recreate + resume (if the TTL tripped, OR context **>50%** and NOT fresh, NOT parked)
 Atomic refresh — you already captured the context in Step 2, so killing is safe:
 ```bash
 ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
+# Only a `refresh` decision recreates: for a skip this exits 1 and nothing below runs.
+python3 /app/shared/skills/doctor_journal.py may-recreate "$S" || exit 1
 tmux kill-session -t "$S"
 bash /app/.launcher/start-agent.sh "$ROLE" "$N"
 sleep 8
@@ -166,10 +158,10 @@ if [ "$ROLE" = "capitano" ]; then MODE=" $(python3 /app/shared/skills/mode_banne
 LANGUAGE=" $(python3 /app/shared/skills/text_language.py line)"   # the team's language by name (RULE-T14): every role, not only the Capitano
 /app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$LANGUAGE$MODE"
 ```
-Set `resume_msg_sent=True` in the journal entry. Then move to the next session (pace ~15-20s between agents).
+Once the resume message is delivered, write its row: `python3 /app/shared/skills/doctor_journal.py resume "$S" --round-id "$ROUND_ID" --timing <start+30|mid> --role <role>`. Then move to the next session (pace ~15-20s between agents).
 
 ## Rules
-- **The 12h TTL has no loopholes and no off-switch.** `JHT_AGENT_MAX_SESSION_AGE_H`, default `12`. Neither PARKED, nor skip-fresh, nor the context threshold, nor "it is working", nor the working-hours gate can cancel it. **Stagger it**: sessions are born in waves and would expire together — refresh at most one over-TTL session per pass and order them by **decreasing age**, so the oldest goes first and the team is never recreated all at once.
+- **The 24h TTL has no loopholes and no off-switch.** `JHT_AGENT_HARD_CAP_H`, default `24`. Neither PARKED, nor skip-fresh, nor the context threshold, nor "it is working", nor the working-hours gate can cancel it. **Stagger it**: sessions are born in waves and would expire together — refresh at most one over-TTL session per pass and order them by **decreasing age**, so the oldest goes first and the team is never recreated all at once.
 - **Outside the working-hours window the round does not run — but the TTL still does.** The round is skipped at night because interviewing agents would burn budget for nothing; a 30-hour session is recreated anyway, because one kick-off costs nothing next to a lost day. `agent-watchdog.sh` enforces the same ceiling deterministically (same env var) for when the Doctor is stopped, blocked or never spawned — which is exactly what happened on 2026-07-28/29. Both paths are meant to exist: this one is the *rich* refresh (retrospective + resume), that one is the safety net that guarantees the ceiling at any cost.
 - **`working_hours: null` (or absent, or empty) means NO time restriction** — the team is 24/7 and the round runs normally. It never means "always outside the window". In the incident `working_hours` was null exactly because the user's answer about the timezone was the line stuck in the Capitano's composer.
 - **Unblock before you refresh.** Run the `agent-unblock` phase first: refreshing a paralysed team just recreates the paralysis with a clean context window.

@@ -189,7 +189,7 @@ def test_the_panel_of_a_session_with_a_free_share_card_gives_the_used_share(pane
 
 
 def test_a_session_at_twenty_percent_used_is_not_recreated():
-    for age in (0.7, 3.0, 11.9):
+    for age in (0.7, 3.0, 13.0, 23.9):
         verdict = session_context.decide(20.0, age)
         assert verdict == {"action": "skip", "reason": "lowctx", "used_pct": 20.0, "left_pct": 80.0}, age
 
@@ -205,9 +205,29 @@ def test_a_context_that_was_not_measured_is_a_skip_not_a_recreation_on_age():
     assert verdict == {"action": "skip", "reason": "unmeasured", "used_pct": None, "left_pct": None}
 
 
+def test_between_twelve_and_twenty_four_hours_only_the_context_decides():
+    # the hard cap is 24 h: a session of 13 h at 20% used is left alone, at 70% it is recreated, unmeasured it is left alone
+    assert session_context.decide(20.0, 13.0)["action"] == "skip"
+    assert session_context.decide(70.0, 13.0)["reason"] == "context"
+    assert session_context.decide(None, 13.0)["reason"] == "unmeasured"
+
+
+def test_the_hard_cap_comes_from_its_own_variable(pane, monkeypatch, capsys, tmp_path):
+    make, seen, keys = pane
+    monkeypatch.setenv("JHT_HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(session_context, "pct_from_log", lambda *_a, **_k: 4.0)
+    make()
+    monkeypatch.setenv("JHT_AGENT_MAX_SESSION_AGE_H", "12")           # the old name no longer decides
+    session_context.main(["SCOUT-1", "--provider", "codex", "--age-h", "13"])
+    assert json.loads(capsys.readouterr().out)["decision"]["action"] == "skip"
+    monkeypatch.setenv("JHT_AGENT_HARD_CAP_H", "12")
+    session_context.main(["SCOUT-1", "--provider", "codex", "--age-h", "13"])
+    assert json.loads(capsys.readouterr().out)["decision"]["reason"] == "ttl"
+
+
 def test_the_ttl_overrides_a_low_context_and_an_unmeasured_one():
     assert session_context.decide(4.0, 30.0)["reason"] == "ttl"
-    assert session_context.decide(None, 12.0) == {"action": "refresh", "reason": "ttl", "used_pct": None, "left_pct": None}
+    assert session_context.decide(None, 24.0) == {"action": "refresh", "reason": "ttl", "used_pct": None, "left_pct": None}
     assert session_context.decide(4.0, 30.0, ttl_h=48.0)["action"] == "skip"
 
 
@@ -226,8 +246,9 @@ def test_a_codex_log_at_twenty_percent_of_its_window_is_twenty_used_not_eighty()
     assert session_context.decide(pct, 3.0)["action"] == "skip"
 
 
-def test_the_command_line_carries_the_decision_and_touches_no_pane_for_a_session_at_twenty(pane, monkeypatch, capsys):
+def test_the_command_line_carries_the_decision_and_touches_no_pane_for_a_session_at_twenty(pane, monkeypatch, capsys, tmp_path):
     make, seen, keys = pane
+    monkeypatch.setenv("JHT_HOME", str(tmp_path / "home"))
     make()
     monkeypatch.setattr(session_context, "pct_from_log", lambda *_a, **_k: 20.0)
     assert session_context.main(["ASSISTENTE", "--provider", "codex", "--age-h", "3.0"]) == 0
