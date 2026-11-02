@@ -33,15 +33,15 @@ class _Quiet(SimpleHTTPRequestHandler):
 @pytest.fixture()
 def site(tmp_path: Path):
     root = tmp_path / "site"
-    (root / "v0.3.5").mkdir(parents=True)
-    (root / "v0.3.5" / ASSET).write_bytes(BYTES)
-    (root / "v0.3.5" / "job-hunter-team-linux-x64.deb").write_bytes(b"deb bytes")
-    (root / "v0.3.5" / "SHA256SUMS").write_text(
+    (root / "v0.4.0").mkdir(parents=True)
+    (root / "v0.4.0" / ASSET).write_bytes(BYTES)
+    (root / "v0.4.0" / "job-hunter-team-linux-x64.deb").write_bytes(b"deb bytes")
+    (root / "v0.4.0" / "SHA256SUMS").write_text(
         f"{SUM}  {ASSET}\n{hashlib.sha256(b'deb bytes').hexdigest()} *job-hunter-team-linux-x64.deb\n", encoding="utf-8")
     server = ThreadingHTTPServer(("127.0.0.1", 0), partial(_Quiet, directory=str(root)))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    yield type("Site", (), {"url": f"http://127.0.0.1:{server.server_port}", "root": root / "v0.3.5"})
+    yield type("Site", (), {"url": f"http://127.0.0.1:{server.server_port}", "root": root / "v0.4.0"})
     server.shutdown()
     server.server_close()
 
@@ -76,7 +76,7 @@ def _run(tmp_path: Path, site, *args: str, **extra: str):
 
 
 def _asset_args(output: Path | None = None, *more: str):
-    return ("--os", "linux", "--version", "0.3.5", *( ("--output", str(output)) if output else () ), *more)
+    return ("--os", "linux", "--version", "0.4.0", *( ("--output", str(output)) if output else () ), *more)
 
 
 def _clean(tmp_path: Path, tmpdir: Path, *folders: Path):
@@ -187,9 +187,9 @@ def test_a_link_to_a_shared_folder_does_not_hide_the_destination(tmp_path: Path,
     assert done.returncode == 1 and not (home / ".jht" / "client.AppImage").exists()
 
 
-@pytest.mark.parametrize("args", (("--os", "linux"), ("--version", "0.3.5"), ("--os", "plan9", "--version", "0.3.5"),
-                                  ("--os", "linux", "--version", "x.y"), ("--os", "windows", "--version", "0.3.5", "--deb"),
-                                  ("--os", "linux", "--version", "0.3.5", "--nope")))
+@pytest.mark.parametrize("args", (("--os", "linux"), ("--version", "0.4.0"), ("--os", "plan9", "--version", "0.4.0"),
+                                  ("--os", "linux", "--version", "x.y"), ("--os", "windows", "--version", "0.4.0", "--deb"),
+                                  ("--os", "linux", "--version", "0.4.0", "--nope")))
 def test_a_wrong_ask_answers_2_before_any_network(tmp_path: Path, site, args: tuple):
     done, home, _, calls = _run(tmp_path, site, *args, JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
     assert done.returncode == 2, done.stderr
@@ -203,7 +203,7 @@ def test_windows_is_refused_for_a_release_that_has_no_installer(tmp_path: Path, 
 
 
 def test_an_intel_mac_is_refused_before_anything_is_downloaded(tmp_path: Path, site):
-    done, home, _, _ = _run(tmp_path, site, "--os", "macos", "--version", "0.3.5", JHT_DOWNLOAD_HOST="darwin-x64",
+    done, home, _, _ = _run(tmp_path, site, "--os", "macos", "--version", "0.4.0", JHT_DOWNLOAD_HOST="darwin-x64",
                             JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
     assert done.returncode == 1 and "Apple silicon" in done.stderr
     assert not (home / "Downloads").exists()
@@ -216,3 +216,16 @@ def test_without_the_seam_the_release_is_fetched_over_https_only(tmp_path: Path,
     assert 'https://github.com/leopu00/job-hunter-team/releases/download' in body
     assert 'proto="=https"' in body and '[ -z "${JHT_RELEASE_BASE_URL:-}" ] || proto="=https,http"' in body
     assert "docker" not in body, "the container must not be part of the download"
+
+
+@pytest.mark.parametrize("os_name", ("macos", "linux"))
+@pytest.mark.parametrize("version", ("0.3.5", "0.3.9", "v0.3.9"))
+def test_a_release_before_0_4_is_said_to_have_no_macos_linux_app(tmp_path: Path, site, os_name: str, version: str):
+    # the old releases have a SHA256SUMS without the 0.4 names: the answer is not «SHA-256 dichiarato non trovato»
+    (site.root.parent / "v0.3.9").mkdir()
+    (site.root.parent / "v0.3.9" / "SHA256SUMS").write_text(f"{'a' * 64}  job-hunter-team-linux-x64.tar.gz\n", encoding="utf-8")
+    done, home, _, _ = _run(tmp_path, site, "--os", os_name, "--version", version)
+    assert done.returncode == 1
+    assert "non ha l'app per macOS/Linux: usa la 0.4.0 o successive" in done.stderr
+    assert "non trovato" not in done.stderr and "Non e' stato scaricato niente" in done.stderr
+    assert not (home / "Downloads").exists()

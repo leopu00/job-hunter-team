@@ -53,11 +53,11 @@ def release_server(files: dict[str, bytes]):
         server.server_close()
 
 
-def release_files(asset: str, body: bytes, *, checksum: str | None = None):
+def release_files(asset: str, body: bytes, *, checksum: str | None = None, version: str = "0.4.0"):
     digest = checksum or hashlib.sha256(body).hexdigest()
     return {
-        "/releases/download/v0.3.5/SHA256SUMS": f"{digest}  {asset}\n".encode(),
-        f"/releases/download/v0.3.5/{asset}": body,
+        f"/releases/download/v{version}/SHA256SUMS": f"{digest}  {asset}\n".encode(),
+        f"/releases/download/v{version}/{asset}": body,
     }
 
 
@@ -89,9 +89,10 @@ def test_download_help_describes_required_contract():
 )
 def test_downloads_platform_asset_and_verifies_sha256(tmp_path, platform, asset):
     body = f"release bytes for {platform}".encode()
-    with release_server(release_files(asset, body)) as base_url:
+    version = "0.3.5" if platform == "windows" else "0.4.0"  # the Windows installer is of the 0.3.x releases
+    with release_server(release_files(asset, body, version=version)) as base_url:
         result = run_jht(
-            "download", "--os", platform, "--version", "0.3.5",
+            "download", "--os", platform, "--version", version,
             env=isolated_env(tmp_path, base_url),
         )
 
@@ -105,7 +106,7 @@ def test_downloads_platform_asset_and_verifies_sha256(tmp_path, platform, asset)
 def test_download_version_is_not_intercepted_by_global_version_flag(tmp_path):
     """Regressione P1: il comando deve lavorare, non stampare solo ``0.3.5``."""
     asset = "job-hunter-team-windows-x64-setup.exe"
-    with release_server(release_files(asset, b"windows installer")) as base_url:
+    with release_server(release_files(asset, b"windows installer", version="0.3.5")) as base_url:
         output = tmp_path / "chosen.exe"
         result = run_jht(
             "download", "--os", "windows", "--version", "0.3.5",
@@ -121,7 +122,7 @@ def test_download_deb_selects_optional_linux_asset(tmp_path):
     asset = "job-hunter-team-linux-x64.deb"
     with release_server(release_files(asset, b"deb package")) as base_url:
         result = run_jht(
-            "download", "--os", "linux", "--version", "0.3.5", "--deb",
+            "download", "--os", "linux", "--version", "0.4.0", "--deb",
             env=isolated_env(tmp_path, base_url),
         )
 
@@ -134,7 +135,7 @@ def test_checksum_mismatch_fails_and_removes_partial_file(tmp_path):
     files = release_files(asset, b"corrupt", checksum="0" * 64)
     with release_server(files) as base_url:
         result = run_jht(
-            "download", "--os", "linux", "--version", "0.3.5",
+            "download", "--os", "linux", "--version", "0.4.0",
             env=isolated_env(tmp_path, base_url),
         )
 
@@ -164,7 +165,7 @@ def test_invalid_requests_fail_before_network(tmp_path, args, message):
 
 def test_network_error_is_nonzero_and_leaves_no_file(tmp_path):
     result = run_jht(
-        "download", "--os", "linux", "--version", "0.3.5",
+        "download", "--os", "linux", "--version", "0.4.0",
         env=isolated_env(tmp_path, "http://127.0.0.1:1/releases/download"),
     )
     assert result.returncode != 0
@@ -178,7 +179,7 @@ def test_existing_wrong_file_is_not_overwritten(tmp_path):
     output.write_bytes(b"keep me")
     with release_server(release_files(asset, b"new bytes")) as base_url:
         result = run_jht(
-            "download", "--os", "macos", "--version", "0.3.5",
+            "download", "--os", "macos", "--version", "0.4.0",
             "--output", str(output), env=isolated_env(tmp_path, base_url),
         )
 
@@ -191,7 +192,7 @@ def test_an_intel_mac_is_refused_before_anything_is_downloaded(tmp_path):
     asset = "job-hunter-team-macos-universal.dmg"
     with release_server(release_files(asset, b"bytes")) as base_url:
         result = run_jht(
-            "download", "--os", "macos", "--version", "0.3.5",
+            "download", "--os", "macos", "--version", "0.4.0",
             env={**isolated_env(tmp_path, base_url), "JHT_DOWNLOAD_HOST": "darwin-x64"},
         )
 
@@ -204,9 +205,10 @@ def test_an_intel_mac_is_refused_before_anything_is_downloaded(tmp_path):
 @pytest.mark.parametrize("platform", ["windows", "linux"])
 def test_an_intel_mac_may_still_download_the_other_systems(tmp_path, platform):
     asset = {"windows": "job-hunter-team-windows-x64-setup.exe", "linux": "job-hunter-team-linux-x64.AppImage"}[platform]
-    with release_server(release_files(asset, b"bytes")) as base_url:
+    version = "0.3.5" if platform == "windows" else "0.4.0"
+    with release_server(release_files(asset, b"bytes", version=version)) as base_url:
         result = run_jht(
-            "download", "--os", platform, "--version", "0.3.5",
+            "download", "--os", platform, "--version", version,
             env={**isolated_env(tmp_path, base_url), "JHT_DOWNLOAD_HOST": "darwin-x64"},
         )
 
@@ -227,3 +229,26 @@ def test_windows_is_refused_for_a_release_that_has_no_installer(tmp_path, versio
     assert "Windows is not part of 0.4.0" in result.stderr and "coming soon" in result.stderr
     assert "Nothing was downloaded" in result.stderr
     assert not (tmp_path / "user" / "downloads").exists()
+
+
+@pytest.mark.parametrize("platform", ["macos", "linux"])
+@pytest.mark.parametrize("version", ["0.3.5", "0.3.9", "v0.3.9"])
+def test_macos_and_linux_say_plainly_that_a_release_before_0_4_has_no_app(tmp_path, platform, version):
+    # v0.3.9 really has a SHA256SUMS, without the 0.4 file names: the answer must not be «SHA-256 not found»
+    asset = {"macos": "job-hunter-team-macos-universal.dmg", "linux": "job-hunter-team-linux-x64.AppImage"}[platform]
+    files = {"/releases/download/v0.3.9/SHA256SUMS": b"a" * 64 + b"  job-hunter-team-linux-x64.tar.gz\n"}
+    with release_server(files) as base_url:
+        result = run_jht("download", "--os", platform, "--version", version, env=isolated_env(tmp_path, base_url))
+
+    assert result.returncode != 0
+    assert "has no app for macOS/Linux: use 0.4.0 or later" in result.stderr
+    assert "Declared SHA-256 not found" not in result.stderr
+    assert "Nothing was downloaded" in result.stderr
+    assert not (tmp_path / "user" / "downloads" / asset).exists()
+
+
+def test_windows_is_not_touched_by_the_before_0_4_message(tmp_path):
+    asset = "job-hunter-team-windows-x64-setup.exe"
+    with release_server(release_files(asset, b"win", version="0.3.9")) as base_url:
+        result = run_jht("download", "--os", "windows", "--version", "0.3.9", env=isolated_env(tmp_path, base_url))
+    assert result.returncode == 0, result.stderr
