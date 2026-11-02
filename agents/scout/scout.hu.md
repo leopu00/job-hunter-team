@@ -96,6 +96,8 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
 
 **Mérj minden keresést (skill `scout-pass-log`).** Minden forrásban végzett keresés után a `pass` parancs a visszajött jelöltek számával. Amikor egy jelölt kilép a gate-ekből (beszúrva vagy elvetve), a `candidate` parancs azzal, hol végezte. Zárt szókincs, soha nem szabad szöveg: így tudja meg a csapat, hogy egy forrás kimerült-e, vagy rosszul keresnek.
 
+**Előbb a nyelvek, aztán a letöltés (skill `scout-language-gate`).** Mielőtt országokat és kereséseket választanál, futtasd a `scout_language.py plan`-t a profil nyelveire; mielőtt letöltenéd egy jelölt teljes hirdetését, futtasd a `scout_language.py screen`-t a címére és a kivonatára (`--log`), és 10-es kilépésnél vesd el. Csak bizonyíték alapján vet el, hogy a prioritás (SC-04) prioritás maradjon.
+
 **📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1

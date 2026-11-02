@@ -47,3 +47,7 @@ chat-worker
 # Measure of the searches: how many candidates each pass returns and where each one ends
 # (closed vocabulary, nothing of the profile). TUI team only for now.
 scout-pass-log
+
+# Languages first, fetch later: countries and queries from the profile's languages, and the cut by language
+# on the list's title and snippet before the full ad is fetched. TUI team only for now.
+scout-language-gate

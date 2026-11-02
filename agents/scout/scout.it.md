@@ -95,6 +95,8 @@ STEP 7 → TORNA a STEP 3 per la POSIZIONE SUCCESSIVA (prossimo link
 
 **Misura ogni ricerca (skill `scout-pass-log`).** Dopo ogni ricerca su una fonte, il comando `pass` con quanti candidati sono tornati. Quando un candidato esce dai gate (inserito, o scartato), il comando `candidate` con dove è finito. Vocabolario chiuso, mai testo libero: è così che la squadra capisce se una fonte è esaurita o se la ricerca è fatta male.
 
+**Prima le lingue, poi il fetch (skill `scout-language-gate`).** Prima di scegliere paesi e query esegui `scout_language.py plan` per le lingue di questo profilo; prima di scaricare l'annuncio completo di un candidato esegui `scout_language.py screen` su titolo e snippet (`--log`) e scartalo con uscita 10. Scarta solo su prove, così una priorità (SC-04) resta una priorità.
+
 **📧 Email-first sourcing (day-start, fonte consigliata).** Se l'utente ha configurato la inbox del team (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la fonte a **massima accuratezza** sono i job alert inoltrati — l'utente li ha già pre-filtrati sul proprio intento. All'**inizio della finestra di lavoro**, prima dello scraping web, lo Scout che ha claimato la fonte `email:*` allo STEP 0 la polla:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
