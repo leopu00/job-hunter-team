@@ -170,6 +170,17 @@ def known_boards(provider: str, data: dict = None) -> dict:
     return out
 
 
+_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
+
+
+def _public_name(host: str) -> bool:
+    """A domain name with a dot and a letter in its last label: never an IP literal (v4 or v6), `localhost` or a bare name."""
+    if ":" in host or host.endswith(".") or host == "localhost" or host.endswith((".localhost", ".local", ".internal", ".lan")):
+        return False
+    labels = host.split(".")
+    return len(labels) >= 2 and all(_LABEL.match(label) for label in labels) and bool(re.search(r"[a-z]", labels[-1]))
+
+
 def url_for(provider: str, board: str, data: dict = None) -> str:
     if provider not in PROVIDERS:
         raise Refused("provider must be one of: %s" % ", ".join(PROVIDERS))
@@ -182,8 +193,11 @@ def url_for(provider: str, board: str, data: dict = None) -> str:
     url = boards[board]
     if provider == "teamtailor":
         parts = urllib.parse.urlsplit(url)
-        if parts.scheme != "https" or not parts.hostname or not parts.path.endswith("/jobs"):
-            raise Refused("the Teamtailor address in the table must be an https .../jobs page")
+        host = (parts.hostname or "").lower()
+        if parts.scheme != "https" or not host or not parts.path.endswith("/jobs") or parts.port not in (None, 443) or parts.username:
+            raise Refused("the Teamtailor address in the table must be an https .../jobs page on the standard port")
+        if not _public_name(host):
+            raise Refused("the Teamtailor host in the table must be a public domain name, not an address or a local name")
         return urllib.parse.urlunsplit(("https", parts.netloc, parts.path + ".rss", "", ""))
     host = {"greenhouse": "boards-api.greenhouse.io", "lever": "api.lever.co"}[provider]
     if urllib.parse.urlsplit(url).hostname != host or not url.startswith("https://"):
@@ -249,9 +263,14 @@ def ads_lever(data, country: str) -> list:
 
 
 def ads_teamtailor(body: bytes, country: str) -> list:
-    if b"<!DOCTYPE" in body[:2048].upper() or b"<!ENTITY" in body.upper():
+    # Only a plain ASCII/UTF-8 feed is parsed: a BOM or UTF-16 hides the bytes of a DTD from the check below (measured by the
+    # security review), so a body that does not start with `<` (after blanks) or holds a NUL is refused before the parser.
+    head = body.lstrip(b" \t\r\n")
+    if not head.startswith(b"<") or b"\x00" in body or body.startswith((b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")):
+        raise ValueError("a feed that is not plain XML text is refused")
+    if b"<!DOCTYPE" in body.upper() or b"<!ENTITY" in body.upper():
         raise ValueError("a feed with a DTD is refused")
-    root = ET.fromstring(body)
+    root = ET.fromstring(head)
     out = []
     for item in root.iter("item"):
         places = []

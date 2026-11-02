@@ -137,6 +137,39 @@ def test_a_feed_with_a_dtd_is_not_parsed():
     assert (result["ok"], result["status"]) == (False, "closed") and result["hits"] == []
 
 
+@pytest.mark.parametrize("encode", [
+    lambda s: s.encode("utf-16"), lambda s: s.encode("utf-16-le"), lambda s: s.encode("utf-16-be"),
+    lambda s: b"\xef\xbb\xbf" + s.encode("utf-8"), lambda s: s.encode("utf-8").replace(b"<rss", b"\x00<rss"),
+])
+def test_a_feed_that_hides_its_dtd_behind_a_bom_or_utf16_is_refused_before_the_parser(encode):
+    """Security review: a UTF-16 feed with a DOCTYPE and entities slipped past the check on ASCII bytes and was expanded."""
+    feed = '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY a "aaaa"><!ENTITY b "&a;&a;&a;&a;">]><rss><channel><item><title>&b;</title></item></channel></rss>'
+    result = ab.search("teamtailor", "kambi", "se", fetcher=answer(encode(feed)), data=TABLE)
+    assert (result["ok"], result["status"], result["hits"]) == (False, "closed", [])
+
+
+def test_plain_ascii_and_blank_before_the_declaration_are_still_read():
+    assert ab.search("teamtailor", "kambi", "se", fetcher=answer(b"\n  " + TEAMTAILOR), data=TABLE)["counts"]["in_country"] == 1
+
+
+@pytest.mark.parametrize("url", [
+    "https://127.0.0.1/jobs", "https://10.0.0.5/jobs", "https://[::1]/jobs", "https://localhost/jobs", "https://intranet/jobs",
+    "https://kambi.localhost/jobs", "https://jobs.example.local/jobs", "https://kambi.teamtailor.com:8443/jobs",
+    "https://user:pw" + "@" + "kambi.teamtailor.com/jobs", "https://192.0.2.1.5/jobs", "https://kambi.teamtailor.com./jobs", "https://-bad.teamtailor.com/jobs",
+])
+def test_a_teamtailor_address_that_is_not_a_public_domain_name_is_refused(url):
+    """Security review: the table may one day carry a wrong address; an IP literal, a local name or another port is not asked."""
+    data = {"se": {"teamtailor": {"url": "{url}", "urls": {"kambi": url}}}}
+    with pytest.raises(ab.Refused):
+        ab.url_for("teamtailor", "kambi", data)
+
+
+@pytest.mark.parametrize("url", ["https://career.hemnet.se/jobs", "https://careers.tobii.com/jobs", "https://jobs.bokio.se/jobs", "https://xn--jobb-5qa.example.se/jobs"])
+def test_the_companys_own_domains_of_the_table_are_accepted(url):
+    data = {"se": {"teamtailor": {"url": "{url}", "urls": {"kambi": url}}}}
+    assert ab.url_for("teamtailor", "kambi", data) == url + ".rss"
+
+
 @pytest.mark.parametrize("http,status", [(403, "closed"), (429, "closed"), (401, "closed"), (404, "gone"), (410, "gone"), (500, "closed"), (0, "closed")])
 def test_a_board_that_does_not_answer_is_closed_or_gone_for_the_pass_and_nothing_is_retried(http, status):
     calls = []
