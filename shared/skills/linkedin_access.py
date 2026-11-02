@@ -13,6 +13,15 @@ Method retained from the legacy job-hunter/scout-3 repository:
 LinkedIn does not need Playwright here: requests with a realistic user agent
 are sufficient. No cookies, persistent browser context, or login are used.
 
+Rate limit (429): LinkedIn answers 429 («Too Many Requests», or its own 999) to a guest that asks too much. Until
+02/11/2026 a 429 in `search` looked like «no more results» and in `fetch-job` like a closed page, and the scout
+insisted. Now every request goes through `_get`: a cap of requests per window (state shared by all the scouts in
+`$JHT_HOME/state/linkedin-rate.json`), a short backoff that honours `Retry-After`, a cooldown shared by every call
+after the backoff is exhausted, and an explicit outcome:
+    {"rate_limited": true, "reason": "http_429"|"cooldown"|"request_cap", "retry_after_s": N, "retry_at": "<UTC>"}
+(on `search` it is the last JSON line, exit code 3; on `fetch-job` it is the whole answer, exit code 3). The scout
+takes another source and comes back to LinkedIn at `retry_at`; while the cooldown lasts LinkedIn is not called at all.
+
 CLI:
     python3 linkedin_access.py search \\
         --keywords "python junior" --location "Italy" --limit 25 \\
@@ -29,6 +38,8 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import email.utils
 import json
 import os
 import random
@@ -36,6 +47,7 @@ import re
 import sys
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -63,6 +75,165 @@ def _headers() -> dict:
     }
 
 
+# ── Rate limit ───────────────────────────────────────────────────────
+def _env_number(name: str, default: float) -> float:
+    try:
+        value = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value == value and abs(value) != float("inf") and value > 0 else default
+
+
+RATE_STATE = JHT_HOME / "state" / "linkedin-rate.json"
+WINDOW_S = _env_number("JHT_LINKEDIN_WINDOW_S", 600.0)          # the window of the request cap
+MAX_REQUESTS = int(_env_number("JHT_LINKEDIN_MAX_REQUESTS", 40))  # requests per window, all scouts together
+MAX_RETRIES = 2                 # tries after the first 429, inside one call
+BASE_BACKOFF_S = 2.0            # 2 s, 4 s … when LinkedIn gives no Retry-After
+MAX_INLINE_WAIT_S = 20.0        # never keep a tool call waiting longer than this on a 429
+COOLDOWN_BASE_S = 300.0         # LinkedIn is not called for 5 min after a 429 that the backoff did not clear…
+COOLDOWN_MAX_S = 3600.0         # …10, 20, … minutes if it keeps happening, never more than an hour
+RETRY_AFTER_MAX_S = 86400.0
+RATE_LIMITED_STATUS = (429, 999)   # 999 is LinkedIn's own «you look like a bot»
+
+
+@contextlib.contextmanager
+def _state_lock():
+    """Exclusive lock on the shared state (the scouts are separate processes). Without fcntl: no lock."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    handle = None
+    try:
+        RATE_STATE.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(RATE_STATE.with_suffix(".lock"), "a+")
+        fcntl.flock(handle, fcntl.LOCK_EX)
+    except OSError:
+        if handle is not None:
+            handle.close()
+        handle = None
+    try:
+        yield
+    finally:
+        if handle is not None:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            finally:
+                handle.close()
+
+
+def _read_state() -> dict:
+    try:
+        data = json.loads(RATE_STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_state(state: dict) -> None:
+    try:
+        RATE_STATE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = RATE_STATE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(state), encoding="utf-8")
+        os.replace(tmp, RATE_STATE)
+    except OSError:
+        pass   # a state that cannot be written is the old behaviour (no cap), never a failure of the search
+
+
+def parse_retry_after(value, now=None):
+    """Seconds to wait from a `Retry-After` header (a number of seconds, or an HTTP date), or None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        try:
+            when = email.utils.parsedate_to_datetime(text)
+        except (TypeError, ValueError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        seconds = when.timestamp() - (time.time() if now is None else now)
+    if seconds != seconds:
+        return None
+    return min(max(seconds, 0.0), RETRY_AFTER_MAX_S)
+
+
+def _limited(reason: str, retry_after_s: float, now: float) -> dict:
+    retry_after = max(1, int(round(retry_after_s)))
+    return {
+        "rate_limited": True,
+        "reason": reason,
+        "retry_after_s": retry_after,
+        "retry_at": datetime.fromtimestamp(now + retry_after, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source": "linkedin",
+    }
+
+
+def _gate(now: float):
+    """None if a request may go out (and it is counted), else the rate_limited outcome. Reads and writes the state."""
+    with _state_lock():
+        state = _read_state()
+        until = state.get("cooldown_until")
+        if isinstance(until, (int, float)) and until > now:
+            return _limited("cooldown", until - now, now)
+        recent = [t for t in state.get("requests") or [] if isinstance(t, (int, float)) and now - WINDOW_S < t <= now]
+        if len(recent) >= MAX_REQUESTS:
+            return _limited("request_cap", recent[0] + WINDOW_S - now, now)
+        recent.append(now)
+        state["requests"] = recent
+        _write_state(state)
+        return None
+
+
+def _note_rate_limit(now: float, retry_after) -> dict:
+    """The backoff did not clear the 429: a cooldown shared by every call, longer each time it happens again."""
+    with _state_lock():
+        state = _read_state()
+        strikes = int(state.get("strikes") or 0) + 1 if now - float(state.get("last_429") or 0) < 6 * 3600 else 1
+        cooldown = min(COOLDOWN_MAX_S, max(retry_after or 0.0, COOLDOWN_BASE_S * 2 ** (strikes - 1)))
+        state.update({"strikes": strikes, "last_429": now, "cooldown_until": now + cooldown})
+        _write_state(state)
+    return _limited("http_429", cooldown, now)
+
+
+def _note_success() -> None:
+    with _state_lock():
+        state = _read_state()
+        if state.get("strikes") or state.get("cooldown_until"):
+            state.update({"strikes": 0, "cooldown_until": 0})
+            _write_state(state)
+
+
+def _get(url: str, **kwargs):
+    """GET with the rate limit rules. Returns (response, None) or (None, rate_limited outcome).
+
+    A network error is raised as it always was. The first 429 waits (Retry-After, or 2 s, 4 s…) up to
+    MAX_INLINE_WAIT_S and tries again, MAX_RETRIES times; then the cooldown starts and the outcome is returned."""
+    import requests
+
+    for attempt in range(MAX_RETRIES + 1):
+        now = time.time()
+        blocked = _gate(now)
+        if blocked is not None:
+            return None, blocked
+        r = requests.get(url, headers=_headers(), **kwargs)
+        if r.status_code not in RATE_LIMITED_STATUS:
+            if r.status_code == 200:
+                _note_success()
+            return r, None
+        retry_after = parse_retry_after(r.headers.get("Retry-After"))
+        wait = retry_after if retry_after is not None else BASE_BACKOFF_S * 2 ** attempt
+        if attempt >= MAX_RETRIES or wait > MAX_INLINE_WAIT_S:
+            return None, _note_rate_limit(time.time(), retry_after)
+        time.sleep(wait + random.uniform(0, 0.5))
+    return None, _note_rate_limit(time.time(), None)   # unreachable: the loop always returns
+
+
 # ── URL conversion ────────────────────────────────────────────────────
 JOB_ID_RE = re.compile(r"/(?:comm/)?jobs/view/(\d+)")
 
@@ -86,13 +257,19 @@ ENTITY_URN_RE = re.compile(r'data-entity-urn="urn:li:jobPosting:(\d+)"')
 
 def search(keywords: str, location: str = "", limit: int = 25,
            posted_within_days: int = 7) -> list[dict]:
-    """Cerca via guest endpoint. Niente login.
+    """Cerca via guest endpoint. Niente login. Solo i risultati (vedi `search_ex` per l'esito di un 429)."""
+    return search_ex(keywords, location, limit, posted_within_days)[0]
+
+
+def search_ex(keywords: str, location: str = "", limit: int = 25,
+              posted_within_days: int = 7) -> tuple[list[dict], dict | None]:
+    """Cerca via guest endpoint. Niente login. Ritorna (risultati, rate_limited o None).
 
     `f_TPR=r<seconds>` = posted in last N seconds.
     Pagination: parametro `start` (offset di 10/25 alla volta).
+    Se LinkedIn risponde 429 (o la fonte e' in cooldown / ha raggiunto il tetto di richieste) la ricerca si ferma, i
+    risultati gia' raccolti restano e il secondo valore e' l'esito `rate_limited` con `retry_after_s` e `retry_at`.
     """
-    import requests
-
     f_tpr = f"r{posted_within_days * 86400}"
     results: list[dict] = []
     seen_ids = set()
@@ -107,9 +284,11 @@ def search(keywords: str, location: str = "", limit: int = 25,
         }
         url = GUEST_SEARCH + "?" + urllib.parse.urlencode(params)
         try:
-            r = requests.get(url, headers=_headers(), timeout=20)
+            r, limited = _get(url, timeout=20)
         except Exception:
             break
+        if limited is not None:
+            return results, limited
         if r.status_code != 200 or not r.text.strip():
             break
 
@@ -164,14 +343,13 @@ def search(keywords: str, location: str = "", limit: int = 25,
         start += 25
         time.sleep(0.6 + random.uniform(0, 0.5))  # cortesia, anti-rate
 
-    return results
+    return results, None
 
 
 # ── Fetch JD pubblico ────────────────────────────────────────────────
 def fetch_job(url_or_id: str) -> dict:
     """Fetch JD via /jobs/view/<ID> pubblico. Estrae title, company,
     location, JD body, criteri, posted_at, deadline (deadline_extract)."""
-    import requests
     from bs4 import BeautifulSoup
 
     jid = extract_job_id(url_or_id)
@@ -185,9 +363,12 @@ def fetch_job(url_or_id: str) -> dict:
         parse_deadline = lambda t: None  # noqa: E731
 
     try:
-        r = requests.get(url, headers=_headers(), timeout=25, allow_redirects=True)
+        r, limited = _get(url, timeout=25, allow_redirects=True)
     except Exception as e:
         return {"job_id": jid, "url": url, "error": str(e)}
+    if limited is not None:
+        # not a closed page and not «blocked for good»: LinkedIn says wait. The scout takes another source.
+        return {"job_id": jid, "url": url, "status": 429, **limited}
 
     if r.status_code != 200:
         return {"job_id": jid, "url": url, "status": r.status_code, "blocked": True}
@@ -259,6 +440,9 @@ def fetch_job(url_or_id: str) -> dict:
     }
 
 
+RATE_LIMITED_EXIT = 3   # exit code of `search` / `fetch-job` when LinkedIn says wait
+
+
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -278,13 +462,18 @@ def main(argv):
     args = p.parse_args(argv)
 
     if args.cmd == "search":
-        for j in search(args.keywords, args.location, args.limit, args.posted_within_days):
+        results, limited = search_ex(args.keywords, args.location, args.limit, args.posted_within_days)
+        for j in results:
             print(json.dumps(j))
+        if limited is not None:
+            print(json.dumps(limited))          # the last line: rate_limited + when to come back
+            return RATE_LIMITED_EXIT
         return 0
 
     if args.cmd == "fetch-job":
-        print(json.dumps(fetch_job(args.url_or_id), indent=2, ensure_ascii=False))
-        return 0
+        job = fetch_job(args.url_or_id)
+        print(json.dumps(job, indent=2, ensure_ascii=False))
+        return RATE_LIMITED_EXIT if job.get("rate_limited") else 0
 
     if args.cmd == "convert-url":
         jid = extract_job_id(args.url_or_id)
