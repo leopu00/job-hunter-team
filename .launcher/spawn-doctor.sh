@@ -68,8 +68,14 @@ except Exception:
 PYEOF
 )"
     if [ -n "$FALLBACK_MODEL" ]; then
-      export JHT_SPAWN_MODEL_OVERRIDE="$FALLBACK_MODEL"
-      echo "[$LABEL] retry ${JHT_DOCTOR_RETRY}: fallback model '$FALLBACK_MODEL'"
+      # Il valore viene dal file di configurazione: si valida PRIMA di esportarlo e di scriverlo nel log
+      # del giro (un a-capo o una sequenza di escape non devono finirci).
+      if jht_spawn_model_name_ok "$FALLBACK_MODEL"; then
+        export JHT_SPAWN_MODEL_OVERRIDE="$FALLBACK_MODEL"
+        echo "[$LABEL] retry ${JHT_DOCTOR_RETRY}: fallback model '$FALLBACK_MODEL'"
+      else
+        echo "[$LABEL] retry ${JHT_DOCTOR_RETRY}: doctor_fallback_model is not a model name — ignored"
+      fi
     fi
     ;;
 esac

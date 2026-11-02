@@ -538,6 +538,17 @@ jht_pi_version_check() {
   fi
 }
 
+# jht_spawn_model_name_ok <nome>
+#   Un nome di modello e' accettabile solo se finisce senza rischi in un comando digitato nel pane:
+#   inizia con una lettera o una cifra (mai «-»: diventerebbe un'opzione di claude/codex), poi solo
+#   lettere, cifre e . _ : / -, al massimo 64 caratteri. Vale per chi lo logga come per chi lo digita.
+jht_spawn_model_name_ok() {
+  case "$1" in
+    ''|[!A-Za-z0-9]*|*[!A-Za-z0-9._:/-]*) return 1 ;;
+  esac
+  [ "${#1}" -le 64 ]
+}
+
 # jht_spawn_repl_cmd
 #   Stampa il comando REPL del PROVIDER ATTIVO (non più codex hardcoded: su un
 #   setup claude, lanciare codex fallirebbe per CLI/auth assenti). effort=high
@@ -551,10 +562,10 @@ jht_spawn_repl_cmd() {
   # Modello di riserva (JHT_SPAWN_MODEL_OVERRIDE): lo mette solo chi ritenta dopo un errore di
   # capacita'. Il nome finisce in un comando digitato nel pane: solo caratteri da nome di modello.
   local override="${JHT_SPAWN_MODEL_OVERRIDE:-}"
-  case "$override" in
-    "") ;;
-    *[!A-Za-z0-9._:/-]*) echo "[spawn-lib] WARN: JHT_SPAWN_MODEL_OVERRIDE has characters a model name does not have — ignored" >&2; override="" ;;
-  esac
+  if [ -n "$override" ] && ! jht_spawn_model_name_ok "$override"; then
+    echo "[spawn-lib] WARN: JHT_SPAWN_MODEL_OVERRIDE is not a model name (characters, a leading dash, or length) — ignored" >&2
+    override=""
+  fi
   case "$provider" in
     openai|codex)
       [ -n "$override" ] && model_flag=" -m $override"

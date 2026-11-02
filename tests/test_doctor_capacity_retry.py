@@ -324,3 +324,31 @@ def test_the_fallback_model_replaces_the_usual_one_for_claude_and_codex_only_whe
 def test_a_model_name_with_shell_characters_is_never_typed_into_the_pane():
     assert "--model sonnet" in _repl_cmd("claude", "x; rm -rf ~")
     assert "touch" not in _repl_cmd("claude", "$(touch /tmp/x)")
+
+
+def test_a_model_name_that_starts_with_a_dash_would_be_an_option_and_is_ignored():
+    for bad in ("--oss", "-x", "-m", "--model=other"):
+        assert "--model sonnet" in _repl_cmd("claude", bad), bad
+        assert " -m " not in _repl_cmd("codex", bad) and bad not in _repl_cmd("codex", bad), bad
+
+
+def _name_ok(value: str) -> bool:
+    script = f'. "{SPAWN_LIB}"; jht_spawn_model_name_ok "$1"'
+    return subprocess.run(["bash", "-c", script, "x", value], capture_output=True, timeout=30).returncode == 0
+
+
+def test_the_model_name_check_is_one_function_for_the_log_and_for_the_pane():
+    assert _name_ok("backup-model-1") and _name_ok("a.b_c:d/e-f") and _name_ok("9x")
+    for bad in ("", "-x", "--oss", "x y", "x\nINJECTED", "x\x1b[31m", "$(id)", "a" * 65):
+        assert not _name_ok(bad), repr(bad)
+
+
+def test_the_doctor_spawner_validates_the_fallback_model_before_it_logs_or_exports_it():
+    source = (ROOT / ".launcher" / "spawn-doctor.sh").read_text(encoding="utf-8")
+    check = source.index('jht_spawn_model_name_ok "$FALLBACK_MODEL"')
+    assert check < source.index('export JHT_SPAWN_MODEL_OVERRIDE="$FALLBACK_MODEL"')
+    assert check < source.index("fallback model '$FALLBACK_MODEL'")
+    # the value that failed the check never reaches the round's log
+    assert "is not a model name — ignored" in source
+    refused = source.split("is not a model name")[1].split("\n")[0]
+    assert "$FALLBACK_MODEL" not in refused
