@@ -73,10 +73,12 @@ const CURSOR = /^[0-9]{1,12}$/;
 
 export const PROFILE_SCRIPT = `${SKILLS}/profile_progress.py`;
 export const TEAM_START_SCRIPT = `${SKILLS}/team_start.py`;
+export const WORK_STATS_SCRIPT = `${SKILLS}/work_stats_read.py`;
+const WORK_STATS_REQUEST = '{"op":"read","nights":30}\n';
 const PROFILE_REQUEST = '{"op":"read"}\n';
 
 /** The reads whose reader is a script of the image: each is offered only with the script's digest, which the app compares with its own. */
-export const SCRIPT_OPS = Object.freeze({ 'profile.progress': PROFILE_SCRIPT, 'team.start': TEAM_START_SCRIPT });
+export const SCRIPT_OPS = Object.freeze({ 'profile.progress': PROFILE_SCRIPT, 'team.start': TEAM_START_SCRIPT, 'work.stats': WORK_STATS_SCRIPT });
 
 const NO_ARGS = (args) => (args === undefined ? [] : null);
 const keysOnly = (value, allowed) => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -123,6 +125,12 @@ export const READERS = {
     stdin: PROFILE_REQUEST,
     argv: (args) => (NO_ARGS(args) ? [PYTHON, '-I', TEAM_START_SCRIPT] : null),
   },
+  // the statistics of the last 30 nights: the request is fixed here, the script's clear is never asked
+  'work.stats': {
+    ttl: 5000,
+    stdin: WORK_STATS_REQUEST,
+    argv: (args) => (NO_ARGS(args) ? [PYTHON, '-I', WORK_STATS_SCRIPT] : null),
+  },
 };
 
 function control(words) {
@@ -132,9 +140,9 @@ function control(words) {
 
 const CONTROL_OPS = ['watch', 'invalidate', 'ping', 'bye'];
 /** What the hello says this process can do (a script's read only when its file is in the image). */
-export function opsOf(profileKnown, teamStartKnown = profileKnown) {
-  const known = { 'profile.progress': profileKnown, 'team.start': teamStartKnown };
-  return [...Object.keys(READERS).filter((op) => !Object.hasOwn(known, op) || known[op]), ...CONTROL_OPS];
+export function opsOf(known) {
+  const has = (op) => (known instanceof Set ? known.has(op) : Boolean(known));
+  return [...Object.keys(READERS).filter((op) => !Object.hasOwn(SCRIPT_OPS, op) || has(op)), ...CONTROL_OPS];
 }
 
 /** The environment of a reader: the image's own few variables and a fixed PATH. */
@@ -277,8 +285,7 @@ export function createStateStream({
     }
   },
   cid = containerId,
-  profileSha = () => sha256File(PROFILE_SCRIPT),
-  teamStartSha = () => sha256File(TEAM_START_SCRIPT),
+  scriptSha = (op) => sha256File(SCRIPT_OPS[op]),
   timeoutMs = READER_TIMEOUT_MS,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
@@ -483,7 +490,7 @@ export function createStateStream({
       answer(id, { ok: false, err: 'op_unknown' });
       return;
     }
-    if ((op === 'profile.progress' && profileShaValue === null) || (op === 'team.start' && teamStartShaValue === null)) {
+    if (Object.hasOwn(SCRIPT_OPS, op) && !digests[op]) {
       answer(id, { ok: false, err: 'op_unknown' });
       return;
     }
@@ -507,18 +514,16 @@ export function createStateStream({
     }
   };
 
-  const profileShaValue = profileSha();
-  const teamStartShaValue = teamStartSha();
+  // the digest of each script of the image a read runs (null: the file is not there, and the read is not offered)
+  const digests = Object.fromEntries(Object.keys(SCRIPT_OPS).map((op) => [op, scriptSha(op) ?? null]));
 
   return {
     /** How many answers are kept (for the tests). */
     kept: () => cache.size,
     /** First line, before anything is read. */
     hello() {
-      const sha = {};
-      if (profileShaValue) sha['profile.progress'] = profileShaValue;
-      if (teamStartShaValue) sha['team.start'] = teamStartShaValue;
-      send({ t: 'hello', proto: PROTO, ops: opsOf(profileShaValue !== null, teamStartShaValue !== null), cid: cid(), sha256: sha });
+      const sha = Object.fromEntries(Object.entries(digests).filter(([, digest]) => digest));
+      send({ t: 'hello', proto: PROTO, ops: opsOf(new Set(Object.keys(sha))), cid: cid(), sha256: sha });
       armIdle();
     },
     /** Bytes from stdin. */

@@ -20,7 +20,7 @@ const MAX_NIGHTS: usize = 90;
 
 /// The fixed script: loads the team's own `work_stats.py` and answers one JSON. An image older than the
 /// feature has no such file: `stats_unavailable`.
-const WORK_STATS_PY: &str = r#"import importlib.util,json,os,sys
+pub(crate) const WORK_STATS_PY: &str = r#"import importlib.util,json,os,sys
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 try: req=json.loads(sys.stdin.readline())
 except Exception: emit({'ok':False,'error':'stats_unavailable'})
