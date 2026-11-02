@@ -88,6 +88,7 @@ pub(crate) enum StreamRead<'a> {
     AgentsExclusions,
     TeamSettings,
     TeamStart,
+    WorkStats,
     AgentsScreen { name: &'a str },
     ProfileProgress,
 }
@@ -114,6 +115,7 @@ impl StreamRead<'_> {
             Self::AgentsExclusions => "agents.exclusions",
             Self::TeamSettings => "team.settings",
             Self::TeamStart => "team.start",
+            Self::WorkStats => "work.stats",
             Self::AgentsScreen { .. } => "agents.screen",
             Self::ProfileProgress => "profile.progress",
         }
@@ -140,7 +142,7 @@ impl StreamRead<'_> {
                 }
                 request.insert("args".into(), json!({ "name": name }));
             }
-            Self::AgentsList | Self::AgentsTeam | Self::AgentsHistory | Self::AgentsExclusions | Self::TeamSettings | Self::TeamStart | Self::ProfileProgress => {}
+            Self::AgentsList | Self::AgentsTeam | Self::AgentsHistory | Self::AgentsExclusions | Self::TeamSettings | Self::TeamStart | Self::WorkStats | Self::ProfileProgress => {}
         }
         serde_json::to_string(&Value::Object(request)).ok()
     }
@@ -574,13 +576,17 @@ fn hello_accepted(hello: &Hello, container: &str) -> Result<Vec<String>, &'stati
 }
 
 /// The reads this side knows: every `StreamRead::op`. A hello that lists any other operation is ignored for it.
-const READ_OPS: [&str; 9] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.exclusions", "team.settings", "agents.screen", "profile.progress", "team.start"];
+const READ_OPS: [&str; 10] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.exclusions", "team.settings", "agents.screen", "profile.progress", "team.start", "work.stats"];
 
 /// The digest of the script an operation runs from the image, when it runs one; the script is the app's own constant.
+/// The container declares its digest in the hello. That is NOT an authentication (the container is not trusted): it
+/// finds an image that is not aligned with this app. What defends the app is the answer, closed again here with the
+/// same parsers as the old way, whatever script produced it.
 fn script_sha(op: &str) -> Option<String> {
     let script = match op {
         "profile.progress" => crate::profile_progress::PROFILE_PROGRESS_PY,
         "team.start" => crate::team_start::TEAM_START_PY,
+        "work.stats" => crate::work_stats::WORK_STATS_PY,
         _ => return None,
     };
     Some(format!("{:x}", Sha256::digest(script.as_bytes())))
@@ -1020,6 +1026,7 @@ mod tests {
         assert_eq!(value(StreamRead::AgentsExclusions), json!({"id":5,"op":"agents.exclusions"}));
         assert_eq!(value(StreamRead::TeamSettings), json!({"id":5,"op":"team.settings"}));
         assert_eq!(value(StreamRead::TeamStart), json!({"id":5,"op":"team.start"}));
+        assert_eq!(value(StreamRead::WorkStats), json!({"id":5,"op":"work.stats"}));
         for agent in ["-x", "--help", "a b", "capitano\n", "Capitano", "", "root", &"x".repeat(257)] {
             assert!(StreamRead::ChatRead { agent, cursor: None }.request(1).is_none(), "{agent:?}");
         }
@@ -1126,10 +1133,12 @@ mod tests {
             StreamRead::AgentsScreen { name: "CAPITANO" }.op(),
             StreamRead::ProfileProgress.op(),
             StreamRead::TeamStart.op(),
+            StreamRead::WorkStats.op(),
         ];
         assert_eq!(asked, READ_OPS);
         let mut said = hello(1, Some("3c33ab6a0d08"), Some(profile_script_sha()));
         said.script_sha.insert("team.start".to_owned(), script_sha("team.start").unwrap());
+        said.script_sha.insert("work.stats".to_owned(), script_sha("work.stats").unwrap());
         said.ops = asked.iter().map(|op| (*op).to_owned()).collect();
         let accepted = hello_accepted(&said, &id).unwrap();
         for op in asked {
@@ -1167,6 +1176,8 @@ mod tests {
         assert_eq!(file, crate::profile_progress::PROFILE_PROGRESS_PY);
         let file = include_str!("../../../shared/skills/team_start.py");
         assert_eq!(file, crate::team_start::TEAM_START_PY);
+        let file = include_str!("../../../shared/skills/work_stats_read.py");
+        assert_eq!(file, crate::work_stats::WORK_STATS_PY);
     }
 
     // ── a stream over a real pipe: a stand-in for the container ─────────────────────────────────────
@@ -1360,7 +1371,7 @@ done"#
         let ops = hello_accepted(&hello, &format!("{}{}", hello.cid.clone().unwrap(), "0".repeat(64 - hello.cid.as_ref().unwrap().len()))).unwrap();
         println!("accepted: {ops:?}");
         session.ops.set(ops).unwrap();
-        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::TeamStart, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
+        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::TeamStart, StreamRead::WorkStats, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
             for round in 0..2 {
                 let at = Instant::now();
                 let done = session.read(&read).expect("answered");
@@ -1415,13 +1426,16 @@ done"#
         let code = code.as_str();
         // the reads of the closed set, and nothing else, have an operation
         let ops = code.split("fn op(&self)").nth(1).unwrap().split("\n    }\n").next().unwrap();
-        assert_eq!(ops.matches('"').count() / 2, 9);
+        assert_eq!(ops.matches('"').count() / 2, 10);
         for forbidden in ["app_exit", "ChatOperation::Send", "ChatOperation::Answer", "ChatOperation::Enter", "\"start\"", "\"stop\"", "\"restart\"", "\"pause\"", "\"resume\"", "\"send\"", "\"answer\"", "write_access", "team_control", "start_command"] {
             assert!(!code.contains(forbidden), "{forbidden}");
         }
         // the first-start read is a script the app already has, and the stream only takes its digest
         assert_eq!(code.matches("crate::team_start::").count(), 1);
         assert!(code.contains("crate::team_start::TEAM_START_PY"));
+        // and the statistics' read is the script's constant too, never its clearing (the stream asks for a read of 30 nights only)
+        assert_eq!(code.matches("crate::work_stats::").count(), 1);
+        assert!(code.contains("crate::work_stats::WORK_STATS_PY") && !code.contains("work_stats_clear"));
         // the callers: the chat's Read only, the panel's three reads only, the profile read only
         let chat = include_str!("direct_chat.rs");
         let chat_arm = chat.split("// The hot read goes over the state stream").nth(1).unwrap().split("let writes =").next().unwrap();
@@ -1436,6 +1450,8 @@ done"#
         assert_eq!(local.matches("read_local(").count(), 1);
         assert!(local.contains("matches!(request, Request::Read {})") && local.contains("StreamRead::TeamSettings") && local.contains("invalidate_local(stream)"));
         // a change made the old way tells the stream to drop what it kept
+        // clearing the statistics goes the old way and drops what the stream kept of them
+        assert!(chat.contains("WORK_STATS_PY && request == &json!({\"op\": \"clear\"})"));
         assert!(chat.contains("crate::state_stream::invalidate_local(stream)") && control.contains("crate::state_stream::invalidate_local(stream)"));
     }
 

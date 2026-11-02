@@ -2512,14 +2512,15 @@ fn run_python(
     request: &Value,
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
-    // The profile bar's read and the team's first-start read go over the state stream when it is open: the same script, as a file of the image.
+    // The profile bar's read, the team's first-start read and the statistics' read go over the state stream when it is open: the same script, as a file of the image.
     if let (ValidatedHost::Local, Some(app), Some(wrapper), Some(runtime)) = (&connection.validated, connection.app.as_ref(), connection.local_wrapper.as_deref(), connection.local_runtime.as_deref()) {
-        let hot = if request != &json!({"op": "read"}) {
-            None
-        } else if script == crate::profile_progress::PROFILE_PROGRESS_PY {
+        let plain = request == &json!({"op": "read"});
+        let hot = if plain && script == crate::profile_progress::PROFILE_PROGRESS_PY {
             Some(crate::state_stream::StreamRead::ProfileProgress)
-        } else if script == crate::team_start::TEAM_START_PY {
+        } else if plain && script == crate::team_start::TEAM_START_PY {
             Some(crate::state_stream::StreamRead::TeamStart)
+        } else if request == &json!({"op": "read", "nights": 30}) && script == crate::work_stats::WORK_STATS_PY {
+            Some(crate::state_stream::StreamRead::WorkStats)
         } else {
             None
         };
@@ -2539,6 +2540,12 @@ fn run_python(
         timeout,
     );
     input.zeroize();
+    // clearing the statistics changes what the stream kept of them: it is dropped now
+    if script == crate::work_stats::WORK_STATS_PY && request == &json!({"op": "clear"}) {
+        if let (ValidatedHost::Local, Some(app), Some(wrapper), Some(runtime)) = (&connection.validated, connection.app.as_ref(), connection.local_wrapper.as_deref(), connection.local_runtime.as_deref()) {
+            crate::state_stream::invalidate_local(&crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime });
+        }
+    }
     result
 }
 
