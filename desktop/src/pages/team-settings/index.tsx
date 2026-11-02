@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { BackToSettings, PageTitle } from "../settings/embedded";
 import { makeT } from "@/lib/i18n-dict";
 import { ToastProvider, useToast } from "@/app/components/Toast";
 import { T as WEB_TEXT } from "@/app/(protected)/settings/team/page.i18n";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
 import { readTeamSettings, writeTeamSettings, type TeamSettings, type TeamSettingsPatch } from "../../lib/team-settings-native";
-import { navigate } from "../../shell/router";
 import type { PageProps } from "../types";
 import RoleModelsCard from "./RoleModelsCard";
 import { TEAM_SETTINGS_TEXT } from "./team-settings.i18n";
@@ -54,16 +54,10 @@ function TeamSettings() {
 
   return (
     <section className="max-w-3xl mx-auto px-5 py-8 flex flex-col gap-4" aria-labelledby="team-settings-title">
-      <button
-        type="button"
-        onClick={() => navigate("/settings")}
-        className="self-start text-[11px] tracking-[0.14em] uppercase text-[var(--color-dim)] hover:text-[var(--color-bright)]"
-      >
-        ← {t.back}
-      </button>
-      <h1 id="team-settings-title" className="text-[15px] font-semibold text-[var(--color-bright)]">
+      <BackToSettings label={t.back} />
+      <PageTitle id="team-settings-title" className="text-[15px] font-semibold text-[var(--color-bright)]">
         {t.title}
-      </h1>
+      </PageTitle>
       {loaded.kind === "loading" && (
         <p role="status" className="text-[12px] text-[var(--color-muted)]">
           {t.loading}

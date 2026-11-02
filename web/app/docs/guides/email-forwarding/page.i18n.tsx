@@ -239,7 +239,7 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         In the <strong>JHT desktop app</strong>, open <strong>Mail</strong> in
-        the top menu and fill in the <strong>Save a new app password</strong>{" "}
+        the Account menu (top right) and fill in the <strong>Save a new app password</strong>{" "}
         form:
       </>
     ),
@@ -624,7 +624,7 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         Nell&apos;<strong>app desktop JHT</strong>, apri <strong>Posta</strong>{" "}
-        nel menu in alto e compila il modulo{" "}
+        nel menu Account (in alto a destra) e compila il modulo{" "}
         <strong>Salva una nuova password per app</strong>:
       </>
     ),
@@ -1027,7 +1027,7 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         En la <strong>app de escritorio JHT</strong>, abre{" "}
-        <strong>Correo</strong> en el menú superior y rellena el formulario{" "}
+        <strong>Correo</strong> en el menú Cuenta (arriba a la derecha) y rellena el formulario{" "}
         <strong>Guardar una nueva contraseña de aplicación</strong>:
       </>
     ),
@@ -1442,7 +1442,7 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         Dans l&apos;<strong>app de bureau JHT</strong>, ouvrez{" "}
-        <strong>Courrier</strong> dans le menu du haut et remplissez le
+        <strong>Courrier</strong> dans le menu Compte (en haut à droite) et remplissez le
         formulaire{" "}
         <strong>Enregistrer un nouveau mot de passe d’application</strong> :
       </>
@@ -1867,7 +1867,7 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Teile das Postfach mit dem Team (Desktop-App)",
     step2Body: (
       <>
-        Öffne in der <strong>JHT-Desktop-App</strong> im oberen Menü{" "}
+        Öffne in der <strong>JHT-Desktop-App</strong> im Kontomenü (oben rechts){" "}
         <strong>E-Mail</strong> und fülle das Formular{" "}
         <strong>Ein neues App-Passwort speichern</strong> aus:
       </>
@@ -2275,7 +2275,7 @@ export const T: Record<Locale, Strings> = {
     step2Title: "2️⃣ Oszd meg a postafiókot a csapattal (asztali alkalmazás)",
     step2Body: (
       <>
-        A <strong>JHT asztali alkalmazásban</strong> nyisd meg a felső menüben a{" "}
+        A <strong>JHT asztali alkalmazásban</strong> nyisd meg a Fiók menüben (jobb felül) a{" "}
         <strong>Levelezés</strong> oldalt, és töltsd ki az{" "}
         <strong>Új alkalmazásjelszó mentése</strong> űrlapot:
       </>
@@ -2680,7 +2680,7 @@ export const T: Record<Locale, Strings> = {
     step2Body: (
       <>
         No <strong>app de desktop JHT</strong>, abra <strong>Correio</strong> no
-        menu superior e preencha o formulário{" "}
+        menu Conta (canto superior direito) e preencha o formulário{" "}
         <strong>Guardar uma nova palavra-passe de aplicação</strong>:
       </>
     ),

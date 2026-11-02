@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PageTitle } from "../settings/embedded";
 import type { Locale } from "@/i18n/config";
 import { appLocale } from "../../lib/app-locale";
 import { describeError, errorCodeOf } from "../../lib/error-catalog";
@@ -64,7 +65,7 @@ export function ComputerScreen({
   const removing = stage.state === "removing";
   return (
     <section className="max-w-3xl mx-auto px-5 py-8 text-[12px]" aria-labelledby="computer-title">
-      <h1 id="computer-title" className="text-[16px] font-bold">{t.title}</h1>
+      <PageTitle id="computer-title" className="text-[16px] font-bold">{t.title}</PageTitle>
       <p className="mt-1 text-[var(--color-muted)]">{t.intro}</p>
 
       {stage.state === "checking" && <p className="mt-5" role="status">…</p>}

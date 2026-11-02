@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DashboardI18nProvider } from "@/app/components/DashboardI18n";
 import { locales } from "@/i18n/config";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
-import { desktopLinks } from "../../shell/desktop-links";
+import { NAV_TEXT } from "../../shell/nav.i18n";
 import { SHELL_TEXT } from "../../shell/shell.i18n";
 import { SETTINGS_TEXT } from "../settings/settings.i18n";
 import { HELP_TEXT } from "./help.i18n";
@@ -58,11 +58,10 @@ describe("the help page", () => {
   });
 
   it.each(locales)("%s: its two navigation labels are the ones the bars use", (locale) => {
-    const links = Object.fromEntries(desktopLinks(locale).map((link) => [link.href, link.label]));
-    expect(links["/help"]).toBe(HELP_TEXT[locale].navLabel);
-    expect(links["/help"]).toBe(EXISTING_TEAM_READONLY_TEXT[locale].help);
-    expect(links["/settings"]).toBe(SETTINGS_TEXT[locale].navLabel);
-    expect(links["/settings"]).toBe(EXISTING_TEAM_READONLY_TEXT[locale].settings);
+    expect(NAV_TEXT[locale].help).toBe(HELP_TEXT[locale].navLabel);
+    expect(NAV_TEXT[locale].help).toBe(EXISTING_TEAM_READONLY_TEXT[locale].help);
+    expect(NAV_TEXT[locale].settings).toBe(SETTINGS_TEXT[locale].navLabel);
+    expect(NAV_TEXT[locale].settings).toBe(EXISTING_TEAM_READONLY_TEXT[locale].settings);
   });
 
   it.each(locales)("%s: the button names it quotes exist in the shell's and the read-only view's texts", (locale) => {

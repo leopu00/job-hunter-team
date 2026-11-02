@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BackToSettings, PageTitle } from "../settings/embedded";
 import { appLocale } from "../../lib/app-locale";
 import { buildAccountExport } from "../../lib/account-export";
 import { cloudClient } from "../../lib/cloud-client";
@@ -8,7 +9,6 @@ import { teamOffFailure } from "../../shell/team-off-failure";
 import { pluralText } from "../../lib/plural";
 import { fill } from "../../lib/text-slots";
 import { EXPORT_FORMATS, EXPORT_SOURCES, exportTeamData, saveAccountExport, type ExportFormat, type ExportOutcome, type ExportSource } from "../../lib/team-export";
-import { navigate } from "../../shell/router";
 import type { PageProps } from "../types";
 import { EXPORT_TEXT, type ExportText } from "./export.i18n";
 
@@ -95,16 +95,10 @@ export default function ExportPage(_props: PageProps) {
 
   return (
     <section className="max-w-3xl mx-auto px-5 py-8 flex flex-col gap-4" aria-labelledby="export-title">
-      <button
-        type="button"
-        onClick={() => navigate("/settings")}
-        className="self-start text-[11px] tracking-[0.14em] uppercase text-[var(--color-dim)] hover:text-[var(--color-bright)]"
-      >
-        ← {t.back}
-      </button>
-      <h1 id="export-title" className="text-[15px] font-semibold text-[var(--color-bright)]">
+      <BackToSettings label={t.back} />
+      <PageTitle id="export-title" className="text-[15px] font-semibold text-[var(--color-bright)]">
         {t.title}
-      </h1>
+      </PageTitle>
       <p className="text-[12px] text-[var(--color-muted)]">{t.intro}</p>
       {/* said before anything is saved: the file is plain and holds the person's data */}
       <p role="note" data-testid="export-personal-data" className="text-[12px] text-[var(--color-yellow)]">

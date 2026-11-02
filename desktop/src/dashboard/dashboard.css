@@ -531,3 +531,11 @@
 }
 .theme-editor textarea:focus-visible { outline: 2px solid var(--color-green); outline-offset: 2px; }
 .theme-editor button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
+
+/* A technical page shown inside a section of Settings (pages/settings/SettingsSections.tsx): the section's column
+   already gives it its width and margins, so the page's own frame is flattened. */
+.settings-embedded > section {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}

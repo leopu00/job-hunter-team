@@ -6,7 +6,8 @@ import { emptyEngine } from "../../office/parts";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
 import { navigate } from "../../shell/router";
-import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
+import { READ_ONLY_NAV_ITEMS } from "../../shell/nav-items";
+import { READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import { realSnapshotReply } from "../../test-support/snapshot-command-reply";
@@ -80,7 +81,7 @@ describe("/office in the read-only view of an existing team", () => {
     expect(route?.fullBleed).toBe(true);
     // not the cloud's page: that one reads Realtime and the cloud's positions
     expect(route?.page).not.toBe(ROUTES.find((r) => r.path === "/office")?.page);
-    expect(READ_ONLY_NAV.map((n) => n.href)).toContain("/office");
+    expect(READ_ONLY_NAV_ITEMS.map((n) => n.href)).toContain("/office");
   });
 
   it("opens from the navigation and draws the sessions the VPS reports", async () => {
