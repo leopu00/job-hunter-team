@@ -576,7 +576,7 @@ def test_download_is_not_a_container_command_any_more(tmp_path: Path):
     env["JHT_DOWNLOAD_HOST"] = "darwin-arm64"
 
     done = subprocess.run(
-        [str(wrapper), "download", "--os", "macos", "--version", "0.3.5", "--output", str(tmp_path / "out" / "x.dmg")],
+        [str(wrapper), "download", "--os", "macos", "--version", "0.4.0", "--output", str(tmp_path / "out" / "x.dmg")],
         env=env, text=True, capture_output=True, timeout=30, check=False,
     )
 

@@ -1360,7 +1360,7 @@ def test_host_download_is_checked_on_the_host_and_never_calls_the_container(
     from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
     asset = b"verified release bytes\n"
-    release = tmp_path / "site" / "v0.3.5"
+    release = tmp_path / "site" / "v0.4.0"
     release.mkdir(parents=True)
     (release / "job-hunter-team-macos-universal.dmg").write_bytes(asset)
     (release / "SHA256SUMS").write_text(
@@ -1394,7 +1394,7 @@ def test_host_download_is_checked_on_the_host_and_never_calls_the_container(
             "--os",
             "macos",
             "--version",
-            "0.3.5",
+            "0.4.0",
             "--output",
             str(destination),
         )
