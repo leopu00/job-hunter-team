@@ -92,6 +92,8 @@ STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
          fresh searches stop yielding new links.
 ```
 
+**Measure every search (skill `scout-pass-log`).** After each search of a source, the `pass` command with how many candidates came back. When a candidate leaves the gates (inserted, or dropped), the `candidate` command with where it ended. Closed vocabulary, never free text: it is how the team learns whether a source is exhausted or the search is bad.
+
 **📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1

@@ -43,3 +43,7 @@ scout-web-access
 # costs a full turn of THIS agent's model, and orders still come from the
 # Capitano, never from the chat.
 chat-worker
+
+# Measure of the searches: how many candidates each pass returns and where each one ends
+# (closed vocabulary, nothing of the profile). TUI team only for now.
+scout-pass-log
