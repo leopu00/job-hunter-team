@@ -16,6 +16,37 @@ function failureText(code: string): string {
   return `${copy.text} ${copy.action}`;
 }
 
+/** The lengths of time offered as one tap (hours). */
+export const QUICK_HOURS = [1, 2, 4] as const;
+/** The field starts on this many hours from now, rounded up to a quarter of an hour (inside the 12 hours the team takes). */
+export const DEFAULT_HOURS = 4;
+const QUARTER_MS = 15 * 60_000;
+
+/** The wall clock `HH:MM` of a zone at an instant; null when the zone is not one the platform knows. */
+export function clockIn(zone: string | null | undefined, at: Date): string | null {
+  if (!zone) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(at);
+    const hour = parts.find((part) => part.type === "hour")?.value;
+    const minute = parts.find((part) => part.type === "minute")?.value;
+    return hour && minute ? `${hour === "24" ? "00" : hour}:${minute}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The time the team reads `hours` from now, as the team's wall clock reads it (the box takes HH:MM in the zone of the team's
+ * hours, and the person's computer may be in another). Null while that zone is not known: then nothing is guessed, the field
+ * stays empty and the person types the time. `roundTo` rounds up to the minute (a length of time) or to the quarter of an hour
+ * (the field's first value).
+ */
+export function untilIn(zone: string | null | undefined, hours: number, now: Date, roundTo: "minute" | "quarter"): string | null {
+  const step = roundTo === "quarter" ? QUARTER_MS : 60_000;
+  const at = new Date(Math.ceil((now.getTime() + hours * 3_600_000) / step) * step);
+  return clockIn(zone, at);
+}
+
 /**
  * «Work flat out until HH:MM»: choose a time, and the team works flat out until then, even outside its
  * hours; when the time is up the hours it had before come back by themselves, with the app closed or
@@ -34,7 +65,8 @@ export default function BurstControl({
 }) {
   const t = BURST_TEXT[appLocale()];
   const inputId = useId();
-  const [time, setTime] = useState("");
+  const zone = settings.workingHours?.timezone ?? null;
+  const [time, setTime] = useState(() => untilIn(zone, DEFAULT_HOURS, new Date(), "quarter") ?? "");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Note>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -60,16 +92,31 @@ export default function BurstControl({
     setNote({ kind: "ok", text: done(result.settings) });
   }
 
+  function begin(until: string) {
+    void run(
+      () => startBurst(until, settings.connectionKey),
+      (next) => fill(t.burstStarted, { time: next.burst?.active ? next.burst.untilLocal : until }),
+    );
+  }
+
   function start() {
     if (!burstTimeIsValid(time)) {
       setNote({ kind: "error", text: t.burstNeedsTime });
       return;
     }
-    void run(
-      () => startBurst(time, settings.connectionKey),
-      (next) => fill(t.burstStarted, { time: next.burst?.active ? next.burst.untilLocal : time }),
-    );
+    begin(time);
   }
+
+  /** One tap: the team works flat out for this many hours from now (the time is the team's own clock, never the computer's). */
+  function startFor(hours: number) {
+    const until = untilIn(zone, hours, new Date(), "minute");
+    if (until === null || busy) return;
+    setTime(until);
+    begin(until);
+  }
+
+  const quick = zone !== null && clockIn(zone, new Date()) !== null;
+  const quickLabels: Record<(typeof QUICK_HOURS)[number], string> = { 1: t.burstFor1, 2: t.burstFor2, 4: t.burstFor4 };
 
   const noteLine = note && (
     <p
@@ -116,9 +163,19 @@ export default function BurstControl({
           <p className="m-0 text-[12px] text-[var(--color-muted)]">{t.burstIntro}</p>
         </>
       )}
+      {quick && (
+        <div role="group" aria-label={t.burstQuickLabel} data-testid="burst-quick" className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-widest text-[var(--color-dim)]">{t.burstQuickLabel}</span>
+          {QUICK_HOURS.map((hours) => (
+            <button key={hours} type="button" data-testid={`burst-quick-${hours}`} disabled={busy} onClick={() => startFor(hours)} className={BUTTON}>
+              {quickLabels[hours]}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={inputId} className="text-[11px] uppercase tracking-widest text-[var(--color-dim)]">
-          {t.burstUntilLabel}
+          {quick ? t.burstExactLabel : t.burstUntilLabel}
         </label>
         <input
           id={inputId}
