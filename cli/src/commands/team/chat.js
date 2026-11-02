@@ -112,6 +112,50 @@ const CHAT_READER = '/app/shared/skills/agent_chat.py';
 const HISTORY_ROWS = 6;
 const POLL_MS = 3000;
 const REPLY_WAIT_MS = 20_000;
+// A message pasted into a terminal that is in the middle of a turn can be lost (A2 of the Linux CLI gate, 02/11: the
+// second line, typed while the Assistant was still answering the first, never reached it and the chat said nothing).
+// So the next message waits for the agent to be free, and says so; at the limit it is NOT sent and the person is told.
+const FREE_WAIT_MS = 180_000;
+const FREE_POLL_MS = 2000;
+
+/**
+ * Whether the pane shows a turn in progress: a status line with «esc to interrupt» in its last rows. The same
+ * reading as the transport's (agents/_skills/tmux-send/jht-tmux-send, _pane_busy): the phrase quoted or followed by
+ * prose is not a status line, and in doubt the pane is NOT busy (a message to a free pane is the harmless mistake).
+ */
+export function paneLooksBusy(pane, scanLines = 10) {
+  const rows = String(pane || '').replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').split('\n').slice(-scanLines);
+  for (const row of rows) {
+    const lower = row.toLowerCase();
+    const at = lower.indexOf('esc to interrupt');
+    if (at < 0) continue;
+    const before = lower.slice(0, at);
+    const after = lower.slice(at + 'esc to interrupt'.length);
+    if (/["'“«]$/.test(before)) continue;           // quoted: prose
+    if (after.length > 40) continue;                // followed by a speech: prose
+    const rest = after.replace(/[) ]*$/, '').replace(/^ */, '');
+    if (rest === '' || /^[·•|,-]/.test(rest)) return true;
+  }
+  return false;
+}
+
+/**
+ * Waits until the agent's pane is free. Calls `onWait` once, the first time it is busy. True when free (at once
+ * or after waiting), false when it is still busy at the limit.
+ */
+export async function waitForFreePane({
+  capture, sleep = (ms) => new Promise((res) => setTimeout(res, ms)), now = Date.now,
+  maxMs = FREE_WAIT_MS, everyMs = FREE_POLL_MS, onWait = () => {},
+} = {}) {
+  if (!paneLooksBusy(capture())) return true;
+  onWait();
+  const until = now() + maxMs;
+  while (now() < until) {
+    await sleep(everyMs);
+    if (!paneLooksBusy(capture())) return true;
+  }
+  return false;
+}
 
 /** The chat name of a session (ASSISTENTE -> assistente, SCOUT-1 -> scout), or null for a session without a chat. */
 export function chatAgentOf(session) {
@@ -411,6 +455,16 @@ export async function chatAction(agentArg, options = {}) {
       if (typed.result !== 'chat') {
         const said = describeAnswer(typed);
         console.log(said.failed ? c.red(`  ${said.text}`) : c.green(`  ✓ ${said.text}`));
+        continue;
+      }
+      // Never paste into a turn in progress: the text can be lost without a word. Wait for the agent, say so.
+      const free = await waitForFreePane({
+        capture: () => capturePane(session, 12),
+        onWait: () => console.log(c.dim('  (still answering your previous message: yours goes out as soon as it is free)')),
+      });
+      if (!free) {
+        console.log(c.red('  Your message was NOT sent: the agent is still busy after 3 minutes.'));
+        console.log(c.dim(`  Send it again when it has answered (/read shows the answer). Your text: ${msg.length > 80 ? msg.slice(0, 80) + '…' : msg}`));
         continue;
       }
       const r = sendMessage(session, msg);
