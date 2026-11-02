@@ -14,6 +14,7 @@ import {
   type AgentMode,
   type AgentPose,
   type AgentRole,
+  type AgentStatuses,
   type Bubble,
   type CharacterSheet,
   type CreateOfficeEngine,
@@ -39,6 +40,32 @@ export const SPEED = 150;
 export const PIPELINE_SPEED = 185;
 /** How many pipeline events an agent keeps while busy (AgentNPC._pending_pipeline). */
 export const PENDING_MAX = 8;
+/** AgentNPC._begin_desk_pause: the sine ease from the standing spot to the seat. */
+export const SETTLE_SECONDS = 0.28;
+/** AgentNPC.react_to_work: two pulses, each 0.16 s up and 0.45 s down. */
+export const PULSE_UP = 0.16;
+export const PULSE_DOWN = 0.45;
+export const PULSE_SECONDS = 2 * (PULSE_UP + PULSE_DOWN);
+
+/** The glow 0..1 `t` seconds into a work flash; 0 once it is over. */
+export function pulseAt(t: number): number {
+  if (t < 0 || t >= PULSE_SECONDS) return 0;
+  const k = t % (PULSE_UP + PULSE_DOWN);
+  return k < PULSE_UP ? k / PULSE_UP : 1 - (k - PULSE_UP) / PULSE_DOWN;
+}
+/**
+ * AgentNPC.TRIP_EVERY for the core roles that walk a round in live too
+ * (LIVE_PATROL): the mean seconds between two rounds, jitter x0.6..1.4 (the
+ * mentor's x0.95..1.05: his ritual stays near the half hour).
+ */
+export const PATROL_EVERY: Partial<Record<AgentRole, number>> = { capitano: 90, sentinella: 140, assistente: 300, mentor: 1800 };
+
+/** Whether a status published by the box means the agent is at work (agent_npc.gd backend_status == "working"). */
+export function isTyping(statuses: AgentStatuses | null, uid: string): boolean {
+  const status = statuses?.agents[uid.toLowerCase()];
+  // no word from the box about this agent: as before there were statuses, it types
+  return status ? status.status === "working" : true;
+}
 
 /**
  * agent_npc.gd _seat_offset's table by facing: where the body sits relative
@@ -81,6 +108,9 @@ type Leg = {
   exit?: boolean;
 };
 
+/** The sine ease from the standing spot to the seat (AgentNPC.SEATING). */
+type Settle = { t: number; from: Vec; to: Vec };
+
 /**
  * Where an agent works. `furniture`: the desk or core seat it sits at, null
  * when it has no workstation of its own (an instance beyond the chairs)
@@ -111,6 +141,19 @@ type Agent = {
   /** the rig's clock (SpriteSheetRig._t) */
   t: number;
   gone: boolean;
+  /** what the box says: working types, anything else sits still (agent_npc.gd _work_pose) */
+  typing: boolean;
+  /** a core role's round (character_defs.gd "wander"); empty = none */
+  wander: Vec[];
+  /** seconds to the next round */
+  patrolIn: number;
+  /** the trip it walks is a round, which a status other than working cuts short */
+  patrol: boolean;
+  settle: Settle | null;
+  /** seconds into the flash of a real transition; null = none */
+  pulse: number | null;
+  /** the motion it had when the panel took it, given back when the panel closes */
+  heldFrom: { facing: SheetFacing; flipped: boolean; mode: AgentMode } | null;
 };
 
 const EMPTY_PILES: Piles = { scout: null, analisti: null, scorer: null, scrittori: null, critici: null };
@@ -134,6 +177,9 @@ class Engine implements OfficeEngine {
   private owed: Record<DeptId, number> = { scout: 0, analisti: 0, scorer: 0, scrittori: 0, critici: 0 };
   private said: Bubble[] = [];
   private clock = 0;
+  private statuses: AgentStatuses | null = null;
+  /** the agent whose panel is open: it stands still and looks at the camera */
+  private selected: string | null = null;
 
   constructor(
     private readonly layout: OfficeLayout,
@@ -176,12 +222,55 @@ class Engine implements OfficeEngine {
     }
   }
 
+  setStatuses(statuses: AgentStatuses | null): void {
+    this.statuses = statuses;
+    for (const a of this.agents.values()) {
+      const typing = isTyping(statuses, a.info.uid);
+      if (typing === a.typing) continue;
+      a.typing = typing;
+      if (a.state === "work") this.deskPose(a);
+      else if (a.patrol && !typing) this.recall(a);
+    }
+  }
+
+  select(uid: string | null): void {
+    const before = this.selected;
+    this.selected = uid;
+    if (before !== null && before !== uid) {
+      const a = this.agents.get(before);
+      if (a) this.hold(a, false);
+    }
+    if (uid !== null && uid !== before) {
+      const a = this.agents.get(uid);
+      if (a) this.hold(a, true);
+    }
+  }
+
+  /** Nothing in the office moves or changes its picture: a scene that draws less may skip the frame. */
+  quiet(): boolean {
+    for (const a of this.agents.values()) {
+      if (a.gone || a.settle || a.pulse !== null) return false;
+      // held by the panel it does not move: only its picture can still change
+      if (a.state !== "work" && this.selected !== a.info.uid) return false;
+      if (trackFor(a.mode, a.facing, a.still).fps > 0) return false;
+    }
+    return true;
+  }
+
   step(dt: number): void {
     if (dt <= 0) return;
     this.clock += dt;
     for (const a of this.agents.values()) {
       a.t += dt;
-      if (a.state === "pause") {
+      if (a.settle) this.settling(a, dt);
+      if (a.pulse !== null) {
+        a.pulse += dt;
+        if (a.pulse >= PULSE_SECONDS) a.pulse = null;
+      }
+      if (this.selected === a.info.uid && a.state !== "work") continue; // the panel holds it
+      if (a.state === "work") {
+        this.patrolTick(a, dt);
+      } else if (a.state === "pause") {
         a.pause -= dt;
         if (a.pause <= 0) this.startNextLeg(a);
       } else if (a.state === "trip") {
@@ -206,6 +295,7 @@ class Engine implements OfficeEngine {
         flipped: a.facing === "side" && a.flipped,
         frame: frameAt(track, a.t, fps ?? track.fps),
         carrying: a.mode === "carry",
+        ...(a.pulse !== null ? { pulse: pulseAt(a.pulse) } : {}),
         ...(a.mode === "sit" && a.home.furniture ? { seatedAt: a.home.furniture.id } : {}),
       };
     });
@@ -253,7 +343,15 @@ class Engine implements OfficeEngine {
       speed: 0,
       t: this.random() * 10,
       gone: false,
+      typing: isTyping(this.statuses, info.uid),
+      wander: home.dept ? [] : this.layout.coreSeats.find((c) => c.role === info.role)?.wander ?? [],
+      patrolIn: 0,
+      patrol: false,
+      settle: null,
+      pulse: null,
+      heldFrom: null,
     };
+    agent.patrolIn = this.nextPatrol(agent);
     this.agents.set(info.uid, agent);
     if (atOnce) {
       this.seat(agent);
@@ -261,6 +359,7 @@ class Engine implements OfficeEngine {
       agent.legs = [{ target: agent.home.spot, mode: "walk", pause: 0, pauseMode: "work" }];
       this.startNextLeg(agent);
     }
+    if (this.selected === info.uid) this.hold(agent, true);
   }
 
   private leave(uid: string): void {
@@ -315,19 +414,101 @@ class Engine implements OfficeEngine {
     return { spot: { ...this.layout.door }, facing: "down", dept, offset: { x: 0, y: 0 }, furniture: null };
   }
 
-  /** At the desk (agent_npc.gd _work_pose): seated with the seat offset, or working standing. */
-  private seat(a: Agent): void {
+  /**
+   * At the desk (agent_npc.gd _work_pose): seated with the seat offset, or
+   * working standing. `ease`: it sits down over SETTLE_SECONDS from where it
+   * stands, instead of appearing in the chair.
+   */
+  private seat(a: Agent, ease = false): void {
     a.state = "work";
     a.leg = null;
     a.legs = [];
     a.path = [];
     a.pipeline = false;
-    const sits = a.hasSit;
-    const off = sits ? a.home.offset : { x: 0, y: 0 };
-    a.pos = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
-    this.setMotion(a, rigFacing(a.home.facing), sits ? "sit" : "work");
+    a.patrol = false;
+    this.deskPose(a, ease);
     const next = a.pending.shift();
     if (next !== undefined) this.startTrip(a, next);
+  }
+
+  /** The pose at the desk by what the box says: typing, or sitting (standing) still. */
+  private deskPose(a: Agent, ease = false): void {
+    const sits = a.hasSit;
+    const off = sits ? a.home.offset : { x: 0, y: 0 };
+    const to = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
+    if (sits && ease && (a.pos.x !== to.x || a.pos.y !== to.y)) a.settle = { t: 0, from: { ...a.pos }, to };
+    else {
+      a.settle = null;
+      a.pos = to;
+    }
+    this.setMotion(a, rigFacing(a.home.facing), sits ? "sit" : a.typing ? "work" : "still");
+    // the seated sheet's sit_idle: the first frame, no motion
+    if (sits && !a.typing) a.still = true;
+  }
+
+  /** AgentNPC._begin_desk_pause's tween: position only, the sine ease. */
+  private settling(a: Agent, dt: number): void {
+    const s = a.settle!;
+    s.t += dt;
+    const p = Math.min(1, s.t / SETTLE_SECONDS);
+    const e = Math.sin((p * Math.PI) / 2);
+    a.pos = { x: s.from.x + (s.to.x - s.from.x) * e, y: s.from.y + (s.to.y - s.from.y) * e };
+    if (p >= 1) a.settle = null;
+  }
+
+  // ─── Rounds of the core roles ───────────────────────────────────────────
+
+  private nextPatrol(a: Agent): number {
+    const every = PATROL_EVERY[a.info.role];
+    if (every === undefined || a.wander.length === 0) return Infinity;
+    return a.info.role === "mentor" ? every * this.between(0.95, 1.05) : every * this.between(0.6, 1.4);
+  }
+
+  /** agent_npc.gd's S.WORK timer: a round only while the box says it works (and no panel holds it). */
+  private patrolTick(a: Agent, dt: number): void {
+    if (a.patrolIn === Infinity || a.settle || this.selected === a.info.uid) return;
+    a.patrolIn -= dt;
+    if (a.patrolIn > 0) return;
+    a.patrolIn = this.nextPatrol(a);
+    if (a.typing) this.startPatrol(a);
+  }
+
+  /** agent_npc.gd _plan_trip for a core role: the mentor's ritual, or one stop of the round, then the seat. */
+  private startPatrol(a: Agent): void {
+    const home: Leg = { target: a.home.spot, mode: "walk", pause: 0, pauseMode: "work" };
+    const stop = (target: Vec, lo: number, hi: number): Leg => ({ target, mode: "walk", pause: this.between(lo, hi), pauseMode: "idle" });
+    if (a.info.role === "mentor" && a.wander.length >= 2) {
+      a.legs = [stop(a.wander[0]!, 5, 8), stop(a.wander[1]!, 7, 12), home];
+    } else {
+      const spot = a.wander[Math.floor(this.random() * a.wander.length) % a.wander.length]!;
+      // AgentNPC._jit: thirty agents on one pixel look like a queue
+      const target = this.nav.clampToWalkable({ x: spot.x + this.between(-26, 26), y: spot.y + this.between(-14, 14) });
+      a.legs = [stop(target, 3, 7), home];
+    }
+    a.patrol = true;
+    this.startNextLeg(a);
+  }
+
+  /** The box stopped saying "working" on a round: back to the seat instead of freezing in the corridor. */
+  private recall(a: Agent): void {
+    a.legs = [{ target: a.home.spot, mode: "walk", pause: 0, pauseMode: "work" }];
+    this.startNextLeg(a);
+  }
+
+  /** The panel takes an agent that is out walking (it stands, looking at the camera) or gives it back. */
+  private hold(a: Agent, on: boolean): void {
+    if (a.state === "work" || a.mode === "sit") return; // at its desk it goes on as it is
+    if (on) {
+      a.heldFrom = { facing: a.facing, flipped: a.flipped, mode: a.mode };
+      a.speed = 0;
+      this.setMotion(a, { facing: "down", flipped: false }, "still");
+      return;
+    }
+    const from = a.heldFrom;
+    a.heldFrom = null;
+    if (!from) return;
+    this.setMotion(a, { facing: from.facing, flipped: from.flipped }, from.mode);
+    if (a.state === "trip" && a.leg) a.speed = a.pipeline ? PIPELINE_SPEED : SPEED;
   }
 
   // ─── Pipeline trips ────────────────────────────────────────────────────
@@ -335,6 +516,7 @@ class Engine implements OfficeEngine {
   private pipeline(uid: string, toState: string): void {
     const a = this.agents.get(uid);
     if (!a || a.gone || a.legs.some((l) => l.exit) || a.leg?.exit) return;
+    a.pulse = 0; // react_to_work: the real work shows
     this.owe(a, toState, +1);
     if (a.state !== "work") {
       a.pending.push(toState);
@@ -413,9 +595,10 @@ class Engine implements OfficeEngine {
   private startNextLeg(a: Agent): void {
     const leg = a.legs.shift();
     if (!leg) {
-      this.seat(a);
+      this.seat(a, true);
       return;
     }
+    a.settle = null;
     // Standing up (_set_desk_occupied(false)): from the seat back to the
     // standing spot in front of the chair, then walk.
     if (a.mode === "sit") a.pos = { ...a.home.spot };
@@ -477,7 +660,8 @@ class Engine implements OfficeEngine {
       a.pause = leg.pause;
       if (leg.deskWork && a.hasSit) {
         const off = a.home.offset;
-        a.pos = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
+        const to = { x: a.home.spot.x + off.x, y: a.home.spot.y + off.y };
+        a.settle = { t: 0, from: { ...a.pos }, to };
         this.setMotion(a, rigFacing(a.home.facing), "sit");
       } else if (leg.deskWork) {
         this.setMotion(a, rigFacing(a.home.facing), "work");
