@@ -119,6 +119,18 @@ const NOT_ERRORS: Record<string, string> = {
   autostart_sid_unreadable: "closed word of the runtime log for the autostart registration",
   autostart_stage_failed: "closed word of the runtime log for the autostart registration",
   autostart_contract_mismatch: "closed word of the runtime log for the autostart registration",
+  // state_stream.rs: the words of the open stream with the container (the hot reads), none of which reaches the person: a
+  // read the stream cannot answer is made the old way in the same call, and the reason an opening failed is only kept.
+  age_ms: "field of the state stream's answer (state_stream.rs), never shown",
+  args_invalid: "the state stream's refusal of a request (state_stream.rs); the read is made the old way",
+  op_unknown: "the state stream's refusal of a request (state_stream.rs); the read is made the old way",
+  reader_failed: "the state stream's refusal of a request (state_stream.rs); the read is made the old way",
+  too_big: "the state stream's refusal of a request (state_stream.rs); the read is made the old way",
+  state_stream_cid_mismatch: "why the state stream was not opened (state_stream.rs); the reads stay the old way",
+  state_stream_cid_missing: "why the state stream was not opened (state_stream.rs); the reads stay the old way",
+  state_stream_hello: "why the state stream was not opened (state_stream.rs); the reads stay the old way",
+  state_stream_off: "why the state stream was not opened (state_stream.rs); the reads stay the old way",
+  state_stream_proto_unknown: "why the state stream was not opened (state_stream.rs); the reads stay the old way",
   // The container engine executable the app resolves and spawns (direct_chat.rs, onboarding.rs).
   docker: "name of the container engine program, not a code",
   // A successful, idempotent broker receipt: the native side accepts it and

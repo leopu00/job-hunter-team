@@ -1339,6 +1339,7 @@ fn activate_scope_from(
     // the previous account to a new command.
     let previous = active.take();
     direct_chat::teardown(chat);
+    crate::state_stream::teardown(app);
     onboarding::teardown(onboarding);
     crate::live_screen::teardown(app);
     crate::broker_view::teardown(app);
@@ -1533,6 +1534,7 @@ pub(crate) fn runtime_account_scope_reset(
         .map_err(|_| failure("account_scope_state_failed"))?;
     let previous = active.take();
     direct_chat::teardown(&chat);
+    crate::state_stream::teardown(&app);
     onboarding::teardown(&onboarding);
     crate::live_screen::teardown(&app);
     crate::broker_view::teardown(&app);

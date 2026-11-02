@@ -48,6 +48,7 @@ mod team_export;
 mod team_owner;
 mod chat_attachment;
 mod profile_progress;
+mod state_stream;
 mod team_start;
 mod work_stats;
 mod text_file_export;
@@ -69,6 +70,7 @@ pub fn run() {
         .manage(account_scope::AccountScopeState::default())
         .manage(broker_view::BrokerViewState::default())
         .manage(direct_chat::DirectChatState::default())
+        .manage(state_stream::StateStreamState::default())
         .manage(onboarding::OnboardingNativeState::default())
         .manage(profile_import::ProfileImportState::default())
         .manage(voice_input::VoiceInputState::default())
@@ -104,6 +106,7 @@ pub fn run() {
             team_owner::runtime_local_team_owner_identity,
             team_owner::runtime_local_team_owner,
             profile_progress::profile_progress_read,
+            state_stream::state_stream_status,
             team_start::team_start_read,
             auth_login::auth_callback_url,
             auth_login::auth_cancel_login,
