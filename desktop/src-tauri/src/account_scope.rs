@@ -296,7 +296,14 @@ pub(crate) fn validate_local_runtime(
     }
     let home = local_runtime_home(app)?;
     let marker = local_owner_marker_path(app)?;
-    claim_or_validate_owner(&home, &marker, scope)
+    let checked = claim_or_validate_owner(&home, &marker, scope);
+    // A refusal here leaves no command in the runtime log: the line says it was the owner of the folder.
+    if let Err(code) = checked {
+        if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+            log.record_local_owner_refusal(code);
+        }
+    }
+    checked
 }
 
 /// The team runs on this computer on macOS (Podman), Linux and Windows
