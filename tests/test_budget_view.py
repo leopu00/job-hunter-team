@@ -355,3 +355,38 @@ def test_a_real_flag_a_real_marker_and_real_notices_are_still_read(home):
     big = home / ".burn-intent.flag"
     big.write_bytes(b" " * (burn_intent.FLAG_MAX_BYTES + 10))
     assert burn_intent.read() is None, "a flag larger than a flag is not ours"
+
+
+# ── the seventh and the eighth file: what the pause between jobs is read from (with workers alive) ───────────────
+
+@pytest.mark.parametrize("how", ["pipe", "link to /dev/zero"])
+@pytest.mark.parametrize("relative", ["config/throttle.json", "config/throttle-floor-exempt.txt"])
+def test_a_pipe_or_a_link_in_place_of_the_throttle_files_neither_holds_the_read_nor_is_followed(home, relative, how):
+    put_samples(home, series(0.8, 7.0, 78, now=datetime.now(UTC).timestamp()), reset=datetime.now(UTC).timestamp() + 50 * 3600)
+    (home / "config").mkdir(exist_ok=True)
+    _replace(home, relative, how)
+    # workers alive (the page asks tmux, which this suite does not have): simulated, as the pause is read only with them
+    code = ("import sys, json; sys.path.insert(0, %r); import pace_guard, budget_view; "
+            "pace_guard.active_workers = lambda: ['scout-1', 'scorer-1']; "
+            "print(json.dumps(budget_view.read()))" % str(SKILLS))
+    result = subprocess.run([sys.executable, "-c", code], env={**os.environ, "JHT_HOME": str(home)}, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert out["week"] is not None
+    # the pipe or the link reads as no file: the default config (no throttle) and no exemption, so the floor pause
+    assert out["pauseSec"] == pace_guard.WORKER_FLOOR and "pause_between_jobs" not in out["brakes"]
+
+
+def test_the_throttle_readers_read_a_real_config_and_a_real_exemption_as_before(home):
+    (home / "config").mkdir(exist_ok=True)
+    (home / "config" / "throttle.json").write_text(json.dumps({"default": 0, "scout-1": 900}), encoding="utf-8")
+    (home / "config" / "throttle-floor-exempt.txt").write_text("# a measure\nscorer-1\n", encoding="utf-8")
+    code = ("import sys, importlib.util; spec = importlib.util.spec_from_file_location('tc', %r); tc = importlib.util.module_from_spec(spec); "
+            "spec.loader.exec_module(tc); print(tc.get_agent('scout-1'), tc._floor_exempt('scorer-1'), tc._floor_exempt('scout-1'), tc.load())"
+            % str(SKILLS / "throttle-config.py"))
+    result = subprocess.run([sys.executable, "-c", code], env={**os.environ, "JHT_HOME": str(home)}, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "780 True False {'default': 0, 'scout-1': 900}"
+    (home / "config" / "throttle.json").write_text("{not json", encoding="utf-8")
+    broken = subprocess.run([sys.executable, "-c", code], env={**os.environ, "JHT_HOME": str(home)}, capture_output=True, text=True, timeout=30)
+    assert broken.returncode == 0 and broken.stdout.split()[0] == "300", "an unreadable config reads as the default, then the floor"

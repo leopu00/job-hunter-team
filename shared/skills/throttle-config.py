@@ -69,9 +69,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import plain_file  # noqa: E402  (the one way to read a file the agents can write: no link followed, no pipe waited on)
+
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CONFIG_DIR = JHT_HOME / "config"
 CONFIG_FILE = CONFIG_DIR / "throttle.json"
+CONFIG_MAX_BYTES = 256 * 1024     # a handful of agents with a number each: a larger file is not ours
+EXEMPT_MAX_BYTES = 64 * 1024
 
 DEFAULT_CONFIG: dict = {"default": 0}
 
@@ -159,14 +166,14 @@ def _floor_exempt(agent) -> bool:
     costruzione: qualunque errore di lettura lascia il floor attivo — la
     direzione sicura è tenere il freno, non toglierlo."""
     try:
-        if not _FLOOR_EXEMPT_FILE.exists():
-            return False
+        # plain_file: a pipe or a link made in place of the file by an agent must not hold the readers that protect the
+        # budget (the bridge, the pace guard, the app's Budget page); it reads as no exemption: the floor stays on.
         names = {
             ln.strip().lower()
-            for ln in _FLOOR_EXEMPT_FILE.read_text(encoding="utf-8").splitlines()
+            for ln in plain_file.read_plain(_FLOOR_EXEMPT_FILE, max_size=EXEMPT_MAX_BYTES).decode("utf-8").splitlines()
             if ln.strip() and not ln.lstrip().startswith("#")
         }
-    except OSError:
+    except (OSError, plain_file.NotPlain, UnicodeDecodeError):     # FileNotFoundError is an OSError: no file, no exemption
         return False
     return str(agent or "").strip().lower() in names
 
@@ -241,12 +248,11 @@ def load() -> dict:
     """Read config from disk. Missing file → default. Corrupt → default
     (logged to stderr, never raises — la skill DEVE essere robusta perché
     è invocata in loop dagli agenti)."""
-    if not CONFIG_FILE.exists():
-        return dict(DEFAULT_CONFIG)
     try:
-        with CONFIG_FILE.open() as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
+        data = plain_file.read_json(CONFIG_FILE, max_size=CONFIG_MAX_BYTES)
+    except FileNotFoundError:
+        return dict(DEFAULT_CONFIG)
+    except (OSError, plain_file.NotPlain, UnicodeDecodeError, ValueError) as e:       # ValueError: not JSON
         print(f"warn: throttle config unreadable, using defaults: {e}",
               file=sys.stderr)
         return dict(DEFAULT_CONFIG)
