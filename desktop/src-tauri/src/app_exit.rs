@@ -171,6 +171,27 @@ fn waits_for(session: &str) -> bool {
     !matches!(session.strip_prefix("JHT-").unwrap_or(session), "ASSISTENTE" | "SENTINELLA-WORKER")
 }
 
+/// How many names, and how long, the page is told: the names come from the container, which is not trusted, and go to a page
+/// that shows them. `active` still counts every session the stop waits for.
+pub(crate) const MAX_NAMES_TO_PAGE: usize = 12;
+pub(crate) const MAX_NAME_LEN: usize = 64;
+
+/// The names the page may see: only those a tmux session of the team can have (letters, digits, `-`, `_`, `.`, up to
+/// `MAX_NAME_LEN`), at most `MAX_NAMES_TO_PAGE` of them. A name that is not like that is not shown (never cut: a cut name
+/// would say something the container did not).
+pub(crate) fn names_for_page(names: &[String]) -> Vec<String> {
+    names
+        .iter()
+        .filter(|name| {
+            !name.is_empty()
+                && name.len() <= MAX_NAME_LEN
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        })
+        .take(MAX_NAMES_TO_PAGE)
+        .cloned()
+        .collect()
+}
+
 /// How the ordered stop stands, from the Capitano's flag and the sessions still open. The agents are done when the Capitano
 /// says so, or when none of the sessions that need waiting for is left: an Assistente that stays up does not hold the
 /// stop forever.
@@ -181,7 +202,7 @@ pub(crate) fn progress(flag: bool, sessions: Sessions) -> ExitProgress {
             return ExitProgress { ready: flag, active: 0, remaining: Vec::new() };
         }
     };
-    ExitProgress { ready: flag || remaining.is_empty(), active: remaining.len(), remaining }
+    ExitProgress { ready: flag || remaining.is_empty(), active: remaining.len(), remaining: names_for_page(&remaining) }
 }
 
 #[derive(Serialize)]
@@ -198,7 +219,7 @@ pub(crate) struct ExitProgress {
     ready: bool,
     /// The sessions the stop is waiting for (the Assistente is not one of them).
     active: usize,
-    /// Their names, so that the page can say who is still on.
+    /// Their names, so that the page can say who is still on (capped: see `names_for_page`).
     remaining: Vec<String>,
 }
 
@@ -548,5 +569,42 @@ mod tests {
         assert!(finish.contains("MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}"));
         // a state that could not be read is its own answer, not a machine said to be off
         assert!(finish.contains("MachineStop::StateUnknown => return Err(\"app_exit_machine_state_unknown\")"));
+    }
+
+    #[test]
+    fn the_names_for_the_page_are_capped_in_number_length_and_characters() {
+        let many: Vec<String> = (0..40).map(|n| format!("SCOUT-{n}")).collect();
+        let done = progress(false, Sessions::Open(many));
+        assert_eq!(done.active, 40, "the stop still waits for all of them");
+        assert_eq!(done.remaining.len(), MAX_NAMES_TO_PAGE);
+        assert_eq!(done.remaining[0], "SCOUT-0");
+        assert!(!done.ready);
+    }
+
+    #[test]
+    fn a_name_that_is_too_long_or_has_odd_characters_is_not_shown_but_is_still_waited_for() {
+        let long = "A".repeat(MAX_NAME_LEN + 1);
+        let at_limit = "B".repeat(MAX_NAME_LEN);
+        let open = vec![
+            long,
+            at_limit.clone(),
+            "<img src=x onerror=alert(1)>".to_owned(),
+            "SCOUT 1".to_owned(),
+            "SCOUT\u{202e}1".to_owned(),
+            "Ünïcode".to_owned(),
+            "JHT-SCOUT-1.a_b".to_owned(),
+        ];
+        let done = progress(false, Sessions::Open(open));
+        assert_eq!(done.active, 7);
+        assert!(!done.ready, "sessions with strange names still hold the stop");
+        assert_eq!(done.remaining, [at_limit, "JHT-SCOUT-1.a_b".to_owned()]);
+    }
+
+    #[test]
+    fn the_capped_names_are_the_first_valid_ones_not_the_first_ones() {
+        let mut open = vec!["<bad>".to_owned(); 30];
+        open.extend((0..3).map(|n| format!("AGENT-{n}")));
+        let done = progress(false, Sessions::Open(open));
+        assert_eq!(done.remaining, ["AGENT-0", "AGENT-1", "AGENT-2"]);
     }
 }

@@ -143,6 +143,13 @@ CAPTAIN_SESSION = os.environ.get("JHT_THROTTLE_ENGINE_CAPTAIN", "CAPITANO")
 PAUSE_END_MARGIN_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_END_MARGIN", "60"))
 # Quanto del log storico si rilegge a ogni giro per cercare le pause aperte (le ultime righe: basta e avanza).
 PAUSE_LOG_TAIL_BYTES = 262144
+# Quanto aspetta un lock dei flag tenuto da altri: poi si procede senza (e lo si scrive), come quando il lock non si puo' creare.
+FLAGS_LOCK_TIMEOUT_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_LOCK_TIMEOUT", "10"))
+FLAGS_LOCK_POLL_SEC = 0.05
+# Le righe `start` del log storico le scrive l'agente (dentro il container): si usano solo se hanno la forma che il motore scrive.
+_PAUSE_AGENT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+_PAUSE_ID_MAX = 128
+_PAUSE_REASON_MAX = 200
 
 # Il testo della sveglia. Due obblighi in una riga: l'ack è il PRIMO comando
 # (senza quello il flag resta NOTIFIED e il watchdog escala su un agente sano),
@@ -646,7 +653,8 @@ def _flags_lock():
     scrive per ultimo cancella la modifica dell'altro. Il guasto vero: il `tick` legge, si ferma sulla consegna di una
     sveglia (fino a NOTIFY_TIMEOUT_SEC), l'agente nel frattempo registra la sua pausa, il `tick` riscrive lo stato
     vecchio e la pausa dell'agente sparisce: nessuna sveglia, nessun `end`, l'agente fermo davanti alla coda.
-    Senza `fcntl` (Windows, dove il motore non gira) o senza poter creare il lock si procede come prima."""
+    Senza `fcntl` (Windows, dove il motore non gira), senza poter creare il lock o con un lock tenuto da altri per piu' di
+    `FLAGS_LOCK_TIMEOUT_SEC` si procede senza, e lo si scrive nel log: un lock appeso non ferma il giro."""
     try:
         import fcntl
     except ImportError:
@@ -657,7 +665,20 @@ def _flags_lock():
         path = flags_path().with_suffix(".lock")
         path.parent.mkdir(parents=True, exist_ok=True)
         handle = open(path, "a+")
-        fcntl.flock(handle, fcntl.LOCK_EX)
+        deadline = time.monotonic() + FLAGS_LOCK_TIMEOUT_SEC
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    # qualcuno tiene il lock da troppo: il giro non si ferma per questo. Si procede senza lock; una
+                    # scrittura persa e' la pausa persa che `recover_lost_pauses` chiude.
+                    _log("flag lock held for more than %gs: going on without it" % FLAGS_LOCK_TIMEOUT_SEC)
+                    handle.close()
+                    handle = None
+                    break
+                time.sleep(FLAGS_LOCK_POLL_SEC)
     except OSError as exc:
         _log("flag lock unavailable: %s" % exc)
         if handle is not None:
@@ -1266,6 +1287,39 @@ def maybe_sweep_questions(now=None) -> int:
         return 0
 
 
+def _finite_number(value, low: float, high: float):
+    """`value` se e' un numero vero (non bool, non NaN, non infinito) fra `low` e `high`; altrimenti None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    return number if low <= number <= high else None
+
+
+def _valid_start(rec: dict):
+    """La riga `start` ripulita, o None se non ha la forma che `_register` scrive.
+
+    Il log lo scrivono gli agenti dentro il container: una riga con `NaN` (che `json.loads` accetta e che salta ogni
+    confronto), un'infinita, una durata di anni, un id che non e' una stringa (non si mette in un insieme) o un nome che
+    non e' un agente non deve diventare una pausa da recuperare. Il motivo, che finisce in un altro log e nel messaggio,
+    si tronca. Il resto dei campi non viene copiato."""
+    agent = rec.get("agent")
+    if not isinstance(agent, str) or not _PAUSE_AGENT_RE.match(agent):
+        return None
+    started = _finite_number(rec.get("ts_unix"), 1.0, 4102444800.0)   # fino al 2100
+    applied = _finite_number(rec.get("applied_sec"), 0.0, ACTIVE_PRUNE_SEC)
+    pause_id = rec.get("id")
+    if started is None or applied is None:
+        return None
+    if not isinstance(pause_id, str) or not 0 < len(pause_id) <= _PAUSE_ID_MAX:
+        return None
+    reason = rec.get("reason")
+    reason = reason[:_PAUSE_REASON_MAX] if isinstance(reason, str) else None
+    return {"agent": agent, "id": pause_id, "ts_unix": started, "applied_sec": applied, "reason": reason}
+
+
 def _open_pauses() -> dict:
     """{agent: record `start`} delle pause del log storico che non hanno ancora un `end`.
 
@@ -1289,10 +1343,11 @@ def _open_pauses() -> dict:
             continue
         if not isinstance(rec, dict):
             continue
-        agent = rec.get("agent")
-        if rec.get("event") == "start" and agent and isinstance(rec.get("ts_unix"), (int, float)):
-            last_start[agent] = rec
-        elif rec.get("event") == "end" and rec.get("id"):
+        if rec.get("event") == "start":
+            clean = _valid_start(rec)
+            if clean is not None:
+                last_start[clean["agent"]] = clean
+        elif rec.get("event") == "end" and isinstance(rec.get("id"), str) and rec["id"]:
             ended.add(rec["id"])
     return {a: r for a, r in last_start.items() if r.get("id") not in ended}
 
