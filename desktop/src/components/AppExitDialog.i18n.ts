@@ -21,6 +21,8 @@ export interface AppExitText {
   stopping: string;
   /** The agents take longer than expected. */
   slow: string;
+  /** Who has not stopped yet: `{names}` are the sessions of the agents still on. */
+  stillOn: string;
   forceNow: string;
   /** A step failed and the app stayed open. */
   failed: string;
@@ -46,6 +48,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "Aspetto che gli agenti finiscano. Sessioni ancora aperte: {count}.",
     stopping: "Fermo la squadra e il motore…",
     slow: "Gli agenti ci mettono più del previsto.",
+    stillOn: "Ancora in funzione: {names}.",
     forceNow: "Forza lo stop",
     failed: "Non sono riuscito a fermare tutto, e l’app resta aperta. Puoi riprovare, forzare lo stop o lasciare la squadra al lavoro.",
     othersKept: "Sullo stesso motore girano anche {count} container che non sono di Job Hunter Team: se fermi la squadra, il motore resta acceso per loro.",
@@ -66,6 +69,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "Waiting for the agents to finish. Sessions still open: {count}.",
     stopping: "Stopping the team and the engine…",
     slow: "The agents are taking longer than expected.",
+    stillOn: "Still running: {names}.",
     forceNow: "Force the stop",
     failed: "I could not stop everything, and the app stays open. You can try again, force the stop or leave the team working.",
     othersKept: "{count} other container(s) that are not Job Hunter Team’s run on the same engine: if you stop the team, the engine stays on for them.",
@@ -86,6 +90,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "Várom, hogy az ügynökök befejezzék. Még nyitott munkamenetek: {count}.",
     stopping: "Leállítom a csapatot és a konténermotort…",
     slow: "Az ügynököknek a vártnál tovább tart.",
+    stillOn: "Még fut: {names}.",
     forceNow: "Kényszerített leállítás",
     failed: "Nem sikerült mindent leállítani, az alkalmazás nyitva marad. Próbálhatod újra, erőltetheted a leállítást, vagy hagyhatod dolgozni a csapatot.",
     othersKept: "Ugyanezen a motoron {count} nem a Job Hunter Team-hez tartozó konténer is fut: ha leállítod a csapatot, a motor értük bekapcsolva marad.",
@@ -106,6 +111,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "Espero a que los agentes terminen. Sesiones aún abiertas: {count}.",
     stopping: "Detengo el equipo y el motor…",
     slow: "Los agentes tardan más de lo previsto.",
+    stillOn: "Siguen en marcha: {names}.",
     forceNow: "Forzar la parada",
     failed: "No he podido detenerlo todo, y la app sigue abierta. Puedes reintentar, forzar la parada o dejar el equipo trabajando.",
     othersKept: "En el mismo motor se ejecutan también {count} contenedor(es) que no son de Job Hunter Team: si detienes el equipo, el motor sigue encendido para ellos.",
@@ -126,6 +132,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "Ich warte, bis die Agenten fertig sind. Noch offene Sitzungen: {count}.",
     stopping: "Ich halte das Team und die Container-Engine an…",
     slow: "Die Agenten brauchen länger als erwartet.",
+    stillOn: "Laufen noch: {names}.",
     forceNow: "Anhalten erzwingen",
     failed: "Ich konnte nicht alles anhalten, und die App bleibt offen. Du kannst es erneut versuchen, das Anhalten erzwingen oder das Team weiterarbeiten lassen.",
     othersKept: "Auf demselben Motor laufen auch {count} Container, die nicht zu Job Hunter Team gehören: Wenn du das Team anhältst, bleibt der Motor für sie an.",
@@ -146,6 +153,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "J’attends que les agents terminent. Sessions encore ouvertes : {count}.",
     stopping: "J’arrête l’équipe et le moteur…",
     slow: "Les agents mettent plus de temps que prévu.",
+    stillOn: "Toujours en marche : {names}.",
     forceNow: "Forcer l’arrêt",
     failed: "Je n’ai pas pu tout arrêter, et l’app reste ouverte. Tu peux réessayer, forcer l’arrêt ou laisser l’équipe travailler.",
     othersKept: "{count} autre(s) conteneur(s) qui ne sont pas ceux de Job Hunter Team tournent sur le même moteur : si tu arrêtes l’équipe, le moteur reste allumé pour eux.",
@@ -166,6 +174,7 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     waiting: "Espero que os agentes terminem. Sessões ainda abertas: {count}.",
     stopping: "A parar a equipa e o motor…",
     slow: "Os agentes demoram mais do que o previsto.",
+    stillOn: "Ainda em funcionamento: {names}.",
     forceNow: "Forçar a paragem",
     failed: "Não consegui parar tudo, e a app fica aberta. Podes tentar de novo, forçar a paragem ou deixar a equipa a trabalhar.",
     othersKept: "No mesmo motor correm também {count} contentor(es) que não são do Job Hunter Team: se paras a equipa, o motor fica ligado para eles.",
