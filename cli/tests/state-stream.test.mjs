@@ -6,7 +6,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  CHAT_AGENTS, EXIT_PROTOCOL, MAX_LINE, PROFILE_SCRIPT, READERS, containerId, createStateStream, depthOf, opsOf, readerEnv, runReader,
+  CACHE_MAX_BYTES, CACHE_MAX_ENTRIES, CHAT_AGENTS, EXIT_PROTOCOL, MAX_LINE, PROFILE_SCRIPT, READERS, containerId, createStateStream, depthOf, opsOf, readerEnv, runReader,
 } from '../src/lib/state-stream.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -284,6 +284,35 @@ test('an error or a non-zero exit is not kept: the next ask runs again', async (
   h.send({ id: 4, op: 'agents.list' });
   assert.equal(h.calls.length, 3);
   assert.equal(h.lines.at(-1).cached, true);
+});
+
+test('what is kept is bounded: 1000 different cursors keep at most 64 entries, and the ones past their time go', async () => {
+  const h = harness({ reply: { exit: 0, out: '{"messages":[]}' } });
+  for (let n = 1; n <= 1000; n += 1) {
+    h.send({ id: n, op: 'chat.read', args: { agent: 'capitano', cursor: String(n) } });
+    await h.next();
+    h.tick(10); // the ask rate stays under 10 a second by the fake clock being moved on
+    if (n % 9 === 0) h.tick(1000);
+  }
+  assert.ok(h.stream.kept() <= CACHE_MAX_ENTRIES, h.stream.kept());
+  // answers past their time are dropped when the next one is put away
+  h.tick(10_000);
+  h.send({ id: 1001, op: 'agents.list' });
+  await h.next();
+  assert.equal(h.stream.kept(), 1);
+});
+
+test('what is kept is bounded in bytes too: big answers push the oldest out', async () => {
+  // 1.5 MiB each (too big to send as a line, but they are put away): three fit in the time, two in the bytes
+  const big = 'x'.repeat(1.5 * 1024 * 1024);
+  const h = harness({ reply: { exit: 0, out: big } });
+  for (let n = 1; n <= 12; n += 1) {
+    h.send({ id: n, op: 'chat.read', args: { agent: 'capitano', cursor: String(n) } });
+    await h.next();
+    assert.ok(h.stream.kept() * big.length <= CACHE_MAX_BYTES, `${n}: ${h.stream.kept()}`);
+    h.tick(100);
+  }
+  assert.equal(h.stream.kept(), 2);
 });
 
 test('invalidate drops what is kept', async () => {

@@ -46,6 +46,9 @@ export const READER_STDOUT_MAX = 1024 * 1024;
 export const IDLE_EXIT_MS = 60_000;
 export const MAX_TOPICS = 12;
 export const EXIT_PROTOCOL = 3;
+/** What is kept of answered reads: at most this many entries and this many bytes of text; the oldest go first. */
+export const CACHE_MAX_ENTRIES = 64;
+export const CACHE_MAX_BYTES = 4 * 1024 * 1024;
 
 const PYTHON = '/usr/bin/python3';
 const TMUX = '/usr/bin/tmux';
@@ -311,6 +314,24 @@ export function createStateStream({
     return true;
   };
 
+  // Put an answer away: the ones past their time go, then the oldest until the count and the bytes are within the cap.
+  const remember = (key, entry) => {
+    cache.delete(key);
+    cache.set(key, entry);
+    const t = now();
+    let bytes = 0;
+    for (const [other, kept] of cache) {
+      if (t - kept.at >= kept.ttl) cache.delete(other);
+      else bytes += kept.out.length;
+    }
+    for (const other of cache.keys()) {
+      if (cache.size <= CACHE_MAX_ENTRIES && bytes <= CACHE_MAX_BYTES) break;
+      if (other === key) continue;
+      bytes -= cache.get(other).out.length;
+      cache.delete(other);
+    }
+  };
+
   const readThrough = async (id, op, args, argv) => {
     const reader = READERS[op];
     const key = cacheKey(op, args);
@@ -336,7 +357,7 @@ export function createStateStream({
       answer(id, { ok: false, err: result.err });
       return;
     }
-    if (!shared && result.exit === 0) cache.set(key, { at: now(), exit: result.exit, out: result.out });
+    if (!shared && result.exit === 0) remember(key, { at: now(), ttl: reader.ttl, exit: result.exit, out: result.out });
     answer(id, { ok: true, exit: result.exit, out: result.out, age_ms: 0, cached: false });
   };
 
@@ -450,6 +471,8 @@ export function createStateStream({
   const profileShaValue = profileSha();
 
   return {
+    /** How many answers are kept (for the tests). */
+    kept: () => cache.size,
     /** First line, before anything is read. */
     hello() {
       const sha = profileShaValue ? { 'profile.progress': profileShaValue } : {};
