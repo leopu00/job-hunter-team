@@ -235,3 +235,82 @@ def test_end_to_end_the_two_commands_in_a_clean_home(tmp_path):
     assert group["dropped"]["language"] == 1
     assert "greenhouse" in run("scout_pass_report.py", "--no-tokens")
     assert "no passes" in run("scout_pass_report.py", "--no-tokens", "--log", str(tmp_path / "none.jsonl"))
+
+
+# ── why a candidate was dropped locally, and how many: role, area, --count, and what nobody accounted for ───────────
+def test_role_and_area_are_reasons_and_an_unknown_reason_is_still_refused(home):
+    assert _run("candidate", "--source", "arbetsformedlingen", "--country", "se", "--outcome", "role") == 0
+    assert _run("candidate", "--source", "arbetsformedlingen", "--country", "se", "--outcome", "area") == 0
+    assert [l["outcome"] for l in _lines(home)] == ["role", "area"]
+    with pytest.raises(SystemExit):
+        _run("candidate", "--source", "x", "--outcome", "because")
+    assert {"role", "area"} <= set(plog.OUTCOMES) and {"role", "area"} <= set(report.OUTCOMES)
+
+
+def test_one_line_can_stand_for_many_candidates_dropped_for_the_same_reason(home):
+    assert _run("candidate", "--source", "arbetsformedlingen", "--country", "se", "--outcome", "area", "--count", "640") == 0
+    assert _run("candidate", "--source", "arbetsformedlingen", "--country", "se", "--outcome", "role", "--count", "1") == 0
+    area, role, = _lines(home)
+    assert area["count"] == 640 and role["count"] == 1
+    assert set(area) == {"v", "kind", "ts", "agent", "source", "country", "outcome", "opened", "count"}
+    _run("candidate", "--source", "linkedin", "--outcome", "seniority")
+    assert "count" not in _lines(home)[-1], "a line without --count is a line as before"
+
+
+@pytest.mark.parametrize("extra", [["--count", "0"], ["--count", "-3"], ["--count", "100001"], ["--count", "ten"],
+                                   ["--outcome", "inserted", "--count", "2"], ["--count", "5", "--opened"]])
+def test_a_count_outside_one_to_a_hundred_thousand_or_with_inserted_or_opened_is_refused_and_nothing_is_written(home, extra):
+    argv = ["candidate", "--source", "arbetsformedlingen", "--country", "se", "--outcome", "area"]
+    if "--outcome" in extra:
+        argv = ["candidate", "--source", "arbetsformedlingen", "--country", "se"]
+    try:
+        code = _run(*argv, *extra)
+    except SystemExit as exc:
+        code = exc.code
+    assert code == 2
+    assert _lines(home) == []
+
+
+def test_the_report_adds_up_the_counts_and_says_how_many_nobody_accounted_for():
+    # the field case: 1080 read, 3 counted -> 1077 not explained
+    rows = [_pass(T0, source="arbetsformedlingen", country="se", returned=1080),
+            _cand(T0 + 1, "inserted", source="arbetsformedlingen", country="se"),
+            _cand(T0 + 2, "seniority", source="arbetsformedlingen", country="se", opened=False),
+            _cand(T0 + 3, "duplicate", source="arbetsformedlingen", country="se", opened=False)]
+    (row,) = report.fold(rows)["passes"]
+    assert row["unexplained"] == 1077
+    # the same pass, every reason logged with its count
+    rows = [_pass(T0, source="arbetsformedlingen", country="se", returned=1080)]
+    for ts, (outcome, n) in enumerate((("area", 640), ("role", 400), ("seniority", 30), ("duplicate", 7)), 1):
+        rows.append(dict(_cand(T0 + ts, outcome, source="arbetsformedlingen", country="se", opened=False), count=n))
+    rows.append(_cand(T0 + 9, "inserted", source="arbetsformedlingen", country="se"))
+    out = report.fold(rows)
+    (row,) = out["passes"]
+    assert row["outcomes"]["area"] == 640 and row["outcomes"]["role"] == 400 and row["inserted"] == 1
+    assert row["dropped"] == 1077 and row["unexplained"] == 2
+    (group,) = out["summary"]
+    assert group["dropped"]["area"] == 640 and group["dropped"]["role"] == 400 and group["unexplained"] == 2
+    assert "unexpl" in report.table(out).splitlines()[0] and "area=640" in report.table(out)
+
+
+def test_more_reasons_than_candidates_never_make_a_negative_number_and_a_pass_does_not_cover_for_another():
+    rows = [_pass(T0, returned=5), dict(_cand(T0 + 1, "area", opened=False), count=50),
+            _pass(T0 + 10, source="linkedin", country="multi", returned=30)]
+    out = report.fold(rows)
+    first, second = out["passes"]
+    assert first["unexplained"] == 0 and second["unexplained"] == 30
+    by_source = {g["source"]: g["unexplained"] for g in out["summary"]}
+    assert by_source == {"greenhouse": 0, "linkedin": 30}
+
+
+@pytest.mark.parametrize("bad", ["many", -4, 0, 10**9, True, 2.5, None, [3]])
+def test_a_count_in_the_file_that_is_not_a_whole_number_in_range_counts_as_one(bad):
+    rows = [_pass(T0, returned=10), dict(_cand(T0 + 1, "role", opened=False), count=bad)]
+    (row,) = report.fold(rows)["passes"]
+    assert row["outcomes"]["role"] == 1
+    assert report.weight({"count": 7}) == 7 and report.weight({}) == 1
+
+
+def test_counted_candidates_without_their_pass_are_counted_apart_by_their_count():
+    out = report.fold([dict(_cand(T0, "area", opened=False), count=12)])
+    assert out["orphan"] == {"greenhouse/nl": {"area": 12}}
