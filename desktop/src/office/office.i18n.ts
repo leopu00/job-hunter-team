@@ -87,6 +87,23 @@ export interface OfficeText {
   teamOffRecent: string;
   // the line above the scene: the agents that have no seat in the office
   notInOffice: string; // {names}
+  // the agent's panel (it is opened on every source: the cloud, this computer, the existing team's VPS)
+  agentPanelAria: string; // {name}
+  agentActionsAria: string; // {name}
+  heldByYou: string;
+  heldBySafety: string;
+  notRunning: string;
+  notPublishedHere: string;
+  sectionQuestions: string;
+  questionsOpen: PluralForms; // {count}
+  questionsNone: string;
+  sectionLastMessage: string;
+  lastFromYou: string;
+  lastNone: string;
+  writeTo: string; // {name}
+  terminalToggle: string;
+  terminalLogAria: string; // {name}
+  detailsUnavailable: string;
 }
 
 export const OFFICE_TEXT: Record<Locale, OfficeText> = {
@@ -167,6 +184,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "Il team è spento: l'ufficio è vuoto.",
     teamOffRecent: "Il team è spento: restano gli agenti che hanno lavorato nelle ultime 24 ore.",
     notInOffice: "Non nell'ufficio: {names}.",
+    agentPanelAria: "Pannello di {name}",
+    agentActionsAria: "Azioni su {name}",
+    heldByYou: "Spento da te",
+    heldBySafety: "Messo in sicurezza dalla squadra",
+    notRunning: "Spento",
+    notPublishedHere: "Ultimo lavoro e posizione su cui lavora: non pubblicati dal team.",
+    sectionQuestions: "Domande",
+    questionsOpen: { one: "{count} domanda aperta per te", other: "{count} domande aperte per te" },
+    questionsNone: "Nessuna domanda aperta.",
+    sectionLastMessage: "Ultimo messaggio",
+    lastFromYou: "Tu",
+    lastNone: "Nessun messaggio letto in questa sessione: apri la chat per leggerlo.",
+    writeTo: "Scrivi a {name}",
+    terminalToggle: "Terminale (sola lettura)",
+    terminalLogAria: "Terminale di {name}, sola lettura",
+    detailsUnavailable: "Dettagli dell'agente non disponibili da qui.",
   },
   en: {
     detailsAria: "Office details",
@@ -245,6 +278,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "The team is off: the office is empty.",
     teamOffRecent: "The team is off: the agents who worked in the last 24 hours stay.",
     notInOffice: "Not in the office: {names}.",
+    agentPanelAria: "{name}'s panel",
+    agentActionsAria: "Actions on {name}",
+    heldByYou: "Stopped by you",
+    heldBySafety: "Put in safety by the team",
+    notRunning: "Off",
+    notPublishedHere: "Last work and the position it works on: not published by the team.",
+    sectionQuestions: "Questions",
+    questionsOpen: { one: "{count} open question for you", other: "{count} open questions for you" },
+    questionsNone: "No open questions.",
+    sectionLastMessage: "Last message",
+    lastFromYou: "You",
+    lastNone: "No message read in this session: open the chat to read it.",
+    writeTo: "Write to {name}",
+    terminalToggle: "Terminal (read only)",
+    terminalLogAria: "{name}'s terminal, read only",
+    detailsUnavailable: "The agent's details are not available from here.",
   },
   de: {
     detailsAria: "Details des Büros",
@@ -323,6 +372,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "Das Team ist aus: Das Büro ist leer.",
     teamOffRecent: "Das Team ist aus: Es bleiben die Agenten, die in den letzten 24 Stunden gearbeitet haben.",
     notInOffice: "Nicht im Büro: {names}.",
+    agentPanelAria: "Bereich von {name}",
+    agentActionsAria: "Aktionen für {name}",
+    heldByYou: "Von dir gestoppt",
+    heldBySafety: "Vom Team in Sicherheit gebracht",
+    notRunning: "Aus",
+    notPublishedHere: "Letzte Arbeit und Stelle, an der er arbeitet: vom Team nicht veröffentlicht.",
+    sectionQuestions: "Fragen",
+    questionsOpen: { one: "{count} offene Frage an dich", other: "{count} offene Fragen an dich" },
+    questionsNone: "Keine offenen Fragen.",
+    sectionLastMessage: "Letzte Nachricht",
+    lastFromYou: "Du",
+    lastNone: "In dieser Sitzung wurde keine Nachricht gelesen: Öffne den Chat, um sie zu lesen.",
+    writeTo: "Schreibe an {name}",
+    terminalToggle: "Terminal (nur lesen)",
+    terminalLogAria: "Terminal von {name}, nur lesen",
+    detailsUnavailable: "Die Details des Agenten sind von hier aus nicht verfügbar.",
   },
   fr: {
     detailsAria: "Détails du bureau",
@@ -401,6 +466,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "L’équipe est éteinte : le bureau est vide.",
     teamOffRecent: "L’équipe est éteinte : restent les agents qui ont travaillé ces dernières 24 heures.",
     notInOffice: "Pas dans le bureau : {names}.",
+    agentPanelAria: "Panneau de {name}",
+    agentActionsAria: "Actions sur {name}",
+    heldByYou: "Arrêté par vous",
+    heldBySafety: "Mis en sécurité par l’équipe",
+    notRunning: "Éteint",
+    notPublishedHere: "Dernier travail et poste sur lequel il travaille : non publiés par l’équipe.",
+    sectionQuestions: "Questions",
+    questionsOpen: { one: "{count} question ouverte pour vous", other: "{count} questions ouvertes pour vous" },
+    questionsNone: "Aucune question ouverte.",
+    sectionLastMessage: "Dernier message",
+    lastFromYou: "Vous",
+    lastNone: "Aucun message lu pendant cette session : ouvrez la discussion pour le lire.",
+    writeTo: "Écrire à {name}",
+    terminalToggle: "Terminal (lecture seule)",
+    terminalLogAria: "Terminal de {name}, lecture seule",
+    detailsUnavailable: "Les détails de l’agent ne sont pas disponibles d’ici.",
   },
   es: {
     detailsAria: "Detalles de la oficina",
@@ -479,6 +560,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "El equipo está apagado: la oficina está vacía.",
     teamOffRecent: "El equipo está apagado: quedan los agentes que han trabajado en las últimas 24 horas.",
     notInOffice: "Fuera de la oficina: {names}.",
+    agentPanelAria: "Panel de {name}",
+    agentActionsAria: "Acciones sobre {name}",
+    heldByYou: "Apagado por ti",
+    heldBySafety: "Puesto en seguridad por el equipo",
+    notRunning: "Apagado",
+    notPublishedHere: "Último trabajo y posición en la que trabaja: no publicados por el equipo.",
+    sectionQuestions: "Preguntas",
+    questionsOpen: { one: "{count} pregunta abierta para ti", other: "{count} preguntas abiertas para ti" },
+    questionsNone: "Ninguna pregunta abierta.",
+    sectionLastMessage: "Último mensaje",
+    lastFromYou: "Tú",
+    lastNone: "Ningún mensaje leído en esta sesión: abre el chat para leerlo.",
+    writeTo: "Escribir a {name}",
+    terminalToggle: "Terminal (solo lectura)",
+    terminalLogAria: "Terminal de {name}, solo lectura",
+    detailsUnavailable: "Los detalles del agente no están disponibles desde aquí.",
   },
   pt: {
     detailsAria: "Detalhes do escritório",
@@ -557,6 +654,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "A equipa está desligada: o escritório está vazio.",
     teamOffRecent: "A equipa está desligada: ficam os agentes que trabalharam nas últimas 24 horas.",
     notInOffice: "Fora do escritório: {names}.",
+    agentPanelAria: "Painel de {name}",
+    agentActionsAria: "Ações sobre {name}",
+    heldByYou: "Desligado por ti",
+    heldBySafety: "Posto em segurança pela equipa",
+    notRunning: "Desligado",
+    notPublishedHere: "Último trabalho e posição em que trabalha: não publicados pela equipa.",
+    sectionQuestions: "Perguntas",
+    questionsOpen: { one: "{count} pergunta aberta para ti", other: "{count} perguntas abertas para ti" },
+    questionsNone: "Nenhuma pergunta aberta.",
+    sectionLastMessage: "Última mensagem",
+    lastFromYou: "Tu",
+    lastNone: "Nenhuma mensagem lida nesta sessão: abre o chat para a ler.",
+    writeTo: "Escrever a {name}",
+    terminalToggle: "Terminal (só leitura)",
+    terminalLogAria: "Terminal de {name}, só leitura",
+    detailsUnavailable: "Os detalhes do agente não estão disponíveis a partir daqui.",
   },
   hu: {
     detailsAria: "Az iroda részletei",
@@ -635,6 +748,22 @@ export const OFFICE_TEXT: Record<Locale, OfficeText> = {
     teamOffEmpty: "A csapat ki van kapcsolva: az iroda üres.",
     teamOffRecent: "A csapat ki van kapcsolva: az utolsó 24 órában dolgozó ügynökök maradnak.",
     notInOffice: "Nincs az irodában: {names}.",
+    agentPanelAria: "{name} panelje",
+    agentActionsAria: "Műveletek: {name}",
+    heldByYou: "Te kapcsoltad ki",
+    heldBySafety: "A csapat biztonsági okból leállította",
+    notRunning: "Kikapcsolva",
+    notPublishedHere: "Utolsó munka és az állás, amelyen dolgozik: a csapat nem tette közzé.",
+    sectionQuestions: "Kérdések",
+    questionsOpen: { one: "{count} nyitott kérdés neked", other: "{count} nyitott kérdés neked" },
+    questionsNone: "Nincs nyitott kérdés.",
+    sectionLastMessage: "Utolsó üzenet",
+    lastFromYou: "Te",
+    lastNone: "Ebben a munkamenetben még nem volt olvasott üzenet: nyisd meg a csevegést.",
+    writeTo: "Írj neki: {name}",
+    terminalToggle: "Terminál (csak olvasható)",
+    terminalLogAria: "{name} terminálja, csak olvasható",
+    detailsUnavailable: "Az ügynök részletei innen nem érhetők el.",
   },
 };
 

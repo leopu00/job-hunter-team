@@ -1,10 +1,12 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OfficeClick, OfficeEvent, OfficeLayout, OfficeManifest, OfficeSceneOptions } from "../../office/contract";
 import { diffOfficeSnapshots } from "../../office/data/diff";
 import { emptyEngine } from "../../office/parts";
 import { leaveExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
+import { forgetChatMessages, rememberChatPage } from "../../lib/chat-last-message";
 import { setLocalTeamData } from "../../lib/local-team-data";
 import { refresh } from "../../shell/router";
 import { realSnapshotReply } from "../../test-support/snapshot-command-reply";
@@ -64,7 +66,7 @@ const ROWS = [
   { id: "12", legacy_id: 12, title: "Da punteggiare", company: "Beta", status: "scored", location: "Milano", found_at: "2026-10-16T09:00:00Z", score: 74, write_requested: false },
 ];
 let agents: ReturnType<typeof agent>[];
-let controlReply: () => Promise<unknown>;
+let controlReply: (op?: string) => Promise<unknown>;
 let snapshotReply: () => Promise<unknown>;
 let positionsReply: (op: string) => unknown;
 let applied: OfficeEvent[];
@@ -98,7 +100,7 @@ beforeEach(() => {
   native.invoke.mockImplementation(async (command: string, args?: { request?: { op?: string } }) => {
     if (command === SNAPSHOT) return snapshotReply();
     if (command === POSITIONS) return positionsReply(args?.request?.op ?? "");
-    if (command === CONTROL) return controlReply();
+    if (command === CONTROL) return controlReply(args?.request?.op);
     throw new Error(`unexpected native command ${command}`);
   });
   resetVpsPositionsShared();
@@ -108,6 +110,7 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (url: string) => (url === "/office/manifest.json" ? json(MANIFEST) : url === "/office/layout.json" ? json(LAYOUT) : new Response("{}", { status: 404 }))),
   );
+  forgetChatMessages();
   leaveExistingTeamReadOnly();
   setLocalTeamData("local:synthetic");
 });
@@ -231,15 +234,163 @@ describe("the office of a local profile", () => {
     expect(applied.length).toBe(before);
   });
 
-  it("a click on an agent says its moves cannot be read from here, with no word about a VPS", async () => {
+  const TEAM = { halted: false, standby: { state: "off", until: null, weeklyReset: false }, held: [] as { session: string; byUser: boolean }[], burnIntent: { state: "off" } };
+  const listReply = () => ({ ok: true, data: { agents, roles: ROLES, states: true, target: "T-local", where: "local", label: null } });
+  const controlRequests = () => calls(CONTROL).map(([, args]) => (args as { request: Record<string, unknown> }).request);
+
+  it("a click on an agent opens its panel: its state, Spegni and the chat, what the team does not publish said so, nothing of the cloud", async () => {
+    controlReply = async (op) => (op === "team" ? { ok: true, data: TEAM } : listReply());
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
     const click: OfficeClick = { kind: "agent", uid: "capitano", role: "capitano" };
     act(() => scene.options!.onClick(click));
+    const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
+    expect(within(panel).getByTestId("office-agent-not-published")).toHaveTextContent("non pubblicati dal team");
+    expect(await within(panel).findByRole("button", { name: "Spegni Capitano" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /^Accendi/ })).toBeNull();
+    expect(within(panel).getByRole("button", { name: "Scrivi a Capitano" })).toBeInTheDocument();
+    // the terminal is read only when it is opened
+    expect(controlRequests().filter((r) => r.op === "screen")).toEqual([]);
+    expect(panel.textContent).not.toMatch(/cloud|VPS/i);
+    expect(cloud.touched).toEqual([]);
+  });
+
+  it("Spegni asks first, with the Agents page's own confirmation; Esc closes the question and not the panel; confirming turns the agent off", async () => {
+    const user = userEvent.setup();
+    let stopped = false;
+    controlReply = async (op) => {
+      if (op === "team") return { ok: true, data: TEAM };
+      if (op === "stop") {
+        stopped = true;
+        return { ok: true, data: { result: "stopped" } };
+      }
+      return listReply();
+    };
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "agent", uid: "scout-1", role: "scout" }));
+    const panel = await screen.findByRole("complementary", { name: "Pannello di SCOUT-1" });
+    await user.click(await within(panel).findByRole("button", { name: "Spegni Scout-1" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Spegnere Scout-1");
+    expect(stopped).toBe(false);
+    // the keyboard lands in the question, Esc closes it and the panel stays
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "Pannello di SCOUT-1" })).toBeInTheDocument();
+    expect(stopped).toBe(false);
+
+    await user.click(within(panel).getByRole("button", { name: "Spegni Scout-1" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Conferma" }));
+    await waitFor(() => expect(stopped).toBe(true));
+    expect(controlRequests().find((r) => r.op === "stop")).toMatchObject({ session: "SCOUT-1", target: "T-local", confirmed: true });
+    expect(await within(panel).findByRole("status")).toHaveTextContent(/Scout-1/);
+  });
+
+  it("an agent turned off from here says «Spento da te» and offers Accendi", async () => {
+    agents = [agent("CAPITANO", "capitano", null, "lavora")];
+    controlReply = async (op) => (op === "team" ? { ok: true, data: { ...TEAM, held: [{ session: "SCOUT-1", byUser: true }] } } : listReply());
+    mount();
+    await waitFor(() => expect(entered()).toEqual(["capitano"]));
+    act(() => scene.options!.onClick({ kind: "agent", uid: "scout-1", role: "scout" }));
+    const panel = await screen.findByRole("complementary", { name: "Pannello di SCOUT-1" });
+    expect(await within(panel).findByTestId("office-agent-held")).toHaveTextContent("Spento da te");
+    expect(within(panel).getByRole("button", { name: "Accendi Scout-1" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /^Spegni/ })).toBeNull();
+    // an agent that is off has no terminal to read
+    expect(within(panel).queryByTestId("office-agent-terminal-toggle")).toBeNull();
+  });
+
+  it("the terminal opens on a button, read only, named for a screen reader, and is read only while it is open", async () => {
+    const user = userEvent.setup();
+    controlReply = async (op) => {
+      if (op === "team") return { ok: true, data: TEAM };
+      if (op === "screen") return { ok: true, data: { name: "CAPITANO", up: true, text: "riga uno\nriga due", refreshMs: 2000 } };
+      return listReply();
+    };
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "agent", uid: "capitano", role: "capitano" }));
+    const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
+    const toggle = await within(panel).findByRole("button", { name: /Terminale \(sola lettura\)/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(controlRequests().filter((r) => r.op === "screen")).toEqual([]);
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const log = await within(panel).findByRole("log", { name: "Terminale di Capitano, sola lettura" });
+    expect(log).toHaveTextContent("riga uno");
+    expect(log).toHaveAttribute("tabindex", "0");
+    expect(log).toHaveAttribute("aria-live", "off");
+    await user.click(toggle);
+    expect(within(panel).queryByRole("log")).toBeNull();
+  });
+
+  it("without a mouse: Tab reaches the agent with its tag's words, Enter opens its panel and takes the focus, Esc closes it and gives the focus back", async () => {
+    const user = userEvent.setup();
+    controlReply = async (op) => (op === "team" ? { ok: true, data: TEAM } : listReply());
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    const button = await screen.findByRole("button", { name: /capitano/i });
+    button.focus();
+    await user.keyboard("{Enter}");
+    const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
+    expect(document.activeElement).toBe(panel);
+    // Tab goes on inside the panel, in reading order: the chat first, then Spegni
+    await user.tab();
+    await user.tab();
+    const write = await within(panel).findByRole("button", { name: "Scrivi a Capitano" });
+    const off = await within(panel).findByRole("button", { name: "Spegni Capitano" });
+    expect(panel.contains(document.activeElement)).toBe(true);
+    expect(write.compareDocumentPosition(off) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.keyboard("{Escape}");
     expect(screen.queryByRole("complementary")).toBeNull();
-    const note = screen.getByTestId("office-agent-note");
-    expect(note).toHaveTextContent(EXISTING_TEAM_READONLY_TEXT.it.officeAgentNoMovesHere);
-    expect(note).not.toHaveTextContent(/VPS/);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("shows the last message exchanged with an agent the chat already read, and says so when it has read none", async () => {
+    controlReply = async (op) => (op === "team" ? { ok: true, data: TEAM } : listReply());
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "agent", uid: "capitano", role: "capitano" }));
+    const first = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
+    expect(within(first).getByText(/Nessun messaggio letto in questa sessione/)).toBeInTheDocument();
+    // no read of the chat was made for it
+    expect(calls("direct_chat_read")).toHaveLength(0);
+
+    const at = Math.floor(Date.now() / 1000);
+    rememberChatPage("capitano", {
+      messages: [
+        { id: "1", role: "agent", text: "Ho trovato 3 posizioni nuove", at: at - 600 },
+        { id: "2", role: "user", text: "Perfetto, passa all'analisi", at: at - 60 },
+        { id: "3", role: "system", text: "mail_not_taken", at: at - 10, code: "mail_not_taken" },
+      ],
+    });
+    act(() => scene.options!.onClick({ kind: "agent", uid: "scout-1", role: "scout" }));
+    act(() => scene.options!.onClick({ kind: "agent", uid: "capitano", role: "capitano" }));
+    const again = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
+    const last = within(again).getByTestId("office-agent-last-message");
+    expect(last).toHaveTextContent("Perfetto, passa all'analisi");
+    expect(last).toHaveTextContent("Tu");
+    expect(calls("direct_chat_read")).toHaveLength(0);
+  });
+
+  it("the agent's panel asks the engine to hold it still while it is open and lets it go when it closes", async () => {
+    const select = vi.fn();
+    parts.value = {
+      createEngine: vi.fn(() => ({ ...emptyEngine(), apply: (e: OfficeEvent) => applied.push(e), select })),
+      data: { load, diff: diffOfficeSnapshots },
+    };
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(2));
+    act(() => scene.options!.onClick({ kind: "agent", uid: "scout-1", role: "scout" }));
+    await screen.findByRole("complementary", { name: "Pannello di SCOUT-1" });
+    expect(select).toHaveBeenLastCalledWith("scout-1");
+    act(() => scene.options!.onClick(null));
+    expect(select).toHaveBeenLastCalledWith(null);
+    // another object is not an agent
+    act(() => scene.options!.onClick({ kind: "board" }));
+    expect(select).toHaveBeenLastCalledWith(null);
   });
 
   it("a team that is off draws an empty office and says so, without an error", async () => {

@@ -212,7 +212,7 @@ describe("the office page", () => {
     await waitFor(() => expect(scene.options).not.toBeNull());
     const click: OfficeClick = { kind: "agent", uid: "scout-1", role: "scout" };
     act(() => scene.options!.onClick(click));
-    const panel = await screen.findByRole("complementary", { name: "Dettagli dell'ufficio" });
+    const panel = await screen.findByRole("complementary", { name: "Pannello di SCOUT-1" });
     expect(within(panel).getByRole("heading", { name: "SCOUT-1" })).toBeInTheDocument();
     expect(currentLocation()).toEqual({ path: "/office", search: "" });
     // The inspector stays in the office workspace. On desktop it takes its own

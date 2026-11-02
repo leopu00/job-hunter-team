@@ -23,6 +23,8 @@ import {
   type PanelPosition,
   type PlacesData,
 } from "./load-panels";
+import AgentPanel from "./AgentPanel";
+import { Heading, hex, Section, SecondaryLink } from "./panel-parts";
 import type { PanelClient } from "./types";
 import { vpsPanelLoaders } from "./vps-panels";
 
@@ -44,6 +46,10 @@ export type OfficePanelProps = {
    * there: the page says so with a speech bubble (pages/office/index.tsx).
    */
   source?: "cloud" | "vps";
+  /** the existing team's read-only view: an agent's panel offers nothing to do to it */
+  readOnly?: boolean;
+  /** an agent was turned off or on from its panel: the office reads the team again */
+  onActed?: () => void;
   onClose: () => void;
   /** another panel in place of this one (the department's pile, from its panel) */
   onOpen: (target: OfficeClick) => void;
@@ -76,7 +82,7 @@ export default function OfficePanel(props: OfficePanelProps) {
       data-testid="office-panel"
       // its keys are its own: the arrows scroll the list, the camera stays (controls.ts)
       {...{ [OWN_KEYS_ATTR]: "" }}
-      aria-label={t.detailsAria}
+      aria-label={target.kind === "agent" ? fill(t.agentPanelAria, { name: target.uid.toUpperCase() }) : t.detailsAria}
       className="absolute inset-x-3 bottom-3 top-3 z-20 flex max-w-[calc(100%-24px)] flex-col overflow-hidden rounded border border-[var(--color-border)] bg-[var(--color-panel)] shadow-2xl focus:outline-none lg:static lg:my-3 lg:mr-3 lg:w-[380px] lg:max-w-[380px]"
       onPointerDown={(e) => e.stopPropagation()}
     >
@@ -125,24 +131,6 @@ function useLoad<T>(load: () => Promise<T>): { data: T | null; error: string | n
   return state;
 }
 
-function Heading({ title, sub }: { title: string; sub?: string }) {
-  return (
-    <header className="mb-3 pr-6">
-      <h2 className="m-0 text-[14px] font-bold tracking-widest text-[var(--color-white)]">{title}</h2>
-      {sub && <p className="m-0 mt-0.5 text-[11px] text-[var(--color-muted)]">{sub}</p>}
-    </header>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-4">
-      <h3 className="m-0 mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-dim)]">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
 function Loading({ error, source = "cloud" }: { error: string | null; source?: "cloud" | "vps" }) {
   const t = officeText(useLocale());
   if (error && source === "vps") {
@@ -167,33 +155,31 @@ function StateChip({ status }: { status: string | null }) {
   );
 }
 
-function SecondaryLink({ label, onClick }: { label: string; onClick: () => void }) {
+function AgentBody(props: OfficePanelProps & { target: Extract<OfficeClick, { kind: "agent" }> }) {
+  const { target, layout, statuses, client, source = "cloud", readOnly = false, onNavigate, onActed } = props;
+  const t = officeText(useLocale());
+  const dept = DEPT_OF_ROLE[target.role];
   return (
-    <button type="button" onClick={onClick} className="rounded text-[11px] text-[var(--color-muted)] underline hover:text-[var(--color-bright)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-bright)]">
-      {label}
-    </button>
+    <AgentPanel
+      target={target}
+      subtitle={dept ? fill(t.departmentOf, { name: deptName(layout, dept) }) : target.role}
+      statuses={statuses}
+      readOnly={readOnly}
+      onNavigate={onNavigate}
+      onActed={onActed}
+    >
+      {/* the positions an agent holds and its moves are the cloud's: on this computer and on a VPS the team does not publish them */}
+      {source === "cloud" ? <CloudAgentSections client={client} uid={target.uid} onNavigate={onNavigate} /> : undefined}
+    </AgentPanel>
   );
 }
 
-function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanelProps & { target: Extract<OfficeClick, { kind: "agent" }> }) {
+function CloudAgentSections({ client, uid, onNavigate }: { client: PanelClient; uid: string; onNavigate: (path: string) => void }) {
   const locale = useLocale();
   const t = officeText(locale);
-  const { data, error } = useLoad<AgentPanelData>(() => loadAgentPanel(client, target.uid));
-  const dept = DEPT_OF_ROLE[target.role];
-  const status = statuses?.agents[target.uid.toLowerCase()];
-  const tag = status ? tagOf(status, Date.now(), locale) : null;
+  const { data, error } = useLoad<AgentPanelData>(() => loadAgentPanel(client, uid));
   return (
     <>
-      <Heading title={target.uid.toUpperCase()} sub={dept ? fill(t.departmentOf, { name: deptName(layout, dept) }) : target.role} />
-      <Section title={t.sectionNow}>
-        {tag ? (
-          <span className="rounded border px-2 py-0.5 text-[11px] font-bold tracking-widest" style={{ color: hex(tag.color), borderColor: hex(tag.color) }}>
-            {tag.label}
-          </span>
-        ) : (
-          <span className="text-[11px] text-[var(--color-muted)]">{t.statusNotPublished}</span>
-        )}
-      </Section>
       <Section title={t.sectionInHand}>
         {!data ? (
           <Loading error={error} />
@@ -220,7 +206,6 @@ function AgentBody({ target, layout, statuses, client, onNavigate }: OfficePanel
           </ul>
         )}
       </Section>
-      <SecondaryLink label={t.openAgentPage} onClick={() => onNavigate(`/agents?agent=${encodeURIComponent(target.role)}`)} />
     </>
   );
 }
@@ -473,8 +458,4 @@ function PositionDetail({ p, onNavigate }: { p: PanelPosition; onNavigate: (path
       </div>
     </div>
   );
-}
-
-function hex(color: number): string {
-  return `#${color.toString(16).padStart(6, "0")}`;
 }
