@@ -37,7 +37,8 @@ def test_the_skill_exists_in_every_language_with_the_same_commands(suffix):
     assert skill.startswith("---\nname: scout-coverage\n")
     for needle in ("scout_coverage.py next", "scout_coverage.py plan", "scout_coverage.py status", "scout_pass_log.py pass",
                    "--status closed", "--query-kind", "scout_exhaustion.py check", "core_missing", "level_terms", "cities",
-                   "role_language", "synonym", "plan_done", "broad", "broad_terms", "platsbanken_search.py", "boards --country"):
+                   "role_language", "synonym", "plan_done", "broad", "broad_terms", "platsbanken_search.py", "boards --country",
+                   "ats_board_search.py", "--drop-seniority", "--title-any", "dropped"):
         assert needle in skill, "%s: %r" % (suffix or "en", needle)
 
 
@@ -59,6 +60,9 @@ def test_the_commands_the_skill_names_exist_in_the_tools():
     for flag in ("--q", "--city", "--no-experience", "--query-kind", "--log"):
         assert flag in platsbanken, flag
     assert '"boards"' in coverage
+    board = (skills / "ats_board_search.py").read_text(encoding="utf-8")
+    for flag in ("--provider", "--board", "--country", "--drop-seniority", "--title-any", "--log", "--query-kind"):
+        assert flag in board, flag
     assert "broad_terms" in (skills / "scout_coverage_table.json").read_text(encoding="utf-8")
     for status in ("closed", "gone"):
         assert '"%s"' % status in log
