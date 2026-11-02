@@ -33,6 +33,12 @@ const NOT_ERRORS: Record<string, string> = {
     ["support_report_invalid", "support_report_dir_unavailable", "support_report_write_failed", "support_report_none", "support_report_open_failed"]
       .map((code) => [code, "the support report's box says it in its own lines (copy not kept, folder not shown); the code is never shown"]),
   ),
+  // team_budget.rs: the closed lists of codes the Budget page puts in words in each language (the verdict, the brakes
+  // that are on), the keys of its answer. The page's own lines say them; the code is never put in front of the person.
+  ...Object.fromEntries(
+    ["lockout_risk", "no_data", "on_pace", "pace_ahead", "daily_cap_stop", "recovering_after_freeze", "pause_between_jobs"]
+      .map((code) => [code, "a code of the Budget page's closed lists, told by the page in its own lines; never shown as a code"]),
+  ),
   // local_swipe.rs: the names of the fields of a deck and of the verdict's answer, and the start of the owner
   // codes the write turns into «read only». They are keys of a JSON the page reads, never a sentence.
   ...Object.fromEntries(

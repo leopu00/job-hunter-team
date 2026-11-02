@@ -1164,6 +1164,18 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "This can be done only from the app’s main window.",
     "Go back to the main window and try again.",
   ),
+  budget_unreadable: copy(
+    "Non riesco a leggere il budget della squadra.",
+    "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",
+    "The team's budget cannot be read.",
+    "Try again in a moment; if it does not change, check that the team is running.",
+  ),
+  budget_unavailable: copy(
+    "La squadra non offre ancora i dati del budget.",
+    "Aggiorna la squadra e riprova.",
+    "The team does not offer the budget figures yet.",
+    "Update the team and try again.",
+  ),
   stats_unreadable: copy(
     "Non riesco a leggere le statistiche della squadra.",
     "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",
