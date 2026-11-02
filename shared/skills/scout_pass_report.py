@@ -34,7 +34,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 OUTCOMES = ("inserted", "duplicate", "dead_link", "closed_ad", "seniority", "work_auth", "domain", "experience",
-            "language", "other")
+            "language", "role", "area", "other")
 
 
 def home() -> Path:
@@ -60,6 +60,13 @@ def read_rows(path: Path, since_ts: float = 0.0) -> list:
                 rows.append(row)
     rows.sort(key=lambda r: r["ts"])
     return rows
+
+
+def weight(row: dict) -> int:
+    """How many candidates a candidate line stands for: its `count` (a whole number from 1 to 100000), otherwise 1.
+    A value that is not that is read as 1, never raised."""
+    count = row.get("count")
+    return count if isinstance(count, int) and not isinstance(count, bool) and 1 <= count <= 100000 else 1
 
 
 def token_events(since_ts: float):
@@ -102,20 +109,23 @@ def fold(rows: list, events=None) -> dict:
             continue
         current = open_pass.get(agent)
         outcome = row.get("outcome") if row.get("outcome") in OUTCOMES else "other"
+        many = weight(row)
         if current is None or (current["source"], current["country"]) != (source, country):
             key = "%s/%s" % (source, country)
-            orphan[key][outcome] += 1
+            orphan[key][outcome] += many
             if row.get("opened"):
-                orphan[key]["opened"] += 1
+                orphan[key]["opened"] += many
             continue
-        current["outcomes"][outcome] += 1
-        current["opened"] += 1 if row.get("opened") else 0
+        current["outcomes"][outcome] += many
+        current["opened"] += many if row.get("opened") else 0
         current["_to"] = row["ts"]
     for p in passes:
         p["tokens_kt"] = _weighted(events, p["agent"], p.pop("_from"), p.pop("_to"))
         p["inserted"] = p["outcomes"]["inserted"]
         p["dropped"] = sum(v for k, v in p["outcomes"].items() if k != "inserted")
-    groups = defaultdict(lambda: {"passes": 0, "returned": 0, "opened": 0, "inserted": 0, "tokens_kt": None,
+        # What the source returned and nobody accounted for: a pass of 1080 ads with 3 reasons logged leaves 1077 here.
+        p["unexplained"] = max(0, p["returned"] - sum(p["outcomes"].values()))
+    groups = defaultdict(lambda: {"passes": 0, "returned": 0, "opened": 0, "inserted": 0, "unexplained": 0, "tokens_kt": None,
                                   "dropped": {o: 0 for o in OUTCOMES if o != "inserted"}})
     for p in passes:
         g = groups[(time.strftime("%Y-%m-%d", time.localtime(p["ts"])), p["source"], p["country"])]
@@ -123,6 +133,7 @@ def fold(rows: list, events=None) -> dict:
         g["returned"] += p["returned"]
         g["opened"] += p["opened"]
         g["inserted"] += p["inserted"]
+        g["unexplained"] += p["unexplained"]
         if p["tokens_kt"] is not None:
             g["tokens_kt"] = round((g["tokens_kt"] or 0.0) + p["tokens_kt"], 1)
         for o in g["dropped"]:
@@ -137,11 +148,11 @@ def fold(rows: list, events=None) -> dict:
 
 
 def table(report: dict) -> str:
-    lines = ["day         source          cc     passes returned opened inserted  kT  kT/inserted  dropped (reason=n)"]
+    lines = ["day         source          cc     passes returned opened inserted unexpl  kT  kT/inserted  dropped (reason=n)"]
     for g in report["summary"]:
         dropped = " ".join("%s=%d" % (o, n) for o, n in g["dropped"].items() if n) or "-"
-        lines.append("%-11s %-15s %-6s %6d %8d %6d %8d %5s %11s  %s" % (
-            g["day"], g["source"], g["country"], g["passes"], g["returned"], g["opened"], g["inserted"],
+        lines.append("%-11s %-15s %-6s %6d %8d %6d %8d %6d %5s %11s  %s" % (
+            g["day"], g["source"], g["country"], g["passes"], g["returned"], g["opened"], g["inserted"], g["unexplained"],
             "-" if g["tokens_kt"] is None else g["tokens_kt"],
             "-" if g["kt_per_inserted"] is None else g["kt_per_inserted"], dropped))
     if len(lines) == 1:
