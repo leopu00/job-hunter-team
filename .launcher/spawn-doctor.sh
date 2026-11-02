@@ -52,6 +52,28 @@ jht_spawn_new_session "$SESSION" "$DOTTORE_DIR" "$LABEL" || exit 1
 tmux send-keys -t "$SESSION" "export PATH='$JHT_SPAWN_PANE_PATH'" C-m
 sleep 1
 
+# 5b) Un nuovo tentativo dopo un errore di capacita' (JHT_DOCTOR_RETRY=<n>, messo dal watchdog)
+#     usa il modello di riserva, se la configurazione lo prevede: `doctor_fallback_model` in
+#     jht.config.json. Senza quella chiave il modello resta quello di sempre.
+case "${JHT_DOCTOR_RETRY:-0}" in
+  ''|0|*[!0-9]*) ;;
+  *)
+    FALLBACK_MODEL="$(python3 - "$JHT_HOME/jht.config.json" <<'PYEOF' 2>/dev/null || true
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        print(str(json.load(handle).get("doctor_fallback_model") or "").strip())
+except Exception:
+    pass
+PYEOF
+)"
+    if [ -n "$FALLBACK_MODEL" ]; then
+      export JHT_SPAWN_MODEL_OVERRIDE="$FALLBACK_MODEL"
+      echo "[$LABEL] retry ${JHT_DOCTOR_RETRY}: fallback model '$FALLBACK_MODEL'"
+    fi
+    ;;
+esac
+
 # 6) Avvia il REPL del provider attivo (effort alto).
 DOCTOR_CMD="$(jht_spawn_repl_cmd "$ACTIVE_PROVIDER")" || exit 1
 tmux send-keys -t "$SESSION" "$DOCTOR_CMD" C-m
@@ -61,6 +83,10 @@ jht_spawn_wait_repl "$SESSION" "$DOCTOR_CMD" "$LABEL" dottore "$LOGS_DIR" "spawn
 
 # 6c) Auto-accept dei dialog + iniezione del prompt iniziale.
 jht_spawn_kickoff "$SESSION" 'Read AGENTS.md and run the health-check cycle as documented. When finished, write the final log and REMAIN available on standby — DO NOT self-terminate (the next spawn replaces you using kill-then-create). If the coordinators contact you, respond to their request.'
+
+# 6d) L'avvio e' riuscito solo se la sessione non e' ferma sul prompt per un errore di capacita':
+#     rc 75, e chi ci sta sopra NON segna il giro fatto (riprova dopo un'attesa, o round_failed).
+jht_spawn_verify_start "$SESSION" "$LABEL" dottore "$LOGS_DIR" "spawn-doctor.sh" || exit $?
 
 # 7) Log spawn evento per tracciabilità (UI lo mostrerà in timeline).
 ROUND_ID="$(date -u +%Y%m%dT%H%M%SZ)-spawn"
