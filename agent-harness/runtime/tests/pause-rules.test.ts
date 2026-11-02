@@ -35,8 +35,13 @@ describe("the pause rules, one file for the TUI and the API team", () => {
     expect(loadPauseRules(REPO_ROOT)).toEqual({
       shortPauseSec: FILE.short_pause_sec,
       emptyUnit: { roles: FILE.empty_unit.roles, maxStreak: FILE.empty_unit.max_streak },
+      queuedWork: { roles: FILE.queued_work.roles, pauseSec: FILE.queued_work.pause_sec },
     });
-    expect(FILE).toMatchObject({ short_pause_sec: 60, empty_unit: { roles: ["scout"], max_streak: 10 } });
+    expect(FILE).toMatchObject({
+      short_pause_sec: 60,
+      empty_unit: { roles: ["scout"], max_streak: 10 },
+      queued_work: { roles: ["analista", "scorer"], pause_sec: 60 },
+    });
   });
 
   it("without the file no rule applies: the full pause", () => {
@@ -65,6 +70,13 @@ describe("the pause rules, one file for the TUI and the API team", () => {
     const applied = Array.from({ length: cap + 1 }, () => pause(policy, unit).ms);
     expect(applied).toEqual([...Array(cap).fill(SHORT), FULL]);
     expect(pause(policy, unit).ms).toBe(SHORT);
+  });
+
+  it("keeps the queue rule to the engine: here the queues are not counted, the Analista and the Scorer keep the full pause", () => {
+    const scorer = new PausePolicy("scorer-4", loadPauseRules(REPO_ROOT));
+    const unit = new WorkUnit();
+    pause(scorer, unit);
+    expect(pause(scorer, unit).ms).toBe(FULL);
   });
 
   it("is the SCOUT's rule only, and never lengthens a pause", () => {

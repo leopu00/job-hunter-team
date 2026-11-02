@@ -103,6 +103,8 @@ Read `UNSCORED` (positions − scores) as the queue behind the Analista/Scorer, 
 
 On top of the grid, the role asymmetry: the last agents you slow are the ones converting an existing backlog into a **scored** position (Analista, Scorer) — they are the difference between "50 positions sourced" and something the user can act on. The first is the one generating new raw input when the downstream queue is already deep (Scout). A Writer with an empty queue is not a lever in either direction.
 
+**The engine already shortens the Analista's and the Scorer's pause while their own queue has positions waiting** (`new` for the Analista, `checked` without a score for the Scorer): 60 s between two units, none in the user's burn («Lavora a tutta»), `pause-rules.json` → `queued_work`. The value you write for them in `throttle.json` is the pause for an **empty** queue, and the one that stays when the budget is critical (a freeze in the last 2 hours, the team above its pace by more than 1 %/h): that is when slowing them takes effect on a deep queue. In a healthy budget a deep queue is not held still.
+
 **Concentrate on one or two agents.** The ladder is coarse — consecutive rungs are 20-60% apart — so a cut spread over five agents lands inside the noise for each of them, while the same cut on the top-share agent is a real, measurable change by the next signal.
 
 **When you do brake two, give them different rungs.** The ladder is in prime minutes (1, 2, 3, 5, 7, 11, 13, 17, 23, 31, 41, 53, 60) on purpose: two workers pausing on the same value re-synchronise by construction, and their checkpoints then land together as a burst of simultaneous requests. `scout-1=660` + `analista-1=780` (11 and 13 min) collide far more rarely than both at 780.

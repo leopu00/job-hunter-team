@@ -85,6 +85,8 @@ Modi:
     python3 throttle_engine.py status [<a>]    # i flag, leggibili
 """
 import argparse
+import contextlib
+import copy
 import importlib.util
 import json
 import os
@@ -135,6 +137,12 @@ NOTIFIED_ACK_MAX_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_ACK_MAX", "600"
 # il file all'infinito su un roster che cambia (worker one-shot, respawn).
 ACTIVE_PRUNE_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_PRUNE", "86400"))
 CAPTAIN_SESSION = os.environ.get("JHT_THROTTLE_ENGINE_CAPTAIN", "CAPITANO")
+# Ogni pausa ha una fine certa: inizio + durata + questo margine. Una pausa del log storico (`start`) che a quel punto
+# non ha un `end` e di cui il flag non sa piu' niente e' una pausa PERSA (vedi `recover_lost_pauses`), e l'agente che
+# la sta aspettando viene svegliato.
+PAUSE_END_MARGIN_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_END_MARGIN", "60"))
+# Quanto del log storico si rilegge a ogni giro per cercare le pause aperte (le ultime righe: basta e avanza).
+PAUSE_LOG_TAIL_BYTES = 262144
 
 # Il testo della sveglia. Due obblighi in una riga: l'ack è il PRIMO comando
 # (senza quello il flag resta NOTIFIED e il watchdog escala su un agente sano),
@@ -284,6 +292,18 @@ def _pause_rules() -> dict:
 
 _RULES = _pause_rules()
 USER_WORK_PAUSE_SEC = int(_RULES.get("short_pause_sec") or 0)
+# ── Posizioni in coda per il ruolo (02/11) ───────────────────────────────
+# Misurato su un run locale: l'Analista lavora ~51 s a posizione e poi sta fermo 300-780 s anche con 15 posizioni
+# `new` in coda (67-94 % del ciclo in pausa); lo Scorer ha lo stesso freno. Il freno del Capitano serve contro i giri a
+# VUOTO, e un giro con una coda non e' a vuoto: con posizioni in attesa nella coda del ruolo la pausa dopo un'unita'
+# scende al massimo a `pause_sec` (60 s, un checkpoint fra due unita' come vuole il worker floor, solo corto). Una
+# regola sola per i ruoli elencati in pause-rules.json (`queued_work.roles`): aggiungerne uno e' una riga di JSON.
+# Cede al freno della spesa come l'unita' vuota dello Scout (`captains_pause_stays`: recupero dopo un congelamento,
+# team sopra il suo ritmo); con la deroga dell'utente («Lavora a tutta», burn intent) il freno e' tolto e, con una
+# coda in attesa, non c'e' nessuna pausa. Coda vuota o illeggibile: la pausa del Capitano, come prima.
+_QUEUED = _RULES.get("queued_work") or {}
+_QUEUED_ROLES = frozenset(_QUEUED.get("roles") or ())
+QUEUED_WORK_PAUSE_SEC = int(_QUEUED.get("pause_sec") or USER_WORK_PAUSE_SEC)
 _USER_REQUEST_ROLES = frozenset((_RULES.get("user_requests") or {}).get("roles") or ())
 # ── Lo SCOUT che non ha inserito niente (27/09) ──────────────────────────
 # Su una VPS lo SCOUT smaltiva una lista in cache piena di annunci già visti:
@@ -379,6 +399,41 @@ def waiting_user_requests(agent: str) -> list:
     except Exception as exc:  # noqa: BLE001 — la skill gira in loop dagli agenti
         _log("could not count user requests for %s: %s" % (agent, exc))
         return []
+
+
+def queued_work(agent: str) -> int:
+    """Quante posizioni aspettano `agent` nella coda del suo ruolo (db_query.role_queue_count).
+
+    0 per i ruoli senza la regola e per qualunque errore: senza una risposta certa si tiene la pausa del Capitano
+    (la direzione sicura e' il freno, come in `waiting_user_requests`)."""
+    if _role_of(agent) not in _QUEUED_ROLES:
+        return 0
+    try:
+        for cand in (Path("/app/shared/skills"), Path(__file__).resolve().parent):
+            if (cand / "db_query.py").exists():
+                if str(cand) not in sys.path:
+                    sys.path.insert(0, str(cand))
+                break
+        mod = _load_shared("db_query", "db_query.py")
+        if mod is None:
+            return 0
+        conn = mod.get_db()
+        try:
+            return int(mod.role_queue_count(conn, _role_of(agent)))
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001 — la skill gira in loop dagli agenti
+        _log("could not count the queue of %s: %s" % (agent, exc))
+        return 0
+
+
+def _burn_intent_now() -> bool:
+    mod = _throttle_config()
+    try:
+        return bool(mod is not None and mod._burn_intent_active())
+    except Exception as exc:  # noqa: BLE001
+        _log("could not read the burn intent: %s" % exc)
+        return False
 
 
 def inserted_since(agent: str, since: float):
@@ -583,8 +638,50 @@ def _first_pass_cap(agent: str):
 
 
 # ── Registrazione (la chiama l'agente, e ritorna SUBITO) ──────────────────
+@contextlib.contextmanager
+def _flags_lock():
+    """Lock esclusivo sul file dei flag, per la lettura-modifica-scrittura.
+
+    `register` e `ack` (l'agente) e `tick` (il daemon) leggono TUTTO il file e lo riscrivono TUTTO: senza un lock chi
+    scrive per ultimo cancella la modifica dell'altro. Il guasto vero: il `tick` legge, si ferma sulla consegna di una
+    sveglia (fino a NOTIFY_TIMEOUT_SEC), l'agente nel frattempo registra la sua pausa, il `tick` riscrive lo stato
+    vecchio e la pausa dell'agente sparisce: nessuna sveglia, nessun `end`, l'agente fermo davanti alla coda.
+    Senza `fcntl` (Windows, dove il motore non gira) o senza poter creare il lock si procede come prima."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    handle = None
+    try:
+        path = flags_path().with_suffix(".lock")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, "a+")
+        fcntl.flock(handle, fcntl.LOCK_EX)
+    except OSError as exc:
+        _log("flag lock unavailable: %s" % exc)
+        if handle is not None:
+            handle.close()
+        handle = None
+    try:
+        yield
+    finally:
+        if handle is not None:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            finally:
+                handle.close()
+
+
 def register(agent: str, seconds=None, reason=None, session=None,
              now=None) -> dict:
+    """Arma il timer per `agent` (sotto il lock dei flag). Vedi `_register`."""
+    with _flags_lock():
+        return _register(agent, seconds, reason, session, now)
+
+
+def _register(agent: str, seconds=None, reason=None, session=None,
+              now=None) -> dict:
     """Arma il timer per `agent` e ritorna. NON dorme, NON forka, NON attende.
 
     È il cuore del ticket: l'unica cosa che l'agente fa col tempo è dire «ho
@@ -600,6 +697,20 @@ def register(agent: str, seconds=None, reason=None, session=None,
     shortened_from = None
     if waiting:
         shortened_from, applied = applied, USER_WORK_PAUSE_SEC
+    # Posizioni in coda per il ruolo: tetto corto alla pausa (nessuna pausa in «a tutta»). Non allunga mai.
+    queued = 0
+    queued_kept = None
+    if applied > 0 and _role_of(agent) in _QUEUED_ROLES:
+        queued = queued_work(agent)
+        if queued:
+            queued_kept = captains_pause_stays(now)
+            if queued_kept is not None:
+                queued = 0
+            else:
+                wanted = 0 if _burn_intent_now() else QUEUED_WORK_PAUSE_SEC
+                if wanted < applied:
+                    shortened_from = shortened_from if shortened_from is not None else applied
+                    applied = wanted
 
     state = read_flags()
     # Lo SCOUT dopo un'unità vuota: si conta da quando l'unità è cominciata,
@@ -643,12 +754,14 @@ def register(agent: str, seconds=None, reason=None, session=None,
             "session": session_for(agent, {"session": session}),
         }
         write_flags(state)
-        emit("no_throttle", agent=agent, ts=now, reason=reason)
+        # Senza pausa perche' il ruolo ha una coda in «a tutta»: il log dice quanto era lunga e che pausa avrebbe avuto.
+        why = {"shortened_from": shortened_from, "queued_work": queued} if queued else {}
+        emit("no_throttle", agent=agent, ts=now, reason=reason, **why)
         # `checkpoint`: l'agente è arrivato a fine unità con throttle 0. Non è
         # una pausa, ma È un battito, ed è ciò che dà la cadenza al pacing.
         emit_pause("checkpoint", agent, now, requested_sec=0, reason=reason,
-                   source="explicit" if seconds is not None else "config")
-        return {"agent": agent, "armed": False, "applied_sec": 0, "until": None}
+                   source="explicit" if seconds is not None else "config", **why)
+        return {"agent": agent, "armed": False, "applied_sec": 0, "until": None, **why}
 
     until = int(now + applied)
     pause_id = "%s-%d" % (agent, int(now))
@@ -672,6 +785,12 @@ def register(agent: str, seconds=None, reason=None, session=None,
                   "user_requests_waiting": dict(waiting)} if waiting else
                  {"shortened_from": shortened_from, "empty_unit": empty_streak}
                  if shortened_from is not None else {})
+    if queued and shortened_from is not None:
+        shortened = {"shortened_from": shortened_from, "queued_work": queued}
+        if waiting:
+            shortened["user_requests_waiting"] = dict(waiting)
+    if queued_kept is not None:
+        shortened = {"queued_work_kept": queued_kept}
     if held is not None:
         shortened = {"empty_unit_kept": held}
     if long_unit is not None:
@@ -691,6 +810,12 @@ def register(agent: str, seconds=None, reason=None, session=None,
 
 # ── Ack (lo fa l'AGENTE: è ciò che rende NOTIFIED una prova) ──────────────
 def ack(agent: str, now=None) -> dict:
+    """`NOTIFIED → ACTIVE` (sotto il lock dei flag). Vedi `_ack`."""
+    with _flags_lock():
+        return _ack(agent, now)
+
+
+def _ack(agent: str, now=None) -> dict:
     """`NOTIFIED → ACTIVE`. È il primo atto dell'agente al risveglio.
 
     Ammesso **solo quando l'attesa è finita**: da `NOTIFIED` sempre, da
@@ -1141,16 +1266,121 @@ def maybe_sweep_questions(now=None) -> int:
         return 0
 
 
+def _open_pauses() -> dict:
+    """{agent: record `start`} delle pause del log storico che non hanno ancora un `end`.
+
+    Si legge la CODA di `logs/throttle-events.jsonl` (append-only: non si perde per una scrittura concorrente come il
+    file dei flag). Per ogni agente conta l'ULTIMO `start`; un `end` con lo stesso id lo chiude."""
+    path = pause_log_path()
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as fh:
+            if size > PAUSE_LOG_TAIL_BYTES:
+                fh.seek(size - PAUSE_LOG_TAIL_BYTES)
+                fh.readline()  # la prima riga della coda puo' essere tagliata
+            raw = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return {}
+    last_start, ended = {}, set()
+    for line in raw.splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        agent = rec.get("agent")
+        if rec.get("event") == "start" and agent and isinstance(rec.get("ts_unix"), (int, float)):
+            last_start[agent] = rec
+        elif rec.get("event") == "end" and rec.get("id"):
+            ended.add(rec["id"])
+    return {a: r for a, r in last_start.items() if r.get("id") not in ended}
+
+
+def recover_lost_pauses(agents: dict, now: float, sessions) -> int:
+    """Ogni pausa ha una fine certa: inizio + durata + `PAUSE_END_MARGIN_SEC`. Ritorna quante ne ha recuperate.
+
+    Una pausa che il log storico ha aperto (`start`) e non ha chiuso (`end`), scaduta da piu' del margine, e di cui il
+    flag non sa piu' niente (manca, o e' un ACTIVE di prima dell'inizio) e' PERSA: una scrittura concorrente l'ha
+    cancellata, o il flag e' stato toccato a mano. L'agente la sta aspettando e nessuno lo sveglia: su un run reale
+    l'Analista e' rimasto fermo 74, 46 e 23 minuti con la coda piena, tre pause su 46 senza `end`. Qui la pausa si
+    chiude nel log (`end` con `recovered`) e l'agente viene svegliato dal giro normale (`until` = adesso). Se la sua
+    sessione non esiste piu' la pausa si chiude e basta. Mai su una pausa piu' vecchia di ACTIVE_PRUNE_SEC.
+    """
+    recovered = 0
+    for agent, rec in _open_pauses().items():
+        started = float(rec["ts_unix"])
+        applied = rec.get("applied_sec")
+        if not isinstance(applied, (int, float)):
+            continue
+        due = started + float(applied) + PAUSE_END_MARGIN_SEC
+        if now < due or now > started + float(applied) + ACTIVE_PRUNE_SEC:
+            continue
+        entry = agents.get(agent)
+        if isinstance(entry, dict):
+            if entry.get("pause_id") == rec.get("id"):
+                continue  # il flag la conosce: la gestisce il giro normale
+            if entry.get("state") in (IN_THROTTLE, NOTIFIED):
+                continue  # un'altra pausa, piu' recente: non e' questa che e' persa
+            since = entry.get("since")
+            if isinstance(since, (int, float)) and float(since) >= started:
+                continue  # l'agente e' ripartito dopo l'inizio: la pausa e' finita, solo senza `end`
+        session = session_for(agent, entry if isinstance(entry, dict) else None)
+        gone = sessions is not None and session not in sessions
+        emit_pause("end", agent, now, id=rec.get("id"), applied_sec=applied,
+                   actual_sleep_sec=round(max(0.0, now - started), 2), interrupted=True,
+                   reason=rec.get("reason"), recovered="session-gone" if gone else "lost-pause")
+        if gone:
+            emit("pause_closed", agent=agent, ts=now, session=session, pause_id=rec.get("id"),
+                 overdue_sec=int(now - (started + float(applied))))
+            continue
+        agents[agent] = {"state": IN_THROTTLE, "since": int(started), "until": int(now),
+                         "timer_armed_at": int(started), "applied_sec": applied, "session": session,
+                         "reason": rec.get("reason"), "notify_attempts": 0, "pause_id": None}
+        emit("pause_recovered", agent=agent, ts=now, session=session, pause_id=rec.get("id"),
+             overdue_sec=int(now - (started + float(applied))))
+        recovered += 1
+    return recovered
+
+
+def _merge_flags(fresh: dict, before: dict, after: dict) -> dict:
+    """I flag da scrivere: quello che il giro ha DECISO sopra quello che c'e' ora sul disco.
+
+    Un agente che il giro non ha toccato resta com'e' adesso (puo' aver registrato o fatto l'ack mentre il giro
+    consegnava una sveglia). Un agente che il giro ha cambiato si scrive solo se sul disco e' ancora quello che il
+    giro aveva letto; se nel frattempo l'agente ha scritto, vince la scrittura dell'agente e il giro lo riguarda al
+    prossimo passaggio."""
+    merged = dict(fresh)
+    for agent in set(before) | set(after):
+        if before.get(agent) == after.get(agent):
+            continue
+        if fresh.get(agent) == before.get(agent):
+            if agent in after:
+                merged[agent] = after[agent]
+            else:
+                merged.pop(agent, None)
+    return merged
+
+
 def tick(now=None) -> dict:
     """Un giro completo. Ritorna lo stato aggiornato (comodo per i test).
 
     Nessun timer in memoria: si rilegge il file e si confrontano i `until`.
     È il motivo per cui un respawn del daemon non perde niente.
+
+    Il giro puo' durare minuti (una consegna di sveglia aspetta fino a NOTIFY_TIMEOUT_SEC): si scrive sotto il lock dei
+    flag, unendo ai flag che ci sono ADESSO sul disco solo cio' che il giro ha cambiato (`_merge_flags`).
     """
     now = time.time() if now is None else float(now)
     state = read_flags()
     agents = state["agents"]
+    before = copy.deepcopy(agents)
     sessions = live_sessions()
+
+    try:
+        recover_lost_pauses(agents, now, sessions)
+    except Exception as exc:  # noqa: BLE001 — il recupero non ferma il giro
+        _log("could not recover lost pauses: %s" % exc)
 
     for agent in list(agents):
         entry = agents.get(agent)
@@ -1164,8 +1394,9 @@ def tick(now=None) -> dict:
             _log("error on %s: %s" % (agent, exc))
 
     last_hb = state.get("last_heartbeat")
+    heartbeat = None
     if last_hb is None or (now - float(last_hb)) >= HEARTBEAT_SEC:
-        state["last_heartbeat"] = now
+        heartbeat = now
         counts = {IN_THROTTLE: 0, NOTIFIED: 0, ACTIVE: 0}
         for entry in agents.values():
             key = entry.get("state")
@@ -1175,8 +1406,13 @@ def tick(now=None) -> dict:
              notified=counts[NOTIFIED], active=counts[ACTIVE],
              tracked=len(agents))
 
-    write_flags(state)
-    return state
+    with _flags_lock():
+        fresh = read_flags()
+        fresh["agents"] = _merge_flags(fresh["agents"], before, agents)
+        if heartbeat is not None:
+            fresh["last_heartbeat"] = heartbeat
+        write_flags(fresh)
+    return fresh
 
 
 # ── Freschezza del log (check del Dottore) ────────────────────────────────

@@ -1189,6 +1189,25 @@ USER_REQUEST_QUEUES = (
 )
 
 
+# La coda di lavoro NORMALE di un ruolo: la condizione di `next_for_role`, scritta una volta sola. Il conto del
+# motore del throttle (regola `queued_work` di pause-rules.json) e' quello della coda che l'agente vede.
+ANALYST_QUEUE_WHERE = "p.status = 'new'"
+SCORER_QUEUE_WHERE = "p.status = 'checked' AND s.id IS NULL"
+_ROLE_QUEUES = {
+    'analista': ("positions p", ANALYST_QUEUE_WHERE),
+    'scorer': ("positions p LEFT JOIN scores s ON s.position_id = p.id", SCORER_QUEUE_WHERE),
+}
+
+
+def role_queue_count(conn, role):
+    """Quante posizioni aspettano `role` (analista: `new`; scorer: `checked` senza punteggio). 0 per gli altri ruoli."""
+    entry = _ROLE_QUEUES.get(role)
+    if entry is None:
+        return 0
+    source, where = entry
+    return conn.execute(f"SELECT COUNT(*) FROM {source} WHERE {where}").fetchone()[0]
+
+
 def waiting_user_requests(conn):
     """[(coda, quante)] delle code di richieste dell'utente non vuote."""
     waiting = []
@@ -1206,21 +1225,21 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
     lim = _sql_limit(limit)
 
     if role == 'analista':
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
-            WHERE p.status = 'new'
+            WHERE {ANALYST_QUEUE_WHERE}
             ORDER BY p.found_at ASC
             LIMIT ?
         """, (lim,)).fetchall()
         label = "New positions ready for analysis"
 
     elif role == 'scorer':
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.found_at, COUNT(*) OVER () AS _total
             FROM positions p
             LEFT JOIN scores s ON s.position_id = p.id
-            WHERE p.status = 'checked' AND s.id IS NULL
+            WHERE {SCORER_QUEUE_WHERE}
             ORDER BY p.found_at ASC
             LIMIT ?
         """, (lim,)).fetchall()
