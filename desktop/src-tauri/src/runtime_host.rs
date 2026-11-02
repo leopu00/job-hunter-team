@@ -1004,7 +1004,118 @@ pub(crate) fn hide_console(command: &mut Command) {
     command.creation_flags(CREATE_NO_WINDOW);
 }
 #[cfg(not(windows))]
-pub(crate) fn hide_console(_command: &mut Command) {}
+pub(crate) fn hide_console(command: &mut Command) {
+    clean_appimage_env(command);
+}
+
+// ── the program an AppImage starts is the system's, not the AppImage's ───────────────────────────────────────────
+//
+// An AppImage runs with the environment its AppRun built: LD_LIBRARY_PATH on the libraries inside the image, PATH, XDG_DATA_DIRS
+// and the GTK/GStreamer/Python variables on its own folders, APPDIR and APPIMAGE. A child inherits all of it. The curl of the
+// SYSTEM then loads the image's libcurl/openssl, which do not fit it, and exits at once (the first download of the team's
+// environment failed in 100 ms with the network up). Every program the app starts is a system program: it gets the environment
+// the app was started with, which is the one without the AppRun's entries. The app's own process is NOT changed (the web view's
+// helpers need the image's libraries). The one place is here; `hide_console` calls it for every program started through it, and a
+// test fails when a production `Command::new` goes by neither.
+
+/// Set by the AppImage runtime and its AppRun: the app is running from an image when one of the first two is there.
+const APPIMAGE_MARKERS: [&str; 4] = ["APPIMAGE", "APPDIR", "ARGV0", "OWD"];
+/// Lists of paths (`:`-separated; spaces too in LD_PRELOAD): the entries inside the image go, the person's own stay.
+const APPIMAGE_PATH_LISTS: [&str; 17] = [
+    "LD_LIBRARY_PATH", "LD_PRELOAD", "PATH", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "PYTHONPATH", "PERL5LIB", "PERLLIB",
+    "GST_PLUGIN_PATH", "GST_PLUGIN_SYSTEM_PATH", "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH_1_0", "QT_PLUGIN_PATH",
+    "GTK_PATH", "GIO_EXTRA_MODULES", "GI_TYPELIB_PATH", "LIBRARY_PATH",
+];
+/// One path each: removed when it points inside the image.
+const APPIMAGE_SINGLE_PATHS: [&str; 17] = [
+    "GDK_PIXBUF_MODULE_FILE", "GDK_PIXBUF_MODULEDIR", "GSETTINGS_SCHEMA_DIR", "GTK_EXE_PREFIX", "GTK_DATA_PREFIX",
+    "GTK_IM_MODULE_FILE", "GST_PLUGIN_SCANNER", "GST_REGISTRY", "FONTCONFIG_FILE", "FONTCONFIG_PATH", "PYTHONHOME", "TCL_LIBRARY",
+    "TK_LIBRARY", "QT_QPA_PLATFORM_PLUGIN_PATH", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE",
+];
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum EnvChange {
+    Remove(String),
+    Set(String, String),
+}
+
+/// Whether `entry` is a place inside the running image: under APPDIR, or under the `.mount_*` folder the runtime mounts it on.
+fn inside_appimage(entry: &str, appdir: Option<&str>) -> bool {
+    if let Some(dir) = appdir {
+        let dir = dir.trim_end_matches('/');
+        if !dir.is_empty() && (entry == dir || entry.starts_with(&format!("{dir}/"))) {
+            return true;
+        }
+    }
+    entry.split('/').any(|part| part.starts_with(".mount_"))
+}
+
+/// What to change in the environment a child inherits so that it is the one without the AppImage's entries. Nothing when the
+/// app is not running from an image. `lookup` reads one variable: the real environment in production, a table in the tests.
+pub(crate) fn appimage_env_changes(lookup: &dyn Fn(&str) -> Option<String>) -> Vec<EnvChange> {
+    let appdir = lookup("APPDIR").filter(|dir| !dir.is_empty());
+    if appdir.is_none() && lookup("APPIMAGE").is_none() {
+        return Vec::new();
+    }
+    let mut changes = Vec::new();
+    for name in APPIMAGE_PATH_LISTS {
+        let Some(value) = lookup(name) else { continue };
+        // spaces separate the entries of LD_PRELOAD only: in a PATH or a folder list they belong to a name
+        let separators: &[char] = if name == "LD_PRELOAD" { &[':', ' '] } else { &[':'] };
+        let entries: Vec<&str> = value.split(separators).collect();
+        let kept: Vec<&str> =
+            entries.iter().copied().filter(|entry| entry.is_empty() || !inside_appimage(entry, appdir.as_deref())).collect();
+        if kept.len() == entries.len() {
+            continue;
+        }
+        let kept: Vec<&str> = kept.into_iter().filter(|entry| !entry.is_empty()).collect();
+        changes.push(if kept.is_empty() { EnvChange::Remove(name.to_owned()) } else { EnvChange::Set(name.to_owned(), kept.join(":")) });
+    }
+    for name in APPIMAGE_SINGLE_PATHS {
+        if lookup(name).is_some_and(|value| inside_appimage(&value, appdir.as_deref())) {
+            changes.push(EnvChange::Remove(name.to_owned()));
+        }
+    }
+    for name in APPIMAGE_MARKERS {
+        if lookup(name).is_some() {
+            changes.push(EnvChange::Remove(name.to_owned()));
+        }
+    }
+    changes
+}
+
+/// Puts `changes` on `command`: a variable to remove is removed from what the child inherits, one to set is set.
+fn apply_env_changes(command: &mut Command, changes: Vec<EnvChange>) {
+    for change in changes {
+        match change {
+            EnvChange::Remove(name) => {
+                command.env_remove(name);
+            }
+            EnvChange::Set(name, value) => {
+                command.env(name, value);
+            }
+        }
+    }
+}
+
+/// `clean_appimage_env` with the environment read from `lookup`. What the caller set or removed on purpose (a PATH of its own)
+/// is not touched.
+fn clean_env_with(command: &mut Command, lookup: &dyn Fn(&str) -> Option<String>) {
+    let chosen: Vec<OsString> = command.get_envs().map(|(name, _)| name.to_os_string()).collect();
+    let changes = appimage_env_changes(lookup)
+        .into_iter()
+        .filter(|change| {
+            let (EnvChange::Remove(name) | EnvChange::Set(name, _)) = change;
+            !chosen.iter().any(|set| set == OsStr::new(name))
+        })
+        .collect();
+    apply_env_changes(command, changes);
+}
+
+/// A child of the app starts with the environment of the system, not of the AppImage it runs from. A no-op everywhere else.
+pub(crate) fn clean_appimage_env(command: &mut Command) {
+    clean_env_with(command, &|name| std::env::var(name).ok());
+}
 
 /// The longest stdout line run_program_lines hands over whole; a longer one
 /// arrives in pieces.
@@ -2085,5 +2196,162 @@ mod tests {
         let missing =
             super::run_program_lines("/nonexistent/jht-installer", ["x"], std::time::Duration::from_secs(1), |_| {});
         assert_eq!(missing, Err("process_start_failed"));
+    }
+
+    // ── the AppImage's environment does not reach the programs the app starts ────────────────────────────────────
+    // (the system curl exited 127 on «undefined symbol: nghttp2_option_set_…» because the AppRun's LD_LIBRARY_PATH put the
+    // image's older libnghttp2 in front of the system's: runtime_download_failed, in 100 ms, with the network up)
+
+    fn env_table(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let map: std::collections::HashMap<String, String> =
+            pairs.iter().map(|(name, value)| ((*name).to_owned(), (*value).to_owned())).collect();
+        move |name| map.get(name).cloned()
+    }
+
+    const IMAGE: &str = "/tmp/.mount_JobHunXYZ12";
+
+    fn libs_of_the_image() -> String {
+        format!("{IMAGE}/usr/lib/:{IMAGE}/usr/lib/i386-linux-gnu/:{IMAGE}/usr/lib/x86_64-linux-gnu/:{IMAGE}/usr/lib32/")
+    }
+
+    #[test]
+    fn outside_an_appimage_the_environment_is_left_alone() {
+        let table = env_table(&[("LD_LIBRARY_PATH", "/opt/mine/lib"), ("PATH", "/usr/bin:/bin"), ("GTK_PATH", "/opt/gtk")]);
+        assert!(super::appimage_env_changes(&table).is_empty());
+    }
+
+    #[test]
+    fn the_libraries_of_the_image_leave_ld_library_path_and_the_persons_own_stay() {
+        let ours = format!("{}:/opt/mine/lib", libs_of_the_image());
+        let table = env_table(&[("APPDIR", IMAGE), ("APPIMAGE", "/home/ada/JHT.AppImage"), ("LD_LIBRARY_PATH", &ours)]);
+        let changes = super::appimage_env_changes(&table);
+        assert!(changes.contains(&super::EnvChange::Set("LD_LIBRARY_PATH".into(), "/opt/mine/lib".into())), "{changes:?}");
+        // nothing but the image's: the variable goes
+        let only = libs_of_the_image();
+        let table = env_table(&[("APPDIR", IMAGE), ("LD_LIBRARY_PATH", &only)]);
+        assert!(super::appimage_env_changes(&table).contains(&super::EnvChange::Remove("LD_LIBRARY_PATH".into())));
+    }
+
+    #[test]
+    fn the_markers_of_the_image_do_not_pass_to_the_child() {
+        let table = env_table(&[("APPDIR", IMAGE), ("APPIMAGE", "/x.AppImage"), ("ARGV0", "x"), ("OWD", "/home/ada")]);
+        let changes = super::appimage_env_changes(&table);
+        for name in ["APPDIR", "APPIMAGE", "ARGV0", "OWD"] {
+            assert!(changes.contains(&super::EnvChange::Remove(name.into())), "{name}: {changes:?}");
+        }
+    }
+
+    #[test]
+    fn a_path_keeps_its_own_entries_even_when_a_name_has_a_space_in_it() {
+        let path = format!("{IMAGE}/usr/bin:/home/ada/my tools/bin:/usr/bin");
+        let table = env_table(&[("APPDIR", IMAGE), ("PATH", &path)]);
+        assert!(super::appimage_env_changes(&table)
+            .contains(&super::EnvChange::Set("PATH".into(), "/home/ada/my tools/bin:/usr/bin".into())));
+    }
+
+    #[test]
+    fn ld_preload_is_cut_by_spaces_too_and_keeps_what_is_not_the_images() {
+        let preload = format!("{IMAGE}/usr/lib/libx.so /usr/lib/libmine.so");
+        let table = env_table(&[("APPDIR", IMAGE), ("LD_PRELOAD", &preload)]);
+        assert!(super::appimage_env_changes(&table)
+            .contains(&super::EnvChange::Set("LD_PRELOAD".into(), "/usr/lib/libmine.so".into())));
+    }
+
+    #[test]
+    fn a_single_path_variable_goes_only_when_it_points_into_the_image() {
+        let module_file = format!("{IMAGE}/usr/lib/gdk-pixbuf/loaders.cache");
+        let table = env_table(&[
+            ("APPDIR", IMAGE),
+            ("GDK_PIXBUF_MODULE_FILE", &module_file),
+            ("SSL_CERT_FILE", "/etc/ssl/certs/ca-certificates.crt"),
+        ]);
+        let changes = super::appimage_env_changes(&table);
+        assert!(changes.contains(&super::EnvChange::Remove("GDK_PIXBUF_MODULE_FILE".into())));
+        assert!(!changes.iter().any(|change| matches!(change, super::EnvChange::Remove(name) if name == "SSL_CERT_FILE")));
+    }
+
+    #[test]
+    fn with_only_the_appimage_marker_the_mount_folder_is_still_recognised() {
+        let libs = libs_of_the_image();
+        let table = env_table(&[("APPIMAGE", "/x.AppImage"), ("LD_LIBRARY_PATH", &libs)]);
+        assert!(super::appimage_env_changes(&table).contains(&super::EnvChange::Remove("LD_LIBRARY_PATH".into())));
+    }
+
+    #[test]
+    fn what_the_caller_set_on_purpose_is_not_overwritten() {
+        let path = format!("{IMAGE}/usr/bin:/usr/bin");
+        let table = env_table(&[("APPDIR", IMAGE), ("PATH", &path), ("LD_LIBRARY_PATH", &libs_of_the_image())]);
+        let mut command = std::process::Command::new("true");
+        command.env("PATH", "/engine/bin");
+        super::clean_env_with(&mut command, &table);
+        let set: std::collections::HashMap<_, _> = command.get_envs().collect();
+        assert_eq!(set.get(std::ffi::OsStr::new("PATH")), Some(&Some(std::ffi::OsStr::new("/engine/bin"))));
+        assert_eq!(set.get(std::ffi::OsStr::new("LD_LIBRARY_PATH")), Some(&None), "removed for the child");
+    }
+
+    /// A child that does what the system curl did: it dies when it sees the image's libraries in its LD_LIBRARY_PATH.
+    #[cfg(unix)]
+    fn child_that_fails_on_the_images_libraries() -> std::process::Command {
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args([
+            "-c",
+            "case \"${LD_LIBRARY_PATH:-}\" in *.mount_*|*\"${APPDIR:-@none@}\"*) echo \"libraries of the image: $LD_LIBRARY_PATH\" >&2; exit 127;; esac; \
+             [ -z \"${APPDIR:-}${APPIMAGE:-}${ARGV0:-}${OWD:-}\" ] || { echo \"markers of the image\" >&2; exit 126; }; exit 0",
+        ]);
+        // the environment the AppRun built, as a child would inherit it
+        command.env_clear();
+        command.env("APPDIR", IMAGE).env("APPIMAGE", "/home/ada/JHT.AppImage").env("ARGV0", "JHT").env("OWD", "/home/ada");
+        command.env("LD_LIBRARY_PATH", format!("{}:/opt/mine/lib", libs_of_the_image()));
+        command
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_child_started_with_the_appimage_environment_fails_and_one_started_clean_does_not() {
+        let mut inherited = child_that_fails_on_the_images_libraries();
+        assert_eq!(inherited.status().unwrap().code(), Some(127), "the fake child must see the problem it stands for");
+
+        let mut cleaned = child_that_fails_on_the_images_libraries();
+        let libs = format!("{}:/opt/mine/lib", libs_of_the_image());
+        let seen = env_table(&[("APPDIR", IMAGE), ("APPIMAGE", "/home/ada/JHT.AppImage"), ("ARGV0", "JHT"), ("OWD", "/home/ada"), ("LD_LIBRARY_PATH", &libs)]);
+        super::apply_env_changes(&mut cleaned, super::appimage_env_changes(&seen));
+        assert_eq!(cleaned.status().unwrap().code(), Some(0));
+    }
+
+    /// Every program the app starts goes through the one place: a `Command::new` in production code that is followed by neither
+    /// `hide_console` nor `clean_appimage_env` would start with the image's libraries again.
+    #[test]
+    fn every_program_the_app_starts_goes_through_the_one_place() {
+        let sources = [
+            ("runtime_host.rs", include_str!("runtime_host.rs")),
+            ("podman.rs", include_str!("podman.rs")),
+            ("broker_view.rs", include_str!("broker_view.rs")),
+            ("closer_desktop_transport.rs", include_str!("closer_desktop_transport.rs")),
+            ("browsers.rs", include_str!("browsers.rs")),
+            ("direct_chat.rs", include_str!("direct_chat.rs")),
+            ("runtime_log.rs", include_str!("runtime_log.rs")),
+            ("onboarding.rs", include_str!("onboarding.rs")),
+        ];
+        // macOS and Windows programs that cannot meet an AppImage
+        let elsewhere = ["\"/usr/sbin/sysctl\"", "\"/usr/bin/open\"", "explorer.exe"];
+        let mut starts = 0;
+        for (name, source) in sources {
+            let source = source.replace("\r\n", "\n");
+            let production = source.split("\nmod tests {").next().unwrap();
+            let lines: Vec<&str> = production.lines().collect();
+            for (index, line) in lines.iter().enumerate() {
+                if !line.contains("Command::new(") || line.trim_start().starts_with("//") || elsewhere.iter().any(|skip| line.contains(skip)) {
+                    continue;
+                }
+                starts += 1;
+                let after = lines[index..lines.len().min(index + 45)].join("\n");
+                assert!(
+                    after.contains("hide_console(") || after.contains("clean_appimage_env("),
+                    "{name}:{}: a program is started without the AppImage environment being cleaned: {line}",
+                    index + 1
+                );
+            }
+        }
+        assert!(starts >= 8, "the guard must see the programs the app starts, saw {starts}");
     }
 }

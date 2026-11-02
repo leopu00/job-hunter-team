@@ -242,6 +242,8 @@ fn launch_command(app: &Path, url: &str) -> Command {
 fn launch_command(executable: &Path, url: &str) -> Command {
     let mut command = Command::new(executable);
     command.arg(url);
+    // a browser started from an AppImage is the system's, with the system's libraries
+    crate::runtime_host::clean_appimage_env(&mut command);
     command
 }
 

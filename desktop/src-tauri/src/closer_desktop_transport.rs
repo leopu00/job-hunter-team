@@ -93,6 +93,7 @@ pub(super) fn run_bounded(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
+    crate::runtime_host::clean_appimage_env(&mut command);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

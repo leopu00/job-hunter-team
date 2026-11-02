@@ -778,7 +778,11 @@ pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
 #[cfg(not(any(windows, target_os = "macos")))]
 pub(crate) fn reveal(path: &Path) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or(path);
-    std::process::Command::new("xdg-open").arg(dir).spawn().map(|_| ())
+    let mut command = std::process::Command::new("xdg-open");
+    command.arg(dir);
+    // the file manager is the system's, not the AppImage's
+    crate::runtime_host::clean_appimage_env(&mut command);
+    command.spawn().map(|_| ())
 }
 
 #[cfg(test)]
