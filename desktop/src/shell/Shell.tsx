@@ -178,6 +178,8 @@ export interface ShellProps {
   onLogout?: () => Promise<void>;
   /** Leaves the read-only view of an existing team (back to the setup). */
   onCloseReadOnly?: () => void;
+  /** Opens the setup where the person chooses where the team runs (the saved destination is gone). */
+  onChooseDestination?: () => void;
   /** Whose app this is (the account or the local profile): what the greeting on coming back remembers is theirs. */
   identityKey?: string;
 }
@@ -192,7 +194,7 @@ const FULL_BLEED_COLUMN: CSSProperties = {
   overflow: "hidden",
 };
 
-export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellProps) {
+export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, identityKey }: ShellProps) {
   const { path, search } = useLocation();
   // The existing team's VPS is what the pages read, in either kind of link; only the read-only one
   // disables what writes (a team connected in full has the same pages, with their controls on).
@@ -261,7 +263,7 @@ export default function Shell({ onLogout, onCloseReadOnly, identityKey }: ShellP
             {text.sortLastAction}
           </p>
         )}
-        <VpsLinkBar onCloseReadOnly={onCloseReadOnly} />
+        <VpsLinkBar onCloseReadOnly={onCloseReadOnly} onChooseDestination={onChooseDestination} />
         <WriteAccessRestoredBanner />
         {identityKey && <AwayGreeting identityKey={identityKey} />}
       </>

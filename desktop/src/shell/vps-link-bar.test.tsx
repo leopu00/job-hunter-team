@@ -157,4 +157,31 @@ describe("the header of an existing team's VPS", () => {
     await act(async () => { await Promise.resolve(); });
     expect(screen.queryByTestId("vps-link-identity")).toBeNull();
   });
+
+  it.each(["host_not_configured", "host_config_invalid"])(
+    "%s: no destination is saved, so «Riprova» (the same question) gives way to choosing where the team runs",
+    async (code) => {
+      const user = userEvent.setup();
+      const choose = vi.fn();
+      render(<VpsLinkBar onChooseDestination={choose} />);
+      report({ ok: false, error: code, kind: "application" });
+      expect(bar()).toHaveAttribute("data-state", "application");
+      expect(within(bar()).queryByRole("button", { name: VPS_LINK_TEXT.it.retry })).toBeNull();
+      await user.click(within(bar()).getByRole("button", { name: VPS_LINK_TEXT.it.chooseDestination }));
+      expect(choose).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("any other application failure keeps «Riprova» and offers no destination", () => {
+    render(<VpsLinkBar onChooseDestination={vi.fn()} />);
+    report({ ok: false, error: "positions_unavailable", kind: "application" });
+    expect(within(bar()).getByRole("button", { name: VPS_LINK_TEXT.it.retry })).toBeInTheDocument();
+    expect(screen.queryByTestId("vps-link-choose-destination")).toBeNull();
+  });
+
+  it("without a way to the setup (nothing to open) the old «Riprova» stays", () => {
+    render(<VpsLinkBar />);
+    report({ ok: false, error: "host_not_configured", kind: "application" });
+    expect(within(bar()).getByRole("button", { name: VPS_LINK_TEXT.it.retry })).toBeInTheDocument();
+  });
 });

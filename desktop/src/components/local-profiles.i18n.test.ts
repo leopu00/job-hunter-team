@@ -30,6 +30,7 @@ describe("the words of the list of local profiles", () => {
     expect(text.listTitle.length).toBeLessThanOrEqual(30);
     expect(text.teamHere.length).toBeLessThanOrEqual(24);
     expect(text.lastUsed.length).toBeLessThanOrEqual(16);
+    expect(text.noDestination.length).toBeLessThanOrEqual(24);
     expect(text.newProfile.length).toBeLessThanOrEqual(28);
     expect(text.switchProfile.length).toBeLessThanOrEqual(20);
   });

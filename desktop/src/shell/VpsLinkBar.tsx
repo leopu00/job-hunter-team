@@ -15,6 +15,9 @@ const COLORS: Record<LinkStatus, string> = {
   blocked: "var(--color-red)",
 };
 
+/** The saved destination is gone or unreadable: asking again gets the same answer, only choosing a new one helps. */
+export const NO_DESTINATION_CODES: readonly string[] = ["host_not_configured", "host_config_invalid"];
+
 function clock(at: number): string {
   return new Date(at).toLocaleTimeString(appLocale(), { hour: "2-digit", minute: "2-digit" });
 }
@@ -34,7 +37,11 @@ function copy(value: string) {
  * they sit behind «Dettagli tecnici». «Riprova» only where nothing retries by itself;
  * a changed SSH key sends the person back to the setup to look at it again.
  */
-export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }) {
+export function VpsLinkBar({ onCloseReadOnly, onChooseDestination }: {
+  onCloseReadOnly?: () => void;
+  /** Opens the setup's step where the person chooses where the team runs. */
+  onChooseDestination?: () => void;
+}) {
   const locale = appLocale();
   const t = VPS_LINK_TEXT[locale];
   const state = useVpsLink();
@@ -52,6 +59,8 @@ export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }
   const waiting = state.status === "reconnecting" && state.nextAt !== null
     ? describeError("vps_reconnecting", { locale, resetsAt: Math.ceil(state.nextAt / 1000) })
     : null;
+  const noDestination = failed && typeof state.code === "string" &&
+    NO_DESTINATION_CODES.includes(state.code) && onChooseDestination !== undefined;
   const label = state.status === "idle" ? t.checking : t[state.status];
 
   return (
@@ -86,7 +95,10 @@ export function VpsLinkBar({ onCloseReadOnly }: { onCloseReadOnly?: () => void }
           {t.details}
         </button>
       )}
-      {(state.status === "network" || state.status === "application" || state.status === "version") && (
+      {noDestination && (
+        <button type="button" data-testid="vps-link-choose-destination" onClick={onChooseDestination} className="ml-auto underline text-[var(--color-bright)]">{t.chooseDestination}</button>
+      )}
+      {!noDestination && (state.status === "network" || state.status === "application" || state.status === "version") && (
         <button type="button" onClick={retryVpsLink} className="ml-auto underline text-[var(--color-bright)]">{t.retry}</button>
       )}
       {state.status === "blocked" && onCloseReadOnly && (
