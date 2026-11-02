@@ -202,6 +202,23 @@ def test_a_corrupt_state_file_is_the_old_behaviour_not_a_crash(linkedin):
     assert la.fetch_job("5")["status"] == 404
 
 
+@pytest.mark.parametrize("raw", [
+    '{"cooldown_until": Infinity}',
+    '{"cooldown_until": 32503680000}',                       # a year 3000
+    '{"cooldown_until": "x", "strikes": "x", "last_429": "y"}',
+    '{"strikes": NaN, "last_429": Infinity, "requests": [Infinity, "z", 1]}',
+    '{"requests": "no", "strikes": 1e999}',
+])
+def test_a_state_with_absurd_values_does_not_stop_the_scout_nor_hide_a_429(linkedin, raw):
+    la.RATE_STATE.parent.mkdir(parents=True)
+    la.RATE_STATE.write_text(raw, encoding="utf-8")
+    linkedin.script["job"] = [(200, {}, "<html></html>")]
+    assert la.fetch_job("5").get("rate_limited") is not True, "an absurd cooldown is dropped, not obeyed"
+    linkedin.script["job"] = [(429, {}, "")] * 3
+    out = la.fetch_job("6")
+    assert out["rate_limited"] is True and out["reason"] == "http_429" and 1 <= out["retry_after_s"] <= la.COOLDOWN_MAX_S
+
+
 @pytest.mark.parametrize("value,expected", [("abc", 7.0), ("", 7.0), ("nan", 7.0), ("inf", 7.0), ("-3", 7.0), ("12", 12.0)])
 def test_the_limits_from_the_environment_never_crash_the_import(monkeypatch, value, expected):
     monkeypatch.setenv("JHT_LINKEDIN_TEST_VALUE", value)
