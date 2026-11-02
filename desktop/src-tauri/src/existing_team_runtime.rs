@@ -2191,7 +2191,7 @@ pub(crate) fn delivery_command(
 
 /// The agents the chat may be opened with: the closed list of `agent_chat.py`, which refuses any
 /// other name again on its side.
-const CHAT_AGENTS: [&str; 8] = [
+pub(crate) const CHAT_AGENTS: [&str; 8] = [
     "capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico",
 ];
 

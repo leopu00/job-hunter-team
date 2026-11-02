@@ -2137,6 +2137,30 @@ impl AttestedLocalTeam {
         Ok(Self { engine, container })
     }
 
+    /// The id of the container this team was attested as.
+    pub(crate) fn container_id(&self) -> &str {
+        &self.container
+    }
+
+    /// The container found again from the runtime and still this one (a second attestation, once, after a long exec was opened).
+    pub(crate) fn is_still_the_container(&self, runtime: &Path, timeout: Duration) -> bool {
+        local_chat_container(&self.engine, runtime, timeout).is_ok_and(|id| id == self.container)
+    }
+
+    /// `exec -i <container> <argv>` left running, with both pipes: for the long exec of the state stream. Its
+    /// standard error goes nowhere; the caller closes it. Same engine, same environment as every other exec here.
+    pub(crate) fn spawn_exec(&self, argv: &[&str]) -> Result<std::process::Child, &'static str> {
+        let args = attested_exec_args(&self.container, argv, true)?;
+        let program = self.engine.program.to_str().ok_or("runtime_missing")?;
+        let mut command = std::process::Command::new(program);
+        command.args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
+        for name in local_engine_removed_environment(&self.engine) {
+            command.env_remove(name);
+        }
+        crate::runtime_host::hide_console(&mut command);
+        command.spawn().map_err(|_| "process_start_failed")
+    }
+
     /// `exec [-i] <container> <argv>`: `-i` only when there is stdin to give.
     pub(crate) fn exec(&self, argv: &[&str], input: Option<&[u8]>, timeout: Duration) -> Result<ProcessResult, &'static str> {
         run_local_engine(&self.engine, attested_exec_args(&self.container, argv, input.is_some())?, input, timeout)
@@ -2179,17 +2203,24 @@ fn run_connection(
                             .local_runtime
                             .as_deref()
                             .ok_or_else(|| failure("runtime_missing"))?;
-                        run_local_chat(
-                            connection
-                                .local_wrapper
-                                .as_deref()
-                                .ok_or_else(|| failure("runtime_missing"))?,
-                            runtime,
-                            operation,
-                            input,
-                            timeout,
-                        )
-                        .map_err(failure)
+                        let wrapper = connection
+                            .local_wrapper
+                            .as_deref()
+                            .ok_or_else(|| failure("runtime_missing"))?;
+                        // The hot read goes over the state stream when it is open (and only the read: a send, an
+                        // answer or an Enter is exec by exec, and tells the stream to drop what it kept).
+                        let stream = connection.app.as_ref().map(|app| crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime });
+                        if let (Some(stream), ChatOperation::Read { agent, cursor }) = (&stream, &operation) {
+                            if let Some(done) = crate::state_stream::read_local(stream, &crate::state_stream::StreamRead::ChatRead { agent, cursor: *cursor }) {
+                                return Ok(done);
+                            }
+                        }
+                        let writes = !matches!(operation, ChatOperation::Read { .. });
+                        let done = run_local_chat(wrapper, runtime, operation, input, timeout).map_err(failure);
+                        if let (true, Some(stream)) = (writes, &stream) {
+                            crate::state_stream::invalidate_local(stream);
+                        }
+                        done
                     }
                 _ => crate::onboarding::run_verified_local_wrapper(
                     connection
@@ -2481,6 +2512,15 @@ fn run_python(
     request: &Value,
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
+    // The profile bar's read goes over the state stream when it is open: the same script, as a file of the image.
+    if let (ValidatedHost::Local, Some(app), Some(wrapper), Some(runtime)) = (&connection.validated, connection.app.as_ref(), connection.local_wrapper.as_deref(), connection.local_runtime.as_deref()) {
+        if script == crate::profile_progress::PROFILE_PROGRESS_PY && request == &json!({"op": "read"}) {
+            let context = crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime };
+            if let Some(done) = crate::state_stream::read_local(&context, &crate::state_stream::StreamRead::ProfileProgress) {
+                return Ok(done);
+            }
+        }
+    }
     let mut input = python_input(script, request)?;
     let result = run_connection(
         connection,

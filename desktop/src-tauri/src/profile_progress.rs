@@ -28,7 +28,7 @@ const COUNT_MAX: u64 = 10_000;
 /// The fixed script: loads the team's own `validate_profile.py` and answers one JSON. An image older than the
 /// feature has no such function, or no profile yet: `profile_unavailable`; a file that is not YAML: `profile_unreadable`.
 /// `JHT_HOME` and `JHT_APP` are the image's own (`/jht_home`, `/app`); a test points them elsewhere.
-const PROFILE_PROGRESS_PY: &str = r#"import importlib.util,json,os,sys
+pub(crate) const PROFILE_PROGRESS_PY: &str = r#"import importlib.util,json,os,sys
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 def unavailable(): emit({'ok':False,'error':'profile_unavailable'})
 try: req=json.loads(sys.stdin.readline())
