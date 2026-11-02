@@ -135,14 +135,16 @@ def run_watchdog(func: str, tmux: Tmux, home: Path, **env):
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_01_ttl_recreates_an_over_age_session_without_the_doctor(tmux_factory, home):
-    """12h+1min → ricreata entro un tick, con contesto al 4% e agente attivo.
+    """24h+1min (il tetto duro) → ricreata entro un tick, con contesto al 4% e agente attivo.
+
+    Fra 12 h e il tetto la ricreazione e' condizionata (tests/test_agent_watchdog_ttl_window.py).
 
     Il Dottore non entra in scena: questo è lo script, ed è la ragione per cui il
     TTL vive in due posti. Quella notte il Dottore era fermo.
     """
     tmux = tmux_factory({
-        # 12h e 1 minuto, contesto al 4%, sta pure lavorando (busy)
-        "SCOUT-1": {"created": int((_now() - timedelta(hours=12, minutes=1)).timestamp()),
+        # 24h e 1 minuto, contesto al 4%, sta pure lavorando (busy)
+        "SCOUT-1": {"created": int((_now() - timedelta(hours=24, minutes=1)).timestamp()),
                     "busy": True, "transcript": ["24.9k/1m tokens (4%)"]},
         "CAPITANO": {"created": _hours_ago(2)},
     })
@@ -182,21 +184,16 @@ def test_02_ttl_ignores_context_parked_and_freshness(tmux_factory, home):
     assert "ANALISTA-2" not in tmux.sessions()
 
 
-def test_02b_the_ttl_path_in_the_watchdog_consults_nothing_but_age():
-    """Asserzione sul SORGENTE: dentro maybe_ttl_refresh non c'è nessun gate."""
+def test_02b_the_hard_cap_consults_nothing_but_age():
+    """Asserzione sul SORGENTE: il tetto duro e' deciso dall'eta' PRIMA di ogni altro gate."""
     src = LAUNCHER.read_text()
-    body = src[src.index("maybe_ttl_refresh() {"):src.index("maybe_respawn_workers() {")]
-    # solo il CODICE ESEGUITO: commenti e riga di log citano quei gate proprio
-    # per dire che NON valgono, e li conterebbero come violazioni.
-    body = "\n".join(ln for ln in body.splitlines()
-                     if not ln.lstrip().startswith(("#", "log \"")))
-    for forbidden in ("working_hours", "is_within_working_hours", "PARKED",
-                      "/context", "skipped_fresh", "config_ready"):
-        assert forbidden not in body, (
-            f"maybe_ttl_refresh consulta '{forbidden}': il TTL avrebbe una scappatoia"
-        )
-    assert '"$age" -ge "$AGENT_MAX_SESSION_AGE_H"' in body, (
-        "il confronto del TTL non e' piu' sull'eta'")
+    body = src[src.index("ttl_reason() {"):src.index("maybe_ttl_refresh() {")]
+    body = "\n".join(ln for ln in body.splitlines() if not ln.lstrip().startswith("#"))
+    cap = body.index('"$age" -ge "$AGENT_HARD_CAP_H"')
+    for gate in ("ttl_in_working_hours", "ttl_context_pct", "ttl_context_recently_checked"):
+        assert body.index(gate) > cap, f"{gate} viene prima del tetto duro: il tetto avrebbe una scappatoia"
+    for forbidden in ("PARKED", "skipped_fresh", "config_ready"):
+        assert forbidden not in body, f"il TTL consulta '{forbidden}'"
 
 
 def test_02c_every_skip_in_session_refresh_is_explicitly_overridden_by_the_ttl():
@@ -699,7 +696,7 @@ def test_11b_the_same_worker_outside_hours_stays_down_end_to_end(tmux_factory, h
 
 
 def test_11c_but_the_ttl_is_never_suspended_by_the_hour_gate(tmux_factory, home):
-    """Il contrappunto all'11: il TTL non conosce la finestra di lavoro."""
+    """Il contrappunto all'11: il tetto duro (24 h) non conosce la finestra di lavoro."""
     start, end = ((_now() - timedelta(hours=4)).hour, (_now() - timedelta(hours=2)).hour)
     (home / "jht.config.json").write_text(json.dumps({"team": {"working_hours": {
         "timezone": "UTC",

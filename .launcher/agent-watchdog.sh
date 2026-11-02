@@ -15,27 +15,23 @@
 # il restart-loop del vecchio sentinel_health (V4 bug). Gli altri core hanno
 # stato e li rinfresca il Dottore (refresh ricco con resume).
 #
-# ── TTL di 12h su OGNI sessione agente (2026-07-29) ─────────────────────
-# maybe_ttl_refresh: superata JHT_AGENT_MAX_SESSION_AGE_H la sessione viene
-# ricreata, punto. Il criterio è SOLO l'età: non conta il contesto (una
-# sessione al 4% dopo 30 ore va comunque ricreata), non conta che l'agente
-# stia lavorando, non conta lo stato PARKED, non conta nessuna euristica di
-# salute. Motivo: nell'incidente 2026-07-28/29 le sessioni avevano 38,5 ·
-# 29,5 · 27,0 · 14,5 · 14,2 ore e TUTTE le euristiche disponibili dicevano
-# "sano" mentre il team era paralizzato per undici ore. Un TTL non ha
-# euristiche da sbagliare.
+# ── TTL su OGNI sessione agente (2026-07-29; condizionato il 2026-11-02, vedi maybe_ttl_refresh) ──
+# maybe_ttl_refresh: tetto duro sull'eta' (JHT_AGENT_HARD_CAP_H, 24 h) e, sotto
+# il tetto, ricreazione condizionata. Il tetto non guarda contesto, lavoro in
+# corso, stato PARKED, orario o salute: nessuna sessione puo' superarlo.
+# Motivo (incidente 2026-07-28/29): le sessioni avevano 38,5 · 29,5 · 27,0 ·
+# 14,5 · 14,2 ore e TUTTE le euristiche dicevano «sano» mentre il team era
+# paralizzato per undici ore. Un tetto d'eta' non ha euristiche da sbagliare.
+# Fra JHT_AGENT_MAX_SESSION_AGE_H (12 h) e il tetto, dal 2026-11-02, la
+# ricreazione scatta solo in orario di lavoro e solo con il contesto >= 50%
+# (misurato dai log, mai con tasti): la maggior parte dei cicli cadeva quando
+# il team dorme, e ogni ricreazione e' un kick-off LLM senza lavoro da fare.
 #
-# Il TTL vive QUI oltre che nel Dottore per ridondanza: il Dottore è un
+# Il tetto vive QUI oltre che nel Dottore per ridondanza: il Dottore è un
 # agente e può essere fermo, bloccato o non spawnato — è successo proprio
 # quella notte. Il Dottore fa il refresh RICCO (capture + intervista +
 # retrospettiva + resume), questo è la rete che garantisce il tetto a
-# qualsiasi costo. Due differenze deliberate dal refresh della Sentinella:
-#   • NIENTE gate orario — una sessione di 30 ore va ricreata anche di
-#     notte: il costo di un kick-off è trascurabile rispetto a una giornata
-#     persa (il gate resta invece sul respawn dei worker, sotto);
-#   • UN SOLO refresh per tick, il più vecchio — le sessioni nascono a
-#     ondate e scadrebbero insieme, scaglionarle evita di rifare il team
-#     intero in un colpo.
+# qualsiasi costo. UN SOLO refresh per tick, il più vecchio.
 #
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
@@ -80,6 +76,17 @@ AGENTS=(assistente capitano mentor sentinella)
 SENTINELLA_MAX_CTX_AGE_H="${JHT_SENTINELLA_MAX_CTX_AGE_H:-24}"
 # TTL: età massima (ore) di QUALSIASI sessione agente. Vedi il blocco in testa.
 AGENT_MAX_SESSION_AGE_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+# Tetto DURO sull'eta' (ore): a questa eta' la sessione si ricrea comunque, di giorno o di notte, con qualunque contesto.
+# Fra AGENT_MAX_SESSION_AGE_H e il tetto la ricreazione e' condizionata (vedi maybe_ttl_refresh).
+AGENT_HARD_CAP_H="${JHT_AGENT_HARD_CAP_H:-24}"
+[ "$AGENT_HARD_CAP_H" -ge "$AGENT_MAX_SESSION_AGE_H" ] 2>/dev/null || AGENT_HARD_CAP_H="$AGENT_MAX_SESSION_AGE_H"
+# Sotto il tetto si ricrea solo se il contesto usato e' almeno questa percentuale.
+AGENT_TTL_CONTEXT_PCT="${JHT_AGENT_TTL_CONTEXT_PCT:-50}"
+# Quanto ci si fida di una misura del contesto (secondi) prima di rifarla: il watchdog gira ogni 30 s.
+AGENT_TTL_CONTEXT_RECHECK_SEC="${JHT_AGENT_TTL_CONTEXT_RECHECK_SEC:-600}"
+SESSION_CONTEXT_TOOL="${JHT_SESSION_CONTEXT_TOOL:-/app/shared/skills/session_context.py}"
+TTL_STATE_DIR="${JHT_AGENT_TTL_STATE_DIR:-$JHT_HOME/state}"
+WORKING_HOURS_ROOT="${JHT_APP_ROOT:-$_AGENT_WATCHDOG_DIR/..}"
 # Roster atteso (chi dovrebbe essere vivo): stato condiviso scritto da
 # start-agent.sh a ogni spawn riuscito, letto qui per sorvegliare i worker
 # numerati. Vedi shared/skills/team_roster.py per le tre guardie che
@@ -759,11 +766,79 @@ respawn_worker() {
   fi
 }
 
+ttl_in_working_hours() {
+  # Dentro l'orario di lavoro? Una risposta che non e' un «out» esplicito (config assente, modulo non importabile) vale
+  # «dentro»: il TTL tra 12 h e il tetto non deve sparire per un guasto della sonda, resta il tetto duro.
+  local r
+  r="$(python3 -c "import sys; sys.path.insert(0,'$WORKING_HOURS_ROOT'); from shared.skills.working_hours import is_within_working_hours as f; print('in' if f() else 'out')" 2>/dev/null)" || r=""
+  [ "$r" != "out" ]
+}
+
+ttl_context_recently_checked() {
+  local session="$1" now="$2" last
+  last="$(cat "$TTL_STATE_DIR/ttl-ctx-$session" 2>/dev/null)" || return 1
+  case "$last" in ''|*[!0-9]*) return 1 ;; esac
+  [ $((now - last)) -lt "$AGENT_TTL_CONTEXT_RECHECK_SEC" ]
+}
+
+ttl_context_stamp() {
+  mkdir -p "$TTL_STATE_DIR" 2>/dev/null || return 0
+  printf '%s\n' "$2" >"$TTL_STATE_DIR/ttl-ctx-$1" 2>/dev/null || true
+}
+
+ttl_context_pct() {
+  # Percentuale di contesto USATA, letta dai log del CLI (session_context.py SENZA --provider: nessun tasto nel pane).
+  # Vuoto e rc 1 se non e' misurabile.
+  local out pct
+  [ -f "$SESSION_CONTEXT_TOOL" ] || return 1
+  out="$(JHT_HOME="$JHT_HOME" python3 "$SESSION_CONTEXT_TOOL" "$1" 2>/dev/null)" || true
+  pct="$(printf '%s' "$out" | python3 -c 'import sys, json
+try:
+    v = json.loads(sys.stdin.read()).get("pct")
+except Exception:
+    v = None
+print("" if v is None or isinstance(v, bool) else v)' 2>/dev/null)" || return 1
+  case "$pct" in ''|*[!0-9.]*) return 1 ;; esac
+  printf '%s' "$pct"
+}
+
+ttl_reason() {
+  # Perche' questa sessione, gia' oltre AGENT_MAX_SESSION_AGE_H, va ricreata ADESSO (stampa il motivo, rc 0),
+  # oppure rc 1 (aspetta).
+  local session="$1" age="$2" now="$3" pct
+  if [ "$age" -ge "$AGENT_HARD_CAP_H" ]; then
+    echo "hard cap ${AGENT_HARD_CAP_H}h"
+    return 0
+  fi
+  ttl_in_working_hours || return 1
+  ttl_context_recently_checked "$session" "$now" && return 1
+  if ! pct="$(ttl_context_pct "$session")"; then
+    ttl_context_stamp "$session" "$now"      # non misurato: vale solo il tetto
+    return 1
+  fi
+  if awk -v p="$pct" -v t="$AGENT_TTL_CONTEXT_PCT" 'BEGIN { exit !(p + 0 >= t + 0) }'; then
+    echo "context ${pct}% used"
+    return 0
+  fi
+  ttl_context_stamp "$session" "$now"
+  return 1
+}
+
 maybe_ttl_refresh() {
-  # TTL duro su ogni sessione agente. SOLO l'età decide: nessun gate orario,
-  # nessuna soglia di contesto, nessun check di salute, nessuno stato PARKED.
-  # Un refresh per tick, il più vecchio per primo (scaglionamento).
-  local oldest="" oldest_age=-1 line s age
+  # Ricreazione a scadenza di ogni sessione agente. Un refresh per tick, il piu' vecchio per primo.
+  #
+  #   eta' >= AGENT_HARD_CAP_H (24 h)  → SEMPRE, a qualunque ora e con qualunque contesto: e' il tetto duro.
+  #   12 h <= eta' < tetto             → solo IN ORARIO DI LAVORO e solo se il contesto usato e' >= 50% (misurato dai
+  #                                      log, senza tasti). Contesto non misurato → aspetta il tetto.
+  #
+  # PERCHE' l'orario: fino al 02/11 il TTL era di sola eta' e ignorava l'orario di proposito (incidente del 28-29/07:
+  # sessioni di 38,5 · 29,5 · 27 h mentre tutte le euristiche dicevano «sano» e il team era fermo da undici ore).
+  # Ma la maggior parte dei cicli cadeva quando la squadra dorme o ai bordi dell'orario, e ogni ricreazione e' un
+  # kick-off LLM senza niente da fare. PERCHE' il tetto di 24 h basta ancora: le sessioni piu' vecchie dell'incidente
+  # avevano 38,5 · 29,5 · 27 h e il tetto e' duro (non guarda orario, contesto, PARKED, salute), quindi nessuna puo'
+  # arrivare a quelle eta'; il resto di quell'incidente (input pendente, retry) lo copre lo sblocco del Dottore.
+  local oldest="" oldest_age=-1 oldest_why="" line s age why now
+  now=$(date -u +%s)
   while IFS= read -r line; do
     s="${line%%|*}"
     [ -z "$s" ] && continue
@@ -771,9 +846,10 @@ maybe_ttl_refresh() {
     agent_is_contained "$s" && continue
     age=$(session_age_h "$s") || continue
     [ -z "$age" ] && continue
-    if [ "$age" -ge "$AGENT_MAX_SESSION_AGE_H" ] && [ "$age" -gt "$oldest_age" ]; then
-      oldest="$s"; oldest_age="$age"
-    fi
+    [ "$age" -ge "$AGENT_MAX_SESSION_AGE_H" ] || continue
+    [ "$age" -gt "$oldest_age" ] || continue
+    why="$(ttl_reason "$s" "$age" "$now")" || continue
+    oldest="$s"; oldest_age="$age"; oldest_why="$why"
   done <<EOF
 $(tmux list-sessions -F '#{session_name}' 2>/dev/null)
 EOF
@@ -783,7 +859,7 @@ EOF
   read -r role inst <<EOF
 $(session_role "$oldest")
 EOF
-  log "ttl: $oldest is ${oldest_age}h old ≥ ${AGENT_MAX_SESSION_AGE_H}h — kill+recreate (age only: context/PARKED/activity do NOT matter)"
+  log "ttl: $oldest is ${oldest_age}h old ≥ ${AGENT_MAX_SESSION_AGE_H}h — ${oldest_why} — kill+recreate"
   if ! tmux kill-session -t "=$oldest" 2>/dev/null; then
     return 0
   fi
