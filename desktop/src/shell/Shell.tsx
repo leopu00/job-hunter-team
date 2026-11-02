@@ -18,6 +18,7 @@ import {
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
 import { LeaveReadOnlyContext } from "../lib/leave-read-only";
+import { ChooseDestinationContext } from "../lib/choose-destination";
 import { ConnectInFull } from "./ConnectInFull";
 import { VpsLinkBar } from "./VpsLinkBar";
 import { SHELL_TEXT } from "./shell.i18n";
@@ -200,9 +201,11 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
   const Page = moved ? undefined : match?.route.page;
   const page = Page && match && (
     <SignOutContext.Provider value={onLogout ?? null}>
-      <PageErrorBoundary key={path} onHome={() => navigate(readOnly ? READ_ONLY_HOME : HOME)}>
-        <Page params={match.params} search={params} />
-      </PageErrorBoundary>
+      <ChooseDestinationContext.Provider value={onChooseDestination ?? null}>
+        <PageErrorBoundary key={path} onHome={() => navigate(readOnly ? READ_ONLY_HOME : HOME)}>
+          <Page params={match.params} search={params} />
+        </PageErrorBoundary>
+      </ChooseDestinationContext.Provider>
       {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
       <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>

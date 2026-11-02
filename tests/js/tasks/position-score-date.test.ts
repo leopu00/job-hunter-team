@@ -16,13 +16,24 @@ const page = readFileSync(
   join(repo, "web/app/(protected)/positions/[id]/page.tsx"),
   "utf8",
 );
+/** «GG/MM, HH:MM» di un timbro senza fuso (UTC, come SQLite) nell'ora locale di chi legge: il fuso della macchina non conta. */
+const localStamp = (utc: string) => {
+  const d = new Date(`${utc}Z`);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getDate())}/${two(d.getMonth() + 1)}, ${two(d.getHours())}:${two(d.getMinutes())}`;
+};
+
 describe("data della valutazione nella pagina posizione", () => {
   it("formatta la data gia' scritta dallo Scorer senza sostituirla con altre date", () => {
-    // Senza offset: il contratto qui e' che venga mostrato il timestamp dello
-    // Scorer, non che il browser dell'utente sia nel fuso Europe/Rome.
+    // Senza offset = UTC (come lo scrive SQLite): il contratto qui e' che venga mostrato lo STESSO istante
+    // dello Scorer nell'ora locale della persona, non l'ora UTC scritta come se fosse locale.
     const scoredAt = "2026-08-12T15:24:00.000";
+    const local = new Date("2026-08-12T15:24:00.000Z");
+    const two = (n: number) => String(n).padStart(2, "0");
 
-    expect(formatPositionEventStamp(scoredAt, "it")).toBe("12/08, 15:24");
+    expect(formatPositionEventStamp(scoredAt, "it")).toBe(
+      `${two(local.getDate())}/${two(local.getMonth() + 1)}, ${two(local.getHours())}:${two(local.getMinutes())}`,
+    );
     expect(formatPositionEventStamp("", "it")).toBeNull();
     expect(formatPositionEventStamp("non-una-data", "it")).toBeNull();
   });
@@ -70,7 +81,7 @@ describe("data della valutazione nella pagina posizione", () => {
     expect(html).toContain('data-score-assessed-at=""');
     expect(html).toContain(`dateTime="${scoredAt}"`);
     expect(html).toContain("Valutato dallo Scorer il");
-    expect(html).toContain("12/08, 15:24");
+    expect(html).toContain(localStamp(scoredAt));
   });
 
   it("conserva scored_at nella lista delle posizioni valutate", () => {
@@ -124,7 +135,7 @@ describe("data della valutazione nella pagina posizione", () => {
     );
 
     expect(html).toContain(`title="${scoredAt}"`);
-    expect(html).toContain("12/08, 15:24");
+    expect(html).toContain(localStamp(scoredAt));
   });
 
   it("non inventa una data nel dettaglio quando scored_at e' assente", () => {

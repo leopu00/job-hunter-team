@@ -1,4 +1,5 @@
 import { intlTag } from "@/lib/locale-tag";
+import { parseStamp } from "@/lib/parse-stamp";
 
 /**
  * Data e ora brevi di una riga, nella lingua dell'interfaccia: solo l'ora se
@@ -16,8 +17,8 @@ export function formatShortStamp(
   now: Date = new Date(),
 ): string {
   if (!ts) return "—";
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "—";
+  const d = parseStamp(ts);
+  if (!d) return "—";
   if (d.toDateString() === now.toDateString()) {
     return d.toLocaleTimeString(intlTag(locale), {
       hour: "2-digit",

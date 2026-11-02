@@ -10,6 +10,8 @@
 // che dichiara una parentela inesistente non e' un dettaglio: e' la fonte da
 // cui la parentela viene poi citata come fatto.
 import type { TeamActivityRole } from "./team-activity";
+import { intlTag } from "./locale-tag";
+import { parseStamp } from "./parse-stamp";
 
 export const ROLE_META: Record<
   TeamActivityRole,
@@ -47,28 +49,28 @@ export const ROLE_META: Record<
   },
 };
 
-// Tempo relativo in italiano (es. "2m fa", "3h fa", "5g fa").
-export function timeAgo(iso: string | null): string {
-  if (!iso) return "—";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "—";
+// Tempo relativo nella lingua dell'interfaccia (es. "2 min fa", "3 h ago", "vor 5 T."): lo scrive Intl, quindi
+// una lingua sola per volta e mai un «fa» in un'app inglese. Il timbro è un istante vero (parseStamp: senza
+// fuso = UTC), non un'ora locale letta male.
+export function timeAgo(iso: string | null, locale: string = "it"): string {
+  const then = parseStamp(iso)?.getTime();
+  if (then === undefined) return "—";
   const diff = Date.now() - then;
-  if (diff < 0) return "ora";
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "ora";
-  if (min < 60) return `${min}m fa`;
+  const formatter = new Intl.RelativeTimeFormat(intlTag(locale), { numeric: "auto", style: "short" });
+  const min = Math.floor(Math.max(diff, 0) / 60000);
+  if (min < 1) return formatter.format(0, "second");
+  if (min < 60) return formatter.format(-min, "minute");
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h fa`;
+  if (h < 24) return formatter.format(-h, "hour");
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}g fa`;
-  const mo = Math.floor(d / 30);
-  return `${mo} mes${mo === 1 ? "e" : "i"} fa`;
+  if (d < 30) return formatter.format(-d, "day");
+  return formatter.format(-Math.floor(d / 30), "month");
 }
 
 // ISO → 'DD/MM HH:MM' (ora locale).
 export function dmhm(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");
+  const d = parseStamp(iso);
+  if (!d) return iso.slice(0, 16).replace("T", " ");
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }

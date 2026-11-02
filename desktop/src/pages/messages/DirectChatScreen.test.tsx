@@ -15,6 +15,7 @@ import type {
   DirectChatStatus,
 } from "./direct-chat-contract";
 import { ERROR_CATALOG } from "../../lib/error-catalog";
+import { ChooseDestinationContext } from "../../lib/choose-destination";
 
 const VOICE_IDLE: VoiceInputSnapshot = {
   available: true,
@@ -991,6 +992,54 @@ describe("the Messages page opened with the connection closed", () => {
       await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
       expect(mock.reconnect).toHaveBeenCalledTimes(1);
       expect(within(bar).getByRole("button", { name: "Riprova" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A profile on this computer whose destination is not saved reaches the chat, not the bar of a team on a VPS:
+  // «Try again» asks the same question and gets the same refusal, so the bar offers the choice and goes there.
+  it.each(["host_not_configured", "host_config_invalid"])("%s: offers to choose where the team runs, instead of Retry, and takes the person there", async (code) => {
+    viewport(1000, 500);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const choose = vi.fn();
+      const mock = closedChat(async () => { throw { code }; });
+      render(
+        <ChooseDestinationContext.Provider value={choose}>
+          <DirectChatScreen client={mock} />
+        </ChooseDestinationContext.Provider>,
+      );
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(within(bar).queryByRole("button", { name: "Riprova" })).toBeNull();
+      const button = within(bar).getByTestId("direct-chat-choose-destination");
+      expect(button).toHaveTextContent("Scegli dove far girare la squadra");
+      // the destination is gone: the setup opens on its own, and the button does the same by hand
+      await waitFor(() => expect(choose).toHaveBeenCalled());
+      const before = choose.mock.calls.length;
+      fireEvent.click(button);
+      expect(choose).toHaveBeenCalledTimes(before + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("another refusal keeps its Retry even where the destination can be chosen", async () => {
+    viewport(1000, 500);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const choose = vi.fn();
+      const mock = closedChat(async () => { throw { code: "ssh_auth_failed" }; });
+      render(
+        <ChooseDestinationContext.Provider value={choose}>
+          <DirectChatScreen client={mock} />
+        </ChooseDestinationContext.Provider>,
+      );
+      const bar = await screen.findByTestId("direct-chat-status");
+      await waitFor(() => expect(bar).toHaveAttribute("role", "alert"));
+      expect(within(bar).getByRole("button", { name: "Riprova" })).toBeTruthy();
+      expect(choose).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

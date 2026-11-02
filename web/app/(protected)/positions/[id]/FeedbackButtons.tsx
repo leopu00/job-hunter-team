@@ -7,6 +7,7 @@ import { applicationAckAccepted } from "@/lib/positions/application-ack";
 import { useLocale } from "@/lib/use-locale";
 import { RejectionReasonPicker } from "./RejectionReasonPicker";
 import { intlTag } from "@/lib/locale-tag";
+import { parseStamp } from "@/lib/parse-stamp";
 import type { Locale } from "@/i18n/config";
 import {
   IconX,
@@ -339,8 +340,8 @@ const T: Record<
 // (`04/08, 13:13`): la richiesta era l'orario ESATTO, e le due superfici
 // devono dire la stessa cosa nello stesso modo.
 function formatAppliedAt(ts: string, locale: string): string {
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "";
+  const d = parseStamp(ts);
+  if (!d) return "";
   return d.toLocaleString(intlTag(locale), {
     day: "2-digit",
     month: "2-digit",

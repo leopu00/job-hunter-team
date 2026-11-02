@@ -43,6 +43,9 @@ import { systemLineText, withoutAttachmentPath } from "./chat-line-text";
 import { ChatMessageRow } from "./ChatMessageRow";
 import { renderChatText } from "./chat-text";
 import { JumpToLatest, useStickToBottom } from "./stick-to-bottom";
+import { useChooseDestination } from "../../lib/choose-destination";
+import { NO_DESTINATION_CODES } from "../../shell/VpsLinkBar";
+import { VPS_LINK_TEXT } from "../../lib/vps-link.i18n";
 
 // The ids are the roles' keys on the VPS; the names come from the dictionary.
 const AGENT_IDS = ["capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico"] as const;
@@ -204,6 +207,13 @@ function StatusBar({
   // The team of this computer is stopped: the sentence says «start the team», so the bar offers it (the
   // app opened without the team has it in the banner above).
   const teamStopped = (failed || operationError) && code === "local_team_not_running" && !teamOff;
+  // The saved destination of the team is gone: asking again gets the same refusal, so the bar offers what
+  // helps (choose where the team runs) instead of «Try again», and takes the person there at once.
+  const chooseDestination = useChooseDestination();
+  const noDestination = Boolean((failed || operationError) && code && NO_DESTINATION_CODES.includes(code) && chooseDestination);
+  useEffect(() => {
+    if (noDestination) chooseDestination?.();
+  }, [noDestination, chooseDestination]);
 
   return (
     <div
@@ -218,14 +228,25 @@ function StatusBar({
       {(failed || operationError) && (
         <span className="shrink-0 flex items-center gap-2">
           {teamStopped && <StartTeamAction onStarted={onReadAgain} />}
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={reconnecting}
-            className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
-          >
-            {reconnecting ? t.reconnecting : t.retry}
-          </button>
+          {noDestination ? (
+            <button
+              type="button"
+              data-testid="direct-chat-choose-destination"
+              onClick={chooseDestination ?? undefined}
+              className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)]"
+            >
+              {VPS_LINK_TEXT[locale].chooseDestination}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={reconnecting}
+              className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
+            >
+              {reconnecting ? t.reconnecting : t.retry}
+            </button>
+          )}
         </span>
       )}
     </div>

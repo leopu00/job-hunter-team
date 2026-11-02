@@ -181,13 +181,14 @@ export function ActionLead({ ev }: { ev: RecentActivityEvent }) {
 // "…" → niente scroll orizzontale, #id/ora allineati a destra. Mobile: larghezza
 // naturale (la card scrolla orizzontalmente).
 export function ActivityRow({ ev }: { ev: RecentActivityEvent }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const meta = ROLE_META[ev.role];
   const label = ev.actor === ev.role ? meta.label : ev.actor;
   return (
     <div className="flex items-center gap-3 px-4 py-2 w-max min-w-full md:w-full hover:bg-[var(--color-bg)] transition-colors">
-      <span className="text-[10px] text-[var(--color-dim)] w-14 shrink-0 tabular-nums">
-        {timeAgo(ev.ts)}
+      <span className="text-[10px] text-[var(--color-dim)] w-16 shrink-0 tabular-nums">
+        {timeAgo(ev.ts, locale)}
       </span>
       <ActorIcon role={ev.role} size={13} />
       <span
