@@ -51,6 +51,9 @@ from pathlib import Path
 from typing import Optional
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pace_reference  # noqa: E402  (il riferimento unico: ore attive, lo stesso della Sentinella)
+
 JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
 DATA_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
 
@@ -94,6 +97,7 @@ THROTTLE_CLI = "python3 /app/shared/skills/throttle-config.py"
 
 VERDICT_LABELS = {
     "LOCKOUT-IMMINENTE": "LOCKOUT-IMMINENT",
+    "LOCKOUT-RISK": "LOCKOUT-RISK",
     "AVANTI": "AHEAD",
     "INDIETRO": "BEHIND",
     "IN-PARI": "ON-PACE",
@@ -198,12 +202,21 @@ def step_throttle(current_s: int, steps: int) -> int:
 
 def evaluate(sample: dict, now_unix: float,
              target_pct: float | None = None,
-             current_throttle_s: int = WORKER_FLOOR) -> dict:
+             current_throttle_s: int = WORKER_FLOOR,
+             reference: dict | None = None,
+             burn_intent_on: bool = False) -> dict:
     """Verdetto di pacing + throttle consigliato.
 
     Funzione **pura**: legge un sample e ritorna numeri. Non scrive il
     throttle, non tocca file, non manda messaggi — chi decide è il Capitano,
     che riceve `advice_line()` nel suo pane.
+
+    `reference` = il `weekly_pace_assessment` dello STESSO tick (lo calcola il bridge una volta e lo da' a chi lo chiede:
+    la Sentinella ne scrive il suo WEEKLY-PACE). Su una finestra SETTIMANALE (piano a finestra unica, o piu' lunga di un
+    giorno) la retta ideale e' quella delle ORE ATTIVE di pace_reference.py e non il calendario: con orario di lavoro il
+    calendario dice «indietro di 28 punti» mentre le ore attive dicono «avanti», due ordini opposti nello stesso minuto
+    (02/11). Il verdetto e' quello di pace_reference.verdict(), lo stesso della Sentinella; sotto una deroga di spesa
+    (`burn_intent_on`) frena solo il LOCKOUT-RISK. Senza `reference` (o su una finestra di 5 ore) il calcolo e' quello di sempre.
     """
     usage = sample.get("usage")
     if not isinstance(usage, (int, float)) or isinstance(usage, bool):
@@ -223,6 +236,30 @@ def evaluate(sample: dict, now_unix: float,
     frac = elapsed_fraction(start, end, now_unix)
     ideal = ideal_usage(target_pct, frac)
     deviation = float(usage) - ideal
+    window_h = (end - start) / 3600.0
+    shared = None
+    if isinstance(reference, dict) and (sample.get("usage_is_weekly") is True or pace_reference.is_weekly_window(window_h)):
+        view = pace_reference.verdict(reference, burn_intent_on=burn_intent_on, usage_pct=float(usage), target_pct=target_pct)
+        if view["verdict"] != "ND" and view["ideal_pct"] is not None:
+            shared = view
+            ideal = view["ideal_pct"]
+            deviation = float(usage) - ideal
+
+    if shared is not None:
+        # La retta e il verdetto sono quelli condivisi con la Sentinella. Il muro (>= DANGER_PCT in anticipo sulla retta)
+        # resta quello di sempre, deroga o no: e' il blocco del provider, non una scelta economica.
+        if float(usage) >= DANGER_PCT and deviation > STEP_PCT:
+            verdict, steps = "LOCKOUT-IMMINENTE", len(LADDER)
+        else:
+            verdict, steps = shared["verdict"], shared["steps"]
+        suggested = step_throttle(current_throttle_s, steps) if steps else current_throttle_s
+        return {
+            "ok": True, "verdict": verdict, "usage_pct": round(float(usage), 2), "ideal_pct": round(ideal, 2),
+            "deviation_pct": round(deviation, 2), "target_pct": round(float(target_pct), 2), "elapsed_frac": round(frac, 4),
+            "minutes_to_reset": int((end - now_unix) // 60), "steps": steps, "throttle_current_s": current_throttle_s,
+            "throttle_recommended_s": suggested, "recommends_change": suggested != current_throttle_s,
+            "basis": "active_hours", "reference_reason": shared["reason"], "burn_intent": bool(burn_intent_on),
+        }
 
     # Il pericolo non è il livello in sé — a un minuto dal reset il 99% è
     # l'obiettivo centrato, non un allarme. È pericoloso solo un livello alto
@@ -336,7 +373,8 @@ def advice_line(result: dict, workers: list[str] | None = None,
         f"{VERDICT_LABELS.get(result['verdict'], result['verdict'])} "
         f"— RECOMMENDATION, THROTTLE NOT APPLIED",
         f"usage={result['usage_pct']}% vs curve={result['ideal_pct']}% "
-        f"({result['deviation_pct']:+}pt against the {result['target_pct']}% reset target)",
+        f"({result['deviation_pct']:+}pt against the {result['target_pct']}% reset target"
+        + (", active-hours line, the same reference as WEEKLY-PACE" if result.get("basis") == "active_hours" else "") + ")",
         f"reset in {result['minutes_to_reset']} min",
         f"worker throttle NOW {result['throttle_current_s']}s "
         f"→ RECOMMENDED {rec}s ({result['steps']:+} steps)",

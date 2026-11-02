@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pace_rate  # noqa: E402  (il ritmo di un contatore intero: UN solo calcolo, vedi pace_rate.py)
+import pace_reference  # noqa: E402  (il riferimento: ore attive, UNO per la Sentinella e per il PACE-GUARD)
 
 # burn_mode (duale di early_lockout_h): in SOTTO-PACE e VICINO al reset, segnala di
 # ACCELERARE per non sprecare il weekly (Kimi non fa carryover). Il gate sulle ore
@@ -58,7 +59,7 @@ DEBT_BIND_PCT = 8.0          # punti-% di over-spend cumulativo oltre cui il deb
 
 def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
                            weekly_active_hours, window_h=2.0,
-                           weekly_total_active_hours=None):
+                           weekly_total_active_hours=None, burn_intent_on=False):
     """RATE weekly REALE (vel_weekly) su ~window_h vs sostenibile.
 
     Il weekly_usage e' integer-rounded e si muove ~+1%/tick → su pochi minuti e'
@@ -72,6 +73,11 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
     kind: SOPRA-PACE (ratio>1.2) | SOTTO-PACE (<0.8) | ALLINEATO | ND.
     burn_mode: True se SOTTO-PACE + spreco previsto >= WASTE_TOL_PCT + reset vicino
     (ore attive <= NEAR_RESET_ACTIVE_H) → il team deve ACCELERARE/saturare.
+
+    `burn_intent_on` (la deroga a termine dell'utente): il livello, il debito e il rapporto col sostenibile restano
+    INFORMAZIONE (campi `debt_pct`, `ratio`, `kind` invariati) e non frenano; `binding` diventa il solo `lockout_risk`
+    (pace_reference.lockout_risk: il limite BASSO del ritmo esaurisce il residuo piu' di LOCKOUT_MARGIN_ACTIVE_H ore attive
+    prima del reset). Senza deroga `binding` e' quello di sempre.
     """
     if (not isinstance(weekly_remaining_pct, (int, float))
             or not isinstance(weekly_active_hours, (int, float))
@@ -196,7 +202,15 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
         "unattributed_pts": rate["unattributed_pts"],
         "rebaselined": rate["rebaselined"],
     }
-    res["binding"] = is_weekly_binding(res)
+    risk, early_lo = pace_reference.lockout_risk(weekly_remaining_pct, weekly_active_hours, rate["lo"])
+    res["lockout_risk"] = risk
+    res["lockout_early_active_h"] = early_lo
+    res["lockout_margin_active_h"] = pace_reference.LOCKOUT_MARGIN_ACTIVE_H
+    res["burn_intent"] = bool(burn_intent_on)
+    if burn_intent_on:
+        res["binding"] = bool(risk and not burst_transient)
+    else:
+        res["binding"] = is_weekly_binding(res)
     return res
 
 

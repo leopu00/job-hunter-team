@@ -2342,7 +2342,12 @@ def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
             return
         current = mod.current_worker_throttle(workers)
         now_ts = time.time()
-        result = mod.evaluate(entry, now_ts, current_throttle_s=current)
+        # Il riferimento e' UNO: lo stesso assessment (ore attive) da cui la Sentinella scrive il suo WEEKLY-PACE.
+        reference = _weekly_pace_via_skill(
+            entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts,
+            burn_intent_on=burn_intent_on)
+        result = mod.evaluate(entry, now_ts, current_throttle_s=current,
+                              reference=reference, burn_intent_on=burn_intent_on)
         if not result.get("ok"):
             return
         result["ts"] = entry.get("ts")
@@ -2570,7 +2575,7 @@ def _compute_metrics_via_skill(parsed, last, history, weekly_axis=None):
     return cm.compute_metrics(parsed, last, history=history, weekly_axis=weekly_axis)
 
 
-def _weekly_pace_via_skill(entry, now_dt, now_ts):
+def _weekly_pace_via_skill(entry, now_dt, now_ts, burn_intent_on=False):
     """weekly_pace (rate weekly REALE 2h vs sostenibile + lockout anticipato) via
     la pure-function condivisa shared/skills/weekly_pace.py. weekly_active_hours
     da work_hours_target (ore ON da now al weekly_reset). Ritorna dict o None.
@@ -2579,7 +2584,11 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
     [BRIDGE TICK] alla Sentinella → S-07 lo elabora e CONSIGLIA il Capitano (C-09),
     invece di farlo arrivare al Capitano che bypasserebbe l'analisi (= il bug
     dell'indagine: status SOTTOUTILIZZO 89% mentre il weekly andava a 100%).
-    UN solo calcolo del pace (lezione fix#4): la stessa funzione shared."""
+    UN solo calcolo del pace (lezione fix#4): la stessa funzione shared.
+
+    `burn_intent_on` (la deroga di spesa dell'utente, 02/11): il livello e il debito restano informazione e il solo
+    freno e' il rischio di lockout (shared/skills/pace_reference.py). Il risultato e' anche il riferimento che il
+    PACE-GUARD usa nello stesso tick: i due non possono piu' dare ordini opposti."""
     try:
         wrem = entry.get("weekly_remaining_pct")
         wreset_unix = entry.get("weekly_reset_at_unix")
@@ -2610,7 +2619,8 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
         # Cosi' weekly_pace puo' calcolare ideal_used e debt_pct (saldo vs retta).
         wtot = wht.active_hours_in_range(wreset_dt - timedelta(days=7), wreset_dt, cfg)
         return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah,
-                                         weekly_total_active_hours=wtot)
+                                         weekly_total_active_hours=wtot,
+                                         burn_intent_on=bool(burn_intent_on))
     except Exception:
         return None
 
@@ -2686,6 +2696,19 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct, harvest_backlog=None):
     # Priorità: burst in uscita > frena (binding/sopra-pace) > accelera (burn) > mantieni.
     if burst:
         return " WEEKLY-PACE→CONTROLLED-RECOVERY: exit spike, do NOT brake hard"
+    under_burn = bool(weekly_pace.get("burn_intent"))
+    if under_burn and not binding:
+        # Deroga di spesa dell'utente: essere avanti sulla retta, il debito e il rapporto col sostenibile sono
+        # INFORMAZIONE e non frenano (l'ordine opposto al PACE-GUARD del 02/11 veniva da qui). Frena solo il rischio di
+        # lockout, che e' il ramo `binding` qui sotto.
+        if kind == "SOPRA-PACE" and isinstance(vel, (int, float)) and isinstance(sust, (int, float)):
+            return (f" WEEKLY-PACE→BURN-INFO: above the sustainable speed ({vel:.2f} vs {sust:.2f}%/h)"
+                    f"{leash}, but the user's spending override is on: this is information, NOT a brake;"
+                    f" only a lockout risk brakes")
+        if burn:
+            return " WEEKLY-PACE→ACCELERATE-SATURATE: the user's spending override is on and the quota would be wasted"
+        goal_b = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
+        return f" WEEKLY-PACE→MAINTAIN{goal_b}{leash}; spending override on, only a lockout risk brakes"
     if binding or kind == "SOPRA-PACE":
         cut = None
         if isinstance(vel, (int, float)) and vel > 0 and isinstance(sust, (int, float)):
@@ -2697,6 +2720,12 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct, harvest_backlog=None):
                 else "")
         trend = (f"; otherwise the quota will run out ~{early:.0f} active hours before reset"
                  if isinstance(early, (int, float)) and early > 0 else "")
+        if under_burn:
+            lock_h = weekly_pace.get("lockout_early_active_h")
+            head = " WEEKLY-PACE→LOCKOUT-RISK" + (
+                f": at the slowest recent rate the quota is gone ~{lock_h:.0f} active hours before reset"
+                if isinstance(lock_h, (int, float)) else "")
+            return head + goal + leash + " (the one brake the spending override keeps)"
         return head + goal + leash + trend
     if burn:
         diag = (f"current pace ends at ~{proj:.0f}%, wasting ~{wasted:.0f}% of "
@@ -3361,7 +3390,8 @@ def main():
             weekly_pace = None
             if within_hours and not weekly_locked:
                 weekly_pace = _weekly_pace_via_skill(
-                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts,
+                    burn_intent_on=_bi_on)
                 if isinstance(weekly_pace, dict) and weekly_pace.get("binding"):
                     weekly_binding = True
 
@@ -3521,7 +3551,8 @@ def main():
             # Sentinella solo su edge azionabile (should_notify).
             if weekly_pace is None and not weekly_locked:
                 weekly_pace = _weekly_pace_via_skill(
-                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts,
+                    burn_intent_on=_bi_on)
             tick_msg = _build_tick_message(
                 entry, parsed, status, proj, usage, reset, dyn_target,
                 work_phase, weekly_pace, weekly_locked, now_h, now_ts)
