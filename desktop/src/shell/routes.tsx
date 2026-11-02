@@ -6,6 +6,7 @@ import ExistingTeamOfficePage from "../pages/office/readonly";
 import DashboardPage from "../pages/dashboard";
 import MailPage from "../pages/mail";
 import BackupPage from "../pages/backup";
+import BudgetPage from "../pages/budget";
 import ComputerPage from "../pages/computer";
 import ExportPage from "../pages/export";
 import MapPage from "../pages/map";
@@ -75,6 +76,8 @@ export const ROUTES: Route[] = [
   { path: "/agents", page: AgentsPanel },
   { path: "/office", page: OfficePage, fullBleed: true },
   { path: "/mail", page: MailPage },
+  // How the team's weekly budget is going (the native team_budget_read): only reads, so the read-only view has it too.
+  { path: "/budget", page: BudgetPage },
   { path: "/settings", page: SettingsPage },
   { path: "/settings/vps-connection", page: VpsConnectionPage },
   // When the agents work (the web's /settings/team, its hours half).
@@ -93,7 +96,7 @@ export const ROUTES: Route[] = [
 export const READ_ONLY_ROUTES: Route[] = [
   // The map reads the team's positions from its VPS when this view is on. The office is not
   // in this list: the full shell's one reads the cloud (see the route below).
-  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id", "/export", "/backup"].includes(route.path)),
+  ...ROUTES.filter((route) => ["/dashboard", "/map", "/positions", "/positions/:id", "/export", "/backup", "/budget"].includes(route.path)),
   // Not the web's cloud Team page: the state the existing team's VPS reports about itself.
   { path: "/team", page: ExistingTeamStatusPage },
   // Not the web's cloud Profile page: the profile the existing team's VPS holds.

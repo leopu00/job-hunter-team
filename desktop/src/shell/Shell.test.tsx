@@ -298,7 +298,8 @@ describe("Shell", () => {
     expect(desktopLinks("it").map((l) => l.label)).toEqual(["Agenti", "Ufficio", "Posta", "Impostazioni", "Guida"]);
     expect(within(nav).queryByRole("link", { name: "Budget" })).not.toBeInTheDocument();
     expect(desktopLinks("it").some((link) => link.href === "/budget")).toBe(false);
-    expect(matchRoute(ROUTES, "/budget")).toBeNull();
+    // The Budget page has its own route (its entry in the bar is the navigation work's, not this list's).
+    expect(matchRoute(ROUTES, "/budget")?.route.path).toBe("/budget");
   });
 
   it("names the desktop's own pages in the app's language, as the mail page names itself", () => {
