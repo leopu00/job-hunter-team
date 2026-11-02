@@ -263,7 +263,9 @@ describe("data that no profile owns", () => {
       const banner = await screen.findByTestId("local-team-owner-banner");
       const text = LOCAL_PROFILES_TEXT.it;
       await screen.findByTestId("local-team-owner-take");
-      expect(banner).toHaveTextContent(text.ownerChoices);
+      // one sentence for the situation and both ways, with the owner's name; not the one-way sentence on top of it
+      expect(banner).toHaveTextContent("Su questo Mac c’è una sola squadra, e ora è di Ada. Puoi passare al profilo di Ada, oppure usarla con questo: allora Ada non potrà più usarla.");
+      expect(banner).not.toHaveTextContent("passa a quel profilo per usarla");
       expect(screen.getByTestId("local-team-owner-switch")).toBeInTheDocument();
 
       // nothing is taken by one click: the confirmation says what happens first
@@ -286,7 +288,7 @@ describe("data that no profile owns", () => {
       await screen.findByTestId("local-team-owner-banner");
       await act(async () => undefined);
       expect(screen.queryByTestId("local-team-owner-take")).toBeNull();
-      expect(screen.getByTestId("local-team-owner-banner")).not.toHaveTextContent(LOCAL_PROFILES_TEXT.it.ownerChoices);
+      expect(screen.getByTestId("local-team-owner-banner")).not.toHaveTextContent("oppure usarla con questo");
       unknown.unmount();
 
       render(<LocalTeamOwnerBanner locale="it" ways={{ probe: async () => true, takeOver: vi.fn(async () => { throw { code: "local_owner_change_refused" }; }) }} />);

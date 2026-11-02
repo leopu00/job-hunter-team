@@ -133,6 +133,10 @@ export function LocalTeamOwnerBanner({
       ? t.ownerBannerAccount
       : view.name ? t.ownerBanner.replace("{name}", () => view.name as string) : t.ownerBannerUnknown;
   const takeable = canTake && ownerIsOther;
+  // With the two ways to offer, ONE sentence says the situation and both: the one-way sentence («switch to that profile
+  // to use it») would contradict the second way.
+  const ownerName = view?.owner === "other" ? view.name : null;
+  const choicesText = ownerName ? t.ownerChoicesNamed.replace(/\{name\}/g, () => ownerName) : t.ownerChoices;
   async function takeTeam() {
     setBusy(true);
     setTakeFailed(false);
@@ -154,7 +158,7 @@ export function LocalTeamOwnerBanner({
       className="px-4 py-2 text-[12px] flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-border)]"
       style={{ background: "var(--color-panel)", color: "var(--color-white)" }}
     >
-      <span>{takeable ? `${text} ${t.ownerChoices}` : text}</span>
+      <span>{takeable ? choicesText : text}</span>
       {onSwitch && view.owner === "other" && (
         <button
           type="button"
