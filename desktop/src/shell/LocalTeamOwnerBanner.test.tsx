@@ -252,4 +252,49 @@ describe("data that no profile owns", () => {
     expect(t.ownerBannerNobody).not.toBe(t.ownerBannerUnknown);
     expect(t.ownerBannerNobody).not.toBe(t.ownerBannerAccount);
   });
+
+  describe("a profile whose Mac already has the team of another profile (new profile, existing team)", () => {
+    it("says the two ways in plain words and offers to use the team with this profile, after a confirmation", async () => {
+      save("profile-b", "profile-a");
+      const takeOver = vi.fn(async () => undefined);
+      const user = userEvent.setup();
+      render(<LocalTeamOwnerBanner locale="it" onSwitch={async () => undefined} ways={{ probe: async () => true, takeOver }} />);
+
+      const banner = await screen.findByTestId("local-team-owner-banner");
+      const text = LOCAL_PROFILES_TEXT.it;
+      await screen.findByTestId("local-team-owner-take");
+      // one sentence for the situation and both ways, with the owner's name; not the one-way sentence on top of it
+      expect(banner).toHaveTextContent("Su questo Mac c’è una sola squadra, e ora è di Ada. Puoi passare al profilo di Ada, oppure usarla con questo: allora Ada non potrà più usarla.");
+      expect(banner).not.toHaveTextContent("passa a quel profilo per usarla");
+      expect(screen.getByTestId("local-team-owner-switch")).toBeInTheDocument();
+
+      // nothing is taken by one click: the confirmation says what happens first
+      await user.click(screen.getByTestId("local-team-owner-take"));
+      expect(takeOver).not.toHaveBeenCalled();
+      expect(screen.getByTestId("local-team-owner-take-confirm")).toHaveTextContent("Non si cancella e non si sposta niente");
+      await user.click(screen.getByTestId("local-team-owner-take-cancel"));
+      expect(takeOver).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId("local-team-owner-take"));
+      await user.click(screen.getByTestId("local-team-owner-take-yes"));
+      expect(takeOver).toHaveBeenCalledOnce();
+      expect(screen.queryByTestId("local-team-owner-take-failed")).toBeNull();
+    });
+
+    it("does not offer the take-over when the native side does not name the owner, and says when it failed", async () => {
+      save("profile-b", "profile-a");
+      const user = userEvent.setup();
+      const unknown = render(<LocalTeamOwnerBanner locale="it" ways={{ probe: async () => false, takeOver: vi.fn() }} />);
+      await screen.findByTestId("local-team-owner-banner");
+      await act(async () => undefined);
+      expect(screen.queryByTestId("local-team-owner-take")).toBeNull();
+      expect(screen.getByTestId("local-team-owner-banner")).not.toHaveTextContent("oppure usarla con questo");
+      unknown.unmount();
+
+      render(<LocalTeamOwnerBanner locale="it" ways={{ probe: async () => true, takeOver: vi.fn(async () => { throw { code: "local_owner_change_refused" }; }) }} />);
+      await user.click(await screen.findByTestId("local-team-owner-take"));
+      await user.click(screen.getByTestId("local-team-owner-take-yes"));
+      expect(await screen.findByTestId("local-team-owner-take-failed")).toHaveTextContent(LOCAL_PROFILES_TEXT.it.takeFailed);
+    });
+  });
 });

@@ -114,6 +114,8 @@ import { AssistantChatFrame } from "../onboarding/AssistantChatFrame";
 import { NewPositionNotifier } from "../lib/notify/NewPositionNotifier";
 import TeamLanguagePrompt from "../components/TeamLanguagePrompt";
 import Shell from "../shell/Shell";
+import { NO_DESTINATION_CODES } from "../shell/VpsLinkBar";
+import { useVpsLink } from "../lib/vps-link";
 import { navigate } from "../shell/router";
 import { describeError, errorAmountsOf, errorCodeOf, errorMachineOf, errorResetsAt } from "../lib/error-catalog";
 import { isReadableCause } from "../lib/failure-cause";
@@ -1464,9 +1466,14 @@ export default function DashboardApp() {
       navigate("/messages?agent=assistente", { replace: true });
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
+      // No saved destination: «Try again» would ask the same question, so the setup asks where the team runs.
+      if (resumedBackendFailure(error) === "collecting-host") {
+        collectHostAgain();
+        return;
+      }
       fail("assistant", error);
     }
-  }, [fail, identityKey, setRuntime]);
+  }, [collectHostAgain, fail, identityKey, setRuntime]);
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult, options?: { fromReadOnlyView?: boolean }) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
@@ -1700,6 +1707,41 @@ export default function DashboardApp() {
       runtime: { status: "collecting", stage: "host" },
     });
   }, [gate.phase, identityKey, localProfile?.displayName]);
+  /**
+   * The saved destination of the team is gone (its file is missing or unreadable): the view of the team
+   * ends and the setup opens on the step where the person chooses where the team runs. Asking the same
+   * question again would get the same refusal.
+   */
+  const chooseDestination = useCallback(() => {
+    if (!identityKey) return;
+    leaveExistingTeamReadOnly();
+    setReadOnlyExistingTeamKey(null);
+    setExistingTeamDismissedIdentityKey(identityKey);
+    setManualExistingTeam(null);
+    setConnectedExistingTeamKey(null);
+    setSavedTeamOpening({ identityKey, phase: "done" });
+    // The reopening of a saved team belongs to the first setup: it would find the same missing destination.
+    resumeAttemptedIdentityRef.current = identityKey;
+    setAssistantChatIdentityKey(null);
+    submissionRef.current = null;
+    setProviderLogin(null);
+    setActivity(null);
+    setSshHostKey(null);
+    setGate({
+      phase: "required",
+      account: localProfile ? { displayName: localProfile.displayName, identity: "local" } : { displayName: null, identity: "google" },
+      resumeAvailable: false,
+      runtime: { status: "collecting", stage: "host" },
+    });
+  }, [identityKey, localProfile?.displayName]);
+  // A profile whose destination is not saved does not stay on the team's view with an error: the link
+  // says so (the read of the team was refused for it) and the person goes back to choosing it.
+  const vpsLink = useVpsLink();
+  const noDestination = vpsLink.status === "application" && vpsLink.code !== null &&
+    NO_DESTINATION_CODES.includes(vpsLink.code);
+  useEffect(() => {
+    if (noDestination && identityKey && readOnlyExistingTeamKey === identityKey) chooseDestination();
+  }, [chooseDestination, identityKey, noDestination, readOnlyExistingTeamKey]);
   const providerSetup = useMemo(
     () => (localTeamPlatform && gate.phase === "ready" && vpsSetupKey !== identityKey ? { open: openProviderSetup } : null),
     [gate.phase, identityKey, localTeamPlatform, openProviderSetup, vpsSetupKey],
@@ -1814,6 +1856,7 @@ export default function DashboardApp() {
         key={identityKey}
         identityKey={identityKey ?? undefined}
         onLogout={logout}
+        onChooseDestination={chooseDestination}
         // A team connected in full has no way «back»; a read-only one of a set-up profile neither
         // (its setup is done: the chat's «Collega il team» opens the full connection).
         onCloseReadOnly={linkedView?.full || gate.phase === "ready" ? undefined : closeReadOnlyExistingTeam}

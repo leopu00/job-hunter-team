@@ -1,6 +1,6 @@
 ---
 name: session-refresh
-description: "Solo para el Doctor. Ronda de refresco de contexto: para cada sesión de agente lee la ocupación real de su contexto (comando client-side del proveedor, cero tokens) y refresca SOLO las sesiones cuya ventana de contexto esté llena por encima del 50% — realiza una retrospectiva (captura + entrevista + analítica), añade una síntesis densa al diario diario en crecimiento, y luego MATA + recrea + reanuda la sesión con el contexto de continuación, de modo que su ventana de contexto se limpie sin perder dónde estaba. Se ejecuta 2× por ventana de trabajo (a los +30min y a la mitad). Salta las sesiones recientes, de bajo contexto (≤50%) y las que el Capitano dejó aparcadas — EXCEPTO más allá del TTL de 12h de la sesión (JHT_AGENT_MAX_SESSION_AGE_H), que prevalece sobre cualquier salto: decide solo la edad, sin excepciones."
+description: "Solo para el Doctor. Ronda de refresco de contexto: para cada sesión de agente lee la ocupación real de su contexto (comando client-side del proveedor, cero tokens) y refresca SOLO las sesiones cuya ventana de contexto esté llena por encima del 50% — realiza una retrospectiva (captura + entrevista + analítica), añade una síntesis densa al diario diario en crecimiento, y luego MATA + recrea + reanuda la sesión con el contexto de continuación, de modo que su ventana de contexto se limpie sin perder dónde estaba. Se ejecuta 2× por ventana de trabajo (a los +30min y a la mitad). Salta las sesiones recientes, de bajo contexto (≤50%) y las que el Capitano dejó aparcadas — EXCEPTO más allá del TTL de 24h de la sesión (JHT_AGENT_HARD_CAP_H), que prevalece sobre cualquier salto: decide solo la edad, sin excepciones."
 allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
 ---
 
@@ -28,9 +28,9 @@ tmux list-sessions -F '#{session_name}|#{session_created}'
 - **Orden**: las sesiones worker PRIMERO (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), los coordinadores AL FINAL y con cuidado (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "Con cuidado" significa **captura bien su estado y compáctalos — NO los saltes** (son los top consumers; ver Reglas). Nunca refresques `DOTTORE` / `DOCTOR-WATCHDOG` (tú mismo / el planificador).
 - **Salto de FRESH** (pre-filtro barato antes de la comprobación de contexto): `age = now - session_created`. Si `age < 40 min` → SALTAR por completo (todavía no hay nada que resumir, y refrescar tiraría una sesión que acaba de empezar). Registra `action=skipped_fresh`. Todo lo que supere este pre-filtro pasa por el **Paso 1.4 (TTL)** y luego por el **Paso 1.5 (comprobación de contexto)** — es esa medición `>50%`, no la edad, la que decide el refresco *ordinario*.
 
-## Paso 1.4 — TTL: **toda sesión de agente vive como máximo 12 horas**
+## Paso 1.4 — TTL: **toda sesión de agente vive como máximo 24 horas**
 ```bash
-TTL_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"
+TTL_H="${JHT_AGENT_HARD_CAP_H:-24}"
 AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_created}') ) / 3600 ))
 [ "$AGE_H" -ge "$TTL_H" ] && echo "TTL CADUCADO ($AGE_H h) → refresco OBLIGATORIO"
 ```
@@ -38,7 +38,7 @@ AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_create
 
 | salto normal | más allá del TTL |
 |---|---|
-| `skipped_fresh` (age < 40min) | imposible pasadas las 12h, pero el TTL gana igualmente |
+| `skipped_fresh` (age < 40min) | imposible pasadas las 24h, pero el TTL gana igualmente |
 | `skipped_lowctx` (contexto ≤ 50%) | **ignorado** — una sesión al 4% tras 30h se recrea igual |
 | `skipped_parked` (PARKED, Paso 4) | **ignorado** — aparcada o no, el TTL se aplica |
 | «el agente está trabajando» | **ignorado** — captura su estado en el seed y recrea |
@@ -47,6 +47,8 @@ AGE_H=$(( ( $(date -u +%s) - $(tmux display-message -p -t "$S" '#{session_create
 Registra `action=recreated` con `reason=ttl` y el `session_age_h` medido. Luego ve directo a los Pasos 2 → 7 (captura, analítica, síntesis, recrear + reanudar): **sáltate por completo el Paso 1.5 y el Paso 4**, solo pueden producir un salto y aquí el salto no está disponible.
 
 Por qué solo la edad, sin heurísticas de salud encima: en el incidente del 2026-07-28/29 las sesiones tenían **38,5 · 29,5 · 27,0 · 14,5 · 14,2 horas**, todas las heurísticas decían «sano» y el equipo llevaba once horas paralizado. Los contextos estaban por debajo del 50%, así que ninguna regla las tocó. Un TTL no tiene heurísticas que equivocar.
+
+Para una sesión vencida por TTL registra igualmente la decisión antes del Paso 6: `python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"` responde `refresh` con `reason: ttl` (el porcentaje de contexto aquí no cuenta). La fila del diario y la recreación necesitan esa decisión.
 
 ## Paso 1.5 — COMPROBACIÓN DE CONTEXTO (el trigger del refresco *ordinario*: **>50%**)
 Solo para las sesiones que **no** dispararon el TTL en el Paso 1.4.
@@ -58,13 +60,15 @@ Dos requisitos tajantes — ignóralos y *quemas* presupuesto en vez de ahorrarl
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Decide a partir de `pct` (extraído de una línea como `24.9k/1m tokens (2%)`):
 - **`pct` ≤ 50** → SALTAR **salvo que el TTL se haya disparado en el Paso 1.4**. NO recrees una sesión por debajo del TTL, aunque sea vieja. Registra `action=skipped_lowctx` con el `%` medido. Pasa a la siguiente sesión.
 - **`pct` > 50** → procede al refresco (Pasos 2–7).
-- **el comando no se renderizó / falló el parseo** → recae en la heurística de edad (`age ≥ 40min` → refresco) y registra `ctx=unparsed`.
+- **no medido** (`pct: null`: el comando no se renderizó, falló el parseo, la sesión no estaba en reposo) → NO recrees por edad: por debajo del TTL, `action=skipped_unmeasured` con `context_pct: null`; el TTL del Paso 1.4 sigue siendo la red de seguridad. Una ronda de recreación cuesta unos 4 puntos del presupuesto semanal.
+- `pct` es la parte USADA del contexto, nunca la libre: una tarjeta que dice `N% left` (Codex) da la parte LIBRE. En el diario escribe `context_pct` = `decision.used_pct` tal cual, sin releerlo de una tarjeta y sin invertirlo. Decide con `decision.action` (`refresh`|`skip`): lo calculó el script.
 
 ## Paso 1.6 — avisar una vez al Capitano, antes del primer refresco
 Solo cuando esta ronda haya seleccionado su primer objetivo real de refresco
@@ -108,7 +112,7 @@ Una sesión está **PARKED** (el Capitano la dejó encendida deliberadamente per
 Si está PARKED → **NO la recrees para reiniciarla**. Escribe la síntesis (Paso 6) con `action=skipped_parked` y sigue adelante. (Recrearla convertiría un aparcamiento deliberado en trabajo que el Capitano no quería.) Si la recreas por higiene, el mensaje de resume DEBE decir que estaba inactiva: `[RESUME] you were in STANDBY — stay idle until the Capitano assigns you a queue.`
 
 **Dos excepciones tajantes al PARKED — esta regla describía el incidente al pie de la letra y mantuvo al Doctor de brazos cruzados justo cuando el equipo más lo necesitaba:**
-1. **Más allá del TTL (Paso 1.4) el PARKED no se aplica.** Aparcada o no, una sesión de 12h+ se recrea.
+1. **Más allá del TTL (Paso 1.4) el PARKED no se aplica.** Aparcada o no, una sesión de 24h+ se recrea.
 2. **Un agente bloqueado no es un agente aparcado.** «no fresca + produced == 0 + ningún mensaje reciente del Capitano» es también la huella exacta de un equipo con la coordinación rota. La señal objetiva que los separa: **un agente que reintenta hacia otro agente sin respuesta no está aparcado, está bloqueado** (las entradas `retry_loop` del scan de `agent-unblock`, y en el pane se ven los intentos). Lo mismo para «todos los operativos parados con cuota disponible». En esos casos NO registres `skipped_parked` — deshaz el bloqueo (`agent-unblock`) y luego continúa la ronda.
 
 ## Paso 5 — entrevistar al agente
@@ -122,30 +126,20 @@ tmux capture-pane -p -S -40 -t "$S" | tail -25   # leer la respuesta
 ## Paso 6 — añadir la síntesis DENSA (solo añadir, crece a diario)
 Una entrada JSONL por agente por ronda. Combina analítica + entrevista en un resumen compacto. NUNCA sobrescribas — varios Doctores a lo largo del día todos añaden.
 ```bash
-python3 - "$S" "$ROUND_ID" "$DAY" "$JOURNAL" <<'PY'
-import json, sys, datetime
-session, round_id, day, journal = sys.argv[1:5]
-entry = {
-  "ts": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z"),
-  "round_id": round_id, "day": day,
-  "timing": "start+30",          # or "mid"  — set to the slot you were spawned for
-  "session": session, "role": "<role>", "session_age_h": 0.0,
-  "analytics": { },              # paste the doctor_analytics.py JSON here
-  "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
-  "action": "recreated",         # recreated | skipped_lowctx | skipped_parked | skipped_fresh
-  "context_pct": 0,              # ocupación de contexto medida en el Paso 1.5 (el gate >50%)
-  "resume_msg_sent": False,
-}
-with open(journal, "a") as f:
-    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-print("appended", session)
-PY
+# analytics = the JSON of Step 3 saved to a file; interview = {"intoppi": "...", "imparato": "...", "summary_denso": "..."} saved to a file
+python3 /app/shared/skills/doctor_journal.py append "$S" --round-id "$ROUND_ID" --day "$DAY" \
+  --timing <start+30|mid> --role <role> --age-h "$AGE_H" \
+  --analytics-file /tmp/an_$S.json --interview-file /tmp/iv_$S.json
+# only for the two reasons the decision cannot see: add  --override skipped_parked  or  --override skipped_fresh
 ```
+`action` y `context_pct` de la fila son los de la decisión del Paso 1.5, escritos por el script: tú no los escribes, y una fila `recreated` sin una decisión `refresh` se rechaza.
 
 ## Paso 7 — recrear + reanudar (si se disparó el TTL, O contexto **>50%** y NO fresca, NO aparcada)
 Refresco atómico — ya capturaste el contexto en el Paso 2, así que matar es seguro:
 ```bash
 ROLE=<role>; N=<instance>      # de la analítica; recrea el MISMO número (sin dado — el dado es solo para spawns NUEVOS)
+# Only a `refresh` decision recreates: for a skip this exits 1 and nothing below runs.
+python3 /app/shared/skills/doctor_journal.py may-recreate "$S" || exit 1
 tmux kill-session -t "$S"
 bash /app/.launcher/start-agent.sh "$ROLE" "$N"
 sleep 8
@@ -157,10 +151,10 @@ if [ "$ROLE" = "capitano" ]; then MODE=" $(python3 /app/shared/skills/mode_banne
 LANGUAGE=" $(python3 /app/shared/skills/text_language.py line)"   # the team's language by name (RULE-T14): every role, not only the Capitano
 /app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>.$LANGUAGE$MODE"
 ```
-Pon `resume_msg_sent=True` en la entrada del diario. Luego pasa a la siguiente sesión (ritmo ~15-20s entre agentes).
+Entregado el mensaje de reanudación, escribe su fila: `python3 /app/shared/skills/doctor_journal.py resume "$S" --round-id "$ROUND_ID" --timing <start+30|mid> --role <role>`. Luego pasa a la siguiente sesión (ritmo ~15-20s entre agentes).
 
 ## Reglas
-- **El TTL de 12h no tiene resquicios ni interruptor.** `JHT_AGENT_MAX_SESSION_AGE_H`, por defecto `12`. Ni PARKED, ni skip-fresh, ni el umbral de contexto, ni «está trabajando», ni el gate horario pueden anularlo. **Escalónalo**: las sesiones nacen en oleadas y caducarían juntas — refresca como máximo UNA sesión pasada del TTL por pasada, ordenando por edad **decreciente**, así la más vieja va primero y el equipo no se recrea entero de golpe.
+- **El TTL de 24h no tiene resquicios ni interruptor.** `JHT_AGENT_HARD_CAP_H`, por defecto `24`. Ni PARKED, ni skip-fresh, ni el umbral de contexto, ni «está trabajando», ni el gate horario pueden anularlo. **Escalónalo**: las sesiones nacen en oleadas y caducarían juntas — refresca como máximo UNA sesión pasada del TTL por pasada, ordenando por edad **decreciente**, así la más vieja va primero y el equipo no se recrea entero de golpe.
 - **Fuera de la ventana de trabajo la ronda no corre — pero el TTL sí.** De noche la ronda se salta porque entrevistar agentes quemaría presupuesto para nada; una sesión de 30 horas se recrea igualmente, porque un kick-off no cuesta nada frente a un día perdido. `agent-watchdog.sh` impone el mismo techo de forma determinista (misma env var) para cuando el Doctor está parado, bloqueado o nunca fue lanzado — que es exactamente lo que pasó el 2026-07-28/29. Ambos caminos deben existir: este es el refresco *rico* (retrospectiva + resume), aquel es la red que garantiza el techo a cualquier coste.
 - **`working_hours: null` (o ausente, o vacío) significa NINGUNA restricción horaria** — el equipo es 24/7 y la ronda corre con normalidad. Nunca significa «siempre fuera de horario». En el incidente `working_hours` era null precisamente porque la respuesta del usuario sobre el huso horario era la línea colgada en el composer del Capitano.
 - **Desbloquea antes de refrescar.** Ejecuta primero la fase `agent-unblock`: refrescar un equipo paralizado recrea la parálisis con una ventana de contexto limpia.

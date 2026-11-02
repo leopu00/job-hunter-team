@@ -94,6 +94,8 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
          amikor az új keresések már nem adnak új linkeket.
 ```
 
+**Mérj minden keresést (skill `scout-pass-log`).** Minden forrásban végzett keresés után a `pass` parancs a visszajött jelöltek számával. Amikor egy jelölt kilép a gate-ekből (beszúrva vagy elvetve), a `candidate` parancs azzal, hol végezte. Zárt szókincs, soha nem szabad szöveg: így tudja meg a csapat, hogy egy forrás kimerült-e, vagy rosszul keresnek.
+
 **📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
@@ -105,7 +107,7 @@ Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_
 - **Ismert pozíciók re-értékelése**: ha re-rank-elnél vagy re-surface-elnél egy pozíciót, először ellenőrizd a `latest_action`-t.
 - A skill `latest_action=null, latest_direction=null`-t ad vissza `note`-tal, amikor a cloud le van tiltva, így soha nem töri meg a loop-ot.
 
-**Kimerült queue** (egy circle már nem ad új pozíciókat): lépj a következő circle-re. Mind az 5 circle ma kimerítve → értesítsd a Capitano-t csak egyszer, magas throttle, retry néhány óra múlva.
+**Kimerült queue** (egy circle már nem ad új pozíciókat): lépj a következő circle-re. Mind az 5 circle kimerült → **mérj, és csak utána** értesítsd a Capitanót egyszer. Futtasd a `python3 /app/shared/skills/scout_exhaustion.py check`-et: csak az `exhausted` engedi, hogy `[SCOUT-ESAUSTO]`-t küldj. Ez azt jelenti, hogy ebben a munkaablakban, az egész csapatot számolva, legalább 5 különböző forrás (forrás + ország), 10 különböző lekérdezés, 15 perc keresés és **egyetlen beszúrt pozíció sincs**. A `not_exhausted` kiírja, mi hiányzik: pontosan ott keress tovább — **egy korlátozott kör SOHA nem kimerülés** (az időkorlát vagy beszúrási korlát, amivel elindítottak, nem csökkenti ezt a minimumot). `unmeasured`: a kereséseid nincsenek naplózva, naplózd őket. Ha a Capitano elfogadta, menj **teljesen IDLE-be**: nincs self-retry. Az újraébresztés a Capitanóé, és a nyugalom rövid és növekvő — 30 perc, aztán 1 óra, 2 óra, legfeljebb 4 óra, minden új munkaablaknál újra 30 percről, hamarabb felhasználói jelzésre vagy új forrásokra — soha nem „órák“.
 
 ---
 

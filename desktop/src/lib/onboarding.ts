@@ -520,6 +520,18 @@ export async function loadOnboardingGate(
   };
 }
 
+/**
+ * Whether a local profile has chosen where its team runs: its setup was started (the host is chosen
+ * and saved with the first step) or finished. A profile with neither has no destination yet.
+ */
+export function localProfileHasDestination(
+  profileId: string,
+  store: OnboardingMarkerStore = localStorage,
+): boolean {
+  const markerId = `local:${profileId}`;
+  return markerPresent(store, markerId) || markerStarted(store, markerId) || markerRestarted(store, markerId);
+}
+
 /** Local profiles have no cloud milestones: only their device-local marker can admit Shell. */
 export function loadLocalOnboardingGate(
   profileId: string,

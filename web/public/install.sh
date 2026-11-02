@@ -2012,7 +2012,29 @@ final_message() {
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
   printf "  ${DIM}To also delete your data (config, db, CVs, output):${RESET}\n"
-  printf "  ${DIM}  rm -rf %s/.jht \"%s/Documents/Job Hunter Team\"${RESET}\n" "$HOME" "$HOME"
+  if [ "$USE_DOCKER" -eq 1 ]; then
+    # With a container engine on Linux ~/.jht belongs to the container (uid 1001, often mode 700; with rootless Podman, to a
+    # sub-uid): `rm -rf` from this account fails with "Permission denied" (TEST, Linux gate). `jht uninstall --confirm --purge`
+    # empties the folders the right way for the engine (a one-shot container for Docker, `podman unshare` for Podman), without
+    # sudo and without changing a permission, so it is the command printed for every engine. The Podman machine of a Mac goes
+    # with its images; the Podman of a Linux computer keeps the image, hence the `podman rmi`.
+    if [ "$RUNTIME_CHOICE" = "podman" ]; then
+      if podman_native_mode; then
+        printf "  ${DIM}  jht uninstall --confirm --purge && podman rmi %s${RESET}\n" "$IMAGE"
+      else
+        printf "  ${DIM}  jht uninstall --confirm --purge${RESET}\n"
+      fi
+    else
+      printf "  ${DIM}  jht uninstall --confirm --purge && docker rmi %s${RESET}\n" "$IMAGE"
+    fi
+    # Last resort, only when the jht command is already gone. The text the person pastes keeps the variable: the shell expands
+    # it in the right place, and a path with a space stays one word. (A tilde inside the quotes would not expand: TEST 19b.)
+    printf "  ${DIM}  If the jht command is already gone (on Linux the container owns these folders, hence sudo):${RESET}\n"
+    printf '  %s  sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%s\n' "${DIM}" "${RESET}"
+  else
+    # Native mode: nothing ran in a container, the folders are the person's own and `jht` has no uninstall.
+    printf '  %s  rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%s\n' "${DIM}" "${RESET}"
+  fi
   printf "\n"
 }
 
@@ -2214,16 +2236,15 @@ maybe_onboard() {
     return 0
   fi
 
-  # `curl | bash` connects stdin to the pipe, so `-t 0` is false and
-  # `read` cannot talk to the user. We reopen stdin from the
-  # controlling terminal (/dev/tty) so the wizard can read input:
-  # same pattern as rustup, nvm, oh-my-zsh.
-  # Without this escape hatch, after `curl | bash` the installer
-  # printed "Stdin is not an interactive terminal: skipping the
-  # wizard" and the user had to remember to re-run `jht setup`.
+  # `curl | bash` connects stdin to the pipe, so `-t 0` is false and `read` cannot talk to the user. The wizard reads
+  # from the controlling terminal (/dev/tty), and ONLY the wizard: `jht setup </dev/tty` below redirects that one
+  # command. Never `exec </dev/tty` here: with the script itself arriving on stdin, bash would go on reading the REST OF
+  # THE SCRIPT from the terminal, the installer would not give the prompt back until Ctrl-D, and what the person types
+  # would be run by the installer's own shell.
+  local wizard_from_tty=0
   if [ ! -t 0 ]; then
     if tty_can_be_opened; then
-      exec </dev/tty
+      wizard_from_tty=1
     else
       info "No interactive terminal (no /dev/tty): skipping the wizard."
       info "Run manually: jht setup"
@@ -2235,7 +2256,11 @@ maybe_onboard() {
   # the correct next action. Whoever wants to skip uses JHT_SKIP_ONBOARD=1.
   export PATH="$BIN_DIR:$PATH"
   printf "\n"
-  jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+  if [ "$wizard_from_tty" -eq 1 ]; then
+    jht setup </dev/tty || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+  else
+    jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+  fi
 }
 
 # ── Free disk space (Linux) ───────────────────────────────────────────────

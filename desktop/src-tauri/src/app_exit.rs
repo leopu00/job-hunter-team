@@ -141,9 +141,47 @@ fn list_sessions() -> TeamCommand<'static> {
     TeamCommand { argv: vec!["tmux", "list-sessions", "-F", "#{session_name}"], input: None }
 }
 
-/// How many sessions a `tmux list-sessions` answer names.
-pub(crate) fn count_sessions(stdout: &[u8]) -> usize {
-    String::from_utf8_lossy(stdout).lines().filter(|line| !line.trim().is_empty()).count()
+/// The sessions a `tmux list-sessions` answer names.
+pub(crate) fn session_names(stdout: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(stdout).lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_owned).collect()
+}
+
+/// What the look at the container's sessions found.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Sessions {
+    Open(Vec<String>),
+    /// The answer could not be read: that is NOT «none open», and it never ends the wait.
+    Unreadable,
+}
+
+/// `tmux list-sessions` exits 1 when it has no server, and the last session that closes takes the server with it: that is
+/// «none open». Any other failure (the container is gone, the command did not run) says nothing about the sessions.
+pub(crate) fn read_sessions(answer: Result<ProcessResult, &'static str>) -> Sessions {
+    match answer {
+        Ok(done) if done.code == 0 => Sessions::Open(session_names(&done.stdout)),
+        Ok(done) if done.code == 1 => Sessions::Open(Vec::new()),
+        _ => Sessions::Unreadable,
+    }
+}
+
+/// The sessions the ordered stop does not wait for. The Assistente is the person's chat: it has no work to note down, and
+/// `jht team stop --all` leaves it alive on purpose (only `team stop assistente` closes it, a step the Capitano can skip
+/// or never reach). `SENTINELLA-WORKER` is the bridge's `/usage` probe, not an agent. The container going down closes both.
+fn waits_for(session: &str) -> bool {
+    !matches!(session.strip_prefix("JHT-").unwrap_or(session), "ASSISTENTE" | "SENTINELLA-WORKER")
+}
+
+/// How the ordered stop stands, from the Capitano's flag and the sessions still open. The agents are done when the Capitano
+/// says so, or when none of the sessions that need waiting for is left: an Assistente that stays up does not hold the
+/// stop forever.
+pub(crate) fn progress(flag: bool, sessions: Sessions) -> ExitProgress {
+    let remaining: Vec<String> = match sessions {
+        Sessions::Open(open) => open.into_iter().filter(|session| waits_for(session)).collect(),
+        Sessions::Unreadable => {
+            return ExitProgress { ready: flag, active: 0, remaining: Vec::new() };
+        }
+    };
+    ExitProgress { ready: flag || remaining.is_empty(), active: remaining.len(), remaining }
 }
 
 #[derive(Serialize)]
@@ -158,7 +196,10 @@ pub(crate) struct ExitState {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExitProgress {
     ready: bool,
+    /// The sessions the stop is waiting for (the Assistente is not one of them).
     active: usize,
+    /// Their names, so that the page can say who is still on.
+    remaining: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -280,7 +321,7 @@ pub(crate) async fn app_exit_order(
     .await
 }
 
-/// How the ordered stop stands: the Capitano's flag, and how many sessions are still open.
+/// How the ordered stop stands: the Capitano's flag, and which sessions are still open (the Assistente aside).
 #[tauri::command]
 pub(crate) async fn app_exit_poll(
     window: tauri::Window,
@@ -291,9 +332,8 @@ pub(crate) async fn app_exit_poll(
         if local_destination(&app, scope)? != TeamHost::Local {
             return Err("app_exit_vps_untouched");
         }
-        let ready = exec_local(&app, scope, &flag_is_there()).map(|done| done.code == 0).unwrap_or(false);
-        let active = exec_local(&app, scope, &list_sessions()).map(|done| count_sessions(&done.stdout)).unwrap_or(0);
-        Ok(ExitProgress { ready, active })
+        let flag = exec_local(&app, scope, &flag_is_there()).map(|done| done.code == 0).unwrap_or(false);
+        Ok(progress(flag, read_sessions(exec_local(&app, scope, &list_sessions()))))
     })
     .await
 }
@@ -425,9 +465,57 @@ mod tests {
 
     #[test]
     fn the_sessions_are_counted_by_their_lines() {
-        assert_eq!(count_sessions(b"CAPITANO\nSCOUT-1\n\nASSISTENTE\n"), 3);
-        assert_eq!(count_sessions(b""), 0);
-        assert_eq!(count_sessions(b"  \n"), 0);
+        assert_eq!(session_names(b"CAPITANO\nSCOUT-1\n\nASSISTENTE\n"), ["CAPITANO", "SCOUT-1", "ASSISTENTE"]);
+        assert!(session_names(b"").is_empty());
+        assert!(session_names(b"  \n").is_empty());
+    }
+
+    fn answer(code: i32, stdout: &str) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: stdout.as_bytes().to_vec() })
+    }
+
+    #[test]
+    fn an_assistente_that_stays_up_does_not_hold_the_ordered_stop() {
+        // the case of the report: the Capitano is gone without its flag, `team stop --all` left the Assistente alive
+        let done = progress(false, read_sessions(answer(0, "ASSISTENTE\n")));
+        assert!(done.ready, "only the Assistente is left: the agents are done");
+        assert_eq!(done.active, 0);
+        assert!(done.remaining.is_empty());
+        // with the legacy host prefix and the bridge's probe next to it, the same
+        assert!(progress(false, read_sessions(answer(0, "JHT-ASSISTENTE\nSENTINELLA-WORKER\n"))).ready);
+    }
+
+    #[test]
+    fn the_agents_still_open_hold_the_stop_and_are_named() {
+        let waiting = progress(false, read_sessions(answer(0, "ASSISTENTE\nCAPITANO\nSCOUT-1\n")));
+        assert!(!waiting.ready);
+        assert_eq!(waiting.active, 2, "the Assistente is not counted");
+        assert_eq!(waiting.remaining, ["CAPITANO", "SCOUT-1"]);
+        // a name that only starts like the Assistente is an agent
+        assert!(!progress(false, read_sessions(answer(0, "ASSISTENTE-2\n"))).ready);
+    }
+
+    #[test]
+    fn the_flag_ends_the_wait_with_the_agents_still_listed() {
+        let done = progress(true, read_sessions(answer(0, "SCOUT-1\nASSISTENTE\n")));
+        assert!(done.ready);
+    }
+
+    #[test]
+    fn no_server_is_none_open_but_an_unreadable_answer_is_not() {
+        assert!(progress(false, read_sessions(answer(1, ""))).ready, "tmux has no server: the last session closed");
+        for unreadable in [answer(125, ""), answer(127, ""), Err("app_exit_no_container")] {
+            assert_eq!(read_sessions(unreadable), Sessions::Unreadable);
+        }
+        let blind = progress(false, Sessions::Unreadable);
+        assert!(!blind.ready, "a list that could not be read never ends the wait");
+        assert!(progress(true, Sessions::Unreadable).ready, "the flag still does");
+    }
+
+    #[test]
+    fn the_progress_tells_the_page_who_is_still_on() {
+        let waiting = progress(false, Sessions::Open(vec!["SCOUT-1".into()]));
+        assert_eq!(serde_json::to_string(&waiting).unwrap(), r#"{"ready":false,"active":1,"remaining":["SCOUT-1"]}"#);
     }
 
     #[test]

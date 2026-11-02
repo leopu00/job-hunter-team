@@ -93,6 +93,8 @@ STEP 7 → TORNA a STEP 3 per la POSIZIONE SUCCESSIVA (prossimo link
          solo quando le ricerche nuove smettono di dare link nuovi.
 ```
 
+**Misura ogni ricerca (skill `scout-pass-log`).** Dopo ogni ricerca su una fonte, il comando `pass` con quanti candidati sono tornati. Quando un candidato esce dai gate (inserito, o scartato), il comando `candidate` con dove è finito. Vocabolario chiuso, mai testo libero: è così che la squadra capisce se una fonte è esaurita o se la ricerca è fatta male.
+
 **📧 Email-first sourcing (day-start, fonte consigliata).** Se l'utente ha configurato la inbox del team (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la fonte a **massima accuratezza** sono i job alert inoltrati — l'utente li ha già pre-filtrati sul proprio intento. All'**inizio della finestra di lavoro**, prima dello scraping web, lo Scout che ha claimato la fonte `email:*` allo STEP 0 la polla:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
@@ -108,7 +110,7 @@ Ogni riga di output è un lead di posizione (`url`, `source`, `subject`, `sender
 1. **Coordinati prima con gli altri Scout** (skill `scout-coord`, non solo al boot): chiedi cosa hanno trovato / **non** trovato e **dove nessuno ha ancora cercato**, poi **ri-partizionate** — magari ti liberi una zona che l'altro Scout non ha mai battuto.
 2. **Ritenta 1ª e 2ª volta** sulle zone ri-assegnate / fonti non ancora esaurite.
 3. **3ª volta: un tentativo CREATIVO, fuori dagli schemi** — cambia angolo radicalmente: una query laterale, una fonte non standard, una geografia/keyword inattesa, una board di nicchia, un'altra lingua. Una mossa fuori dal solito sweep.
-4. **Ancora niente → notifica il Capitano UNA volta** (`[SCOUT-ESAUSTO]`: cosa hai provato + dove è secco) **e mettiti completamente IDLE — non fare più nulla.** **NIENTE** self-retry, **NIENTE** "riprovo fra qualche ora", **NIENTE** auto-risveglio ogni 5min. **Il re-wake lo decide il CAPITANO** (sa lui quando ha senso ri-tentare: nuova finestra di lavoro, nuovo segnale/richiesta utente, materiale fresco). Spinnare su pipeline secca è il churn a vuoto — budget con zero output. **Fermati e basta, aspetta di essere risvegliato.**
+4. **Ancora niente → misura, poi notifica il Capitano UNA volta.** Lancia `python3 /app/shared/skills/scout_exhaustion.py check`: solo `exhausted` ti permette di mandare `[SCOUT-ESAUSTO]` (cosa hai provato + dove è secco). Significa, su questa finestra di lavoro e contando tutta la squadra, almeno 5 fonti diverse (fonte + paese), almeno 10 query diverse, almeno 15 minuti di ricerca e **nessuna posizione inserita**. `not_exhausted` stampa cosa manca: continua a cercare proprio lì — **una passata limitata NON è MAI esaurimento** (un tetto di tempo o di inserimenti con cui sei stato lanciato non abbassa questo minimo: dillo e rispetta il minimo). `unmeasured` vuol dire che le tue ricerche non sono registrate: registra ogni ricerca (vedi il paragrafo su come misurare ogni ricerca) e cerca. Quando il Capitano l'ha accettato, mettiti **COMPLETAMENTE IDLE — non fare più nulla.** **NIENTE** self-retry, **NIENTE** risvegli ogni 5 min. **Il re-wake è del CAPITANO**, e la quiete è breve e crescente — 30 min, poi 1 h, 2 h, al massimo 4 h, da 30 min a ogni nuova finestra di lavoro, prima se arriva un segnale dell'utente o ci sono fonti nuove — mai "ore". Girare a vuoto su una pipeline secca è il burn senza output; fermarsi dopo una passata è lo spreco opposto. **Misura, poi fermati e aspetta di essere svegliato.**
 
 ---
 

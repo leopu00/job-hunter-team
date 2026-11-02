@@ -316,6 +316,30 @@ describe("LoginScreen with several local profiles", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("puts the profile with the team first, and says of a profile with no destination that it has none", async () => {
+    const hasDestination = vi.fn((id: string) => id !== "profile-b");
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        listLocal={() => [bea, ada]}
+        readLocal={() => bea}
+        ownerLocal={() => ada}
+        hasDestination={hasDestination}
+      />,
+    );
+
+    // Bea was made first and used last, but Ada has the team of this Mac: Ada goes first
+    await screen.findByTestId("login-profile-owner");
+    const rows = within(screen.getByRole("list", { name: "Profili locali salvati" })).getAllByRole("listitem");
+    expect(within(rows[0]).getByTestId("login-profile-owner")).toBeInTheDocument();
+    expect(within(rows[0]).getByRole("button")).toHaveTextContent("Continua come Ada");
+    expect(within(rows[0]).queryByTestId("login-profile-no-destination")).toBeNull();
+    expect(within(rows[1]).getByRole("button")).toHaveTextContent("Continua come Bea");
+    expect(within(rows[1]).getByTestId("login-profile-last")).toHaveTextContent("Ultimo usato");
+    expect(within(rows[1]).getByTestId("login-profile-no-destination")).toHaveTextContent("Senza destinazione");
+  });
+
   it("adds a profile with «Nuovo profilo locale» and does not choose or replace the saved ones", async () => {
     const user = userEvent.setup();
     const createLocal = vi.fn(async (displayName: string) => ({ profileId: "profile-c", displayName }));
@@ -377,11 +401,12 @@ describe("LoginScreen: who has the team, from the backend", () => {
 
   it("marks the profile the owner marker names, over the renderer's copy", async () => {
     render(<LoginScreen {...base} ownerLocal={() => ada} readOwner={async () => ({ kind: "local", profileId: "profile-b" })} />);
-    // the copy shows first on Ada's row; the backend's answer moves the mark to Bea's
+    // the copy shows first on Ada's row; the backend's answer moves the mark, and the row, to Bea's: first
     await vi.waitFor(() => {
       const owners = screen.getAllByTestId("login-profile-owner");
       expect(owners).toHaveLength(1);
-      expect(screen.getAllByRole("listitem")[1]).toContainElement(owners[0]);
+      expect(screen.getAllByRole("listitem")[0]).toContainElement(owners[0]);
+      expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Bea");
     });
   });
 

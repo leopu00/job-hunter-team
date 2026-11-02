@@ -366,7 +366,7 @@ def test_rich_refresh_orders_and_snapshots_before_recreate():
     assert "coordinators LAST" in skill
     assert "CAPITANO" in skill
     capture = skill.index("tmux capture-pane -p -S - -t")
-    durable_snapshot = skill.index('with open(journal, "a")')
+    durable_snapshot = skill.index('doctor_journal.py append "$S"')
     recreate = skill.index('tmux kill-session -t "$S"')
     assert capture < durable_snapshot < recreate
     assert "doctor-retrospective.jsonl" in skill
@@ -459,7 +459,7 @@ def test_config_has_one_canonical_vocabulary_not_legacy_preferences():
         ROOT / "agents" / "_skills" / "daily-restart-wave" / "SKILL.md"
     )
 
-    assert "JHT_AGENT_MAX_SESSION_AGE_H" in primary
+    assert "JHT_AGENT_HARD_CAP_H" in primary
     assert "working_hours" in scheduler
     assert "preferences.json" not in primary + scheduler + launchers
     assert "Read `~/.jht/preferences.json`" in legacy

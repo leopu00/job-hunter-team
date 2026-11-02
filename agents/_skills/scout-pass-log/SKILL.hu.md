@@ -1,0 +1,35 @@
+---
+name: scout-pass-log
+description: "Mérd a kereséseidet, hogy a csapat lássa: egy forrás kimerült-e, vagy rosszul keresel. Minden forrásban végzett keresés után írd le, hány jelölt jött vissza; amikor egy jelölt kilép a gate-ekből, írd le, hol végezte. Két rövid parancs, zárt szókincs, soha nem szabad szöveg."
+allowed-tools: Bash(python3 /app/shared/skills/scout_pass_log.py *)
+---
+<!-- @translation: hu, ai-translated 2026-11-02 -->
+
+# scout-pass-log — mérd, mit adnak vissza a kereséseid
+
+Kívülről senki sem tudja megmondani, hogy egy profil forrásai kimerültek-e, vagy a Scout rosszul keres: az INSERT előtt kiesett jelölt (halott link, egy szűrő, a hirdetésben látott nyelv) nem hagyott nyomot. Ez a két parancs egy-egy rövid sort hagy. Nem kerülnek semmibe, és soha nem állítják meg a munkádat.
+
+## Mikor
+
+- **Minden forrásban végzett keresés után** (jelöltek listája jött vissza): a `pass` parancs.
+- **Amikor egy jelölt kilép a gate-ekből** (beszúrva, vagy elvetve és miért): a `candidate` parancs. Add hozzá a `--opened`-et, ha letöltötted a teljes JD-t (a drága lépés).
+
+## Parancsok
+
+```bash
+python3 /app/shared/skills/scout_pass_log.py pass --source greenhouse --country nl --returned 25 \
+    --query-kind role --query "<the query you searched>"
+python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --country nl --outcome language --opened
+python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --country nl --outcome inserted --opened
+```
+
+## Zárt szókincs
+
+`--source`: ugyanaz a slug, amit az INSERT `--source`-ának adsz (`linkedin`, `greenhouse`, ...). `--country`: két betű (`nl`), vagy `multi` / `remote`. `--query-kind`: `role` · `role_language` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `other`.
+
+## Szabályok
+
+- A szabad szöveget elutasítja (kilépés 2, semmi sem íródik): soha ne írj mezőbe címet, céget, nevet vagy a profil bármely részét. A keresett lekérdezés a `--query`-be csak azért kerül, hogy hash legyen belőle; a szövege soha nem tárolódik.
+- Ha elutasítja, javítsd az értéket, és hívd újra. Emiatt soha ne hagyd ki a keresést vagy a jelöltet.
+- A `language` annak a jelöltnek az eredménye, akit azért vetsz el, mert a hirdetés olyan nyelvet kér, amelyet a felhasználó nem beszél, akár a listában, akár a JD-ben láttad.
+- Egy hívás keresésenként és egy jelöltenként, ha tudod, ugyanabban a shell-hívásban, mint a döntő gate.

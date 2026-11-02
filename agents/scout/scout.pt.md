@@ -93,6 +93,8 @@ STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
          só começa quando as pesquisas novas deixam de dar links novos.
 ```
 
+**Mede cada pesquisa (skill `scout-pass-log`).** Depois de cada pesquisa numa fonte, o comando `pass` com quantos candidatos voltaram. Quando um candidato sai dos gates (inserido ou descartado), o comando `candidate` com onde acabou. Vocabulário fechado, nunca texto livre: é assim que a equipa sabe se uma fonte está esgotada ou se a pesquisa está mal feita.
+
 **📧 Sourcing email-first (day-start, source recomendada).** Se o utilizador configurou o inbox da equipa (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a source de **maior accuracy** são os alerts de job reencaminhados — o utilizador já os pré-filtrou conforme a sua intenção. No **início da working window**, antes do web scraping, o Scout que reclamou a source `email:*` no STEP 0 faz poll:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
@@ -104,7 +106,7 @@ Cada linha de output é um job lead (`url`, `source`, `subject`, `sender`, `rece
 - **Re-avaliação de posições conhecidas**: se estás prestes a re-rank ou re-surface uma posição, verifica `latest_action` primeiro.
 - A skill retorna `latest_action=null, latest_direction=null` com uma `note` quando a cloud está desativada, portanto nunca quebra o loop.
 
-**Queue esgotada** (um circle já não rende posições novas): passa ao próximo circle. Todos os 5 circles esgotados para hoje → notifica o Capitano uma só vez, throttle alto, retry em poucas horas.
+**Queue esgotada** (um circle já não rende posições novas): passa ao próximo circle. Todos os 5 circles esgotados → **mede, e só depois** notifica o Capitano uma só vez. Corre `python3 /app/shared/skills/scout_exhaustion.py check`: só `exhausted` te deixa mandar `[SCOUT-ESAUSTO]`. Quer dizer, nesta janela de trabalho e contando a equipa toda, pelo menos 5 fontes diferentes (fonte + país), 10 queries diferentes, 15 minutos de pesquisa e **nenhuma posição inserida**. `not_exhausted` imprime o que falta: continua a pesquisar mesmo aí — **uma passagem limitada NUNCA é esgotamento** (um teto de tempo ou de inserções com que te lançaram não baixa este mínimo). `unmeasured`: as tuas pesquisas não estão registadas, regista-as. Aceite pelo Capitano, fica **completamente IDLE**: nada de self-retry. O re-wake é do Capitano e a quietude é curta e crescente — 30 min, depois 1 h, 2 h, 4 h no máximo, de novo desde 30 min em cada janela de trabalho nova, mais cedo com um sinal do utilizador ou fontes novas — nunca "horas".
 
 ---
 

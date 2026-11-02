@@ -11,8 +11,10 @@ export type ExitTeam = "local" | "vps" | "none";
 export interface ExitProgress {
   /** The Capitano wrote its flag: every agent has noted where it was and stopped. */
   ready: boolean;
-  /** Sessions still open in the container. */
+  /** Sessions the stop is waiting for in the container (the Assistente, which `team stop --all` leaves up, is not one). */
   active: number;
+  /** Their names, to tell the person who is still on. */
+  remaining: string[];
 }
 
 /** The event the native side sends when the window's close button or ⌘Q asks to leave. */
@@ -64,9 +66,10 @@ export function parseExitState(value: unknown): ExitState | null {
 
 export function parseExitProgress(value: unknown): ExitProgress | null {
   if (!value || typeof value !== "object") return null;
-  const { ready, active } = value as { ready?: unknown; active?: unknown };
+  const { ready, active, remaining } = value as { ready?: unknown; active?: unknown; remaining?: unknown };
   if (typeof ready !== "boolean" || typeof active !== "number" || !Number.isSafeInteger(active) || active < 0) return null;
-  return { ready, active };
+  const names = Array.isArray(remaining) ? remaining.filter((name): name is string => typeof name === "string" && name !== "") : [];
+  return { ready, active, remaining: names };
 }
 
 /** The native side's refusal: `{ code }`. Anything else is an unanswered call. */

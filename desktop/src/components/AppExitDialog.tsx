@@ -24,7 +24,7 @@ const SLOW_MS = 120_000;
 type Phase =
   | { kind: "closed" }
   | { kind: "choose"; remember: boolean }
-  | { kind: "waiting"; active: number; slow: boolean }
+  | { kind: "waiting"; active: number; slow: boolean; remaining: string[] }
   | { kind: "stopping" }
   | { kind: "failed"; code?: string };
 
@@ -51,7 +51,7 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
   }, []);
 
   const stopInOrder = useCallback(async (run: number) => {
-    setPhase({ kind: "waiting", active: 0, slow: false });
+    setPhase({ kind: "waiting", active: 0, slow: false, remaining: [] });
     try {
       await exitOrder();
     } catch {
@@ -67,7 +67,7 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
         if (runRef.current !== run) return;
         // only the Capitano's flag says the agents are done: a session list that could not be read looks like «none open»
         if (progress.ready) return void (await leave("ordered", run));
-        setPhase({ kind: "waiting", active: progress.active, slow: Date.now() - started >= slowMs });
+        setPhase({ kind: "waiting", active: progress.active, slow: Date.now() - started >= slowMs, remaining: progress.remaining });
       } catch {
         if (runRef.current === run) setPhase({ kind: "failed" });
         return;
@@ -194,6 +194,9 @@ export default function AppExitDialog({ pollMs = POLL_MS, slowMs = SLOW_MS }: { 
         {phase.kind === "waiting" && (
           <div role="status" data-testid="app-exit-waiting" className="flex flex-col gap-2 text-[12px] text-[var(--color-bright)]">
             <p>{fill(t.waiting, { count: phase.active })}</p>
+            {phase.remaining.length > 0 && (
+              <p data-testid="app-exit-remaining" className="text-[11px] text-[var(--color-muted)]">{fill(t.stillOn, { names: phase.remaining.join(", ") })}</p>
+            )}
             {phase.slow && (
               <>
                 <p className="text-[11px] text-[var(--color-muted)]">{t.slow}</p>

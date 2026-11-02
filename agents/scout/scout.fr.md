@@ -95,6 +95,8 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
          recherches ne donnent plus de nouveaux liens.
 ```
 
+**Mesure chaque recherche (skill `scout-pass-log`).** Après chaque recherche sur une source, la commande `pass` avec le nombre de candidats revenus. Quand un candidat sort des gates (inséré ou écarté), la commande `candidate` avec l'endroit où il a fini. Vocabulaire fermé, jamais de texte libre : c'est ainsi que l'équipe sait si une source est épuisée ou si la recherche est mal faite.
+
 **📧 Email-first sourcing (day-start, source recommandée).** Si l'utilisateur a configuré l'inbox de l'équipe (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la source la **plus précise** est constituée des job alerts forwardés — l'utilisateur les a déjà pré-filtrés selon son intention. Au **début de la fenêtre de travail**, avant le web scraping, le Scout qui a claimé la source `email:*` au STEP 0 la poll :
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
@@ -106,7 +108,7 @@ Chaque ligne de sortie est un lead job (`url`, `source`, `subject`, `sender`, `r
 - **Re-évaluation de positions connues** : si tu es sur le point de re-rank ou re-surface une position, vérifie `latest_action` d'abord.
 - La skill retourne `latest_action=null, latest_direction=null` avec un `note` quand le cloud est désactivé, donc elle ne casse jamais le loop.
 
-**Queue épuisée** (un circle ne rend plus de positions nouvelles) : passe au circle suivant. Tous les 5 circles épuisés pour aujourd'hui → notifie le Capitano une seule fois, throttle élevé, retry dans quelques heures.
+**Queue épuisée** (un circle ne rend plus de positions nouvelles) : passe au circle suivant. Les 5 circles épuisés → **mesure, puis** notifie le Capitano une seule fois. Lance `python3 /app/shared/skills/scout_exhaustion.py check` : seul `exhausted` t'autorise à envoyer `[SCOUT-ESAUSTO]`. Cela veut dire, sur cette fenêtre de travail et en comptant toute l'équipe, au moins 5 sources différentes (source + pays), 10 requêtes différentes, 15 minutes de recherche et **aucune position insérée**. `not_exhausted` imprime ce qui manque : continue à chercher précisément là — **une passe limitée n'est JAMAIS un épuisement** (un plafond de temps ou d'insertions avec lequel on t'a lancé n'abaisse pas ce minimum). `unmeasured` : tes recherches ne sont pas enregistrées, enregistre-les. Une fois accepté par le Capitano, mets-toi **complètement IDLE** : pas de self-retry. Le re-wake est celui du Capitano et le calme est court et croissant — 30 min, puis 1 h, 2 h, 4 h au plus, de nouveau 30 min à chaque nouvelle fenêtre de travail, plus tôt sur un signal de l'utilisateur ou de nouvelles sources — jamais « des heures ».
 
 ---
 

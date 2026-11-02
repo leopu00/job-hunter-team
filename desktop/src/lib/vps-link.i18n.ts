@@ -16,6 +16,8 @@ export type VpsLinkCopy = {
   copyRevision: string;
   copyDigest: string;
   retry: string;
+  /** Instead of «retry» when no destination is saved: opens the step where the person chooses where the team runs. */
+  chooseDestination: string;
   reviewKey: string;
   /** The control that opens the pinned revision and image, and the error code. */
   details: string;
@@ -41,6 +43,7 @@ const it: VpsLinkCopy = {
   copyRevision: "Copia la revisione",
   copyDigest: "Copia il digest dell’immagine",
   retry: "Riprova",
+  chooseDestination: "Scegli dove far girare la squadra",
   reviewKey: "Torna alla configurazione",
   details: "Dettagli tecnici",
   copy: "Copia",
@@ -62,6 +65,7 @@ const en: VpsLinkCopy = {
   copyRevision: "Copy the revision",
   copyDigest: "Copy the image digest",
   retry: "Retry",
+  chooseDestination: "Choose where to run the team",
   reviewKey: "Back to the setup",
   details: "Technical details",
   copy: "Copy",
@@ -83,6 +87,7 @@ const de: VpsLinkCopy = {
   copyRevision: "Revision kopieren",
   copyDigest: "Image-Digest kopieren",
   retry: "Erneut versuchen",
+  chooseDestination: "Wählen, wo das Team läuft",
   reviewKey: "Zurück zur Einrichtung",
   details: "Technische Details",
   copy: "Kopieren",
@@ -104,6 +109,7 @@ const es: VpsLinkCopy = {
   copyRevision: "Copiar la revisión",
   copyDigest: "Copiar el digest de la imagen",
   retry: "Reintentar",
+  chooseDestination: "Elige dónde ejecutar el equipo",
   reviewKey: "Volver a la configuración",
   details: "Detalles técnicos",
   copy: "Copiar",
@@ -125,6 +131,7 @@ const fr: VpsLinkCopy = {
   copyRevision: "Copier la révision",
   copyDigest: "Copier le digest de l’image",
   retry: "Réessayer",
+  chooseDestination: "Choisir où faire tourner l’équipe",
   reviewKey: "Retour à la configuration",
   details: "Détails techniques",
   copy: "Copier",
@@ -146,6 +153,7 @@ const hu: VpsLinkCopy = {
   copyRevision: "Revízió másolása",
   copyDigest: "Képkivonat másolása",
   retry: "Újra",
+  chooseDestination: "Válaszd ki, hol fusson a csapat",
   reviewKey: "Vissza a beállításhoz",
   details: "Műszaki részletek",
   copy: "Másolás",
@@ -167,6 +175,7 @@ const pt: VpsLinkCopy = {
   copyRevision: "Copiar a revisão",
   copyDigest: "Copiar o digest da imagem",
   retry: "Tentar novamente",
+  chooseDestination: "Escolha onde executar a equipa",
   reviewKey: "Voltar à configuração",
   details: "Detalhes técnicos",
   copy: "Copiar",

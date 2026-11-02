@@ -20,6 +20,8 @@ describe("the words of the list of local profiles", () => {
     const text = LOCAL_PROFILES_TEXT[locale];
     expect(text.useProfile).toContain("{name}");
     expect(text.ownerBanner).toContain("{name}");
+    expect(text.ownerChoicesNamed).toContain("{name}");
+    expect(text.ownerChoices).not.toContain("{name}");
     expect(text.ownerBannerUnknown).not.toContain("{name}");
     expect(text.ownerBannerAccount).not.toContain("{name}");
     expect(text.ownerBannerNobody).not.toContain("{name}");
@@ -30,6 +32,7 @@ describe("the words of the list of local profiles", () => {
     expect(text.listTitle.length).toBeLessThanOrEqual(30);
     expect(text.teamHere.length).toBeLessThanOrEqual(24);
     expect(text.lastUsed.length).toBeLessThanOrEqual(16);
+    expect(text.noDestination.length).toBeLessThanOrEqual(24);
     expect(text.newProfile.length).toBeLessThanOrEqual(28);
     expect(text.switchProfile.length).toBeLessThanOrEqual(20);
   });
