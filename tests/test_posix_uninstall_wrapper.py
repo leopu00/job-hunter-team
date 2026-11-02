@@ -617,3 +617,22 @@ def test_the_purge_flag_is_not_known_to_the_desktop_call() -> None:
     """The desktop runs `uninstall --confirm` and nothing else: data is only ever deleted by a person who typed --purge."""
     desktop = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
     assert "--purge" not in desktop
+
+
+@needs_non_root
+@pytest.mark.parametrize("pinned", ["--privileged", "-v/:/host", "-"])
+def test_a_pinned_image_that_looks_like_an_option_is_never_handed_to_docker(tmp_path: Path, pinned: str) -> None:
+    """The pin is a file next to the runtime: whatever it holds, `docker run` gets the default image or a real reference,
+    never a word that docker would read as one of its options."""
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    (box.runtime / "runtime-image").write_text(pinned + "\n", encoding="utf-8")
+    hide_data_from_the_host(box)
+    try:
+        result = box.run("uninstall", "--confirm", "--purge")
+    finally:
+        restore_if_left(box)
+    assert result.returncode == 0, result.stdout + result.stderr
+    run = next(call for call in box.calls() if call.startswith("docker run"))
+    default = re.search(r'^DEFAULT_RUNTIME_IMAGE="([^"]+)"$', SOURCE, re.M).group(1)
+    assert f"--entrypoint /bin/sh {default} -c " in run

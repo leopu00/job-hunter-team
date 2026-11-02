@@ -5345,7 +5345,7 @@ uninstall_runtime_image() {
   if [ -f "$pin" ] && [ ! -L "$pin" ]; then
     ref="$(head -n 1 "$pin" 2>/dev/null | tr -d '\r\n')"
     case "$ref" in
-      ''|*[!A-Za-z0-9./_:@-]*) ;;
+      ''|-*|*[!A-Za-z0-9./_:@-]*) ;;       # a reference never starts with a dash: it would be read as an option
       *) printf '%s\n' "$ref"; return 0 ;;
     esac
   fi
