@@ -52,10 +52,11 @@ import scout_language as _lang  # noqa: E402 — the skills folder, put on the p
 TIER_ORDER = {"core": 0, "minor": 1}
 CLOSED_STATUSES = ("closed", "gone")
 STATES = ("covered", "partial", "untouched", "closed", "via_email")
-# The order of the questions on one portal. The portal's own language first (the title as people write it there), then the
-# English title, an adjacent title, a level word, a place.
-SLOTS_LOCAL = ("role_language", "role", "synonym", "level", "city")
-SLOTS_ENGLISH = ("role", "synonym", "level", "city")
+# The order of the questions on one portal. WIDE first (the role's family or an entry word alone, read in full and filtered
+# against the profile: a title in AND with a place often answers 0), then the portal's own language (the title as people write
+# it there), the English title, an adjacent title, a level word, a place.
+SLOTS_LOCAL = ("broad", "role_language", "role", "synonym", "level", "city")
+SLOTS_ENGLISH = ("broad", "role", "synonym", "level", "city")
 REMOTE_BLOCKERS = ("on-site", "onsite", "on site", "in sede", "in-sede", "presenza")
 
 
@@ -167,6 +168,8 @@ def _missing(entry: dict, numbers: dict, need: dict) -> list:
         missing.append("different queries %d/%d" % (numbers["queries"], need["queries"]))
     if entry.get("portal_language") != "en" and "role_language" not in numbers["kinds"]:
         missing.append("a query in the portal's language (query-kind role_language)")
+    if "broad" not in numbers["kinds"]:
+        missing.append("a BROAD query (query-kind broad: the role family or an entry word on its own, filtered locally)")
     return missing
 
 
@@ -212,15 +215,16 @@ def portal_states(rows: list, profile=None, now: float | None = None) -> list:
 
 def core_missing(states: list) -> list:
     """The core portals not done yet, as `platsbanken/se 1/3` (the smaller of passes and different queries, over what is
-    needed), with ` +role_language` when the query in the portal's language is still missing. Empty = the core is done."""
+    needed), with ` +role_language` when the query in the portal's language is still missing and ` +broad` when no wide query was
+    asked yet. Empty = the core is done."""
     need = needed()
     out = []
     for r in states:
         if r["tier"] != "core" or r["state"] in DONE_STATES:
             continue
         have = min(r["passes"], r["distinct_queries"], need["passes"])
-        out.append("%s/%s %d/%d%s" % (r["source"], r["country"], have, need["passes"],
-                                      " +role_language" if any("role_language" in m for m in r["missing"]) else ""))
+        tags = "".join(" +%s" % kind for kind in ("role_language", "broad") if any(kind in m for m in r["missing"]))
+        out.append("%s/%s %d/%d%s" % (r["source"], r["country"], have, need["passes"], tags))
     return out
 
 
@@ -246,8 +250,12 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None) ->
         terms = data["level_terms"].get(entry["portal_language"], data["level_terms"]["en"])
         step = {"plan_done": False, "source": entry["slug"], "name": entry["name"], "country": entry["country"],
                 "tier": entry["tier"], "host": entry.get("host"), "query_kind": kind,
-                "query_language": entry["portal_language"] if kind == "role_language" else "en",
+                "query_language": entry["portal_language"] if kind in ("role_language", "broad") else "en",
                 "have": {"passes": numbers["passes"], "queries": numbers["queries"]}, "need": need}
+        if kind == "broad":
+            step["broad_terms"] = list(data.get("broad_terms", {}).get(entry["portal_language"], data.get("broad_terms", {}).get("en", []))) + list(terms)
+            step["how"] = ("WIDE: the role's family or one of broad_terms on its own, no full title and no place; read ALL the "
+                           "results (every page) and filter them against the profile yourself")
         if kind == "level":
             step["level_terms"] = terms
         if kind == "city":

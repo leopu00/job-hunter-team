@@ -62,7 +62,10 @@ OUTCOMES = (
 # What the query was about, never the query. `role` is the profile's title in English, `role_language` the same title in
 # the language of the portal, `synonym` an adjacent title, `level` a title with a level word (junior, graduate...), `city`
 # a title with a place: the kinds scout_coverage.py asks for, one per pass, so a portal is not asked the same thing twice.
-QUERY_KINDS = ("role", "role_language", "synonym", "level", "city", "company", "generic", "other")
+# `broad` is a WIDE question: the role's family, or a level / entry word (internship, graduate...) on its own, no full title
+# and no place. A portal that takes several words as AND answers 0 to «junior project coordinator» + a city and hundreds to
+# «praktik» (Platsbanken, real run of 02/11): the Scout reads the wide list and filters it against the profile itself.
+QUERY_KINDS = ("role", "role_language", "synonym", "level", "city", "broad", "company", "generic", "other")
 # How the portal answered. Left out, the pass is a normal one. `closed` = it cannot be read this pass (403, a login wall,
 # a challenge, a page that is an empty shell); `gone` = 410, the endpoint is dead and the source comes off the lists.
 STATUSES = ("ok", "empty", "closed", "gone")

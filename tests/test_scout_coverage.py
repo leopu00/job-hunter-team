@@ -130,7 +130,7 @@ def test_a_403_seen_only_from_the_mac_does_not_close_a_source_in_the_table_the_s
     assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["eu-remote-jobs", "remote-rocketship"]
     hub = by[("thehub", "se")]
     assert hub["tier"] == "core" and hub["portal_language"] == "en"
-    rows = [_pass("thehub", "se", "role", q) for q in ("developer", "engineer", "junior developer")]
+    rows = [_pass("thehub", "se", "role", "developer"), _pass("thehub", "se", "role", "engineer"), _pass("thehub", "se", "broad", "internship")]
     assert _state(rows, "thehub")["state"] == "covered"      # an English portal in Sweden: no Swedish query demanded
 
 
@@ -147,10 +147,23 @@ def test_the_company_boards_of_sweden_are_in_the_table_and_the_command_lists_the
 def test_a_portal_is_covered_at_three_passes_with_three_different_queries_one_in_its_language(profile):
     rows = [_pass("arbetsformedlingen", "se", "role_language", "utvecklare")]
     assert _state(rows, "arbetsformedlingen")["state"] == "partial"
-    rows += [_pass("arbetsformedlingen", "se", "role", "developer"), _pass("arbetsformedlingen", "se", "level", "junior developer")]
+    rows += [_pass("arbetsformedlingen", "se", "role", "developer"), _pass("arbetsformedlingen", "se", "broad", "praktik")]
     state = _state(rows, "arbetsformedlingen")
     assert (state["state"], state["passes"], state["distinct_queries"]) == ("covered", 3, 3)
     assert state["next_kind"] is None
+
+
+def test_three_different_queries_without_a_wide_one_are_not_coverage_and_the_next_question_is_the_wide_one(profile):
+    """Real run of 02/11: Platsbanken answers 0 to a full title in AND with a city and hundreds to «praktik». Titles only
+    (three different, one in the portal's language) never covered it: one WIDE query is part of «covered»."""
+    rows = [_pass("arbetsformedlingen", "se", "role_language", "utvecklare"), _pass("arbetsformedlingen", "se", "role", "developer"),
+            _pass("arbetsformedlingen", "se", "level", "junior developer")]
+    state = _state(rows, "arbetsformedlingen")
+    assert (state["state"], state["passes"], state["distinct_queries"]) == ("partial", 3, 3)
+    assert any("BROAD" in m and "broad" in m for m in state["missing"]) and not any("role_language" in m for m in state["missing"])
+    assert state["next_kind"] == "broad"
+    english = [_pass("irishjobs", "ie", "role", q) for q in ("developer", "engineer", "junior developer")]
+    assert _state(english, "irishjobs", "ie")["state"] == "partial"
 
 
 def test_three_passes_of_the_same_query_are_not_coverage(profile):
@@ -161,10 +174,11 @@ def test_three_passes_of_the_same_query_are_not_coverage(profile):
 
 def test_a_portal_in_another_language_needs_a_query_in_it(profile):
     rows = [_pass("arbetsformedlingen", "se", "role", q) for q in ("developer", "engineer", "junior developer")]
+    rows.append(_pass("arbetsformedlingen", "se", "broad", "praktik"))
     state = _state(rows, "arbetsformedlingen")
-    assert state["state"] == "partial" and any("role_language" in m for m in state["missing"])
+    assert state["state"] == "partial" and any("role_language" in m for m in state["missing"])    # wide, but not in its language
     assert state["next_kind"] == "role_language"
-    english = [_pass("irishjobs", "ie", "role", q) for q in ("developer", "engineer", "junior developer")]
+    english = [_pass("irishjobs", "ie", "role", q) for q in ("developer", "engineer")] + [_pass("irishjobs", "ie", "broad", "internship")]
     assert _state(english, "irishjobs", "ie")["state"] == "covered"
 
 
@@ -205,18 +219,22 @@ def test_candidates_and_inserted_are_counted_per_portal(profile):
 def test_the_thresholds_come_from_the_environment(profile, monkeypatch):
     monkeypatch.setenv("JHT_SCOUT_COVER_PASSES", "1")
     monkeypatch.setenv("JHT_SCOUT_COVER_QUERIES", "1")
-    assert _state([_pass("arbetsformedlingen", "se", "role_language", "a")], "arbetsformedlingen")["state"] == "covered"
+    assert _state([_pass("irishjobs", "ie", "broad", "internship")], "irishjobs", "ie")["state"] == "covered"
+    assert _state([_pass("irishjobs", "ie", "role", "developer")], "irishjobs", "ie")["state"] == "partial"      # still no wide one
+    assert _state([_pass("arbetsformedlingen", "se", "broad", "praktik")], "arbetsformedlingen")["state"] == "partial"
 
 
 # ── core_missing: what the exhaustion tool reads ─────────────────────────────────────────────────────────────────────
 def test_core_missing_names_the_core_portals_not_done_and_nothing_else(profile):
     states = cov.portal_states([_pass("arbetsformedlingen", "se", "role", "a")])
     missing = cov.core_missing(states)
-    assert "arbetsformedlingen/se 1/3 +role_language" in missing
-    assert "blocket-jobb/se 0/3 +role_language" in missing
+    assert "arbetsformedlingen/se 1/3 +role_language +broad" in missing
+    assert "blocket-jobb/se 0/3 +role_language +broad" in missing
+    assert "arbetsformedlingen/se 1/3 +broad" in cov.core_missing(cov.portal_states(
+        [_pass("arbetsformedlingen", "se", "role_language", "a")]))
     assert not any(m.startswith("indeed/") for m in missing)            # email: done
     assert not any(m.startswith(("ledigajobb", "jobbland")) for m in missing)   # minor
-    assert "irishjobs/ie 0/3" in missing
+    assert "irishjobs/ie 0/3 +broad" in missing
 
 
 def test_core_missing_is_empty_when_the_whole_core_is_done(profile):
@@ -224,7 +242,7 @@ def test_core_missing_is_empty_when_the_whole_core_is_done(profile):
     for entry in cov.load_plan()["entries"]:
         if entry["tier"] != "core" or entry["access"] != "search":
             continue
-        kinds = ("role_language", "role", "synonym") if entry["portal_language"] != "en" else ("role", "synonym", "level")
+        kinds = ("broad", "role_language", "role") if entry["portal_language"] != "en" else ("broad", "role", "synonym")
         rows += [_pass(entry["slug"], entry["country"], k, "%s %s" % (entry["slug"], k)) for k in kinds]
     assert cov.core_missing(cov.portal_states(rows)) == []
     assert cov.next_step(cov.load_plan(), [r for r in rows if r["kind"] == "pass"])["plan_done"] is False  # minor ones remain
@@ -240,15 +258,18 @@ def test_next_asks_a_different_kind_of_question_each_time(profile):
         assert step["source"] == "arbetsformedlingen"
         asked.append(step["query_kind"])
         rows.append(_pass(step["source"], step["country"], step["query_kind"], "q%d" % len(asked)))
-    assert asked == ["role_language", "role", "synonym"]
+    assert asked == ["broad", "role_language", "role"]            # wide first, then the portal's language, then English
     assert cov.next_step(plan, rows)["source"] == "blocket-jobb"
 
 
 def test_next_gives_the_level_words_and_the_cities_only_when_it_asks_for_them(profile):
     plan = cov.load_plan()
-    done_first = [_pass(s, "se", k, "%s-%s" % (s, k)) for s in ("arbetsformedlingen", "blocket-jobb") for k in ("role_language", "role", "synonym")]
-    # LinkedIn: three kinds asked but the same query each time -> still partial, and the next kind is the level
-    rows = done_first + [_pass("linkedin", "se", k, "same") for k in ("role_language", "role", "synonym")]
+    done_first = [_pass(s, "se", k, "%s-%s" % (s, k)) for s in ("arbetsformedlingen", "blocket-jobb") for k in ("broad", "role_language", "role")]
+    # LinkedIn: three kinds asked but the same query each time -> still partial, and the next kind is the synonym
+    rows = done_first + [_pass("linkedin", "se", k, "same") for k in ("broad", "role_language", "role")]
+    step = cov.next_step(plan, rows)
+    assert (step["source"], step["query_kind"]) == ("linkedin", "synonym")
+    rows.append(_pass("linkedin", "se", "synonym", "same"))
     step = cov.next_step(plan, rows)
     assert (step["source"], step["query_kind"]) == ("linkedin", "level")
     assert step["level_terms"] == cov.table()["level_terms"]["sv"] and "cities" not in step
@@ -257,7 +278,7 @@ def test_next_gives_the_level_words_and_the_cities_only_when_it_asks_for_them(pr
     assert (step["source"], step["query_kind"]) == ("linkedin", "city")
     assert "Stockholm" in step["cities"] and "level_terms" not in step
     # a portal with no city list never asks for one
-    plain = done_first + [_pass("academic-work", "se", k, "same") for k in ("role_language", "role", "synonym", "level")]
+    plain = done_first + [_pass("academic-work", "se", k, "same") for k in ("broad", "role_language", "role", "synonym", "level")]
     step = cov.next_step(plan, plain)
     assert step["source"] != "academic-work" or step["query_kind"] != "city"
 
@@ -276,14 +297,14 @@ def test_next_says_the_plan_is_done_when_every_portal_is_done(profile):
 def test_the_pass_log_accepts_the_new_kinds_and_a_closed_vocabulary_of_statuses(tmp_path, monkeypatch):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     monkeypatch.setenv("JHT_AGENT_NAME", "scout-1")
-    for kind in ("synonym", "level", "city"):
+    for kind in ("synonym", "level", "city", "broad"):
         assert plog.main(["pass", "--source", "linkedin", "--country", "se", "--returned", "1", "--query-kind", kind]) == 0
     assert plog.main(["pass", "--source", "arbetsformedlingen", "--country", "se", "--returned", "0", "--status", "closed"]) == 0
     with pytest.raises(SystemExit):
         plog.main(["pass", "--source", "x", "--returned", "0", "--status", "a free text"])
     lines = [json.loads(l) for l in (tmp_path / "logs" / "scout-passes.jsonl").read_text().splitlines()]
-    assert [l.get("status") for l in lines] == [None, None, None, "closed"]
-    assert set(lines[3]) == {"v", "kind", "ts", "agent", "source", "country", "returned", "query_kind", "status"}
+    assert [l.get("status") for l in lines] == [None, None, None, None, "closed"]
+    assert set(lines[4]) == {"v", "kind", "ts", "agent", "source", "country", "returned", "query_kind", "status"}
 
 
 # ── the visible side: the P1 report ──────────────────────────────────────────────────────────────────────────────────
@@ -294,7 +315,7 @@ def _run(*argv, home):
 
 def test_the_p1_report_shows_every_portal_of_the_plan_covered_or_not_and_nothing_of_the_profile(profile, tmp_path):
     profile.write_text(PROFILE_SV_EN + "name: Zorro Testsson\ntarget_role: Plumber of clouds\nlocation: Kiruna\n", encoding="utf-8")
-    for q, kind in (("utvecklare", "role_language"), ("developer", "role"), ("junior developer", "level")):
+    for q, kind in (("utvecklare", "role_language"), ("developer", "role"), ("praktik", "broad")):
         done = _run(str(SKILLS / "scout_pass_log.py"), "pass", "--source", "arbetsformedlingen", "--country", "se", "--returned", "7",
                     "--query-kind", kind, "--query", q, home=tmp_path)
         assert done.returncode == 0, done.stderr
@@ -315,3 +336,15 @@ def test_the_cli_plan_status_and_next_answer(profile, tmp_path):
         out = _run(str(SKILLS / "scout_coverage.py"), sub, "--json", home=tmp_path)
         assert out.returncode == 0, out.stderr
         json.loads(out.stdout)
+
+
+def test_next_for_a_wide_question_gives_the_entry_words_of_the_portals_language_and_says_how(profile):
+    step = cov.next_step(cov.load_plan(), [])
+    assert (step["source"], step["query_kind"], step["query_language"]) == ("arbetsformedlingen", "broad", "sv")
+    assert step["broad_terms"][0] == "praktik" and "nyexaminerad" in step["broad_terms"]
+    assert "ALL the results" in step["how"] and "no full title and no place" in step["how"]
+
+
+def test_every_language_of_the_table_has_its_entry_words():
+    data = cov.table()
+    assert set(data["broad_terms"]) == set(data["level_terms"]) and all(data["broad_terms"][k] for k in data["broad_terms"])
