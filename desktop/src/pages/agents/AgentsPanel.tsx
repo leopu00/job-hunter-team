@@ -40,6 +40,7 @@ import { Lanes, SessionHistory } from "./AgentHistory";
 import ActionLogSection from "./ActionLogSection";
 import { BurstStrip } from "../work-hours/BurstControl";
 import Link from "../../web-shims/next-link";
+import { onStreamHint, onStreamState, streamPace } from "../../lib/state-stream";
 import { isDirectChatAgentId, REOPEN_NO_RETRY, type DirectChatAgentId } from "../messages/DirectChatScreen";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
 
@@ -66,6 +67,10 @@ function chatName(id: DirectChatAgentId): string {
  * whatever their code: «Refresh» and coming back to the page still read, and a good read brings it back.
  */
 export const LIST_REFRESH_LOCAL_MS = 20_000;
+/** The same on this computer while the channel to the team is up: it says when the agents change, so this only backs it up. */
+export const LIST_REFRESH_STREAMED_MS = 60_000;
+/** Hints of the channel closer than this are one read (a team starting changes its agents one after the other). */
+const LIST_HINT_GAP_MS = 3_000;
 export const LIST_REFRESH_VPS_MS = 60_000;
 /** The periodic read gives up after this many failed in a row (whatever their code): it cannot know every refusal a server gives. */
 export const LIST_REFRESH_FAILURES = 3;
@@ -557,6 +562,8 @@ export default function AgentsPanel({ search }: PageProps) {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
+    // A hint of the channel came while a periodic read was on its way: that read may have started before the change, so one more follows it.
+    let hintedMeanwhile = false;
     const again = async () => {
       if (!live) return;
       clearTimeout(timer);
@@ -568,19 +575,42 @@ export default function AgentsPanel({ search }: PageProps) {
         } finally {
           quietReading.current = false;
         }
+        if (hintedMeanwhile && live) {
+          hintedMeanwhile = false;
+          return again();
+        }
       }
       // the count is the ref's, not the state's: the next read is not set once the third failure is in
-      if (live && failedInARow.current < LIST_REFRESH_FAILURES) timer = setTimeout(() => void again(), everyMs);
+      if (live && failedInARow.current < LIST_REFRESH_FAILURES) timer = setTimeout(() => void again(), streamPace(everyMs, LIST_REFRESH_STREAMED_MS));
     };
     // the window seen again after it was hidden reads at once
     const seen = () => {
       if (document.visibilityState === "visible" && !occupied.current && Date.now() - last >= SEEN_AGAIN_MIN_MS) void again();
     };
-    timer = setTimeout(() => void again(), everyMs);
+    timer = setTimeout(() => void again(), streamPace(everyMs, LIST_REFRESH_STREAMED_MS));
     document.addEventListener("visibilitychange", seen);
+    // The agents changed, said the channel: read now (an action's own read, or a read in flight, answers for it).
+    const stopHint = onStreamHint(
+      "agents",
+      () => {
+        if (document.visibilityState !== "visible" || occupied.current) return;
+        if (quietReading.current) hintedMeanwhile = true;
+        else void again();
+      },
+      LIST_HINT_GAP_MS,
+    );
+    // The channel went up or down: the wait that is running was set at the other pace.
+    const stopState = onStreamState(() => {
+      if (live && !quietReading.current && failedInARow.current < LIST_REFRESH_FAILURES) {
+        clearTimeout(timer);
+        timer = setTimeout(() => void again(), streamPace(everyMs, LIST_REFRESH_STREAMED_MS));
+      }
+    });
     return () => {
       live = false;
       clearTimeout(timer);
+      stopHint();
+      stopState();
       document.removeEventListener("visibilitychange", seen);
     };
   }, [read, everyMs, noRetry, givenUp]);
