@@ -221,4 +221,26 @@ describe("the profile progress with the channel to the team", () => {
     await tick(5_000);
     expect(read).toHaveBeenCalledTimes(2);
   });
+
+  it("a hint that comes while a read is still on its way is not lost: one more read follows it", async () => {
+    await up();
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const read = vi.fn(async () => {
+      if (++calls === 1) await held;
+      return reading(2);
+    });
+    renderHook(() => useProfileProgress(read));
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    emitHint({ topic: "profile" });
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(1);
+    release();
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    await tick(PROFILE_PROGRESS_STREAMED_MS - 1_000);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1362,6 +1362,31 @@ describe("«Agenti»: the list reads again by itself", () => {
       expect(lists()).toBe(3);
     });
 
+    it("a hint that comes while a read is still on its way is not lost: one more read follows it", async () => {
+      where = "local";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      // the list answers only when the test lets it: the read the first hint starts stays in flight
+      const answer = native.invoke.getMockImplementation()!;
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+        if (command === COMMAND && args.request.op === "list") await held;
+        return answer(command, args);
+      });
+      hint();
+      await waitFor(() => expect(lists()).toBe(2));
+      // the second hint of the burst is due while that read has not ended
+      hint();
+      await advance(3_500);
+      expect(lists()).toBe(2);
+      release();
+      await waitFor(() => expect(lists()).toBe(3));
+      await advance(10_000);
+      expect(lists()).toBe(3);
+    });
+
     it("a hint of another topic reads nothing, and a hidden window reads nothing", async () => {
       where = "local";
       show();
