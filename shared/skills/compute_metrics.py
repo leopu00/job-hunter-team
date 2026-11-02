@@ -51,6 +51,44 @@ def _load_format_time():
 _FT = _load_format_time()
 
 
+# ─── pace_rate (helper sorella) — il RITMO di un contatore intero ───────
+# Un solo calcolo del ritmo per tutti (vedi pace_rate.py): almeno un'ora, intervallo [lo, hi] sul contatore intero,
+# salti non attribuibili e cali senza reset. Senza il modulo il ritmo e' 0 (la proiezione resta il livello: la
+# direzione sicura per un modulo che comanda freni e' non inventare un ritmo).
+def _load_pace_rate():
+    for cand in (Path("/app/shared/skills/pace_rate.py"),
+                 Path(__file__).resolve().parent / "pace_rate.py"):
+        try:
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("pace_rate", cand)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+        except (OSError, ImportError, AttributeError, SyntaxError):
+            continue
+    return None
+
+
+_PR = _load_pace_rate()
+
+
+def _history_rate(history, usage, provider, now):
+    """Il ritmo (pace_rate.counter_rate) della serie `history` + il campione di adesso, o None."""
+    if _PR is None:
+        return None
+    points = []
+    for h in history or []:
+        if h.get("provider") not in (None, provider):
+            continue
+        ts = _parse_iso(h.get("ts"))
+        u = h.get("usage")
+        if ts is not None and isinstance(u, (int, float)) and not isinstance(u, bool):
+            points.append((ts.timestamp(), float(u)))
+    points.append((now.timestamp(), float(usage)))
+    return _PR.counter_rate(points, now.timestamp())
+
+
 def _fmt_reset(unix_ts, fallback=None):
     """Epoch → 'YYYY-MM-DD HH:MM TZ' (mai ora-nuda). fallback se non derivabile."""
     if isinstance(unix_ts, (int, float)) and not isinstance(unix_ts, bool):
@@ -202,7 +240,9 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     ts = now.isoformat()
     history = history or []
 
-    # ── Delta + velocity istantanea ──
+    # ── Delta + velocity ──
+    # `delta` e' il passo fra due campioni; la `velocity` NON e' delta / 5 minuti (un punto intero = 12 %/h, tre =
+    # 36 %/h: rumore del contatore, non consumo) ma il ritmo di pace_rate su almeno un'ora, mai negativo.
     delta = 0.0
     velocity = 0.0
     session_gap_min = 0.0
@@ -210,9 +250,10 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         last_ts = _parse_iso(last.get("ts"))
         if last_ts:
             session_gap_min = (now - last_ts).total_seconds() / 60.0
-            dt_h = max(0.01, (now - last_ts).total_seconds() / 3600)
             delta = usage - last["usage"]
-            velocity = delta / dt_h
+    rate_res = _history_rate(history, usage, provider, now)
+    if rate_res is not None:
+        velocity = rate_res["rate"]
 
     # ── Cold-start: gap troppo grande, EMA invalidata ──
     session_discontinuity = session_gap_min > SESSION_GAP_MIN
@@ -261,6 +302,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     )
     velocity_ideal = None
     projection = None
+    projection_lo = None
     projection_naive = None
     last_hour_delta = cumulative_delta_last_hour(
         history + [{"ts": ts, "delta": delta}], now
@@ -275,39 +317,17 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
             or session_discontinuity
             or reset_event
         )
+        effective_lo = 0.0
         if cold_start:
             # Sessione nuova: niente media disponibile, vel=0
             effective_vel = 0.0
         else:
-            # Trova il primo sample della sessione corrente (stesso
-            # session_id). La sessione cambia su drop>30 / gap>20min,
-            # quindi è automaticamente "scoped" alla finestra corrente.
-            session_first = None
-            for h in history or []:
-                if h.get("session_id") == session_id and h.get("provider") == provider:
-                    session_first = h
-                    break
-            if session_first is None:
-                # Niente storia in sessione → fallback EMA (caso raro:
-                # storia esiste ma session_id appena cambiato)
-                effective_vel = velocity_smooth
-            else:
-                first_ts = _parse_iso(session_first.get("ts"))
-                if first_ts:
-                    elapsed_h = (now - first_ts).total_seconds() / 3600
-                else:
-                    elapsed_h = 0
-                first_usage = session_first.get("usage")
-                if elapsed_h > 0.05 and isinstance(first_usage, (int, float)):
-                    # vel media reale dalla nascita della sessione:
-                    # robusta a oscillazioni di 1 punto, si stabilizza
-                    # in ~10 min, niente parser/EMA fragile.
-                    effective_vel = (usage - first_usage) / elapsed_h
-                else:
-                    # < 3 minuti dall'inizio sessione: dato troppo grezzo,
-                    # vel=0 finché abbiamo abbastanza tempo per misurare
-                    effective_vel = 0.0
+            # Il ritmo e' quello di pace_rate (almeno un'ora, intervallo sul contatore intero): prima erano i punti
+            # interi delle ultime 30 righe (2,5 h) per le ore al reset, cioe' 1 punto = +30 di proiezione su 76 h.
+            effective_vel = rate_res["rate"] if rate_res is not None else 0.0
+            effective_lo = rate_res["lo"] if rate_res is not None else 0.0
         projection = usage + effective_vel * hours_to_reset
+        projection_lo = usage + effective_lo * hours_to_reset
 
     # ── Dead-band: velocity in calo? ──
     vs_prev = (last or {}).get("velocity_smooth")
@@ -329,7 +349,9 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         # La projection resta nel sample per diagnosi, ma al confine non e'
         # actionable: nessun ATTENZIONE/throttle da un numero volatile.
         status, throttle = "OK", 0
-    elif projection is not None and projection > PROJ_HIGH:
+    elif projection_lo is not None and projection_lo > PROJ_HIGH:
+        # Il freno solo se anche il LIMITE BASSO del ritmo proietta sopra la soglia: l'intervallo del contatore
+        # intero non da' un verdetto a un solo scalino (vedi pace_rate.py).
         status, throttle = "ATTENZIONE", 1
     elif projection is not None and PROJ_STEADY_LOW <= projection <= PROJ_STEADY_HIGH:
         status, throttle = "STEADY", 0
@@ -418,14 +440,14 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     # per ≥2 tick, la leva giusta è il KILL (C-12), non alzare ancora il throttle.
     if reset_edge_guard:
         phase = 3
-    elif projection is not None and projection > 100:
+    elif projection_lo is not None and projection_lo > 100:
         phase = 2
     else:
         phase = 1
 
     suggested_throttle_s = 0
-    if projection is not None and not reset_edge_guard:
-        p = projection
+    if projection_lo is not None and not reset_edge_guard:
+        p = projection_lo
         if p > 400:
             suggested_throttle_s = 3600  # max (= jht-throttle.py MAX_SLEEP)
         elif p > 300:
