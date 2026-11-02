@@ -199,13 +199,23 @@ def test_a_wrong_ask_answers_2_before_any_network(tmp_path: Path, site, args: tu
 @pytest.mark.parametrize("version", ("0.4.0", "0.4.1", "1.0.0"))
 def test_windows_is_refused_for_a_release_that_has_no_installer(tmp_path: Path, site, version: str):
     done, home, _, _ = _run(tmp_path, site, "--os", "windows", "--version", version, JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
-    assert done.returncode == 1 and "Windows non fa parte" in done.stderr
+    assert done.returncode == 1 and "Windows is not part of 0.4.0" in done.stderr and "Nothing was downloaded" in done.stderr
+    # another home: the first run records its language in the runtime's values file
+    (tmp_path / "it").mkdir()
+    italian, _, _, _ = _run(tmp_path / "it", site, "--os", "windows", "--version", version, JHT_RELEASE_BASE_URL="http://127.0.0.1:9",
+                            JHT_LANG="it")
+    assert italian.returncode == 1 and "Windows non fa parte" in italian.stderr
 
 
 def test_an_intel_mac_is_refused_before_anything_is_downloaded(tmp_path: Path, site):
     done, home, _, _ = _run(tmp_path, site, "--os", "macos", "--version", "0.4.0", JHT_DOWNLOAD_HOST="darwin-x64",
                             JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
-    assert done.returncode == 1 and "Apple silicon" in done.stderr
+    assert done.returncode == 1 and "Apple silicon" in done.stderr and "Nothing was downloaded" in done.stderr
+    assert "Mac Intel, non" not in done.stderr
+    (tmp_path / "it").mkdir()
+    italian, _, _, _ = _run(tmp_path / "it", site, "--os", "macos", "--version", "0.4.0", JHT_DOWNLOAD_HOST="darwin-x64",
+                            JHT_RELEASE_BASE_URL="http://127.0.0.1:9", JHT_LANG="it")
+    assert italian.returncode == 1 and "questo e' un Mac Intel" in italian.stderr
     assert not (home / "Downloads").exists()
 
 
@@ -226,6 +236,12 @@ def test_a_release_before_0_4_is_said_to_have_no_macos_linux_app(tmp_path: Path,
     (site.root.parent / "v0.3.9" / "SHA256SUMS").write_text(f"{'a' * 64}  job-hunter-team-linux-x64.tar.gz\n", encoding="utf-8")
     done, home, _, _ = _run(tmp_path, site, "--os", os_name, "--version", version)
     assert done.returncode == 1
-    assert "non ha l'app per macOS/Linux: usa la 0.4.0 o successive" in done.stderr
-    assert "non trovato" not in done.stderr and "Non e' stato scaricato niente" in done.stderr
+    # an installation in English (the default) says it in English; one in Italian, as before (B5 of the Linux retest)
+    assert f"This release (v{version.removeprefix('v')}) has no app for macOS/Linux: use 0.4.0 or later" in done.stderr
+    assert "Nothing was downloaded" in done.stderr and "not found" not in done.stderr
+    assert "Questa release" not in done.stderr and "e' stato" not in done.stderr
+    (tmp_path / "it").mkdir()
+    italian, _, _, _ = _run(tmp_path / "it", site, "--os", os_name, "--version", version, JHT_LANG="it")
+    assert "non ha l'app per macOS/Linux: usa la 0.4.0 o successive" in italian.stderr
+    assert "non trovato" not in italian.stderr and "Non e' stato scaricato niente" in italian.stderr
     assert not (home / "Downloads").exists()

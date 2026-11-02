@@ -187,6 +187,7 @@ class Box:
 
     def run(self, *args: str, **extra_env: str) -> subprocess.CompletedProcess[str]:
         env = {
+            "JHT_LANG": "it",  # the asserted texts are the Italian ones; the English ones have their own tests below
             **extra_env,
             "HOME": str(self.home),
             "PATH": f"{self.tools}:{self.system}",
@@ -636,3 +637,51 @@ def test_a_pinned_image_that_looks_like_an_option_is_never_handed_to_docker(tmp_
     run = next(call for call in box.calls() if call.startswith("docker run"))
     default = re.search(r'^DEFAULT_RUNTIME_IMAGE="([^"]+)"$', SOURCE, re.M).group(1)
     assert f"--entrypoint /bin/sh {default} -c " in run
+
+
+# ── the texts speak the language of the installation (B4, B5 of the Linux retest) ─────────────────────────────────
+
+ITALIAN_MARKS = ("e' ", "uso:", "Vengono", "restano", "Restano", "rimoss", "Non cancellati", "non valida")
+
+
+@pytest.mark.parametrize("lang", ["en", "hu", "de", ""])
+def test_an_installation_that_is_not_italian_gets_english_from_uninstall(tmp_path: Path, lang: str) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    box.machines("jht-podman*")
+    result = box.run("uninstall", "--yes", JHT_LANG=lang)
+    assert result.returncode == 2
+    assert "usage: jht uninstall --confirm [--purge]" in result.stderr
+    assert "mail password and Telegram tokens" in result.stderr
+    assert not [mark for mark in ITALIAN_MARKS if mark in result.stderr], result.stderr
+
+
+def test_without_purge_the_folders_are_said_to_stay_and_with_purge_they_are_not(tmp_path: Path) -> None:
+    """B4: `--purge` printed «~/.jht e Documenti restano» and, the line after, «con --purge vengono cancellati»."""
+    for lang, stays, purge_says in (("it", "~/.jht e Documenti restano", "Con --purge vengono cancellati anche ~/.jht"),
+                                    ("en", "~/.jht and Documents stay", "With --purge ~/.jht and ~/Documents/Job Hunter Team are deleted")):
+        plain = Box(tmp_path / f"plain-{lang}", "Darwin")
+        plain.select("docker")
+        plain.machines("colima-default*")
+        said = plain.run("uninstall", "--confirm", JHT_LANG=lang)
+        assert said.returncode == 0, said.stderr
+        assert stays in said.stderr and purge_says not in said.stderr
+
+        purged = Box(tmp_path / f"purge-{lang}", "Darwin")
+        purged.select("docker")
+        purged.machines("colima-default*")
+        said = purged.run("uninstall", "--confirm", "--purge", JHT_LANG=lang)
+        assert said.returncode == 0, said.stderr
+        assert purge_says in said.stderr
+        assert stays not in said.stderr, "the same output says the folders stay and that they are deleted"
+        assert "restano" not in said.stderr and " stay" not in said.stderr
+        assert LOSS in said.stderr if lang == "it" else "mail password and Telegram tokens" in said.stderr
+
+
+def test_the_usage_still_tells_both_sides_because_it_says_which_flag_does_what(tmp_path: Path) -> None:
+    for lang, stays, purge_says in (("it", "restano", "Con --purge"), ("en", "stay", "With --purge")):
+        box = Box(tmp_path / lang, "Darwin")      # a box per language: the first run records its language
+        box.select("podman")
+        box.machines("jht-podman*")
+        said = box.run("uninstall", JHT_LANG=lang).stderr
+        assert stays in said and purge_says in said

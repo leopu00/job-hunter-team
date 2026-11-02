@@ -72,7 +72,8 @@ def note(tmp_path: Path, content: str | None, *, mode: int = 0o644) -> str:
     functions = "\n".join(re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
                           for name in ("jht_host_env_value_valid", "jht_read_host_env_value", "runtime_stat", "runtime_node_safe",
                                        "jht_host_values_trusted", "jht_host_values_log", "jht_a_mac_is_never_a_vps",
-                                       "jht_load_host_values", "host_setup_skip_note"))
+                                       "jht_load_host_values", "host_setup_skip_note",
+                                       "jht_text_en", "jht_text_it", "jht_say"))
     host_env = tmp_path / "host.env"
     if content is not None:
         host_env.write_text(content, encoding="utf-8")
@@ -86,14 +87,23 @@ def note(tmp_path: Path, content: str | None, *, mode: int = 0o644) -> str:
 
 def test_it_says_the_preflight_is_done_when_host_env_says_the_type_of_host(tmp_path):
     out = note(tmp_path, "JHT_LANG=en\nJHT_HOST_TYPE=local\n")
+    assert out.startswith("INFO:") and "preflight is already done" in out and "uid 1001" in out
+    assert "gia' fatto" not in out, "an installation in English is not spoken to in Italian"
+
+
+def test_the_italian_installation_is_still_told_in_italian(tmp_path):
+    out = note(tmp_path, "JHT_LANG=it\nJHT_HOST_TYPE=local\n")
     assert out.startswith("INFO:") and "gia' fatto" in out and "uid 1001" in out
+    out = note(tmp_path, "JHT_LANG=it\n")
+    assert out.startswith("WARN:") and "non si legge o non dice il tipo di host" in out
 
 
 @pytest.mark.parametrize("content", [None, "JHT_LANG=en\n", "JHT_HOST_TYPE=server\n", ""])
 def test_it_does_not_say_done_when_host_env_is_missing_has_no_type_or_a_bad_one(tmp_path, content):
     out = note(tmp_path, content)
-    assert out.startswith("WARN:") and "gia' fatto" not in out
-    assert "non si legge o non dice il tipo di host" in out and "'unknown'" in out and "uid 1001" in out
+    assert out.startswith("WARN:") and "gia' fatto" not in out and "already done" not in out
+    assert "cannot be read or does not say the host type" in out and "'unknown'" in out and "uid 1001" in out
+    assert "non si legge" not in out
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads any file: the case is a normal user")
