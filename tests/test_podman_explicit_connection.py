@@ -30,6 +30,27 @@ def _native_function(lines: list, index: int) -> bool:
     return NATIVE_GUARD in [line.strip() for line in lines[start + 1:index]]
 
 
+LINUX_BRANCH = 'if [ "$HOST_KERNEL" = "Linux" ]; then'
+
+
+def _linux_only(lines: list, index: int) -> bool:
+    """The call sits inside the branch that runs only on Linux (the enclosing blocks, walking
+    outwards by indentation, include `if [ "$HOST_KERNEL" = "Linux" ]`) and in a function."""
+    indent = len(lines[index]) - len(lines[index].lstrip())
+    for i in range(index - 1, -1, -1):
+        line = lines[i]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        here = len(line) - len(line.lstrip())
+        if FUNCTION.match(line):
+            return False
+        if here < indent:
+            if line.strip() == LINUX_BRANCH:
+                return True
+            indent = here
+    return False
+
+
 # The calls that name no JHT machine on purpose, each by name: what the call
 # starts with, the proof it must carry, and why. Any other call without the
 # machine is still a failure, and an exception that no call uses fails too.
@@ -43,6 +64,12 @@ NAMED_EXCEPTIONS = {
         'machine rm --force "$UNINSTALL_MACHINE_NAME"',
         lambda lines, index: True,
         "the uninstall removes the machine it names, by its own variable",
+    ),
+    "linux-unshare": (
+        "unshare rm -rf -- ",
+        _linux_only,
+        "`podman unshare` enters the user namespace of the local Podman and has no remote form: "
+        "it exists only for native Podman on Linux (the Linux branch), where there is no machine",
     ),
     "native-rootless-probe": (
         "info --format '{{.Host.Security.Rootless}} {{.Host.ServiceIsRemote}}'",
@@ -169,3 +196,27 @@ def test_a_call_with_many_options_names_the_machine_after_them():
     assert unnamed_calls(call)[0] == []
     # and without the name it is still found, however long
     assert len(unnamed_calls(call.replace('      "$PODMAN_MACHINE_NAME"; then', '      true; then'))[0]) == 1
+
+
+def test_the_unshare_exception_holds_only_in_the_linux_branch():
+    inside = (
+        'purge() {\n'
+        '  if [ "$HOST_KERNEL" = "Linux" ]; then\n'
+        '    if [ "$selection" = "podman" ]; then\n'
+        '      "$podman_bin" unshare rm -rf -- "$dir" >/dev/null 2>&1 || true\n'
+        '    fi\n'
+        '  fi\n'
+        '}\n')
+    found, total, used = unnamed_calls(inside)
+    assert (found, total, used) == ([], 1, ["linux-unshare"])
+    after_fi = inside.replace('    fi\n  fi\n', '    fi\n  fi\n  "$podman_bin" unshare rm -rf -- "$dir"\n')
+    assert [line for line, _ in unnamed_calls(after_fi)[0]] == [7]
+    other_kernel = inside.replace('"Linux"', '"Darwin"')
+    assert [line for line, _ in unnamed_calls(other_kernel)[0]] == [4]
+    other_function = (
+        'other() {\n  :\n}\n'
+        '  if [ "$HOST_KERNEL" = "Linux" ]; then\n'
+        'second() {\n'
+        '  "$podman_bin" unshare rm -rf -- "$dir"\n'
+        '}\n')
+    assert [line for line, _ in unnamed_calls(other_function)[0]] == [6]
