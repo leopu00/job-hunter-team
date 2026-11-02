@@ -153,7 +153,20 @@ AGENT_TABLE_FILE = LOGS_DIR / "agent-usage-table.json"
 
 # Sotto questo numero di minuti effettivi nella finestra (dopo aver
 # isolato l'ultima session_id) il calcolo è troppo rumoroso. Salta tick.
-MIN_EFFECTIVE_MIN = 5.0
+# Il ritmo di un contatore intero non si misura su 15 minuti (un punto = 4 %/h, tre = 12 %/h: rumore del contatore):
+# almeno un'ora, come pace_rate.py (misurato su un team reale il 01/11: +3 punti in 5 minuti, nessun token del team, letti come
+# «vel_team=12.00%/h» su 15 minuti e poi «stop new spawns» con la pipeline vuota).
+def _env_float(name: str, default: float) -> float:
+    """Un numero dall'ambiente; un valore non numerico (o non finito) non deve far cadere il bridge all'import."""
+    try:
+        value = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value == value and value not in (float("inf"), float("-inf")) else default
+
+
+RATE_WINDOW_MIN = _env_float("JHT_PACING_RATE_WINDOW_MIN", 60.0)
+MIN_EFFECTIVE_MIN = _env_float("JHT_PACING_MIN_EFFECTIVE_MIN", 55.0)
 
 # Target band center per-provider. Override globale via JHT_PACING_TARGET_PCT
 # resta supportato per backward-compat (es. tuning manuale durante debug).
@@ -358,6 +371,57 @@ def _pace_shadow_log(d, now):
             f.write(json.dumps(rec, separators=(",", ":")) + "\n")
     except Exception as e:  # noqa: BLE001 — lo shadow non deve MAI rompere il tick
         print(f"[pacing-bridge] WARN shadow-log: {e}", file=sys.stderr, flush=True)
+
+
+_PACE_RATE_MOD = None
+
+
+def _pace_rate():
+    """shared/skills/pace_rate.py (il ritmo di un contatore intero), o None se non si carica."""
+    global _PACE_RATE_MOD
+    if _PACE_RATE_MOD is None:
+        try:
+            _PACE_RATE_MOD = _path_import(_shared_skills_dir() / "pace_rate.py", "_pace_rate")
+        except Exception as e:  # noqa: BLE001
+            print(f"[pacing-bridge] WARN pace_rate not loadable: {e}", file=sys.stderr, flush=True)
+            _PACE_RATE_MOD = False
+    return _PACE_RATE_MOD or None
+
+
+def _single_weekly(sample: dict) -> bool:
+    """True se `usage` del campione e' la settimanale ricopiata (piano a finestra unica, es. Codex `prolite`).
+
+    Il bridge del provider lo dichiara (`usage_is_weekly`); per i campioni scritti prima, stesso valore e stesso reset
+    sui due assi."""
+    if not isinstance(sample, dict):
+        return False
+    if sample.get("usage_is_weekly") is True:
+        return True
+    u, w = sample.get("usage"), sample.get("weekly_usage")
+    ru, rw = sample.get("reset_at_unix"), sample.get("weekly_reset_at_unix")
+    return (isinstance(u, (int, float)) and not isinstance(u, bool) and u == w
+            and isinstance(ru, (int, float)) and ru == rw)
+
+
+# Debito sulla retta delle ore attive oltre il quale, a coda vuota, la settimanale e' DAVVERO il vincolo (COAST):
+# stesso valore di weekly_pace.DEBT_BIND_PCT.
+WEEKLY_COAST_DEBT_PCT = 8.0
+
+
+def _weekly_debt_pct(wht, now, weekly_used, weekly_reset_unix, weekly_active_hours):
+    """Quanto la settimanale e' avanti (+) o indietro (-) rispetto alla retta delle ore attive, in punti %, o None."""
+    try:
+        if not (isinstance(weekly_used, (int, float)) and isinstance(weekly_reset_unix, (int, float))
+                and isinstance(weekly_active_hours, (int, float))):
+            return None
+        reset_dt = datetime.fromtimestamp(float(weekly_reset_unix), timezone.utc)
+        total = wht.active_hours_in_range(reset_dt - timedelta(days=7), reset_dt)
+        if total <= 0 or not 0 <= weekly_active_hours <= total:
+            return None
+        ideal_used = (total - weekly_active_hours) / total * 100.0
+        return float(weekly_used) - ideal_used
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _path_import(p: Path, name: str):
@@ -658,7 +722,7 @@ def compute_tick(ast, tba, rb, now: datetime,
     effettiva è < MIN_EFFECTIVE_MIN, saltiamo il tick (dati troppo
     rumorosi appena dopo un reset).
     """
-    nominal_since = now - timedelta(minutes=TICK_MIN)
+    nominal_since = now - timedelta(minutes=max(TICK_MIN, RATE_WINDOW_MIN))
     now_ts = now.timestamp()
     nominal_since_ts = nominal_since.timestamp()
 
@@ -690,6 +754,25 @@ def compute_tick(ast, tba, rb, now: datetime,
     u_last = window[-1][1]
     n_samples = len(window)
     delta_usage = u_last - u_first
+    # I salti non attribuibili al team (>= 3 punti fra due campioni a < 10 minuti) e i cali senza reset non entrano
+    # nel ritmo (pace_rate.adjust_series): il livello resta quello del provider, il vel_team no.
+    unattributed_pts = 0.0
+    pr = _pace_rate()
+    if pr is not None:
+        adjusted, adj_info = pr.adjust_series([(w[0], w[1]) for w in window])
+        if len(adjusted) >= 2:
+            unattributed_pts = float(adj_info["unattributed_pts"])
+            delta_usage = adjusted[-1][1] - adjusted[0][1]
+            if adjusted[0][0] > effective_since_ts:       # un calo ha ricominciato la serie da li'
+                effective_since_ts = adjusted[0][0]
+                effective_window_h = (now_ts - effective_since_ts) / 3600.0
+                n_samples = len(adjusted)
+                if effective_window_h * 60.0 < MIN_EFFECTIVE_MIN:
+                    return {
+                        "ok": False, "now": now, "error": "effective_window_too_short",
+                        "effective_min": effective_window_h * 60.0, "min_required": MIN_EFFECTIVE_MIN,
+                        "hint": "the counter went down without a reset: the rate restarts from the new reading",
+                    }
 
     # 2) Token per agente nella finestra EFFETTIVA (a partire da
     #    effective_since_ts, non nominal). Pesi rate-Kimi 1,1,0,0.
@@ -766,6 +849,13 @@ def compute_tick(ast, tba, rb, now: datetime,
                 and ti.get("target_source") not in (None, "band_center")
                 and usage_now >= window_target_pct
             )
+            if _single_weekly(sample):
+                # Piano a finestra unica: `usage_now` e' la settimanale cumulativa, il target della finestra e' una
+                # quota di 5h: confrontarli dava COAST con il 63% di weekly residuo (team reale, 01/11 03:45Z: 37 contro
+                # un target di 36,67 che scende con le ore attive rimaste). COAST solo se la settimanale e' DAVVERO
+                # avanti sulla retta delle ore attive.
+                debt = _weekly_debt_pct(wht, now, weekly_used, weekly_reset_unix, weekly_active_hours)
+                weekly_coast = bool(debt is not None and debt >= WEEKLY_COAST_DEBT_PCT)
             return {
                 "ok": False,
                 "now": now,
@@ -793,6 +883,7 @@ def compute_tick(ast, tba, rb, now: datetime,
             "now": now,
             "error": "non_positive_delta",
             "delta_usage": delta_usage,
+            "unattributed_pts": unattributed_pts,
             "team_kt": team_kt,
             "u_first": u_first,
             "u_last": u_last,
@@ -840,6 +931,13 @@ def compute_tick(ast, tba, rb, now: datetime,
         vel_target = max(0.0, (target_pct - usage_now) / h_to_reset)
     else:
         vel_target = None
+    if _single_weekly(sample):
+        # Piano a finestra unica: l'obiettivo e' la settimanale (atterrare al 100% al reset sulle ore attive rimaste),
+        # non il target di una finestra 5h che finisce fra 5 ore (che dava «3,63 %/h» quando il sostenibile era 2,01).
+        _wrem, _wah = target_info.get("weekly_remaining_pct"), target_info.get("weekly_active_hours")
+        if isinstance(_wrem, (int, float)) and isinstance(_wah, (int, float)) and _wah > 0:
+            vel_target = _wrem / _wah
+            target_pct = 100.0
 
     # 6) Per ogni agente: kT, kT/h, %/h, share, cadenza checkpoint/min.
     #    Filtra rumore < MIN_PCT_H.
@@ -891,8 +989,9 @@ def compute_tick(ast, tba, rb, now: datetime,
     return {
         "ok": True,
         "now": now,
-        "window_min": TICK_MIN,
+        "window_min": int(max(TICK_MIN, RATE_WINDOW_MIN)),
         "effective_window_min": effective_window_h * 60.0,
+        "unattributed_pts": unattributed_pts,
         "n_samples": n_samples,
         "u_first": u_first,
         "u_last": u_last,
@@ -1008,6 +1107,11 @@ def format_message(d: dict) -> str:
         f"for decisions; compare vel_team with vel_target)",
         f"vel_team={d['vel_team']:.2f}%/h",
     ]
+    if d.get("unattributed_pts"):
+        parts.append(
+            f"counter jump of +{d['unattributed_pts']:.0f}pt not attributable to the team "
+            f"(not team consumption: excluded from the rate)"
+        )
 
     if d["vel_target"] is not None:
         # Quando il target è work-hours-aware mostriamo il valore effettivo
