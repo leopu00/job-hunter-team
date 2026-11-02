@@ -237,7 +237,10 @@ def evaluate(sample: dict, now_unix: float,
     else:
         verdict, steps = "IN-PARI", 0
 
-    suggested = step_throttle(current_throttle_s, steps)
+    # In pari (0 gradini) non c'e' niente da consigliare: `step_throttle(…, 0)` aggancia comunque il valore alla scala
+    # (900 -> 780, 0 -> 300), e un consiglio di ACCELERARE a +2,4 punti AVANTI sulla curva e' un consiglio al contrario
+    # (45 casi misurati il 29/10 su un team reale). Il floor dei worker lo applica throttle-config a ogni lettura.
+    suggested = step_throttle(current_throttle_s, steps) if steps else current_throttle_s
     return {
         "ok": True,
         "verdict": verdict,

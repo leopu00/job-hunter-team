@@ -15,7 +15,12 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pace_rate  # noqa: E402  (il ritmo di un contatore intero: UN solo calcolo, vedi pace_rate.py)
 
 # burn_mode (duale di early_lockout_h): in SOTTO-PACE e VICINO al reset, segnala di
 # ACCELERARE per non sprecare il weekly (Kimi non fa carryover). Il gate sulle ore
@@ -106,37 +111,28 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
         return None
     if len(samples) < 2:
         return None
-    samples.sort()
-    newest = samples[-1]
-    # Finestra ADATTIVA: dalla piu' recente all'indietro, il PRIMO campione con
-    # delta intero >= MIN_DELTA_PCT da' la finestra piu' corta affidabile (cattura
-    # anche un burst veloce); se nessuno la raggiunge, usa tutto il lookback (rate
-    # genuinamente basso → massima affidabilita'). Cosi' un delta di 1 punto su 2h
-    # (rumore di quantizzazione) non viene piu' letto come "ALLINEATO".
-    oldest = samples[0]
-    for s in reversed(samples[:-1]):
-        if (newest[1] - s[1]) >= MIN_DELTA_PCT:
-            oldest = s
-            break
+    # Il ritmo e' di pace_rate.py: almeno un'ora, intervallo [lo, hi] sul contatore intero, salti non attribuibili
+    # tolti, un calo senza reset = nuovo punto di partenza (prima: finestra adattiva da 3 punti, `dw < 0` -> None,
+    # cioe' cieco per ore dopo ogni calo).
+    rate = pace_rate.counter_rate(samples, now_ts, max_span_h=lookback_h)
+    if rate is None:
+        return None
+    series = rate["samples"]
+    newest = series[-1]
     # `recent` = primo campione dentro l'ultima RECENT_WINDOW_H (per burst_transient).
     recent = None
-    for t, w in samples:
+    for t, w in series:
         if t >= recent_since:
             recent = (t, w)
             break
-    dt_h = (newest[0] - oldest[0]) / 3600.0
-    dw = newest[1] - oldest[1]
-    if dt_h < 0.1 or dw < 0:        # finestra troppo corta o reset weekly nel mezzo
-        return None
-    vel_weekly = dw / dt_h          # %/h (su finestra adattiva)
+    dt_h = rate["span_h"]
+    vel_weekly = rate["rate"]       # %/h sulla finestra scelta
     sustainable = weekly_remaining_pct / weekly_active_hours
     ratio = (vel_weekly / sustainable) if sustainable > 0 else None
     hte = (weekly_remaining_pct / vel_weekly) if vel_weekly > 0 else None  # ore attive
     early = (weekly_active_hours - hte) if hte is not None else None
-    kind = ("ND" if ratio is None
-            else "SOPRA-PACE" if ratio > 1.2
-            else "SOTTO-PACE" if ratio < 0.8
-            else "ALLINEATO")
+    # SOPRA solo se anche il limite BASSO dell'intervallo supera 1,2x; SOTTO solo se anche l'ALTO sta sotto 0,8x.
+    kind = pace_rate.classify(rate, sustainable)
     # burn_mode: proietta dove atterri al reset al ritmo attuale e quanto weekly
     # sprecheresti. Duale di early_lockout (li' freni perche' bruci troppo; qui
     # acceleri perche' lasceresti budget sul tavolo poco prima del reset).
@@ -194,6 +190,11 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
         "sustainable_nominal_pct_h": (round(sustainable_nominal, 3)
                                       if sustainable_nominal is not None else None),
         "rate_window_h": round(dt_h, 2),
+        # L'intervallo del ritmo (contatore intero) e cosa e' stato tolto dalla misura.
+        "vel_lo_pct_h": round(rate["lo"], 2),
+        "vel_hi_pct_h": round(rate["hi"], 2),
+        "unattributed_pts": rate["unattributed_pts"],
+        "rebaselined": rate["rebaselined"],
     }
     res["binding"] = is_weekly_binding(res)
     return res

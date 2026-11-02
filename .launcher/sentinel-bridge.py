@@ -1963,6 +1963,15 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             base_u = usage if isinstance(usage, (int, float)) else 0
             vel_tgt5 = round(max(0.0, target5 - base_u) / rem_h, 1)
             reset_in5 = _humanize_dur(rem_h)
+    # Piano a finestra unica: la sezione «corta» E' la settimanale. Il suo ritmo e il suo obiettivo sono quelli
+    # dell'asse settimanale (stesso calcolo della sezione WEEK: pace_rate.py), non il target di una finestra 5h
+    # che la confrontava col livello settimanale e dava «+300% above» sopra un «BELOW-PACE 0.07×».
+    wp_ = weekly_pace if isinstance(weekly_pace, dict) else {}
+    if (single_weekly and isinstance(wp_.get("vel_weekly_pct_h"), (int, float))
+            and isinstance(wp_.get("sustainable_pct_h"), (int, float))):
+        target5 = 100.0
+        vel_now5 = wp_.get("vel_weekly_pct_h")
+        vel_tgt5 = wp_.get("sustainable_pct_h")
     fivehh = {
         "usage": usage,
         "proj": round(proj) if isinstance(proj, (int, float)) else proj,
@@ -3246,7 +3255,8 @@ def main():
                     last = None
                     history = []
                 else:
-                    history = load_recent_samples(30)
+                    # 100 righe = 8 h a 5 minuti: il ritmo si misura su ore (pace_rate.py), non sulle ultime 2,5 h.
+                    history = load_recent_samples(100)
             # Verdetto weekly (rate active-hours) PRIMA del compute, così lo
             # status persistito è già composto bi-dimensionale (2026-06-29).
             # weekly_pace legge la storia dal JSONL (≤ tick precedente) + il
@@ -3264,6 +3274,10 @@ def main():
                 _wk_axis = _weekly_pace_via_skill(_pre, _ndt, _nts)
             entry = _compute_metrics_via_skill(parsed, last, history, weekly_axis=_wk_axis)
             entry["source"] = "bridge"
+            # Piano a finestra unica settimanale: `usage` E' la settimanale ricopiata (r.1443). Il campione lo dice, cosi'
+            # chi legge (pacing-bridge, messaggio del tick) non confronta un asse con il target dell'altro.
+            if isinstance(parsed, dict) and parsed.get("usage_is_weekly") is True:
+                entry["usage_is_weekly"] = True
             write_jsonl(entry)
             write_log(entry)
             # Consumo per RUOLO sulle finestre del provider: a ogni lettura,

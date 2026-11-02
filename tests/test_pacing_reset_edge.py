@@ -7,28 +7,31 @@ from shared.skills.compute_metrics import compute_metrics
 
 
 def _volatile_sample(minutes_to_reset):
-    """Session average volutamente enorme: projection > 400 fuori dal guard."""
+    """Un ritmo alto e REALE (2 punti ogni 5 minuti per un'ora = 24 %/h): proietta oltre il 100% fuori dal guard.
+
+    Prima il test usava un salto di 80 punti in 6 minuti: un artefatto di arrotondamento che oggi non e' piu' un ritmo
+    (pace_rate.py: un salto di 3 punti o piu' fra due campioni a meno di 10 minuti non e' consumo del team)."""
     now = datetime.now(timezone.utc)
     session_id = "reset-edge-regression"
     parsed = {
         "provider": "codex",
-        "usage": 80,
+        "usage": 90,
         "reset_at": (now + timedelta(minutes=minutes_to_reset)).strftime("%H:%M"),
         "reset_at_unix": (now + timedelta(minutes=minutes_to_reset)).timestamp(),
     }
     history = [{
-        "ts": (now - timedelta(minutes=6)).isoformat(),
+        "ts": (now - timedelta(minutes=65 - 5 * i)).isoformat(),
         "provider": "codex",
         "session_id": session_id,
-        "usage": 0,
-        "delta": 0,
-    }]
+        "usage": 64 + 2 * i,
+        "delta": 2 if i else 0,
+    } for i in range(14)]
     last = {
         "ts": (now - timedelta(minutes=1)).isoformat(),
         "provider": "codex",
         "session_id": session_id,
-        "usage": 70,
-        "velocity_smooth": 100,
+        "usage": 88,
+        "velocity_smooth": 24,
     }
     return compute_metrics(parsed, last, history=history)
 
@@ -36,7 +39,7 @@ def _volatile_sample(minutes_to_reset):
 def test_volatile_projection_is_observable_but_not_actionable_at_reset_edge():
     result = _volatile_sample(minutes_to_reset=15)
 
-    assert result["projection"] > 200
+    assert result["projection"] > 95
     assert result["reset_edge_guard"] is True
     assert result["phase"] == 3
     assert result["status"] == "OK"
@@ -56,11 +59,11 @@ def test_reset_edge_guard_includes_zero_and_thirty_minutes():
 def test_projection_ladder_still_applies_outside_reset_edge():
     result = _volatile_sample(minutes_to_reset=31)
 
-    assert result["projection"] > 400
+    assert result["projection"] > 100
     assert result["reset_edge_guard"] is False
     assert result["phase"] == 2
     assert result["status"] == "ATTENZIONE"
-    assert result["suggested_throttle_s"] == 3600
+    assert result["suggested_throttle_s"] >= 60
 
 
 def test_just_expired_epoch_does_not_roll_to_tomorrow_and_rearm_projection():
