@@ -168,6 +168,12 @@ def test_a_scout_at_the_cap_waits_the_hold_and_the_others_wait_what_they_did(tmp
     res = eng.register("scout-1", reason="post-position", now=now)
     assert res["applied_sec"] == eng.FIRST_PASS_HOLD_SEC == 780 and res["until"] == now + 780
     assert res["first_pass_cap"] == {"cap": 1, "found": 1, "reached": True}
+    # the Analista's queue is empty here (the position it found is analysed): only a Scout is held, the others wait
+    # what they did. With the position still `new` the queue rule would shorten the Analista's pause to 60 s instead.
+    conn = sqlite3.connect(str(tmp_path / "jobs.db"))
+    conn.execute("UPDATE positions SET status = 'scored'")
+    conn.commit()
+    conn.close()
     assert eng.register("analista-1", now=now)["applied_sec"] == 300, "only a Scout is held"
 
 

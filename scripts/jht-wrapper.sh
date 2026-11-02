@@ -3970,6 +3970,11 @@ handle_host_download() {
     err "Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e' stato scaricato niente."
     return 1
   fi
+  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e Linux e' dalla 0.4.0.
+  if [ "$platform" != windows ] && [ "$major" -eq 0 ] && [ "$minor" -lt 4 ]; then
+    err "Questa release (v$version) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente."
+    return 1
+  fi
   if [ "$platform" = macos ] && download_host_is_intel_mac; then
     err "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente."
     return 1

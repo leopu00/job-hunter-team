@@ -41,6 +41,12 @@ function releaseHasNoWindows(version) {
   return major > 0 || minor >= 4;
 }
 
+// The releases before 0.4 have other files (tar.gz, setup.exe, zip): the macOS and Linux apps start with 0.4.0.
+function releaseHasNoMacLinuxApp(version) {
+  const [major, minor] = String(version).split('.').map((part) => Number.parseInt(part, 10));
+  return major === 0 && minor < 4;
+}
+
 // The Mac build of 0.4 is Apple silicon only (the file name still says
 // "universal"; it is renamed in 0.4.1). On an Intel Mac it would download and
 // not open, so the download is refused before anything is fetched. Node run
@@ -172,6 +178,11 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
     throw new Error(
       'Windows is not part of 0.4.0: there is no Windows installer in this release (coming soon). '
       + 'Nothing was downloaded.',
+    );
+  }
+  if (platform !== 'windows' && releaseHasNoMacLinuxApp(version)) {
+    throw new Error(
+      `This release (v${version}) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded.`,
     );
   }
   if (platform === 'macos' && hostIsIntelMac()) {
