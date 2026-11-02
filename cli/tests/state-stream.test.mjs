@@ -6,14 +6,14 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  CACHE_MAX_BYTES, CACHE_MAX_ENTRIES, CHAT_AGENTS, EXIT_PROTOCOL, MAX_LINE, PROFILE_SCRIPT, READERS, containerId, createStateStream, depthOf, opsOf, readerEnv, runReader,
+  CACHE_MAX_BYTES, CACHE_MAX_ENTRIES, CHAT_AGENTS, EXIT_PROTOCOL, MAX_LINE, PROFILE_SCRIPT, READERS, TEAM_START_SCRIPT, containerId, createStateStream, depthOf, opsOf, readerEnv, runReader,
 } from '../src/lib/state-stream.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SOURCE = readFileSync(join(ROOT, 'cli/src/lib/state-stream.js'), 'utf8');
 
 // ── the harness: a stream with a fake reader and a fake clock ────────────────────────────────
-function harness({ reply = { exit: 0, out: '{"ok":true}\n' }, profileSha = () => 'a'.repeat(64), stat, cid = () => 'b'.repeat(64) } = {}) {
+function harness({ reply = { exit: 0, out: '{"ok":true}\n' }, profileSha = () => 'a'.repeat(64), teamStartSha = () => 'c'.repeat(64), stat, cid = () => 'b'.repeat(64) } = {}) {
   const lines = [];
   const ended = [];
   const calls = [];
@@ -34,6 +34,7 @@ function harness({ reply = { exit: 0, out: '{"ok":true}\n' }, profileSha = () =>
     stat,
     cid,
     profileSha,
+    teamStartSha,
     home: '/jht_home',
     setTimer: (fn) => { release = fn; return 1; },
     clearTimer: () => {},
@@ -56,18 +57,28 @@ test('the first line is the hello: protocol, ops, the container id, and the scri
   assert.equal(hello.t, 'hello');
   assert.equal(hello.proto, 1);
   assert.equal(hello.cid, 'b'.repeat(64));
-  assert.deepEqual(hello.sha256, { 'profile.progress': 'a'.repeat(64) });
-  assert.deepEqual(hello.ops, ['chat.read', 'agents.list', 'agents.team', 'agents.history', 'agents.exclusions', 'team.settings', 'agents.screen', 'profile.progress', 'watch', 'invalidate', 'ping', 'bye']);
+  assert.deepEqual(hello.sha256, { 'profile.progress': 'a'.repeat(64), 'team.start': 'c'.repeat(64) });
+  assert.deepEqual(hello.ops, ['chat.read', 'agents.list', 'agents.team', 'agents.history', 'agents.exclusions', 'team.settings', 'agents.screen', 'profile.progress', 'team.start', 'watch', 'invalidate', 'ping', 'bye']);
 });
 
 test('an image without the profile script does not declare that op, and asking for it is an unknown op', async () => {
   const h = harness({ profileSha: () => null });
   assert.ok(!h.lines[0].ops.includes('profile.progress'));
-  assert.deepEqual(h.lines[0].sha256, {});
+  assert.deepEqual(h.lines[0].sha256, { 'team.start': 'c'.repeat(64) });
   h.send({ id: 1, op: 'profile.progress' });
   assert.deepEqual(await h.next(), { t: 'res', id: 1, ok: false, err: 'op_unknown' });
   assert.equal(h.calls.length, 0);
   assert.deepEqual(opsOf(false).includes('profile.progress'), false);
+});
+
+test('an image without the team-start script does not declare that op and the other scripts still work', async () => {
+  const h = harness({ teamStartSha: () => null });
+  assert.ok(!h.lines[0].ops.includes('team.start') && h.lines[0].ops.includes('profile.progress'));
+  assert.deepEqual(h.lines[0].sha256, { 'profile.progress': 'a'.repeat(64) });
+  h.send({ id: 1, op: 'team.start' });
+  assert.deepEqual(await h.next(), { t: 'res', id: 1, ok: false, err: 'op_unknown' });
+  assert.equal(h.calls.length, 0);
+  assert.deepEqual(opsOf(true, false).filter((op) => op === 'team.start' || op === 'profile.progress'), ['profile.progress']);
 });
 
 test('the container id: the engine file first, then a 12-hex hostname, else nothing', () => {
@@ -91,6 +102,9 @@ test('each read runs one absolute argv from the table and returns the reader std
   h.send({ id: 7, op: 'agents.exclusions' });
   h.send({ id: 8, op: 'team.settings' });
   await h.next();
+  // (eight reads at a time is the most the stream runs: the ninth waits for the answers)
+  h.send({ id: 9, op: 'team.start' });
+  await h.next();
   const argvs = h.calls.map((call) => call.argv);
   assert.deepEqual(argvs[0], ['/usr/bin/python3', '-I', '/app/shared/skills/agent_chat.py', 'read', 'capitano', '123']);
   assert.deepEqual(argvs[1], ['/usr/bin/python3', '-I', '/app/shared/skills/agent_control.py', 'list']);
@@ -103,7 +117,9 @@ test('each read runs one absolute argv from the table and returns the reader std
   assert.ok(argvs.every((argv) => argv[0].startsWith('/')));
   const answers = h.lines.filter((line) => line.t === 'res');
   assert.deepEqual(argvs[7], ['/usr/local/bin/node', '/app/cli/bin/jht.js', 'agent-control', 'settings', 'get']);
-  assert.equal(answers.length, 8);
+  assert.deepEqual(argvs[8], ['/usr/bin/python3', '-I', TEAM_START_SCRIPT]);
+  assert.equal(h.calls[8].options.stdin, '{"op":"read"}\n');
+  assert.equal(answers.length, 9);
   assert.deepEqual(answers[0], { t: 'res', id: 1, ok: true, exit: 4, out: '{"error":"x"}\n', age_ms: 0, cached: false });
 });
 
@@ -522,6 +538,9 @@ test('source: the chat agents are the app list, and the profile script is the ap
   const progress = readFileSync(join(ROOT, 'desktop/src-tauri/src/profile_progress.rs'), 'utf8');
   const constant = /const PROFILE_PROGRESS_PY: &str = r#"([\s\S]*?)"#;/.exec(progress)[1];
   assert.equal(readFileSync(join(ROOT, 'shared/skills/profile_progress.py'), 'utf8'), constant);
+  const start = readFileSync(join(ROOT, 'desktop/src-tauri/src/team_start.rs'), 'utf8');
+  const startConstant = /const TEAM_START_PY: &str = r#"([\s\S]*?)"#;/.exec(start)[1];
+  assert.equal(readFileSync(join(ROOT, 'shared/skills/team_start.py'), 'utf8'), startConstant);
 });
 
 // ── the real command, over a pipe ─────────────────────────────────────────────────────────────

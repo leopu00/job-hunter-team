@@ -2512,11 +2512,20 @@ fn run_python(
     request: &Value,
     timeout: Duration,
 ) -> Result<ProcessResult, DirectChatError> {
-    // The profile bar's read goes over the state stream when it is open: the same script, as a file of the image.
+    // The profile bar's read and the team's first-start read go over the state stream when it is open: the same script, as a file of the image.
     if let (ValidatedHost::Local, Some(app), Some(wrapper), Some(runtime)) = (&connection.validated, connection.app.as_ref(), connection.local_wrapper.as_deref(), connection.local_runtime.as_deref()) {
-        if script == crate::profile_progress::PROFILE_PROGRESS_PY && request == &json!({"op": "read"}) {
+        let hot = if request != &json!({"op": "read"}) {
+            None
+        } else if script == crate::profile_progress::PROFILE_PROGRESS_PY {
+            Some(crate::state_stream::StreamRead::ProfileProgress)
+        } else if script == crate::team_start::TEAM_START_PY {
+            Some(crate::state_stream::StreamRead::TeamStart)
+        } else {
+            None
+        };
+        if let Some(hot) = hot {
             let context = crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime };
-            if let Some(done) = crate::state_stream::read_local(&context, &crate::state_stream::StreamRead::ProfileProgress) {
+            if let Some(done) = crate::state_stream::read_local(&context, &hot) {
                 return Ok(done);
             }
         }

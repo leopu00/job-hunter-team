@@ -87,6 +87,7 @@ pub(crate) enum StreamRead<'a> {
     AgentsHistory,
     AgentsExclusions,
     TeamSettings,
+    TeamStart,
     AgentsScreen { name: &'a str },
     ProfileProgress,
 }
@@ -112,6 +113,7 @@ impl StreamRead<'_> {
             Self::AgentsHistory => "agents.history",
             Self::AgentsExclusions => "agents.exclusions",
             Self::TeamSettings => "team.settings",
+            Self::TeamStart => "team.start",
             Self::AgentsScreen { .. } => "agents.screen",
             Self::ProfileProgress => "profile.progress",
         }
@@ -138,7 +140,7 @@ impl StreamRead<'_> {
                 }
                 request.insert("args".into(), json!({ "name": name }));
             }
-            Self::AgentsList | Self::AgentsTeam | Self::AgentsHistory | Self::AgentsExclusions | Self::TeamSettings | Self::ProfileProgress => {}
+            Self::AgentsList | Self::AgentsTeam | Self::AgentsHistory | Self::AgentsExclusions | Self::TeamSettings | Self::TeamStart | Self::ProfileProgress => {}
         }
         serde_json::to_string(&Value::Object(request)).ok()
     }
@@ -151,7 +153,8 @@ struct Hello {
     proto: u64,
     ops: Vec<String>,
     cid: Option<String>,
-    profile_sha: Option<String>,
+    /// The digest of each script of the image a read runs, by operation.
+    script_sha: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -230,13 +233,12 @@ fn parse_frame(line: &[u8]) -> Result<Frame, ()> {
                 Some(Value::Null) | None => None,
                 _ => return Err(()),
             };
-            let profile_sha = object
+            let script_sha = object
                 .get("sha256")
                 .and_then(Value::as_object)
-                .and_then(|map| map.get("profile.progress"))
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            Ok(Frame::Hello(Hello { proto, ops, cid, profile_sha }))
+                .map(|map| map.iter().filter_map(|(op, sha)| Some((op.clone(), sha.as_str()?.to_owned()))).collect())
+                .unwrap_or_default();
+            Ok(Frame::Hello(Hello { proto, ops, cid, script_sha }))
         }
         "res" => {
             if !only_keys(object, &["t", "id", "ok", "exit", "out", "age_ms", "cached", "err"]) {
@@ -560,21 +562,32 @@ fn hello_accepted(hello: &Hello, container: &str) -> Result<Vec<String>, &'stati
     if !lower_hex(cid, 12, 64) || !container.starts_with(cid) {
         return Err("state_stream_cid_mismatch");
     }
-    let profile_ok = hello.profile_sha.as_deref() == Some(profile_script_sha().as_str());
+    // a read that runs a script of the image is offered only with the digest of the script this app has
+    let script_ok = |op: &str| script_sha(op).map_or(true, |own| hello.script_sha.get(op) == Some(&own));
     Ok(hello
         .ops
         .iter()
-        .filter(|op| op.as_str() != "profile.progress" || profile_ok)
+        .filter(|op| script_ok(op.as_str()))
         .filter(|op| READ_OPS.contains(&op.as_str()) || matches!(op.as_str(), "watch" | "invalidate" | "ping" | "bye"))
         .cloned()
         .collect())
 }
 
 /// The reads this side knows: every `StreamRead::op`. A hello that lists any other operation is ignored for it.
-const READ_OPS: [&str; 8] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.exclusions", "team.settings", "agents.screen", "profile.progress"];
+const READ_OPS: [&str; 9] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.exclusions", "team.settings", "agents.screen", "profile.progress", "team.start"];
+
+/// The digest of the script an operation runs from the image, when it runs one; the script is the app's own constant.
+fn script_sha(op: &str) -> Option<String> {
+    let script = match op {
+        "profile.progress" => crate::profile_progress::PROFILE_PROGRESS_PY,
+        "team.start" => crate::team_start::TEAM_START_PY,
+        _ => return None,
+    };
+    Some(format!("{:x}", Sha256::digest(script.as_bytes())))
+}
 
 fn profile_script_sha() -> String {
-    format!("{:x}", Sha256::digest(crate::profile_progress::PROFILE_PROGRESS_PY.as_bytes()))
+    script_sha("profile.progress").unwrap()
 }
 
 // ── the state: one stream at most, opened in the background, closed with the account ───────────────
@@ -914,7 +927,7 @@ mod tests {
     fn the_shapes_the_container_has_are_read() {
         assert_eq!(
             parse_frame(&line(&json!({"t":"hello","proto":1,"ops":["chat.read","ping"],"cid":"3c33ab6a0d08","sha256":{"profile.progress":"ab"}}))),
-            Ok(Frame::Hello(Hello { proto: 1, ops: vec!["chat.read".into(), "ping".into()], cid: Some("3c33ab6a0d08".into()), profile_sha: Some("ab".into()) }))
+            Ok(Frame::Hello(Hello { proto: 1, ops: vec!["chat.read".into(), "ping".into()], cid: Some("3c33ab6a0d08".into()), script_sha: [("profile.progress".to_owned(), "ab".to_owned())].into() }))
         );
         assert_eq!(
             parse_frame(&line(&json!({"t":"res","id":7,"ok":true,"exit":3,"out":"x\n","age_ms":4,"cached":true}))),
@@ -1006,6 +1019,7 @@ mod tests {
         assert_eq!(value(StreamRead::AgentsHistory), json!({"id":5,"op":"agents.history"}));
         assert_eq!(value(StreamRead::AgentsExclusions), json!({"id":5,"op":"agents.exclusions"}));
         assert_eq!(value(StreamRead::TeamSettings), json!({"id":5,"op":"team.settings"}));
+        assert_eq!(value(StreamRead::TeamStart), json!({"id":5,"op":"team.start"}));
         for agent in ["-x", "--help", "a b", "capitano\n", "Capitano", "", "root", &"x".repeat(257)] {
             assert!(StreamRead::ChatRead { agent, cursor: None }.request(1).is_none(), "{agent:?}");
         }
@@ -1068,7 +1082,7 @@ mod tests {
             proto,
             ops: ["chat.read", "agents.list", "profile.progress", "watch", "exec", "shell", "invalidate"].map(String::from).to_vec(),
             cid: cid.map(str::to_owned),
-            profile_sha,
+            script_sha: profile_sha.map(|sha| [("profile.progress".to_owned(), sha)].into()).unwrap_or_default(),
         }
     }
 
@@ -1111,9 +1125,11 @@ mod tests {
             StreamRead::TeamSettings.op(),
             StreamRead::AgentsScreen { name: "CAPITANO" }.op(),
             StreamRead::ProfileProgress.op(),
+            StreamRead::TeamStart.op(),
         ];
         assert_eq!(asked, READ_OPS);
         let mut said = hello(1, Some("3c33ab6a0d08"), Some(profile_script_sha()));
+        said.script_sha.insert("team.start".to_owned(), script_sha("team.start").unwrap());
         said.ops = asked.iter().map(|op| (*op).to_owned()).collect();
         let accepted = hello_accepted(&said, &id).unwrap();
         for op in asked {
@@ -1130,9 +1146,27 @@ mod tests {
     }
 
     #[test]
+    fn a_read_that_runs_a_script_of_the_image_is_offered_only_with_the_digest_of_the_apps_own() {
+        let id = format!("3c33ab6a0d08{}", "0".repeat(52));
+        let mut said = hello(1, Some("3c33ab6a0d08"), Some(profile_script_sha()));
+        said.ops.push("team.start".to_owned());
+        // no digest for it, or the digest of another script (the profile's): the read is left out; the others stay
+        let accepted = hello_accepted(&said, &id).unwrap();
+        assert!(!accepted.contains(&"team.start".to_owned()) && accepted.contains(&"profile.progress".to_owned()));
+        said.script_sha.insert("team.start".to_owned(), profile_script_sha());
+        assert!(!hello_accepted(&said, &id).unwrap().contains(&"team.start".to_owned()));
+        said.script_sha.insert("team.start".to_owned(), script_sha("team.start").unwrap());
+        assert!(hello_accepted(&said, &id).unwrap().contains(&"team.start".to_owned()));
+        assert_ne!(script_sha("team.start"), script_sha("profile.progress"));
+        assert_eq!(script_sha("chat.read"), None);
+    }
+
+    #[test]
     fn the_script_the_image_carries_is_the_one_this_app_has_byte_for_byte() {
         let file = include_str!("../../../shared/skills/profile_progress.py");
         assert_eq!(file, crate::profile_progress::PROFILE_PROGRESS_PY);
+        let file = include_str!("../../../shared/skills/team_start.py");
+        assert_eq!(file, crate::team_start::TEAM_START_PY);
     }
 
     // ── a stream over a real pipe: a stand-in for the container ─────────────────────────────────────
@@ -1326,7 +1360,7 @@ done"#
         let ops = hello_accepted(&hello, &format!("{}{}", hello.cid.clone().unwrap(), "0".repeat(64 - hello.cid.as_ref().unwrap().len()))).unwrap();
         println!("accepted: {ops:?}");
         session.ops.set(ops).unwrap();
-        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
+        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::TeamStart, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
             for round in 0..2 {
                 let at = Instant::now();
                 let done = session.read(&read).expect("answered");
@@ -1381,10 +1415,13 @@ done"#
         let code = code.as_str();
         // the reads of the closed set, and nothing else, have an operation
         let ops = code.split("fn op(&self)").nth(1).unwrap().split("\n    }\n").next().unwrap();
-        assert_eq!(ops.matches('"').count() / 2, 8);
-        for forbidden in ["app_exit", "ChatOperation::Send", "ChatOperation::Answer", "ChatOperation::Enter", "\"start\"", "\"stop\"", "\"restart\"", "\"pause\"", "\"resume\"", "\"send\"", "\"answer\"", "write_access", "team_start"] {
+        assert_eq!(ops.matches('"').count() / 2, 9);
+        for forbidden in ["app_exit", "ChatOperation::Send", "ChatOperation::Answer", "ChatOperation::Enter", "\"start\"", "\"stop\"", "\"restart\"", "\"pause\"", "\"resume\"", "\"send\"", "\"answer\"", "write_access", "team_control", "start_command"] {
             assert!(!code.contains(forbidden), "{forbidden}");
         }
+        // the first-start read is a script the app already has, and the stream only takes its digest
+        assert_eq!(code.matches("crate::team_start::").count(), 1);
+        assert!(code.contains("crate::team_start::TEAM_START_PY"));
         // the callers: the chat's Read only, the panel's three reads only, the profile read only
         let chat = include_str!("direct_chat.rs");
         let chat_arm = chat.split("// The hot read goes over the state stream").nth(1).unwrap().split("let writes =").next().unwrap();
