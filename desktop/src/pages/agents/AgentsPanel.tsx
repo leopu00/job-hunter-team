@@ -552,9 +552,16 @@ export default function AgentsPanel({ search }: PageProps) {
   useRefresh(() => void read());
   // One read at a time, and none while an action or a start is on its way: their own read follows them.
   const occupied = useRef(false);
-  occupied.current = busy || acting || starting;
+  const occupiedNow = busy || acting || starting;
+  occupied.current = occupiedNow;
   // the periodic read in flight counts too: a window seen again meanwhile does not start a second
   const quietReading = useRef(false);
+  // The channel's hints outlive the polling below, which is set up again whenever the page's pace or state changes
+  // (the first list from this computer turns 60 s into 20 s): the wait of a burst and a hint that came during a read
+  // are the page's, not the effect's, or a rebuild in the middle of a burst would drop the last read.
+  const hintedMeanwhile = useRef(false);
+  const readAtHint = useRef<(() => void) | null>(null);
+  useEffect(() => onStreamHint("agents", () => readAtHint.current?.(), LIST_HINT_GAP_MS), []);
   const noRetry = list !== null && !list.ok && REOPEN_NO_RETRY.has(list.code);
   const everyMs = list?.ok && list.value.where !== "vps" ? LIST_REFRESH_LOCAL_MS : LIST_REFRESH_VPS_MS;
   useEffect(() => {
@@ -562,9 +569,7 @@ export default function AgentsPanel({ search }: PageProps) {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
-    // A hint of the channel came while a periodic read was on its way: that read may have started before the change, so one more follows it.
-    let hintedMeanwhile = false;
-    const again = async () => {
+    const again = async (): Promise<void> => {
       if (!live) return;
       clearTimeout(timer);
       if (document.visibilityState === "visible" && !occupied.current && !quietReading.current) {
@@ -575,9 +580,12 @@ export default function AgentsPanel({ search }: PageProps) {
         } finally {
           quietReading.current = false;
         }
-        if (hintedMeanwhile && live) {
-          hintedMeanwhile = false;
-          return again();
+        // A hint came while that read was on its way: it may have started before the change, so one more follows it.
+        if (hintedMeanwhile.current) {
+          hintedMeanwhile.current = false;
+          if (live) return again();
+          readAtHint.current?.();
+          return;
         }
       }
       // the count is the ref's, not the state's: the next read is not set once the third failure is in
@@ -589,16 +597,14 @@ export default function AgentsPanel({ search }: PageProps) {
     };
     timer = setTimeout(() => void again(), streamPace(everyMs, LIST_REFRESH_STREAMED_MS));
     document.addEventListener("visibilitychange", seen);
-    // The agents changed, said the channel: read now (an action's own read, or a read in flight, answers for it).
-    const stopHint = onStreamHint(
-      "agents",
-      () => {
-        if (document.visibilityState !== "visible" || occupied.current) return;
-        if (quietReading.current) hintedMeanwhile = true;
-        else void again();
-      },
-      LIST_HINT_GAP_MS,
-    );
+    // The agents changed, said the channel: read now (an action's own read answers for it).
+    readAtHint.current = () => {
+      if (document.visibilityState !== "visible") return;
+      // A read is on its way (the periodic one, or the person's or an action's own): it may have started before the
+      // change, so the hint waits for it to end instead of being dropped.
+      if (occupied.current || quietReading.current) hintedMeanwhile.current = true;
+      else void again();
+    };
     // The channel went up or down: the wait that is running was set at the other pace.
     const stopState = onStreamState(() => {
       if (live && !quietReading.current && failedInARow.current < LIST_REFRESH_FAILURES) {
@@ -609,11 +615,19 @@ export default function AgentsPanel({ search }: PageProps) {
     return () => {
       live = false;
       clearTimeout(timer);
-      stopHint();
+      readAtHint.current = null;
       stopState();
       document.removeEventListener("visibilitychange", seen);
     };
   }, [read, everyMs, noRetry, givenUp]);
+  // The read that kept the page occupied has ended: a hint that waited for it is read now. Declared after the polling
+  // above so that, when both change in one render, the polling is set up again before this runs.
+  useEffect(() => {
+    if (!occupiedNow && hintedMeanwhile.current && !quietReading.current && readAtHint.current) {
+      hintedMeanwhile.current = false;
+      readAtHint.current();
+    }
+  }, [occupiedNow]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const current =

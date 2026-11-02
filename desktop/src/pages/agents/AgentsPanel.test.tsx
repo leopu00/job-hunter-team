@@ -1397,6 +1397,26 @@ describe("«Agenti»: the list reads again by itself", () => {
       expect(lists()).toBe(3);
     });
 
+    it("a burst is not lost when the page changes its own pace in the middle of it (the polling is set up again)", async () => {
+      where = "vps";
+      show();
+      await screen.findByTestId("panel-summary");
+      status("up");
+      hint();
+      await until(() => lists() === 2);
+      // the rest of the burst waits for the gap...
+      hint();
+      // ...and meanwhile a read comes back from this computer: the pace of the page changes (60 s to 20 s) and its polling is set up again
+      where = "local";
+      fireEvent.click(screen.getByText("Aggiorna"));
+      await until(() => lists() === 3);
+      await advance(3_500);
+      await until(() => lists() === 4);
+      expect(lists()).toBe(4);
+      await advance(10_000);
+      expect(lists()).toBe(4);
+    });
+
     it("a hint of another topic reads nothing, and a hidden window reads nothing", async () => {
       where = "local";
       show();
