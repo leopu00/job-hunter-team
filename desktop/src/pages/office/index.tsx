@@ -103,6 +103,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const showStatuses = (next: AgentStatuses | null) => {
     statusesRef.current = next;
     sceneRef.current?.setAgentStatuses?.(next);
+    engineRef.current?.setStatuses?.(next);
     setStatuses(next);
   };
   const [snapshot, setSnapshot] = useState<OfficeSnapshot | null>(null);
@@ -143,6 +144,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     if (!el) return;
     const engine = parts.createEngine ? parts.createEngine(assets.layout, { characters: assets.manifest.characters }) : emptyEngine();
     engineRef.current = engine;
+    engine.setStatuses?.(statusesRef.current);
     let scene: OfficeScene | null = null;
     let gone = false;
     const observer = new ResizeObserver(() => scene?.resize(el.clientWidth, el.clientHeight));
