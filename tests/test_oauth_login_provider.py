@@ -74,3 +74,32 @@ def test_the_powershell_wrapper_has_the_same_cases():
     empty = re.search(r"^\s*'' \{ throw \"([^\"]+)\" \}", block, re.M)
     assert empty is not None and NO_PROVIDER in empty.group(1) and "jht providers use openai" in empty.group(1)
     assert block.index("'' { throw") < block.index("default {")
+
+
+# «Cancel» of the sign-in: killing the window's end of `docker exec` does not end the login in the container when there
+# is no terminal (Linux with a pipe), so the app asks the wrapper to end it.
+def test_stop_ends_the_device_login_in_the_container_and_starts_no_login(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    env["JHT_TEST_ACTIVE_PROVIDER"] = "openai"
+    done = subprocess.run(
+        [str(wrapper), "oauth-login", "--stop"], env=env, text=True, capture_output=True, timeout=20, check=False
+    )
+    calls = log.read_text(encoding="utf-8").splitlines()
+    assert done.returncode == 0, done.stderr
+    stops = [line for line in calls if "docker exec" in line and "--device-auth" in line and "process.kill" in line]
+    assert len(stops) == 1, calls
+    # only the device login of Codex is looked for, by its command line: the team's agents are never named
+    assert "'login'" in stops[0] and "'--device-auth'" in stops[0] and "SIGTERM" in stops[0]
+    assert not any(re.search(r"codex login --device-auth$", line) for line in calls), "no login is started by --stop"
+    assert not any(" claude " in line or "kimi --yolo" in line for line in calls)
+
+
+def test_the_powershell_wrapper_has_the_stop_too():
+    text = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
+    start = text.index("{ $_ -in @('oauth-login', 'claude-login') }")
+    block = text[start : text.index("'setup' {", start)]
+    stop = block.index("-eq '--stop'")
+    assert "process.kill" in block[stop:] and "--device-auth" in block[stop:]
+    # before the provider is read: a stop never starts a login
+    assert stop < block.index("$Provider =")

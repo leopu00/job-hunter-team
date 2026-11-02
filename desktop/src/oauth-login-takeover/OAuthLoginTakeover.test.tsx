@@ -1,7 +1,19 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { formatOAuthLoginElapsed, OAuthLoginTakeover, type OAuthLoginTakeoverProps } from "./OAuthLoginTakeover";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { locales } from "@/i18n/config";
+import {
+  DEVICE_CODE_LIFETIME_MS,
+  formatOAuthLoginElapsed,
+  NO_REQUEST_HINT_AFTER_MS,
+  OAuthLoginTakeover,
+  type OAuthLoginTakeoverProps,
+} from "./OAuthLoginTakeover";
+import { TAKEOVER_TEXT } from "./oauth-login-takeover.i18n";
+
+// the wording of the screen is the app's language: these cases are in Italian
+beforeEach(() => localStorage.setItem("jht-lang", "it"));
+afterEach(() => localStorage.removeItem("jht-lang"));
 
 function props(overrides: Partial<OAuthLoginTakeoverProps> = {}): OAuthLoginTakeoverProps {
   return {
@@ -180,5 +192,90 @@ describe("OAuth login formatting helpers", () => {
     expect(formatOAuthLoginElapsed(-1)).toBe("00:00");
     expect(formatOAuthLoginElapsed(Number.NaN)).toBe("00:00");
     expect(formatOAuthLoginElapsed(3_723_000)).toBe("01:02:03");
+  });
+});
+
+const DEVICE: OAuthLoginTakeoverProps["actions"] = [
+  { kind: "url", instruction: "Apri l’indirizzo e inserisci il codice temporaneo.", safeUrl: "https://auth.openai.com/codex/device" },
+  { kind: "code", instruction: "Apri l’indirizzo e inserisci il codice temporaneo.", userCode: "VXTP-0BB30" },
+];
+
+describe("OAuthLoginTakeover, the device login of Codex", () => {
+  it("shows the address and the code in the clear, with copy and open-in-browser, and the way out", async () => {
+    const user = userEvent.setup();
+    const onOpenUrl = vi.fn().mockResolvedValue(true);
+    render(<OAuthLoginTakeover {...props({ actions: DEVICE, onOpenUrl })} />);
+    expect(screen.getByText("https://auth.openai.com/codex/device")).toBeInTheDocument();
+    expect(screen.getByText("VXTP-0BB30")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Apri nel browser" }));
+    expect(onOpenUrl).toHaveBeenCalledWith("https://auth.openai.com/codex/device");
+    expect(screen.getByRole("button", { name: "Annulla" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Riavvia accesso" })).toBeEnabled();
+  });
+
+  it("says so when the browser cannot be opened, and keeps the address to copy", async () => {
+    const user = userEvent.setup();
+    render(<OAuthLoginTakeover {...props({ actions: DEVICE, onOpenUrl: vi.fn().mockResolvedValue(false) })} />);
+    await user.click(screen.getByRole("button", { name: "Apri nel browser" }));
+    expect(screen.getByText(TAKEOVER_TEXT.it.openFailed)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copia URL" })).toBeEnabled();
+  });
+
+  it("counts down the 15 minutes of the code from when it appeared, and says when it has expired", () => {
+    const view = render(<OAuthLoginTakeover {...props({ actions: DEVICE, elapsedMs: 40_000 })} />);
+    expect(screen.getByTestId("oauth-code-expiry")).toHaveTextContent("Il codice scade tra 15:00.");
+    view.rerender(<OAuthLoginTakeover {...props({ actions: DEVICE, elapsedMs: 40_000 + 5 * 60_000 })} />);
+    expect(screen.getByTestId("oauth-code-expiry")).toHaveTextContent("Il codice scade tra 10:00.");
+    view.rerender(<OAuthLoginTakeover {...props({ actions: DEVICE, elapsedMs: 40_000 + DEVICE_CODE_LIFETIME_MS })} />);
+    expect(screen.queryByTestId("oauth-code-expiry")).not.toBeInTheDocument();
+    expect(screen.getByTestId("oauth-login-error")).toHaveTextContent(TAKEOVER_TEXT.it.expired);
+    expect(screen.getByRole("button", { name: "Copia codice" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apri nel browser" })).toBeDisabled();
+    // an expired code is not the end: «Restart» is there, and so is «Cancel»
+    expect(screen.getByRole("button", { name: "Riavvia accesso" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Annulla" })).toBeEnabled();
+  });
+
+  it("a new code starts its own 15 minutes", () => {
+    const view = render(<OAuthLoginTakeover {...props({ actions: DEVICE, elapsedMs: 0 })} />);
+    view.rerender(<OAuthLoginTakeover {...props({ actions: DEVICE, elapsedMs: DEVICE_CODE_LIFETIME_MS + 1_000 })} />);
+    expect(screen.getByTestId("oauth-login-error")).toBeInTheDocument();
+    const next: OAuthLoginTakeoverProps["actions"] = [DEVICE[0], { ...DEVICE[1], userCode: "ABCD-12345" } as (typeof DEVICE)[1]];
+    view.rerender(<OAuthLoginTakeover {...props({ actions: next, elapsedMs: DEVICE_CODE_LIFETIME_MS + 2_000 })} />);
+    expect(screen.queryByTestId("oauth-login-error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("oauth-code-expiry")).toHaveTextContent("15:00");
+  });
+
+  it("with no request from the provider it shows the wait, then says what to do, and always offers Cancel", () => {
+    const view = render(<OAuthLoginTakeover {...props({ actions: [], connectionState: "connecting", elapsedMs: 3_000 })} />);
+    expect(screen.getByText(TAKEOVER_TEXT.it.waiting)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Annulla" })).toBeEnabled();
+    view.rerender(<OAuthLoginTakeover {...props({ actions: [], connectionState: "connecting", elapsedMs: NO_REQUEST_HINT_AFTER_MS + 1_000 })} />);
+    expect(screen.getByText(TAKEOVER_TEXT.it.waitingLong)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Annulla" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Riavvia accesso" })).toBeEnabled();
+  });
+});
+
+describe("the words of the sign-in screen", () => {
+  it.each(locales)("%s: are all there, and the screen speaks that language", (locale) => {
+    const text = TAKEOVER_TEXT[locale];
+    for (const [key, value] of Object.entries(text)) {
+      const written = typeof value === "function" ? value("Codex") : value;
+      expect(written.trim().length, `${locale}.${key}`).toBeGreaterThan(1);
+    }
+    render(<OAuthLoginTakeover {...props({ actions: DEVICE, locale })} />);
+    expect(screen.getByRole("button", { name: text.cancel })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: text.openBrowser })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: text.title("Codex") })).toBeInTheDocument();
+  });
+
+  it("does not leave the other languages with the Italian words", () => {
+    for (const locale of locales.filter((entry) => entry !== "it")) {
+      expect(TAKEOVER_TEXT[locale].cancel, locale).not.toBe(TAKEOVER_TEXT.it.cancel);
+      expect(TAKEOVER_TEXT[locale].waiting, locale).not.toBe(TAKEOVER_TEXT.it.waiting);
+    }
+    // Portuguese of Portugal says «equipa» and «ecrã», not the Brazilian forms
+    expect(JSON.stringify(TAKEOVER_TEXT.pt)).not.toMatch(/equipe|tela|usuário/i);
   });
 });

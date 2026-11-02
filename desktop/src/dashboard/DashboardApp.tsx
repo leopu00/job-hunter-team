@@ -965,6 +965,22 @@ export default function DashboardApp() {
     providerSessionIdentityRef.current = loginIdentityKey;
     let sessionId: string | null = null;
     let invalidAction = false;
+    // A valid login is already there (the provider's own credentials in the team's host): another one would replace
+    // them with the person's other account, and wait for a code nobody needs. The team starts with what is there.
+    // What cannot be read does not stop the login: it goes on as it always did.
+    let already: OnboardingRuntimeSnapshot | null | undefined = null;
+    try {
+      already = await readOnboardingSnapshot(submission.host);
+    } catch {
+      already = null;
+    }
+    if (!attemptIsCurrent()) return;
+    if (already?.providerAuthenticated) {
+      providerSessionIdentityRef.current = null;
+      setProviderLogin(null);
+      await startTeam(submission);
+      return;
+    }
     try {
       providerInputRequestRef.current = null;
       setProviderLogin({

@@ -5897,6 +5897,16 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
+    # `oauth-login --stop`: the app's «Cancel» of the sign-in. Closing the window's end of `docker exec` does not stop what
+    # it started in the container when there is no terminal (Linux, a pipe): the `codex login --device-auth` stays there,
+    # waiting for a code nobody will enter, and finishes later over the credentials the person has. This ends exactly that
+    # process (the device login of Codex, found by its command line), never the team's agents.
+    if [ "${2:-}" = "--stop" ]; then
+      docker exec "$ATTESTED_CONTAINER_ID" node -e \
+        "const fs=require('fs');for(const d of fs.readdirSync('/proc')){if(!/^[0-9]+\$/.test(d)||Number(d)===process.pid)continue;try{const a=fs.readFileSync('/proc/'+d+'/cmdline','utf8').split('\\0');if(a.includes('login')&&a.includes('--device-auth')&&a.some(function(x){return /codex/.test(x)}))process.kill(Number(d),'SIGTERM')}catch(e){}}" \
+        2>/dev/null || true
+      exit 0
+    fi
     provider="$(docker exec "$ATTESTED_CONTAINER_ID" node -e \
       "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" \
       2>/dev/null || true)"
