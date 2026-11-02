@@ -2604,6 +2604,12 @@ function Invoke-HostDownload {
     $script:HostDownloadExitCode = 1
     return
   }
+  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e Linux e' dalla 0.4.0.
+  if ($platform -ne 'windows' -and [int]$parts[0] -eq 0 -and [int]$parts[1] -lt 4) {
+    Write-Err "Questa release (v$version) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente."
+    $script:HostDownloadExitCode = 1
+    return
+  }
   if ($platform -eq 'macos' -and $env:JHT_DOWNLOAD_HOST -eq 'darwin-x64') {
     Write-Err 'L''app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e'' un Mac Intel, non supportato nella 0.4. Non e'' stato scaricato niente.'
     $script:HostDownloadExitCode = 1
