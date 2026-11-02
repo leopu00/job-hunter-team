@@ -74,8 +74,8 @@ def test_the_plan_puts_every_core_portal_before_any_minor_one_and_the_native_lan
     assert tiers == sorted(tiers, key=lambda t: cov.TIER_ORDER[t])
     assert plan["languages"][0] == "sv"
     cores = [e for e in plan["entries"] if e["tier"] == "core"]
-    assert [e["slug"] for e in cores[:5]] == ["arbetsformedlingen", "blocket-jobb", "linkedin", "indeed", "academic-work"]
-    assert {e["country"] for e in cores[:5]} == {"se"}
+    assert [e["slug"] for e in cores[:6]] == ["arbetsformedlingen", "blocket-jobb", "linkedin", "indeed", "jobbsafari", "academic-work"]
+    assert {e["country"] for e in cores[:6]} == {"se"}
     languages_in_order = [e["language"] for e in cores]
     assert languages_in_order.index("en") > max(i for i, g in enumerate(languages_in_order) if g == "sv")
 
@@ -119,11 +119,15 @@ def test_at_most_eight_core_portals_per_group_and_the_table_is_well_formed():
         assert code == "remote" or code in data["level_terms"], code
 
 
-def test_the_sources_that_answered_403_are_closed_in_the_table_and_the_english_first_ones_need_no_local_query(profile):
+def test_a_403_seen_only_from_the_mac_does_not_close_a_source_in_the_table_the_scout_on_the_field_does(profile):
     by = {(e["slug"], e["country"]): e for e in cov.load_plan()["entries"]}
     for key in (("jobbsafari", "se"), ("jobbland", "se"), ("weworkremotely", "remote"), ("himalayas", "remote"), ("jooble", "se")):
-        assert by[key]["access"] == "closed", key
-        assert _state([], key[0], key[1])["state"] == "closed"
+        assert by[key]["access"] == "search", key             # «to try», not «closed»
+        assert _state([], key[0], key[1])["state"] == "untouched"
+        assert _state([_pass(key[0], key[1], "role_language", "a", returned=0, status="closed")], key[0], key[1])["state"] == "closed"
+    assert by[("jobbsafari", "se")]["tier"] == "core"
+    # what the table closes was seen closed on a real run (the squad's own pass log), nothing from one network alone
+    assert sorted(e["slug"] for e in by.values() if e["access"] == "closed") == ["eu-remote-jobs", "remote-rocketship"]
     hub = by[("thehub", "se")]
     assert hub["tier"] == "core" and hub["portal_language"] == "en"
     rows = [_pass("thehub", "se", "role", q) for q in ("developer", "engineer", "junior developer")]

@@ -122,10 +122,10 @@
     "slug": "jobbsafari",
     "name": "Jobbsafari",
     "country": "se",
-    "tier": "minor",
-    "access": "closed",
+    "tier": "core",
+    "access": "search",
     "host": "jobbsafari.se",
-    "hint": "403 (Cloudflare) on 02/11 from an automated reader: closed for the pass."
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
    },
    {
     "slug": "academic-work",
@@ -153,9 +153,9 @@
     "name": "Jobbland",
     "country": "se",
     "tier": "minor",
-    "access": "closed",
+    "access": "search",
     "host": "jobbland.se",
-    "hint": "403 on 02/11 from an automated reader: closed for the pass."
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
    },
    {
     "slug": "karriarguiden",
@@ -955,9 +955,9 @@
     "name": "Jooble Sweden",
     "country": "se",
     "tier": "minor",
-    "access": "closed",
+    "access": "search",
     "host": "se.jooble.org",
-    "hint": "403 on 02/11 from an automated reader.",
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed.",
     "portal_language": "en"
    }
   ],
@@ -974,13 +974,13 @@
     "slug": "weworkremotely",
     "name": "We Work Remotely",
     "country": "remote",
-    "tier": "minor",
-    "access": "closed",
+    "tier": "core",
+    "access": "search",
     "host": "weworkremotely.com",
     "aliases": [
      "we-work-remotely"
     ],
-    "hint": "403 on 02/11 from an automated reader: closed for the pass."
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
    },
    {
     "slug": "remoteok",
@@ -1007,10 +1007,10 @@
     "slug": "himalayas",
     "name": "Himalayas",
     "country": "remote",
-    "tier": "minor",
-    "access": "closed",
+    "tier": "core",
+    "access": "search",
     "host": "himalayas.app",
-    "hint": "403 on 02/11 from an automated reader: closed for the pass."
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
    },
    {
     "slug": "working-nomads",
