@@ -32,6 +32,8 @@ export function useProfileProgress(
     let live = true;
     let complete = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // A hint of the channel came while a read was on its way: that read may have started before the change, so one more follows it.
+    let hintedMeanwhile = false;
     const again = async () => {
       if (!live) return;
       clearTimeout(timer);
@@ -50,6 +52,10 @@ export function useProfileProgress(
         } finally {
           reading.current = false;
         }
+        if (hintedMeanwhile && live) {
+          hintedMeanwhile = false;
+          return again();
+        }
       }
       if (live && !complete) timer = setTimeout(() => void again(), streamPace(everyMs, PROFILE_PROGRESS_STREAMED_MS));
     };
@@ -59,7 +65,15 @@ export function useProfileProgress(
     void again();
     document.addEventListener("visibilitychange", seen);
     // The profile changed, said the channel: read now (even a card that was complete, a field may have emptied).
-    const stopHint = onStreamHint("profile", seen, HINT_GAP_MS);
+    const stopHint = onStreamHint(
+      "profile",
+      () => {
+        if (document.visibilityState !== "visible") return;
+        if (reading.current) hintedMeanwhile = true;
+        else void again();
+      },
+      HINT_GAP_MS,
+    );
     // The channel went up or down: the wait that is running was set at the other pace.
     const stopState = onStreamState(() => {
       // a read in flight sets the next wait itself, at the pace of the moment it ends

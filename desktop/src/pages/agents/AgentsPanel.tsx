@@ -562,6 +562,8 @@ export default function AgentsPanel({ search }: PageProps) {
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let last = Date.now();
+    // A hint of the channel came while a periodic read was on its way: that read may have started before the change, so one more follows it.
+    let hintedMeanwhile = false;
     const again = async () => {
       if (!live) return;
       clearTimeout(timer);
@@ -572,6 +574,10 @@ export default function AgentsPanel({ search }: PageProps) {
           await read(false, true);
         } finally {
           quietReading.current = false;
+        }
+        if (hintedMeanwhile && live) {
+          hintedMeanwhile = false;
+          return again();
         }
       }
       // the count is the ref's, not the state's: the next read is not set once the third failure is in
@@ -587,7 +593,9 @@ export default function AgentsPanel({ search }: PageProps) {
     const stopHint = onStreamHint(
       "agents",
       () => {
-        if (document.visibilityState === "visible" && !occupied.current) void again();
+        if (document.visibilityState !== "visible" || occupied.current) return;
+        if (quietReading.current) hintedMeanwhile = true;
+        else void again();
       },
       LIST_HINT_GAP_MS,
     );
