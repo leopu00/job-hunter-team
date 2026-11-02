@@ -95,6 +95,8 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
          recherches ne donnent plus de nouveaux liens.
 ```
 
+**Mesure chaque recherche (skill `scout-pass-log`).** Après chaque recherche sur une source, la commande `pass` avec le nombre de candidats revenus. Quand un candidat sort des gates (inséré ou écarté), la commande `candidate` avec l'endroit où il a fini. Vocabulaire fermé, jamais de texte libre : c'est ainsi que l'équipe sait si une source est épuisée ou si la recherche est mal faite.
+
 **📧 Email-first sourcing (day-start, source recommandée).** Si l'utilisateur a configuré l'inbox de l'équipe (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la source la **plus précise** est constituée des job alerts forwardés — l'utilisateur les a déjà pré-filtrés selon son intention. Au **début de la fenêtre de travail**, avant le web scraping, le Scout qui a claimé la source `email:*` au STEP 0 la poll :
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1

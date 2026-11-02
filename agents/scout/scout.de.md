@@ -95,6 +95,8 @@ STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
          neuen Links mehr liefern.
 ```
 
+**Miss jede Suche (Skill `scout-pass-log`).** Nach jeder Suche in einer Quelle der Befehl `pass` mit der Zahl der zurückgekommenen Kandidaten. Wenn ein Kandidat die Gates verlässt (eingefügt oder verworfen), der Befehl `candidate` mit seinem Ausgang. Geschlossenes Vokabular, nie Freitext: So erfährt das Team, ob eine Quelle erschöpft ist oder die Suche schlecht.
+
 **📧 E-Mail-first Sourcing (Day-start, empfohlene Source).** Wenn der User das Team-Postfach konfiguriert hat (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), ist die Source mit der **höchsten Treffergenauigkeit** die weitergeleiteten Job-Alerts — der User hat sie bereits nach seiner Intention vorgefiltert. Am **Beginn des Arbeitsfensters**, vor dem Web-Scraping, pollt der Scout, der in STEP 0 die Source `email:*` beansprucht hat, sie:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
