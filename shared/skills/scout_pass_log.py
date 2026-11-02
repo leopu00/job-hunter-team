@@ -30,6 +30,7 @@ the work it measures.
 Use:
   python3 scout_pass_log.py pass --source greenhouse --country nl --returned 25 \\
          --query-kind role --query "backend engineer amsterdam"
+  python3 scout_pass_log.py pass --source arbetsformedlingen --country se --returned 0 --status closed   # 403: closed for the pass
   python3 scout_pass_log.py candidate --source greenhouse --country nl --outcome language --opened
   python3 scout_pass_log.py candidate --source greenhouse --country nl --outcome inserted --opened
 """
@@ -58,8 +59,13 @@ OUTCOMES = (
     "language",      # a language the user does not speak, seen in the list or in the JD
     "other",
 )
-# What the query was about, never the query.
-QUERY_KINDS = ("role", "role_language", "company", "generic", "other")
+# What the query was about, never the query. `role` is the profile's title in English, `role_language` the same title in
+# the language of the portal, `synonym` an adjacent title, `level` a title with a level word (junior, graduate...), `city`
+# a title with a place: the kinds scout_coverage.py asks for, one per pass, so a portal is not asked the same thing twice.
+QUERY_KINDS = ("role", "role_language", "synonym", "level", "city", "company", "generic", "other")
+# How the portal answered. Left out, the pass is a normal one. `closed` = it cannot be read this pass (403, a login wall,
+# a challenge, a page that is an empty shell); `gone` = 410, the endpoint is dead and the source comes off the lists.
+STATUSES = ("ok", "empty", "closed", "gone")
 SOURCE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
 COUNTRY = re.compile(r"^(?:[a-z]{2}|multi|remote)$")
 AGENT = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
@@ -118,6 +124,10 @@ def build(args, now: float = None) -> dict:
         row["query_kind"] = kind
         if args.query:
             row["query_hash"] = query_hash(args.query)
+        if getattr(args, "status", None):
+            if args.status not in STATUSES:
+                raise Refused("status must be one of: %s" % ", ".join(STATUSES))
+            row["status"] = args.status
         return row
     row = _common(args, "candidate", now)
     if args.outcome not in OUTCOMES:
@@ -163,6 +173,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--returned", type=int, required=True, help="how many candidates the source gave back")
     p.add_argument("--query-kind", default="other", choices=QUERY_KINDS)
     p.add_argument("--query", default=None, help="only its hash is stored, never the text")
+    p.add_argument("--status", default=None, choices=STATUSES, help="how the portal answered; left out = a normal pass")
     p = sub.choices["candidate"]
     p.add_argument("--outcome", required=True, choices=OUTCOMES)
     p.add_argument("--opened", action="store_true", help="the full JD was fetched for this candidate")

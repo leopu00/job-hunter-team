@@ -1,0 +1,1166 @@
+{
+ "version": 1,
+ "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit.",
+ "retired": [
+  "xing-jobs",
+  "bundesagentur-fuer-arbeit"
+ ],
+ "level_terms": {
+  "sv": [
+   "junior",
+   "nyexaminerad",
+   "trainee"
+  ],
+  "da": [
+   "junior",
+   "nyuddannet",
+   "trainee"
+  ],
+  "no": [
+   "junior",
+   "nyutdannet",
+   "trainee"
+  ],
+  "fi": [
+   "junior",
+   "vastavalmistunut",
+   "trainee"
+  ],
+  "nl": [
+   "junior",
+   "starter",
+   "afgestudeerd",
+   "trainee"
+  ],
+  "de": [
+   "Junior",
+   "Berufseinsteiger",
+   "Absolvent",
+   "Trainee"
+  ],
+  "fr": [
+   "junior",
+   "débutant",
+   "jeune diplômé"
+  ],
+  "it": [
+   "junior",
+   "neolaureato",
+   "primo impiego"
+  ],
+  "es": [
+   "junior",
+   "recién graduado",
+   "sin experiencia"
+  ],
+  "pt": [
+   "júnior",
+   "recém-licenciado",
+   "trainee"
+  ],
+  "en": [
+   "junior",
+   "graduate",
+   "entry level",
+   "associate"
+  ]
+ },
+ "groups": {
+  "sv": [
+   {
+    "slug": "arbetsformedlingen",
+    "name": "Platsbanken (Arbetsförmedlingen)",
+    "country": "se",
+    "tier": "core",
+    "access": "search",
+    "host": "arbetsformedlingen.se/platsbanken",
+    "aliases": [
+     "platsbanken",
+     "arbetsformedlingen-se",
+     "arbets"
+    ],
+    "api": "https://jobsearch.api.jobtechdev.se/search",
+    "hint": "Every public Swedish ad. The site is a JS app: use the public JobTech JobSearch API (no key): q, municipality, region, remote, experience=false, trainee, published-after, sort=pubdate-desc, limit<=100, x-feature-freetext-bool-method=and. Source of the kit of 02/11."
+   },
+   {
+    "slug": "blocket-jobb",
+    "name": "Blocket Jobb",
+    "country": "se",
+    "tier": "core",
+    "access": "search",
+    "host": "jobb.blocket.se",
+    "aliases": [
+     "blocket"
+    ],
+    "hint": "Did not answer from the Mac on 02/11 (jobb.blocket.se no answer, blocket.se/jobb 404). If it does not answer, log the pass with --status closed: that settles it for the window."
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Sweden",
+    "country": "se",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Stockholm",
+     "Göteborg",
+     "Malmö",
+     "Uppsala"
+    ],
+    "hint": "Public list: se.linkedin.com/jobs/search/?keywords={q}&location={city}%2C%20Sweden&f_TPR=r604800&sortBy=DD ; start= in steps of 25."
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Sweden",
+    "country": "se",
+    "tier": "core",
+    "access": "email",
+    "host": "se.indeed.com",
+    "hint": "403 (Cloudflare) to an automated reader: not searched, its alerts arrive by email."
+   },
+   {
+    "slug": "jobbsafari",
+    "name": "Jobbsafari",
+    "country": "se",
+    "tier": "core",
+    "access": "search",
+    "host": "jobbsafari.se",
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
+   },
+   {
+    "slug": "academic-work",
+    "name": "Academic Work",
+    "country": "se",
+    "tier": "core",
+    "access": "search",
+    "host": "academicwork.se",
+    "aliases": [
+     "academicwork"
+    ],
+    "hint": "Many junior and graduate ads. Page for English-speaking applicants: academicwork.se/jobbsokande/for-international-and-english-speaking-applicants"
+   },
+   {
+    "slug": "ledigajobb",
+    "name": "Ledigajobb",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "ledigajobb.se",
+    "hint": "By city: ledigajobb.se/lediga-jobb/{city}; by trade: ledigajobb.se/sok?pcb={trade}-jobb"
+   },
+   {
+    "slug": "jobbland",
+    "name": "Jobbland",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobbland.se",
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
+   },
+   {
+    "slug": "karriarguiden",
+    "name": "Karriärguiden",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "karriarguiden.se",
+    "hint": "Search: karriarguiden.se/jobb?q={query}"
+   }
+  ],
+  "da": [
+   {
+    "slug": "jobindex",
+    "name": "Jobindex",
+    "country": "dk",
+    "tier": "core",
+    "access": "search",
+    "host": "jobindex.dk"
+   },
+   {
+    "slug": "jobnet",
+    "name": "Jobnet",
+    "country": "dk",
+    "tier": "core",
+    "access": "search",
+    "host": "job.jobnet.dk"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Denmark",
+    "country": "dk",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "København",
+     "Aarhus",
+     "Odense"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Denmark",
+    "country": "dk",
+    "tier": "core",
+    "access": "email",
+    "host": "dk.indeed.com"
+   },
+   {
+    "slug": "thehub",
+    "name": "The Hub",
+    "country": "dk",
+    "tier": "minor",
+    "access": "search",
+    "host": "thehub.io",
+    "aliases": [
+     "the-hub"
+    ]
+   },
+   {
+    "slug": "ofir",
+    "name": "Ofir",
+    "country": "dk",
+    "tier": "minor",
+    "access": "search",
+    "host": "ofir.dk"
+   },
+   {
+    "slug": "workindenmark",
+    "name": "Work in Denmark",
+    "country": "dk",
+    "tier": "minor",
+    "access": "search",
+    "host": "workindenmark.dk"
+   },
+   {
+    "slug": "jobsearch-dk",
+    "name": "Jobsearch",
+    "country": "dk",
+    "tier": "minor",
+    "access": "closed",
+    "host": "jobsearch.dk"
+   }
+  ],
+  "no": [
+   {
+    "slug": "finn-no",
+    "name": "FINN jobb",
+    "country": "no",
+    "tier": "core",
+    "access": "search",
+    "host": "finn.no/job",
+    "aliases": [
+     "finn"
+    ]
+   },
+   {
+    "slug": "nav-no",
+    "name": "Arbeidsplassen (NAV)",
+    "country": "no",
+    "tier": "core",
+    "access": "search",
+    "host": "arbeidsplassen.nav.no",
+    "aliases": [
+     "arbeidsplassen",
+     "nav"
+    ]
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Norway",
+    "country": "no",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Oslo",
+     "Bergen",
+     "Trondheim"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Norway",
+    "country": "no",
+    "tier": "core",
+    "access": "email",
+    "host": "no.indeed.com"
+   }
+  ],
+  "fi": [
+   {
+    "slug": "tyomarkkinatori",
+    "name": "Työmarkkinatori",
+    "country": "fi",
+    "tier": "core",
+    "access": "search",
+    "host": "tyomarkkinatori.fi"
+   },
+   {
+    "slug": "duunitori",
+    "name": "Duunitori",
+    "country": "fi",
+    "tier": "core",
+    "access": "search",
+    "host": "duunitori.fi"
+   },
+   {
+    "slug": "oikotie-tyopaikat",
+    "name": "Oikotie Työpaikat",
+    "country": "fi",
+    "tier": "core",
+    "access": "search",
+    "host": "tyopaikat.oikotie.fi",
+    "aliases": [
+     "oikotie"
+    ]
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Finland",
+    "country": "fi",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Helsinki",
+     "Espoo",
+     "Tampere"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Finland",
+    "country": "fi",
+    "tier": "core",
+    "access": "email",
+    "host": "fi.indeed.com"
+   },
+   {
+    "slug": "jobly",
+    "name": "Jobly",
+    "country": "fi",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobly.fi"
+   }
+  ],
+  "nl": [
+   {
+    "slug": "werk-nl",
+    "name": "Werk.nl",
+    "country": "nl",
+    "tier": "core",
+    "access": "search",
+    "host": "werk.nl",
+    "aliases": [
+     "werknl"
+    ]
+   },
+   {
+    "slug": "stepstone-nl",
+    "name": "StepStone Netherlands",
+    "country": "nl",
+    "tier": "core",
+    "access": "search",
+    "host": "stepstone.nl"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Netherlands",
+    "country": "nl",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Amsterdam",
+     "Rotterdam",
+     "Utrecht",
+     "Eindhoven"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Netherlands",
+    "country": "nl",
+    "tier": "core",
+    "access": "email",
+    "host": "nl.indeed.com"
+   },
+   {
+    "slug": "nationale-vacaturebank",
+    "name": "Nationale Vacaturebank",
+    "country": "nl",
+    "tier": "core",
+    "access": "closed",
+    "host": "nationalevacaturebank.nl"
+   },
+   {
+    "slug": "intermediair",
+    "name": "Intermediair",
+    "country": "nl",
+    "tier": "minor",
+    "access": "closed",
+    "host": "intermediair.nl"
+   },
+   {
+    "slug": "jobbird",
+    "name": "Jobbird",
+    "country": "nl",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobbird.com",
+    "aliases": [
+     "jobbird-netherlands"
+    ]
+   },
+   {
+    "slug": "magnet-me",
+    "name": "Magnet.me",
+    "country": "nl",
+    "tier": "minor",
+    "access": "search",
+    "host": "magnet.me"
+   },
+   {
+    "slug": "vdab",
+    "name": "VDAB",
+    "country": "be",
+    "tier": "minor",
+    "access": "search",
+    "host": "vdab.be"
+   },
+   {
+    "slug": "jobat",
+    "name": "Jobat",
+    "country": "be",
+    "tier": "minor",
+    "access": "closed",
+    "host": "jobat.be"
+   }
+  ],
+  "de": [
+   {
+    "slug": "stepstone-de",
+    "name": "StepStone Germany",
+    "country": "de",
+    "tier": "core",
+    "access": "search",
+    "host": "stepstone.de",
+    "aliases": [
+     "stepstone-germany",
+     "stepstone"
+    ]
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Germany",
+    "country": "de",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Berlin",
+     "München",
+     "Hamburg",
+     "Frankfurt",
+     "Köln"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Germany",
+    "country": "de",
+    "tier": "core",
+    "access": "email",
+    "host": "de.indeed.com"
+   },
+   {
+    "slug": "get-in-it",
+    "name": "get in IT",
+    "country": "de",
+    "tier": "core",
+    "access": "search",
+    "host": "get-in-it.de"
+   },
+   {
+    "slug": "karriere-at",
+    "name": "karriere.at",
+    "country": "at",
+    "tier": "core",
+    "access": "search",
+    "host": "karriere.at"
+   },
+   {
+    "slug": "jobs-ch",
+    "name": "jobs.ch",
+    "country": "ch",
+    "tier": "core",
+    "access": "search",
+    "host": "jobs.ch"
+   },
+   {
+    "slug": "stepstone-at",
+    "name": "StepStone Austria",
+    "country": "at",
+    "tier": "minor",
+    "access": "search",
+    "host": "stepstone.at"
+   },
+   {
+    "slug": "willhaben",
+    "name": "willhaben jobs",
+    "country": "at",
+    "tier": "minor",
+    "access": "search",
+    "host": "willhaben.at/jobs",
+    "aliases": [
+     "willhaben-austria"
+    ]
+   },
+   {
+    "slug": "kimeta",
+    "name": "Kimeta",
+    "country": "de",
+    "tier": "minor",
+    "access": "search",
+    "host": "kimeta.de"
+   },
+   {
+    "slug": "jobscout24",
+    "name": "JobScout24",
+    "country": "ch",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobscout24.ch"
+   },
+   {
+    "slug": "jobware",
+    "name": "Jobware",
+    "country": "de",
+    "tier": "minor",
+    "access": "closed",
+    "host": "jobware.de"
+   }
+  ],
+  "fr": [
+   {
+    "slug": "francetravail",
+    "name": "France Travail",
+    "country": "fr",
+    "tier": "core",
+    "access": "search",
+    "host": "francetravail.fr",
+    "aliases": [
+     "france-travail",
+     "pole-emploi"
+    ]
+   },
+   {
+    "slug": "welcome-to-the-jungle",
+    "name": "Welcome to the Jungle",
+    "country": "fr",
+    "tier": "core",
+    "access": "search",
+    "host": "welcometothejungle.com",
+    "aliases": [
+     "wttj"
+    ]
+   },
+   {
+    "slug": "hellowork",
+    "name": "HelloWork",
+    "country": "fr",
+    "tier": "core",
+    "access": "search",
+    "host": "hellowork.com"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn France",
+    "country": "fr",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Paris",
+     "Lyon",
+     "Toulouse",
+     "Nantes"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed France",
+    "country": "fr",
+    "tier": "core",
+    "access": "email",
+    "host": "fr.indeed.com"
+   },
+   {
+    "slug": "apec",
+    "name": "APEC",
+    "country": "fr",
+    "tier": "core",
+    "access": "search",
+    "host": "apec.fr"
+   },
+   {
+    "slug": "meteojob",
+    "name": "Meteojob",
+    "country": "fr",
+    "tier": "minor",
+    "access": "search",
+    "host": "meteojob.com"
+   },
+   {
+    "slug": "jobup",
+    "name": "Jobup",
+    "country": "ch",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobup.ch"
+   },
+   {
+    "slug": "actiris",
+    "name": "Actiris",
+    "country": "be",
+    "tier": "minor",
+    "access": "search",
+    "host": "actiris.brussels"
+   },
+   {
+    "slug": "le-forem",
+    "name": "Le Forem",
+    "country": "be",
+    "tier": "minor",
+    "access": "search",
+    "host": "leforem.be",
+    "aliases": [
+     "forem"
+    ]
+   }
+  ],
+  "it": [
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Italy",
+    "country": "it",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Milano",
+     "Roma",
+     "Torino",
+     "Bologna"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Italy",
+    "country": "it",
+    "tier": "core",
+    "access": "email",
+    "host": "it.indeed.com"
+   },
+   {
+    "slug": "infojobs-it",
+    "name": "InfoJobs Italy",
+    "country": "it",
+    "tier": "core",
+    "access": "search",
+    "host": "infojobs.it"
+   },
+   {
+    "slug": "monster-it",
+    "name": "Monster Italy",
+    "country": "it",
+    "tier": "minor",
+    "access": "search",
+    "host": "monster.it"
+   },
+   {
+    "slug": "cliclavoro",
+    "name": "Cliclavoro",
+    "country": "it",
+    "tier": "minor",
+    "access": "search",
+    "host": "cliclavoro.gov.it"
+   }
+  ],
+  "es": [
+   {
+    "slug": "infojobs",
+    "name": "InfoJobs",
+    "country": "es",
+    "tier": "core",
+    "access": "search",
+    "host": "infojobs.net"
+   },
+   {
+    "slug": "tecnoempleo",
+    "name": "Tecnoempleo",
+    "country": "es",
+    "tier": "core",
+    "access": "search",
+    "host": "tecnoempleo.com"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Spain",
+    "country": "es",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Madrid",
+     "Barcelona",
+     "Valencia"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Spain",
+    "country": "es",
+    "tier": "core",
+    "access": "email",
+    "host": "es.indeed.com"
+   }
+  ],
+  "pt": [
+   {
+    "slug": "net-empregos",
+    "name": "Net-Empregos",
+    "country": "pt",
+    "tier": "core",
+    "access": "search",
+    "host": "net-empregos.com"
+   },
+   {
+    "slug": "itjobs-pt",
+    "name": "ITJobs",
+    "country": "pt",
+    "tier": "core",
+    "access": "search",
+    "host": "itjobs.pt",
+    "aliases": [
+     "itjobs"
+    ]
+   },
+   {
+    "slug": "sapo-emprego",
+    "name": "Sapo Emprego",
+    "country": "pt",
+    "tier": "core",
+    "access": "search",
+    "host": "emprego.sapo.pt"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Portugal",
+    "country": "pt",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Lisboa",
+     "Porto"
+    ]
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Portugal",
+    "country": "pt",
+    "tier": "core",
+    "access": "email",
+    "host": "pt.indeed.com"
+   },
+   {
+    "slug": "landing-jobs",
+    "name": "Landing.jobs",
+    "country": "pt",
+    "tier": "minor",
+    "access": "search",
+    "host": "landing.jobs",
+    "aliases": [
+     "landingjobs"
+    ]
+   }
+  ],
+  "en": [
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Ireland",
+    "country": "ie",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Dublin",
+     "Cork",
+     "Galway"
+    ],
+    "portal_language": "en"
+   },
+   {
+    "slug": "indeed",
+    "name": "Indeed Ireland",
+    "country": "ie",
+    "tier": "core",
+    "access": "email",
+    "host": "ie.indeed.com",
+    "portal_language": "en"
+   },
+   {
+    "slug": "irishjobs",
+    "name": "IrishJobs",
+    "country": "ie",
+    "tier": "core",
+    "access": "search",
+    "host": "irishjobs.ie",
+    "portal_language": "en"
+   },
+   {
+    "slug": "thehub",
+    "name": "The Hub (Nordic startups, in English)",
+    "country": "se",
+    "tier": "core",
+    "access": "search",
+    "host": "thehub.io/jobs?countryCode=SE",
+    "aliases": [
+     "the-hub"
+    ],
+    "hint": "Almost all ads in English. Remote: thehub.io/jobs?countryCode=REMOTE. No public API.",
+    "portal_language": "en"
+   },
+   {
+    "slug": "jobs-ie",
+    "name": "Jobs.ie",
+    "country": "ie",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobs.ie",
+    "portal_language": "en"
+   },
+   {
+    "slug": "gradireland",
+    "name": "GradIreland",
+    "country": "ie",
+    "tier": "minor",
+    "access": "search",
+    "host": "gradireland.com",
+    "portal_language": "en"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn Malta",
+    "country": "mt",
+    "tier": "minor",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "Valletta",
+     "Sliema"
+    ],
+    "portal_language": "en"
+   },
+   {
+    "slug": "keepmeposted",
+    "name": "KeepMePosted",
+    "country": "mt",
+    "tier": "minor",
+    "access": "search",
+    "host": "keepmeposted.com.mt",
+    "portal_language": "en"
+   },
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn United Kingdom (only with visa sponsorship)",
+    "country": "gb",
+    "tier": "minor",
+    "access": "search",
+    "host": "linkedin.com/jobs",
+    "cities": [
+     "London",
+     "Manchester",
+     "Edinburgh"
+    ],
+    "portal_language": "en"
+   },
+   {
+    "slug": "reed",
+    "name": "Reed (only with visa sponsorship)",
+    "country": "gb",
+    "tier": "minor",
+    "access": "search",
+    "host": "reed.co.uk",
+    "portal_language": "en"
+   },
+   {
+    "slug": "totaljobs",
+    "name": "Totaljobs (only with visa sponsorship)",
+    "country": "gb",
+    "tier": "minor",
+    "access": "search",
+    "host": "totaljobs.com",
+    "portal_language": "en"
+   },
+   {
+    "slug": "wellfound",
+    "name": "Wellfound (Sweden)",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "wellfound.com/location/sweden",
+    "hint": "Details need a login.",
+    "portal_language": "en"
+   },
+   {
+    "slug": "welcome-to-the-jungle",
+    "name": "Welcome to the Jungle (Sweden)",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "welcometothejungle.com/en/jobs",
+    "aliases": [
+     "wttj"
+    ],
+    "hint": "Country filter in the URL not verified: use the site's filter.",
+    "portal_language": "en"
+   },
+   {
+    "slug": "talent-com",
+    "name": "Talent.com Sweden",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "se.talent.com",
+    "aliases": [
+     "talent"
+    ],
+    "portal_language": "en"
+   },
+   {
+    "slug": "careerjet",
+    "name": "Careerjet Sweden",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "careerjet.se",
+    "portal_language": "en"
+   },
+   {
+    "slug": "jooble",
+    "name": "Jooble Sweden",
+    "country": "se",
+    "tier": "minor",
+    "access": "search",
+    "host": "se.jooble.org",
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed.",
+    "portal_language": "en"
+   }
+  ],
+  "remote": [
+   {
+    "slug": "linkedin",
+    "name": "LinkedIn remote",
+    "country": "remote",
+    "tier": "core",
+    "access": "search",
+    "host": "linkedin.com/jobs"
+   },
+   {
+    "slug": "weworkremotely",
+    "name": "We Work Remotely",
+    "country": "remote",
+    "tier": "core",
+    "access": "search",
+    "host": "weworkremotely.com",
+    "aliases": [
+     "we-work-remotely"
+    ],
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
+   },
+   {
+    "slug": "remoteok",
+    "name": "Remote OK",
+    "country": "remote",
+    "tier": "core",
+    "access": "search",
+    "host": "remoteok.com",
+    "aliases": [
+     "remote-ok"
+    ],
+    "hint": "Public API at remoteok.com/api, asks for attribution."
+   },
+   {
+    "slug": "remotive",
+    "name": "Remotive",
+    "country": "remote",
+    "tier": "core",
+    "access": "search",
+    "host": "remotive.com",
+    "hint": "Public API documented by the site (remotive.com/api/remote-jobs?search=); filter Sweden/Europe/EMEA."
+   },
+   {
+    "slug": "himalayas",
+    "name": "Himalayas",
+    "country": "remote",
+    "tier": "core",
+    "access": "search",
+    "host": "himalayas.app",
+    "hint": "403 seen only from the Mac on 02/11 (another network): to try. The Scout closes it on the field with --status closed."
+   },
+   {
+    "slug": "working-nomads",
+    "name": "Working Nomads",
+    "country": "remote",
+    "tier": "core",
+    "access": "search",
+    "host": "workingnomads.com",
+    "aliases": [
+     "workingnomads"
+    ]
+   },
+   {
+    "slug": "jobspresso",
+    "name": "Jobspresso",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobspresso.co"
+   },
+   {
+    "slug": "nodesk",
+    "name": "NoDesk",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "nodesk.co"
+   },
+   {
+    "slug": "jobgether",
+    "name": "Jobgether",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "jobgether.com"
+   },
+   {
+    "slug": "flexjobs",
+    "name": "FlexJobs",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "flexjobs.com"
+   },
+   {
+    "slug": "remote-rocketship",
+    "name": "Remote Rocketship",
+    "country": "remote",
+    "tier": "minor",
+    "access": "closed",
+    "host": "remoterocketship.com"
+   },
+   {
+    "slug": "eu-remote-jobs",
+    "name": "EU Remote Jobs",
+    "country": "remote",
+    "tier": "minor",
+    "access": "closed",
+    "host": "euremotejobs.com"
+   },
+   {
+    "slug": "arc",
+    "name": "Arc",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "arc.dev/remote-jobs",
+    "hint": "Senior-heavy."
+   },
+   {
+    "slug": "wellfound",
+    "name": "Wellfound remote",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "wellfound.com"
+   },
+   {
+    "slug": "thehub",
+    "name": "The Hub remote",
+    "country": "remote",
+    "tier": "minor",
+    "access": "search",
+    "host": "thehub.io/jobs?countryCode=REMOTE",
+    "aliases": [
+     "the-hub"
+    ]
+   }
+  ]
+ },
+ "ats_boards": {
+  "se": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 02/11; an empty or missing board is skipped, never retried in a loop. Workable not verified (429).",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "truecaller",
+     "yubico",
+     "mentimeter",
+     "wolt",
+     "betsson",
+     "kambi",
+     "rebtel",
+     "lovable",
+     "cellink",
+     "fingerprint",
+     "tomorrow"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "spotify",
+     "netlight",
+     "increase",
+     "trustly"
+    ]
+   },
+   "teamtailor": {
+    "url": "{url}",
+    "urls": {
+     "bambuser": "https://bambuser.teamtailor.com/jobs",
+     "kambi": "https://kambi.teamtailor.com/jobs",
+     "polestar": "https://polestar.teamtailor.com/jobs",
+     "rebtel": "https://rebtel.teamtailor.com/jobs",
+     "schibsted": "https://schibsted.teamtailor.com/jobs",
+     "anyfin": "https://career.anyfin.com/jobs",
+     "bokio": "https://jobs.bokio.se/jobs",
+     "brite": "https://careers.britepayments.com/jobs",
+     "doktor": "https://jobs.doktor.se/jobs",
+     "dustin": "https://jobs.dustin.com/jobs",
+     "hemmakvall": "https://karriar.hemmakvall.se/jobs",
+     "hemnet": "https://career.hemnet.se/jobs",
+     "hiq": "https://career.hiq.se/jobs",
+     "lunar": "https://jobs.lunar.app/jobs",
+     "northmill": "https://careers.northmill.com/jobs",
+     "oneflow": "https://career.oneflow.com/jobs",
+     "quinyx": "https://careers.quinyx.com/jobs",
+     "sitevision": "https://career.sitevision.se/jobs",
+     "softhouse": "https://jobb.softhouse.se/jobs",
+     "storytel": "https://jobs.storytel.com/jobs",
+     "stravito": "https://careers.stravito.com/jobs",
+     "telavox": "https://career.telavox.com/jobs",
+     "tibber": "https://jobs.tibber.com/jobs",
+     "tradera": "https://careers.tradera.com/jobs",
+     "tobii": "https://careers.tobii.com/jobs",
+     "twoday": "https://career.twoday.se/jobs"
+    },
+    "feed": "append .rss to the /jobs address"
+   }
+  }
+ }
+}
