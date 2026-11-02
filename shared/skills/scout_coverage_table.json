@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit.",
+ "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik».",
  "retired": [
   "xing-jobs",
   "bundesagentur-fuer-arbeit"
@@ -63,6 +63,42 @@
    "graduate",
    "entry level",
    "associate"
+  ]
+ },
+ "broad_terms": {
+  "sv": [
+   "praktik"
+  ],
+  "da": [
+   "praktik"
+  ],
+  "no": [
+   "praktikant"
+  ],
+  "fi": [
+   "harjoittelu"
+  ],
+  "nl": [
+   "stage"
+  ],
+  "de": [
+   "Praktikum"
+  ],
+  "fr": [
+   "stage"
+  ],
+  "it": [
+   "tirocinio"
+  ],
+  "es": [
+   "prácticas"
+  ],
+  "pt": [
+   "estágio"
+  ],
+  "en": [
+   "internship",
+   "graduate"
   ]
  },
  "groups": {

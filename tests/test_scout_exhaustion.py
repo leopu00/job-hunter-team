@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import types
 import time
 from pathlib import Path
 
@@ -33,7 +34,23 @@ def isolated_home(tmp_path, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     # No working hours configured: the window is the last 12 hours, whatever the clock of the machine.
     monkeypatch.setattr(se, "window_start", lambda now: None)
+    # The coverage plan has its own tests (test_scout_coverage.py): here it covers everything unless a test says otherwise.
+    use_coverage(monkeypatch, [])
     return tmp_path
+
+
+def use_coverage(monkeypatch, missing, *, fail=False):
+    """A scout_coverage that answers `missing` for the core portals (or raises), whatever is on disk."""
+    fake = types.ModuleType("scout_coverage")
+    def portal_states(rows, profile=None, now=None):
+        if fail:
+            raise RuntimeError("profile unreadable")
+        fake.seen_rows = list(rows)
+        return ["states"]
+    fake.portal_states = portal_states
+    fake.core_missing = lambda states: list(missing)
+    monkeypatch.setitem(sys.modules, "scout_coverage", fake)
+    return fake
 
 
 def write_log(home: Path, rows: list) -> None:
@@ -277,3 +294,65 @@ def test_the_heartbeat_order_no_longer_talks_about_markers_of_the_day():
     source = (ROOT / ".launcher" / "heartbeat-bridge.py").read_text(encoding="utf-8")
     assert "no [SCOUT-ESAUSTO] marker exists today" not in source
     assert 'os.environ.get("JHT_HEARTBEAT_SCOUT_EXHAUST_LOOKBACK_H", "12")' not in source
+
+
+# ---- the core portals of the coverage plan stand on top of the three numbers ----
+
+def test_dry_by_the_numbers_but_a_core_portal_not_covered_is_not_exhaustion(isolated_home, monkeypatch):
+    """Five LinkedIn pages are 5 sources worth of numbers and none of the national portals: the plan says where to go."""
+    use_coverage(monkeypatch, ["platsbanken/se 1/3", "blocket-jobb/se 0/3"])
+    write_log(isolated_home, passes(12, sources=6))
+    result = se.check(NOW)
+    assert result["verdict"] == "not_exhausted"
+    assert (result["sources"], result["queries"]) == (6, 12)          # the three numbers alone would have said yes
+    assert result["core_missing"] == ["platsbanken/se 1/3", "blocket-jobb/se 0/3"]
+    assert any("platsbanken/se 1/3" in m and "scout_coverage.py next" in m for m in result["missing"])
+
+
+def test_all_core_portals_covered_and_the_numbers_reached_is_exhaustion(isolated_home):
+    write_log(isolated_home, passes(12, sources=6))
+    result = se.check(NOW)
+    assert result["verdict"] == "exhausted" and result["core_missing"] == []
+
+
+def test_the_coverage_clause_gets_the_rows_of_the_window(isolated_home, monkeypatch):
+    fake = use_coverage(monkeypatch, [])
+    write_log(isolated_home, passes(12, sources=6) + [{"v": 1, "kind": "pass", "ts": NOW - 40 * 3600, "source": "old",
+                                                        "country": "se", "returned": 1, "query_hash": "hold"}])
+    se.check(NOW)
+    assert len(fake.seen_rows) == 12 and all(r["source"] != "old" for r in fake.seen_rows)
+
+
+def test_a_coverage_that_cannot_be_computed_never_blocks_exhaustion(isolated_home, monkeypatch):
+    """An unreadable profile, a language the table lacks, a bug: the three numbers decide, no impossible exhaustion."""
+    use_coverage(monkeypatch, ["platsbanken/se 0/3"], fail=True)
+    write_log(isolated_home, passes(12, sources=6))
+    result = se.check(NOW)
+    assert result["verdict"] == "exhausted" and result["core_missing"] == []
+
+
+def test_a_coverage_answer_that_is_not_a_list_of_lines_is_ignored(isolated_home, monkeypatch):
+    fake = use_coverage(monkeypatch, [])
+    fake.core_missing = lambda states: "everything"
+    write_log(isolated_home, passes(12, sources=6))
+    assert se.check(NOW)["verdict"] == "exhausted"
+
+
+def test_without_the_coverage_module_the_numbers_stand_alone(isolated_home, monkeypatch):
+    monkeypatch.setitem(sys.modules, "scout_coverage", None)            # import raises ImportError
+    write_log(isolated_home, passes(12, sources=6))
+    assert se.check(NOW)["verdict"] == "exhausted"
+
+
+def test_declare_refuses_while_a_core_portal_is_missing_and_names_it(isolated_home, monkeypatch):
+    use_coverage(monkeypatch, ["platsbanken/se 2/3"])
+    write_log(isolated_home, passes(12, sources=6))
+    code, result = se.declare(NOW)
+    assert code == 3 and "platsbanken/se 2/3" in " ".join(result["missing"])
+    assert se.status(NOW)["quiet"] is False                              # nothing was written
+
+
+def test_the_coverage_clause_does_not_change_unmeasured(isolated_home, monkeypatch):
+    use_coverage(monkeypatch, ["platsbanken/se 0/3"])
+    result = se.check(NOW)
+    assert result["verdict"] == "unmeasured" and result["core_missing"] == []

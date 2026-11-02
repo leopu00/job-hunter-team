@@ -61,6 +61,7 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
 
 STEP 3 — UNE POSITION CANDIDATE par itération (SC-09) → position-insert
          5 gates : dedup → link verify → fetch JD → filters → INSERT.
+         OÙ chercher : `scout_coverage.py next` → portail + type de requête (d'abord une requête LARGE ; d'abord les core, puis les sources mineures).
          UNE position par itération, du set de liens en cache. PAS 5 d'un
          coup, PAS un mass-batch (le self-loop est OK — une par passe).
          Anti-bias : >30% d'une seule entreprise → change source/query
@@ -98,6 +99,8 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
 **Mesure chaque recherche (skill `scout-pass-log`).** Après chaque recherche sur une source, la commande `pass` avec le nombre de candidats revenus. Quand un candidat sort des gates (inséré ou écarté), la commande `candidate` avec l'endroit où il a fini. Vocabulaire fermé, jamais de texte libre : c'est ainsi que l'équipe sait si une source est épuisée ou si la recherche est mal faite.
 
 **La langue d'abord, la récupération ensuite (skill `scout-language-gate`).** Avant de choisir pays et requêtes, lance `scout_language.py plan` pour les langues de ce profil ; avant de récupérer l'annonce complète d'un candidat, lance `scout_language.py screen` sur son titre et son extrait (`--log`) et écarte-le à la sortie 10. Il n'écarte que sur preuve, pour qu'une priorité reste une priorité.
+
+**D'abord la couverture (skill `scout-coverage`).** Avant toute source mineure, les portails nationaux principaux (core) des langues de ce profil : au début de chaque recherche lance `python3 /app/shared/skills/scout_coverage.py next`. Il te donne le portail, le pays à journaliser et le type de requête. La première est toujours LARGE : la famille du rôle ou un mot d'entrée («praktik») seul, sans titre complet et sans lieu, car un portail qui met les mots en AND répond 0 à «junior project coordinator» + une ville et des centaines à «praktik» ; lis TOUS les résultats (chaque page) et filtre-les toi-même contre le profil. Viennent ensuite le titre dans la langue du portail, en anglais, un synonyme, avec un mot de niveau, avec une ville : fais celle qu'il indique, puis journalise la passe avec le même `--query-kind` (`broad` pour la large). Un portail est couvert avec 3 passes et 3 requêtes différentes, dont une large et une dans la langue du portail ; un portail qui répond 403/410 ou un mur de connexion se ferme avec UNE passe (`--status closed`) et tu passes à la suite. Platsbanken (Suède) a une API publique : `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --query-kind broad --log`. `exhausted` (`scout_exhaustion.py check`) exige aussi les portails core couverts : `core_missing` dit où tu dois encore aller.
 
 **LinkedIn dit d'attendre (`linkedin_access.py`).** Quand `search` ou `fetch-job` se termine par la sortie 3 et une dernière ligne JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, LinkedIn ne répond pas : garde les résultats déjà imprimés, passe TOUT DE SUITE à une autre source et ne reviens sur LinkedIn qu'à `retry_at`. Ne réessaie jamais en boucle : tous les Scouts ensemble ont 40 requêtes toutes les 10 minutes, et insister ne fait qu'allonger l'attente.
 
