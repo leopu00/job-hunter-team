@@ -18,19 +18,23 @@ import type { ToolHandler } from "../tools/registry.ts";
  * has nothing to count from and is always the full one, as in the TUI after a
  * boot.
  *
- * `user_requests` (the ANALISTA with the user's requests waiting) is the TUI's
- * alone for now: here the database may be the hub's, and the queues are not
- * counted in this process.
+ * `user_requests` (the ANALISTA with the user's requests waiting) and
+ * `queued_work` (the ANALISTA and the SCORER with positions waiting in their own
+ * queue: a short pause, none in the user's burn) are the TUI's alone for now:
+ * here the database may be the hub's, and the queues are not counted in this
+ * process. The file is read whole so that the two teams share one schema; the
+ * roles and the cap of `queued_work` are loaded here, and applied by the engine.
  */
 export interface PauseRules {
   shortPauseSec: number;
   emptyUnit: { roles: string[]; maxStreak: number };
+  queuedWork: { roles: string[]; pauseSec: number };
 }
 
 export const PAUSE_RULES_FILE = join("agents", "_skills", "throttle", "pause-rules.json");
 
 /** No file, or one that cannot be read: no rule, the full pause (the safe direction is the brake). */
-export const NO_RULES: PauseRules = { shortPauseSec: 0, emptyUnit: { roles: [], maxStreak: 0 } };
+export const NO_RULES: PauseRules = { shortPauseSec: 0, emptyUnit: { roles: [], maxStreak: 0 }, queuedWork: { roles: [], pauseSec: 0 } };
 
 export function loadPauseRules(appRoot: string): PauseRules {
   let raw: unknown;
@@ -39,11 +43,18 @@ export function loadPauseRules(appRoot: string): PauseRules {
   } catch {
     return NO_RULES;
   }
-  const file = (raw ?? {}) as { short_pause_sec?: unknown; empty_unit?: { roles?: unknown; max_streak?: unknown } };
-  const roles = Array.isArray(file.empty_unit?.roles) ? file.empty_unit.roles.filter((r): r is string => typeof r === "string") : [];
+  const file = (raw ?? {}) as {
+    short_pause_sec?: unknown;
+    empty_unit?: { roles?: unknown; max_streak?: unknown };
+    queued_work?: { roles?: unknown; pause_sec?: unknown };
+  };
+  const rolesOf = (value: unknown): string[] => (Array.isArray(value) ? value.filter((r): r is string => typeof r === "string") : []);
+  const shortPauseSec = Number.isInteger(file.short_pause_sec) ? (file.short_pause_sec as number) : 0;
   return {
-    shortPauseSec: Number.isInteger(file.short_pause_sec) ? (file.short_pause_sec as number) : 0,
-    emptyUnit: { roles, maxStreak: Number.isInteger(file.empty_unit?.max_streak) ? (file.empty_unit!.max_streak as number) : 0 },
+    shortPauseSec,
+    emptyUnit: { roles: rolesOf(file.empty_unit?.roles), maxStreak: Number.isInteger(file.empty_unit?.max_streak) ? (file.empty_unit!.max_streak as number) : 0 },
+    // `pause_sec` absent: the short pause, as in the engine.
+    queuedWork: { roles: rolesOf(file.queued_work?.roles), pauseSec: Number.isInteger(file.queued_work?.pause_sec) ? (file.queued_work!.pause_sec as number) : shortPauseSec },
   };
 }
 

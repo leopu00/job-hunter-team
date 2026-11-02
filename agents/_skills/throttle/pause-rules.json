@@ -24,7 +24,16 @@
     "(vel_team vs vel_target). An unreadable signal is no signal; a user's burn intent",
     "(burn_intent) lifts the hold, as it lifts the floor and the ladder.",
     "user_requests (TUI only for now): an Analista with the user's requests waiting",
-    "(db_query.USER_REQUEST_QUEUES) pauses short_pause_sec."
+    "(db_query.USER_REQUEST_QUEUES) pauses short_pause_sec.",
+    "queued_work (TUI only for now: the queues are counted from the database): ONE rule for the roles",
+    "listed, the Analista and the Scorer. The Capitano's pause is the brake against empty rounds, and a",
+    "round with positions waiting in the role's own queue (db_query.role_queue_count: the Analista's `new`,",
+    "the Scorer's `checked` without a score, the queues next-for-analista and next-for-scorer print) is",
+    "not empty: the pause after a unit is at most pause_sec (a checkpoint between two units, only short).",
+    "With the queue empty, or one that cannot be counted, the Capitano's pause as before. It yields to the",
+    "same hold as empty_unit (keep_captains_pause: recovery after a freeze, team over its pace): then the",
+    "Capitano's pause stays, the budget is protected. The user's burn intent (\"Lavora a tutta\") lifts that",
+    "hold and, with a queue waiting, takes the pause away altogether. A rule never lengthens a pause."
   ],
   "short_pause_sec": 60,
   "empty_unit": {
@@ -38,5 +47,9 @@
   },
   "user_requests": {
     "roles": ["analista"]
+  },
+  "queued_work": {
+    "roles": ["analista", "scorer"],
+    "pause_sec": 60
   }
 }

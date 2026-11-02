@@ -104,6 +104,8 @@ Az `UNSCORED`-ot (pozíciók − pontszámok) olvasd az Elemző/Scorer mögötti
 
 A rács fölött a szerepek aszimmetriája: utolsóként azokat lassítod, akik a meglévő felhalmozást **pontszámos** pozícióvá alakítják (Elemző, Scorer) — ők a különbség „50 megtalált pozíció" és valami között, amivel a felhasználó kezdeni tud valamit. Elsőként az, amelyik új nyers bemenetet gyárt, miközben a lefelé lévő sor már mély (Scout). Egy üres sorú Író egyik irányban sem kar.
 
+**A motor már lerövidíti az Elemző és a Scorer szünetét, amíg a saját sorukban pozíciók várnak** (`new` az Elemzőnél, pontszám nélküli `checked` a Scorernél): 60 s két egység között, a felhasználó burstjében («Lavora a tutta») semennyi, `pause-rules.json` → `queued_work`. Az az érték, amit nekik a `throttle.json`-ba írsz, az **üres** sor szüneteje, és az, ami marad, ha a keret kritikus (fagyasztás az utolsó 2 órában, a csapat több mint 1 %/h-val a tempója felett): ilyenkor hat a lassításuk teli sornál. Rendben lévő kereten egy teli sort nem tartunk állva.
+
 **Egy-két ágensre koncentrálj.** A létra durva — két fok között 20-60% van — így egy öt ágensre szétkent vágás mindegyiküknél a zajba vész, míg ugyanaz a vágás a legnagyobb share-ű ágensen valódi, mérhető változás a következő jelzésre.
 
 **Ha kettőt fékezel, adj nekik különböző fokot.** A létra szándékosan prímperceken áll (1, 2, 3, 5, 7, 11, 13, 17, 23, 31, 41, 53, 60): két worker, amely ugyanazon az értéken tart szünetet, szerkezetéből adódóan újra szinkronba kerül, és a checkpointjaik együtt esnek be — egyidejű kérések sorozataként. `scout-1=660` + `analista-1=780` (11 és 13 perc) sokkal ritkábban ütközik, mint mindkettő 780-on.
