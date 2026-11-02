@@ -25,7 +25,7 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 
 ## Zárt szókincs
 
-`--source`: ugyanaz a slug, amit az INSERT `--source`-ának adsz (`linkedin`, `greenhouse`, ...). `--country`: két betű (`nl`), vagy `multi` / `remote`. `--query-kind`: `role` · `role_language` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `other`.
+`--source`: ugyanaz a slug, amit az INSERT `--source`-ának adsz (`linkedin`, `greenhouse`, ...). `--country`: két betű (`nl`), vagy `multi` / `remote`. `--query-kind`: `role` · `role_language` · `broad` · `synonym` · `level` · `city` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `role` · `area` · `other`.
 
 ## Szabályok
 
@@ -33,3 +33,4 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 - Ha elutasítja, javítsd az értéket, és hívd újra. Emiatt soha ne hagyd ki a keresést vagy a jelöltet.
 - A `language` annak a jelöltnek az eredménye, akit azért vetsz el, mert a hirdetés olyan nyelvet kér, amelyet a felhasználó nem beszél, akár a listában, akár a JD-ben láttad.
 - Egy hívás keresésenként és egy jelöltenként, ha tudod, ugyanabban a shell-hívásban, mint a döntő gate.
+- Minden hirdetés, amelyet egy lista elolvasása után helyben elvetsz, megkapja az indokát a naplóban, soha nem a csend: a cím a profil szerepein kívül → `role`, a hely a profil területein kívül → `area`, meg a többi (`seniority`, `language`, `experience`, `domain`, `work_auth`). Sok, azonos indokú hirdetésnél NE hívj hirdetésenként: a `candidate --source S --country CC --outcome role --count 640` EGY sor, amely 640-et ér (1-től 100000-ig; soha `inserted`-del és soha `--opened`-del, az soronként egy). Az a portál, amely 403-at, belépési falat vagy 410-et ad: `pass ... --returned 0 --status closed` (410-nél `gone`, üres listánál `empty`). A jelentés `unexpl` oszlopa az, amit a portál visszaadott, és senki sem magyarázott meg: 0-ra kell érnie.

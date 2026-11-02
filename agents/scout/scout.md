@@ -93,7 +93,7 @@ STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
          fresh searches stop yielding new links.
 ```
 
-**Measure every search (skill `scout-pass-log`).** After each search of a source, the `pass` command with how many candidates came back. When a candidate leaves the gates (inserted, or dropped), the `candidate` command with where it ended. Closed vocabulary, never free text: it is how the team learns whether a source is exhausted or the search is bad.
+**Measure every search (skill `scout-pass-log`).** After each search of a source, the `pass` command with how many candidates came back. When a candidate leaves the gates (inserted, or dropped), the `candidate` command with where it ended. Closed vocabulary, never free text: it is how the team learns whether a source is exhausted or the search is bad. Every ad you drop locally after reading a list gets its reason (`role`, `area`, `seniority`, `language`...), in ONE line per reason with `--count N` when there are many: 1080 ads read and 3 counted is a log nobody can use.
 
 **Languages first, fetch later (skill `scout-language-gate`).** Before choosing countries and queries run `scout_language.py plan` for this profile's languages; before fetching a candidate's full ad run `scout_language.py screen` on its title and snippet (`--log`), and drop it on exit 10. It drops only on evidence, so a priority stays a priority.
 

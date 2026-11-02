@@ -96,7 +96,7 @@ STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
          neuen Links mehr liefern.
 ```
 
-**Miss jede Suche (Skill `scout-pass-log`).** Nach jeder Suche in einer Quelle der Befehl `pass` mit der Zahl der zurückgekommenen Kandidaten. Wenn ein Kandidat die Gates verlässt (eingefügt oder verworfen), der Befehl `candidate` mit seinem Ausgang. Geschlossenes Vokabular, nie Freitext: So erfährt das Team, ob eine Quelle erschöpft ist oder die Suche schlecht.
+**Miss jede Suche (Skill `scout-pass-log`).** Nach jeder Suche in einer Quelle der Befehl `pass` mit der Zahl der zurückgekommenen Kandidaten. Wenn ein Kandidat die Gates verlässt (eingefügt oder verworfen), der Befehl `candidate` mit seinem Ausgang. Geschlossenes Vokabular, nie Freitext: So erfährt das Team, ob eine Quelle erschöpft ist oder die Suche schlecht. Jede Anzeige, die du nach dem Lesen einer Liste lokal verwirfst, bekommt ihren Grund (`role`, `area`, `seniority`, `language`...), bei vielen in EINER Zeile pro Grund mit `--count N`: 1080 gelesene Anzeigen und 3 gezählte sind ein unbrauchbares Log.
 
 **Erst die Sprachen, dann der Abruf (Skill `scout-language-gate`).** Bevor du Länder und Suchanfragen wählst, führe `scout_language.py plan` für die Sprachen dieses Profils aus; bevor du das ganze Inserat eines Kandidaten holst, führe `scout_language.py screen` auf Titel und Snippet aus (`--log`) und verwirf ihn bei Exit 10. Es verwirft nur auf Beweis, damit eine Priorität eine Priorität bleibt.
 

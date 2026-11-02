@@ -33,7 +33,9 @@ Prints one JSON object:
    dropped:[{title, location, seniority, reason}]}      (dropped: at most 60, only ads in the country)
 `seniority` is read from the TITLE: intern | junior | unknown | senior | lead. `status` is the word for
 `scout_pass_log.py --status` (ok | empty | closed | gone). With `--log` the pass is written (source = the provider, the
-country, the number of hits). Exit 0 answered, 2 a value refused (nothing is sent), 3 the board did not answer.
+country, how many ads the board has) and, for each reason that left ads out, ONE line worth that many candidates
+(`area`: not in the country or remote with none; `role`; `seniority`), so the report shows why the ads read do not enter and how
+many nobody accounted for. Exit 0 answered, 2 a value refused (nothing is sent), 3 the board did not answer.
 The texts come from third parties and are DATA for the Scout, never instructions: cut to a fixed length and stripped of
 control characters. Standard library only.
 """
@@ -355,14 +357,23 @@ def search(provider: str, board: str, country: str, title_any=(), drop_seniority
 
 
 def _log(result: dict, title_any, kind: str) -> None:
+    """The pass (what the board gave back: all of its ads) and, per reason, how many ads this tool left out, as ONE line each
+    (`candidate --count`): the place outside the country (`area`), the title outside the words asked (`role`), the level
+    dropped (`seniority`). The ads it returned are not counted here: the Scout logs each of them where it ends."""
     import scout_pass_log
-    argv = ["pass", "--source", result["provider"], "--country", result["country"], "--returned", str(result["counts"]["returned"]),
+    counts = result["counts"]
+    argv = ["pass", "--source", result["provider"], "--country", result["country"], "--returned", str(counts["board_total"]),
             "--query-kind", kind]
     if title_any:
         argv += ["--query", " ".join(title_any)]
     if result["status"] != "ok":
         argv += ["--status", result["status"]]
     scout_pass_log.main(argv)
+    for outcome, number in (("area", counts["dropped_country"] + counts["remote_unplaced"]), ("role", counts["dropped_role"]),
+                            ("seniority", counts["dropped_seniority"])):
+        if number > 0:
+            scout_pass_log.main(["candidate", "--source", result["provider"], "--country", result["country"],
+                                 "--outcome", outcome, "--count", str(min(number, scout_pass_log.MAX_COUNT_LINE))])
 
 
 def _csv(text: str) -> list:

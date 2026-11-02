@@ -25,7 +25,7 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 
 ## Vocabolario chiuso
 
-`--source`: lo stesso slug che dai a `--source` dell'INSERT (`linkedin`, `greenhouse`, ...). `--country`: due lettere (`nl`), oppure `multi` / `remote`. `--query-kind`: `role` · `role_language` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `other`.
+`--source`: lo stesso slug che dai a `--source` dell'INSERT (`linkedin`, `greenhouse`, ...). `--country`: due lettere (`nl`), oppure `multi` / `remote`. `--query-kind`: `role` · `role_language` · `broad` · `synonym` · `level` · `city` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `role` · `area` · `other`.
 
 ## Regole
 
@@ -33,3 +33,4 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 - Se viene rifiutato, correggi il valore e richiama. Mai saltare la ricerca o il candidato per questo.
 - `language` è l'esito di un candidato che scarti perché l'annuncio richiede una lingua che l'utente non parla, che tu l'abbia vista nella lista o nella JD.
 - Una chiamata per ricerca e una per candidato, nella stessa chiamata di shell del gate che ha deciso, quando puoi.
+- Ogni annuncio che scarti in locale dopo aver letto una lista ha il suo motivo nel registro, mai il silenzio: titolo fuori dai ruoli del profilo → `role`, luogo fuori dalle sue aree → `area`, e gli altri (`seniority`, `language`, `experience`, `domain`, `work_auth`). Per molti annunci con lo stesso motivo NON chiamare una volta per annuncio: `candidate --source S --country CC --outcome role --count 640` è UNA riga che ne vale 640 (da 1 a 100000; mai con `inserted` e mai con `--opened`, che è una riga ciascuno). Un portale che risponde 403, un muro di login o 410: `pass ... --returned 0 --status closed` (`gone` per il 410, `empty` per una lista vuota). La colonna `unexpl` del report è ciò che il portale ha restituito e nessuno ha spiegato: deve arrivare a 0.

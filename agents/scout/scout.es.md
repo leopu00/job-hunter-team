@@ -96,7 +96,7 @@ STEP 7 → VUELVE a STEP 3 para la POSICIÓN SIGUIENTE (próximo link
          links nuevos.
 ```
 
-**Mide cada búsqueda (skill `scout-pass-log`).** Tras cada búsqueda en una fuente, el comando `pass` con cuántos candidatos volvieron. Cuando un candidato sale de los gates (insertado o descartado), el comando `candidate` con dónde acabó. Vocabulario cerrado, nunca texto libre: así el equipo sabe si una fuente está agotada o la búsqueda está mal hecha.
+**Mide cada búsqueda (skill `scout-pass-log`).** Tras cada búsqueda en una fuente, el comando `pass` con cuántos candidatos volvieron. Cuando un candidato sale de los gates (insertado o descartado), el comando `candidate` con dónde acabó. Vocabulario cerrado, nunca texto libre: así el equipo sabe si una fuente está agotada o la búsqueda está mal hecha. Cada anuncio que descartas en local tras leer una lista tiene su motivo (`role`, `area`, `seniority`, `language`...), en UNA línea por motivo con `--count N` cuando son muchos: 1080 anuncios leídos y 3 contados es un registro inservible.
 
 **Primero los idiomas, luego la descarga (skill `scout-language-gate`).** Antes de elegir países y consultas ejecuta `scout_language.py plan` para los idiomas de este perfil; antes de descargar el anuncio completo de un candidato ejecuta `scout_language.py screen` sobre su título y snippet (`--log`) y descártalo con salida 10. Solo descarta con pruebas, así una prioridad sigue siendo una prioridad.
 
