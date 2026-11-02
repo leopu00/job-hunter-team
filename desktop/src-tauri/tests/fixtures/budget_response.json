@@ -1,0 +1,166 @@
+{
+  "ahead_without_override": {
+    "ok": true,
+    "generatedAt": "2026-11-02T22:00:00+00:00",
+    "sampleAt": "2026-11-02T22:00:00+00:00",
+    "sampleAgeMin": 0,
+    "week": {
+      "usedPct": 78.0,
+      "remainingPct": 22.0,
+      "resetAtUnix": 1793860552,
+      "activeHoursToReset": 28.6,
+      "idealUsedPct": 59.1,
+      "deviationPts": 18.9,
+      "line": "ahead"
+    },
+    "rate": {
+      "loPctH": 0.63,
+      "hiPctH": 1.26,
+      "nowPctH": 0.95,
+      "sustainablePctH": 0.77,
+      "projectedFinalPct": 105.0,
+      "wastedPct": 0.0,
+      "lockoutEarlyActiveH": null,
+      "marginActiveH": 2.0
+    },
+    "verdict": {
+      "code": "ahead",
+      "brake": true,
+      "steps": 3
+    },
+    "brakes": [
+      "pace_ahead",
+      "pause_between_jobs"
+    ],
+    "pauseSec": 900,
+    "burn": {
+      "state": "off",
+      "grantedAt": null,
+      "expiresAt": null,
+      "remainingMin": null,
+      "spentPts": null,
+      "paceBeforePctH": null,
+      "paceNowPctH": 0.95
+    },
+    "roles": {
+      "window": "week",
+      "roles": [
+        {
+          "role": "scout",
+          "sharePct": 60.0,
+          "kt": 540.0,
+          "agents": 2
+        },
+        {
+          "role": "analista",
+          "sharePct": 20.0,
+          "kt": 180.0,
+          "agents": 1
+        },
+        {
+          "role": "scorer",
+          "sharePct": 10.0,
+          "kt": 90.0,
+          "agents": 1
+        }
+      ],
+      "unattributedPct": 10.0,
+      "totalKt": 900.0,
+      "ageMin": 2
+    }
+  },
+  "override_lockout_risk": {
+    "ok": true,
+    "generatedAt": "2026-11-02T22:00:00+00:00",
+    "sampleAt": "2026-11-02T22:00:00+00:00",
+    "sampleAgeMin": 0,
+    "week": {
+      "usedPct": 46.0,
+      "remainingPct": 54.0,
+      "resetAtUnix": 1793860552,
+      "activeHoursToReset": 28.6,
+      "idealUsedPct": 59.1,
+      "deviationPts": -13.1,
+      "line": "behind"
+    },
+    "rate": {
+      "loPctH": 6.0,
+      "hiPctH": 8.0,
+      "nowPctH": 7.0,
+      "sustainablePctH": 1.89,
+      "projectedFinalPct": 246.0,
+      "wastedPct": 0.0,
+      "lockoutEarlyActiveH": 19.6,
+      "marginActiveH": 2.0
+    },
+    "verdict": {
+      "code": "lockout_risk",
+      "brake": true,
+      "steps": 6
+    },
+    "brakes": [
+      "lockout_risk"
+    ],
+    "pauseSec": null,
+    "burn": {
+      "state": "active",
+      "grantedAt": "2026-11-02T21:00:00+00:00",
+      "expiresAt": "2026-11-03T02:00:00+00:00",
+      "remainingMin": 240,
+      "spentPts": 7.0,
+      "paceBeforePctH": 7.0,
+      "paceNowPctH": 7.0
+    },
+    "roles": {
+      "window": "week",
+      "roles": [
+        {
+          "role": "scout",
+          "sharePct": 60.0,
+          "kt": 540.0,
+          "agents": 2
+        },
+        {
+          "role": "analista",
+          "sharePct": 20.0,
+          "kt": 180.0,
+          "agents": 1
+        },
+        {
+          "role": "scorer",
+          "sharePct": 10.0,
+          "kt": 90.0,
+          "agents": 1
+        }
+      ],
+      "unattributedPct": 10.0,
+      "totalKt": 900.0,
+      "ageMin": 2
+    }
+  },
+  "no_data": {
+    "ok": true,
+    "generatedAt": "2026-11-02T22:00:00+00:00",
+    "sampleAt": null,
+    "sampleAgeMin": null,
+    "week": null,
+    "rate": null,
+    "verdict": {
+      "code": "no_data",
+      "brake": false,
+      "steps": 0
+    },
+    "brakes": [],
+    "pauseSec": null,
+    "burn": {
+      "state": "off",
+      "grantedAt": null,
+      "expiresAt": null,
+      "remainingMin": null,
+      "spentPts": null,
+      "paceBeforePctH": null,
+      "paceNowPctH": null
+    },
+    "roles": null
+  }
+}

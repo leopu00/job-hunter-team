@@ -6,7 +6,6 @@ import { SignOutContext } from "../../lib/account-actions";
 import type { TeamControlState } from "../../lib/agent-control";
 import AccountCard from "./AccountCard";
 import { ACCOUNT_TEXT } from "./account.i18n";
-import { ROUTES } from "../../shell/routes";
 import TeamCard from "./TeamCard";
 
 beforeEach(() => localStorage.setItem("jht-lang", "en"));
@@ -90,27 +89,16 @@ describe("the Team card", () => {
   });
 
   it("leads to the agents' panel and, where the team is not only read, to the budget page", async () => {
-    const budget = { path: "/budget", page: () => null };
-    ROUTES.push(budget); // the page comes with its own piece of work: the link shows once the route is there
-    try {
-      render(<TeamCard readOnly={false} read={ok(state())} />);
-      await userEvent.click(screen.getByTestId("settings-agents-link"));
-      expect(window.location.hash).toBe("#/agents");
-      await userEvent.click(screen.getByTestId("settings-budget-link"));
-      expect(window.location.hash).toBe("#/budget");
-    } finally {
-      ROUTES.splice(ROUTES.indexOf(budget), 1);
-    }
+    render(<TeamCard readOnly={false} read={ok(state())} />);
+    await userEvent.click(screen.getByTestId("settings-agents-link"));
+    expect(window.location.hash).toBe("#/agents");
+    await userEvent.click(screen.getByTestId("settings-budget-link"));
+    expect(window.location.hash).toBe("#/budget");
     cleanup();
     render(<TeamCard readOnly read={ok(state())} />);
     expect(screen.getByTestId("settings-agents-link")).toBeInTheDocument();
     expect(screen.queryByTestId("settings-budget-link")).toBeNull();
   });
-});
-
-it("shows no link to a budget page that does not exist yet", () => {
-  render(<TeamCard readOnly={false} read={ok(state())} />);
-  expect(screen.queryByTestId("settings-budget-link")).toBeNull();
 });
 
 it("is written in the seven languages with the same words filled in", () => {

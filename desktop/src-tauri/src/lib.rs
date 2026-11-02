@@ -50,6 +50,7 @@ mod chat_attachment;
 mod profile_progress;
 mod team_start;
 mod work_stats;
+mod team_budget;
 mod text_file_export;
 mod voice_input;
 mod vps_link;
@@ -212,6 +213,7 @@ pub fn run() {
             app_exit::app_exit_finish,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
+            team_budget::team_budget_read,
             local_swipe::local_swipe_deck_read,
             local_swipe::local_team_position_judge,
             voice_input::voice_input_cancel,

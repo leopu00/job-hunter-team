@@ -37,14 +37,17 @@ describe("the main bar", () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);
     await screen.findByRole("heading", { name: "Dashboard" });
-    expect(barHrefs()).toEqual(NAV_ITEMS.map((item) => `#${item.href}`).filter((href) => href !== "#/budget"));
+    expect(barHrefs()).toEqual(NAV_ITEMS.map((item) => `#${item.href}`));
     expect(barHrefs()).not.toContain("#/profile");
     expect(barHrefs()).not.toContain("#/settings");
   });
 
-  it("shows the Budget link, after the office, the day its page is in the routes — and not before", async () => {
-    const budget = { path: "/budget", page: () => <h1>Pagina budget</h1> };
-    ROUTES.push(budget);
+  it("shows the Budget link after the office, and it opens the Budget page", async () => {
+    // the route is the real one; only its page is a stand-in, so the test does not read the native budget
+    const budget = ROUTES.find((route) => route.path === "/budget");
+    if (!budget) throw new Error("the Budget page is not in the routes");
+    const page = budget.page;
+    budget.page = () => <h1>Pagina budget</h1>;
     try {
       navigate("/dashboard", { replace: true });
       render(<Shell />);
@@ -56,7 +59,7 @@ describe("the main bar", () => {
       expect(await screen.findByRole("heading", { name: "Pagina budget" })).toBeInTheDocument();
       expect(link).toHaveAttribute("aria-current", "page");
     } finally {
-      ROUTES.splice(ROUTES.indexOf(budget), 1);
+      budget.page = page;
     }
   });
 

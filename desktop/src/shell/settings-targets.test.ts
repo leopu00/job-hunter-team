@@ -14,8 +14,6 @@ describe("the addresses the settings pages navigate to", () => {
     const folder = fileURLToPath(new URL("../pages/settings/", import.meta.url));
     const sources = ["index.tsx", "SettingsSections.tsx", "TeamCard.tsx", "AccountCard.tsx"].map((file) => readFileSync(join(folder, file), "utf8"));
     const targets = new Set(sources.flatMap((source) => [...source.matchAll(/navigate\("([^"?]+)[^"]*"\)/g)].map((match) => match[1])));
-    // the budget page comes with its own piece of work: its link is shown only once the route exists (TeamCard)
-    targets.delete("/budget");
     expect(targets.size).toBeGreaterThanOrEqual(2);
     for (const target of targets) {
       const goes = redirectFor(target, "")?.split("?")[0] ?? target;

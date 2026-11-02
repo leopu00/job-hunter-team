@@ -307,16 +307,16 @@ describe("Shell", () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    // every destination of the bar has a page, except the ones whose page another piece of work brings (Budget)
-    for (const item of NAV_ITEMS.filter((entry) => entry.href !== "/budget")) {
+    // every destination of the bar has a page
+    for (const item of NAV_ITEMS) {
       expect(matchRoute(ROUTES, item.href)?.route.path).toBe(item.href);
     }
     expect(NAV_ITEMS.map((item) => item.href)).toEqual(["/dashboard", "/positions", "/swipe", "/map", "/team", "/office", "/budget", "/messages"]);
     const links = within(screen.getByTestId("navbar-links")).getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/team", "#/office", "#/messages"].filter((href) => href !== "#/budget"));
-    // Budget appears the day its page is in the routes: until then no link goes nowhere
-    expect(within(nav).queryByRole("link", { name: "Budget" })).not.toBeInTheDocument();
-    expect(matchRoute(ROUTES, "/budget")).toBeNull();
+    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/team", "#/office", "#/budget", "#/messages"]);
+    // Budget has its page in the routes, so its entry in the bar is lit
+    expect(within(nav).getByRole("link", { name: "Budget" })).toHaveAttribute("href", "#/budget");
+    expect(matchRoute(ROUTES, "/budget")?.route.path).toBe("/budget");
     const menu = await accountMenu();
     for (const item of ACCOUNT_MENU_ITEMS) {
       // Settings is the page of its sections: its own address goes on to one of them

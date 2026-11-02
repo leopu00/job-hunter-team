@@ -57,9 +57,35 @@ MIN_DELTA_PCT = 3.0          # punti interi minimi per un rate affidabile (err q
 DEBT_BIND_PCT = 8.0          # punti-% di over-spend cumulativo oltre cui il debito binda
 
 
+def _samples_from_file(jsonl_path, since, now_ts):
+    """[(epoch, weekly_usage)] of the rows of the sentinel's data file inside [since, now_ts]."""
+    samples = []
+    with open(str(jsonl_path), encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            w = e.get("weekly_usage")
+            ts_iso = e.get("ts")
+            if not isinstance(w, (int, float)) or not isinstance(ts_iso, str):
+                continue
+            try:
+                t = datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                continue
+            if t < since or t > now_ts:
+                continue
+            samples.append((t, float(w)))
+    return samples
+
+
 def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
                            weekly_active_hours, window_h=2.0,
-                           weekly_total_active_hours=None, burn_intent_on=False):
+                           weekly_total_active_hours=None, burn_intent_on=False, samples=None):
     """RATE weekly REALE (vel_weekly) su ~window_h vs sostenibile.
 
     Il weekly_usage e' integer-rounded e si muove ~+1%/tick → su pochi minuti e'
@@ -83,38 +109,22 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
             or not isinstance(weekly_active_hours, (int, float))
             or weekly_active_hours <= 0):
         return None
-    if jsonl_path is None or not os.path.exists(str(jsonl_path)):
+    if samples is None and (jsonl_path is None or not os.path.exists(str(jsonl_path))):
         return None
     # Lookback ampio: la finestra del rate e' ADATTIVA (sotto), non fissa a
     # window_h, per battere il rumore di quantizzazione del weekly_usage (intero).
     lookback_h = max(window_h, MAX_WINDOW_H)
     since = now_ts - lookback_h * 3600.0
     recent_since = now_ts - RECENT_WINDOW_H * 3600.0
-    samples = []
-    try:
-        with open(str(jsonl_path), encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    e = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                w = e.get("weekly_usage")
-                ts_iso = e.get("ts")
-                if not isinstance(w, (int, float)) or not isinstance(ts_iso, str):
-                    continue
-                try:
-                    t = datetime.fromisoformat(
-                        ts_iso.replace("Z", "+00:00")).timestamp()
-                except ValueError:
-                    continue
-                if t < since or t > now_ts:
-                    continue
-                samples.append((t, float(w)))
-    except OSError:
-        return None
+    if samples is not None:
+        # [(epoch, weekly_usage)] already read and checked by the caller (the app's read, budget_view.py)
+        samples = [(float(t), float(w)) for t, w in samples
+                   if isinstance(t, (int, float)) and isinstance(w, (int, float)) and since <= t <= now_ts]
+    else:
+        try:
+            samples = _samples_from_file(jsonl_path, since, now_ts)
+        except OSError:
+            return None
     if len(samples) < 2:
         return None
     # Il ritmo e' di pace_rate.py: almeno un'ora, intervallo [lo, hi] sul contatore intero, salti non attribuibili

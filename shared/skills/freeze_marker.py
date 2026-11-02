@@ -14,8 +14,14 @@ di disco è muto (la traccia manca, il team si ferma lo stesso).
 """
 import json
 import os
+import sys
 import time
 from pathlib import Path
+
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+import plain_file  # noqa: E402  (a pipe or a link in place of the marker must not hold the reader)
 
 
 def marker_path() -> Path:
@@ -37,8 +43,8 @@ def mark(kind: str, now=None) -> None:
 def seconds_since(now=None):
     """Secondi dall'ultimo congelamento, o None (nessuna traccia, o illeggibile)."""
     try:
-        ts = float(json.loads(marker_path().read_text(encoding="utf-8"))["ts"])
-    except (OSError, ValueError, KeyError, TypeError):
+        ts = float(plain_file.read_json(marker_path(), max_size=4096)["ts"])
+    except (OSError, plain_file.NotPlain, ValueError, KeyError, TypeError):
         return None
     elapsed = (time.time() if now is None else float(now)) - ts
     return elapsed if elapsed >= 0 else None
