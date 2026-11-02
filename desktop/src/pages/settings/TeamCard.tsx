@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { readTeamState, type Outcome, type TeamControlState } from "../../lib/agent-control";
 import { navigate } from "../../shell/router";
+import { BurstStrip } from "../work-hours/BurstControl";
 import { ACCOUNT_TEXT } from "./account.i18n";
 
 const linkCls = "text-left rounded border border-[var(--color-border)] px-4 py-3 hover:border-[var(--color-border-glow)]";
@@ -9,7 +10,9 @@ const linkCls = "text-left rounded border border-[var(--color-border)] px-4 py-3
 /**
  * The team's state in one line and the two ways to what the person asks for in Settings: the agents' panel
  * (start, pause, stop: those commands live there and keep their confirmations) and the hours, where the
- * weekly budget is set (not shown on a team that is only read: it writes to the team).
+ * weekly budget is set (not shown on a team that is only read: it writes to the team). «Work flat out until a
+ * time» is here too, under the budget: it is the team's pace and budget, where people look for it (it was
+ * only on the hours page and in the agents' panel, and was not found).
  */
 export default function TeamCard({ readOnly, read = readTeamState }: { readOnly: boolean; read?: () => Promise<Outcome<TeamControlState>> }) {
   const t = ACCOUNT_TEXT[appLocale()];
@@ -42,6 +45,7 @@ export default function TeamCard({ readOnly, read = readTeamState }: { readOnly:
           <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{t.budgetNote}</span>
         </button>
       )}
+      {!readOnly && <BurstStrip compact={false} />}
     </section>
   );
 }

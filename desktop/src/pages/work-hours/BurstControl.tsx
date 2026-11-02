@@ -139,8 +139,11 @@ export default function BurstControl({
   );
 }
 
-/** The same control for a page that has not read the team's settings: it reads them itself and shows nothing until it can. */
-export function BurstStrip() {
+/**
+ * The same control for a page that has not read the team's settings: it reads them itself and shows nothing until it can.
+ * Short (the agents' panel) unless `compact={false}`: with its title and its line, as in the Settings team card.
+ */
+export function BurstStrip({ compact = true }: { compact?: boolean }) {
   const [settings, setSettings] = useState<TeamSettings | null>(null);
   useEffect(() => {
     let alive = true;
@@ -151,5 +154,5 @@ export function BurstStrip() {
       alive = false;
     };
   }, []);
-  return settings ? <BurstControl compact settings={settings} onSettings={setSettings} /> : null;
+  return settings ? <BurstControl compact={compact} settings={settings} onSettings={setSettings} /> : null;
 }
