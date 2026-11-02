@@ -27,6 +27,7 @@ import { describeError, ERROR_CATALOG } from "../lib/error-catalog";
 import { STATE_TEXT } from "../lib/onboarding-state.i18n";
 import { existingTeamReadOnly, existingTeamView, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { writeAccessNotice } from "../lib/write-access-restored";
+import { reportVpsRead } from "../lib/vps-link";
 import type { ExistingTeamConnectModalProps } from "../onboarding/ExistingTeamConnectModal";
 import {
   loadOnboardingGate,
@@ -148,7 +149,7 @@ vi.mock("../shell/Shell", async () => {
     runtimeInstalled: true, containerRunning: true, providerConfigured: true, providerAuthenticated: true,
     assistantRunning: true, captainRunning: true, profileReady, assistantWelcomed: false, directChatReady: false,
   });
-  function MockShell({ onLogout, onCloseReadOnly }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void }) {
+  function MockShell({ onLogout, onCloseReadOnly, onChooseDestination }: { onLogout?: () => Promise<void>; onCloseReadOnly?: () => void; onChooseDestination?: () => void }) {
     // What the chat's «Collega il team» reaches in the read-only view.
     const reconfirm = useReconfirmExistingTeam();
     // What the dashboard's «Collega un team» reaches in a Shell with no team linked.
@@ -165,6 +166,7 @@ vi.mock("../shell/Shell", async () => {
         <span data-testid="local-team-data">{String(localTeamData())}</span>
         {onLogout && <button type="button" onClick={() => void onLogout()}>local-logout</button>}
         {onCloseReadOnly && <button type="button" onClick={onCloseReadOnly}>close-read-only</button>}
+        {onChooseDestination && <button type="button" onClick={onChooseDestination}>choose-destination</button>}
         {connectTeam && <button type="button" onClick={connectTeam.open}>connect-a-team</button>}
         {reconfirm && <p>reconfirm-account:{reconfirm.accountLabel}</p>}
         {reconfirm && <button type="button" onClick={() => void reconfirm.onConnected(ready(true))}>reconfirm-connected</button>}
@@ -1514,6 +1516,33 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
     expect(existingTeamReadOnly()).toBeNull();
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+  });
+
+  it("a team whose destination is no longer saved sends the profile back to choosing where it runs, not to an error", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("existing-no-destination"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Reader Person" },
+      resumeAvailable: false,
+      existingTeam: { teamId: "team-opaque-0009", status: "available" },
+      runtime: { status: "collecting", stage: "host" },
+    });
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "connect-existing-team-read-only" }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+
+    // another kind of refusal does not move the person
+    act(() => reportVpsRead({ ok: false, error: "positions_unavailable", kind: "application" }));
+    expect(screen.getByTestId("shell")).toBeInTheDocument();
+
+    // no saved destination: asking again would get the same answer, so the setup's host step opens
+    act(() => reportVpsRead({ ok: false, error: "host_not_configured", kind: "application" }));
+    expect(await screen.findByTestId("onboarding")).toHaveTextContent("collecting:host");
+    expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    expect(existingTeamReadOnly()).toBeNull();
+    expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
   it("a Google account in the read-only view reaches the full connection from the chat, and then writes", async () => {

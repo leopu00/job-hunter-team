@@ -6,6 +6,8 @@ import { waitAtMost } from "../lib/wait-at-most";
 import { probeDesktopLocalTeamOwner } from "../lib/desktop-account-scope";
 import { readDesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
 import { listLocalProfiles, localIdentitySelected, readLocalProfile, readTeamOwnerCopy } from "../lib/local-profile";
+import { localOwnerWays } from "../lib/local-owner";
+import { useProviderSetup } from "../lib/provider-setup";
 import { useLocation } from "./router";
 
 /** Whose the team of this computer is, as seen from the profile in use. */
@@ -63,6 +65,8 @@ export async function readNativeTeamOwnerView(
   return { owner: "other", name };
 }
 
+const defaultWays = localOwnerWays(() => undefined);
+
 /**
  * The band inside the app while the profile in use does not own the team of this computer: it says
  * whose the team is and offers the way to that profile (signing out of this one leads to the choice).
@@ -73,6 +77,7 @@ export function LocalTeamOwnerBanner({
   read = readTeamOwnerView,
   readNative = readNativeTeamOwnerView,
   onSwitch,
+  ways = defaultWays,
   locale: localeOverride,
 }: {
   read?: () => TeamOwnerView;
@@ -80,6 +85,8 @@ export function LocalTeamOwnerBanner({
   readNative?: () => Promise<TeamOwnerView | null>;
   /** the app's own sign-out: for a local profile it leaves it and opens the choice of profile */
   onSwitch?: () => Promise<void>;
+  /** the take-over of the team (and the probe that says it can be offered); the native side's, in the app */
+  ways?: { probe: () => Promise<boolean>; takeOver: () => Promise<void> };
   locale?: Locale;
 }) {
   const locale = localeOverride ?? appLocale();
@@ -87,6 +94,20 @@ export function LocalTeamOwnerBanner({
   // null while the backend is asked: nothing shows, so the copy never shows only to be taken back
   const [view, setView] = useState<TeamOwnerView | null>(null);
   const [busy, setBusy] = useState(false);
+  // The team can be taken over only when its owner is a local profile of this app that the native side names without doubt.
+  const [canTake, setCanTake] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [takeFailed, setTakeFailed] = useState(false);
+  // After taking the team over, the setup opens on the step where the team's place is chosen.
+  const providerSetup = useProviderSetup();
+  const ownerIsOther = view?.owner === "other" && !view.account;
+  useEffect(() => {
+    setCanTake(false);
+    if (!ownerIsOther) { setConfirming(false); return; }
+    let live = true;
+    void ways.probe().then((known) => { if (live) setCanTake(known); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [ownerIsOther, ways, view]);
 
   // read again where the answer can have changed: another page, the window coming back (what shows stays until the new answer)
   useEffect(() => {
@@ -111,6 +132,21 @@ export function LocalTeamOwnerBanner({
     : view.account
       ? t.ownerBannerAccount
       : view.name ? t.ownerBanner.replace("{name}", () => view.name as string) : t.ownerBannerUnknown;
+  const takeable = canTake && ownerIsOther;
+  async function takeTeam() {
+    setBusy(true);
+    setTakeFailed(false);
+    try {
+      await ways.takeOver();
+      setConfirming(false);
+      setView({ owner: "self" });
+      providerSetup?.open();
+    } catch {
+      setTakeFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div
       role="status"
@@ -118,7 +154,7 @@ export function LocalTeamOwnerBanner({
       className="px-4 py-2 text-[12px] flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-border)]"
       style={{ background: "var(--color-panel)", color: "var(--color-white)" }}
     >
-      <span>{text}</span>
+      <span>{takeable ? `${text} ${t.ownerChoices}` : text}</span>
       {onSwitch && view.owner === "other" && (
         <button
           type="button"
@@ -133,6 +169,41 @@ export function LocalTeamOwnerBanner({
           {t.switchProfile}
         </button>
       )}
+      {takeable && !confirming && (
+        <button
+          type="button"
+          data-testid="local-team-owner-take"
+          disabled={busy}
+          onClick={() => { setTakeFailed(false); setConfirming(true); }}
+          className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)] disabled:opacity-60"
+        >
+          {t.takeTeam}
+        </button>
+      )}
+      {takeable && confirming && (
+        <>
+          <span data-testid="local-team-owner-take-confirm" className="basis-full">{t.takeConfirm}</span>
+          <button
+            type="button"
+            data-testid="local-team-owner-take-yes"
+            disabled={busy}
+            onClick={() => void takeTeam()}
+            className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)] disabled:opacity-60"
+          >
+            {t.takeYes}
+          </button>
+          <button
+            type="button"
+            data-testid="local-team-owner-take-cancel"
+            disabled={busy}
+            onClick={() => setConfirming(false)}
+            className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)] disabled:opacity-60"
+          >
+            {t.takeCancel}
+          </button>
+        </>
+      )}
+      {takeFailed && <span role="alert" data-testid="local-team-owner-take-failed" className="basis-full">{t.takeFailed}</span>}
     </div>
   );
 }
