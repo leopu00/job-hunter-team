@@ -2012,7 +2012,15 @@ final_message() {
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
   printf "  ${DIM}To also delete your data (config, db, CVs, output):${RESET}\n"
-  printf "  ${DIM}  rm -rf %s/.jht \"%s/Documents/Job Hunter Team\"${RESET}\n" "$HOME" "$HOME"
+  if [ "$USE_DOCKER" -eq 1 ] && [ "$RUNTIME_CHOICE" != "podman" ]; then
+    # With Docker on Linux ~/.jht belongs to the container (uid 1001, often mode 700): `rm -rf` from this account cannot
+    # empty it. `--purge` does, through a one-shot container, without sudo and without changing a permission.
+    printf "  ${DIM}  jht uninstall --confirm --purge && docker rmi %s${RESET}\n" "$IMAGE"
+  else
+    # The text the person pastes keeps the variable: the shell expands it in the right place, and a path with a space
+    # stays one word. (A tilde inside the quotes would not expand: that was TEST 19b.)
+    printf '  %s  rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"%s\n' "${DIM}" "${RESET}"
+  fi
   printf "\n"
 }
 

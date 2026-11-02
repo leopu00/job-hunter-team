@@ -3276,6 +3276,10 @@ jht — Job Hunter Team
     jht uninstall --confirm rimuove il runtime locale (macchina Podman o
                            container e volumi jht, con i segreti salvati);
                            restano ~/.jht, Documenti, Podman e Docker
+    jht uninstall --confirm --purge
+                           come sopra, e cancella anche ~/.jht e
+                           ~/Documents/Job Hunter Team (anche se le possiede
+                           il container, senza sudo e senza cambiare permessi)
 
   Tutti gli altri comandi (positions, stats, team, providers, cron,
   working-hours, cloud...) girano DENTRO il container: per il loro aiuto
@@ -5054,10 +5058,13 @@ UNINSTALL_PROJECT="jht"
 UNINSTALL_RC_MARKER="# Added by JHT install.sh"
 UNINSTALL_LOSS="Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds."
 
+UNINSTALL_PURGE_LOSS="Con --purge vengono cancellati anche ~/.jht e ~/Documents/Job Hunter Team: configurazione, database, CV e output. Non si torna indietro."
+
 uninstall_usage() {
-  err "uso: jht uninstall --confirm"
+  err "uso: jht uninstall --confirm [--purge]"
   info "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht."
   info "$UNINSTALL_LOSS"
+  info "$UNINSTALL_PURGE_LOSS"
   info "Restano anche Podman, podman-compose, Docker, Colima e Homebrew."
 }
 
@@ -5069,6 +5076,7 @@ uninstall_left() {
     machine) err "Non rimossi: la macchina Podman jht-podman o i container e i volumi di JHT, con i segreti salvati. Rilancia 'jht uninstall --confirm' quando Podman o Docker rispondono." ;;
     runtime) err "Non rimosso: il runtime host di JHT." ;;
     commands) err "Non rimossi: il comando jht o le righe PATH aggiunte dall'installer." ;;
+    data) err "Non cancellati i dati di JHT elencati sopra. Il comando jht e il runtime sono rimasti: rilancia 'jht uninstall --confirm --purge' dopo aver risolto." ;;
   esac
 }
 
@@ -5317,12 +5325,95 @@ uninstall_machine() {
   fi
 }
 
-jht_uninstall() {
-  local runtime_dir selection="" bin rc failed=0
-  if [ "$#" -ne 1 ] || [ "$1" != "--confirm" ]; then
-    uninstall_usage
-    return 2
+# ── jht uninstall --confirm --purge: i dati ───────────────────────────────
+# Le cartelle sono quelle due, fisse (vedi host_data_dir_same): mai altre, mai un percorso preso dall'ambiente.
+#
+# Su Linux con Docker il container gira come uid 1001 e possiede ~/.jht (spesso 700): l'utente di casa non puo' ne'
+# leggerla ne' cancellarne il contenuto, nemmeno col comando giusto. Si prova prima come l'utente, SENZA cambiare
+# permessi o proprietari; solo se resta qualcosa, un container usa-e-getta della stessa immagine (gia' presente: mai
+# scaricata) che gira come 1001, il proprietario, senza capability, senza rete, a filesystem di sola lettura e con
+# montata solo quella cartella: ne svuota il contenuto. La cartella, ormai vuota, la toglie l'utente (togliere una voce
+# chiede il permesso di scrittura sulla cartella che la contiene, la sua, non quello sulla voce). Con Podman rootless
+# senza keep-id i file sono di uno uid dello spazio dei nomi: `podman unshare` li cancella senza sudo.
+uninstall_data_dirs() {
+  printf '%s\n' "$HOME/.jht" "$HOME/Documents/Job Hunter Team"
+}
+
+uninstall_runtime_image() {
+  local pin ref
+  pin="$1/runtime-image"
+  if [ -f "$pin" ] && [ ! -L "$pin" ]; then
+    ref="$(head -n 1 "$pin" 2>/dev/null | tr -d '\r\n')"
+    case "$ref" in
+      ''|*[!A-Za-z0-9./_:@-]*) ;;
+      *) printf '%s\n' "$ref"; return 0 ;;
+    esac
   fi
+  printf '%s\n' "$DEFAULT_RUNTIME_IMAGE"
+}
+
+uninstall_empty_in_docker() {
+  local dir="$1" runtime_dir="$2" docker_bin endpoint image
+  case "$dir" in *:*|*,*) return 1 ;; esac
+  docker_bin="$(uninstall_tool docker)" || return 1
+  endpoint="$(uninstall_docker_endpoint "$docker_bin")" || return 1
+  case "$endpoint" in unix://*) ;; *) return 1 ;; esac
+  "$docker_bin" info >/dev/null 2>&1 || return 1
+  image="$(uninstall_runtime_image "$runtime_dir")"
+  "$docker_bin" run --rm --pull never --user 1001:1001 --cap-drop ALL --network none \
+    --security-opt no-new-privileges --read-only -v "$dir:/purge" \
+    --entrypoint /bin/sh "$image" -c 'find /purge -mindepth 1 -xdev -delete' >/dev/null 2>&1
+}
+
+uninstall_remove_data_dir() {
+  local dir="$1" runtime_dir="$2" selection="$3" podman_bin
+  if [ -L "$dir" ]; then
+    err "$dir e' un collegamento: non lo seguo e non lo cancello."
+    return 1
+  fi
+  [ -e "$dir" ] || return 0
+  if [ ! -d "$dir" ]; then
+    err "$dir non e' una cartella: non la cancello."
+    return 1
+  fi
+  rm -rf -- "$dir" 2>/dev/null || true
+  [ -e "$dir" ] || [ -L "$dir" ] || return 0
+  if [ "$HOST_KERNEL" = "Linux" ]; then
+    if [ "$selection" = "podman" ] && podman_bin="$(uninstall_tool podman)"; then
+      "$podman_bin" unshare rm -rf -- "$dir" >/dev/null 2>&1 || true
+    else
+      uninstall_empty_in_docker "$dir" "$runtime_dir" || true
+      rmdir -- "$dir" 2>/dev/null || true
+    fi
+  fi
+  if [ -e "$dir" ] || [ -L "$dir" ]; then
+    err "Non sono riuscito a cancellare $dir (appartiene a un altro utente, per esempio quello del container, e il container di servizio non e' disponibile)."
+    return 1
+  fi
+}
+
+uninstall_remove_data() {
+  local runtime_dir="$1" selection="$2" dir failed=0
+  case "${JHT_HOME_HOST:-$HOME/.jht}|${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}" in
+    "$HOME/.jht|$HOME/Documents/Job Hunter Team") ;;
+    *) err "JHT_HOME_HOST o JHT_USER_DIR_HOST puntano altrove: non cancello cartelle che non sono quelle fisse di JHT."; return 1 ;;
+  esac
+  while IFS= read -r dir; do
+    uninstall_remove_data_dir "$dir" "$runtime_dir" "$selection" || failed=1
+  done < <(uninstall_data_dirs)
+  [ "$failed" -eq 0 ]
+}
+
+jht_uninstall() {
+  local runtime_dir selection="" bin rc failed=0 purge=0
+  case "$*" in
+    "--confirm") ;;
+    "--confirm --purge"|"--purge --confirm") purge=1 ;;
+    *)
+      uninstall_usage
+      return 2
+      ;;
+  esac
   case "$HOME" in
     /?*) ;;
     *) err "HOME non valida: rimozione negata."; return 2 ;;
@@ -5342,12 +5433,22 @@ jht_uninstall() {
     esac
   fi
   info "$UNINSTALL_LOSS"
+  [ "$purge" -eq 0 ] || warn "$UNINSTALL_PURGE_LOSS"
 
   uninstall_phase uninstall_machine
   if ! uninstall_machine "$selection"; then
     uninstall_left machine
     uninstall_report_rest "$runtime_dir"
     return 24
+  fi
+
+  # I dati vanno PRIMA del runtime e del comando: se non si riesce, il comando jht resta e si puo' rilanciare.
+  if [ "$purge" -eq 1 ]; then
+    uninstall_phase uninstall_data
+    if ! uninstall_remove_data "$runtime_dir" "$selection"; then
+      uninstall_left data
+      return 24
+    fi
   fi
 
   uninstall_phase uninstall_runtime
