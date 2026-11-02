@@ -235,6 +235,32 @@ def test_the_heartbeat_is_quiet_until_the_accepted_step_ends(isolated_home):
     assert hb._scout_exhausted_recently(now) is False
 
 
+@pytest.mark.parametrize("raw", ["Infinity", "1e300", "9999999999999", "1e18"])
+def test_a_huge_or_infinite_wake_time_silences_the_heartbeat_for_four_hours_at_most(isolated_home, raw):
+    from datetime import datetime, timedelta, timezone
+    hb = load_heartbeat(isolated_home)
+    now = datetime.now(timezone.utc)
+    (isolated_home / "state").mkdir()
+    (isolated_home / "state" / "scout-quiescence.json").write_text('{"next_wake_at": %s}' % raw, encoding="utf-8")
+    assert hb._scout_exhausted_recently(now) is True, "inside the ladder's last step the quiet holds"
+    assert hb._scout_exhausted_recently(now + timedelta(hours=4, minutes=30)) is False, "past the cap the order can go"
+
+
+@pytest.mark.parametrize("raw", ['"never"', "true", "null", "NaN", "[1]"])
+def test_a_wake_time_that_is_not_a_number_is_not_a_state(isolated_home, raw):
+    from datetime import datetime, timezone
+    hb = load_heartbeat(isolated_home)
+    now = datetime.now(timezone.utc)
+    (isolated_home / "state").mkdir()
+    (isolated_home / "state" / "scout-quiescence.json").write_text('{"next_wake_at": %s}' % raw, encoding="utf-8")
+    # no log either: nothing known, so the order can go
+    assert hb._scout_exhausted_recently(now) is False
+    # with a fresh sentence of a Scout the old signal decides, as when there is no state
+    (isolated_home / "logs").mkdir(exist_ok=True)
+    (isolated_home / "logs" / "messages.jsonl").write_text(json.dumps(message(1, now)) + "\n", encoding="utf-8")
+    assert hb._scout_exhausted_recently(now) is True
+
+
 def test_without_a_state_a_scouts_sentence_silences_the_heartbeat_for_thirty_minutes_not_hours(isolated_home):
     from datetime import datetime, timezone
     hb = load_heartbeat(isolated_home)
