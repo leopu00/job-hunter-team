@@ -153,7 +153,7 @@ describe.skipIf(PYTHON_SKILLS === null)("B1-T2 · after a rescore the SCORER app
     const answers = await play(t, [
       ["capitano-1", "ticket.py", "ticket", ["assign", "1", "scorer-1"]],
       ["scorer-1", "db_insert.py", "db_insert", [...LOW, "--action", "rescore"]],
-      ["scorer-1", "db_update.py", "db_update", ["position", "4", "--status", "excluded", "--notes", "EXCLUDED: [SALARY] far below target after the rescore"]],
+      ["scorer-1", "db_update.py", "db_update", ["position", "4", "--status", "excluded", "--notes", "EXCLUDED: [LOW_SCORE] far below the bar after the rescore"]],
       ["scorer-1", "ticket.py", "ticket", ["resolve", "1", "--response", "Nuovo punteggio 35/100: esclusa."]],
     ]);
     expect(failed(answers)).toEqual([]);
