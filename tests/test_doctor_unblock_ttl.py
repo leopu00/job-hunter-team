@@ -163,7 +163,7 @@ def test_01b_ttl_default_is_twelve_hours_and_env_overridable():
     assert 'AGENT_MAX_SESSION_AGE_H="${JHT_AGENT_MAX_SESSION_AGE_H:-12}"' in src
     for suffix in LOCALES:
         text = (DOTTORE / f"dottore{suffix}.md").read_text()
-        assert "JHT_AGENT_MAX_SESSION_AGE_H" in text, suffix
+        assert "JHT_AGENT_HARD_CAP_H" in text, suffix  # the Doctor's texts name the hard cap (24 h)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -205,7 +205,7 @@ def test_02c_every_skip_in_session_refresh_is_explicitly_overridden_by_the_ttl()
         name = "SKILL.md" if suffix == "" else f"SKILL{suffix}.md"
         text = (REFRESH_SKILL / name).read_text()
         assert "1.4" in text, name
-        assert "JHT_AGENT_MAX_SESSION_AGE_H" in text, name
+        assert "JHT_AGENT_HARD_CAP_H" in text, name
         # il TTL precede il controllo del contesto
         assert text.index("1.4") < text.index("1.5"), name
         # e nomina esplicitamente ciò che annulla
