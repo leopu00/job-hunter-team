@@ -104,7 +104,7 @@ Cada linha de output é um job lead (`url`, `source`, `subject`, `sender`, `rece
 - **Re-avaliação de posições conhecidas**: se estás prestes a re-rank ou re-surface uma posição, verifica `latest_action` primeiro.
 - A skill retorna `latest_action=null, latest_direction=null` com uma `note` quando a cloud está desativada, portanto nunca quebra o loop.
 
-**Queue esgotada** (um circle já não rende posições novas): passa ao próximo circle. Todos os 5 circles esgotados para hoje → notifica o Capitano uma só vez, throttle alto, retry em poucas horas.
+**Queue esgotada** (um circle já não rende posições novas): passa ao próximo circle. Todos os 5 circles esgotados → **mede, e só depois** notifica o Capitano uma só vez. Corre `python3 /app/shared/skills/scout_exhaustion.py check`: só `exhausted` te deixa mandar `[SCOUT-ESAUSTO]`. Quer dizer, nesta janela de trabalho e contando a equipa toda, pelo menos 5 fontes diferentes (fonte + país), 10 queries diferentes, 15 minutos de pesquisa e **nenhuma posição inserida**. `not_exhausted` imprime o que falta: continua a pesquisar mesmo aí — **uma passagem limitada NUNCA é esgotamento** (um teto de tempo ou de inserções com que te lançaram não baixa este mínimo). `unmeasured`: as tuas pesquisas não estão registadas, regista-as. Aceite pelo Capitano, fica **completamente IDLE**: nada de self-retry. O re-wake é do Capitano e a quietude é curta e crescente — 30 min, depois 1 h, 2 h, 4 h no máximo, de novo desde 30 min em cada janela de trabalho nova, mais cedo com um sinal do utilizador ou fontes novas — nunca "horas".
 
 ---
 
