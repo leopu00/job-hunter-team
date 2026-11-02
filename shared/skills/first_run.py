@@ -584,6 +584,13 @@ def _answered_plan_hint(provider: str, choice: str) -> str:
             " and run begin-burst again")
 
 
+def _where_chat(holder: str) -> dict:
+    """How the person reaches the chat that holds a card: the exact command of the terminal (`/cards` there lists the
+    open card) and the place in the app. Whoever tells the person where the card is says THIS, not «the Captain's chat»
+    (P3-1 of the Linux CLI gate, 02/11: the card sat in `jht team chat capitano` and nobody said the command)."""
+    return {"chat_command": f"jht team chat {holder}", "chat_command_then": "/cards", "chat_in_app": f"Messages › {holder}"}
+
+
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
              now: Optional[datetime] = None) -> dict:
     """Ask the user which plan they have: the one way to do it, for any agent. The card goes to the chat where the
@@ -620,7 +627,8 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             record = state["plan_question"]
             holder = record.get("agent") or "capitano"
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
-                    "question_id": record["id"], "agent": holder, "in_your_chat": holder == agent}
+                    "question_id": record["id"], "agent": holder, "in_your_chat": holder == agent,
+                    **_where_chat(holder)}
         picked = _named_choice(answer, card["provider"]) if kind == "answered" else None
         if picked is not None:  # the person already picked: the plan only waits to be written, nobody asks again
             return {"ok": True, "asked": False, "answered": True, "choice": picked,
@@ -643,7 +651,7 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
         state["plan_cards"] = {"provider": card["provider"], "count": cards + 1}
         _write(state)
         return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]],
-                "agent": chat, "in_your_chat": chat == agent}
+                "agent": chat, "in_your_chat": chat == agent, **_where_chat(chat)}
 
 
 # The first run opens when the Capitano runs `begin-burst`, and the Capitano is told once, by `jht profile import`,

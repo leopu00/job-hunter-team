@@ -250,6 +250,15 @@ def test_a_wrong_call_changes_nothing(home, args):
 
 
 @pytest.mark.parametrize("lang", LANGS)
+def test_the_welcome_names_the_upload_command_that_works_on_every_host_before_the_folder(lang):
+    """P2-3 of the Linux CLI gate (02/11): on Linux the folder named by the welcome is the container's (1001:1001, 700)
+    and the person cannot write in it; `jht artifact upload <file>` works there and on the Mac."""
+    text = _catalog(lang)["welcome.assistente"]
+    assert "jht artifact upload" in text
+    assert text.index("jht artifact upload") < text.index("Job Hunter Team/allegati")
+
+
+@pytest.mark.parametrize("lang", LANGS)
 def test_the_catalog_welcome_does_not_send_the_user_to_telegram_and_asks_the_name(lang):
     catalog = _catalog(lang)
     assert "Telegram" not in catalog["welcome.assistente"]
