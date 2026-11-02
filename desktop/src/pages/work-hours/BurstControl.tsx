@@ -6,6 +6,8 @@ import { burstTimeIsValid, readTeamSettings, startBurst, stopBurst, type TeamSet
 import { BURST_TEXT } from "./burst.i18n";
 
 const BUTTON = "text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)] disabled:opacity-50";
+/** How long «Started until HH:MM, Undo» stays after a start: long enough to notice a wrong tap, short enough not to be furniture. */
+export const UNDO_MS = 10_000;
 /** How often the strip checks whether the time is up: the team puts its hours back by itself, the page only stops showing the strip. */
 const TICK_MS = 30_000;
 
@@ -70,6 +72,13 @@ export default function BurstControl({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<Note>(null);
   const [now, setNow] = useState(() => Date.now());
+  /** The clock time of the burst this control has just started, for the ten seconds in which it can be taken back. */
+  const [justStarted, setJustStarted] = useState<string | null>(null);
+  useEffect(() => {
+    if (justStarted === null) return;
+    const timer = setTimeout(() => setJustStarted(null), UNDO_MS);
+    return () => clearTimeout(timer);
+  }, [justStarted]);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
@@ -78,7 +87,7 @@ export default function BurstControl({
   const burst = settings.burst ?? null;
   const running = burst !== null && burst.active && Date.parse(burst.until) > now;
 
-  async function run(call: () => Promise<TeamSettingsResult>, done: (next: TeamSettings) => string) {
+  async function run(call: () => Promise<TeamSettingsResult>, done: (next: TeamSettings) => string | null) {
     if (busy) return;
     setBusy(true);
     setNote(null);
@@ -89,13 +98,18 @@ export default function BurstControl({
       return;
     }
     onSettings(result.settings);
-    setNote({ kind: "ok", text: done(result.settings) });
+    const text = done(result.settings);
+    setNote(text === null ? null : { kind: "ok", text });
   }
 
   function begin(until: string) {
     void run(
       () => startBurst(until, settings.connectionKey),
-      (next) => fill(t.burstStarted, { time: next.burst?.active ? next.burst.untilLocal : until }),
+      (next) => {
+        // The confirmation is the undo line, not a note: «Started until HH:MM» with «Undo» for ten seconds.
+        setJustStarted(next.burst?.active ? next.burst.untilLocal : until);
+        return null;
+      },
     );
   }
 
@@ -132,11 +146,30 @@ export default function BurstControl({
   if (running && burst.active) {
     return (
       <div data-testid="burst" className="flex flex-col gap-1">
+        {justStarted !== null && (
+          <div
+            role="status"
+            data-testid="burst-undo"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border px-3 py-1 text-[12px]"
+            style={{ borderColor: "var(--color-green)", color: "var(--color-bright)" }}
+          >
+            <span className="font-semibold">{fill(t.burstStarted, { time: justStarted })}</span>
+            <button
+              type="button"
+              data-testid="burst-undo-button"
+              disabled={busy}
+              onClick={() => void run(() => stopBurst(settings.connectionKey), () => { setJustStarted(null); return t.burstStopped; })}
+              className={BUTTON}
+            >
+              {busy ? t.burstBusy : t.burstUndo}
+            </button>
+          </div>
+        )}
         <div
           role="status"
           data-testid="burst-active"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border px-3 py-2 text-[12px]"
-          style={{ borderColor: "var(--color-yellow)", color: "var(--color-bright)" }}
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border-2 px-3 py-2 text-[12px]"
+          style={{ borderColor: "var(--color-yellow)", backgroundColor: "color-mix(in srgb, var(--color-yellow) 12%, transparent)", color: "var(--color-bright)" }}
         >
           <span className="font-semibold">{fill(t.burstActive, { time: burst.untilLocal })}</span>
           {!compact && <span className="text-[var(--color-muted)]">{t.burstActiveNote}</span>}
@@ -144,7 +177,7 @@ export default function BurstControl({
             type="button"
             data-testid="burst-stop"
             disabled={busy}
-            onClick={() => void run(() => stopBurst(settings.connectionKey), () => t.burstStopped)}
+            onClick={() => void run(() => stopBurst(settings.connectionKey), () => { setJustStarted(null); return t.burstStopped; })}
             className={BUTTON}
           >
             {busy ? t.burstBusy : t.burstStop}
