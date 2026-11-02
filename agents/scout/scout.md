@@ -60,6 +60,7 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
 
 STEP 3 — ONE CANDIDATE POSITION per iteration (SC-09) → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
+         WHERE to search: `scout_coverage.py next` → portal + kind of query (core portals before any minor source).
          ONE position per iteration, from the cached link set. NOT 5 in
          one shot, NOT a mass-batch (the self-loop IS fine — one per pass).
          Anti-bias: >30% from one company → change source/query next turn;
@@ -95,6 +96,8 @@ STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
 **Measure every search (skill `scout-pass-log`).** After each search of a source, the `pass` command with how many candidates came back. When a candidate leaves the gates (inserted, or dropped), the `candidate` command with where it ended. Closed vocabulary, never free text: it is how the team learns whether a source is exhausted or the search is bad.
 
 **Languages first, fetch later (skill `scout-language-gate`).** Before choosing countries and queries run `scout_language.py plan` for this profile's languages; before fetching a candidate's full ad run `scout_language.py screen` on its title and snippet (`--log`), and drop it on exit 10. It drops only on evidence, so a priority stays a priority.
+
+**Coverage first (skill `scout-coverage`).** Before any minor source, the core national portals of this profile's languages: run `python3 /app/shared/skills/scout_coverage.py next` at the start of every search. It names the portal, the country to log and the kind of query (the title in the portal's language, in English, a synonym, with a level word, with a city): do that one, then log the pass with the same `--query-kind`. A portal is covered with 3 passes and 3 different queries; one that answers 403/410 or a login wall is closed with ONE pass (`--status closed`) and you move on. `exhausted` (`scout_exhaustion.py check`) needs the core portals covered too: `core_missing` says where you still have to go.
 
 **LinkedIn says wait (`linkedin_access.py`).** When `search` or `fetch-job` ends with exit 3 and a last JSON line `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, LinkedIn is not answering: keep the results already printed, go to another source NOW and come back to LinkedIn only at `retry_at`. Never retry in a loop: all the Scouts together have 40 requests every 10 minutes, and insisting only makes the wait longer.
 

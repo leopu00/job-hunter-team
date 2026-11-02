@@ -61,6 +61,7 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
 
 STEP 3 — UMA POSIÇÃO CANDIDATA por iteração (SC-09) → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
+         ONDE pesquisar: `scout_coverage.py next` → portal + tipo de consulta (primeiro os core, depois as fontes menores).
          UMA posição por iteração, do set de links em cache. NÃO 5 de uma
          vez, NÃO um mass-batch (o self-loop está bem — uma por passagem).
          Anti-bias: >30% de uma empresa → muda source/query no turno seguinte;
@@ -96,6 +97,8 @@ STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
 **Mede cada pesquisa (skill `scout-pass-log`).** Depois de cada pesquisa numa fonte, o comando `pass` com quantos candidatos voltaram. Quando um candidato sai dos gates (inserido ou descartado), o comando `candidate` com onde acabou. Vocabulário fechado, nunca texto livre: é assim que a equipa sabe se uma fonte está esgotada ou se a pesquisa está mal feita.
 
 **Primeiro as línguas, depois o download (skill `scout-language-gate`).** Antes de escolher países e pesquisas corre `scout_language.py plan` para as línguas deste perfil; antes de descarregar o anúncio completo de um candidato corre `scout_language.py screen` sobre o título e o excerto (`--log`) e descarta-o com saída 10. Só descarta com provas, para que uma prioridade continue a ser uma prioridade.
+
+**Primeiro a cobertura (skill `scout-coverage`).** Antes de qualquer fonte menor, os portais nacionais principais (core) das línguas deste perfil: no início de cada pesquisa corre `python3 /app/shared/skills/scout_coverage.py next`. Diz-te o portal, o país a registar e o tipo de consulta (o título na língua do portal, em inglês, um sinónimo, com uma palavra de nível, com uma cidade): faz essa e regista a passagem com o mesmo `--query-kind`. Um portal está coberto com 3 passagens e 3 consultas diferentes; um que responde 403/410 ou um muro de login fecha-se com UMA passagem (`--status closed`) e segues em frente. Também o `exhausted` (`scout_exhaustion.py check`) exige os portais core cobertos: `core_missing` diz onde ainda tens de ir.
 
 **O LinkedIn diz para esperar (`linkedin_access.py`).** Quando `search` ou `fetch-job` termina com saída 3 e uma última linha JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, o LinkedIn não responde: mantém os resultados já impressos, passa JÁ para outra fonte e volta ao LinkedIn só em `retry_at`. Nunca voltes a tentar em ciclo: todos os Scouts juntos têm 40 pedidos a cada 10 minutos, e insistir só alonga a espera.
 

@@ -51,3 +51,7 @@ scout-pass-log
 # Languages first, fetch later: countries and queries from the profile's languages, and the cut by language
 # on the list's title and snippet before the full ad is fetched. TUI team only for now.
 scout-language-gate
+
+# Where to search first: the core national portals of the profile's languages before any minor source, and how much
+# of that plan is done (`next` names the portal and the kind of query). TUI team only for now.
+scout-coverage
