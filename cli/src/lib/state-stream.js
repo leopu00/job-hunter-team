@@ -45,8 +45,11 @@ export const READER_TIMEOUT_MS = 8000;
 export const READER_STDOUT_MAX = 1024 * 1024;
 export const IDLE_EXIT_MS = 60_000;
 export const MAX_TOPICS = 12;
-/** The least time between two hints for the positions: the database changes far more often than a page needs to read. */
-export const POSITIONS_HINT_MS = 10_000;
+/**
+ * The least time between two hints of a topic that can change many times a minute: the positions' database (a scoring
+ * team writes all the time) and the settings (a read of them runs the CLI and two scripts). The last change always gets one.
+ */
+export const HINT_MIN_MS = Object.freeze({ settings: 3000, positions: 10_000 });
 export const EXIT_PROTOCOL = 3;
 /** What is kept of answered reads: at most this many entries and this many bytes of text; the oldest go first. */
 export const CACHE_MAX_ENTRIES = 64;
@@ -390,8 +393,8 @@ export function createStateStream({
     send({ t: 'ev', topic, rev });
   };
 
-  let positionsDirty = false;
-  let positionsHintAt = -Infinity;
+  const dirty = new Set();
+  const hintAt = new Map();
   const sweep = async () => {
     if (over || sweeping) return;
     sweeping = true;
@@ -407,12 +410,11 @@ export function createStateStream({
         if (over) return;
         const before = signatures.get(topic);
         signatures.set(topic, signature);
-        if (topic === 'positions') {
-          // a scoring team writes many times a minute: one hint at most every POSITIONS_HINT_MS, and the last change always gets one
-          if (before !== undefined && before !== signature) positionsDirty = true;
-          if (positionsDirty && now() - positionsHintAt >= POSITIONS_HINT_MS) {
-            positionsDirty = false;
-            positionsHintAt = now();
+        if (Object.hasOwn(HINT_MIN_MS, topic)) {
+          if (before !== undefined && before !== signature) dirty.add(topic);
+          if (dirty.has(topic) && now() - (hintAt.get(topic) ?? -Infinity) >= HINT_MIN_MS[topic]) {
+            dirty.delete(topic);
+            hintAt.set(topic, now());
             bump(topic);
           }
         } else if (before !== undefined && before !== signature) {
@@ -441,7 +443,7 @@ export function createStateStream({
       }
       topics = [...new Set(list)];
       signatures = new Map();
-      positionsDirty = false;
+      dirty.clear();
       clearInterval(watcher);
       if (topics.length) {
         watcher = setInterval(() => { sweep().catch(() => {}); }, 1000);

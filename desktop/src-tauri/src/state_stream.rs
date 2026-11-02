@@ -565,10 +565,13 @@ fn hello_accepted(hello: &Hello, container: &str) -> Result<Vec<String>, &'stati
         .ops
         .iter()
         .filter(|op| op.as_str() != "profile.progress" || profile_ok)
-        .filter(|op| matches!(op.as_str(), "chat.read" | "agents.list" | "agents.team" | "agents.screen" | "profile.progress" | "watch" | "invalidate" | "ping" | "bye"))
+        .filter(|op| READ_OPS.contains(&op.as_str()) || matches!(op.as_str(), "watch" | "invalidate" | "ping" | "bye"))
         .cloned()
         .collect())
 }
+
+/// The reads this side knows: every `StreamRead::op`. A hello that lists any other operation is ignored for it.
+const READ_OPS: [&str; 8] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.exclusions", "team.settings", "agents.screen", "profile.progress"];
 
 fn profile_script_sha() -> String {
     format!("{:x}", Sha256::digest(crate::profile_progress::PROFILE_PROGRESS_PY.as_bytes()))
@@ -1097,6 +1100,36 @@ mod tests {
     }
 
     #[test]
+    fn every_read_this_side_can_ask_is_accepted_from_a_hello_and_the_containers_table_has_no_other() {
+        let id = format!("3c33ab6a0d08{}", "0".repeat(52));
+        let asked = [
+            StreamRead::ChatRead { agent: "capitano", cursor: None }.op(),
+            StreamRead::AgentsList.op(),
+            StreamRead::AgentsTeam.op(),
+            StreamRead::AgentsHistory.op(),
+            StreamRead::AgentsExclusions.op(),
+            StreamRead::TeamSettings.op(),
+            StreamRead::AgentsScreen { name: "CAPITANO" }.op(),
+            StreamRead::ProfileProgress.op(),
+        ];
+        assert_eq!(asked, READ_OPS);
+        let mut said = hello(1, Some("3c33ab6a0d08"), Some(profile_script_sha()));
+        said.ops = asked.iter().map(|op| (*op).to_owned()).collect();
+        let accepted = hello_accepted(&said, &id).unwrap();
+        for op in asked {
+            assert!(accepted.contains(&op.to_owned()), "{op}");
+        }
+        // the container's table (the JS file, which the image carries) names the same reads and no others
+        let js = include_str!("../../../cli/src/lib/state-stream.js");
+        let table = js.split("export const READERS = {").nth(1).unwrap().split("\n};\n").next().unwrap();
+        let mut names: Vec<&str> = table.lines().filter_map(|line| line.strip_prefix("  '")?.split('\'').next()).collect();
+        names.sort_unstable();
+        let mut known = READ_OPS.to_vec();
+        known.sort_unstable();
+        assert_eq!(names, known);
+    }
+
+    #[test]
     fn the_script_the_image_carries_is_the_one_this_app_has_byte_for_byte() {
         let file = include_str!("../../../shared/skills/profile_progress.py");
         assert_eq!(file, crate::profile_progress::PROFILE_PROGRESS_PY);
@@ -1293,7 +1326,7 @@ done"#
         let ops = hello_accepted(&hello, &format!("{}{}", hello.cid.clone().unwrap(), "0".repeat(64 - hello.cid.as_ref().unwrap().len()))).unwrap();
         println!("accepted: {ops:?}");
         session.ops.set(ops).unwrap();
-        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
+        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
             for round in 0..2 {
                 let at = Instant::now();
                 let done = session.read(&read).expect("answered");

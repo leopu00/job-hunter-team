@@ -401,17 +401,19 @@ test('settings and positions are topics; positions gives one hint per 10 s at mo
   state.sig = '2:20';
   await new Promise((resolve) => setTimeout(resolve, 1200));
   assert.deepEqual(hints(), ['settings:1', 'positions:1']);
-  // two more changes inside the 10 s: settings hints at once, positions waits
-  state.at += 2000; state.sig = '3:30';
+  // two more changes 4 s apart: the settings hint each time (3 s apart at least), the positions wait for their 10 s
+  state.at += 4000; state.sig = '3:30';
   await new Promise((resolve) => setTimeout(resolve, 1200));
-  state.at += 2000; state.sig = '4:40';
+  state.at += 4000; state.sig = '4:40';
   await new Promise((resolve) => setTimeout(resolve, 1200));
   assert.deepEqual(hints(), ['settings:1', 'positions:1', 'settings:2', 'settings:3']);
-  // the window passes with no further change: the trailing hint still comes, once
-  state.at += 10_000;
+  // a change inside the settings' 3 s is held back, and the trailing hint comes once the time has passed
+  state.at += 1000; state.sig = '5:50';
   await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.deepEqual(hints(), ['settings:1', 'positions:1', 'settings:2', 'settings:3'], 'held back');
+  state.at += 3000;
   await new Promise((resolve) => setTimeout(resolve, 1200));
-  assert.deepEqual(hints(), ['settings:1', 'positions:1', 'settings:2', 'settings:3', 'positions:2']);
+  assert.deepEqual(hints(), ['settings:1', 'positions:1', 'settings:2', 'settings:3', 'settings:4', 'positions:2'], 'the trailing hints: settings after its 3 s, positions after its 10 s, once each');
   stream.close();
 });
 
