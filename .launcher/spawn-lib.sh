@@ -538,18 +538,38 @@ jht_pi_version_check() {
   fi
 }
 
+# jht_spawn_model_name_ok <nome>
+#   Un nome di modello e' accettabile solo se finisce senza rischi in un comando digitato nel pane:
+#   inizia con una lettera o una cifra (mai «-»: diventerebbe un'opzione di claude/codex), poi solo
+#   lettere, cifre e . _ : / -, al massimo 64 caratteri. Vale per chi lo logga come per chi lo digita.
+jht_spawn_model_name_ok() {
+  case "$1" in
+    ''|[!A-Za-z0-9]*|*[!A-Za-z0-9._:/-]*) return 1 ;;
+  esac
+  [ "${#1}" -le 64 ]
+}
+
 # jht_spawn_repl_cmd
 #   Stampa il comando REPL del PROVIDER ATTIVO (non più codex hardcoded: su un
 #   setup claude, lanciare codex fallirebbe per CLI/auth assenti). effort=high
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local provider="${1:-}"
+  local provider="${1:-}" model_flag=""
   if [ -z "$provider" ]; then
     provider="$(jht_spawn_active_provider)" || return 2
   fi
+  # Modello di riserva (JHT_SPAWN_MODEL_OVERRIDE): lo mette solo chi ritenta dopo un errore di
+  # capacita'. Il nome finisce in un comando digitato nel pane: solo caratteri da nome di modello.
+  local override="${JHT_SPAWN_MODEL_OVERRIDE:-}"
+  if [ -n "$override" ] && ! jht_spawn_model_name_ok "$override"; then
+    echo "[spawn-lib] WARN: JHT_SPAWN_MODEL_OVERRIDE is not a model name (characters, a leading dash, or length) — ignored" >&2
+    override=""
+  fi
   case "$provider" in
-    openai|codex) printf '%s\n' "codex --yolo -c model_reasoning_effort=high -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES" ;;
+    openai|codex)
+      [ -n "$override" ] && model_flag=" -m $override"
+      printf '%s\n' "codex --yolo${model_flag} -c model_reasoning_effort=high -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES" ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
     claude|anthropic)
       local home="${JHT_HOME:-/jht_home}"
@@ -564,7 +584,7 @@ d["bypassPermissionsModeAccepted"] = True
 os.makedirs(os.path.dirname(f), exist_ok=True)
 json.dump(d, open(f, "w"), indent=2)
 PYDOC
-      printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model sonnet" ;;
+      printf '%s\n' "IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model ${override:-sonnet}" ;;
     *)
       echo "[spawn-lib] ERROR: unsupported configured provider '$provider'" >&2
       return 2
@@ -742,6 +762,36 @@ jht_spawn_kickoff() {
     sleep 2 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
   ' >/dev/null 2>&1 < /dev/null &
   disown 2>/dev/null || true
+}
+
+# jht_spawn_verify_start <sessione> <label> <ruolo> <logs_dir> <src>
+#   L'avvio e' riuscito solo se la sessione NON e' rimasta ferma sul prompt con un errore di
+#   capacita' del modello. Il kickoff gira in background (~19 s) e `spawn` usciva 0 prima che il
+#   prompt fosse partito: con «Selected model is at capacity» la sessione restava li', senza un
+#   nuovo tentativo e senza un round_failed, e chi ci stava sopra segnava il giro fatto.
+#   Aspetta la fine del kickoff, poi legge il pane. Ritorna 0 = partita; 75 (EX_TEMPFAIL) = a
+#   capacita': logga spawn_failed (reason capacity), uccide la sessione ferma e lo dice su stderr.
+#   JHT_SPAWN_START_CHECK_SEC (default 30) e' la finestra; 0 spegne il controllo.
+jht_spawn_verify_start() {
+  local session="$1" label="$2" role="$3" logs_dir="$4" src="$5"
+  local window="${JHT_SPAWN_START_CHECK_SEC:-30}" waited=0 pane ts_fail
+  local pattern="${JHT_SPAWN_CAPACITY_RE:-at capacity|over capacity|overloaded_error}"
+  case "$window" in ''|*[!0-9]*) window=30 ;; esac
+  [ "$window" -gt 0 ] || return 0
+  while [ "$waited" -lt "$window" ]; do
+    sleep 3
+    waited=$((waited + 3))
+    pane=$(jht_spawn_tmux capture-pane -p -t "=$session:" -S -60 2>/dev/null) || continue
+    if printf '%s\n' "$pane" | grep -Eiq "$pattern"; then
+      echo "[$label] ERROR: the model is at capacity — '$session' stays at the prompt, spawn not successful" >&2
+      ts_fail="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      printf '{"ts":"%s","session":"%s","role":"%s","event":"spawn_failed","reason":"capacity","src":"%s"}\n' \
+        "$ts_fail" "$session" "$role" "$src" >> "$logs_dir/$role-actions.jsonl"
+      jht_spawn_tmux kill-session -t "=$session" 2>/dev/null || true
+      return 75
+    fi
+  done
+  return 0
 }
 
 # jht_spawn_log_event <logs_dir> <ruolo> <sessione> <round_id> <src>
