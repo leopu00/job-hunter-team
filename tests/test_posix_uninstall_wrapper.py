@@ -111,6 +111,20 @@ case "$1" in
         drop "$kind" "$3" ;;
       *) exit 97 ;;
     esac ;;
+  run)
+    # The one-shot container `jht uninstall --confirm --purge` empties a data folder with: it runs as the folder's
+    # owner (1001), keeps no capability, has no network, a read-only root and ONLY that folder mounted.
+    [ ! -f "$FAKE_STATE/run-fails" ] || exit 1
+    src=""
+    case "$*" in
+      "run --rm --pull never --user 1001:1001 --cap-drop ALL --network none --security-opt no-new-privileges --read-only -v "*":/purge --entrypoint /bin/sh "*" -c find /purge -mindepth 1 -xdev -delete") ;;
+      *) exit 99 ;;
+    esac
+    for arg in "$@"; do case "$arg" in *:/purge) src="${arg%:/purge}" ;; esac; done
+    [ -d "$src" ] || exit 100
+    printf 'mode-seen-by-the-container %s\n' "$(ls -ld "$src" | cut -c1-10)" >> "$FAKE_LOG"
+    # As the owner would: the folder is his, so he can open it. Nothing is changed on the way in or out for the host.
+    chmod -R u+rwx "$src" && find "$src" -mindepth 1 -delete ;;
   *) exit 90 ;;
 esac
 """
@@ -211,7 +225,7 @@ def test_without_exactly_one_confirmation_nothing_moves(tmp_path: Path, args: tu
     result = box.run("uninstall", *args)
 
     assert result.returncode == 2
-    assert "uso: jht uninstall --confirm" in result.stderr
+    assert "uso: jht uninstall --confirm [--purge]" in result.stderr
     assert LOSS in result.stderr
     assert STAYS in result.stderr  # il testo dice dove resta la sessione e come si toglie
     assert box.calls() == []
@@ -479,3 +493,146 @@ def test_uninstall_runs_before_every_runtime_check_and_has_no_override() -> None
     assert "prune" not in block
     assert "launchctl" not in block.replace("Nessun LaunchAgent", "")
     assert shutil.which("bash")
+
+
+# ── --purge: the data folders ──────────────────────────────────────────────
+
+needs_non_root = pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="root can delete a folder mode 000")
+
+
+def hide_data_from_the_host(box: Box) -> None:
+    """What Docker on Linux leaves: ~/.jht owned by another uid (the container's 1001) and mode 700, so that this
+    account can neither list it nor empty it. Mode 000 under a normal account is the same wall."""
+    (box.home / ".jht").chmod(0o000)
+
+
+def restore_if_left(box: Box) -> None:
+    for path in (box.home / ".jht",):
+        if path.exists():
+            path.chmod(0o700)
+
+
+@pytest.mark.parametrize("args", [("--purge",), ("--purge", "--purge"), ("--confirm", "--purge", "--purge"), ("--confirm", "--purge", "x")])
+def test_purge_needs_the_confirmation_and_nothing_else(tmp_path: Path, args: tuple[str, ...]) -> None:
+    box = Box(tmp_path, "Linux")
+    result = box.run("uninstall", *args)
+    assert result.returncode == 2
+    assert "--purge" in result.stderr
+    assert box.calls() == []
+    assert_user_data_kept(box)
+    assert box.runtime.is_dir() and box.wrapper.is_file()
+
+
+@pytest.mark.parametrize("order", [("--confirm", "--purge"), ("--purge", "--confirm")])
+def test_purge_on_the_mac_deletes_the_two_folders_directly(tmp_path: Path, order: tuple[str, ...]) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("docker")
+    box.machines("colima-default*")
+    result = box.run("uninstall", *order)
+    assert result.returncode == 0, result.stderr
+    assert "uninstall_data" in " ".join(phases(result))
+    assert not (box.home / ".jht").exists() and not (box.home / "Documents" / "Job Hunter Team").exists()
+    assert (box.home / "Documents").is_dir()  # only the product's folder goes
+    assert not [call for call in box.calls() if call.startswith("docker run")]
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+@needs_non_root
+def test_purge_empties_a_folder_the_host_cannot_open_through_a_one_shot_container(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    (box.runtime / "runtime-image").write_text("example.invalid/jht@sha256:" + "1" * 64 + "\n", encoding="utf-8")
+    hide_data_from_the_host(box)
+    try:
+        result = box.run("uninstall", "--confirm", "--purge")
+    finally:
+        restore_if_left(box)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert phases(result) == [
+        "JHT_PHASE uninstall_machine", "JHT_PHASE uninstall_data",
+        "JHT_PHASE uninstall_runtime", "JHT_PHASE uninstall_commands",
+    ]
+    assert not (box.home / ".jht").exists() and not (box.home / "Documents" / "Job Hunter Team").exists()
+    runs = [call for call in box.calls() if call.startswith("docker run")]
+    assert len(runs) == 1, runs
+    # the pinned image, never a pull, never root, no capability, no network, and the one folder only
+    assert "example.invalid/jht@sha256:" + "1" * 64 in runs[0]
+    assert "--pull never" in runs[0] and "--user 1001:1001" in runs[0] and "--cap-drop ALL" in runs[0]
+    assert "--cap-add" not in runs[0] and "--privileged" not in runs[0] and "--network none" in runs[0]
+    assert runs[0].count(" -v ") == 1 and f"-v {box.home}/.jht:/purge" in runs[0]
+    # the wrapper did not open the folder for the container: the mode it saw is the one the host had
+    assert "mode-seen-by-the-container d---------" in box.calls()
+    assert not box.runtime.exists() and not box.wrapper.exists()
+
+
+@needs_non_root
+def test_a_purge_that_cannot_run_keeps_the_wrapper_and_the_runtime_for_the_retry(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    hide_data_from_the_host(box)
+    (box.state / "run-fails").write_text("1", encoding="utf-8")
+    try:
+        result = box.run("uninstall", "--confirm", "--purge")
+        left = (box.home / ".jht").exists()
+    finally:
+        restore_if_left(box)
+    assert result.returncode == 24
+    assert "JHT_LEFT data" in result.stdout
+    assert left, "the folder cannot have gone"
+    assert box.runtime.is_dir() and box.wrapper.is_file(), "no retry would be possible without the command"
+    assert "jht uninstall --confirm --purge" in result.stderr
+
+
+def test_purge_never_follows_a_link_in_place_of_a_data_folder(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("docker")
+    box.machines("colima-default*")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "precious.txt").write_text("keep\n", encoding="utf-8")
+    shutil.rmtree(box.home / ".jht")
+    (box.home / ".jht").symlink_to(elsewhere)
+    result = box.run("uninstall", "--confirm", "--purge")
+    assert result.returncode == 24
+    assert "JHT_LEFT data" in result.stdout
+    assert (elsewhere / "precious.txt").read_text(encoding="utf-8") == "keep\n"
+    assert box.wrapper.is_file()
+
+
+def test_purge_refuses_folders_other_than_the_fixed_two(tmp_path: Path) -> None:
+    box = Box(tmp_path, "Darwin")
+    box.select("docker")
+    box.machines("colima-default*")
+    other = tmp_path / "other-jht"
+    other.mkdir()
+    (other / "x").write_text("keep\n", encoding="utf-8")
+    result = box.run("uninstall", "--confirm", "--purge", JHT_HOME_HOST=str(other))
+    assert result.returncode == 24
+    assert (other / "x").exists()
+    assert_user_data_kept(box)
+    assert box.wrapper.is_file()
+
+
+def test_the_purge_flag_is_not_known_to_the_desktop_call() -> None:
+    """The desktop runs `uninstall --confirm` and nothing else: data is only ever deleted by a person who typed --purge."""
+    desktop = (ROOT / "desktop" / "src-tauri" / "src" / "onboarding.rs").read_text(encoding="utf-8")
+    assert "--purge" not in desktop
+
+
+@needs_non_root
+@pytest.mark.parametrize("pinned", ["--privileged", "-v/:/host", "-"])
+def test_a_pinned_image_that_looks_like_an_option_is_never_handed_to_docker(tmp_path: Path, pinned: str) -> None:
+    """The pin is a file next to the runtime: whatever it holds, `docker run` gets the default image or a real reference,
+    never a word that docker would read as one of its options."""
+    box = Box(tmp_path, "Linux")
+    box.select("docker")
+    (box.runtime / "runtime-image").write_text(pinned + "\n", encoding="utf-8")
+    hide_data_from_the_host(box)
+    try:
+        result = box.run("uninstall", "--confirm", "--purge")
+    finally:
+        restore_if_left(box)
+    assert result.returncode == 0, result.stdout + result.stderr
+    run = next(call for call in box.calls() if call.startswith("docker run"))
+    default = re.search(r'^DEFAULT_RUNTIME_IMAGE="([^"]+)"$', SOURCE, re.M).group(1)
+    assert f"--entrypoint /bin/sh {default} -c " in run
