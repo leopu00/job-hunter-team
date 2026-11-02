@@ -303,6 +303,8 @@ def test_the_scout_is_told_403_closes_a_source_and_the_ats_are_read_per_company(
     skill = (REPO_ROOT / "agents" / "_skills" / "circles-and-sources" / ("SKILL%s.md" % suffix)).read_text(encoding="utf-8")
     for text in (prompt, skill):
         assert "**403**" in text and "Email-first sourcing" in text
+        for closed in ("Umantis", "Climatebase", "JobSearch DK", "Cloudflare"):
+            assert closed in text
         for ats in ("Greenhouse", "Ashby", "Workable", "Personio", "Teamtailor", "Recruitee", "Jobvite"):
             assert ats in text
     tiers = [l for l in skill.splitlines() if l.startswith("| 2 ") or l.startswith("| `on-site`")]
