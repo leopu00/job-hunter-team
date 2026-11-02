@@ -22,6 +22,7 @@ import {
   selectLocalProfileById,
   type LocalProfile,
 } from "../lib/local-profile";
+import { localProfileHasDestination } from "../lib/onboarding";
 import PublicPageLinks from "./PublicPageLinks";
 import { describeError } from "../lib/error-catalog";
 import { LOGIN_ERROR_CATALOG_CODE } from "../lib/login-error-codes";
@@ -53,6 +54,8 @@ export interface LoginScreenProps {
   ownerLocal?: () => LocalProfile | null;
   /** who the backend's owner marker names: it wins over `ownerLocal` once it answers */
   readOwner?: () => Promise<DesktopTeamOwnerIdentity | null>;
+  /** whether a profile has chosen where its team runs (its setup was started or finished) */
+  hasDestination?: (profileId: string) => boolean;
   /** adds a profile to the list: the saved ones stay */
   createLocal?: (displayName: string) => Promise<LocalProfile>;
   /** chooses a saved profile by its id */
@@ -85,6 +88,7 @@ export function LoginScreen({
   readLocal = readLocalProfile,
   ownerLocal = readTeamOwnerCopy,
   readOwner = readDesktopTeamOwnerIdentity,
+  hasDestination = localProfileHasDestination,
   createLocal = createAndActivateLocalProfile,
   selectLocal = selectLocalProfileById,
   onLocalReady = () => goTo(DASHBOARD_PAGE),
@@ -252,10 +256,13 @@ export function LoginScreen({
     }
   }, [localBusy, onRecoverLocalPlayground]);
 
-  const savedProfiles = listLocal();
+  const ownerId = !ownerAsked ? null : nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
+  // The profile with the team on this Mac comes first (the others keep the order they were made in).
+  const savedProfiles = [...listLocal()].sort(
+    (a, b) => Number(b.profileId === ownerId) - Number(a.profileId === ownerId),
+  );
   const hasSavedLocalProfile = savedProfiles.length > 0;
   const lastUsedId = readLocal()?.profileId ?? null;
-  const ownerId = !ownerAsked ? null : nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
 
   return (
     <main className="page login-screen" lang={locale}>
@@ -359,10 +366,13 @@ export function LoginScreen({
                       >
                         {localBusy ? t.preparing : profilesText.useProfile.replace("{name}", () => profile.displayName)}
                       </button>
-                      {(profile.profileId === ownerId || profile.profileId === lastUsedId) && (
+                      {(profile.profileId === ownerId || profile.profileId === lastUsedId || !hasDestination(profile.profileId)) && (
                         <span className="login-card__tags">
                           {profile.profileId === ownerId && <span data-testid="login-profile-owner">{profilesText.teamHere}</span>}
                           {profile.profileId === lastUsedId && <span data-testid="login-profile-last">{profilesText.lastUsed}</span>}
+                          {profile.profileId !== ownerId && !hasDestination(profile.profileId) && (
+                            <span data-testid="login-profile-no-destination">{profilesText.noDestination}</span>
+                          )}
                         </span>
                       )}
                     </li>
