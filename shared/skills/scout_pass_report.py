@@ -19,6 +19,7 @@ Use:
   python3 scout_pass_report.py                 # last 72 hours, a table
   python3 scout_pass_report.py --since-hours 12 --json
   python3 scout_pass_report.py --no-tokens
+  python3 scout_pass_report.py --coverage      # the coverage plan: one row per portal, covered or not (see scout_coverage.py)
 """
 from __future__ import annotations
 
@@ -150,16 +151,36 @@ def table(report: dict) -> str:
     return "\n".join(lines)
 
 
+def coverage(rows: list, as_json: bool) -> int:
+    """The coverage plan over these rows: covered / partial / untouched / closed / via_email for every portal of the plan."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import scout_coverage
+    plan = scout_coverage.load_plan()
+    report = scout_coverage.status(plan, rows)
+    if as_json:
+        print(json.dumps({"languages": plan["languages"], "unmapped": plan["unmapped"], "rows": report,
+                          "core_missing": scout_coverage.core_missing(scout_coverage.portal_states(rows))},
+                         sort_keys=True, ensure_ascii=False))
+    else:
+        print(scout_coverage.render(plan, report))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scout_pass_report", description=__doc__.split("\n")[0])
     ap.add_argument("--since-hours", type=float, default=72.0)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--no-tokens", action="store_true", help="skip the usage logs: the budget stays null")
+    ap.add_argument("--coverage", action="store_true",
+                    help="the coverage plan of the profile's languages over the window, one row per portal, instead of the passes")
     ap.add_argument("--log", default=None, help="another file (default: $JHT_HOME/logs/scout-passes.jsonl)")
     args = ap.parse_args(argv)
     since = time.time() - args.since_hours * 3600.0
     path = Path(args.log) if args.log else home() / "logs" / "scout-passes.jsonl"
     rows = read_rows(path, since)
+    if args.coverage:
+        return coverage(rows, args.json)
     events = None if args.no_tokens or not rows else token_events(rows[0]["ts"] - 3600.0)
     report = fold(rows, events)
     print(json.dumps(report, sort_keys=True) if args.json else table(report))
