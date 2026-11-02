@@ -3394,6 +3394,12 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
+    # `oauth-login --stop`: the app's «Cancel» of the sign-in. See jht-wrapper.sh: it ends the device login of Codex in the container, found by its command line, never the team's agents.
+    if ($Rest.Count -gt 0 -and $Rest[0] -eq '--stop') {
+      $StopScript = "const fs=require('fs');for(const d of fs.readdirSync('/proc')){if(!/^[0-9]+`$/.test(d)||Number(d)===process.pid)continue;try{const a=fs.readFileSync('/proc/'+d+'/cmdline','utf8').split('\0');if(a.includes('login')&&a.includes('--device-auth')&&a.some(function(x){return /codex/.test(x)}))process.kill(Number(d),'SIGTERM')}catch(e){}}"
+      & { $ErrorActionPreference = 'Continue'; & docker exec $Container node -e $StopScript 2>$null | Out-Null }
+      exit 0
+    }
     $Provider = (& { $ErrorActionPreference = 'Continue'; & docker exec $Container node -e "try{const c=require('/jht_home/jht.config.json');process.stdout.write(String(c.active_provider||''))}catch{}" 2>$null })
     switch (($Provider | Out-String).Trim().ToLowerInvariant()) {
       { $_ -in @('openai', 'codex') } { & docker exec @ExecFlags $Container codex login --device-auth; break }

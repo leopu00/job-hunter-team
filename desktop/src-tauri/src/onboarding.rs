@@ -164,6 +164,8 @@ pub(crate) enum LocalCliOperation {
     ProviderUpdate(SubscriptionProvider),
     ProviderCurrent,
     OauthLogin,
+    /// `jht oauth-login --stop`: ends the device login of Codex that «Cancel» left running in the container.
+    OauthLoginStop,
     TeamStart,
     Snapshot,
     AssistantStart,
@@ -188,6 +190,7 @@ impl LocalCliOperation {
             Self::ProviderUpdate(provider) => vec!["providers", "update", provider.cli_id()],
             Self::ProviderCurrent => vec!["providers", "current"],
             Self::OauthLogin => vec!["oauth-login"],
+            Self::OauthLoginStop => vec!["oauth-login", "--stop"],
             Self::TeamStart => vec!["team", "start"],
             Self::Snapshot => vec!["onboarding-snapshot"],
             Self::AssistantStart => vec!["team", "start", "assistente"],
@@ -210,6 +213,7 @@ impl LocalCliOperation {
             Self::ProviderUpdate(_) => "provider-update",
             Self::ProviderCurrent => "provider-current",
             Self::OauthLogin => "oauth-login",
+            Self::OauthLoginStop => "oauth-login-stop",
             Self::TeamStart => "team-start",
             Self::Snapshot => "snapshot",
             Self::AssistantStart => "assistant-start",
@@ -2484,6 +2488,7 @@ pub(crate) const REMOTE_LINKEDIN_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v
 pub(crate) const REMOTE_LINKEDIN_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login --stop"#;
 pub(crate) const REMOTE_LINKEDIN_STATUS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin status --json"#;
 const REMOTE_OAUTH_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login"#;
+const REMOTE_OAUTH_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login --stop"#;
 
 fn ensure_success(
     result: Result<ProcessResult, &'static str>,
@@ -4847,6 +4852,31 @@ fn provider_bootstrap_input(provider: SubscriptionProvider) -> Option<&'static [
     }
 }
 
+
+/// The login's command on Linux. With a pipe in place of a terminal the wrapper's exec into the container has no
+/// terminal (`-i`, no `-t`): the provider's login does not behave as in a terminal, and what it started in the
+/// container outlives the app's end that closes. `script` gives it the terminal the macOS path has (util-linux: `-q`
+/// quiet, `-e` exit code of the child, `-f` flush at every write, `-c` the command; the wrapper's path goes in the
+/// environment, so nothing needs quoting). Without `script`, as before.
+#[cfg(not(any(target_os = "macos", windows)))]
+fn linux_login_command(wrapper: PathBuf) -> Command {
+    let script = Path::new("/usr/bin/script");
+    let mut cmd = if script.is_file() {
+        let mut cmd = Command::new(script);
+        cmd.arg("-qefc")
+            .arg(r#"exec "$JHT_OAUTH_WRAPPER" oauth-login"#)
+            .arg("/dev/null")
+            .env("JHT_OAUTH_WRAPPER", &wrapper);
+        cmd
+    } else {
+        let mut cmd = Command::new(&wrapper);
+        cmd.args(LocalCliOperation::OauthLogin.argv());
+        cmd
+    };
+    crate::runtime_host::hide_console(&mut cmd);
+    cmd
+}
+
 #[tauri::command]
 pub(crate) fn onboarding_provider_login(
     window: tauri::Window,
@@ -4925,9 +4955,7 @@ pub(crate) fn onboarding_provider_login(
                 }
                 #[cfg(not(any(target_os = "macos", windows)))]
                 {
-                    let mut cmd = Command::new(wrapper);
-                    cmd.args(LocalCliOperation::OauthLogin.argv());
-                    cmd
+                    linux_login_command(wrapper)
                 }
             }
             ValidatedHost::Vps { .. } => {
@@ -5186,6 +5214,7 @@ fn valid_provider_login_input(input: &str) -> bool {
 
 #[tauri::command]
 pub(crate) fn onboarding_provider_login_close(
+    app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     session_id: String,
@@ -5206,7 +5235,33 @@ pub(crate) fn onboarding_provider_login_close(
         let _ = process.kill();
         let _ = process.wait();
     }
+    // Killing the app's own end does not end what the login started in the container: «Cancel» stops that too, best
+    // effort (the person has cancelled; a refusal here is not theirs to hear about). The session exists only because it
+    // was opened with the host's full permission: the stop runs on that same host.
+    stop_provider_login_in_container(&app, scope.scope(), &session.host);
     Ok(())
+}
+
+/// Ends the device login of Codex that is still waiting in the team's container (`jht oauth-login --stop`), on this
+/// computer through the attested wrapper and on a VPS through SSH. Nothing else is touched: the command looks for
+/// `codex login --device-auth` by its command line.
+fn stop_provider_login_in_container(app: &tauri::AppHandle, scope: &AccountScope, host: &ExecutionHost) {
+    let Ok(validated) = validate_host(app, host) else {
+        return;
+    };
+    let _ = match &validated {
+        ValidatedHost::Local => match wrapper_path(app) {
+            Some(wrapper) => run_scoped_local(
+                app,
+                scope,
+                &wrapper,
+                LocalCliOperation::OauthLoginStop,
+                Duration::from_secs(20),
+            ),
+            None => return,
+        },
+        ValidatedHost::Vps { .. } => run_ssh(&validated, REMOTE_OAUTH_LOGIN_STOP, None, Duration::from_secs(20), None),
+    };
 }
 
 /// The resume snapshot says whether its host is this computer, the only one whose stopped runtime the
@@ -8250,6 +8305,7 @@ mod tests {
                 vec!["providers", "current"],
             ),
             (LocalCliOperation::OauthLogin, vec!["oauth-login"]),
+            (LocalCliOperation::OauthLoginStop, vec!["oauth-login", "--stop"]),
             (LocalCliOperation::TeamStart, vec!["team", "start"]),
             (LocalCliOperation::Snapshot, vec!["onboarding-snapshot"]),
             (
