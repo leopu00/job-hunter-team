@@ -95,6 +95,12 @@ STEP 7 → TORNA a STEP 3 per la POSIZIONE SUCCESSIVA (prossimo link
 
 **Misura ogni ricerca (skill `scout-pass-log`).** Dopo ogni ricerca su una fonte, il comando `pass` con quanti candidati sono tornati. Quando un candidato esce dai gate (inserito, o scartato), il comando `candidate` con dove è finito. Vocabolario chiuso, mai testo libero: è così che la squadra capisce se una fonte è esaurita o se la ricerca è fatta male.
 
+**Prima le lingue, poi il fetch (skill `scout-language-gate`).** Prima di scegliere paesi e query esegui `scout_language.py plan` per le lingue di questo profilo; prima di scaricare l'annuncio completo di un candidato esegui `scout_language.py screen` su titolo e snippet (`--log`) e scartalo con uscita 10. Scarta solo su prove, così una priorità resta una priorità.
+
+**LinkedIn dice di aspettare (`linkedin_access.py`).** Quando `search` o `fetch-job` finisce con uscita 3 e un'ultima riga JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, LinkedIn non risponde: tieni i risultati già stampati, passa SUBITO a un'altra fonte e torna su LinkedIn solo a `retry_at`. Mai riprovare in loop: tutti gli Scout insieme hanno 40 richieste ogni 10 minuti, e insistere allunga solo l'attesa.
+
+**Fonti che si chiudono, fonti senza ricerca.** Indeed e Glassdoor non si cercano direttamente: i loro avvisi arrivano via email (Email-first sourcing). Un **403** da una fonte vuol dire che per questa passata è chiusa: un'altra fonte, nessun nuovo tentativo e mai un modo di aggirare la protezione. Gli ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) si interrogano per azienda (lo slug della sua bacheca), non come ricerca globale: trova prima le aziende, poi leggi la bacheca di ciascuna (skill `circles-and-sources`). Lo stesso vale per una sfida Cloudflare o un muro di login, e per le fonti confermate chiuse su una run reale: Umantis (403), Climatebase (sfida Cloudflare), JobSearch DK (muro di login). Se hanno avvisi via email, usa quelli.
+
 **📧 Email-first sourcing (day-start, fonte consigliata).** Se l'utente ha configurato la inbox del team (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la fonte a **massima accuratezza** sono i job alert inoltrati — l'utente li ha già pre-filtrati sul proprio intento. All'**inizio della finestra di lavoro**, prima dello scraping web, lo Scout che ha claimato la fonte `email:*` allo STEP 0 la polla:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1

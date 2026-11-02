@@ -69,16 +69,18 @@ Drena un livello completamente prima di passare al successivo.
 | Livello | Tipo                                | Fonti                                                                                                        | Note                                                                                          |
 |---------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
 | 1       | **LinkedIn**                        | `linkedin_check.py` (profilo autenticato), `safe_fetch.py`, ripiego `linkedin_access.py search`/`fetch-job` (pubblico, senza login)                                            | Universale: copre remoto, in sede, ibrido. Primo step obbligatorio per ogni cerchio. **MAI `fetch` MCP** — bloccato da robots.txt. |
-| 2       | **Aggregatori ATS**                 | Board Greenhouse, board Lever, Indeed, Wellfound (ex AngelList)                                              | Funzionano per qualsiasi work_mode. Coprono molte aziende in un solo scrape.                  |
+| 2       | **Aggregatori ATS**                 | Board Greenhouse, board Lever, Wellfound (ex AngelList)                                              | Funzionano per qualsiasi work_mode. Una bacheca per azienda: trova prima le aziende.                  |
 | 3       | **Board niche (specifiche per profilo)** | Scegli per `work_mode` E dominio                                                                       | (vedi tabella sotto)                                                                          |
 | 4       | **WebSearch + pagine career**       | Query `WebSearch` + scrape di pagine career aziendali                                                       | Ultimo ricorso solo dopo che i livelli 1-3 sono drenati.                                      |
+
+**Fonti che si chiudono e fonti senza ricerca.** Indeed e Glassdoor non si cercano direttamente (rispondono 403 a un lettore automatico): i loro avvisi di lavoro arrivano via email (Email-first sourcing nel tuo prompt). Un **403** da una fonte qualsiasi vuol dire che per questa passata è chiusa: passa a un'altra fonte, non riprovare e non cercare mai un modo di aggirare la protezione. Gli ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) si interrogano **per azienda** (lo slug della sua bacheca), non come ricerca globale: non ne hanno una. Trova prima le aziende (LinkedIn, `WebSearch`, pagine carriere) e leggi la bacheca di ciascuna. Lo stesso vale per una sfida Cloudflare o un muro di login, e per le fonti confermate chiuse su una run reale: Umantis (403), Climatebase (sfida Cloudflare), JobSearch DK (muro di login). Se hanno avvisi via email, usa quelli.
 
 ### Livello 3 — scegli per work_mode + dominio
 
 | `work_mode` del candidato | Board niche da considerare                                                                                 |
 |---------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `remote`                  | Remote.co, WeWorkRemotely, RemoteOK, EURemoteJobs (o equivalenti regionali)                                       |
-| `on-site` / `hybrid`     | Board locali / nazionali (InfoJobs, Glassdoor regionale, Stepstone, Welcome to the Jungle FR, ...)                |
+| `on-site` / `hybrid`     | Board locali / nazionali (InfoJobs, Stepstone, Welcome to the Jungle FR, ...)                |
 | `flessibile`              | Combina remote + locale                                                                                           |
 | Specifico per dominio (qualsiasi) | Niche per stack: PyJobs (Python), GoJobs (Go), Djinni (Europa dell'Est / dev), 4dayweek.io (settimana 4 giorni), ... |
 

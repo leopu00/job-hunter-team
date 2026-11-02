@@ -69,16 +69,18 @@ Drena un nivel completamente antes de pasar al siguiente.
 | Nivel | Tipo                                | Fuentes                                                                                                      | Notas                                                                                         |
 |-------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
 | 1     | **LinkedIn**                        | `linkedin_check.py` (perfil autenticado), `safe_fetch.py`, alternativa `linkedin_access.py search`/`fetch-job` (público, sin login)                                        | Universal: cubre remoto, presencial, híbrido. Primer paso obligatorio para cada círculo. **NUNCA `fetch` MCP** — bloqueado por robots.txt. |
-| 2     | **Agregadores ATS**                 | Tableros Greenhouse, tableros Lever, Indeed, Wellfound (ex AngelList)                                        | Funcionan para cualquier work_mode. Cubren muchas empresas en un scrape.                       |
+| 2     | **Agregadores ATS**                 | Tableros Greenhouse, tableros Lever, Wellfound (ex AngelList)                                        | Funcionan para cualquier work_mode. Un tablero por empresa: encuentra primero las empresas.                       |
 | 3     | **Tableros nicho (específicos del perfil)** | Elegir por `work_mode` Y dominio                                                                     | (ver tabla abajo)                                                                              |
 | 4     | **WebSearch + páginas de carreras** | Consultas `WebSearch` + scrape de páginas de carreras de empresas                                            | Último recurso solo después de que los niveles 1-3 estén drenados.                             |
+
+**Fuentes que se cierran y fuentes sin búsqueda.** Indeed y Glassdoor no se buscan directamente (responden 403 a un lector automático): sus alertas de empleo llegan por email (Email-first sourcing en tu prompt). Un **403** de cualquier fuente significa que está cerrada para esta pasada: pasa a otra fuente, no reintentes y no busques nunca una forma de saltarte la protección. Los ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) se consultan **por empresa** (el slug de su tablero), no como búsqueda global: no tienen una. Encuentra primero las empresas (LinkedIn, `WebSearch`, páginas de carreras) y lee el tablero de cada una. Lo mismo vale para un desafío de Cloudflare o un muro de login, y para las fuentes confirmadas como cerradas en una ejecución real: Umantis (403), Climatebase (desafío de Cloudflare), JobSearch DK (muro de login). Si tienen alertas por email, usa esas.
 
 ### Nivel 3 — elegir por work_mode + dominio
 
 | `work_mode` del candidato | Tableros nicho a considerar                                                                                |
 |---------------------------|------------------------------------------------------------------------------------------------------------|
 | `remote`                  | Remote.co, WeWorkRemotely, RemoteOK, EURemoteJobs (o equivalentes regionales)                              |
-| `on-site` / `hybrid`     | Tableros locales / nacionales (InfoJobs, Glassdoor regional, Stepstone, Welcome to the Jungle FR, ...)     |
+| `on-site` / `hybrid`     | Tableros locales / nacionales (InfoJobs, Stepstone, Welcome to the Jungle FR, ...)     |
 | `flessibile`              | Combinar remoto + local                                                                                    |
 | Específico de dominio (cualquiera) | Nicho específico de stack: PyJobs (Python), GoJobs (Go), Djinni (Europa del Este / dev), 4dayweek.io (4-day-week), ... |
 

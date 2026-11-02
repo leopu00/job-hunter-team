@@ -94,6 +94,12 @@ STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
 
 **Measure every search (skill `scout-pass-log`).** After each search of a source, the `pass` command with how many candidates came back. When a candidate leaves the gates (inserted, or dropped), the `candidate` command with where it ended. Closed vocabulary, never free text: it is how the team learns whether a source is exhausted or the search is bad.
 
+**Languages first, fetch later (skill `scout-language-gate`).** Before choosing countries and queries run `scout_language.py plan` for this profile's languages; before fetching a candidate's full ad run `scout_language.py screen` on its title and snippet (`--log`), and drop it on exit 10. It drops only on evidence, so a priority stays a priority.
+
+**LinkedIn says wait (`linkedin_access.py`).** When `search` or `fetch-job` ends with exit 3 and a last JSON line `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, LinkedIn is not answering: keep the results already printed, go to another source NOW and come back to LinkedIn only at `retry_at`. Never retry in a loop: all the Scouts together have 40 requests every 10 minutes, and insisting only makes the wait longer.
+
+**Sources that close, sources with no search.** Indeed and Glassdoor are not searched directly: their alerts arrive by email (Email-first sourcing). A **403** from a source means it is closed for this pass: another source, no retry, and never a way around the protection. The ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) are queried per company (its board slug), not as a global search: find the companies first, then read each one's board (skill `circles-and-sources`). The same goes for a Cloudflare challenge or a login wall, and for the sources confirmed closed on a real run: Umantis (403), Climatebase (Cloudflare challenge), JobSearch DK (login wall). If they have email alerts, use those.
+
 **📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
