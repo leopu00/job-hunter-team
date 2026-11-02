@@ -11,7 +11,7 @@ La lingua è il taglio che più spesso uccide un candidato DOPO che la ricerca, 
 
 ## 1. Pianifica la ricerca
 
-`plan` dà a ogni paese una modalità. `local`: il profilo parla lì una lingua di lavoro. `english_friendly`: i ruoli in inglese sono comuni e il profilo parla inglese: cercalo, aggiungendo i qualificatori che stampa (`English-speaking`, `international team`, `English required`). `english_only`: vale la pena aprire solo annunci in inglese. Non esclude nulla (priorità sì, esclusione no, SC-04): parti dall'`order` che stampa e non spendere le prime passate sui paesi `english_only`.
+`plan` dà a ogni paese una modalità. `local`: il profilo parla lì una lingua di lavoro. `english_friendly`: i ruoli in inglese sono comuni e il profilo parla inglese: cercalo, aggiungendo i qualificatori che stampa (`English-speaking`, `international team`, `English required`). `english_only`: vale la pena aprire solo annunci in inglese. Non esclude nulla (priorità sì, esclusione no, SC-04): parti dall'`order` che stampa e non spendere le prime passate sui paesi `english_only`. Elenca anche i `portals`: i portali di lavoro scritti nella lingua del loro paese che il profilo non sa leggere (jobs.ch, jobup, jobnet, stepstone-de...) sono `skip`, come EURES in un paese di cui il profilo non parla la lingua (`eures`): non cercarli (`portal --source S --country CC` risponde per uno, uscita 10 = skip). Le liste ATS qui non vengono mai escluse.
 
 ## 2. Controlla ogni candidato prima del fetch
 
@@ -24,6 +24,9 @@ python3 /app/shared/skills/scout_language.py plan
 # for each candidate, from what the LIST shows, BEFORE you fetch the full ad (exit 10 = drop it)
 python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet "<the list's snippet, if any>" \
     --country nl --source greenhouse --log
+
+# one job board in one country (exit 10 = it is in the language of its country and the profile cannot read it: skip it)
+python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
 ## Regole

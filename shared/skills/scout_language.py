@@ -13,6 +13,9 @@ Two commands, both reading `languages` from `$JHT_HOME/profile/candidate_profile
            level), `english_friendly` (English roles are common there and the profile speaks English) or `english_only`
            (only ads in English are worth opening). Nothing is excluded: this is a PRIORITY, as the Scout's rule SC-04
            asks (priority yes, exclusion no); the per-ad `screen` below is the cut.
+  portal   one job board in one country: `skip` when it is a portal in the language of its country (jobs.ch, jobup,
+           jobnet, stepstone-de...; EURES by the country searched) and the profile does not speak it. `plan` lists them
+           all. ATS lists are never excluded here: the per-ad `screen` cuts them. A portal not in the table is not excluded.
   screen   one candidate, from what the LIST shows (title, and the snippet if the source gives one): `skip_language`
            when the ad needs a language the profile does not speak, `ok`, or `unknown` (not enough text to say). It is
            run before `safe_fetch`/the full JD, so a dropped candidate costs nothing more. It only drops on evidence:
@@ -32,6 +35,7 @@ opened), so the saving shows in the numbers.
 
 Use:
   python3 scout_language.py plan
+  python3 scout_language.py portal --source jobs.ch --country ch        # exit 10 = do not search it
   python3 scout_language.py screen --title "Backend-Entwickler (m/w/d)" --snippet "Wir suchen ..." --country de
   python3 scout_language.py screen --title "..." --source greenhouse --country nl --log     # exit 10 = skip_language
 """
@@ -177,7 +181,57 @@ def plan(spoken: dict) -> dict:
         countries[country] = entry
     order = {"local": 0, "english_friendly": 1, "english_only": 2}
     ranked = sorted(countries, key=lambda c: (order[countries[c]["mode"]], c))
-    return {"spoken": sorted(ok), "english": "en" in ok, "order": ranked, "countries": countries}
+    eures = {c: portal_verdict("eures", c, spoken)["verdict"] for c in COUNTRY_LANGUAGES}
+    return {"spoken": sorted(ok), "english": "en" in ok, "order": ranked, "countries": countries,
+            "portals": portals(spoken), "eures": eures}
+
+
+# ── the job boards written in the language of their country ──────────────────────────────────────────────────────────
+# A portal of ONE country whose ads are in that country's language is worth searching only when the profile speaks it:
+# on a real run jobs.ch dropped 6 of 7 for language, jobup 4 of 4, jobnet 2 of 2, jobscout24 3 of 3. The ATS lists
+# (Greenhouse, Lever, Ashby, Workday, SmartRecruiters...) are NOT here: they carry ads in several languages, English among
+# them, and the per-ad `screen` is what cuts them. A portal that is not in this table is never excluded.
+# slug (lowercase, dots and spaces as dashes) -> (country, the languages its ads are in)
+LOCAL_PORTALS = {
+    "jobs-ch": ("ch", ("de", "fr", "it")), "jobup": ("ch", ("fr",)), "jobscout24": ("ch", ("de",)),
+    "jobnet": ("dk", ("da",)), "jobindex": ("dk", ("da",)),
+    "stepstone-de": ("de", ("de",)), "stepstone-at": ("at", ("de",)), "stepstone-nl": ("nl", ("nl",)),
+    "xing": ("de", ("de",)), "karriere-at": ("at", ("de",)),
+    "infojobs": ("es", ("es",)), "francetravail": ("fr", ("fr",)), "pole-emploi": ("fr", ("fr",)), "apec": ("fr", ("fr",)),
+    "profession-hu": ("hu", ("hu",)), "pracuj-pl": ("pl", ("pl",)), "net-empregos": ("pt", ("pt",)),
+    "finn-no": ("no", ("no",)), "nav-no": ("no", ("no",)),
+    "jobbsafari": ("se", ("sv",)), "arbetsformedlingen-se": ("se", ("sv",)), "arbetsformedlingen": ("se", ("sv",)),
+}
+# EURES lists the ads of every country in the language of that country: what it is worth depends on the country searched.
+COUNTRY_PORTALS = frozenset({"eures"})
+
+
+def portal_slug(source: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", fold(source)).strip("-")
+
+
+def portal_verdict(source: str, country: str, spoken: dict) -> dict:
+    """`search`, `skip` (a local-language portal the profile cannot read) or `unknown` (not in the table, or no way to say)."""
+    ok = business_languages(spoken)
+    if not ok:
+        return {"verdict": "unknown", "reason": "no_profile_languages"}
+    slug = portal_slug(source)
+    country = fold(country).strip()
+    if slug in COUNTRY_PORTALS:
+        langs = COUNTRY_LANGUAGES.get(country)
+        if not langs:
+            return {"verdict": "unknown", "reason": "country_needed"}
+    elif slug in LOCAL_PORTALS:
+        langs = LOCAL_PORTALS[slug][1]
+    else:
+        return {"verdict": "unknown", "reason": "not_in_table"}
+    if set(langs) & ok or "en" in langs:
+        return {"verdict": "search", "reason": "language_spoken"}
+    return {"verdict": "skip", "reason": "local_language_required", "languages": sorted(langs)}
+
+
+def portals(spoken: dict) -> dict:
+    return {slug: portal_verdict(slug, "", spoken)["verdict"] for slug in LOCAL_PORTALS}
 
 
 # ── screen ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -363,9 +417,12 @@ def _log(result: dict, args) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scout_language", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("plan", "screen"):
+    for name in ("plan", "screen", "portal"):
         p = sub.add_parser(name)
         p.add_argument("--profile", default=None, help="default: $JHT_HOME/profile/candidate_profile.yml")
+    q = sub.choices["portal"]
+    q.add_argument("--source", required=True)
+    q.add_argument("--country", default="")
     s = sub.choices["screen"]
     s.add_argument("--title", required=True)
     s.add_argument("--snippet", default="")
@@ -377,6 +434,10 @@ def main(argv=None) -> int:
     if args.cmd == "plan":
         print(json.dumps(plan(spoken), sort_keys=True))
         return 0
+    if args.cmd == "portal":
+        verdict = portal_verdict(args.source, args.country, spoken)
+        print(json.dumps(verdict, sort_keys=True))
+        return 10 if verdict["verdict"] == "skip" else 0
     result = screen(args.title, args.snippet, spoken)
     _log(result, args)
     print(json.dumps(result, sort_keys=True))

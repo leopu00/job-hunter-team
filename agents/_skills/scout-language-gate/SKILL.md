@@ -10,7 +10,7 @@ Language is the cut that most often kills a candidate AFTER the search, the fetc
 
 ## 1. Plan the search
 
-`plan` gives each country a mode. `local`: the profile speaks a working language there. `english_friendly`: roles in English are common and the profile speaks English: search it, adding the qualifiers it prints (`English-speaking`, `international team`, `English required`). `english_only`: only ads in English are worth opening. Nothing is excluded (priority yes, exclusion no, SC-04): start from the `order` it prints and do not spend the first passes on `english_only` countries.
+`plan` gives each country a mode. `local`: the profile speaks a working language there. `english_friendly`: roles in English are common and the profile speaks English: search it, adding the qualifiers it prints (`English-speaking`, `international team`, `English required`). `english_only`: only ads in English are worth opening. Nothing is excluded (priority yes, exclusion no, SC-04): start from the `order` it prints and do not spend the first passes on `english_only` countries. It also lists `portals`: job boards written in the language of their country that the profile cannot read (jobs.ch, jobup, jobnet, stepstone-de...) are `skip`, and so is EURES in a country whose language the profile does not speak (`eures`): do not search them (`portal --source S --country CC` answers for one, exit 10 = skip). ATS lists are never excluded here.
 
 ## 2. Screen each candidate before the fetch
 
@@ -23,6 +23,9 @@ python3 /app/shared/skills/scout_language.py plan
 # for each candidate, from what the LIST shows, BEFORE you fetch the full ad (exit 10 = drop it)
 python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet "<the list's snippet, if any>" \
     --country nl --source greenhouse --log
+
+# one job board in one country (exit 10 = it is in the language of its country and the profile cannot read it: skip it)
+python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
 ## Rules

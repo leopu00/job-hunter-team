@@ -11,7 +11,7 @@ A língua é o corte que mais vezes mata um candidato DEPOIS de a pesquisa, o do
 
 ## 1. Planear a pesquisa
 
-`plan` dá a cada país um modo. `local`: o perfil fala lá uma língua de trabalho. `english_friendly`: as vagas em inglês são comuns e o perfil fala inglês: pesquisa lá, com os qualificadores que imprime (`English-speaking`, `international team`, `English required`). `english_only`: só vale a pena abrir anúncios em inglês. Nada é excluído (prioridade sim, exclusão não, SC-04): começa pela `order` impressa e não gastes as primeiras passagens em países `english_only`.
+`plan` dá a cada país um modo. `local`: o perfil fala lá uma língua de trabalho. `english_friendly`: as vagas em inglês são comuns e o perfil fala inglês: pesquisa lá, com os qualificadores que imprime (`English-speaking`, `international team`, `English required`). `english_only`: só vale a pena abrir anúncios em inglês. Nada é excluído (prioridade sim, exclusão não, SC-04): começa pela `order` impressa e não gastes as primeiras passagens em países `english_only`. Lista também os `portals`: os portais de emprego escritos na língua do seu país que o perfil não sabe ler (jobs.ch, jobup, jobnet, stepstone-de...) são `skip`, tal como o EURES num país cuja língua o perfil não fala (`eures`): não os pesquises (`portal --source S --country CC` responde por um, saída 10 = skip). As listas ATS nunca são excluídas aqui.
 
 ## 2. Verificar cada candidato antes do download
 
@@ -24,6 +24,9 @@ python3 /app/shared/skills/scout_language.py plan
 # for each candidate, from what the LIST shows, BEFORE you fetch the full ad (exit 10 = drop it)
 python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet "<the list's snippet, if any>" \
     --country nl --source greenhouse --log
+
+# one job board in one country (exit 10 = it is in the language of its country and the profile cannot read it: skip it)
+python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
 ## Regras

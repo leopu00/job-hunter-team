@@ -11,7 +11,7 @@ A nyelv az a vágás, amely a leggyakrabban azután öli meg a jelöltet, hogy a
 
 ## 1. A keresés megtervezése
 
-A `plan` minden országnak módot ad. `local`: a profil ott beszél egy munkanyelvet. `english_friendly`: ott gyakoriak az angol nyelvű pozíciók, és a profil beszél angolul: keress ott, a kiírt minősítőkkel (`English-speaking`, `international team`, `English required`). `english_only`: csak az angol hirdetéseket érdemes megnyitni. Semmit nem zár ki (prioritás igen, kizárás nem, SC-04): a kiírt `order`-ből indulj, és az első köröket ne az `english_only` országokra költsd.
+A `plan` minden országnak módot ad. `local`: a profil ott beszél egy munkanyelvet. `english_friendly`: ott gyakoriak az angol nyelvű pozíciók, és a profil beszél angolul: keress ott, a kiírt minősítőkkel (`English-speaking`, `international team`, `English required`). `english_only`: csak az angol hirdetéseket érdemes megnyitni. Semmit nem zár ki (prioritás igen, kizárás nem, SC-04): a kiírt `order`-ből indulj, és az első köröket ne az `english_only` országokra költsd. Kilistázza a `portals`-t is: az országuk nyelvén írt állásportálok, amelyeket a profil nem tud olvasni (jobs.ch, jobup, jobnet, stepstone-de...), `skip`-ek, akárcsak az EURES olyan országban, amelynek nyelvét a profil nem beszéli (`eures`): ne keresd őket (a `portal --source S --country CC` egyről válaszol, 10-es kilépés = skip). Az ATS-listákat itt soha nem zárja ki.
 
 ## 2. Minden jelölt ellenőrzése a letöltés előtt
 
@@ -24,6 +24,9 @@ python3 /app/shared/skills/scout_language.py plan
 # for each candidate, from what the LIST shows, BEFORE you fetch the full ad (exit 10 = drop it)
 python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet "<the list's snippet, if any>" \
     --country nl --source greenhouse --log
+
+# one job board in one country (exit 10 = it is in the language of its country and the profile cannot read it: skip it)
+python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
 ## Szabályok

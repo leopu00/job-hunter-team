@@ -240,3 +240,57 @@ def test_every_scout_prompt_names_the_measure_the_language_gate_and_the_linkedin
         assert needle in text, "%s is missing %r" % (suffix or "en", needle)
     listed = (REPO_ROOT / "agents" / "scout" / "skills.list").read_text(encoding="utf-8").split()
     assert "scout-pass-log" in listed and "scout-language-gate" in listed
+
+
+# ── the job boards written in the language of their country ────────────────────────────────────────────────────────
+@pytest.mark.parametrize("source,country", [
+    ("jobs.ch", "ch"), ("Jobs.ch", "ch"), ("jobup", "ch"), ("jobscout24", "ch"), ("jobnet", "dk"), ("jobindex", "dk"),
+    ("stepstone-de", "de"), ("StepStone DE", "de"), ("profession.hu", "hu"), ("infojobs", "es"),
+])
+def test_a_local_language_portal_the_profile_cannot_read_is_skipped(source, country):
+    got = sl.portal_verdict(source, country, SV_EN)
+    assert got["verdict"] == "skip" and got["reason"] == "local_language_required" and got["languages"], got
+
+
+@pytest.mark.parametrize("source,country", [("jobbsafari", "se"), ("arbetsformedlingen-se", "se"), ("Arbetsformedlingen SE", "se")])
+def test_a_local_language_portal_in_a_language_the_profile_speaks_is_searched(source, country):
+    assert sl.portal_verdict(source, country, SV_EN)["verdict"] == "search"
+
+
+def test_the_same_portal_is_searched_by_a_profile_that_speaks_one_of_its_languages():
+    assert sl.portal_verdict("jobs.ch", "ch", {"fr": 4, "en": 4})["verdict"] == "search", "French is one of its three"
+    assert sl.portal_verdict("jobs.ch", "ch", {"it": 5})["verdict"] == "search"
+    assert sl.portal_verdict("jobup", "ch", {"de": 5, "en": 4})["verdict"] == "skip", "jobup is in French"
+
+
+def test_eures_is_judged_by_the_country_it_is_searched_in():
+    assert sl.portal_verdict("EURES", "pt", SV_EN)["verdict"] == "skip"
+    assert sl.portal_verdict("eures", "de", SV_EN)["verdict"] == "skip"
+    assert sl.portal_verdict("eures", "se", SV_EN)["verdict"] == "search"
+    assert sl.portal_verdict("eures", "gb", SV_EN)["verdict"] == "search", "English is a working language there"
+    assert sl.portal_verdict("eures", "", SV_EN) == {"verdict": "unknown", "reason": "country_needed"}
+
+
+@pytest.mark.parametrize("source", ["greenhouse", "lever", "ashby", "workday", "smartrecruiters", "teamtailor", "linkedin",
+                                    "a-portal-nobody-listed", "ofir"])
+def test_ats_lists_linkedin_and_unknown_portals_are_never_excluded(source):
+    assert sl.portal_verdict(source, "nl", SV_EN) == {"verdict": "unknown", "reason": "not_in_table"}
+
+
+def test_without_the_profile_languages_no_portal_is_excluded():
+    assert sl.portal_verdict("jobs.ch", "ch", {})["verdict"] == "unknown"
+
+
+def test_the_plan_lists_the_portals_and_eures_by_country():
+    plan = sl.plan(SV_EN)
+    assert plan["portals"]["jobs-ch"] == "skip" and plan["portals"]["jobbsafari"] == "search"
+    assert plan["eures"]["pt"] == "skip" and plan["eures"]["se"] == "search"
+    assert set(plan["eures"]) == set(sl.COUNTRY_LANGUAGES)
+
+
+def test_the_portal_command_exits_10_on_skip(home):
+    skip = _run(home, "portal", "--source", "jobs.ch", "--country", "ch")
+    assert skip.returncode == 10 and json.loads(skip.stdout)["verdict"] == "skip"
+    keep = _run(home, "portal", "--source", "jobbsafari", "--country", "se")
+    assert keep.returncode == 0 and json.loads(keep.stdout)["verdict"] == "search"
+    assert _run(home, "portal", "--source", "greenhouse").returncode == 0

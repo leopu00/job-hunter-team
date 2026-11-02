@@ -11,7 +11,7 @@ Die Sprache ist der Schnitt, der am häufigsten einen Kandidaten tötet, NACHDEM
 
 ## 1. Die Suche planen
 
-`plan` gibt jedem Land einen Modus. `local`: Das Profil spricht dort eine Arbeitssprache. `english_friendly`: Rollen auf Englisch sind üblich und das Profil spricht Englisch: such dort, mit den ausgegebenen Zusätzen (`English-speaking`, `international team`, `English required`). `english_only`: Nur englische Inserate lohnen das Öffnen. Nichts wird ausgeschlossen (Priorität ja, Ausschluss nein, SC-04): Beginne mit der ausgegebenen `order` und verbrauche die ersten Durchgänge nicht auf `english_only`-Ländern.
+`plan` gibt jedem Land einen Modus. `local`: Das Profil spricht dort eine Arbeitssprache. `english_friendly`: Rollen auf Englisch sind üblich und das Profil spricht Englisch: such dort, mit den ausgegebenen Zusätzen (`English-speaking`, `international team`, `English required`). `english_only`: Nur englische Inserate lohnen das Öffnen. Nichts wird ausgeschlossen (Priorität ja, Ausschluss nein, SC-04): Beginne mit der ausgegebenen `order` und verbrauche die ersten Durchgänge nicht auf `english_only`-Ländern. Es listet auch die `portals`: Jobportale in der Sprache ihres Landes, die das Profil nicht lesen kann (jobs.ch, jobup, jobnet, stepstone-de...), sind `skip`, ebenso EURES in einem Land, dessen Sprache das Profil nicht spricht (`eures`): such sie nicht (`portal --source S --country CC` antwortet für eines, Exit 10 = skip). ATS-Listen werden hier nie ausgeschlossen.
 
 ## 2. Jeden Kandidaten vor dem Abruf prüfen
 
@@ -24,6 +24,9 @@ python3 /app/shared/skills/scout_language.py plan
 # for each candidate, from what the LIST shows, BEFORE you fetch the full ad (exit 10 = drop it)
 python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet "<the list's snippet, if any>" \
     --country nl --source greenhouse --log
+
+# one job board in one country (exit 10 = it is in the language of its country and the profile cannot read it: skip it)
+python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
 ## Regeln

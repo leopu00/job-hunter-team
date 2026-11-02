@@ -11,7 +11,7 @@ La langue est la coupe qui tue le plus souvent un candidat APRÈS que la recherc
 
 ## 1. Planifier la recherche
 
-`plan` donne à chaque pays un mode. `local` : le profil y parle une langue de travail. `english_friendly` : les postes en anglais y sont courants et le profil parle anglais : cherche-y, avec les qualificatifs qu'il imprime (`English-speaking`, `international team`, `English required`). `english_only` : seules les annonces en anglais valent d'être ouvertes. Rien n'est exclu (priorité oui, exclusion non, SC-04) : pars de l'`order` imprimé et ne dépense pas les premières passes sur les pays `english_only`.
+`plan` donne à chaque pays un mode. `local` : le profil y parle une langue de travail. `english_friendly` : les postes en anglais y sont courants et le profil parle anglais : cherche-y, avec les qualificatifs qu'il imprime (`English-speaking`, `international team`, `English required`). `english_only` : seules les annonces en anglais valent d'être ouvertes. Rien n'est exclu (priorité oui, exclusion non, SC-04) : pars de l'`order` imprimé et ne dépense pas les premières passes sur les pays `english_only`. Il liste aussi les `portals` : les portails d'emploi écrits dans la langue de leur pays que le profil ne sait pas lire (jobs.ch, jobup, jobnet, stepstone-de...) sont `skip`, comme EURES dans un pays dont le profil ne parle pas la langue (`eures`) : ne les cherche pas (`portal --source S --country CC` répond pour un seul, sortie 10 = skip). Les listes ATS ne sont jamais exclues ici.
 
 ## 2. Contrôler chaque candidat avant la récupération
 
@@ -24,6 +24,9 @@ python3 /app/shared/skills/scout_language.py plan
 # for each candidate, from what the LIST shows, BEFORE you fetch the full ad (exit 10 = drop it)
 python3 /app/shared/skills/scout_language.py screen --title "<title>" --snippet "<the list's snippet, if any>" \
     --country nl --source greenhouse --log
+
+# one job board in one country (exit 10 = it is in the language of its country and the profile cannot read it: skip it)
+python3 /app/shared/skills/scout_language.py portal --source jobs.ch --country ch
 ```
 
 ## Règles
