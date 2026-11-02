@@ -10,7 +10,7 @@
 
 import { execSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline/promises';
+import { createInterface } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 import {
   AGENTS, c,
@@ -157,6 +157,37 @@ export async function waitForFreePane({
   return false;
 }
 
+/**
+ * The lines the person types, kept from the moment the chat opens. `rl.question` only hears a line while it is being
+ * asked: a line typed while the chat waits for the reply, or for the agent to be free, was dropped without a word (B1
+ * of the Linux CLI ritest, 02/11: the second and third messages never left). Here every line is kept, in order, and
+ * handed out when the loop asks for the next one. `null` is the end of the input.
+ */
+export function createLineQueue(rl) {
+  const lines = [];
+  const waiting = [];
+  let closed = false;
+  rl.on('line', (line) => {
+    const waiter = waiting.shift();
+    if (waiter) waiter(line); else lines.push(line);
+  });
+  rl.on('close', () => {
+    closed = true;
+    while (waiting.length) waiting.shift()(null);
+  });
+  return {
+    /** Whether a line is already waiting its turn. */
+    pending: () => lines.length > 0,
+    /** The next line, waiting for it if the person has not typed it yet; null once the input has ended. */
+    next(prompt) {
+      if (lines.length) return Promise.resolve(lines.shift());
+      if (closed) return Promise.resolve(null);
+      if (prompt) { rl.setPrompt(prompt); rl.prompt(); }
+      return new Promise((res) => waiting.push(res));
+    },
+  };
+}
+
 /** The chat name of a session (ASSISTENTE -> assistente, SCOUT-1 -> scout), or null for a session without a chat. */
 export function chatAgentOf(session) {
   const base = String(session).toLowerCase().replace(/^jht-/, '').replace(/-\d+$/, '').replace(/-s\d+$/, '');
@@ -294,13 +325,14 @@ export function createChatPump(feed) {
     tick() {
       return waiting ? [] : feed.fresh();
     },
-    /** Waits for the reply: the new rows as soon as there are any, or [] at the deadline. */
-    async awaitReply({ sleep = (ms) => new Promise((res) => setTimeout(res, ms)), now = Date.now, timeoutMs = REPLY_WAIT_MS, everyMs = 2000 } = {}) {
+    /** Waits for the reply: the new rows as soon as there are any, or [] at the deadline (or when `stop()` says so). */
+    async awaitReply({ sleep = (ms) => new Promise((res) => setTimeout(res, ms)), now = Date.now, timeoutMs = REPLY_WAIT_MS, everyMs = 2000, stop = () => false } = {}) {
       waiting = true;
       try {
         const until = now() + timeoutMs;
         let rows = [];
-        while (!rows.length && now() < until) {
+        // `stop`: the person has already typed the next line, which must not wait for a reply that may take minutes.
+        while (!rows.length && now() < until && !stop()) {
           await sleep(everyMs);
           rows = feed.fresh();
         }
@@ -393,6 +425,7 @@ export async function chatAction(agentArg, options = {}) {
   }
 
   const rl = createInterface({ input, output, terminal: true });
+  const typedLines = createLineQueue(rl);
   console.log('');
   console.log(c.bold(`Chat with ${session}`) + c.dim(`  (${usingContainer() ? 'container jht' : 'tmux host'})`));
   console.log(c.dim('  /exit to exit · /read for new messages · /cards for the open questions · /pane for the terminal · /clear to clean'));
@@ -431,7 +464,8 @@ export async function chatAction(agentArg, options = {}) {
 
   try {
     while (true) {
-      const line = await rl.question(c.bold('>') + ' ');
+      const line = await typedLines.next(c.bold('>') + ' ');
+      if (line === null) break;
       const msg = line.trim();
       if (!msg) continue;
       if (msg === '/exit' || msg === '/quit') break;
@@ -475,8 +509,8 @@ export async function chatAction(agentArg, options = {}) {
       // The answer is in the chat: wait for it for a while; the terminal's screen only when the chat cannot be read.
       if (!options.quiet) {
         if (feed) {
-          const rows = await pump.awaitReply();
-          if (rows.length) show(rows); else console.log(c.dim('  (no reply yet: /read shows it when it comes)'));
+          const rows = await pump.awaitReply({ stop: typedLines.pending });
+          if (rows.length) show(rows); else if (!typedLines.pending()) console.log(c.dim('  (no reply yet: /read shows it when it comes)'));
         } else {
           await new Promise((res) => setTimeout(res, 3000));
           showPane(8);
