@@ -260,10 +260,16 @@ _NAME_PATTERN = {code: pattern for code, pattern in
 _COMPOUND = re.compile(r"\b(deutsch|niederlandisch|franzosisch|englisch|spanisch|italienisch|schwedisch|polnisch)kenntnisse")
 
 
+_SENTENCE_REACH = 400   # a sentence longer than this is cut: a text with no full stop must not cost a scan of all of it per match
+
+
 def _sentence(folded: str, start: int, end: int) -> tuple:
-    left = max((folded.rfind(c, 0, start) for c in _SENTENCE_END), default=-1) + 1
-    rights = [i for i in (folded.find(c, end) for c in _SENTENCE_END) if i != -1]
-    return left, (min(rights) if rights else len(folded))
+    floor = max(0, start - _SENTENCE_REACH)
+    left = max((folded.rfind(c, floor, start) for c in _SENTENCE_END), default=-1) + 1
+    left = max(left, floor)
+    ceil = min(len(folded), end + _SENTENCE_REACH)
+    rights = [i for i in (folded.find(c, end, ceil) for c in _SENTENCE_END) if i != -1]
+    return left, (min(rights) if rights else ceil)
 
 
 def _needs(folded: str, match, left: int, right: int) -> bool:
@@ -275,9 +281,14 @@ def _needs(folded: str, match, left: int, right: int) -> bool:
     return any(word in close for word in _NEED_WORDS)
 
 
+TEXT_CAP = 20000   # characters read of an ad: the requirements are at the top, and a 120 KB hostile text cost 11.6 s of CPU
+
+
 def required_missing(text: str, ok: frozenset) -> list:
-    """Languages the text asks for in so many words that the profile does not speak at business level."""
-    folded = fold(text)
+    """Languages the text asks for in so many words that the profile does not speak at business level.
+
+    Reads the first TEXT_CAP characters, and stops looking for a language at the first sentence that asks for it."""
+    folded = fold((text or "")[:TEXT_CAP])
     missing = set()
     for code, pattern in _NAME_PATTERN.items():
         if code in ok:
@@ -294,6 +305,7 @@ def required_missing(text: str, ok: frozenset) -> list:
                             for other in LANGUAGE_NAMES)):
                 continue  # "fluent German or English": it offers a language the profile speaks (but "German AND English" does not)
             missing.add(code)
+            break         # asked for once is enough: the rest of the text cannot change the answer for this language
     for match in _COMPOUND.finditer(folded):
         code = language_code(match.group(1))
         if code and code not in ok:
@@ -303,12 +315,15 @@ def required_missing(text: str, ok: frozenset) -> list:
     return sorted(missing)
 
 
+_STOPWORD_SETS = {code: frozenset(words) for code, words in STOPWORDS.items()}
+
+
 def ad_language(text: str):
     """(code, hits) of the language the text is written in, or (None, 0) when it cannot say."""
-    tokens = re.findall(r"[a-z]+", fold(text))
+    tokens = re.findall(r"[a-z]+", fold((text or "")[:TEXT_CAP]))
     if len(tokens) < 12:
         return None, 0
-    hits = {code: sum(1 for t in tokens if t in set(words)) for code, words in STOPWORDS.items()}
+    hits = {code: sum(1 for t in tokens if t in words) for code, words in _STOPWORD_SETS.items()}
     ranked = sorted(hits.items(), key=lambda kv: -kv[1])
     (best, top), (_, second) = ranked[0], ranked[1]
     if top >= 4 and top >= 2 * second + 1 and top / len(tokens) >= 0.12:

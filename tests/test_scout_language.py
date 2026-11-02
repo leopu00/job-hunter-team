@@ -320,3 +320,58 @@ def test_the_lexicon_is_a_data_file_beside_the_script_and_is_consistent():
     assert sl.LANGUAGE_NAMES == lexicon["names"] and sl.COUNTRY_LANGUAGES["se"] == ("sv",)
     # every language a country can name exists in the table of names
     assert {l for langs in sl.COUNTRY_LANGUAGES.values() for l in langs} <= set(lexicon["names"])
+
+
+# ── the cost of a hostile ad: a cap on the text, a bounded sentence, an exit at the first hit ─────────────────
+
+def _timed(fn, *args):
+    import time
+    t0 = time.process_time()
+    out = fn(*args)
+    return out, time.process_time() - t0
+
+
+def test_a_hostile_120kb_ad_costs_well_under_a_second_not_eleven():
+    hostile = "fluent deutsch " * 8000                                   # ~120 KB, one phrase over and over, no full stop
+    assert len(hostile) > 100_000
+    out, spent = _timed(sl.required_missing, hostile, frozenset({"en"}))
+    assert out == ["de"] and spent < 1.0, f"{spent:.2f} s of CPU"
+    # the same with full stops (a sentence per hit) and with a language the profile lacks nowhere in the text
+    dotted = "Fluent Deutsch required. " * 5000
+    out, spent = _timed(sl.required_missing, dotted, frozenset({"en"}))
+    assert out == ["de"] and spent < 1.0, f"{spent:.2f} s of CPU"
+    nothing = ("we build things with care and we like a quiet office " * 3000)
+    out, spent = _timed(sl.required_missing, nothing, frozenset({"en"}))
+    assert out == [] and spent < 1.0, f"{spent:.2f} s of CPU"
+
+
+def test_the_language_screen_of_a_hostile_ad_is_cheap_too():
+    hostile = "fluent deutsch " * 8000
+    _, spent = _timed(sl.ad_language, hostile)
+    assert spent < 1.0, f"{spent:.2f} s of CPU"
+    _, spent = _timed(sl.screen, "Engineer", hostile, SV_EN)
+    assert spent < 1.0, f"{spent:.2f} s of CPU"
+
+
+def test_a_requirement_at_the_top_is_still_found_after_the_cap_and_one_past_it_is_not_read():
+    top = "You need fluent German. " + "We like cake and tea. " * 2000
+    assert sl.required_missing(top, frozenset({"en"})) == ["de"]
+    past = "We like cake and tea. " * 2000 + "You need fluent German."
+    assert len(past) > sl.TEXT_CAP
+    assert sl.required_missing(past, frozenset({"en"})) == []            # beyond the cap: documented, never a drop on a guess
+    assert sl.required_missing("", frozenset({"en"})) == [] and sl.required_missing(None, frozenset({"en"})) == []
+
+
+def test_a_language_is_reported_once_whatever_the_number_of_sentences_that_ask_for_it():
+    text = "Fluent German is a must. Fluent German again. Fluent French is a must. "
+    assert sl.required_missing(text, frozenset({"en"})) == ["de", "fr"]
+
+
+def test_the_sentence_window_is_bounded_but_keeps_the_sentence_of_a_normal_ad():
+    short = "a. fluent german needed; b"
+    left, right = sl._sentence(short, short.index("fluent"), short.index("fluent") + 6)
+    assert short[left:right].strip() == "fluent german needed"            # the sentence of a normal ad, full stops and all
+    long_text = "x" * 5000 + " fluent german " + "y" * 5000
+    start = long_text.index("fluent")
+    left, right = sl._sentence(long_text, start, start + 6)
+    assert start - left <= sl._SENTENCE_REACH and right - start <= sl._SENTENCE_REACH + 6
