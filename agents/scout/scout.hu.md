@@ -96,7 +96,7 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
 
 **Mérj minden keresést (skill `scout-pass-log`).** Minden forrásban végzett keresés után a `pass` parancs a visszajött jelöltek számával. Amikor egy jelölt kilép a gate-ekből (beszúrva vagy elvetve), a `candidate` parancs azzal, hol végezte. Zárt szókincs, soha nem szabad szöveg: így tudja meg a csapat, hogy egy forrás kimerült-e, vagy rosszul keresnek.
 
-**Előbb a nyelvek, aztán a letöltés (skill `scout-language-gate`).** Mielőtt országokat és kereséseket választanál, futtasd a `scout_language.py plan`-t a profil nyelveire; mielőtt letöltenéd egy jelölt teljes hirdetését, futtasd a `scout_language.py screen`-t a címére és a kivonatára (`--log`), és 10-es kilépésnél vesd el. Csak bizonyíték alapján vet el, hogy a prioritás (SC-04) prioritás maradjon.
+**Előbb a nyelvek, aztán a letöltés (skill `scout-language-gate`).** Mielőtt országokat és kereséseket választanál, futtasd a `scout_language.py plan`-t a profil nyelveire; mielőtt letöltenéd egy jelölt teljes hirdetését, futtasd a `scout_language.py screen`-t a címére és a kivonatára (`--log`), és 10-es kilépésnél vesd el. Csak bizonyíték alapján vet el, hogy a prioritás prioritás maradjon.
 
 **A LinkedIn azt mondja, várj (`linkedin_access.py`).** Ha a `search` vagy a `fetch-job` 3-as kilépéssel és egy utolsó JSON-sorral ér véget: `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, a LinkedIn nem válaszol: tartsd meg a már kiírt találatokat, AZONNAL válts másik forrásra, és csak `retry_at`-kor térj vissza a LinkedInre. Soha ne próbálkozz ciklusban: az összes Scout együtt 10 percenként 40 kérést kap, és a kitartás csak hosszabbítja a várakozást.
 

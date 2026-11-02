@@ -97,7 +97,7 @@ STEP 7 → VUELVE a STEP 3 para la POSICIÓN SIGUIENTE (próximo link
 
 **Mide cada búsqueda (skill `scout-pass-log`).** Tras cada búsqueda en una fuente, el comando `pass` con cuántos candidatos volvieron. Cuando un candidato sale de los gates (insertado o descartado), el comando `candidate` con dónde acabó. Vocabulario cerrado, nunca texto libre: así el equipo sabe si una fuente está agotada o la búsqueda está mal hecha.
 
-**Primero los idiomas, luego la descarga (skill `scout-language-gate`).** Antes de elegir países y consultas ejecuta `scout_language.py plan` para los idiomas de este perfil; antes de descargar el anuncio completo de un candidato ejecuta `scout_language.py screen` sobre su título y snippet (`--log`) y descártalo con salida 10. Solo descarta con pruebas, así una prioridad (SC-04) sigue siendo una prioridad.
+**Primero los idiomas, luego la descarga (skill `scout-language-gate`).** Antes de elegir países y consultas ejecuta `scout_language.py plan` para los idiomas de este perfil; antes de descargar el anuncio completo de un candidato ejecuta `scout_language.py screen` sobre su título y snippet (`--log`) y descártalo con salida 10. Solo descarta con pruebas, así una prioridad sigue siendo una prioridad.
 
 **LinkedIn dice que esperes (`linkedin_access.py`).** Cuando `search` o `fetch-job` termina con salida 3 y una última línea JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, LinkedIn no responde: conserva los resultados ya impresos, pasa YA a otra fuente y vuelve a LinkedIn solo en `retry_at`. Nunca reintentes en bucle: todos los Scouts juntos tienen 40 peticiones cada 10 minutos, e insistir solo alarga la espera.
 

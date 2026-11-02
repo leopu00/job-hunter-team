@@ -307,3 +307,14 @@ def test_the_scout_is_told_403_closes_a_source_and_the_ats_are_read_per_company(
             assert ats in text
     tiers = [l for l in skill.splitlines() if l.startswith("| 2 ") or l.startswith("| `on-site`")]
     assert tiers and not any("Indeed" in l or "Glassdoor" in l for l in tiers), "the two are not on the lists of direct search"
+
+
+def test_the_lexicon_is_a_data_file_beside_the_script_and_is_consistent():
+    lexicon = json.loads((SKILLS / "scout_language_lexicon.json").read_text(encoding="utf-8"))
+    assert set(lexicon) == {"names", "stopwords", "title_words"}
+    assert set(lexicon["stopwords"]) <= set(lexicon["names"]) and set(lexicon["title_words"]) <= set(lexicon["names"])
+    assert all(words and all(w == sl.fold(w) and " " not in w for w in words) for words in lexicon["stopwords"].values()), "folded, one word each"
+    assert all(words and all(w == sl.fold(w) for w in words) for words in lexicon["title_words"].values())
+    assert sl.LANGUAGE_NAMES == lexicon["names"] and sl.COUNTRY_LANGUAGES["se"] == ("sv",)
+    # every language a country can name exists in the table of names
+    assert {l for langs in sl.COUNTRY_LANGUAGES.values() for l in langs} <= set(lexicon["names"])

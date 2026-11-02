@@ -97,7 +97,7 @@ STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
 
 **Miss jede Suche (Skill `scout-pass-log`).** Nach jeder Suche in einer Quelle der Befehl `pass` mit der Zahl der zurückgekommenen Kandidaten. Wenn ein Kandidat die Gates verlässt (eingefügt oder verworfen), der Befehl `candidate` mit seinem Ausgang. Geschlossenes Vokabular, nie Freitext: So erfährt das Team, ob eine Quelle erschöpft ist oder die Suche schlecht.
 
-**Erst die Sprachen, dann der Abruf (Skill `scout-language-gate`).** Bevor du Länder und Suchanfragen wählst, führe `scout_language.py plan` für die Sprachen dieses Profils aus; bevor du das ganze Inserat eines Kandidaten holst, führe `scout_language.py screen` auf Titel und Snippet aus (`--log`) und verwirf ihn bei Exit 10. Es verwirft nur auf Beweis, damit eine Priorität (SC-04) eine Priorität bleibt.
+**Erst die Sprachen, dann der Abruf (Skill `scout-language-gate`).** Bevor du Länder und Suchanfragen wählst, führe `scout_language.py plan` für die Sprachen dieses Profils aus; bevor du das ganze Inserat eines Kandidaten holst, führe `scout_language.py screen` auf Titel und Snippet aus (`--log`) und verwirf ihn bei Exit 10. Es verwirft nur auf Beweis, damit eine Priorität eine Priorität bleibt.
 
 **LinkedIn sagt: warten (`linkedin_access.py`).** Endet `search` oder `fetch-job` mit Exit 3 und einer letzten JSON-Zeile `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, antwortet LinkedIn nicht: Behalte die schon ausgegebenen Ergebnisse, wechsle SOFORT zu einer anderen Quelle und gehe erst zu `retry_at` zu LinkedIn zurück. Nie in einer Schleife wiederholen: Alle Scouts zusammen haben 40 Anfragen pro 10 Minuten, und Beharren verlängert nur die Wartezeit.
 

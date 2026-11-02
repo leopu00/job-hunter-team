@@ -52,32 +52,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 # ── the languages, by the names people write for them (in the product's seven languages and in themselves) ────────────
-LANGUAGE_NAMES = {
-    "en": "english inglese ingles anglais englisch angol ingles",
-    "de": "german deutsch tedesco aleman allemand nemet alemao duits niederdeutsch",
-    "nl": "dutch nederlands olandese neerlandes neerlandais niederlandisch holandes hollandi nederlandse flemish vlaams",
-    "fr": "french francais francese frances franzosisch frans",
-    "es": "spanish espanol spagnolo spanisch espagnol spanyol castellano castilian",
-    "it": "italian italiano italienisch italien olasz italiaans",
-    "pt": "portuguese portugues portoghese portugiesisch portugais",
-    "sv": "swedish svenska svedese schwedisch suedois sueco sved zweeds",
-    "da": "danish dansk danese danisch danois danes dan deens",
-    "no": "norwegian norsk norvegese norwegisch norvegien noruego noors norveg",
-    "fi": "finnish suomi finlandese finnisch finnois finlandes finn fins",
-    "pl": "polish polski polacco polnisch polonais polaco lengyel pools",
-    "cs": "czech cestina ceco tschechisch tcheque checo cseh tsjechisch",
-    "hu": "hungarian magyar ungherese ungarisch hongrois hungaro hongaars",
-    "ro": "romanian rumeno rumanisch roumain rumano",
-    "el": "greek ellinika greco griechisch grec griego grego gorog",
-    "bg": "bulgarian balgarski bulgaro bulgarisch bulgare bolgar",
-    "hr": "croatian hrvatski croato kroatisch croate horvat",
-    "sk": "slovak slovencina slovacco slowakisch slovaque eslovaco szlovak",
-    "sl": "slovenian slovene sloveno slowenisch esloveno szloven",
-    "et": "estonian eesti estone estnisch estonien estonio eszt",
-    "lv": "latvian latviesu lettone lettisch letton leton lett",
-    "lt": "lithuanian lietuviu lituano litauisch lituanien litvan",
-    "tr": "turkish turkce turco turkisch turc torok",
-}
+# The words themselves (the names of each language, its distinctive function words, the job words of its titles) are data,
+# not code: they live in scout_language_lexicon.json beside this file. A language is added there.
+def _lexicon() -> dict:
+    return json.loads((HERE / "scout_language_lexicon.json").read_text(encoding="utf-8"))
+
+
+_LEXICON = _lexicon()
+LANGUAGE_NAMES = _LEXICON["names"]
 
 # ── where a language is a working language ───────────────────────────────────────────────────────────────────────────
 COUNTRY_LANGUAGES = {
@@ -235,36 +217,10 @@ def portals(spoken: dict) -> dict:
 
 
 # ── screen ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-# Distinctive function words (not English, not shared between the neighbours), folded.
-STOPWORDS = {
-    "en": "the and you with for will our we are your to of in team experience skills work join role about who what".split(),
-    "de": "und der die das mit fur von wir sie eine ein zu den im auf sind ihre unser bei oder als nicht auch werden uns dem".split(),
-    "nl": "het een voor met wij jij je ons bij naar ook zijn wordt onze van er dat die niet maar kan".split(),
-    "fr": "le les des une et pour avec nous vous dans du sur est votre notre au aux que qui ce cette sont ou plus".split(),
-    "es": "el los las una y con para que nuestro tu del por somos buscamos en un es se su como mas".split(),
-    "it": "il le di e per con una che nel della siamo cerchiamo dei delle nostro non sono anche gli lo".split(),
-    "pt": "os as uma com para que nosso procuramos voce em do da dos das nao sao ao ser mais".split(),
-    "sv": "och att det som ett med av vi du pa inom har ska dig ar vara eller inte oss vill".split(),
-    "da": "og at det som et til med af vi du pa har skal dig er eller ikke os vil kan".split(),
-    "no": "og det som et til med av vi du pa har skal deg er eller ikke oss vil kan".split(),
-    "fi": "ja on ei etta olla sina me joka tai kanssa tyo sinulle meille ovat myos".split(),
-    "pl": ("oraz dla sie jest ktory ktore ktorzy nasz naszym naszego nami lub przez nie jak ale tez bedzie bedziesz "
-           "zespolu praca osob wiec").split(),
-    "cs": "pro nebo mame hledame kteri jsou nase byt jako ale take bude nebo".split(),
-    "hu": "egy hogy van vagy nem is mi te ugy csapat keres munka lesz".split(),
-}
-# Job words that give a language away in a title that has nothing else; each is specific to its language.
-TITLE_WORDS = {
-    "de": "entwickler ingenieur mitarbeiter sachbearbeiter leiter berater praktikant werkstudent verkaufer kaufmann fachkraft".split(),
-    "nl": "medewerker ontwikkelaar beheerder adviseur stagiair leidinggevende".split(),
-    "fr": "ingenieur developpeur charge stagiaire alternance responsable conseiller".split(),
-    "es": "desarrollador ingeniero responsable practicas asesor tecnico".split(),
-    "it": "sviluppatore ingegnere addetto stage consulente responsabile".split(),
-    "pt": "engenheiro programador estagio consultor".split(),
-    "sv": "utvecklare ingenjor chef konsult".split(),
-    "da": "udvikler ingenior konsulent".split(),
-    "pl": "programista inzynier specjalista".split(),
-}
+# Distinctive function words (not English, not shared between the neighbours) and the job words that give a language away in
+# a title with nothing else, each specific to its language: folded, in the lexicon.
+STOPWORDS = _LEXICON["stopwords"]
+TITLE_WORDS = _LEXICON["title_words"]
 GENDER_MARKS = {"de": re.compile(r"\((?:m/w/d|w/m/d|m/w/x|d/m/w)\)"), "nl": re.compile(r"\((?:m/v/x|m/v)\)"),
                 "fr": re.compile(r"\((?:h/f|f/h)\)")}
 ENGLISH_TITLE = frozenset("software engineer developer manager analyst designer scientist consultant specialist lead "
