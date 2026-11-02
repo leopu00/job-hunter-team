@@ -30,7 +30,7 @@ describe("the band that says whose the team of this computer is", () => {
     save("profile-b", "profile-a");
     render(<LocalTeamOwnerBanner locale="it" />);
     expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent(
-      "Su questo Mac la squadra risulta di Ada: passa a quel profilo per usarla.",
+      "Su questo computer la squadra risulta di Ada: passa a quel profilo per usarla.",
     );
   });
 
@@ -69,7 +69,7 @@ describe("the band that says whose the team of this computer is", () => {
   it("uses the sentence without a name when the owner's name is not known", async () => {
     render(<LocalTeamOwnerBanner locale="it" read={() => ({ owner: "other", name: null })} />);
     expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent(
-      "Su questo Mac la squadra risulta di un altro profilo: passa a quel profilo per usarla.",
+      "Su questo computer la squadra risulta di un altro profilo: passa a quel profilo per usarla.",
     );
   });
 
@@ -187,7 +187,7 @@ describe("the backend's answer over the renderer's copy", () => {
     await expect(readNativeTeamOwnerView(async () => ({ kind: "google" }))).resolves.toEqual({ owner: "other", name: null, account: true });
     render(<LocalTeamOwnerBanner locale="it" readNative={async () => ({ owner: "other", name: null, account: true })} />);
     expect(await screen.findByTestId("local-team-owner-banner")).toHaveTextContent(
-      "Su questo Mac la squadra risulta di un account Google: passa a quel profilo per usarla.",
+      "Su questo computer la squadra risulta di un account Google: passa a quel profilo per usarla.",
     );
   });
 
@@ -264,7 +264,7 @@ describe("data that no profile owns", () => {
       const text = LOCAL_PROFILES_TEXT.it;
       await screen.findByTestId("local-team-owner-take");
       // one sentence for the situation and both ways, with the owner's name; not the one-way sentence on top of it
-      expect(banner).toHaveTextContent("Su questo Mac c’è una sola squadra, e ora è di Ada. Puoi passare al profilo di Ada, oppure usarla con questo: allora Ada non potrà più usarla.");
+      expect(banner).toHaveTextContent("Su questo computer c’è una sola squadra, e ora è di Ada. Puoi passare al profilo di Ada, oppure usarla con questo: allora Ada non potrà più usarla.");
       expect(banner).not.toHaveTextContent("passa a quel profilo per usarla");
       expect(screen.getByTestId("local-team-owner-switch")).toBeInTheDocument();
 

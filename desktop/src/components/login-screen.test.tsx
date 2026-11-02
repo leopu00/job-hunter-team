@@ -300,11 +300,11 @@ describe("LoginScreen with several local profiles", () => {
     );
 
     const list = screen.getByRole("list", { name: "Profili locali salvati" });
-    expect(screen.getByRole("heading", { name: "Profili su questo Mac" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Profili su questo computer" })).toBeInTheDocument();
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     // the mark of the team waits for the backend (which cannot answer here), then the copy speaks
-    expect(await within(rows[0]).findByTestId("login-profile-owner")).toHaveTextContent("Squadra di questo Mac");
+    expect(await within(rows[0]).findByTestId("login-profile-owner")).toHaveTextContent("Squadra del computer");
     expect(within(rows[0]).queryByTestId("login-profile-last")).toBeNull();
     expect(within(rows[1]).getByTestId("login-profile-last")).toHaveTextContent("Ultimo usato");
     expect(within(rows[1]).queryByTestId("login-profile-owner")).toBeNull();
@@ -329,7 +329,7 @@ describe("LoginScreen with several local profiles", () => {
       />,
     );
 
-    // Bea was made first and used last, but Ada has the team of this Mac: Ada goes first
+    // Bea was made first and used last, but Ada has the team of this computer: Ada goes first
     await screen.findByTestId("login-profile-owner");
     const rows = within(screen.getByRole("list", { name: "Profili locali salvati" })).getAllByRole("listitem");
     expect(within(rows[0]).getByTestId("login-profile-owner")).toBeInTheDocument();
