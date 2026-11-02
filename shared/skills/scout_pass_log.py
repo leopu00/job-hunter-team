@@ -31,6 +31,7 @@ Use:
   python3 scout_pass_log.py pass --source greenhouse --country nl --returned 25 \\
          --query-kind role --query "backend engineer amsterdam"
   python3 scout_pass_log.py pass --source arbetsformedlingen --country se --returned 0 --status closed   # 403: closed for the pass
+  python3 scout_pass_log.py candidate --source arbetsformedlingen --country se --outcome area --count 640   # 640 ads outside the places
   python3 scout_pass_log.py candidate --source greenhouse --country nl --outcome language --opened
   python3 scout_pass_log.py candidate --source greenhouse --country nl --outcome inserted --opened
 """
@@ -57,8 +58,13 @@ OUTCOMES = (
     "domain",        # Gate 4: outside IT
     "experience",    # Gate 4: hard requirement above the real years + 3
     "language",      # a language the user does not speak, seen in the list or in the JD
+    "role",          # the title is outside the roles of the profile (read in full, filtered against the profile by the Scout)
+    "area",          # the place is outside the ones the profile accepts
     "other",
 )
+# `candidate --count N`: ONE line worth N candidates dropped for the same reason. A Scout that reads 1000 ads of a portal and
+# drops 900 of them locally makes a handful of calls (one per reason), not 900.
+MAX_COUNT_LINE = 100000
 # What the query was about, never the query. `role` is the profile's title in English, `role_language` the same title in
 # the language of the portal, `synonym` an adjacent title, `level` a title with a level word (junior, graduate...), `city`
 # a title with a place: the kinds scout_coverage.py asks for, one per pass, so a portal is not asked the same thing twice.
@@ -89,8 +95,15 @@ class Refused(ValueError):
     """A value outside the closed vocabularies: nothing is written."""
 
 
+# The page of a list is not another question. On a real run 13 of the 17 passes of one Scout on Platsbanken were the same few
+# queries at offset 0, 100, 200...: logged with their offset they would have counted as thirteen different queries and a portal
+# as covered by one question asked thirteen times. The words that name a page are taken out before the hash.
+_PAGE = re.compile(r"\b(?:offset|page|pagina|seite|start|skip|from)\s*[=:#]?\s*\d+\b")
+
+
 def query_hash(query: str) -> str:
-    return hashlib.sha256(" ".join(str(query).lower().split()).encode("utf-8")).hexdigest()[:10]
+    text = _PAGE.sub(" ", str(query).lower())
+    return hashlib.sha256(" ".join(text.split()).encode("utf-8")).hexdigest()[:10]
 
 
 def _agent(explicit):
@@ -137,6 +150,15 @@ def build(args, now: float = None) -> dict:
         raise Refused("outcome must be one of: %s" % ", ".join(OUTCOMES))
     row["outcome"] = args.outcome
     row["opened"] = bool(args.opened)
+    count = getattr(args, "count", None)
+    if count is not None:
+        if not isinstance(count, int) or isinstance(count, bool) or not 1 <= count <= MAX_COUNT_LINE:
+            raise Refused("count must be a whole number from 1 to %d" % MAX_COUNT_LINE)
+        if args.outcome == "inserted":
+            raise Refused("an inserted position is one line each: count is for candidates dropped for the same reason")
+        if args.opened:
+            raise Refused("count is for candidates dropped from the list without opening them: --opened is one line each")
+        row["count"] = count
     return row
 
 
@@ -180,6 +202,8 @@ def parser() -> argparse.ArgumentParser:
     p = sub.choices["candidate"]
     p.add_argument("--outcome", required=True, choices=OUTCOMES)
     p.add_argument("--opened", action="store_true", help="the full JD was fetched for this candidate")
+    p.add_argument("--count", type=int, default=None,
+                   help="this line is worth N candidates dropped for the same reason (1-%d; never with inserted or --opened)" % MAX_COUNT_LINE)
     return ap
 
 

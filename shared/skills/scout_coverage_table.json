@@ -98,7 +98,9 @@
   ],
   "en": [
    "internship",
-   "graduate"
+   "intern",
+   "graduate",
+   "trainee"
   ]
  },
  "groups": {
@@ -1198,5 +1200,54 @@
     "feed": "append .rss to the /jobs address"
    }
   }
+ },
+ "broad_examples": {
+  "note": "Wide English queries that returned positions on Platsbanken (API, one profile, 17 passes, 1080 read, 8 inserted, 02/11/2026), as examples for profiles that read English. They are hints for the words, never a list to copy: a profile's own role family goes in the same way (one word, no full title, no place). The same field run gave 0 positions for the full titles of the profile and for the two Swedish wide words tried (3 passes).",
+  "en": [
+   {
+    "term": "intern",
+    "inserted": 2,
+    "read": 200
+   },
+   {
+    "term": "developer",
+    "inserted": 2,
+    "read": 200
+   },
+   {
+    "term": "project",
+    "inserted": 1,
+    "read": 200
+   },
+   {
+    "term": "coordinator",
+    "inserted": 1,
+    "read": 102
+   },
+   {
+    "term": "graduate",
+    "inserted": 1,
+    "read": 63
+   },
+   {
+    "term": "trainee",
+    "inserted": 1,
+    "read": 15
+   }
+  ],
+  "no_yield": [
+   {
+    "term": "praktik",
+    "language": "sv",
+    "inserted": 0,
+    "read": 200
+   },
+   {
+    "term": "utvecklare",
+    "language": "sv",
+    "inserted": 0,
+    "read": 100
+   }
+  ]
  }
 }

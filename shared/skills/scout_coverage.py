@@ -254,6 +254,7 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None) ->
                 "have": {"passes": numbers["passes"], "queries": numbers["queries"]}, "need": need}
         if kind == "broad":
             step["broad_terms"] = list(data.get("broad_terms", {}).get(entry["portal_language"], data.get("broad_terms", {}).get("en", []))) + list(terms)
+            step["broad_worked_in_english"] = [e["term"] for e in data.get("broad_examples", {}).get("en", [])]
             step["how"] = ("WIDE: the role's family or one of broad_terms on its own, no full title and no place; read ALL the "
                            "results (every page) and filter them against the profile yourself")
         if kind == "level":
