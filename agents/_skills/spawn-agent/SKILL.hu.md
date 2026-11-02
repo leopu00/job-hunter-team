@@ -133,3 +133,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - `pipeline-triage` (Capitano) — *melyik* szerepkort inditsd a backlog alapjan.
 - `tmux-send` — uzenet-borítek konvenciok.
 - `agents/_team/team-rules.md` T01 — soha ne zarj be masik agens munkamenetet.
+
+## Helyek: a `start-agent.sh` válaszolhat 75-tel
+
+A Capitano által kért ÚJ Scout, Analista vagy Scorer először a `spawn_gate.py`-on megy át: a **75**-ös kilépés az okkal a stderr-en azt jelenti, hogy nincs hely (`host_agent_cap`, a várakozó pozíciójú szerepeknek fenntartva). Ha azt mondja: `Retire SCOUT-N to make room`, vond vissza azt a Scoutot a `jht-agent-retire`-rel, és indítsd el azt, akinek a munkája van (C-29). Ugyanazon worker cseréje nem megy át a gate-en.

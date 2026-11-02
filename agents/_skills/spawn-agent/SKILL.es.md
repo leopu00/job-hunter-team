@@ -133,3 +133,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - `pipeline-triage` (Capitano) — *qué* rol iniciar según el backlog.
 - `tmux-send` — convenciones del sobre de mensajes.
 - `agents/_team/team-rules.md` T01 — nunca cerrar la sesión de otro agente.
+
+## Puestos: `start-agent.sh` puede responder 75
+
+Un Scout, Analista o Scorer NUEVO pedido por el Capitano pasa antes por `spawn_gate.py`: la salida **75** con el motivo en stderr significa que no hay puesto (`host_agent_cap`, reservado para los roles con posiciones en cola). Si dice `Retire SCOUT-N to make room`, retira ese Scout con `jht-agent-retire` y arranca el que tiene el trabajo (C-29). Sustituir al mismo worker no pasa por el gate.

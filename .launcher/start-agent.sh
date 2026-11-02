@@ -835,6 +835,31 @@ if [ "$ROLE" = "mentor" ] && [ "${JHT_MENTOR_NOW:-}" != "1" ] && ! tmux has-sess
 fi
 # --- fine cancello del Mentor
 
+# --- cancello dei posti (spawn_gate.py)
+# Con host_agent_cap=4 il Capitano ha riempito i 4 posti di Scout e 12 posizioni sono rimaste ad aspettare un Analista e uno
+# Scorer che nessuno ha acceso: il tetto era una frase del prompt, nessun codice decideva a chi andavano i posti. Un NUOVO
+# Scout entra solo se resta un posto per l'Analista e per lo Scorer che hanno posizioni in coda e nessun worker; Analista e
+# Scorer entrano sempre fino al tetto, e a posti pieni il gate dice quale Scout ritirare (non lo ritira: la decide il
+# Capitano). Vale per gli spawn nuovi chiesti dal Capitano; il watchdog, l'operatore, il Dottore e il roster del primo avvio
+# non passano di qui. Uscita 10 del gate = niente posto (75, come il Mentor: «non ora»); qualunque altra cosa (script assente,
+# errore) = si parte. JHT_SPAWN_GATE=off lo spegne.
+case "$ROLE" in
+  scout|analista|scorer)
+    case "$(printf '%s' "${JHT_AGENT_NAME:-}" | tr 'A-Z' 'a-z')" in
+      capitano|capitano-*)
+        if [ -z "${JHT_SPAWN_SRC:-}" ] && [ "${JHT_SPAWN_GATE:-}" != "off" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+          _gate_rc=0
+          python3 /app/shared/skills/spawn_gate.py check --role "$ROLE" || _gate_rc=$?
+          if [ "$_gate_rc" -eq 10 ]; then
+            exit 75
+          fi
+        fi
+        ;;
+    esac
+    ;;
+esac
+# --- fine cancello dei posti
+
 # Capitano, watchdog e operatore possono chiedere lo stesso spawn quasi nello
 # stesso istante. Prima il controllo `tmux has-session` arrivava DOPO `rm -rf`
 # delle cartelle skill: due start concorrenti cancellavano la destinazione
