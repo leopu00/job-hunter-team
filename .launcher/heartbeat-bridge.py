@@ -67,15 +67,17 @@ DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
 # scrive qui. Il sentinel-data grezzo la lascia spesso a None → l'heartbeat era
 # cieco al giorno/notte e sparava nudge in piena notte.
 PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
-# Anti-quiescenza (#1/#2, 2026-07-01): il registro dei messaggi inter-agente. Lo
-# leggiamo per sapere se uno Scout ha GIÀ dichiarato [SCOUT-ESAUSTO] di recente:
-# in quel caso il mercato è secco e la quiescenza è VOLUTA (C-05b) → l'heartbeat
-# NON deve ri-ordinare uno Scout che ciclerebbe a vuoto. La finestra di look-back
-# è una finestra di lavoro (default 12h): oltre, al nuovo window il re-wake torna
-# lecito (il re-wake resta del Capitano — vedi scout.md § idle).
+# Anti-quiescenza (#1/#2, 2026-07-01; resa breve e a scalini il 2026-11-02): il registro dei messaggi inter-agente e lo
+# stato della quiescenza. Dopo un [SCOUT-ESAUSTO] ACCETTATO dal Capitano (skill scout_exhaustion.py: fonti, query e minuti
+# MISURATI, nessuna posizione inserita) la quiescenza e' voluta (C-05b), ma dura 30 min, poi 1 h, 2 h, 4 h al massimo, e
+# riparte da 30 min a ogni finestra di lavoro: lo stato scrive `next_wake_at`, e finito quel tempo l'heartbeat torna a
+# ordinare uno Scout. Prima la finestra era fissa a 12 h (una frase dello Scout dopo UNA passata di cinque minuti teneva
+# fermo il team per ore, a budget intatto). Senza lo stato (il Capitano non ha usato la skill) il vecchio segnale vale solo
+# per il primo scalino: la dichiarazione dello Scout tace l'heartbeat per 30 minuti, non per ore.
 MESSAGES_JSONL = LOGS_DIR / "messages.jsonl"
+QUIESCENCE_STATE = JHT_HOME / "state" / "scout-quiescence.json"
 SCOUT_EXHAUST_LOOKBACK_H = float(
-    os.environ.get("JHT_HEARTBEAT_SCOUT_EXHAUST_LOOKBACK_H", "12")
+    os.environ.get("JHT_HEARTBEAT_SCOUT_EXHAUST_LOOKBACK_H", "0.5")
 )
 TARGET = os.environ.get("JHT_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
@@ -332,17 +334,24 @@ def _mode_section():
 
 
 def _scout_exhausted_recently(now):
-    """True se uno Scout ha dichiarato [SCOUT-ESAUSTO] nell'ultima finestra di
-    lavoro (SCOUT_EXHAUST_LOOKBACK_H). In quel caso le fonti sono DAVVERO secche e
-    la quiescenza è voluta (C-05b): l'heartbeat non deve ordinare un altro Scout
-    che ripasserebbe le stesse fonti esaurite. Il re-wake resta del Capitano al
-    prossimo window. Robusto: file assente / righe non-JSON / ts illeggibile → non
-    blocca (ritorna False = 'nessun esaurimento noto', l'ordine può partire)."""
+    """True se il team e' in QUIESCENZA voluta dopo un [SCOUT-ESAUSTO]: l'heartbeat non deve ordinare uno Scout che
+    ripasserebbe le stesse fonti. Autorevole e' lo stato scritto da `scout_exhaustion.py declare` (quiete finche'
+    `next_wake_at` non e' passato). Se lo stato non c'e', vale il messaggio dello Scout nell'ultimo
+    SCOUT_EXHAUST_LOOKBACK_H (30 minuti: il primo scalino). Robusto: file assenti / righe non-JSON / ts illeggibile →
+    False ('nessuna quiescenza nota', l'ordine puo' partire)."""
     from collections import deque
+    try:
+        state = json.loads(QUIESCENCE_STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = None
+    if isinstance(state, dict):
+        wake = state.get("next_wake_at")
+        if isinstance(wake, (int, float)) and not isinstance(wake, bool):
+            return now.timestamp() < wake
     cutoff = now - timedelta(hours=SCOUT_EXHAUST_LOOKBACK_H)
     try:
         with open(MESSAGES_JSONL, encoding="utf-8") as f:
-            tail = deque(f, maxlen=2000)  # basta la coda: un window è ~poche centinaia
+            tail = deque(f, maxlen=2000)  # basta la coda: un window e' ~poche centinaia
     except OSError:
         return False
     for line in tail:
@@ -394,8 +403,9 @@ def choose_nudge(state, now, last_theme):
     #    a valle. Il vecchio `qa==0 and qs==0` si spegneva per una singola posizione
     #    NEW rimasta: la notte del 30/06 il Capitano è restato fermo ~7h con qa=1,
     #    0 Scout, chiudendo la finestra a vuoto. Due eccezioni corrette:
-    #      (a) [SCOUT-ESAUSTO] recente → mercato secco, quiescenza VOLUTA (C-05b):
-    #          non ri-ordinare uno Scout che ciclerebbe sulle stesse fonti;
+    #      (a) quiescenza voluta dopo un [SCOUT-ESAUSTO] accettato (C-05b), breve e a
+    #          scalini (30 min, 1 h, 2 h, 4 h): non ri-ordinare uno Scout che
+    #          ciclerebbe sulle stesse fonti prima che lo scalino sia finito;
     #      (b) backlog a valle profondo (≥15) → il collo di bottiglia è downstream,
     #          non il sourcing: lo gestisce il ramo (3).
     #      (c) `stop_search` sul disco (C-18, 2026-07-30) → il sourcing è spento
@@ -411,11 +421,11 @@ def choose_nudge(state, now, last_theme):
             and not state.get("sourcing_stopped")
             and not _scout_exhausted_recently(now)):
         return ("sourcing-fermo",
-                f"[HEARTBEAT] No Scout is active and no [SCOUT-ESAUSTO] marker exists today "
+                f"[HEARTBEAT] No Scout is active and no accepted [SCOUT-ESAUSTO] quiet is in force "
                 f"(analista={qa}, scorer={qs}, weekly={wk}%) → sourcing is STOPPED. "
                 f"ORDER (C-05): open `pipeline-triage` and spawn one Scout NOW, then scale "
                 f"to a coordinated team (C-21). Do NOT close the work window before the "
-                f"Scouts have run through their [SCOUT-ESAUSTO] markers.")
+                f"Scouts have run through a measured exhaustion (scout_exhaustion.py check).")
 
     # 2) WORKER CALDO: top-consumer con share alto e cadenza ~0 = sospetto
     #    rabbit-hole/stuck → un segnale, non un ordine: il Capitano non killa al buio.
