@@ -397,6 +397,7 @@ while true; do
   # Un claim dal risultato incerto NON viene rilasciato: meglio saltare un rich
   # round che duplicare spawn LLM. Solo un fallimento certo dello spawner fa
   # `release`, così il prossimo poll può ritentare.
+  retry=0
   jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.claim" \
     env DOCTOR_FALLBACK_SEC="$FALLBACK_SEC" python3 "$SCHED" claim \
     && slot_rc=0 || slot_rc=$?
@@ -408,7 +409,11 @@ while true; do
     log "schedule claim FAILED rc=$slot_rc — rich refresh not spawned (TTL fail-safe remains active): $slot_out"
     slot=WAIT
   else
-    slot="$slot_out"
+    # «MID retry=2»: un nuovo tentativo dopo un errore di capacita' del modello (schedule `fail`).
+    slot="${slot_out%% *}"
+    retry=0
+    case "$slot_out" in *" retry="*) retry="${slot_out##*retry=}" ;; esac
+    case "$retry" in ''|*[!0-9]*) retry=0 ;; esac
   fi
 
   case "$slot" in
@@ -420,7 +425,7 @@ while true; do
           || log "schedule release FAILED for missing spawner (slot=$slot) — claim stays fail-closed"
       else
         jht_doctor_bounded "$SPAWN_TIMEOUT_SEC" "$RUN_PREFIX.spawn" \
-          bash "$SPAWNER" && rc=0 || rc=$?
+          env JHT_DOCTOR_RETRY="$retry" bash "$SPAWNER" && rc=0 || rc=$?
         out="$(cat "$RUN_PREFIX.spawn" 2>/dev/null || true)"
         if [ "$rc" -eq 0 ]; then
           if jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
@@ -430,6 +435,21 @@ while true; do
             # Il claim pre-spawn resta su disco: niente doppio spawn al poll
             # successivo, anche se la finalizzazione ha perso la risposta.
             log "schedule mark FAILED after successful spawn (slot=$slot) — claim retained, no duplicate retry"
+          fi
+        elif [ "$rc" -eq 75 ]; then
+          # Sessione partita ma ferma sul prompt: il modello e' a capacita'. NON e' un giro fatto:
+          # il claim si libera, si riprova dopo un'attesa (dal secondo tentativo col modello di
+          # riserva, se la configurazione lo prevede) e, finiti i tentativi, `round_failed` e' nel
+          # diario del Dottore. Mai in silenzio.
+          if jht_doctor_bounded "$HELPER_TIMEOUT_SEC" "$RUN_PREFIX.sched" \
+               python3 "$SCHED" fail "$slot" capacity; then
+            fail_out="$(cat "$RUN_PREFIX.sched" 2>/dev/null || true)"
+            case "$fail_out" in
+              RETRY*) log "spawn dottore: model at capacity (slot=$slot) — round NOT marked done, retry later [$fail_out]" ;;
+              *)      log "ROUND FAILED: spawn dottore: model at capacity (slot=$slot), no attempts left — round_failed recorded [$fail_out]" ;;
+            esac
+          else
+            log "schedule fail FAILED after a capacity error (slot=$slot) — claim retained fail-closed, no duplicate retry"
           fi
         elif [ "$rc" -eq 124 ]; then
           # Il tetto è scattato: esito INCERTO (la sessione DOTTORE può essere
