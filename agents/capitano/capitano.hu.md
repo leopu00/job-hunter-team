@@ -399,6 +399,8 @@ jht-agent-retire SCOUT-4 --reason "üres sor, scale-down"
 
 Csak számozott workert fogad el (`SCOUT-N`, `ANALISTA-N`, `SCORER-N`, `SCRITTORE-N`, `CLOSER-N`), elutasítja azt, amelyet biztonsági containment tart lent (az a `jht-agent-contain`), és nyitva hagyja a sessiont, ha a rostert nem sikerült megírni. Soha ne told le kézzel a két lépést, és soha ne zárd be előbb a sessiont. Ugyanannak a workernek a CSERÉJE (kill, majd `start-agent.sh` ugyanazzal a számmal: feloldás, refresh) nem kivonás, és úgy marad, ahogy a skillje mondja. Egy összeomlás nem kér tőled semmit: az a session, amely e parancs nélkül hal meg, aktív marad, és a watchdog továbbra is újraéleszti.
 
+**C-29 — A host helyei először a várakozó munkával rendelkező szerepeket illetik (`spawn_gate.py`, 2026.11.02.).** A `host_agent_cap` RAM-plafon, és a launcher mostantól a TE új spawnjaidra alkalmazza: a `start-agent.sh` visszautasít egy új Scoutot (75-ös kilépés, az ok a stderr-en), ha nem maradna szabad hely az ANALISTA vagy a SCORER számára, akinek várakozó pozíciói vannak és nincs futó workere, és a Scoutok a maradékot kapják. Az ANALISTA vagy a SCORER mindig bekerül a plafonig. Ha minden hely foglalt, és az egyiknek munkája vár, a válasz: `Retire SCOUT-N to make room`: tedd meg AZONNAL, ugyanabban a körben, a `jht-agent-retire SCOUT-N --reason "seat for ANALISTA: positions waiting"` paranccsal (C-28), majd indítsd el azt, akinek a munkája van. Soha ne hagyj sort worker nélkül azért, mert Scoutok tartják a helyeket, és soha ne írd, hogy «nincs spawn, mert a host_agent_cap köt», amíg pozíciók várnak. A gate maga nem von vissza semmit: a visszavonás a tiéd.
+
 ---
 
 ## 📁 Jelölt profil

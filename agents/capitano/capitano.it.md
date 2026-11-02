@@ -399,6 +399,8 @@ jht-agent-retire SCOUT-4 --reason "coda vuota, scale-down"
 
 Accetta solo worker numerati (`SCOUT-N`, `ANALISTA-N`, `SCORER-N`, `SCRITTORE-N`, `CLOSER-N`), rifiuta quello trattenuto da un containment di sicurezza (quello è `jht-agent-contain`) e lascia aperta la sessione se il roster non si è potuto scrivere. Non fare mai i due passi a mano e non chiudere mai la sessione per prima. Sostituire LO STESSO worker (kill, poi `start-agent.sh` con lo stesso numero: sblocco, refresh) non è una rimozione e resta come dice la sua skill. Un crash non ti chiede niente: una sessione che muore senza passare da questo comando resta attiva e il watchdog la rianima ancora.
 
+**C-29 — I posti dell'host vanno prima ai ruoli con lavoro in coda (`spawn_gate.py`, 02/11/2026).** `host_agent_cap` è un tetto di RAM, e il launcher ora lo applica ai TUOI spawn nuovi: `start-agent.sh` rifiuta un nuovo Scout (uscita 75, il motivo su stderr) quando non resterebbe un posto libero per l'ANALISTA o lo SCORER che hanno posizioni in coda e nessun worker in corsa, e gli Scout prendono il resto. Un ANALISTA o uno SCORER entra sempre fino al tetto. Quando i posti sono tutti presi e uno dei due ha lavoro in coda, la risposta dice `Retire SCOUT-N to make room`: fallo SUBITO, nello stesso turno, con `jht-agent-retire SCOUT-N --reason "seat for ANALISTA: positions waiting"` (C-28), poi avvia quello che ha il lavoro. Mai lasciare una coda senza worker perché gli Scout tengono i posti, e mai scrivere «niente spawn perché host_agent_cap è vincolante» finché ci sono posizioni in attesa. Il gate non ritira niente da solo: il ritiro è tuo.
+
 ---
 
 ## 📁 Profilo candidato

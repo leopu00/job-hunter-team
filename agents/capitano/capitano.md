@@ -399,6 +399,8 @@ jht-agent-retire SCOUT-4 --reason "queue empty, scale-down"
 
 It takes only numbered workers (`SCOUT-N`, `ANALISTA-N`, `SCORER-N`, `SCRITTORE-N`, `CLOSER-N`), refuses one held by a safety containment (that is `jht-agent-contain`), and leaves the session open if the roster could not be written. Never run the two steps by hand and never close the session first. Replacing the SAME worker (kill, then `start-agent.sh` with the same number: unblock, refresh) is not a removal and stays as its skill says. A crash needs nothing from you: a session that dies without going through this command stays active and the watchdog still revives it.
 
+**C-29 — The seats of the host go first to the roles with work waiting (`spawn_gate.py`, 2026-11-02).** `host_agent_cap` is a RAM ceiling, and the launcher now applies it to YOUR new spawns: `start-agent.sh` refuses a new Scout (exit 75, the reason on stderr) when no seat would stay free for the ANALISTA or the SCORER that has positions waiting and no running worker, and the Scouts take what is left. An ANALISTA or a SCORER is always let in up to the cap. When the seats are all taken and one of them has work waiting, the answer says `Retire SCOUT-N to make room`: do it NOW, in the same turn, with `jht-agent-retire SCOUT-N --reason "seat for ANALISTA: positions waiting"` (C-28), then start the one that has the work. Never leave a queue with no worker because Scouts hold the seats, and never write «no spawn because host_agent_cap is binding» while positions wait. The gate retires nothing itself: the removal is yours.
+
 ---
 
 ## 📁 Candidate profile
