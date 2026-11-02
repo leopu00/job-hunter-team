@@ -70,6 +70,8 @@ fn command_inner(
 ) -> Result<CommandOutcome, CommandFailure> {
     let (program, search_path) = engine_program();
     let mut command = Command::new(program);
+    // before the PATH below: the engine is a system program, not one of the AppImage the app may run from
+    crate::runtime_host::clean_appimage_env(&mut command);
     if let Some(path) = search_path {
         command.env("PATH", path);
     }

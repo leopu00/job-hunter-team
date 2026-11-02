@@ -1860,7 +1860,37 @@ pub(crate) fn attest_then<T>(
     })
 }
 
-fn download_installer_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>, OnboardingError> {
+/// What the download of the installer failed on, from how `curl` ended, so that the person is told the real reason and not always
+/// «check your internet connection»: the network (the generic code, whose sentence says so), the server answering with an error
+/// (404, 403, 5xx: curl exits 22 because of `-f`), or the program itself not running on this computer (not found, exit 126/127,
+/// or the dynamic loader complaining: the system curl loading libraries that do not fit it).
+pub(crate) fn download_failure_code(result: &Result<ProcessResult, &'static str>, stderr: &[u8]) -> &'static str {
+    const LOADER_MESSAGES: [&str; 5] = [
+        "symbol lookup error",
+        "error while loading shared libraries",
+        "undefined symbol",
+        "version `GLIBC",
+        "cannot open shared object file",
+    ];
+    let said = String::from_utf8_lossy(stderr);
+    match result {
+        // too slow is the network
+        Err("process_timeout") => "runtime_download_failed",
+        // curl did not start, or its pipes did not open
+        Err(_) => "runtime_download_tool_failed",
+        Ok(done) if matches!(done.code, 126 | 127) || LOADER_MESSAGES.iter().any(|marker| said.contains(marker)) => {
+            "runtime_download_tool_failed"
+        }
+        Ok(done) if done.code == 22 => "runtime_download_refused",
+        Ok(_) => "runtime_download_failed",
+    }
+}
+
+fn download_installer_bytes(
+    url: &str,
+    expected_digest: &str,
+    log: Option<&RuntimeLog>,
+) -> Result<Vec<u8>, OnboardingError> {
     // Refuse a release without a compiled-in digest before touching the network.
     expected_installer_digest(expected_digest)?;
     let target = std::env::temp_dir().join(format!(
@@ -1875,10 +1905,16 @@ fn download_installer_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>,
             "-o",
             target.to_str().ok_or_else(|| failure("storage_failed"))?,
         ];
-        let downloaded =
-            run_program("curl", curl_args, None, Duration::from_secs(90)).map_err(failure)?;
-        if !downloaded.success() {
-            return Err(failure("runtime_download_failed"));
+        let started = Instant::now();
+        let (downloaded, stderr) =
+            run_program_keeping_stderr("curl", curl_args, None, Duration::from_secs(90));
+        // The log of the steps names this one and what curl said (redacted there), as for the installer that runs after it: the
+        // reason for a failure used to be only in onboarding-diagnostics.jsonl.
+        if let Some(log) = log {
+            log.record_result("download install.sh", &downloaded, &stderr, started.elapsed());
+        }
+        if !matches!(&downloaded, Ok(done) if done.success()) {
+            return Err(failure(download_failure_code(&downloaded, &stderr)));
         }
         set_private_permissions(&target).map_err(failure)?;
         let metadata = fs::metadata(&target).map_err(|_| failure("runtime_download_failed"))?;
@@ -1895,6 +1931,7 @@ fn download_installer_bytes(url: &str, expected_digest: &str) -> Result<Vec<u8>,
 /// against that channel's digest and hands it over with the channel's
 /// installer arguments (none in production).
 fn with_downloaded_installer<T>(
+    log: Option<&RuntimeLog>,
     execute: impl FnOnce(&VerifiedInstaller, &[String]) -> Result<T, OnboardingError>,
 ) -> Result<T, OnboardingError> {
     let channel = release_channel::current().map_err(failure)?;
@@ -1906,6 +1943,7 @@ fn with_downloaded_installer<T>(
     download_then_attest(
         &release_channel::install_url(channel.as_ref()),
         expected,
+        log,
         |installer| execute(installer, &args),
     )
 }
@@ -1916,9 +1954,10 @@ fn with_downloaded_installer<T>(
 fn download_then_attest<T>(
     url: &str,
     expected_digest: &str,
+    log: Option<&RuntimeLog>,
     execute: impl FnOnce(&VerifiedInstaller) -> Result<T, OnboardingError>,
 ) -> Result<T, OnboardingError> {
-    let bytes = download_installer_bytes(url, expected_digest)?;
+    let bytes = download_installer_bytes(url, expected_digest, log)?;
     attest_then(bytes, expected_digest, execute)
 }
 
@@ -2261,7 +2300,7 @@ fn install_local(
             }
             if install_required {
                 trace_local_runtime("runtime", "install_required");
-                let installed = with_downloaded_installer(|installer, channel_args| {
+                let installed = with_downloaded_installer(log, |installer, channel_args| {
                     let started = Instant::now();
                     let (result, stderr) = run_program_keeping_stderr(
                         "/usr/bin/env",
@@ -2345,7 +2384,7 @@ fn install_local(
                     &local_runtime_dir(app)?,
                 );
             if !reusable {
-                with_downloaded_installer(|installer, channel_args| {
+                with_downloaded_installer(log, |installer, channel_args| {
                     let args = local_install_args(
                         &["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"],
                         channel_args,
@@ -3011,7 +3050,7 @@ fn prepare_impl(
                     if !valid_pairing_token(token) {
                         return Err(failure("pairing_token_invalid"));
                     }
-                    with_downloaded_installer(|installer, channel_args| {
+                    with_downloaded_installer(None, |installer, channel_args| {
                         let command = remote_install_command(channel_args)?;
                         let mut input = remote_install_input(installer, token)?;
                         let result = ensure_remote_install_success(
@@ -6652,12 +6691,12 @@ mod tests {
         };
 
         // The right bytes run, once.
-        super::download_then_attest(&url, &digest, execute).unwrap();
+        super::download_then_attest(&url, &digest, None, execute).unwrap();
         assert_eq!(ran.get(), 1);
 
         // A commit that does not exist: nothing to download.
         let missing = format!("file://{}", root.join("no-such-commit/install.sh").display());
-        let error = super::download_then_attest(&missing, &digest, execute).unwrap_err();
+        let error = super::download_then_attest(&missing, &digest, None, execute).unwrap_err();
         assert_eq!(error.code, "runtime_download_failed");
 
         // The network is down: nobody listens on the port.
@@ -6667,16 +6706,16 @@ mod tests {
             .unwrap()
             .port();
         let down = format!("http://127.0.0.1:{port}/install.sh");
-        let error = super::download_then_attest(&down, &digest, execute).unwrap_err();
+        let error = super::download_then_attest(&down, &digest, None, execute).unwrap_err();
         assert_eq!(error.code, "runtime_download_failed");
 
         // Other bytes than the build's digest (another commit, a tampered file).
         fs::write(&installer, b"echo someone else\n").unwrap();
-        let error = super::download_then_attest(&url, &digest, execute).unwrap_err();
+        let error = super::download_then_attest(&url, &digest, None, execute).unwrap_err();
         assert_eq!(error.code, "installer_digest_mismatch");
 
         // A build without a digest refuses before touching the network.
-        let error = super::download_then_attest(&down, "", execute).unwrap_err();
+        let error = super::download_then_attest(&down, "", None, execute).unwrap_err();
         assert_eq!(error.code, "installer_digest_missing");
 
         assert_eq!(ran.get(), 1, "the installer ran on a failed download");
@@ -6689,6 +6728,72 @@ mod tests {
             let error = super::remote_install_command(&[bad.to_owned()]).unwrap_err();
             assert_eq!(error.code, "installer_digest_invalid", "{bad:?}");
         }
+    }
+
+    // ── the download of the installer says why it failed, and the log of the steps has it ─────────────────────────
+
+    fn curl_ended(code: i32) -> Result<ProcessResult, &'static str> {
+        Ok(ProcessResult { code, stdout: Vec::new() })
+    }
+
+    #[test]
+    fn the_download_failure_is_told_by_its_cause() {
+        use super::download_failure_code as code;
+        // the network: no host, no connection, too slow, a read that broke
+        for ended in [6, 7, 28, 35, 52, 56, 37] {
+            assert_eq!(code(&curl_ended(ended), b""), "runtime_download_failed", "curl {ended}");
+        }
+        assert_eq!(code(&Err("process_timeout"), b""), "runtime_download_failed");
+        // the server answered with an error (-f): not a connection problem
+        assert_eq!(code(&curl_ended(22), b"curl: (22) The requested URL returned error: 404"), "runtime_download_refused");
+        // the program did not run: not found, not executable, or the loader refusing the libraries it was given
+        assert_eq!(code(&Err("process_start_failed"), b""), "runtime_download_tool_failed");
+        assert_eq!(code(&curl_ended(127), b""), "runtime_download_tool_failed");
+        assert_eq!(code(&curl_ended(126), b""), "runtime_download_tool_failed");
+        let symbol = b"curl: symbol lookup error: /lib/x86_64-linux-gnu/libcurl.so.4: undefined symbol: nghttp2_option_set_no_rfc9113_leading_and_trailing_ws_validation";
+        assert_eq!(code(&curl_ended(127), symbol), "runtime_download_tool_failed");
+        assert_eq!(code(&curl_ended(1), b"curl: error while loading shared libraries: libnghttp2.so.14"), "runtime_download_tool_failed");
+        // a loader message beats the exit code: whatever curl exited with, the reason is the libraries
+        assert_eq!(code(&curl_ended(22), symbol), "runtime_download_tool_failed");
+    }
+
+    #[test]
+    fn the_new_download_codes_can_be_retried_and_carry_only_the_code() {
+        for code in ["runtime_download_refused", "runtime_download_tool_failed"] {
+            let serialized = serde_json::to_value(failure(code)).unwrap();
+            assert_eq!(serialized["code"], code);
+            assert_eq!(serialized["retryable"], true);
+            assert_eq!(serialized["message"], code);
+        }
+    }
+
+    /// A server that answers 404 once (the commit of the test channel does not exist, the site lost the file): the person is not
+    /// told to check the connection, and the log of the steps names the download and what curl said.
+    #[cfg(unix)]
+    #[test]
+    fn a_server_that_answers_404_is_told_as_refused_and_is_written_in_the_log_of_the_steps() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut request = [0u8; 2048];
+                let _ = stream.read(&mut request);
+                let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("jht-download-log-{}-{}", std::process::id(), port));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = super::RuntimeLog::in_dir(&dir);
+        let digest = format!("{:x}", Sha256::digest(b"echo the installer\n"));
+        let url = format!("http://127.0.0.1:{port}/install.sh");
+        let error = super::download_then_attest(&url, &digest, Some(&log), |_: &super::VerifiedInstaller| Ok(())).unwrap_err();
+        assert_eq!(error.code, "runtime_download_refused");
+        server.join().unwrap();
+        let written = std::fs::read_to_string(log.path()).unwrap();
+        assert!(written.contains("download install.sh: exit 22"), "{written}");
+        assert!(written.contains("404"), "what curl said is in the log: {written}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn outcome(success: bool) -> Result<ProcessResult, &'static str> {
@@ -6740,6 +6845,8 @@ mod tests {
             "podman_not_ready",
             "wsl_not_ready",
             "runtime_download_failed",
+            "runtime_download_refused",
+            "runtime_download_tool_failed",
             "runtime_install_failed",
             "runtime_missing",
             "runtime_wrapper_install_failed",
