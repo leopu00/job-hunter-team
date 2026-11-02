@@ -20,7 +20,11 @@ describe("the Windows app opens no console of its own", () => {
   it("hides the console of the programs it starts, in one place", () => {
     const hide = read("runtime_host.rs");
     expect(hide).toMatch(/pub\(crate\) fn hide_console\(command: &mut Command\) \{[\s\S]*?CREATE_NO_WINDOW: u32 = 0x0800_0000;[\s\S]*?creation_flags\(CREATE_NO_WINDOW\)/);
-    expect(hide).toMatch(/#\[cfg\(not\(windows\)\)\]\s*pub\(crate\) fn hide_console\(_command: &mut Command\) \{\}/);
+    // outside Windows the same function cleans the AppImage's environment off the child: one place for both
+    expect(hide).toMatch(/#\[cfg\(not\(windows\)\)\]\s*pub\(crate\) fn hide_console\(command: &mut Command\) \{\s*clean_appimage_env\(command\);\s*\}/);
+    // and still ONE place: one function per platform, and one cleaner they share
+    expect(hide.match(/fn hide_console\(/g)).toHaveLength(2);
+    expect(hide.match(/pub\(crate\) fn clean_appimage_env\(/g)).toHaveLength(1);
   });
 
   // The spawns that did not go through runtime_host's own helper: the provider login (PowerShell on this
