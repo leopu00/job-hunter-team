@@ -21,6 +21,8 @@ import { OFFICE_MAX_FPS, pauseWhenHidden, sceneResolution } from "./frame-pace";
 import { toWorld } from "./camera";
 import { hitTest, layoutHits, rectOf, sameTarget, type Hit } from "./hit";
 import { advanceEffects, START_EFFECTS, watchReducedMotion } from "./motion";
+import { glowTint } from "./glow";
+import { createRedrawGate } from "./redraw-gate";
 import { sheetPlacements, towerHeight, type PaperRule } from "./paper";
 import {
   doorLeaves,
@@ -430,6 +432,8 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     }
     for (const [id, o] of occupiable) {
       const who = seated.get(id);
+      // the desk and the agent are one picture: the flash glows on the desk
+      o.sprite.tint = glowTint(who?.pulse);
       o.sprite.texture = who ? o.taken : o.free;
       o.occupant = who ? { uid: who.uid, role: who.role } : null;
     }
@@ -478,6 +482,11 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
 
   // Lights and effects (motion.ts): still under prefers-reduced-motion.
   let effects = START_EFFECTS;
+  // What was drawn last (redraw-gate.ts): a frame whose pictures would be the same is not drawn again.
+  const gate = createRedrawGate();
+  let lastPoses: AgentPose[] | null = null;
+  let wasQuiet = false;
+  let statusesRevision = 0;
   const motion = watchReducedMotion(() => {
     effects = START_EFFECTS;
   });
@@ -492,20 +501,40 @@ export async function createOfficeScene(host: HTMLElement, options: OfficeSceneO
     edges.alpha = tesseractPulse(frame.t);
     // the hologram redraws at 20 Hz, as in Godot
     if (holoItem && frame.redrawHologram) drawHologram(holo, holoItem.rect, frame.t);
-    const poses = engine.poses();
+    // Nobody moves or changes picture (quiet) for the second frame running: the poses are the ones just drawn.
+    const quiet = engine.quiet?.() === true;
+    const poses = quiet && wasQuiet && lastPoses ? lastPoses : engine.poses();
+    lastPoses = poses;
+    wasQuiet = quiet;
     const printing = layout.pois && someoneStandsAt(poses, layout.pois.printer, 70);
     if (printerItem) drawPrinter(printerFx, printerItem.rect.w / 150, printing && frame.animatePrinter ? frame.t : null);
     door.step(someoneNear(poses, layout.door, 120), dt);
-    drawAgents(poses);
-    drawBubbles(poses);
-    drawTags(poses);
-    drawPiles();
+    const bubblesNow = engine.bubbles();
+    const pilesNow = engine.piles();
+    const camera = controls.camera();
+    const dirty = gate.dirty({
+      poses,
+      camera,
+      view: { w: app.screen.width, h: app.screen.height },
+      statusesRevision,
+      tagsTellTime: statuses !== null,
+      nowSeconds: Math.floor(Date.now() / 1000),
+      bubbles: bubblesNow,
+      piles: pilesNow,
+    });
+    if (dirty) {
+      drawAgents(poses);
+      drawBubbles(poses);
+      drawTags(poses);
+      drawPiles();
+    }
     drawFocus();
   });
 
   return {
     setAgentStatuses(next: AgentStatuses | null) {
       statuses = next;
+      statusesRevision++;
     },
     focus(target: OfficeClick | null) {
       focused = target;
@@ -654,6 +683,7 @@ function drawPose(sprite: Sprite, pose: AgentPose, character: CharacterSheet, te
   sprite.scale.set(pose.flipped ? -pick.sheet.scale : pick.sheet.scale, pick.sheet.scale);
   sprite.position.set(pose.pos.x, pose.pos.y);
   sprite.zIndex = pose.pos.y;
+  sprite.tint = glowTint(pose.pulse);
 }
 
 function bubbleNode(text: string): Container {
