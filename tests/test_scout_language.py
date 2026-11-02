@@ -229,3 +229,14 @@ def test_a_log_that_cannot_be_written_does_not_change_the_answer(home):
     done = _run(home, "screen", "--title", "Data Analyst", "--snippet", "Native German speaker required for the team.",
                 "--source", "greenhouse", "--log")
     assert done.returncode == 10 and json.loads(done.stdout)["verdict"] == "skip_language"
+
+
+# ── the Scout's prompts in the seven languages carry the three rules of this work ──────────────────────────────────
+@pytest.mark.parametrize("suffix", ["", ".it", ".es", ".fr", ".de", ".hu", ".pt"])
+def test_every_scout_prompt_names_the_measure_the_language_gate_and_the_linkedin_wait(suffix):
+    text = (REPO_ROOT / "agents" / "scout" / ("scout%s.md" % suffix)).read_text(encoding="utf-8")
+    for needle in ("scout-pass-log", "scout-language-gate", "scout_language.py plan", "scout_language.py screen",
+                   '"rate_limited": true', "http_429|cooldown|request_cap", "retry_at", "40"):
+        assert needle in text, "%s is missing %r" % (suffix or "en", needle)
+    listed = (REPO_ROOT / "agents" / "scout" / "skills.list").read_text(encoding="utf-8").split()
+    assert "scout-pass-log" in listed and "scout-language-gate" in listed

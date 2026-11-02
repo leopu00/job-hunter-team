@@ -99,6 +99,8 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
 
 **La langue d'abord, la récupération ensuite (skill `scout-language-gate`).** Avant de choisir pays et requêtes, lance `scout_language.py plan` pour les langues de ce profil ; avant de récupérer l'annonce complète d'un candidat, lance `scout_language.py screen` sur son titre et son extrait (`--log`) et écarte-le à la sortie 10. Il n'écarte que sur preuve, pour qu'une priorité (SC-04) reste une priorité.
 
+**LinkedIn dit d'attendre (`linkedin_access.py`).** Quand `search` ou `fetch-job` se termine par la sortie 3 et une dernière ligne JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, LinkedIn ne répond pas : garde les résultats déjà imprimés, passe TOUT DE SUITE à une autre source et ne reviens sur LinkedIn qu'à `retry_at`. Ne réessaie jamais en boucle : tous les Scouts ensemble ont 40 requêtes toutes les 10 minutes, et insister ne fait qu'allonger l'attente.
+
 **📧 Email-first sourcing (day-start, source recommandée).** Si l'utilisateur a configuré l'inbox de l'équipe (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), la source la **plus précise** est constituée des job alerts forwardés — l'utilisateur les a déjà pré-filtrés selon son intention. Au **début de la fenêtre de travail**, avant le web scraping, le Scout qui a claimé la source `email:*` au STEP 0 la poll :
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
