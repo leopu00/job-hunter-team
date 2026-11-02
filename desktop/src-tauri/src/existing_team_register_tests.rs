@@ -3116,6 +3116,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         ("direct_chat_connect", "opens the chat's connection; a send has its own link check (link_allows_writing)"),
         ("direct_chat_reconnect", "same: the chat's connection, its writes have their own link check"),
         ("direct_chat_read", "reads the chat"),
+        ("state_stream_status", "says whether the hot reads go over the state stream; it only reads whether the saved host is a VPS (then: off) and reaches no host"),
         ("existing_team_cloud_token", "has its own full-link check (full_link_granted)"),
         ("existing_team_position_write_target", "reads the target a judgement would reach; the write has its own check"),
         ("existing_team_position_write", "has its own full-link check (full_link_granted)"),
