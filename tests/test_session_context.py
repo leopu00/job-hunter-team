@@ -162,3 +162,87 @@ def test_the_skill_of_the_round_calls_the_helper_and_types_no_slash_command_in_a
         text = skill.read_text(encoding="utf-8")
         assert "session_context.py" in text, skill.name
         assert 'send-keys -t "$S" "/context"' not in text and 'send-keys -t "$S" "/status"' not in text, skill.name
+
+
+# ── the share USED, and the decision to recreate (31/10: three coordinators 8-42% used were recreated) ──────────
+
+def test_a_card_that_says_the_free_share_is_read_as_the_used_one():
+    # Codex: «Context window: 80% left (51.7K used / 258K)» is 20% USED, not 80
+    assert session_context.used_from_text("  Context window:  80% left (51.7K used / 258K)") == 20.0
+    assert session_context.used_from_text("Context window: 14% left") == 86.0
+    # Claude's panel already says the used share
+    assert session_context.used_from_text("claude-opus-4  24.9k/1m tokens (2%)") == 2.0
+    # the used form wins when a screen has both
+    assert session_context.used_from_text("24.9k/1m tokens (2%)\n  98% left") == 2.0
+    assert session_context.used_from_text("Free space: 758.5k (75.8%)") is None
+    assert session_context.used_from_text("nothing about the context") is None
+
+
+def test_the_panel_of_a_session_with_a_free_share_card_gives_the_used_share(pane, monkeypatch):
+    make, seen, keys = pane
+    make(mode="idle", after_enter="panel")
+    shown = "  Context window:  80% left (51.7K used / 258K)\n  Esc to cancel"
+    monkeypatch.setattr(session_context.agent_chat, "capture_pane",
+                        lambda _s: shown if seen()["mode"] == "panel" else "╭" + "─" * 46 + "╮\n│ ❯  │\n╰" + "─" * 46 + "╯\n  ? for shortcuts")
+    out = session_context.pct_from_panel("SCORER-2", "/context")
+    assert out["pct"] == 20.0
+
+
+def test_a_session_at_twenty_percent_used_is_not_recreated():
+    for age in (0.7, 3.0, 11.9):
+        verdict = session_context.decide(20.0, age)
+        assert verdict == {"action": "skip", "reason": "lowctx", "used_pct": 20.0, "left_pct": 80.0}, age
+
+
+def test_only_more_than_half_used_asks_for_a_recreation():
+    assert session_context.decide(50.0, 3.0)["action"] == "skip"
+    assert session_context.decide(50.1, 3.0) == {"action": "refresh", "reason": "context", "used_pct": 50.1, "left_pct": 49.9}
+    assert session_context.decide(86.0, 3.0)["reason"] == "context"
+
+
+def test_a_context_that_was_not_measured_is_a_skip_not_a_recreation_on_age():
+    verdict = session_context.decide(None, 5.0)
+    assert verdict == {"action": "skip", "reason": "unmeasured", "used_pct": None, "left_pct": None}
+
+
+def test_the_ttl_overrides_a_low_context_and_an_unmeasured_one():
+    assert session_context.decide(4.0, 30.0)["reason"] == "ttl"
+    assert session_context.decide(None, 12.0) == {"action": "refresh", "reason": "ttl", "used_pct": None, "left_pct": None}
+    assert session_context.decide(4.0, 30.0, ttl_h=48.0)["action"] == "skip"
+
+
+def test_a_codex_log_at_twenty_percent_of_its_window_is_twenty_used_not_eighty():
+    import agent_state
+    window, used = 258400, 51680
+    lines = [json.dumps({
+        "timestamp": "2026-10-31T21:00:00.000Z", "type": "event_msg",
+        "payload": {"type": "token_count", "info": {
+            "total_token_usage": {"total_tokens": 4 * used},
+            "last_token_usage": {"input_tokens": used - 400, "output_tokens": 400, "total_tokens": used},
+            "model_context_window": window}},
+    })]
+    pct = agent_state.parse_codex(lines).context["pct"]
+    assert pct == 20.0
+    assert session_context.decide(pct, 3.0)["action"] == "skip"
+
+
+def test_the_command_line_carries_the_decision_and_touches_no_pane_for_a_session_at_twenty(pane, monkeypatch, capsys):
+    make, seen, keys = pane
+    make()
+    monkeypatch.setattr(session_context, "pct_from_log", lambda *_a, **_k: 20.0)
+    assert session_context.main(["ASSISTENTE", "--provider", "codex", "--age-h", "3.0"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["pct"] == 20.0
+    assert out["decision"] == {"action": "skip", "reason": "lowctx", "used_pct": 20.0, "left_pct": 80.0}
+    assert seen()["calls"] == [], "nothing is typed, nothing is killed"
+    # without --age-h the answer is what it always was
+    assert session_context.main(["ASSISTENTE", "--provider", "codex"]) == 0
+    assert "decision" not in json.loads(capsys.readouterr().out)
+
+
+def test_the_skill_says_the_decision_comes_from_the_script_in_every_language():
+    for skill in sorted((SKILLS_DIR.parent.parent / "agents" / "_skills" / "session-refresh").glob("SKILL*.md")):
+        text = skill.read_text(encoding="utf-8")
+        assert "--age-h" in text and "decision.used_pct" in text and "decision.action" in text, skill.name
+        assert "skipped_unmeasured" in text, skill.name
+        assert "ctx=unparsed" not in text, skill.name

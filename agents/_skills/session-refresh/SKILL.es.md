@@ -58,13 +58,15 @@ Dos requisitos tajantes — ignóralos y *quemas* presupuesto en vez de ahorrarl
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Decide a partir de `pct` (extraído de una línea como `24.9k/1m tokens (2%)`):
 - **`pct` ≤ 50** → SALTAR **salvo que el TTL se haya disparado en el Paso 1.4**. NO recrees una sesión por debajo del TTL, aunque sea vieja. Registra `action=skipped_lowctx` con el `%` medido. Pasa a la siguiente sesión.
 - **`pct` > 50** → procede al refresco (Pasos 2–7).
-- **el comando no se renderizó / falló el parseo** → recae en la heurística de edad (`age ≥ 40min` → refresco) y registra `ctx=unparsed`.
+- **no medido** (`pct: null`: el comando no se renderizó, falló el parseo, la sesión no estaba en reposo) → NO recrees por edad: por debajo del TTL, `action=skipped_unmeasured` con `context_pct: null`; el TTL del Paso 1.4 sigue siendo la red de seguridad. Una ronda de recreación cuesta unos 4 puntos del presupuesto semanal.
+- `pct` es la parte USADA del contexto, nunca la libre: una tarjeta que dice `N% left` (Codex) da la parte LIBRE. En el diario escribe `context_pct` = `decision.used_pct` tal cual, sin releerlo de una tarjeta y sin invertirlo. Decide con `decision.action` (`refresh`|`skip`): lo calculó el script.
 
 ## Paso 1.6 — avisar una vez al Capitano, antes del primer refresco
 Solo cuando esta ronda haya seleccionado su primer objetivo real de refresco

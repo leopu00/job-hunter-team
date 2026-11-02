@@ -58,13 +58,15 @@ Deux exigences impératives — les ignorer *brûle* du budget au lieu d'en éco
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Décide à partir de `pct` (extrait d'une ligne comme `24.9k/1m tokens (2%)`) :
 - **`pct` ≤ 50** → IGNORER **sauf si le TTL s'est déclenché à l'Étape 1.4**. NE recrée PAS une session sous le TTL, même si elle est vieille. Journalise `action=skipped_lowctx` avec le `%` mesuré. Passe à la session suivante.
 - **`pct` > 50** → procède au rafraîchissement (Étapes 2–7).
-- **la commande ne s'est pas affichée / le parsing a échoué** → repli sur l'heuristique d'âge (`age ≥ 40min` → rafraîchir) et journalise `ctx=unparsed`.
+- **non mesuré** (`pct: null` : la commande ne s'est pas affichée, le parsing a échoué, la session n'était pas au repos) → NE recrée PAS selon l'âge : sous le TTL, `action=skipped_unmeasured` avec `context_pct: null` ; le TTL de l'Étape 1.4 reste le filet de sécurité. Un tour de recréation coûte environ 4 points du budget hebdomadaire.
+- `pct` est la part UTILISÉE du contexte, jamais la part libre : une carte qui écrit `N% left` (Codex) donne la part LIBRE. Dans le journal, écris `context_pct` = `decision.used_pct` tel quel, sans le relire sur une carte et sans l'inverser. Décide avec `decision.action` (`refresh`|`skip`) : le script l'a calculé.
 
 ## Étape 1.6 — prévenir le Capitano une fois, avant le premier rafraîchissement
 Seulement lorsque ce tour a sélectionné sa première vraie cible de

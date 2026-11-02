@@ -58,13 +58,15 @@ Két kőkemény követelmény — ha figyelmen kívül hagyod őket, *elégeted*
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Dönts a `pct` alapján (egy `24.9k/1m tokens (2%)` jellegű sorból kinyerve):
 - **`pct` ≤ 50** → KIHAGYNI, **hacsak a TTL nem lépett életbe a Step 1.4-ben**. A TTL alatti munkamenetet NE hozd újra létre, még ha régi is. Naplózd: `action=skipped_lowctx` a mért `%`-kal. Lépj a következő munkamenetre.
 - **`pct` > 50** → folytasd a frissítéssel (Step 2–7).
-- **a parancs nem renderelődött / a parse elbukott** → ess vissza a kor-heurisztikára (`age ≥ 40min` → frissítés), és naplózd: `ctx=unparsed`.
+- **nem mért** (`pct: null`: a parancs nem renderelődött, a parse elbukott, a munkamenet nem volt nyugalomban) → NE hozd újra létre kor alapján: a TTL alatt `action=skipped_unmeasured` és `context_pct: null`; a Step 1.4 TTL-je marad a biztonsági háló. Egy újralétrehozási kör a heti költségvetés kb. 4 pontjába kerül.
+- A `pct` a kontextus HASZNÁLT része, soha nem a szabad: az `N% left` feliratú kártya (Codex) a SZABAD részt adja. A naplóba a `context_pct` = `decision.used_pct` kerül, pontosan így, kártyáról újraolvasás és megfordítás nélkül. A döntéshez a `decision.action` (`refresh`|`skip`) szolgál: a szkript számolta ki.
 
 ## Step 1.6 — értesítsd egyszer a Capitanót az első frissítés előtt
 Csak akkor, amikor ez a kör kiválasztotta az első valódi frissítési célpontot
