@@ -16,6 +16,13 @@ const page = readFileSync(
   "utf8",
 );
 
+/** «GG/MM, HH:MM» di un timbro senza fuso (UTC, come SQLite) nell'ora locale di chi legge: il fuso della macchina non conta. */
+const localStamp = (utc: string) => {
+  const d = new Date(`${utc}Z`);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${two(d.getDate())}/${two(d.getMonth() + 1)}, ${two(d.getHours())}:${two(d.getMinutes())}`;
+};
+
 describe("data della decisione nel motivo di esclusione", () => {
   it("mostra data e ora di user_excluded_at nel riquadro quando esistono", () => {
     const excludedAt = "2026-08-13T09:42:00.000";
@@ -31,7 +38,7 @@ describe("data della decisione nel motivo di esclusione", () => {
     expect(html).toContain('data-exclusion-decided-at=""');
     expect(html).toContain(`dateTime="${excludedAt}"`);
     expect(html).toContain("Decisione presa il");
-    expect(html).toContain("13/08, 09:42");
+    expect(html).toContain(localStamp(excludedAt));
   });
 
   it("non inventa una data quando user_excluded_at manca o non e' valido", () => {

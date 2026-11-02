@@ -544,6 +544,7 @@ function WorkDonut({
   onHide: () => void;
   t: (typeof T)[Locale];
 }) {
+  const locale = useLocale();
   const [sel, setSel] = useState<TeamActivityRole | null>(null);
   const roleHasInstances = (r: TeamActivityRole) =>
     actors.some((a) => a.role === r && a.actor !== a.role && a.total > 0);
@@ -740,7 +741,7 @@ function WorkDonut({
               </span>
               {sel ? (
                 <span className="text-[9px] text-[var(--color-dim)] w-20 text-right shrink-0 tabular-nums whitespace-nowrap">
-                  {t.last(timeAgo(s.last ?? null))}
+                  {t.last(timeAgo(s.last ?? null, locale))}
                 </span>
               ) : (
                 <span
@@ -778,7 +779,8 @@ export default function ActivityCharts({
   showDonut?: boolean;
   showVolume?: boolean;
 }) {
-  const t = T[useLocale()];
+  const locale = useLocale();
+  const t = T[locale];
   const {
     dates,
     roles,
@@ -993,7 +995,7 @@ export default function ActivityCharts({
                       />
                     </div>
                     <span className="text-[10px] text-[var(--color-dim)] w-20 text-right shrink-0 whitespace-nowrap">
-                      {t.last(timeAgo(g.last))}
+                      {t.last(timeAgo(g.last, locale))}
                     </span>
                   </div>
 
@@ -1043,7 +1045,7 @@ export default function ActivityCharts({
                               {a.total}
                             </span>
                             <span className="text-[9px] text-[var(--color-dim)] w-20 text-right shrink-0 tabular-nums whitespace-nowrap">
-                              {t.last(timeAgo(a.lastActiveAt))}
+                              {t.last(timeAgo(a.lastActiveAt, locale))}
                             </span>
                           </div>
                         );

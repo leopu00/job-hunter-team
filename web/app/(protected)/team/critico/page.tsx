@@ -4,6 +4,7 @@ import { scoreSpectrumCss } from "@/lib/score-color";
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/app/components/AgentInteraction";
+import { parseStamp } from "@/lib/parse-stamp";
 import { useLocale } from "@/lib/use-locale";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { intlTag } from "@/lib/locale-tag";
@@ -59,7 +60,7 @@ interface LiveData {
 // ── Helpers ────────────────────────────────────────────────────────
 function fmtTs(ts: string | null, localeTag = "it-IT"): string {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString(localeTag, {
+  return (parseStamp(ts) ?? new Date(ts)).toLocaleString(localeTag, {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
