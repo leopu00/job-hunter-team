@@ -11,6 +11,7 @@ import { messagesApi } from "../pages/messages/messages-api";
 import { positionsApi } from "../pages/positions/positions-api";
 import { teamApi } from "../pages/team/team-api";
 import { installCookieMirror } from "../lib/cookie-mirror";
+import { startStateStream } from "../lib/state-stream";
 import { installExternalLinks } from "../lib/external-links";
 import { installCsvExport } from "../lib/export-csv";
 import { installDocumentPreview, installDocumentSave } from "../lib/team-document";
@@ -31,6 +32,8 @@ installCookieMirror();
 // on this computer when the profile has no cloud account (lib/local-judgement-api.ts).
 installApiBridge(shellApi(localTeamApi(localJudgementApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase))))))))));
 initializeTheme();
+// The channel to the team only tells the pages when to read again; without it (or before it opens) they poll as always.
+void startStateStream();
 installCsvExport();
 installExternalLinks();
 installDocumentSave();
