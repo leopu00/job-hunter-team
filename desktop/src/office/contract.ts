@@ -242,6 +242,8 @@ export type CoreSeat = {
   furnitureId: string;
   /** as Desk.seatOffset: the role def's seat_offset (the mentor's (0, -24)) or the table by facing */
   seatOffset?: Vec;
+  /** the points a core role walks to when it has nothing to do (its round); none = it stays at its seat */
+  wander?: Vec[];
 };
 
 /** Everything static about the office: /office/layout.json. */
@@ -455,6 +457,15 @@ export interface OfficeEngine {
   bubbles(): Bubble[];
   /** the counts as drawn now: moving towards the last "piles" event with the trips */
   piles(): Piles;
+  /** the agents' statuses as the page read them (null = none): the engine animates an agent by what it is doing */
+  setStatuses?(statuses: AgentStatuses | null): void;
+  /** true when nothing in the office is moving: the scene may draw less */
+  quiet?(): boolean;
+  /**
+   * The agent whose panel is open (null = none): it stands still, facing the
+   * camera, and does not wander while it is selected.
+   */
+  select?(uid: string | null): void;
 }
 
 /** Builds an engine over a layout. `random` is injectable so tests are deterministic. */
