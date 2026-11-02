@@ -584,11 +584,24 @@ def _answered_plan_hint(provider: str, choice: str) -> str:
             " and run begin-burst again")
 
 
-def _where_chat(holder: str) -> dict:
+_CHAT_OWNER = {"capitano": "Captain's", "assistente": "Assistant's"}
+
+
+def _where_chat(holder: str, caller: str) -> dict:
     """How the person reaches the chat that holds a card: the exact command of the terminal (`/cards` there lists the
-    open card) and the place in the app. Whoever tells the person where the card is says THIS, not «the Captain's chat»
-    (P3-1 of the Linux CLI gate, 02/11: the card sat in `jht team chat capitano` and nobody said the command)."""
-    return {"chat_command": f"jht team chat {holder}", "chat_command_then": "/cards", "chat_in_app": f"Messages › {holder}"}
+    open card), the place in the app, and `tell_user`, the sentence that says it. Whoever tells the person where the
+    card is does not know whether they are in the app or at a terminal (P3-1 of the Linux CLI gate, 02/11: the card
+    sat in `jht team chat capitano` and nobody said the command; then, in the ritest of c7baf5a3c, the Assistente said
+    only «under Messages» to a person at a terminal): the sentence names BOTH ways, and «this chat, above» when the card
+    is in the caller's own chat."""
+    if holder == caller:
+        said = "The card with the plans is in this chat, above: pick your plan there."
+    else:
+        owner = _CHAT_OWNER.get(holder, f"{holder}'s")
+        said = (f"The card with the plans is in the {owner} chat. In the app: Messages › {holder}. In a terminal: run "
+                f"`jht team chat {holder}`, type `/cards` and answer with the number of your plan.")
+    return {"chat_command": f"jht team chat {holder}", "chat_command_then": "/cards", "chat_in_app": f"Messages › {holder}",
+            "tell_user": said}
 
 
 def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = PLAN_REASK_AFTER_S,
@@ -628,7 +641,7 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
             holder = record.get("agent") or "capitano"
             return {"ok": True, "asked": False, "reason": "a question about the plan is open and has no answer",
                     "question_id": record["id"], "agent": holder, "in_your_chat": holder == agent,
-                    **_where_chat(holder)}
+                    **_where_chat(holder, agent)}
         picked = _named_choice(answer, card["provider"]) if kind == "answered" else None
         if picked is not None:  # the person already picked: the plan only waits to be written, nobody asks again
             return {"ok": True, "asked": False, "answered": True, "choice": picked,
@@ -651,7 +664,7 @@ def ask_plan(agent: str = "capitano", asked_by: str = "agent", reask_s: float = 
         state["plan_cards"] = {"provider": card["provider"], "count": cards + 1}
         _write(state)
         return {"ok": True, "asked": True, "question_id": question_id, "options": [o["id"] for o in card["options"]],
-                "agent": chat, "in_your_chat": chat == agent, **_where_chat(chat)}
+                "agent": chat, "in_your_chat": chat == agent, **_where_chat(chat, agent)}
 
 
 # The first run opens when the Capitano runs `begin-burst`, and the Capitano is told once, by `jht profile import`,

@@ -198,11 +198,41 @@ def test_the_card_posted_in_the_assistentes_own_chat_names_that_chat_the_same_wa
     assert out["asked"] is True and out["chat_command"] == "jht team chat assistente"
 
 
-def test_every_language_of_the_skill_tells_the_assistente_to_give_the_command():
+def test_ask_plan_hands_over_the_sentence_that_names_both_ways_to_the_card(box):
+    """P3-1 again (ritest of c7baf5a3c, 02/11): the Assistente said «in the Captain's chat under Messages» — the app's
+    words — to a person at a terminal. Who tells the person where the card is does not know whether they are in the
+    app or in a terminal, so ask-plan gives the sentence, with BOTH ways, for the card it has just posted and for the
+    one that is already open."""
+    configure(box)
+    run(box, "ask-plan")  # the Capitano has the card
+
+    open_card = run(box, "ask-plan", "--agent", "assistente")
+
+    said = open_card["tell_user"]
+    assert "jht team chat capitano" in said and "/cards" in said, said   # the terminal
+    assert "Messages" in said and "capitano" in said.lower(), said        # the app
+    assert "this chat" not in said, "the card is NOT in the chat of the one who tells it"
+
+
+def test_the_card_posted_in_the_callers_chat_is_told_as_here_and_still_names_the_command(box):
+    configure(box)
+
+    posted = run(box, "ask-plan", "--agent", "assistente")
+
+    assert posted["asked"] is True and posted["in_your_chat"] is True
+    assert "this chat" in posted["tell_user"] and "above" in posted["tell_user"], posted["tell_user"]
+
+
+def test_every_branch_of_the_skill_that_has_a_card_says_it_with_tell_user():
+    """The step of the skill sends the Assistente to the sentence in BOTH cases (the card just posted, the card already
+    open) — a rule only on the second left the first to the Assistente's own words."""
     root = Path(__file__).resolve().parent.parent / "agents" / "_skills" / "onboarding-flow"
     for skill in sorted(root.glob("SKILL*.md")):
         text = skill.read_text(encoding="utf-8")
-        assert "`chat_command`" in text and "jht team chat capitano" in text and "/cards" in text, skill.name
+        step = next(line for line in text.splitlines() if line.startswith("2. ") and "first_run.py ask-plan --agent assistente" in line)
+        asked = step.split("`asked: true`", 1)[1].split("`wait_for_profile: true`", 1)[0]
+        assert "`tell_user`" in asked, f"{skill.name}: the branch asked:true does not send to tell_user"
+        assert "`tell_user`" in step.split("`wait_for_profile: true`", 1)[1], f"{skill.name}: open-card branch"
 
 
 # ── the instructions, in seven languages ─────────────────────────────────────
@@ -225,10 +255,12 @@ def test_the_onboarding_skill_asks_the_plan_after_the_profile_and_points_to_the_
 
 @pytest.mark.parametrize("lang", LANGS)
 def test_the_assistente_prompt_never_says_this_chat_for_a_card_that_is_elsewhere(lang: str):
+    """...and says where the card is with `tell_user`, which names the app AND the terminal (ritest of c7baf5a3c)."""
     text = (ROOT / "agents" / "assistente" / f"assistente{SUFFIX[lang]}.md").read_text(encoding="utf-8")
     line = next(l for l in text.splitlines() if "first_run.py ask-plan --agent assistente" in l)
 
     assert "in_your_chat" in line and "wait_for_profile" in line, lang
+    assert "`tell_user`" in line, lang
 
 
 @pytest.mark.parametrize("lang", LANGS)
