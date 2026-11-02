@@ -58,13 +58,15 @@ Zwei zwingende Anforderungen — ignorierst du sie, *verbrennst* du Budget, stat
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Entscheide anhand von `pct` (geparst aus einer Zeile wie `24.9k/1m tokens (2%)`):
 - **`pct` ≤ 50** → ÜBERSPRINGEN, **außer das TTL hat in Schritt 1.4 ausgelöst**. Eine Sitzung unterhalb des TTL NICHT neu erstellen, auch wenn sie alt ist. Logge `action=skipped_lowctx` mit der gemessenen `%`. Gehe zur nächsten Sitzung.
 - **`pct` > 50** → fahre mit dem Refresh fort (Schritte 2–7).
-- **Befehl wurde nicht gerendert / Parsing fehlgeschlagen** → Rückfall auf die Alters-Heuristik (`age ≥ 40min` → Refresh) und logge `ctx=unparsed`.
+- **nicht gemessen** (`pct: null`: der Befehl wurde nicht gerendert, das Parsing schlug fehl, die Sitzung war nicht im Ruhezustand) → NICHT nach Alter neu erstellen: unterhalb des TTL `action=skipped_unmeasured` mit `context_pct: null`; das TTL aus Schritt 1.4 bleibt das Sicherheitsnetz. Eine Neuerstellungsrunde kostet etwa 4 Punkte des Wochenbudgets.
+- `pct` ist der BENUTZTE Anteil des Kontexts, nie der freie: eine Karte mit `N% left` (Codex) nennt den FREIEN Teil. Schreibe ins Journal `context_pct` = `decision.used_pct` genau so, ohne es aus einer Karte neu zu lesen und ohne es umzukehren. Entscheide mit `decision.action` (`refresh`|`skip`): das Skript hat es berechnet.
 
 ## Schritt 1.6 — den Capitano einmal vor dem ersten Refresh informieren
 Erst wenn diese Runde ihr erstes echtes Refresh-Ziel gewählt hat (TTL oder

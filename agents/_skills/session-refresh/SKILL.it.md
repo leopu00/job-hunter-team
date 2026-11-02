@@ -58,13 +58,15 @@ Due requisiti tassativi — ignorarli fa *bruciare* budget invece di risparmiarl
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Decidi da `pct` (estratto da una riga tipo `24.9k/1m tokens (2%)`):
 - **`pct` ≤ 50** → SALTA **a meno che il TTL non sia scattato allo Step 1.4**. NON ricreare una sessione sotto il TTL, anche se e' vecchiotta. Logga `action=skipped_lowctx` con la `%` misurata. Passa alla successiva.
 - **`pct` > 50** → procedi al refresh (Step 2–7).
-- **comando non renderizzato / parse fallito** → ricadi sull'euristica dell'eta' (`age ≥ 40min` → refresh) e logga `ctx=unparsed`.
+- **non misurato** (`pct: null`: comando non renderizzato, parse fallito, sessione non a riposo) → NON ricreare per l'eta': sotto il TTL, `action=skipped_unmeasured` e `context_pct: null`; il TTL del passo 1.4 resta la rete. Un giro di ricreazione costa circa 4 punti di budget settimanale.
+- `pct` e' la quota USATA del contesto, mai quella libera: una scheda che scrive `N% left` (Codex) dice la parte LIBERA. Nel diario scrivi `context_pct` = `decision.used_pct` cosi' com'e', senza rileggerlo da una scheda e senza invertirlo. Per decidere usa `decision.action` (`refresh`|`skip`): l'ha calcolato lo script.
 
 ## Step 1.6 — avvisa il Capitano una volta, prima del primo refresh
 Solo quando questo giro ha selezionato il primo vero target di refresh (TTL o

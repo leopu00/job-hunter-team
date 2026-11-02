@@ -18,15 +18,26 @@ This is the one way to read it:
 It never types into a pane that is not idle with an empty composer (a draft, a turn, a menu), and never presses
 anything on a turn that has started (Escape would interrupt it).
 
+The number is the share USED, always. The Codex card says `N% left` (the FREE share) and Claude's panel says
+`24.9k/1m tokens (2%)` (used). On a 31/10 round of a beta VPS the Dottore recreated three coordinators that were 3 hours
+old and 8-42% used on their cards, with 86/96/86 as context_pct in its journal: about 4 points of the weekly budget
+for a recreation round. So the round no longer decides by eye: with `--age-h` the answer carries the DECISION
+(refresh or skip, and why) computed here, with `used_pct` and `left_pct` side by side, a card that says the free
+share is turned into the used one, and a context that could not be measured is a skip, not a recreation on age (the
+12 h TTL stays the safety net).
+
 Usage:
-  python3 session_context.py SCORER-2 [--provider claude|codex|kimi]
-  → {"session": "scorer-2", "pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}
+  python3 session_context.py SCORER-2 [--provider claude|codex|kimi] [--age-h 3.2]
+  → {"session": "scorer-2", "pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+     "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured",
+                  "used_pct": 41.0, "left_pct": 59.0}}          (decision only with --age-h)
 Exit: 0 read (or nothing to read, no panel touched) · 4 a panel was opened and is still open.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -46,6 +57,44 @@ RENDER_WAIT_S = 3.0
 CLOSE_WAIT_S = 0.7
 CLOSE_PRESSES = 3
 _CONTEXT_LINE = re.compile(r"[0-9.]+k?/[0-9.]+[km] tokens \((\d+)%\)")
+# The cards that say the FREE share (Codex: «Context window: 80% left (51.7K used / 258K)»).
+_LEFT_LINE = re.compile(r"(\d+(?:\.\d+)?)%\s+(?:left|remaining|free)\b", re.IGNORECASE)
+REFRESH_ABOVE_PCT = 50.0       # a session is recreated for its context only when MORE than this share is used
+DEFAULT_TTL_H = 12.0           # JHT_AGENT_MAX_SESSION_AGE_H
+
+
+def used_from_text(text: str) -> Optional[float]:
+    """The share of the context USED that a screen says, whichever way it says it, or None.
+
+    `24.9k/1m tokens (2%)` is the used share as it stands; `80% left` is the free one and means 20% used. The used form
+    wins when both are on the screen.
+    """
+    used = _CONTEXT_LINE.findall(text)
+    if used:
+        return float(used[-1])
+    left = _LEFT_LINE.findall(text)
+    if left:
+        return round(max(0.0, min(100.0, 100.0 - float(left[-1]))), 1)
+    return None
+
+
+def decide(pct: Optional[float], age_h: Optional[float], ttl_h: float = DEFAULT_TTL_H,
+           threshold: float = REFRESH_ABOVE_PCT) -> dict:
+    """Whether the round recreates a session, from the share of its context USED and its age.
+
+    The TTL comes first and overrides everything (a session at 4% after 30 hours is recreated). Below it, only a
+    context MORE than `threshold` used asks for a recreation; one that was not measured is not a reason (age alone
+    is the TTL's job): a recreation costs about 4 points of the weekly budget.
+    """
+    used = float(pct) if isinstance(pct, (int, float)) and not isinstance(pct, bool) else None
+    shown = {"used_pct": used, "left_pct": round(100.0 - used, 1) if used is not None else None}
+    if age_h is not None and age_h >= ttl_h:
+        return {"action": "refresh", "reason": "ttl", **shown}
+    if used is None:
+        return {"action": "skip", "reason": "unmeasured", **shown}
+    if used > threshold:
+        return {"action": "refresh", "reason": "context", **shown}
+    return {"action": "skip", "reason": "lowctx", **shown}
 
 
 def _tmux(*args: str) -> bool:
@@ -111,9 +160,8 @@ def pct_from_panel(session: str, command: str, render_wait: float = RENDER_WAIT_
         return {"pct": None, "source": "none", "closed": closed, "reason": "send_failed" if closed else why}
     time.sleep(render_wait)
     shown = agent_chat.capture_pane(session) or ""
-    found = _CONTEXT_LINE.findall(agent_chat.strip_terminal_codes(shown))
+    pct = used_from_text(agent_chat.strip_terminal_codes(shown))
     closed, why = close_panel(session)
-    pct = float(found[-1]) if found else None
     return {"pct": pct, "source": "panel" if pct is not None else "none", "closed": closed,
             "reason": "read" if pct is not None and closed else (why if not closed else "unparsed")}
 
@@ -133,8 +181,16 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("session")
     ap.add_argument("--provider", default="")
+    ap.add_argument("--age-h", type=float, default=None,
+                    help="the session's age in hours: adds the decision (refresh or skip, and why)")
     args = ap.parse_args(argv)
     result = read(args.session, args.provider)
+    if args.age_h is not None:
+        try:
+            ttl_h = float(os.environ.get("JHT_AGENT_MAX_SESSION_AGE_H", DEFAULT_TTL_H))
+        except ValueError:
+            ttl_h = DEFAULT_TTL_H
+        result["decision"] = decide(result.get("pct"), args.age_h, ttl_h)
     print(json.dumps(result, ensure_ascii=False))
     return 0 if result["closed"] else 4
 

@@ -58,13 +58,15 @@ Dois requisitos taxativos — ignorá-los faz *queimar* orçamento em vez de eco
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Decida a partir de `pct` (extraído de uma linha como `24.9k/1m tokens (2%)`):
 - **`pct` ≤ 50** → PULAR **a menos que o TTL tenha disparado no Step 1.4**. NÃO recrie uma sessão abaixo do TTL, mesmo que seja velha. Registre `action=skipped_lowctx` com a `%` medida. Passe para a próxima sessão.
 - **`pct` > 50** → prossiga para a renovação (Steps 2–7).
-- **o comando não renderizou / o parse falhou** → recaia na heurística de idade (`age ≥ 40min` → renovar) e registre `ctx=unparsed`.
+- **não medido** (`pct: null`: o comando não renderizou, o parse falhou, a sessão não estava em repouso) → NÃO recrie pela idade: abaixo do TTL, `action=skipped_unmeasured` com `context_pct: null`; o TTL do Step 1.4 continua a ser a rede de segurança. Uma ronda de recriação custa cerca de 4 pontos do orçamento semanal.
+- `pct` é a parte USADA do contexto, nunca a livre: um cartão que diz `N% left` (Codex) dá a parte LIVRE. No diário escreve `context_pct` = `decision.used_pct` tal como está, sem o reler de um cartão e sem o inverter. Decide com `decision.action` (`refresh`|`skip`): foi o script que o calculou.
 
 ## Step 1.6 — avise o Capitano uma vez, antes da primeira renovação
 Só quando esta ronda tiver selecionado o primeiro alvo real de renovação (TTL

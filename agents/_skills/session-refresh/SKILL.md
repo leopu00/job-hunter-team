@@ -65,13 +65,15 @@ Two hard requirements — ignore them and you *burn* budget instead of saving it
 
 ```bash
 S=<session>      # the provider is the one of the session (claude, codex, kimi)
-python3 /app/shared/skills/session_context.py "$S" --provider <provider>
-# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "..."}   (exit 4 = a panel is still open)
+python3 /app/shared/skills/session_context.py "$S" --provider <provider> --age-h "$AGE_H"
+# → {"pct": 41.0, "source": "log"|"panel"|"none", "closed": true, "reason": "...",
+#    "decision": {"action": "refresh"|"skip", "reason": "ttl"|"context"|"lowctx"|"unmeasured", "used_pct": 41.0, "left_pct": 59.0}}   (exit 4 = a panel is still open)
 ```
 Decide from `pct` (parsed from a line like `24.9k/1m tokens (2%)`):
 - **`pct` ≤ 50** → SKIP **unless the TTL tripped in Step 1.4**. Do NOT recreate an under-TTL session, even if it is old-ish. Log `action=skipped_lowctx` with the measured `%`. Move to the next session.
 - **`pct` > 50** → proceed to refresh (Steps 2–7).
-- **command didn't render / parse failed** → fall back to the age heuristic (`age ≥ 40min` → refresh) and log `ctx=unparsed`.
+- **not measured** (`pct: null`: the command did not render, the parse failed, the session was not idle) → do NOT recreate on age: under the TTL, `action=skipped_unmeasured` with `context_pct: null`; the TTL of Step 1.4 stays the safety net. A recreation round costs about 4 points of weekly budget.
+- `pct` is the share of the context USED, never the free one: a card that says `N% left` (Codex) gives the FREE part. In the journal write `context_pct` = `decision.used_pct` exactly as it is, without re-reading it from a card and without inverting it. Decide with `decision.action` (`refresh`|`skip`): the script computed it.
 
 ## Step 1.6 — notify the Capitano once, before the first refresh
 Only when this round has selected its first real refresh target (TTL or context),
