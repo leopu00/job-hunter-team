@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import type { AgentPose, CharacterSheet, OfficeEngine, PositionTag } from "../contract";
+import type { AgentPose, AgentStatuses, CharacterSheet, OfficeEngine, PositionTag } from "../contract";
 import { createOfficeEngine } from "./engine";
 import { seeded, smallOffice } from "./fixture.test-helpers";
+
+/** What the box says: these agents work. Without a word an agent sits still, the office does not invent work. */
+function working(...uids: string[]): AgentStatuses {
+  return { at: 0, agents: Object.fromEntries(uids.map((uid) => [uid, { status: "working" as const }])) };
+}
 
 const TAG: PositionTag = { id: null, legacyId: 60, title: "Engineer", company: "Acme" };
 
@@ -42,12 +47,14 @@ describe("the office engine: agents at their desks", () => {
       { id: "scout_a", main: { src: "", cols: 6, rows: 12, cell: { w: 256, h: 384 }, feet: { x: 128, y: 360 }, scale: 0.425 }, sit: null },
     ];
     const engine = createOfficeEngine(layout, { random: seeded(), characters });
+    engine.setStatuses!(working("scout-1"));
     engine.apply({ type: "enter", agent: { uid: "scout-1", role: "scout", sheet: "" }, atOnce: true });
     expect(pose(engine, "scout-1")).toMatchObject({ mode: "work", pos: layout.departments[0]!.desks[0]!.seat });
   });
 
   it("animates a seated agent on the seated track, frame by frame", () => {
     const engine = createOfficeEngine(smallOffice(), { random: () => 0 });
+    engine.setStatuses!(working("scout-1"));
     engine.apply({ type: "enter", agent: { uid: "scout-1", role: "scout", sheet: "" }, atOnce: true });
     const frames = new Set<number>();
     run(engine, 1, () => frames.add(pose(engine, "scout-1").frame));
@@ -88,6 +95,7 @@ describe("the office engine: where each one sits", () => {
   it("gives a taken desk to nobody else: a copy beyond the chairs works standing by the inbox", () => {
     const layout = smallOffice();
     const engine = createOfficeEngine(layout, { random: seeded() });
+    engine.setStatuses!(working("analista-3"));
     for (const uid of ["analista-1", "analista-2", "analista-3"]) engine.apply({ type: "enter", agent: { uid, role: "analista", sheet: "" }, atOnce: true });
     engine.apply({ type: "enter", agent: { uid: "scout-5", role: "scout", sheet: "" }, atOnce: true });
     const third = pose(engine, "analista-3");

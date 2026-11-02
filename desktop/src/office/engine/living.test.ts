@@ -70,11 +70,29 @@ describe("the agents' status becomes their motion", () => {
     expect(pose(engine, "scout-1").mode).toBe("still");
   });
 
-  it("keeps typing when the box says nothing about the agent (no status is not a rest)", () => {
-    expect(isTyping(null, "scout-1")).toBe(true);
-    expect(isTyping(statuses({ capitano: "idle" }), "scout-1")).toBe(true);
-    expect(isTyping(statuses({ "SCOUT-1": "idle" }), "scout-1")).toBe(true); // the producers write the keys in lower case
+  it("sits still when the box says nothing about the agent: the office shows the real work, it does not invent it", () => {
+    expect(isTyping(null, "scout-1")).toBe(false);
+    expect(isTyping(statuses({ capitano: "working" }), "scout-1")).toBe(false);
+    expect(isTyping(statuses({ "SCOUT-1": "working" }), "scout-1")).toBe(false); // the producers write the keys in lower case
     expect(isTyping(statuses({ "scout-1": "idle" }), "scout-1")).toBe(false);
+    expect(isTyping(statuses({ "scout-1": "working" }), "scout-1")).toBe(true);
+    const engine = seated(); // no statuses at all
+    const frames = new Set<number>();
+    run(engine, 1, () => frames.add(pose(engine, "scout-1").frame));
+    expect([...frames]).toEqual([0]);
+    expect(pose(engine, "scout-1").mode).toBe("sit");
+  });
+
+  it("a status that goes away sits the agent still again", () => {
+    const engine = seated();
+    engine.setStatuses!(statuses({ "scout-1": "working" }));
+    const typing = new Set<number>();
+    run(engine, 1, () => typing.add(pose(engine, "scout-1").frame));
+    expect(typing.size).toBeGreaterThan(1);
+    engine.setStatuses!(null);
+    const still = new Set<number>();
+    run(engine, 1, () => still.add(pose(engine, "scout-1").frame));
+    expect([...still]).toEqual([0]);
   });
 
   it("an agent that enters after the statuses were read already knows its own", () => {
@@ -224,6 +242,8 @@ describe("a selected agent", () => {
 describe("a quiet office", () => {
   it("is quiet when every agent sits still, and not while one types, walks or sits down", () => {
     const engine = seated(smallOffice(), ["scout-1", "capitano"]);
+    expect(engine.quiet!()).toBe(true); // no word from the box: they sit still
+    engine.setStatuses!(statuses({ "scout-1": "working", capitano: "paused" }));
     expect(engine.quiet!()).toBe(false); // typing: the frames change
     engine.setStatuses!(statuses({ "scout-1": "idle", capitano: "paused" }));
     expect(engine.quiet!()).toBe(true);
