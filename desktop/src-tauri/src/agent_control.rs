@@ -341,7 +341,7 @@ pub(crate) fn read_input(request: &ControlRequest) -> Option<Vec<u8>> {
 
 /// `shared`: the chat's ssh master, lent for a read of the terminal (see `screen_master`); None opens
 /// a connection of its own, as every other read and every action does.
-fn run(destination: &Destination, request: &ControlRequest, argv: &[String], shared: Option<&Path>) -> Result<ProcessResult, &'static str> {
+fn run(app: &tauri::AppHandle, scope: &AccountScope, destination: &Destination, request: &ControlRequest, argv: &[String], shared: Option<&Path>) -> Result<ProcessResult, &'static str> {
     // checked again right before ssh starts: the master's folder must still be the chat's
     let shared = shared.filter(|socket| direct_chat::lent_socket_still_ours(socket));
     let read = request.action().is_none();
@@ -364,15 +364,34 @@ fn run(destination: &Destination, request: &ControlRequest, argv: &[String], sha
             }
         }
         Destination::Local { wrapper, runtime } => {
+            // The panel's hot reads go over the state stream when it is open; anything else (and any read the
+            // stream cannot answer) is made the way it always was.
+            let stream = runtime.as_deref().map(|runtime| crate::state_stream::LocalContext { app, scope, wrapper, runtime });
+            let hot = match request {
+                ControlRequest::List {} => Some(crate::state_stream::StreamRead::AgentsList),
+                ControlRequest::Team {} => Some(crate::state_stream::StreamRead::AgentsTeam),
+                ControlRequest::Screen { session } => Some(crate::state_stream::StreamRead::AgentsScreen { name: session }),
+                _ => None,
+            };
+            if let (Some(stream), Some(hot)) = (&stream, &hot) {
+                if let Some(done) = crate::state_stream::read_local(stream, hot) {
+                    return Ok(done);
+                }
+            }
             let words: Vec<&str> = argv.iter().map(String::as_str).collect();
             let command = crate::team_control::agent_control_command(&words, None)?;
             // In the team's attested container; the wrapper only when that container cannot be found.
             // A read may use the container found a moment ago; an action finds it again first.
-            crate::team_control::run_local(wrapper, runtime.as_deref(), &command, timeout, !read, || {
+            let done = crate::team_control::run_local(wrapper, runtime.as_deref(), &command, timeout, !read, || {
                 let mut args = vec!["agent-control"];
                 args.extend(words.iter().copied());
                 crate::onboarding::run_verified_local_wrapper(wrapper, &args, None, timeout)
-            })
+            });
+            // an action changed the team: what the stream kept of it is dropped now
+            if let (false, Some(stream)) = (read, &stream) {
+                crate::state_stream::invalidate_local(stream);
+            }
+            done
         }
     }
 }
@@ -761,7 +780,7 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Destination::Local { .. } => None,
     };
     let shared = screen_master(app, scope, &request, &destination);
-    match run(&destination, &request, &argv, shared.as_deref()) {
+    match run(app, scope, &destination, &request, &argv, shared.as_deref()) {
         Ok(output) => {
             let mut reply = answer(&request, &output, &print, label.as_deref());
             // The terminal tells the page how soon to read it again.

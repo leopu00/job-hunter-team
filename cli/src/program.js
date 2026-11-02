@@ -7,6 +7,7 @@ import { registerTeamSettingsCommand } from './commands/team-settings.js';
 import { registerBurnCommand } from './commands/burn.js';
 import { registerStandbyCommand } from './commands/standby.js';
 import { registerAgentControlCommand } from './commands/agent-control.js';
+import { registerStateStreamCommand } from './commands/state-stream.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerTeamCommand } from './commands/team/index.js';
 import { registerCronCommand } from './commands/cron.js';
@@ -104,6 +105,7 @@ export function buildProgram() {
   registerBurnCommand(program);
   registerStandbyCommand(program);
   registerAgentControlCommand(program);
+  registerStateStreamCommand(program);
   registerStatusCommand(program);
   registerTeamCommand(program);
   registerCronCommand(program);
