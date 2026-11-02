@@ -24,7 +24,7 @@ old and 8-42% used on their cards, with 86/96/86 as context_pct in its journal: 
 for a recreation round. So the round no longer decides by eye: with `--age-h` the answer carries the DECISION
 (refresh or skip, and why) computed here, with `used_pct` and `left_pct` side by side, a card that says the free
 share is turned into the used one, and a context that could not be measured is a skip, not a recreation on age (the
-12 h TTL stays the safety net).
+24 h hard cap stays the safety net).
 
 Usage:
   python3 session_context.py SCORER-2 [--provider claude|codex|kimi] [--age-h 3.2]
@@ -51,6 +51,7 @@ if str(_HERE) not in sys.path:
 
 import agent_chat  # noqa: E402
 import agent_state  # noqa: E402
+import doctor_journal  # noqa: E402
 
 PANEL_COMMANDS = {"claude": "/context"}             # the providers whose context only the panel tells
 RENDER_WAIT_S = 3.0
@@ -60,7 +61,7 @@ _CONTEXT_LINE = re.compile(r"[0-9.]+k?/[0-9.]+[km] tokens \((\d+)%\)")
 # The cards that say the FREE share (Codex: «Context window: 80% left (51.7K used / 258K)»).
 _LEFT_LINE = re.compile(r"(\d+(?:\.\d+)?)%\s+(?:left|remaining|free)\b", re.IGNORECASE)
 REFRESH_ABOVE_PCT = 50.0       # a session is recreated for its context only when MORE than this share is used
-DEFAULT_TTL_H = 12.0           # JHT_AGENT_MAX_SESSION_AGE_H
+DEFAULT_TTL_H = 24.0           # JHT_AGENT_HARD_CAP_H: the hard cap; below it only MORE than 50% used asks for a recreation
 
 
 def used_from_text(text: str) -> Optional[float]:
@@ -187,10 +188,12 @@ def main(argv=None) -> int:
     result = read(args.session, args.provider)
     if args.age_h is not None:
         try:
-            ttl_h = float(os.environ.get("JHT_AGENT_MAX_SESSION_AGE_H", DEFAULT_TTL_H))
+            ttl_h = float(os.environ.get("JHT_AGENT_HARD_CAP_H", DEFAULT_TTL_H))
         except ValueError:
             ttl_h = DEFAULT_TTL_H
         result["decision"] = decide(result.get("pct"), args.age_h, ttl_h)
+        # Left for doctor_journal.py: the row of the journal and the right to recreate come from THIS, not from the model.
+        result["decision_saved"] = doctor_journal.save_decision(args.session, result["decision"])
     print(json.dumps(result, ensure_ascii=False))
     return 0 if result["closed"] else 4
 
