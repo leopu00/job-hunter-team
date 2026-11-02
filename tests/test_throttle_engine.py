@@ -1519,3 +1519,77 @@ def test_a_very_old_open_pause_is_ignored(home):
     eng.emit_pause("start", "scout-1", T0, id="scout-1-%d" % int(T0), applied_sec=300, reason="x", source="config")
     eng.tick(now=T0 + 300 + eng.ACTIVE_PRUNE_SEC + 10)
     assert SENT == [] and not events("pause_recovered")
+
+
+# ── il log lo scrivono gli agenti: le righe `start` si validano, un lock tenuto non ferma il giro (02/11) ────────────
+def _raw_log(lines):
+    path = eng.pause_log_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        for line in lines:
+            fh.write(line + "\n")
+
+
+@pytest.mark.parametrize("row", [
+    '{"event":"start","agent":"analista-1","id":"x-1","ts_unix":NaN,"applied_sec":300}',
+    '{"event":"start","agent":"analista-1","id":"x-2","ts_unix":%d,"applied_sec":NaN}' % T0,
+    '{"event":"start","agent":"analista-1","id":"x-3","ts_unix":Infinity,"applied_sec":300}',
+    '{"event":"start","agent":"analista-1","id":"x-4","ts_unix":%d,"applied_sec":Infinity}' % T0,
+    '{"event":"start","agent":"analista-1","id":"x-5","ts_unix":%d,"applied_sec":1e300}' % T0,
+    '{"event":"start","agent":"analista-1","id":"x-6","ts_unix":1e300,"applied_sec":300}',
+    '{"event":"start","agent":"analista-1","id":"x-7","ts_unix":%d,"applied_sec":-5}' % T0,
+    '{"event":"start","agent":"analista-1","id":"x-8","ts_unix":true,"applied_sec":300}',
+    '{"event":"start","agent":"analista-1","id":"x-9","ts_unix":%d,"applied_sec":true}' % T0,
+    '{"event":"start","agent":"analista-1","id":["a"],"ts_unix":%d,"applied_sec":300}' % T0,
+    '{"event":"start","agent":"analista-1","id":"%s","ts_unix":%d,"applied_sec":300}' % ("i" * 500, T0),
+    '{"event":"start","agent":"analista-1","ts_unix":%d,"applied_sec":300}' % T0,
+    '{"event":"start","agent":["analista-1"],"id":"x-10","ts_unix":%d,"applied_sec":300}' % T0,
+    '{"event":"start","agent":"../../etc x","id":"x-11","ts_unix":%d,"applied_sec":300}' % T0,
+    '{"event":"start","agent":"%s","id":"x-12","ts_unix":%d,"applied_sec":300}' % ("a" * 200, T0),
+])
+def test_a_start_row_that_is_not_what_the_engine_writes_is_not_an_open_pause(home, row):
+    _raw_log([row])
+    assert eng._open_pauses() == {}
+    eng.tick(now=T0 + 5000)    # the round neither crashes nor wakes anybody for it
+    assert SENT == [] and not events("pause_recovered") and not events("pause_closed")
+
+
+def test_an_end_row_with_an_id_that_cannot_be_hashed_does_not_break_the_good_rows(home):
+    _raw_log(['{"event":"end","id":["x"]}', '{"event":"end","id":{"a":1}}',
+              '{"event":"start","agent":"scout-1","id":"scout-1-1","ts_unix":%d,"applied_sec":300}' % T0])
+    assert list(eng._open_pauses()) == ["scout-1"]
+
+
+def test_a_good_start_row_keeps_working_and_a_long_reason_is_cut(home):
+    _raw_log(['{"event":"start","agent":"scout-1","id":"scout-1-1","ts_unix":%d,"applied_sec":300,"reason":"%s"}'
+              % (T0, "r" * 5000)])
+    rec = eng._open_pauses()["scout-1"]
+    assert rec["id"] == "scout-1-1" and rec["applied_sec"] == 300.0 and len(rec["reason"]) == eng._PAUSE_REASON_MAX
+    eng.tick(now=T0 + 300 + eng.PAUSE_END_MARGIN_SEC + 1)
+    assert [m["agent"] for m in SENT] == ["scout-1"] and len(events("pause_recovered")) == 1
+
+
+def test_a_flags_lock_held_by_somebody_else_does_not_stop_the_round(home, monkeypatch):
+    fcntl = pytest.importorskip("fcntl")
+    monkeypatch.setattr(eng, "FLAGS_LOCK_TIMEOUT_SEC", 0.3)
+    set_config(home, **{"analista-1": 300})
+    eng.register("analista-1", now=T0)
+    lock = eng.flags_path().with_suffix(".lock")
+    with open(lock, "a+") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX)          # a process that keeps the lock and never lets it go
+        began = time.monotonic()
+        eng.tick(now=T0 + 300)                       # waits the timeout, then goes on
+        spent = time.monotonic() - began
+        assert 0.25 <= spent < 5, spent
+        assert flag("analista-1")["state"] == eng.NOTIFIED and len(SENT) == 1
+        began = time.monotonic()
+        assert eng.ack("analista-1", now=T0 + 301)["ok"] is True      # the agent's side is not stuck either
+        assert time.monotonic() - began < 5
+
+
+def test_a_flags_lock_that_is_free_is_taken_at_once(home, monkeypatch):
+    monkeypatch.setattr(eng, "FLAGS_LOCK_TIMEOUT_SEC", 5)
+    began = time.monotonic()
+    with eng._flags_lock():
+        pass
+    assert time.monotonic() - began < 1

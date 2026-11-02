@@ -79,6 +79,10 @@ QUIESCENCE_STATE = JHT_HOME / "state" / "scout-quiescence.json"
 SCOUT_EXHAUST_LOOKBACK_H = float(
     os.environ.get("JHT_HEARTBEAT_SCOUT_EXHAUST_LOOKBACK_H", "0.5")
 )
+# Il tetto della quiete dichiarata: l'ultimo scalino della scala (4 h) piu' un margine, contato da quando lo stato e' stato
+# SCRITTO (mtime del file), non da adesso. Lo stato lo scrive un agente dentro il container: un `next_wake_at` enorme o
+# Infinity (json.loads lo accetta) non puo' tacere l'heartbeat per sempre.
+QUIESCENCE_MAX_H = 4.25
 TARGET = os.environ.get("JHT_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 TICKET_PY = "/app/shared/skills/ticket.py"
@@ -338,7 +342,8 @@ def _scout_exhausted_recently(now):
     ripasserebbe le stesse fonti. Autorevole e' lo stato scritto da `scout_exhaustion.py declare` (quiete finche'
     `next_wake_at` non e' passato). Se lo stato non c'e', vale il messaggio dello Scout nell'ultimo
     SCOUT_EXHAUST_LOOKBACK_H (30 minuti: il primo scalino). Robusto: file assenti / righe non-JSON / ts illeggibile →
-    False ('nessuna quiescenza nota', l'ordine puo' partire)."""
+    False ('nessuna quiescenza nota', l'ordine puo' partire). Il `next_wake_at` vale al massimo `QUIESCENCE_MAX_H` da
+    quando lo stato e' stato scritto; un valore non numerico, booleano o NaN non e' uno stato: si ricade sul messaggio dello Scout."""
     from collections import deque
     try:
         state = json.loads(QUIESCENCE_STATE.read_text(encoding="utf-8"))
@@ -346,8 +351,13 @@ def _scout_exhausted_recently(now):
         state = None
     if isinstance(state, dict):
         wake = state.get("next_wake_at")
-        if isinstance(wake, (int, float)) and not isinstance(wake, bool):
-            return now.timestamp() < wake
+        if isinstance(wake, (int, float)) and not isinstance(wake, bool) and wake == wake:
+            now_ts = now.timestamp()
+            try:
+                written = min(QUIESCENCE_STATE.stat().st_mtime, now_ts)
+            except OSError:
+                written = now_ts
+            return now_ts < min(wake, written + QUIESCENCE_MAX_H * 3600)
     cutoff = now - timedelta(hours=SCOUT_EXHAUST_LOOKBACK_H)
     try:
         with open(MESSAGES_JSONL, encoding="utf-8") as f:
