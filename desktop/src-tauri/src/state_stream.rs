@@ -435,10 +435,12 @@ impl Session {
         let _ = self.send(|id| serde_json::to_string(&json!({ "id": id, "op": "invalidate" })).ok());
     }
 
+    /// Is the stream alive? A ping that could not even be written because reads are waiting (not fatal) is skipped:
+    /// those reads are the proof, and a busy stream is not a dead one.
     fn ping(&self) -> bool {
         match self.send(|id| serde_json::to_string(&json!({ "id": id, "op": "ping" })).ok()) {
             Ok(receiver) => matches!(receiver.recv_timeout(PING_TIMEOUT), Ok(Reply::Pong)),
-            Err(_) => false,
+            Err(unanswered) => !unanswered.fatal,
         }
     }
 
@@ -604,6 +606,8 @@ impl Default for StateStreamState {
     }
 }
 
+/// The window the page events go to: the app's own, like the other events of this kind.
+const MAIN_WINDOW: &str = "main";
 pub(crate) const STATUS_EVENT: &str = "state-stream://status";
 pub(crate) const TOPIC_EVENT: &str = "state-stream://event";
 
@@ -628,7 +632,7 @@ impl StateStreamState {
             _ => false,
         };
         if changed {
-            let _ = app.emit(STATUS_EVENT, StatusReply { state: next, since_ms: 0 });
+            let _ = app.emit_to(MAIN_WINDOW, STATUS_EVENT, StatusReply { state: next, since_ms: 0 });
         }
     }
 
@@ -800,7 +804,7 @@ fn open_session(app: &tauri::AppHandle, scope: &AccountScope, wrapper: &Path, ru
     let (hello_sender, hello_receiver) = mpsc::channel();
     let events_app = app.clone();
     let sink: Sink = Arc::new(move |event| {
-        let _ = events_app.emit(TOPIC_EVENT, event);
+        let _ = events_app.emit_to(MAIN_WINDOW, TOPIC_EVENT, event);
     });
     let ended_app = app.clone();
     let reader_session = Arc::clone(&session);
@@ -1227,6 +1231,16 @@ done"#
         }
 
         #[test]
+        fn a_ping_that_finds_the_stream_full_is_skipped_and_a_dead_stream_fails_it() {
+            let silent = format!("printf '%s\\n' '{HELLO}'; cat >/dev/null");
+            let open = open(&silent, true);
+            let _waiting: Vec<_> = (0..MAX_PENDING).map(|_| open.session.send(|id| StreamRead::AgentsList.request(id)).unwrap()).collect();
+            assert!(open.session.ping(), "six reads wait: the stream is busy, not dead");
+            open.session.close();
+            assert!(!open.session.ping());
+        }
+
+        #[test]
         fn closing_kills_the_exec_and_no_more_than_six_reads_wait_at_once() {
             // a peer that never answers: the sixth ask is written, the seventh is not
             let silent = format!("printf '%s\\n' '{HELLO}'; cat >/dev/null");
@@ -1357,6 +1371,13 @@ done"#
             assert!(at("direct_chat::teardown") < at("state_stream::teardown("), "{function}");
             assert!(at("state_stream::teardown(") < at("forget_write_access_of("), "{function}");
         }
+    }
+
+    #[test]
+    fn the_events_go_to_the_main_window_only() {
+        let code = production();
+        assert_eq!(code.matches("emit_to(MAIN_WINDOW,").count(), 2);
+        assert!(!code.contains(".emit(") && code.contains("const MAIN_WINDOW: &str = \"main\";"));
     }
 
     #[test]
