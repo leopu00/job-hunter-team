@@ -32,16 +32,16 @@ describe("localized desktop error catalog", () => {
     }
   });
 
-  it("ssh_unavailable lists the likely causes and what to check in every language", () => {
+  it("ssh_unavailable is the sentence for an ssh that failed and said nothing, and tells what to check, in every language", () => {
     for (const locale of ERROR_LOCALES) {
       const described = describeError("ssh_unavailable", { locale });
       expect(described.known, locale).toBe(true);
-      // Five causes in the sentence (passphrase or open permissions, wrong
-      // user, unauthorized key, closed port, timeout), not just "check the VPS".
-      expect(described.text.split(/[,;:]/).length, locale).toBeGreaterThanOrEqual(5);
+      // The causes ssh names (key, refused connection, unreachable address, changed host key) have their own codes
+      // and sentences now; this one is for the rest, and its action still lists what to check, not just "check the VPS".
+      expect(described.action.split(/[,;:]/).length, locale).toBeGreaterThanOrEqual(3);
       expect(described.action.length, locale).toBeGreaterThan(80);
     }
-    expect(describeError("ssh_unavailable", { locale: "it" }).text).toContain("passphrase");
+    expect(describeError("ssh_unavailable", { locale: "en" }).text).toContain("cannot tell why");
   });
 
   it("ssh_client_missing has its own sentence and says to install OpenSSH in every language", () => {
