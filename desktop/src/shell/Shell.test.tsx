@@ -6,8 +6,10 @@ import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { signOut } from "../lib/supabase";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
 import { currentLocation, matchRoute, navigate } from "./router";
-import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "./routes";
-import { desktopLinks } from "./desktop-links";
+import { READ_ONLY_ROUTES, ROUTES } from "./routes";
+import { ACCOUNT_MENU_ITEMS, NAV_ITEMS, READ_ONLY_ACCOUNT_MENU_ITEMS, READ_ONLY_NAV_ITEMS } from "./nav-items";
+import { NAV_TEXT } from "./nav.i18n";
+import { redirectFor } from "./redirects";
 import { THEME_STORAGE_KEY } from "./theme";
 import { downgradeExistingTeamToReadOnly, enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { announceRestoredWriteAccess, reportWriteAccessRemovalFailed, writeAccessNotice } from "../lib/write-access-restored";
@@ -48,6 +50,12 @@ afterEach(() => {
   document.documentElement.removeAttribute("data-theme");
 });
 
+/** The ways out and the person\'s pages are in the account menu: open it, then the item. */
+async function accountMenu(user = userEvent.setup()) {
+  await user.click(screen.getByTestId("account-menu-button"));
+  return within(screen.getByRole("menu", { name: /Menu dell'account|Account menu/ }));
+}
+
 describe("Shell navbar language", () => {
   afterEach(() => localStorage.removeItem("jht-lang"));
 
@@ -59,9 +67,12 @@ describe("Shell navbar language", () => {
     expect(screen.getByRole("navigation", { name: "App navigation" })).toBeInTheDocument();
     const actions = screen.getByTestId("navbar-actions");
     expect(within(actions).getByRole("button", { name: "Refresh" })).toBeInTheDocument();
-    expect(within(actions).getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    const menu = await accountMenu();
+    expect(menu.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+    expect(menu.getByRole("menuitem", { name: "Settings" })).toBeInTheDocument();
+    expect(menu.getByRole("menuitem", { name: "Profile" })).toBeInTheDocument();
     expect(within(actions).queryByRole("button", { name: "Aggiorna" })).not.toBeInTheDocument();
-    expect(within(actions).queryByRole("button", { name: "Disconnetti" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Disconnetti" })).not.toBeInTheDocument();
   });
 });
 
@@ -69,11 +80,12 @@ describe("Shell", () => {
   it("has a button that leaves the app apart from the one that leaves the account, and it asks the exit dialog", async () => {
     navigate("/", { replace: true });
     render(<Shell />);
-    const actions = within(await screen.findByTestId("navbar-actions"));
-    expect(actions.getByRole("button", { name: "Disconnetti" })).toBeInTheDocument();
+    await screen.findByTestId("navbar-actions");
+    const menu = await accountMenu();
+    expect(menu.getByRole("menuitem", { name: "Disconnetti" })).toBeInTheDocument();
     const asked = vi.fn();
     window.addEventListener(EXIT_OPEN_EVENT, asked);
-    await userEvent.setup().click(actions.getByRole("button", { name: "Esci da Job Hunter Team" }));
+    await userEvent.setup().click(menu.getByRole("menuitem", { name: "Esci da Job Hunter Team" }));
     window.removeEventListener(EXIT_OPEN_EVENT, asked);
     expect(asked).toHaveBeenCalledOnce();
     expect(signOut).not.toHaveBeenCalled();
@@ -105,8 +117,12 @@ describe("Shell", () => {
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
     // The labels come from the web's dictionary once /api/i18n answers "it".
     await within(nav).findByRole("link", { name: "Posizioni" });
-    for (const label of ["Dashboard", "Mappa", "Swipe", "Team", "Messaggi", "Profilo"]) {
+    for (const label of ["Dashboard", "Mappa", "Swipe", "Team", "Ufficio", "Messaggi"]) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+    }
+    // the person's own pages are in the account menu, not in the bar
+    for (const label of ["Profilo", "Impostazioni", "Guida", "Posta", "Agenti"]) {
+      expect(within(nav).queryByRole("link", { name: label })).not.toBeInTheDocument();
     }
     await user.click(within(nav).getByRole("link", { name: "Mappa" }));
     expect(currentLocation().path).toBe("/map");
@@ -153,7 +169,7 @@ describe("Shell", () => {
     render(<Shell />);
     await screen.findByRole("heading", { name: "Dashboard" });
 
-    const button = screen.getByRole("button", { name: "Disconnetti" });
+    const button = (await accountMenu()).getByRole("menuitem", { name: "Disconnetti" });
     expect(button).toHaveAttribute("title", SHELL_TEXT.it.signOutNote);
     // True for a team on this computer and on a VPS alike: it says what is not deleted, not where it is.
     expect(SHELL_TEXT.it.signOutNote).toMatch(/non vengono cancellati/);
@@ -167,10 +183,10 @@ describe("Shell", () => {
     render(<Shell />);
     await screen.findByRole("heading", { name: "Dashboard" });
 
-    await user.click(screen.getByRole("button", { name: "Disconnetti" }));
+    await user.click((await accountMenu(user)).getByRole("menuitem", { name: "Disconnetti" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta bloccato/i);
-    expect(screen.getByRole("button", { name: "Disconnetti" })).toBeEnabled();
+    expect((await accountMenu(user)).getByRole("menuitem", { name: "Disconnetti" })).toBeEnabled();
   });
 
   it("uses the local logout boundary and keeps Shell mounted if its teardown fails", async () => {
@@ -180,12 +196,12 @@ describe("Shell", () => {
     render(<Shell onLogout={localLogout} />);
     await screen.findByRole("heading", { name: "Dashboard" });
 
-    await user.click(screen.getByRole("button", { name: "Disconnetti" }));
+    await user.click((await accountMenu(user)).getByRole("menuitem", { name: "Disconnetti" }));
 
     expect(localLogout).toHaveBeenCalledOnce();
     expect(signOut).not.toHaveBeenCalled();
     expect(await screen.findByRole("alert")).toHaveTextContent(/runtime resta bloccato/i);
-    expect(screen.getByRole("button", { name: "Disconnetti" })).toBeEnabled();
+    expect((await accountMenu(user)).getByRole("menuitem", { name: "Disconnetti" })).toBeEnabled();
   });
 
   it.each([820, 480])(
@@ -208,7 +224,7 @@ describe("Shell", () => {
       expect(links.className).toMatch(/overflow-x-auto/);
       expect(actions.className).toMatch(/flex-shrink-0/);
       expect(within(actions).getByRole("button", { name: "Aggiorna" })).toBeInTheDocument();
-      expect(within(actions).getByRole("button", { name: "Disconnetti" })).toBeInTheDocument();
+      expect(within(actions).getByTestId("account-menu-button")).toBeInTheDocument();
       expect(within(nav).queryByRole("link", { name: /Team locale/i })).not.toBeInTheDocument();
     },
   );
@@ -248,7 +264,7 @@ describe("Shell", () => {
       const inStrip = within(strip).getAllByRole("link").filter((link) => (link as HTMLElement).style.display !== "none");
       expect(inStrip.length).toBeLessThan(within(strip).getAllByRole("link", { hidden: true }).length);
       // the controls stay where they were
-      expect(within(screen.getByTestId("navbar-actions")).getByRole("button", { name: "Disconnetti" })).toBeInTheDocument();
+      expect(within(screen.getByTestId("navbar-actions")).getByTestId("account-menu-button")).toBeInTheDocument();
 
       await userEvent.setup().click(more);
       const inMenu = within(screen.getByRole("menu")).getAllByRole("menuitem");
@@ -287,41 +303,56 @@ describe("Shell", () => {
     expect(document.documentElement).toHaveAttribute("data-jht-theme", "ocean");
   });
 
-  it("adds the desktop's own pages after the web's links, and routes to them", async () => {
+  it("keeps the bar to the positions and the team, and the person's pages in the account menu, and routes to all of them", async () => {
     navigate("/dashboard", { replace: true });
     render(<Shell />);
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    for (const { href, label } of desktopLinks("it")) {
-      expect(within(nav).getByRole("link", { name: label })).toHaveAttribute("href", "#" + href);
-      expect(matchRoute(ROUTES, href)?.route.path).toBe(href);
+    // every destination of the bar has a page, except the ones whose page another piece of work brings (Budget)
+    for (const item of NAV_ITEMS.filter((entry) => entry.href !== "/budget")) {
+      expect(matchRoute(ROUTES, item.href)?.route.path).toBe(item.href);
     }
-    expect(desktopLinks("it").map((l) => l.label)).toEqual(["Agenti", "Ufficio", "Posta", "Impostazioni", "Guida"]);
+    expect(NAV_ITEMS.map((item) => item.href)).toEqual(["/dashboard", "/positions", "/swipe", "/map", "/team", "/office", "/budget", "/messages"]);
+    const links = within(screen.getByTestId("navbar-links")).getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/team", "#/office", "#/messages"].filter((href) => href !== "#/budget"));
+    // Budget appears the day its page is in the routes: until then no link goes nowhere
     expect(within(nav).queryByRole("link", { name: "Budget" })).not.toBeInTheDocument();
-    expect(desktopLinks("it").some((link) => link.href === "/budget")).toBe(false);
     expect(matchRoute(ROUTES, "/budget")).toBeNull();
+    const menu = await accountMenu();
+    for (const item of ACCOUNT_MENU_ITEMS) {
+      // Settings is the page of its sections: its own address goes on to one of them
+      if (item.href === "/settings") expect(redirectFor(item.href, "")).toMatch(/^\/settings\//);
+      else expect(matchRoute(ROUTES, item.href)?.route.path).toBe(item.href);
+    }
+    expect(menu.getAllByRole("menuitem").map((entry) => entry.textContent)).toEqual(["Profilo", "Posta", "Impostazioni", "Guida", "Esci da Job Hunter Team", "Disconnetti"]);
+    expect(menu.getByRole("menuitem", { name: "Impostazioni" })).toHaveAttribute("href", "#/settings");
   });
 
-  it("names the desktop's own pages in the app's language, as the mail page names itself", () => {
-    expect(desktopLinks("en").map((l) => l.label)).toEqual(["Agents", "Office", "Mail", "Settings", "Help"]);
-    expect(desktopLinks("de").map((l) => l.label)).toEqual(["Agenten", "Büro", "E-Mail", "Einstellungen", "Hilfe"]);
+  it("names the account menu's pages in the app's language, as the pages name themselves", () => {
+    expect(NAV_TEXT.en).toMatchObject({ office: "Office", mail: "Mail", settings: "Settings", help: "Help", profile: "Profile" });
+    expect(NAV_TEXT.de).toMatchObject({ office: "Büro", mail: "E-Mail", settings: "Einstellungen", help: "Hilfe" });
     for (const locale of ["it", "en", "de", "fr", "es", "pt", "hu"] as const)
-      expect(new Set(desktopLinks(locale).map((l) => l.href))).toEqual(new Set(["/agents", "/office", "/mail", "/settings", "/help"]));
+      for (const word of Object.values(NAV_TEXT[locale])) expect(word.trim().length, locale).toBeGreaterThan(0);
   });
 
   it("has the settings and help pages in the full shell and in the read-only view of an existing team", async () => {
-    for (const path of ["/settings", "/help"]) {
-      expect(matchRoute(ROUTES, path)?.route.path).toBe(path);
-      expect(matchRoute(READ_ONLY_ROUTES, path)?.route.path).toBe(path);
-      expect(READ_ONLY_NAV.some((entry) => entry.href === path)).toBe(true);
+    for (const path of ["/settings/appearance", "/help"]) {
+      expect(matchRoute(ROUTES, path)).not.toBeNull();
+      expect(matchRoute(READ_ONLY_ROUTES, path)).not.toBeNull();
     }
+    for (const path of ["/settings", "/help"]) {
+      expect(READ_ONLY_ACCOUNT_MENU_ITEMS.some((entry) => entry.href === path)).toBe(true);
+    }
+    expect(READ_ONLY_NAV_ITEMS.map((entry) => entry.href)).toEqual(["/dashboard", "/positions", "/map", "/team", "/office"]);
 
     enterExistingTeamReadOnly(true, null);
     try {
       navigate("/dashboard", { replace: true });
       render(<Shell />);
-      const nav = await screen.findByRole("navigation", { name: "Navigazione app" });
-      expect(within(nav).getByRole("link", { name: "Impostazioni" })).toHaveAttribute("href", "#/settings");
-      expect(within(nav).getByRole("link", { name: "Guida" })).toHaveAttribute("href", "#/help");
+      await screen.findByRole("navigation", { name: "Navigazione app" });
+      const menu = await accountMenu();
+      expect(menu.getByRole("menuitem", { name: "Impostazioni" })).toHaveAttribute("href", "#/settings");
+      expect(menu.getByRole("menuitem", { name: "Guida" })).toHaveAttribute("href", "#/help");
+      expect(menu.queryByRole("menuitem", { name: "Posta" })).not.toBeInTheDocument();
     } finally {
       leaveExistingTeamReadOnly();
     }

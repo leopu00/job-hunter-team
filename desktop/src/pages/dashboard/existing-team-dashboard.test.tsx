@@ -90,7 +90,7 @@ describe("Dashboard on an existing team read only", () => {
     expect(screen.getByText("Candidature inviate")).toBeInTheDocument();
     // the navigation of that view
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Mappa", "Posizioni", "Squadra", "Profilo", "Ufficio", "Agenti", "Impostazioni", "Guida"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["JHT", "Dashboard", "Posizioni", "Mappa", "Squadra", "Ufficio"]);
     // nothing from the cloud, no write
     expect(fake.current!.calls).toEqual([]);
     expect(fake.current!.rpc).toEqual([]);
@@ -274,9 +274,11 @@ describe("Dashboard on an existing team connected in full", () => {
     expect(fake.current!.calls).toEqual([]);
     expect(fake.current!.rpc).toEqual([]);
     expect(screen.queryByTestId("existing-team-readonly-banner")).not.toBeInTheDocument();
-    // no way «back» to a setup that is done, and the team's own pages stay in the navigation
+    // no way «back» to a setup that is done, and the team's own pages stay reachable: the bar, and the account menu
     expect(screen.queryByRole("button", { name: /torna alla configurazione/i })).not.toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getByRole("link", { name: "Agenti" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Squadra" })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByTestId("account-menu-button"));
+    expect(screen.getByRole("menuitem", { name: "Profilo" })).toBeInTheDocument();
   });
 });

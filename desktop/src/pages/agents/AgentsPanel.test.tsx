@@ -7,7 +7,8 @@ import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/
 import { resetStateStreamForTests, startStateStream } from "../../lib/state-stream";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
 import { navigate } from "../../shell/router";
-import { READ_ONLY_NAV, READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
+import { READ_ONLY_NAV_ITEMS } from "../../shell/nav-items";
+import { READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
 import Shell from "../../shell/Shell";
 import { createPermissiveSupabase } from "../../test-support/permissive-supabase";
 import type { Locale } from "@/i18n/config";
@@ -115,7 +116,8 @@ describe("«Agenti», the agents' control panel", () => {
   it("is the agents page of the full shell and of the read-only view", () => {
     expect(ROUTES.find((r) => r.path === "/agents")?.page).toBe(AgentsPanel);
     expect(READ_ONLY_ROUTES.find((r) => r.path === "/agents")?.page).toBe(AgentsPanel);
-    expect(READ_ONLY_NAV.map((n) => n.href)).toContain("/agents");
+    // no link of its own in the bar: the panel is the Team destination's (it stays lit there)
+    expect(READ_ONLY_NAV_ITEMS.find((n) => n.also?.includes("/agents"))?.href).toBe("/team");
   });
 
   it("lists who needs the person first, then who works, the idle, and the off ones last", async () => {
@@ -344,7 +346,8 @@ describe("«Agenti», the agents' control panel", () => {
       expect(screen.queryByTestId(id)).toBeNull();
     }
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
-    expect(within(nav).getByRole("link", { name: "Agenti" })).toHaveAttribute("aria-current", "page");
+    // the panel is part of the Team destination: that link stays lit on it
+    expect(within(nav).getByRole("link", { name: "Squadra" })).toHaveAttribute("aria-current", "page");
     expect(ops().every((r) => ["list", "team", "screen", "history"].includes(String(r.op)))).toBe(true);
     expect(fake.current!.calls).toEqual([]);
   });

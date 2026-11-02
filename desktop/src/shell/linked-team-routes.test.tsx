@@ -1,12 +1,10 @@
-import { readFileSync } from "node:fs";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fixtureData } from "../pages/dashboard/dashboard-fixture";
 import { loadDashboard } from "../pages/dashboard/load-dashboard";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../lib/existing-team-readonly";
 import { installApiBridge, notInDesktop, shellApi } from "./api-bridge";
-import { currentLocation, matchRoute, navigate } from "./router";
-import { READ_ONLY_ROUTES } from "./routes";
+import { currentLocation, navigate } from "./router";
 import Shell from "./Shell";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
@@ -35,19 +33,20 @@ afterEach(() => {
 });
 
 describe("the settings pages of a team on a linked VPS", () => {
-  it("opens the hours and the models on a team connected in full, and stays on their address", async () => {
-    for (const [path, title] of [["/settings/hours", "Pagina orari"], ["/settings/team", "Pagina modelli"]] as const) {
+  it("opens the hours and the models on a team connected in full, in the Team section, from their old addresses too", async () => {
+    for (const path of ["/settings/hours", "/settings/team"]) {
       enterExistingTeamReadOnly(true, null, "vps-1", true);
       navigate(path, { replace: true });
       const { unmount } = render(<Shell />);
-      expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
-      expect(currentLocation().path).toBe(path);
+      expect(await screen.findByRole("heading", { name: "Pagina orari" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Pagina modelli" })).toBeInTheDocument();
+      expect(currentLocation().path).toBe("/settings/team");
       unmount();
       leaveExistingTeamReadOnly();
     }
   });
 
-  it("on the read-only link says why they do not open, with the reason, and does not leave the address", async () => {
+  it("on the read-only link says why they do not open, with the reason, and stays in the Team section", async () => {
     for (const path of ["/settings/hours", "/settings/team"]) {
       enterExistingTeamReadOnly(true, null, "vps-1");
       navigate(path, { replace: true });
@@ -56,18 +55,9 @@ describe("the settings pages of a team on a linked VPS", () => {
       expect(gate).toHaveTextContent("Solo lettura: questa connessione non modifica i dati.");
       expect(gate).toHaveTextContent("Per cambiarli usa «Collega in scrittura»");
       expect(screen.queryByRole("heading", { name: /Pagina (orari|modelli)/ })).not.toBeInTheDocument();
-      expect(currentLocation().path).toBe(path);
+      expect(currentLocation().path).toBe("/settings/team");
       unmount();
       leaveExistingTeamReadOnly();
     }
-  });
-
-  it("has a route for every address the settings page and its team card send the person to", () => {
-    const sources = ["../pages/settings/index.tsx", "../pages/settings/TeamCard.tsx"].map((file) =>
-      readFileSync(new URL(file, import.meta.url), "utf8"),
-    );
-    const targets = new Set(sources.flatMap((source) => [...source.matchAll(/navigate\("([^"]+)"\)/g)].map((match) => match[1])));
-    expect(targets.size).toBeGreaterThanOrEqual(6);
-    for (const target of targets) expect(matchRoute(READ_ONLY_ROUTES, target), target).not.toBeNull();
   });
 });

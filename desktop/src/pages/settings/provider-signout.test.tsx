@@ -141,7 +141,7 @@ describe("the Provider card of the Settings page", () => {
       });
       render(
         <ProviderSetupContext.Provider value={{ open: vi.fn() }}>
-          <SettingsPage params={{}} search={new URLSearchParams()} />
+          <SettingsPage params={{ section: "team" }} search={new URLSearchParams()} />
         </ProviderSetupContext.Provider>,
       );
       const card = screen.getByTestId("settings-provider");
@@ -162,7 +162,7 @@ describe("the Provider card of the Settings page", () => {
       native.isTauri.mockReturnValue(false);
       render(
         <ProviderSetupContext.Provider value={{ open: vi.fn() }}>
-          <SettingsPage params={{}} search={new URLSearchParams()} />
+          <SettingsPage params={{ section: "team" }} search={new URLSearchParams()} />
         </ProviderSetupContext.Provider>,
       );
       await screen.findByTestId("settings-provider");

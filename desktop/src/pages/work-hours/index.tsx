@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { BackToSettings, PageTitle } from "../settings/embedded";
 import WorkHoursPicker from "@/app/components/WorkHoursPicker";
 import { ToastProvider } from "@/app/components/Toast";
 import { appLocale } from "../../lib/app-locale";
@@ -10,7 +11,6 @@ import {
   type TeamSettings,
   type WorkingHours,
 } from "../../lib/team-settings-native";
-import { navigate } from "../../shell/router";
 import type { PageProps } from "../types";
 import BurstControl from "./BurstControl";
 import WorkStatsCard from "./WorkStatsCard";
@@ -58,16 +58,10 @@ function WorkHours() {
 
   return (
     <section className="max-w-3xl mx-auto px-5 py-8 flex flex-col gap-4" aria-labelledby="work-hours-title">
-      <button
-        type="button"
-        onClick={() => navigate("/settings")}
-        className="self-start text-[11px] tracking-[0.14em] uppercase text-[var(--color-dim)] hover:text-[var(--color-bright)]"
-      >
-        ← {t.back}
-      </button>
-      <h1 id="work-hours-title" className="text-[15px] font-semibold text-[var(--color-bright)]">
+      <BackToSettings label={t.back} />
+      <PageTitle id="work-hours-title" className="text-[15px] font-semibold text-[var(--color-bright)]">
         {t.title}
-      </h1>
+      </PageTitle>
       {loaded.kind === "loading" && (
         <p role="status" className="text-[12px] text-[var(--color-muted)]">
           {t.loading}
