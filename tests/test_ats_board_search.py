@@ -255,6 +255,41 @@ def test_the_pass_is_written_to_the_log_with_the_status_the_board_gave(tmp_path,
     monkeypatch.setattr(ab, "fetch", answer(b"", 403))
     assert ab.main(["--provider", "greenhouse", "--board", "wolt", "--country", "se", "--log"]) == 3
     lines = [json.loads(l) for l in (tmp_path / "logs" / "scout-passes.jsonl").read_text().splitlines()]
-    assert [(l["source"], l["country"], l["returned"], l["query_kind"], l.get("status")) for l in lines] == [
-        ("greenhouse", "se", 1, "broad", None), ("greenhouse", "se", 0, "other", "closed")]
-    assert "query_hash" in lines[0]
+    passes = [l for l in lines if l["kind"] == "pass"]
+    assert [(l["source"], l["country"], l["returned"], l["query_kind"], l.get("status")) for l in passes] == [
+        ("greenhouse", "se", 2, "broad", None), ("greenhouse", "se", 0, "other", "closed")]       # what the board GAVE: all its ads
+    assert "query_hash" in passes[0]
+    assert [(l["outcome"], l["count"]) for l in lines if l["kind"] == "candidate"] == [("area", 1)]
+
+
+def test_every_ad_read_is_accounted_for_by_a_reason_or_left_for_the_scout_to_log(tmp_path, monkeypatch):
+    """Field data of 02/11: 1080 ads read on a portal, 3 counted. Here the tool itself says why it left the others out, in ONE
+    line per reason, and what is still unexplained in the report is exactly the ads handed back to the Scout."""
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setenv("JHT_AGENT_NAME", "scout-1")
+    jobs = ([("Marketing Coordinator %d" % i, "Stockholm") for i in range(3)] + [("Senior Engineer %d" % i, "Sweden") for i in range(5)] +
+            [("Barista %d" % i, "Stockholm, Sweden") for i in range(4)] + [("Sales %d" % i, "London, UK") for i in range(10)] + [("Anywhere", "Remote")])
+    monkeypatch.setattr(ab, "fetch", answer(gh(*jobs)))
+    monkeypatch.setattr(ab, "table", lambda: TABLE)
+    assert ab.main(["--provider", "greenhouse", "--board", "wolt", "--country", "se", "--log", "--title-any", "coordinator,engineer",
+                    "--drop-seniority", "senior"]) == 0
+    lines = [json.loads(l) for l in (tmp_path / "logs" / "scout-passes.jsonl").read_text().splitlines()]
+    assert {l["outcome"]: l["count"] for l in lines if l["kind"] == "candidate"} == {"area": 11, "role": 4, "seniority": 5}
+    assert all("opened" in l and l["opened"] is False for l in lines if l["kind"] == "candidate")
+    env = {"PATH": "/usr/bin:/bin", "JHT_HOME": str(tmp_path), "PYTHONDONTWRITEBYTECODE": "1"}
+    done = subprocess.run([sys.executable, "-I", str(SKILLS / "scout_pass_report.py"), "--json", "--no-tokens"], env=env, capture_output=True,
+                          text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    (group,) = json.loads(done.stdout)["summary"]
+    assert group["returned"] == 23 and group["unexplained"] == 3                    # the 3 coordinators the Scout still has to log
+    assert group["dropped"]["area"] == 11 and group["dropped"]["role"] == 4 and group["dropped"]["seniority"] == 5
+
+
+def test_a_pass_without_ads_left_out_writes_no_candidate_line(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setenv("JHT_AGENT_NAME", "scout-1")
+    monkeypatch.setattr(ab, "fetch", answer(gh(("Marketing Coordinator", "Stockholm"))))
+    monkeypatch.setattr(ab, "table", lambda: TABLE)
+    assert ab.main(["--provider", "greenhouse", "--board", "wolt", "--country", "se", "--log"]) == 0
+    lines = [json.loads(l) for l in (tmp_path / "logs" / "scout-passes.jsonl").read_text().splitlines()]
+    assert [l["kind"] for l in lines] == ["pass"]

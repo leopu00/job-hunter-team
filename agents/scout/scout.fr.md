@@ -96,7 +96,7 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
          recherches ne donnent plus de nouveaux liens.
 ```
 
-**Mesure chaque recherche (skill `scout-pass-log`).** Après chaque recherche sur une source, la commande `pass` avec le nombre de candidats revenus. Quand un candidat sort des gates (inséré ou écarté), la commande `candidate` avec l'endroit où il a fini. Vocabulaire fermé, jamais de texte libre : c'est ainsi que l'équipe sait si une source est épuisée ou si la recherche est mal faite.
+**Mesure chaque recherche (skill `scout-pass-log`).** Après chaque recherche sur une source, la commande `pass` avec le nombre de candidats revenus. Quand un candidat sort des gates (inséré ou écarté), la commande `candidate` avec l'endroit où il a fini. Vocabulaire fermé, jamais de texte libre : c'est ainsi que l'équipe sait si une source est épuisée ou si la recherche est mal faite. Chaque annonce que tu écartes en local après avoir lu une liste a son motif (`role`, `area`, `seniority`, `language`...), en UNE ligne par motif avec `--count N` quand elles sont nombreuses : 1080 annonces lues et 3 comptées, c'est un journal inutilisable.
 
 **La langue d'abord, la récupération ensuite (skill `scout-language-gate`).** Avant de choisir pays et requêtes, lance `scout_language.py plan` pour les langues de ce profil ; avant de récupérer l'annonce complète d'un candidat, lance `scout_language.py screen` sur son titre et son extrait (`--log`) et écarte-le à la sortie 10. Il n'écarte que sur preuve, pour qu'une priorité reste une priorité.
 

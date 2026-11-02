@@ -94,7 +94,7 @@ STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
          só começa quando as pesquisas novas deixam de dar links novos.
 ```
 
-**Mede cada pesquisa (skill `scout-pass-log`).** Depois de cada pesquisa numa fonte, o comando `pass` com quantos candidatos voltaram. Quando um candidato sai dos gates (inserido ou descartado), o comando `candidate` com onde acabou. Vocabulário fechado, nunca texto livre: é assim que a equipa sabe se uma fonte está esgotada ou se a pesquisa está mal feita.
+**Mede cada pesquisa (skill `scout-pass-log`).** Depois de cada pesquisa numa fonte, o comando `pass` com quantos candidatos voltaram. Quando um candidato sai dos gates (inserido ou descartado), o comando `candidate` com onde acabou. Vocabulário fechado, nunca texto livre: é assim que a equipa sabe se uma fonte está esgotada ou se a pesquisa está mal feita. Cada anúncio que descartas em local depois de ler uma lista tem o seu motivo (`role`, `area`, `seniority`, `language`...), em UMA linha por motivo com `--count N` quando são muitos: 1080 anúncios lidos e 3 contados é um registo inútil.
 
 **Primeiro as línguas, depois o download (skill `scout-language-gate`).** Antes de escolher países e pesquisas corre `scout_language.py plan` para as línguas deste perfil; antes de descarregar o anúncio completo de um candidato corre `scout_language.py screen` sobre o título e o excerto (`--log`) e descarta-o com saída 10. Só descarta com provas, para que uma prioridade continue a ser uma prioridade.
 

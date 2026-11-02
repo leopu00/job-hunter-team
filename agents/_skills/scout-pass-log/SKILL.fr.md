@@ -25,7 +25,7 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 
 ## Vocabulaire fermé
 
-`--source` : le même slug que pour `--source` de l'INSERT (`linkedin`, `greenhouse`, ...). `--country` : deux lettres (`nl`), ou `multi` / `remote`. `--query-kind` : `role` · `role_language` · `company` · `generic` · `other`. `--outcome` : `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `other`.
+`--source` : le même slug que pour `--source` de l'INSERT (`linkedin`, `greenhouse`, ...). `--country` : deux lettres (`nl`), ou `multi` / `remote`. `--query-kind` : `role` · `role_language` · `broad` · `synonym` · `level` · `city` · `company` · `generic` · `other`. `--outcome` : `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `role` · `area` · `other`.
 
 ## Règles
 
@@ -33,3 +33,4 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 - S'il est refusé, corrige la valeur et rappelle. Ne saute jamais la recherche ou le candidat à cause de cela.
 - `language` est le résultat d'un candidat que tu écartes parce que l'annonce exige une langue que l'utilisateur ne parle pas, vue dans la liste ou dans la JD.
 - Un appel par recherche et un par candidat, dans le même appel shell que le gate qui a décidé, quand tu peux.
+- Chaque annonce que tu écartes en local après avoir lu une liste a son motif dans le journal, jamais le silence : titre hors des rôles du profil → `role`, lieu hors de ses zones → `area`, et les autres (`seniority`, `language`, `experience`, `domain`, `work_auth`). Pour beaucoup d'annonces au même motif ne fais PAS un appel par annonce : `candidate --source S --country CC --outcome role --count 640` est UNE ligne qui en vaut 640 (de 1 à 100000 ; jamais avec `inserted` ni avec `--opened`, qui est une ligne chacune). Un portail qui répond 403, un mur de connexion ou 410 : `pass ... --returned 0 --status closed` (`gone` pour le 410, `empty` pour une liste vide). La colonne `unexpl` du rapport est ce que le portail a renvoyé et que personne n'a expliqué : elle doit tomber à 0.

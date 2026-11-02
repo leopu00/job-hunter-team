@@ -68,3 +68,18 @@ def test_the_commands_the_skill_names_exist_in_the_tools():
         assert '"%s"' % status in log
     skill = (REPO_ROOT / "agents" / "_skills" / "scout-coverage" / "SKILL.md").read_text(encoding="utf-8")
     assert not re.search(r"(?i)\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", skill)       # no address in an example
+
+
+@pytest.mark.parametrize("suffix", SUFFIXES)
+def test_every_scout_prompt_and_pass_log_skill_say_every_local_drop_gets_its_reason_in_bulk(suffix):
+    """Field data of 02/11: 1080 ads read on a portal and 3 counted. The log has the reasons and a bulk line; the Scout must use them."""
+    prompt = _prompt(suffix)
+    paragraph = next(l for l in prompt.split("\n") if l.startswith("**") and "`scout-pass-log`" in l)
+    for needle in ("`role`", "`area`", "--count N", "1080"):
+        assert needle in paragraph, "%s: %r" % (suffix or "en", needle)
+    skill = (REPO_ROOT / "agents" / "_skills" / "scout-pass-log" / ("SKILL%s.md" % suffix)).read_text(encoding="utf-8")
+    for needle in ("--outcome role --count 640", "--status closed", "unexpl", "`role` \u00b7 `area`", "`broad`", "100000"):
+        assert needle in skill, "%s: %r" % (suffix or "en", needle)
+    log = (REPO_ROOT / "shared" / "skills" / "scout_pass_log.py").read_text(encoding="utf-8")
+    for outcome in ("role", "area"):
+        assert '"%s"' % outcome in log

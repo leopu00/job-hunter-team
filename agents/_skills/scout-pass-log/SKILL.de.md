@@ -25,7 +25,7 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 
 ## Geschlossenes Vokabular
 
-`--source`: derselbe Slug wie bei `--source` des INSERT (`linkedin`, `greenhouse`, ...). `--country`: zwei Buchstaben (`nl`) oder `multi` / `remote`. `--query-kind`: `role` · `role_language` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `other`.
+`--source`: derselbe Slug wie bei `--source` des INSERT (`linkedin`, `greenhouse`, ...). `--country`: zwei Buchstaben (`nl`) oder `multi` / `remote`. `--query-kind`: `role` · `role_language` · `broad` · `synonym` · `level` · `city` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `role` · `area` · `other`.
 
 ## Regeln
 
@@ -33,3 +33,4 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 - Bei einer Ablehnung den Wert korrigieren und erneut aufrufen. Nie deshalb die Suche oder den Kandidaten überspringen.
 - `language` ist das Ergebnis für einen Kandidaten, den du verwirfst, weil das Inserat eine Sprache verlangt, die der Nutzer nicht spricht, ob in der Liste oder in der JD gesehen.
 - Ein Aufruf pro Suche und einer pro Kandidat, möglichst im selben Shell-Aufruf wie das Gate, das entschieden hat.
+- Jede Anzeige, die du nach dem Lesen einer Liste lokal verwirfst, bekommt ihren Grund im Log, nie Schweigen: Titel außerhalb der Rollen des Profils → `role`, Ort außerhalb seiner Gebiete → `area`, dazu die übrigen (`seniority`, `language`, `experience`, `domain`, `work_auth`). Für viele Anzeigen mit demselben Grund NICHT einmal pro Anzeige aufrufen: `candidate --source S --country CC --outcome role --count 640` ist EINE Zeile für 640 (1 bis 100000; nie mit `inserted` und nie mit `--opened`, das ist je eine Zeile). Ein Portal, das mit 403, einer Login-Wand oder 410 antwortet: `pass ... --returned 0 --status closed` (`gone` bei 410, `empty` bei leerer Liste). Die Report-Spalte `unexpl` ist, was das Portal geliefert hat und niemand erklärt hat: sie muss auf 0 kommen.
