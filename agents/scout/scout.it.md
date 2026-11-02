@@ -94,7 +94,7 @@ STEP 7 → TORNA a STEP 3 per la POSIZIONE SUCCESSIVA (prossimo link
          solo quando le ricerche nuove smettono di dare link nuovi.
 ```
 
-**Misura ogni ricerca (skill `scout-pass-log`).** Dopo ogni ricerca su una fonte, il comando `pass` con quanti candidati sono tornati. Quando un candidato esce dai gate (inserito, o scartato), il comando `candidate` con dove è finito. Vocabolario chiuso, mai testo libero: è così che la squadra capisce se una fonte è esaurita o se la ricerca è fatta male.
+**Misura ogni ricerca (skill `scout-pass-log`).** Dopo ogni ricerca su una fonte, il comando `pass` con quanti candidati sono tornati. Quando un candidato esce dai gate (inserito, o scartato), il comando `candidate` con dove è finito. Vocabolario chiuso, mai testo libero: è così che la squadra capisce se una fonte è esaurita o se la ricerca è fatta male. Ogni annuncio che scarti in locale dopo aver letto una lista ha il suo motivo (`role`, `area`, `seniority`, `language`...), in UNA riga per motivo con `--count N` quando sono molti: 1080 annunci letti e 3 contati è un registro inutilizzabile.
 
 **Prima le lingue, poi il fetch (skill `scout-language-gate`).** Prima di scegliere paesi e query esegui `scout_language.py plan` per le lingue di questo profilo; prima di scaricare l'annuncio completo di un candidato esegui `scout_language.py screen` su titolo e snippet (`--log`) e scartalo con uscita 10. Scarta solo su prove, così una priorità resta una priorità.
 

@@ -25,7 +25,7 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 
 ## Vocabulário fechado
 
-`--source`: o mesmo slug que dás a `--source` do INSERT (`linkedin`, `greenhouse`, ...). `--country`: duas letras (`nl`), ou `multi` / `remote`. `--query-kind`: `role` · `role_language` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `other`.
+`--source`: o mesmo slug que dás a `--source` do INSERT (`linkedin`, `greenhouse`, ...). `--country`: duas letras (`nl`), ou `multi` / `remote`. `--query-kind`: `role` · `role_language` · `broad` · `synonym` · `level` · `city` · `company` · `generic` · `other`. `--outcome`: `inserted` · `duplicate` · `dead_link` · `closed_ad` · `seniority` · `work_auth` · `domain` · `experience` · `language` · `role` · `area` · `other`.
 
 ## Regras
 
@@ -33,3 +33,4 @@ python3 /app/shared/skills/scout_pass_log.py candidate --source greenhouse --cou
 - Se for recusado, corrige o valor e chama de novo. Nunca saltes a pesquisa ou o candidato por causa disso.
 - `language` é o resultado de um candidato que descartas porque o anúncio exige uma língua que o utilizador não fala, vista na lista ou na JD.
 - Uma chamada por pesquisa e uma por candidato, na mesma chamada de shell do gate que decidiu, quando puderes.
+- Cada anúncio que descartas em local depois de ler uma lista tem o seu motivo no registo, nunca silêncio: título fora dos papéis do perfil → `role`, lugar fora das suas áreas → `area`, e os outros (`seniority`, `language`, `experience`, `domain`, `work_auth`). Para muitos anúncios com o mesmo motivo NÃO faças uma chamada por anúncio: `candidate --source S --country CC --outcome role --count 640` é UMA linha que vale 640 (de 1 a 100000; nunca com `inserted` nem com `--opened`, que é uma linha cada). Um portal que responde 403, um muro de login ou 410: `pass ... --returned 0 --status closed` (`gone` para o 410, `empty` para uma lista vazia). A coluna `unexpl` do relatório é o que o portal devolveu e ninguém explicou: tem de chegar a 0.

@@ -95,7 +95,7 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
          amikor az új keresések már nem adnak új linkeket.
 ```
 
-**Mérj minden keresést (skill `scout-pass-log`).** Minden forrásban végzett keresés után a `pass` parancs a visszajött jelöltek számával. Amikor egy jelölt kilép a gate-ekből (beszúrva vagy elvetve), a `candidate` parancs azzal, hol végezte. Zárt szókincs, soha nem szabad szöveg: így tudja meg a csapat, hogy egy forrás kimerült-e, vagy rosszul keresnek.
+**Mérj minden keresést (skill `scout-pass-log`).** Minden forrásban végzett keresés után a `pass` parancs a visszajött jelöltek számával. Amikor egy jelölt kilép a gate-ekből (beszúrva vagy elvetve), a `candidate` parancs azzal, hol végezte. Zárt szókincs, soha nem szabad szöveg: így tudja meg a csapat, hogy egy forrás kimerült-e, vagy rosszul keresnek. Minden hirdetés, amelyet egy lista elolvasása után helyben elvetsz, megkapja az indokát (`role`, `area`, `seniority`, `language`...), sok esetén indoksorozatonként EGY sorban a `--count N`-nel: 1080 elolvasott és 3 megszámolt hirdetés használhatatlan napló.
 
 **Előbb a nyelvek, aztán a letöltés (skill `scout-language-gate`).** Mielőtt országokat és kereséseket választanál, futtasd a `scout_language.py plan`-t a profil nyelveire; mielőtt letöltenéd egy jelölt teljes hirdetését, futtasd a `scout_language.py screen`-t a címére és a kivonatára (`--log`), és 10-es kilépésnél vesd el. Csak bizonyíték alapján vet el, hogy a prioritás prioritás maradjon.
 
