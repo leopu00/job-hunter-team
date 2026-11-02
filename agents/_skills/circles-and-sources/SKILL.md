@@ -68,16 +68,18 @@ Drain a tier completely before moving to the next.
 | Tier | Type                                | Sources                                                                                                       | Notes                                                                                          |
 |------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | 1    | **LinkedIn**                        | `linkedin_check.py` (authenticated profile), `safe_fetch.py`, fallback `linkedin_access.py search`/`fetch-job` (public, no login)                                          | Universal: covers remote, on-site, hybrid. Mandatory first step for every circle. **NEVER `fetch` MCP** — blocked by robots.txt. |
-| 2    | **ATS aggregators**                 | Greenhouse boards, Lever boards, Indeed, Wellfound (ex AngelList)                                            | Work for any work_mode. Cover many companies in one scrape.                                    |
+| 2    | **ATS aggregators**                 | Greenhouse boards, Lever boards, Wellfound (ex AngelList)                                            | Work for any work_mode. One board per company: find the companies first.                                    |
 | 3    | **Niche boards (profile-specific)** | Pick by `work_mode` AND domain                                                                              | (see table below)                                                                              |
 | 4    | **WebSearch + career pages**        | `WebSearch` queries + scrape of company career pages                                                        | Last resort only after tier 1-3 are drained.                                                   |
+
+**Sources that close, and sources with no search.** Indeed and Glassdoor are not searched directly (they answer 403 to an automated reader): their job alerts arrive by email (Email-first sourcing in your prompt). A **403** from any source means it is closed for this pass: go to another source, do not retry, and never look for a way around the protection. The ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) are queried **per company** (its board slug), not as a global search: they have none. Find the companies first (LinkedIn, `WebSearch`, career pages) and read each one's board. The same goes for a Cloudflare challenge or a login wall, and for the sources confirmed closed on a real run: Umantis (403), Climatebase (Cloudflare challenge), JobSearch DK (login wall). If they have email alerts, use those.
 
 ### Tier 3 — choose by work_mode + domain
 
 | Candidate's `work_mode` | Niche boards to consider                                                                                          |
 |-------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `remote`                | Remote.co, WeWorkRemotely, RemoteOK, EURemoteJobs (or regional equivalents)                                       |
-| `on-site` / `hybrid`    | Local / national boards (InfoJobs, Glassdoor regional, Stepstone, Welcome to the Jungle FR, ...)                  |
+| `on-site` / `hybrid`    | Local / national boards (InfoJobs, Stepstone, Welcome to the Jungle FR, ...)                  |
 | `flessibile`            | Combine remote + local                                                                                            |
 | Domain-specific (any)   | Stack-specific niche: PyJobs (Python), GoJobs (Go), Djinni (Eastern Europe / dev), 4dayweek.io (4-day-week), ...   |
 
