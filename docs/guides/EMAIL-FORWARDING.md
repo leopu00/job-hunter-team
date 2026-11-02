@@ -69,7 +69,7 @@ there is treated as a potential lead.
 
 ## 2️⃣ Share the inbox with the team (desktop app)
 
-In the **JHT desktop app**, open **Mail** in the top menu and fill in the
+In the **JHT desktop app**, open **Mail** in the Account menu (top right) and fill in the
 **Save a new app password** form:
 
 | Field | What to put |

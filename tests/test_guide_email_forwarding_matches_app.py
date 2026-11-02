@@ -16,9 +16,9 @@ LANGS = ["en", "it", "es", "fr", "de", "hu", "pt"]
 PAGE = (ROOT / "web/app/docs/guides/email-forwarding/page.i18n.tsx").read_text(encoding="utf-8")
 MD = (ROOT / "docs/guides/EMAIL-FORWARDING.md").read_text(encoding="utf-8")
 MAIL = (ROOT / "desktop/src/pages/mail/mail.i18n.ts").read_text(encoding="utf-8")
-LINKS = (ROOT / "desktop/src/shell/desktop-links.ts").read_text(encoding="utf-8")
+NAV = (ROOT / "desktop/src/shell/nav.i18n.ts").read_text(encoding="utf-8")
+NAV_ITEMS = (ROOT / "desktop/src/shell/nav-items.ts").read_text(encoding="utf-8")
 READONLY = (ROOT / "desktop/src/lib/existing-team-readonly.i18n.ts").read_text(encoding="utf-8")
-ROUTES = (ROOT / "desktop/src/shell/routes.tsx").read_text(encoding="utf-8")
 
 # What the guide said before it followed the app: none of it exists in the app.
 OLD_LABELS = {
@@ -70,10 +70,29 @@ def test_every_label_the_guide_quotes_is_the_apps_own():
             assert label in BLOCKS[lang], (lang, key, label)
 
 
-def test_the_menu_entry_is_the_one_the_app_shows_in_its_top_menu():
-    # the guide says «open Mail in the top menu»: the entry is the page's title
+def nav_labels() -> dict[str, dict[str, str]]:
+    found = {}
     for lang in LANGS:
-        assert re.search(rf'"/mail": \{{.*?\b{lang}: "{re.escape(APP[lang]["title"])}"', LINKS), lang
+        block = re.search(rf"^  {lang}: \{{ (.*?) \}},$", NAV, re.M).group(1)
+        found[lang] = dict(re.findall(r'(\w+): "([^"]*)"', block))
+    return found
+
+
+def test_the_menu_entry_is_the_one_the_app_shows_in_its_account_menu():
+    # the guide says «open Mail in the Account menu»: the entry is the page's title, and the menu has the account's own name
+    labels = nav_labels()
+    for lang in LANGS:
+        assert labels[lang]["mail"] == APP[lang]["title"], lang
+    # Mail is an entry of the account menu (nav-items.ts), not of the bar
+    account_menu = re.search(r"export const ACCOUNT_MENU_ITEMS: NavItem\[\] = \[(.*?)\n\];", NAV_ITEMS, re.S).group(1)
+    assert '"/mail"' in account_menu
+    assert '"/mail"' not in re.search(r"export const NAV_ITEMS: NavItem\[\] = \[(.*?)\n\];", NAV_ITEMS, re.S).group(1)
+
+
+def test_the_guide_names_the_account_menu_the_way_the_app_does():
+    labels = nav_labels()
+    for lang in LANGS:
+        assert plain(labels[lang]["account"]).lower() in BLOCKS[lang].lower(), lang
 
 
 def test_the_old_flow_is_gone_from_the_site_guide():
@@ -90,9 +109,8 @@ def test_the_dedicated_question_is_answered_in_the_guide():
 
 
 def test_the_guide_says_the_mail_entry_is_missing_in_read_only_and_names_the_apps_button():
-    # the read-only menu (READ_ONLY_NAV) has no /mail: a reader on a team opened read only must be told
-    nav = re.search(r"export const READ_ONLY_NAV = \[(.*?)\] as const", ROUTES, re.S).group(1)
-    assert '"/mail"' not in nav
+    # the read-only menu (READ_ONLY_ACCOUNT_MENU_ITEMS) has no /mail: a reader on a team opened read only must be told
+    assert "READ_ONLY_ACCOUNT_MENU_ITEMS: NavItem[] = ACCOUNT_MENU_ITEMS.filter((item) => item.href !== \"/mail\")" in NAV_ITEMS
     texts = {}
     for block in re.finditer(r"^  (\w+): \{\n(.*?)\n  \},", READONLY, re.S | re.M):
         texts[block.group(1)] = dict(re.findall(r'^\s+(\w+): "(.*)",$', block.group(2), re.M))
