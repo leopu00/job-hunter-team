@@ -63,8 +63,8 @@ export const PATROL_EVERY: Partial<Record<AgentRole, number>> = { capitano: 90, 
 /** Whether a status published by the box means the agent is at work (agent_npc.gd backend_status == "working"). */
 export function isTyping(statuses: AgentStatuses | null, uid: string): boolean {
   const status = statuses?.agents[uid.toLowerCase()];
-  // no word from the box about this agent: as before there were statuses, it types
-  return status ? status.status === "working" : true;
+  // no word from the box about this agent: it sits still, the office shows the real work and does not invent it
+  return status ? status.status === "working" : false;
 }
 
 /**
