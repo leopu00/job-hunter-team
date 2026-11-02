@@ -538,13 +538,13 @@ function snapshot(db: Database) {
 }
 
 const UPDATES: string[][] = [
-  ["position", "2", "--status", "excluded", "--notes", "DUPLICATE of #1 \\u00e9\\nsecond line and more than forty characters"],
-  ["position", "2", "--status", "excluded"],
+  ["position", "2", "--status", "excluded", "--notes", "EXCLUDED: [DUPLICATE] of #1 \\u00e9\\nsecond line and more than forty characters"],
+  ["position", "2", "--status", "excluded", "--notes", "[SCADUTO] gone"],
   ["position", "2", "--notes", "only a note"],
-  ["position", "2", "--stat", "excluded", "--no=short"],
+  ["position", "2", "--stat", "excluded", "--no=EXCLUDED: [STACK] short"],
   ["position", "2"],
   ["position", "2", "--notes", ""],
-  ["position", "99", "--status", "excluded"],
+  ["position", "99", "--status", "excluded", "--notes", "EXCLUDED: [GEO] no such position"],
   ["position", "x"],
   ["position", "2", "--status", "bogus"],
   ["position", "2", "--s", "excluded"],
@@ -561,14 +561,14 @@ describe("db_update position against db_update.py", () => {
     const { call, ourDb } = twins();
     const before = snapshot(ourDb);
     for (const args of [
-      ["position", "1", "--status", "excluded", "--notes", "dup"],
+      ["position", "1", "--status", "excluded", "--notes", "EXCLUDED: [DUPLICATE] dup"],
       // D-3: position 3 is still 'new', but scout-2 found it.
-      ["position", "3", "--status", "excluded", "--notes", "dup"],
+      ["position", "3", "--status", "excluded", "--notes", "EXCLUDED: [DUPLICATE] dup"],
       ["position", "3", "--notes", "mine now"],
       ["position", "2", "--status", "scored"],
       ["position", "2", "--status", "applied"],
       ["position", "2", "--title", "renamed"],
-      ["position", "2", "--status", "excluded", "--jd-text", "x"],
+      ["position", "2", "--status", "excluded", "--notes", "EXCLUDED: [GEO] x", "--jd-text", "x"],
     ]) {
       const r = await call("db_update", args);
       expect(r.ok, args.join(" ")).toBe(false);
@@ -758,7 +758,7 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
       { action: "liveness_check", outcome: "confirmed_closed", evidence_code: 404 },
     ]);
     // A position still in analysis is excluded on judgement, no proof needed (RULE-06).
-    expect((await call("db_update", ["position", "2", "--status", "excluded", "--notes", "EXCLUDED: [GEO]"])).ok).toBe(true);
+    expect((await call("db_update", ["position", "2", "--status", "excluded", "--notes", "EXCLUDED: [GEO] onsite only in Tokyo"])).ok).toBe(true);
   });
 });
 

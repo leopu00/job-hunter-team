@@ -113,7 +113,7 @@ describe("rows in jobs.db", () => {
   };
   const update = (db: Database, agent: string) => {
     const tool = createDbTools({ db: () => db, agent }).find((t) => t.spec.name === "db_update")!;
-    return (id: string) => run(tool, { args: ["position", id, "--status", "excluded"] });
+    return (id: string) => run(tool, { args: ["position", id, "--status", "excluded", "--notes", "EXCLUDED: [DUPLICATE] same position under its other name"] });
   };
 
   it("lets a Scout recover its own positions under either of its names, and not another's", async () => {

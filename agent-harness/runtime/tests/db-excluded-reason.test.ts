@@ -101,14 +101,14 @@ describe("the reason of an exclusion", () => {
   });
 });
 
-describe.skipIf(skills === null)("against db_update.py of this tree", () => {
-  it("has the same categories and the same words", () => {
+describe("against db_update.py of this tree", () => {
+  it.skipIf(skills === null)("has the same categories and the same words", () => {
     const run = runPython(skills!, ["-c", "import json, db_update as d; print(json.dumps([list(d.EXCLUDE_CATEGORIES), d.EXCLUDE_HELP]))"]);
     expect(run.status, run.stderr).toBe(0);
     expect(JSON.parse(run.stdout)).toEqual([[...EXCLUDE_CATEGORIES], EXCLUDE_HELP]);
   });
 
-  it.each(REFUSED.concat(ACCEPTED).map((n) => [String(n), n]))("answers %s as the script does", async (_label, notes) => {
+  it.skipIf(skills === null).each(REFUSED.concat(ACCEPTED).map((n) => [String(n), n]))("answers %s as the script does", async (_label, notes) => {
     const pyPath = join(root, `py-${Math.random()}.db`);
     const ourPath = join(root, `ours-${Math.random()}.db`);
     const pyDb = seeded(pyPath);
