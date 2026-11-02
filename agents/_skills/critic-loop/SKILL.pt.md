@@ -148,7 +148,7 @@ fi
 
 Status da posição:
 - `critic_score ≥ 5` → `db_update.py position <POSITION_ID> --status ready`
-- `critic_score < 5` → `db_update.py position <POSITION_ID> --status excluded`
+- `critic_score < 5` → `db_update.py position <POSITION_ID> --status excluded --notes "EXCLUDED: [CRITIC] <reason>"`
 
 Depois notifique o Capitano:
 ```bash

@@ -81,7 +81,7 @@ Mielőtt dolgozol egy pozíción:
 3. Értesítsd a peer-t tmux-on keresztül
 
 **RULE-04 — SCORE KÜSZÖBÖK**
-- `score < 40` → `--status excluded` (küszöb alatt: kikerül a pipeline-ból, a felhasználó nem látja a listában)
+- `score < 40` → `--status excluded --notes "EXCLUDED: [LOW_SCORE] <reason>"` (küszöb alatt: kikerül a pipeline-ból, a felhasználó nem látja a listában)
 - `score >= 40` → `--status scored` — és az autonóm pipeline ITT VÉGET ÉR
 
 NINCS semmiféle "parking" és NINCS automatikus átadás a Scrittori-knak: CV CSAK

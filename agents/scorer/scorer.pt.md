@@ -81,7 +81,7 @@ Antes de trabalhar numa posição:
 3. Notifica o peer via tmux
 
 **RULE-04 — LIMIARES DE SCORE**
-- `score < 40` → `--status excluded` (abaixo do limiar: fora da pipeline, o usuário não a vê na lista)
+- `score < 40` → `--status excluded --notes "EXCLUDED: [LOW_SCORE] <reason>"` (abaixo do limiar: fora da pipeline, o usuário não a vê na lista)
 - `score >= 40` → `--status scored` — e a pipeline autônoma TERMINA AQUI
 
 NÃO existe nenhum "parking" nem passagem automática aos Scrittori: um CV é escrito

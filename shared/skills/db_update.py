@@ -268,6 +268,37 @@ def _checked_place_gate(conn, args, previous_status):
     return 'city' if city else ('country' if country else 'remote')
 
 
+# ── A position is excluded WITH its reason ─────────────────────────────────────────────────────────────
+# On a real profile 72 of 120 excluded positions had notes with no category (RULE-07 of the Analista asks for
+# `EXCLUDED: [CATEGORY]` and nothing enforced it), so nobody could tell why the pipeline drops what it drops, and a
+# profile that finds nothing could not be diagnosed. The move INTO `excluded` is refused unless the notes it will
+# have start with `EXCLUDED: [CATEGORY] <reason>`.
+#  - the eight categories of the Analista's RULE-07;
+#  - four more for the exclusions that are not the Analista's judgement: a duplicate, a score under the bar, a
+#    Critic score under the bar, an expired ad;
+#  - and the three forms the skills tell agents to write TODAY (`DUPLICATA di #<id>`, `ESCLUSA: [LINK_MORTO]`,
+#    `[SCADUTO]`), so a documented flow does not stop at the refusal. They go when the skills use the new form.
+# Only the move into `excluded` is checked: a position already excluded can have its notes edited freely.
+EXCLUDE_CATEGORIES = (
+    "DEAD_LINK", "GEO", "LANGUAGE", "SENIORITY", "STACK", "DEGREE", "CERT", "SCAM",
+    "DUPLICATE", "LOW_SCORE", "CRITIC", "EXPIRED",
+)
+_EXCLUDE_NOTE = re.compile(r"^\s*EXCLUDED:\s*\[(?:%s)\]\s*\S" % "|".join(EXCLUDE_CATEGORIES))
+_EXCLUDE_LEGACY_NOTE = re.compile(r"^\s*(?:DUPLICATA di #\d+|ESCLUSA:\s*\[LINK_MORTO\]\s*\S|\[SCADUTO\]\s*\S)")
+EXCLUDE_HELP = (
+    "DEAD_LINK link dead or the ad gone · GEO place/work authorisation · LANGUAGE a language the user does not speak "
+    "· SENIORITY level or years of experience · STACK stack far from the profile · DEGREE a required degree · CERT a "
+    "required certification · SCAM a scam · DUPLICATE the same position as another · LOW_SCORE score under the bar "
+    "· CRITIC Critic score under the bar · EXPIRED the ad expired"
+)
+
+
+def excluded_reason_ok(notes) -> bool:
+    """True when `notes` give the reason a position is excluded in a form the team can read."""
+    text = str(notes or "")
+    return bool(_EXCLUDE_NOTE.match(text) or _EXCLUDE_LEGACY_NOTE.match(text))
+
+
 def update_position(args):
     # Stessa regola della INSERT: i campi che vengono dalla pagina restano una
     # riga sola. Una correzione dell'Analista al titolo passa da qui, e senza
@@ -297,12 +328,27 @@ def update_position(args):
     # la transizione. Se status non cambia (es. solo notes aggiornate),
     # nessuna entry viene scritta nel transition log.
     previous_status = None
+    previous_notes = None
     if args.status:
         row = conn.execute(
-            "SELECT status FROM positions WHERE id = ?", (args.id,)
+            "SELECT status, notes FROM positions WHERE id = ?", (args.id,)
         ).fetchone()
         if row is not None:
             previous_status = row[0] if not hasattr(row, "keys") else row["status"]
+            previous_notes = row[1] if not hasattr(row, "keys") else row["notes"]
+    if args.status == 'excluded' and previous_status != 'excluded':
+        # The notes the row will have: the ones passed now, or the ones it already carries.
+        written = interpret_escapes(args.notes) if args.notes else previous_notes
+        if not excluded_reason_ok(written):
+            print(
+                f"⚠️  EXCLUDED REJECTED: position {args.id} is excluded together with the reason, so the team and "
+                "the user can read why. Run the command again with "
+                "--notes 'EXCLUDED: [CATEGORY] <the specific reason>' where CATEGORY is one of: "
+                f"{EXCLUDE_HELP}.",
+                file=sys.stderr,
+            )
+            conn.close()
+            sys.exit(1)
     precision_floor = _checked_place_gate(conn, args, previous_status)
 
     # `getattr`: update_position è invocata anche con Namespace costruiti a

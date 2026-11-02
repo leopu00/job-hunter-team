@@ -168,7 +168,8 @@ fi
 if [[ <final_score>_int >= 5 ]]; then
   python3 /app/shared/skills/db_update.py position "$ID" --status ready
 else
-  python3 /app/shared/skills/db_update.py position "$ID" --status excluded
+  python3 /app/shared/skills/db_update.py position "$ID" --status excluded \
+    --notes "EXCLUDED: [CRITIC] final Critic score under 5"
 fi
 ```
 

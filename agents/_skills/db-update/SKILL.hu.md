@@ -22,7 +22,9 @@ Táblák: `position`, `application`.
 ```bash
 # Léptetés checked / excluded állapotba (Analyst feladata)
 python3 /app/shared/skills/db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
-python3 /app/shared/skills/db_update.py position 42 --status excluded
+# Excluding NEEDS its reason, or the command is refused (exit 1): notes start with EXCLUDED: [CATEGORY] <reason>,
+# CATEGORY one of DEAD_LINK GEO LANGUAGE SENIORITY STACK DEGREE CERT SCAM DUPLICATE LOW_SCORE CRITIC EXPIRED
+python3 /app/shared/skills/db_update.py position 42 --status excluded --notes "EXCLUDED: [GEO] <specific reason>"
 
 # last-checked jelölő (link életben levése megerősítve — anti-ütközés foglalásként is használt)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now

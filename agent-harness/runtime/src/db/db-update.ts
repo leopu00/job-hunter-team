@@ -132,6 +132,29 @@ function guardRoleFamily(raw: string, active: string[]): { family: string; propo
   return { family: "Other", proposed: v };
 }
 
+/**
+ * A position moves into `excluded` only with its reason in the notes, as `db_update.py` does (`excluded_reason_ok`): the
+ * eight categories of the Analista's RULE-07, four more for the exclusions that are not its judgement, and the three
+ * forms the skills told the agents to write before this rule. `tests/db-excluded-reason.test.ts` reads the Python
+ * source and fails if these drift from it.
+ */
+export const EXCLUDE_CATEGORIES = [
+  "DEAD_LINK", "GEO", "LANGUAGE", "SENIORITY", "STACK", "DEGREE", "CERT", "SCAM",
+  "DUPLICATE", "LOW_SCORE", "CRITIC", "EXPIRED",
+] as const;
+export const EXCLUDE_HELP =
+  "DEAD_LINK link dead or the ad gone · GEO place/work authorisation · LANGUAGE a language the user does not speak " +
+  "· SENIORITY level or years of experience · STACK stack far from the profile · DEGREE a required degree · CERT a " +
+  "required certification · SCAM a scam · DUPLICATE the same position as another · LOW_SCORE score under the bar " +
+  "· CRITIC Critic score under the bar · EXPIRED the ad expired";
+const EXCLUDE_NOTE = new RegExp(`^\\s*EXCLUDED:\\s*\\[(?:${EXCLUDE_CATEGORIES.join("|")})\\]\\s*\\S`, "u");
+const EXCLUDE_LEGACY_NOTE = /^\s*(?:DUPLICATA di #\d+|ESCLUSA:\s*\[LINK_MORTO\]\s*\S|\[SCADUTO\]\s*\S)/u;
+
+export function excludedReasonOk(notes: string | null | undefined): boolean {
+  const text = notes ?? "";
+  return EXCLUDE_NOTE.test(text) || EXCLUDE_LEGACY_NOTE.test(text);
+}
+
 /** `update_position`, with the actor as `last_actor` and in the transition and history rows. */
 export function updatePosition(db: Database, a: Parsed, actor: string, userId: string, guard?: UpdateGuard): ScriptResult {
   const id = a["id"] as number;
@@ -157,9 +180,30 @@ export function updatePosition(db: Database, a: Parsed, actor: string, userId: s
   db.exec("BEGIN IMMEDIATE");
   try {
     let previous: string | null = null;
+    let previousNotes: string | null = null;
     if (pyTruthy(a["status"])) {
-      const row = db.prepare("SELECT status FROM positions WHERE id = ?").get(id) as { status: string | null } | undefined;
-      if (row) previous = row.status;
+      const row = db.prepare("SELECT status, notes FROM positions WHERE id = ?").get(id) as
+        | { status: string | null; notes: string | null }
+        | undefined;
+      if (row) {
+        previous = row.status;
+        previousNotes = row.notes;
+      }
+    }
+    if (a["status"] === "excluded" && previous !== "excluded") {
+      // The notes the row will have: the ones passed now, or the ones it already carries.
+      const written = pyTruthy(a["notes"]) ? interpretEscapes(a["notes"] as string) : previousNotes;
+      if (!excludedReasonOk(written)) {
+        db.exec("ROLLBACK");
+        return {
+          stdout: "",
+          stderr:
+            `⚠\ufe0f  EXCLUDED REJECTED: position ${id} is excluded together with the reason, so the team and the user can read why. ` +
+            "Run the command again with --notes 'EXCLUDED: [CATEGORY] <the specific reason>' where CATEGORY is one of: " +
+            `${EXCLUDE_HELP}.\n`,
+          exitCode: 1,
+        };
+      }
     }
     // JHT-T03: no `checked` without a place — the gate of db_update.py `_checked_place_gate`, twin
     // for twin. The row is read as it would result after this UPDATE; the floor is the first

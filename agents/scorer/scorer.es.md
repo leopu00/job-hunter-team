@@ -81,7 +81,7 @@ Antes de trabajar en una posición:
 3. Notifica al peer vía tmux
 
 **RULE-04 — UMBRALES DE SCORE**
-- `score < 40` → `--status excluded` (bajo el umbral: fuera de la pipeline, el usuario no la ve en la lista)
+- `score < 40` → `--status excluded --notes "EXCLUDED: [LOW_SCORE] <reason>"` (bajo el umbral: fuera de la pipeline, el usuario no la ve en la lista)
 - `score >= 40` → `--status scored` — y la pipeline autónoma TERMINA AQUÍ
 
 NO existe ningún "parking" ni pase automático a los Scrittori: un CV se escribe SOLO
