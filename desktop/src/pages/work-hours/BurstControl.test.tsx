@@ -1,9 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
-import { EFFORTS, MODEL_CLASSES, ROLES, WEEKDAYS } from "../../lib/team-settings-native";
-import BurstControl, { BurstStrip, DEFAULT_HOURS, QUICK_HOURS, clockIn, untilIn } from "./BurstControl";
+import { EFFORTS, MODEL_CLASSES, ROLES, WEEKDAYS, type TeamSettings } from "../../lib/team-settings-native";
+import BurstControl, { BurstStrip, DEFAULT_HOURS, QUICK_HOURS, UNDO_MS, clockIn, untilIn } from "./BurstControl";
 import { BURST_TEXT } from "./burst.i18n";
 import WorkHoursPage from "./index";
 
@@ -49,7 +50,7 @@ describe("work flat out until a time", () => {
     await user.click(screen.getByTestId("burst-start"));
     expect(await screen.findByTestId("burst-active")).toHaveTextContent("Full throttle until 03:00");
     expect(requests().at(-1)).toEqual({ op: "burst_start", until: "03:00", connectionKey: KEY });
-    expect(screen.getByTestId("burst-note")).toHaveTextContent("Started: the team is working at full throttle until 03:00.");
+    expect(screen.getByTestId("burst-undo")).toHaveTextContent("Started until 03:00");
     expect(screen.queryByTestId("burst-start")).toBeNull();
   });
 
@@ -229,7 +230,102 @@ describe("the time the field starts on, and the lengths of time to tap", () => {
   });
 
   it("the new lines exist in the seven languages", () => {
-    const keys = ["burstNeedsTime", "burstQuickLabel", "burstFor1", "burstFor2", "burstFor4", "burstExactLabel"] as const;
+    const keys = ["burstNeedsTime", "burstQuickLabel", "burstFor1", "burstFor2", "burstFor4", "burstExactLabel", "burstUndo"] as const;
     for (const locale of Object.keys(BURST_TEXT) as Locale[]) for (const key of keys) expect(BURST_TEXT[locale][key]?.length, `${locale}/${key}`).toBeGreaterThan(3);
+  });
+});
+
+// ── a one-tap start can be taken back: «Started until HH:MM, Undo» for ten seconds, and the strip with «Stop now» stays while it lasts ──
+describe("taking back a one-tap start", () => {
+  const startsOn = (untilLocal: string) =>
+    answer((request) => (request.op === "burst_start" ? reply({ working_hours: ROME, burst: { active: true, until: IN_AN_HOUR(), untilLocal } }) : reply({ working_hours: ROME })));
+
+  it("a tap on 2 hours shows «Started until 15:07» with «Undo», and the strip with «Stop now» is there too", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      startsOn("15:07");
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      await user.click(await screen.findByTestId("burst-quick-2"));
+      const undo = await screen.findByTestId("burst-undo");
+      expect(undo).toHaveTextContent("Started until 15:07");
+      expect(screen.getByTestId("burst-undo-button")).toHaveTextContent("Undo");
+      expect(screen.getByTestId("burst-active")).toHaveTextContent("Full throttle until 15:07");
+      expect(screen.getByTestId("burst-stop")).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("«Undo» stops the burst with the key and the gesture comes back", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      answer((request) => {
+        if (request.op === "burst_start") return reply({ working_hours: ROME, burst: { active: true, until: IN_AN_HOUR(), untilLocal: "14:07" } });
+        if (request.op === "burst_stop") return reply({ working_hours: ROME, burst: { active: false } });
+        return reply({ working_hours: ROME });
+      });
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      await user.click(await screen.findByTestId("burst-quick-1"));
+      await user.click(await screen.findByTestId("burst-undo-button"));
+      expect(await screen.findByTestId("burst-start")).toBeInTheDocument();
+      expect(requests().at(-1)).toEqual({ op: "burst_stop", connectionKey: KEY });
+      expect(screen.queryByTestId("burst-undo")).toBeNull();
+      expect(screen.getByTestId("burst-note")).toHaveTextContent("Stopped: the earlier hours are back.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the undo line goes after ten seconds and the strip with «Stop now» stays for as long as the burst lasts", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"], now: NOON_UTC });
+    try {
+      startsOn("15:07");
+      const base = { target: "local" as const, connectionKey: KEY, workingHours: { timezone: "Europe/Rome", windows: [] }, roleModels: {} };
+      const Host = () => {
+        const [settings, setSettings] = React.useState<TeamSettings>(base);
+        return <BurstControl settings={settings} onSettings={setSettings} />;
+      };
+      render(<Host />);
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("burst-quick-2"));
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(screen.getByTestId("burst-undo")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(UNDO_MS - 1000);
+      });
+      expect(screen.getByTestId("burst-undo")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(screen.queryByTestId("burst-undo")).toBeNull();
+      expect(screen.getByTestId("burst-active")).toHaveTextContent("Full throttle until 15:07");
+      expect(screen.getByTestId("burst-stop")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a burst that was already running when the page opened shows the strip and no undo line", async () => {
+    answer(() => reply({ working_hours: ROME, burst: running() }));
+    render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+    expect(await screen.findByTestId("burst-active")).toBeInTheDocument();
+    expect(screen.queryByTestId("burst-undo")).toBeNull();
+  });
+
+  it("a start the box refuses shows the refusal and no undo line", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      answer((request) => (request.op === "burst_start" ? { ok: false, error: "team_settings_burst_too_far" } : reply({ working_hours: ROME })));
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      await user.click(await screen.findByTestId("burst-quick-4"));
+      expect(await screen.findByTestId("burst-note")).toHaveTextContent("more than 12 hours from now");
+      expect(screen.queryByTestId("burst-undo")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

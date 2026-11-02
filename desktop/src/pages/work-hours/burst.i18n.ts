@@ -23,7 +23,8 @@ const it = {
   burstActive: "A tutta fino alle {time}",
   burstActiveNote: "Alla scadenza tornano gli orari di prima.",
   burstStop: "Ferma adesso",
-  burstStarted: "Partito: la squadra lavora a tutta fino alle {time}.",
+  burstStarted: "Avviato fino alle {time}",
+  burstUndo: "Annulla",
   burstStopped: "Fermato: sono tornati gli orari di prima.",
   burstBusy: "Un momento…",
 };
@@ -46,7 +47,8 @@ const en: BurstText = {
   burstActive: "Full throttle until {time}",
   burstActiveNote: "When it ends, the hours you had before come back.",
   burstStop: "Stop now",
-  burstStarted: "Started: the team is working at full throttle until {time}.",
+  burstStarted: "Started until {time}",
+  burstUndo: "Undo",
   burstStopped: "Stopped: the earlier hours are back.",
   burstBusy: "One moment…",
 };
@@ -67,7 +69,8 @@ const de: BurstText = {
   burstActive: "Vollgas bis {time}",
   burstActiveNote: "Danach gelten wieder die Zeiten von vorher.",
   burstStop: "Jetzt anhalten",
-  burstStarted: "Gestartet: Das Team arbeitet mit Vollgas bis {time}.",
+  burstStarted: "Gestartet bis {time}",
+  burstUndo: "Rückgängig",
   burstStopped: "Angehalten: Die Zeiten von vorher gelten wieder.",
   burstBusy: "Einen Moment…",
 };
@@ -88,7 +91,8 @@ const fr: BurstText = {
   burstActive: "Pleins gaz jusqu’à {time}",
   burstActiveNote: "À l’échéance, les horaires d’avant reviennent.",
   burstStop: "Arrêter maintenant",
-  burstStarted: "C’est parti : l’équipe travaille à pleins gaz jusqu’à {time}.",
+  burstStarted: "Lancé jusqu’à {time}",
+  burstUndo: "Annuler",
   burstStopped: "Arrêté : les horaires d’avant sont revenus.",
   burstBusy: "Un instant…",
 };
@@ -109,7 +113,8 @@ const es: BurstText = {
   burstActive: "A todo gas hasta las {time}",
   burstActiveNote: "Al terminar, vuelve el horario de antes.",
   burstStop: "Parar ahora",
-  burstStarted: "En marcha: el equipo trabaja a todo gas hasta las {time}.",
+  burstStarted: "Iniciado hasta las {time}",
+  burstUndo: "Deshacer",
   burstStopped: "Parado: ha vuelto el horario de antes.",
   burstBusy: "Un momento…",
 };
@@ -130,7 +135,8 @@ const pt: BurstText = {
   burstActive: "Todo o gás até às {time}",
   burstActiveNote: "No fim, volta o horário de antes.",
   burstStop: "Parar agora",
-  burstStarted: "Arrancou: a equipa trabalha com todo o gás até às {time}.",
+  burstStarted: "Iniciado até às {time}",
+  burstUndo: "Desfazer",
   burstStopped: "Parado: voltou o horário de antes.",
   burstBusy: "Um momento…",
 };
@@ -151,7 +157,8 @@ const hu: BurstText = {
   burstActive: "Full gőzzel {time}-ig",
   burstActiveNote: "Lejártakor visszaáll a korábbi munkaidő.",
   burstStop: "Leállítás most",
-  burstStarted: "Elindult: a csapat full gőzzel dolgozik {time}-ig.",
+  burstStarted: "Elindítva eddig: {time}",
+  burstUndo: "Visszavonás",
   burstStopped: "Leállítva: visszaállt a korábbi munkaidő.",
   burstBusy: "Egy pillanat…",
 };
