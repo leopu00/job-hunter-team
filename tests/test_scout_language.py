@@ -305,6 +305,10 @@ def test_the_scout_is_told_403_closes_a_source_and_the_ats_are_read_per_company(
         assert "**403**" in text and "Email-first sourcing" in text
         for closed in ("Umantis", "Climatebase", "JobSearch DK", "Cloudflare"):
             assert closed in text
+        # the 02/11 run: six more that answered 403, two whose endpoint is dead (410: to remove, not to retry)
+        for closed in ("Jobware", "Nationale Vacaturebank", "Jobat", "Remote Rocketship", "Intermediair", "EU Remote Jobs"):
+            assert closed in text
+        assert "**410**" in text and "XING Jobs" in text and "Bundesagentur" in text
         for ats in ("Greenhouse", "Ashby", "Workable", "Personio", "Teamtailor", "Recruitee", "Jobvite"):
             assert ats in text
     tiers = [l for l in skill.splitlines() if l.startswith("| 2 ") or l.startswith("| `on-site`")]
