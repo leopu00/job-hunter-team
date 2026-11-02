@@ -10,7 +10,12 @@ WHAT «EXHAUSTED» MEANS (all of it, over the current working window, every Scou
   - at least N different sources: distinct (source, country) pairs in the pass log;         default 5
   - at least M different queries: distinct query hashes;                                      default 10
   - at least T minutes of searching: from the first to the last pass line;                    default 15
+  - the CORE portals of the coverage plan are covered (scout_coverage.py: the national portals of each language the
+    profile speaks, each asked with 3 passes and 3 different queries, or closed and declared so). Three numbers can be
+    reached on five LinkedIn pages; this one cannot: it says WHERE the Scout still has to go (`missing` names the portal);
   - and NO candidate inserted: not one `inserted` outcome in the window.
+The coverage clause never makes «exhausted» impossible: if the profile cannot be read, the table has none of its
+languages, or scout_coverage.py is missing or fails, it does not block (the three numbers above stand alone).
 Sources, queries and time count over the whole window (a second round does not have to repeat the first one); the
 «no candidate inserted» and «at least one search» count since the last exhaustion accepted in the window, so that a Scout
 woken after a quiet needs ONE new pass to confirm the sources are still dry, and a position found by it ends the quiet
@@ -147,7 +152,19 @@ def measure(rows: list, since_declared: float | None = None) -> dict:
             "inserted": inserted, "span_min": round(span, 1)}
 
 
-def verdict(numbers: dict, need: dict, after_declaration: bool = False) -> dict:
+def core_missing(rows: list) -> list:
+    """The core portals of the coverage plan still short of «covered», as «platsbanken/se 1/3» lines. Empty when they are all
+    covered AND when it cannot tell (no scout_coverage.py, an unreadable profile, a language the table does not have, any
+    error): the clause only ever adds a reason to keep searching that it can name, never one it cannot."""
+    try:
+        import scout_coverage  # noqa: PLC0415 — the skills folder, put on the path above
+        missing = scout_coverage.core_missing(scout_coverage.portal_states(rows))
+    except Exception:  # noqa: BLE001 — the measure of coverage never stops the other three
+        return []
+    return [m for m in missing if isinstance(m, str) and m] if isinstance(missing, (list, tuple)) else []
+
+
+def verdict(numbers: dict, need: dict, after_declaration: bool = False, uncovered: list = None) -> dict:
     if numbers["passes"] == 0:
         return {"verdict": "unmeasured", "missing": ["no pass logged: log each search with scout_pass_log.py"]}
     missing = []
@@ -161,6 +178,9 @@ def verdict(numbers: dict, need: dict, after_declaration: bool = False) -> dict:
         missing.append("queries %d/%d (different queries)" % (numbers["queries"], need["queries"]))
     if numbers["span_min"] < need["span_min"]:
         missing.append("search time %.0f/%.0f min" % (numbers["span_min"], need["span_min"]))
+    if uncovered:
+        missing.append("core portals of the plan not covered yet (passes, different queries): %s; "
+                       "ask `scout_coverage.py next`" % ", ".join(uncovered[:8]))
     return {"verdict": "not_exhausted" if missing else "exhausted", "missing": missing}
 
 
@@ -179,9 +199,12 @@ def check(now: float | None = None, since_hours: float | None = None, path: Path
     start = window_start(now)
     since = now - since_hours * 3600 if since_hours is not None else (start if start is not None else now - DEFAULT_LOOKBACK_H * 3600)
     declared = _last_declaration(read_state(), start, now)
-    numbers = measure(read_rows(since, path), declared)
+    rows = read_rows(since, path)
+    numbers = measure(rows, declared)
     need = thresholds()
-    return {**verdict(numbers, need, declared is not None), **numbers, "need": need,
+    uncovered = core_missing(rows) if rows else []
+    return {**verdict(numbers, need, declared is not None, uncovered), **numbers, "need": need,
+            "core_missing": uncovered,
             "window_start": datetime.fromtimestamp(since, tz=timezone.utc).isoformat(timespec="seconds")}
 
 
