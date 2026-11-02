@@ -786,14 +786,53 @@ describe("DashboardApp onboarding router", () => {
       expect(markOnboardingReady).not.toHaveBeenCalled();
     });
 
-    it.each(["self", "none"] as const)("the owner (%s) gets the setup as always", async (owner) => {
+    it("a team nobody has taken yet gets the setup as always", async () => {
       setUpLocal();
-      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue(owner);
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("none");
 
       render(<DashboardApp />);
 
       expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
       expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+    });
+
+    // The local profile and its team are there (the team of this computer is the profile's), and only the mark
+    // of the setup is missing: the app reopens that team instead of starting the wizard again at the welcome.
+    it("a team that is already this profile's is reopened, not set up again from the first step", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("self");
+      vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
+      expect(resumeOnboardingSnapshot).toHaveBeenCalledOnce();
+      expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+      expect(markOnboardingReady).not.toHaveBeenCalled();
+    });
+
+    it("the same for an account whose team of this computer is its own", async () => {
+      vi.mocked(useSession).mockReturnValue(signedInAs("synthetic-google-account"));
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("self");
+      requireOnboarding();
+      vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, assistantWelcomed: false });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByText("action-required:assistant")).toBeInTheDocument();
+      expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    });
+
+    it("a reopening that finds no destination goes to the step where it is chosen, not to a dead end", async () => {
+      setUpLocal();
+      vi.mocked(probeDesktopLocalTeamOwner).mockResolvedValue("self");
+      vi.mocked(resumeOnboardingSnapshot).mockRejectedValue({ code: "host_not_configured" });
+
+      render(<DashboardApp />);
+
+      expect(await screen.findByTestId("onboarding")).toBeInTheDocument();
+      expect(screen.queryByText(/failed:/)).not.toBeInTheDocument();
     });
 
     it("when the owner cannot be read the setup decides, as before", async () => {

@@ -24,6 +24,7 @@ import {
   migrateDesktopLocalProfileToAccount,
   probeDesktopLocalProfileMigration,
   probeDesktopLocalTeamOwner,
+  type DesktopLocalTeamOwner,
 } from "../lib/desktop-account-scope";
 import {
   activateSavedLocalProfile,
@@ -392,16 +393,15 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
 }
 
 /**
- * The native side says the team of this computer is not for this profile to set up: it belongs to someone else
- * (`other`), or its data belong to nobody and this profile cannot take them (`nobody`). An answer that cannot be
- * had is not «yes»: the setup decides, as before.
+ * Whose the team of this computer is, from the native side, for the gate. `other`: it belongs to someone else, or
+ * (`nobody`) its data belong to nobody and this profile cannot take them: this profile is not the one to set it up.
+ * `self`: it is this profile's already. An answer that cannot be had is not an answer: the setup decides, as before.
  */
-async function teamIsNotThisProfiles(): Promise<boolean> {
+async function localTeamOwnerOrNull(): Promise<DesktopLocalTeamOwner | null> {
   try {
-    const owner = await probeDesktopLocalTeamOwner();
-    return owner === "other" || owner === "nobody";
+    return await probeDesktopLocalTeamOwner();
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -549,7 +549,14 @@ export default function DashboardApp() {
       // The team of this computer is another profile's (or account's): this one goes in without setting up a
       // team here, and the shell says whose the team is. The setup would stop at its first step with the
       // owner's refusal. Nothing is written: the day this profile owns a team, the setup is still there.
-      if (next?.phase === "required" && !next.existingTeam && await teamIsNotThisProfiles()) next = { phase: "ready" };
+      if (next?.phase === "required" && !next.existingTeam) {
+        const owner = await localTeamOwnerOrNull();
+        if (owner === "other" || owner === "nobody") next = { phase: "ready" };
+        // The team of this computer is already this profile's, and only the mark of the setup is missing (another
+        // origin of the webview, a cleared storage): the app reopens that team like any saved one. Starting the
+        // wizard again at the welcome would ask for what the team already has.
+        else if (owner === "self" && !next.resumeAvailable) next = { ...next, resumeAvailable: true };
+      }
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
       if (activeIdentityKeyRef.current !== initializingKey) return;
