@@ -30,6 +30,11 @@ static SUPPORT_REPORT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 /// The saved support reports kept: the newest ones, the older are deleted when a new one is saved.
 const SUPPORT_REPORTS_KEPT: usize = 50;
 
+/// How often the same refusal of the owner of `~/.jht` is written again.
+const OWNER_REFUSAL_EVERY: Duration = Duration::from_secs(60);
+/// The last refusal written: the log it went to, its code and when.
+static LAST_OWNER_REFUSAL: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
+
 #[derive(Clone)]
 pub(crate) struct RuntimeLog {
     path: PathBuf,
@@ -161,6 +166,31 @@ impl RuntimeLog {
             _ => "not_restored",
         };
         let entry = format!("=== {} existing_team.full_link={outcome}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// The data folder of this computer (`~/.jht`) refused the profile in use, by its closed code only:
+    /// no profile, account, digest or path. The check runs in memory and leaves no other trace, so this
+    /// line is how a later reading of the log tells «another profile owns the team» from a failed step.
+    /// The same refusal is written once a minute at most: pages that ask again must not push the
+    /// failures of the setup out of the file.
+    pub(crate) fn record_local_owner_refusal(&self, code: &str) {
+        let code = match code {
+            "local_account_owner_mismatch" | "local_account_owner_missing" | "local_account_owner_invalid"
+            | "local_account_owner_unavailable" => code,
+            _ => return,
+        };
+        let now = std::time::Instant::now();
+        {
+            let mut last = LAST_OWNER_REFUSAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some((path, said, at)) = last.as_ref() {
+                if path == &self.path && said == code && now.duration_since(*at) < OWNER_REFUSAL_EVERY {
+                    return;
+                }
+            }
+            *last = Some((self.path.clone(), code.to_owned(), now));
+        }
+        let entry = format!("=== {} local_owner.refused: {code}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -858,6 +888,28 @@ mod tests {
         let blocked = RuntimeLog::in_dir(&root.join("not-a-directory"));
         blocked.record_existing_team_status(super::ExistingTeamPhase::Final, Ok(0));
         assert_eq!(fs::read(root.join("not-a-directory")).unwrap(), b"preserve");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_refusal_of_the_owner_of_the_data_folder_is_written_by_code_once_a_minute() {
+        let root = dir("owner-refusal");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record_local_owner_refusal("local_account_owner_mismatch");
+        // the same refusal asked again by the pages does not fill the file
+        log.record_local_owner_refusal("local_account_owner_mismatch");
+        log.record_local_owner_refusal("local_account_owner_mismatch");
+        // a code that is not one of the owner's, or free text, is not written at all
+        log.record_local_owner_refusal("owner is 203.0.113.7 and has a name");
+        log.record_local_owner_refusal("disk_low");
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert_eq!(text.matches(" local_owner.refused: local_account_owner_mismatch\n").count(), 1);
+        assert_eq!(text.lines().count(), 1, "{text}");
+        assert!(!text.contains("203.0.113.7") && !text.contains("has a name"));
+        // another refusal is a new line
+        log.record_local_owner_refusal("local_account_owner_missing");
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" local_owner.refused: local_account_owner_missing\n"));
         let _ = fs::remove_dir_all(root);
     }
 
