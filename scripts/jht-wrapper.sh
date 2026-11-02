@@ -3913,8 +3913,8 @@ handle_gui_command() {
 # JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
 download_usage() {
   cat <<'USAGE'
-uso: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]
-  Scarica l'app desktop dalla release, ne verifica lo SHA-256 e la salva (di base in ~/Downloads).
+usage: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]
+  Downloads the desktop app from the release, checks its SHA-256 and saves it (by default in ~/Downloads).
 USAGE
 }
 
@@ -3944,16 +3944,16 @@ handle_host_download() {
       --help|-h) download_usage; return 0 ;;
       --deb) deb=1; shift ;;
       --os|--version|--output|-o)
-        if [ "$#" -lt 2 ] || [ -z "$2" ]; then err "$arg richiede un valore"; return 2; fi
+        if [ "$#" -lt 2 ] || [ -z "$2" ]; then err "$arg needs a value"; return 2; fi
         case "$arg" in --os) os="$2" ;; --version) version="$2" ;; *) output="$2" ;; esac
         shift 2 ;;
       --os=*) os="${arg#--os=}"; shift ;;
       --version=*) version="${arg#--version=}"; shift ;;
       --output=*) output="${arg#--output=}"; shift ;;
-      *) err "argomento non riconosciuto: $arg"; download_usage >&2; return 2 ;;
+      *) err "unknown argument: $arg"; download_usage >&2; return 2 ;;
     esac
   done
-  if [ -z "$os" ] || [ -z "$version" ]; then err "--os e --version sono obbligatori"; download_usage >&2; return 2; fi
+  if [ -z "$os" ] || [ -z "$version" ]; then err "--os and --version are required"; download_usage >&2; return 2; fi
 
   local platform asset
   case "$(printf '%s' "$os" | tr '[:upper:]' '[:lower:]')" in
