@@ -106,6 +106,20 @@ const RUNTIME_PREPARE = copy(
   "Preparing the team’s environment did not succeed.",
   "Check your internet connection and try again.",
 );
+/** The server answered the download with an error (the file is not there, or it is busy): not a connection problem. */
+const RUNTIME_DOWNLOAD_REFUSED = copy(
+  "Il server non ha consegnato il pacchetto dell’ambiente del team.",
+  "Riprova fra qualche minuto. Se si ripete, aggiorna Job Hunter Team.",
+  "The server did not hand over the team’s environment package.",
+  "Try again in a few minutes. If it happens again, update Job Hunter Team.",
+);
+/** The program that downloads (curl) did not run on this computer: missing, or refused by the libraries it was given. */
+const RUNTIME_DOWNLOAD_TOOL = copy(
+  "Il programma che scarica l’ambiente del team non si è avviato su questo computer.",
+  "Riavvia Job Hunter Team. Se si ripete, installa o ripara curl su questo computer.",
+  "The program that downloads the team’s environment could not run on this computer.",
+  "Restart Job Hunter Team. If it happens again, install or repair curl on this computer.",
+);
 const RUNTIME_INTEGRITY = copy(
   "Il pacchetto dell’ambiente del team non supera la verifica di integrità.",
   "Non usarlo: aggiorna Job Hunter Team all’ultima versione e riprova.",
@@ -557,6 +571,8 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Try again. If it happens again, restart the computer.",
   ),
   runtime_download_failed: RUNTIME_PREPARE,
+  runtime_download_refused: RUNTIME_DOWNLOAD_REFUSED,
+  runtime_download_tool_failed: RUNTIME_DOWNLOAD_TOOL,
   runtime_install_failed: RUNTIME_PREPARE,
   runtime_failed: RUNTIME_PREPARE,
   runtime_wrapper_publish_failed: RUNTIME_PREPARE,

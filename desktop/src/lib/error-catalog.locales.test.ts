@@ -92,6 +92,32 @@ describe("localized desktop error catalog", () => {
     expect(seen.size).toBe(ERROR_LOCALES.length);
   });
 
+  it.each([
+    ["runtime_download_refused", "did not hand over", "Riprova fra qualche minuto"],
+    ["runtime_download_tool_failed", "could not run on this computer", "installa o ripara curl"],
+  ])("%s says its own cause in every language, not «check your internet connection»", (code, english, italianAction) => {
+    const generic = describeError("runtime_download_failed", { locale: "en" });
+    expect(describeError(code, { locale: "en" }).text).toContain(english);
+    expect(describeError(code, { locale: "it" }).action).toContain(italianAction);
+    const seen = new Set<string>();
+    for (const locale of ERROR_LOCALES) {
+      const described = describeError(code, { locale });
+      const genericHere = describeError("runtime_download_failed", { locale });
+      expect(described.known, `${code}/${locale}`).toBe(true);
+      expect(described.text, `${code}/${locale}`).not.toBe(genericHere.text);
+      expect(described.action, `${code}/${locale}`).not.toBe(genericHere.action);
+      if (locale !== "en") expect(described.text, `${code}/${locale}`).not.toBe(generic.text);
+      seen.add(described.text);
+    }
+    expect(seen.size).toBe(ERROR_LOCALES.length);
+  });
+
+  it("keeps «check your internet connection» for the download failure that is the network", () => {
+    expect(describeError("runtime_download_failed", { locale: "en" }).action).toContain("internet connection");
+    expect(describeError("runtime_download_refused", { locale: "en" }).action).not.toContain("internet");
+    expect(describeError("runtime_download_tool_failed", { locale: "en" }).action).not.toContain("internet");
+  });
+
   it("tells the two installer failures apart in every language", () => {
     for (const locale of ERROR_LOCALES) {
       const mismatch = describeError("installer_digest_mismatch", { locale });
