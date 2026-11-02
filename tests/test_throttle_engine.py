@@ -1271,3 +1271,251 @@ def test_an_orphan_wait_does_not_take_the_wake_up(home, shim):
     woke = [s for s in SENT if s["agent"] == "analista-1"]
     assert woke and woke[-1]["session"] == "ANALISTA-1", SENT
     assert events("notified")[-1]["agent"] == "analista-1"
+
+
+# ── Posizioni in coda per il ruolo: UNA regola per l'Analista e lo Scorer (02/11) ─────────────────────────────
+# Misurato: l'Analista lavora ~51 s a posizione e poi sta fermo 300-780 s anche con 15 posizioni `new` in coda.
+# La regola e' `queued_work` in pause-rules.json; la coda e' quella di next-for-analista / next-for-scorer.
+def _queue(db: Path, *, new=0, checked=0, checked_scored=0):
+    """Posizioni `new`, `checked` senza punteggio, e `checked` CON punteggio (che non sono in coda)."""
+    import sqlite3
+    conn = sqlite3.connect(db)
+    for _ in range(new):
+        conn.execute("INSERT INTO positions (title, company, status) VALUES ('A', 'Acme', 'new')")
+    for _ in range(checked):
+        conn.execute("INSERT INTO positions (title, company, status) VALUES ('B', 'Acme', 'checked')")
+    for _ in range(checked_scored):
+        cur = conn.execute("INSERT INTO positions (title, company, status) VALUES ('C', 'Acme', 'checked')")
+        conn.execute("INSERT INTO scores (position_id, total_score) VALUES (?, 70)", (cur.lastrowid,))
+    conn.commit()
+    conn.close()
+
+
+def test_the_queue_rule_is_one_rule_for_the_roles_the_file_lists():
+    rules = json.loads((REPO_ROOT / "agents" / "_skills" / "throttle"
+                        / "pause-rules.json").read_text(encoding="utf-8"))
+    assert rules["queued_work"] == {"roles": ["analista", "scorer"], "pause_sec": 60}
+    assert eng._QUEUED_ROLES == {"analista", "scorer"} and eng.QUEUED_WORK_PAUSE_SEC == 60
+
+
+@pytest.mark.parametrize("agent,seed", [("analista-1", {"new": 3}), ("analista-2", {"new": 1}),
+                                         ("scorer-4", {"checked": 5})])
+def test_a_role_with_positions_in_its_queue_pauses_short(home, monkeypatch, agent, seed):
+    set_config(home, **{agent: 780})
+    _queue(_jobs_db(home, monkeypatch), **seed)
+    res = eng.register(agent, reason="post-position checkpoint", now=T0)
+    n = sum(seed.values())
+    assert res["applied_sec"] == 60 and res["shortened_from"] == 780 and res["queued_work"] == n
+    assert res["until"] == int(T0) + 60
+    armed = events("armed")[-1]
+    assert armed["applied_sec"] == 60 and armed["shortened_from"] == 780 and armed["queued_work"] == n
+
+
+@pytest.mark.parametrize("agent", ["analista-1", "scorer-4"])
+def test_an_empty_queue_keeps_the_captains_full_pause(home, monkeypatch, agent):
+    set_config(home, **{agent: 780})
+    # the seeded position is `scored`; a checked one WITH a score is not in the Scorer's queue
+    _queue(_jobs_db(home, monkeypatch), checked_scored=2)
+    res = eng.register(agent, now=T0)
+    assert res["applied_sec"] == 780 and "shortened_from" not in res and "queued_work" not in res
+
+
+def test_each_role_counts_its_own_queue_only(home, monkeypatch):
+    set_config(home, **{"analista-1": 780, "scorer-4": 780})
+    _queue(_jobs_db(home, monkeypatch), new=2)  # positions waiting for the Analista, none for the Scorer
+    assert eng.register("analista-1", now=T0)["applied_sec"] == 60
+    assert eng.register("scorer-4", now=T0)["applied_sec"] == 780
+
+
+@pytest.mark.parametrize("agent", ["scout-2", "capitano-1", "scrittore-1", "critico-1", "dottore"])
+def test_the_other_roles_keep_their_pause(home, monkeypatch, agent):
+    set_config(home, **{agent: 660})
+    _queue(_jobs_db(home, monkeypatch), new=4, checked=4)
+    assert eng.register(agent, now=T0)["applied_sec"] == 660
+
+
+def test_an_unreadable_queue_keeps_the_captains_pause_for_both_roles(home, monkeypatch):
+    set_config(home, **{"analista-1": 780, "scorer-4": 780})
+    bad = home / "jobs.db"
+    bad.write_text("not a database", encoding="utf-8")
+    monkeypatch.setenv("JHT_DB", str(bad))
+    import sys
+    monkeypatch.delitem(sys.modules, "_db", raising=False)
+    assert eng.register("analista-1", now=T0)["applied_sec"] == 780
+    assert eng.register("scorer-4", now=T0)["applied_sec"] == 780
+
+
+def test_a_pause_shorter_than_the_cap_is_never_lengthened(home, monkeypatch):
+    set_config(home, **{"scorer-4": 30})
+    _queue(_jobs_db(home, monkeypatch), checked=2)
+    # the floor (300 s) lifts it to 300 first, then the queue shortens it: the cap is a ceiling
+    res = eng.register("scorer-4", seconds=30, now=T0)
+    assert res["applied_sec"] == 60 and res["shortened_from"] == 300
+    monkeypatch.setattr(eng, "effective_seconds", lambda agent, requested=None: 30)
+    assert eng.register("scorer-4", now=T0)["applied_sec"] == 30
+
+
+def test_user_requests_and_a_queue_together_are_still_one_short_pause(home, monkeypatch):
+    set_config(home, **{"analista-1": 780})
+    db = _jobs_db(home, monkeypatch, geocode_requested=1, geocode_requested_at="2026-09-27 14:54:03")
+    _queue(db, new=2)
+    res = eng.register("analista-1", now=T0)
+    assert res["applied_sec"] == 60 and res["shortened_from"] == 780
+    assert res["user_requests_waiting"] == {"next-for-geocoding": 1}
+
+
+@pytest.mark.parametrize("agent,seed", [("analista-1", {"new": 3}), ("scorer-4", {"checked": 3})])
+def test_a_budget_hold_keeps_the_captains_pause_even_with_a_queue(home, monkeypatch, agent, seed):
+    # the same hold as the Scout's empty unit: recovery after a freeze, or the team over its pace
+    set_config(home, **{agent: 780})
+    _queue(_jobs_db(home, monkeypatch), **seed)
+    _freeze_marker().mark("freeze", now=T0 - 600)
+    res = eng.register(agent, now=T0)
+    assert res["applied_sec"] == 780 and res["queued_work_kept"] == "after-freeze"
+    assert "shortened_from" not in res and "queued_work" not in res
+    _freeze_marker().marker_path().unlink()
+    _pacing_report(home, team=3.5, target=1.4)
+    res = eng.register(agent, now=T0 + 10)
+    assert res["applied_sec"] == 780 and res["queued_work_kept"] == "over-pace"
+    # the hold gone (team within its pace): the queue shortens again
+    _pacing_report(home, team=1.5, target=1.4)
+    assert eng.register(agent, now=T0 + 20)["applied_sec"] == 60
+
+
+@pytest.mark.parametrize("agent,seed", [("analista-1", {"new": 3}), ("scorer-4", {"checked": 3})])
+def test_the_users_burn_intent_takes_the_pause_away_with_a_queue(home, burn, monkeypatch, agent, seed):
+    burn.grant(hours=5, reason="stanotte spremete")
+    _freeze_marker().mark("freeze", now=T0 - 600)  # the hold is lifted by the burn too
+    set_config(home, **{agent: 780})
+    eng._MODULE_CACHE.clear()
+    tc = _load("throttle_config_burn_queue", SKILLS_DIR / "throttle-config.py")
+    tc._BURN_INTENT_MOD = burn
+    monkeypatch.setattr(eng, "_throttle_config", lambda: tc)
+    _queue(_jobs_db(home, monkeypatch), **seed)
+    res = eng.register(agent, now=T0)
+    assert res["armed"] is False and res["applied_sec"] == 0 and res["until"] is None
+    assert res["queued_work"] == sum(seed.values()) and res["shortened_from"] == 780
+    assert flag(agent)["state"] == eng.ACTIVE
+    assert events("no_throttle")[-1]["queued_work"] == sum(seed.values())
+
+
+def test_the_burn_intent_with_an_empty_queue_changes_nothing_for_the_queue_rule(home, burn, monkeypatch):
+    burn.grant(hours=5, reason="stanotte spremete")
+    set_config(home, **{"analista-1": 780})
+    eng._MODULE_CACHE.clear()
+    tc = _load("throttle_config_burn_empty", SKILLS_DIR / "throttle-config.py")
+    tc._BURN_INTENT_MOD = burn
+    monkeypatch.setattr(eng, "_throttle_config", lambda: tc)
+    _jobs_db(home, monkeypatch)
+    res = eng.register("analista-1", now=T0)
+    assert res["applied_sec"] == 780 and "queued_work" not in res
+
+
+def test_a_whole_batch_is_drained_at_one_unit_per_minute_not_per_cycle(home, monkeypatch):
+    # 15 positions waiting (the scout's batch of the measured run): between two units the pause is 60 s, and it
+    # becomes the Capitano's again only when the queue is empty
+    set_config(home, **{"analista-1": 780})
+    db = _jobs_db(home, monkeypatch)
+    _queue(db, new=15)
+    import sqlite3
+    t, pauses = T0, []
+    for _ in range(15):
+        res = eng.register("analista-1", reason="post-position checkpoint", now=t)
+        pauses.append(res["applied_sec"])
+        t += res["applied_sec"]
+        eng.tick(now=t)
+        eng.ack("analista-1", now=t + 1)
+        conn = sqlite3.connect(db)
+        conn.execute("UPDATE positions SET status = 'checked' WHERE id = (SELECT MIN(id) FROM positions WHERE status = 'new')")
+        conn.commit()
+        conn.close()
+        t += 50  # the unit
+    # the 15th unit emptied the queue: the next pause is the full one
+    assert pauses[:14] == [60] * 14 or pauses[:15] == [60] * 15
+    assert eng.register("analista-1", now=t)["applied_sec"] == 780
+
+
+# ── (b) ogni pausa ha una fine certa: lo «start senza end» (02/11) ───────────────────────────────────────────
+def test_a_flag_write_of_the_agent_during_a_slow_tick_is_not_lost(home, monkeypatch):
+    """Il guasto: il giro legge i flag, si ferma sulla consegna di una sveglia, l'agente registra la sua pausa, il giro
+    riscrive lo stato vecchio e la pausa dell'agente sparisce (nessuna sveglia, nessun `end`)."""
+    set_config(home, **{"scout-1": 660, "analista-1": 300})
+    eng.register("scout-1", now=T0)
+    eng.register("analista-1", now=T0)
+    eng.tick(now=T0 + 300)           # the analyst wakes (a 300 s pause), the scout is still waiting
+    eng.ack("analista-1", now=T0 + 301)
+    assert flag("analista-1")["state"] == eng.ACTIVE
+
+    def slow_delivery(session, agent, message):
+        # while the tick is delivering the scout's wake-up, the analyst finishes its unit and registers
+        SENT.append({"session": session, "agent": agent, "msg": message})
+        eng.register("analista-1", reason="post-position checkpoint", now=T0 + 700)
+        return 0
+
+    monkeypatch.setattr(eng, "send_wakeup", slow_delivery)
+    eng.tick(now=T0 + 660)
+    assert flag("scout-1")["state"] == eng.NOTIFIED
+    mine = flag("analista-1")
+    assert mine["state"] == eng.IN_THROTTLE and mine["pause_id"] == "analista-1-%d" % int(T0 + 700), mine
+    assert mine["until"] == int(T0 + 700) + 300
+
+
+def test_a_pause_that_the_flag_forgot_is_closed_and_the_agent_woken(home):
+    """Lo «start senza end»: il log ha l'inizio, il flag non sa niente della pausa (ACTIVE di prima)."""
+    set_config(home, **{"analista-1": 300})
+    eng.register("analista-1", now=T0 - 1000)
+    eng.tick(now=T0 - 700)
+    eng.ack("analista-1", now=T0 - 699)               # ACTIVE, since before the next pause
+    eng.emit_pause("start", "analista-1", T0, id="analista-1-%d" % int(T0), requested_sec=300, applied_sec=300,
+                   reason="post-position checkpoint", source="config")    # the pause the flag lost
+    SENT.clear()
+    margin = eng.PAUSE_END_MARGIN_SEC
+    eng.tick(now=T0 + 300 + margin - 1)
+    assert SENT == [] and not events("pause_recovered"), "before start + duration + margin nothing happens"
+    eng.tick(now=T0 + 300 + margin + 1)
+    assert [m["agent"] for m in SENT] == ["analista-1"]
+    assert flag("analista-1")["state"] == eng.NOTIFIED
+    rec = events("pause_recovered")
+    assert len(rec) == 1 and rec[0]["pause_id"] == "analista-1-%d" % int(T0) and rec[0]["overdue_sec"] == margin + 1
+    ends = [json.loads(l) for l in eng.pause_log_path().read_text().splitlines() if '"event": "end"' in l or '"event":"end"' in l]
+    closing = [e for e in ends if e["id"] == "analista-1-%d" % int(T0)]
+    assert len(closing) == 1 and closing[0]["recovered"] == "lost-pause" and closing[0]["interrupted"] is True
+    # it is closed once: the next rounds neither wake it again nor recover it again
+    eng.tick(now=T0 + 400 + margin)
+    assert len(SENT) == 1 and len(events("pause_recovered")) == 1
+    # the agent acknowledges and the story is over
+    assert eng.ack("analista-1", now=T0 + 500 + margin)["ok"] is True
+
+
+def test_a_lost_pause_of_a_session_that_is_gone_is_closed_without_a_wake(home, monkeypatch):
+    monkeypatch.setattr(eng, "live_sessions", lambda: {"CAPITANO"})
+    eng.emit_pause("start", "analista-1", T0, id="analista-1-%d" % int(T0), applied_sec=300, reason="x", source="config")
+    eng.tick(now=T0 + 400)
+    eng.tick(now=T0 + 500)
+    assert SENT == [] and flag("analista-1") == {}
+    closed = events("pause_closed")
+    assert len(closed) == 1 and closed[0]["agent"] == "analista-1"
+
+
+def test_a_pause_the_flag_knows_is_left_to_the_normal_round(home):
+    set_config(home, **{"analista-1": 300})
+    eng.register("analista-1", now=T0)
+    eng.tick(now=T0 + 300 + eng.PAUSE_END_MARGIN_SEC + 30)   # normal round woke it: nothing is "lost"
+    assert not events("pause_recovered") and len(SENT) == 1
+
+
+def test_an_agent_that_restarted_after_the_start_is_not_woken_again(home):
+    # it came back by itself (no `end` in the log), its flag says ACTIVE since after the start: not a lost pause
+    eng.emit_pause("start", "scout-1", T0, id="scout-1-%d" % int(T0), applied_sec=300, reason="x", source="config")
+    state = eng.read_flags()
+    state["agents"]["scout-1"] = {"state": eng.ACTIVE, "since": int(T0 + 310), "until": None,
+                                  "timer_armed_at": None, "session": "SCOUT-1"}
+    eng.write_flags(state)
+    eng.tick(now=T0 + 1000)
+    assert SENT == [] and not events("pause_recovered")
+
+
+def test_a_very_old_open_pause_is_ignored(home):
+    eng.emit_pause("start", "scout-1", T0, id="scout-1-%d" % int(T0), applied_sec=300, reason="x", source="config")
+    eng.tick(now=T0 + 300 + eng.ACTIVE_PRUNE_SEC + 10)
+    assert SENT == [] and not events("pause_recovered")

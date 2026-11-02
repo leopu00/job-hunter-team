@@ -104,6 +104,8 @@ Leia `UNSCORED` (posições − pontuações) como a fila atrás do Analista/Sco
 
 Por cima da grelha, a assimetria dos papéis: os últimos que abranda são os que convertem um atraso existente numa posição **com pontuação** (Analista, Scorer) — são a diferença entre "50 posições encontradas" e algo sobre o qual o utilizador pode agir. O primeiro é o que gera nova entrada em bruto quando a fila a jusante já está funda (Scout). Um Escritor com a fila vazia não é alavanca em nenhum dos sentidos.
 
+**O motor já encurta a pausa do Analista e do Scorer enquanto a fila própria tem posições à espera** (`new` para o Analista, `checked` sem pontuação para o Scorer): 60 s entre duas unidades, nenhuma no burst do utilizador («Lavora a tutta»), `pause-rules.json` → `queued_work`. O valor que escreve para eles em `throttle.json` é a pausa com a fila **vazia**, e a que se mantém quando o orçamento é crítico (um congelamento nas últimas 2 horas, a equipa acima do seu ritmo em mais de 1 %/h): é então que travá-los faz efeito com a fila cheia. Com o orçamento em linha, uma fila cheia não se deixa parada.
+
 **Concentre-se num ou dois agentes.** A escada é grosseira — entre degraus vão de 20 a 60% — por isso um corte espalhado por cinco agentes cai dentro do ruído para cada um, ao passo que o mesmo corte no agente de maior quota é uma mudança real e mensurável no sinal seguinte.
 
 **Quando travar dois, dê-lhes degraus diferentes.** A escada está em minutos primos (1, 2, 3, 5, 7, 11, 13, 17, 23, 31, 41, 53, 60) de propósito: dois workers em pausa no mesmo valor voltam a sincronizar-se por construção, e os seus checkpoints caem juntos numa rajada de pedidos simultâneos. `scout-1=660` + `analista-1=780` (11 e 13 min) colidem muito menos do que ambos a 780.
