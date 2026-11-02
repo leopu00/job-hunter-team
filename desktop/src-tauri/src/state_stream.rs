@@ -72,7 +72,7 @@ const CHAT_TOPICS: [&str; 8] = [
 ];
 
 fn watched_topics() -> Vec<&'static str> {
-    let mut topics = vec!["agents", "profile"];
+    let mut topics = vec!["agents", "profile", "settings", "positions"];
     topics.extend(CHAT_TOPICS);
     topics
 }
@@ -84,6 +84,9 @@ pub(crate) enum StreamRead<'a> {
     ChatRead { agent: &'a str, cursor: Option<&'a str> },
     AgentsList,
     AgentsTeam,
+    AgentsHistory,
+    AgentsExclusions,
+    TeamSettings,
     AgentsScreen { name: &'a str },
     ProfileProgress,
 }
@@ -106,6 +109,9 @@ impl StreamRead<'_> {
             Self::ChatRead { .. } => "chat.read",
             Self::AgentsList => "agents.list",
             Self::AgentsTeam => "agents.team",
+            Self::AgentsHistory => "agents.history",
+            Self::AgentsExclusions => "agents.exclusions",
+            Self::TeamSettings => "team.settings",
             Self::AgentsScreen { .. } => "agents.screen",
             Self::ProfileProgress => "profile.progress",
         }
@@ -132,7 +138,7 @@ impl StreamRead<'_> {
                 }
                 request.insert("args".into(), json!({ "name": name }));
             }
-            Self::AgentsList | Self::AgentsTeam | Self::ProfileProgress => {}
+            Self::AgentsList | Self::AgentsTeam | Self::AgentsHistory | Self::AgentsExclusions | Self::TeamSettings | Self::ProfileProgress => {}
         }
         serde_json::to_string(&Value::Object(request)).ok()
     }
@@ -320,6 +326,8 @@ fn page_event(topic: &str) -> Option<PageEvent> {
     match topic {
         "agents" => Some(PageEvent { topic: "agents", agent: None }),
         "profile" => Some(PageEvent { topic: "profile", agent: None }),
+        "settings" => Some(PageEvent { topic: "settings", agent: None }),
+        "positions" => Some(PageEvent { topic: "positions", agent: None }),
         _ => {
             let index = CHAT_TOPICS.iter().position(|known| *known == topic)?;
             let agent = crate::existing_team_runtime::CHAT_AGENTS[index];
@@ -992,6 +1000,9 @@ mod tests {
         assert_eq!(value(StreamRead::AgentsTeam), json!({"id":5,"op":"agents.team"}));
         assert_eq!(value(StreamRead::AgentsScreen { name: "SCOUT-12" }), json!({"id":5,"op":"agents.screen","args":{"name":"SCOUT-12"}}));
         assert_eq!(value(StreamRead::ProfileProgress), json!({"id":5,"op":"profile.progress"}));
+        assert_eq!(value(StreamRead::AgentsHistory), json!({"id":5,"op":"agents.history"}));
+        assert_eq!(value(StreamRead::AgentsExclusions), json!({"id":5,"op":"agents.exclusions"}));
+        assert_eq!(value(StreamRead::TeamSettings), json!({"id":5,"op":"team.settings"}));
         for agent in ["-x", "--help", "a b", "capitano\n", "Capitano", "", "root", &"x".repeat(257)] {
             assert!(StreamRead::ChatRead { agent, cursor: None }.request(1).is_none(), "{agent:?}");
         }
@@ -1012,7 +1023,7 @@ mod tests {
             assert_eq!(*topic, format!("chat:{agent}"));
         }
         assert_eq!(CHAT_TOPICS.len(), crate::existing_team_runtime::CHAT_AGENTS.len());
-        assert_eq!(watched_topics().len(), 10);
+        assert_eq!(watched_topics().len(), 12);
     }
 
     // ── what reaches the page ───────────────────────────────────────────────────────────────────────
@@ -1021,6 +1032,8 @@ mod tests {
     fn the_page_hears_only_topics_from_this_sides_table_and_never_content() {
         assert_eq!(serde_json::to_value(page_event("agents").unwrap()).unwrap(), json!({"topic":"agents"}));
         assert_eq!(serde_json::to_value(page_event("profile").unwrap()).unwrap(), json!({"topic":"profile"}));
+        assert_eq!(serde_json::to_value(page_event("settings").unwrap()).unwrap(), json!({"topic":"settings"}));
+        assert_eq!(serde_json::to_value(page_event("positions").unwrap()).unwrap(), json!({"topic":"positions"}));
         assert_eq!(serde_json::to_value(page_event("chat:mentor").unwrap()).unwrap(), json!({"topic":"chat","agent":"mentor"}));
         for unknown in ["", "piles", "chat:", "chat:root", "chat:-x", "chat:MENTOR", "agents ", "profile\n", "../agents"] {
             assert!(page_event(unknown).is_none(), "{unknown:?}");
@@ -1335,7 +1348,7 @@ done"#
         let code = code.as_str();
         // the reads of the closed set, and nothing else, have an operation
         let ops = code.split("fn op(&self)").nth(1).unwrap().split("\n    }\n").next().unwrap();
-        assert_eq!(ops.matches('"').count() / 2, 5);
+        assert_eq!(ops.matches('"').count() / 2, 8);
         for forbidden in ["app_exit", "ChatOperation::Send", "ChatOperation::Answer", "ChatOperation::Enter", "\"start\"", "\"stop\"", "\"restart\"", "\"pause\"", "\"resume\"", "\"send\"", "\"answer\"", "write_access", "team_start"] {
             assert!(!code.contains(forbidden), "{forbidden}");
         }
@@ -1345,8 +1358,13 @@ done"#
         assert!(chat_arm.contains("ChatOperation::Read { agent, cursor }") && chat_arm.matches("read_local(").count() == 1);
         let control = include_str!("agent_control.rs");
         let hot = control.split("let hot = match request {").nth(1).unwrap().split("};").next().unwrap();
-        assert_eq!(hot.matches("Some(crate::state_stream::StreamRead::").count(), 3);
-        assert!(hot.contains("List {}") && hot.contains("Team {}") && hot.contains("Screen { session }"));
+        assert_eq!(hot.matches("Some(crate::state_stream::StreamRead::").count(), 5);
+        assert!(hot.contains("List {}") && hot.contains("Team {}") && hot.contains("Screen { session }") && hot.contains("History {}") && hot.contains("Exclusions {}"));
+        // the settings: only the read goes over the stream, and a change made the old way drops what it kept
+        let settings = include_str!("team_settings.rs");
+        let local = settings.split("Destination::Local { wrapper, runtime } => {").nth(1).unwrap().split("\n        }\n").next().unwrap();
+        assert_eq!(local.matches("read_local(").count(), 1);
+        assert!(local.contains("matches!(request, Request::Read {})") && local.contains("StreamRead::TeamSettings") && local.contains("invalidate_local(stream)"));
         // a change made the old way tells the stream to drop what it kept
         assert!(chat.contains("crate::state_stream::invalidate_local(stream)") && control.contains("crate::state_stream::invalidate_local(stream)"));
     }

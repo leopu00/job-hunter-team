@@ -370,6 +370,8 @@ fn run(app: &tauri::AppHandle, scope: &AccountScope, destination: &Destination, 
             let hot = match request {
                 ControlRequest::List {} => Some(crate::state_stream::StreamRead::AgentsList),
                 ControlRequest::Team {} => Some(crate::state_stream::StreamRead::AgentsTeam),
+                ControlRequest::History {} => Some(crate::state_stream::StreamRead::AgentsHistory),
+                ControlRequest::Exclusions {} => Some(crate::state_stream::StreamRead::AgentsExclusions),
                 ControlRequest::Screen { session } => Some(crate::state_stream::StreamRead::AgentsScreen { name: session }),
                 _ => None,
             };

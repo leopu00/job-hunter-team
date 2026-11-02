@@ -57,7 +57,7 @@ test('the first line is the hello: protocol, ops, the container id, and the scri
   assert.equal(hello.proto, 1);
   assert.equal(hello.cid, 'b'.repeat(64));
   assert.deepEqual(hello.sha256, { 'profile.progress': 'a'.repeat(64) });
-  assert.deepEqual(hello.ops, ['chat.read', 'agents.list', 'agents.team', 'agents.screen', 'profile.progress', 'watch', 'invalidate', 'ping', 'bye']);
+  assert.deepEqual(hello.ops, ['chat.read', 'agents.list', 'agents.team', 'agents.history', 'agents.exclusions', 'team.settings', 'agents.screen', 'profile.progress', 'watch', 'invalidate', 'ping', 'bye']);
 });
 
 test('an image without the profile script does not declare that op, and asking for it is an unknown op', async () => {
@@ -87,6 +87,9 @@ test('each read runs one absolute argv from the table and returns the reader std
   h.send({ id: 3, op: 'agents.team' });
   h.send({ id: 4, op: 'agents.screen', args: { name: 'SCOUT-2' } });
   h.send({ id: 5, op: 'profile.progress' });
+  h.send({ id: 6, op: 'agents.history' });
+  h.send({ id: 7, op: 'agents.exclusions' });
+  h.send({ id: 8, op: 'team.settings' });
   await h.next();
   const argvs = h.calls.map((call) => call.argv);
   assert.deepEqual(argvs[0], ['/usr/bin/python3', '-I', '/app/shared/skills/agent_chat.py', 'read', 'capitano', '123']);
@@ -95,9 +98,12 @@ test('each read runs one absolute argv from the table and returns the reader std
   assert.deepEqual(argvs[3], ['/usr/bin/python3', '-I', '/app/shared/skills/agent_control.py', 'screen', 'SCOUT-2']);
   assert.deepEqual(argvs[4], ['/usr/bin/python3', '-I', PROFILE_SCRIPT]);
   assert.equal(h.calls[4].options.stdin, '{"op":"read"}\n');
+  assert.deepEqual(argvs[5], ['/usr/bin/python3', '-I', '/app/shared/skills/agent_control.py', 'history']);
+  assert.deepEqual(argvs[6], ['/usr/bin/python3', '-I', '/app/shared/skills/agent_control.py', 'exclusions']);
   assert.ok(argvs.every((argv) => argv[0].startsWith('/')));
   const answers = h.lines.filter((line) => line.t === 'res');
-  assert.equal(answers.length, 5);
+  assert.deepEqual(argvs[7], ['/usr/local/bin/node', '/app/cli/bin/jht.js', 'agent-control', 'settings', 'get']);
+  assert.equal(answers.length, 8);
   assert.deepEqual(answers[0], { t: 'res', id: 1, ok: true, exit: 4, out: '{"error":"x"}\n', age_ms: 0, cached: false });
 });
 
@@ -374,6 +380,70 @@ test('the hint arrives when a sweep sees a different file, once, with rev 1, the
   assert.equal(ended, 0);
 });
 
+test('settings and positions are topics; positions gives one hint per 10 s at most, and the last change always gets one', async () => {
+  const state = { sig: '1:10', at: 1_000_000 };
+  const lines = [];
+  const stream = createStateStream({
+    write: (line) => lines.push(JSON.parse(line)),
+    end: () => {},
+    run: () => Promise.resolve({ exit: 0, out: '{}' }),
+    stat: () => state.sig,
+    now: () => state.at,
+    cid: () => null,
+    profileSha: () => null,
+    home: '/jht_home',
+  });
+  stream.hello();
+  stream.push('{"id":1,"op":"watch","args":{"topics":["settings","positions"]}}\n');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(lines.find((line) => line.id === 1)?.ok, true);
+  const hints = () => lines.filter((line) => line.t === 'ev').map((line) => `${line.topic}:${line.rev}`);
+  state.sig = '2:20';
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.deepEqual(hints(), ['settings:1', 'positions:1']);
+  // two more changes inside the 10 s: settings hints at once, positions waits
+  state.at += 2000; state.sig = '3:30';
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  state.at += 2000; state.sig = '4:40';
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.deepEqual(hints(), ['settings:1', 'positions:1', 'settings:2', 'settings:3']);
+  // the window passes with no further change: the trailing hint still comes, once
+  state.at += 10_000;
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  assert.deepEqual(hints(), ['settings:1', 'positions:1', 'settings:2', 'settings:3', 'positions:2']);
+  stream.close();
+});
+
+test('a change of the settings drops the kept team.settings read', async () => {
+  const state = { sig: '1:10' };
+  const calls = [];
+  const lines = [];
+  const stream = createStateStream({
+    write: (line) => lines.push(JSON.parse(line)),
+    end: () => {},
+    run: (argv) => { calls.push(argv); return Promise.resolve({ exit: 0, out: '{"ok":true}\n' }); },
+    stat: () => state.sig,
+    cid: () => null,
+    profileSha: () => null,
+    home: '/jht_home',
+  });
+  stream.hello();
+  stream.push('{"id":1,"op":"watch","args":{"topics":["settings"]}}\n');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  stream.push('{"id":2,"op":"team.settings"}\n');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  stream.push('{"id":3,"op":"team.settings"}\n');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(calls.length, 1, 'the second ask is served from what is kept');
+  state.sig = '2:20';
+  await new Promise((resolve) => setTimeout(resolve, 1300));
+  stream.push('{"id":4,"op":"team.settings"}\n');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(calls.length, 2);
+  stream.close();
+});
+
 // ── the one place that runs a program ─────────────────────────────────────────────────────────
 test('runReader: stdout whole and the exit code; a non-zero exit is an answer, not an error', async () => {
   const done = await runReader([process.execPath, '-e', 'process.stdout.write("hi\\n"); process.exit(7)'], { cwd: '/', timeoutMs: 5000 });
@@ -428,12 +498,16 @@ test('source: one place runs a program, with no shell, and nothing is written, o
   assert.ok(!/from 'node:fs'.*\b(write|append|chmod|chown|truncate|copy|symlink|link)\w*/.test(CODE));
 });
 
-test('source: the table holds absolute programs only, and every program is one of python3, tmux', () => {
+test('source: the table holds absolute programs only, and every program is one of python3, node, tmux', () => {
   assert.ok(/const PYTHON = '\/usr\/bin\/python3'/.test(CODE) && /const TMUX = '\/usr\/bin\/tmux'/.test(CODE));
   assert.ok(/const CWD|export const CWD = '\/app'/.test(CODE));
   for (const reader of Object.values(READERS)) {
     const sample = reader === READERS['chat.read'] ? { agent: 'capitano' } : reader === READERS['agents.screen'] ? { name: 'CAPITANO' } : undefined;
     const argv = reader.argv(sample);
+    if (reader === READERS['team.settings']) {
+      assert.deepEqual(argv, ['/usr/local/bin/node', '/app/cli/bin/jht.js', 'agent-control', 'settings', 'get']);
+      continue;
+    }
     assert.ok(argv[0] === '/usr/bin/python3' && argv[1] === '-I' && argv[2].startsWith('/app/shared/skills/'), argv.join(' '));
     assert.ok(!argv.slice(3).some((word) => word.startsWith('-')));
   }

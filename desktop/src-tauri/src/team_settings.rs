@@ -30,7 +30,7 @@
 //! means is the team's provider's business.
 
 use crate::{
-    account_scope::AccountScopeState,
+    account_scope::{AccountScope, AccountScopeState},
     agent_control::{destination, destination_mode, own_vps_wrapper, window_refusal, Destination, VpsMode},
     existing_team_runtime::{command, RuntimeTarget},
     runtime_host::{run_ssh_command, ProcessResult},
@@ -191,7 +191,7 @@ fn vps_command(runtime: &RuntimeTarget, verb: &str) -> Result<String, &'static s
 }
 
 /// The box's command line on each destination. The settings travel on stdin, never in a command.
-fn run(destination: &Destination, request: &Request) -> Result<ProcessResult, &'static str> {
+fn run(destination: &Destination, request: &Request, app: &tauri::AppHandle, scope: &AccountScope) -> Result<ProcessResult, &'static str> {
     let input = stdin_of(request);
     let verb = verb(request);
     match destination {
@@ -203,8 +203,21 @@ fn run(destination: &Destination, request: &Request) -> Result<ProcessResult, &'
             let remote = own_vps_wrapper("JHT_AGENT_CONTROL_PROTOCOL=1", &format!("agent-control settings {verb}"));
             run_ssh_command(validated, &remote, input.as_deref(), RUN_TIMEOUT, None)
         }
-        Destination::Local { wrapper, .. } => {
-            crate::onboarding::run_verified_local_wrapper(wrapper, &["agent-control", "settings", verb], input.as_deref(), RUN_TIMEOUT)
+        Destination::Local { wrapper, runtime } => {
+            // The read goes over the state stream when it is open; a change (and any read the stream cannot answer)
+            // is made the way it always was, and a change tells the stream to drop what it kept.
+            let stream = runtime.as_deref().map(|runtime| crate::state_stream::LocalContext { app, scope, wrapper, runtime });
+            let reads = matches!(request, Request::Read {});
+            if let (Some(stream), true) = (&stream, reads) {
+                if let Some(done) = crate::state_stream::read_local(stream, &crate::state_stream::StreamRead::TeamSettings) {
+                    return Ok(done);
+                }
+            }
+            let done = crate::onboarding::run_verified_local_wrapper(wrapper, &["agent-control", "settings", verb], input.as_deref(), RUN_TIMEOUT);
+            if let (Some(stream), false) = (&stream, reads) {
+                crate::state_stream::invalidate_local(stream);
+            }
+            done
         }
     }
 }
@@ -447,7 +460,7 @@ pub(crate) async fn team_settings(
                 Ok((mode, claim, print, target))
             },
             |request| match found.borrow().as_ref() {
-                Some(found_destination) => run(found_destination, request),
+                Some(found_destination) => run(found_destination, request, &app, &worker_expected),
                 None => Err("team_settings_unavailable"),
             },
         ))

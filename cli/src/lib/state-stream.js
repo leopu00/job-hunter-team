@@ -11,7 +11,7 @@
 //   out  {"t":"hello","proto":1,"ops":[…],"cid":"<container id from inside>","sha256":{…}}  first line
 //        {"t":"res","id":n,"ok":true,"exit":0,"out":"<stdout of the reader>","age_ms":0,"cached":false}
 //        {"t":"res","id":n,"ok":false,"err":"args_invalid|op_unknown|busy|timeout|too_big|reader_failed"}
-//        {"t":"ev","topic":"agents|profile|chat:<agent>","rev":n}   «changed, read again», no content
+//        {"t":"ev","topic":"agents|profile|settings|positions|chat:<agent>","rev":n}   «changed, read again», no content
 //        {"t":"pong","id":n}
 //
 // What this process is, and is not:
@@ -45,6 +45,8 @@ export const READER_TIMEOUT_MS = 8000;
 export const READER_STDOUT_MAX = 1024 * 1024;
 export const IDLE_EXIT_MS = 60_000;
 export const MAX_TOPICS = 12;
+/** The least time between two hints for the positions: the database changes far more often than a page needs to read. */
+export const POSITIONS_HINT_MS = 10_000;
 export const EXIT_PROTOCOL = 3;
 /** What is kept of answered reads: at most this many entries and this many bytes of text; the oldest go first. */
 export const CACHE_MAX_ENTRIES = 64;
@@ -52,6 +54,9 @@ export const CACHE_MAX_BYTES = 4 * 1024 * 1024;
 
 const PYTHON = '/usr/bin/python3';
 const TMUX = '/usr/bin/tmux';
+/** The image's own Node and CLI, for the one read whose reader is the CLI command the old way ran (`agent-control settings get`). */
+const NODE = '/usr/local/bin/node';
+const JHT_ENTRY = '/app/cli/bin/jht.js';
 const SKILLS = '/app/shared/skills';
 /** Root-owned, in the image layer, not writable by the agents. */
 export const CWD = '/app';
@@ -91,6 +96,9 @@ export const READERS = {
   },
   'agents.list': { ttl: 1000, argv: (args) => (NO_ARGS(args) ? control(['list']) : null) },
   'agents.team': { ttl: 1000, argv: (args) => (NO_ARGS(args) ? control(['team']) : null) },
+  'agents.history': { ttl: 2000, argv: (args) => (NO_ARGS(args) ? control(['history']) : null) },
+  'agents.exclusions': { ttl: 1000, argv: (args) => (NO_ARGS(args) ? control(['exclusions']) : null) },
+  'team.settings': { ttl: 3000, argv: (args) => (NO_ARGS(args) ? [NODE, JHT_ENTRY, 'agent-control', 'settings', 'get'] : null) },
   'agents.screen': {
     ttl: 500,
     argv(args) {
@@ -222,9 +230,9 @@ export function depthOf(line) {
 }
 
 const AGENT_TOPIC = /^chat:([a-z]+)$/;
-/** A topic the app may watch: `agents`, `profile`, or `chat:<agent>` for one of the chat's agents. */
+/** A topic the app may watch: `agents`, `profile`, `settings`, `positions`, or `chat:<agent>` for one of the chat's agents. */
 export function validTopic(topic) {
-  if (topic === 'agents' || topic === 'profile') return true;
+  if (topic === 'agents' || topic === 'profile' || topic === 'settings' || topic === 'positions') return true;
   const found = typeof topic === 'string' ? AGENT_TOPIC.exec(topic) : null;
   return Boolean(found && CHAT_AGENTS.includes(found[1]));
 }
@@ -363,6 +371,10 @@ export function createStateStream({
 
   const topicPaths = (topic) => {
     if (topic === 'profile') return [`${home}/profile/candidate_profile.yml`];
+    // what `agent-control settings get` reads: the config, the burst's record, the containment holds, the budget's file
+    if (topic === 'settings') return [`${home}/jht.config.json`, `${home}/.burst.json`, `${home}/logs/containment`, `${home}/logs/sentinel-data.jsonl`];
+    // the database and its write-ahead log (in WAL a write touches the log, not the main file); only stat'ed
+    if (topic === 'positions') return [`${home}/jobs.db`, `${home}/jobs.db-wal`];
     const chat = AGENT_TOPIC.exec(topic);
     return chat ? [`${home}/agents/${chat[1]}/chat.jsonl`] : [];
   };
@@ -372,11 +384,14 @@ export function createStateStream({
     revs.set(topic, rev);
     if (topic === 'agents') for (const key of cache.keys()) if (key.startsWith('agents.')) cache.delete(key);
     if (topic === 'profile') for (const key of cache.keys()) if (key.startsWith('profile.')) cache.delete(key);
+    if (topic === 'settings') for (const key of cache.keys()) if (key.startsWith('team.settings\n')) cache.delete(key);
     const chat = AGENT_TOPIC.exec(topic);
     if (chat) for (const key of cache.keys()) if (key.startsWith('chat.read\n') && key.includes(`"agent":"${chat[1]}"`)) cache.delete(key);
     send({ t: 'ev', topic, rev });
   };
 
+  let positionsDirty = false;
+  let positionsHintAt = -Infinity;
   const sweep = async () => {
     if (over || sweeping) return;
     sweeping = true;
@@ -392,7 +407,17 @@ export function createStateStream({
         if (over) return;
         const before = signatures.get(topic);
         signatures.set(topic, signature);
-        if (before !== undefined && before !== signature) bump(topic);
+        if (topic === 'positions') {
+          // a scoring team writes many times a minute: one hint at most every POSITIONS_HINT_MS, and the last change always gets one
+          if (before !== undefined && before !== signature) positionsDirty = true;
+          if (positionsDirty && now() - positionsHintAt >= POSITIONS_HINT_MS) {
+            positionsDirty = false;
+            positionsHintAt = now();
+            bump(topic);
+          }
+        } else if (before !== undefined && before !== signature) {
+          bump(topic);
+        }
       }
     } finally {
       sweeping = false;
@@ -416,6 +441,7 @@ export function createStateStream({
       }
       topics = [...new Set(list)];
       signatures = new Map();
+      positionsDirty = false;
       clearInterval(watcher);
       if (topics.length) {
         watcher = setInterval(() => { sweep().catch(() => {}); }, 1000);
