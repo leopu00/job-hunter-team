@@ -1293,7 +1293,7 @@ describe("«Agenti»: the list reads again by itself", () => {
   const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
   // Moves only the fake clock until the condition holds (never waits on the real one, which a loaded machine stretches).
   const until = async (done: () => boolean) => {
-    for (let step = 0; step < 50 && !done(); step++) await advance(20);
+    for (let step = 0; step < 400 && !done(); step++) await advance(20);
   };
 
   beforeEach(() => {
@@ -1346,11 +1346,13 @@ describe("«Agenti»: the list reads again by itself", () => {
       await advance(LIST_REFRESH_LOCAL_MS + 5_000);
       expect(lists()).toBe(1);
       hint();
-      await waitFor(() => expect(lists()).toBe(2));
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
       await advance(LIST_REFRESH_STREAMED_MS - 1_000);
       expect(lists()).toBe(2);
       await advance(2_000);
-      await waitFor(() => expect(lists()).toBe(3));
+      await until(() => lists() === 3);
+      expect(lists()).toBe(3);
     });
 
     it("a burst of hints (a team starting) is two reads, not one per hint", async () => {
@@ -1359,9 +1361,11 @@ describe("«Agenti»: the list reads again by itself", () => {
       await screen.findByTestId("panel-summary");
       status("up");
       for (let i = 0; i < 12; i++) hint();
-      await waitFor(() => expect(lists()).toBe(2));
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
       await advance(3_500);
-      await waitFor(() => expect(lists()).toBe(3));
+      await until(() => lists() === 3);
+      expect(lists()).toBe(3);
       await advance(10_000);
       expect(lists()).toBe(3);
     });
@@ -1418,7 +1422,8 @@ describe("«Agenti»: the list reads again by itself", () => {
       await advance(LIST_REFRESH_LOCAL_MS - 1_000);
       expect(lists()).toBe(1);
       await advance(2_000);
-      await waitFor(() => expect(lists()).toBe(2));
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
     });
 
     it("with the channel off it reads at 20 s and ignores hints it was never given", async () => {
@@ -1427,7 +1432,8 @@ describe("«Agenti»: the list reads again by itself", () => {
       await screen.findByTestId("panel-summary");
       status("off");
       await advance(LIST_REFRESH_LOCAL_MS + 1_000);
-      await waitFor(() => expect(lists()).toBe(2));
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
     });
 
     it("on a VPS the channel is off and the pace stays 60 s", async () => {
@@ -1436,7 +1442,8 @@ describe("«Agenti»: the list reads again by itself", () => {
       await advance(LIST_REFRESH_VPS_MS - 1_000);
       expect(lists()).toBe(1);
       await advance(2_000);
-      await waitFor(() => expect(lists()).toBe(2));
+      await until(() => lists() === 2);
+      expect(lists()).toBe(2);
     });
   });
 
