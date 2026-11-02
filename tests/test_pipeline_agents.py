@@ -182,7 +182,7 @@ class TestAnalistaFlow:
         """Analista può escludere una posizione (status='excluded')."""
         db_path, tmp = fresh_db
         pos_id = insert_position(db_path, tmp, 'Bad Role', 'BadCo')
-        r = update_position(db_path, tmp, pos_id, status='excluded', notes='non pertinente')
+        r = update_position(db_path, tmp, pos_id, status='excluded', notes='EXCLUDED: [STACK] non pertinente')
         assert r.returncode == 0
 
         conn = sqlite3.connect(db_path)

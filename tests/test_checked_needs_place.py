@@ -184,7 +184,9 @@ def test_a_row_that_is_already_checked_can_be_touched_without_a_place(db):
 @pytest.mark.parametrize("status", ["excluded", "scored", "new", "writing"])
 def test_the_other_transitions_are_not_asked_for_a_place(db, status):
     pid = _make(db, status="checked")
-    done = _run(db, "position", str(pid), "--status", status)
+    # an exclusion carries its reason (the other rule of db_update.py); the other moves ask for nothing
+    reason = ["--notes", "EXCLUDED: [GEO] only onsite elsewhere"] if status == "excluded" else []
+    done = _run(db, "position", str(pid), "--status", status, *reason)
     assert done.returncode == 0, done.stderr
 
 
