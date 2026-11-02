@@ -348,3 +348,16 @@ def test_next_for_a_wide_question_gives_the_entry_words_of_the_portals_language_
 def test_every_language_of_the_table_has_its_entry_words():
     data = cov.table()
     assert set(data["broad_terms"]) == set(data["level_terms"]) and all(data["broad_terms"][k] for k in data["broad_terms"])
+
+
+def test_the_wide_english_queries_that_returned_positions_in_the_field_are_in_the_table_as_examples_and_in_the_wide_step(profile):
+    data = cov.table()
+    worked = {e["term"]: e for e in data["broad_examples"]["en"]}
+    assert {"intern", "developer", "graduate", "trainee"} <= set(worked)
+    assert all(e["inserted"] >= 1 and e["read"] >= e["inserted"] for e in worked.values())
+    assert all(e["inserted"] == 0 for e in data["broad_examples"]["no_yield"])
+    assert {"internship", "intern", "graduate", "trainee"} <= set(data["broad_terms"]["en"])
+    step = cov.next_step(cov.load_plan(), [])
+    assert step["query_kind"] == "broad" and step["broad_worked_in_english"] == list(worked)
+    # nothing but the words and numbers: no profile text, no company
+    assert set(json.dumps(data["broad_examples"])) <= set(json.dumps(data["broad_examples"]).encode("ascii", "ignore").decode())
