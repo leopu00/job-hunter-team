@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
 import { EFFORTS, MODEL_CLASSES, ROLES, WEEKDAYS } from "../../lib/team-settings-native";
-import BurstControl, { BurstStrip } from "./BurstControl";
+import BurstControl, { BurstStrip, DEFAULT_HOURS, QUICK_HOURS, clockIn, untilIn } from "./BurstControl";
 import { BURST_TEXT } from "./burst.i18n";
 import WorkHoursPage from "./index";
 
@@ -57,7 +57,7 @@ describe("work flat out until a time", () => {
     render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
     const user = userEvent.setup();
     await user.click(await screen.findByTestId("burst-start"));
-    expect(screen.getByTestId("burst-note")).toHaveTextContent("Choose the time.");
+    expect(screen.getByTestId("burst-note")).toHaveTextContent("Choose the time: fill in hours and minutes (and AM/PM if the field shows it), or tap a length of time.");
     expect(requests().map((r) => r.op)).toEqual(["read"]);
   });
 
@@ -127,5 +127,109 @@ describe("work flat out until a time", () => {
       for (const key of ["burstStart", "burstActive", "burstStarted"] as const) expect(text[key], `${locale} ${key}`).toContain("{time}");
       for (const [key, value] of Object.entries(text)) expect(value.trim(), `${locale} ${key}`).not.toBe("");
     }
+  });
+});
+
+// ── a field that starts empty looks as if it had a value (WebKit shows 12:30 PM in grey): it starts full, or with a length of time to tap ──
+const ROME = { timezone: "Europe/Rome", windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00" }] };
+const NOON_UTC = new Date("2026-11-02T12:07:00Z"); // 13:07 in Rome (CET)
+
+describe("the time the field starts on, and the lengths of time to tap", () => {
+  it("reads the clock of the zone it is given, not the computer's", () => {
+    expect(clockIn("Europe/Rome", NOON_UTC)).toBe("13:07");
+    expect(clockIn("Asia/Tokyo", NOON_UTC)).toBe("21:07");
+    expect(clockIn("America/New_York", NOON_UTC)).toBe("07:07");
+    expect(clockIn("Not/AZone", NOON_UTC)).toBeNull();
+    expect(clockIn(null, NOON_UTC)).toBeNull();
+    expect(clockIn("Europe/Rome", new Date("2026-11-02T22:59:00Z"))).toBe("23:59");
+    expect(clockIn("Europe/Rome", new Date("2026-11-02T23:00:00Z"))).toBe("00:00");
+  });
+
+  it("starts the field four hours from now, rounded up to a quarter of an hour, in the team's zone, inside the 12 hours", () => {
+    expect(DEFAULT_HOURS).toBe(4);
+    expect(untilIn("Europe/Rome", DEFAULT_HOURS, NOON_UTC, "quarter")).toBe("17:15");
+    expect(untilIn("Europe/Rome", 4, new Date("2026-11-02T12:15:00Z"), "quarter")).toBe("17:15");
+    expect(untilIn("Europe/Rome", 4, new Date("2026-11-02T20:50:00Z"), "quarter")).toBe("02:00");
+    expect(untilIn("Europe/Rome", 1, NOON_UTC, "minute")).toBe("14:07");
+    expect(untilIn("Europe/Rome", 1, new Date("2026-11-02T12:07:30Z"), "minute")).toBe("14:08");
+    expect(untilIn(null, 4, NOON_UTC, "quarter")).toBeNull();
+    for (const hours of [...QUICK_HOURS, DEFAULT_HOURS]) expect(hours).toBeLessThanOrEqual(12);
+  });
+
+  it("shows the field already full when the team's zone is known, and the button says the time", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      answer(() => reply({ working_hours: ROME, burst: { active: false } }));
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const field = (await screen.findByTestId("burst-time")) as HTMLInputElement;
+      expect(field.value).toBe("17:15");
+      expect(screen.getByTestId("burst-start")).toHaveTextContent("Work at full throttle until 17:15");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts with the value in the field when the person only presses the button", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      answer((request) => (request.op === "burst_start" ? reply({ working_hours: ROME, burst: { active: true, until: IN_AN_HOUR(), untilLocal: "17:15" } }) : reply({ working_hours: ROME })));
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      await user.click(await screen.findByTestId("burst-start"));
+      expect(await screen.findByTestId("burst-active")).toHaveTextContent("Full throttle until 17:15");
+      expect(requests().at(-1)).toEqual({ op: "burst_start", until: "17:15", connectionKey: KEY });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("offers one tap for 1, 2 and 4 hours, and a tap sends the team's clock time that far from now", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      answer((request) => (request.op === "burst_start" ? reply({ working_hours: ROME, burst: { active: true, until: IN_AN_HOUR(), untilLocal: "15:07" } }) : reply({ working_hours: ROME })));
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      const group = await screen.findByTestId("burst-quick");
+      expect(group).toHaveTextContent("For how long?");
+      expect([1, 2, 4].map((h) => screen.getByTestId(`burst-quick-${h}`).textContent)).toEqual(["for 1 hour", "for 2 hours", "for 4 hours"]);
+      expect(screen.getByLabelText("Or an exact time")).toBe(screen.getByTestId("burst-time"));
+      await user.click(screen.getByTestId("burst-quick-2"));
+      expect(await screen.findByTestId("burst-active")).toHaveTextContent("Full throttle until 15:07");
+      expect(requests().at(-1)).toEqual({ op: "burst_start", until: "15:07", connectionKey: KEY });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("with no zone known it guesses nothing: the field stays empty, no length of time is offered, and the message says what is missing", async () => {
+    answer(() => reply({ working_hours: null }));
+    render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+    const user = userEvent.setup();
+    const field = (await screen.findByTestId("burst-time")) as HTMLInputElement;
+    expect(field.value).toBe("");
+    expect(screen.queryByTestId("burst-quick")).toBeNull();
+    await user.click(screen.getByTestId("burst-start"));
+    expect(screen.getByTestId("burst-note")).toHaveTextContent(/hours and minutes/);
+    expect(requests().map((r) => r.op)).toEqual(["read"]);
+  });
+
+  it("a field the person has emptied again says what is missing and sends nothing", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: NOON_UTC });
+    try {
+      answer(() => reply({ working_hours: ROME }));
+      render(<WorkHoursPage params={{}} search={new URLSearchParams()} />);
+      const user = userEvent.setup({ advanceTimers: () => undefined });
+      await user.clear(await screen.findByTestId("burst-time"));
+      await user.click(screen.getByTestId("burst-start"));
+      expect(screen.getByTestId("burst-note")).toHaveTextContent("fill in hours and minutes (and AM/PM if the field shows it)");
+      expect(requests().map((r) => r.op)).toEqual(["read"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the new lines exist in the seven languages", () => {
+    const keys = ["burstNeedsTime", "burstQuickLabel", "burstFor1", "burstFor2", "burstFor4", "burstExactLabel"] as const;
+    for (const locale of Object.keys(BURST_TEXT) as Locale[]) for (const key of keys) expect(BURST_TEXT[locale][key]?.length, `${locale}/${key}`).toBeGreaterThan(3);
   });
 });
