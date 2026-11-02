@@ -69,16 +69,18 @@ Eine Stufe vollständig erschöpfen, bevor zur nächsten gewechselt wird.
 | Stufe | Typ                                | Quellen                                                                                                       | Hinweise                                                                                       |
 |-------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | 1     | **LinkedIn**                        | `linkedin_check.py` (authentifiziertes Profil), `safe_fetch.py`, Ausweichlösung `linkedin_access.py search`/`fetch-job` (öffentlich, ohne Login)                                         | Universal: deckt remote, on-site, hybrid ab. Verpflichtender erster Schritt für jeden Kreis. **NIEMALS `fetch` MCP** — blockiert durch robots.txt. |
-| 2     | **ATS-Aggregatoren**                | Greenhouse-Boards, Lever-Boards, Indeed, Wellfound (ehem. AngelList)                                          | Funktioniert für jeden work_mode. Deckt viele Firmen in einem Scrape ab.                       |
+| 2     | **ATS-Aggregatoren**                | Greenhouse-Boards, Lever-Boards, Wellfound (ehem. AngelList)                                          | Funktioniert für jeden work_mode. Ein Board pro Firma: erst die Firmen finden.                       |
 | 3     | **Nischen-Boards (profilspezifisch)** | Nach `work_mode` UND Domain auswählen                                                                       | (siehe Tabelle unten)                                                                          |
 | 4     | **WebSearch + Karriereseiten**       | `WebSearch`-Abfragen + Scraping von Firmen-Karriereseiten                                                    | Letzter Ausweg nur nach Erschöpfung der Stufen 1-3.                                           |
+
+**Quellen, die sich schließen, und Quellen ohne Suche.** Indeed und Glassdoor werden nicht direkt durchsucht (sie antworten einem automatischen Leser mit 403): ihre Job-Alerts kommen per E-Mail (Email-first sourcing in deinem Prompt). Ein **403** einer beliebigen Quelle heißt: für diesen Durchgang geschlossen. Wechsle zu einer anderen Quelle, versuche es nicht erneut und suche nie einen Weg, den Schutz zu umgehen. Die ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) werden **pro Firma** abgefragt (der Slug ihres Boards), nicht als globale Suche: Sie haben keine. Finde zuerst die Firmen (LinkedIn, `WebSearch`, Karriereseiten) und lies das Board jeder einzelnen.
 
 ### Stufe 3 — Auswahl nach work_mode + Domain
 
 | `work_mode` des Kandidaten | Zu erwägende Nischen-Boards                                                                                |
 |-------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `remote`                | Remote.co, WeWorkRemotely, RemoteOK, EURemoteJobs (oder regionale Äquivalente)                                     |
-| `on-site` / `hybrid`    | Lokale / nationale Boards (InfoJobs, Glassdoor regional, Stepstone, Welcome to the Jungle FR, …)                  |
+| `on-site` / `hybrid`    | Lokale / nationale Boards (InfoJobs, Stepstone, Welcome to the Jungle FR, …)                  |
 | `flessibile`            | Remote + lokal kombinieren                                                                                         |
 | Domain-spezifisch (beliebig) | Stack-spezifische Nische: PyJobs (Python), GoJobs (Go), Djinni (Osteuropa / Dev), 4dayweek.io (4-Tage-Woche), … |
 

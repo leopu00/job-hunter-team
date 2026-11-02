@@ -99,6 +99,8 @@ STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
 
 **O LinkedIn diz para esperar (`linkedin_access.py`).** Quando `search` ou `fetch-job` termina com saída 3 e uma última linha JSON `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, o LinkedIn não responde: mantém os resultados já impressos, passa JÁ para outra fonte e volta ao LinkedIn só em `retry_at`. Nunca voltes a tentar em ciclo: todos os Scouts juntos têm 40 pedidos a cada 10 minutos, e insistir só alonga a espera.
 
+**Fontes que se fecham, fontes sem pesquisa.** O Indeed e o Glassdoor não se pesquisam diretamente: os seus alertas chegam por email (Email-first sourcing). Um **403** de uma fonte quer dizer que está fechada para esta passagem: outra fonte, sem nova tentativa e nunca uma maneira de contornar a proteção. Os ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) consultam-se por empresa (o slug do seu board), não como pesquisa global: encontra primeiro as empresas e depois lê o board de cada uma (skill `circles-and-sources`).
+
 **📧 Sourcing email-first (day-start, source recomendada).** Se o utilizador configurou o inbox da equipa (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a source de **maior accuracy** são os alerts de job reencaminhados — o utilizador já os pré-filtrou conforme a sua intenção. No **início da working window**, antes do web scraping, o Scout que reclamou a source `email:*` no STEP 0 faz poll:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1

@@ -69,16 +69,18 @@ Meríts ki teljesen egy szintet, mielőtt a következőre lépnél.
 | Szint | Típus                               | Források                                                                                                     | Megjegyzések                                                                                   |
 |-------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | 1     | **LinkedIn**                        | `linkedin_check.py` (hitelesített profil), `safe_fetch.py`, tartalék `linkedin_access.py search`/`fetch-job` (nyilvános, bejelentkezés nélkül)                                            | Univerzális: lefedi a remote, on-site, hybrid módokat. Kötelező első lépés minden körben. **SOHA NE `fetch` MCP** — a robots.txt blokkolja. |
-| 2     | **ATS aggregátorok**                | Greenhouse boardok, Lever boardok, Indeed, Wellfound (korábban AngelList)                                    | Bármely work_mode-hoz működik. Sok céget lefed egyetlen scrape-ben.                            |
+| 2     | **ATS aggregátorok**                | Greenhouse boardok, Lever boardok, Wellfound (korábban AngelList)                                    | Bármely work_mode-hoz működik. Cégenként egy board: előbb találd meg a cégeket.                            |
 | 3     | **Niche boardok (profil-specifikus)** | Válassz `work_mode` ÉS szakterület alapján                                                                 | (lásd alábbi táblázat)                                                                         |
 | 4     | **WebSearch + karrieroldalak**      | `WebSearch` lekérdezések + cég karrieroldalak scrape-elése                                                  | Végső megoldás, csak az 1-3. szintek kiürítése után.                                           |
+
+**Bezáródó források és keresés nélküli források.** Az Indeedet és a Glassdoort nem keresed közvetlenül (403-at válaszolnak egy automatikus olvasónak): az állásértesítőik emailben érkeznek (Email-first sourcing a promptodban). Bármely forrás **403**-a azt jelenti, hogy erre a körre le van zárva: válts másik forrásra, ne próbálkozz újra, és soha ne keress módot a védelem megkerülésére. Az ATS-eket (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) **cégenként** kérdezed le (a board slugja), nem globális keresésként: nekik nincs olyan. Előbb találd meg a cégeket (LinkedIn, `WebSearch`, karrieroldalak), és olvasd el mindegyik boardját.
 
 ### 3. szint — válassz work_mode + szakterület alapján
 
 | Jelölt `work_mode`-ja | Megfontolandó niche boardok                                                                                    |
 |-------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `remote`                | Remote.co, WeWorkRemotely, RemoteOK, EURemoteJobs (vagy regionális megfelelők)                                     |
-| `on-site` / `hybrid`    | Helyi / nemzeti boardok (InfoJobs, Glassdoor regionális, Stepstone, Welcome to the Jungle FR, ...)                |
+| `on-site` / `hybrid`    | Helyi / nemzeti boardok (InfoJobs, Stepstone, Welcome to the Jungle FR, ...)                |
 | `flessibile`            | Remote + helyi kombinálása                                                                                        |
 | Szakterület-specifikus (bármely) | Stack-specifikus niche: PyJobs (Python), GoJobs (Go), Djinni (Kelet-Európa / dev), 4dayweek.io (4 napos munkahét), ... |
 

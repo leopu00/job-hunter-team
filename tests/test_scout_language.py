@@ -294,3 +294,16 @@ def test_the_portal_command_exits_10_on_skip(home):
     keep = _run(home, "portal", "--source", "jobbsafari", "--country", "se")
     assert keep.returncode == 0 and json.loads(keep.stdout)["verdict"] == "search"
     assert _run(home, "portal", "--source", "greenhouse").returncode == 0
+
+
+# ── the sources the Scout is told to leave alone ────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("suffix", ["", ".it", ".es", ".fr", ".de", ".hu", ".pt"])
+def test_the_scout_is_told_403_closes_a_source_and_the_ats_are_read_per_company(suffix):
+    prompt = (REPO_ROOT / "agents" / "scout" / ("scout%s.md" % suffix)).read_text(encoding="utf-8")
+    skill = (REPO_ROOT / "agents" / "_skills" / "circles-and-sources" / ("SKILL%s.md" % suffix)).read_text(encoding="utf-8")
+    for text in (prompt, skill):
+        assert "**403**" in text and "Email-first sourcing" in text
+        for ats in ("Greenhouse", "Ashby", "Workable", "Personio", "Teamtailor", "Recruitee", "Jobvite"):
+            assert ats in text
+    tiers = [l for l in skill.splitlines() if l.startswith("| 2 ") or l.startswith("| `on-site`")]
+    assert tiers and not any("Indeed" in l or "Glassdoor" in l for l in tiers), "the two are not on the lists of direct search"

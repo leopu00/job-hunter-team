@@ -69,16 +69,18 @@ Uniquement si `preferences.relocation` est non-vide :
 | Niveau | Type                                | Sources                                                                                                       | Notes                                                                                          |
 |--------|-------------------------------------|--------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | 1    | **LinkedIn**                        | `linkedin_check.py` (profil authentifié), `safe_fetch.py`, repli `linkedin_access.py search`/`fetch-job` (public, sans login)                                          | Universel : couvre remote, on-site, hybrid. Première étape obligatoire pour chaque cercle. **JAMAIS `fetch` MCP** — bloqué par robots.txt. |
-| 2    | **Agrégateurs ATS**                 | Boards Greenhouse, boards Lever, Indeed, Wellfound (ex AngelList)                                            | Fonctionne pour tout work_mode. Couvre beaucoup d'entreprises en un seul scrape.               |
+| 2    | **Agrégateurs ATS**                 | Boards Greenhouse, boards Lever, Wellfound (ex AngelList)                                            | Fonctionne pour tout work_mode. Un board par entreprise : trouve d'abord les entreprises.               |
 | 3    | **Boards niche (spécifiques au profil)** | Choisir par `work_mode` ET domaine                                                                     | (voir tableau ci-dessous)                                                                      |
 | 4    | **WebSearch + pages carrières**     | Requêtes `WebSearch` + scrape de pages carrières d'entreprises                                              | Dernier recours uniquement après avoir drainé les niveaux 1-3.                                 |
+
+**Sources qui se ferment et sources sans recherche.** Indeed et Glassdoor ne se cherchent pas directement (ils répondent 403 à un lecteur automatique) : leurs alertes d'emploi arrivent par email (Email-first sourcing dans ton prompt). Un **403** d'une source quelconque veut dire qu'elle est fermée pour cette passe : passe à une autre source, ne réessaie pas et ne cherche jamais un moyen de contourner la protection. Les ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) s'interrogent **par entreprise** (le slug de son board), pas comme une recherche globale : ils n'en ont pas. Trouve d'abord les entreprises (LinkedIn, `WebSearch`, pages carrières) et lis le board de chacune.
 
 ### Niveau 3 — choisir par work_mode + domaine
 
 | `work_mode` du candidat | Boards niche à considérer                                                                                     |
 |-------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `remote`                | Remote.co, WeWorkRemotely, RemoteOK, EURemoteJobs (ou équivalents régionaux)                                      |
-| `on-site` / `hybrid`    | Boards locaux / nationaux (InfoJobs, Glassdoor régional, Stepstone, Welcome to the Jungle FR, ...)                |
+| `on-site` / `hybrid`    | Boards locaux / nationaux (InfoJobs, Stepstone, Welcome to the Jungle FR, ...)                |
 | `flessibile`            | Combiner remote + local                                                                                           |
 | Spécifique au domaine (tout)   | Niche par stack : PyJobs (Python), GoJobs (Go), Djinni (Europe de l'Est / dev), 4dayweek.io (semaine 4 jours), ... |
 

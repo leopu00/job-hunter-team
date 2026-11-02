@@ -100,6 +100,8 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
 
 **A LinkedIn azt mondja, várj (`linkedin_access.py`).** Ha a `search` vagy a `fetch-job` 3-as kilépéssel és egy utolsó JSON-sorral ér véget: `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, a LinkedIn nem válaszol: tartsd meg a már kiírt találatokat, AZONNAL válts másik forrásra, és csak `retry_at`-kor térj vissza a LinkedInre. Soha ne próbálkozz ciklusban: az összes Scout együtt 10 percenként 40 kérést kap, és a kitartás csak hosszabbítja a várakozást.
 
+**Bezáródó források, keresés nélküli források.** Az Indeedet és a Glassdoort nem keresed közvetlenül: az értesítőik emailben érkeznek (Email-first sourcing). Egy forrás **403**-a azt jelenti, hogy erre a körre le van zárva: másik forrás, nincs újrapróbálás, és soha nem keresel módot a védelem megkerülésére. Az ATS-eket (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) cégenként kérdezed le (a board slugja), nem globális keresésként: előbb találd meg a cégeket, aztán olvasd el mindegyik boardját (skill `circles-and-sources`).
+
 **📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1

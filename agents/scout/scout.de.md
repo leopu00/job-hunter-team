@@ -101,6 +101,8 @@ STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
 
 **LinkedIn sagt: warten (`linkedin_access.py`).** Endet `search` oder `fetch-job` mit Exit 3 und einer letzten JSON-Zeile `{"rate_limited": true, "reason": "http_429|cooldown|request_cap", "retry_after_s": N, "retry_at": "<UTC>"}`, antwortet LinkedIn nicht: Behalte die schon ausgegebenen Ergebnisse, wechsle SOFORT zu einer anderen Quelle und gehe erst zu `retry_at` zu LinkedIn zurück. Nie in einer Schleife wiederholen: Alle Scouts zusammen haben 40 Anfragen pro 10 Minuten, und Beharren verlängert nur die Wartezeit.
 
+**Quellen, die sich schließen, Quellen ohne Suche.** Indeed und Glassdoor werden nicht direkt durchsucht: ihre Alerts kommen per E-Mail (Email-first sourcing). Ein **403** einer Quelle heißt: für diesen Durchgang geschlossen, eine andere Quelle, kein erneuter Versuch und nie ein Weg um den Schutz herum. Die ATS (Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, Jobvite...) werden pro Firma (Slug ihres Boards) abgefragt, nicht als globale Suche: erst die Firmen finden, dann das Board jeder einzelnen lesen (Skill `circles-and-sources`).
+
 **📧 E-Mail-first Sourcing (Day-start, empfohlene Source).** Wenn der User das Team-Postfach konfiguriert hat (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), ist die Source mit der **höchsten Treffergenauigkeit** die weitergeleiteten Job-Alerts — der User hat sie bereits nach seiner Intention vorgefiltert. Am **Beginn des Arbeitsfensters**, vor dem Web-Scraping, pollt der Scout, der in STEP 0 die Source `email:*` beansprucht hat, sie:
 ```bash
 python3 /app/shared/skills/email_monitor.py poll --since-days 1
