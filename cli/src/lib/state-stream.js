@@ -72,7 +72,11 @@ export const CHAT_AGENTS = ['capitano', 'assistente', 'mentor', 'scout', 'analis
 const CURSOR = /^[0-9]{1,12}$/;
 
 export const PROFILE_SCRIPT = `${SKILLS}/profile_progress.py`;
+export const TEAM_START_SCRIPT = `${SKILLS}/team_start.py`;
 const PROFILE_REQUEST = '{"op":"read"}\n';
+
+/** The reads whose reader is a script of the image: each is offered only with the script's digest, which the app compares with its own. */
+export const SCRIPT_OPS = Object.freeze({ 'profile.progress': PROFILE_SCRIPT, 'team.start': TEAM_START_SCRIPT });
 
 const NO_ARGS = (args) => (args === undefined ? [] : null);
 const keysOnly = (value, allowed) => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -114,6 +118,11 @@ export const READERS = {
     stdin: PROFILE_REQUEST,
     argv: (args) => (NO_ARGS(args) ? [PYTHON, '-I', PROFILE_SCRIPT] : null),
   },
+  'team.start': {
+    ttl: 1000,
+    stdin: PROFILE_REQUEST,
+    argv: (args) => (NO_ARGS(args) ? [PYTHON, '-I', TEAM_START_SCRIPT] : null),
+  },
 };
 
 function control(words) {
@@ -122,9 +131,10 @@ function control(words) {
 }
 
 const CONTROL_OPS = ['watch', 'invalidate', 'ping', 'bye'];
-/** What the hello says this process can do (the profile read only when its file is in the image). */
-export function opsOf(profileKnown) {
-  return [...Object.keys(READERS).filter((op) => op !== 'profile.progress' || profileKnown), ...CONTROL_OPS];
+/** What the hello says this process can do (a script's read only when its file is in the image). */
+export function opsOf(profileKnown, teamStartKnown = profileKnown) {
+  const known = { 'profile.progress': profileKnown, 'team.start': teamStartKnown };
+  return [...Object.keys(READERS).filter((op) => !Object.hasOwn(known, op) || known[op]), ...CONTROL_OPS];
 }
 
 /** The environment of a reader: the image's own few variables and a fixed PATH. */
@@ -268,6 +278,7 @@ export function createStateStream({
   },
   cid = containerId,
   profileSha = () => sha256File(PROFILE_SCRIPT),
+  teamStartSha = () => sha256File(TEAM_START_SCRIPT),
   timeoutMs = READER_TIMEOUT_MS,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
@@ -472,7 +483,7 @@ export function createStateStream({
       answer(id, { ok: false, err: 'op_unknown' });
       return;
     }
-    if (op === 'profile.progress' && profileShaValue === null) {
+    if ((op === 'profile.progress' && profileShaValue === null) || (op === 'team.start' && teamStartShaValue === null)) {
       answer(id, { ok: false, err: 'op_unknown' });
       return;
     }
@@ -497,14 +508,17 @@ export function createStateStream({
   };
 
   const profileShaValue = profileSha();
+  const teamStartShaValue = teamStartSha();
 
   return {
     /** How many answers are kept (for the tests). */
     kept: () => cache.size,
     /** First line, before anything is read. */
     hello() {
-      const sha = profileShaValue ? { 'profile.progress': profileShaValue } : {};
-      send({ t: 'hello', proto: PROTO, ops: opsOf(profileShaValue !== null), cid: cid(), sha256: sha });
+      const sha = {};
+      if (profileShaValue) sha['profile.progress'] = profileShaValue;
+      if (teamStartShaValue) sha['team.start'] = teamStartShaValue;
+      send({ t: 'hello', proto: PROTO, ops: opsOf(profileShaValue !== null, teamStartShaValue !== null), cid: cid(), sha256: sha });
       armIdle();
     },
     /** Bytes from stdin. */

@@ -21,7 +21,7 @@ const PHASES: [&str; 3] = ["awaiting_profile", "burst", "steady"];
 const WORKERS_MAX: u64 = 1_000;
 
 /// The fixed script. `JHT_HOME` and `JHT_APP` are the image's own (`/jht_home`, `/app`); a test points them elsewhere.
-const TEAM_START_PY: &str = r#"import importlib.util,json,os,sys
+pub(crate) const TEAM_START_PY: &str = r#"import importlib.util,json,os,sys
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 try: req=json.loads(sys.stdin.readline())
 except Exception: emit({'ok':False,'error':'team_start_unavailable'})
