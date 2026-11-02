@@ -3099,6 +3099,39 @@ describe("DashboardApp onboarding router", () => {
     },
   );
 
+  // «Sign in to the provider» on a team that already holds a valid login: starting another would replace the
+  // credentials the person has (Linux test, 02/11: the login deleted the auth.json that was there).
+  it("does not start a provider login when the team already holds a valid one, and goes on to start the team", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("already-logged-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+    await waitFor(() => expect(startOnboardingTeam).toHaveBeenCalled());
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+  });
+
+  it("starts the login when the snapshot cannot be read, as it always did", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("unreadable-snapshot-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(readOnboardingSnapshot).mockRejectedValue(new Error("unreadable"));
+    vi.mocked(startOnboardingProviderLogin).mockResolvedValue("provider-session-unreadable");
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+  });
+
   it("keeps restart at host selection when it cancels an active provider login", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("restart-provider-account"));
     requireOnboarding();
@@ -3404,7 +3437,8 @@ describe("DashboardApp onboarding router", () => {
     expect(await screen.findByText("provider-state:error")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "send-provider-input" })).not.toBeInTheDocument();
     expect(sendOnboardingProviderInput).not.toHaveBeenCalled();
-    expect(readOnboardingSnapshot).not.toHaveBeenCalled();
+    // the one read there is is the check before the login (a valid login already there): none after a failed exit
+    expect(readOnboardingSnapshot).toHaveBeenCalledTimes(1);
     expect(startOnboardingTeam).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "restart-provider-login" })).toBeInTheDocument();
   });
@@ -3414,7 +3448,8 @@ describe("DashboardApp onboarding router", () => {
     requireOnboarding();
     vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
     let resolveSnapshot!: (snapshot: OnboardingRuntimeSnapshot) => void;
-    vi.mocked(readOnboardingSnapshot).mockReturnValue(new Promise((resolve) => {
+    // the first read is the check before the login (no valid login yet); the second is the verification after it
+    vi.mocked(readOnboardingSnapshot).mockResolvedValueOnce(PREPARED).mockReturnValue(new Promise((resolve) => {
       resolveSnapshot = resolve;
     }));
     vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
@@ -3448,9 +3483,10 @@ describe("DashboardApp onboarding router", () => {
     expect(closeOnboardingProviderLogin).toHaveBeenCalledWith("provider-session-success");
     expect(readOnboardingSnapshot).toHaveBeenCalledWith(SUBMISSION.host);
     expect(screen.queryByText("provider-state:needs_user_action")).not.toBeInTheDocument();
+    // [0] is the check before the login, [1] the verification after the session closed
     expect(vi.mocked(closeOnboardingProviderLogin).mock.invocationCallOrder[0])
-      .toBeLessThan(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[0]);
-    expect(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[1]);
+    expect(vi.mocked(readOnboardingSnapshot).mock.invocationCallOrder[1])
       .toBeLessThan(vi.mocked(startOnboardingTeam).mock.invocationCallOrder[0]);
   });
 
