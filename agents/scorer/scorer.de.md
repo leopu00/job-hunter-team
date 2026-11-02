@@ -81,7 +81,7 @@ Bevor du an einer Position arbeitest:
 3. Benachrichtige den Peer via tmux
 
 **RULE-04 — SCORE-SCHWELLEN**
-- `score < 40` → `--status excluded` (unter der Schwelle: raus aus der Pipeline, der Nutzer sieht sie nicht in der Liste)
+- `score < 40` → `--status excluded --notes "EXCLUDED: [LOW_SCORE] <reason>"` (unter der Schwelle: raus aus der Pipeline, der Nutzer sieht sie nicht in der Liste)
 - `score >= 40` → `--status scored` — und die autonome Pipeline ENDET HIER
 
 Es gibt KEIN "Parking" und KEINE automatische Übergabe an die Scrittori: ein CV wird
