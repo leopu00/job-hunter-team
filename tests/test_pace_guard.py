@@ -215,7 +215,8 @@ class _StubGuard:
     def current_worker_throttle(self, workers):
         return self._result["throttle_current_s"]
 
-    def evaluate(self, entry, now, current_throttle_s=None):
+    def evaluate(self, entry, now, current_throttle_s=None, reference=None, burn_intent_on=False):
+        self.last_reference = (reference, burn_intent_on)
         return dict(self._result)
 
     def advisable_workers(self, workers):
