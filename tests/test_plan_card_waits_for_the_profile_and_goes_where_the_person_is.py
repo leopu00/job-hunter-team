@@ -10,6 +10,7 @@ and every reply says whether the card is in the caller's chat (`in_your_chat`) s
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -174,6 +175,34 @@ def test_the_open_card_is_in_the_chat_of_the_one_who_has_it(box):
     again = run(box, "ask-plan", "--agent", "assistente")
 
     assert again["question_id"] == first["question_id"] and again["in_your_chat"] is True
+
+
+def test_a_card_in_the_captains_chat_comes_with_the_exact_command_to_reach_it(box):
+    """P3-1 of the Linux CLI gate (02/11): the card sat in `jht team chat capitano` and the Assistente said only
+    «in the chat with the Captain», with no command."""
+    configure(box)
+    run(box, "ask-plan")  # the Capitano has the card
+
+    again = run(box, "ask-plan", "--agent", "assistente")
+
+    assert again["in_your_chat"] is False and again["agent"] == "capitano"
+    assert again["chat_command"] == "jht team chat capitano" and again["chat_command_then"] == "/cards"
+    assert again["chat_in_app"].endswith("capitano")
+
+
+def test_the_card_posted_in_the_assistentes_own_chat_names_that_chat_the_same_way(box):
+    configure(box)
+
+    out = run(box, "ask-plan", "--agent", "assistente")
+
+    assert out["asked"] is True and out["chat_command"] == "jht team chat assistente"
+
+
+def test_every_language_of_the_skill_tells_the_assistente_to_give_the_command():
+    root = Path(__file__).resolve().parent.parent / "agents" / "_skills" / "onboarding-flow"
+    for skill in sorted(root.glob("SKILL*.md")):
+        text = skill.read_text(encoding="utf-8")
+        assert "`chat_command`" in text and "jht team chat capitano" in text and "/cards" in text, skill.name
 
 
 # ── the instructions, in seven languages ─────────────────────────────────────
