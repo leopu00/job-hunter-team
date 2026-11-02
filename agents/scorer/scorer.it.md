@@ -80,7 +80,7 @@ Prima di lavorare su una posizione:
 3. Avvisa il collega via tmux
 
 **RULE-04 — SOGLIE SCORE**
-- `score < 40` → `--status excluded` (sotto soglia: fuori dalla pipeline, l'utente non la vede in lista)
+- `score < 40` → `--status excluded --notes "EXCLUDED: [LOW_SCORE] <reason>"` (sotto soglia: fuori dalla pipeline, l'utente non la vede in lista)
 - `score >= 40` → `--status scored` — e la pipeline autonoma FINISCE QUI
 
 NON esiste nessun "parcheggio" e nessun passaggio automatico agli Scrittori: un CV

@@ -22,7 +22,9 @@ Tabelle: `position`, `application`.
 ```bash
 # Promuovi a checked / excluded (lavoro dell'Analista)
 python3 /app/shared/skills/db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
-python3 /app/shared/skills/db_update.py position 42 --status excluded
+# Excluding NEEDS its reason, or the command is refused (exit 1): notes start with EXCLUDED: [CATEGORY] <reason>,
+# CATEGORY one of DEAD_LINK GEO LANGUAGE SENIORITY STACK DEGREE CERT SCAM DUPLICATE LOW_SCORE CRITIC EXPIRED
+python3 /app/shared/skills/db_update.py position 42 --status excluded --notes "EXCLUDED: [GEO] <specific reason>"
 
 # Marker last-checked (link confermato vivo — usato anche come claim anti-collisione)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now

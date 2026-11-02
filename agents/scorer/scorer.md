@@ -80,7 +80,7 @@ Before working on a position:
 3. Notify the peer via tmux
 
 **RULE-04 — SCORE THRESHOLDS**
-- `score < 40` → `--status excluded` (below the bar: out of the pipeline, the user never sees it listed)
+- `score < 40` → `--status excluded --notes "EXCLUDED: [LOW_SCORE] <reason>"` (below the bar: out of the pipeline, the user never sees it listed)
 - `score >= 40` → `--status scored` — and the autonomous pipeline ENDS HERE
 
 There is NO "parking" and NO automatic pass to the Writers: a CV gets written ONLY

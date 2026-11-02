@@ -43,7 +43,7 @@ const SCOUT: Step[] = [
     "--salary-declared-currency", "",
   ]],
   // The scout's own new row, found to be a duplicate: excluded with a note.
-  ["scout-1", "db_update.py", "db_update", ["position", "5", "--status", "excluded", "--notes", "duplicate of #1 on another board"]],
+  ["scout-1", "db_update.py", "db_update", ["position", "5", "--status", "excluded", "--notes", "EXCLUDED: [DUPLICATE] duplicate of #1 on another board"]],
 ];
 
 const ANALISTA: Step[] = [

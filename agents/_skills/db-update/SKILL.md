@@ -21,7 +21,9 @@ Tables: `position`, `application`.
 ```bash
 # Promote to checked / excluded (Analyst's job)
 python3 /app/shared/skills/db_update.py position 42 --status checked --loc-city "Milan" --loc-country "Italy"
-python3 /app/shared/skills/db_update.py position 42 --status excluded
+# Excluding NEEDS its reason, or the command is refused (exit 1): notes start with EXCLUDED: [CATEGORY] <reason>,
+# CATEGORY one of DEAD_LINK GEO LANGUAGE SENIORITY STACK DEGREE CERT SCAM DUPLICATE LOW_SCORE CRITIC EXPIRED
+python3 /app/shared/skills/db_update.py position 42 --status excluded --notes "EXCLUDED: [GEO] <specific reason>"
 
 # last-checked marker (link confirmed alive — also used as anti-collision claim)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
