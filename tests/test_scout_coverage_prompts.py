@@ -15,7 +15,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SUFFIXES = ("", ".it", ".de", ".es", ".fr", ".pt", ".hu")
 NEEDLES = ("scout-coverage", "scout_coverage.py next", "--query-kind", "--status closed", "scout_exhaustion.py check",
-           "core_missing", "3")
+           "core_missing", "3", "praktik", "platsbanken_search.py", "--query-kind broad")
 
 
 def _prompt(suffix: str) -> str:
@@ -37,7 +37,7 @@ def test_the_skill_exists_in_every_language_with_the_same_commands(suffix):
     assert skill.startswith("---\nname: scout-coverage\n")
     for needle in ("scout_coverage.py next", "scout_coverage.py plan", "scout_coverage.py status", "scout_pass_log.py pass",
                    "--status closed", "--query-kind", "scout_exhaustion.py check", "core_missing", "level_terms", "cities",
-                   "role_language", "synonym", "plan_done"):
+                   "role_language", "synonym", "plan_done", "broad", "broad_terms", "platsbanken_search.py", "boards --country"):
         assert needle in skill, "%s: %r" % (suffix or "en", needle)
 
 
@@ -53,8 +53,13 @@ def test_the_commands_the_skill_names_exist_in_the_tools():
     log = (skills / "scout_pass_log.py").read_text(encoding="utf-8")
     for sub in ("plan", "status", "next"):
         assert '"%s"' % sub in coverage
-    for kind in ("role_language", "role", "synonym", "level", "city"):
+    for kind in ("role_language", "role", "synonym", "level", "city", "broad"):
         assert '"%s"' % kind in log
+    platsbanken = (skills / "platsbanken_search.py").read_text(encoding="utf-8")
+    for flag in ("--q", "--city", "--no-experience", "--query-kind", "--log"):
+        assert flag in platsbanken, flag
+    assert '"boards"' in coverage
+    assert "broad_terms" in (skills / "scout_coverage_table.json").read_text(encoding="utf-8")
     for status in ("closed", "gone"):
         assert '"%s"' % status in log
     skill = (REPO_ROOT / "agents" / "_skills" / "scout-coverage" / "SKILL.md").read_text(encoding="utf-8")

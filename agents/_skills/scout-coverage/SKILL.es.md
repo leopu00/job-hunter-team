@@ -10,7 +10,7 @@ Busca PRIMERO donde están los mercados propios del perfil y sabe cuánto está 
 
 ## 1. Pregunta qué viene después, en cada búsqueda
 
-`next` imprime una línea JSON: el portal (`source`, `country`, `tier`), el TIPO de consulta (`query_kind`: `role_language` = el título en el idioma del portal, `role` = el título en inglés, `synonym` = un título cercano, `level` = el título con una palabra de nivel del idioma, listadas en `level_terms`, `city` = el título con un lugar, listados en `cities`), lo que tienes (`have`) frente a lo necesario (`need`) y la línea `log` para usar después. Busca exactamente eso y registra la pasada con el mismo `--query-kind`. `plan_done: true` significa plan hecho: pasa a las otras fuentes.
+`next` imprime una línea JSON: el portal (`source`, `country`, `tier`), el TIPO de consulta (`query_kind`: `broad` = una consulta AMPLIA, siempre la primera: la familia del rol o una palabra de entrada sola (en `broad_terms`), sin título completo y sin lugar, `role_language` = el título en el idioma del portal, `role` = el título en inglés, `synonym` = un título cercano, `level` = el título con una palabra de nivel del idioma, listadas en `level_terms`, `city` = el título con un lugar, listados en `cities`), lo que tienes (`have`) frente a lo necesario (`need`) y la línea `log` para usar después. Busca exactamente eso y registra la pasada con el mismo `--query-kind`. `plan_done: true` significa plan hecho: pasa a las otras fuentes.
 
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
@@ -28,6 +28,8 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 
 ## Reglas
 
+- La PRIMERA pregunta a un portal es siempre `broad`: una palabra de `broad_terms` o la familia del rol, SOLA. Un portal que une las palabras con AND responde 0 a «junior project coordinator» + una ciudad y cientos a «praktik». Lee TODOS los resultados, cada página, y filtralos tú contra el perfil. Un portal solo está cubierto con una pasada `broad`, además de las 3 consultas distintas y la de su idioma.
+- Platsbanken (Suecia) tiene una API pública, sin clave: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --city stockholm --no-experience --query-kind broad --log`. Los tablones de empresas de un país: `python3 /app/shared/skills/scout_coverage.py boards --country se`.
 - Primero los core, luego los menores: ninguna fuente menor mientras `next` nombre un portal core.
 - Un portal está CUBIERTO con 3 pasadas y 3 consultas DISTINTAS (una en el idioma del portal si no es inglés). La misma consulta tres veces cuenta una: cambia el tipo, no las palabras.
 - Un portal que responde 403, 410, un muro de login o un challenge queda CERRADO con UNA pasada registrada `--status closed` (o `gone` para el 410): dilo y sigue, no insistas.

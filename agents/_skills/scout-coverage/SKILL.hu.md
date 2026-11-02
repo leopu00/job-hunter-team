@@ -10,7 +10,7 @@ Előbb ott keress, ahol a profil saját piacai vannak, és tudd, mennyi van meg 
 
 ## 1. Kérdezd meg, mi jön ezután, minden keresésnél
 
-A `next` egy JSON-sort ír ki: a portált (`source`, `country`, `tier`), a lekérdezés FAJTÁJÁT (`query_kind`: `role_language` = a cím a portál nyelvén, `role` = a cím angolul, `synonym` = egy rokon cím, `level` = a cím a nyelv egy szintjelölő szavával, a `level_terms`-ben felsorolva, `city` = a cím egy hellyel, a `cities`-ben felsorolva), mid van (`have`) a szükségeshez (`need`) képest, és a utána használandó `log` sort. Pontosan azt keresd, majd naplózd a menetet ugyanazzal a `--query-kind`-dal. A `plan_done: true` azt jelenti: a terv kész, mehetsz a többi forráshoz.
+A `next` egy JSON-sort ír ki: a portált (`source`, `country`, `tier`), a lekérdezés FAJTÁJÁT (`query_kind`: `broad` = SZÉLES lekérdezés, mindig az első: a szerep családja vagy egy belépő szó magában (a `broad_terms`-ben), teljes cím és hely nélkül, `role_language` = a cím a portál nyelvén, `role` = a cím angolul, `synonym` = egy rokon cím, `level` = a cím a nyelv egy szintjelölő szavával, a `level_terms`-ben felsorolva, `city` = a cím egy hellyel, a `cities`-ben felsorolva), mid van (`have`) a szükségeshez (`need`) képest, és a utána használandó `log` sort. Pontosan azt keresd, majd naplózd a menetet ugyanazzal a `--query-kind`-dal. A `plan_done: true` azt jelenti: a terv kész, mehetsz a többi forráshoz.
 
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
@@ -28,6 +28,8 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 
 ## Szabályok
 
+- Egy portálnak feltett ELSŐ kérdés mindig `broad`: a `broad_terms` egy szava vagy a szerep családja, MAGÁBAN. Az a portál, amely a szavakat AND-del köti, a «junior project coordinator» + város kérdésre 0-t, a «praktik»-ra több százat ad. Olvasd el AZ ÖSSZES találatot, minden oldalt, és szűrd magad a profilra. Egy portál csak `broad` menettel lefedett, a 3 különböző lekérdezés és a portál nyelvén tett mellett.
+- A Platsbankennek (Svédország) nyilvános, kulcs nélküli API-ja van: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --city stockholm --no-experience --query-kind broad --log`. Egy ország cégtáblái: `python3 /app/shared/skills/scout_coverage.py boards --country se`.
 - Előbb a core, aztán a kisebbek: nincs kisebb forrás, amíg a `next` core portált nevez meg.
 - Egy portál LEFEDETT 3 menettel és 3 KÜLÖNBÖZŐ lekérdezéssel (egy a portál nyelvén, ha az nem angol). Ugyanaz a lekérdezés háromszor egynek számít: a fajtát válts, ne a szavakat.
 - Az a portál, amelyik 403-at, 410-et, belépési falat vagy challenge-et ad, EGY `--status closed` (410-nél `gone`) menettel LEZÁRT: mondd ki, és menj tovább, ne erőltesd.

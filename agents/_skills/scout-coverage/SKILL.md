@@ -10,7 +10,7 @@ Search where the profile's own markets are FIRST, and know how much of it is don
 
 ## 1. Ask what comes next, every search
 
-`next` prints one JSON line: the portal (`source`, `country`, `tier`), the KIND of query (`query_kind`: `role_language` = the title in the portal's language, `role` = the title in English, `synonym` = an adjacent title, `level` = the title with a level word of the language, listed in `level_terms`, `city` = the title with a place, listed in `cities`), what you have (`have`) against what is needed (`need`) and the `log` line to use afterwards. Search exactly that, then log the pass with the same `--query-kind`. `plan_done: true` means the plan is done: go on to the other sources.
+`next` prints one JSON line: the portal (`source`, `country`, `tier`), the KIND of query (`query_kind`: `broad` = a WIDE query, always the first: the role's family or an entry word on its own (listed in `broad_terms`), no full title and no place, `role_language` = the title in the portal's language, `role` = the title in English, `synonym` = an adjacent title, `level` = the title with a level word of the language, listed in `level_terms`, `city` = the title with a place, listed in `cities`), what you have (`have`) against what is needed (`need`) and the `log` line to use afterwards. Search exactly that, then log the pass with the same `--query-kind`. `plan_done: true` means the plan is done: go on to the other sources.
 
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
@@ -28,6 +28,8 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 
 ## Rules
 
+- The FIRST question on a portal is always `broad`: a word of `broad_terms` or the role's family, ALONE. A portal that ANDs the words answers 0 to «junior project coordinator» + a city and hundreds to «praktik». Read ALL its results, every page, and filter them against the profile yourself. A portal is covered only with a `broad` pass, besides the 3 different queries and the one in its language.
+- Platsbanken (Sweden) has a public API, no key: `python3 /app/shared/skills/platsbanken_search.py --q "praktik" --city stockholm --no-experience --query-kind broad --log`. The company boards of a country: `python3 /app/shared/skills/scout_coverage.py boards --country se`.
 - Core before minor: no minor source while `next` names a core portal.
 - A portal is COVERED with 3 passes and 3 DIFFERENT queries (one in the portal's language when that is not English). The same query three times counts once: change the kind, not the wording.
 - A portal that answers 403, 410, a login wall or a challenge is CLOSED with ONE pass logged `--status closed` (or `gone` for 410): say so and move on, do not insist.
