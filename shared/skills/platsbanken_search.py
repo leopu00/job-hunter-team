@@ -148,7 +148,7 @@ def shape(ad: dict) -> dict:
     apply_url = details.get("url")
     return {"id": _text(ad.get("id"), 40), "headline": _text(ad.get("headline")), "employer": _text(employer.get("name")),
             "url": url if isinstance(url, str) and url.startswith("https://") else None,
-            "apply_url": apply_url if isinstance(apply_url, str) and apply_url.startswith(("https://", "http://")) else None,
+            "apply_url": apply_url if isinstance(apply_url, str) and apply_url.startswith("https://") else None,
             "municipality": _text(place.get("municipality"), 60) or None, "region": _text(place.get("region"), 60) or None,
             "published": _text(ad.get("publication_date"), 25) or None, "deadline": _text(ad.get("application_deadline"), 25) or None,
             "experience_required": ad.get("experience_required") if isinstance(ad.get("experience_required"), bool) else None,

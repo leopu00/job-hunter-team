@@ -108,6 +108,15 @@ def test_a_hostile_ad_cannot_make_the_output_big_or_carry_control_characters_or_
     assert len(json.dumps(result)) < 5000
 
 
+@pytest.mark.parametrize("link", ["http://example.com/apply", "HTTP://example.com", "ftp://example.com", "//example.com", "data:text/html,x", ""])
+def test_only_an_https_link_leaves_for_the_ad_and_for_the_application(link):
+    ad = dict(AD, webpage_url=link, application_details={"url": link})
+    hit = ps.parse(200, _answer(ad))["hits"][0]
+    assert hit["url"] is None and hit["apply_url"] is None
+    good = ps.parse(200, _answer(dict(AD, application_details={"url": "https://example.com/apply"})))["hits"][0]
+    assert good["apply_url"] == "https://example.com/apply"
+
+
 def test_wrong_types_in_an_ad_are_read_not_raised():
     for weird in (None, 5, "text", [], {"employer": "x", "workplace_address": 3, "must_have": [], "description": "no"}):
         ps.shape(weird)
