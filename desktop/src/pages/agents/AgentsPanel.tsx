@@ -112,7 +112,7 @@ export type PanelRow = {
   heldBySafety: boolean;
 };
 
-function displayName(session: string): string {
+export function displayName(session: string): string {
   return session.charAt(0) + session.slice(1).toLowerCase();
 }
 
@@ -163,7 +163,7 @@ export function rowActions(row: PanelRow, readOnly: boolean): AgentAction[] {
 }
 
 type Notice = { ok: boolean; text: string };
-type Pending =
+export type Pending =
   | { kind: "agent"; op: AgentAction; row: PanelRow }
   | { kind: "answer"; row: PanelRow; question: AgentQuestion; option: QuestionOption }
   | { kind: "pause" }
@@ -197,7 +197,7 @@ function clock(seconds: number | null): string {
   return seconds === null ? "—" : stamp(seconds * 1000);
 }
 
-function failureText(code: string): string {
+export function failureText(code: string): string {
   const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
   return `${copy.text} ${copy.action} (${code})`;
 }
@@ -208,7 +208,7 @@ function readFailureText(code: string): string {
   return copy.known ? `${copy.text} ${copy.action}` : `${copy.text} ${copy.action} (${code})`;
 }
 
-function resultText(t: AgentsPanelText, result: ActionResult, name: string): string {
+export function resultText(t: AgentsPanelText, result: ActionResult, name: string): string {
   const key = {
     started: t.resultStarted,
     already_running: t.resultAlreadyRunning,
@@ -290,7 +290,7 @@ function stateLine(t: AgentsPanelText, row: PanelRow): string {
  * window is visible, at the pace the native side says (terminal-pace.ts). One read at a time: the
  * next one is set only once the last is back.
  */
-function Terminal({ row, t, chatName }: { row: PanelRow; t: AgentsPanelText; chatName: string | null }) {
+export function Terminal({ row, t, chatName, label }: { row: PanelRow; t: AgentsPanelText; chatName: string | null; label?: string }) {
   const [screen, setScreen] = useState<Outcome<{ up: boolean; text: string | null; refreshMs: unknown }> | null>(null);
   const session = row.session;
   useEffect(() => {
@@ -343,17 +343,19 @@ function Terminal({ row, t, chatName }: { row: PanelRow; t: AgentsPanelText; cha
         {chatName !== null && ` ${fill(t.terminalWriteInChat, { name: chatName })}`}
       </p>
       <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
-      <TerminalText session={session} text={screen.value.text === "" ? t.screenEmpty : (screen.value.text ?? "")} />
+      <TerminalText session={session} label={label} text={screen.value.text === "" ? t.screenEmpty : (screen.value.text ?? "")} />
     </>
   );
 }
 
 /** The lines of the terminal: drawn again only when they change, not at every read. */
-export const TerminalText = memo(function TerminalText({ session, text }: { session: string; text: string }) {
+export const TerminalText = memo(function TerminalText({ session, text, label }: { session: string; text: string; label?: string }) {
   return (
     // Text only: React escapes it, nothing in it is ever HTML.
     <pre
       data-testid={`panel-terminal-${session}`}
+      // given a name, the terminal is a log a keyboard can scroll and a screen reader can find: never announced as it changes
+      {...(label ? { role: "log", tabIndex: 0, "aria-label": label, "aria-live": "off" as const } : {})}
       className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[22rem] overflow-auto rounded p-2 lg:max-h-none"
       style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
     >
@@ -362,7 +364,7 @@ export const TerminalText = memo(function TerminalText({ session, text }: { sess
   );
 });
 
-function Confirm({
+export function Confirm({
   t,
   pending,
   where,

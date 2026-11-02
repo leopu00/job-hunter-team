@@ -7,7 +7,6 @@ import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly } from "../../lib/
 import { describeError } from "../../lib/error-catalog";
 import { refresh } from "../../shell/router";
 import { realSnapshotReply } from "../../test-support/snapshot-command-reply";
-import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { EXISTING_TEAM_STATUS_TEXT } from "../existing-team/existing-team-status.i18n";
 
 // /office in the read-only view of an existing team: the same office, fed by
@@ -281,18 +280,23 @@ describe("the office of an existing team, over its VPS", () => {
     expect(cloud.touched).toEqual([]);
   });
 
-  it("an agent has no panel here: one line above the scene says why, in the person's language, and nothing is read", async () => {
+  it("an agent opens a read-only panel here: no Spegni, no Accendi, no speech bubble, nothing read from the cloud", async () => {
     mount();
     await waitFor(() => expect(entered()).toHaveLength(2));
     const click: OfficeClick = { kind: "agent", uid: "capitano", role: "capitano" };
     act(() => scene.options!.onClick(click));
-    expect(screen.queryByRole("complementary")).toBeNull();
-    expect(screen.getByTestId("office-agent-note")).toHaveTextContent(EXISTING_TEAM_READONLY_TEXT.it.officeAgentNoMoves);
+    const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
+    // the VPS does not report an agent's moves: the panel says so, it never draws an empty list
+    expect(within(panel).getByTestId("office-agent-not-published")).toHaveTextContent("non pubblicati dal team");
+    // whatever the read of the list gave, nothing may be done to this team's agents from here
+    await waitFor(() => expect(within(panel).getByTestId("office-agent-unavailable")).toBeInTheDocument());
+    expect(within(panel).queryByRole("button", { name: /^(Spegni|Accendi)/ })).toBeNull();
     // no speech bubble is drawn over the agents: two of them covered each other
     expect(applied.filter((e) => e.type === "say")).toEqual([]);
-    // a second click replaces the line, it does not add one
+    // a second click replaces the panel, it does not add one
     act(() => scene.options!.onClick({ kind: "agent", uid: "assistente", role: "assistente" }));
-    expect(screen.getAllByTestId("office-agent-note")).toHaveLength(1);
+    expect(await screen.findByRole("complementary", { name: "Pannello di ASSISTENTE" })).toBeInTheDocument();
+    expect(screen.getAllByRole("complementary")).toHaveLength(1);
     expect(readsOf("piles")).toHaveLength(1); // only the office's own, none for a panel
     expect(readsOf("list")).toHaveLength(0);
     expect(cloud.touched).toEqual([]);

@@ -16,7 +16,6 @@ import { officeSummary } from "../../office/summary";
 import { withStatusAgents } from "../../office/data/load";
 import { appLocale } from "../../lib/app-locale";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
-import { EXISTING_TEAM_READONLY_TEXT } from "../../lib/existing-team-readonly.i18n";
 import { localizeLayout, officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamAgentsShared, type TeamAgentsReading } from "../../lib/existing-team-agents";
@@ -115,25 +114,11 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const locale = useLocale();
   const [status, setStatus] = useState<string | null>(null);
   const [statusIsAlert, setStatusIsAlert] = useState(false);
-  // What a click on an agent says where there is no panel: ONE line above the scene, never a bubble over it
-  // (two clicks made two bubbles that covered each other and the agents).
-  const [note, setNote] = useState<string | null>(null);
-  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (noteTimer.current) clearTimeout(noteTimer.current);
-  }, []);
   const { assets, parts } = ready;
-  // A click or a key on the office. Over an existing team's VPS an agent has no panel (its moves
-  // are not in what the VPS reports): a line above the scene says so, never a panel with nothing in it.
+  // A click or a key on the office. An agent has a panel on every source; over an existing team's VPS it is the
+  // read-only one (its state and terminal, nothing to do to it), and where the team does not publish an agent's
+  // positions the panel says so.
   const openPanel = (click: OfficeClick | null, button?: HTMLButtonElement) => {
-    if (click && source !== "cloud" && click.kind === "agent") {
-      if (noteTimer.current) clearTimeout(noteTimer.current);
-      const said = EXISTING_TEAM_READONLY_TEXT[appLocale()];
-      setNote(source === "this-computer" ? said.officeAgentNoMovesHere : said.officeAgentNoMoves);
-      noteTimer.current = setTimeout(() => setNote(null), 8000);
-      setPanel(null);
-      return;
-    }
     if (button) opener.current = button;
     setPanel(click);
   };
@@ -324,6 +309,12 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [panel]);
+  // The agent whose panel is open stands still, facing the camera, until the panel closes (the engine's select).
+  const selected = panel?.kind === "agent" ? panel.uid : null;
+  useEffect(() => {
+    engineRef.current?.select?.(selected);
+    return () => engineRef.current?.select?.(null);
+  }, [selected, assets, parts, source]);
   // A panel opened from the keyboard gives the focus back to its button when it closes.
   useEffect(() => {
     if (panel || !opener.current) return;
@@ -355,15 +346,6 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
           {status}
         </p>
       )}
-      {note && (
-        <p
-          role="status"
-          data-testid="office-agent-note"
-          className="m-0 shrink-0 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-[var(--color-muted)]"
-        >
-          {note}
-        </p>
-      )}
       <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row" data-testid="office-workspace">
         <div className="relative min-h-0 flex-1" data-testid="office-stage">
           <div ref={host} className="absolute inset-0" data-testid="office-canvas" />
@@ -386,6 +368,8 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
               statuses={statuses}
               client={source === "cloud" ? cloudClient() : NO_CLOUD}
               source={source === "cloud" ? "cloud" : "vps"}
+              readOnly={source === "team-probe"}
+              onActed={() => (source === "cloud" ? scheduler.current?.poke() : void readProbe(true))}
               onClose={() => setPanel(null)}
               onOpen={setPanel}
               onNavigate={navigate}
