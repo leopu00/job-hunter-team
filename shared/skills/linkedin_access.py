@@ -41,6 +41,7 @@ import argparse
 import contextlib
 import email.utils
 import json
+import math
 import os
 import random
 import re
@@ -123,12 +124,29 @@ def _state_lock():
                 handle.close()
 
 
-def _read_state() -> dict:
+def _finite(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _read_state(now: float = None) -> dict:
+    """The shared state, with every field brought back to something sane: a file with valid JSON but absurd values
+    (Infinity, a cooldown years away, a text where a count goes) must not stop a scout nor turn into «no results»."""
     try:
         data = json.loads(RATE_STATE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    now = time.time() if now is None else now
+    until = data.get("cooldown_until")
+    data["cooldown_until"] = until if _finite(until) and until <= now + COOLDOWN_MAX_S else 0
+    strikes = data.get("strikes")
+    data["strikes"] = int(strikes) if _finite(strikes) and 0 <= strikes <= 1000 else 0
+    last = data.get("last_429")
+    data["last_429"] = last if _finite(last) else 0
+    reqs = data.get("requests")
+    data["requests"] = [t for t in reqs if _finite(t)] if isinstance(reqs, list) else []
+    return data
 
 
 def _write_state(state: dict) -> None:
@@ -177,7 +195,7 @@ def _limited(reason: str, retry_after_s: float, now: float) -> dict:
 def _gate(now: float):
     """None if a request may go out (and it is counted), else the rate_limited outcome. Reads and writes the state."""
     with _state_lock():
-        state = _read_state()
+        state = _read_state(now)
         until = state.get("cooldown_until")
         if isinstance(until, (int, float)) and until > now:
             return _limited("cooldown", until - now, now)
@@ -193,7 +211,7 @@ def _gate(now: float):
 def _note_rate_limit(now: float, retry_after) -> dict:
     """The backoff did not clear the 429: a cooldown shared by every call, longer each time it happens again."""
     with _state_lock():
-        state = _read_state()
+        state = _read_state(now)
         strikes = int(state.get("strikes") or 0) + 1 if now - float(state.get("last_429") or 0) < 6 * 3600 else 1
         cooldown = min(COOLDOWN_MAX_S, max(retry_after or 0.0, COOLDOWN_BASE_S * 2 ** (strikes - 1)))
         state.update({"strikes": strikes, "last_429": now, "cooldown_until": now + cooldown})
