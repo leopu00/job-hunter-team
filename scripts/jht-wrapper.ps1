@@ -2570,23 +2570,23 @@ function Invoke-HostDownload {
   # Un numero restituito da una funzione PowerShell viaggia sullo stesso success stream di stdout: il codice di uscita vive in
   # un canale scalare dedicato e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
   $script:HostDownloadExitCode = 1
-  $usage = "uso: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]"
+  $usage = "usage: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]"
   $os = ''; $version = ''; $output = ''; $deb = $false
   for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
     $arg = $DownloadArgs[$i]
     if ($arg -eq '--help' -or $arg -eq '-h') { Write-Host $usage; $script:HostDownloadExitCode = 0; return }
     elseif ($arg -eq '--deb') { $deb = $true }
     elseif ($arg -in @('--os', '--version', '--output', '-o')) {
-      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) { Write-Err "$arg richiede un valore"; $script:HostDownloadExitCode = 2; return }
+      if ($i + 1 -ge $DownloadArgs.Count -or -not $DownloadArgs[$i + 1]) { Write-Err "$arg needs a value"; $script:HostDownloadExitCode = 2; return }
       $i += 1
       if ($arg -eq '--os') { $os = $DownloadArgs[$i] } elseif ($arg -eq '--version') { $version = $DownloadArgs[$i] } else { $output = $DownloadArgs[$i] }
     }
     elseif ($arg.StartsWith('--os=')) { $os = $arg.Substring(5) }
     elseif ($arg.StartsWith('--version=')) { $version = $arg.Substring(10) }
     elseif ($arg.StartsWith('--output=')) { $output = $arg.Substring(9) }
-    else { Write-Err "argomento non riconosciuto: $arg"; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
+    else { Write-Err "unknown argument: $arg"; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
   }
-  if (-not $os -or -not $version) { Write-Err '--os e --version sono obbligatori'; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
+  if (-not $os -or -not $version) { Write-Err '--os and --version are required'; Write-Host $usage; $script:HostDownloadExitCode = 2; return }
 
   $platform = switch ($os.ToLowerInvariant()) {
     { $_ -in @('win', 'win32', 'windows') } { 'windows' }
