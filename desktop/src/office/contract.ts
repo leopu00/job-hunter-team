@@ -348,6 +348,12 @@ export type AgentPose = {
    * as Godot's seated_art) and hides the agent's own sprite.
    */
   seatedAt?: string;
+  /**
+   * 0..1, present only while the agent's real work flashes (agent_npc.gd
+   * react_to_work: the body pulses twice): the scene tints the agent, or the
+   * desk it sits at, by this much of the glow.
+   */
+  pulse?: number;
 };
 
 /**

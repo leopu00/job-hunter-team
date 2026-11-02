@@ -402,10 +402,14 @@ def build_layout(plan: ArtPlan) -> tuple[dict, list[str]]:
         key = agent.get("workstation_key")
         furniture_id = next((i["id"] for i in furniture["ITEMS"] if i.get("registry_key") == key), "")
         facing = agent.get("facing", "down")
-        core_seats.append({
+        core_seat = {
             "role": role, "seat": agent["spot"], "seatFacing": facing,
             "seatOffset": seat_offset(agent, facing), "furnitureId": furniture_id,
-        })
+        }
+        # character_defs.gd "wander": the points of the round a core role walks (agent_npc.gd _plan_trip)
+        if agent.get("wander"):
+            core_seat["wander"] = list(agent["wander"])
+        core_seats.append(core_seat)
 
     sheets: dict[str, list[str]] = {}
     for dept_id, variants in characters["VARIANT_BY_DESK"].items():

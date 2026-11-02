@@ -22,4 +22,10 @@ describe("the office scene is made with the frame pace", () => {
   it("stops watching the window when the scene is destroyed", () => {
     expect(scene).toMatch(/destroy\(\) \{[\s\S]*?stopPause\(\);[\s\S]*?app\.destroy/);
   });
+
+  it("draws the agents, bubbles, tags and piles only when the redraw gate says a picture changed", () => {
+    expect(scene).toMatch(/if \(dirty\) \{\s*drawAgents\(poses\);\s*drawBubbles\(poses\);\s*drawTags\(poses\);\s*drawPiles\(\);\s*\}/);
+    // new statuses are a change the gate sees
+    expect(scene).toMatch(/setAgentStatuses\(next: AgentStatuses \| null\) \{\s*statuses = next;\s*statusesRevision\+\+;/);
+  });
 });
