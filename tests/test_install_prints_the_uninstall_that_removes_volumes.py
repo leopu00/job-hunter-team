@@ -17,10 +17,10 @@ WRAPPER = ROOT / "scripts" / "jht-wrapper.sh"
 
 # ── A2 ──────────────────────────────────────────────────────────────────────
 
-def final_message(tmp_path: Path, *, runtime_choice: str) -> str:
+def final_message(tmp_path: Path, *, runtime_choice: str, os_name: str = "linux", use_docker: int = 1) -> str:
     script = (
         f'JHT_INSTALLER_SOURCE_ONLY=1 . "{INSTALL}"\n'
-        f'USE_DOCKER=1; RUNTIME_CHOICE="{runtime_choice}"; OS=linux; BIN_DIR="{tmp_path}/bin"; '
+        f'USE_DOCKER={use_docker}; RUNTIME_CHOICE="{runtime_choice}"; OS={os_name}; BIN_DIR="{tmp_path}/bin"; '
         f'RUNTIME_DIR="{tmp_path}/host-runtime"; IMAGE="example.invalid/jht@sha256:{"1" * 64}"\n'
         "final_message\n"
     )
@@ -37,6 +37,10 @@ def test_the_docker_uninstall_the_installer_prints_removes_the_volumes_too(tmp_p
     assert "mail password and the Telegram tokens" in out
 
 
+def data_section(out: str) -> str:
+    return out.split("To also delete your data", 1)[1]
+
+
 def test_the_data_folders_are_still_kept_by_that_uninstall_and_the_other_command_deletes_them_too(tmp_path):
     """With Docker the data of a Linux computer belongs to the container (uid 1001, mode 700): the line for the data is
     `jht uninstall --confirm --purge`, which empties it through a one-shot container; a plain `rm -rf` from the user's
@@ -45,17 +49,50 @@ def test_the_data_folders_are_still_kept_by_that_uninstall_and_the_other_command
     assert "keeps your data in ~/.jht and ~/Documents/Job Hunter Team" in out
     assert "To also delete your data" in out
     assert "jht uninstall --confirm --purge && docker rmi example.invalid/jht@sha256:" in out
-    assert "rm -rf" not in out.split("To also delete your data", 1)[1]
 
 
-@pytest.mark.parametrize("runtime_choice", ["podman"])
-def test_the_data_command_that_is_printed_expands_and_deletes_the_two_folders(tmp_path, runtime_choice):
+@pytest.mark.parametrize("runtime_choice,os_name,rmi", [
+    ("", "linux", "docker rmi"),
+    ("", "macos", "docker rmi"),
+    ("podman", "linux", "podman rmi"),
+    ("podman", "macos", None),
+])
+def test_every_engine_prints_the_purge_first_and_the_rm_only_as_the_last_line_with_sudo(tmp_path, runtime_choice, os_name, rmi):
+    """Linux gate: the `rm -rf ~/.jht ...` printed for Podman got "Permission denied" (folders 1001:1001, mode 700). The command
+    printed first, for Docker and for Podman alike, is `jht uninstall --confirm --purge`; the `rm -rf` is the last line, only
+    for when jht is gone, and declares its sudo."""
+    out = final_message(tmp_path, runtime_choice=runtime_choice, os_name=os_name)
+    lines = [l.strip() for l in data_section(out).splitlines() if l.strip()]
+    commands = [l for l in lines if "rm -rf" in l or "jht uninstall" in l]
+    assert commands[0].startswith("jht uninstall --confirm --purge")
+    if rmi:
+        assert commands[0].endswith(f"{rmi} example.invalid/jht@sha256:{'1' * 64}")
+    else:
+        assert commands[0] == "jht uninstall --confirm --purge"
+    assert len(commands) == 2
+    assert commands[1] == 'sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"'
+    assert lines.index(commands[1]) == len(lines) - 1          # the last line of the message
+    assert "jht down" not in data_section(out)
+
+
+def test_the_native_mode_keeps_the_plain_rm_because_jht_has_no_uninstall_there_and_the_folders_are_the_persons(tmp_path):
+    out = final_message(tmp_path, runtime_choice="", use_docker=0)
+    section = data_section(out)
+    assert "jht uninstall" not in section and "sudo" not in section
+    assert 'rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"' in section
+
+
+@pytest.mark.parametrize("runtime_choice,use_docker", [("podman", 1), ("", 0)])
+def test_the_rm_command_that_is_printed_expands_and_deletes_the_two_folders(tmp_path, runtime_choice, use_docker):
     """TEST 19b: the line printed `rm -rf ~/.jht "~/Documents/Job Hunter Team"`, and a tilde inside quotes is not
-    expanded. The command the person pastes must work as printed, even when HOME has a space in it."""
-    out = final_message(tmp_path, runtime_choice=runtime_choice)
-    line = next(l.strip() for l in out.splitlines() if l.strip().startswith("rm -rf") and ".jht" in l)
-    assert line == 'rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"'
+    expanded. The command the person pastes must work as printed, even when HOME has a space in it (the `sudo` of the
+    container case is not run here: without it the same words delete the two folders of an account that owns them)."""
+    out = final_message(tmp_path, runtime_choice=runtime_choice, use_docker=use_docker)
+    line = next(l.strip() for l in out.splitlines() if "rm -rf" in l and '"$HOME/.jht"' in l)
+    assert line in ('rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"',
+                    'sudo rm -rf "$HOME/.jht" "$HOME/Documents/Job Hunter Team"')
     assert "~" not in line
+    line = line.removeprefix("sudo ")
     home = tmp_path / "home with space"
     (home / ".jht").mkdir(parents=True)
     (home / ".jht" / "a").write_text("x", encoding="utf-8")
