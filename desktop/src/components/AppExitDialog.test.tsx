@@ -26,7 +26,7 @@ interface Team {
   /** Containers that are not the team's on its machine, as the native side counts them. */
   others?: unknown;
   /** What each poll answers, in order; the last one repeats. */
-  polls?: { ready: boolean; active: number }[];
+  polls?: { ready: boolean; active: number; remaining?: string[] }[];
   failing?: Record<string, string>;
 }
 
@@ -184,6 +184,28 @@ describe("AppExitDialog", () => {
     await user.click(await screen.findByTestId("app-exit-ordered"));
     expect(await screen.findByTestId("app-exit-force-now")).toBeInTheDocument();
     expect(calls().some((call) => call.startsWith("app_exit_finish"))).toBe(false);
+  });
+
+  it("says who has not stopped and, when it takes too long, offers to force", async () => {
+    team({ polls: [{ ready: false, active: 2, remaining: ["CAPITANO", "SCOUT-1"] }] });
+    const user = userEvent.setup();
+    render(<AppExitDialog pollMs={5} slowMs={30} />);
+    await closeButton();
+    await user.click(await screen.findByTestId("app-exit-ordered"));
+    expect(await screen.findByTestId("app-exit-remaining")).toHaveTextContent(fill(T.stillOn, { names: "CAPITANO, SCOUT-1" }));
+    expect(await screen.findByTestId("app-exit-force-now")).toBeInTheDocument();
+    expect(screen.getByTestId("app-exit-waiting")).toHaveTextContent(T.slow);
+  });
+
+  it("an Assistente left up is not waited for: the native side answers «ready» and the stop goes on", async () => {
+    // what app_exit_poll answers when only the Assistente is open and the Capitano never wrote its flag
+    team({ polls: [{ ready: false, active: 1, remaining: ["SCOUT-1"] }, { ready: true, active: 0, remaining: [] }] });
+    const user = userEvent.setup();
+    render(<AppExitDialog pollMs={5} slowMs={5000} />);
+    await closeButton();
+    await user.click(await screen.findByTestId("app-exit-ordered"));
+    await waitFor(() => expect(calls()).toContain('app_exit_finish:{"mode":"ordered"}'));
+    expect(calls()).not.toContain('app_exit_finish:{"mode":"forced"}');
   });
 
   it("after a slow wait the person can force the stop", async () => {
