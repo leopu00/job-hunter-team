@@ -104,6 +104,6 @@ async function handleStatus() {
 export function registerStatusCommand(program) {
   program
     .command('status')
-    .description('Show system status JHT')
+    .description('Show the state of the system: version, configuration, team sessions')
     .action(handleStatus);
 }

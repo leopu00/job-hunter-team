@@ -49,6 +49,7 @@ import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
 import { registerDownloadCommand } from './commands/download.js';
 import { registerGameCommand } from './commands/game.js';
+import { renderFullHelp } from './lib/help-groups.js';
 
 // Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
@@ -150,11 +151,13 @@ export function buildProgram() {
   registerDownloadCommand(program);
   registerGameCommand(program);
 
-  // Salviamo il riferimento all'help "lungo" autogenerato da commander
-  // PRIMA di sovrascrivere helpInformation. `jht help` lo invoca per
-  // mostrare tutti i sotto-comandi registrati sopra.
-  const fullHelp = Command.prototype.helpInformation.bind(program);
+  // A group of commands asked without a subcommand (`jht cron`) is a request for its help, not an error:
+  // the help goes to stdout and the exit code is 0.
+  for (const command of program.commands) {
+    if (command.commands.length > 0 && !command._actionHandler) command.action(() => command.help());
+  }
 
+  // `jht --help` is the short essential list; `jht help` is the long one, in groups, for the width of the terminal.
   program.helpInformation = function () {
     return ESSENTIAL_HELP;
   };
@@ -163,7 +166,7 @@ export function buildProgram() {
     .command('help')
     .description('Show all available commands (long form)')
     .action(() => {
-      process.stdout.write(fullHelp());
+      process.stdout.write(renderFullHelp(program, process.stdout.columns || 80));
     });
 
   return program;
