@@ -21,8 +21,9 @@ const AGENTS = [
   agent("CAPITANO", "capitano", null, "lavora"),
   agent("SCOUT-1", "scout", "1", "idle"),
   agent("SCOUT-2", "scout", "2", "lavora"),
+  agent("DOTTORE", "dottore", null, "idle"),
 ];
-const ROLES = ["capitano", "scout"].map((role) => ({ role, multi: role === "scout" }));
+const ROLES = ["capitano", "scout", "dottore"].map((role) => ({ role, multi: role === "scout" }));
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
 
 let restoreBridge: () => void;
@@ -79,12 +80,15 @@ describe("the page of one agent", () => {
     expect(asked.filter((r) => r.op === "screen").every((r) => r.session === "SCOUT-2")).toBe(true);
   });
 
-  it("leads to the chat only where the chat speaks with this very session", async () => {
+  it("leads to the chat with this very session: the first instance by its role, the others by number", async () => {
     const first = show("SCOUT-1");
     expect(await screen.findByTestId("agent-page-chat")).toHaveAttribute("href", "#/messages?agent=scout");
     first.unmount();
-    show("SCOUT-2");
-    expect(await screen.findByTestId("agent-page-no-chat")).toHaveTextContent("non è ancora disponibile");
+    const second = show("SCOUT-2");
+    expect(await screen.findByTestId("agent-page-chat")).toHaveAttribute("href", "#/messages?agent=scout-2");
+    second.unmount();
+    show("DOTTORE");
+    expect(await screen.findByTestId("agent-page-no-chat")).toHaveTextContent("non c’è una chat");
     expect(screen.queryByTestId("agent-page-chat")).toBeNull();
   });
 
@@ -108,11 +112,12 @@ describe("the names of the agents", () => {
     expect(agentTitle("DOTTORE", words)).toBe("Dottore");
   });
 
-  it("gives a chat id to the sessions the chat speaks with, and to no other", () => {
+  it("gives a chat id to the sessions the chat speaks with, instances included, and to no other", () => {
     expect(chatIdOfSession("CAPITANO")).toBe("capitano");
     expect(chatIdOfSession("SCOUT-1")).toBe("scout");
-    expect(chatIdOfSession("SCOUT-2")).toBeNull();
-    expect(chatIdOfSession("CRITICO-S3")).toBeNull();
+    expect(chatIdOfSession("SCOUT-2")).toBe("scout-2");
+    expect(chatIdOfSession("SCRITTORE-12")).toBe("scrittore-12");
+    for (const none of ["SCOUT-0", "SCOUT-01", "SCOUT-10000", "CRITICO-S3", "CAPITANO-2", "scout-2"]) expect(chatIdOfSession(none), none).toBeNull();
     expect(chatIdOfSession("DOTTORE")).toBeNull();
   });
 

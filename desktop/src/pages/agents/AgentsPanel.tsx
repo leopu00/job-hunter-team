@@ -41,20 +41,23 @@ import ActionLogSection from "./ActionLogSection";
 import { BurstStrip } from "../work-hours/BurstControl";
 import Link from "../../web-shims/next-link";
 import { onStreamHint, onStreamState, streamPace } from "../../lib/state-stream";
-import { isDirectChatAgentId, REOPEN_NO_RETRY, type DirectChatAgentId } from "../messages/DirectChatScreen";
+import { REOPEN_NO_RETRY } from "../messages/DirectChatScreen";
+import { chatIdOfSession, sessionOfChatId } from "../messages/chat-agents";
+import { agentTitle } from "./agent-names";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
 
 /**
  * The agents the person can chat with are the ones the Messages page lists: the same rule, not a
  * list of this page. The chat is there; here a button leads to it with the agent already chosen.
  */
-function chatAgentOf(row: PanelRow): DirectChatAgentId | null {
-  return isDirectChatAgentId(row.role) ? row.role : null;
+function chatAgentOf(row: PanelRow): string | null {
+  return chatIdOfSession(row.session);
 }
 
-/** The agent's name as Messages writes it. */
-function chatName(id: DirectChatAgentId): string {
-  return DIRECT_CHAT_TEXT[appLocale()].agents[id];
+/** The agent's name as Messages writes it («Scout» for the first instance, «Scout 2» for the second). */
+function chatName(id: string): string {
+  const roles = DIRECT_CHAT_TEXT[appLocale()].agents as Record<string, string>;
+  return roles[id] ?? agentTitle(sessionOfChatId(id) ?? id.toUpperCase(), roles);
 }
 
 /**
