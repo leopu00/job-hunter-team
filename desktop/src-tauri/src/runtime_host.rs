@@ -908,11 +908,9 @@ impl Drop for PrivateTempFile {
 /// The streams a pipe-free call keeps in files: `jht-ssh-<kind>-<pid>-<nanos>.tmp`.
 const PIPE_FREE_FILE_KINDS: [&str; 3] = ["in", "out", "messages"];
 /// Well past the longest pipe-free call (the chat's send, 105 s): a file this old belongs to no call.
-#[cfg_attr(not(windows), allow(dead_code))]
 const PIPE_FREE_FILE_STALE_AFTER: Duration = Duration::from_secs(600);
 
 /// Whether `name` is exactly the name of a file of a pipe-free call.
-#[cfg_attr(not(windows), allow(dead_code))]
 fn is_pipe_free_file_name(name: &str) -> bool {
     let Some(rest) = name.strip_prefix("jht-ssh-").and_then(|rest| rest.strip_suffix(".tmp")) else {
         return false;
@@ -922,11 +920,38 @@ fn is_pipe_free_file_name(name: &str) -> bool {
     parts.len() == 3 && PIPE_FREE_FILE_KINDS.contains(&parts[0]) && number(parts[1]) && number(parts[2])
 }
 
+/// Whether the file is the user's own. On Linux the temporary folder is a `/tmp` shared with other users, and a
+/// file with the name of ours that belongs to somebody else is not ours to remove; on macOS and Windows the folder
+/// is the user's own already, and the check costs nothing.
+fn is_ours(metadata: &fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // SAFETY: geteuid has no arguments or pointers.
+        metadata.uid() == unsafe { libc::geteuid() }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        true
+    }
+}
+
 /// Removes, in `dir`, the files of pipe-free calls older than `stale_after`: what a crash of the app
-/// left in the middle of a call (the input of a chat command among them). Only regular files with
-/// exactly that name: never a link, a reparse point or a folder.
-#[cfg_attr(not(windows), allow(dead_code))]
+/// left in the middle of a call (the input of a chat command among them; on macOS and Linux the `-E` file
+/// of ssh's own messages). Only regular files of the user with exactly that name: never a link, a reparse
+/// point, a folder or somebody else's file.
 fn remove_stale_pipe_free_files_in(dir: &Path, stale_after: Duration, now: std::time::SystemTime) -> usize {
+    remove_stale_files_where(dir, stale_after, now, &is_ours)
+}
+
+/// The same, with the judgement of whose a file is given (the tests cannot make a file of another user).
+fn remove_stale_files_where(
+    dir: &Path,
+    stale_after: Duration,
+    now: std::time::SystemTime,
+    mine: &dyn Fn(&fs::Metadata) -> bool,
+) -> usize {
     let Ok(entries) = fs::read_dir(dir) else {
         return 0;
     };
@@ -939,7 +964,7 @@ fn remove_stale_pipe_free_files_in(dir: &Path, stale_after: Duration, now: std::
         let Ok(metadata) = fs::symlink_metadata(&path) else {
             continue;
         };
-        if !metadata.file_type().is_file() || is_reparse_point(&metadata) {
+        if !metadata.file_type().is_file() || is_reparse_point(&metadata) || !mine(&metadata) {
             continue;
         }
         let old = metadata
@@ -962,18 +987,15 @@ fn is_reparse_point(metadata: &fs::Metadata) -> bool {
 }
 
 #[cfg(not(windows))]
-#[allow(dead_code)]
 fn is_reparse_point(_metadata: &fs::Metadata) -> bool {
     false
 }
 
-/// At start, on Windows only (the one place the pipe-free calls run), in the user's own temporary
-/// folder: never in a /tmp shared with other users.
+/// At start, on every system, in the user's own temporary folder (`std::env::temp_dir()`): Windows' pipe-free calls
+/// leave their three files there when the app dies in the middle of one, and on macOS and Linux the ssh calls leave
+/// the file of ssh's own messages. A `/tmp` shared with other users is safe too: only the user's own files go.
 pub(crate) fn remove_stale_pipe_free_files() {
-    #[cfg(windows)]
-    {
-        let _ = remove_stale_pipe_free_files_in(&std::env::temp_dir(), PIPE_FREE_FILE_STALE_AFTER, std::time::SystemTime::now());
-    }
+    let _ = remove_stale_pipe_free_files_in(&std::env::temp_dir(), PIPE_FREE_FILE_STALE_AFTER, std::time::SystemTime::now());
 }
 
 /// A program with no pipe at all: stdin from a private file (or the null
@@ -2143,6 +2165,39 @@ mod tests {
         assert_eq!(super::PIPE_FREE_FILE_STALE_AFTER, Duration::from_secs(600));
         // and the app runs it at start, off the start's path
         assert!(include_str!("lib.rs").split("generate_handler").next().unwrap().contains("std::thread::spawn(runtime_host::remove_stale_pipe_free_files);"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The file of ssh's own messages (`-E`) that a crash left on macOS or Linux goes at the next start, like the
+    /// files of Windows' calls; a file that is not the user's own (a shared `/tmp` on Linux) is never touched.
+    #[test]
+    fn the_messages_file_a_crash_left_goes_on_every_system_and_another_users_file_stays() {
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("jht-stale-owner-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let now = SystemTime::now();
+        let old = |name: &str| {
+            let path = dir.join(name);
+            fs::write(&path, b"synthetic").unwrap();
+            fs::File::options().write(true).open(&path).unwrap().set_modified(now - Duration::from_secs(3600)).unwrap();
+            path
+        };
+        let mine = old("jht-ssh-messages-4242-1700000000000000000.tmp");
+        let theirs = old("jht-ssh-messages-4243-1700000000000000001.tmp");
+        // the real judgement: a file this test just made is the user's own
+        assert_eq!(super::remove_stale_pipe_free_files_in(&dir, Duration::from_secs(600), now), 2);
+        assert!(!mine.exists() && !theirs.exists());
+        // with the judgement that says «not mine» nothing goes, however old
+        let kept = old("jht-ssh-messages-4244-1700000000000000002.tmp");
+        assert_eq!(super::remove_stale_files_where(&dir, Duration::from_secs(600), now, &|_| false), 0);
+        assert!(kept.exists());
+        assert_eq!(super::remove_stale_files_where(&dir, Duration::from_secs(600), now, &|_| true), 1);
+        assert!(!kept.exists());
+        // the sweep is not limited to Windows any more, in the code that runs at start
+        let production = include_str!("runtime_host.rs").split("#[cfg(test)]").next().unwrap();
+        let sweep = production.split("pub(crate) fn remove_stale_pipe_free_files() {").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(!sweep.contains("cfg(windows)"), "the sweep runs on every system");
         let _ = fs::remove_dir_all(&dir);
     }
 
