@@ -7,6 +7,10 @@ import { onStreamHint, streamPace } from "../../lib/state-stream";
 import { useRefresh } from "../../shell/router";
 import Link from "../../web-shims/next-link";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
+import { directChatClient } from "../messages/direct-chat-client";
+import { previewText, conversationTime } from "../messages/chat-kinds";
+import { DICTATION_LOCALE } from "../messages/direct-chat.i18n";
+import { lastChatMessage, type LastChatMessage } from "../../lib/chat-last-message";
 import type { PageProps } from "../types";
 import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { AGENTS_PANEL_TEXT } from "./AgentsPanel.i18n";
@@ -81,11 +85,35 @@ export default function AgentPage({ params }: PageProps) {
     return () => clearTimeout(timer);
   }, [read, everyMs, valid]);
 
+  // The last thing said in the chat with this agent: what this run of the app already read of it, and one read of
+  // its own when the chat's connection is up (never one that opens a connection: this page only looks).
+  const chatId = chatIdOfSession(session);
+  const [lastMessage, setLastMessage] = useState<LastChatMessage | null>(() => (chatId ? lastChatMessage(chatId) : null));
+  useEffect(() => {
+    if (!valid || !chatId) {
+      setLastMessage(null);
+      return;
+    }
+    setLastMessage(lastChatMessage(chatId));
+    let live = true;
+    void (async () => {
+      try {
+        if ((await directChatClient.status()).state !== "ready") return;
+        await directChatClient.read({ agentId: chatId });
+        if (live) setLastMessage(lastChatMessage(chatId));
+      } catch {
+        // the chat is not reachable now: what was read before stays
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [chatId, valid]);
+
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
   const row = rows.find((r) => r.session === session) ?? null;
   const title = agentTitle(session, DIRECT_CHAT_TEXT[appLocale()].agents);
   const where = list?.ok ? (list.value.where === "vps" ? fill(t.whereVps, { label: list.value.label ?? "" }) : t.whereLocal) : "";
-  const chatId = chatIdOfSession(session);
 
   const back = (
     <Link href={`/agents?agent=${encodeURIComponent(session)}`} data-testid="agent-page-back" className="text-[13px] no-underline" style={{ color: "var(--color-blue)" }}>
@@ -153,6 +181,23 @@ export default function AgentPage({ params }: PageProps) {
 
         <section aria-label={p.lastWork} className="shrink-0 border-t px-5 py-3" style={{ borderColor: "var(--color-border)" }}>
           <h2 className="m-0 mb-1 text-[12px] font-semibold uppercase tracking-widest text-[var(--color-muted)]">{p.lastWork}</h2>
+          {chatId !== null && (
+            <div data-testid="agent-page-last-message" className="mb-2">
+              {lastMessage ? (
+                <>
+                  <p className="m-0 text-[14px] text-[var(--color-muted)]">
+                    {fill(p.lastMessage, {
+                      who: lastMessage.role === "user" ? p.you : title,
+                      time: conversationTime(lastMessage.at, DICTATION_LOCALE[appLocale()]),
+                    })}
+                  </p>
+                  <p className="m-0 mt-0.5 break-words text-[15px] text-[var(--color-bright)]">{previewText({ ...lastMessage, role: "agent" }, p.you)}</p>
+                </>
+              ) : (
+                <p className="m-0 text-[14px] text-[var(--color-muted)]">{p.noMessage}</p>
+              )}
+            </div>
+          )}
           <p data-testid="agent-page-activity" className="m-0 text-[14px] text-[var(--color-bright)]">
             {row.agent?.activity != null ? fill(p.lastActive, { time: ago(row.agent.activity) }) : p.neverActive}
           </p>
