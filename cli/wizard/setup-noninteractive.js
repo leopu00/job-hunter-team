@@ -8,7 +8,7 @@
  *   jht setup --non-interactive --provider claude --api-key sk-ant-... --model claude-sonnet-4-6
  *   jht setup --non-interactive --provider claude --secret-mode env --secret-env ANTHROPIC_API_KEY
  */
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
 import {
   AI_PROVIDERS,
@@ -21,6 +21,9 @@ import {
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
 import { t } from './i18n.js';
+
+/** The most a file holding one API key can weigh. */
+const API_KEY_FILE_MAX_BYTES = 4096;
 
 /**
  * Crea un prompter finto per passare a runHealthCheck (serve solo progress).
@@ -78,6 +81,25 @@ export async function runNonInteractiveSetup(opts) {
       // before, from --api-key
       let key = opts.apiKey;
       if (opts.apiKeyFile) {
+        // a regular file, not a link (and so not a pipe or a device that never ends), of a size a key can have
+        let stat = null;
+        try { stat = lstatSync(opts.apiKeyFile); } catch { /* said below */ }
+        if (!stat || !stat.isFile()) {
+          console.error(pc.red(stat
+            ? `The file given to --api-key-file must be a regular file, not a link or a device: ${opts.apiKeyFile}`
+            : `The file given to --api-key-file cannot be read: ${opts.apiKeyFile}`));
+          process.exitCode = 1;
+          return;
+        }
+        if (stat.size > API_KEY_FILE_MAX_BYTES) {
+          console.error(pc.red(`The file given to --api-key-file is too big for a key (over ${API_KEY_FILE_MAX_BYTES} bytes): ${opts.apiKeyFile}`));
+          process.exitCode = 1;
+          return;
+        }
+        // like ssh: a key that others can read is said, not refused
+        if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+          console.error(pc.yellow(`The file ${opts.apiKeyFile} can be read by other users: chmod 600 it.`));
+        }
         try {
           key = readFileSync(opts.apiKeyFile, 'utf8').split(/\r?\n/)[0];
         } catch {

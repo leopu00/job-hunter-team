@@ -61,8 +61,9 @@ export function formatSecretForConfig(mode, value) {
  */
 export function describeSecret(secret) {
   if (!secret) return 'not configured';
-  if (typeof secret === 'string') return `plaintext (${secret.slice(0, 8)}****)`;
-  if (secret.type === 'plaintext') return `plaintext (${(secret.value ?? '').slice(0, 8)}****)`;
+  // nothing of a key is shown, not even its first characters
+  if (typeof secret === 'string') return 'plaintext (hidden)';
+  if (secret.type === 'plaintext') return 'plaintext (hidden)';
   if (secret.type === 'ref') {
     if (secret.source === 'env') return `env:${secret.id}`;
     if (secret.source === 'file') return `file:${secret.path}`;

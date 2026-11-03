@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,4 +128,37 @@ test('the help of setup warns that --api-key is visible and offers --api-key-fil
   const help = spawnSync(process.execPath, [entry, 'setup', '--help'], { env: { PATH: dirname(process.execPath), HOME: box.root, JHT_HOME: box.home }, encoding: 'utf8' });
   assert.match(help.stdout, /--api-key-file <path>/);
   assert.match(help.stdout.replace(/\s+/g, ' '), /prefer --api-key-file/);
+});
+
+test('--api-key-file refuses a link, a device and a file too big for a key, warns about a file others can read, and the summary shows nothing of the key', () => {
+  const box = sandbox();
+  const fake = `sk-${'a'.repeat(30)}`;
+  const real = join(box.root, 'real.txt');
+  writeFileSync(real, `${fake}\n`);
+  chmodSync(real, 0o600);
+  const link = join(box.root, 'link.txt');
+  symlinkSync(real, link);
+  const viaLink = setupNonInteractive(['--api-key-file', link], box);
+  assert.notEqual(viaLink.status, 0);
+  assert.match(viaLink.out, /must be a regular file/);
+
+  const device = setupNonInteractive(['--api-key-file', '/dev/zero'], box);
+  assert.notEqual(device.status, 0);
+  assert.match(device.out, /must be a regular file/);
+
+  const big = join(box.root, 'big.txt');
+  writeFileSync(big, 'x'.repeat(5000));
+  chmodSync(big, 0o600);
+  const tooBig = setupNonInteractive(['--api-key-file', big], box);
+  assert.notEqual(tooBig.status, 0);
+  assert.match(tooBig.out, /too big for a key/);
+  assert.equal(readdirSync(box.home).includes('jht.config.json'), false, 'nothing is written when the file is refused');
+
+  chmodSync(real, 0o644);
+  const open = setupNonInteractive(['--api-key-file', real], box);
+  assert.equal(open.status ?? 0, 0, open.out);
+  assert.match(open.out, /can be read by other users/);
+  assert.match(open.out, /plaintext \(hidden\)/);
+  assert.equal(open.out.includes(fake.slice(0, 8)), false, 'not even the first characters of the key');
+  assert.equal(open.out.includes(fake), false);
 });
