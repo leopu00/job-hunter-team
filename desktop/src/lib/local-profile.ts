@@ -42,8 +42,40 @@ interface LocalProfilesV2 {
   profiles: (LocalProfile & { createdAt: number })[];
 }
 
+/** At most 80 characters, counted as people count them: a cut never splits an emoji or another character of two units. */
 function cleanName(value: string): string {
-  return value.trim().replace(/\s+/g, " ").slice(0, 80);
+  return Array.from(value.trim().replace(/\s+/g, " ")).slice(0, 80).join("").trim();
+}
+
+/** The first character of a name, whole (an emoji is one), for the round mark that stands for the profile. */
+export function nameInitial(value: string | null | undefined): string {
+  const first = Array.from((value ?? "").trim())[0];
+  return first ? first.toUpperCase() : "J";
+}
+
+function sameNameKey(value: string): string {
+  return value.normalize("NFC").toLocaleLowerCase();
+}
+
+/**
+ * The profiles with the name each is shown under. Two profiles may be called alike (the same name typed
+ * again after a start that failed, or on purpose): the second is shown as «Name (2)», the third «Name (3)»,
+ * in the order they were made, so a banner that says whose the team is never names the person who is looking
+ * at it. A name that is alone is shown as it is.
+ */
+export function labelLocalProfiles<T extends LocalProfile>(profiles: T[]): (T & { label: string })[] {
+  const seen = new Map<string, number>();
+  return profiles.map((profile) => {
+    const key = sameNameKey(profile.displayName);
+    const nth = (seen.get(key) ?? 0) + 1;
+    seen.set(key, nth);
+    return { ...profile, label: nth === 1 ? profile.displayName : `${profile.displayName} (${nth})` };
+  });
+}
+
+/** The name a saved profile is shown under, among the saved profiles; null when it is not one of them. */
+export function localProfileLabel(profileId: string, store: LocalProfileStore = localStorage): string | null {
+  return labelLocalProfiles(listLocalProfiles(store)).find((profile) => profile.profileId === profileId)?.label ?? null;
 }
 
 function validProfile(value: unknown): value is LocalProfile {

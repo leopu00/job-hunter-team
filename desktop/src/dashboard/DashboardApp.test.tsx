@@ -19,6 +19,7 @@ import {
   finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
+  removeLocalProfile,
 } from "../lib/local-profile";
 import { clearGoogleIdentitySelection, googleIdentitySelected } from "../lib/identity-choice";
 import { readDesktopPlatform } from "../lib/desktop-platform";
@@ -127,6 +128,7 @@ vi.mock("../lib/local-profile", () => ({
   finalizeLocalProfileMigration: vi.fn(),
   localIdentitySelected: vi.fn(),
   readLocalProfile: vi.fn(),
+  removeLocalProfile: vi.fn(),
 }));
 vi.mock("../lib/identity-choice", () => ({
   clearGoogleIdentitySelection: vi.fn(),
@@ -444,6 +446,54 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-chat")).not.toBeInTheDocument();
     expect(reconnectDirectChat).not.toHaveBeenCalled();
+  });
+
+  describe("a saved local profile whose record is gone from this computer", () => {
+    function gone(code = "local_profile_not_found") {
+      vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
+      vi.mocked(localIdentitySelected).mockReturnValue(true);
+      vi.mocked(readLocalProfile).mockReturnValue({ profileId: "gone-profile", displayName: "Test 1" });
+      vi.mocked(activateDesktopLocalScope).mockRejectedValue({ code });
+      vi.mocked(clearDesktopAccountScope).mockResolvedValue();
+    }
+
+    it("says it is gone, does not offer to try again, and mounts nothing", async () => {
+      gone();
+      render(<DashboardApp />);
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/non c.è più su questo computer/i);
+      expect(alert).not.toHaveTextContent(/isolamento/i);
+      expect(screen.queryByRole("button", { name: "Riprova" })).not.toBeInTheDocument();
+      expect(screen.queryByTestId("onboarding")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+    });
+
+    it("leads to the choice of profile, keeping the profile in the list", async () => {
+      gone();
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "Scegli un altro profilo" }));
+      await waitFor(() => expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE));
+      expect(clearLocalIdentitySelection).toHaveBeenCalled();
+      expect(removeLocalProfile).not.toHaveBeenCalled();
+    });
+
+    it("forgets it from the list only when the person asks, then leads to the choice", async () => {
+      gone("local_profile_unavailable");
+      const user = userEvent.setup();
+      render(<DashboardApp />);
+      await user.click(await screen.findByRole("button", { name: "Dimentica questo profilo" }));
+      await waitFor(() => expect(goTo).toHaveBeenCalledWith(LOGIN_PAGE));
+      expect(removeLocalProfile).toHaveBeenCalledWith("gone-profile");
+    });
+
+    it("still offers «Riprova» for any other refusal, and the way out beside it", async () => {
+      gone("account_scope_mismatch");
+      render(<DashboardApp />);
+      expect(await screen.findByRole("button", { name: "Riprova" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Scegli un altro profilo" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Dimentica questo profilo" })).not.toBeInTheDocument();
+    });
   });
 
   it.each(["claude", "codex", "kimi"] as const)(

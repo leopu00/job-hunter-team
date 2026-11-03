@@ -283,6 +283,31 @@ describe("LoginScreen with several local profiles", () => {
   const ada = { profileId: "profile-a", displayName: "Ada" };
   const bea = { profileId: "profile-b", displayName: "Bea" };
 
+  it("tells two profiles with the same name apart in the list, and chooses each by its own id", async () => {
+    const user = userEvent.setup();
+    const first = { profileId: "profile-1", displayName: "Test 1" };
+    const second = { profileId: "profile-2", displayName: "Test 1" };
+    const selectLocal = vi.fn((id: string) => (id === "profile-2" ? second : first));
+    render(
+      <LoginScreen
+        loadBrowsers={noBrowsers}
+        configured
+        listLocal={() => [first, second]}
+        readLocal={() => second}
+        ownerLocal={() => null}
+        selectLocal={selectLocal}
+        onLocalReady={vi.fn()}
+      />,
+    );
+    const rows = within(screen.getByRole("list", { name: "Profili locali salvati" })).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByRole("button")).toHaveTextContent("Test 1");
+    expect(within(rows[0]).getByRole("button")).not.toHaveTextContent("(2)");
+    expect(within(rows[1]).getByRole("button")).toHaveTextContent("Test 1 (2)");
+    await user.click(within(rows[1]).getByRole("button"));
+    expect(selectLocal).toHaveBeenCalledWith("profile-2");
+  });
+
   it("lists the saved profiles, says which one has the team and which was used last, and chooses by id", async () => {
     const user = userEvent.setup();
     const selectLocal = vi.fn((_id: string) => bea);
