@@ -38,7 +38,7 @@ req=json.loads(sys.stdin.readline())
 agent=str(req.get('agent') or '')
 allowed={'capitano','assistente','mentor','scout','analista','scorer','scrittore','critico'}
 if agent not in allowed: raise SystemExit(2)
-path=f'/jht_home/agents/{agent}/chat.jsonl'
+path='/jht_home/agents/'+{'scout':'scout-1','analista':'analista-1','scorer':'scorer-1','scrittore':'scrittore-1'}.get(agent,agent)+'/chat.jsonl'
 if not os.path.isfile(path):
  print(json.dumps({'messages':[],'cursor':'0'})); raise SystemExit(0)
 size=os.path.getsize(path); raw_cursor=req.get('cursor')
@@ -71,7 +71,7 @@ allowed={'capitano','assistente','mentor','scout','analista','scorer','scrittore
 if agent not in allowed: raise SystemExit(2)
 cid=str(req.get('clientMessageId') or ''); text=str(req.get('text') or '').strip(); mode=str(req.get('mode') or '')
 if not cid or len(cid)>128 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in cid): raise SystemExit(2)
-path=f'/jht_home/agents/{agent}/chat.jsonl'
+path='/jht_home/agents/'+{'scout':'scout-1','analista':'analista-1','scorer':'scorer-1','scrittore':'scrittore-1'}.get(agent,agent)+'/chat.jsonl'
 def existing():
  if not os.path.isfile(path): return None
  size=os.path.getsize(path)
