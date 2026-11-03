@@ -22,6 +22,7 @@ its refusals.
   apply-request ID --on --expect DIGEST|--off      apply_gate consent, then
                                                    apply_request.toggle
   recheck ID --on|--off                            positions.recheck_requested
+  geocode ID --on|--off                            geocode_request.request_geocode
 
 The reasons are the closed vocabulary of feedback_reasons (shared with the web
 and the other writers). The note stays the user's: it is written only where the
@@ -59,7 +60,7 @@ class Refused(Exception):
         self.detail = detail
 
 
-def read_note():
+def read_note(keep_lines=False):
     """The note from the one JSON line on stdin: cleaned, never cut silently."""
     raw = sys.stdin.buffer.readline(STDIN_MAX_BYTES + 1)
     if len(raw) > STDIN_MAX_BYTES:
@@ -73,7 +74,7 @@ def read_note():
     note = payload.get("note")
     if note is not None and not isinstance(note, str):
         raise Refused("note_invalid")
-    return clean_note(note)
+    return clean_note(note, keep_lines)
 
 
 def position_exists(pid):
@@ -126,7 +127,8 @@ def do_restore(args):
 
 
 def do_note(args):
-    note = read_note()
+    # the private note box keeps its lines, as the web route's does (the one-line notes of a verdict do not)
+    note = read_note(keep_lines=True)
     if len(note) > BOX_NOTE_MAX:
         raise Refused("note_too_long")
     conn = get_db()
@@ -221,10 +223,19 @@ def do_recheck(args):
     return {"recheck_requested": bool(args.on)}
 
 
+def do_geocode(args):
+    from geocode_request import request_geocode
+    out = request_geocode(args.id, "on" if args.on else "off")
+    if not out.get("ok"):
+        raise Refused("position_not_found" if out.get("status_code") == "NOT_FOUND" else "geocode_refused",
+                      out.get("error"))
+    return {"geocode_requested": bool(out.get("current"))}
+
+
 OPS = {
     "feedback": do_feedback, "exclude": do_exclude, "restore": do_restore, "note": do_note,
     "write-request": do_write_request, "apply-request": do_apply_request, "recheck": do_recheck,
-    "apply-preview": do_apply_preview,
+    "apply-preview": do_apply_preview, "geocode": do_geocode,
 }
 
 
@@ -250,7 +261,7 @@ def parser():
     ex.add_argument("--note-on-stdin", action="store_true")
     for name in ("restore", "note"):
         sub.add_parser(name).add_argument("id", type=position_id)
-    for name in ("write-request", "apply-request", "recheck"):
+    for name in ("write-request", "apply-request", "recheck", "geocode"):
         one = sub.add_parser(name)
         one.add_argument("id", type=position_id)
         switch = one.add_mutually_exclusive_group(required=True)

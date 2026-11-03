@@ -107,6 +107,30 @@ def test_a_cv_request_and_a_recheck(home):
     assert code == 0 and row(db, "SELECT recheck_requested FROM positions WHERE id = 3") == (1,)
 
 
+def test_the_private_note_keeps_its_lines_and_the_comment_of_a_verdict_does_not(home):
+    db, env, _ = home
+    code, out = run(env, "note", "1", note="  first line  \r\n\r\n\r\n second\tline \n")
+    assert code == 0 and out["saved"] is True
+    assert row(db, "SELECT body FROM position_user_notes WHERE position_id = 1") == ("first line\n\nsecond line",)
+    # the one-line comment of a verdict is flattened, as it always was
+    code, out = run(env, "feedback", "1", "--value", "dislike", "--note-on-stdin", note="  too many\nyears  ")
+    assert code == 0
+    assert row(db, "SELECT note FROM position_feedback WHERE position_id = 1") == ("too many years",)
+
+
+def test_a_geocoding_request_and_its_cancellation(home):
+    db, env, _ = home
+    code, out = run(env, "geocode", "1", "--on")
+    assert code == 0 and out["geocode_requested"] is True
+    assert row(db, "SELECT geocode_requested FROM positions WHERE id = 1") == (1,)
+    # no guard of status (the writer's own rule): a position that is only «checked» can be asked for too
+    code, out = run(env, "geocode", "3", "--on")
+    assert code == 0 and row(db, "SELECT geocode_requested FROM positions WHERE id = 3") == (1,)
+    code, out = run(env, "geocode", "1", "--off")
+    assert code == 0 and out["geocode_requested"] is False
+    assert row(db, "SELECT geocode_requested FROM positions WHERE id = 1") == (0,)
+
+
 def test_a_star_with_its_score_and_direction(home):
     db, env, _ = home
     code, out = run(env, "feedback", "1", "--value", "star", "--score", "5", "--direction", "more_like_this")
@@ -195,6 +219,7 @@ def test_a_reason_outside_the_vocabulary_is_refused_and_writes_nothing(home):
     ("feedback", "1;rm", "--value", "like"),
     ("feedback", "-1", "--value", "like"),
     ("recheck", "1"),
+    ("geocode", "1"),
     ("run", "1"),
 ])
 def test_anything_but_the_closed_arguments_is_a_request_error(home, args):
@@ -224,7 +249,8 @@ def test_only_one_line_of_stdin_is_read(home):
 def test_a_missing_position_says_so(home):
     _db, env, _ = home
     for args in (("feedback", "99", "--value", "like"), ("exclude", "99", "--reason", "other"),
-                 ("note", "99"), ("recheck", "99", "--on"), ("write-request", "99", "--on")):
+                 ("note", "99"), ("recheck", "99", "--on"), ("write-request", "99", "--on"),
+                 ("geocode", "99", "--on")):
         code, out = run(env, *args, note="x" if args[0] == "note" else None)
         assert code == 1 and out["code"] == "position_not_found", args
 
