@@ -311,9 +311,11 @@ describe("Shell", () => {
     for (const item of NAV_ITEMS) {
       expect(matchRoute(ROUTES, item.href)?.route.path).toBe(item.href);
     }
-    expect(NAV_ITEMS.map((item) => item.href)).toEqual(["/dashboard", "/positions", "/swipe", "/map", "/team", "/office", "/budget", "/messages"]);
+    expect(NAV_ITEMS.map((item) => item.href)).toEqual(["/dashboard", "/positions", "/swipe", "/map", "/agents", "/office", "/budget", "/messages"]);
     const links = within(screen.getByTestId("navbar-links")).getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/team", "#/office", "#/budget", "#/messages"]);
+    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/agents", "#/office", "#/budget", "#/messages"]);
+    // Team opens the agents' panel, and stays lit on the team's activity page too
+    expect(NAV_ITEMS.find((item) => item.label && "web" in item.label && item.label.web === "nav_team")?.also).toEqual(["/team"]);
     // Budget has its page in the routes, so its entry in the bar is lit
     expect(within(nav).getByRole("link", { name: "Budget" })).toHaveAttribute("href", "#/budget");
     expect(matchRoute(ROUTES, "/budget")?.route.path).toBe("/budget");
