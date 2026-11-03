@@ -78,7 +78,12 @@ does not change Defender.
 On Windows the installer runs the team in Podman inside WSL: it installs the
 Podman CLI and the Compose provider through winget when they are missing, and
 Docker Desktop is not needed. WSL must already be enabled; the installer does
-not enable it. On
+not enable it. **winget is a requirement** (it comes with "App Installer": on
+Windows 10 install it from the Microsoft Store,
+<https://apps.microsoft.com/detail/9nblggh4nns1>, or the official link
+<https://aka.ms/getwinget>). Without winget, and without a Podman already
+installed, the installer stops before writing anything and says so; install App
+Installer and run the same command again. On
 macOS and Linux, the installer can prepare a supported runtime after user
 confirmation.
 
