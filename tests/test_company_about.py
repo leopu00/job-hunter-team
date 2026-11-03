@@ -116,3 +116,11 @@ def test_a_hostile_text_is_cleaned_and_cut_before_it_is_stored(db):
     assert stored == cleaned
     assert _run(db, "db_update.py", "company", "Acme", "--about", "\u200b\x07").returncode == 0
     assert _about(db) == cleaned, "a text with nothing left after cleaning writes nothing"
+
+
+def test_the_cut_at_600_never_falls_inside_an_emoji():
+    import company_about
+    text = "a" * 599 + "\U0001F469\u200d\U0001F4BB" + "b" * 50
+    cut = company_about.clean_about(text)
+    assert len(cut) == 600 and cut.startswith("a" * 599 + "\U0001F469")
+    cut.encode("utf-8")                              # a lone surrogate would raise

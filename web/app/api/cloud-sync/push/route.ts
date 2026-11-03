@@ -773,7 +773,8 @@ export async function POST(req: NextRequest) {
         logo: c.logo ?? null,
         logo_source: c.logo_source ?? null,
         logo_fetched: !!c.logo_fetched,
-        about: typeof c.about === "string" ? c.about.slice(0, 600) || null : null,
+        // 600 characters, counted in code points: a UTF-16 slice could cut an emoji in two and the JSON would be refused.
+        about: typeof c.about === "string" ? Array.from(c.about).slice(0, 600).join("") || null : null,
       }));
 
     if (payload.length !== companies.length) {

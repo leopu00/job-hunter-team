@@ -17,4 +17,9 @@ describe("cleanAbout", () => {
     expect(cleanAbout(null)).toBeNull();
     expect(cleanAbout(undefined)).toBeNull();
   });
+  it("cuts at 600 characters, never in the middle of an emoji", () => {
+    const cut = cleanAbout("a".repeat(599) + "\u{1F469}\u200D\u{1F4BB}" + "b".repeat(50)) as string;
+    expect(Array.from(cut)).toHaveLength(600);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(cut)).toBe(false);
+  });
 });
