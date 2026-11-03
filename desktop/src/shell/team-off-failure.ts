@@ -5,6 +5,11 @@ import { TEAM_OFF_TEXT } from "./team-off.i18n";
 /** The codes a page gets when the chat channel to the container is not there: the container is off, or not connected yet. */
 const CONTAINER_OFF_CODES = new Set(["local_team_not_running", "disconnected", "container_unavailable"]);
 
+/** The code is the container being off (not a failure of the page): the banner or the bar above has the way to turn it on. */
+export function isContainerOffCode(code: string | null | undefined): boolean {
+  return code != null && CONTAINER_OFF_CODES.has(code);
+}
+
 /**
  * What a page that reads the team's container says when it cannot, in the app opened without the team: the
  * catalog's «start the team» is not the way (the container is what is off, and the banner above turns it on

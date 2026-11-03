@@ -234,16 +234,18 @@ describe("Dashboard on an existing team read only", () => {
     reply = () => ({ ok: false, error: "positions_unavailable" });
     navigate("/dashboard", { replace: true });
     render(<Shell />);
-    // the link bar's alert comes first and has no code; the page's own alert says it
+    // the page says the core's own sentence and what to do; its code is never on the screen
     await waitFor(() => {
       const alerts = screen.getAllByRole("alert");
-      expect(alerts.some((alert) => alert.textContent?.includes("(positions_unavailable)"))).toBe(true);
       expect(alerts.some((alert) => alert.textContent?.includes(describeError("positions_unavailable", { locale: "it" }).text))).toBe(true);
     });
+    expect(document.body).not.toHaveTextContent("positions_unavailable");
 
     reply = () => ({ ok: true, data: syntheticStats() });
     // the page's own button, next to its message (the navbar's «Aggiorna» is the other one, with another word)
-    const pageAlert = screen.getAllByRole("alert").find((alert) => alert.textContent?.includes("(positions_unavailable)"))!;
+    const pageAlert = screen.getAllByRole("alert").find((alert) =>
+      alert.textContent?.includes(describeError("positions_unavailable", { locale: "it" }).text) &&
+      within(alert.parentElement as HTMLElement).queryAllByRole("button", { name: "Riprova" }).length === 1)!;
     await user.click(within(pageAlert.parentElement as HTMLElement).getByRole("button", { name: "Riprova" }));
     expect(await screen.findByText("12 posizioni totali · 1 escluse · 11 attive")).toBeInTheDocument();
   });
