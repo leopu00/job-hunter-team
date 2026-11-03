@@ -164,6 +164,15 @@ try {
   function Write-Ok { param([string]$Msg) }
   function Write-Dry { param([string]$Cmd) throw "unexpected dry run: $Cmd" }
   function Write-Fail { param([string]$Msg) throw $Msg }
+  # What Get-RuntimeFiles calls before it writes anything and when the Podman setup ends: the installer's own functions,
+  # taken from the real file. The preflight asks for winget when no Podman is installed; this runner has neither, and
+  # the enabler is replaced below by a fixture, so a stand-in winget lets it pass: what winget does is not on trial here.
+  foreach ($installerFunctionName in @('Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem')) {
+    $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
+    if (-not $fn) { throw "standalone $installerFunctionName function missing" }
+    . ([scriptblock]::Create($fn.Extent.Text))
+  }
+  function winget { throw 'the clean-start fixture must not run winget' }
   function Invoke-Action {
     param([scriptblock]$Block, [string]$Description)
     & $Block
