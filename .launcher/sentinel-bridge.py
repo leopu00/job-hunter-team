@@ -2845,6 +2845,7 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
             if ws is not None and isinstance(wusage, (int, float)):
                 ws_ts = ws.timestamp()
                 base = None
+                seen = []
                 with open(DATA_JSONL, encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
@@ -2864,9 +2865,21 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
                                 ts.replace("Z", "+00:00")).timestamp()
                         except Exception:
                             continue
-                        if t >= ws_ts:
-                            base = wt
+                        if t >= ws_ts - 3600:
+                            seen.append((t, float(wt)))
+                        if t >= ws_ts + 3600:
                             break
+                # The baseline is the first reading of the window that is not an isolated wrong one (77, 0, 77): a 0 read
+                # at the start of the window made «consumed today» the whole week and ordered a daily hard-coast
+                # (a real team, 02/11).
+                try:
+                    seen, _dropped = _imp("pace_rate").drop_isolated_readings(seen)
+                except Exception:
+                    pass
+                for t, wt in seen:
+                    if t >= ws_ts:
+                        base = wt
+                        break
                 if base is not None:
                     consumed = max(0.0, wusage - base)
         except Exception:
