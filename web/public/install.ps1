@@ -2,11 +2,22 @@
 # ║  Job Hunter Team — Windows-native installer (PowerShell)                 ║
 # ╠══════════════════════════════════════════════════════════════════════════╣
 # ║                                                                          ║
-# ║  Usage:                                                                  ║
-# ║    iwr -useb https://jobhunterteam.ai/install.ps1 | iex                  ║
+# ║  Usage: download the file, check its SHA-256, then run it with -File.    ║
+# ║  Do not run it straight from the download (no pipe into                  ║
+# ║  Invoke-Expression, no compile in memory): Microsoft Defender blocks     ║
+# ║  that scheme as malicious content (AMSI), whatever the script.           ║
 # ║                                                                          ║
-# ║    # Alternative branch, to test dev-N:                                  ║
-# ║    & ([scriptblock]::Create((iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/scripts/install.ps1).Content)) -Branch dev-1
+# ║    $f = Join-Path $env:TEMP 'jht-install.ps1'                            ║
+# ║    iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f            ║
+# ║    $published = (iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256).Content.Trim()
+# ║    if ((Get-FileHash $f -Algorithm SHA256).Hash -eq $published) { powershell -NoProfile -ExecutionPolicy Bypass -File $f } else { Remove-Item $f; Write-Error 'SHA-256 does not match: stop, do not run it' }
+# ║                                                                          ║
+# ║  -ExecutionPolicy Bypass is the policy of that one process only (Windows ║
+# ║  clients refuse scripts by default); it does not touch Defender.         ║
+# ║  If the two SHA-256 differ, stop: do not run the file.                   ║
+# ║                                                                          ║
+# ║    # Alternative branch, to test dev-N: same file, with -Branch dev-1    ║
+# ║    powershell -NoProfile -ExecutionPolicy Bypass -File $f -Branch dev-1  ║
 # ║                                                                          ║
 # ║  Default: Podman rootless in a dedicated WSL machine. The desktop        ║
 # ║  obtains consent; this script installs the user-scope Podman CLI when    ║
@@ -248,7 +259,7 @@ function Test-JhtWindows10Client {
 function Get-Windows10SupportWarning {
   # install.ps1 deliberately stays ASCII: Windows PowerShell 5.1 reads a
   # BOM-less script in the legacy console encoding. The desktop has the full
-  # translated copy; this is what a person sees through iwr | iex.
+  # translated copy; this is what a person sees when running the downloaded file.
   param([string]$Language = [Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName)
   switch ($Language.ToLowerInvariant()) {
     'it' { return "Podman non supporta piu' Windows 10: puo' funzionare, ma non lo garantiamo. Il sistema supportato e' Windows 11." }
@@ -636,8 +647,8 @@ function Test-WillAutoOnboard {
   if ($SkipOnboard)   { return $false }
   if ($env:JHT_SKIP_ONBOARD -eq '1') { return $false }
   if ($PairingToken)  { return $false }
-  # The interactive wizard needs a host process — when install.ps1 runs via
-  # `iwr|iex` inside an interactive pwsh we have a normal host. When it runs
+  # The interactive wizard needs a host process — when install.ps1 runs as a
+  # downloaded file inside an interactive PowerShell we have a normal host. When it runs
   # from a job/CI with redirection, IsInputRedirected is true.
   if ([Console]::IsInputRedirected) { return $false }
   return $true

@@ -58,10 +58,22 @@ bash install.sh
 On native Windows PowerShell (Windows is not supported in 0.4: these steps are untested and may not work.):
 
 ```powershell
-iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile install.ps1
-Get-Content .\install.ps1
-.\install.ps1
+$f = Join-Path $env:TEMP 'jht-install.ps1'
+iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f
+Get-Content $f
+$published = (iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256).Content.Trim()
+if ((Get-FileHash $f -Algorithm SHA256).Hash -eq $published) { powershell -NoProfile -ExecutionPolicy Bypass -File $f } else { Remove-Item $f; Write-Error 'SHA-256 does not match: stop, do not run it' }
 ```
+
+The published SHA-256 of the installer is the one in
+[`desktop/src-tauri/installer-windows.sha256`](https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256);
+the command compares it with the SHA-256 of the file you downloaded and runs the
+file only when they are equal. **If they differ, stop**: do not run the file
+(the command deletes it), and tell us. Do not pipe the download into `iex` or
+compile it in memory: Microsoft Defender blocks that scheme as malicious
+content, whatever the script says. `-ExecutionPolicy Bypass` applies to that one
+PowerShell process only, because Windows clients refuse scripts by default; it
+does not change Defender.
 
 On Windows the installer runs the team in Podman inside WSL: it installs the
 Podman CLI and the Compose provider through winget when they are missing, and
