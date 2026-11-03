@@ -82,6 +82,25 @@ jobs:
           & wsl.exe --version 2>&1 | ForEach-Object { "  $_" }
           & winget --version 2>&1 | ForEach-Object { "  winget $_" }
 
+      # The runtime image of this job is the build of the pile, not the release pin. install.ps1 starts the image it
+      # is given with the compose of this commit, and the compose of this commit starts the portal-secrets broker
+      # (jht-broker) and the Telegram service (jht-telegram-service) in it. The pin of release/runtime-image.v1.json
+      # is the image of 14/08, from before both existed: with it `docker compose up` started two containers whose
+      # command was not in the image and they left with exit 127, «runtime_containers_unhealthy», after 300 s, in
+      # every run since the broker came (T146). `master-arthur` is the tag the TEST builds of the pile are
+      # pushed under (docker.yml, dispatched on that branch); it is read here as a digest, so that install.ps1
+      # (which wants `repository@sha256:...` and checks what it pulled) is given exactly one image for the whole job.
+      - name: Take the runtime image of the pile (the tag master-arthur, as a digest)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $token = (Invoke-RestMethod -UseBasicParsing -Uri 'https://ghcr.io/token?service=ghcr.io&scope=repository:leopu00/jht:pull').token
+          $accept = 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json'
+          $answer = Invoke-WebRequest -UseBasicParsing -Uri 'https://ghcr.io/v2/leopu00/jht/manifests/master-arthur' -Headers @{ Authorization = "Bearer $token"; Accept = $accept }
+          $digest = [string]$answer.Headers['Docker-Content-Digest']
+          if ($digest -notmatch '^sha256:[0-9a-f]{64}$') { throw "the tag master-arthur has no digest: '$digest'" }
+          "JHT_IMAGE=ghcr.io/leopu00/jht@$digest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "runtime image of this job: ghcr.io/leopu00/jht@$digest (tag master-arthur)"
+
       # Every run of a script goes through the same runner: powershell.exe 5.1
       # with the app's arguments, its output timestamped (JHT_PHASE lines show
       # where the time goes), its exit code and duration kept for the summary.
