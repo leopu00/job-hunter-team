@@ -4,10 +4,11 @@
 # ║                                                                          ║
 # ║  Usage: download the file, check its SHA-256, then run it with -File.    ║
 # ║  Do not run it straight from the download (no pipe into                  ║
-# ║  Invoke-Expression, no compile in memory): Microsoft Defender blocks     ║
-# ║  that scheme as malicious content (AMSI), whatever the script.           ║
+# ║  Invoke-Expression, no compile in memory): in our tests Microsoft        ║
+# ║  Defender has blocked that scheme as malicious content (AMSI),           ║
+# ║  whatever the script was.                                                ║
 # ║                                                                          ║
-# ║    $f = Join-Path $env:TEMP 'jht-install.ps1'                            ║
+# ║    $f = Join-Path $env:TEMP ("jht-install-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
 # ║    iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f            ║
 # ║    $published = (iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256).Content.Trim()
 # ║    if ((Get-FileHash $f -Algorithm SHA256).Hash -eq $published) { powershell -NoProfile -ExecutionPolicy Bypass -File $f } else { Remove-Item $f; Write-Error 'SHA-256 does not match: stop, do not run it' }
