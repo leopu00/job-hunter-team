@@ -417,6 +417,48 @@ export function clearOnboardingInterruption(userId: string, store: OnboardingMar
   } catch { /* nothing to clear */ }
 }
 
+const PROVIDER_PREFIX = "jht.desktop.onboarding.provider.";
+
+/** What the renderer remembers of the provider's sign-in on this computer: which provider, and whether the app ever saw it signed in. */
+export interface OnboardingProviderMemory {
+  provider: SubscriptionProvider;
+  /** The app saw this provider signed in: if it is not any more, the sign-in has expired; otherwise it was never done. */
+  signedIn: boolean;
+}
+
+export function recordOnboardingProvider(
+  userId: string, value: OnboardingProviderMemory, store: OnboardingMarkerStore = localStorage,
+): void {
+  try { store.setItem(`${PROVIDER_PREFIX}${userId}`, JSON.stringify(value)); } catch { /* only the memory is lost */ }
+}
+
+export function readOnboardingProvider(
+  userId: string, store: OnboardingMarkerStore = localStorage,
+): OnboardingProviderMemory | undefined {
+  try {
+    const raw = store.getItem(`${PROVIDER_PREFIX}${userId}`);
+    if (!raw) return undefined;
+    const row = record(JSON.parse(raw));
+    if (typeof row.provider !== "string" || !INTERRUPTION_PROVIDERS.has(row.provider)) return undefined;
+    return { provider: row.provider as SubscriptionProvider, signedIn: row.signedIn === true };
+  } catch { return undefined; }
+}
+
+/** The provider was chosen: kept with what is already known of its sign-in (a new choice of the same provider keeps it). */
+export function rememberChosenProvider(
+  userId: string, provider: SubscriptionProvider, store: OnboardingMarkerStore = localStorage,
+): void {
+  const before = readOnboardingProvider(userId, store);
+  recordOnboardingProvider(userId, { provider, signedIn: before?.provider === provider && before.signedIn }, store);
+}
+
+/** The app saw the provider signed in on the team's host. */
+export function rememberProviderSignedIn(
+  userId: string, provider: SubscriptionProvider, store: OnboardingMarkerStore = localStorage,
+): void {
+  recordOnboardingProvider(userId, { provider, signedIn: true }, store);
+}
+
 const DRAFT_PREFIX = "jht.desktop.onboarding.draft.";
 const DRAFT_LAST_STEP = 3;
 const DRAFT_KEEP_MS = 30 * 24 * 60 * 60 * 1_000;
