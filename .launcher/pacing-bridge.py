@@ -577,7 +577,7 @@ def next_quarter(now: datetime | None = None) -> datetime:
     return now.replace(minute=minute_block, second=0, microsecond=0)
 
 
-def _read_window_samples(since_ts: float, now_ts: float):
+def _read_window_samples(since_ts: float, now_ts: float, last_session_only: bool = True):
     """Ritorna lista di (ts_unix, usage, session_id) ordinata per ts,
     SOLO quella relativa all'ULTIMA session_id presente nella finestra.
 
@@ -625,12 +625,33 @@ def _read_window_samples(since_ts: float, now_ts: float):
     samples.sort(key=lambda r: r[0])
     if not samples:
         return []
+    if not last_session_only:
+        return samples
     last_session = samples[-1][2]
     if last_session is None:
         # Nessun session_id (jsonl vecchio): usa tutto, accetta il rischio
         # che un reset finisca dentro la finestra una volta ogni 5h.
         return samples
     return [s for s in samples if s[2] == last_session]
+
+
+def _long_ratio(by_agent, now_ts: float):
+    """I kT per punto del team misurati in ORE (pace_rate.kt_per_point), o None se i dati non bastano.
+
+    Il rapporto di una sola finestra da un'ora e' sbagliato per costruzione: il delta di quel tick esce da
+    pace_rate.adjust_series, che toglie i salti da 3 punti o piu' fra due campioni (altro uso dell'account), mentre i kT
+    restano interi; su un contatore che il provider aggiorna a scatti quei salti sono consumo del team. Misurato su
+    un team reale, 28/10-03/11: 930 kT/punto dal tick contro i ~400 della settimana intera (29.886 kT su 75 punti).
+    `by_agent` e' collect_events() da almeno RATIO_MAX_SPAN_H ore fa."""
+    pr = _pace_rate()
+    if pr is None:
+        return None
+    since = now_ts - pr.RATIO_MAX_SPAN_H * 3600.0
+    samples = _read_window_samples(since, now_ts, last_session_only=False)
+    if len(samples) < 2:
+        return None
+    events = [(ts, w / 1000.0) for evs in by_agent.values() for ts, w in evs if since <= ts <= now_ts]
+    return pr.kt_per_point([(t, u) for t, u, _ in samples], events, now_ts)
 
 
 def _read_throttle_events(since_ts: float, now_ts: float) -> dict[str, int]:
@@ -776,7 +797,9 @@ def compute_tick(ast, tba, rb, now: datetime,
 
     # 2) Token per agente nella finestra EFFETTIVA (a partire da
     #    effective_since_ts, non nominal). Pesi rate-Kimi 1,1,0,0.
-    by_agent = tba.collect_events(effective_since_ts)
+    _pr_mod = _pace_rate()
+    _long_since = now_ts - (_pr_mod.RATIO_MAX_SPAN_H if _pr_mod is not None else 0.0) * 3600.0
+    by_agent = tba.collect_events(min(effective_since_ts, _long_since))
     agent_kt = {}
     for name, evs in by_agent.items():
         kt = sum(
@@ -891,7 +914,12 @@ def compute_tick(ast, tba, rb, now: datetime,
                     "budget, or usage is flat",
         }
 
-    ratio = team_kt / delta_usage              # kT per 1% di budget
+    ratio_window = team_kt / delta_usage       # kT per 1% di budget sulla SOLA finestra: solo per l'audit
+    # Il rapporto che si usa e' quello misurato in ore sui punti guadagnati (vedi _long_ratio); la finestra sola ripiega
+    # solo se i dati non bastano, e il tick lo dice (ratio_source).
+    _lr = _long_ratio(by_agent, now_ts)
+    ratio = _lr["ratio"] if _lr else ratio_window
+    ratio_source = "hours" if _lr else "window"
     vel_team = delta_usage / effective_window_h  # %/h sulla finestra effettiva
 
     # 3) Sample fresco del bridge (proj/usage_now/reset_at).
@@ -951,7 +979,7 @@ def compute_tick(ast, tba, rb, now: datetime,
         if pct_per_h < MIN_PCT_H:
             skipped.append({"name": name, "pct_per_h": pct_per_h})
             continue
-        share = (pct_per_h / vel_team) * 100.0 if vel_team > 0 else 0.0
+        share = (kt / team_kt) * 100.0 if team_kt > 0 else 0.0   # quota del consumo del team, non del passo del contatore
         events = checkpoint_counts.get(name, 0)
         cadence_per_min = events / eff_min if eff_min > 0 else 0.0
         agents.append(
@@ -998,6 +1026,10 @@ def compute_tick(ast, tba, rb, now: datetime,
         "delta_usage": delta_usage,
         "team_kt": team_kt,
         "ratio": ratio,
+        "ratio_window": ratio_window,
+        "ratio_source": ratio_source,
+        "ratio_gain_pts": _lr["gain"] if _lr else None,
+        "ratio_span_h": _lr["span_h"] if _lr else None,
         "vel_team": vel_team,
         "vel_target": vel_target,
         # target_band_center (92% storico) è SOLO il fallback per setup senza
@@ -1163,7 +1195,9 @@ def format_message(d: dict) -> str:
 
     parts.append(
         f"ratio={d['ratio']:.1f}kT/% "
-        f"(team {d['team_kt']:.2f}kT / Δusage {d['delta_usage']:.2f}%)"
+        + (f"(measured over {d['ratio_span_h']:.0f}h, {d['ratio_gain_pts']:.0f} points gained)"
+           if d.get("ratio_source") == "hours" else
+           f"(ONE window only, unreliable: team {d['team_kt']:.2f}kT / Δusage {d['delta_usage']:.2f}%)")
     )
 
     if d["agents"]:

@@ -197,8 +197,8 @@ export function RejectionReasonPicker({
             disabled={disabled}
             className="rounded-lg border px-3 py-2 text-[11px] font-semibold disabled:opacity-60"
             style={{
-              borderColor: "var(--color-accent)",
-              color: "var(--color-accent)",
+              borderColor: "var(--color-accent, var(--color-green))",
+              color: "var(--color-accent, var(--color-green))",
             }}
           >
             {t.save}

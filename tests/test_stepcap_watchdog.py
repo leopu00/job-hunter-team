@@ -114,6 +114,9 @@ def home(tmp_path, monkeypatch):
     CAPTAIN_MSGS.clear()
     # Un heartbeat per giro renderebbe illeggibili le asserzioni sugli eventi.
     monkeypatch.setattr(wd, "HEARTBEAT_SEC", 10 ** 9)
+    # Il motore dei throttle non gira nei test: nessuna sveglia sua, la ripresa e' del watchdog (i test della sveglia del
+    # motore rimettono l'attesa).
+    monkeypatch.setattr(wd, "ENGINE_WAKE_GRACE_SEC", 0.0)
     monkeypatch.setattr(wd, "MARKER_TAIL_LINES", 10)
     return tmp_path
 
@@ -175,13 +178,44 @@ def test_1b_lo_stallo_e_seguito_dal_throttle(home, monkeypatch):
     assert len(throttled) == 1
     assert throttled[0]["throttle_sec"] in throttle_config.THROTTLE_LADDER
 
+    # La pausa e' quella del MOTORE (flag, log start/end, sveglia, recupero), non un secondo sistema parallelo.
+    flag = wd._throttle_engine().get_flag("scout-3")
+    assert flag["state"] == "IN_THROTTLE" and flag["pause_id"].startswith("scout-3-")
+    assert flag["applied_sec"] == throttled[0]["throttle_sec"]
+    assert flag["until"] - flag["timer_armed_at"] == flag["applied_sec"]
+    assert flag["reason"].startswith("stepcap")
+    assert not (home / "state" / "throttle-scout-3.json").exists(), "niente file legacy: una pausa sola"
+
+
+def test_1b2_senza_motore_si_ripiega_sul_vecchio_file(home, monkeypatch):
+    monkeypatch.setattr(wd, "_throttle_engine", lambda: None)
+    FakeTmux({"SCOUT-3": stall_pane()}).install(monkeypatch)
+    wd.tick(now=T0)
+    wd.tick(now=T0 + 60)
     state = json.loads((home / "state" / "throttle-scout-3.json").read_text())
-    assert set(state) == {"agent", "id", "until", "started", "applied_sec"}, \
-        "il formato è quello di agents/_tools/jht-throttle, non uno nuovo"
-    assert state["agent"] == "scout-3"
-    assert state["id"].startswith("stepcap-")
-    assert state["until"] - state["started"] == state["applied_sec"]
-    assert state["applied_sec"] == throttled[0]["throttle_sec"]
+    assert set(state) == {"agent", "id", "until", "started", "applied_sec"}
+    assert state["id"].startswith("stepcap-") and state["agent"] == "scout-3"
+
+
+def test_1b3_il_motore_sveglia_e_il_watchdog_aspetta_prima_di_riprendere(home, monkeypatch):
+    monkeypatch.setattr(wd, "ENGINE_WAKE_GRACE_SEC", 120.0)
+    fake = FakeTmux({"SCOUT-3": stall_pane()}).install(monkeypatch)
+    drive_to_stall(fake, T0)
+    sec = events("throttled")[0]["throttle_sec"]
+    wd.tick(now=T0 + 60 + sec + 5)
+    assert fake.resumes == [], "il motore sveglia al suo giro: una sveglia sola"
+    wd.tick(now=T0 + 60 + sec + 130)
+    assert len(fake.resumes) == 1, "motore fermo: dopo la tolleranza riprende il watchdog"
+
+
+def test_1b4_il_motore_ha_gia_svegliato_e_il_pane_si_muove_nessuna_ripresa(home, monkeypatch):
+    monkeypatch.setattr(wd, "ENGINE_WAKE_GRACE_SEC", 120.0)
+    fake = FakeTmux({"SCOUT-3": stall_pane()}).install(monkeypatch)
+    drive_to_stall(fake, T0)
+    sec = events("throttled")[0]["throttle_sec"]
+    fake.panes["SCOUT-3"] += "\n> [wake-up del motore] riprendo\n"
+    wd.tick(now=T0 + 60 + sec + 5)
+    assert fake.resumes == [] and len(events("recovered")) == 1
 
 
 # ── Test 1c — lo stallo SENZA marcatore ──────────────────────────────────
@@ -232,6 +266,41 @@ def test_1e_fuori_finestra_limmobilita_non_e_uno_stallo(home, monkeypatch):
     for i in range(8):
         wd.tick(now=T0 + i * 60)
     assert events("detected") == []
+
+
+def test_1f_uno_scorer_che_aspetta_lavoro_non_e_fermo(home, monkeypatch):
+    """Un team reale, 02/11: lo Scorer con la coda vuota e il pane immobile riceveva pause del watchdog (300, 120, 60 s) sopra
+    quelle del motore, e un ack rifiutato lo teneva fermo con 7 posizioni in coda."""
+    monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", 5)
+    fake = FakeTmux({"SCORER-4": IDLE_PANE}).install(monkeypatch)
+    monkeypatch.setattr(wd._throttle_engine(), "queue_is_empty", lambda agent: True)
+    for i in range(20):
+        wd.tick(now=T0 + i * 60)
+    assert events("detected") == [] and events("throttled") == []
+    assert [e["why"] for e in events("idle_by_design")] == ["empty-queue"], "detto una volta, non a ogni giro"
+    assert wd._throttle_engine().get_flag("scorer-4") == {}
+    assert not (home / "state" / "throttle-scorer-4.json").exists() and fake.resumes == []
+
+
+def test_1g_con_posizioni_in_coda_lo_stesso_pane_immobile_e_uno_stallo(home, monkeypatch):
+    monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", 5)
+    FakeTmux({"SCORER-4": IDLE_PANE}).install(monkeypatch)
+    monkeypatch.setattr(wd._throttle_engine(), "queue_is_empty", lambda agent: False)
+    for i in range(7):
+        wd.tick(now=T0 + i * 60)
+    assert len(events("detected")) == 1 and events("idle_by_design") == []
+
+
+def test_1h_dentro_una_pausa_del_motore_il_pane_immobile_e_il_suo_comportamento(home, monkeypatch):
+    monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", 5)
+    FakeTmux({"ANALISTA-1": IDLE_PANE}).install(monkeypatch)
+    eng = wd._throttle_engine()
+    monkeypatch.setattr(eng, "queue_is_empty", lambda agent: False)
+    eng.register("analista-1", seconds=3600, reason="checkpoint", now=T0)
+    for i in range(8):
+        wd.tick(now=T0 + i * 60)
+    assert events("detected") == []
+    assert [e["why"] for e in events("idle_by_design")] == ["engine-pause"]
 
 
 # ── Test 2 — nessun falso positivo ───────────────────────────────────────

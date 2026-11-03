@@ -57,40 +57,6 @@ describe("official FIRSTSETUP assistance connection", () => {
     expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.en.saved })).toBeNull();
     expect(native.invoke).not.toHaveBeenCalled();
   });
-  it.each(["host_not_configured", "browser_binding_required"])(
-    "opens the actual panel with edited draft fields and keeps %s unavailable without registering or preparing", async (error) => {
-      native.invoke.mockImplementation(async (op: string) => {
-        if (op === "closer_desktop_request") return { ok: false, error };
-        throw new Error("unexpected operation");
-      });
-      const props: OnboardingFlowProps = {
-        account: { identity: "local", displayName: "Synthetic" }, platform: "macos", runtime: { status: "collecting", stage: "host" },
-        onSubmit: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn(), onExitFailure: vi.fn(), onRuntimeAction: vi.fn(),
-        providerLogin: null, sshHostKey: null, onConfirmHostKey: vi.fn(), onCancelHostKey: vi.fn(),
-        onProviderInput: vi.fn(), onProviderClose: vi.fn(), onProviderRestart: vi.fn(),
-      };
-      const user = userEvent.setup(); render(<OnboardingFlow {...props} />); const t = ONBOARDING_TEXT.en;
-      await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
-      await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
-      await user.type(screen.getByLabelText(t.vpsAddress), "draft.example.invalid");
-      expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeDisabled();
-      await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.saved }));
-      // The panel first draws a provisional heading and replaces it once its session exists:
-      // query again on every attempt instead of holding the element findByRole resolved with.
-      await waitFor(() => expect(screen.getByRole("heading", { name: "Assisted browser" })).toBeInTheDocument());
-      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(error));
-      expect(screen.queryByRole("img")).toBeNull();
-      expect(screen.getByRole("button", { name: "Take control" })).toBeDisabled();
-      expect(native.invoke).toHaveBeenCalledOnce();
-      expect(native.invoke.mock.calls[0][0]).toBe("closer_desktop_request");
-      expect(native.invoke.mock.calls[0][1]).not.toHaveProperty("host");
-      expect(props.onSubmit).not.toHaveBeenCalled(); expect(props.onRuntimeAction).not.toHaveBeenCalled();
-      expect(props.onConfirmHostKey).not.toHaveBeenCalled();
-      await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.back }));
-      expect(screen.getByLabelText(t.vpsAddress)).toHaveValue("draft.example.invalid");
-      expect(Object.keys(localStorage)).toEqual(["jht-lang"]);
-    },
-  );
   it("registers only the existing VPS fields on an explicit click, without declaring readiness", async () => {
     const onOpen = vi.fn();
     render(<FirstSetupAssistance host={host} locale="en" onOpen={onOpen} />);
@@ -182,7 +148,7 @@ describe("official FIRSTSETUP assistance connection", () => {
     native.invoke.mockRejectedValue(new Error("synthetic sensitive transport detail"));
     expect(await registerAssistanceHost(host)).toEqual({ ok: false, error: "desktop_transport_unavailable" });
   });
-  it("opens the actual unavailable browser before team setup and returns with the wizard choices intact", async () => {
+  it("the first setup of a team on a VPS has no entry to the assisted browser (out of 0.4.0): the wizard keeps its own choices", async () => {
     const props: OnboardingFlowProps = {
       account: { identity: "local", displayName: "Synthetic" }, platform: "macos", runtime: { status: "collecting", stage: "host" },
       onSubmit: vi.fn(), onRetry: vi.fn(), onRestart: vi.fn(), onExitFailure: vi.fn(), onRuntimeAction: vi.fn(),
@@ -193,22 +159,10 @@ describe("official FIRSTSETUP assistance connection", () => {
     await user.click(screen.getByRole("button", { name: new RegExp(t.startSetup) }));
     await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
     await user.type(screen.getByLabelText(t.vpsAddress), host.address);
-    await user.type(screen.getByLabelText(t.sshUser), host.user);
-    await user.click(screen.getByRole("button", { name: t.sshKeyPicker.choose }));
-    await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect }));
-    // The panel first draws a provisional heading and replaces it once its session exists:
-    // query again on every attempt instead of holding the element findByRole resolved with.
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Assisted browser" })).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("browser_binding_required"));
-    expect(screen.queryByRole("img")).toBeNull();
-    expect(screen.getByRole("button", { name: "Take control" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.back }));
+    expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeNull();
+    expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.en.saved })).toBeNull();
+    expect(screen.queryByText(ASSISTANCE_TEXT.en.intro)).toBeNull();
     expect(screen.getByLabelText(t.vpsAddress)).toHaveValue(host.address);
-    expect(screen.getByText("key", { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: t.hostTitle })).toHaveFocus();
-    expect(props.onSubmit).not.toHaveBeenCalled(); expect(props.onRuntimeAction).not.toHaveBeenCalled();
-    expect(props.onConfirmHostKey).not.toHaveBeenCalled();
-    expect(native.invoke.mock.calls.map(([op]) => op)).toEqual(["closer_desktop_register_host", "closer_desktop_request"]);
-    expect(Object.keys(localStorage)).toEqual(["jht-lang"]);
+    expect(native.invoke).not.toHaveBeenCalled();
   });
 });
