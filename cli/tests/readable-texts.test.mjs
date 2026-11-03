@@ -64,3 +64,26 @@ test('setup runs a sub-step with its stderr inherited: no buffer cap, no questio
   assert.doesNotMatch(run, /'pipe'|maxBuffer/);
   assert.match(run, /existsSync\(entry\)/);
 });
+
+test('the SQLite experimental warning is dropped, any other warning passes, JHT_DEBUG keeps it', async () => {
+  const { installWarningFilter } = await import('../src/lib/quiet-warnings.js');
+  const make = (env = {}) => {
+    const seen = [];
+    const proc = { env, emitWarning: (w, ...r) => seen.push([String(w?.message ?? w), r[0]]) };
+    installWarningFilter(proc);
+    return { proc, seen };
+  };
+  const quiet = make();
+  quiet.proc.emitWarning('SQLite is an experimental feature and might change at any time', 'ExperimentalWarning');
+  quiet.proc.emitWarning('Something else is experimental', 'ExperimentalWarning');
+  quiet.proc.emitWarning('The buffer is deprecated', 'DeprecationWarning');
+  assert.deepEqual(quiet.seen.map(([text]) => text), ['Something else is experimental', 'The buffer is deprecated']);
+  const debug = make({ JHT_DEBUG: '1' });
+  debug.proc.emitWarning('SQLite is an experimental feature', 'ExperimentalWarning');
+  assert.equal(debug.seen.length, 1);
+});
+
+test('the long help names the commands that live on the computer, up and down among them', () => {
+  const { out } = jht(['help']);
+  assert.match(out, /On your computer, outside the container:\n\s+up\s+Start the team\n\s+down\s+Stop it/);
+});

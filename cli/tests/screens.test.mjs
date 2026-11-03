@@ -84,3 +84,32 @@ test('--json gives a script the same facts: doctor, status, agents', () => {
   assert.equal(agents.running, 2);
   assert.equal(agents.agents.find((a) => a.id === 'capitano').running, true);
 });
+
+test('the errors of the parser and of the common mistakes have one shape: what happened, why, what to do', () => {
+  const box = sandbox();
+  const unknown = jht(['stauts'], box).out;
+  assert.match(unknown, /^Error: unknown command 'stauts'\n  Did you mean one of stats, status\?\n  → All the commands: jht help/);
+  const sub = jht(['team', 'lst'], box).out;
+  assert.match(sub, /^Error: /);
+  assert.match(sub, /→ Help for this command: jht team --help/);
+  assert.doesNotMatch(unknown + sub, /^error:/m);
+});
+
+test('talking to a team that is not running says so and how to start it, and a wrong system is not read as a missing release', () => {
+  const box = sandbox();
+  for (const args of [['team', 'chat', 'capitano'], ['team', 'send', 'capitano', 'hello']]) {
+    const { out, status } = jht(args, box);
+    assert.equal(status, 1);
+    assert.match(out, /Error: the team is not running\n  There is nobody to talk to as 'capitano' yet\.\n  → Start it with: jht team start/);
+  }
+  assert.match(jht(['download', '--os', 'plan9'], box).out, /Unsupported operating system: plan9/);
+  assert.match(jht(['download', '--os', 'linux'], box).out, /Which release\? Add --version/);
+});
+
+test('small messages read as a person would say them', () => {
+  const box = sandbox();
+  assert.match(jht(['notifications'], box).out, /No unread notifications\./);
+  assert.doesNotMatch(jht(['notifications'], box).out, /not read\./);
+  const config = jht(['config', 'get', 'nothing'], box).out;
+  assert.match(config, /Error: there is no configuration yet\n  → Set it up with: jht setup/);
+});

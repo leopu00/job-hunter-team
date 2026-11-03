@@ -34,6 +34,14 @@ export const HELP_GROUPS = [
 
 export const OTHER_GROUP = 'Other';
 
+/** The commands of the program on the computer (the wrapper), which the program inside the container cannot list. */
+export const HOST_COMMANDS = [
+  ['up', 'Start the team'],
+  ['down', 'Stop it'],
+  ['restart', 'Restart it'],
+  ['uninstall', 'Remove the local runtime (asks to confirm)'],
+];
+
 /** The visible commands of a program with the group each belongs to. */
 export function groupCommands(program) {
   const byName = new Map(program.commands.filter((c) => !HIDDEN_COMMANDS.has(c.name())).map((c) => [c.name(), c]));
@@ -73,22 +81,25 @@ export function renderFullHelp(program, width = 80) {
   const column = Math.min(Math.max(...terms.map((t) => t.length)), 26) + 2;
   const out = ['Usage: jht [options] [command]', '', program.description(), '', 'Options:',
     '  -V, --version  output the version number', '  -h, --help     display help for command', ''];
+  const row = (term, description) => {
+    const room = w - 2 - column;
+    const lines = wrap(description, room);
+    if (term.length + 2 > column) {
+      out.push(`  ${term}`);
+      for (const line of lines) out.push(`  ${' '.repeat(column)}${line}`.trimEnd());
+    } else {
+      out.push(`  ${term.padEnd(column)}${lines[0]}`.trimEnd());
+      for (const line of lines.slice(1)) out.push(`  ${' '.repeat(column)}${line}`);
+    }
+  };
   for (const { title, commands } of groups) {
     out.push(`${title}:`);
-    for (const c of commands) {
-      const term = termOf(c);
-      const room = w - 2 - column;
-      const lines = wrap(help.subcommandDescription(c), room);
-      if (term.length + 2 > column) {
-        out.push(`  ${term}`);
-        for (const line of lines) out.push(`  ${' '.repeat(column)}${line}`.trimEnd());
-      } else {
-        out.push(`  ${term.padEnd(column)}${lines[0]}`.trimEnd());
-        for (const line of lines.slice(1)) out.push(`  ${' '.repeat(column)}${line}`);
-      }
-    }
+    for (const c of commands) row(termOf(c), help.subcommandDescription(c));
     out.push('');
   }
+  out.push('On your computer, outside the container:');
+  for (const [term, text] of HOST_COMMANDS) row(term, text);
+  out.push('');
   out.push('Help for one command: jht <command> --help', '');
   return out.join('\n');
 }
