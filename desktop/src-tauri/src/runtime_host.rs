@@ -2399,6 +2399,49 @@ mod tests {
         assert_eq!(String::from_utf8_lossy(&own.unwrap().stdout), "M=0\n");
     }
 
+    /// The cause of the tests that failed at random on Linux with `process_start_failed after 0.0 s` (a runtime-log test of
+    /// onboarding three times in a day, and the fake ssh): a script written and run at once is refused with ETXTBSY, «text
+    /// file busy», when another thread forks between the moment the file is opened for writing and the moment it is closed:
+    /// the child the other thread started holds a copy of the open file until it execs. The tests of the crate run in parallel
+    /// and start programs all the time, so it happens to the ones that write a script. This stands in for them: the other
+    /// threads start programs without stopping, and every script must run.
+    #[cfg(unix)]
+    #[test]
+    fn a_script_written_and_run_at_once_runs_even_while_other_threads_start_programs() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let noise: Vec<_> = (0..4)
+            .map(|_| {
+                let stop = stop.clone();
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        let _ = std::process::Command::new("/bin/true").status();
+                    }
+                })
+            })
+            .collect();
+        let dir = std::env::temp_dir().join(format!("jht-busy-script-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mut refused = Vec::new();
+        for n in 0..300 {
+            let path = dir.join(format!("script-{n}"));
+            fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            match super::run_program(path.to_str().unwrap(), std::iter::empty::<&str>(), None, std::time::Duration::from_secs(20)) {
+                Ok(done) if done.code == 0 => {}
+                other => refused.push((n, other.map(|done| done.code))),
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        for thread in noise {
+            thread.join().unwrap();
+        }
+        let _ = fs::remove_dir_all(&dir);
+        assert!(refused.is_empty(), "{} of 300 scripts did not run: {refused:?}", refused.len());
+    }
+
     #[cfg(unix)]
     #[test]
     fn an_installer_s_lines_arrive_in_order_with_its_exit_code() {
