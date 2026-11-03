@@ -18,9 +18,6 @@ import { cleanImagesResult } from "../lib/clean-images";
 import { appLocale } from "../lib/app-locale";
 import { runtimeText } from "../lib/onboarding-runtime.i18n";
 import VpsProfileImport from "./VpsProfileImport";
-import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
-import FirstSetupAssistance from "./FirstSetupAssistance";
-import { ASSISTANCE_TEXT } from "./assistance.i18n";
 import { LOGIN_TEXT } from "../components/login-screen.i18n";
 import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
@@ -679,7 +676,6 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const draftChangeRef = useRef(onDraftChange);
   draftChangeRef.current = onDraftChange;
   const [submitting, setSubmitting] = useState(false);
-  const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const [profileName, setProfileName] = useState(account.displayName ?? "");
   const [savedVps, setSavedVps] = useState<SavedVps[]>([]);
@@ -716,15 +712,9 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
       node.scrollLeft = 0;
     }
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [step, assistanceOpen]);
+  }, [step]);
 
   if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onUseLocalData={account.identity === "local" ? onUseLocalData : undefined} onSetAsideLocalData={onSetAsideLocalData} localOwner={account.identity === "local" ? localOwner : undefined} onFreeDiskSpace={onFreeDiskSpace} onLoadPlans={onLoadPlans} onDeclarePlan={onDeclarePlan} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
-
-  if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
-    <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>
-    <button className="onboarding-secondary" type="button" onClick={() => setAssistanceOpen(false)}>{ASSISTANCE_TEXT[locale].back}</button>
-    <CloserDesktopPanel onClose={() => setAssistanceOpen(false)} />
-  </main>;
 
   // A team on a VPS pairs with the account: a local profile has none, so the step says so now
   // instead of starting a setup that fails at the runtime stage (pairing_token_missing).
@@ -868,7 +858,6 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             <p>{t.existingTeam.description}</p>
             <button type="button" className="onboarding-secondary" onClick={() => onConnectExistingTeam(host)}>{t.existingTeam.verifyVps}</button>
           </section>}
-          {host.kind === "vps" && <FirstSetupAssistance host={host} locale={locale} onOpen={() => setAssistanceOpen(true)} />}
           {account.identity === "local" && host.kind === "local" && <VpsProfileImport />}
           </>}
 

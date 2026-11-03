@@ -434,6 +434,28 @@ def queued_work(agent: str) -> int:
         return 0
 
 
+def queue_is_empty(agent: str) -> bool:
+    """True SOLO se `agent` e' di un ruolo con coda (analista, scorer) e la coda e' stata letta e non ha niente.
+
+    Un ruolo senza coda, un errore di lettura, un database che non risponde: False. Chi chiede (lo stepcap-watchdog) lo
+    usa per NON chiamare «fermo» un agente che aspetta lavoro: la direzione sicura qui e' non dire «aspetta lavoro»
+    senza una lettura certa."""
+    if _role_of(agent) not in _QUEUED_ROLES:
+        return False
+    try:
+        mod = _load_shared("db_query", "db_query.py")
+        if mod is None:
+            return False
+        conn = mod.get_db()
+        try:
+            return int(mod.role_queue_count(conn, _role_of(agent))) == 0
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        _log("could not read the queue of %s: %s" % (agent, exc))
+        return False
+
+
 def _burn_intent_now() -> bool:
     mod = _throttle_config()
     try:

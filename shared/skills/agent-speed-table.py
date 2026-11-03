@@ -117,6 +117,33 @@ def _parse_iso(s):
         return None
 
 
+def _load_pace_rate():
+    here = Path(__file__).resolve().parent
+    spec = importlib.util.spec_from_file_location("pace_rate", str(here / "pace_rate.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _all_samples(since_ts: float, now_ts: float):
+    """[(epoch, usage)] di sentinel-data.jsonl nell'intervallo, ordinati; [] se manca il file."""
+    out = []
+    try:
+        with SENTINEL_JSONL.open() as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ts = _parse_iso(e.get("ts"))
+                u = e.get("usage")
+                if ts is not None and isinstance(u, (int, float)) and since_ts <= ts.timestamp() <= now_ts:
+                    out.append((ts.timestamp(), float(u)))
+    except OSError:
+        return []
+    return sorted(out)
+
+
 def _team_delta_usage(since_ts: float, now_ts: float):
     """Ritorna (usage_first, usage_last, n_samples) dentro la finestra,
     leggendo sentinel-data.jsonl. Se file mancante o samples insufficienti
@@ -168,7 +195,10 @@ def main():
     window_h = args.since_min / 60.0
 
     tba = _load_skill_module()
-    by_agent = tba.collect_events(since_ts)
+    pr = _load_pace_rate()
+    long_since_ts = now_ts - pr.RATIO_MAX_SPAN_H * 3600.0
+    by_agent_long = tba.collect_events(min(since_ts, long_since_ts))
+    by_agent = {a: [(t, w) for t, w in evs if t >= since_ts] for a, evs in by_agent_long.items()}
 
     # Totali kT per agente
     agent_kt = {a: sum(w for _, w in evs) / 1000.0 for a, evs in by_agent.items()}
@@ -197,7 +227,12 @@ def main():
         }, sys.stdout)
         return
 
-    ratio = team_kt / delta_usage              # kT per ogni 1% di usage
+    ratio_window = team_kt / delta_usage       # kT per 1% sulla sola finestra: gonfiato dal contatore intero
+    # Il rapporto vero si misura in ore sui punti guadagnati (pace_rate.kt_per_point): una finestra da poche ore con un
+    # contatore intero ha dato 930 kT/punto contro i ~400 della settimana (un team reale, 28/10-03/11).
+    long_events = [(t, w / 1000.0) for evs in by_agent_long.values() for t, w in evs if t >= long_since_ts]
+    long = pr.kt_per_point(_all_samples(long_since_ts, now_ts), long_events, now_ts)
+    ratio = long["ratio"] if long else ratio_window
     team_speed_pct_h = delta_usage / window_h  # %/h del team in finestra
 
     # Per ogni agente: speed + tabella throttle.
@@ -263,6 +298,8 @@ def main():
             "kt": round(team_kt, 2),
             "delta_usage_pct": round(delta_usage, 2),
             "ratio_kt_per_pct": round(ratio, 2),
+            "ratio_window_kt_per_pct": round(ratio_window, 2),
+            "ratio_source": "hours" if long else "window",
             "ratio_in_range": (
                 RATIO_OK_MIN_KT_PER_PCT <= ratio <= RATIO_OK_MAX_KT_PER_PCT
             ),
