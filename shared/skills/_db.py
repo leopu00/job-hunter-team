@@ -166,6 +166,7 @@ def ensure_schema(conn: sqlite3.Connection):
         logo TEXT,
         logo_source TEXT,
         logo_fetched INTEGER DEFAULT 0,
+        about TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -919,6 +920,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_position_tickets_cloud_id(conn)
     _migrate_position_tickets_active_rescore(conn)
     _migrate_companies_logo(conn)
+    _migrate_companies_about(conn)
     _migrate_pending_messages_chat_turns(conn)
     _migrate_positions_url_unique(conn)
     _migrate_scout_coordination_unique(conn)
@@ -2155,6 +2157,20 @@ def _migrate_companies_logo(conn: sqlite3.Connection) -> None:
     ):
         if not _column_exists(conn, 'companies', name):
             conn.execute(f"ALTER TABLE companies ADD COLUMN {name} {decl}")
+
+
+def _migrate_companies_about(conn: sqlite3.Connection) -> None:
+    """Adds `companies.about`: who the company is and what it does, two sentences.
+
+    Written by the Analista from the company's own website, in the user's language, plain text, about the COMPANY
+    only (the position's description mixes company and role). NULL = not written yet: a company analysed before
+    this column existed is filled at its next re-evaluation, never in bulk. Additive and idempotent; the web twin
+    is supabase migration 106 (`companies.about`).
+    """
+    if not _table_exists(conn, 'companies'):
+        return
+    if not _column_exists(conn, 'companies', 'about'):
+        conn.execute("ALTER TABLE companies ADD COLUMN about TEXT")
 
 
 def _migrate_pending_messages_chat_turns(conn: sqlite3.Connection) -> None:

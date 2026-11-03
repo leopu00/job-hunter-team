@@ -531,7 +531,7 @@ export function updateCompany(db: Database, a: Parsed, actor: string): ScriptRes
     const before = pyTruthy(action) && companyId ? snapshot(db, "companies", companyId, COMPANY_TRACKED) : new Map();
     const sets: string[] = [];
     const params: Value[] = [];
-    for (const k of ["verdict", "red_flags", "culture_notes", "sector", "size", "glassdoor_rating", "analyzed_by", "hq_country", "website"]) {
+    for (const k of ["verdict", "red_flags", "culture_notes", "about", "sector", "size", "glassdoor_rating", "analyzed_by", "hq_country", "website"]) {
       if (pyTruthy(a[k])) {
         sets.push(`${k} = ?`);
         params.push(a[k] as Value);

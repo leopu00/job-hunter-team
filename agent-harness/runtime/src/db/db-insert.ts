@@ -19,8 +19,8 @@ export function insertCompany(db: Database, a: Parsed): ScriptResult {
       `
         INSERT INTO companies (name, website, hq_country, sector, size,
                                glassdoor_rating, red_flags, culture_notes,
-                               analyzed_by, verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               analyzed_by, verdict, about)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             website          = COALESCE(excluded.website, companies.website),
             hq_country       = COALESCE(excluded.hq_country, companies.hq_country),
@@ -31,6 +31,7 @@ export function insertCompany(db: Database, a: Parsed): ScriptResult {
             culture_notes    = COALESCE(excluded.culture_notes, companies.culture_notes),
             analyzed_by      = COALESCE(excluded.analyzed_by, companies.analyzed_by),
             verdict          = COALESCE(excluded.verdict, companies.verdict),
+            about            = COALESCE(excluded.about, companies.about),
             analyzed_at      = CURRENT_TIMESTAMP
     `,
     )
@@ -38,6 +39,7 @@ export function insertCompany(db: Database, a: Parsed): ScriptResult {
       a["name"] as string, a["website"] as string | null, a["hq_country"] as string | null, a["sector"] as string | null,
       a["size"] as string | null, a["glassdoor_rating"] as number | null, a["red_flags"] as string | null,
       a["culture_notes"] as string | null, a["analyzed_by"] as string | null, a["verdict"] as string | null,
+      a["about"] as string | null,
     );
   // lastInsertRowid says nothing after an update: the id is read.
   const row = db.prepare("SELECT id FROM companies WHERE name = ?").get(a["name"] as string) as { id: number };

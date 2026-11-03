@@ -395,6 +395,8 @@ def query_company_detail(name, as_json=False):
         print(f"  Red flags: {r['red_flags']}")
     if r['culture_notes']:
         print(f"  Culture: {r['culture_notes']}")
+    # NULL = never written: the Analista writes it at the next evaluation of a position of this company.
+    print(f"  About: {r['about'] or 'NOT WRITTEN YET (write it: db_update.py company ... --about)'}")
 
     # Posizioni collegate
     positions = conn.execute("""

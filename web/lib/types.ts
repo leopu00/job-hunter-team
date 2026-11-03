@@ -155,6 +155,11 @@ export interface Company {
   // Logo aziendale (mig 056): data-URI base64 ≤~35KB estratto dall'Analista
   // (skill logo-extraction). Null = non ancora estratto / non trovato.
   logo: string | null;
+  // Chi è l'azienda e di cosa si occupa (mig 106): due frasi scritte dall'Analista
+  // dal sito aziendale, nella lingua dell'utente, solo l'azienda (non il ruolo).
+  // Null / assente = non ancora scritte (le aziende già analizzate si riempiono alla
+  // prossima rivalutazione).
+  about?: string | null;
 }
 
 // ── Application ────────────────────────────────────────────────────
