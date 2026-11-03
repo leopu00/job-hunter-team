@@ -174,12 +174,12 @@ async function handleProviders() {
   // Provider aggiuntivi non noti
   const custom = Object.keys(providers).filter(k => !KNOWN_PROVIDERS[k]);
   if (custom.length > 0) {
-    console.log(`  ${DIM}Provider custom:${RESET}`);
+    console.log(`  ${DIM}Other providers:${RESET}`);
     for (const id of custom) {
       const p = providers[id];
       const isActive = activeProvider === id;
-      const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
-      console.log(`  ${WARN}  ${id}${activeLabel} — model: ${p?.model ?? '—'}`);
+      const activeLabel = isActive ? ` ${GREEN}· active${RESET}` : '';
+      console.log(`  ${WARN} ${id}${activeLabel} — model ${p?.model ?? '—'}`);
     }
     console.log('');
   }
