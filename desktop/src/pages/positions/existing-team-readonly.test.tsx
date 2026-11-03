@@ -327,7 +327,7 @@ describe("Dettaglio posizione on an existing team read only", () => {
     expect(screen.getAllByText(/Synthetic Co A/).length).toBeGreaterThan(0);
 
     // The private note, and everything that asks the team for something.
-    const note = screen.getByRole("textbox");
+    const note = screen.getByRole("textbox", { hidden: true });
     expect(note).toBeDisabled();
     expect(note).toHaveAttribute("title", REASON);
     const sheet = screen.getByRole("button", { name: /richieste/i });
@@ -406,7 +406,7 @@ describe("Dettaglio posizione on an existing team read only", () => {
     expect(screen.getByTestId("existing-team-readonly-banner")).toHaveTextContent(
       EXISTING_TEAM_READONLY_TEXT.it.connectionReadOnly,
     );
-    expect(screen.getByRole("textbox")).toHaveAttribute("title", EXISTING_TEAM_READONLY_TEXT.it.connectionReadOnly);
+    expect(screen.getByRole("textbox", { hidden: true })).toHaveAttribute("title", EXISTING_TEAM_READONLY_TEXT.it.connectionReadOnly);
   });
 
   it("refuses at the bridge a write that gets past a disabled control", async () => {

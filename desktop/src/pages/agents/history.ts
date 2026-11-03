@@ -32,44 +32,44 @@ export function durationText(seconds: number, units: DurationUnits): string {
   return `${rest} ${units.min}`;
 }
 
-export type LaneCell = {
-  /** moves of positions in this hour */
-  moves: number;
-  /** an agent of the department was up at some moment of this hour (the sessions the team traced) */
-  up: boolean;
-  /** the hour, epoch s: [from, to) */
-  from: number;
-  to: number;
+/** The window of the gantt: the last LANE_HOURS hours, ending at `nowS`. */
+export const GANTT_SECONDS = LANE_HOURS * HOUR;
+
+export type GanttBar = {
+  /** epoch s, cut to the window */
+  start: number;
+  end: number;
+  /** the session is still running: its bar reaches «now» */
+  open: boolean;
+  /** false: it ended and nobody wrote when, so it is a mark at its start and never a stretch the team did not say */
+  endKnown: boolean;
+  reason: PastSession["reason"];
 };
 
-export type Lane = { role: string; cells: LaneCell[]; total: number };
+export type GanttRow = { agent: string; role: string; bars: GanttBar[] };
 
 /**
- * One lane per role of the team, oldest hour first, ending at `nowS`. The counts are the team's (the first count
- * of a role is its last hour); «up» comes from the sessions: one that ended at an unknown moment only covers the
- * moment it started, never more than the team said. Null when the moves could not be read: not known is not zero.
+ * One row per agent that was up in the last day, one bar per session, as the team traced them. A session that ended at an
+ * unknown moment only covers the moment it started, never more than the team said. Rows go by the order of `roles` (the
+ * team's departments), then by name.
  */
-export function buildLanes(history: PanelHistory, roles: string[], nowS: number): Lane[] | null {
-  if (history.lanes === null) return null;
-  const sessionsByRole = new Map<string, PastSession[]>();
-  for (const [name, agent] of Object.entries(history.agents)) {
-    const role = roleOfSession(name);
-    sessionsByRole.set(role, [...(sessionsByRole.get(role) ?? []), ...agent.sessions]);
-  }
-  return roles.map((role) => {
-    const counts = history.lanes?.[role];
-    const sessions = sessionsByRole.get(role) ?? [];
-    const cells: LaneCell[] = [];
-    for (let index = 0; index < LANE_HOURS; index++) {
-      const ago = LANE_HOURS - 1 - index; // 0 is the last hour
-      const to = nowS - ago * HOUR;
-      const from = to - HOUR;
-      const reaches = (s: PastSession) => {
-        const end = s.end ?? (s.reason === "running" ? nowS : s.start);
-        return s.start < to && end >= from;
-      };
-      cells.push({ moves: counts?.[ago] ?? 0, up: sessions.some(reaches), from, to });
+export function buildGantt(history: PanelHistory, roles: string[], nowS: number): GanttRow[] {
+  const from = nowS - GANTT_SECONDS;
+  const rows: GanttRow[] = [];
+  for (const [agent, past] of Object.entries(history.agents)) {
+    const bars: GanttBar[] = [];
+    for (const s of past.sessions) {
+      const running = s.end === null && s.reason === "running";
+      const known = s.end !== null ? s.end : running ? nowS : null;
+      const end = known ?? s.start;
+      if (end < from || s.start > nowS) continue;
+      bars.push({ start: Math.max(s.start, from), end: Math.min(end, nowS), open: running, endKnown: known !== null, reason: s.reason });
     }
-    return { role, cells, total: cells.reduce((sum, cell) => sum + cell.moves, 0) };
-  });
+    if (bars.length > 0) rows.push({ agent, role: roleOfSession(agent), bars: bars.sort((x, y) => x.start - y.start) });
+  }
+  const rank = (role: string) => {
+    const at = roles.indexOf(role);
+    return at === -1 ? roles.length : at;
+  };
+  return rows.sort((x, y) => rank(x.role) - rank(y.role) || x.agent.localeCompare(y.agent, "en", { numeric: true }));
 }

@@ -531,6 +531,108 @@ export default async function PositionDetailPage({ params }: PageProps) {
       exclusionText = t("not_specified");
     }
   }
+  // Il pannello «Feedback e richieste»: il suo pulsante vive nella Panoramica, subito sotto i pulsanti
+  // di giudizio, e il pannello non ripete i 4 giudizi (una serie sola, quella della Panoramica).
+  const teamActions =
+    position.legacy_id != null ? (
+      <TeamActionsSheet
+        active={
+          initialVerdict != null ||
+          position.geocode_requested === true ||
+          position.recheck_requested === true ||
+          position.write_requested === true ||
+          !!position.user_excluded_reason ||
+          tickets.some((tk) => tk.status !== "resolved")
+        }
+        actions={
+          <>
+            {/* Geocoding-on-demand (V8): l'utente richiede coordinate
+                ufficio precise. Sempre attivo: l'Analista skippa
+                autonomamente quando non ha materiale geografico utile
+                (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
+            <GeocodeRequestButton
+              legacyId={position.legacy_id}
+              initialRequested={position.geocode_requested === true}
+              alreadyGeocoded={position.office_geocoded === true}
+            />
+            {/* Recheck ON-DEMAND (mig 042): il recheck non è più
+                automatico, l'utente lo richiede qui → l'Analista
+                ri-verifica la liveness. */}
+            <RecheckButton
+              legacyId={position.legacy_id}
+              initialRequested={position.recheck_requested === true}
+              lastOpenCheck={position.last_open_check}
+            />
+            {/* Stessa pipeline dei ticket liberi: il kind rende la
+                destinazione Scorer deterministica e lo stato impedisce
+                di aprire una seconda rivalutazione mentre la prima è in
+                attesa o assegnata. */}
+            <RescoreRequestButton
+              legacyId={position.legacy_id}
+              initialStatus={
+                rescoreTicket?.status === "open" ||
+                rescoreTicket?.status === "assigned"
+                  ? rescoreTicket.status
+                  : null
+              }
+              disabled={score == null}
+            />
+            {(() => {
+              // Writer-on-demand (V6): il button e' visibile solo se la
+              // posizione e' nello stato giusto. Il Capitano spawna lo
+              // Scrittore quando il flag e' acceso (vedi BACKLOG
+              // [JHT-WRITER-ON-DEMAND]).
+              const wrongStatus = position.status !== "scored";
+              const alreadyWriting = application != null;
+              const isDisabled = wrongStatus || alreadyWriting;
+              const reason = alreadyWriting
+                ? t("cv_in_progress")
+                : wrongStatus
+                  ? t("cv_only_from_scored").replace(
+                      "{status}",
+                      position.status,
+                    )
+                  : undefined;
+              return (
+                <WriteRequestButton
+                  legacyId={position.legacy_id}
+                  initialRequested={
+                    position.write_requested === true &&
+                    position.write_request_kind !== "cover_letter"
+                  }
+                  disabled={isDisabled}
+                  disabledReason={reason}
+                />
+              );
+            })()}
+            <CoverLetterRequestButton
+              legacyId={position.legacy_id}
+              initialRequested={
+                position.write_requested === true &&
+                position.write_request_kind === "cover_letter"
+              }
+              disabled={application == null}
+            />
+            {/* Esclusione manuale utente (mig 041): l'utente esclude
+                l'offerta con una causa → status 'excluded', gli agenti
+                smettono di ri-verificarne la liveness. */}
+            <ExcludeButton
+              legacyId={position.legacy_id}
+              status={position.status}
+              initialReason={position.user_excluded_reason ?? null}
+            />
+          </>
+        }
+        tickets={
+          <TicketPanel
+            legacyId={position.legacy_id}
+            tickets={tickets}
+            hideTitle
+          />
+        }
+      />
+    ) : null;
+
   // Panoramica SEMPRE presente: da 20/07 ospita anche titolo e azienda
   // (l'header nudo è sparito) e la fila dei giudizi in coda.
   const overviewCard = (
@@ -704,6 +806,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           />
         </div>
       )}
+      {teamActions && (
+        <div className="mt-3" data-testid="team-actions-trigger">
+          {teamActions}
+        </div>
+      )}
     </div>
   );
 
@@ -828,16 +935,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     text={position.jd_summary}
                     className="text-[12px] text-[var(--color-base)] leading-relaxed"
                   />
-                  {position.url && (
-                    <a
-                      href={position.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
-                    >
-                      {t("original_listing")} <IconExternal />
-                    </a>
-                  )}
                 </>
               ) : (
                 <>
@@ -864,6 +961,24 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     </div>
                   )}
                 </>
+              )}
+              {/* L'unico «Annuncio originale» della pagina: un pulsante a destra in fondo al riquadro. */}
+              {position.url && (
+                <div className="mt-4 flex justify-end">
+                  <a
+                    href={position.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="original-listing"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
+                    style={{
+                      borderColor: "var(--color-blue)",
+                      color: "var(--color-blue)",
+                    }}
+                  >
+                    {t("original_listing")} <IconExternal />
+                  </a>
+                </div>
               )}
             </div>
           )}
@@ -1092,22 +1207,14 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
         {/* ── Right column ────────────────────────────────────── */}
         <div className="space-y-4">
-          {/* Località testuale (senza mappa): resta qui tra i metadati.
-              La versione CON mappa vive in cima alla colonna principale. */}
-          {hasLocationCard && !mapCoords && locationCard}
-
-          {/* La vecchia card Dettagli è confluita nella Panoramica (19/07):
-              fonte e data lì; "trovata da" non interessa l'utente; il link
-              all'annuncio vive nell'header e nella card JD. */}
-
-          {/* Company */}
+          {/* Colonna destra: Company, poi Località (senza mappa: quella CON mappa vive in cima alla colonna
+              principale), poi Analisi del team. */}
+          {/* Company: chi è e di cosa si occupa (le 2 frasi dell'Analista) in cima; recensioni e reputazione
+              sotto una voce chiusa di default. */}
           {company && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-3">{t("company")}</div>
-              {/* [LOGO-V/B] Il logo vive SOLO qui: grande, col nome
-                  dell'azienda accanto. Il lato destro della riga si riempie
-                  con verdetto e Glassdoor quando esistono — niente vuoti
-                  fissi (feedback 22/07). */}
+              {/* [LOGO-V/B] Il logo vive SOLO qui: grande, col nome dell'azienda accanto. */}
               <div className="flex items-center gap-3 mb-3">
                 {company.logo && (
                   <Avatar
@@ -1122,37 +1229,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 <div className="text-[13px] font-semibold text-[var(--color-white)] min-w-0 flex-1 break-words">
                   {company.name}
                 </div>
-                {(company.verdict || company.glassdoor_rating) && (
-                  <div className="shrink-0 flex flex-col items-end gap-1">
-                    {company.verdict && (
-                      <span
-                        className="text-[10px] font-bold px-2 py-0.5 rounded border"
-                        style={{
-                          color:
-                            company.verdict === "GO"
-                              ? "var(--color-green)"
-                              : company.verdict === "CAUTIOUS"
-                                ? "var(--color-yellow)"
-                                : "var(--color-red)",
-                          borderColor:
-                            company.verdict === "GO"
-                              ? "var(--color-green)"
-                              : company.verdict === "CAUTIOUS"
-                                ? "var(--color-yellow)"
-                                : "var(--color-red)",
-                        }}
-                      >
-                        {company.verdict}
-                      </span>
-                    )}
-                    {company.glassdoor_rating && (
-                      <span className="text-[10px] text-[var(--color-muted)]">
-                        Glassdoor: {company.glassdoor_rating}/5
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
+              {company.about?.trim() && (
+                <p
+                  data-testid="company-about"
+                  className="mb-3 text-[12px] text-[var(--color-base)] leading-relaxed"
+                >
+                  {company.about.trim()}
+                </p>
+              )}
               <div className="space-y-2">
                 {company.hq && <InfoRow label={t("c_hq")} value={company.hq} />}
                 {company.sector && (
@@ -1161,20 +1246,77 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 {company.size && (
                   <InfoRow label={t("c_size")} value={company.size} />
                 )}
-                {company.culture_notes && (
-                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-2">
-                    {company.culture_notes}
-                  </p>
-                )}
-                {company.red_flags && (
-                  <p
-                    className="text-[11px] leading-relaxed mt-2"
-                    style={{ color: "var(--color-red)" }}
-                  >
-                    <IconAlert /> {company.red_flags}
-                  </p>
-                )}
               </div>
+              {(company.verdict ||
+                company.glassdoor_rating ||
+                company.culture_notes ||
+                company.red_flags) && (
+                <details
+                  data-testid="company-reputation"
+                  className="group mt-3 border-t border-[var(--color-border)] pt-3"
+                >
+                  <summary className="flex list-none cursor-pointer items-center justify-between gap-2 text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] [&::-webkit-details-marker]:hidden">
+                    <span>{t("company_reputation")}</span>
+                    <svg
+                      viewBox="0 0 10 6"
+                      className="w-2.5 h-2.5 transition-transform group-open:rotate-180"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M1 1l4 4 4-4" />
+                    </svg>
+                  </summary>
+                  <div className="mt-3 space-y-2">
+                    {(company.verdict || company.glassdoor_rating) && (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {company.verdict && (
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded border"
+                            style={{
+                              color:
+                                company.verdict === "GO"
+                                  ? "var(--color-green)"
+                                  : company.verdict === "CAUTIOUS"
+                                    ? "var(--color-yellow)"
+                                    : "var(--color-red)",
+                              borderColor:
+                                company.verdict === "GO"
+                                  ? "var(--color-green)"
+                                  : company.verdict === "CAUTIOUS"
+                                    ? "var(--color-yellow)"
+                                    : "var(--color-red)",
+                            }}
+                          >
+                            {company.verdict}
+                          </span>
+                        )}
+                        {company.glassdoor_rating && (
+                          <span className="text-[10px] text-[var(--color-muted)]">
+                            Glassdoor: {company.glassdoor_rating}/5
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {company.culture_notes && (
+                      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                        {company.culture_notes}
+                      </p>
+                    )}
+                    {company.red_flags && (
+                      <p
+                        className="text-[11px] leading-relaxed"
+                        style={{ color: "var(--color-red)" }}
+                      >
+                        <IconAlert /> {company.red_flags}
+                      </p>
+                    )}
+                  </div>
+                </details>
+              )}
               {company.website && (
                 <a
                   href={company.website}
@@ -1187,6 +1329,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
               )}
             </div>
           )}
+
+          {hasLocationCard && !mapCoords && locationCard}
 
           {/* Team analysis — parsing del campo notes (vedi parse-analysis) */}
           {position.notes && (
@@ -1253,23 +1397,34 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
                         {t("an_mismatches")}
                       </div>
-                      <ul className="space-y-2.5">
+                      {/* Ogni disallineamento è un blocco: il badge (GEO / DOMAIN / …) in una riga di
+                          intestazione, il testo sotto a tutta larghezza. */}
+                      <ul className="space-y-3">
                         {analysis.mismatches.map((mm, i) => (
-                          <li key={i} className="flex gap-2">
+                          <li
+                            key={i}
+                            data-testid="mismatch"
+                            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-3"
+                          >
                             {mm.tag && (
-                              <span
-                                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 h-fit"
-                                style={{
-                                  color: tagColor(mm.tag),
-                                  borderColor: tagColor(mm.tag),
-                                }}
+                              <div
+                                data-testid="mismatch-head"
+                                className="mb-1.5 flex items-center gap-2"
                               >
-                                {mm.tag}
-                              </span>
+                                <span
+                                  className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border"
+                                  style={{
+                                    color: tagColor(mm.tag),
+                                    borderColor: tagColor(mm.tag),
+                                  }}
+                                >
+                                  {mm.tag}
+                                </span>
+                              </div>
                             )}
-                            <span className="text-[11px] text-[var(--color-muted)] leading-relaxed min-w-0 break-words">
+                            <p className="w-full text-[11px] text-[var(--color-muted)] leading-relaxed break-words">
                               {mm.text}
-                            </span>
+                            </p>
                           </li>
                         ))}
                       </ul>
@@ -1295,8 +1450,8 @@ export default async function PositionDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Azioni di coda (scelta utente 20/07): Feedback e richieste +
-          annuncio originale come ULTIMI elementi, più prev/next ripetuto. */}
+      {/* Coda: la candidatura autorizzata e prev/next ripetuto. «Feedback e richieste» sta nella
+          Panoramica sotto i giudizi, «Annuncio originale» in fondo al riquadro della descrizione. */}
       <div className="mt-6 space-y-4">
         {applyLegacyId != null && applyState.kind !== "hidden" && (
           <ApplyRequestButton
@@ -1306,128 +1461,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
             authorisedBy={data.position.apply_requested_by ?? null}
             webSentAt={webSentAt}
           />
-        )}
-        {position.legacy_id != null && (
-          <div className="mt-4 flex items-center gap-3">
-            <TeamActionsSheet
-              active={
-                initialVerdict != null ||
-                position.geocode_requested === true ||
-                position.recheck_requested === true ||
-                position.write_requested === true ||
-                !!position.user_excluded_reason ||
-                tickets.some((tk) => tk.status !== "resolved")
-              }
-              feedback={
-                feedbackEnabled ? (
-                  <FeedbackButtons
-                    legacyId={position.legacy_id}
-                    initialVerdict={initialVerdict}
-                  />
-                ) : undefined
-              }
-              actions={
-                <>
-                  {/* Geocoding-on-demand (V8): l'utente richiede coordinate
-                      ufficio precise. Sempre attivo: l'Analista skippa
-                      autonomamente quando non ha materiale geografico utile
-                      (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]). */}
-                  <GeocodeRequestButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.geocode_requested === true}
-                    alreadyGeocoded={position.office_geocoded === true}
-                  />
-                  {/* Recheck ON-DEMAND (mig 042): il recheck non è più
-                      automatico, l'utente lo richiede qui → l'Analista
-                      ri-verifica la liveness. */}
-                  <RecheckButton
-                    legacyId={position.legacy_id}
-                    initialRequested={position.recheck_requested === true}
-                    lastOpenCheck={position.last_open_check}
-                  />
-                  {/* Stessa pipeline dei ticket liberi: il kind rende la
-                      destinazione Scorer deterministica e lo stato impedisce
-                      di aprire una seconda rivalutazione mentre la prima è in
-                      attesa o assegnata. */}
-                  <RescoreRequestButton
-                    legacyId={position.legacy_id}
-                    initialStatus={
-                      rescoreTicket?.status === "open" ||
-                      rescoreTicket?.status === "assigned"
-                        ? rescoreTicket.status
-                        : null
-                    }
-                    disabled={score == null}
-                  />
-                  {(() => {
-                    // Writer-on-demand (V6): il button e' visibile solo se la
-                    // posizione e' nello stato giusto. Il Capitano spawna lo
-                    // Scrittore quando il flag e' acceso (vedi BACKLOG
-                    // [JHT-WRITER-ON-DEMAND]).
-                    const wrongStatus = position.status !== "scored";
-                    const alreadyWriting = application != null;
-                    const isDisabled = wrongStatus || alreadyWriting;
-                    const reason = alreadyWriting
-                      ? t("cv_in_progress")
-                      : wrongStatus
-                        ? t("cv_only_from_scored").replace(
-                            "{status}",
-                            position.status,
-                          )
-                        : undefined;
-                    return (
-                      <WriteRequestButton
-                        legacyId={position.legacy_id}
-                        initialRequested={
-                          position.write_requested === true &&
-                          position.write_request_kind !== "cover_letter"
-                        }
-                        disabled={isDisabled}
-                        disabledReason={reason}
-                      />
-                    );
-                  })()}
-                  <CoverLetterRequestButton
-                    legacyId={position.legacy_id}
-                    initialRequested={
-                      position.write_requested === true &&
-                      position.write_request_kind === "cover_letter"
-                    }
-                    disabled={application == null}
-                  />
-                  {/* Esclusione manuale utente (mig 041): l'utente esclude
-                      l'offerta con una causa → status 'excluded', gli agenti
-                      smettono di ri-verificarne la liveness. */}
-                  <ExcludeButton
-                    legacyId={position.legacy_id}
-                    status={position.status}
-                    initialReason={position.user_excluded_reason ?? null}
-                  />
-                </>
-              }
-              tickets={
-                <TicketPanel
-                  legacyId={position.legacy_id}
-                  tickets={tickets}
-                  hideTitle
-                />
-              }
-            />
-            {position.url && (
-              <a
-                href={position.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold no-underline transition-colors hover:bg-[var(--color-row)]"
-                style={{
-                  borderColor: "var(--color-blue)",
-                  color: "var(--color-blue)",
-                }}
-              >
-                {t("original_listing")} <IconExternal />
-              </a>
-            )}
-          </div>
         )}
         <PrevNextNav id={position.id} />
       </div>

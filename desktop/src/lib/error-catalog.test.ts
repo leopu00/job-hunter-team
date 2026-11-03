@@ -47,6 +47,24 @@ const NOT_ERRORS: Record<string, string> = {
       "salary_declared_min", "salary_estimated_currency", "salary_estimated_max", "salary_estimated_min", "local_account_owner",
     ].map((word) => [word, "a key of the Swipe's deck or of a verdict's answer, or a prefix compared in code; never shown"]),
   ),
+  // local_position_act.rs and position_judgement.py's operations: the names of the operations, of the fields of a
+  // request and of the script's answer. They are keys and values of a JSON the page reads, never a sentence.
+  ...Object.fromEntries(
+    [
+      "applied_via", "free", "geocode_requested", "interview", "interview_round", "mark_applied", "outcome_undo",
+      "recheck_requested", "rejected", "rejection_note", "rejection_reason", "rescore", "response_at", "ticket_id",
+      "ticket_status", "user_note", "write_request", "write_request_kind", "write_requested",
+      // existing_team_runtime.rs: the name of the Activity log's read, an operation of the positions reader
+      "team_activity_log",
+      // local_action_log.rs: the action log's own codes. The list tells any failure as «I cannot read the log»
+      // (local-action-log.ts keeps only that), and a write that fails is never the act's problem: none is shown.
+      "action_log_failed", "action_log_invalid", "action_log_unavailable", "action_log_window_refused",
+      // local_position_act.rs: the operations of the authorisation to apply and the fields of its request and answer
+      "apply_preview", "apply_request", "apply_requested",
+      // team_settings.rs: the word of a settings request that writes (`op` = `write`), compared in code
+      "write",
+    ].map((word) => [word, "a name or a value of the position page's act (an operation, a field of its request or of the answer); never shown"]),
+  ),
   // team_provider.rs: the verb the box's door is asked for (`agent-control provider logout`), never shown.
   logout: "a verb of the box's door for the provider's sign-in, not an error",
   // team_start.rs: a value of the phase the first start is in, read by the page, not an error.
@@ -64,6 +82,9 @@ const NOT_ERRORS: Record<string, string> = {
       "label_image", "label_windows",
     ].map((word) => [word, "reason word of runtime.log beside a container check failure, never shown to the person"]),
   ),
+  // runtime_log.rs, app_exit.<step>: the word for a step that is none of the four the app names (state, order, poll, finish);
+  // it stands in a line of runtime.log, for whoever reads it, and is never shown to the person.
+  other: "step word of an app_exit line in runtime.log; never shown",
   // private_copy.rs: the extensions a private copy of a document can have, from a fixed list in the module. Words of a file
   // name, never an error the person is told.
   ...Object.fromEntries(

@@ -13,37 +13,39 @@ import type { TeamActivityRole } from "./team-activity";
 import { intlTag } from "./locale-tag";
 import { parseStamp } from "./parse-stamp";
 
+// Colours of the roles in the charts: tokens of the CHOSEN theme (the desktop's eleven palettes and the web's light and dark),
+// one for each role and all five apart, so a chart follows the theme and no role looks like its neighbour. Never a hex here.
 export const ROLE_META: Record<
   TeamActivityRole,
   { label: string; color: string; verb: string; action: string }
 > = {
   scout: {
     label: "Scout",
-    color: "#2196f3",
+    color: "var(--color-blue)",
     verb: "posizioni trovate",
     action: "ha trovato una posizione",
   },
   analista: {
     label: "Analista",
-    color: "#00e676",
+    color: "var(--color-green)",
     verb: "posizioni analizzate",
     action: "ha analizzato una posizione",
   },
   scorer: {
     label: "Scorer",
-    color: "#b388ff",
+    color: "var(--color-purple)",
     verb: "score assegnati",
     action: "ha assegnato uno score",
   },
   scrittore: {
     label: "Scrittore",
-    color: "#ffd600",
+    color: "var(--color-yellow)",
     verb: "CV scritti",
     action: "ha scritto un CV",
   },
   critico: {
     label: "Critico",
-    color: "#ff6ac1",
+    color: "var(--color-red)",
     verb: "review completate",
     action: "ha completato una review",
   },

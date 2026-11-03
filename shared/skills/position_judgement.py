@@ -22,6 +22,12 @@ its refusals.
   apply-request ID --on --expect DIGEST|--off      apply_gate consent, then
                                                    apply_request.toggle
   recheck ID --on|--off                            positions.recheck_requested
+  geocode ID --on|--off                            geocode_request.request_geocode
+  ticket ID --kind rescore|custom --text-on-stdin  ticket.open_ticket (a rescore is asked once)
+  mark-applied ID --on|--off [--note-on-stdin]     «I applied by hand» and taking it back
+  outcome ID --value interview|rejected [--reason CODE] [--note-on-stdin]
+                                                   the answer of the company, and
+  outcome-undo ID                                  taking it back
 
 The reasons are the closed vocabulary of feedback_reasons (shared with the web
 and the other writers). The note stays the user's: it is written only where the
@@ -34,6 +40,7 @@ Output: one JSON line, {"ok": true, "op": ..., "id": ...} or
 """
 
 import argparse
+import datetime
 import json
 import os
 import sys
@@ -46,6 +53,16 @@ from feedback_reasons import NOTE_MAX, REASONS, clean_note  # noqa: E402
 # One line of stdin, at most this many bytes: a note is 200 characters, so
 # 4 KiB is room for any of them in UTF-8 and nothing more is ever read.
 STDIN_MAX_BYTES = 4096
+# A ticket's text is up to 2000 characters (the web route's limit): four bytes each in UTF-8, escaped.
+TEXT_STDIN_MAX_BYTES = 16 * 1024
+REQUEST_TEXT_MAX = 2000
+APPLIED_NOTE_MAX = 500
+REJECTION_NOTE_MAX = 500
+REJECTION_REASONS = ("location", "salary", "experience", "language")
+OUTCOMES = ("interview", "rejected")
+RESCORE_KIND = "rescore"
+FIRST_INTERVIEW_ROUND = 1
+APPLIED_VIA_USER = "user_manual"
 BOX_NOTE_MAX = 4000  # the web route's limit for the private note box
 FEEDBACK_VALUES = ("like", "dislike", "hide", "star", "clear")
 FEEDBACK_DIRECTIONS = ("more_like_this", "less_like_this")
@@ -59,21 +76,26 @@ class Refused(Exception):
         self.detail = detail
 
 
-def read_note():
-    """The note from the one JSON line on stdin: cleaned, never cut silently."""
-    raw = sys.stdin.buffer.readline(STDIN_MAX_BYTES + 1)
-    if len(raw) > STDIN_MAX_BYTES:
+def read_line(key, max_bytes):
+    """The text from the one JSON line on stdin ({key: text}): at most `max_bytes` read, never cut silently."""
+    raw = sys.stdin.buffer.readline(max_bytes + 1)
+    if len(raw) > max_bytes:
         raise Refused("note_too_long")
     try:
         payload = json.loads(raw.decode("utf-8") or "{}")
     except (UnicodeDecodeError, ValueError):
         raise Refused("note_invalid")
-    if not isinstance(payload, dict) or set(payload) - {"note"}:
+    if not isinstance(payload, dict) or set(payload) - {key}:
         raise Refused("note_invalid")
-    note = payload.get("note")
-    if note is not None and not isinstance(note, str):
+    value = payload.get(key)
+    if value is not None and not isinstance(value, str):
         raise Refused("note_invalid")
-    return clean_note(note)
+    return value
+
+
+def read_note(keep_lines=False):
+    """The note from the one JSON line on stdin: cleaned, never cut silently."""
+    return clean_note(read_line("note", STDIN_MAX_BYTES), keep_lines)
 
 
 def position_exists(pid):
@@ -126,7 +148,8 @@ def do_restore(args):
 
 
 def do_note(args):
-    note = read_note()
+    # the private note box keeps its lines, as the web route's does (the one-line notes of a verdict do not)
+    note = read_note(keep_lines=True)
     if len(note) > BOX_NOTE_MAX:
         raise Refused("note_too_long")
     conn = get_db()
@@ -221,10 +244,228 @@ def do_recheck(args):
     return {"recheck_requested": bool(args.on)}
 
 
+def now_iso():
+    """The instant as the web writes it (`toISOString`): never the word 'now', which a trigger refuses."""
+    moment = datetime.datetime.now(datetime.timezone.utc)
+    return moment.strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (moment.microsecond // 1000)
+
+
+def columns_of(conn, table):
+    return {row[1] for row in conn.execute("PRAGMA table_info(" + table + ")")}
+
+
+def do_ticket(args):
+    text = clean_note(read_line("text", TEXT_STDIN_MAX_BYTES), keep_lines=True)
+    if not text:
+        raise Refused("request_empty")
+    if len(text) > REQUEST_TEXT_MAX:
+        raise Refused("request_too_long")
+    kind = RESCORE_KIND if args.kind == RESCORE_KIND else "custom"
+    conn = get_db()
+    try:
+        ensure_schema(conn)
+        # The parent and the ticket are one write, and a rescore that is already waiting is the one asked for.
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            if conn.execute("SELECT id FROM positions WHERE id = ?", (args.id,)).fetchone() is None:
+                raise Refused("position_not_found")
+            if kind == RESCORE_KIND:
+                active = conn.execute(
+                    "SELECT id, status FROM position_tickets WHERE position_id = ? AND kind = ? "
+                    "AND status IN ('open','assigned') ORDER BY created_at ASC, id ASC LIMIT 1",
+                    (args.id, kind)).fetchone()
+                if active:
+                    conn.execute("COMMIT")
+                    return {"ticket_id": active[0], "ticket_status": active[1], "deduplicated": True}
+            cur = conn.execute(
+                "INSERT INTO position_tickets (position_id, request_text, kind, status) VALUES (?, ?, ?, 'open')",
+                (args.id, text, kind))
+            conn.execute("COMMIT")
+            return {"ticket_id": int(cur.lastrowid), "ticket_status": "open", "deduplicated": False}
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.close()
+
+
+def derived_previous_state(has_cv, has_score):
+    return "ready" if has_cv else "scored" if has_score else "new"
+
+
+def do_mark_applied(args):
+    note = None
+    if args.note_on_stdin:
+        note = (clean_note(read_line("note", STDIN_MAX_BYTES)) or None)
+        if note is not None and len(note) > APPLIED_NOTE_MAX:
+            raise Refused("note_too_long")
+    conn = get_db()
+    try:
+        ensure_schema(conn)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute("SELECT id, status FROM positions WHERE id = ?", (args.id,)).fetchone()
+            if row is None:
+                raise Refused("position_not_found")
+            if args.on:
+                # an application the TEAM sent is not rewritten as done by hand (the mark would overwrite
+                # applied_via, and taking it back would then turn it into a draft); the person's own, again, is fine
+                sent = conn.execute("SELECT applied, applied_via FROM applications WHERE position_id = ?",
+                                    (args.id,)).fetchone()
+                if sent and sent[0] and sent[1] and sent[1] != APPLIED_VIA_USER:
+                    raise Refused("already_applied")
+                applied_at = now_iso()
+                # one transaction: the position and the application must not tell two stories
+                conn.execute(
+                    "INSERT INTO applications (position_id, status, applied, applied_at, applied_via, critic_notes) "
+                    "VALUES (?, 'applied', 1, ?, ?, ?) ON CONFLICT(position_id) DO UPDATE SET "
+                    "status = 'applied', applied = 1, applied_at = excluded.applied_at, "
+                    "applied_via = excluded.applied_via, updated_at = CURRENT_TIMESTAMP",
+                    (args.id, applied_at, APPLIED_VIA_USER, note))
+                conn.execute("UPDATE positions SET status = 'applied', last_actor = 'user' WHERE id = ?", (args.id,))
+                if row[1] != "applied":
+                    conn.execute(
+                        "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes) "
+                        "VALUES (?, ?, 'applied', 'user', ?)", (args.id, row[1], note))
+                conn.execute("COMMIT")
+                return {"status": "applied", "applied_at": applied_at, "applied_via": APPLIED_VIA_USER}
+            # taking it back: only what the person marked, and only while it is still «applied»
+            if row[1] != "applied":
+                raise Refused("not_applied")
+            app = conn.execute("SELECT applied_via, cv_path, cv_pdf_path FROM applications WHERE position_id = ?",
+                               (args.id,)).fetchone()
+            if app and app[0] and app[0] != APPLIED_VIA_USER:
+                raise Refused("applied_by_team")
+            # The state it was in when the person marked it. Taking back an answer (outcome-undo) also writes a
+            # transition to «applied» by the user, from «response»: that one is not where this mark came from.
+            previous = conn.execute(
+                "SELECT from_state FROM position_state_transitions WHERE position_id = ? AND to_state = 'applied' "
+                "AND by_agent = 'user' AND COALESCE(from_state, '') <> 'response' ORDER BY id DESC LIMIT 1",
+                (args.id,)).fetchone()
+            scored = conn.execute("SELECT COUNT(*) FROM scores WHERE position_id = ?", (args.id,)).fetchone()[0]
+            restored = (previous[0] if previous and previous[0] else
+                        derived_previous_state(bool(app and (app[1] or app[2])), scored > 0))
+            conn.execute(
+                "UPDATE applications SET applied = 0, applied_at = NULL, applied_via = NULL, "
+                "status = CASE WHEN status = 'applied' THEN 'draft' ELSE status END, "
+                "updated_at = CURRENT_TIMESTAMP WHERE position_id = ?", (args.id,))
+            conn.execute("UPDATE positions SET status = ?, last_actor = 'user' WHERE id = ?", (restored, args.id))
+            conn.execute(
+                "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes) "
+                "VALUES (?, 'applied', ?, 'user', ?)", (args.id, restored, "annullata dall'utente"))
+            conn.execute("COMMIT")
+            return {"status": restored}
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.close()
+
+
+def do_outcome(args):
+    if args.reason is not None and args.reason not in REJECTION_REASONS:
+        raise Refused("invalid_reason")
+    note = None
+    if args.note_on_stdin:
+        note = (clean_note(read_line("note", STDIN_MAX_BYTES)) or None)
+        if note is not None and len(note) > REJECTION_NOTE_MAX:
+            raise Refused("invalid_note")
+    # the reason belongs to the rejection: an interview has no question it would answer
+    if args.value != "rejected" and (args.reason or note):
+        raise Refused("reason_only_on_rejection")
+    conn = get_db()
+    try:
+        ensure_schema(conn)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            position = conn.execute("SELECT id, status FROM positions WHERE id = ?", (args.id,)).fetchone()
+            if position is None:
+                raise Refused("position_not_found")
+            application = conn.execute("SELECT applied, interview_round FROM applications WHERE position_id = ?",
+                                       (args.id,)).fetchone()
+            # an answer follows a sent application: without one it is an error
+            if not application or not application[0]:
+                raise Refused("not_applied")
+            response_at = now_iso()
+            round_ = (application[1] if application[1] is not None else FIRST_INTERVIEW_ROUND) \
+                if args.value == "interview" else application[1]
+            if {"rejection_reason", "rejection_note"} <= columns_of(conn, "applications"):
+                conn.execute(
+                    "UPDATE applications SET status = 'response', response = ?, response_at = ?, interview_round = ?, "
+                    "rejection_reason = ?, rejection_note = ?, updated_at = CURRENT_TIMESTAMP WHERE position_id = ?",
+                    (args.value, response_at, round_, args.reason, note, args.id))
+            else:
+                conn.execute(
+                    "UPDATE applications SET status = 'response', response = ?, response_at = ?, interview_round = ?, "
+                    "updated_at = CURRENT_TIMESTAMP WHERE position_id = ?", (args.value, response_at, round_, args.id))
+            conn.execute("UPDATE positions SET status = 'response', last_actor = 'user' WHERE id = ?", (args.id,))
+            if position[1] != "response":
+                conn.execute(
+                    "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes) "
+                    "VALUES (?, ?, 'response', 'user', ?)", (args.id, position[1], args.value))
+            conn.execute("COMMIT")
+            return {"status": "response", "response": args.value, "response_at": response_at,
+                    "interview_round": round_}
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.close()
+
+
+def do_outcome_undo(args):
+    conn = get_db()
+    try:
+        ensure_schema(conn)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            position = conn.execute("SELECT id, status FROM positions WHERE id = ?", (args.id,)).fetchone()
+            if position is None:
+                raise Refused("position_not_found")
+            application = conn.execute("SELECT response, interview_round FROM applications WHERE position_id = ?",
+                                       (args.id,)).fetchone()
+            if not application or not application[0]:
+                raise Refused("no_outcome")
+            # a round beyond the first was written by the team: it is not this button's to delete
+            kept = None if application[1] == FIRST_INTERVIEW_ROUND else application[1]
+            reason = ", rejection_reason = NULL, rejection_note = NULL" \
+                if "rejection_reason" in columns_of(conn, "applications") else ""
+            conn.execute(
+                "UPDATE applications SET status = 'applied', response = NULL, response_at = NULL, "
+                "interview_round = ?" + reason + ", updated_at = CURRENT_TIMESTAMP WHERE position_id = ?",
+                (kept, args.id))
+            conn.execute("UPDATE positions SET status = 'applied', last_actor = 'user' WHERE id = ?", (args.id,))
+            if position[1] != "applied":
+                conn.execute(
+                    "INSERT INTO position_state_transitions (position_id, from_state, to_state, by_agent, notes) "
+                    "VALUES (?, ?, 'applied', 'user', ?)", (args.id, position[1], "esito annullato dall'utente"))
+            conn.execute("COMMIT")
+            return {"status": "applied", "interview_round": kept}
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.close()
+
+
+def do_geocode(args):
+    from geocode_request import request_geocode
+    out = request_geocode(args.id, "on" if args.on else "off")
+    if not out.get("ok"):
+        raise Refused("position_not_found" if out.get("status_code") == "NOT_FOUND" else "geocode_refused",
+                      out.get("error"))
+    return {"geocode_requested": bool(out.get("current"))}
+
+
 OPS = {
     "feedback": do_feedback, "exclude": do_exclude, "restore": do_restore, "note": do_note,
     "write-request": do_write_request, "apply-request": do_apply_request, "recheck": do_recheck,
-    "apply-preview": do_apply_preview,
+    "apply-preview": do_apply_preview, "geocode": do_geocode, "ticket": do_ticket,
+    "mark-applied": do_mark_applied, "outcome": do_outcome, "outcome-undo": do_outcome_undo,
 }
 
 
@@ -250,7 +491,7 @@ def parser():
     ex.add_argument("--note-on-stdin", action="store_true")
     for name in ("restore", "note"):
         sub.add_parser(name).add_argument("id", type=position_id)
-    for name in ("write-request", "apply-request", "recheck"):
+    for name in ("write-request", "apply-request", "recheck", "geocode"):
         one = sub.add_parser(name)
         one.add_argument("id", type=position_id)
         switch = one.add_mutually_exclusive_group(required=True)
@@ -261,6 +502,22 @@ def parser():
         if name == "apply-request":
             one.add_argument("--expect", type=confirm_digest)
     sub.add_parser("apply-preview").add_argument("id", type=position_id)
+    tk = sub.add_parser("ticket")
+    tk.add_argument("id", type=position_id)
+    tk.add_argument("--kind", required=True, choices=(RESCORE_KIND, "custom"))
+    tk.add_argument("--text-on-stdin", action="store_true", required=True)
+    ma = sub.add_parser("mark-applied")
+    ma.add_argument("id", type=position_id)
+    ma_switch = ma.add_mutually_exclusive_group(required=True)
+    ma_switch.add_argument("--on", action="store_true")
+    ma_switch.add_argument("--off", action="store_true")
+    ma.add_argument("--note-on-stdin", action="store_true")
+    oc = sub.add_parser("outcome")
+    oc.add_argument("id", type=position_id)
+    oc.add_argument("--value", required=True, choices=OUTCOMES)
+    oc.add_argument("--reason")
+    oc.add_argument("--note-on-stdin", action="store_true")
+    sub.add_parser("outcome-undo").add_argument("id", type=position_id)
     return p
 
 

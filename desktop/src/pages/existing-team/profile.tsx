@@ -56,7 +56,7 @@ function notices(read: ExistingTeamProfileRead, built: Built, t: ExistingTeamPro
   if (file.parse === "invalid_yaml") out.push({ id: "parse-invalid", text: t.parseInvalid });
   if (file.parse === "not_a_mapping") out.push({ id: "parse-not-mapping", text: t.parseNotMapping });
   if (file.parse === "aliases_unsupported") out.push({ id: "parse-aliases", text: t.parseAliases });
-  if (built.mapFailed) out.push({ id: "map-failed", text: t.mapFailed.replace("{code}", "profile_not_interpretable") });
+  if (built.mapFailed) out.push({ id: "map-failed", text: t.mapFailed });
   if (file.fields) {
     if (file.dropped > 0) out.push({ id: "dropped", text: t.dropped.replace("{n}", String(file.dropped)) });
     const missing = missingCoreFields(file.fields);

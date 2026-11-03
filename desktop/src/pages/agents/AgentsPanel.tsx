@@ -202,13 +202,13 @@ export function clock(seconds: number | null): string {
 
 export function failureText(code: string): string {
   const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
-  return `${copy.text} ${copy.action} (${code})`;
+  return `${copy.text} ${copy.action}`;
 }
 
-/** Why the page could not read the agents: the catalog's sentence alone; a code it has none for keeps the code. */
+/** Why the page could not read the agents: the catalog's sentence and what to do, never the code (it stays in the log). */
 export function readFailureText(code: string): string {
   const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
-  return copy.known ? `${copy.text} ${copy.action}` : `${copy.text} ${copy.action} (${code})`;
+  return `${copy.text} ${copy.action}`;
 }
 
 export function resultText(t: AgentsPanelText, result: ActionResult, name: string): string {

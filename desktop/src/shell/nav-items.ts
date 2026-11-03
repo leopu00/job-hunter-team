@@ -24,7 +24,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/positions", label: { web: "nav_positions" }, tour: "positions" },
   { href: "/swipe", label: { web: "nav_swipe" } },
   { href: "/map", label: { web: "nav_map" } },
-  { href: "/team", label: { web: "nav_team" }, tour: "team", pending: "team", also: ["/agents"] },
+  // Team opens the agents' panel (turn each agent on or off); the team's activity page stays one address away and keeps the link lit.
+  { href: "/agents", label: { web: "nav_team" }, tour: "team", pending: "team", also: ["/team"] },
   { href: "/office", label: { own: "office" } },
   { href: "/budget", label: { own: "budget" } },
   { href: "/messages", label: { web: "nav_messages" } },

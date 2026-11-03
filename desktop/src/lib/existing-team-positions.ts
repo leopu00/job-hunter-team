@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
 import { nativeReadStarted } from "./page-timing";
+import { rememberLocalPositionToken } from "./local-swipe";
 import { localTeamData, reportLocalTeamRead } from "./local-team-data";
 import { REFRESH_EVENT } from "../shell/refresh-event";
 // The pages show an empty list for a list that could not be read, as the web does for a query
@@ -11,7 +12,8 @@ import type {
   DesktopVpsRead,
 } from "../../../web/lib/desktop-vps-positions";
 import type { DashboardStats, PositionWithScore } from "../../../web/lib/types";
-import type { TeamActivityCounts } from "../../../web/lib/team-activity";
+import { normActor, TEAM_ACTIVITY_ROLES } from "../../../web/lib/team-activity";
+import type { RecentActivityEvent, TeamActivityCounts, TeamActivityRole } from "../../../web/lib/team-activity";
 import type { DashboardPosition } from "./dashboard-data";
 import type {
   PositionDetail,
@@ -40,6 +42,7 @@ type Request =
   | { op: "piles" }
   | { op: "map"; offset: number }
   | { op: "team_activity"; from: string; to: string }
+  | { op: "team_activity_log" }
   | { op: "directives" };
 
 function listRequest(opts?: PositionFilterOpts): Request {
@@ -356,6 +359,23 @@ export async function readDesktopVpsStats(): Promise<DesktopVpsRead<DesktopVpsSt
  * What each role did per day and instance in a range, counted in the team's database: only for the team of
  * this computer (a profile with no cloud account). An existing team's page keeps reading what it read.
  */
+/**
+ * The description of one position of the team on this computer, for the card of the Swipe: the team's own
+ * `jd_summary`, else the first 1500 characters of the full text (as the web route does). `null` is a position with
+ * neither, and the card says so. Only for the team of this computer; it never keeps the position's write token.
+ */
+export async function readDesktopPositionSummary(id: string): Promise<DesktopVpsRead<string | null>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "detail", id });
+  if (value.source !== "vps") return value;
+  if (value.data === null) return { source: "vps", data: null };
+  const position = isRecord(value.data) && isRecord(value.data.position) ? value.data.position : null;
+  if (position === null) return { source: "unavailable", code: "desktop_bad_reply" };
+  const summary = typeof position.jd_summary === "string" && position.jd_summary.trim() ? position.jd_summary : null;
+  const text = typeof position.jd_text === "string" && position.jd_text.trim() ? position.jd_text.replace(/\r\n/g, "\n").trim().slice(0, 1500) : null;
+  return { source: "vps", data: summary ?? text };
+}
+
 export async function readDesktopVpsTeamActivity(
   from: string,
   to: string,
@@ -377,6 +397,36 @@ export async function readDesktopVpsTeamActivity(
 }
 
 /**
+ * Every event of the team of this computer, newest first, each with the position it touched: the Activity log page.
+ * Only for the team of this computer, like the activity (a profile with no cloud account has no other log to read).
+ */
+export async function readDesktopVpsTeamActivityLog(): Promise<DesktopVpsRead<RecentActivityEvent[]>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "team_activity_log" });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (!isRecord(data) || !Array.isArray(data.items) || !data.items.every(isRecord)) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  const events: RecentActivityEvent[] = [];
+  for (const item of data.items) {
+    const role = item.role;
+    // what the log draws is closed here: a known role, a time, an instance id as the web normalises it, text that is text
+    if (typeof role !== "string" || !(TEAM_ACTIVITY_ROLES as readonly string[]).includes(role) || typeof item.ts !== "string") continue;
+    events.push({
+      role: role as TeamActivityRole,
+      actor: normActor(role as TeamActivityRole, typeof item.actor === "string" ? item.actor : null),
+      ts: item.ts,
+      pid: typeof item.pid === "string" ? item.pid : null,
+      title: typeof item.title === "string" ? item.title : null,
+      company: typeof item.company === "string" ? item.company : null,
+      legacyId: typeof item.legacyId === "number" && Number.isInteger(item.legacyId) ? item.legacyId : null,
+    });
+  }
+  return { source: "vps", data: events };
+}
+
+/**
  * The standing orders on the board of the team of this computer, read only (the Team page's panel asks for them
  * through /api/team-directives). Only for the team of this computer, like the activity.
  */
@@ -394,7 +444,16 @@ export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items
 export function readDesktopVpsPosition(
   id: string,
 ): Promise<DesktopVpsRead<PositionDetail | null>> {
-  return read<unknown>({ op: "detail", id }).then(detailRead);
+  return read<unknown>({ op: "detail", id }).then((value) => {
+    // The detail of the team of this computer carries a token for the writes of this position
+    // (local-judgement-api.ts); it is kept apart and does not reach the page.
+    if (value.source === "vps" && localTeamData() && isRecord(value.data) && typeof value.data.token === "string") {
+      const { token, ...rest } = value.data;
+      rememberLocalPositionToken(id, token);
+      return detailRead({ ...value, data: rest });
+    }
+    return detailRead(value);
+  });
 }
 
 export function readDesktopVpsPositionFacets(): Promise<

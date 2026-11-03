@@ -14,6 +14,7 @@ import {
   readDesktopVpsPositions,
   readDesktopVpsPositionsWindow,
   readDesktopVpsTeamActivity,
+  readDesktopVpsTeamActivityLog,
 } from "@/lib/desktop-vps-positions";
 // [JHT-WEB-DEMO] Modalità demo (onboarding cloud): quando il cookie
 // jht_demo_persona è attivo le query servono il dataset statico della
@@ -2009,6 +2010,10 @@ export async function getTeamActivity(opts?: {
 export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
   const dp = await activeDemoPersona();
   if (dp) return demo.demoTeamActivityLog(dp);
+  // The desktop of a profile with no cloud account: the events of the team's own database (inert on the web).
+  const desktop = await readDesktopVpsTeamActivityLog();
+  if (desktop.source === "vps") return desktop.data;
+  if (desktop.source === "unavailable") return [];
   const w = await ws();
   if (w) {
     try {

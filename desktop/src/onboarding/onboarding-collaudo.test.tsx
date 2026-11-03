@@ -93,12 +93,12 @@ describe("the Environment step shows only what the choice made needs", () => {
     expect(screen.queryByRole("button", { name: t.existingTeam.verifyVps })).not.toBeInTheDocument();
   });
 
-  it("with a VPS both blocks are there, as small cards and not as second full-height panels", async () => {
+  it("with a VPS only the «team già attivo» block is there, as a small card: the browser assistance is out of 0.4.0", async () => {
     const { user } = await toEnvironment();
     await user.click(screen.getByRole("radio", { name: new RegExp(t.vpsServer) }));
-    const assistance = screen.getByText(ASSISTANCE_TEXT.it.intro).closest("section")!;
+    expect(screen.queryByText(ASSISTANCE_TEXT.it.intro)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.it.connect })).not.toBeInTheDocument();
     const existing = screen.getByRole("button", { name: t.existingTeam.verifyVps }).closest("section")!;
-    expect(assistance).toHaveClass("onboarding-aside");
     expect(existing).toHaveClass("onboarding-aside");
     expect(document.querySelectorAll("section.onboarding-panel")).toHaveLength(0);
   });
