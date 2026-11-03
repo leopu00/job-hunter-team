@@ -164,7 +164,7 @@ def test_phase_lines_follow_who_is_reading(tmp_path, script, machine_output, sho
     # The subprocess' output is a pipe, as the desktop's is: unset, the line comes out.
     body = "Write-JhtPhase wsl_check\n[Console]::Out.WriteLine('AFTER')\n"
     extra = {} if machine_output is None else {"JHT_MACHINE_OUTPUT": machine_output}
-    result = _run(tmp_path, script, ["Test-JhtMachineOutput", "Write-JhtPhase"], body, extra)
+    result = _run(tmp_path, script, ["Write-JhtPhase"], body, extra)
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
     assert ("JHT_PHASE wsl_check" in lines) is shown, result.stdout

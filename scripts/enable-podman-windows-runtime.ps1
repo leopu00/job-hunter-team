@@ -38,17 +38,14 @@ $ComposeProvider = Join-Path $RuntimeShimDir 'docker-compose.exe'
 # through a pipe; at a terminal they are noise. The installer that runs this
 # script passes its own answer in JHT_MACHINE_OUTPUT (1 or 0); started alone,
 # they follow whether the output is redirected.
-function Test-JhtMachineOutput {
-  if ($env:JHT_MACHINE_OUTPUT -eq '1') { return $true }
-  if ($env:JHT_MACHINE_OUTPUT -eq '0') { return $false }
-  return [Console]::IsOutputRedirected
-}
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'wsl_check', 'podman_install', 'podman_machine_init',
     'podman_machine_start', 'runtime_download', 'image_pull', 'team_restart'
   )][string]$Id)
-  if (Test-JhtMachineOutput) { [Console]::Out.WriteLine("JHT_PHASE $Id") }
+  # JHT_MACHINE_OUTPUT=1 asks for the line, =0 refuses it; unset, it follows whether the output is redirected.
+  $machine = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
+  if ($machine) { [Console]::Out.WriteLine("JHT_PHASE $Id") }
 }
 
 # Podman's pull progress for the app: the layers it says it copies, one JHT_PULL line each (a redrawn
