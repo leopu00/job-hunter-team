@@ -149,6 +149,10 @@ enum MoreRequest {
         confirmed: bool,
         #[serde(default)]
         confirm: Option<String>,
+        /// The destination the preview showed. Authorising carries it back: the broker is told where the SCRIPT says the
+        /// application goes, and that must be where the person saw it going.
+        #[serde(default)]
+        destination: Option<String>,
         token: String,
     },
 }
@@ -262,12 +266,14 @@ impl Act {
                     MoreRequest::Outcome { rejection_note: Some(note), .. } if chars(note) > SHORT_NOTE_CHARS => Err("invalid_note"),
                     // Authorising an application is asked for in two steps: the preview, then this, with an explicit
                     // «confirmed» and the digest of the preview the person saw. Withdrawing is asked for as it is.
-                    MoreRequest::ApplyRequest { on: true, confirmed, confirm, .. }
-                        if !*confirmed || !confirm.as_deref().is_some_and(valid_digest) =>
+                    MoreRequest::ApplyRequest { on: true, confirmed, confirm, destination, .. }
+                        if !*confirmed || !confirm.as_deref().is_some_and(valid_digest) || !destination.as_deref().is_some_and(valid_destination) =>
                     {
                         Err("position_write_not_confirmed")
                     }
-                    MoreRequest::ApplyRequest { on: false, confirm: Some(_), .. } => Err("position_write_request_invalid"),
+                    MoreRequest::ApplyRequest { on: false, confirm, destination, .. } if confirm.is_some() || destination.is_some() => {
+                        Err("position_write_request_invalid")
+                    }
                     MoreRequest::Outcome { value: OutcomeValue::Interview, rejection_reason, rejection_note, .. }
                         if rejection_reason.as_deref().is_some_and(|r| !r.is_empty()) || rejection_note.as_deref().is_some_and(|n| !n.trim().is_empty()) =>
                     {
@@ -463,6 +469,14 @@ impl Act {
     }
 
     /// Whether this act authorises an application: the one that needs the broker's record as well.
+    /// The destination of the preview the person saw, carried by an authorisation.
+    fn seen_destination(&self) -> Option<&str> {
+        match self {
+            Self::More(MoreRequest::ApplyRequest { destination, .. }) => destination.as_deref(),
+            _ => None,
+        }
+    }
+
     fn authorises(&self) -> bool {
         matches!(self, Self::More(MoreRequest::ApplyRequest { on: true, .. }))
     }
@@ -522,19 +536,25 @@ pub(crate) fn act_with(
         if let Some(answer) = close_answer(output) {
             let worked = answer.get("ok") == Some(&Value::Bool(true));
             if worked && act.authorises() {
-                let recorded = raw_answer(output)
-                    .and_then(|raw| BrokerRecord::from_reply(act.id(), &raw))
-                    .is_some_and(|broker| broker_recorded(record(&broker)));
+                let from_script = raw_answer(output).and_then(|raw| BrokerRecord::from_reply(act.id(), &raw));
+                // where the script says it goes must be where the person saw it going: if not, nothing reaches the broker
+                let as_seen = from_script.as_ref().is_some_and(|broker| Some(broker.fields().2) == act.seen_destination());
+                let recorded = as_seen && from_script.is_some_and(|broker| broker_recorded(record(&broker)));
                 if !recorded {
                     // withdrawn again, with the same closed line the page would have sent
-                    let withdraw = Act::More(MoreRequest::ApplyRequest { id: act.id().to_owned(), on: false, confirmed: false, confirm: None, token: act.token().to_owned() });
+                    let withdraw = Act::More(MoreRequest::ApplyRequest { id: act.id().to_owned(), on: false, confirmed: false, confirm: None, destination: None, token: act.token().to_owned() });
                     // The withdrawal is read too: if the team does not confirm it the flag may still be on, and the person
                     // is told that, not that nothing was recorded.
                     let withdrawn = run(&script_input(ACT_PY, &withdraw.line(ino, dev)))
                         .ok()
                         .and_then(|output| close_answer(&output))
                         .is_some_and(|answer| answer.get("ok") == Some(&Value::Bool(true)));
-                    return failure(if withdrawn { "apply_authorisation_unrecorded" } else { "apply_withdrawal_unconfirmed" });
+                    let changed = !as_seen && raw_answer(output).and_then(|raw| BrokerRecord::from_reply(act.id(), &raw)).is_some();
+                    return failure(match (withdrawn, changed) {
+                        (false, _) => "apply_withdrawal_unconfirmed",
+                        (true, true) => "position_changed",
+                        (true, false) => "apply_authorisation_unrecorded",
+                    });
                 }
             }
             // a preview is a read: the positions did not change, nobody is told
@@ -878,7 +898,7 @@ mod tests {
     fn authorise(answers: &[&str], broker: Result<ProcessResult, &'static str>) -> (Value, Vec<Value>, Option<BrokerRecord>, u32) {
         let (told, recorded) = (Cell::new(0), RefCell::new(None));
         let (lines, next) = (RefCell::new(Vec::new()), Cell::new(0));
-        let request = json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "token": token()});
+        let request = json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "destination": "portal:ashby", "token": token()});
         let reply = act_with(
             request,
             true,
@@ -956,6 +976,19 @@ mod tests {
     }
 
     #[test]
+    fn a_destination_other_than_the_one_the_person_saw_reaches_no_broker_and_the_flag_is_taken_back() {
+        // the preview showed portal:ashby (see `authorise`); the script's answer says the application goes elsewhere
+        let elsewhere = WRITTEN.replace("portal:ashby", "web:elsewhere.example.com");
+        let (reply, lines, recorded, told) = authorise(&[&elsewhere], said(0, r#"{"ok":true}"#));
+        assert_eq!(reply, failure("position_changed"));
+        assert_eq!((recorded.is_none(), told, lines.len()), (true, 0, 2), "no broker, nobody told, the flag withdrawn");
+        assert_eq!(lines[1]["on"], json!(false));
+        // and when the flag cannot be taken back either, that is what is told
+        let (reply, _, recorded, _) = authorise(&[&elsewhere, "the container fell"], said(0, r#"{"ok":true}"#));
+        assert_eq!((reply, recorded.is_none()), (failure("apply_withdrawal_unconfirmed"), true));
+    }
+
+    #[test]
     fn an_authorisation_needs_a_click_and_the_digest_of_the_preview_and_a_withdrawal_needs_neither() {
         let t = token();
         for (request, code) in [
@@ -964,6 +997,11 @@ mod tests {
             (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "token": t}), "position_write_not_confirmed"),
             (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST.to_uppercase(), "token": t}), "position_write_not_confirmed"),
             (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": "0'; reboot", "token": t}), "position_write_not_confirmed"),
+            // the destination the person saw goes back with the digest: without it, or one that does not fit, nothing is asked
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "destination": "portal:Ashby", "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "destination": "web:a b; reboot", "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": false, "destination": "portal:ashby", "token": t}), "position_write_request_invalid"),
             (json!({"op": "apply_request", "id": "4", "on": false, "confirm": DIGEST, "token": t}), "position_write_request_invalid"),
             (json!({"op": "apply_request", "id": "4", "confirmed": true, "confirm": DIGEST, "token": t}), "position_write_request_invalid"),
             (json!({"op": "apply_preview", "id": "4", "confirm": DIGEST, "token": t}), "position_write_request_invalid"),
@@ -1004,7 +1042,7 @@ mod tests {
         let t = token();
         for code in ["consent_absent", "consent_disabled", "config_missing", "position_not_ready", "already_submitted", "destination_invalid", "confirmation_required", "position_changed", "agent_caller"] {
             let text = format!(r#"{{"ok":false,"op":"apply-request","id":4,"code":"{code}","detail":"/secret"}}"#);
-            let request = json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "token": t});
+            let request = json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "destination": "portal:ashby", "token": t});
             let recorded = Cell::new(0);
             let reply = act_with(request, true, TAG, || Ok(()), |_| said(1, &text), || true, |_| {
                 recorded.set(recorded.get() + 1);
