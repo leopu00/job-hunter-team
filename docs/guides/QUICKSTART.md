@@ -112,7 +112,7 @@ curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 **Windows (PowerShell; WSL must be enabled):** Windows is not supported in 0.4: these steps are untested and may not work.
 
 ```powershell
-$f = Join-Path $env:TEMP 'jht-install.ps1'
+$f = Join-Path $env:TEMP ("jht-install-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
 iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f
 $published = (iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256).Content.Trim()
 if ((Get-FileHash $f -Algorithm SHA256).Hash -eq $published) { powershell -NoProfile -ExecutionPolicy Bypass -File $f } else { Remove-Item $f; Write-Error 'SHA-256 does not match: stop, do not run it' }
@@ -123,8 +123,8 @@ The published SHA-256 of the installer is the one in
 the command compares it with the SHA-256 of the file you downloaded and runs the
 file only when they are equal. **If they differ, stop**: do not run the file
 (the command deletes it), and tell us. Do not pipe the download into `iex` or
-compile it in memory: Microsoft Defender blocks that scheme as malicious
-content, whatever the script says. `-ExecutionPolicy Bypass` applies to that one
+compile it in memory: in our tests Microsoft Defender has blocked that scheme
+as malicious content, whatever the script was. `-ExecutionPolicy Bypass` applies to that one
 PowerShell process only, because Windows clients refuse scripts by default; it
 does not change Defender.
 
