@@ -74,7 +74,25 @@ def test_the_enabler_exit_code_still_reaches_the_app_after_the_staging_folder_is
     assert runtime.index("Remove-Item -LiteralPath $stage -Recurse -Force") < runtime.index("exit $script:EnablerExitCode")
     function = INSTALLER.read_text(encoding="utf-8")
     function = function[function.index("function Invoke-PodmanRuntimeEnabler") : function.index("function Show-PodmanSetupProblem")]
-    assert "$script:EnablerExitCode = $code" in function and "exit" not in function
+    assert "$script:EnablerExitCode = if ($null -eq $code)" in function and "exit" not in function
+
+
+@pytest.mark.parametrize("installer", [INSTALLER, PUBLIC_INSTALLER], ids=["scripts", "web"])
+def test_an_enabler_that_left_without_an_exit_code_is_a_failure_not_a_go_on(installer):
+    text = installer.read_text(encoding="utf-8")
+    function = text[text.index("function Invoke-PodmanRuntimeEnabler") : text.index("function Show-PodmanSetupProblem")]
+    assert "$script:EnablerExitCode = if ($null -eq $code) { 1 } else { $code }" in function
+    assert "$script:EnablerExitCode = $code\n" not in function
+
+
+@pytest.mark.parametrize(("code", "kept"), [("$null", "1"), ("0", "0"), ("21", "21"), ("25", "25")])
+def test_the_exit_code_the_installer_leaves_with_follows_the_enabler_s(tmp_path, code, kept):
+    text = INSTALLER.read_text(encoding="utf-8")
+    line = next(candidate for candidate in text.splitlines() if candidate.strip().startswith("$script:EnablerExitCode = if ($null -eq $code)"))
+    body = f"$code = {code}\n{line.strip()}\n[Console]::Out.WriteLine('KEPT=' + $script:EnablerExitCode)\n"
+    result = _run(tmp_path, INSTALLER, [], body)
+    assert result.returncode == 0, result.stderr
+    assert f"KEPT={kept}" in result.stdout.splitlines(), result.stdout
 
 
 def test_every_enabler_exit_code_has_a_next_step():

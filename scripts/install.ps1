@@ -378,7 +378,8 @@ function Invoke-PodmanRuntimeEnabler {
   }
   # The caller leaves with it once the staging folder is gone and the empty
   # folders of this run are removed.
-  $script:EnablerExitCode = $code
+  # An enabler that left without a code did not succeed: no code is 1, never a go-on.
+  $script:EnablerExitCode = if ($null -eq $code) { 1 } else { $code }
 }
 
 # What the person does next, for the codes the enabler leaves with. The reason
