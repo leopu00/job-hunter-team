@@ -16,6 +16,7 @@ so no test can ever reach the real Podman or Docker of the machine it runs on.
 from __future__ import annotations
 
 import os
+import pty
 import re
 from pathlib import Path
 import shutil
@@ -199,6 +200,30 @@ class Box:
         return subprocess.run(
             [str(self.wrapper), *args], capture_output=True, text=True, env=env, timeout=60,
         )
+
+    def run_in_terminal(self, *args: str, **extra_env: str) -> tuple[int, str]:
+        """The same run with stdout on a terminal (a pseudo-terminal), as a person typing it."""
+        env = {
+            "JHT_LANG": "it", **extra_env, "HOME": str(self.home), "PATH": f"{self.tools}:{self.system}",
+            "FAKE_UNAME": self.kernel, "FAKE_STATE": str(self.state), "FAKE_LOG": str(self.log), "LANG": "C",
+        }
+        master, slave = pty.openpty()
+        try:
+            process = subprocess.Popen([str(self.wrapper), *args], stdout=slave, stderr=slave, stdin=subprocess.DEVNULL, env=env)
+            os.close(slave)
+            chunks = []
+            while True:
+                try:
+                    data = os.read(master, 65536)
+                except OSError:
+                    break
+                if not data:
+                    break
+                chunks.append(data)
+            process.wait(timeout=60)
+        finally:
+            os.close(master)
+        return process.returncode, b"".join(chunks).decode("utf-8", "replace")
 
     def calls(self) -> list[str]:
         return self.log.read_text(encoding="utf-8").splitlines() if self.log.exists() else []
@@ -685,3 +710,37 @@ def test_the_usage_still_tells_both_sides_because_it_says_which_flag_does_what(t
         box.machines("jht-podman*")
         said = box.run("uninstall", JHT_LANG=lang).stderr
         assert stays in said and purge_says in said
+
+
+def _mac_podman_box(tmp_path: Path) -> Box:
+    box = Box(tmp_path, "Darwin")
+    box.select("podman")
+    (box.runtime / "podman-machine").write_text("jht-podman\n", encoding="utf-8")
+    box.machines("jht-podman*")
+    return box
+
+
+def test_a_person_at_a_terminal_reads_sentences_not_the_markers_of_the_app(tmp_path: Path) -> None:
+    box = _mac_podman_box(tmp_path)
+    code, out = box.run_in_terminal("uninstall", "--confirm")
+    assert code == 0, out
+    assert "JHT_PHASE" not in out and "JHT_LEFT" not in out
+    assert "Rimuovo la macchina Podman" in out and "Rimuovo il comando jht" in out
+    assert not box.runtime.exists()
+
+
+def test_the_markers_stay_for_the_app_on_a_pipe_and_when_forced_on_a_terminal(tmp_path: Path) -> None:
+    piped = _mac_podman_box(tmp_path / "pipe").run("uninstall", "--confirm")
+    assert piped.returncode == 0, piped.stderr
+    assert phases(piped)[0] == "JHT_PHASE uninstall_machine"
+    assert "Rimuovo la macchina Podman" not in piped.stdout + piped.stderr
+    code, out = _mac_podman_box(tmp_path / "tty").run_in_terminal("uninstall", "--confirm", JHT_MACHINE_OUTPUT="1")
+    assert code == 0, out
+    assert "JHT_PHASE uninstall_machine" in out and "Rimuovo la macchina Podman" not in out
+
+
+def test_machine_output_zero_forbids_the_markers_even_on_a_pipe(tmp_path: Path) -> None:
+    result = _mac_podman_box(tmp_path).run("uninstall", "--confirm", JHT_MACHINE_OUTPUT="0")
+    assert result.returncode == 0, result.stderr
+    assert phases(result) == []
+    assert "Rimuovo il runtime dell'host" in result.stdout + result.stderr

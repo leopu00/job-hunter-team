@@ -51,20 +51,35 @@ const PROVIDER_OAUTH_CMD = {
   kimi: 'kimi',
 };
 
+/** The one sentence for a step that did not complete: its own message when it has one, never a stack trace. */
+export function describeStepFailure(label, stderr, result = {}) {
+  const lines = String(stderr).split('\n').map((l) => l.trim()).filter(Boolean);
+  const own = lines.find((l) => /^(error|errore)\b/i.test(l) && !/Cannot find module/.test(l));
+  const missing = lines.some((l) => /Cannot find module|MODULE_NOT_FOUND/.test(l));
+  const why = own ?? (missing || result.error ? 'the JHT program could not be started here' : null);
+  return `  ${label} did not complete${why ? `: ${why.replace(/^error:\s*/i, '')}` : ''}. More details: JHT_DEBUG=1 jht setup`;
+}
+
 /**
  * Esegue un sub-comando JHT (lo stesso CLI Node, gia' in /app/cli/bin/jht.js)
  * con stdio inherited. Ritorna true se exit code = 0.
  */
 function runJhtSubcommand(args, label) {
   const entry = process.env.JHT_NODE_ENTRY || '/app/cli/bin/jht.js';
+  // stderr is held: a failing step ends as one sentence, not as the child's stack trace in the middle of the wizard.
+  // JHT_DEBUG=1 shows everything it said.
   const result = spawnSync(process.execPath, [entry, ...args], {
-    stdio: 'inherit',
+    stdio: ['inherit', 'inherit', 'pipe'],
+    encoding: 'utf8',
     env: process.env,
   });
+  const said = String(result.stderr ?? '');
   if (result.status !== 0) {
-    console.error(`[setup] ${label} failed (exit ${result.status})`);
+    console.error(describeStepFailure(label, said, result));
+    if (process.env.JHT_DEBUG && said) console.error(said);
     return false;
   }
+  if (said.trim()) process.stderr.write(said);
   return true;
 }
 

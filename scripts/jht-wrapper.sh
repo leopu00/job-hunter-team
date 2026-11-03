@@ -311,6 +311,11 @@ jht_text_en() {
     download.release_no_app) printf '%s' "This release (v%s) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded." ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
+    uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
+    uninstall.phase.data) printf '%s' "Deleting ~/.jht and the Documents folder (--purge)..." ;;
+    uninstall.phase.runtime) printf '%s' "Removing the host runtime..." ;;
+    uninstall.phase.commands) printf '%s' "Removing the jht command and the PATH lines the installer added..." ;;
+    migrate.left) printf '%s' "Not copied or not verified: the volume %s." ;;
     uninstall.usage_what) printf '%s' "Removes the local JHT runtime: the jht-podman Podman machine or JHT's containers and volumes, the host runtime and the jht command." ;;
     uninstall.usage_stays) printf '%s' "Podman, podman-compose, Docker, Colima and Homebrew stay too." ;;
     uninstall.loss) printf '%s' "The saved mail password and Telegram tokens are deleted too; ~/.jht and Documents stay, and with them the saved LinkedIn session (secrets/linkedin-profile and .cache/linkedin): remove it with jht reset --scope creds." ;;
@@ -335,6 +340,11 @@ jht_text_it() {
     download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
+    uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
+    uninstall.phase.data) printf '%s' "Cancello ~/.jht e la cartella Documenti (--purge)..." ;;
+    uninstall.phase.runtime) printf '%s' "Rimuovo il runtime dell'host..." ;;
+    uninstall.phase.commands) printf '%s' "Rimuovo il comando jht e le righe PATH aggiunte dall'installer..." ;;
+    migrate.left) printf '%s' "Non copiato o non verificato: il volume %s." ;;
     uninstall.usage_what) printf '%s' "Rimuove il runtime locale di JHT: la macchina Podman jht-podman oppure i container e i volumi di JHT, il runtime host e il comando jht." ;;
     uninstall.usage_stays) printf '%s' "Restano anche Podman, podman-compose, Docker, Colima e Homebrew." ;;
     uninstall.loss) printf '%s' "Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds." ;;
@@ -2291,7 +2301,7 @@ migration_copy_volume() {
 migration_left() {
   local verified=" $1 " logical
   for logical in $RUNTIME_MIGRATION_VOLUMES; do
-    case "$verified" in *" $logical "*) ;; *) printf 'JHT_LEFT %s\n' "$logical" ;; esac
+    case "$verified" in *" $logical "*) ;; *) if jht_machine_output; then printf 'JHT_LEFT %s\n' "$logical"; else warn "$(jht_say migrate.left "$logical")"; fi ;; esac
   done
 }
 
@@ -5132,10 +5142,27 @@ uninstall_usage() {
   info "$(jht_say uninstall.usage_stays)"
 }
 
-uninstall_phase() { printf 'JHT_PHASE %s\n' "$1"; }
+# JHT_PHASE / JHT_LEFT are for the desktop app, which reads this through a pipe. At a terminal the person gets a
+# sentence instead. JHT_MACHINE_OUTPUT=1 forces the marker, =0 forbids it, unset: only when stdout is not a terminal
+# (the same rule as install.sh and install.ps1).
+jht_machine_output() {
+  case "${JHT_MACHINE_OUTPUT:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [ ! -t 1 ]
+}
+
+uninstall_phase() {
+  if jht_machine_output; then
+    printf 'JHT_PHASE %s\n' "$1"
+  else
+    info "$(jht_say "uninstall.phase.${1#uninstall_}")"
+  fi
+}
 
 uninstall_left() {
-  printf 'JHT_LEFT %s\n' "$1"
+  if jht_machine_output; then printf 'JHT_LEFT %s\n' "$1"; fi
   case "$1" in
     machine) err "$(jht_say uninstall.left.machine)" ;;
     runtime) err "$(jht_say uninstall.left.runtime)" ;;
