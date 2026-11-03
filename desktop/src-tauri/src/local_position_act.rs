@@ -20,7 +20,7 @@
 use crate::{
     account_scope::AccountScopeState,
     direct_chat,
-    existing_team_judgement::NOTE_MAX_BYTES,
+    existing_team_judgement::{valid_destination, valid_digest, BrokerRecord, NOTE_MAX_BYTES},
     local_swipe::{failure, local_wrapper, on_worker, parse_token, run_script, scope_tag, script_input, short_text, team_is_up, valid_id, JudgeRequest},
     runtime_host::ProcessResult,
 };
@@ -38,7 +38,7 @@ def fail(code): emit({'ok':False,'code':code})
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('request_invalid')
 COMMON={'op','id','expect'}
-FIELDS={'feedback':COMMON|{'value','score','direction','reason','note'},'exclude':COMMON|{'reason','note'},'restore':COMMON,'recheck':COMMON|{'on'},'geocode':COMMON|{'on'},'write_request':COMMON|{'on','kind'},'user_note':COMMON|{'note'},'ticket':COMMON|{'kind','text'},'mark_applied':COMMON|{'on','note'},'outcome':COMMON|{'value','rejection_reason','rejection_note'},'outcome_undo':COMMON}
+FIELDS={'feedback':COMMON|{'value','score','direction','reason','note'},'exclude':COMMON|{'reason','note'},'restore':COMMON,'recheck':COMMON|{'on'},'geocode':COMMON|{'on'},'write_request':COMMON|{'on','kind'},'user_note':COMMON|{'note'},'ticket':COMMON|{'kind','text'},'mark_applied':COMMON|{'on','note'},'outcome':COMMON|{'value','rejection_reason','rejection_note'},'outcome_undo':COMMON,'apply_preview':COMMON,'apply_request':COMMON|{'on','confirm'}}
 KINDS={'write_request':('cv','cover_letter'),'ticket':('rescore','free')}
 if not isinstance(req,dict) or req.get('op') not in FIELDS or set(req)-FIELDS[req['op']]: fail('request_invalid')
 op=req['op']; pid=req.get('id'); expect=req.get('expect')
@@ -49,13 +49,14 @@ os.environ['JHT_HOME']=HOME
 try: info=os.lstat(HOME+'/jobs.db')
 except OSError: fail('deck_outdated')
 if info.st_ino!=expect['ino'] or info.st_dev!=expect['dev']: fail('deck_outdated')
-for key in ('value','direction','reason','note','kind','text','rejection_reason','rejection_note'):
+for key in ('value','direction','reason','note','kind','text','rejection_reason','rejection_note','confirm'):
  if key in req and not isinstance(req[key],str): fail('request_invalid')
 if 'score' in req and (type(req['score']) is not int or not 1<=req['score']<=5): fail('request_invalid')
 if 'on' in FIELDS[op] and type(req.get('on')) is not bool: fail('request_invalid')
 if 'kind' in req and req['kind'] not in KINDS.get(op,()): fail('request_invalid')
 if op=='ticket' and ('kind' not in req or not isinstance(req.get('text'),str)): fail('request_invalid')
 if op=='outcome' and req.get('value') not in ('interview','rejected'): fail('request_invalid')
+if 'confirm' in req and (len(req['confirm'])!=64 or any(c not in '0123456789abcdef' for c in req['confirm'])): fail('request_invalid')
 switch='--on' if req.get('on') else '--off'
 note_op=(op in ('feedback','exclude','mark_applied') and 'note' in req) or (op=='outcome' and 'rejection_note' in req)
 if op=='feedback':
@@ -73,6 +74,10 @@ elif op=='outcome':
  argv=['outcome',pid,'--value',req['value']]
  if 'rejection_reason' in req: argv+=['--reason',req['rejection_reason']]
 elif op=='outcome_undo': argv=['outcome-undo',pid]
+elif op=='apply_preview': argv=['apply-preview',pid]
+elif op=='apply_request':
+ argv=['apply-request',pid,switch]
+ if req['on'] and 'confirm' in req: argv+=['--expect',req['confirm']]
 else: argv=['note',pid]
 if note_op: argv.append('--note-on-stdin')
 feed=None
@@ -134,6 +139,18 @@ enum MoreRequest {
         token: String,
     },
     OutcomeUndo { id: String, token: String },
+    /// What the person confirms before authorising an application: «title @ company · host» and the digest of it.
+    ApplyPreview { id: String, token: String },
+    /// Authorising (`on`, with the digest of the preview the person saw and an explicit `confirmed`) or withdrawing.
+    ApplyRequest {
+        id: String,
+        on: bool,
+        #[serde(default)]
+        confirmed: bool,
+        #[serde(default)]
+        confirm: Option<String>,
+        token: String,
+    },
 }
 
 /// A request to the team about one position: the rescore (asked once while one waits) or a free request.
@@ -201,7 +218,9 @@ impl Act {
                 | MoreRequest::Ticket { id, .. }
                 | MoreRequest::MarkApplied { id, .. }
                 | MoreRequest::Outcome { id, .. }
-                | MoreRequest::OutcomeUndo { id, .. },
+                | MoreRequest::OutcomeUndo { id, .. }
+                | MoreRequest::ApplyPreview { id, .. }
+                | MoreRequest::ApplyRequest { id, .. },
             ) => id,
         }
     }
@@ -217,7 +236,9 @@ impl Act {
                 | MoreRequest::Ticket { token, .. }
                 | MoreRequest::MarkApplied { token, .. }
                 | MoreRequest::Outcome { token, .. }
-                | MoreRequest::OutcomeUndo { token, .. },
+                | MoreRequest::OutcomeUndo { token, .. }
+                | MoreRequest::ApplyPreview { token, .. }
+                | MoreRequest::ApplyRequest { token, .. },
             ) => token,
         }
     }
@@ -239,6 +260,14 @@ impl Act {
                         Err("invalid_reason")
                     }
                     MoreRequest::Outcome { rejection_note: Some(note), .. } if chars(note) > SHORT_NOTE_CHARS => Err("invalid_note"),
+                    // Authorising an application is asked for in two steps: the preview, then this, with an explicit
+                    // «confirmed» and the digest of the preview the person saw. Withdrawing is asked for as it is.
+                    MoreRequest::ApplyRequest { on: true, confirmed, confirm, .. }
+                        if !*confirmed || !confirm.as_deref().is_some_and(valid_digest) =>
+                    {
+                        Err("position_write_not_confirmed")
+                    }
+                    MoreRequest::ApplyRequest { on: false, confirm: Some(_), .. } => Err("position_write_request_invalid"),
                     MoreRequest::Outcome { value: OutcomeValue::Interview, rejection_reason, rejection_note, .. }
                         if rejection_reason.as_deref().is_some_and(|r| !r.is_empty()) || rejection_note.as_deref().is_some_and(|n| !n.trim().is_empty()) =>
                     {
@@ -284,6 +313,14 @@ impl Act {
                 line
             }
             Self::More(MoreRequest::OutcomeUndo { id, .. }) => json!({ "op": "outcome_undo", "id": id, "expect": expect }),
+            Self::More(MoreRequest::ApplyPreview { id, .. }) => json!({ "op": "apply_preview", "id": id, "expect": expect }),
+            Self::More(MoreRequest::ApplyRequest { id, on, confirm, .. }) => {
+                let mut line = json!({ "op": "apply_request", "id": id, "on": on, "expect": expect });
+                if let (true, Some(confirm)) = (*on, confirm) {
+                    line.as_object_mut().expect("an object").insert("confirm".into(), json!(confirm));
+                }
+                line
+            }
             Self::More(MoreRequest::UserNote { id, body, .. }) => {
                 let mut line = json!({ "op": "user_note", "id": id, "expect": expect });
                 if let Some(body) = body {
@@ -320,8 +357,33 @@ const REFUSALS: &[&str] = &[
     "reason_only_on_rejection",
 ];
 
+/// What the authorisation to apply may be refused with (the consent, the rule, the position, the preview): the codes of
+/// `apply_gate.py` and `apply_request.py`. A code the list does not have is a runtime older than this app.
+const APPLY_REFUSALS: &[&str] = &[
+    "config_missing",
+    "config_unreadable",
+    "config_malformed",
+    "consent_absent",
+    "consent_disabled",
+    "consent_mode_unknown",
+    "consent_cap_invalid",
+    "rule_unavailable",
+    "authorisation_unreadable",
+    "position_id_invalid",
+    "position_not_found",
+    "already_submitted",
+    "position_not_ready",
+    "destination_invalid",
+    "confirmation_required",
+    "position_changed",
+    "write_not_observed",
+    "apply_request_refused",
+    "agent_caller",
+];
+
 /// The flags and the states the script's answer may carry, by the kind of value.
 const TEXT_FIELDS: &[&str] = &[
+    "result",
     "op",
     "value",
     "reason",
@@ -335,7 +397,7 @@ const TEXT_FIELDS: &[&str] = &[
     "response_at",
     "ticket_status",
 ];
-const FLAG_FIELDS: &[&str] = &["cloud_synced", "recheck_requested", "geocode_requested", "write_requested", "saved", "deduplicated"];
+const FLAG_FIELDS: &[&str] = &["cloud_synced", "recheck_requested", "geocode_requested", "write_requested", "saved", "deduplicated", "apply_requested"];
 /// Whole numbers the answer may carry: the round of an interview, the number of a ticket.
 const NUMBER_FIELDS: &[(&str, u64)] = &[("interview_round", 1000), ("ticket_id", 1_000_000_000_000)];
 
@@ -360,6 +422,22 @@ fn close_answer(output: &ProcessResult) -> Option<Value> {
                 out.insert((*key).into(), Value::Bool(flag));
             }
         }
+        // the preview of an authorisation: the sentence the person confirms (cut and without control characters), the
+        // digest it must carry back, and where it would go
+        if let Some(summary) = answer.get("summary").and_then(Value::as_str) {
+            let text: String = summary.chars().filter(|c| !c.is_control() && !matches!(*c, '\u{2028}' | '\u{2029}')).take(300).collect();
+            if !text.is_empty() {
+                out.insert("summary".into(), Value::String(text));
+            }
+        }
+        if let Some(confirm) = answer.get("confirm").and_then(Value::as_str).filter(|c| valid_digest(c)) {
+            out.insert("confirm".into(), json!(confirm));
+        }
+        if answer.get("op").and_then(Value::as_str) == Some("apply-preview") {
+            if let Some(destination) = answer.get("destination").and_then(Value::as_str).filter(|d| valid_destination(d)) {
+                out.insert("destination".into(), json!(destination));
+            }
+        }
         for (key, most) in NUMBER_FIELDS {
             if let Some(number) = answer.get(*key).and_then(Value::as_u64).filter(|number| number <= most) {
                 out.insert((*key).into(), json!(number));
@@ -371,23 +449,55 @@ fn close_answer(output: &ProcessResult) -> Option<Value> {
         return Some(Value::Object(out));
     }
     let code = answer.get("code").and_then(Value::as_str)?;
-    let code = REFUSALS.iter().copied().find(|known| *known == code)?;
+    let code = REFUSALS.iter().chain(APPLY_REFUSALS).copied().find(|known| *known == code)?;
     Some(failure(match code {
         "request_invalid" => "position_write_request_invalid",
         other => other,
     }))
 }
 
+impl Act {
+    /// Whether this act only reads (the preview an authorisation is confirmed from).
+    fn reads(&self) -> bool {
+        matches!(self, Self::More(MoreRequest::ApplyPreview { .. }))
+    }
+
+    /// Whether this act authorises an application: the one that needs the broker's record as well.
+    fn authorises(&self) -> bool {
+        matches!(self, Self::More(MoreRequest::ApplyRequest { on: true, .. }))
+    }
+}
+
+/// The script's last line as it printed it, for the two fields (`instant`, `destination`) the answer closes away: they
+/// go to the broker from the host and never to the page.
+fn raw_answer(output: &ProcessResult) -> Option<Value> {
+    String::from_utf8_lossy(&output.stdout).lines().last().and_then(|line| serde_json::from_str(line).ok())
+}
+
+/// What the host's wrapper answered to `desktop-apply record`: its one closed line says the broker recorded it.
+fn broker_recorded(result: Result<ProcessResult, &'static str>) -> bool {
+    let Ok(result) = result else { return false };
+    let line: Option<Value> = String::from_utf8_lossy(&result.stdout).lines().last().and_then(|line| serde_json::from_str(line).ok());
+    result.code == 0 && line.is_some_and(|line| line == json!({ "ok": true }))
+}
+
 /// The whole decision of one act, with the app-bound steps injected (the order the tests drive). `gate` is the
 /// host, the owner and the wrapper; nothing runs unless every step before it said yes. `after_write` runs only
 /// when the team wrote what was asked.
+///
+/// An authorisation to apply is written twice: the flag the pages show (the script in the team's container) and the
+/// record in the team's broker, which is what the CLOSER checks before it sends, made from the host (`record`: the
+/// agents' container cannot record there). If the broker does not record it, the flag is withdrawn again and the person
+/// is told: nothing would go out. Only then is the page told it worked.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn act_with(
     request: Value,
     window_is_main: bool,
     tag: &str,
     gate: impl FnOnce() -> Result<(), &'static str>,
-    run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
+    mut run: impl FnMut(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
+    record: impl FnOnce(&BrokerRecord) -> Result<ProcessResult, &'static str>,
     after_write: impl FnOnce(),
 ) -> Value {
     if !window_is_main {
@@ -410,7 +520,20 @@ pub(crate) fn act_with(
     let ran = run(&input);
     if let Ok(output) = &ran {
         if let Some(answer) = close_answer(output) {
-            if answer.get("ok") == Some(&Value::Bool(true)) {
+            let worked = answer.get("ok") == Some(&Value::Bool(true));
+            if worked && act.authorises() {
+                let recorded = raw_answer(output)
+                    .and_then(|raw| BrokerRecord::from_reply(act.id(), &raw))
+                    .is_some_and(|broker| broker_recorded(record(&broker)));
+                if !recorded {
+                    // withdrawn again, with the same closed line the page would have sent
+                    let withdraw = Act::More(MoreRequest::ApplyRequest { id: act.id().to_owned(), on: false, confirmed: false, confirm: None, token: act.token().to_owned() });
+                    let _ = run(&script_input(ACT_PY, &withdraw.line(ino, dev)));
+                    return failure("apply_authorisation_unrecorded");
+                }
+            }
+            // a preview is a read: the positions did not change, nobody is told
+            if worked && !act.reads() {
                 after_write();
             }
             return answer;
@@ -427,9 +550,11 @@ pub(crate) fn act_with(
 /// What the action log writes down of an act: `exclude` and `restore` of a position, with its number. The request is
 /// read only for these two words and a whole number; the rest of it is the act's own business.
 fn log_event(request: &Value) -> Option<(&'static str, u64)> {
-    let action = match request.get("op").and_then(Value::as_str)? {
-        "exclude" => "exclusion.decide",
-        "restore" => "exclusion.withdraw",
+    let action = match (request.get("op").and_then(Value::as_str)?, request.get("on").and_then(Value::as_bool)) {
+        ("exclude", _) => "exclusion.decide",
+        ("restore", _) => "exclusion.withdraw",
+        ("apply_request", Some(true)) => "position.apply_authorize",
+        ("apply_request", Some(false)) => "position.apply_revoke",
         _ => return None,
     };
     let id = request.get("id").and_then(Value::as_str).filter(|id| valid_id(id))?;
@@ -451,6 +576,8 @@ pub(crate) async fn local_team_position_act(
     let main = direct_chat::window_may_write(window.label());
     // the one act the action log names: a position excluded or put back, by its number
     let logged = log_event(&request);
+    // an authorisation needs the host's wrapper to record it in the broker: checked before anything is written
+    let authorising = request.get("op").and_then(Value::as_str) == Some("apply_request") && request.get("on") == Some(&Value::Bool(true));
     Ok(on_worker(scopes.inner(), expected, move |scope| {
         let wrapper: RefCell<Option<PathBuf>> = RefCell::new(None);
         act_with(
@@ -458,11 +585,20 @@ pub(crate) async fn local_team_position_act(
             main,
             &scope_tag(scope),
             || {
-                *wrapper.borrow_mut() = Some(local_wrapper(&app, scope, true)?);
+                let found = local_wrapper(&app, scope, true)?;
+                if authorising && !crate::onboarding::wrapper_has_desktop_apply(&found) {
+                    return Err("existing_team_runtime_outdated");
+                }
+                *wrapper.borrow_mut() = Some(found);
                 Ok(())
             },
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
             || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
+            |broker| {
+                let (id, instant, destination) = broker.fields();
+                let found = wrapper.borrow().clone().ok_or("runtime_missing")?;
+                crate::onboarding::run_verified_local_wrapper(&found, &["desktop-apply", "record", id, instant, destination], None, std::time::Duration::from_secs(40))
+            },
             || {
                 if let Some((action, number)) = logged {
                     crate::local_action_log::record(&app, scope, action, &crate::local_action_log::Subject::Position(number));
@@ -501,6 +637,7 @@ mod tests {
     ) -> (Value, u32, u32, u32, Vec<u8>) {
         let (gates, runs, told) = (Cell::new(0), Cell::new(0), Cell::new(0));
         let given = RefCell::new(Vec::new());
+        let mut ran = Some(ran);
         let reply = act_with(
             request,
             main,
@@ -512,9 +649,10 @@ mod tests {
             |input| {
                 runs.set(runs.get() + 1);
                 *given.borrow_mut() = input.to_vec();
-                ran
+                ran.take().unwrap_or_else(|| said(0, "{}"))
             },
             || up,
+            |_| said(0, r#"{"ok":true}"#),
             || told.set(told.get() + 1),
         );
         (reply, gates.get(), runs.get(), told.get(), given.into_inner())
@@ -560,7 +698,7 @@ mod tests {
         let t = token();
         let mut cases: Vec<(Value, &str)> = vec![
             (json!({"op": "note", "id": "12", "token": t}), "position_write_request_invalid"),
-            (json!({"op": "apply_request", "id": "12", "on": true, "token": t}), "position_write_request_invalid"),
+            (json!({"op": "apply_cancel", "id": "12", "on": true, "token": t}), "position_write_request_invalid"),
             (json!({"op": "recheck", "id": "12", "token": t}), "position_write_request_invalid"),
             (json!({"op": "recheck", "id": "12", "on": "yes", "token": t}), "position_write_request_invalid"),
             (json!({"op": "recheck", "id": "12", "on": true}), "position_write_request_invalid"),
@@ -728,6 +866,144 @@ mod tests {
         assert_eq!(drive(request, true, Ok(()), Err("timeout"), true).0, failure("existing_team_runtime_outdated"));
     }
 
+    const DIGEST: &str = "ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12";
+    const INSTANT: &str = "2026-11-03T09:30:00.123Z";
+
+    /// An authorisation, driven with the answers of the script (in order) and of the host's record; what ran, in order.
+    fn authorise(answers: &[&str], broker: Result<ProcessResult, &'static str>) -> (Value, Vec<Value>, Option<BrokerRecord>, u32) {
+        let (told, recorded) = (Cell::new(0), RefCell::new(None));
+        let (lines, next) = (RefCell::new(Vec::new()), Cell::new(0));
+        let request = json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "token": token()});
+        let reply = act_with(
+            request,
+            true,
+            TAG,
+            || Ok(()),
+            |input| {
+                let text = String::from_utf8(input.to_vec()).unwrap();
+                lines.borrow_mut().push(serde_json::from_str::<Value>(text.lines().nth(1).unwrap()).unwrap());
+                let n = next.get();
+                next.set(n + 1);
+                said(0, answers.get(n).copied().unwrap_or(r#"{"ok":true,"op":"apply-request","id":4}"#))
+            },
+            || true,
+            |record| {
+                *recorded.borrow_mut() = Some(record.clone());
+                broker
+            },
+            || told.set(told.get() + 1),
+        );
+        (reply, lines.into_inner(), recorded.into_inner(), told.get())
+    }
+
+    const WRITTEN: &str = r#"{"ok":true,"op":"apply-request","id":4,"apply_requested":true,"result":"authorised","instant":"2026-11-03T09:30:00.123Z","destination":"portal:ashby","detail":"x"}"#;
+
+    #[test]
+    fn an_authorisation_is_recorded_in_the_broker_from_the_host_and_only_then_the_page_hears_it_worked() {
+        let (reply, lines, recorded, told) = authorise(&[WRITTEN], said(0, r#"{"ok":true}"#));
+        // the page learns the flag and nothing of the instant or the destination, which went to the broker
+        assert_eq!(reply, json!({"ok": true, "op": "apply-request", "apply_requested": true, "result": "authorised"}));
+        assert_eq!(told, 1);
+        assert_eq!(lines.len(), 1, "no withdrawal when the broker recorded it");
+        assert_eq!(lines[0], json!({"op": "apply_request", "id": "4", "on": true, "confirm": DIGEST, "expect": {"ino": 77, "dev": 5}}));
+        assert_eq!(recorded.unwrap().fields(), ("4", INSTANT, "portal:ashby"));
+    }
+
+    #[test]
+    fn an_authorisation_the_broker_does_not_record_is_withdrawn_and_said_and_the_page_is_not_told_it_worked() {
+        for broker in [
+            said(0, r#"{"ok":false,"error":"apply_record_refused"}"#),
+            said(1, r#"{"ok":true}"#),
+            said(0, ""),
+            said(0, "recorded"),
+            Err("timeout"),
+        ] {
+            let (reply, lines, recorded, told) = authorise(&[WRITTEN], broker);
+            assert_eq!(reply, failure("apply_authorisation_unrecorded"));
+            assert_eq!(told, 0);
+            assert!(recorded.is_some());
+            assert_eq!(lines.len(), 2);
+            assert_eq!(lines[1], json!({"op": "apply_request", "id": "4", "on": false, "expect": {"ino": 77, "dev": 5}}), "withdrawn with the closed line");
+        }
+        // what the script printed does not fit a command line: nothing reaches the broker, and it is withdrawn too
+        for bad in [
+            r#"{"ok":true,"apply_requested":true}"#,
+            r#"{"ok":true,"apply_requested":true,"instant":"2026-11-03 09:30","destination":"portal:ashby"}"#,
+            r#"{"ok":true,"apply_requested":true,"instant":"2026-11-03T09:30:00.123Z","destination":"portal:ash'by; reboot"}"#,
+            r#"{"ok":true,"apply_requested":true,"instant":"2026-11-03T09:30:00.123Z","destination":"ftp:example.com"}"#,
+        ] {
+            let (reply, lines, recorded, told) = authorise(&[bad], said(0, r#"{"ok":true}"#));
+            assert_eq!((reply, recorded, told, lines.len()), (failure("apply_authorisation_unrecorded"), None, 0, 2), "{bad}");
+        }
+    }
+
+    #[test]
+    fn an_authorisation_needs_a_click_and_the_digest_of_the_preview_and_a_withdrawal_needs_neither() {
+        let t = token();
+        for (request, code) in [
+            (json!({"op": "apply_request", "id": "4", "on": true, "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": false, "confirm": DIGEST, "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST.to_uppercase(), "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": "0'; reboot", "token": t}), "position_write_not_confirmed"),
+            (json!({"op": "apply_request", "id": "4", "on": false, "confirm": DIGEST, "token": t}), "position_write_request_invalid"),
+            (json!({"op": "apply_request", "id": "4", "confirmed": true, "confirm": DIGEST, "token": t}), "position_write_request_invalid"),
+            (json!({"op": "apply_preview", "id": "4", "confirm": DIGEST, "token": t}), "position_write_request_invalid"),
+            (json!({"op": "apply_preview", "id": "0", "token": t}), "position_write_request_invalid"),
+        ] {
+            let (reply, gates, runs) = refused(request.clone());
+            assert_eq!((reply, gates, runs), (failure(code), 0, 0), "{request}");
+        }
+        // a withdrawal asks nothing of the broker and writes the one closed line
+        let request = json!({"op": "apply_request", "id": "4", "on": false, "token": t});
+        let broker_calls = Cell::new(0);
+        let reply = act_with(request, true, TAG, || Ok(()), |_| said(0, r#"{"ok":true,"op":"apply-request","id":4,"apply_requested":false,"result":"withdrawn"}"#), || true, |_| {
+            broker_calls.set(broker_calls.get() + 1);
+            said(0, "{}")
+        }, || {});
+        assert_eq!(reply, json!({"ok": true, "op": "apply-request", "apply_requested": false, "result": "withdrawn"}));
+        assert_eq!(broker_calls.get(), 0);
+    }
+
+    #[test]
+    fn the_preview_is_closed_to_a_sentence_a_digest_and_a_destination_and_writes_nothing() {
+        let said_ok = format!(r#"{{"ok":true,"op":"apply-preview","id":4,"summary":"Synthetic role @ Synthetic\u0007 Co \u00b7 jobs.example.com","confirm":"{DIGEST}","destination":"web:jobs.example.com","extra":1}}"#);
+        let request = json!({"op": "apply_preview", "id": "4", "token": token()});
+        let (reply, _, runs, told, input) = drive(request.clone(), true, Ok(()), said(0, &said_ok), true);
+        assert_eq!(
+            reply,
+            json!({"ok": true, "op": "apply-preview", "summary": "Synthetic role @ Synthetic Co \u{b7} jobs.example.com", "confirm": DIGEST, "destination": "web:jobs.example.com"})
+        );
+        assert_eq!((runs, told), (1, 0), "a preview is not a write: nobody is told that the positions changed");
+        assert_eq!(line_of(input), json!({"op": "apply_preview", "id": "4", "expect": {"ino": 77, "dev": 5}}));
+        // a digest or a destination that does not fit is not passed on
+        let hostile = r#"{"ok":true,"op":"apply-preview","summary":"s","confirm":"ZZ","destination":"web:a b; reboot"}"#;
+        assert_eq!(drive(request, true, Ok(()), said(0, hostile), true).0, json!({"ok": true, "op": "apply-preview", "summary": "s"}));
+    }
+
+    #[test]
+    fn the_refusals_of_the_consent_and_of_the_position_come_back_as_codes_and_nothing_is_recorded() {
+        let t = token();
+        for code in ["consent_absent", "consent_disabled", "config_missing", "position_not_ready", "already_submitted", "destination_invalid", "confirmation_required", "position_changed", "agent_caller"] {
+            let text = format!(r#"{{"ok":false,"op":"apply-request","id":4,"code":"{code}","detail":"/secret"}}"#);
+            let request = json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": DIGEST, "token": t});
+            let recorded = Cell::new(0);
+            let reply = act_with(request, true, TAG, || Ok(()), |_| said(1, &text), || true, |_| {
+                recorded.set(recorded.get() + 1);
+                said(0, r#"{"ok":true}"#)
+            }, || {});
+            assert_eq!((reply, recorded.get()), (failure(code), 0), "{code}");
+        }
+    }
+
+    #[test]
+    fn the_action_log_names_an_authorisation_and_its_withdrawal_by_the_position_number_only() {
+        assert_eq!(log_event(&json!({"op": "apply_request", "id": "4", "on": true, "confirmed": true, "confirm": "x"})), Some(("position.apply_authorize", 4)));
+        assert_eq!(log_event(&json!({"op": "apply_request", "id": "4", "on": false})), Some(("position.apply_revoke", 4)));
+        assert_eq!(log_event(&json!({"op": "apply_preview", "id": "4"})), None);
+        assert_eq!(log_event(&json!({"op": "apply_request", "id": "4"})), None);
+    }
+
     /// The source of the module above its tests.
     fn source() -> &'static str {
         include_str!("local_position_act.rs").split("#[cfg(test)]").next().unwrap()
@@ -770,10 +1046,10 @@ mod tests {
             assert!(!ACT_PY.contains(forbidden), "{forbidden}");
         }
         let fields = ACT_PY.split("FIELDS={").nth(1).unwrap().split('\n').next().unwrap();
-        for op in ["feedback", "exclude", "restore", "recheck", "geocode", "write_request", "user_note", "ticket", "mark_applied", "outcome", "outcome_undo"] {
+        for op in ["feedback", "exclude", "restore", "recheck", "geocode", "write_request", "user_note", "ticket", "mark_applied", "outcome", "outcome_undo", "apply_preview", "apply_request"] {
             assert!(fields.contains(&format!("'{op}':")), "{op}");
         }
-        // the authorisation to apply is not here: it is written in the broker too, and is its own piece
-        assert!(!fields.contains("apply"));
+        // the authorisation to apply is here, with the preview it needs; the host records it in the broker too
+        assert!(fields.contains("'apply_preview':") && fields.contains("'apply_request':"));
     }
 }

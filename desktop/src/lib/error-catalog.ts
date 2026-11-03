@@ -394,6 +394,62 @@ const BROWSER_RUNTIME_CHANGED = copy(
 
 export const UNKNOWN_ERROR: ErrorCopy = RETRY;
 
+// The authorisation to apply, in a profile with no cloud account: what the consent, the settings and the position refuse, in words.
+const APPLY_CONSENT_OFF = copy(
+    "L’invio automatico delle candidature non è acceso.",
+    "Accendilo nelle impostazioni, poi autorizza di nuovo la candidatura.",
+    "Automatic sending of applications is not turned on.",
+    "Turn it on in the settings, then authorise the application again.",
+);
+const APPLY_SETTINGS_UNREADABLE = copy(
+    "Non riesco a leggere le impostazioni dell’invio automatico.",
+    "Controlla le impostazioni e riprova; se resta così, guarda lo stato del team.",
+    "I cannot read the settings of automatic sending.",
+    "Check the settings and try again; if it stays so, look at the team’s state.",
+);
+const APPLY_NOT_READY = copy(
+    "Questa posizione non è ancora pronta per l’invio.",
+    "Aspetta che il team prepari CV e lettera, poi riprova.",
+    "This position is not ready to be sent yet.",
+    "Wait for the team to prepare the CV and the letter, then try again.",
+);
+const APPLY_ALREADY_SENT = copy(
+    "Per questa posizione la candidatura è già partita.",
+    "Non si può autorizzare di nuovo.",
+    "The application for this position has already gone out.",
+    "It cannot be authorised again.",
+);
+const APPLY_NO_DESTINATION = copy(
+    "Non riesco a capire dove andrebbe inviata la candidatura.",
+    "Apri l’annuncio e candidati a mano, poi segna «Mi sono candidato».",
+    "I cannot tell where the application would be sent.",
+    "Open the ad and apply by hand, then mark «I applied».",
+);
+const APPLY_PREVIEW_CHANGED = copy(
+    "La posizione è cambiata dopo l’anteprima.",
+    "Riapri l’anteprima e conferma di nuovo.",
+    "The position changed after the preview.",
+    "Open the preview again and confirm again.",
+);
+const APPLY_NOT_RECORDED = copy(
+    "Il team non ha registrato l’autorizzazione.",
+    "Aggiorna la pagina e riprova.",
+    "The team did not record the authorisation.",
+    "Refresh the page and try again.",
+);
+const APPLY_ONLY_THE_PERSON = copy(
+    "Questa azione la può fare solo la persona, dall’app.",
+    "Usa il pulsante della pagina.",
+    "Only the person can do this, from the app.",
+    "Use the button on the page.",
+);
+const APPLY_BAD_NUMBER = copy(
+    "Il numero della posizione non è valido.",
+    "Aggiorna la pagina e riprova.",
+    "The position’s number is not valid.",
+    "Refresh the page and try again.",
+);
+
 export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // ── Generic and app state ────────────────────────────────────────────────
   unknown: RETRY,
@@ -419,6 +475,23 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // The native side has already withdrawn the request when its broker receipt
   // cannot be recorded. The shared retry copy is available in every locale.
   apply_authorisation_unrecorded: RETRY,
+  consent_absent: APPLY_CONSENT_OFF,
+  consent_disabled: APPLY_CONSENT_OFF,
+  consent_mode_unknown: APPLY_CONSENT_OFF,
+  consent_cap_invalid: APPLY_CONSENT_OFF,
+  config_missing: APPLY_SETTINGS_UNREADABLE,
+  config_unreadable: APPLY_SETTINGS_UNREADABLE,
+  config_malformed: APPLY_SETTINGS_UNREADABLE,
+  rule_unavailable: APPLY_SETTINGS_UNREADABLE,
+  authorisation_unreadable: APPLY_SETTINGS_UNREADABLE,
+  position_not_ready: APPLY_NOT_READY,
+  already_submitted: APPLY_ALREADY_SENT,
+  destination_invalid: APPLY_NO_DESTINATION,
+  position_changed: APPLY_PREVIEW_CHANGED,
+  write_not_observed: APPLY_NOT_RECORDED,
+  apply_request_refused: APPLY_NOT_RECORDED,
+  agent_caller: APPLY_ONLY_THE_PERSON,
+  position_id_invalid: APPLY_BAD_NUMBER,
 
   // ── Account scope and local owner ────────────────────────────────────────
   account_scope_state_failed: ACCOUNT_SCOPE,
