@@ -115,6 +115,6 @@ async function handleHealth() {
 export function registerHealthCommand(program) {
   program
     .command('health')
-    .description('Shows the health status of JHT modules')
+    .description('Check the health of each part of JHT: configuration, credentials, memory, agents')
     .action(handleHealth);
 }

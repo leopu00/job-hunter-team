@@ -229,7 +229,7 @@ export function registerWorkingHoursCommand(program) {
     .action(handleSet);
 
   wh.command('set-custom <days> <range>')
-    .description('Custom — es: jht wh set-custom mon-fri 09:00-18:00')
+    .description('Custom, e.g. jht wh set-custom mon-fri 09:00-18:00')
     .option('--tz <iana>', 'IANA timezone (default: local)')
     .action(handleSetCustom);
 

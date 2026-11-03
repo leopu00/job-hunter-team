@@ -1017,7 +1017,7 @@ function handleLimits(opts = {}) {
 }
 
 export function registerProvidersCommand(program) {
-  const cmd = new Command('providers').description('Provider LLM — list / current / use');
+  const cmd = new Command('providers').description('AI providers: list, show the active one, switch');
 
   // Default action: list (back-compat con `jht providers`)
   cmd.action(handleProviders);
