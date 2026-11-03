@@ -424,6 +424,18 @@ pub(crate) fn act_with(
     }
 }
 
+/// What the action log writes down of an act: `exclude` and `restore` of a position, with its number. The request is
+/// read only for these two words and a whole number; the rest of it is the act's own business.
+fn log_event(request: &Value) -> Option<(&'static str, u64)> {
+    let action = match request.get("op").and_then(Value::as_str)? {
+        "exclude" => "exclusion.decide",
+        "restore" => "exclusion.withdraw",
+        _ => return None,
+    };
+    let id = request.get("id").and_then(Value::as_str).filter(|id| valid_id(id))?;
+    Some((action, id.parse().ok()?))
+}
+
 /// The person's act on a position of the team on this computer, written in its database.
 #[tauri::command]
 pub(crate) async fn local_team_position_act(
@@ -437,6 +449,8 @@ pub(crate) async fn local_team_position_act(
         Err(_) => return Ok(failure("account_scope_unavailable")),
     };
     let main = direct_chat::window_may_write(window.label());
+    // the one act the action log names: a position excluded or put back, by its number
+    let logged = log_event(&request);
     Ok(on_worker(scopes.inner(), expected, move |scope| {
         let wrapper: RefCell<Option<PathBuf>> = RefCell::new(None);
         act_with(
@@ -450,6 +464,9 @@ pub(crate) async fn local_team_position_act(
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
             || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
             || {
+                if let Some((action, number)) = logged {
+                    crate::local_action_log::record(&app, scope, action, &crate::local_action_log::Subject::Position(number));
+                }
                 let (Some(wrapper), Ok(runtime)) = (wrapper.borrow().clone(), direct_chat::local_runtime_path(&app)) else { return };
                 crate::state_stream::positions_written(&crate::state_stream::LocalContext { app: &app, scope, wrapper: &wrapper, runtime: &runtime });
             },
@@ -726,6 +743,23 @@ mod tests {
         assert!(command.contains("window_may_write(window.label())"));
         // the write is announced to the page from inside the worker, under the scope
         assert!(command.find("on_worker(").unwrap() < command.find("positions_written(").unwrap());
+    }
+
+    #[test]
+    fn only_an_exclusion_or_putting_it_back_is_named_in_the_action_log_and_by_a_whole_number() {
+        assert_eq!(log_event(&json!({"op": "exclude", "id": "12", "reason": "other", "note": "private", "token": "t"})), Some(("exclusion.decide", 12)));
+        assert_eq!(log_event(&json!({"op": "restore", "id": "7", "token": "t"})), Some(("exclusion.withdraw", 7)));
+        for request in [
+            json!({"op": "feedback", "id": "12", "value": "like"}),
+            json!({"op": "user_note", "id": "12", "body": "private"}),
+            json!({"op": "ticket", "id": "12", "kind": "free", "text": "private"}),
+            json!({"op": "exclude", "id": "012"}),
+            json!({"op": "exclude", "id": 12}),
+            json!({"op": "exclude"}),
+            json!({"id": "12"}),
+        ] {
+            assert_eq!(log_event(&request), None, "{request}");
+        }
     }
 
     #[test]

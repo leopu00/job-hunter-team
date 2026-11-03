@@ -5,9 +5,13 @@ import type { WebActionLogClient } from "@/lib/web-action-log";
 import { WEB_ACTION_LOG_TEXT } from "@/lib/web-action-log.i18n";
 import { appLocale } from "../../lib/app-locale";
 import { cloudSessionReadable } from "../../lib/auth-storage-lock";
+import { localActionLogClient } from "../../lib/local-action-log";
+import { localTeamData } from "../../lib/local-team-data";
 
 /** What the section reads the log with: the app's session, or nothing when nobody is signed in with an account. */
 export async function appLogClient(): Promise<WebActionLogClient | null> {
+  // A profile with no cloud account has the app's own log, of what it did on the team of this computer.
+  if (localTeamData()) return localActionLogClient();
   // Loaded when the section is opened, not with the panel: the panel does not need the account to show its agents.
   const { supabase, supabaseConfigured } = await import("../../lib/supabase");
   // A locked session storage (a local profile) answers nothing: no account, said at once.
@@ -16,7 +20,7 @@ export async function appLogClient(): Promise<WebActionLogClient | null> {
   return data.session ? supabase : null;
 }
 
-type Source = { kind: "closed" } | { kind: "reading" } | { kind: "ready"; client: WebActionLogClient } | { kind: "no-account" };
+type Source = { kind: "closed" } | { kind: "reading" } | { kind: "ready"; client: WebActionLogClient; own: boolean } | { kind: "no-account" };
 
 /**
  * «Registro delle azioni» in the agents panel: what the site asked on the
@@ -39,7 +43,7 @@ export default function ActionLogSection({
     if (!isOpen || source.kind !== "closed") return;
     setSource({ kind: "reading" });
     loadClient().then(
-      (client) => setSource(client ? { kind: "ready", client } : { kind: "no-account" }),
+      (client) => setSource(client ? { kind: "ready", client, own: localTeamData() } : { kind: "no-account" }),
       () => setSource({ kind: "no-account" }),
     );
   };
@@ -64,7 +68,7 @@ export default function ActionLogSection({
             {t.signedOut}
           </p>
         )}
-        {source.kind === "ready" && <ActionLogPanel client={source.client} locale={locale} />}
+        {source.kind === "ready" && <ActionLogPanel client={source.client} locale={locale} variant={source.own ? "app" : "site"} />}
       </div>
     </details>
   );

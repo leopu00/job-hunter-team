@@ -476,3 +476,54 @@ export const WEB_ACTION_LOG_TEXT: Record<Locale, WebActionLogText> = {
     },
   },
 };
+
+/**
+ * The lines that differ when the log is the app's own (a profile with no cloud account): the rows are what the app
+ * did on the team of this computer, not what the site asked. Everything else is the site log's text.
+ */
+export type WebActionLogAppText = Pick<WebActionLogText, "intro" | "empty" | "listLabel">;
+
+export const WEB_ACTION_LOG_APP_TEXT: Record<Locale, WebActionLogAppText> = {
+  it: {
+    intro:
+      "Quello che l’app ha fatto sul team di questo computer a nome tuo: accendere, fermare o riavviare la squadra, cambiare le impostazioni, escludere una posizione. Il registro si legge e basta: lo scrive l’app, nel momento in cui l’azione riesce.",
+    empty: "L’app non ha ancora fatto nessuna azione sul team.",
+    listLabel: "Azioni fatte dall’app sul team",
+  },
+  en: {
+    intro:
+      "What the app did on the team of this computer for you: starting, stopping or restarting the team, changing settings, excluding a position. The log is read-only: the app writes it at the moment an action works.",
+    empty: "The app has not done any action on the team yet.",
+    listLabel: "Actions done by the app on the team",
+  },
+  de: {
+    intro:
+      "Was die App in deinem Namen am Team dieses Computers getan hat: das Team starten, stoppen oder neu starten, Einstellungen ändern, eine Position ausschließen. Das Protokoll ist nur lesbar: Die App schreibt es in dem Moment, in dem eine Aktion gelingt.",
+    empty: "Die App hat am Team noch keine Aktion ausgeführt.",
+    listLabel: "Von der App am Team ausgeführte Aktionen",
+  },
+  es: {
+    intro:
+      "Lo que la app ha hecho en tu nombre en el equipo de este ordenador: encender, detener o reiniciar el equipo, cambiar los ajustes, excluir una posición. El registro es solo de lectura: lo escribe la app en el momento en que una acción sale bien.",
+    empty: "La app todavía no ha hecho ninguna acción en el equipo.",
+    listLabel: "Acciones hechas por la app en el equipo",
+  },
+  fr: {
+    intro:
+      "Ce que l’appli a fait en ton nom sur l’équipe de cet ordinateur : démarrer, arrêter ou redémarrer l’équipe, changer les réglages, exclure un poste. Le journal se lit seulement : l’appli l’écrit au moment où une action réussit.",
+    empty: "L’appli n’a encore fait aucune action sur l’équipe.",
+    listLabel: "Actions faites par l’appli sur l’équipe",
+  },
+  hu: {
+    intro:
+      "Amit az alkalmazás a nevedben tett a számítógép csapatával: a csapat elindítása, leállítása vagy újraindítása, beállítások módosítása, egy pozíció kizárása. A napló csak olvasható: az alkalmazás írja, abban a pillanatban, amikor egy művelet sikerül.",
+    empty: "Az alkalmazás még nem végzett műveletet a csapaton.",
+    listLabel: "Az alkalmazás által a csapaton végzett műveletek",
+  },
+  pt: {
+    intro:
+      "O que a app fez em teu nome na equipa deste computador: ligar, parar ou reiniciar a equipa, mudar as definições, excluir uma vaga. O registo só se lê: é a app que o escreve, no momento em que uma ação resulta.",
+    empty: "A app ainda não fez nenhuma ação na equipa.",
+    listLabel: "Ações feitas pela app na equipa",
+  },
+};

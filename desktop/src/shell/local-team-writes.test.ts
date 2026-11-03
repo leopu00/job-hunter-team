@@ -134,6 +134,7 @@ describe("the local mode's «signed in» is not an identity", () => {
       "lib/local-judgement-api.ts",
       "lib/local-summary-api.ts",
       "lib/local-team-data.ts",
+      "pages/agents/ActionLogSection.tsx",
       "pages/map/map-api.ts",
       "pages/swipe/load-swipe.ts",
       "pages/team/local-team-api.ts",
@@ -151,6 +152,13 @@ describe("the local mode's «signed in» is not an identity", () => {
     // the activity read is asked only for the team of this computer: a yes/no gate, no identity in it
     const reading = readFileSync(join(src, "lib/existing-team-positions.ts"), "utf-8").split("\n").find((l) => l.includes("localTeamData()") && !l.includes("import") && !l.trim().startsWith("*"));
     expect(reading).toContain('if (!localTeamData()) return { source: "not_desktop" }');
+    // the action log takes the app's own log in local mode, and says so on the list: a yes/no gate and a flag
+    const logSection = readFileSync(join(src, "pages/agents/ActionLogSection.tsx"), "utf-8");
+    const uses = logSection.split("\n").filter((l) => l.includes("localTeamData()") && !l.includes("import") && !l.trim().startsWith("*"));
+    expect(uses.map((l) => l.trim())).toEqual([
+      "if (localTeamData()) return localActionLogClient();",
+      '(client) => setSource(client ? { kind: "ready", client, own: localTeamData() } : { kind: "no-account" }),',
+    ]);
     // the board's read is the same kind of gate: local mode or not, and what it answers is the team's rows
     const board = readFileSync(join(src, "pages/team/local-team-api.ts"), "utf-8");
     const gate = board.split("\n").find((l) => l.includes("localTeamData()") && !l.includes("import") && !l.trim().startsWith("*"));
