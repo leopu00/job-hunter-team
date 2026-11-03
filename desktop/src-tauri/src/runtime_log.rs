@@ -566,7 +566,7 @@ fn chat_failure_code(code: &str) -> &str {
     }
 }
 
-fn utc(at: SystemTime) -> String {
+pub(crate) fn utc(at: SystemTime) -> String {
     let seconds = at.duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or(0);
     let (days, rest) = ((seconds / 86_400) as i64, seconds % 86_400);
     // Days to a civil date (Howard Hinnant's algorithm).

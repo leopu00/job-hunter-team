@@ -445,7 +445,8 @@ pub(crate) async fn team_settings(
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "account_scope_changed")?;
         let found = std::cell::RefCell::new(None);
-        Ok::<Value, &'static str>(team_settings_with(
+        let written = request.get("settings").cloned().filter(|_| request.get("op").and_then(Value::as_str) == Some("write"));
+        let reply = team_settings_with(
             request,
             window_is_main,
             || {
@@ -463,7 +464,14 @@ pub(crate) async fn team_settings(
                 Some(found_destination) => run(found_destination, request, &app, &worker_expected),
                 None => Err("team_settings_unavailable"),
             },
-        ))
+        );
+        // A setting changed on the team of this computer goes in the action log of this profile.
+        if let (Some(settings), Some(true), Some("local")) =
+            (written, reply.get("ok").and_then(Value::as_bool), reply.get("target").and_then(Value::as_str))
+        {
+            crate::local_action_log::record(&app, &worker_expected, "settings.update", &crate::local_action_log::settings_of(&settings));
+        }
+        Ok::<Value, &'static str>(reply)
     })
     .await
     .unwrap_or(Err("team_settings_unavailable"));

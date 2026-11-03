@@ -25,14 +25,17 @@ const TONE_COLOR: Record<WebActionTone, string> = {
 export default function ActionLogList({
   rows,
   locale,
+  listLabel,
 }: {
   rows: WebActionRow[];
   locale: Locale;
+  /** The list's name for a reader of the screen, when it is not the site log's own. */
+  listLabel?: string;
 }) {
   const t = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
   return (
     <ol
-      aria-label={t.listLabel}
+      aria-label={listLabel ?? t.listLabel}
       data-testid="action-log-list"
       className="flex flex-col gap-px rounded border overflow-hidden"
       style={{ borderColor: "var(--color-border)" }}
