@@ -116,11 +116,11 @@ describe("a verdict of a local profile", () => {
   });
 
   it("leaves every other route, and every call when the profile is not local, to the next link", async () => {
-    for (const [path, method] of [["7/delete", "POST"], ["7/profile-files", "POST"], ["7/user-note", "PUT"], ["7/feedback", "GET"], ["7/feedback", "DELETE"], ["x/feedback", "POST"]] as const) {
+    for (const [path, method] of [["7/delete", "POST"], ["7/apply-request", "POST"], ["7/profile-files", "POST"], ["7/user-note", "PUT"], ["7/feedback", "GET"], ["7/feedback", "DELETE"], ["x/feedback", "POST"]] as const) {
       await post(path, {}, method);
     }
     expect(write).not.toHaveBeenCalled();
-    expect(next).toHaveBeenCalledTimes(6);
+    expect(next).toHaveBeenCalledTimes(7);
     next.mockClear();
     setLocalTeamData(null);
     await post("7/feedback", { action: "like" });
@@ -154,8 +154,6 @@ describe("what a local profile does on the page of a position", () => {
 
     expect(await (await post("12/recheck-request", {})).json()).toEqual({ id: "12", recheck_requested: true, source: "local" });
     expect(await (await post("12/geocode-request", {})).json()).toEqual({ position: { id: "12", geocode_requested: true }, source: "local" });
-    expect(await (await post("12/apply-request", { confirmed: true })).json()).toEqual({ ok: true, state: "queued", id: "12", apply_requested: true, source: "local" });
-    expect(await (await post("12/apply-request", undefined, "DELETE")).json()).toMatchObject({ apply_requested: false });
     expect(write).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
   });
@@ -163,20 +161,21 @@ describe("what a local profile does on the page of a position", () => {
   it("writes «I applied myself» and the outcome as local acknowledgements the page accepts", async () => {
     act.mockResolvedValue({ ok: true, applied_at: "2026-01-02T03:04:05Z" });
     expect(await (await post("12/mark-applied", {})).json()).toEqual({ ok: true, id: "12", applied_at: "2026-01-02T03:04:05Z", source: "local", cloud_synced: null });
-    const rejected = await post("12/outcome", { outcome: "rejected", rejection_reason: "other", rejection_note: " n " });
-    expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "rejected", rejection_reason: "other", rejection_note: "n", token: TOKEN_P });
+    act.mockResolvedValue({ ok: true, status: "response", response: "rejected", response_at: "2026-01-03T00:00:00Z" });
+    const rejected = await post("12/outcome", { outcome: "rejected", rejection_reason: "salary", rejection_note: " n " });
+    expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "rejected", rejection_reason: "salary", rejection_note: "n", token: TOKEN_P });
     expect(await rejected.json()).toMatchObject({ response: "rejected", source: "local", cloud_synced: null });
     await post("12/outcome", { outcome: "interview", rejection_reason: "other" });
     expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "interview", token: TOKEN_P });
     await post("12/outcome", undefined, "DELETE");
-    expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "clear", token: TOKEN_P });
+    expect(act).toHaveBeenLastCalledWith({ op: "outcome_undo", id: "12", token: TOKEN_P });
   });
 
   it("opens a rescore or a free request as a ticket, and refuses a file", async () => {
-    act.mockResolvedValue({ ok: true, ticket_id: 5, status: "open" });
+    act.mockResolvedValue({ ok: true, ticket_id: 5, ticket_status: "assigned", deduplicated: true });
     const rescore = await post("12/ticket", { kind: "rescore", request_text: "Rivaluta" });
     expect(act).toHaveBeenLastCalledWith({ op: "ticket", id: "12", kind: "rescore", text: "Rivaluta", token: TOKEN_P });
-    expect(await rescore.json()).toMatchObject({ id: 5, status: "open", kind: "rescore" });
+    expect(await rescore.json()).toMatchObject({ id: 5, status: "assigned", kind: "rescore", deduplicated: true });
     const form = new FormData();
     form.append("request_text", "Cerca altro");
     await api("/api/positions/12/ticket", { method: "POST", body: form });
@@ -205,7 +204,6 @@ describe("what a local profile does on the page of a position", () => {
     expect((await post("12/write-request", { kind: "poem" })).status).toBe(400);
     expect((await post("12/outcome", { outcome: "ghosted" })).status).toBe(400);
     expect((await post("12/user-note", { note: "  " })).status).toBe(400);
-    expect((await post("12/apply-request", {})).status).toBe(400);
     expect((await post("13/recheck-request", {})).status).toBe(409);
     expect(act).not.toHaveBeenCalled();
   });

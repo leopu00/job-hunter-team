@@ -89,10 +89,6 @@ export const LOCAL_TEAM_NON_GET_ALLOWED: Readonly<Record<string, string>> = {
     `asking for the CV or the cover letter: ${POSITION_ACT}`,
   "DELETE /api/positions/[legacyId]/write-request":
     `withdrawing that request: ${POSITION_ACT}`,
-  "POST /api/positions/[legacyId]/apply-request":
-    `authorising the application, after the page's confirmation: ${POSITION_ACT}`,
-  "DELETE /api/positions/[legacyId]/apply-request":
-    `withdrawing that authorisation: ${POSITION_ACT}`,
   "POST /api/positions/[legacyId]/ticket":
     `a new request to the team: a rescore or a free one: ${POSITION_ACT}`,
 };

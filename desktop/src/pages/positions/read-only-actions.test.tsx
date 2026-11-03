@@ -51,8 +51,9 @@ const CASES: Array<[string, () => ReactElement]> = [
   ],
 ];
 
+// The button that opens or closes a fold (the private notes) only shows what is already there: it is a read, it stays on.
 const controls = (container: HTMLElement) =>
-  [...container.querySelectorAll<HTMLElement & { disabled: boolean }>("button, textarea, select, input")];
+  [...container.querySelectorAll<HTMLElement & { disabled: boolean }>("button:not([aria-expanded]), textarea, select, input")];
 
 afterEach(cleanup);
 

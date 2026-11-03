@@ -7,7 +7,12 @@ import { createContext, useContext } from "react";
  * the buttons that would write stay on screen, disabled, and say why.
  * The web never provides it, so every control keeps working there.
  */
-export type ReadOnlyActions = { readOnly: boolean; reason: string };
+export type ReadOnlyActions = {
+  readOnly: boolean;
+  reason: string;
+  /** Only the authorisation of the application stays off, with this reason (the desktop on a team it writes to, but not that). */
+  applyReason?: string;
+};
 
 const NOT_READ_ONLY: ReadOnlyActions = { readOnly: false, reason: "" };
 

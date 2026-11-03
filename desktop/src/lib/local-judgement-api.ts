@@ -17,8 +17,9 @@ import { localTeamData } from "./local-team-data";
  *   POST   /api/positions/<n>/outcome         interview / rejected (+ why); DELETE takes it back
  *   POST   /api/positions/<n>/recheck-request, geocode-request   ask the team; DELETE withdraws
  *   POST   /api/positions/<n>/write-request   the CV or the cover letter (`kind`); DELETE withdraws
- *   POST   /api/positions/<n>/apply-request   authorise the application (`confirmed`); DELETE withdraws
  *   POST   /api/positions/<n>/ticket          a rescore (`kind: "rescore"`) or a free request (`request_text`)
+ *
+ * The authorisation of an application (apply-request) is not here: it writes the team's broker too, and stays off.
  *
  * It never falls through to the cloud: in this mode a call of these routes is answered here, with the code
  * of its refusal, whatever the native side says. Every other route stays refused by the bridge.
@@ -29,7 +30,7 @@ const ACT = "local_team_position_act";
 type Body = Record<string, unknown>;
 type Op =
   | "feedback" | "exclude" | "restore" | "user_note" | "mark_applied" | "outcome"
-  | "recheck" | "geocode" | "write_request" | "apply_request" | "ticket";
+  | "recheck" | "geocode" | "write_request" | "ticket" | "outcome_undo";
 type NativeRequest = { op: Op; id: string } & Body;
 type Build = (id: string, body: Body) => NativeRequest | Response;
 /** What the page reads back from the route, from the closed answer of the native side. */
@@ -133,12 +134,12 @@ const MORE_ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: S
       }
       return request;
     },
-    shape: (request) => ({ ok: true, id: request.id, response: request.value, source: "local", cloud_synced: null }),
+    shape: (request, reply) => ({ ok: true, id: request.id, response: typeof reply.response === "string" ? reply.response : request.value, source: "local", cloud_synced: null }),
   },
   {
     method: "DELETE",
     path: /^\/api\/positions\/(\d+)\/outcome$/,
-    build: (id) => ({ op: "outcome", id, value: "clear" }),
+    build: (id) => ({ op: "outcome_undo", id }),
     shape: (request) => ({ ok: true, id: request.id, response: null, source: "local", cloud_synced: null }),
   },
   ...both(/^\/api\/positions\/(\d+)\/recheck-request$/, (id, _body, on) => ({ op: "recheck", id, on }), (request) => ({
@@ -161,12 +162,6 @@ const MORE_ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: S
       source: "local",
     }),
   ),
-  ...both(
-    /^\/api\/positions\/(\d+)\/apply-request$/,
-    // The click that authorises is the authorisation to send, given in the page's dialog and said in the body.
-    (id, body, on) => (on && body.confirmed !== true ? invalid("position_write_not_confirmed") : { op: "apply_request", id, on }),
-    (request) => ({ ok: true, state: "queued", id: request.id, apply_requested: request.on === true, source: "local" }),
-  ),
   {
     method: "POST",
     path: /^\/api\/positions\/(\d+)\/ticket$/,
@@ -177,8 +172,9 @@ const MORE_ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: S
       return { op: "ticket", id, kind: body.kind === "rescore" ? "rescore" : "free", text: requestText };
     },
     shape: (request, reply) => ({
-      id: reply.ticket_id ?? reply.id ?? null,
-      status: typeof reply.status === "string" ? reply.status : "open",
+      id: reply.ticket_id ?? null,
+      status: typeof reply.ticket_status === "string" ? reply.ticket_status : "open",
+      ...(reply.deduplicated === true ? { deduplicated: true } : {}),
       kind: request.kind,
       source: "local",
     }),

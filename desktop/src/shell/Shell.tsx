@@ -176,7 +176,11 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
   // database through the native command (lib/local-judgement-api.ts), so its controls stay on.
   const onPositionPage = /^\/positions\/[^/]+\/?$/.test(path);
   const localReadOnly = useMemo(
-    () => (localTeam && !onPositionPage ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly } : { readOnly: false, reason: "" }),
+    () =>
+      localTeam && !onPositionPage
+        ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly }
+        : // on the page of a position only the authorisation of an application stays off (it writes the team's broker too)
+          { readOnly: false, reason: "", ...(localTeam ? { applyReason: LOCAL_TEAM_DATA_TEXT[appLocale()].applyOff } : {}) },
     [localTeam, onPositionPage],
   );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);

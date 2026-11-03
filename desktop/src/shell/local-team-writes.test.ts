@@ -83,8 +83,6 @@ describe("a local profile never writes through /api", () => {
       "DELETE /api/positions/[legacyId]/geocode-request",
       "POST /api/positions/[legacyId]/write-request",
       "DELETE /api/positions/[legacyId]/write-request",
-      "POST /api/positions/[legacyId]/apply-request",
-      "DELETE /api/positions/[legacyId]/apply-request",
       "POST /api/positions/[legacyId]/ticket",
     ]);
     for (const [path, reason] of Object.entries(LOCAL_TEAM_NON_GET_ALLOWED)) {
@@ -101,7 +99,7 @@ describe("only the routes of the position page and the Swipe may be written by a
     const allowed = [
       ["POST", "/api/positions/7/feedback"], ["POST", "/api/positions/7/user-exclude"], ["DELETE", "/api/positions/7/user-exclude"],
       ["POST", "/api/positions/7/user-note"], ["DELETE", "/api/positions/7/user-note"], ["POST", "/api/positions/7/write-request"],
-      ["DELETE", "/api/positions/7/write-request"], ["POST", "/api/positions/7/apply-request"], ["DELETE", "/api/positions/7/apply-request"],
+      ["DELETE", "/api/positions/7/write-request"],
       ["POST", "/api/positions/7/recheck-request"], ["DELETE", "/api/positions/7/recheck-request"], ["POST", "/api/positions/7/geocode-request"],
       ["DELETE", "/api/positions/7/geocode-request"], ["POST", "/api/positions/7/mark-applied"], ["DELETE", "/api/positions/7/mark-applied"],
       ["POST", "/api/positions/7/outcome"], ["DELETE", "/api/positions/7/outcome"], ["POST", "/api/positions/7/ticket"],
@@ -113,7 +111,7 @@ describe("only the routes of the position page and the Swipe may be written by a
     next.mockClear();
     for (const [method, path] of [
       ["PUT", "/api/positions/7/feedback"], ["DELETE", "/api/positions/7/feedback"], ["PATCH", "/api/positions/7/user-exclude"],
-      ["PUT", "/api/positions/7/user-note"], ["DELETE", "/api/positions/7/ticket"], ["PATCH", "/api/positions/7/write-request"],
+      ["PUT", "/api/positions/7/user-note"], ["POST", "/api/positions/7/apply-request"], ["DELETE", "/api/positions/7/apply-request"], ["DELETE", "/api/positions/7/ticket"], ["PATCH", "/api/positions/7/write-request"],
       ["POST", "/api/positions/7/feedback/extra"], ["POST", "/api/positions/feedback"], ["POST", "/api/positions/7/delete"],
     ] as const) {
       const answer = await api(path, { method });
