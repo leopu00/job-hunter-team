@@ -1312,19 +1312,40 @@
 .onboarding-plan__list {
   margin: 12px 0 8px;
   display: grid;
+  /* minmax(0, ...): a long label never widens the column past the card */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
 .onboarding-plan__option {
+  min-width: 0;
   padding: 10px 12px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   color: var(--color-muted);
   background: var(--color-card);
   cursor: pointer;
+}
+
+.onboarding-plan__option input {
+  flex: none;
+}
+
+/* The label and the price take what is left and break where they must; the badge keeps its size and goes to the next line when there is no room. */
+.onboarding-plan__option > span:not(.onboarding-choice__badge) {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-plan__option .onboarding-choice__badge {
+  flex: none;
+  max-width: 100%;
+  margin-left: 0;
 }
 
 .onboarding-plan__option.is-selected {
