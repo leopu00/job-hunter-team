@@ -383,6 +383,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A csapat környezete nincs telepítve ezen a számítógépen.", "Kezdd újra a műszaki beállítástól."],
     pt: ["O ambiente da equipa não está instalado neste computador.", "Recomeça a partir da configuração técnica."],
   },
+  "The Docker program is not on this computer, so I cannot talk to the team.": {
+    de: ["Das Programm Docker ist auf diesem Computer nicht vorhanden, daher kann ich nicht mit dem Team sprechen.", "Installiere Docker (oder starte Job Hunter Team neu, sobald es installiert ist) und versuche es erneut."],
+    es: ["El programa Docker no está en este ordenador, así que no puedo hablar con el equipo.", "Instala Docker (o reinicia Job Hunter Team cuando esté instalado) y vuelve a intentarlo."],
+    fr: ["Le programme Docker n’est pas sur cet ordinateur, je ne peux donc pas parler à l’équipe.", "Installe Docker (ou redémarre Job Hunter Team une fois installé) puis réessaie."],
+    hu: ["A Docker program nincs a számítógépen, ezért nem tudok beszélni a csapattal.", "Telepítsd a Dockert (vagy indítsd újra a Job Hunter Teamet a telepítés után), majd próbáld újra."],
+    pt: ["O programa Docker não está neste computador, por isso não consigo falar com a equipa.", "Instala o Docker (ou reinicia o Job Hunter Team depois de o instalar) e tenta novamente."],
+  },
   "The team container is not ready.": {
     de: ["Der Container des Teams ist nicht bereit.", "Versuche es erneut. Wenn es wieder passiert, starte den Computer neu und wiederhole die Einrichtung."],
     es: ["El contenedor del equipo no está listo.", "Inténtalo de nuevo. Si vuelve a ocurrir, reinicia el ordenador y repite la configuración."],
@@ -1805,6 +1812,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   engine_timeout: translated("I cannot check the container engine."),
   engine_unavailable: translated("I cannot check the container engine."),
 
+  container_engine_missing: translated("The Docker program is not on this computer, so I cannot talk to the team."),
   container_start_failed: translated("The team container is not ready."),
   container_not_ready: translated("The team container is not ready."),
   container_timeout: translated("The team container is not ready."),

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import Link from "../web-shims/next-link";
 import { appLocale } from "../lib/app-locale";
 import { isItemActive, type NavItem } from "./nav-items";
@@ -29,6 +30,11 @@ export default function UserMenu({
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // Where the list hangs: under the button, in window coordinates. The list is drawn on the page's body, not inside
+  // the bar, so nothing the bar sits in (its overflow, the bands under it, a scrolling box) can clip it or cover it.
+  const [place, setPlace] = useState<{ top: number; right: number } | null>(null);
   const { path } = useLocation();
   const pending = usePendingSetup();
   const text = NAV_TEXT[appLocale()];
@@ -37,10 +43,30 @@ export default function UserMenu({
 
   useEffect(() => setOpen(false), [path]);
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlace(null);
+      return;
+    }
+    const measure = () => {
+      const box = buttonRef.current?.getBoundingClientRect();
+      if (!box) return;
+      setPlace({ top: Math.round(box.bottom + 4), right: Math.max(0, Math.round(document.documentElement.clientWidth - box.right)) });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!wrapRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -56,6 +82,7 @@ export default function UserMenu({
   return (
     <div ref={wrapRef} className="relative" data-testid="account-menu">
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -67,11 +94,14 @@ export default function UserMenu({
         {text.account} ▾
         {anyPending && <PendingMark />}
       </button>
-      {open && (
+      {open && place && createPortal(
         <div
+          ref={menuRef}
           role="menu"
           aria-label={text.accountMenu}
-          className="absolute right-0 top-full mt-1 z-40 min-w-[11rem] rounded border border-[var(--color-border)] bg-[var(--color-panel)] py-1 shadow-lg"
+          data-testid="account-menu-list"
+          className="min-w-[11rem] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-panel)] py-1 shadow-lg"
+          style={{ position: "fixed", top: place.top, right: place.right, zIndex: 60, maxHeight: `calc(100vh - ${place.top + 8}px)` }}
         >
           {items.map((item) => {
             const active = isItemActive(path, item);
@@ -109,7 +139,8 @@ export default function UserMenu({
               {action.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import AppExitDialog from "./components/AppExitDialog";
 import AppMenu from "./components/AppMenu";
+import PageErrorBoundary from "./shell/PageErrorBoundary";
 import { installCookieMirror } from "./lib/cookie-mirror";
 import { installExternalLinks } from "./lib/external-links";
 import "./styles.css";
@@ -16,7 +17,11 @@ installExternalLinks();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    {/* A screen that breaks while it is drawn (the setup has no shell around it) would leave the window blank: here it
+        says so and offers to start again. Without it nothing marks the failure and even the close button waits for a page that is gone. */}
+    <PageErrorBoundary onHome={() => window.location.reload()}>
+      <App />
+    </PageErrorBoundary>
     <AppExitDialog />
     <AppMenu />
   </StrictMode>,

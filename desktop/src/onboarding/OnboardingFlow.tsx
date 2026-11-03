@@ -211,6 +211,21 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     actionsRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [actionKey]);
 
+  // Another profile's data: the two ways out are offered only when the owner is a local profile of this
+  // app (a probe the native side answers), each one after a confirmation. This effect stays ABOVE every early return
+  // of the view: a hook after a return changes the hook count when the sign-in starts, React throws and the window
+  // goes blank (B1).
+  const ownerMismatch = runtime.status === "failed" && runtime.code === "local_account_owner_mismatch" && host.kind === "local" && localOwner !== undefined;
+  useEffect(() => {
+    setOwnerKnown(false);
+    setConfirmingOwner(null);
+    if (!ownerMismatch || !localOwner) return;
+    let active = true;
+    void localOwner.probe().then((known) => { if (active) setOwnerKnown(known); }).catch(() => {});
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerMismatch, failureKey]);
+
   if (runtime.status === "ready") {
     return (
       <main className="onboarding-shell onboarding-shell--complete">
@@ -345,18 +360,6 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     // The setup starts again; what it finds is its own to say.
     if (done) await onRetry().catch(() => setActionFailed(true));
   }
-  // Another profile's data: the two ways out are offered only when the owner is a local profile of this
-  // app (a probe the native side answers), each one after a confirmation.
-  const ownerMismatch = failed && runtime.code === "local_account_owner_mismatch" && host.kind === "local" && localOwner !== undefined;
-  useEffect(() => {
-    setOwnerKnown(false);
-    setConfirmingOwner(null);
-    if (!ownerMismatch || !localOwner) return;
-    let active = true;
-    void localOwner.probe().then((known) => { if (active) setOwnerKnown(known); }).catch(() => {});
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerMismatch, failureKey]);
   const ownerWays = ownerMismatch && ownerKnown ? localOwner : undefined;
   async function chooseOwner(choice: "return" | "take") {
     if (pendingRef.current || !ownerWays) return;
