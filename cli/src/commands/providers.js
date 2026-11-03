@@ -158,9 +158,9 @@ async function handleProviders() {
     if (ver.installed || ver.latest || pin) {
       let line = `     ${DIM}CLI: ${ver.installed || '—'}`;
       if (pin && ver.installed && ver.installed !== pin) {
-        line += ` ${YELLOW}⚠ differs from the release pin ${pin} → jht providers update${RESET}${DIM}`;
+        line += ` ${YELLOW}⚠ this release is tested with ${pin} — jht providers update installs it${RESET}${DIM}`;
       } else if (pin) {
-        line += ` (release pin ${pin})`;
+        line += ` (the version this release is tested with)`;
       } else if (ver.installed && ver.latest && ver.installed !== ver.latest) {
         line += ` ${YELLOW}→ ${ver.latest} ⚠ update available${RESET}${DIM}`;
       }

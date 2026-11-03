@@ -5,6 +5,8 @@ section_panel.gd choosing the Podman runtime). Godot is abandoned and it went
 with it.
 """
 
+import os
+import pty
 import subprocess
 from pathlib import Path
 
@@ -301,3 +303,42 @@ def test_installer_and_wrapper_pin_the_supported_direct_podman_compose_pair():
     )
     assert "--podman-args" not in active_compose
     assert 'CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME"' in compose_block
+
+
+def _phase_output(tmp_path: Path, *, terminal: bool, machine_output: str | None) -> str:
+    """What `jht_phase image_pull` prints, on a pipe or on a pseudo-terminal."""
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": "/usr/bin:/bin",
+        "JHT_INSTALLER_SOURCE_ONLY": "1",
+        **({"JHT_MACHINE_OUTPUT": machine_output} if machine_output is not None else {}),
+    }
+    command = ["bash", "-c", f'. "{INSTALLER}"; jht_phase image_pull; echo done']
+    if not terminal:
+        return subprocess.run(command, env=env, text=True, capture_output=True, timeout=20, check=False).stdout
+    master, slave = pty.openpty()
+    try:
+        process = subprocess.Popen(command, env=env, stdout=slave, stderr=slave, stdin=subprocess.DEVNULL)
+        os.close(slave)
+        chunks = []
+        while True:
+            try:
+                data = os.read(master, 65536)
+            except OSError:
+                break
+            if not data:
+                break
+            chunks.append(data)
+        process.wait(timeout=20)
+    finally:
+        os.close(master)
+    return b"".join(chunks).decode("utf-8", "replace")
+
+
+def test_the_phase_marker_goes_to_the_app_on_a_pipe_and_not_to_a_person_at_a_terminal(tmp_path: Path):
+    assert "JHT_PHASE image_pull" in _phase_output(tmp_path, terminal=False, machine_output=None)
+    on_terminal = _phase_output(tmp_path, terminal=True, machine_output=None)
+    assert "JHT_PHASE" not in on_terminal and "done" in on_terminal
+    # explicit wins in both directions: =1 on a terminal, =0 on a pipe
+    assert "JHT_PHASE image_pull" in _phase_output(tmp_path, terminal=True, machine_output="1")
+    assert "JHT_PHASE" not in _phase_output(tmp_path, terminal=False, machine_output="0")
