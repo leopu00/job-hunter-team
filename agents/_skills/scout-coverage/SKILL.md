@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "Search the core national portals of the profile's languages BEFORE any minor source, and know how much of the plan is done. `next` names the portal, the country to log and the kind of query to run; a portal is covered with 3 passes and 3 different queries, and «exhausted» needs the core portals covered. Run `next` at the start of every search."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
 ---
 
 # scout-coverage — where to search first, and how much is done
@@ -12,9 +12,15 @@ Search where the profile's own markets are FIRST, and know how much of it is don
 
 `next` prints one JSON line: the portal (`source`, `country`, `tier`), the KIND of query (`query_kind`: `broad` = a WIDE query, always the first: the role's family or an entry word on its own (listed in `broad_terms`), no full title and no place, `role_language` = the title in the portal's language, `role` = the title in English, `synonym` = an adjacent title, `level` = the title with a level word of the language, listed in `level_terms`, `city` = the title with a place, listed in `cities`), what you have (`have`) against what is needed (`need`) and the `log` line to use afterwards. Search exactly that, then log the pass with the same `--query-kind`. `plan_done: true` means the plan is done: go on to the other sources.
 
+`next` also says, with your id, whether the profile changed since you built your circles: `"profile": {"changed": true, "groups": [...]}`. Read the profile again, redo the circles of the groups that changed, keep your positions and your passes, then run `profile_version.py ack`.
+
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
 python3 /app/shared/skills/scout_coverage.py next
+
+# with your id: also says if the profile changed since you built your circles (then read it again, redo the circles, and ack)
+python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID
+python3 /app/shared/skills/profile_version.py ack --agent $MY_ID
 
 # the whole plan for this profile (once), and how much of it is done (any time)
 python3 /app/shared/skills/scout_coverage.py plan

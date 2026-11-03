@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "Cerca i portali nazionali core delle lingue del profilo PRIMA di qualunque fonte minore, e sappi quanto del piano è fatto. `next` indica il portale, il paese da registrare e il tipo di query da fare; un portale è coperto con 3 passate e 3 query diverse, e «esausto» richiede i portali core coperti. Lancia `next` all'inizio di ogni ricerca."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
 ---
 
 # scout-coverage — dove cercare prima, e quanto è fatto
@@ -12,9 +12,15 @@ Cerca PRIMA dove stanno i mercati del profilo e sappi quanto ne è fatto. Una pr
 
 `next` stampa una riga JSON: il portale (`source`, `country`, `tier`), il TIPO di query (`query_kind`: `broad` = una query LARGA, sempre la prima: la famiglia del ruolo o una parola d'ingresso da sola (in `broad_terms`), senza titolo completo e senza luogo, `role_language` = il titolo nella lingua del portale, `role` = il titolo in inglese, `synonym` = un titolo vicino, `level` = il titolo con una parola di livello della lingua, elencate in `level_terms`, `city` = il titolo con un luogo, elencati in `cities`), cosa hai (`have`) contro cosa serve (`need`) e la riga `log` da usare dopo. Cerca esattamente quello, poi registra la passata con lo stesso `--query-kind`. `plan_done: true` vuol dire piano finito: passa alle altre fonti.
 
+`next` dice anche, con il tuo id, se il profilo è cambiato da quando hai costruito i cerchi: `"profile": {"changed": true, "groups": [...]}`. Rileggi il profilo, rifai i cerchi dei gruppi cambiati, tieni le tue posizioni e le tue passate, poi `profile_version.py ack`.
+
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
 python3 /app/shared/skills/scout_coverage.py next
+
+# con il tuo id: dice anche se il profilo è cambiato da quando hai costruito i cerchi (allora rileggilo, rifai i cerchi e fai ack)
+python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID
+python3 /app/shared/skills/profile_version.py ack --agent $MY_ID
 
 # the whole plan for this profile (once), and how much of it is done (any time)
 python3 /app/shared/skills/scout_coverage.py plan
