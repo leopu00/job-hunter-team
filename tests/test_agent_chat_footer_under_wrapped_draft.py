@@ -81,3 +81,15 @@ def test_a_menu_with_a_long_first_choice_a_short_second_and_a_hint_row_stays_a_m
 def test_the_wake_up_of_the_engine_left_unsent_with_the_footer_under_it_is_still_only_text_for_the_gate():
     pane = screen(draft(215, 217, 81))
     assert agent_chat.new_turn_gate(pane) == "text", "an unsigned draft is never pasted over"
+
+
+def test_known_limit_an_unnumbered_menu_shaped_exactly_like_a_wrapped_draft_reads_as_text_and_nothing_is_typed():
+    """The one form that changed from «blocked» to «text» without being a draft: a menu with no numbers whose cursor row and
+    second row are as long as a wrapped draft (~215 characters), a short third row, and the model/path line right under it
+    with nothing below. Its shape IS a draft's, and no Codex dialog is known to have it (a dialog takes the place of the
+    composer AND of the model line; real lists are numbered or short). What matters is what «text» does: the transport never
+    pastes over a draft that is not signed, and a menu's rows are not signed — it waits, says a foreign text is in the box,
+    and types nothing (a paste behind a signed draft, and the Enter after it, need the signature to be proved in the box)."""
+    pane = screen(["› " + "m" * 213, "  " + "n" * 215, "  " + "o" * 38])
+    assert agent_chat.delivery_gate(pane) == "text"
+    assert agent_chat.new_turn_gate(pane) == "text", "not «signed»: nothing here carries the transport's signature"
