@@ -1049,6 +1049,26 @@ describe("OnboardingFlow technical setup", () => {
     expect(document.body).not.toHaveTextContent("synthetic-secret");
   });
 
+  it("goes from the sign-in action to the takeover on the same screen without losing the window (hooks stay in order)", () => {
+    // The click on «Sign in» sets the login while the stage stays `provider-login`: the same screen renders again with
+    // its early return. A hook placed after that return makes React throw and the whole window go blank.
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { props, rerender } = renderFlow({
+      runtime: { status: "action-required", stage: "provider-login", message: "Accedi con l’abbonamento scelto." },
+    });
+    expect(screen.getByRole("button", { name: /accedi al provider/i })).toBeInTheDocument();
+    rerender(<OnboardingFlow {...props} runtime={{ status: "working", stage: "provider-login", message: "Login in corso" }} providerLogin={{
+      provider: "codex",
+      status: "needs_user_action",
+      actions: [],
+      connectionState: "connected",
+      startedAt: Date.now(),
+    }} />);
+    expect(screen.getByRole("heading", { name: /completa l’accesso a codex/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /annulla/i })).toBeInTheDocument();
+    error.mockRestore();
+  });
+
   it("keeps requested provider input fail-closed and exposes cancel and restart", async () => {
     const onProviderInput = vi.fn().mockRejectedValue(new Error("synthetic"));
     const onProviderClose = vi.fn().mockResolvedValue(undefined);

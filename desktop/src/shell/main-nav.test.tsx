@@ -89,6 +89,22 @@ describe("the main bar", () => {
 });
 
 describe("the account menu", () => {
+  it("hangs outside the bar, fixed on the window: nothing the bar sits in, nor a band under it, can cut it or cover it", async () => {
+    navigate("/dashboard", { replace: true });
+    const user = userEvent.setup();
+    render(<Shell />);
+    await screen.findByRole("heading", { name: "Dashboard" });
+    await user.click(screen.getByTestId("account-menu-button"));
+    const list = screen.getByRole("menu", { name: NAV_TEXT.it.accountMenu });
+    expect(list.closest("header")).toBeNull();
+    expect(list.parentElement).toBe(document.body);
+    expect(list).toHaveStyle({ position: "fixed" });
+    expect(Number(list.style.zIndex)).toBeGreaterThan(40);
+    // a click inside the list is not «elsewhere»: the menu stays until an item is chosen
+    await user.click(within(list).getByRole("separator"));
+    expect(screen.getByRole("menu", { name: NAV_TEXT.it.accountMenu })).toBeInTheDocument();
+  });
+
   it("opens, closes with Escape and when the person clicks elsewhere, and closes on going to a page", async () => {
     navigate("/dashboard", { replace: true });
     const user = userEvent.setup();

@@ -146,6 +146,12 @@ const RUNTIME_MISSING = copy(
   "The team environment is not installed on this computer.",
   "Start again from the technical setup.",
 );
+const CONTAINER_ENGINE_MISSING = copy(
+  "Il programma Docker non si trova su questo computer, quindi non posso parlare con il team.",
+  "Installa Docker (o riavvia Job Hunter Team dopo averlo installato) e riprova.",
+  "The Docker program is not on this computer, so I cannot talk to the team.",
+  "Install Docker (or restart Job Hunter Team once it is installed) and try again.",
+);
 const CONTAINER = copy(
   "Il container del team non risulta pronto.",
   "Riprova. Se si ripete, riavvia il computer e ricomincia dalla configurazione.",
@@ -580,6 +586,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   runtime_wrapper_install_failed: RUNTIME_PREPARE,
   runtime_install_unsupported: LOCAL_UNSUPPORTED,
   runtime_missing: RUNTIME_MISSING,
+  container_engine_missing: CONTAINER_ENGINE_MISSING,
   installer_digest_missing: RUNTIME_INTEGRITY,
   installer_digest_invalid: RUNTIME_INTEGRITY,
   installer_digest_mismatch: RUNTIME_INTEGRITY_MISMATCH,
