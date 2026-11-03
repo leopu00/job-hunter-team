@@ -351,23 +351,45 @@ failed=0
 # reaches the target and prints http_code 000 with http_connect 403. So a
 # refusal over https is read from http_connect; anything else there (000: no
 # answer to the CONNECT, 200: the tunnel was opened) is a wrong answer.
+# What goes out to the Internet through a proxy (ghcr.io, api.telegram.org) can fail for a moment on a
+# runner or a PC (curl 35, a reset TLS handshake, in one run out of the ones that had reached the check):
+# it is asked again, three times in all with a pause, before it counts. A refusal (403) is the proxy's own
+# policy, local and the same every time: asked once, so a proxy that lets the wrong thing through is
+# never given a second chance to look right.
 check() {
   name=$1 port=$2 url=$3 expected=$4
-  out=$(curl --silent --output /dev/null --max-time 30 --write-out '%{http_code} %{http_connect}' --proxy "http://127.0.0.1:$port" "$url" 2>/dev/null)
-  status=$?
-  got=${out%% *}
-  connect=${out#* }
-  [ "$connect" != "$out" ] || connect=""
-  [ -n "$got" ] || got=000
-  [ -n "$connect" ] || connect=000
-  if [ "$expected" = reachable ]; then
-    if [ "$status" -eq 0 ]; then result=$got; else result="curl-$status"; failed=1; fi
-  else
-    result=$got
-    case "$expected $url" in "403 https://"*) result=$connect ;; esac
-    [ "$result" = "$expected" ] || failed=1
-  fi
+  attempt=1 tries=1
+  case "$expected" in 403) ;; *) tries=${JHT_PROXY_TRIES:-3} ;; esac
+  while :; do
+    out=$(curl --silent --output /dev/null --max-time 30 --write-out '%{http_code} %{http_connect}' --proxy "http://127.0.0.1:$port" "$url" 2>/dev/null)
+    status=$?
+    got=${out%% *}
+    connect=${out#* }
+    [ "$connect" != "$out" ] || connect=""
+    [ -n "$got" ] || got=000
+    [ -n "$connect" ] || connect=000
+    if [ "$expected" = reachable ]; then
+      if [ "$status" -eq 0 ]; then result=$got; ok=1; else result="curl-$status"; ok=0; fi
+    else
+      result=$got
+      case "$expected $url" in "403 https://"*) result=$connect ;; esac
+      if [ "$result" = "$expected" ]; then ok=1; else ok=0; fi
+    fi
+    if [ "$ok" -eq 1 ] || [ "$attempt" -ge "$tries" ]; then break; fi
+    attempt=$((attempt + 1))
+    sleep "${JHT_PROXY_PAUSE:-5}"
+  done
+  [ "$ok" -eq 1 ] || failed=1
   echo "JHT_PROXY_CHECK $name $port $url $expected $result"
+  # What separates the network from our proxy, when what leaves the machine stays wrong after the tries: the same
+  # request straight from the machine (--noproxy '*': an http_proxy in the machine's environment would not make it direct)
+  # and through the proxy with curl's own words, one line each.
+  if [ "$ok" -eq 0 ] && [ "$expected" != 403 ]; then
+    direct=$(curl --silent --show-error --output /dev/null --max-time 15 --noproxy '*' --write-out '%{http_code}' "$url" 2>&1)
+    echo "JHT_PROXY_DIAG $name direct exit=$? $(printf %s "$direct" | tr '\n' ' ' | cut -c1-200)"
+    viaproxy=$(curl --silent --show-error --output /dev/null --max-time 15 --write-out '%{http_code}' --proxy "http://127.0.0.1:$port" "$url" 2>&1)
+    echo "JHT_PROXY_DIAG $name via-proxy exit=$? $(printf %s "$viaproxy" | tr '\n' ' ' | cut -c1-200)"
+  fi
 }
 check agent "$agent" https://ghcr.io/v2/ 401
 check broker "$broker" https://ghcr.io/v2/ 401
