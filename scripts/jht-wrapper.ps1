@@ -1092,7 +1092,7 @@ function Invoke-AgentControl {
 # invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
 # l'host e' uno. Come Invoke-AgentControl NON avvia mai niente: col broker spento o non attestato risponde col
 # codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
-# cifre ASCII) prima di finire in una riga di comando; la risposta e' una riga sola, mai il testo del broker.
+# cifre ASCII; fine stringa con \z: in .NET `$` accetta anche un a capo finale) prima di finire in una riga di comando; la risposta e' una riga sola, mai il testo del broker.
 # Il codice sta in $script:DesktopApplyExitCode, come per Invoke-AgentControl.
 $script:DesktopApplyExitCode = 2
 function Invoke-DesktopApply {
@@ -1100,9 +1100,9 @@ function Invoke-DesktopApply {
   $script:DesktopApplyExitCode = 2
   if (
     $ApplyArgs.Count -ne 4 -or $ApplyArgs[0] -cne 'record' -or
-    $ApplyArgs[1] -cnotmatch '^[1-9][0-9]{0,9}$' -or
-    $ApplyArgs[2] -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$' -or
-    $ApplyArgs[3] -cnotmatch '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$'
+    $ApplyArgs[1] -cnotmatch '^[1-9][0-9]{0,9}\z' -or
+    $ApplyArgs[2] -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\z' -or
+    $ApplyArgs[3] -cnotmatch '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})\z'
   ) {
     [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_invalid"}')
     return
