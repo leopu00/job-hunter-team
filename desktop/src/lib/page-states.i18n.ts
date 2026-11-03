@@ -11,6 +11,8 @@ export interface PageStatesText {
   loadingAgents: string;
   loadingOffice: string;
   dashboardFailed: string;
+  /** The team's container is off: nothing is wrong with the page, the data come back once the team is on. */
+  dashboardTeamOff: string;
   agentsFailed: string;
   officeNoAssets: string;
   officeFailed: string;
@@ -24,6 +26,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Caricamento agenti",
     loadingOffice: "Caricamento ufficio",
     dashboardFailed: "Non riesco a leggere la dashboard. Controlla la connessione e premi «Aggiorna».",
+    dashboardTeamOff: "Il team è spento. I dati della dashboard compaiono appena lo accendi.",
     agentsFailed: "Non riesco a leggere gli agenti. Controlla la connessione e premi «Aggiorna».",
     officeNoAssets: "L'arte dell'ufficio non è ancora nell'app.",
     officeFailed: "Non riesco a caricare l'ufficio. Premi «Aggiorna» o riapri la pagina.",
@@ -35,6 +38,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Loading agents",
     loadingOffice: "Loading office",
     dashboardFailed: "I can't read the dashboard. Check the connection and press «Refresh».",
+    dashboardTeamOff: "The team is off. The dashboard data appear as soon as you turn it on.",
     agentsFailed: "I can't read the agents. Check the connection and press «Refresh».",
     officeNoAssets: "The office artwork is not in the app yet.",
     officeFailed: "I can't load the office. Press «Refresh» or reopen the page.",
@@ -46,6 +50,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Agenten werden geladen",
     loadingOffice: "Büro wird geladen",
     dashboardFailed: "Das Dashboard lässt sich nicht lesen. Prüfe die Verbindung und drücke «Aktualisieren».",
+    dashboardTeamOff: "Das Team ist aus. Die Dashboard-Daten erscheinen, sobald du es einschaltest.",
     agentsFailed: "Die Agenten lassen sich nicht lesen. Prüfe die Verbindung und drücke «Aktualisieren».",
     officeNoAssets: "Die Grafiken des Büros sind noch nicht in der App.",
     officeFailed: "Das Büro lässt sich nicht laden. Drücke «Aktualisieren» oder öffne die Seite neu.",
@@ -57,6 +62,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Chargement des agents",
     loadingOffice: "Chargement du bureau",
     dashboardFailed: "Impossible de lire le tableau de bord. Vérifie la connexion et appuie sur «Actualiser».",
+    dashboardTeamOff: "L’équipe est éteinte. Les données du tableau de bord apparaissent dès que tu l’allumes.",
     agentsFailed: "Impossible de lire les agents. Vérifie la connexion et appuie sur «Actualiser».",
     officeNoAssets: "Les illustrations du bureau ne sont pas encore dans l’app.",
     officeFailed: "Impossible de charger le bureau. Appuie sur «Actualiser» ou rouvre la page.",
@@ -68,6 +74,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Cargando los agentes",
     loadingOffice: "Cargando la oficina",
     dashboardFailed: "No puedo leer el panel. Comprueba la conexión y pulsa «Actualizar».",
+    dashboardTeamOff: "El equipo está apagado. Los datos del panel aparecen en cuanto lo enciendes.",
     agentsFailed: "No puedo leer los agentes. Comprueba la conexión y pulsa «Actualizar».",
     officeNoAssets: "El arte de la oficina todavía no está en la app.",
     officeFailed: "No puedo cargar la oficina. Pulsa «Actualizar» o vuelve a abrir la página.",
@@ -79,6 +86,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "A carregar os agentes",
     loadingOffice: "A carregar o escritório",
     dashboardFailed: "Não consigo ler o painel. Verifica a ligação e carrega em «Atualizar».",
+    dashboardTeamOff: "A equipa está desligada. Os dados do painel aparecem assim que a ligares.",
     agentsFailed: "Não consigo ler os agentes. Verifica a ligação e carrega em «Atualizar».",
     officeNoAssets: "A arte do escritório ainda não está na app.",
     officeFailed: "Não consigo carregar o escritório. Carrega em «Atualizar» ou volta a abrir a página.",
@@ -90,6 +98,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Ügynökök betöltése",
     loadingOffice: "Iroda betöltése",
     dashboardFailed: "Nem tudom beolvasni az irányítópultot. Ellenőrizd a kapcsolatot, és nyomd meg a «Frissítés» gombot.",
+    dashboardTeamOff: "A csapat ki van kapcsolva. Az irányítópult adatai megjelennek, amint bekapcsolod.",
     agentsFailed: "Nem tudom beolvasni az ügynököket. Ellenőrizd a kapcsolatot, és nyomd meg a «Frissítés» gombot.",
     officeNoAssets: "Az iroda grafikái még nincsenek az appban.",
     officeFailed: "Nem tudom betölteni az irodát. Nyomd meg a «Frissítés» gombot, vagy nyisd meg újra az oldalt.",

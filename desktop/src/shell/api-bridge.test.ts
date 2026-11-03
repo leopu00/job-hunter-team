@@ -83,7 +83,7 @@ describe("shellApi, the language the person picks", () => {
     try {
       const next = vi.fn(notInDesktop);
       const api = shellApi(next);
-      for (const path of ["/api/positions/7/user-note", "/api/team-directives", "/api/anything-new/3"]) {
+      for (const path of ["/api/positions/7/summary", "/api/team-directives", "/api/anything-new/3"]) {
         for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
           const refused = await api(path, { method });
           expect(refused.status, `${method} ${path}`).toBe(403);

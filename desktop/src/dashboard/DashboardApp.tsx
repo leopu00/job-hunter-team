@@ -61,10 +61,14 @@ import {
   readOnboardingDraft,
   recordOnboardingDraft,
   recordOnboardingInterruption,
+  readOnboardingProvider,
+  rememberChosenProvider,
+  rememberProviderSignedIn,
   resetOnboardingMarker,
   runtimeStateFromSnapshot,
   type OnboardingActivityState,
   type OnboardingDraft,
+  type SubscriptionProvider,
   type OnboardingGateState,
   type OnboardingProviderLoginAction,
   type OnboardingProviderLoginState,
@@ -344,8 +348,25 @@ function resumedRuntimeStopped(snapshot: OnboardingRuntimeSnapshot): OnboardingR
   return { status: "action-required", stage: "team-start", message: stateText().runtimeStopped, runtimeStopped: true };
 }
 
+/**
+ * The team of this computer runs and the provider is set up, but the provider is not signed in: not a dead end and not a
+ * reason to install again. The person signs in (the button is always there); the sentence says whether the sign-in was
+ * never done or the app saw it and it has expired.
+ */
+/** The provider the resumed sign-in shows when the app remembers none: the one the setup recommends. */
+const DEFAULT_RESUME_PROVIDER: SubscriptionProvider = "codex";
+
+function providerSignInNeeded(signedBefore: boolean | undefined): OnboardingRuntimeState {
+  return {
+    status: "action-required",
+    stage: "provider-login",
+    message: signedBefore ? stateText().resumedProviderLoginInvalid : stateText().resumedProviderLoginMissing,
+  };
+}
+
 function resumedPrerequisiteFailure(
   snapshot: OnboardingRuntimeSnapshot,
+  signedBefore?: boolean,
 ): OnboardingRuntimeState | null {
   if (!snapshot.runtimeInstalled) return {
     status: "failed", stage: "runtime", retryable: false,
@@ -359,14 +380,21 @@ function resumedPrerequisiteFailure(
     status: "failed", stage: "provider", retryable: false,
     message: stateText().resumedProviderNotConfigured,
   };
-  if (!snapshot.providerAuthenticated) return {
-    status: "failed", stage: "provider-login", retryable: false,
-    message: stateText().resumedProviderLoginInvalid,
-  };
+  if (!snapshot.providerAuthenticated) {
+    // This computer's team can be signed in from here; a saved team elsewhere keeps the refusal.
+    if (snapshot.localHost === true) return providerSignInNeeded(signedBefore);
+    return {
+      status: "failed", stage: "provider-login", retryable: false,
+      message: signedBefore ? stateText().resumedProviderLoginInvalid : stateText().resumedProviderLoginMissing,
+    };
+  }
   return null;
 }
 
-function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collecting-host" | null {
+function resumedBackendFailure(
+  error: unknown,
+  host: { local: boolean; signedBefore?: boolean } = { local: false },
+): OnboardingRuntimeState | "collecting-host" | null {
   const code = nativeErrorCode(error);
   if (code === "host_not_configured" || code === "host_config_invalid") return "collecting-host";
   if (code === "resume_runtime_not_ready") return {
@@ -381,10 +409,13 @@ function resumedBackendFailure(error: unknown): OnboardingRuntimeState | "collec
     status: "failed", stage: "provider", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
     message: stateText().resumedProviderNotConfigured,
   };
-  if (code === "resume_provider_not_authenticated") return {
-    status: "failed", stage: "provider-login", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
-    message: stateText().resumedProviderLoginInvalid,
-  };
+  if (code === "resume_provider_not_authenticated") {
+    if (host.local) return providerSignInNeeded(host.signedBefore);
+    return {
+      status: "failed", stage: "provider-login", code, action: describeError(code, { locale: appLocale() }).action, retryable: false,
+      message: host.signedBefore ? stateText().resumedProviderLoginInvalid : stateText().resumedProviderLoginMissing,
+    };
+  }
   if (code === "team_start_failed" || code === "team_verify_failed") return {
     status: "failed", stage: "team-start", code, action: describeError(code, { locale: appLocale() }).action, retryable: true,
     message: stateText().resumedTeamNotReady,
@@ -874,29 +905,47 @@ export default function DashboardApp() {
     if (!identityKey) throw new Error("identity-missing");
     setRuntime({ status: "working", stage: "runtime", message: stateText().preparingProductionRuntime });
     beginActivityInvocation();
-    const snapshot = await prepareOnboardingRuntime(
-      submission,
-      pairingToken(localProfile ? null : session, submission),
-      recordActivityProgress,
-    ).catch((error) => {
-      const failed = localRuntimeFailure(error);
-      if (markerId && submission.host.kind === "local" && failed.status === "failed") {
-        recordOnboardingInterruption(markerId, {
-          stage: failed.stage, code: failed.code ?? null, at: Date.now(), provider: submission.provider,
-        });
+    let snapshot: OnboardingRuntimeSnapshot;
+    try {
+      snapshot = await prepareOnboardingRuntime(
+        submission,
+        pairingToken(localProfile ? null : session, submission),
+        recordActivityProgress,
+      );
+    } catch (error) {
+      // The installer refuses to change the environment under a team that runs (exit 84). If that team is set up
+      // (container up, provider configured) there is nothing to install: the setup goes on from where it is, never
+      // into a button that would run the same installer again.
+      let running: OnboardingRuntimeSnapshot | null = null;
+      if (nativeErrorCode(error) === "local_team_running" && submission.host.kind === "local") {
+        try { running = await readOnboardingSnapshot(submission.host); } catch { running = null; }
       }
-      return failLocalRuntime(error);
-    });
+      if (!running || !running.runtimeInstalled || !running.containerRunning || !running.providerConfigured) {
+        const failed = localRuntimeFailure(error);
+        if (markerId && submission.host.kind === "local" && failed.status === "failed") {
+          recordOnboardingInterruption(markerId, {
+            stage: failed.stage, code: failed.code ?? null, at: Date.now(), provider: submission.provider,
+          });
+        }
+        return failLocalRuntime(error);
+      }
+      snapshot = running;
+    }
     if (!snapshot.providerAuthenticated) {
-      setRuntime(runtimeStateFromSnapshot(snapshot));
+      const signedBefore = markerId ? readOnboardingProvider(markerId)?.signedIn : undefined;
+      setRuntime(submission.host.kind === "local" && snapshot.providerConfigured
+        ? providerSignInNeeded(signedBefore)
+        : runtimeStateFromSnapshot(snapshot));
       return;
     }
+    if (markerId) rememberProviderSignedIn(markerId, submission.provider);
     await startTeam(submission);
   }, [beginActivityInvocation, failLocalRuntime, identityKey, localProfile?.profileId, markerId, recordActivityProgress, session, setRuntime, startTeam]);
 
   const submit = useCallback(async (submission: OnboardingSubmission) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");
     submissionRef.current = submission;
+    rememberChosenProvider(markerId, submission.provider);
     if (submission.host.kind === "vps") setVpsSetupKey(identityKey);
     setActivity((current) => current ?? createOnboardingActivity());
     try {
@@ -948,7 +997,13 @@ export default function DashboardApp() {
   }, [setRuntime]);
 
   const loginProvider = useCallback(async () => {
-    const submission = submissionRef.current;
+    // A reopened app has no submission: the login is of this computer's team (the only one it resumes), with the
+    // provider the app remembers. The provider is still read from the team by the sign-in itself.
+    const memory = markerId ? readOnboardingProvider(markerId) : undefined;
+    const submission = submissionRef.current ??
+      (gate.phase === "required" && gate.resumeAvailable && resumeLocalRef.current
+        ? { host: { kind: "local" } as const, provider: memory?.provider ?? DEFAULT_RESUME_PROVIDER }
+        : null);
     if (!submission) return fail("provider-login", new Error("submission-missing"));
     const loginIdentityKey = identityKey;
     const scope = accountScopeRef.current;
@@ -978,6 +1033,7 @@ export default function DashboardApp() {
     if (already?.providerAuthenticated) {
       providerSessionIdentityRef.current = null;
       setProviderLogin(null);
+      if (markerId) rememberProviderSignedIn(markerId, submission.provider);
       await startTeam(submission);
       return;
     }
@@ -1093,8 +1149,9 @@ export default function DashboardApp() {
     }
     providerInputRequestRef.current = null;
     setProviderLogin(null);
+    if (markerId) rememberProviderSignedIn(markerId, submission.provider);
     await startTeam(submission);
-  }, [beginActivityInvocation, fail, identityKey, recordActivityProgress, setRuntime, startTeam]);
+  }, [beginActivityInvocation, fail, gate, identityKey, markerId, recordActivityProgress, setRuntime, startTeam]);
 
   const sendProviderInput = useCallback(async (input: string) => {
     const sessionId = providerSessionRef.current;
@@ -1371,6 +1428,20 @@ export default function DashboardApp() {
     }
   }, [identityKey, openFullExistingTeam, openReadOnlyExistingTeam, setRuntime]);
 
+  // Whether the resume is reading this computer's team (the one the app can sign in), and what the app remembers of the sign-in.
+  const resumeLocalRef = useRef(false);
+  const resumeSignIn = useCallback((snapshot: OnboardingRuntimeSnapshot) => {
+    resumeLocalRef.current = snapshot.localHost === true;
+    const memory = markerId ? readOnboardingProvider(markerId) : undefined;
+    // Seen signed in now: if it is gone later, that is an expiry; before that it was never done.
+    if (markerId && memory && snapshot.providerAuthenticated && !memory.signedIn) rememberProviderSignedIn(markerId, memory.provider);
+    return memory?.signedIn;
+  }, [markerId]);
+  const resumeFailureHost = useCallback(() => ({
+    local: resumeLocalRef.current,
+    signedBefore: markerId ? readOnboardingProvider(markerId)?.signedIn : undefined,
+  }), [markerId]);
+
   const resumeAssistant = useCallback(async (options?: { reopened?: boolean }) => {
     if (!identityKey) throw new Error("identity-missing");
     try {
@@ -1391,7 +1462,7 @@ export default function DashboardApp() {
         setRuntime(stopped);
         return;
       }
-      const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
+      const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot, resumeSignIn(nativeSnapshot));
       if (prerequisiteFailure) {
         setRuntime(prerequisiteFailure);
         return;
@@ -1411,7 +1482,7 @@ export default function DashboardApp() {
       });
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
-      const backendFailure = resumedBackendFailure(error);
+      const backendFailure = resumedBackendFailure(error, resumeFailureHost());
       if (backendFailure === "collecting-host") {
         collectHostAgain();
         return;
@@ -1422,7 +1493,7 @@ export default function DashboardApp() {
       }
       fail("runtime", error);
     }
-  }, [collectHostAgain, fail, identityKey, reopenExistingTeam, setRuntime]);
+  }, [collectHostAgain, fail, identityKey, reopenExistingTeam, resumeFailureHost, resumeSignIn, setRuntime]);
 
   const resumeTeam = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
@@ -1441,7 +1512,7 @@ export default function DashboardApp() {
       }, snapshot));
     } catch (error) {
       if (activeIdentityKeyRef.current !== identityKey) throw error;
-      const backendFailure = resumedBackendFailure(error);
+      const backendFailure = resumedBackendFailure(error, resumeFailureHost());
       if (backendFailure === "collecting-host") {
         collectHostAgain();
         return;
@@ -1452,7 +1523,7 @@ export default function DashboardApp() {
       }
       fail("team-start", error);
     }
-  }, [beginActivityInvocation, collectHostAgain, fail, identityKey, recordActivityProgress, setRuntime]);
+  }, [beginActivityInvocation, collectHostAgain, fail, identityKey, recordActivityProgress, resumeFailureHost, setRuntime]);
 
   const connectResumedAssistant = useCallback(async () => {
     if (!identityKey) throw new Error("identity-missing");
@@ -1464,7 +1535,7 @@ export default function DashboardApp() {
         setRuntime(stopped);
         return;
       }
-      const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot);
+      const prerequisiteFailure = resumedPrerequisiteFailure(nativeSnapshot, resumeSignIn(nativeSnapshot));
       if (prerequisiteFailure) {
         setRuntime(prerequisiteFailure);
         return;
@@ -1496,7 +1567,7 @@ export default function DashboardApp() {
       }
       fail("assistant", error);
     }
-  }, [collectHostAgain, fail, identityKey, setRuntime]);
+  }, [collectHostAgain, fail, identityKey, resumeSignIn, setRuntime]);
 
   const connectExistingTeam = useCallback(async (nativeSnapshot: ExistingTeamConnectionResult, options?: { fromReadOnlyView?: boolean }) => {
     if (!identityKey || !markerId) throw new Error("identity-missing");

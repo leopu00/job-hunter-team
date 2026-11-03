@@ -31,12 +31,14 @@ automatico — il Capitano non è un worker):
          rendeva il watchdog inerte su tutto il resto della flotta. Gli stalli
          che ci hanno morso — turno abortito su 429, riga appesa nel composer,
          attesa di una sveglia soppressa — non stampano nulla.
-  2. THROTTLE — si scrive `$JHT_HOME/state/throttle-<agent>.json` nello stesso
-     formato di `agents/_tools/jht-throttle`, con durata presa dalla
-     `THROTTLE_LADDER` di `shared/skills/throttle-config.py` partendo dal rung
-     corrente dell'agente. La pausa è il cuore, non un dettaglio: il cap di 100
-     step è spesso il sintomo di un rabbit-hole e rimettere in moto l'agente
-     subito lo rimanda nello stesso loop.
+  2. THROTTLE — la pausa la arma il MOTORE dei throttle (`throttle_engine.register`, la stessa pausa tracciata di
+     ogni altro: flag, log `start`/`end`, sveglia, recupero di una pausa persa), con durata presa dalla
+     `THROTTLE_LADDER` di `shared/skills/throttle-config.py` partendo dal rung corrente dell'agente. Una pausa sola:
+     il vecchio file `$JHT_HOME/state/throttle-<agent>.json` si scrive solo se il motore non si carica. La pausa è il
+     cuore, non un dettaglio: il cap di 100 step è spesso il sintomo di un rabbit-hole e rimettere in moto l'agente
+     subito lo rimanda nello stesso loop. Un agente che aspetta lavoro (ruolo con coda, coda vuota) o che sta
+     dentro una pausa del motore NON e' fermo: il pane immobile e' il suo comportamento giusto (un team reale, 02/11:
+     lo Scorer con la coda vuota ricevette pause del watchdog sopra quelle del motore, per ore).
   3. RIPRESA — alla scadenza, messaggio via BUFFER tmux (mai `send-keys` col
      testo inline: il quoting salta al primo apice).
 
@@ -135,6 +137,9 @@ TMUX_BUFFER = "jht-stepcap"
 # morso non porta marcatori: turno abortito su 429, riga appesa nel composer,
 # agente in attesa di una sveglia soppressa. Nessuno di questi stampa niente.
 IDLE_STALL_ROUNDS = int(os.environ.get("JHT_STEPCAP_IDLE_ROUNDS", "15"))
+# Dopo la fine di una pausa armata nel motore, il motore sveglia l'agente al suo giro: il watchdog aspetta questo tanto
+# prima di mandare lui la ripresa (motore fermo).
+ENGINE_WAKE_GRACE_SEC = float(os.environ.get("JHT_STEPCAP_ENGINE_WAKE_GRACE", "120"))
 
 # ── Marcatori per PROVIDER ────────────────────────────────────────────────
 # Il testo cambia da CLI a CLI: cablarne uno solo rende il watchdog inutile al
@@ -575,6 +580,50 @@ def write_throttle(agent: str, seconds: int, now: float) -> Path:
     return path
 
 
+def arm_pause(agent: str, seconds: int, now: float, reason: str) -> dict:
+    """Arma la pausa nel motore dei throttle: {via, applied_sec, until}. Se il motore non c'e', il vecchio file.
+
+    Il motore puo' accorciarla (coda in attesa, richieste dell'utente) o toglierla (deroga «a tutta»): vale quello
+    che risponde, non quello che si chiedeva."""
+    engine = _throttle_engine()
+    if engine is not None:
+        try:
+            res = engine.register(agent, seconds=seconds, reason=reason, now=now)
+            applied = int(res.get("applied_sec") or 0)
+            until = res.get("until")
+            return {"via": "engine", "applied_sec": applied,
+                    "until": float(until) if isinstance(until, (int, float)) else float(now)}
+        except Exception as exc:  # noqa: BLE001 — il motore rotto non ferma il watchdog
+            _log("the engine did not take the pause of %s: %s" % (agent, exc))
+    write_throttle(agent, seconds, now)
+    return {"via": "legacy-file", "applied_sec": int(seconds), "until": float(now + seconds)}
+
+
+def _idle_by_design(agent: str, now: float):
+    """Perche' un pane immobile NON e' uno stallo: 'empty-queue' | 'engine-pause' | None.
+
+    Un ruolo con coda e coda vuota aspetta lavoro; un agente dentro una pausa del motore (o appena svegliato, in attesa
+    dell'ack) sta facendo quello che gli e' stato detto. In nessuno dei due casi una pausa del watchdog serve: si
+    sommerebbe a quella del motore (due sistemi di pausa in parallelo, un team reale 02/11)."""
+    engine = _throttle_engine()
+    if engine is None:
+        return None
+    try:
+        entry = engine.get_flag(agent)
+        if isinstance(entry, dict):
+            until = entry.get("until")
+            if entry.get("state") == getattr(engine, "IN_THROTTLE", "IN_THROTTLE") \
+                    and isinstance(until, (int, float)) and float(until) + ENGINE_WAKE_GRACE_SEC > now:
+                return "engine-pause"
+            if entry.get("state") == getattr(engine, "NOTIFIED", "NOTIFIED"):
+                return "engine-pause"
+        if engine.queue_is_empty(agent):
+            return "empty-queue"
+    except Exception as exc:  # noqa: BLE001
+        _log("could not tell if %s is idle by design: %s" % (agent, exc))
+    return None
+
+
 def clear_throttle(agent: str) -> None:
     try:
         _throttle_state_path(agent).unlink()
@@ -765,6 +814,12 @@ def _handle_agent(session, agent, entry, now, live_workers):
             entry.update(phase="idle", hash=current, until=None, stall_hash=None,
                          immobile=0)
             return
+        if entry.get("via") == "engine":
+            engine = _throttle_engine()
+            flag = engine.get_flag(agent) if engine is not None else {}
+            if isinstance(flag, dict) and flag.get("state") == getattr(engine, "IN_THROTTLE", "IN_THROTTLE") \
+                    and now < float(entry.get("until") or 0) + ENGINE_WAKE_GRACE_SEC:
+                return          # e' il motore che lo sveglia, al suo giro: una sveglia sola
         gate = resume_gate(now, live_workers)
         if gate:
             emit("gated", agent=agent, ts=now, session=session, gate=gate,
@@ -804,6 +859,7 @@ def _handle_agent(session, agent, entry, now, live_workers):
     entry["hash"] = current
     if previous is None or previous != current:
         entry["immobile"] = 0
+        entry["idle_noted"] = False
         return
     if marker:
         entry["immobile"] = 0
@@ -816,6 +872,12 @@ def _handle_agent(session, agent, entry, now, live_workers):
         # è il comportamento giusto. Si continua a contare (così alla riapertura
         # il verdetto è immediato) ma non si chiama stallo ciò che è un ordine.
         if resume_gate(now, live_workers):
+            return
+        calm = _idle_by_design(agent, now)
+        if calm:
+            if not entry.get("idle_noted"):
+                entry["idle_noted"] = True
+                emit("idle_by_design", agent=agent, ts=now, session=session, why=calm, rounds=rounds)
             return
         marker = f"no marker: pane unchanged for {rounds} cycles"
     stall_rounds = int(entry.get("immobile") or 0)
@@ -861,11 +923,13 @@ def _handle_agent(session, agent, entry, now, live_workers):
         return
 
     seconds = throttle_for(agent, consecutive)
+    armed = {"via": "none", "applied_sec": 0, "until": now}
     try:
-        write_throttle(agent, seconds, now)
+        armed = arm_pause(agent, seconds, now, "stepcap: %s" % marker)
     except OSError as exc:
         _log("throttle was not written for %s: %s" % (agent, exc))
-    entry.update(phase="throttled", until=now + seconds, throttle_sec=seconds)
+    seconds = armed["applied_sec"]
+    entry.update(phase="throttled", until=armed["until"], throttle_sec=seconds, via=armed["via"])
     emit("throttled", agent=agent, ts=now, session=session, marker=marker,
          consecutive=consecutive, throttle_sec=seconds)
     if consecutive == ESCALATE_AT - 1:

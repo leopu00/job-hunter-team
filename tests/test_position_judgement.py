@@ -107,6 +107,115 @@ def test_a_cv_request_and_a_recheck(home):
     assert code == 0 and row(db, "SELECT recheck_requested FROM positions WHERE id = 3") == (1,)
 
 
+def test_the_private_note_keeps_its_lines_and_the_comment_of_a_verdict_does_not(home):
+    db, env, _ = home
+    code, out = run(env, "note", "1", note="  first line  \r\n\r\n\r\n second\tline \n")
+    assert code == 0 and out["saved"] is True
+    assert row(db, "SELECT body FROM position_user_notes WHERE position_id = 1") == ("first line\n\nsecond line",)
+    # the one-line comment of a verdict is flattened, as it always was
+    code, out = run(env, "feedback", "1", "--value", "dislike", "--note-on-stdin", note="  too many\nyears  ")
+    assert code == 0
+    assert row(db, "SELECT note FROM position_feedback WHERE position_id = 1") == ("too many years",)
+
+
+def _ticket(env, pid, kind, text):
+    return run(env, "ticket", pid, "--kind", kind, "--text-on-stdin", raw=json.dumps({"text": text}) + "\n")
+
+
+def test_a_ticket_is_opened_with_its_text_and_a_rescore_is_asked_once(home):
+    db, env, _ = home
+    code, out = _ticket(env, "1", "custom", "  Rivedi\nl'indirizzo dell'ufficio  ")
+    assert code == 0 and out["deduplicated"] is False and out["ticket_status"] == "open"
+    assert row(db, "SELECT position_id, request_text, kind, status FROM position_tickets WHERE id = ?", out["ticket_id"]) == \
+        (1, "Rivedi\nl'indirizzo dell'ufficio", "custom", "open")
+    # two free requests are two tickets; a rescore waiting is the one the second ask gets back
+    assert _ticket(env, "1", "custom", "un'altra")[1]["ticket_id"] != out["ticket_id"]
+    code, first = _ticket(env, "1", "rescore", "Rivaluta")
+    code, again = _ticket(env, "1", "rescore", "Rivaluta ancora")
+    assert code == 0 and again["deduplicated"] is True and again["ticket_id"] == first["ticket_id"]
+    assert row(db, "SELECT COUNT(*) FROM position_tickets WHERE kind = 'rescore'") == (1,)
+    # the text is the person's own, never cut, and not empty
+    assert _ticket(env, "1", "custom", "   ")[1]["code"] == "request_empty"
+    assert _ticket(env, "1", "custom", "x" * 2001)[1]["code"] == "request_too_long"
+    assert _ticket(env, "1", "custom", "è" * 2000)[0] == 0
+    assert _ticket(env, "99", "custom", "x")[1]["code"] == "position_not_found"
+    assert run(env, "ticket", "1", "--kind", "poem", "--text-on-stdin", raw='{"text": "x"}\n')[0] == 2
+
+
+def test_marking_an_application_by_hand_and_taking_it_back(home):
+    db, env, _ = home
+    code, out = run(env, "mark-applied", "1", "--on", "--note-on-stdin", note="dal sito")
+    assert code == 0 and out["status"] == "applied" and out["applied_via"] == "user_manual" and out["applied_at"].endswith("Z")
+    assert row(db, "SELECT status, last_actor FROM positions WHERE id = 1") == ("applied", "user")
+    assert row(db, "SELECT applied, applied_via, critic_notes FROM applications WHERE position_id = 1") == (1, "user_manual", "dal sito")
+    assert row(db, "SELECT from_state, to_state, by_agent FROM position_state_transitions WHERE position_id = 1") == ("scored", "applied", "user")
+    code, out = run(env, "mark-applied", "1", "--off")
+    assert code == 0 and out["status"] == "scored"
+    assert row(db, "SELECT status FROM positions WHERE id = 1") == ("scored",)
+    assert row(db, "SELECT applied, applied_at, applied_via, status FROM applications WHERE position_id = 1") == (0, None, None, "draft")
+    # taking back what is not applied, or what the team applied, is refused and changes nothing
+    assert run(env, "mark-applied", "1", "--off")[1]["code"] == "not_applied"
+    run(env, "mark-applied", "2", "--on")
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE applications SET applied_via = 'team' WHERE position_id = 2")
+    conn.commit()
+    conn.close()
+    assert run(env, "mark-applied", "2", "--off")[1]["code"] == "applied_by_team"
+    assert row(db, "SELECT status FROM positions WHERE id = 2") == ("applied",)
+    # an application the team sent is not rewritten as done by hand, and stays what it was
+    code, out = run(env, "mark-applied", "2", "--on")
+    assert code == 1 and out["code"] == "already_applied"
+    assert row(db, "SELECT applied_via FROM applications WHERE position_id = 2") == ("team",)
+    assert row(db, "SELECT status FROM positions WHERE id = 2") == ("applied",)
+    # the person's own, marked again, is fine
+    run(env, "mark-applied", "1", "--on")
+    assert run(env, "mark-applied", "1", "--on")[0] == 0
+    assert run(env, "mark-applied", "99", "--on")[1]["code"] == "position_not_found"
+    assert run(env, "mark-applied", "1", "--on", "--note-on-stdin", note="x" * 501)[1]["code"] == "note_too_long"
+
+
+def test_the_answer_of_a_company_is_declared_and_taken_back(home):
+    db, env, _ = home
+    # no answer without an application that was sent
+    assert run(env, "outcome", "1", "--value", "rejected")[1]["code"] == "not_applied"
+    run(env, "mark-applied", "1", "--on")
+    code, out = run(env, "outcome", "1", "--value", "rejected", "--reason", "salary", "--note-on-stdin", note="troppo basso")
+    assert code == 0 and out["status"] == "response" and out["response"] == "rejected"
+    assert row(db, "SELECT status, response, rejection_reason, rejection_note FROM applications WHERE position_id = 1") == \
+        ("response", "rejected", "salary", "troppo basso")
+    assert row(db, "SELECT status FROM positions WHERE id = 1") == ("response",)
+    code, out = run(env, "outcome-undo", "1")
+    assert code == 0 and out["status"] == "applied"
+    assert row(db, "SELECT status, response, rejection_reason, rejection_note FROM applications WHERE position_id = 1") == \
+        ("applied", None, None, None)
+    assert row(db, "SELECT status FROM positions WHERE id = 1") == ("applied",)
+    assert run(env, "outcome-undo", "1")[1]["code"] == "no_outcome"
+    # an interview is round one, and a round the team wrote beyond it stays
+    code, out = run(env, "outcome", "1", "--value", "interview")
+    assert out["response"] == "interview" and out["interview_round"] == 1
+    assert run(env, "outcome-undo", "1")[1]["interview_round"] is None
+    # the reason belongs to a rejection, and only the four the person may choose
+    assert run(env, "outcome", "1", "--value", "interview", "--reason", "salary")[1]["code"] == "reason_only_on_rejection"
+    assert run(env, "outcome", "1", "--value", "rejected", "--reason", "weather")[1]["code"] == "invalid_reason"
+    assert run(env, "outcome", "1", "--value", "rejected", "--note-on-stdin", note="x" * 501)[1]["code"] == "invalid_note"
+    assert run(env, "outcome", "1", "--value", "ghosted")[0] == 2
+    assert run(env, "outcome", "99", "--value", "rejected")[1]["code"] == "position_not_found"
+    assert run(env, "outcome-undo", "99")[1]["code"] == "position_not_found"
+
+
+def test_a_geocoding_request_and_its_cancellation(home):
+    db, env, _ = home
+    code, out = run(env, "geocode", "1", "--on")
+    assert code == 0 and out["geocode_requested"] is True
+    assert row(db, "SELECT geocode_requested FROM positions WHERE id = 1") == (1,)
+    # no guard of status (the writer's own rule): a position that is only «checked» can be asked for too
+    code, out = run(env, "geocode", "3", "--on")
+    assert code == 0 and row(db, "SELECT geocode_requested FROM positions WHERE id = 3") == (1,)
+    code, out = run(env, "geocode", "1", "--off")
+    assert code == 0 and out["geocode_requested"] is False
+    assert row(db, "SELECT geocode_requested FROM positions WHERE id = 1") == (0,)
+
+
 def test_a_star_with_its_score_and_direction(home):
     db, env, _ = home
     code, out = run(env, "feedback", "1", "--value", "star", "--score", "5", "--direction", "more_like_this")
@@ -195,6 +304,11 @@ def test_a_reason_outside_the_vocabulary_is_refused_and_writes_nothing(home):
     ("feedback", "1;rm", "--value", "like"),
     ("feedback", "-1", "--value", "like"),
     ("recheck", "1"),
+    ("geocode", "1"),
+    ("ticket", "1"),
+    ("ticket", "1", "--kind", "rescore"),
+    ("mark-applied", "1"),
+    ("outcome", "1"),
     ("run", "1"),
 ])
 def test_anything_but_the_closed_arguments_is_a_request_error(home, args):
@@ -224,7 +338,8 @@ def test_only_one_line_of_stdin_is_read(home):
 def test_a_missing_position_says_so(home):
     _db, env, _ = home
     for args in (("feedback", "99", "--value", "like"), ("exclude", "99", "--reason", "other"),
-                 ("note", "99"), ("recheck", "99", "--on"), ("write-request", "99", "--on")):
+                 ("note", "99"), ("recheck", "99", "--on"), ("write-request", "99", "--on"),
+                 ("geocode", "99", "--on")):
         code, out = run(env, *args, note="x" if args[0] == "note" else None)
         assert code == 1 and out["code"] == "position_not_found", args
 

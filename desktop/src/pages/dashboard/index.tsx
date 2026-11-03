@@ -14,7 +14,9 @@ import { describeError } from "../../lib/error-catalog";
 import { ExistingTeamDashboardError, loadExistingTeamDashboard } from "../../lib/existing-team-dashboard";
 import { useConnectTeam } from "../../lib/connect-team";
 import { useExistingTeamView } from "../../lib/existing-team-readonly";
-import { useLocalTeamData } from "../../lib/local-team-data";
+import { useLocalTeamData, useLocalTeamStopped } from "../../lib/local-team-data";
+import { useTeamOff } from "../../lib/team-off";
+import { isContainerOffCode } from "../../shell/team-off-failure";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { CONNECT_TEAM_PROMPT_TEXT } from "./connect-team.i18n";
 import { loadDashboard, type DashboardData } from "./load-dashboard";
@@ -37,6 +39,9 @@ export default function DashboardPage(_props: PageProps) {
   const blocked = useCloudDataBlocked() && !localTeam;
   // A set-up profile with no team linked: the way to link the one that is already on a VPS.
   const connectTeam = useConnectTeam();
+  // The way to turn the team on is already on the screen (the banner of the app opened without the team, or the bar of a stopped team).
+  const teamOff = useTeamOff();
+  const stoppedBar = useLocalTeamStopped();
 
   const read = useCallback(() => {
     const mine = ++request.current;
@@ -63,16 +68,24 @@ export default function DashboardPage(_props: PageProps) {
   if (blocked) return <CloudDataNotice />;
   if (load.state === "loading") return <DashboardSkeleton label={PAGE_STATES_TEXT[appLocale()].loadingDashboard} />;
   if (load.state === "failed") {
-    // The core's own code and what it means, not a guess about the network.
+    const text = PAGE_STATES_TEXT[appLocale()];
+    // The team is off: not an error. One calm line (the banner or the bar above holds the single button that turns it
+    // on), no red, no code, and no second «Try again»: the data come back by themselves once the team is on.
+    if (isContainerOffCode(load.code) && (teamOff || stoppedBar)) {
+      return (
+        <div className="max-w-6xl mx-auto px-5 pt-8">
+          <p role="status" data-testid="dashboard-team-off" className="text-[12px] text-[var(--color-muted)]">{text.dashboardTeamOff}</p>
+        </div>
+      );
+    }
+    // The core's own sentence and what to do, never its code: the code is for the log and the support report.
     const failure = load.code
       ? describeError(load.code, { fallback: "existing_team_unavailable", locale: appLocale() })
       : null;
     return (
       <div className="max-w-6xl mx-auto px-5 pt-8">
         <p role="alert" className="text-[12px]" style={{ color: "var(--color-red)" }}>
-          {failure
-            ? `${failure.text} ${failure.action} (${load.code})`
-            : PAGE_STATES_TEXT[appLocale()].dashboardFailed}
+          {failure ? `${failure.text} ${failure.action}` : text.dashboardFailed}
         </p>
         <button
           type="button"

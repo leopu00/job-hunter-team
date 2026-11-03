@@ -55,7 +55,7 @@ describe("waitForDirectChat — the Assistant's chat comes when its first turn i
       expect(chatMayStillCome(answer("error", code))).toBe(false);
     });
 
-  it.each(["ssh_rate_limited", "ssh_client_missing", "process_start_failed", "tunnel_start_failed", "runtime_missing"])(
+  it.each(["ssh_rate_limited", "ssh_client_missing", "process_start_failed", "tunnel_start_failed", "runtime_missing", "container_engine_missing"])(
     "returns at once, without a second look, when the host refuses or cannot be reached at all (%s)", async (code) => {
       const time = clock();
       const retry = vi.fn();

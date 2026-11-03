@@ -9,7 +9,7 @@ import {
   type TeamActivityEvent,
   type TeamActivityRole,
 } from "@/lib/team-activity";
-import { readDesktopVpsDirectives, readDesktopVpsTeamActivity } from "./existing-team-positions";
+import { readDesktopVpsDirectives, readDesktopVpsTeamActivity, readDesktopVpsTeamActivityLog } from "./existing-team-positions";
 import { setLocalTeamData } from "./local-team-data";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true) }));
@@ -147,5 +147,41 @@ describe("the bridge's read of the board of standing orders", () => {
     expect(await readDesktopVpsDirectives()).toEqual({ source: "unavailable", code: "desktop_bad_reply" });
     native.invoke.mockResolvedValueOnce({ ok: false, error: "local_team_not_running", kind: "application" });
     expect(await readDesktopVpsDirectives()).toEqual({ source: "unavailable", code: "local_team_not_running" });
+  });
+});
+
+describe("the bridge's read of the Activity log", () => {
+  it("is not asked outside the team of this computer", async () => {
+    expect(await readDesktopVpsTeamActivityLog()).toEqual({ source: "not_desktop" });
+    expect(native.invoke).not.toHaveBeenCalled();
+  });
+
+  it("asks for the log with no argument and closes every row it draws", async () => {
+    setLocalTeamData("local:abc");
+    native.invoke.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        items: [
+          { role: "scout", actor: " Scout-1 ", ts: "2026-10-03T10:00:00Z", pid: "7", title: "Backend", company: "Acme", legacyId: 12 },
+          { role: "analista", actor: null, ts: "2026-10-02T10:00:00Z", pid: null, title: null, company: null, legacyId: null },
+          { role: "intruder", actor: "x", ts: "2026-10-01T10:00:00Z", pid: "1" },
+          { role: "scorer", actor: "scorer-1", ts: 5, pid: "1" },
+          { role: "critico", actor: 9, ts: "2026-10-01T09:00:00Z", pid: 3, title: 4, company: {}, legacyId: 1.5 },
+        ],
+      },
+    });
+    expect(await readDesktopVpsTeamActivityLog()).toEqual({
+      source: "vps",
+      data: [
+        { role: "scout", actor: "scout-1", ts: "2026-10-03T10:00:00Z", pid: "7", title: "Backend", company: "Acme", legacyId: 12 },
+        { role: "analista", actor: "analista", ts: "2026-10-02T10:00:00Z", pid: null, title: null, company: null, legacyId: null },
+        { role: "critico", actor: "critico", ts: "2026-10-01T09:00:00Z", pid: null, title: null, company: null, legacyId: null },
+      ],
+    });
+    expect(native.invoke).toHaveBeenCalledWith("existing_team_positions_read", { request: { op: "team_activity_log" } });
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [1] } });
+    expect(await readDesktopVpsTeamActivityLog()).toEqual({ source: "unavailable", code: "desktop_bad_reply" });
+    native.invoke.mockResolvedValueOnce({ ok: false, error: "local_team_not_running", kind: "application" });
+    expect(await readDesktopVpsTeamActivityLog()).toEqual({ source: "unavailable", code: "local_team_not_running" });
   });
 });

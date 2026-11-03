@@ -205,6 +205,9 @@ export function ApplyRequestView({
   onWithdraw?: () => void;
 }) {
   const readOnly = useReadOnlyActions();
+  // L'autorizzazione può restare spenta da sola (con la scrittura del resto della pagina accesa).
+  const blocked = readOnly.readOnly || Boolean(readOnly.applyReason);
+  const blockedReason = readOnly.readOnly ? readOnly.reason : readOnly.applyReason;
   if (state.kind === "hidden") return null;
 
   const button = (
@@ -217,8 +220,8 @@ export function ApplyRequestView({
       type="button"
       data-action={action}
       onClick={onClick}
-      disabled={busy || readOnly.readOnly}
-      title={readOnly.readOnly ? readOnly.reason : undefined}
+      disabled={busy || blocked}
+      title={blocked ? blockedReason : undefined}
       className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:cursor-not-allowed disabled:opacity-60"
       style={{
         borderColor:
@@ -323,7 +326,7 @@ export function ApplyRequestView({
             type="button"
             data-action="reauth"
             onClick={reauth.onClick}
-            disabled={reauth.busy || readOnly.readOnly}
+            disabled={reauth.busy || blocked}
             className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)] disabled:cursor-not-allowed disabled:opacity-60"
             style={{
               borderColor: "var(--color-green)",

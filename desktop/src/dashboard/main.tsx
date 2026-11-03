@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { directExclusionsApi } from "../lib/profile-exclusions-direct";
 import { createWebApiFetch } from "../lib/web-api";
 import { localJudgementApi } from "../lib/local-judgement-api";
+import { localSummaryApi } from "../lib/local-summary-api";
 import { vpsJudgementApi } from "../lib/vps-judgement-api";
 import { mapApi } from "../pages/map/map-api";
 import { messagesApi } from "../pages/messages/messages-api";
@@ -30,7 +31,7 @@ installCookieMirror();
 // (lib/web-api.ts) answers what nobody ported with a JSON 404. The judgement on a position goes to
 // the VPS first when the team is an existing one connected in full (lib/vps-judgement-api.ts), and to the team
 // on this computer when the profile has no cloud account (lib/local-judgement-api.ts).
-installApiBridge(shellApi(localTeamApi(localJudgementApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase))))))))));
+installApiBridge(shellApi(localTeamApi(localSummaryApi(localJudgementApi(vpsJudgementApi(mapApi(positionsApi(messagesApi(teamApi(directExclusionsApi(createWebApiFetch(supabase), supabase)))))))))));
 initializeTheme();
 // The channel to the team only tells the pages when to read again; without it (or before it opens) they poll as always.
 void startStateStream();

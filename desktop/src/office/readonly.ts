@@ -94,7 +94,7 @@ export function officeFromTeamProbe(
     return {
       snapshot: snapshotOf(null, []),
       statuses: null,
-      notice: { text: `${t.failed}. ${failure.text} ${failure.action} (${reading.code})`, alert: true },
+      notice: { text: `${t.failed}. ${failure.text} ${failure.action}`, alert: true },
     };
   }
   if (!reading.fields.containerRunning) {

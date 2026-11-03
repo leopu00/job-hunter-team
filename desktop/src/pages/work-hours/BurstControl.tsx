@@ -59,11 +59,9 @@ export function untilIn(zone: string | null | undefined, hours: number, now: Dat
 export default function BurstControl({
   settings,
   onSettings,
-  compact = false,
 }: {
   settings: TeamSettings;
   onSettings: (next: TeamSettings) => void;
-  compact?: boolean;
 }) {
   const t = BURST_TEXT[appLocale()];
   const inputId = useId();
@@ -172,7 +170,7 @@ export default function BurstControl({
           style={{ borderColor: "var(--color-yellow)", backgroundColor: "color-mix(in srgb, var(--color-yellow) 12%, transparent)", color: "var(--color-bright)" }}
         >
           <span className="font-semibold">{fill(t.burstActive, { time: burst.untilLocal })}</span>
-          {!compact && <span className="text-[var(--color-muted)]">{t.burstActiveNote}</span>}
+          <span className="text-[var(--color-muted)]">{t.burstActiveNote}</span>
           <button
             type="button"
             data-testid="burst-stop"
@@ -190,12 +188,8 @@ export default function BurstControl({
 
   return (
     <div data-testid="burst" className="flex flex-col gap-2">
-      {!compact && (
-        <>
-          <h2 className="m-0 text-[13px] font-semibold text-[var(--color-bright)]">{t.burstTitle}</h2>
-          <p className="m-0 text-[12px] text-[var(--color-muted)]">{t.burstIntro}</p>
-        </>
-      )}
+      <h2 className="m-0 text-[14px] font-semibold text-[var(--color-bright)]">{t.burstTitle}</h2>
+      <p className="m-0 text-[13px] leading-5 text-[var(--color-muted)]">{t.burstIntro}</p>
       {quick && (
         <div role="group" aria-label={t.burstQuickLabel} data-testid="burst-quick" className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] uppercase tracking-widest text-[var(--color-dim)]">{t.burstQuickLabel}</span>
@@ -220,10 +214,10 @@ export default function BurstControl({
           className="rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-[12px] text-[var(--color-bright)]"
         />
         <button type="button" data-testid="burst-start" disabled={busy} onClick={start} className={BUTTON}>
-          {busy ? t.burstBusy : compact ? t.burstStartShort : burstTimeIsValid(time) ? fill(t.burstStart, { time }) : t.burstStartShort}
+          {busy ? t.burstBusy : burstTimeIsValid(time) ? fill(t.burstStart, { time }) : t.burstStartShort}
         </button>
       </div>
-      {!compact && <p className="m-0 text-[11px] text-[var(--color-dim)]">{t.burstLimit}</p>}
+      <p className="m-0 text-[12px] text-[var(--color-muted)]">{t.burstLimit}</p>
       {noteLine}
     </div>
   );
@@ -231,9 +225,10 @@ export default function BurstControl({
 
 /**
  * The same control for a page that has not read the team's settings: it reads them itself and shows nothing until it can.
- * Short (the agents' panel) unless `compact={false}`: with its title and its line, as in the Settings team card.
+ * It is ONE control everywhere (the agents' panel, the Settings team card, the Budget page, the working hours): the same
+ * title, the same taps, the same exact time, the same limit line.
  */
-export function BurstStrip({ compact = true }: { compact?: boolean }) {
+export function BurstStrip() {
   const [settings, setSettings] = useState<TeamSettings | null>(null);
   useEffect(() => {
     let alive = true;
@@ -244,5 +239,5 @@ export function BurstStrip({ compact = true }: { compact?: boolean }) {
       alive = false;
     };
   }, []);
-  return settings ? <BurstControl compact={compact} settings={settings} onSettings={setSettings} /> : null;
+  return settings ? <BurstControl settings={settings} onSettings={setSettings} /> : null;
 }

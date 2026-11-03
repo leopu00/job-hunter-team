@@ -25,6 +25,8 @@ mod existing_team_register;
 mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;
+mod local_action_log;
+mod local_position_act;
 mod local_swipe;
 mod mail;
 mod onboarding;
@@ -40,6 +42,7 @@ mod release_channel;
 mod resources;
 mod release_channel_rules;
 mod runtime_host;
+mod single_instance;
 mod runtime_log;
 mod saved_vps;
 mod team_control;
@@ -65,6 +68,11 @@ pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // first of all the plugins: a second opening of the app hands over to the one already open and ends here
+        // (single_instance.rs); the arguments and the folder it brings are not read
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            single_instance::bring_main_window_forward(app);
+        }))
         .plugin(tauri_plugin_dialog::init())
         // a new position's system notification (lib/notify): only what capabilities/new-position-notification.json allows
         .plugin(tauri_plugin_notification::init())
@@ -219,6 +227,8 @@ pub fn run() {
             team_budget::team_budget_read,
             local_swipe::local_swipe_deck_read,
             local_swipe::local_team_position_judge,
+            local_position_act::local_team_position_act,
+            local_action_log::local_action_log_read,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,

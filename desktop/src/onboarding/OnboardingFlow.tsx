@@ -18,9 +18,6 @@ import { cleanImagesResult } from "../lib/clean-images";
 import { appLocale } from "../lib/app-locale";
 import { runtimeText } from "../lib/onboarding-runtime.i18n";
 import VpsProfileImport from "./VpsProfileImport";
-import CloserDesktopPanel from "../closer-desktop/CloserDesktopPanel";
-import FirstSetupAssistance from "./FirstSetupAssistance";
-import { ASSISTANCE_TEXT } from "./assistance.i18n";
 import { LOGIN_TEXT } from "../components/login-screen.i18n";
 import { fill } from "../lib/text-slots";
 import { ONBOARDING_TEXT, type OnboardingCopy } from "./onboarding.i18n";
@@ -211,6 +208,21 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     actionsRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [actionKey]);
 
+  // Another profile's data: the two ways out are offered only when the owner is a local profile of this
+  // app (a probe the native side answers), each one after a confirmation. This effect stays ABOVE every early return
+  // of the view: a hook after a return changes the hook count when the sign-in starts, React throws and the window
+  // goes blank (B1).
+  const ownerMismatch = runtime.status === "failed" && runtime.code === "local_account_owner_mismatch" && host.kind === "local" && localOwner !== undefined;
+  useEffect(() => {
+    setOwnerKnown(false);
+    setConfirmingOwner(null);
+    if (!ownerMismatch || !localOwner) return;
+    let active = true;
+    void localOwner.probe().then((known) => { if (active) setOwnerKnown(known); }).catch(() => {});
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerMismatch, failureKey]);
+
   if (runtime.status === "ready") {
     return (
       <main className="onboarding-shell onboarding-shell--complete">
@@ -345,18 +357,6 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     // The setup starts again; what it finds is its own to say.
     if (done) await onRetry().catch(() => setActionFailed(true));
   }
-  // Another profile's data: the two ways out are offered only when the owner is a local profile of this
-  // app (a probe the native side answers), each one after a confirmation.
-  const ownerMismatch = failed && runtime.code === "local_account_owner_mismatch" && host.kind === "local" && localOwner !== undefined;
-  useEffect(() => {
-    setOwnerKnown(false);
-    setConfirmingOwner(null);
-    if (!ownerMismatch || !localOwner) return;
-    let active = true;
-    void localOwner.probe().then((known) => { if (active) setOwnerKnown(known); }).catch(() => {});
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerMismatch, failureKey]);
   const ownerWays = ownerMismatch && ownerKnown ? localOwner : undefined;
   async function chooseOwner(choice: "return" | "take") {
     if (pendingRef.current || !ownerWays) return;
@@ -676,7 +676,6 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
   const draftChangeRef = useRef(onDraftChange);
   draftChangeRef.current = onDraftChange;
   const [submitting, setSubmitting] = useState(false);
-  const [assistanceOpen, setAssistanceOpen] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const [profileName, setProfileName] = useState(account.displayName ?? "");
   const [savedVps, setSavedVps] = useState<SavedVps[]>([]);
@@ -713,15 +712,9 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
       node.scrollLeft = 0;
     }
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-  }, [step, assistanceOpen]);
+  }, [step]);
 
   if (runtime.status !== "collecting") return <RuntimeView host={host} platform={platform} t={t} locale={locale} runtime={runtime} activity={activity} onRetry={onRetry} onRestart={onRestart} onExitFailure={exitFailure} onRuntimeAction={onRuntimeAction} providerLogin={providerLogin} sshHostKey={sshHostKey} onConfirmHostKey={onConfirmHostKey} onCancelHostKey={onCancelHostKey} onProviderInput={onProviderInput} onProviderClose={onProviderClose} onProviderRestart={onProviderRestart} onRecreatePodmanMachine={onRecreatePodmanMachine} onUseLocalData={account.identity === "local" ? onUseLocalData : undefined} onSetAsideLocalData={onSetAsideLocalData} localOwner={account.identity === "local" ? localOwner : undefined} onFreeDiskSpace={onFreeDiskSpace} onLoadPlans={onLoadPlans} onDeclarePlan={onDeclarePlan} runtimeLogPath={runtimeLogPath} onOpenRuntimeLog={onOpenRuntimeLog} onOpenWithoutTeam={onOpenWithoutTeam} />;
-
-  if (assistanceOpen) return <main className="onboarding-shell" ref={shellRef} lang={locale}>
-    <h1 ref={headingRef} tabIndex={-1}>{t.firstSetupTitle}</h1>
-    <button className="onboarding-secondary" type="button" onClick={() => setAssistanceOpen(false)}>{ASSISTANCE_TEXT[locale].back}</button>
-    <CloserDesktopPanel onClose={() => setAssistanceOpen(false)} />
-  </main>;
 
   // A team on a VPS pairs with the account: a local profile has none, so the step says so now
   // instead of starting a setup that fails at the runtime stage (pairing_token_missing).
@@ -865,7 +858,6 @@ export function OnboardingFlow({ account, onRenameLocalProfile, platform, runtim
             <p>{t.existingTeam.description}</p>
             <button type="button" className="onboarding-secondary" onClick={() => onConnectExistingTeam(host)}>{t.existingTeam.verifyVps}</button>
           </section>}
-          {host.kind === "vps" && <FirstSetupAssistance host={host} locale={locale} onOpen={() => setAssistanceOpen(true)} />}
           {account.identity === "local" && host.kind === "local" && <VpsProfileImport />}
           </>}
 

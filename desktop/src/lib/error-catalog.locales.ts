@@ -383,6 +383,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A csapat környezete nincs telepítve ezen a számítógépen.", "Kezdd újra a műszaki beállítástól."],
     pt: ["O ambiente da equipa não está instalado neste computador.", "Recomeça a partir da configuração técnica."],
   },
+  "The Docker program is not on this computer, so I cannot talk to the team.": {
+    de: ["Das Programm Docker ist auf diesem Computer nicht vorhanden, daher kann ich nicht mit dem Team sprechen.", "Installiere Docker (oder starte Job Hunter Team neu, sobald es installiert ist) und versuche es erneut."],
+    es: ["El programa Docker no está en este ordenador, así que no puedo hablar con el equipo.", "Instala Docker (o reinicia Job Hunter Team cuando esté instalado) y vuelve a intentarlo."],
+    fr: ["Le programme Docker n’est pas sur cet ordinateur, je ne peux donc pas parler à l’équipe.", "Installe Docker (ou redémarre Job Hunter Team une fois installé) puis réessaie."],
+    hu: ["A Docker program nincs a számítógépen, ezért nem tudok beszélni a csapattal.", "Telepítsd a Dockert (vagy indítsd újra a Job Hunter Teamet a telepítés után), majd próbáld újra."],
+    pt: ["O programa Docker não está neste computador, por isso não consigo falar com a equipa.", "Instala o Docker (ou reinicia o Job Hunter Team depois de o instalar) e tenta novamente."],
+  },
   "The team container is not ready.": {
     de: ["Der Container des Teams ist nicht bereit.", "Versuche es erneut. Wenn es wieder passiert, starte den Computer neu und wiederhole die Einrichtung."],
     es: ["El contenedor del equipo no está listo.", "Inténtalo de nuevo. Si vuelve a ocurrir, reinicia el ordenador y repite la configuración."],
@@ -1733,9 +1740,99 @@ function translated(englishText: string): ErrorTranslations {
  * Stable catalog entries only. Entries owned by the ongoing screen migration
  * are added once their Italian and English source copy is final.
  */
+// The authorisation to apply, in a profile with no cloud account: what the consent, the settings and the position refuse, in words.
+const APPLY_CONSENT_OFF = tr(
+  ["Das automatische Senden von Bewerbungen ist nicht eingeschaltet.", "Schalte es in den Einstellungen ein und gib die Bewerbung dann erneut frei."],
+  ["El envío automático de candidaturas no está activado.", "Actívalo en los ajustes y vuelve a autorizar la candidatura."],
+  ["L’envoi automatique des candidatures n’est pas activé.", "Active-le dans les réglages, puis autorise de nouveau la candidature."],
+  ["A jelentkezések automatikus küldése nincs bekapcsolva.", "Kapcsold be a beállításokban, majd engedélyezd újra a jelentkezést."],
+  ["O envio automático de candidaturas não está ativado.", "Ativa-o nas definições e autoriza de novo a candidatura."],
+);
+const APPLY_SETTINGS_UNREADABLE = tr(
+  ["Ich kann die Einstellungen des automatischen Sendens nicht lesen.", "Prüfe die Einstellungen und versuche es erneut; bleibt es so, sieh dir den Zustand des Teams an."],
+  ["No puedo leer los ajustes del envío automático.", "Revisa los ajustes y vuelve a intentarlo; si sigue igual, mira el estado del equipo."],
+  ["Je ne peux pas lire les réglages de l’envoi automatique.", "Vérifie les réglages et réessaie ; si cela persiste, regarde l’état de l’équipe."],
+  ["Nem tudom elolvasni az automatikus küldés beállításait.", "Ellenőrizd a beállításokat, és próbáld újra; ha így marad, nézd meg a csapat állapotát."],
+  ["Não consigo ler as definições do envio automático.", "Verifica as definições e tenta novamente; se continuar assim, vê o estado da equipa."],
+);
+const APPLY_NOT_READY = tr(
+  ["Diese Position ist noch nicht zum Senden bereit.", "Warte, bis das Team Lebenslauf und Anschreiben vorbereitet hat, und versuche es dann erneut."],
+  ["Esta posición todavía no está lista para enviarse.", "Espera a que el equipo prepare el CV y la carta, y vuelve a intentarlo."],
+  ["Ce poste n’est pas encore prêt à être envoyé.", "Attends que l’équipe prépare le CV et la lettre, puis réessaie."],
+  ["Ez a pozíció még nem áll készen a küldésre.", "Várd meg, amíg a csapat elkészíti az önéletrajzot és a levelet, majd próbáld újra."],
+  ["Esta vaga ainda não está pronta para ser enviada.", "Espera que a equipa prepare o CV e a carta e tenta novamente."],
+);
+const APPLY_WITHDRAWAL_UNCONFIRMED = tr(
+  ["Das Team hat die Freigabe nicht gespeichert, und ich weiß nicht, ob es sie zurückgezogen hat.", "Aktualisiere die Seite und sieh dir den Stand der Bewerbung an, bevor du es erneut versuchst."],
+  ["El equipo no registró la autorización y no sé si la retiró.", "Actualiza la página y mira el estado de la candidatura antes de volver a intentarlo."],
+  ["L’équipe n’a pas enregistré l’autorisation et je ne sais pas si elle l’a retirée.", "Actualise la page et regarde l’état de la candidature avant de réessayer."],
+  ["A csapat nem rögzítette az engedélyt, és nem tudom, visszavonta-e.", "Frissítsd az oldalt, és nézd meg a jelentkezés állapotát, mielőtt újra próbálkozol."],
+  ["A equipa não registou a autorização e não sei se a retirou.", "Atualiza a página e vê o estado da candidatura antes de tentar novamente."],
+);
+const APPLY_ALREADY_SENT = tr(
+  ["Die Bewerbung für diese Position ist schon rausgegangen.", "Sie lässt sich nicht erneut freigeben."],
+  ["La candidatura para esta posición ya salió.", "No se puede autorizar de nuevo."],
+  ["La candidature pour ce poste est déjà partie.", "Elle ne peut pas être autorisée de nouveau."],
+  ["A jelentkezés erre a pozícióra már elment.", "Nem lehet újra engedélyezni."],
+  ["A candidatura a esta vaga já foi enviada.", "Não se pode autorizar de novo."],
+);
+const APPLY_NO_DESTINATION = tr(
+  ["Ich kann nicht erkennen, wohin die Bewerbung gesendet würde.", "Öffne die Anzeige und bewirb dich von Hand, markiere dann «Ich habe mich beworben»."],
+  ["No puedo saber adónde se enviaría la candidatura.", "Abre el anuncio y candidátate a mano; luego marca «Me he candidatado»."],
+  ["Je ne peux pas savoir où la candidature serait envoyée.", "Ouvre l’annonce et postule à la main, puis marque «J’ai postulé»."],
+  ["Nem tudom megállapítani, hová menne a jelentkezés.", "Nyisd meg a hirdetést, jelentkezz kézzel, majd jelöld meg, hogy jelentkeztél."],
+  ["Não consigo perceber para onde a candidatura seria enviada.", "Abre o anúncio e candidata-te à mão; depois marca «Candidatei-me»."],
+);
+const APPLY_PREVIEW_CHANGED = tr(
+  ["Die Position hat sich nach der Vorschau geändert.", "Öffne die Vorschau erneut und bestätige noch einmal."],
+  ["La posición cambió después de la vista previa.", "Abre la vista previa otra vez y confirma de nuevo."],
+  ["Le poste a changé après l’aperçu.", "Rouvre l’aperçu et confirme de nouveau."],
+  ["A pozíció az előnézet után megváltozott.", "Nyisd meg újra az előnézetet, és erősítsd meg újra."],
+  ["A vaga mudou depois da pré-visualização.", "Abre a pré-visualização outra vez e confirma de novo."],
+);
+const APPLY_NOT_RECORDED = tr(
+  ["Das Team hat die Freigabe nicht gespeichert.", "Aktualisiere die Seite und versuche es erneut."],
+  ["El equipo no registró la autorización.", "Actualiza la página y vuelve a intentarlo."],
+  ["L’équipe n’a pas enregistré l’autorisation.", "Actualise la page et réessaie."],
+  ["A csapat nem rögzítette az engedélyt.", "Frissítsd az oldalt, és próbáld újra."],
+  ["A equipa não registou a autorização.", "Atualiza a página e tenta novamente."],
+);
+const APPLY_ONLY_THE_PERSON = tr(
+  ["Das kann nur die Person selbst in der App tun.", "Nutze die Schaltfläche auf der Seite."],
+  ["Esto solo lo puede hacer la persona, desde la app.", "Usa el botón de la página."],
+  ["Seule la personne peut le faire, depuis l’appli.", "Utilise le bouton de la page."],
+  ["Ezt csak maga a személy teheti meg, az alkalmazásból.", "Használd az oldal gombját."],
+  ["Isto só a pessoa o pode fazer, a partir da app.", "Usa o botão da página."],
+);
+const APPLY_BAD_NUMBER = tr(
+  ["Die Nummer der Position ist ungültig.", "Aktualisiere die Seite und versuche es erneut."],
+  ["El número de la posición no es válido.", "Actualiza la página y vuelve a intentarlo."],
+  ["Le numéro du poste n’est pas valide.", "Actualise la page et réessaie."],
+  ["A pozíció száma érvénytelen.", "Frissítsd az oldalt, és próbáld újra."],
+  ["O número da vaga não é válido.", "Atualiza a página e tenta novamente."],
+);
+
 export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> = {
   unknown: translated("The operation did not succeed."),
   apply_authorisation_unrecorded: translated("The operation did not succeed."),
+  apply_withdrawal_unconfirmed: APPLY_WITHDRAWAL_UNCONFIRMED,
+  consent_absent: APPLY_CONSENT_OFF,
+  consent_disabled: APPLY_CONSENT_OFF,
+  consent_mode_unknown: APPLY_SETTINGS_UNREADABLE,
+  consent_cap_invalid: APPLY_SETTINGS_UNREADABLE,
+  config_missing: APPLY_SETTINGS_UNREADABLE,
+  config_unreadable: APPLY_SETTINGS_UNREADABLE,
+  config_malformed: APPLY_SETTINGS_UNREADABLE,
+  rule_unavailable: APPLY_SETTINGS_UNREADABLE,
+  authorisation_unreadable: APPLY_SETTINGS_UNREADABLE,
+  position_not_ready: APPLY_NOT_READY,
+  already_submitted: APPLY_ALREADY_SENT,
+  destination_invalid: APPLY_NO_DESTINATION,
+  position_changed: APPLY_PREVIEW_CHANGED,
+  write_not_observed: APPLY_NOT_RECORDED,
+  apply_request_refused: APPLY_NOT_RECORDED,
+  agent_caller: APPLY_ONLY_THE_PERSON,
+  position_id_invalid: APPLY_BAD_NUMBER,
   desktop_only: translated("This feature is only available in the desktop app."),
   state_failed: translated("The app cannot read its own internal state."),
   state_unavailable: translated("The app cannot read its own internal state."),
@@ -1805,6 +1902,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   engine_timeout: translated("I cannot check the container engine."),
   engine_unavailable: translated("I cannot check the container engine."),
 
+  container_engine_missing: translated("The Docker program is not on this computer, so I cannot talk to the team."),
   container_start_failed: translated("The team container is not ready."),
   container_not_ready: translated("The team container is not ready."),
   container_timeout: translated("The team container is not ready."),
@@ -1902,6 +2000,97 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["Ce poste n’est plus dans l’équipe.", "Actualise la page : le paquet est relu."],
     ["Ez a pozíció már nincs a csapatnál.", "Frissítsd az oldalt: a paklit újraolvassa."],
     ["Esta posição já não está na equipa.", "Atualiza a página: o baralho é lido de novo."],
+  ),
+  already_applied: tr(
+    ["Die Bewerbung für diese Position wurde schon gesendet.", "Hier ist nichts weiter zu tun."],
+    ["La candidatura para esta posición ya se envió.", "Desde aquí no hay nada más que hacer."],
+    ["La candidature pour ce poste a déjà été envoyée.", "Il n’y a rien d’autre à faire d’ici."],
+    ["A jelentkezést erre a pozícióra már elküldték.", "Innen nincs több teendő."],
+    ["A candidatura a esta vaga já foi enviada.", "Daqui não há mais nada a fazer."],
+  ),
+  applied_by_team: tr(
+    ["Das Team hat diese Bewerbung gesendet, nicht du.", "Von hier aus lässt sie sich nicht zurücknehmen."],
+    ["La candidatura la envió el equipo, no tú.", "Desde aquí no se puede deshacer."],
+    ["C’est l’équipe qui a envoyé cette candidature, pas toi.", "Elle ne peut pas être annulée d’ici."],
+    ["Ezt a jelentkezést a csapat küldte el, nem te.", "Innen nem vonható vissza."],
+    ["A candidatura foi enviada pela equipa, não por ti.", "Daqui não se pode anular."],
+  ),
+  bad_status: tr(
+    ["Die Position ist nicht in einem Zustand, in dem der Lebenslauf angefragt werden kann.", "Aktualisiere die Seite, um den Zustand zu sehen."],
+    ["La posición no está en un estado en el que se pueda pedir el CV.", "Actualiza la página para ver su estado."],
+    ["Le poste n’est pas dans un état où l’on peut demander le CV.", "Actualise la page pour voir son état."],
+    ["A pozíció nincs olyan állapotban, hogy az önéletrajzot kérni lehetne.", "Frissítsd az oldalt az állapot megtekintéséhez."],
+    ["A vaga não está num estado em que se possa pedir o CV.", "Atualiza a página para ver o estado."],
+  ),
+  cover_letter_requires_application: tr(
+    ["Das Anschreiben kann angefragt werden, sobald es eine Bewerbung gibt.", "Frage zuerst den Lebenslauf an."],
+    ["La carta de presentación se pide cuando ya existe una candidatura.", "Pide primero el CV."],
+    ["La lettre se demande une fois qu’une candidature existe.", "Demande d’abord le CV."],
+    ["A kísérőlevelet akkor lehet kérni, ha már van jelentkezés.", "Kérd előbb az önéletrajzot."],
+    ["A carta de apresentação pede-se depois de existir uma candidatura.", "Pede primeiro o CV."],
+  ),
+  geocode_refused: tr(
+    ["Das Team hat die Anfrage, das Büro zu verorten, nicht gespeichert.", "Aktualisiere die Seite und versuche es erneut."],
+    ["El equipo no registró la solicitud de ubicar la oficina.", "Actualiza la página y vuelve a intentarlo."],
+    ["L’équipe n’a pas enregistré la demande de situer le bureau.", "Actualise la page et réessaie."],
+    ["A csapat nem rögzítette az iroda elhelyezésére vonatkozó kérést.", "Frissítsd az oldalt, és próbáld újra."],
+    ["A equipa não registou o pedido para localizar o escritório.", "Atualiza a página e tenta novamente."],
+  ),
+  invalid_note: tr(
+    ["Die Notiz zur Absage ist zu lang.", "Kürze sie (höchstens 500 Zeichen) und speichere erneut."],
+    ["La nota del rechazo es demasiado larga.", "Acórtala (500 caracteres como máximo) y guarda de nuevo."],
+    ["La note sur le refus est trop longue.", "Raccourcis-la (500 caractères au maximum) et enregistre de nouveau."],
+    ["Az elutasításhoz írt megjegyzés túl hosszú.", "Rövidítsd le (legfeljebb 500 karakter), és mentsd újra."],
+    ["A nota sobre a recusa é demasiado longa.", "Encurta-a (no máximo 500 caracteres) e guarda de novo."],
+  ),
+  invalid_reason: tr(
+    ["Der gewählte Grund gehört nicht zu den erlaubten.", "Wähle einen aus der Liste."],
+    ["El motivo elegido no es uno de los permitidos.", "Elige uno de la lista."],
+    ["Le motif choisi ne fait pas partie de ceux autorisés.", "Choisis-en un dans la liste."],
+    ["A választott indok nem szerepel az engedélyezettek között.", "Válassz a listából."],
+    ["O motivo escolhido não é um dos permitidos.", "Escolhe um da lista."],
+  ),
+  no_outcome: tr(
+    ["Für diese Position gibt es keine Antwort zum Zurücknehmen.", "Aktualisiere die Seite, um den Zustand zu sehen."],
+    ["Esta posición no tiene ninguna respuesta que deshacer.", "Actualiza la página para ver su estado."],
+    ["Ce poste n’a aucune réponse à annuler.", "Actualise la page pour voir son état."],
+    ["Ennél a pozíciónál nincs visszavonható válasz.", "Frissítsd az oldalt az állapot megtekintéséhez."],
+    ["Esta vaga não tem nenhuma resposta para anular.", "Atualiza a página para ver o estado."],
+  ),
+  not_applied: tr(
+    ["Diese Position ist nicht als beworben markiert.", "Markiere zuerst «Ich habe mich beworben»; falls schon geschehen, aktualisiere die Seite."],
+    ["Esta posición no consta como candidatada.", "Marca primero «Me he candidatado»; si ya lo hiciste, actualiza la página."],
+    ["Ce poste n’est pas marqué comme candidaté.", "Marque d’abord «J’ai postulé» ; si c’est fait, actualise la page."],
+    ["Ez a pozíció nincs jelentkezettként megjelölve.", "Előbb jelöld meg, hogy jelentkeztél; ha már megtetted, frissítsd az oldalt."],
+    ["Esta vaga não consta como candidatada.", "Marca primeiro «Candidatei-me»; se já o fizeste, atualiza a página."],
+  ),
+  reason_only_on_rejection: tr(
+    ["Ein Grund gilt nur für eine Absage.", "Entferne ihn oder gib eine Absage an."],
+    ["Un motivo solo vale para un rechazo.", "Quítalo o indica un rechazo."],
+    ["Un motif ne vaut que pour un refus.", "Retire-le ou déclare un refus."],
+    ["Az indok csak elutasításra érvényes.", "Vedd le, vagy jelölj meg elutasítást."],
+    ["Um motivo só vale para uma recusa.", "Retira-o ou declara uma recusa."],
+  ),
+  request_empty: tr(
+    ["Die Anfrage ist leer.", "Schreibe, was du das Team fragen möchtest."],
+    ["La solicitud está vacía.", "Escribe lo que quieres pedir al equipo."],
+    ["La demande est vide.", "Écris ce que tu veux demander à l’équipe."],
+    ["A kérés üres.", "Írd le, mit szeretnél kérni a csapattól."],
+    ["O pedido está vazio.", "Escreve o que queres pedir à equipa."],
+  ),
+  request_too_long: tr(
+    ["Die Anfrage ist zu lang.", "Kürze sie (höchstens 2000 Zeichen) und sende erneut."],
+    ["La solicitud es demasiado larga.", "Acórtala (2000 caracteres como máximo) y envía de nuevo."],
+    ["La demande est trop longue.", "Raccourcis-la (2000 caractères au maximum) et renvoie-la."],
+    ["A kérés túl hosszú.", "Rövidítsd le (legfeljebb 2000 karakter), és küldd újra."],
+    ["O pedido é demasiado longo.", "Encurta-o (no máximo 2000 caracteres) e envia de novo."],
+  ),
+  write_request_refused: tr(
+    ["Das Team hat die Anfrage für Lebenslauf oder Anschreiben nicht gespeichert.", "Aktualisiere die Seite und versuche es erneut."],
+    ["El equipo no registró la solicitud del CV o de la carta.", "Actualiza la página y vuelve a intentarlo."],
+    ["L’équipe n’a pas enregistré la demande du CV ou de la lettre.", "Actualise la page et réessaie."],
+    ["A csapat nem rögzítette az önéletrajz vagy a levél kérését.", "Frissítsd az oldalt, és próbáld újra."],
+    ["A equipa não registou o pedido do CV ou da carta.", "Atualiza a página e tenta novamente."],
   ),
   feedback_refused: tr(
     ["Das Team hat die Bewertung nicht gespeichert.", "Aktualisiere die Seite und versuche es erneut; bleibt es so, sieh dir den Zustand des Teams an."],
