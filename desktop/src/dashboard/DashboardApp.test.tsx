@@ -2007,6 +2007,90 @@ describe("DashboardApp onboarding router", () => {
     expect(screen.getByText("title:Job Hunter Team è già acceso")).toBeInTheDocument();
   });
 
+  // B12: the team already runs when the setup is pressed again (the app was closed in the middle of it). The installer
+  // refuses (exit 84); the app does not leave the person on a button that runs the same installer again.
+  const TEAM_RUNNING_ERROR = { code: "local_team_running", message: "local_team_running", retryable: true, detail: "team_running: x" };
+
+  it("a team that already runs and has no provider sign-in goes to the sign-in, not to the installer again", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-up-never-signed"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce(TEAM_RUNNING_ERROR);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue(PREPARED);
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
+    // never done: the sentence does not say it is «no longer valid»
+    expect(screen.getByText(STATE_TEXT.it["resumedProviderLoginMissing" as keyof typeof STATE_TEXT.it] as string)).toBeInTheDocument();
+    expect(screen.queryByText(STATE_TEXT.it["resumedProviderLoginInvalid" as keyof typeof STATE_TEXT.it] as string)).not.toBeInTheDocument();
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+    expect(localStorage.getItem("jht.desktop.onboarding.interrupted.team-up-never-signed") ?? "").toBe("");
+    // the sign-in button is there and starts the login
+    await userEvent.click(screen.getByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+  });
+
+  it("the same, when the app saw the sign-in before: it says it has expired", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-up-expired"));
+    requireOnboarding();
+    localStorage.setItem("jht.desktop.onboarding.provider.team-up-expired", JSON.stringify({ provider: "claude", signedIn: true }));
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce(TEAM_RUNNING_ERROR);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue(PREPARED);
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
+    expect(screen.getByText(STATE_TEXT.it["resumedProviderLoginInvalid" as keyof typeof STATE_TEXT.it] as string)).toBeInTheDocument();
+  });
+
+  it("a team that already runs with its provider signed in goes on to start the team, without the installer", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-up-signed"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce(TEAM_RUNNING_ERROR);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    await waitFor(() => expect(startOnboardingTeam).toHaveBeenCalledOnce());
+    expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+  });
+
+  it("a team that runs without its provider set up keeps the calm refusal (there is nothing to continue from)", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-up-not-configured"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockRejectedValueOnce(TEAM_RUNNING_ERROR);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerConfigured: false });
+    render(<DashboardApp />);
+    await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
+
+    expect(await screen.findByText("failed:runtime")).toBeInTheDocument();
+    expect(screen.getByText("calm-card")).toBeInTheDocument();
+  });
+
+  it("an app reopened with the team up and no sign-in offers the sign-in on this computer, and the button starts the login", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("reopened-team-up"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Resume Person" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    localStorage.setItem("jht.desktop.onboarding.provider.reopened-team-up", JSON.stringify({ provider: "codex", signedIn: false }));
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...PREPARED, localHost: true });
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue(PREPARED);
+    render(<DashboardApp />);
+
+    expect(await screen.findByText("action-required:provider-login")).toBeInTheDocument();
+    expect(screen.getByText(STATE_TEXT.it["resumedProviderLoginMissing" as keyof typeof STATE_TEXT.it] as string)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "continue-runtime" }));
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    expect(vi.mocked(startOnboardingProviderLogin).mock.calls[0][0]).toEqual({ kind: "local" });
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+  });
+
   it("a local preparation that fails is remembered, and a reopened setup can resume it with the same provider or drop it", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("interrupted-account"));
     requireOnboarding();
