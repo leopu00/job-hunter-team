@@ -512,6 +512,8 @@ interface CompanyIn {
   logo?: string | null;
   logo_source?: string | null;
   logo_fetched?: number | boolean | null;
+  // Chi e' l'azienda e di cosa si occupa (mig 106): due frasi dell'Analista.
+  about?: string | null;
 }
 
 // Position highlights (mig 046): pro/contro del dettaglio posizione. `id` è
@@ -771,6 +773,8 @@ export async function POST(req: NextRequest) {
         logo: c.logo ?? null,
         logo_source: c.logo_source ?? null,
         logo_fetched: !!c.logo_fetched,
+        // 600 characters, counted in code points: a UTF-16 slice could cut an emoji in two and the JSON would be refused.
+        about: typeof c.about === "string" ? Array.from(c.about).slice(0, 600).join("") || null : null,
       }));
 
     if (payload.length !== companies.length) {

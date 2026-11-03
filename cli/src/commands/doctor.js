@@ -5,6 +5,7 @@ import { execSync } from 'node:child_process'
 import { JHT_HOME } from '../jht-paths.js';
 import { c } from './_colors.js'
 import { hint, statusLine, title } from '../lib/ui.js'
+import { later, say, show } from '../lib/texts.js'
 import { AGENTS, isAgentSession } from './team/agents.js'
 import { LATEST_CONFIG_VERSION } from './migrate.js'
 
@@ -45,25 +46,25 @@ function nodeIsTooOld() {
 }
 
 async function checkConfig() {
-  if (!(await fileExists(CONFIG_PATH))) return { ok: false, msg: 'No configuration yet', hint: 'jht setup' }
+  if (!(await fileExists(CONFIG_PATH))) return { ok: false, msg: later('doctor.config_none'), hint: 'jht setup' }
   const cfg = await readConfigAsync()
-  if (!cfg) return { ok: false, msg: 'The configuration file cannot be read', hint: 'jht setup --reset' }
+  if (!cfg) return { ok: false, msg: later('doctor.config_unreadable'), hint: 'jht setup --reset' }
   const v = cfg.version ?? 1
-  if (v < LATEST_CONFIG_VERSION) return { warn: true, msg: `Config v${v} — update available`, hint: 'jht migrate' }
-  return { ok: true, msg: `Config v${v} valid` }
+  if (v < LATEST_CONFIG_VERSION) return { warn: true, msg: later('doctor.config_old', { v }), hint: 'jht migrate' }
+  return { ok: true, msg: later('doctor.config_ok', { v }) }
 }
 
 async function checkProvider() {
   const cfg = await readConfigAsync()
-  if (!cfg) return { skip: true, msg: 'AI provider — not checked, there is no configuration yet' }
+  if (!cfg) return { skip: true, msg: later('doctor.provider_skip') }
   const active = cfg.active_provider
-  if (!active) return { warn: true, msg: 'No active providers', hint: 'jht providers use codex   (or claude / kimi)' }
+  if (!active) return { warn: true, msg: later('doctor.provider_none'), hint: later('doctor.provider_use') }
   const prov = cfg.providers?.[active]
   // Le subscription usano la sessione OAuth della CLI e non hanno, per
   // definizione, una API key nel config. Segnalarle come incomplete rende il
   // doctor fuorviante proprio dopo un login riuscito dal wizard desktop.
   if (prov?.auth_method === 'subscription' || prov?.auth_method === 'cli') {
-    return { ok: true, msg: `Provider: ${active}${prov?.model ? ` (${prov.model})` : ''} — subscription` }
+    return { ok: true, msg: later('doctor.provider_subscription', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
   }
 
   // Non lasciare che la key di un provider mascheri la configurazione
@@ -74,38 +75,38 @@ async function checkProvider() {
       ? 'OPENAI_API_KEY'
       : `${active.toUpperCase()}_API_KEY`
   const key = prov?.api_key || process.env[envName]
-  if (!key) return { warn: true, msg: `Provider ${active} has no API key`, hint: `Set ${envName}` }
-  return { ok: true, msg: `Provider: ${active}${prov?.model ? ` (${prov.model})` : ''}` }
+  if (!key) return { warn: true, msg: later('doctor.provider_nokey', { active }), hint: later('doctor.provider_setenv', { env: envName }) }
+  return { ok: true, msg: later('doctor.provider_line', { name: `${active}${prov?.model ? ` (${prov.model})` : ''}` }) }
 }
 
 async function checkApiKey() {
   const cfg = await readConfigAsync()
   const key = cfg?.providers?.anthropic?.api_key || process.env.ANTHROPIC_API_KEY
-  if (!key) return { skip: true, msg: 'API test — no Anthropic key found' }
+  if (!key) return { skip: true, msg: later('doctor.api_skip') }
   try {
     const res = await fetch('https://api.anthropic.com/v1/models', {
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       signal: AbortSignal.timeout(5000),
     })
-    if (res.ok) return { ok: true, msg: 'Anthropic API key valid' }
-    if (res.status === 401) return { ok: false, msg: 'Invalid Anthropic API key (401)', hint: 'Update ANTHROPIC_API_KEY' }
-    return { warn: true, msg: `Anthropic API response ${res.status}` }
+    if (res.ok) return { ok: true, msg: later('doctor.api_ok') }
+    if (res.status === 401) return { ok: false, msg: later('doctor.api_invalid'), hint: later('doctor.api_update') }
+    return { warn: true, msg: later('doctor.api_response', { status: res.status }) }
   } catch (e) {
-    if (e.name === 'TimeoutError') return { warn: true, msg: 'Anthropic API timeout (>5s)' }
-    return { warn: true, msg: 'Anthropic API unreachable' }
+    if (e.name === 'TimeoutError') return { warn: true, msg: later('doctor.api_timeout') }
+    return { warn: true, msg: later('doctor.api_unreachable') }
   }
 }
 
 async function checkDatabase() {
   const cfg = await readConfigAsync()
   const url = cfg?.supabase?.url || process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!url) return { skip: true, msg: 'Database — SUPABASE_URL not configured' }
+  if (!url) return { skip: true, msg: later('doctor.db_skip') }
   try {
     const res = await fetch(`${url}/rest/v1/`, { signal: AbortSignal.timeout(5000) })
-    if (res.status < 500) return { ok: true, msg: `Database Supabase accessible` }
-    return { ok: false, msg: `Supabase database error ${res.status}` }
+    if (res.status < 500) return { ok: true, msg: later('doctor.db_ok') }
+    return { ok: false, msg: later('doctor.db_error', { status: res.status }) }
   } catch {
-    return { ok: false, msg: 'Supabase database is not reachable', hint: 'Check SUPABASE_URL and network access' }
+    return { ok: false, msg: later('doctor.db_unreachable'), hint: later('doctor.db_check') }
   }
 }
 
@@ -115,12 +116,12 @@ function checkDeps() {
   const results = []
   for (const cmd of required) {
     const v = cmdVersion(cmd)
-    if (cmd === 'node' && v && nodeIsTooOld()) { results.push({ ok: false, msg: `node: ${v}`, hint: 'Node 18 or later is required' }); continue }
-    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { ok: false, msg: `${cmd}: not found`, hint: `Install ${cmd}` })
+    if (cmd === 'node' && v && nodeIsTooOld()) { results.push({ ok: false, msg: `node: ${v}`, hint: later('doctor.node_old') }); continue }
+    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { ok: false, msg: later('doctor.not_found', { cmd }), hint: later('doctor.install', { cmd }) })
   }
   for (const cmd of optional) {
     const v = cmdVersion(cmd)
-    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { skip: true, msg: `${cmd}: not found (optional)` })
+    results.push(v ? { ok: true, msg: `${cmd}: ${v}` } : { skip: true, msg: later('doctor.not_found_optional', { cmd }) })
   }
   return results
 }
@@ -130,18 +131,18 @@ function checkWorkers() {
     const sessions = execSync('tmux list-sessions -F "#{session_name}" 2>/dev/null', { encoding: 'utf-8', stdio: 'pipe' })
       .trim().split('\n').filter(Boolean)
     // tmux may hold the person's own sessions: only the team's count
-    if (!sessions.some((s) => AGENTS.some((a) => isAgentSession(s, a)))) return [{ warn: true, msg: 'The team is not running', hint: 'jht team start' }]
+    if (!sessions.some((s) => AGENTS.some((a) => isAgentSession(s, a)))) return [{ warn: true, msg: later('doctor.team_off'), hint: 'jht team start' }]
     const expected = ['assistente', 'capitano', 'mentor', 'sentinella']
     return expected.map(role => {
       const agent = AGENTS.find(a => a.role === role)
       const active = !!agent && sessions.some(s => isAgentSession(s, agent))
       const name = agent?.prefix ?? role.toUpperCase()
       return active
-        ? { ok: true, msg: `${name}: active` }
-        : { warn: true, msg: `${name}: not found`, hint: `jht team start ${role}` }
+        ? { ok: true, msg: later('doctor.team_active', { name }) }
+        : { warn: true, msg: later('doctor.team_missing', { name }), hint: `jht team start ${role}` }
     })
   } catch {
-    return [{ skip: true, msg: 'tmux is not available here: the team could not be checked' }]
+    return [{ skip: true, msg: later('doctor.tmux_missing') }]
   }
 }
 
@@ -163,31 +164,33 @@ async function handleDoctor(options) {
   ])
 
   const sections = [
-    { title: 'Environment', checks: depsCk },
-    { title: 'Config',      checks: [configCk] },
-    { title: 'AI provider', checks: [providerCk, apiCk] },
-    { title: 'Database',    checks: [dbCk] },
-    { title: 'Team',        checks: workersCk },
+    { title: later('doctor.sec_environment'), checks: depsCk },
+    { title: later('doctor.sec_config'),      checks: [configCk] },
+    { title: later('doctor.sec_provider'), checks: [providerCk, apiCk] },
+    { title: later('doctor.sec_database'),    checks: [dbCk] },
+    { title: later('doctor.sec_team'),        checks: workersCk },
   ]
-  const all = sections.flatMap((sec) => sec.checks.map((ck) => ({ section: sec.title, status: kindOf(ck), message: ck.msg, hint: ck.hint ?? null })))
+  // the checks hold their texts to be written later: a screen writes them in the person's language, the JSON in English
+  const rows = sections.flatMap((sec) => sec.checks.map((ck) => ({ section: sec.title, status: kindOf(ck), message: ck.msg, hint: ck.hint ?? null })))
+  const all = rows.map((x) => ({ ...x, section: show(x.section), message: show(x.message), hint: show(x.hint) }))
   const count = (status) => all.filter((x) => x.status === status).length
   const problems = count('fail'), warnings = count('warn'), fine = count('ok')
   if (problems > 0) process.exitCode = 1
 
   if (options.json) {
-    console.log(JSON.stringify({ ok: problems === 0, summary: { ok: fine, warnings, problems }, checks: all }, null, 2))
+    console.log(JSON.stringify({ ok: problems === 0, summary: { ok: fine, warnings, problems }, checks: rows.map((x) => ({ ...x, section: show(x.section, 'en'), message: show(x.message, 'en'), hint: show(x.hint, 'en') })) }, null, 2))
     return
   }
 
-  const parts = [`${fine} ok`]
-  if (warnings) parts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`)
-  if (problems) parts.push(`${problems} ${problems === 1 ? 'problem' : 'problems'}`)
-  console.log(title('Check', parts.join(' · ')))
+  const parts = [say('doctor.ok', { n: fine })]
+  if (warnings) parts.push(say(warnings === 1 ? 'doctor.warning_one' : 'doctor.warning_many', { n: warnings }))
+  if (problems) parts.push(say(problems === 1 ? 'doctor.problem_one' : 'doctor.problem_many', { n: problems }))
+  console.log(title(say('doctor.title'), parts.join(' · ')))
 
   if (options.all) {
     for (const sec of sections) {
-      console.log(`  ${c.bold(sec.title)}`)
-      for (const ck of sec.checks) console.log(statusLine(kindOf(ck), ck.msg, { hint: ck.hint, indent: 4 }))
+      console.log(`  ${c.bold(show(sec.title))}`)
+      for (const ck of sec.checks) console.log(statusLine(kindOf(ck), show(ck.msg), { hint: show(ck.hint), indent: 4 }))
       console.log('')
     }
   } else {
@@ -197,17 +200,17 @@ async function handleDoctor(options) {
       console.log(statusLine(x.status, x.message, { hint: x.hint }))
     }
     if (needs.length) console.log('')
-    console.log(hint('Every check: jht doctor --all'))
+    console.log(hint(say('doctor.every_check')))
     console.log('')
   }
-  if (problems === 0 && warnings === 0) console.log(`  ${c.green('Everything is in order.')}\n`)
+  if (problems === 0 && warnings === 0) console.log(`  ${c.green(say('doctor.all_fine'))}\n`)
 }
 
 export function registerDoctorCommand(program) {
   program
     .command('doctor')
-    .description('Check the setup: summary first, --all for every check; exits 1 when something is wrong')
-    .option('-a, --all', 'list every check, grouped')
-    .option('--json', 'machine-readable output')
+    .description(say('doctor.description'))
+    .option('-a, --all', say('doctor.opt_all'))
+    .option('--json', say('option.json'))
     .action(handleDoctor)
 }

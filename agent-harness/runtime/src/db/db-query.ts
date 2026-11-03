@@ -368,6 +368,8 @@ export function dbQuery(db: () => Database, argv: string[], options: DbQueryOpti
     print(`  Glassdoor: ${or("glassdoor_rating")}`);
     if (pyTruthy(r["red_flags"])) print(`  Red flags: ${s(r, "red_flags")}`);
     if (pyTruthy(r["culture_notes"])) print(`  Culture: ${s(r, "culture_notes")}`);
+    // NULL = never written: the Analista writes it at the next evaluation of a position of this company.
+    print(`  About: ${pyTruthy(r["about"]) ? s(r, "about") : "NOT WRITTEN YET (write it: db_update.py company ... --about)"}`);
     const ps = positions();
     if (ps.rows.length) {
       print(`\n  Positions (${ps.rows.length}):`);

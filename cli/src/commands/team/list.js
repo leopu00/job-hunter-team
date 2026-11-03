@@ -1,5 +1,6 @@
 // Comandi team list e team status
 import { errorBlock, hint, marks, table, terminalWidth, title, wrapText } from '../../lib/ui.js';
+import { say } from '../../lib/texts.js';
 import {
   AGENTS, DEFAULT_TEAM, c,
   tmuxAvailable, getActiveSessions, usingContainer, isAgentSession,
@@ -10,24 +11,24 @@ export function listAction() {
   const inContainer = usingContainer();
   const m = marks();
 
-  console.log(title('Team', `${AGENTS.length} roles`));
+  console.log(title(say('team.title'), say('team.roles', { n: AGENTS.length })));
   if (process.env.JHT_DEBUG) console.log(c.dim(inContainer ? '  (source: jht container)' : '  (source: tmux host)'));
   console.log(table(
-    [{ label: 'Role' }, { label: 'Session' }, { label: 'Kind', drop: true }, { label: 'Effort', drop: true }, { label: 'What it does', shrink: true, min: 24 }],
+    [{ label: say('team.col_role') }, { label: say('team.col_session') }, { label: say('team.col_kind'), drop: true }, { label: say('team.col_effort'), drop: true }, { label: say('team.col_does'), shrink: true, min: 24 }],
     AGENTS.map((agent) => {
       const prefix = inContainer ? agent.prefix : `JHT-${agent.prefix}`;
       const active = sessions.some((s) => isAgentSession(s, agent));
       return [
         `${active ? c.green(m.ok) : c.dim(m.info)} ${agent.role}`,
         agent.multi ? `${prefix}-N` : prefix,
-        agent.multi ? 'several' : 'one',
+        agent.multi ? say('team.several') : say('team.one'),
         agent.effort,
-        agent.desc,
+        agent.desc ? say(`role.${agent.role}`) : '',
       ];
     }),
   ));
   console.log('');
-  for (const part of wrapText('Default team: ' + DEFAULT_TEAM.join(', '), terminalWidth() - 4)) console.log(`  ${c.dim(part)}`);
+  for (const part of wrapText(say('team.default_team', { list: DEFAULT_TEAM.join(', ') }), terminalWidth() - 4)) console.log(`  ${c.dim(part)}`);
   console.log('');
 }
 
@@ -38,9 +39,9 @@ export function statusAction() {
   // fanno in tempo a uscire. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
   if (!usingContainer() && !tmuxAvailable()) {
     console.error(errorBlock({
-      what: 'the team cannot be reached',
-      why: 'tmux was not found on this computer and the jht container is not running',
-      fix: 'Start it with: jht up',
+      what: say('team.unreachable_what'),
+      why: say('team.unreachable_why'),
+      fix: say('team.unreachable_fix'),
     }));
     process.exitCode = 1;
     return;
@@ -52,18 +53,18 @@ export function statusAction() {
   );
 
   if (agentSessions.length === 0) {
-    console.log(title('Team', 'not running'));
-    console.log(hint('Start the team with: jht team start'));
+    console.log(title(say('team.title'), say('team.not_running')));
+    console.log(hint(say('team.next_start')));
     console.log('');
     return;
   }
 
-  console.log(title('Team', `${agentSessions.length} running${process.env.JHT_DEBUG ? (usingContainer() ? ' (container)' : ' (host)') : ''}`));
+  console.log(title(say('team.title'), `${say('team.n_running', { n: agentSessions.length })}${process.env.JHT_DEBUG ? (usingContainer() ? ' (container)' : ' (host)') : ''}`));
   console.log(table(
-    [{ label: 'Session' }, { label: 'What it does', shrink: true }],
+    [{ label: say('team.col_session') }, { label: say('team.col_does'), shrink: true }],
     agentSessions.sort().map((name) => {
       const agent = AGENTS.find((a) => isAgentSession(name, a));
-      return [`${c.green(marks().ok)} ${name}`, agent ? agent.desc : ''];
+      return [`${c.green(marks().ok)} ${name}`, agent ? say(`role.${agent.role}`) : ''];
     }),
   ));
   console.log('');

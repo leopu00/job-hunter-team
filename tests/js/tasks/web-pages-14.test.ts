@@ -60,8 +60,8 @@ describe("jht setup CLI", () => {
       expect(src).toContain(o);
     expect(src).not.toContain("--workspace");
   });
-  it("printBanner + runSetupWizard + runNonInteractiveSetup + WizardCancelledError", () => {
-    expect(src).toContain("function printBanner"); expect(src).toContain("runSetupWizard");
+  it("runSetupWizard + runNonInteractiveSetup + WizardCancelledError, and no banner box of its own", () => {
+    expect(src).not.toContain("printBanner"); expect(src).toContain("runSetupWizard");
     expect(src).toContain("runNonInteractiveSetup"); expect(src).toContain("WizardCancelledError");
   });
 });
@@ -76,8 +76,10 @@ describe("jht doctor CLI", () => {
       expect(src).toContain(`function ${fn}`);
   });
   it("5 sezioni diagnostica: Environment, Config, AI provider, Database, Team; riassunto prima, --all e --json", () => {
+    // the names of the sections are texts of the catalog (the screens follow the language of the person)
+    const english = readCli("src/lib/texts/en.js");
     for (const sec of ["Environment", "Config", "AI provider", "Database", "Team"])
-      expect(src).toContain(sec);
+      expect(english).toContain(`'doctor.sec_${sec === "AI provider" ? "provider" : sec.toLowerCase()}': '${sec}'`);
     expect(src).toContain("--all"); expect(src).toContain("--json");
   });
   it("deps required node/npm/tmux/git + optional claude/pandoc/typst/python3", () => {
@@ -233,6 +235,6 @@ describe("SecretRef wizard (JS)", () => {
   });
   it("supporta env/file/exec/plaintext + non espone valori ('****')", () => {
     expect(src).toContain("'env'"); expect(src).toContain("'file'"); expect(src).toContain("'exec'");
-    expect(src).toContain("'plaintext'"); expect(src).toContain("****");
+    expect(src).toContain("'plaintext'"); expect(src).toContain("plaintext (hidden)");
   });
 });
