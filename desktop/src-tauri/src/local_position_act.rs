@@ -38,7 +38,8 @@ def fail(code): emit({'ok':False,'code':code})
 try: req=json.loads(sys.stdin.readline())
 except Exception: fail('request_invalid')
 COMMON={'op','id','expect'}
-FIELDS={'feedback':COMMON|{'value','score','direction','reason','note'},'exclude':COMMON|{'reason','note'},'restore':COMMON,'recheck':COMMON|{'on'},'geocode':COMMON|{'on'},'write_request':COMMON|{'on','kind'},'user_note':COMMON|{'note'}}
+FIELDS={'feedback':COMMON|{'value','score','direction','reason','note'},'exclude':COMMON|{'reason','note'},'restore':COMMON,'recheck':COMMON|{'on'},'geocode':COMMON|{'on'},'write_request':COMMON|{'on','kind'},'user_note':COMMON|{'note'},'ticket':COMMON|{'kind','text'},'mark_applied':COMMON|{'on','note'},'outcome':COMMON|{'value','rejection_reason','rejection_note'},'outcome_undo':COMMON}
+KINDS={'write_request':('cv','cover_letter'),'ticket':('rescore','free')}
 if not isinstance(req,dict) or req.get('op') not in FIELDS or set(req)-FIELDS[req['op']]: fail('request_invalid')
 op=req['op']; pid=req.get('id'); expect=req.get('expect')
 if not isinstance(pid,str) or not pid.isdigit() or pid.startswith('0') or len(pid)>18: fail('request_invalid')
@@ -48,13 +49,15 @@ os.environ['JHT_HOME']=HOME
 try: info=os.lstat(HOME+'/jobs.db')
 except OSError: fail('deck_outdated')
 if info.st_ino!=expect['ino'] or info.st_dev!=expect['dev']: fail('deck_outdated')
-for key in ('value','direction','reason','note','kind'):
+for key in ('value','direction','reason','note','kind','text','rejection_reason','rejection_note'):
  if key in req and not isinstance(req[key],str): fail('request_invalid')
 if 'score' in req and (type(req['score']) is not int or not 1<=req['score']<=5): fail('request_invalid')
 if 'on' in FIELDS[op] and type(req.get('on')) is not bool: fail('request_invalid')
-if req.get('kind','cv') not in ('cv','cover_letter'): fail('request_invalid')
+if 'kind' in req and req['kind'] not in KINDS.get(op,()): fail('request_invalid')
+if op=='ticket' and ('kind' not in req or not isinstance(req.get('text'),str)): fail('request_invalid')
+if op=='outcome' and req.get('value') not in ('interview','rejected'): fail('request_invalid')
 switch='--on' if req.get('on') else '--off'
-note_op=op in ('feedback','exclude') and 'note' in req
+note_op=(op in ('feedback','exclude','mark_applied') and 'note' in req) or (op=='outcome' and 'rejection_note' in req)
 if op=='feedback':
  argv=['feedback',pid,'--value',req.get('value','')]
  if 'score' in req: argv+=['--score',str(req['score'])]
@@ -64,10 +67,19 @@ elif op=='exclude': argv=['exclude',pid,'--reason',req.get('reason','')]
 elif op=='restore': argv=['restore',pid]
 elif op in ('recheck','geocode'): argv=[op,pid,switch]
 elif op=='write_request': argv=['write-request',pid,switch,'--kind',req.get('kind','cv')]
+elif op=='ticket': argv=['ticket',pid,'--kind','rescore' if req['kind']=='rescore' else 'custom','--text-on-stdin']
+elif op=='mark_applied': argv=['mark-applied',pid,switch]
+elif op=='outcome':
+ argv=['outcome',pid,'--value',req['value']]
+ if 'rejection_reason' in req: argv+=['--reason',req['rejection_reason']]
+elif op=='outcome_undo': argv=['outcome-undo',pid]
 else: argv=['note',pid]
 if note_op: argv.append('--note-on-stdin')
-if note_op or op=='user_note':
- sys.stdin=io.TextIOWrapper(io.BytesIO((json.dumps({'note':req.get('note')},ensure_ascii=False)+'\n').encode('utf-8')),encoding='utf-8')
+feed=None
+if op=='ticket': feed={'text':req['text']}
+elif note_op or op=='user_note': feed={'note':req.get('rejection_note') if op=='outcome' else req.get('note')}
+if feed is not None:
+ sys.stdin=io.TextIOWrapper(io.BytesIO((json.dumps(feed,ensure_ascii=False)+'\n').encode('utf-8')),encoding='utf-8')
 PATH='/app/shared/skills/position_judgement.py'
 if not os.path.isfile(PATH): fail('runtime_outdated')
 try:
@@ -110,7 +122,58 @@ enum MoreRequest {
     Geocode { id: String, on: bool, token: String },
     WriteRequest { id: String, kind: WriteKind, on: bool, token: String },
     UserNote { id: String, #[serde(default)] body: Option<String>, token: String },
+    Ticket { id: String, kind: TicketKind, text: String, token: String },
+    MarkApplied { id: String, on: bool, #[serde(default)] note: Option<String>, token: String },
+    Outcome {
+        id: String,
+        value: OutcomeValue,
+        #[serde(default)]
+        rejection_reason: Option<String>,
+        #[serde(default)]
+        rejection_note: Option<String>,
+        token: String,
+    },
+    OutcomeUndo { id: String, token: String },
 }
+
+/// A request to the team about one position: the rescore (asked once while one waits) or a free request.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum TicketKind {
+    Rescore,
+    Free,
+}
+
+impl TicketKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Rescore => "rescore",
+            Self::Free => "free",
+        }
+    }
+}
+
+/// What the person may declare of a company's answer; the silence is derived by the team, never declared.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum OutcomeValue {
+    Interview,
+    Rejected,
+}
+
+impl OutcomeValue {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Interview => "interview",
+            Self::Rejected => "rejected",
+        }
+    }
+}
+
+/// The reasons of a rejection the person may choose, and the longest text of a note and of an application.
+const REJECTION_REASONS: &[&str] = &["location", "salary", "experience", "language"];
+const SHORT_NOTE_CHARS: usize = 500;
+const TICKET_TEXT_CHARS: usize = 2000;
 
 enum Act {
     Judge(JudgeRequest),
@@ -130,14 +193,32 @@ impl Act {
     fn id(&self) -> &str {
         match self {
             Self::Judge(request) => request.id(),
-            Self::More(MoreRequest::Recheck { id, .. } | MoreRequest::Geocode { id, .. } | MoreRequest::WriteRequest { id, .. } | MoreRequest::UserNote { id, .. }) => id,
+            Self::More(
+                MoreRequest::Recheck { id, .. }
+                | MoreRequest::Geocode { id, .. }
+                | MoreRequest::WriteRequest { id, .. }
+                | MoreRequest::UserNote { id, .. }
+                | MoreRequest::Ticket { id, .. }
+                | MoreRequest::MarkApplied { id, .. }
+                | MoreRequest::Outcome { id, .. }
+                | MoreRequest::OutcomeUndo { id, .. },
+            ) => id,
         }
     }
 
     fn token(&self) -> &str {
         match self {
             Self::Judge(request) => request.token(),
-            Self::More(MoreRequest::Recheck { token, .. } | MoreRequest::Geocode { token, .. } | MoreRequest::WriteRequest { token, .. } | MoreRequest::UserNote { token, .. }) => token,
+            Self::More(
+                MoreRequest::Recheck { token, .. }
+                | MoreRequest::Geocode { token, .. }
+                | MoreRequest::WriteRequest { token, .. }
+                | MoreRequest::UserNote { token, .. }
+                | MoreRequest::Ticket { token, .. }
+                | MoreRequest::MarkApplied { token, .. }
+                | MoreRequest::Outcome { token, .. }
+                | MoreRequest::OutcomeUndo { token, .. },
+            ) => token,
         }
     }
 
@@ -148,8 +229,21 @@ impl Act {
                 if !valid_id(self.id()) {
                     return Err("position_write_request_invalid");
                 }
+                let chars = |text: &str| text.trim().chars().count();
                 match more {
                     MoreRequest::UserNote { body: Some(body), .. } if body.len() > NOTE_MAX_BYTES => Err("note_too_long"),
+                    MoreRequest::Ticket { text, .. } if chars(text) == 0 => Err("request_empty"),
+                    MoreRequest::Ticket { text, .. } if chars(text) > TICKET_TEXT_CHARS => Err("request_too_long"),
+                    MoreRequest::MarkApplied { note: Some(note), .. } if chars(note) > SHORT_NOTE_CHARS => Err("note_too_long"),
+                    MoreRequest::Outcome { rejection_reason: Some(reason), .. } if !reason.is_empty() && !REJECTION_REASONS.contains(&reason.as_str()) => {
+                        Err("invalid_reason")
+                    }
+                    MoreRequest::Outcome { rejection_note: Some(note), .. } if chars(note) > SHORT_NOTE_CHARS => Err("invalid_note"),
+                    MoreRequest::Outcome { value: OutcomeValue::Interview, rejection_reason, rejection_note, .. }
+                        if rejection_reason.as_deref().is_some_and(|r| !r.is_empty()) || rejection_note.as_deref().is_some_and(|n| !n.trim().is_empty()) =>
+                    {
+                        Err("reason_only_on_rejection")
+                    }
                     _ => Ok(()),
                 }
             }
@@ -167,6 +261,29 @@ impl Act {
             Self::More(MoreRequest::WriteRequest { id, kind, on, .. }) => {
                 json!({ "op": "write_request", "id": id, "kind": kind.as_str(), "on": on, "expect": expect })
             }
+            Self::More(MoreRequest::Ticket { id, kind, text, .. }) => {
+                json!({ "op": "ticket", "id": id, "kind": kind.as_str(), "text": text, "expect": expect })
+            }
+            Self::More(MoreRequest::MarkApplied { id, on, note, .. }) => {
+                let mut line = json!({ "op": "mark_applied", "id": id, "on": on, "expect": expect });
+                // a note belongs to the mark, never to taking it back
+                if let (true, Some(note)) = (*on, note.as_deref().filter(|note| !note.trim().is_empty())) {
+                    line.as_object_mut().expect("an object").insert("note".into(), json!(note));
+                }
+                line
+            }
+            Self::More(MoreRequest::Outcome { id, value, rejection_reason, rejection_note, .. }) => {
+                let mut line = json!({ "op": "outcome", "id": id, "value": value.as_str(), "expect": expect });
+                let map = line.as_object_mut().expect("an object");
+                if let Some(reason) = rejection_reason.as_deref().filter(|reason| !reason.is_empty()) {
+                    map.insert("rejection_reason".into(), json!(reason));
+                }
+                if let Some(note) = rejection_note.as_deref().filter(|note| !note.trim().is_empty()) {
+                    map.insert("rejection_note".into(), json!(note));
+                }
+                line
+            }
+            Self::More(MoreRequest::OutcomeUndo { id, .. }) => json!({ "op": "outcome_undo", "id": id, "expect": expect }),
             Self::More(MoreRequest::UserNote { id, body, .. }) => {
                 let mut line = json!({ "op": "user_note", "id": id, "expect": expect });
                 if let Some(body) = body {
@@ -193,11 +310,34 @@ const REFUSALS: &[&str] = &[
     "cover_letter_requires_application",
     "write_request_refused",
     "geocode_refused",
+    "request_empty",
+    "request_too_long",
+    "not_applied",
+    "applied_by_team",
+    "no_outcome",
+    "invalid_reason",
+    "invalid_note",
+    "reason_only_on_rejection",
 ];
 
 /// The flags and the states the script's answer may carry, by the kind of value.
-const TEXT_FIELDS: &[&str] = &["op", "value", "reason", "direction", "status", "previous_status", "write_request_kind"];
-const FLAG_FIELDS: &[&str] = &["cloud_synced", "recheck_requested", "geocode_requested", "write_requested", "saved"];
+const TEXT_FIELDS: &[&str] = &[
+    "op",
+    "value",
+    "reason",
+    "direction",
+    "status",
+    "previous_status",
+    "write_request_kind",
+    "applied_at",
+    "applied_via",
+    "response",
+    "response_at",
+    "ticket_status",
+];
+const FLAG_FIELDS: &[&str] = &["cloud_synced", "recheck_requested", "geocode_requested", "write_requested", "saved", "deduplicated"];
+/// Whole numbers the answer may carry: the round of an interview, the number of a ticket.
+const NUMBER_FIELDS: &[(&str, u64)] = &[("interview_round", 1000), ("ticket_id", 1_000_000_000_000)];
 
 /// The script's answer, closed again: a fixed set of fields, a code only of the list.
 fn close_answer(output: &ProcessResult) -> Option<Value> {
@@ -218,6 +358,11 @@ fn close_answer(output: &ProcessResult) -> Option<Value> {
         for key in FLAG_FIELDS {
             if let Some(flag) = answer.get(*key).and_then(Value::as_bool) {
                 out.insert((*key).into(), Value::Bool(flag));
+            }
+        }
+        for (key, most) in NUMBER_FIELDS {
+            if let Some(number) = answer.get(*key).and_then(Value::as_u64).filter(|number| number <= most) {
+                out.insert((*key).into(), json!(number));
             }
         }
         if let Some(score) = answer.get("score").and_then(Value::as_u64).filter(|score| (1..=5).contains(score)) {
@@ -398,7 +543,7 @@ mod tests {
         let t = token();
         let mut cases: Vec<(Value, &str)> = vec![
             (json!({"op": "note", "id": "12", "token": t}), "position_write_request_invalid"),
-            (json!({"op": "mark_applied", "id": "12", "on": true, "token": t}), "position_write_request_invalid"),
+            (json!({"op": "apply_request", "id": "12", "on": true, "token": t}), "position_write_request_invalid"),
             (json!({"op": "recheck", "id": "12", "token": t}), "position_write_request_invalid"),
             (json!({"op": "recheck", "id": "12", "on": "yes", "token": t}), "position_write_request_invalid"),
             (json!({"op": "recheck", "id": "12", "on": true}), "position_write_request_invalid"),
@@ -409,6 +554,19 @@ mod tests {
             (json!({"op": "user_note", "id": "12", "body": 5, "token": t}), "position_write_request_invalid"),
             (json!({"op": "user_note", "id": "12", "text": "x", "token": t}), "position_write_request_invalid"),
             (json!({"op": "user_note", "id": "12", "body": "n".repeat(NOTE_MAX_BYTES + 1), "token": t}), "note_too_long"),
+            (json!({"op": "ticket", "id": "12", "kind": "rescore", "token": t}), "position_write_request_invalid"),
+            (json!({"op": "ticket", "id": "12", "kind": "custom", "text": "x", "token": t}), "position_write_request_invalid"),
+            (json!({"op": "ticket", "id": "12", "kind": "free", "text": "   ", "token": t}), "request_empty"),
+            (json!({"op": "ticket", "id": "12", "kind": "free", "text": "x".repeat(2001), "token": t}), "request_too_long"),
+            (json!({"op": "mark_applied", "id": "12", "token": t}), "position_write_request_invalid"),
+            (json!({"op": "mark_applied", "id": "12", "on": true, "note": "n".repeat(501), "token": t}), "note_too_long"),
+            (json!({"op": "outcome", "id": "12", "value": "ghosted", "token": t}), "position_write_request_invalid"),
+            (json!({"op": "outcome", "id": "12", "token": t}), "position_write_request_invalid"),
+            (json!({"op": "outcome", "id": "12", "value": "rejected", "rejection_reason": "weather", "token": t}), "invalid_reason"),
+            (json!({"op": "outcome", "id": "12", "value": "rejected", "rejection_note": "n".repeat(501), "token": t}), "invalid_note"),
+            (json!({"op": "outcome", "id": "12", "value": "interview", "rejection_reason": "salary", "token": t}), "reason_only_on_rejection"),
+            (json!({"op": "outcome", "id": "12", "value": "interview", "rejection_note": "x", "token": t}), "reason_only_on_rejection"),
+            (json!({"op": "outcome_undo", "id": "12", "token": t, "value": "rejected"}), "position_write_request_invalid"),
             (json!({"id": "12", "token": t}), "position_write_request_invalid"),
             (json!({"op": 7, "id": "12", "token": t}), "position_write_request_invalid"),
         ];
@@ -466,6 +624,19 @@ mod tests {
                 json!({"op": "feedback", "id": "12", "value": "dislike", "score": 2, "reason": "too_senior", "note": "n", "expect": expect}),
             ),
             (json!({"op": "restore", "id": "12", "token": t}), json!({"op": "restore", "id": "12", "expect": expect})),
+            (
+                json!({"op": "ticket", "id": "12", "kind": "rescore", "text": "Rivaluta", "token": t}),
+                json!({"op": "ticket", "id": "12", "kind": "rescore", "text": "Rivaluta", "expect": expect}),
+            ),
+            (json!({"op": "mark_applied", "id": "12", "on": true, "note": "dal sito", "token": t}), json!({"op": "mark_applied", "id": "12", "on": true, "note": "dal sito", "expect": expect})),
+            (json!({"op": "mark_applied", "id": "12", "on": false, "note": "ignorata", "token": t}), json!({"op": "mark_applied", "id": "12", "on": false, "expect": expect})),
+            (json!({"op": "mark_applied", "id": "12", "on": true, "note": "  ", "token": t}), json!({"op": "mark_applied", "id": "12", "on": true, "expect": expect})),
+            (
+                json!({"op": "outcome", "id": "12", "value": "rejected", "rejection_reason": "salary", "rejection_note": "troppo basso", "token": t}),
+                json!({"op": "outcome", "id": "12", "value": "rejected", "rejection_reason": "salary", "rejection_note": "troppo basso", "expect": expect}),
+            ),
+            (json!({"op": "outcome", "id": "12", "value": "interview", "rejection_reason": "", "token": t}), json!({"op": "outcome", "id": "12", "value": "interview", "expect": expect})),
+            (json!({"op": "outcome_undo", "id": "12", "token": t}), json!({"op": "outcome_undo", "id": "12", "expect": expect})),
         ];
         for (request, line) in cases {
             let (_, _, runs, _, input) = drive(request.clone(), true, Ok(()), said(0, "{}"), true);
@@ -489,10 +660,35 @@ mod tests {
             drive(request.clone(), true, Ok(()), said(0, said_ok), true).0,
             json!({"ok": true, "op": "write-request", "write_requested": true, "write_request_kind": "cv"})
         );
+        let said_ok = r#"{"ok":true,"op":"ticket","id":"12","ticket_id":7,"ticket_status":"assigned","deduplicated":true,"request_text":"private"}"#;
+        let ticket = json!({"op": "ticket", "id": "12", "kind": "rescore", "text": "x", "token": t});
+        assert_eq!(
+            drive(ticket, true, Ok(()), said(0, said_ok), true).0,
+            json!({"ok": true, "op": "ticket", "ticket_status": "assigned", "deduplicated": true, "ticket_id": 7})
+        );
+        let said_ok = r#"{"ok":true,"op":"outcome","id":"12","status":"response","response":"rejected","response_at":"2026-11-03T08:00:00.000Z","interview_round":null,"rejection_note":"private"}"#;
+        let outcome = json!({"op": "outcome", "id": "12", "value": "rejected", "token": t});
+        assert_eq!(
+            drive(outcome.clone(), true, Ok(()), said(0, said_ok), true).0,
+            json!({"ok": true, "op": "outcome", "status": "response", "response": "rejected", "response_at": "2026-11-03T08:00:00.000Z"})
+        );
+        let said_ok = r#"{"ok":true,"op":"mark-applied","id":"12","status":"applied","applied_at":"2026-11-03T08:00:00.000Z","applied_via":"user_manual"}"#;
+        let marked = json!({"op": "mark_applied", "id": "12", "on": true, "token": t});
+        assert_eq!(
+            drive(marked, true, Ok(()), said(0, said_ok), true).0,
+            json!({"ok": true, "op": "mark-applied", "status": "applied", "applied_at": "2026-11-03T08:00:00.000Z", "applied_via": "user_manual"})
+        );
+        // a number the page would not expect is not passed on
+        let said_big = r#"{"ok":true,"op":"outcome","interview_round":99999999,"ticket_id":-1}"#;
+        assert_eq!(drive(outcome, true, Ok(()), said(0, said_big), true).0, json!({"ok": true, "op": "outcome"}));
         let said_ok = r#"{"ok":true,"op":"note","id":"12","saved":true}"#;
         let note = json!({"op": "user_note", "id": "12", "body": "x", "token": t});
         assert_eq!(drive(note, true, Ok(()), said(0, said_ok), true).0, json!({"ok": true, "op": "note", "saved": true}));
-        for code in ["position_not_found", "bad_status", "already_applied", "cover_letter_requires_application", "write_request_refused", "geocode_refused", "note_too_long", "note_invalid", "deck_outdated"] {
+        for code in [
+            "position_not_found", "bad_status", "already_applied", "cover_letter_requires_application", "write_request_refused", "geocode_refused",
+            "note_too_long", "note_invalid", "deck_outdated", "request_empty", "request_too_long", "not_applied", "applied_by_team", "no_outcome",
+            "invalid_reason", "invalid_note", "reason_only_on_rejection",
+        ] {
             let text = format!(r#"{{"ok":false,"op":"x","id":"12","code":"{code}","detail":"/secret/path"}}"#);
             assert_eq!(drive(request.clone(), true, Ok(()), said(1, &text), true).0, failure(code), "{code}");
         }
@@ -540,12 +736,10 @@ mod tests {
             assert!(!ACT_PY.contains(forbidden), "{forbidden}");
         }
         let fields = ACT_PY.split("FIELDS={").nth(1).unwrap().split('\n').next().unwrap();
-        for op in ["feedback", "exclude", "restore", "recheck", "geocode", "write_request", "user_note"] {
+        for op in ["feedback", "exclude", "restore", "recheck", "geocode", "write_request", "user_note", "ticket", "mark_applied", "outcome", "outcome_undo"] {
             assert!(fields.contains(&format!("'{op}':")), "{op}");
         }
         // the authorisation to apply is not here: it is written in the broker too, and is its own piece
-        for other in ["apply", "mark_applied", "outcome", "ticket"] {
-            assert!(!fields.contains(other), "{other}");
-        }
+        assert!(!fields.contains("apply"));
     }
 }

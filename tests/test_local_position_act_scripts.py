@@ -97,6 +97,37 @@ def test_the_private_note_is_written_replaced_and_taken_away(tmp_path):
     assert _query(home, "SELECT count(*) FROM position_user_notes") == [(0,)]
 
 
+def test_a_ticket_is_opened_once_for_a_rescore_and_the_text_is_the_persons_own(tmp_path):
+    home = _team(tmp_path)
+    first = _act(home, {"op": "ticket", "id": "1", "kind": "free", "text": "Controlla\nl'indirizzo, è già cambiato"})
+    assert first["ok"] is True and first["deduplicated"] is False and first["ticket_status"] == "open"
+    assert _query(home, "SELECT request_text, kind, status FROM position_tickets WHERE id = ?", first["ticket_id"]) == [("Controlla\nl'indirizzo, è già cambiato", "custom", "open")]
+    one = _act(home, {"op": "ticket", "id": "1", "kind": "rescore", "text": "Rivaluta"})
+    again = _act(home, {"op": "ticket", "id": "1", "kind": "rescore", "text": "Rivaluta ancora"})
+    assert again["deduplicated"] is True and again["ticket_id"] == one["ticket_id"]
+    assert _query(home, "SELECT count(*) FROM position_tickets WHERE kind = 'rescore'") == [(1,)]
+    assert _act(home, {"op": "ticket", "id": "1", "kind": "free", "text": "x" * 2001})["code"] == "request_too_long"
+    assert _act(home, {"op": "ticket", "id": "1", "kind": "free", "text": " "})["code"] == "request_empty"
+    assert _act(home, {"op": "ticket", "id": "1", "kind": "poem", "text": "x"}) == {"ok": False, "code": "request_invalid"}
+    assert _act(home, {"op": "ticket", "id": "1", "kind": "free"}) == {"ok": False, "code": "request_invalid"}
+
+
+def test_an_application_marked_by_hand_gets_an_answer_and_both_are_taken_back(tmp_path):
+    home = _team(tmp_path)
+    assert _act(home, {"op": "outcome", "id": "1", "value": "rejected"})["code"] == "not_applied"
+    marked = _act(home, {"op": "mark_applied", "id": "1", "on": True, "note": "dal sito"})
+    assert marked["ok"] is True and marked["status"] == "applied" and marked["applied_via"] == "user_manual"
+    answer = _act(home, {"op": "outcome", "id": "1", "value": "rejected", "rejection_reason": "salary", "rejection_note": "troppo basso"})
+    assert answer["ok"] is True and answer["response"] == "rejected" and answer["status"] == "response"
+    assert _query(home, "SELECT status, response, rejection_reason, rejection_note FROM applications WHERE position_id = 1") == [("response", "rejected", "salary", "troppo basso")]
+    assert _act(home, {"op": "outcome_undo", "id": "1"})["status"] == "applied"
+    assert _query(home, "SELECT response, rejection_reason FROM applications WHERE position_id = 1") == [(None, None)]
+    assert _act(home, {"op": "mark_applied", "id": "1", "on": False})["status"] == "scored"
+    assert _query(home, "SELECT status FROM positions WHERE id = 1") == [("scored",)]
+    assert _act(home, {"op": "mark_applied", "id": "1", "on": False})["code"] == "not_applied"
+    assert _act(home, {"op": "outcome_undo", "id": "1"})["code"] == "no_outcome"
+
+
 def test_the_judgement_still_works_through_the_same_script(tmp_path):
     home = _team(tmp_path)
     out = _act(home, {"op": "exclude", "id": "2", "reason": "wrong_stack", "note": "no thanks"})
@@ -108,17 +139,21 @@ def test_the_judgement_still_works_through_the_same_script(tmp_path):
 def test_a_read_on_another_database_is_an_old_read_and_nothing_is_written(tmp_path):
     first, second = _team(tmp_path, "first"), _team(tmp_path, "second")
     for request in ({"op": "recheck", "id": "1", "on": True}, {"op": "geocode", "id": "1", "on": True},
-                    {"op": "write_request", "id": "1", "on": True, "kind": "cv"}, {"op": "user_note", "id": "1", "note": "x"}):
+                    {"op": "write_request", "id": "1", "on": True, "kind": "cv"}, {"op": "user_note", "id": "1", "note": "x"},
+                    {"op": "ticket", "id": "1", "kind": "free", "text": "x"}, {"op": "mark_applied", "id": "1", "on": True},
+                    {"op": "outcome", "id": "1", "value": "rejected"}, {"op": "outcome_undo", "id": "1"}):
         assert _act(second, request, expect=_expect(first)) == {"ok": False, "code": "deck_outdated"}, request
     assert _query(second, "SELECT recheck_requested, geocode_requested, write_requested FROM positions WHERE id = 1") == [(0, 0, 0)]
     assert _query(second, "SELECT count(*) FROM position_user_notes") == [(0,)]
+    assert _query(second, "SELECT count(*) FROM position_tickets") == [(0,)]
+    assert _query(second, "SELECT status FROM positions WHERE id = 1") == [("scored",)]
 
 
 @pytest.mark.parametrize(
     "request_",
     [
         {"op": "note", "id": "1"},
-        {"op": "mark_applied", "id": "1", "on": True},
+        {"op": "apply_request", "id": "1", "on": True},
         {"op": "recheck", "id": "1"},
         {"op": "recheck", "id": "1", "on": 1},
         {"op": "recheck", "id": "1", "on": "yes"},
@@ -129,6 +164,13 @@ def test_a_read_on_another_database_is_an_old_read_and_nothing_is_written(tmp_pa
         {"op": "geocode", "id": "0", "on": True},
         {"op": "geocode", "id": 1, "on": True},
         {"op": "geocode", "id": "1" * 19, "on": True},
+        {"op": "ticket", "id": "1", "kind": "rescore"},
+        {"op": "ticket", "id": "1", "kind": "custom", "text": "x"},
+        {"op": "mark_applied", "id": "1"},
+        {"op": "mark_applied", "id": "1", "on": True, "extra": 1},
+        {"op": "outcome", "id": "1", "value": "ghosted"},
+        {"op": "outcome", "id": "1"},
+        {"op": "outcome_undo", "id": "1", "value": "rejected"},
     ],
 )
 def test_a_request_that_is_not_closed_is_refused_and_writes_nothing(tmp_path, request_):
