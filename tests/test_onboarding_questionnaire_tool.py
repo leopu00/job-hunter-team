@@ -252,3 +252,52 @@ def test_ask_does_not_post_the_same_step_again_while_an_answer_waits_to_be_appli
     assert len(cards(box)) == 1
     assert ok(box, "apply")["applied"]
     assert ok(box, "ask")["step"] == "specialty_sw"
+
+
+# ── a profile that already holds the answer (03/11, burst with the least profile) ──
+
+def steps_until_experience(box) -> None:
+    for choice in ("software", "backend"):
+        answer_step(box, choice)
+
+
+def test_the_experience_card_is_not_asked_when_the_profile_already_has_the_years_and_the_level(box):
+    put_profile(box, experience_years=9, seniority_target="senior")
+    before = ok(box, "status")
+    assert before["total"] == 8, before  # the step is not one of the steps that apply to this person
+    steps_until_experience(box)
+    out = ok(box, "status")
+    assert out["next"] == "current_status", out
+    asked = ok(box, "ask")
+    assert asked["step"] == "current_status"
+
+
+def test_with_only_one_of_the_two_the_card_is_still_asked_and_the_years_the_person_gave_are_kept(box):
+    put_profile(box, experience_years=9)
+    steps_until_experience(box)
+    assert ok(box, "status")["next"] == "experience"
+    out = answer_step(box, "mid")  # the band's own threshold is 3
+    assert out["applied"] is True
+    assert profile(box)["experience_years"] == 9 and profile(box)["seniority_target"] == "mid"
+
+
+def test_zero_years_is_an_answer_and_blank_text_is_not(box):
+    put_profile(box, experience_years=0, seniority_target="entry")
+    steps_until_experience(box)
+    assert ok(box, "status")["next"] == "current_status"
+    put_profile(box, experience_years=0, seniority_target="  ")
+    assert ok(box, "status")["next"] == "experience"
+
+
+def test_the_threshold_is_written_when_the_profile_has_no_years(box):
+    put_profile(box)
+    steps_until_experience(box)
+    answer_step(box, "senior")
+    assert profile(box)["experience_years"] == 7 and profile(box)["seniority_target"] == "senior"
+
+
+def test_an_unreadable_profile_skips_nothing(box):
+    path = box.home / PROFILE
+    path.parent.mkdir(exist_ok=True)
+    path.write_text("{ not: [yaml", encoding="utf-8")
+    assert ok(box, "status")["total"] == 9

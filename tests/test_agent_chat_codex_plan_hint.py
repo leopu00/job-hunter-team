@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "shared" / "skills"
 MESSAGE = (
-    "The subscription plan is declared and the candidate profile is complete: the team can start. "
+    "The subscription plan is declared and the candidate profile has what the search needs to start (role, place, language): the team can start, the rest of the profile is still being filled in. "
     "Run first_run.py begin-burst and follow your first-run-burst skill."
 )
 RULE = "─" * 170

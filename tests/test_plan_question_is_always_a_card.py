@@ -55,7 +55,7 @@ def configure(box, plan: str | None = None, provider: str = "openai") -> None:
     (box.home / "jht.config.json").write_text(json.dumps(config), encoding="utf-8")
 
 
-def import_profile(box, minutes_ago: float = 0, content: str = "name: Test Person\ntarget_role: Backend engineer\n") -> Path:
+def import_profile(box, minutes_ago: float = 0, content: str = "name: Test Person\ntarget_role: Backend engineer\nlocation: Stockholm\nlanguages:\n  - {language: Swedish, level: B2}\n") -> Path:
     profile = box.home / "profile"
     profile.mkdir(exist_ok=True)
     path = profile / "candidate_profile.yml"

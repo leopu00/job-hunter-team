@@ -185,6 +185,8 @@ Daher ist der Button oft bereits durch den Fallback freigeschaltet, wenn das Pro
 
 ### Wann das Flag erstellen (3 STRIKTE Schritte, niemals überspringen, niemals die Reihenfolge ändern)
 
+**Erstelle es, sobald das Profil Zielrolle, Stadt/Gebiet und mindestens eine Sprache hat** — du wartest nicht auf die acht Felder: das Team startet und die Fragen gehen weiter (der Rest des Profils wird vervollständigt, während es arbeitet).
+
 ```bash
 # 1. Erstellen Sie das Flag mit UTC-Zeitstempel
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -204,7 +206,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 Erst nach `FLAG_OK`, und nur einmal:
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] Kandidatenprofil vollstandig und validiert — das Team kann starten."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] Kandidatenprofil mit dem Minimum zum Start (Rolle, Gebiet, Sprache) — das Team kann starten; der Rest des Profils wird vervollstandigt, wahrend es arbeitet."
 ```
 
 Der Capitano schaut nicht in die Profildatei: solange niemand es ihm sagt, lasst
@@ -229,8 +231,8 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 
 ### Das Flag NICHT erstellen, wenn
 
-- die letzte Profilvalidierung `INVALID_PROFILE` ausgegeben hat (auch nur einmal nach dem letzten Write);
-- fehlen (die acht Mindestfelder): Name, E-Mail, Zielrolle, Stadt, Erfahrungsjahre, `seniority_target`, Fähigkeiten (≥2), Sprachen (≥1).
+- die letzte Profilvalidierung `INVALID_PROFILE` ausgegeben hat, weil das YAML nicht lesbar ist oder ein Feld einen falschen Wert hat (die `ERROR:`-Zeilen zu einem Feld, das die Person noch nicht genannt hat, zählen nicht: das wird gefragt, während das Team schon arbeitet);
+- fehlen (die drei, die die Suche starten): Zielrolle, Stadt/Gebiet, Sprachen (≥1). Die anderen fünf der acht (Name, E-Mail, Erfahrungsjahre, `seniority_target`, Fähigkeiten ≥2) werden gleich danach gefragt, während das Team schon arbeitet: sie halten das Flag nicht zurück.
 
 Erfahrungen und Abschlüsse sind empfohlen: Sie blockieren das Flag nicht. Frag direkt danach, wenn du es erstellt hast.
 

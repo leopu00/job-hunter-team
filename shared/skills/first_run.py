@@ -47,6 +47,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -393,22 +394,75 @@ ANSWER_PREFIX = "ans:"  # agent_questions.ANSWER_PREFIX: a test holds them equal
 _NOTIFY_ID = re.compile(r"\bid=(aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16})\b")
 
 
-def _profile_imported() -> Optional[float]:
-    """When the candidate profile became usable (the modification time of its file), None while it is not.
+LAUNCHABLE_PATH = JHT_HOME / "state" / "first-run-launchable.json"
 
-    «Usable» is the product's own gate for the profile (`profile_gate`: a YAML with a target role, a name that
-    is not the template's, and one more signal), the same line the Assistente draws before it announces the
-    profile ready. A missing, empty or half-written file is a profile not imported yet; so is a gate that cannot
-    run (no YAML reader): the net stays quiet rather than ask early."""
+
+def _launch_missing(path: Path) -> Optional[list]:
+    """What the profile lacks to START the search (a role, a place, a language), None when it cannot be told
+    (no YAML reader, no validator, a file that does not parse)."""
+    validator = _load_module("validate_profile", "validate_profile.py")
+    if validator is None:
+        return None
+    try:
+        import yaml
+        with open(path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+        return validator.team_launch_missing(data)
+    except Exception:  # a half-written file raises many things: the answer is then «cannot be told»
+        return None
+
+
+def _first_seen_launchable(now: float, launchable: bool) -> Optional[float]:
+    """When the watchdog first saw the profile launchable, kept in a file of its own while it stays so, so that
+    the questionnaire rewriting the profile after every card does not start the wait again. The record goes
+    when the profile stops being launchable: a profile that is launchable again is a new one."""
+    try:
+        record = json.loads(LAUNCHABLE_PATH.read_text(encoding="utf-8"))
+        since = record.get("since")
+        since = float(since) if isinstance(since, (int, float)) and not isinstance(since, bool) else None
+    except (OSError, ValueError, AttributeError):
+        since = None
+    if not launchable:
+        if since is not None:
+            with contextlib.suppress(OSError):
+                LAUNCHABLE_PATH.unlink()
+        return None
+    if since is None:
+        since = now
+        try:
+            LAUNCHABLE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            LAUNCHABLE_PATH.write_text(json.dumps({"since": since}), encoding="utf-8")
+        except OSError:
+            pass  # not recorded: the wait counts from the file's modification, as it always did
+    return since
+
+
+def _profile_imported() -> Optional[float]:
+    """When the candidate profile became fit to START the team, None while it is not.
+
+    Fit is two things: the product's own gate for the profile (`profile_gate`: a YAML with a target role, a name
+    that is not the template's, and one more signal) and the least the search needs (`validate_profile
+    --launch`: a role, a place and a language). It is NOT the complete profile: the questionnaire goes on while
+    the team already works. A missing, empty or half-written file is a profile not imported yet; so is a gate
+    that cannot run (no YAML reader): the net stays quiet rather than ask early.
+
+    The moment is the earlier of the first time the profile was seen fit and the modification of its file: a
+    profile rewritten after every answer of the questionnaire is not a new profile each time."""
     gate = _load_module("profile_gate", "profile_gate.py")
     if gate is None:
         return None
     path = JHT_HOME / "profile" / "candidate_profile.yml"
     try:
         usable, _ = gate.check_minimum_viable_profile(str(path))
-        return path.stat().st_mtime if usable else None
+        missing = _launch_missing(path) if usable else None
+        fit = usable and missing == []
+        modified = path.stat().st_mtime if fit else None
+        first_seen = _first_seen_launchable(time.time(), fit)
     except (OSError, ValueError, AttributeError):
         return None
+    if not fit:
+        return None
+    return min(moment for moment in (modified, first_seen) if moment is not None)
 
 
 def _db_path() -> str:
@@ -681,7 +735,7 @@ START_ENTER_WAIT_S = float(os.environ.get("JHT_FIRST_RUN_ENTER_WAIT_S") or 2)
 START_ENTER_MAX = 6         # for one declared plan, all together: a composer that never takes it is the person's to look at
 START_NUDGE_SEND_S = float(os.environ.get("JHT_FIRST_RUN_SEND_S") or 25)  # the transport may hang: the watchdog's tick (respawns, bridges, mail) does not wait for it for long
 START_MESSAGE = (
-    "The subscription plan is declared and the candidate profile is complete: the team can start. "
+    "The subscription plan is declared and the candidate profile has what the search needs to start (role, place, language): the team can start, the rest of the profile is still being filled in. "
     "Run first_run.py begin-burst and follow your first-run-burst skill."
 )
 # The reminders are written in a file of their own, never in first-run.json: that file is the Capitano's (begin-burst

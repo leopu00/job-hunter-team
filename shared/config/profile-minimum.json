@@ -10,6 +10,12 @@
     "skills",
     "languages"
   ],
+  "launch_required": [
+    "target_role",
+    "location",
+    "languages"
+  ],
+  "launch_about": "The least the team needs to START searching, a part of `required`: the role the Scout searches for, the place it searches in and the language the portals are read in. The rest of `required` is asked while the team already works. Read by validate_profile.py --launch and by first_run.py; the cases above give the same answer through `missing` (launch missing = missing that is in launch_required).",
   "cases": [
     {
       "name": "the canonical shape: every required field at the root",

@@ -185,6 +185,8 @@ Donc souvent le bouton est déjà débloqué par le fallback quand le profil est
 
 ### Quand créer le flag (3 étapes STRICTES, ne jamais les sauter, ne jamais changer l'ordre)
 
+**Créez-le dès que le profil a un rôle visé, une ville/zone et au moins une langue** — vous n'attendez pas les huit champs : l'équipe démarre et les questions continuent (le reste du profil se complète pendant qu'elle travaille).
+
 ```bash
 # 1. Créez le flag avec un horodatage UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -204,7 +206,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 Seulement après `FLAG_OK`, et une seule fois :
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profil du candidat complet et validé — l'équipe peut démarrer."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profil du candidat avec le minimum pour démarrer (rôle, zone, langue) — l'équipe peut démarrer ; le reste du profil se complète pendant qu'elle travaille."
 ```
 
 Le Capitano ne regarde pas le fichier de profil : tant que personne ne le lui dit,
@@ -229,8 +231,8 @@ Et informez l'utilisateur : "j'ai remis le bouton en attente — revoyons ce poi
 
 ### NE PAS créer le flag si
 
-- la dernière validation du profil a affiché `INVALID_PROFILE` (même une seule fois après le dernier Write) ;
-- il manque (les huit champs minimum) : nom, email, rôle cible, ville, années d'expérience, `seniority_target`, compétences (≥2), langues (≥1).
+- la dernière validation du profil a affiché `INVALID_PROFILE` parce que le YAML ne se lit pas ou qu'un champ a une mauvaise valeur (les lignes `ERROR:` sur un champ que la personne n'a pas encore donné ne comptent pas : on le demande pendant que l'équipe travaille déjà) ;
+- manquent (les trois qui lancent la recherche) : rôle visé, ville/zone, langues (≥1). Les cinq autres des huit (nom, e-mail, années d'expérience, `seniority_target`, compétences ≥2) se demandent juste après, pendant que l'équipe travaille déjà : ils ne retiennent pas le flag.
 
 Expériences et diplômes sont recommandés : ils ne bloquent pas le flag. Demandez-les juste après l'avoir créé.
 

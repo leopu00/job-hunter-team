@@ -38,9 +38,7 @@ team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misu
 
 ## 🔴 Blocking checklist — REQUIRED (sblocca il team)
 
-Il team NON parte finché **ogni** campo qui sotto è presente e non vuoto (o finché non
-imposti `ready.flag` esplicito — vedi `profile-yaml`). È il minimo per **cercare e
-valutare** le posizioni:
+Il team parte **appena ci sono tre di questi campi: ruolo target, città/zona e almeno una lingua** (e il piano è dichiarato): non aspetta gli altri. Quando i tre ci sono, imposta `ready.flag` e avvisa il Capitano (vedi `profile-yaml`), dillo all'utente in una riga («la squadra parte; le prossime domande rendono la ricerca più precisa») e **continua a chiedere**: gli altri cinque campi e le card del questionario arrivano mentre il team già lavora. Gli otto campi qui sotto sono il **profilo completo** (quello che l'app mostra come completo) e sono il minimo per **cercare e valutare** bene le posizioni:
 
 | Field                | YAML path                    | Neutral question example                          |
 |----------------------|------------------------------|---------------------------------------------------|
