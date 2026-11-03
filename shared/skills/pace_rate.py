@@ -28,9 +28,10 @@ Regole, valide per qualunque contatore intero e per qualunque asse:
   5. La finestra e' la piu' corta, fra MIN_SPAN_H e MAX_SPAN_H, che contiene MIN_DELTA punti; altrimenti la piu' lunga.
   6. Una lettura isolata che crolla e alla lettura dopo torna al livello di prima (77, 0, 77) non e' un reset: e' una
      lettura sbagliata del provider. Non entra in nessuna serie (drop_isolated_readings); un reset vero non torna su.
-  7. I kT per punto (kt_per_point) si misurano sui punti GUADAGNATI in ore, salti compresi, non in una finestra da un'ora
-     da cui i salti sono tolti: con un contatore intero e aggiornato a scatti il rapporto di una finestra non e' il
-     rapporto del team (tick di un team reale, 28/10-03/11: 930 kT per punto contro i ~400 della settimana intera).
+  7. I kT per punto (kt_per_point) si misurano sui punti GUADAGNATI in ore, non in una finestra corta: con un contatore
+     intero il rapporto di una finestra e' rumore. Su un team reale (28/10-03/11, 29.886 kT su 75 punti = ~400 per
+     punto) le finestre da 15 minuti danno fra 110 e 1295 (10o-90o percentile, massimo 1476: i 930 dei messaggi del
+     tick), quelle da un'ora fra 51 e 593; su 6-48 ore, almeno 8 punti, il rapporto sta fra 146 e 517 (mediana 371).
 
 Funzione pura: nessun I/O. Usata da weekly_pace.py, compute_metrics.py e dal pacing-bridge.
 """
@@ -150,9 +151,8 @@ def kt_per_point(samples, events, now_ts, *, min_gain=RATIO_MIN_GAIN, min_span_h
 
     `samples` = [(epoch, valore)] del contatore, `events` = [(epoch, kT)] del consumo del team. Guadagno = somma dei passi
     in su, senza le letture isolate; i cali (reset) contano zero e il guadagno ricomincia da li'. I salti di JUMP_PTS punti
-    o piu' CONTANO (come nel totale della settimana, dove 29.886 kT su 75 punti dicono ~400): un contatore che il provider
-    aggiorna a scatti, ogni tanto, fa passi da 3 punti che sono consumo del team; toglierli (come fa adjust_series per il
-    ritmo) lascia i kT interi su meno punti e gonfia il rapporto. L'inizio e' il punto piu' vicino a ora che sta a almeno `min_span_h` ore e porta almeno `min_gain` punti; mai
+    o piu' CONTANO, come nel totale della settimana (29.886 kT su 75 punti = ~400): su una finestra di ore sono rari
+    (sul team misurato, un solo salto da 3 punti in sei giorni) e il rapporto deve restare quello del consumo reale. L'inizio e' il punto piu' vicino a ora che sta a almeno `min_span_h` ore e porta almeno `min_gain` punti; mai
     oltre `max_span_h`. Ritorna {ratio, kt, gain, span_h} o None: chi legge ripiega su altro, non su un numero finto.
     """
     since = now_ts - max_span_h * 3600.0

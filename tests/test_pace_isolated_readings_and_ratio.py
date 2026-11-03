@@ -4,8 +4,8 @@
      una serie nuova, accorciava la finestra del ritmo e lasciava la proiezione uguale al livello: «SOTTOUTILIZZO 77 %
      con il reset fra 22 h» (consiglio di spingere con il mercato esaurito).
   2. Senza un ritmo misurato non c'e' un verdetto «sotto»: la proiezione e' il livello, non un consumo.
-  3. Il rapporto kT per punto del tick (una finestra da un'ora, contatore intero) usciva a 930 contro i ~400 della settimana:
-     le finestre in cui il contatore non si muove erano scartate, quelle con un passo contavano tutti i kT su un punto.
+  3. Il rapporto kT per punto del tick (una finestra corta, contatore intero) usciva a 930 contro i ~400 della settimana:
+     una finestra vede 0, 1 o 2 passi, quelle senza passo sono scartate e il rapporto di quelle che restano e' rumore.
 """
 import sys
 from datetime import datetime, timedelta, timezone
