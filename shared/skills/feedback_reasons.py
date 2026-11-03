@@ -65,27 +65,42 @@ def safe_reason(value):
     return LEGACY.get(text, "other")
 
 
-def clean_note(value) -> str:
+def clean_note(value, keep_lines: bool = False) -> str:
     """La nota dell'utente, ripulita: NFC, senza controlli né comandi bidi, spazi singoli.
 
     ZWJ e ZWNJ restano: con quelli si scrive (emoji composte, persiano, hindi).
 
     Non taglia: chi la scrive controlla `len(...) <= NOTE_MAX` e rifiuta, così
     un testo troppo lungo non viene accorciato di nascosto.
+
+    `keep_lines`: per la nota privata della pagina (un riquadro di testo, non un
+    commento di una riga) gli a capo restano, al massimo una riga vuota di fila.
     """
     if value is None:
         return ""
     text = unicodedata.normalize("NFC", str(value))
+    if keep_lines:
+        text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\u2028", "\n").replace("\u2029", "\n")
     kept = []
     for ch in text:
         cat = unicodedata.category(ch)
-        if ch in "\r\n\t\u2028\u2029" or cat == "Zs":
+        if keep_lines and ch == "\n":
+            kept.append(ch)
+        elif ch in "\r\n\t\u2028\u2029" or cat == "Zs":
             kept.append(" ")
         elif ch in INVISIBLE_COMMANDS or cat in ("Cc", "Cs", "Co", "Cn"):
             continue
         else:
             kept.append(ch)
-    return " ".join("".join(kept).split())
+    cleaned = "".join(kept)
+    if not keep_lines:
+        return " ".join(cleaned.split())
+    lines = [" ".join(line.split()) for line in cleaned.split("\n")]
+    out = []
+    for line in lines:
+        if line or (out and out[-1]):
+            out.append(line)
+    return "\n".join(out).strip()
 
 
 def migrated_note(value) -> str | None:

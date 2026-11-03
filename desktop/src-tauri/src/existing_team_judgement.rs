@@ -158,7 +158,7 @@ fn valid_id(id: &str) -> bool {
 }
 
 /// A sha-256 in lowercase hex: the preview's digest.
-fn valid_digest(value: &str) -> bool {
+pub(crate) fn valid_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
@@ -172,7 +172,7 @@ pub(crate) struct BrokerRecord {
     destination: String,
 }
 
-fn valid_instant(value: &str) -> bool {
+pub(crate) fn valid_instant(value: &str) -> bool {
     let b = value.as_bytes();
     b.len() == 24
         && b.iter().enumerate().all(|(i, c)| match i {
@@ -185,7 +185,7 @@ fn valid_instant(value: &str) -> bool {
         })
 }
 
-fn valid_destination(value: &str) -> bool {
+pub(crate) fn valid_destination(value: &str) -> bool {
     let domain = |rest: &str| {
         (3..=253).contains(&rest.len())
             && rest.contains('.')
@@ -201,7 +201,12 @@ fn valid_destination(value: &str) -> bool {
 }
 
 impl BrokerRecord {
-    fn from_reply(id: &str, reply: &Value) -> Option<Self> {
+    /// The three fields, each already closed: the position's number, the instant and the destination.
+    pub(crate) fn fields(&self) -> (&str, &str, &str) {
+        (&self.id, &self.instant, &self.destination)
+    }
+
+    pub(crate) fn from_reply(id: &str, reply: &Value) -> Option<Self> {
         let instant = reply.get("instant")?.as_str()?;
         let destination = reply.get("destination")?.as_str()?;
         (valid_id(id) && valid_instant(instant) && valid_destination(destination)).then(|| Self {

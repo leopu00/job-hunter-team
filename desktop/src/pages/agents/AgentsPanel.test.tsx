@@ -431,10 +431,12 @@ describe("«Agenti», the agents' control panel", () => {
     expect(alert).not.toHaveTextContent("agent_control_no_team");
   });
 
-  it("keeps the code of a failure the catalog has no sentence for, so that a report can name it", async () => {
+  it("says a sentence and what to do for a failure the catalog has no sentence for, never its code", async () => {
     native.invoke.mockImplementation(async () => ({ ok: false, error: "code_the_catalog_does_not_know" }));
     show();
-    expect(await screen.findByTestId("panel-error")).toHaveTextContent("(code_the_catalog_does_not_know)");
+    const failed = await screen.findByTestId("panel-error");
+    expect(failed).toHaveTextContent(describeError("agents_unavailable", { locale: "it" }).text);
+    expect(failed).not.toHaveTextContent("code_the_catalog_does_not_know");
   });
 
   it("with no team running it offers «Avvia la squadra», and reads again once the team is up", async () => {
@@ -1003,7 +1005,7 @@ describe("«Agenti», answering an agent's question from the panel", () => {
     await waitFor(() => expect(answers()).toEqual([{ op: "answer", question: QUESTION, choice: "lungo", target: "T1", confirmed: true }]));
   });
 
-  it("says when the answer was already given elsewhere, when the question had expired, and a refusal with its code", async () => {
+  it("says when the answer was already given elsewhere, when the question had expired, and a refusal without its code", async () => {
     answerReply = { ok: true, data: { result: "already_answered" } };
     show("agent=SCRITTORE-1");
     fireEvent.click(await screen.findByTestId("panel-answer-breve"));
@@ -1017,7 +1019,9 @@ describe("«Agenti», answering an agent's question from the panel", () => {
     answerReply = { ok: false, error: "answer_refused" };
     show("agent=SCRITTORE-1");
     fireEvent.click(await screen.findByTestId("panel-answer-breve"));
-    expect(await screen.findByTestId("panel-notice")).toHaveTextContent(/answer_refused/);
+    const refused = await screen.findByTestId("panel-notice");
+    expect(refused).not.toHaveTextContent(/answer_refused/);
+    expect(refused.textContent ?? "").not.toBe("");
   });
 
   it("has no buttons for a question with several choices, with room for words, or written before the contract", async () => {

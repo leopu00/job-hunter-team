@@ -62,10 +62,17 @@ export const T: Record<
     fNoResults: string;
     fSort: string;
     sortLabels: Record<string, string>;
+    // La descrizione della card: nessuna scritta dal team, oppure non è arrivata in pochi secondi.
+    summaryEmpty: string;
+    summaryFailed: string;
+    summaryRetry: string;
   }
 > = {
   it: {
     title: "Swipe",
+    summaryEmpty: "Nessuna descrizione disponibile per questa posizione.",
+    summaryFailed: "Non riesco a leggere la descrizione adesso.",
+    summaryRetry: "Riprova",
     verdicts: {
       no: "Escludi",
       review_low: "Poco interessante",
@@ -133,6 +140,9 @@ export const T: Record<
   },
   en: {
     title: "Swipe",
+    summaryEmpty: "No description is available for this position.",
+    summaryFailed: "The description could not be read right now.",
+    summaryRetry: "Try again",
     verdicts: {
       no: "Exclude",
       review_low: "Slightly interesting",
@@ -199,6 +209,9 @@ export const T: Record<
   },
   hu: {
     title: "Swipe",
+    summaryEmpty: "Ehhez a pozícióhoz nincs elérhető leírás.",
+    summaryFailed: "A leírást most nem sikerült beolvasni.",
+    summaryRetry: "Újra",
     verdicts: {
       no: "Kizárás",
       review_low: "Kevéssé érdekes",
@@ -266,6 +279,9 @@ export const T: Record<
   },
   es: {
     title: "Swipe",
+    summaryEmpty: "No hay descripción disponible para esta posición.",
+    summaryFailed: "No se pudo leer la descripción ahora.",
+    summaryRetry: "Reintentar",
     verdicts: {
       no: "Excluir",
       review_low: "Poco interesante",
@@ -333,6 +349,9 @@ export const T: Record<
   },
   de: {
     title: "Swipe",
+    summaryEmpty: "Für diese Stelle liegt keine Beschreibung vor.",
+    summaryFailed: "Die Beschreibung konnte gerade nicht gelesen werden.",
+    summaryRetry: "Erneut versuchen",
     verdicts: {
       no: "Ausschließen",
       review_low: "Wenig interessant",
@@ -399,6 +418,9 @@ export const T: Record<
   },
   fr: {
     title: "Swipe",
+    summaryEmpty: "Aucune description n’est disponible pour ce poste.",
+    summaryFailed: "La description n’a pas pu être lue pour le moment.",
+    summaryRetry: "Réessayer",
     verdicts: {
       no: "Exclure",
       review_low: "Peu intéressant",
@@ -470,6 +492,9 @@ export const T: Record<
   },
   pt: {
     title: "Swipe",
+    summaryEmpty: "Não há descrição disponível para esta vaga.",
+    summaryFailed: "Não foi possível ler a descrição agora.",
+    summaryRetry: "Tentar de novo",
     verdicts: {
       no: "Excluir",
       review_low: "Pouco interessante",
