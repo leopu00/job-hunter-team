@@ -1249,14 +1249,20 @@ fn local_docker_cli() -> Result<PathBuf, &'static str> {
     candidates
         .into_iter()
         .find(|candidate| fs::metadata(candidate).is_ok_and(|metadata| metadata.is_file()))
-        .ok_or("runtime_missing")
+        .ok_or("container_engine_missing")
 }
 
 /// The JHT-private Podman shim is the only Podman engine selected from the runtime. Docker is
 /// resolved once to an executable path, never assembled from page input or a shell string.
+/// A runtime without a `container-runtime` file is a Docker one (Linux with Docker never writes it;
+/// the wrapper and the integrity check read it the same way): only a file that is there and cannot
+/// be read, or says something else, is refused.
 fn local_chat_engine(runtime: &Path) -> Result<LocalChatEngine, &'static str> {
-    let selection =
-        fs::read_to_string(runtime.join("container-runtime")).map_err(|_| "runtime_missing")?;
+    let selection = match fs::read_to_string(runtime.join("container-runtime")) {
+        Ok(value) => value,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => "docker".to_owned(),
+        Err(_) => return Err("runtime_missing"),
+    };
     match selection.trim() {
         "podman" => {
             let shim = runtime.join("bin").join(if cfg!(windows) {
@@ -5184,6 +5190,29 @@ mod tests {
         let docker = words(false);
         assert_eq!(docker[0], "compose");
         assert!(docker.iter().any(|word| word == "--project-directory"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_runtime_without_a_container_runtime_file_is_a_docker_one() {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let root = std::env::temp_dir().canonicalize().unwrap().join(format!(
+            "jht-local-chat-no-selection-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let runtime = root.join("host-runtime");
+        fs::create_dir_all(&runtime).unwrap();
+        // Linux with Docker never writes the file: the engine is Docker, never «the runtime is missing».
+        // Whether this machine has a docker program is the machine's; the cause is told truly either way.
+        match super::local_chat_engine(&runtime) {
+            Ok(engine) => assert!(!engine.podman),
+            Err(code) => assert_eq!(code, "container_engine_missing"),
+        }
+        // A file that says something else is still refused as a runtime that is not the installed one.
+        fs::write(runtime.join("container-runtime"), "lxc\n").unwrap();
+        assert_eq!(super::local_chat_engine(&runtime).err(), Some("runtime_missing"));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[cfg(unix)]
