@@ -18,6 +18,25 @@ export const RAIL_MIN_WIDTH = 768;
 export const RAIL_MAX_WIDTH = 1599;
 export const RAIL_QUERY = `(min-width: ${RAIL_MIN_WIDTH}px) and (max-width: ${RAIL_MAX_WIDTH}px)`;
 
+/**
+ * L'app desktop tiene i pannelli nei quattro angoli già da questa larghezza (il web, fino a RAIL_MAX_WIDTH):
+ * da 1500 px le due card in basso (420 px, zoom 1.15) lasciano libera la barra dei controlli, e un Mac a
+ * schermo intero (1512) ha i quattro filtri agli angoli come il web su uno schermo largo. Sotto, la colonna.
+ */
+export const DESKTOP_RAIL_MAX_WIDTH = 1499;
+
+let railMaxWidth = RAIL_MAX_WIDTH;
+
+/** Chi ospita la mappa (l'app desktop) sposta il limite superiore della colonna; il web non lo chiama. */
+export function setMapRailMaxWidth(width: number): void {
+  railMaxWidth = width;
+}
+
+/** La media query della colonna in vigore: la usano il CSS (page.tsx) e il JS (MapCharts), una sola. */
+export function railQuery(): string {
+  return `(min-width: ${RAIL_MIN_WIDTH}px) and (max-width: ${railMaxWidth}px)`;
+}
+
 /** Card d'angolo (layout largo), e card della colonna con i suoi margini. */
 export const CORNER_CARD_W = 420;
 export const RAIL_CARD_W = 360;
@@ -43,9 +62,10 @@ export function railClearance(containerWidth: number): number {
  * non entra nella fascia media: lì diventa la colonna. !important perché
  * devono vincere sugli stili inline delle card.
  */
-export const MAP_PANELS_CSS = `
+function panelsCss(query: string): string {
+  return `
         .map-panels { display: contents; }
-        @media ${RAIL_QUERY} {
+        @media ${query} {
           .map-panels {
             display: flex;
             flex-direction: column;
@@ -74,3 +94,11 @@ export const MAP_PANELS_CSS = `
           .map-panels .map-card-positions { order: 4; }
         }
 `;
+}
+
+export const MAP_PANELS_CSS = panelsCss(RAIL_QUERY);
+
+/** Le regole del rail per il limite in vigore (vedi setMapRailMaxWidth). */
+export function mapPanelsCss(): string {
+  return railMaxWidth === RAIL_MAX_WIDTH ? MAP_PANELS_CSS : panelsCss(railQuery());
+}
