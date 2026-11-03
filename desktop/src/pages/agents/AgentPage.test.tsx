@@ -1,0 +1,136 @@
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Locale } from "@/i18n/config";
+import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
+import { READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
+import AgentPage from "./AgentPage";
+import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
+import { agentTitle, chatIdOfSession, SESSION_NAME } from "./agent-names";
+
+// The page of one agent (/agents/:name), against a stand-in native side (agent_control). Synthetic data only.
+const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => true), Channel: class { onmessage: unknown = null } }));
+vi.mock("@tauri-apps/api/core", () => native);
+vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => undefined }));
+
+const COMMAND = "agent_control";
+const NOW_S = Math.floor(Date.now() / 1000);
+const agent = (name: string, role: string, instance: string | null, state: string, extra: Record<string, unknown> = {}) => ({
+  name, role, instance, up: true, created: NOW_S - 3600, activity: NOW_S - 600, state, reason: null, since: null, until: null, ...extra,
+});
+const AGENTS = [
+  agent("CAPITANO", "capitano", null, "lavora"),
+  agent("SCOUT-1", "scout", "1", "idle"),
+  agent("SCOUT-2", "scout", "2", "lavora"),
+];
+const ROLES = ["capitano", "scout"].map((role) => ({ role, multi: role === "scout" }));
+const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
+
+let restoreBridge: () => void;
+beforeEach(() => {
+  document.cookie = "NEXT_LOCALE=it; path=/";
+  native.invoke.mockReset();
+  native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+    if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+    const { op } = args.request;
+    if (op === "list") return { ok: true, data: { agents: AGENTS, roles: ROLES, states: true, target: "T1", where: "local", label: null } };
+    if (op === "team") return { ok: true, data: { halted: false, standby: { state: "off", until: null, weeklyReset: false }, held: [] } };
+    if (op === "screen") return { ok: true, data: { name: args.request.session, up: true, text: "<b>not html</b>\nlavoro in corso", refreshMs: 2000 } };
+    if (op === "history") return { ok: false, error: "agent_control_unsupported" };
+    return { ok: false, error: "not_in_test" };
+  });
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("no network"); }));
+  restoreBridge = installApiBridge(shellApi(notInDesktop));
+});
+afterEach(() => {
+  cleanup();
+  restoreBridge();
+  vi.unstubAllGlobals();
+});
+
+const show = (name: string) => render(<AgentPage params={{ name }} search={new URLSearchParams()} />);
+
+describe("the page of one agent", () => {
+  it("is a full-bleed page of the full shell and of the read-only view", () => {
+    for (const routes of [ROUTES, READ_ONLY_ROUTES]) {
+      const route = routes.find((r) => r.path === "/agents/:name");
+      expect(route?.page).toBe(AgentPage);
+      expect(route?.fullBleed).toBe(true);
+    }
+  });
+
+  it("names the instance, says its state and shows its terminal as plain text", async () => {
+    show("scout-2");
+    expect(await screen.findByTestId("agent-page-title")).toHaveTextContent("Scout 2");
+    expect(screen.getByTestId("agent-page-state")).toBeInTheDocument();
+    const terminal = await screen.findByTestId("panel-terminal-SCOUT-2");
+    expect(terminal).toHaveTextContent("<b>not html</b>");
+    expect(terminal.querySelector("b")).toBeNull();
+    expect(terminal).toHaveAttribute("role", "log");
+    // watched, not written: the page says so and offers no field and no key
+    expect(screen.getByTestId("agent-page-watch-only")).toHaveTextContent("non il terminale");
+    expect(document.querySelector("textarea, input")).toBeNull();
+  });
+
+  it("only reads: it asks for the list, the team, the history and the screen of this session, never an action", async () => {
+    show("SCOUT-2");
+    await screen.findByTestId("panel-terminal-SCOUT-2");
+    const asked = ops();
+    expect(new Set(asked.map((r) => r.op))).toEqual(new Set(["list", "team", "history", "screen"]));
+    expect(asked.filter((r) => r.op === "screen").every((r) => r.session === "SCOUT-2")).toBe(true);
+  });
+
+  it("leads to the chat only where the chat speaks with this very session", async () => {
+    const first = show("SCOUT-1");
+    expect(await screen.findByTestId("agent-page-chat")).toHaveAttribute("href", "#/messages?agent=scout");
+    first.unmount();
+    show("SCOUT-2");
+    expect(await screen.findByTestId("agent-page-no-chat")).toHaveTextContent("non è ancora disponibile");
+    expect(screen.queryByTestId("agent-page-chat")).toBeNull();
+  });
+
+  it("says when the team has no such agent", async () => {
+    show("ANALISTA-9");
+    expect(await screen.findByTestId("agent-page-missing")).toHaveTextContent("Analista 9");
+  });
+
+  it("asks nothing for a name that is not a session", async () => {
+    show("bad name!");
+    expect(await screen.findByTestId("agent-page-missing")).toBeInTheDocument();
+    await waitFor(() => expect(ops()).toEqual([]));
+  });
+});
+
+describe("the names of the agents", () => {
+  it("writes the instance as the person reads it", () => {
+    const words = { scout: "Scout", analista: "Analista" };
+    expect(agentTitle("ANALISTA-2", words)).toBe("Analista 2");
+    expect(agentTitle("CRITICO-S3", { critico: "Critico" })).toBe("Critico S3");
+    expect(agentTitle("DOTTORE", words)).toBe("Dottore");
+  });
+
+  it("gives a chat id to the sessions the chat speaks with, and to no other", () => {
+    expect(chatIdOfSession("CAPITANO")).toBe("capitano");
+    expect(chatIdOfSession("SCOUT-1")).toBe("scout");
+    expect(chatIdOfSession("SCOUT-2")).toBeNull();
+    expect(chatIdOfSession("CRITICO-S3")).toBeNull();
+    expect(chatIdOfSession("DOTTORE")).toBeNull();
+  });
+
+  it("accepts the sessions of the team's grammar", () => {
+    for (const ok of ["CAPITANO", "SCOUT-12", "CRITICO-S3"]) expect(SESSION_NAME.test(ok), ok).toBe(true);
+    for (const bad of ["", "scout-1", "1SCOUT", "SCOUT 1", "A".repeat(41), "SCOUT/1"]) expect(SESSION_NAME.test(bad), bad).toBe(false);
+  });
+});
+
+describe("the words of the page", () => {
+  it("are all there, in every language, with their placeholder", () => {
+    const keys = Object.keys(AGENT_PAGE_TEXT.it) as (keyof (typeof AGENT_PAGE_TEXT)["it"])[];
+    for (const [locale, text] of Object.entries(AGENT_PAGE_TEXT) as [Locale, (typeof AGENT_PAGE_TEXT)["it"]][]) {
+      for (const key of keys) {
+        expect(text[key], `${locale}.${key}`).toBeTruthy();
+        const placeholders = (AGENT_PAGE_TEXT.it[key].match(/\{\w+\}/g) ?? []).sort();
+        expect((text[key].match(/\{\w+\}/g) ?? []).sort(), `${locale}.${key}`).toEqual(placeholders);
+      }
+    }
+  });
+});
