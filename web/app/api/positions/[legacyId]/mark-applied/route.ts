@@ -165,6 +165,27 @@ export async function POST(
         };
       }
 
+      // Una candidatura che ha mandato il TEAM non si riscrive come «a mano»: il POST sovrascriverebbe
+      // `applied_via`, e l'annullamento poi la porterebbe a bozza. Il click ripetuto sulla propria
+      // candidatura (applied_via già `user_manual`) resta valido.
+      const sent = db
+        .prepare<
+          [number],
+          { applied: number | null; applied_via: string | null }
+        >("SELECT applied, applied_via FROM applications WHERE position_id = ?")
+        .get(legacyId);
+      if (
+        sent?.applied &&
+        sent.applied_via &&
+        sent.applied_via !== APPLIED_VIA_USER
+      ) {
+        return {
+          ok: false,
+          status: 409,
+          body: { error: "already_applied", applied_via: sent.applied_via },
+        };
+      }
+
       const appliedAt = nowIso();
       // Una transazione sola: senza, una posizione può restare 'applied'
       // mentre `applications` non sa di esserlo — e il team leggerebbe due

@@ -162,6 +162,14 @@ def test_marking_an_application_by_hand_and_taking_it_back(home):
     conn.close()
     assert run(env, "mark-applied", "2", "--off")[1]["code"] == "applied_by_team"
     assert row(db, "SELECT status FROM positions WHERE id = 2") == ("applied",)
+    # an application the team sent is not rewritten as done by hand, and stays what it was
+    code, out = run(env, "mark-applied", "2", "--on")
+    assert code == 1 and out["code"] == "already_applied"
+    assert row(db, "SELECT applied_via FROM applications WHERE position_id = 2") == ("team",)
+    assert row(db, "SELECT status FROM positions WHERE id = 2") == ("applied",)
+    # the person's own, marked again, is fine
+    run(env, "mark-applied", "1", "--on")
+    assert run(env, "mark-applied", "1", "--on")[0] == 0
     assert run(env, "mark-applied", "99", "--on")[1]["code"] == "position_not_found"
     assert run(env, "mark-applied", "1", "--on", "--note-on-stdin", note="x" * 501)[1]["code"] == "note_too_long"
 
