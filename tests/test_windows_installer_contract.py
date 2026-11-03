@@ -1,4 +1,4 @@
-"""Windows is not part of the 0.4.0 download: the page says "coming soon" and links nothing.
+"""Windows is not part of the 0.4.0 download: the page says "not in this version" and links nothing.
 
 The Tauri NSIS installer is not built or attached by the release (D13); the
 download page keeps Windows as a card that is not a link, and the funnel has no

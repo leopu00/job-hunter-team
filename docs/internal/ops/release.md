@@ -90,7 +90,7 @@ The macOS build requires all five existing Apple secrets. Tauri signs with the
 Developer ID identity, notarizes with Apple and staples the result; the job
 then verifies `codesign`, `spctl`, `stapler` and `hdiutil`. Windows is not part
 of 0.4.0: no installer is built, the release has none and the site shows Windows as
-"coming soon" with no link. Linux is unsigned, experimental and not tested by
+"not in this version" with no link. Linux is unsigned, experimental and not tested by
 hand, and the public copy says so.
 
 Each runner records a tag/commit/size/SHA-256 sidecar after packaging. The
