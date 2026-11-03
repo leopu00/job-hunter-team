@@ -19,6 +19,7 @@ import {
 } from './agents.js';
 import { execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { answerTyped, describeAnswer } from '../../lib/terminal-answer.js';
+import { errorBlock } from '../../lib/ui.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -31,6 +32,14 @@ function bashSingleQuote(msg) {
  * Se l'arg e' gia' un nome di sessione (es. 'CRITICO-S1' spawnato dallo
  * Scrittore) lo accetta cosi' com'e' se esiste tra le attive.
  */
+/** The agent asked for is not running: say whether it is the team that is off or just that agent, and what to do. */
+function noSessionError(agentArg) {
+  const running = getActiveSessions().filter((s) => AGENTS.some((a) => isAgentSession(s, a)));
+  return running.length === 0
+    ? errorBlock({ what: 'the team is not running', why: `There is nobody to talk to as '${agentArg}' yet.`, fix: 'Start it with: jht team start' })
+    : errorBlock({ what: `'${agentArg}' is not running`, why: `Running now: ${running.join(', ')}.`, fix: `Start it with: jht team start ${agentArg}` });
+}
+
 export function resolveSession(agentArg) {
   const active = getActiveSessions();
   const parsed = parseAgentArg(agentArg);
@@ -375,8 +384,7 @@ export function sendAction(agentArg, message) {
 
   const session = resolveSession(agentArg);
   if (!session) {
-    console.error(c.red(`No active session for '${agentArg}'.`));
-    console.error(c.dim('  Check with: jht team status'));
+    console.error(noSessionError(agentArg));
     process.exitCode = 1;
     return;
   }
@@ -416,10 +424,7 @@ export async function chatAction(agentArg, options = {}) {
 
   const session = resolveSession(agentArg);
   if (!session) {
-    console.error(c.red(`No active session for '${agentArg}'.`));
-    console.error(c.dim('  Agents available: ' + getActiveSessions().filter((s) =>
-      AGENTS.some((a) => isAgentSession(s, a))
-    ).join(', ')));
+    console.error(noSessionError(agentArg));
     process.exitCode = 1;
     return;
   }

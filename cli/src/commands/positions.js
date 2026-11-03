@@ -185,7 +185,7 @@ function requestCvAction(id, options) {
 }
 
 export function registerPositionsCommand(program) {
-  const cmd = new Command('positions').description('Query DB positions (proxy at db_query.py)');
+  const cmd = new Command('positions').description('Query DB positions');
 
   // `--json` su ogni lettura: il default resta la tabella per l'occhio umano,
   // il flag dà la stessa query come una riga JSON. Serve a chi guida `jht` da

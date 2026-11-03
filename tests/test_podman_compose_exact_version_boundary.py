@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import pty
 from pathlib import Path
 import shutil
 import subprocess
@@ -1909,3 +1910,54 @@ def test_the_reason_file_is_left_behind_by_no_one(tmp_path: Path):
     ok_env.pop("JHT_FIXTURE_PS_FAILS")
     _run(wrapper, ok_env, "status")
     assert list(tmp.iterdir()) == []
+
+
+# ── `jht status` for a person: a short screen at a terminal, key=value for the app on a pipe ────────
+
+def _run_in_terminal(wrapper: Path, env: dict[str, str], *args: str) -> tuple[int, str]:
+    master, slave = pty.openpty()
+    try:
+        process = subprocess.Popen([str(wrapper), *args], env=env, stdout=slave, stderr=slave, stdin=subprocess.DEVNULL)
+        os.close(slave)
+        chunks = []
+        while True:
+            try:
+                data = os.read(master, 65536)
+            except OSError:
+                break
+            if not data:
+                break
+            chunks.append(data)
+        process.wait(timeout=WRAPPER_TIMEOUT_S)
+    finally:
+        os.close(master)
+    return process.returncode, b"".join(chunks).decode("utf-8", "replace")
+
+
+def test_status_at_a_terminal_is_a_screen_with_the_next_step_and_on_a_pipe_it_is_what_the_app_reads(tmp_path: Path):
+    import re
+    wrapper, env, _podman_log, _create_marker = _runtime(tmp_path)
+    env["JHT_LANG"] = "en"
+    code, out = _run_in_terminal(wrapper, env, "status")
+    plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", out)
+    assert code == 0, plain
+    assert "status=running" not in plain and "name=" not in plain
+    assert re.search(r"Container\s+running since ", plain) and re.search(r"Image\s+\S+", plain)
+    assert "→ Who is working: jht agents" in plain
+    piped = _run(wrapper, env, "status")
+    assert piped.returncode == 0 and "name=jht status=running" in piped.stdout
+    forced_code, forced = _run_in_terminal(wrapper, {**env, "JHT_MACHINE_OUTPUT": "1"}, "status")
+    assert forced_code == 0 and "status=running" in forced
+
+
+def test_status_of_a_team_that_is_not_there_says_what_to_do_at_a_terminal(tmp_path: Path):
+    import re
+    wrapper, env, _podman_log, _create_marker = _runtime(tmp_path)
+    env["JHT_LANG"] = "en"
+    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
+    code, out = _run_in_terminal(wrapper, env, "status")
+    plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", out)
+    assert code == 1 and "The team's container is not running." in plain and "→ Start it with: jht up" in plain
+    assert "non attivo" not in plain
+    piped = _run(wrapper, env, "status")
+    assert piped.returncode != 0 and "non attivo" in piped.stdout  # the app and the scripts keep the line they read

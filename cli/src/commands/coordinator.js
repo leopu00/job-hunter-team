@@ -31,7 +31,7 @@ function passthrough(opts, mapping) {
 
 export function registerCoordinatorCommand(program) {
   const cmd = new Command('coordinator')
-    .description("Capitano settings: working mode and its orders (proxy to coordinator_settings.py)");
+    .description("Capitano settings: working mode and its orders");
 
   cmd
     .command('show')

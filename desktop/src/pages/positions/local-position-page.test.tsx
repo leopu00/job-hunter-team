@@ -38,6 +38,7 @@ vi.mock("../office", () => ({ default: () => <h1>Ufficio</h1> }));
 
 
 const TOKEN = "position-token-synthetic";
+const DIGEST = "b".repeat(64);
 const RICH = {
   ...syntheticDetail,
   position: {
@@ -76,6 +77,8 @@ beforeEach(() => {
     }
     if (command === ACT) {
       calls.push({ command, request: args!.request });
+      if (args!.request.op === "apply_preview") return { ok: true, op: "apply-preview", summary: "Synthetic role A @ Synthetic Co A · jobs.example.com", confirm: DIGEST, destination: "web:jobs.example.com" };
+      if (args!.request.op === "apply_request") return { ok: true, op: "apply-request", apply_requested: args!.request.on === true };
       return { ok: true };
     }
     return null;
@@ -194,4 +197,52 @@ describe("the page of a position of the team on this computer", () => {
     expect(new Set(colours).size).toBe(4);
     for (const colour of colours) expect(colour).toMatch(/^var\(--color-(red|orange|blue|purple|yellow|green)\)$/);
   }, 20_000);
+
+  it("authorises an application in two steps: the preview shows the summary and where it goes, nothing is authorised until the click, and the click sends the digest and the destination back", async () => {
+    const user = userEvent.setup();
+    detail = { ...syntheticDetail, position: { ...syntheticDetail.position, status: "ready" } };
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+
+    await user.click(await screen.findByRole("button", { name: /^candidati$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/Synthetic role A @ Synthetic Co A · jobs\.example\.com/)).toBeInTheDocument();
+    expect(within(dialog).getByTestId("apply-destination")).toHaveTextContent("web:jobs.example.com");
+    // the first step only reads: the host was asked for a preview and for nothing else
+    expect(calls.map((call) => call.request.op)).toEqual(["apply_preview"]);
+    expect(calls[0].request).toEqual({ op: "apply_preview", id: "101", token: TOKEN });
+
+    // dismissing writes nothing
+    await user.click(within(dialog).getByRole("button", { name: /no|annulla/i }));
+    expect(calls.map((call) => call.request.op)).toEqual(["apply_preview"]);
+
+    await user.click(screen.getByRole("button", { name: /^candidati$/i }));
+    await user.click(await within(await screen.findByRole("alertdialog")).findByRole("button", { name: /sì, invia/i }));
+    await waitFor(() => expect(calls.at(-1)?.request.op).toBe("apply_request"));
+    expect(calls.at(-1)?.request).toEqual({ op: "apply_request", id: "101", on: true, confirmed: true, confirm: DIGEST, destination: "web:jobs.example.com", token: TOKEN });
+    expect(fake.current!.calls).toEqual([]);
+  }, 30_000);
+
+  it("shows a refusal of the host as a sentence and never leaves the authorisation half done", async () => {
+    const user = userEvent.setup();
+    detail = { ...syntheticDetail, position: { ...syntheticDetail.position, status: "ready" } };
+    native.invoke.mockImplementation(async (command: string, args?: { request: Record<string, unknown> }) => {
+      if (command === ACT) return { ok: false, error: "consent_disabled" };
+      if (command === POSITIONS) {
+        const request = args!.request as { op: string; id?: string };
+        if (request.op === "detail") return { ok: true, data: request.id === "101" ? { ...(detail as object), token: TOKEN } : null };
+        if (request.op === "facets") return { ok: true, data: { items: syntheticFacets } };
+        if (request.op === "stats") return { ok: true, data: syntheticStats() };
+        return { ok: true, data: { items: [syntheticPosition], total: 1 } };
+      }
+      return null;
+    });
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+    await user.click(await screen.findByRole("button", { name: /^candidati$/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/consenso/i);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  }, 30_000);
 });

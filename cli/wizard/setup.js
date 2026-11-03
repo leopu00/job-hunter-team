@@ -10,6 +10,7 @@
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import {
   AI_PROVIDERS,
   RECOMMENDED_PROVIDER,
@@ -51,18 +52,31 @@ const PROVIDER_OAUTH_CMD = {
   kimi: 'kimi',
 };
 
+/** The one sentence for a step that did not complete, for the cases where the child could not even say it itself. */
+export function describeStepFailure(label, { missing = false, status = null } = {}) {
+  const why = missing ? 'the JHT program was not found here' : status === null ? 'it could not be started' : `it ended with code ${status}`;
+  return `  ${label} did not complete: ${why}. More details: JHT_DEBUG=1 jht setup`;
+}
+
 /**
  * Esegue un sub-comando JHT (lo stesso CLI Node, gia' in /app/cli/bin/jht.js)
- * con stdio inherited. Ritorna true se exit code = 0.
+ * con stdio inherited: le sue domande e i suoi messaggi arrivano mentre li scrive, senza tetti di buffer.
+ * Ritorna true se exit code = 0. Il caso che mostrava una traccia di Node in mezzo al wizard (il programma non
+ * c'e') si controlla prima, e diventa una frase.
  */
 function runJhtSubcommand(args, label) {
   const entry = process.env.JHT_NODE_ENTRY || '/app/cli/bin/jht.js';
+  if (!existsSync(entry)) {
+    console.error(describeStepFailure(label, { missing: true }));
+    if (process.env.JHT_DEBUG) console.error(`  (looked for ${entry})`);
+    return false;
+  }
   const result = spawnSync(process.execPath, [entry, ...args], {
     stdio: 'inherit',
     env: process.env,
   });
   if (result.status !== 0) {
-    console.error(`[setup] ${label} failed (exit ${result.status})`);
+    console.error(describeStepFailure(label, { status: result.status }));
     return false;
   }
   return true;

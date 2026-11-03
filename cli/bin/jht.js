@@ -28,6 +28,9 @@
  * stati convertiti a `process.exitCode` + `return`. Qui c'e' solo l'ingresso.
  */
 
+import { installWarningFilter } from '../src/lib/quiet-warnings.js';
+installWarningFilter();
+
 /** Argomenti senza opzioni: `['cloud', 'daemon']` per `jht cloud daemon -v`. */
 const words = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 

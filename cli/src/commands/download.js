@@ -5,6 +5,7 @@ import { mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
+import { errorBlock } from '../lib/ui.js';
 import { pipeline } from 'node:stream/promises';
 
 
@@ -247,6 +248,11 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
 
 async function downloadAction(options) {
   try {
+    // The system is checked first, then the release: a wrong system must not read as a missing release.
+    normalizePlatform(options.os);
+    if (!options.version) {
+      throw new Error('Which release? Add --version, for example: jht download --os macos --version 0.4.0');
+    }
     await downloadRelease({
       platform: options.os,
       version: options.version,
@@ -254,7 +260,7 @@ async function downloadAction(options) {
       deb: options.deb,
     });
   } catch (error) {
-    console.error(`\n  Error: ${error.message}\n`);
+    console.error(errorBlock({ what: error.message }));
     process.exitCode = 1;
   }
 }
@@ -265,7 +271,7 @@ export function registerDownloadCommand(program) {
     .command('download')
     .description('Download and verify a desktop client from GitHub Releases')
     .requiredOption('--os <platform>', 'operating system: windows, macos, or linux')
-    .requiredOption('--version <release>', 'release version (for example, 0.3.5)')
+    .option('--version <release>', 'the release to download (required), for example 0.4.0')
     .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
     .option('--deb', 'download the Debian package instead of the Linux AppImage')
     .action(downloadAction);
