@@ -91,7 +91,7 @@ export default function TeamQuietNotice({
       role="status"
       data-testid="team-quiet"
       data-cause={cause.kind}
-      className="shrink-0 px-4 py-2 border-b border-[var(--color-border)] text-[12px]"
+      className="shrink-0 px-4 py-2 border-b border-[var(--color-border)] text-[14px]"
       style={{ color: cause.kind === "containment" || cause.kind === "provider" || (cause.kind === "budget" && cause.full) ? "var(--color-yellow)" : "var(--color-muted)" }}
     >
       {quietSentence(cause, appLocale())}

@@ -3141,7 +3141,8 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
     // what those four reasons rest on, read from the exit's own code: the window is judged first, and nothing is run on a
     // destination that is not this computer's
     let exit = include_str!("app_exit.rs").split("#[cfg(test)]").next().unwrap().replace("\r\n", "\n");
-    let on_scope = exit.split("async fn on_scope").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
+    // the judging of the window is in the part under the one that writes the log of a failure
+    let on_scope = exit.split("async fn on_scope_unlogged").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
     assert!(on_scope.find("window_refusal(window.label())").unwrap() < on_scope.find("spawn_blocking").unwrap(), "the exit judges the window first");
     let exec_local = exit.split("fn exec_local(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
     assert!(exec_local.contains("_ => Err(\"app_exit_vps_untouched\")"), "a destination that is not this computer's runs nothing");

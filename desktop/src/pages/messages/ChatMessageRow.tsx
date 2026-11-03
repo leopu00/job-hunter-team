@@ -6,6 +6,7 @@ import { appLocale } from "../../lib/app-locale";
 import { readableRecordText } from "./chat-readable-record";
 import { renderChatMarkdown } from "./chat-text";
 import { systemLineText } from "./chat-line-text";
+import { DeliveryMark, markOf } from "./DeliveryMark";
 
 /**
  * One line of the conversation. It is a component of its own, and memoized, because the composer's text lives in
@@ -32,6 +33,8 @@ export interface ChatMessageRowProps {
   pressingAny: boolean;
   /** The line's suggested replies cannot be sent now. */
   suggestionsOff: boolean;
+  /** The agent wrote something after this line of the person's. */
+  answered?: boolean;
   onMenu: (id: string, event: { preventDefault(): void; clientX: number; clientY: number }) => void;
   onSend: (line: string) => void;
   onEnterAgain: (id: string) => void;
@@ -50,16 +53,18 @@ function ChatMessageRowView({
   pressingThis,
   pressingAny,
   suggestionsOff,
+  answered = false,
   onMenu,
   onSend,
   onEnterAgain,
 }: ChatMessageRowProps) {
+  const mark = markOf(outcome, answered);
   function renderOutcome(messageId: string, outcome: Outcome) {
     if (outcome.kind === "notSent") {
       const canPress =
         enterAvailable && outcome.presses < ENTER_AGAIN_MAX;
       return (
-        <div data-testid="direct-chat-not-sent" className="mt-1 flex items-center justify-end gap-2 text-[13px] text-[var(--color-yellow)]">
+        <div data-testid="direct-chat-not-sent" className="mt-1 flex items-center justify-end gap-2 text-[14px] text-[var(--color-yellow)]">
           <span>{t.notSent}</span>
           {canPress && (
             <button
@@ -77,14 +82,14 @@ function ChatMessageRowView({
     }
     if (outcome.kind === "expired") {
       return (
-        <div data-testid="direct-chat-queue-expired" className="mt-1 text-right text-[13px] text-[var(--color-yellow)]">
+        <div data-testid="direct-chat-queue-expired" className="mt-1 text-right text-[14px] text-[var(--color-yellow)]">
           {t.queueExpired}
         </div>
       );
     }
     if (outcome.kind === "late") {
       return (
-        <div data-testid="direct-chat-sent-late" className="mt-1 text-right text-[13px] text-[var(--color-yellow)]">
+        <div data-testid="direct-chat-sent-late" className="mt-1 text-right text-[14px] text-[var(--color-yellow)]">
           {t.queueLate}
         </div>
       );
@@ -92,20 +97,13 @@ function ChatMessageRowView({
     if (outcome.kind === "unknown") {
       // No button: a key pressed now could choose something on the agent's screen in the person's place.
       return (
-        <div data-testid="direct-chat-taken-unknown" className="mt-1 text-right text-[13px] text-[var(--color-muted)]">
+        <div data-testid="direct-chat-taken-unknown" className="mt-1 text-right text-[14px] text-[var(--color-muted)]">
           {t.takenUnknown}
           {outcome.reason && <span data-testid="direct-chat-taken-reason">{`: ${t.takenReasons[outcome.reason]}`}</span>}
         </div>
       );
     }
-    return (
-      <div
-        data-testid={outcome.kind === "queued" ? "direct-chat-queued" : "direct-chat-sent"}
-        className="mt-1 text-right text-[13px] text-[var(--color-muted)]"
-      >
-        {outcome.kind === "queued" ? t.queued : t.sent}
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -132,7 +130,7 @@ function ChatMessageRowView({
       data-quoted={quoted ? "true" : undefined}
       onContextMenu={message.role === "system" ? undefined : (event) => onMenu(message.id, event)}
     >
-      <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
+      <div className="mb-1 flex items-center gap-2 text-[14px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
         <span>{message.role === "user" ? t.you : message.role === "system" ? t.system : agentLabel}</span>
         {repeated && repeated > 1 && <span data-testid="direct-chat-repeat">×{repeated}</span>}
         {message.role === "agent" && (
@@ -167,11 +165,12 @@ function ChatMessageRowView({
         </div>
       )}
       {message.role === "user" && inFlight && (
-        <div data-testid="direct-chat-in-flight" className="mt-1 text-right text-[13px] text-[var(--color-muted)]">
+        <div data-testid="direct-chat-in-flight" className="mt-1 text-right text-[14px] text-[var(--color-muted)]">
           {t.sending}
         </div>
       )}
       {message.role === "user" && !inFlight && outcome && renderOutcome(message.id, outcome)}
+      {message.role === "user" && !inFlight && mark && <DeliveryMark mark={mark} t={t} />}
     </article>
   );
 }

@@ -91,8 +91,8 @@ def test_the_guides_tell_what_defender_did_in_our_tests_not_what_it_always_does(
         assert "whatever the script says" not in text, path.name
 
 
-def test_the_guides_download_to_a_name_no_other_process_can_guess():
+def test_every_surface_downloads_to_a_name_no_other_process_can_guess():
     # A fixed name in %TEMP% leaves a window between the hash and the run for another process of the same user.
-    for path in DOCS:
+    for path in SURFACES:
         text = _text(path)
         assert "[guid]::NewGuid()" in text and "'jht-install.ps1'" not in text, path.name

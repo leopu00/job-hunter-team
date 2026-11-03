@@ -13,6 +13,7 @@ import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../.
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 import { hint, marks, title } from '../lib/ui.js';
+import { say } from '../lib/texts.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -122,7 +123,7 @@ async function fileExists(p) {
 }
 
 async function handleProviders() {
-  console.log(title('Providers'));
+  console.log(title(say('providers.title')));
 
   let config = {};
   if (await fileExists(CONFIG_PATH)) {
@@ -141,16 +142,16 @@ async function handleProviders() {
     const hasCred = await fileExists(join(CREDS_DIR, `${id}.enc`)) || await fileExists(join(CREDS_DIR, `${id}.json`));
     const isActive = activeProvider === id;
 
-    const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'none');
+    const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : say('providers.auth_none'));
     const model = provCfg?.model ?? '—';
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
-    const activeLabel = isActive ? ` ${GREEN}· active${RESET}` : '';
+    const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
 
-    const recommendedLabel = known.recommended ? ` ${DIM}· recommended${RESET}` : '';
+    const recommendedLabel = known.recommended ? ` ${DIM}· ${say('providers.recommended')}${RESET}` : '';
     console.log(`  ${icon} ${known.name}${recommendedLabel}${activeLabel}`);
-    console.log(`    ${DIM}${id} · model ${model} · sign-in: ${authMethod}${RESET}`);
-    if (hasEnv) console.log(`    ${DIM}key in ${known.envKey}${RESET}`);
-    if (hasCred) console.log(`    ${DIM}credentials: encrypted file${RESET}`);
+    console.log(`    ${DIM}${say('providers.line', { id, model, auth: authMethod })}${RESET}`);
+    if (hasEnv) console.log(`    ${DIM}${say('providers.key_in', { env: known.envKey })}${RESET}`);
+    if (hasCred) console.log(`    ${DIM}${say('providers.credentials')}${RESET}`);
     const ver = getVersionInfo(id);
     // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
     // "il registry ne ha una più nuova" — quella è una versione che questa
@@ -159,11 +160,11 @@ async function handleProviders() {
     if (ver.installed || ver.latest || pin) {
       let line = `    ${DIM}CLI ${ver.installed || '—'}`;
       if (pin && ver.installed && ver.installed !== pin) {
-        line += ` ${YELLOW}${marks().warn} this release is tested with ${pin}; jht providers update installs it${RESET}${DIM}`;
+        line += ` ${YELLOW}${marks().warn} ${say('providers.pinned_other', { pin })}${RESET}${DIM}`;
       } else if (pin) {
-        line += ` (the version this release is tested with)`;
+        line += ` ${say('providers.pinned_same')}`;
       } else if (ver.installed && ver.latest && ver.installed !== ver.latest) {
-        line += ` ${YELLOW}${marks().warn} ${ver.latest} is available${RESET}${DIM}`;
+        line += ` ${YELLOW}${marks().warn} ${say('providers.newer', { latest: ver.latest })}${RESET}${DIM}`;
       }
       line += RESET;
       console.log(line);
@@ -174,18 +175,18 @@ async function handleProviders() {
   // Provider aggiuntivi non noti
   const custom = Object.keys(providers).filter(k => !KNOWN_PROVIDERS[k]);
   if (custom.length > 0) {
-    console.log(`  ${DIM}Other providers:${RESET}`);
+    console.log(`  ${DIM}${say('providers.other')}${RESET}`);
     for (const id of custom) {
       const p = providers[id];
       const isActive = activeProvider === id;
-      const activeLabel = isActive ? ` ${GREEN}· active${RESET}` : '';
-      console.log(`  ${WARN} ${id}${activeLabel} — model ${p?.model ?? '—'}`);
+      const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
+      console.log(`  ${WARN} ${say('providers.other_line', { id, active: activeLabel, model: p?.model ?? '—' })}`);
     }
     console.log('');
   }
 
   if (!activeProvider) {
-    console.log(hint('No provider is active. Choose one with: jht providers use codex'));
+    console.log(hint(say('providers.none_active')));
     console.log('');
   }
 }

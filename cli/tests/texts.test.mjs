@@ -64,7 +64,7 @@ test('every text a screen asks for exists, and every text of the catalog is used
   }
   for (const key of used) assert.ok(key in CATALOGS.en, `${key} is asked for and English has no such text`);
   // keys built from a name (cmd.<name>, help groups, host commands, the plural forms) are used through a table
-  const indirect = /^(cmd\.|error\.|help\.(group_|host_)|doctor\.(warning|problem)_|doctor\.sec_)/;
+  const indirect = /^(cmd\.|error\.|role\.|help\.(group_|host_)|doctor\.(warning|problem)_|doctor\.sec_)/;
   for (const key of Object.keys(CATALOGS.en)) {
     assert.ok(used.has(key) || indirect.test(key), `${key} is in the catalog and no screen asks for it`);
   }

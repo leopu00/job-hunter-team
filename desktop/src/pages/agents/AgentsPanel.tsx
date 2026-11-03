@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { describeAgentState, type AgentState, type AgentStateTone } from "@/lib/agent-state";
 import { appLocale } from "../../lib/app-locale";
 import { describeError } from "../../lib/error-catalog";
@@ -41,20 +41,23 @@ import ActionLogSection from "./ActionLogSection";
 import { BurstStrip } from "../work-hours/BurstControl";
 import Link from "../../web-shims/next-link";
 import { onStreamHint, onStreamState, streamPace } from "../../lib/state-stream";
-import { isDirectChatAgentId, REOPEN_NO_RETRY, type DirectChatAgentId } from "../messages/DirectChatScreen";
+import { REOPEN_NO_RETRY } from "../messages/DirectChatScreen";
+import { chatIdOfSession, sessionOfChatId } from "../messages/chat-agents";
+import { agentTitle } from "./agent-names";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
 
 /**
  * The agents the person can chat with are the ones the Messages page lists: the same rule, not a
  * list of this page. The chat is there; here a button leads to it with the agent already chosen.
  */
-function chatAgentOf(row: PanelRow): DirectChatAgentId | null {
-  return isDirectChatAgentId(row.role) ? row.role : null;
+function chatAgentOf(row: PanelRow): string | null {
+  return chatIdOfSession(row.session);
 }
 
-/** The agent's name as Messages writes it. */
-function chatName(id: DirectChatAgentId): string {
-  return DIRECT_CHAT_TEXT[appLocale()].agents[id];
+/** The agent's name as Messages writes it («Scout» for the first instance, «Scout 2» for the second). */
+function chatName(id: string): string {
+  const roles = DIRECT_CHAT_TEXT[appLocale()].agents as Record<string, string>;
+  return roles[id] ?? agentTitle(sessionOfChatId(id) ?? id.toUpperCase(), roles);
 }
 
 /**
@@ -80,7 +83,7 @@ const SEEN_AGAIN_MIN_MS = 5_000;
 /** A terminal that changed this recently says the agent is doing something (the second source). */
 const MOVING_MS = 30_000;
 
-const TONE: Record<AgentStateTone, string> = {
+export const TONE: Record<AgentStateTone, string> = {
   green: "var(--color-green)",
   neutral: "var(--color-muted)",
   amber: "var(--color-yellow)",
@@ -170,7 +173,7 @@ export type Pending =
   | { kind: "stop-team" }
   | { kind: "resume" };
 
-function fill(template: string, values: Record<string, string | number>): string {
+export function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? `{${key}}`));
 }
 
@@ -189,11 +192,11 @@ function stamp(at: number, now = Date.now()): string {
 }
 
 /** How long ago, short («2m fa»), as the rest of the app says it. */
-function ago(seconds: number | null): string {
+export function ago(seconds: number | null): string {
   return seconds === null ? "—" : formatRelative(new Date(seconds * 1000).toISOString(), appLocale());
 }
 
-function clock(seconds: number | null): string {
+export function clock(seconds: number | null): string {
   return seconds === null ? "—" : stamp(seconds * 1000);
 }
 
@@ -203,7 +206,7 @@ export function failureText(code: string): string {
 }
 
 /** Why the page could not read the agents: the catalog's sentence and what to do, never the code (it stays in the log). */
-function readFailureText(code: string): string {
+export function readFailureText(code: string): string {
   const copy = describeError(code, { fallback: "agents_unavailable", locale: appLocale() });
   return `${copy.text} ${copy.action}`;
 }
@@ -242,7 +245,7 @@ export function isUp(row: PanelRow): boolean {
   return row.agent !== null && row.agent.state.state !== "spento";
 }
 
-function Led({ row }: { row: PanelRow }) {
+export function Led({ row }: { row: PanelRow }) {
   const tone = isUp(row) ? describeAgentState(row.agent!.state, appLocale()).tone : "grey";
   return (
     <span
@@ -279,7 +282,7 @@ export function identityLine(t: AgentsPanelText, identity: AgentIdentity | null,
   return [parts.provider, parts.model, parts.effort, where].filter(Boolean).join(" · ");
 }
 
-function stateLine(t: AgentsPanelText, row: PanelRow): string {
+export function stateLine(t: AgentsPanelText, row: PanelRow): string {
   if (row.heldBySafety) return t.heldBySafety;
   if (!row.agent || !isUp(row)) return row.heldByUser ? t.heldByUser : t.down;
   return describeAgentState(row.agent.state, appLocale()).line;
@@ -290,7 +293,7 @@ function stateLine(t: AgentsPanelText, row: PanelRow): string {
  * window is visible, at the pace the native side says (terminal-pace.ts). One read at a time: the
  * next one is set only once the last is back.
  */
-export function Terminal({ row, t, chatName, label }: { row: PanelRow; t: AgentsPanelText; chatName: string | null; label?: string }) {
+export function Terminal({ row, t, chatName, label, tall }: { row: PanelRow; t: AgentsPanelText; chatName: string | null; label?: string; tall?: boolean }) {
   const [screen, setScreen] = useState<Outcome<{ up: boolean; text: string | null; refreshMs: unknown }> | null>(null);
   const session = row.session;
   useEffect(() => {
@@ -335,6 +338,18 @@ export function Terminal({ row, t, chatName, label }: { row: PanelRow; t: Agents
       </p>
     );
   if (!screen.value.up) return <p className="text-[11px] text-[var(--color-muted)]">{t.screenDown}</p>;
+  const text = screen.value.text === "" ? t.screenEmpty : (screen.value.text ?? "");
+  if (tall) {
+    // the page of the agent says by itself that the terminal is only watched; the terminal fills the room under the time of the read
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <p className="m-0 mb-1 shrink-0 text-[12px] text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
+        <div className="min-h-0 flex-1">
+          <TerminalText session={session} label={label} tall text={text} />
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       {/* Two channels: the terminal is watched, the chat (the Messages page) is written to. */}
@@ -343,20 +358,40 @@ export function Terminal({ row, t, chatName, label }: { row: PanelRow; t: Agents
         {chatName !== null && ` ${fill(t.terminalWriteInChat, { name: chatName })}`}
       </p>
       <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.screenAt, { time: stamp(screen.at) })}</p>
-      <TerminalText session={session} label={label} text={screen.value.text === "" ? t.screenEmpty : (screen.value.text ?? "")} />
+      <TerminalText session={session} label={label} text={text} />
     </>
   );
 }
 
 /** The lines of the terminal: drawn again only when they change, not at every read. */
-export const TerminalText = memo(function TerminalText({ session, text, label }: { session: string; text: string; label?: string }) {
+export const TerminalText = memo(function TerminalText({ session, text, label, tall }: { session: string; text: string; label?: string; tall?: boolean }) {
+  // The whole-page terminal fills the room it is given and follows the newest line, unless the person scrolled up to read.
+  const ref = useRef<HTMLPreElement>(null);
+  const following = useRef(true);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (tall && el && following.current) el.scrollTop = el.scrollHeight;
+  }, [tall, text]);
   return (
     // Text only: React escapes it, nothing in it is ever HTML.
     <pre
+      ref={ref}
       data-testid={`panel-terminal-${session}`}
+      onScroll={
+        tall
+          ? () => {
+              const el = ref.current;
+              if (el) following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+            }
+          : undefined
+      }
       // given a name, the terminal is a log a keyboard can scroll and a screen reader can find: never announced as it changes
       {...(label ? { role: "log", tabIndex: 0, "aria-label": label, "aria-live": "off" as const } : {})}
-      className="text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[22rem] overflow-auto rounded p-2 lg:max-h-none"
+      className={
+        tall
+          ? "m-0 h-full min-h-0 text-[13px] leading-snug whitespace-pre-wrap break-words overflow-auto rounded p-3"
+          : "text-[11px] leading-snug whitespace-pre-wrap break-words max-h-[22rem] overflow-auto rounded p-2 lg:max-h-none"
+      }
       style={{ background: "var(--color-deep)", color: "var(--color-bright)" }}
     >
       {text}
@@ -920,9 +955,14 @@ export default function AgentsPanel({ search }: PageProps) {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <Led row={current} />
-                        <span className="text-[13px] font-bold tracking-widest" style={{ color: "var(--color-white)" }}>
+                        <Link
+                          href={`/agents/${encodeURIComponent(current.session)}`}
+                          data-testid="panel-agent-page"
+                          className="text-[13px] font-bold tracking-widest no-underline hover:underline"
+                          style={{ color: "var(--color-white)" }}
+                        >
                           {current.session}
-                        </span>
+                        </Link>
                         <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
                           {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
                         </span>

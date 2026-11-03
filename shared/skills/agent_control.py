@@ -652,6 +652,10 @@ def read_list() -> dict:
 ESCAPES = re.compile(r"\x1b(\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)?|[@-Z\\-_])")
 
 
+# How many of the last lines of a terminal the panel and the agent's page get. Read only, and still capped in bytes below.
+SCREEN_LINES = 120
+
+
 def read_screen(name) -> dict:
     if not isinstance(name, str) or not NAME.match(name):
         return {"ok": False, "error": "agents_unavailable"}
@@ -661,7 +665,7 @@ def read_screen(name) -> dict:
     if name not in live:
         return {"ok": True, "data": {"name": name, "up": False, "text": None}}
     try:
-        done = subprocess.run(["tmux", "capture-pane", "-p", "-J", "-t", "=" + name + ":", "-S", "-60"],
+        done = subprocess.run(["tmux", "capture-pane", "-p", "-J", "-t", "=" + name + ":", "-S", f"-{SCREEN_LINES}"],
                               capture_output=True, timeout=8)
     except (OSError, subprocess.TimeoutExpired):
         return {"ok": False, "error": "agents_unavailable"}
@@ -686,7 +690,7 @@ def read_screen(name) -> dict:
     if done.returncode != 0:
         return {"ok": False, "error": "agent_screen_unfiltered"}
     raw = done.stdout.decode("utf-8", "replace")
-    raw = "\n".join(raw.rstrip("\n").split("\n")[-60:])
+    raw = "\n".join(raw.rstrip("\n").split("\n")[-SCREEN_LINES:])
     data = raw.encode("utf-8")
     if len(data) > 16384:
         raw = data[-16384:].decode("utf-8", "ignore")

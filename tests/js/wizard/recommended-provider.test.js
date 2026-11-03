@@ -39,6 +39,6 @@ describe('Codex consigliato nella CLI', () => {
     const known = providers.slice(providers.indexOf('const KNOWN_PROVIDERS = {'));
     expect(known.indexOf('openai:')).toBeLessThan(known.indexOf('anthropic:'));
     expect(providers).toContain("const UPDATE_TARGETS = ['codex'];");
-    expect(providers).toContain('Choose one with: jht providers use codex');
+    expect(read('cli/src/lib/texts/en.js')).toContain('Choose one with: jht providers use codex');
   });
 });

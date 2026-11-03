@@ -210,11 +210,11 @@ export type TakenReason = (typeof TAKEN_REASONS)[number];
  * What a receipt said of a message of the person's: sent (`sent`), in the agent's mailbox
  * (`queued`), pasted and still in the composer (`notSent`, Enter may be pressed again), or not
  * known (`unknown`, nothing may be pressed). «Sent», never «taken»: until the team's delivery
- * proves it, the app does not say the agent took it. A receipt from an older image has no
+ * proves it (`taken: true`), the app does not say the agent took it. A receipt from an older image has no
  * `taken`: its `state` alone decides, as before.
  */
 export type Outcome =
-  | { kind: "sent" }
+  | { kind: "sent"; taken?: true }
   | { kind: "queued"; watched?: true }
   | { kind: "expired" }
   | { kind: "late" }
@@ -230,7 +230,7 @@ export function outcomeOf(receipt: { state?: unknown; taken?: unknown; reason?: 
   if (receipt.taken !== true && receipt.state === "queued") {
     return receipt.queue === "terminal" ? { kind: "queued", watched: true } : { kind: "queued" };
   }
-  return { kind: "sent" };
+  return receipt.taken === true ? { kind: "sent", taken: true } : { kind: "sent" };
 }
 
 /**
@@ -252,7 +252,7 @@ export function settleQueued(
     const lateOnExpired = ending.how === "late" && outcome?.kind === "expired";
     if (!outcome || (!lateOnExpired && (outcome.kind !== "queued" || !outcome.watched))) continue;
     const became: Outcome | null =
-      ending.how === "taken" ? { kind: "sent" }
+      ending.how === "taken" ? { kind: "sent", taken: true }
       : ending.how === "pending" ? outcomeOf({ taken: false }, 0)
       : ending.how === "unconfirmed" ? outcomeOf({ taken: null, reason: "unconfirmed" }, 0)
       : ending.how === "late" ? { kind: "late" }

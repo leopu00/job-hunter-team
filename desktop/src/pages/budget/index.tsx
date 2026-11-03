@@ -3,6 +3,7 @@ import { appLocale } from "../../lib/app-locale";
 import { readTeamState, type TeamControlState } from "../../lib/agent-control";
 import { describeError } from "../../lib/error-catalog";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
+import { ROLE_COLOR } from "../../lib/role-color";
 import { readTeamBudget, type BudgetResult, type TeamBudget } from "../../lib/team-budget-native";
 import { fill } from "../../lib/text-slots";
 import { navigate } from "../../shell/router";
@@ -20,9 +21,24 @@ const WASTE_WORTH_SAYING_PCT = 5;
 type Loaded = { kind: "loading" } | { kind: "failed"; code: string } | { kind: "ready"; budget: TeamBudget };
 type Stopped = "stopped" | "paused" | null;
 
-const card = "rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 flex flex-col gap-2";
-const heading = "text-[13px] font-semibold text-[var(--color-bright)]";
-const line = "m-0 text-[12px] text-[var(--color-muted)]";
+// Sizes and colours of the page. The numbers are read at a glance (big, in the colour of the verdict), the sentences are read
+// (14 px, the body colour of the theme: «muted» is kept for the side notes), and every chart colour is a token of the chosen
+// theme, so it follows the palette (light, dark, custom) and stays apart from its neighbours.
+const card = "rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 flex flex-col gap-3";
+const heading = "m-0 text-[16px] font-semibold text-[var(--color-white)]";
+const line = "m-0 text-[14px] leading-6 text-[var(--color-base)]";
+const note = "m-0 text-[13px] leading-5 text-[var(--color-muted)]";
+const bigNumber = "m-0 text-[40px] leading-none font-bold tabular-nums";
+
+const LINE_COLOR: Record<string, string> = {
+  ahead: "var(--color-orange)",
+  on: "var(--color-green)",
+  behind: "var(--color-blue)",
+};
+
+function Swatch({ color }: { color: string }) {
+  return <span aria-hidden="true" className="mt-[6px] inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: color }} />;
+}
 
 function failureText(code: string): string {
   const copy = describeError(code, { fallback: "budget_unavailable", locale: appLocale() });
@@ -55,6 +71,7 @@ function WeekCard({ budget, t, locale }: { budget: TeamBudget; t: BudgetText; lo
   const used = week?.usedPct ?? null;
   const ideal = week?.idealUsedPct ?? null;
   const pts = week?.deviationPts !== null && week?.deviationPts !== undefined ? number(Math.abs(week.deviationPts), locale) : "";
+  const lineColor = (week?.line && LINE_COLOR[week.line]) || "var(--color-bright)";
   const verdict =
     week?.line === "ahead" ? fill(t.lineAhead, { pts }) : week?.line === "behind" ? fill(t.lineBehind, { pts }) : week?.line === "on" ? t.lineOn : t.lineUnknown;
   return (
@@ -64,21 +81,30 @@ function WeekCard({ budget, t, locale }: { budget: TeamBudget; t: BudgetText; lo
         <p className={line}>{t.unavailable}</p>
       ) : (
         <>
-          <p className="m-0 text-[22px] font-semibold text-[var(--color-bright)]">{number(used, locale)} %</p>
+          <p className={bigNumber} style={{ color: lineColor }}>{number(used, locale)} %</p>
           <div
             role="img"
             aria-label={fill(t.barLabel, { used: number(used, locale), ideal: ideal === null ? t.unavailable : number(ideal, locale) })}
             data-testid="budget-bar"
-            className="relative h-3 w-full rounded bg-[var(--color-border)]"
+            className="relative mt-2 h-4 w-full rounded-full bg-[var(--color-border)]"
           >
-            <div data-testid="budget-bar-used" className="h-full rounded bg-[var(--color-bright)]" style={{ width: `${clamp(used)}%` }} />
+            <div data-testid="budget-bar-used" className="h-full rounded-full" style={{ width: `${clamp(used)}%`, background: lineColor }} />
             {ideal !== null && (
-              <div data-testid="budget-bar-ideal" className="absolute -top-1 h-5 w-[2px] bg-[var(--color-yellow)]" style={{ left: `${clamp(ideal)}%` }} />
+              <div
+                data-testid="budget-bar-ideal"
+                className="absolute -top-1.5 h-7 w-[3px] rounded-sm bg-[var(--color-white)] shadow-[0_0_0_2px_var(--color-card)]"
+                style={{ left: `${clamp(ideal)}%`, transform: "translateX(-50%)" }}
+              />
             )}
           </div>
-          <p className={line}>{fill(t.weekUsed, { used: number(used, locale) })}</p>
-          {ideal !== null && <p className={line}>{fill(t.weekIdeal, { ideal: number(ideal, locale) })}</p>}
-          <p className={line} data-testid="budget-line">{verdict}</p>
+          <p className={`${line} flex items-start gap-2`}><Swatch color={lineColor} />{fill(t.weekUsed, { used: number(used, locale) })}</p>
+          {ideal !== null && (
+            <p className={`${line} flex items-start gap-2`}>
+              <span aria-hidden="true" className="mt-[6px] inline-block h-3 w-[3px] shrink-0 rounded-sm bg-[var(--color-white)]" />
+              {fill(t.weekIdeal, { ideal: number(ideal, locale) })}
+            </p>
+          )}
+          <p className="m-0 text-[15px] leading-6 font-semibold text-[var(--color-bright)]" data-testid="budget-line">{verdict}</p>
         </>
       )}
     </section>
@@ -94,7 +120,7 @@ function LeftCard({ budget, t, locale }: { budget: TeamBudget; t: BudgetText; lo
         <p className={line}>{t.unavailable}</p>
       ) : (
         <>
-          <p className="m-0 text-[22px] font-semibold text-[var(--color-bright)]">{number(week.remainingPct, locale)} %</p>
+          <p className={bigNumber} style={{ color: "var(--color-bright)" }}>{number(week.remainingPct, locale)} %</p>
           <p className={line}>{fill(t.left, { left: number(week.remainingPct, locale) })}</p>
         </>
       )}
@@ -150,7 +176,7 @@ function BrakesCard({ budget, stopped, t }: { budget: TeamBudget; stopped: Stopp
       {rows.length === 0 ? (
         <p className={line} data-testid="budget-brakes-none">{t.brakesNone}</p>
       ) : (
-        <ul className="m-0 pl-4 flex flex-col gap-1">
+        <ul className="m-0 pl-5 flex flex-col gap-2 list-disc marker:text-[var(--color-orange)]">
           {rows.map((row) => (
             <li key={row} className={line}>{row}</li>
           ))}
@@ -192,7 +218,7 @@ function BurnCard({ budget, readOnly, t, locale }: { budget: TeamBudget; readOnl
           ) : null}
         </>
       )}
-      {!readOnly && <BurstStrip compact={false} />}
+      {!readOnly && <BurstStrip />}
     </section>
   );
 }
@@ -206,25 +232,33 @@ function RolesCard({ budget, t, locale }: { budget: TeamBudget; t: BudgetText; l
         <p className={line}>{t.rolesNone}</p>
       ) : (
         <>
-          <p className={line}>{roles.window === "week" ? t.rolesWindowWeek : t.rolesWindow5h}</p>
-          <ul className="m-0 p-0 list-none flex flex-col gap-2">
+          <p className={note}>{roles.window === "week" ? t.rolesWindowWeek : t.rolesWindow5h}</p>
+          <div className="flex h-5 w-full gap-[2px] overflow-hidden rounded-full bg-[var(--color-border)]" aria-hidden="true" data-testid="budget-roles-stack">
             {roles.roles.map((item) => (
-              <li key={item.role} data-testid={`budget-role-${item.role}`} className="flex flex-col gap-1">
-                <div className="flex items-baseline justify-between text-[12px]">
-                  <span className="text-[var(--color-bright)]">{t[`role_${item.role}` as keyof BudgetText]}</span>
-                  <span className="text-[var(--color-muted)]">
-                    {number(item.sharePct, locale)} %
-                    {item.agents !== null && ` · ${item.agents === 1 ? t.rolesAgentOne : fill(t.rolesAgents, { n: item.agents })}`}
+              <div key={item.role} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${clamp(item.sharePct)}%`, background: ROLE_COLOR[item.role] }} />
+            ))}
+          </div>
+          <ul className="m-0 p-0 list-none flex flex-col gap-3">
+            {roles.roles.map((item) => (
+              <li key={item.role} data-testid={`budget-role-${item.role}`} className="flex flex-col gap-1.5">
+                <div className="flex items-baseline justify-between gap-3 text-[14px]">
+                  <span className="flex items-start gap-2 text-[var(--color-bright)]">
+                    <Swatch color={ROLE_COLOR[item.role]} />
+                    {t[`role_${item.role}` as keyof BudgetText]}
+                  </span>
+                  <span className="tabular-nums text-[var(--color-base)]">
+                    <strong className="font-semibold text-[var(--color-bright)]">{number(item.sharePct, locale)} %</strong>
+                    {item.agents !== null && <span className="text-[var(--color-muted)]">{` · ${item.agents === 1 ? t.rolesAgentOne : fill(t.rolesAgents, { n: item.agents })}`}</span>}
                   </span>
                 </div>
-                <div className="h-2 w-full rounded bg-[var(--color-border)]" aria-hidden="true">
-                  <div className="h-full rounded bg-[var(--color-bright)]" style={{ width: `${clamp(item.sharePct)}%` }} />
+                <div className="h-2.5 w-full rounded-full bg-[var(--color-border)]" aria-hidden="true">
+                  <div className="h-full rounded-full" style={{ width: `${clamp(item.sharePct)}%`, background: ROLE_COLOR[item.role] }} />
                 </div>
               </li>
             ))}
           </ul>
-          {roles.unattributedPct !== null && roles.unattributedPct > 0 && <p className={line}>{fill(t.rolesUnattributed, { n: number(roles.unattributedPct, locale) })}</p>}
-          {roles.ageMin !== null && roles.ageMin > STALE_AFTER_MIN && <p className={line}>{fill(t.rolesOld, { min: roles.ageMin })}</p>}
+          {roles.unattributedPct !== null && roles.unattributedPct > 0 && <p className={note}>{fill(t.rolesUnattributed, { n: number(roles.unattributedPct, locale) })}</p>}
+          {roles.ageMin !== null && roles.ageMin > STALE_AFTER_MIN && <p className={note}>{fill(t.rolesOld, { min: roles.ageMin })}</p>}
         </>
       )}
     </section>
@@ -269,17 +303,17 @@ export default function BudgetPage(_props: PageProps) {
   }, [load]);
 
   return (
-    <section className="max-w-3xl mx-auto px-5 py-8 flex flex-col gap-4" aria-labelledby="budget-title" data-testid="budget-page">
-      <h1 id="budget-title" className="text-[15px] font-semibold text-[var(--color-bright)]">{t.title}</h1>
-      {loaded.kind === "loading" && <p role="status" className="text-[12px] text-[var(--color-muted)]">{t.loading}</p>}
+    <section className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-5" aria-labelledby="budget-title" data-testid="budget-page">
+      <h1 id="budget-title" className="m-0 text-[24px] font-bold text-[var(--color-white)]">{t.title}</h1>
+      {loaded.kind === "loading" && <p role="status" className={note}>{t.loading}</p>}
       {loaded.kind === "failed" && (
-        <div role="alert" data-testid="budget-failed" className="rounded border border-[var(--color-border)] px-4 py-3 text-[12px]">
+        <div role="alert" data-testid="budget-failed" className="rounded-xl border border-[var(--color-border)] px-5 py-4 text-[14px]">
           <p className="m-0 text-[var(--color-yellow)]">{t.readFailed}</p>
-          <p className="m-0 mt-1 text-[var(--color-muted)]">{failureText(loaded.code)}</p>
+          <p className="m-0 mt-1 text-[var(--color-base)]">{failureText(loaded.code)}</p>
           <button
             type="button"
             onClick={() => void load(false)}
-            className="mt-2 text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
+            className="mt-3 text-[12px] font-semibold uppercase tracking-widest px-4 py-2 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
           >
             {t.retry}
           </button>
@@ -287,7 +321,7 @@ export default function BudgetPage(_props: PageProps) {
       )}
       {loaded.kind === "ready" && (
         <>
-          <p className={line} data-testid="budget-freshness">
+          <p className={note} data-testid="budget-freshness">
             {loaded.budget.sampleAgeMin === null
               ? t.noReading
               : loaded.budget.sampleAgeMin > STALE_AFTER_MIN
@@ -296,11 +330,15 @@ export default function BudgetPage(_props: PageProps) {
                   ? t.updatedNow
                   : fill(t.updated, { min: loaded.budget.sampleAgeMin })}
           </p>
-          {loaded.budget.week === null && stopped !== null && <p className={line}>{stopped === "stopped" ? t.teamStopped : t.teamPaused}</p>}
-          <WeekCard budget={loaded.budget} t={t} locale={locale} />
-          <LeftCard budget={loaded.budget} t={t} locale={locale} />
-          <RateCard budget={loaded.budget} t={t} locale={locale} />
-          <BrakesCard budget={loaded.budget} stopped={stopped} t={t} />
+          {loaded.budget.week === null && stopped !== null && <p className={note}>{stopped === "stopped" ? t.teamStopped : t.teamPaused}</p>}
+          <div className="grid gap-5 md:grid-cols-[3fr_2fr]">
+            <WeekCard budget={loaded.budget} t={t} locale={locale} />
+            <LeftCard budget={loaded.budget} t={t} locale={locale} />
+          </div>
+          <div className="grid gap-5 md:grid-cols-2">
+            <RateCard budget={loaded.budget} t={t} locale={locale} />
+            <BrakesCard budget={loaded.budget} stopped={stopped} t={t} />
+          </div>
           <BurnCard budget={loaded.budget} readOnly={readOnly} t={t} locale={locale} />
           <RolesCard budget={loaded.budget} t={t} locale={locale} />
           {!readOnly && (
@@ -308,7 +346,7 @@ export default function BudgetPage(_props: PageProps) {
               type="button"
               data-testid="budget-hours-link"
               onClick={() => navigate("/settings/hours")}
-              className="self-start text-[11px] tracking-[0.14em] uppercase text-[var(--color-dim)] hover:text-[var(--color-bright)]"
+              className="self-start text-[12px] tracking-[0.14em] uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)]"
             >
               {t.hoursLink} →
             </button>

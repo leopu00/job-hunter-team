@@ -229,7 +229,8 @@ def main():
 
     ratio_window = team_kt / delta_usage       # kT per 1% sulla sola finestra: gonfiato dal contatore intero
     # Il rapporto vero si misura in ore sui punti guadagnati (pace_rate.kt_per_point): una finestra da poche ore con un
-    # contatore intero ha dato 930 kT/punto contro i ~400 della settimana (un team reale, 28/10-03/11).
+    # contatore intero e' rumore (110-1295 kT/punto in finestre da 15 minuti, contro i ~400 della settimana: un team reale,
+    # 28/10-03/11).
     long_events = [(t, w / 1000.0) for evs in by_agent_long.values() for t, w in evs if t >= long_since_ts]
     long = pr.kt_per_point(_all_samples(long_since_ts, now_ts), long_events, now_ts)
     ratio = long["ratio"] if long else ratio_window

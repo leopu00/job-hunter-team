@@ -23,7 +23,7 @@ export function listAction() {
         agent.multi ? `${prefix}-N` : prefix,
         agent.multi ? say('team.several') : say('team.one'),
         agent.effort,
-        agent.desc,
+        agent.desc ? say(`role.${agent.role}`) : '',
       ];
     }),
   ));
@@ -64,7 +64,7 @@ export function statusAction() {
     [{ label: say('team.col_session') }, { label: say('team.col_does'), shrink: true }],
     agentSessions.sort().map((name) => {
       const agent = AGENTS.find((a) => isAgentSession(name, a));
-      return [`${c.green(marks().ok)} ${name}`, agent ? agent.desc : ''];
+      return [`${c.green(marks().ok)} ${name}`, agent ? say(`role.${agent.role}`) : ''];
     }),
   ));
   console.log('');
