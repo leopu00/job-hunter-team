@@ -18,7 +18,7 @@ Tracking temporale:
 
 Un `$` nel testo: tra virgolette doppie la shell legge `$1`..`$9` come suoi argomenti e li sostituisce con niente
 PRIMA che parta il comando («$120k» arriva come «20k»). Un campo di testo libero (position: --notes, --jd-text,
---jd-summary, --requirements, --location-notes · company: --red-flags, --culture-notes · application:
+--jd-summary, --requirements, --location-notes · company: --red-flags, --culture-notes, --about · application:
 --critic-notes, --response) con `-` legge il testo da stdin; un campo solo per comando. Il delimitatore tra
 apici lascia ogni `$` com'e', e la riga `TXT` di chiusura sta in PRIMA colonna (con un rientro il heredoc non si
 chiude e il testo che finisce con una riga `TXT` viene rifiutato):
@@ -37,6 +37,7 @@ from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCAT
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
+from company_about import clean_about
 
 # Campi il cui valore racconta la manutenzione. Vengono fotografati PRIMA
 # dell'UPDATE e riletti dopo, così l'evento registra il diff e non il fatto
@@ -724,6 +725,9 @@ def update_company(args):
     if args.culture_notes:
         updates.append("culture_notes = ?")
         params.append(args.culture_notes)
+    if args.about and clean_about(args.about):
+        updates.append("about = ?")
+        params.append(clean_about(args.about))
     if args.sector:
         updates.append("sector = ?")
         params.append(args.sector)
@@ -1166,7 +1170,7 @@ def _zip_set_clauses(set_clauses, params):
 # (<<'TXT') leaves every `$` alone.
 STDIN_TEXT_OPTIONS = {
     'position': ('notes', 'jd_text', 'jd_summary', 'requirements', 'location_notes'),
-    'company': ('red_flags', 'culture_notes'),
+    'company': ('red_flags', 'culture_notes', 'about'),
     'application': ('critic_notes', 'response'),
 }
 
@@ -1264,6 +1268,7 @@ def main():
     c.add_argument('--verdict', choices=['GO', 'CAUTIOUS', 'NO_GO'])
     c.add_argument('--red-flags')
     c.add_argument('--culture-notes')
+    c.add_argument('--about', help="Two sentences on who the company is and what it does (the company, not the role), user's language, plain text")
     c.add_argument('--hq-country', help='Headquarters country')
     c.add_argument('--sector')
     c.add_argument('--size')

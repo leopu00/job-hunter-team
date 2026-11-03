@@ -1489,7 +1489,8 @@ async function performPush(options) {
       // cosi' un jobs.db non aggiornato non fa fallire il tick. Lato cloud
       // servono la mig 056 (colonne) e la route /api/cloud-sync/push aggiornata
       // (gia' mappa logo_*); di li' arrivano alla Company card via select("*").
-      for (const c of ['logo', 'logo_source', 'logo_fetched']) {
+      // `about` (mig 106): le due frasi su chi e' l'azienda, stessa regola.
+      for (const c of ['logo', 'logo_source', 'logo_fetched', 'about']) {
         if (sqliteHasColumn(db, 'companies', c)) companyCols.push(c);
       }
       companies = readSqliteTableDelta(db, 'companies', companyCols, readCursor.companies);
