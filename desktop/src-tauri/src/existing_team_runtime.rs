@@ -243,7 +243,8 @@ try:
  # A team that has never run has no jobs.db yet: that is no positions, not a failure. Only a file
  # missing from the team's home counts; a jobs.db that is there and cannot be read stays a failure,
  # and so does a missing home. The reads below then run on an empty database, as for a team with none.
- try: os.lstat('/jht_home/jobs.db'); absent=False
+ ident=[0,0]
+ try: info=os.lstat('/jht_home/jobs.db'); ident=[info.st_ino,info.st_dev]; absent=False
  except FileNotFoundError: absent=os.path.isdir('/jht_home')
  if absent:
   db=sqlite3.connect(':memory:'); db.row_factory=sqlite3.Row
@@ -252,7 +253,7 @@ try:
   db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON')
  db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
-if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
+if op=='detail': emit({'ok':True,'data':position_detail(int(req['id'])),'ident':ident})
 def trunc(value,size): return value[:size] if isinstance(value,str) else value
 def number(value): return value if isinstance(value,(int,float)) and not isinstance(value,bool) else None
 # An office coordinate the globe may place a pin on: a finite number within the globe, else None
@@ -2891,6 +2892,7 @@ fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &
     let reply = positions_read_local_with(
         request,
         request_bytes,
+        &crate::local_swipe::scope_tag(scope),
         |input| crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "python"], Some(input), READ_TIMEOUT),
         || {
             crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "probe"], None, LOCAL_PROBE_TIMEOUT)
@@ -2930,6 +2932,7 @@ pub(crate) fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope)
 fn positions_read_local_with(
     request: &PositionsRequest,
     request_bytes: &[u8],
+    token_tag: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
 ) -> Value {
@@ -2938,7 +2941,7 @@ fn positions_read_local_with(
     input.extend_from_slice(request_bytes);
     input.push(b'\n');
     match run(&input) {
-        Ok(output) if output.success() => positions_reply_from_output(request, output),
+        Ok(output) if output.success() => positions_reply_from_output(request, output, Some(token_tag)),
         _ if !team_is_up() => positions_failure("local_team_not_running"),
         _ => positions_answer_failure("positions_unavailable"),
     }
@@ -2967,25 +2970,33 @@ fn positions_read_with(
             ))
         }
     };
-    positions_reply_from_output(request, output)
+    positions_reply_from_output(request, output, None)
 }
 
 /// What the reader printed, as the page's reply: a bounded, well-formed answer of the shape the request asked
 /// for, or why it is not one. The same for the VPS and for this computer's container.
-fn positions_reply_from_output(request: &PositionsRequest, output: ProcessResult) -> Value {
+fn positions_reply_from_output(request: &PositionsRequest, output: ProcessResult, token_tag: Option<&str>) -> Value {
     if output.stdout.len() > 2 * 1024 * 1024 {
         return positions_answer_failure("positions_unavailable");
     }
-    let reply: Value = match serde_json::from_slice(&output.stdout) {
+    let mut reply: Value = match serde_json::from_slice(&output.stdout) {
         Ok(reply) => reply,
         Err(_) => return positions_answer_failure("positions_unavailable"),
     };
+    // The identity of the database file, which only a detail read of this computer's team turns into a token.
+    let ident = reply.as_object_mut().and_then(|object| object.remove("ident"));
     if valid_positions_reply(request, &reply) {
-        return if matches!(request, PositionsRequest::Profile) {
-            shape_profile(reply)
-        } else {
-            reply
-        };
+        if matches!(request, PositionsRequest::Profile) {
+            return shape_profile(reply);
+        }
+        if let (Some(tag), PositionsRequest::Detail { .. }, Some(ident)) = (token_tag, request, ident) {
+            if let Some(token) = crate::local_swipe::token_from_ident(tag, &ident) {
+                if let Some(data) = reply.get_mut("data").and_then(Value::as_object_mut) {
+                    data.insert("token".into(), Value::String(token));
+                }
+            }
+        }
+        return reply;
     }
     match reply.get("error").and_then(Value::as_str) {
         Some("positions_request_invalid") => positions_answer_failure("positions_request_invalid"),
@@ -4138,6 +4149,7 @@ mod tests {
         let reply = positions_read_local_with(
             &PositionsRequest::Facets,
             br#"{"op":"facets"}"#,
+            "0123456789abcdef",
             |input| {
                 // the same reader and request as the VPS gets, on stdin: the reader in hex, then the request
                 let text = String::from_utf8(input.to_vec()).unwrap();
@@ -4398,6 +4410,36 @@ mod tests {
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
         assert!(POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
         assert!(!POSITIONS_READ_PY.contains("req.get('sql')"));
+    }
+
+    #[test]
+    fn a_detail_read_of_this_computers_team_carries_the_token_to_write_with_and_no_other_read_or_team_does() {
+        let detail = PositionsRequest::Detail { id: "42".into() };
+        let body = json!({"position":{},"score":null,"highlights":[],"company":null,"application":null,"tickets":[],"userNote":null,"exclusionEventAt":null});
+        let said = json!({"ok": true, "data": body, "ident": [77, 5]}).to_string();
+        let with_token = positions_reply_from_output(&detail, exited(0, &said).unwrap(), Some("0123456789abcdef"));
+        assert_eq!(with_token["data"]["token"], "0123456789abcdef.77.5");
+        assert!(with_token.get("ident").is_none(), "the identity is not passed on as it is");
+        // a team on a VPS: the same reader, the same reply, no token
+        let vps = positions_reply_from_output(&detail, exited(0, &said).unwrap(), None);
+        assert_eq!(vps, json!({"ok": true, "data": body}));
+        // a position that is not there has nothing to write to; a database that is not there (0) gives no token
+        let none = json!({"ok": true, "data": null, "ident": [77, 5]}).to_string();
+        assert_eq!(positions_reply_from_output(&detail, exited(0, &none).unwrap(), Some("0123456789abcdef")), json!({"ok": true, "data": null}));
+        let absent = json!({"ok": true, "data": body, "ident": [0, 0]}).to_string();
+        assert!(positions_reply_from_output(&detail, exited(0, &absent).unwrap(), Some("0123456789abcdef"))["data"].get("token").is_none());
+        // a garbled identity gives no token and does not break the read
+        for ident in [json!([1]), json!("1.2"), json!([-1, 5]), json!([1.5, 5]), json!(null)] {
+            let garbled = json!({"ok": true, "data": body, "ident": ident}).to_string();
+            let reply = positions_reply_from_output(&detail, exited(0, &garbled).unwrap(), Some("0123456789abcdef"));
+            assert_eq!(reply, json!({"ok": true, "data": body}), "{ident}");
+        }
+        // only a detail read is given one: a list that carries an identity is the list, closed as before
+        let list = PositionsRequest::List { filters: None };
+        let listed = json!({"ok": true, "data": {"items": []}, "ident": [77, 5]}).to_string();
+        assert_eq!(positions_reply_from_output(&list, exited(0, &listed).unwrap(), Some("0123456789abcdef")), json!({"ok": true, "data": {"items": []}}));
+        // and the reader answers the identity of the file only for a detail
+        assert!(POSITIONS_READ_PY.contains("if op=='detail': emit({'ok':True,'data':position_detail(int(req['id'])),'ident':ident})"));
     }
 
     #[test]

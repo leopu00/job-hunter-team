@@ -132,7 +132,7 @@ except Exception: fail('request_invalid')
 emit(answer)
 "#;
 
-fn failure(code: &str) -> Value {
+pub(crate) fn failure(code: &str) -> Value {
     json!({ "ok": false, "error": code })
 }
 
@@ -166,23 +166,23 @@ pub(crate) enum JudgeRequest {
 }
 
 /// The position's number in the team's database: digits only, 1 to 18 of them, no zero and no leading zero.
-fn valid_id(id: &str) -> bool {
+pub(crate) fn valid_id(id: &str) -> bool {
     (1..=18).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_digit()) && !id.starts_with('0')
 }
 
 /// A code of the closed vocabulary has this shape; which codes exist the script decides.
-fn valid_reason(reason: &str) -> bool {
+pub(crate) fn valid_reason(reason: &str) -> bool {
     (1..=32).contains(&reason.len()) && reason.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'_')
 }
 
 impl JudgeRequest {
-    fn id(&self) -> &str {
+    pub(crate) fn id(&self) -> &str {
         match self {
             Self::Feedback { id, .. } | Self::Exclude { id, .. } | Self::Restore { id, .. } => id,
         }
     }
 
-    fn token(&self) -> &str {
+    pub(crate) fn token(&self) -> &str {
         match self {
             Self::Feedback { token, .. } | Self::Exclude { token, .. } | Self::Restore { token, .. } => token,
         }
@@ -195,7 +195,7 @@ impl JudgeRequest {
         }
     }
 
-    fn check(&self) -> Result<(), &'static str> {
+    pub(crate) fn check(&self) -> Result<(), &'static str> {
         if !valid_id(self.id()) {
             return Err("position_write_request_invalid");
         }
@@ -216,7 +216,7 @@ impl JudgeRequest {
 
     /// The one request line the script reads: the closed fields, and where the database must be the one
     /// the deck was read from.
-    fn line(&self, ino: u64, dev: u64) -> Value {
+    pub(crate) fn line(&self, ino: u64, dev: u64) -> Value {
         // the script reads the identity as integers: it never holds a number above what a JSON integer keeps
         let expect = json!({ "ino": ino, "dev": dev });
         match self {
@@ -250,7 +250,7 @@ impl JudgeRequest {
 }
 
 /// What identifies the scope in a token, without being the scope: 16 hex characters of a hash.
-fn scope_tag(scope: &AccountScope) -> String {
+pub(crate) fn scope_tag(scope: &AccountScope) -> String {
     let mut hash = Sha256::new();
     hash.update(b"jht-swipe-deck/1:");
     hash.update(scope.digest().as_bytes());
@@ -262,7 +262,7 @@ fn make_token(tag: &str, ino: u64, dev: u64) -> String {
 }
 
 /// The identity of the database in a token, when the token is of this scope. Anything else is no token.
-fn parse_token(token: &str, tag: &str) -> Option<(u64, u64)> {
+pub(crate) fn parse_token(token: &str, tag: &str) -> Option<(u64, u64)> {
     let mut parts = token.split('.');
     let (found, ino, dev) = (parts.next()?, parts.next()?, parts.next()?);
     if parts.next().is_some() || found != tag || tag.len() != 16 {
@@ -272,7 +272,15 @@ fn parse_token(token: &str, tag: &str) -> Option<(u64, u64)> {
     Some((number(ino)?, number(dev)?))
 }
 
-fn script_input(script: &str, line: &Value) -> Vec<u8> {
+/// The token of a detail read: the identity of the database file as the reader saw it (`[ino, dev]`), whole
+/// numbers only. Anything else is no token, and the page has nothing to write with.
+pub(crate) fn token_from_ident(tag: &str, ident: &Value) -> Option<String> {
+    let pair = ident.as_array().filter(|pair| pair.len() == 2)?;
+    let (ino, dev) = (pair[0].as_u64()?, pair[1].as_u64()?);
+    (ino != 0).then(|| make_token(tag, ino, dev))
+}
+
+pub(crate) fn script_input(script: &str, line: &Value) -> Vec<u8> {
     let mut input = hex_encode(script.as_bytes()).into_bytes();
     input.push(b'\n');
     input.extend(serde_json::to_vec(line).unwrap_or_default());
@@ -292,7 +300,7 @@ const REFUSALS: &[&str] = &[
     "deck_outdated",
 ];
 
-fn short_text(value: Option<&Value>, max: usize) -> Option<String> {
+pub(crate) fn short_text(value: Option<&Value>, max: usize) -> Option<String> {
     value.and_then(Value::as_str).map(|text| text.chars().take(max).collect())
 }
 
@@ -467,7 +475,7 @@ pub(crate) fn deck_with(
 
 /// This computer's team, for a verdict or for the deck: the host is the local one (an existing team's VPS
 /// is read only here) and this account owns the folder. Returns the wrapper the script goes through.
-fn local_wrapper(app: &tauri::AppHandle, scope: &AccountScope, writing: bool) -> Result<PathBuf, &'static str> {
+pub(crate) fn local_wrapper(app: &tauri::AppHandle, scope: &AccountScope, writing: bool) -> Result<PathBuf, &'static str> {
     let refused = if writing { "position_write_read_only" } else { "existing_team_runtime_required" };
     let host = direct_chat::load_persisted_host(app, scope).map_err(|_| refused)?;
     let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope).map_err(|_| refused)?;
@@ -484,17 +492,17 @@ fn local_wrapper(app: &tauri::AppHandle, scope: &AccountScope, writing: bool) ->
     })
 }
 
-fn run_script(wrapper: &Path, input: &[u8]) -> Result<ProcessResult, &'static str> {
+pub(crate) fn run_script(wrapper: &Path, input: &[u8]) -> Result<ProcessResult, &'static str> {
     crate::onboarding::run_verified_local_wrapper(wrapper, &["desktop-chat", "python"], Some(input), TIMEOUT)
 }
 
-fn team_is_up(wrapper: &Path) -> bool {
+pub(crate) fn team_is_up(wrapper: &Path) -> bool {
     crate::onboarding::run_verified_local_wrapper(wrapper, &["desktop-chat", "probe"], None, PROBE_TIMEOUT)
         .map(|probe| probe.success())
         .unwrap_or(false)
 }
 
-async fn on_worker(
+pub(crate) async fn on_worker(
     scopes: &AccountScopeState,
     expected: AccountScope,
     work: impl FnOnce(&AccountScope) -> Value + Send + 'static,

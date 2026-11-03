@@ -778,6 +778,13 @@ pub(crate) fn invalidate_local(context: &LocalContext<'_>) {
     }
 }
 
+/// After a write of the person's on a position of this computer's team (the app wrote it, not the stream): what the
+/// stream kept is dropped now, and the page hears that the positions changed, so it reads again.
+pub(crate) fn positions_written(context: &LocalContext<'_>) {
+    invalidate_local(context);
+    let _ = context.app.emit_to(MAIN_WINDOW, TOPIC_EVENT, PageEvent { topic: "positions", agent: None });
+}
+
 fn begin_opening(context: &LocalContext<'_>, state: &State<'_, StateStreamState>) {
     let generation = state.generation.load(Ordering::SeqCst);
     {
@@ -1480,7 +1487,8 @@ done"#
     #[test]
     fn the_events_go_to_the_main_window_only() {
         let code = production();
-        assert_eq!(code.matches("emit_to(MAIN_WINDOW,").count(), 2);
+        // the status, the stream's own events, and the one for a write of the person's on a position
+        assert_eq!(code.matches("emit_to(MAIN_WINDOW,").count(), 3);
         assert!(!code.contains(".emit(") && code.contains("const MAIN_WINDOW: &str = \"main\";"));
     }
 
