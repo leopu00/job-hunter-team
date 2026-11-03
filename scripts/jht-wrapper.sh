@@ -42,6 +42,9 @@ JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 # riga: un wrapper che non la ha passerebbe il comando al ramo generico, che
 # avvia il container.
 JHT_AGENT_CONTROL_PROTOCOL=1
+# L'app del desktop registra nel broker l'autorizzazione a una candidatura con `desktop-apply record` solo se
+# trova questa riga: un wrapper che non la ha passerebbe il comando al ramo generico, che avvia il container.
+JHT_DESKTOP_APPLY_PROTOCOL=1
 
 # Sistema e utente non cambiano durante una run: si leggono una volta sola. I
 # controlli d'integrita' del runtime (runtime_stat, runtime_node_safe) li
@@ -3124,6 +3127,39 @@ agent_control() {
   docker exec -i -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$container_id" node "$NODE_ENTRY" agent-control "$@"
 }
 
+# Autorizzazione a una candidatura, dal desktop (`jht desktop-apply record ID INSTANT DESTINATION`). Il CLOSER
+# invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
+# l'host e' uno. L'app mostra l'anteprima con il suo digest, la persona conferma con un clic, il container scrive il
+# flag solo per la posizione vista, e l'app chiede qui di registrare istante e destinazione. Come agent-control NON
+# avvia mai niente (niente ensure_up, niente compose, niente machine): col broker spento o non attestato risponde
+# col codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI prima di finire in una riga di comando;
+# la risposta e' una riga sola, mai il testo del broker.
+desktop_apply() {
+  local action="${1:-}" id="${2:-}" instant="${3:-}" destination="${4:-}" broker_id answer
+  # [[ =~ ]] compares the WHOLE value: a grep over several lines would accept a first line that fits and a second that does not
+  local id_re='^[1-9][0-9]{0,9}$'
+  local instant_re='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+  local destination_re='^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$'
+  if [ "$action" != record ] || [ "$#" -ne 4 ] \
+    || ! [[ "$id" =~ $id_re ]] || ! [[ "$instant" =~ $instant_re ]] || ! [[ "$destination" =~ $destination_re ]]; then
+    printf '%s\n' '{"ok":false,"error":"apply_record_invalid"}'
+    return 2
+  fi
+  broker_id="$(read_only_service_id "$BROKER_SERVICE" 2>/dev/null)" || {
+    printf '%s\n' '{"ok":false,"error":"apply_record_no_broker"}'
+    return 113
+  }
+  answer="$(docker exec -i "$broker_id" jht-broker-admin apply record "$id" "$instant" "$destination" </dev/null 2>/dev/null)" || {
+    printf '%s\n' '{"ok":false,"error":"apply_record_refused"}'
+    return 1
+  }
+  if ! printf '%s' "$answer" | grep -Eq '"status": ?"(recorded|already_recorded)"'; then
+    printf '%s\n' '{"ok":false,"error":"apply_record_refused"}'
+    return 1
+  fi
+  printf '%s\n' '{"ok":true}'
+}
+
 # Docker c'e' ED e' raggiungibile? A differenza di require_docker NON esce:
 # serve a DECIDERE, non a pretendere.
 docker_reachable() {
@@ -5634,6 +5670,11 @@ case "$SUB" in
   agent-control)
     shift || true
     agent_control "$@"
+    ;;
+
+  desktop-apply)
+    shift || true
+    desktop_apply "$@"
     ;;
 
   # ── Machine Podman confinata (macOS) ─────────────────────────────────

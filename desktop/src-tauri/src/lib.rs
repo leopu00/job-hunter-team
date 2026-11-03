@@ -25,6 +25,8 @@ mod existing_team_register;
 mod existing_team_register_tests;
 mod existing_team_runtime;
 mod live_screen;
+mod local_action_log;
+mod local_position_act;
 mod local_swipe;
 mod mail;
 mod onboarding;
@@ -225,6 +227,8 @@ pub fn run() {
             team_budget::team_budget_read,
             local_swipe::local_swipe_deck_read,
             local_swipe::local_team_position_judge,
+            local_position_act::local_team_position_act,
+            local_action_log::local_action_log_read,
             voice_input::voice_input_cancel,
             voice_input::voice_input_start,
             voice_input::voice_input_status,
