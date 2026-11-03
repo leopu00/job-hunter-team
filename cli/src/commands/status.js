@@ -8,6 +8,7 @@ import { fetchLatestRelease, updateNotice } from '../lib/release-check.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { c } from './_colors.js';
 import { hint, keyValues, marks, statusLine, title } from '../lib/ui.js';
+import { say } from '../lib/texts.js';
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
@@ -34,7 +35,7 @@ function getTmuxSessions() {
 }
 
 async function handleStatus(options) {
-  const facts = [['Version', pkg.version]];
+  const facts = [[say('status.version'), pkg.version]];
   let config = null;
   if (await fileExists(CONFIG_FILE)) {
     try { config = JSON.parse(await readFile(CONFIG_FILE, 'utf-8')); } catch { config = false; }
@@ -57,30 +58,30 @@ async function handleStatus(options) {
     return;
   }
 
-  console.log(title('Status'));
+  console.log(title(say('status.title')));
   if (config) {
-    facts.push(['Provider', config.active_provider ? `${config.active_provider}${provConfig?.model ? ` (${provConfig.model})` : ''}` : 'not set']);
-    if (provConfig?.auth_method) facts.push(['Sign-in', provConfig.auth_method]);
-    if (config.workspace) facts.push(['Workspace', config.workspace]);
+    facts.push([say('status.provider'), config.active_provider ? `${config.active_provider}${provConfig?.model ? ` (${provConfig.model})` : ''}` : say('status.not_set')]);
+    if (provConfig?.auth_method) facts.push([say('status.signin'), provConfig.auth_method]);
+    if (config.workspace) facts.push([say('status.workspace'), config.workspace]);
     if (tgBots) {
       const n = ['assistente', 'capitano', 'mentor'].filter((r) => tgBots?.[r]?.bot_token).length;
-      facts.push(['Telegram', n === 3 ? '3 bots configured' : `incomplete (${n} of 3 bots)`]);
+      facts.push([say('status.telegram'), n === 3 ? say('status.telegram_ok') : say('status.telegram_partial', { n })]);
     }
   } else {
-    facts.push(['Configuration', config === false ? 'unreadable' : 'not found']);
+    facts.push([say('status.configuration'), config === false ? say('status.unreadable') : say('status.not_found')]);
   }
-  facts.push(['Team', sessions.length ? `${sessions.length} running` : 'not running']);
+  facts.push([say('status.team'), sessions.length ? say('status.team_running', { n: sessions.length }) : say('status.team_off')]);
   console.log(keyValues(facts));
   if (sessions.length) {
     console.log('');
     for (const name of sessions) console.log(`    ${c.green(marks().ok)} ${name}`);
   }
   console.log('');
-  if (!config) console.log(hint('Set it up with: jht setup'));
-  else if (!sessions.length) console.log(hint('Start the team with: jht team start'));
+  if (!config) console.log(hint(say('status.next_setup')));
+  else if (!sessions.length) console.log(hint(say('status.next_start')));
   if (notice) {
     console.log('');
-    console.log(statusLine('warn', `Version ${notice.latest} is available (you run ${notice.current})`, { hint: `Run "${notice.command}" ${notice.where}` }));
+    console.log(statusLine('warn', say('status.update', { latest: notice.latest, current: notice.current }), { hint: say('status.update_hint', { command: notice.command, where: notice.where }) }));
   }
   console.log('');
 }
@@ -88,7 +89,7 @@ async function handleStatus(options) {
 export function registerStatusCommand(program) {
   program
     .command('status')
-    .description('Show the state of the system: version, configuration, team sessions')
-    .option('--json', 'machine-readable output')
+    .description(say('status.description'))
+    .option('--json', say('option.json'))
     .action(handleStatus);
 }

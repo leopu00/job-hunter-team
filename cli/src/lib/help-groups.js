@@ -1,3 +1,5 @@
+import { say } from './texts.js';
+
 /**
  * The long list of `jht help`: commands in groups a person can read, without the ones that do nothing.
  *
@@ -34,12 +36,21 @@ export const HELP_GROUPS = [
 
 export const OTHER_GROUP = 'Other';
 
+/** The text key of each group's title: the title above is the group's stable name, what is shown comes from the catalog. */
+const GROUP_KEYS = {
+  'Every day': 'help.group_every_day',
+  'Your team': 'help.group_team',
+  'Your data': 'help.group_data',
+  'Maintenance': 'help.group_maintenance',
+  [OTHER_GROUP]: 'help.group_other',
+};
+
 /** The commands of the program on the computer (the wrapper), which the program inside the container cannot list. */
 export const HOST_COMMANDS = [
-  ['up', 'Start the team'],
-  ['down', 'Stop it'],
-  ['restart', 'Restart it'],
-  ['uninstall', 'Remove the local runtime (asks to confirm)'],
+  ['up', 'help.host_up'],
+  ['down', 'help.host_down'],
+  ['restart', 'help.host_restart'],
+  ['uninstall', 'help.host_uninstall'],
 ];
 
 /** The visible commands of a program with the group each belongs to. */
@@ -71,6 +82,13 @@ function wrap(text, width) {
   return lines.length ? lines : [''];
 }
 
+/** The description of a command in the list: the catalog's, or the command's own where its language has none. */
+function describeCommand(command, help) {
+  const key = `cmd.${command.name()}`;
+  const text = say(key);
+  return text === key ? help.subcommandDescription(command) : text;
+}
+
 /** The text of `jht help`, for a terminal `width` columns wide (the same text on a pipe). */
 export function renderFullHelp(program, width = 80) {
   const w = Math.max(40, Math.min(width, 100));
@@ -79,8 +97,8 @@ export function renderFullHelp(program, width = 80) {
   const termOf = (c) => [c.name(), ...c.aliases()].join('|');
   const terms = groups.flatMap((g) => g.commands.map(termOf));
   const column = Math.min(Math.max(...terms.map((t) => t.length)), 26) + 2;
-  const out = ['Usage: jht [options] [command]', '', program.description(), '', 'Options:',
-    '  -V, --version  output the version number', '  -h, --help     display help for command', ''];
+  const out = [say('help.usage'), '', program.description(), '', say('help.options'),
+    `  -V, --version  ${say('help.version')}`, `  -h, --help     ${say('help.help')}`, ''];
   const row = (term, description) => {
     const room = w - 2 - column;
     const lines = wrap(description, room);
@@ -93,13 +111,13 @@ export function renderFullHelp(program, width = 80) {
     }
   };
   for (const { title, commands } of groups) {
-    out.push(`${title}:`);
-    for (const c of commands) row(termOf(c), help.subcommandDescription(c));
+    out.push(`${say(GROUP_KEYS[title] ?? 'help.group_other')}:`);
+    for (const c of commands) row(termOf(c), describeCommand(c, help));
     out.push('');
   }
-  out.push('On your computer, outside the container:');
-  for (const [term, text] of HOST_COMMANDS) row(term, text);
+  out.push(say('help.host_title'));
+  for (const [term, key] of HOST_COMMANDS) row(term, say(key));
   out.push('');
-  out.push('Help for one command: jht <command> --help', '');
+  out.push(say('help.one_command'), '');
   return out.join('\n');
 }

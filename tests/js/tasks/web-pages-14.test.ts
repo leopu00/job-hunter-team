@@ -76,8 +76,10 @@ describe("jht doctor CLI", () => {
       expect(src).toContain(`function ${fn}`);
   });
   it("5 sezioni diagnostica: Environment, Config, AI provider, Database, Team; riassunto prima, --all e --json", () => {
+    // the names of the sections are texts of the catalog (the screens follow the language of the person)
+    const english = readCli("src/lib/texts/en.js");
     for (const sec of ["Environment", "Config", "AI provider", "Database", "Team"])
-      expect(src).toContain(sec);
+      expect(english).toContain(`'doctor.sec_${sec === "AI provider" ? "provider" : sec.toLowerCase()}': '${sec}'`);
     expect(src).toContain("--all"); expect(src).toContain("--json");
   });
   it("deps required node/npm/tmux/git + optional claude/pandoc/typst/python3", () => {
