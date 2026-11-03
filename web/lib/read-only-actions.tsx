@@ -10,8 +10,12 @@ import { createContext, useContext } from "react";
 export type ReadOnlyActions = {
   readOnly: boolean;
   reason: string;
-  /** Only the authorisation of the application stays off, with this reason (the desktop on a team it writes to, but not that). */
-  applyReason?: string;
+  /**
+   * The authorisation of an application is asked in two steps here even though the page is not the cloud's: the host
+   * answers a preview (summary, destination, digest) and the person's click carries the digest and the destination back
+   * (the desktop on the team of this computer).
+   */
+  applyTwoStep?: boolean;
 };
 
 const NOT_READ_ONLY: ReadOnlyActions = { readOnly: false, reason: "" };

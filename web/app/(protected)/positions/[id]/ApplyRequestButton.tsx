@@ -70,6 +70,8 @@ export type AuthorisationStep =
       id: string;
       summary: string;
       expiresAt: string | null;
+      /** Where the application would go, when the host says it (the desktop on this computer's team). */
+      destination?: string;
     }
   | { ok: true; step: "done" }
   | { ok: false; error: string | null; status: number | null };
@@ -93,7 +95,7 @@ async function twoStepCall(
     return { ok: false, error: outcome.code, status: outcome.status };
   }
   if (expected === "queued") return { ok: true, step: "done" };
-  const { id, summary, expiresAt } = outcome.body;
+  const { id, summary, expiresAt, destination } = outcome.body;
   if (
     typeof id !== "string" ||
     typeof summary !== "string" ||
@@ -107,6 +109,8 @@ async function twoStepCall(
     id,
     summary,
     expiresAt: typeof expiresAt === "string" ? expiresAt : null,
+    // only when the host says it: the website's answer has no destination and stays as it was
+    ...(typeof destination === "string" && destination ? { destination } : {}),
   };
 }
 
@@ -123,15 +127,22 @@ export function startAuthorisation(
   );
 }
 
-/** Secondo tempo: porta solo l'id della conferma ricevuta. */
+/**
+ * Secondo tempo: porta l'id della conferma ricevuta e, se la prima risposta diceva dove va la candidatura,
+ * la stessa destinazione: chi scrive controlla che sia quella che l'utente ha visto.
+ */
 export function confirmAuthorisation(
   legacyId: number,
   confirmId: string,
   fetchImpl: typeof fetch = fetch,
+  destination: string | null = null,
 ) {
   return twoStepCall(
     legacyId,
-    { method: "POST", body: JSON.stringify({ confirmId }) },
+    {
+      method: "POST",
+      body: JSON.stringify(destination ? { confirmId, destination } : { confirmId }),
+    },
     "queued",
     fetchImpl,
   );
@@ -160,6 +171,10 @@ export function refusalText(t: Translate, error: string | null): string | null {
     return t("refused_unrecorded");
   if (error === "position_changed" || error === "confirmation_required")
     return t("refused_position_changed");
+  // The consent to apply on this computer (set in the settings) is missing, off or unreadable.
+  if (error?.startsWith("consent_") || error?.startsWith("config_") || error === "rule_unavailable")
+    return t("refused_consent");
+  if (error === "destination_invalid") return t("refused_destination");
   if (
     error === "confirm_expired" ||
     error === "confirm_used" ||
@@ -194,7 +209,7 @@ export function ApplyRequestView({
   error?: string | null;
   confirming?: boolean;
   /** Il testo che il server ha composto per questa conferma (il ruolo e l'azienda) e fin quando vale. */
-  confirmation?: { summary: string; expiresText: string | null } | null;
+  confirmation?: { summary: string; expiresText: string | null; destination?: string | null } | null;
   /** Autorizzata dal sito, ma il tetto di oggi è pieno: parte domani. Non è partita e non è un errore. */
   queuedTomorrow?: boolean;
   /** La porta ha chiesto un accesso recente: il pulsante per rifarlo, e se è in corso. */
@@ -206,8 +221,8 @@ export function ApplyRequestView({
 }) {
   const readOnly = useReadOnlyActions();
   // L'autorizzazione può restare spenta da sola (con la scrittura del resto della pagina accesa).
-  const blocked = readOnly.readOnly || Boolean(readOnly.applyReason);
-  const blockedReason = readOnly.readOnly ? readOnly.reason : readOnly.applyReason;
+  const blocked = readOnly.readOnly;
+  const blockedReason = readOnly.reason;
   if (state.kind === "hidden") return null;
 
   const button = (
@@ -375,6 +390,17 @@ export function ApplyRequestView({
                   <div className="mt-0.5 break-words text-[12px] font-semibold text-[var(--color-white)]">
                     {confirmation.summary}
                   </div>
+                  {confirmation.destination && (
+                    <div
+                      data-testid="apply-destination"
+                      className="mt-1 break-all text-[10px] text-[var(--color-muted)]"
+                    >
+                      {t("confirm_destination")}{" "}
+                      <span className="font-mono text-[var(--color-white)]">
+                        {confirmation.destination}
+                      </span>
+                    </div>
+                  )}
                   {confirmation.expiresText && (
                     <div className="mt-1 text-[10px] text-[var(--color-muted)]">
                       {confirmation.expiresText}
@@ -402,7 +428,7 @@ export function ApplyRequestView({
 export function ApplyRequestButton({
   legacyId,
   state,
-  twoStep = false,
+  twoStep: twoStepProp = false,
   authorisedBy = null,
   webSentAt = [],
 }: {
@@ -418,6 +444,8 @@ export function ApplyRequestButton({
   const locale = useLocale();
   const t = makeT(T, locale);
   const router = useRouter();
+  // The cloud asks in two steps; so does the desktop on the team of this computer (its host answers the preview).
+  const twoStep = twoStepProp || Boolean(useReadOnlyActions().applyTwoStep);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -425,6 +453,7 @@ export function ApplyRequestButton({
     id: string;
     summary: string;
     expiresAt: string | null;
+    destination?: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
   // La porta vuole un accesso degli ultimi 15 minuti: l'utente può rifarlo da qui (T63).
@@ -474,12 +503,12 @@ export function ApplyRequestButton({
   // Secondo tempo: solo l'id della conferma, entro la sua scadenza.
   const confirmTwoStep = async () => {
     if (!pending) return;
-    const { id } = pending;
+    const { id, destination } = pending;
     setPending(null);
     setError(null);
     setSending(true);
     try {
-      const outcome = await confirmAuthorisation(legacyId, id);
+      const outcome = await confirmAuthorisation(legacyId, id, fetch, destination ?? null);
       if (!outcome.ok) return fail("authorise", outcome);
       startTransition(() => router.refresh());
     } finally {
@@ -607,7 +636,9 @@ export function ApplyRequestButton({
       }
       confirming={twoStep ? pending !== null : confirming}
       confirmation={
-        twoStep && pending ? { summary: pending.summary, expiresText } : null
+        twoStep && pending
+          ? { summary: pending.summary, expiresText, destination: pending.destination }
+          : null
       }
       onAuthorise={
         twoStep ? () => void startTwoStep() : () => setConfirming(true)
