@@ -770,7 +770,7 @@ describe("db_update, as the ANALISTA runs it, against db_update.py (T14)", () =>
 const ANALISTA_INSERTS: string[][] = [
   ["company", "--name", "Delta", "--website", "https://delta.example", "--hq-country", "IT", "--sector", "fintech", "--size", "11-50",
     "--glassdoor-rating", "3.9", "--red-flags", "", "--culture-notes", "Remote-first", "--analyzed-by", "analista-1", "--verdict", "GO"],
-  ["company", "--name", "Delta", "--about", "Delta builds payment software. It sells a card terminal."],
+  ["company", "--name", "Delta", "--about", "Delta builds payment software. It sells a card terminal.", "--analyzed-by", "analista-1"],
   // --analyzed-by as the agent: the tool writes the agent whatever is passed (A-2), the script what is passed.
   ["company", "--name", "Ümlaut GmbH", "--verdict", "NO_GO", "--analyzed-by", "analista-1"],
   ["company", "--name", "New Co", "--analyzed-by", "analista-1"],
