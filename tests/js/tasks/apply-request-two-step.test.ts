@@ -357,4 +357,13 @@ describe("the destination of a preview (the desktop on the team of this computer
     await confirmAuthorisation(7, ROW, web as unknown as typeof fetch);
     expect(JSON.parse(String((web.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({ confirmId: ROW });
   });
+
+  it("tells a consent that is off from a setting that is not valid", async () => {
+    const { refusalText } = await import("@/app/(protected)/positions/[id]/ApplyRequestButton");
+    const t = (key: string) => key;
+    for (const off of ["consent_absent", "consent_disabled"]) expect(refusalText(t, off)).toBe("refused_consent");
+    for (const bad of ["consent_cap_invalid", "consent_mode_unknown", "config_missing", "config_malformed", "rule_unavailable"]) {
+      expect(refusalText(t, bad)).toBe("refused_settings");
+    }
+  });
 });

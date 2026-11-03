@@ -186,6 +186,15 @@ export const T = {
     fr: "Le consentement pour postuler depuis cet ordinateur n'est pas actif : active-le dans les réglages et réessaie.",
     pt: "O consentimento para se candidatar a partir deste computador não está ativo: ativa-o nas definições e tenta de novo.",
   },
+  refused_settings: {
+    it: "Le impostazioni della candidatura automatica su questo computer non sono valide: controllale e riprova.",
+    en: "The automatic-application settings on this computer are not valid: check them and try again.",
+    hu: "Az automatikus jelentkezés beállításai ezen a számítógépen érvénytelenek: ellenőrizd őket, és próbáld újra.",
+    es: "Los ajustes de la candidatura automática en este ordenador no son válidos: revísalos y vuelve a intentarlo.",
+    de: "Die Einstellungen der automatischen Bewerbung auf diesem Computer sind ungültig: Prüfe sie und versuche es erneut.",
+    fr: "Les réglages de la candidature automatique sur cet ordinateur ne sont pas valides : vérifie-les et réessaie.",
+    pt: "As definições da candidatura automática neste computador não são válidas: verifica-as e tenta de novo.",
+  },
   refused_destination: {
     it: "Non so dove andrebbe questa candidatura: non la autorizzo. Riprova dal pulsante.",
     en: "I do not know where this application would go: not authorising it. Try again from the button.",

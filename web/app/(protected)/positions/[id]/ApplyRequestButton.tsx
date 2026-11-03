@@ -171,9 +171,11 @@ export function refusalText(t: Translate, error: string | null): string | null {
     return t("refused_unrecorded");
   if (error === "position_changed" || error === "confirmation_required")
     return t("refused_position_changed");
-  // The consent to apply on this computer (set in the settings) is missing, off or unreadable.
+  // The consent to apply on this computer is not given or is off: it is turned on in the settings.
+  if (error === "consent_absent" || error === "consent_disabled") return t("refused_consent");
+  // Any other consent/config code is a setting that is not valid or not readable, not one that is off.
   if (error?.startsWith("consent_") || error?.startsWith("config_") || error === "rule_unavailable")
-    return t("refused_consent");
+    return t("refused_settings");
   if (error === "destination_invalid") return t("refused_destination");
   if (
     error === "confirm_expired" ||
