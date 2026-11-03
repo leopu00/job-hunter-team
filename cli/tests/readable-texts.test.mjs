@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,18 +48,19 @@ test('team list names no internal source unless JHT_DEBUG is set', () => {
   assert.match(jht(['team', 'list'], { JHT_DEBUG: '1' }).out, /source: (tmux host|jht container)/);
 });
 
-test('a setup step that fails is one sentence, never the child\'s stack trace', () => {
-  const trace = [
-    'node:internal/modules/cjs/loader:1595',
-    '  throw err;',
-    "Error: Cannot find module '/app/cli/bin/jht.js'",
-    '    at Module._resolveFilename (node:internal/modules/cjs/loader:1591:15)',
-    "  code: 'MODULE_NOT_FOUND',",
-  ].join('\n');
-  const sentence = describeStepFailure('providers update', trace);
-  assert.match(sentence, /providers update did not complete: the JHT program could not be started here/);
-  assert.doesNotMatch(sentence, /at Module|loader:|throw err|\/app\/cli/);
-  // a step with its own message keeps that message
-  assert.match(describeStepFailure('providers update', 'Error: npm could not reach the registry\n    at x'), /did not complete: npm could not reach the registry/);
-  assert.doesNotMatch(describeStepFailure('x', 'Error: boom\n    at y'), /\n/);
+test('a setup step whose program is not there is one sentence, never the stack trace of Node', () => {
+  assert.equal(
+    describeStepFailure('providers update', { missing: true }),
+    '  providers update did not complete: the JHT program was not found here. More details: JHT_DEBUG=1 jht setup',
+  );
+  assert.match(describeStepFailure('team start', { status: 3 }), /it ended with code 3/);
+  assert.doesNotMatch(describeStepFailure('x', { missing: true }), /\n|\/app/);
+});
+
+test('setup runs a sub-step with its stderr inherited: no buffer cap, no questions held back', () => {
+  const source = readFileSync(fileURLToPath(new URL('../wizard/setup.js', import.meta.url)), 'utf8');
+  const run = source.slice(source.indexOf('function runJhtSubcommand'), source.indexOf('function runProviderOauth'));
+  assert.match(run, /stdio: 'inherit'/);
+  assert.doesNotMatch(run, /'pipe'|maxBuffer/);
+  assert.match(run, /existsSync\(entry\)/);
 });

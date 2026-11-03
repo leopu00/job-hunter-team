@@ -10,6 +10,7 @@
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import {
   AI_PROVIDERS,
   RECOMMENDED_PROVIDER,
@@ -51,35 +52,33 @@ const PROVIDER_OAUTH_CMD = {
   kimi: 'kimi',
 };
 
-/** The one sentence for a step that did not complete: its own message when it has one, never a stack trace. */
-export function describeStepFailure(label, stderr, result = {}) {
-  const lines = String(stderr).split('\n').map((l) => l.trim()).filter(Boolean);
-  const own = lines.find((l) => /^(error|errore)\b/i.test(l) && !/Cannot find module/.test(l));
-  const missing = lines.some((l) => /Cannot find module|MODULE_NOT_FOUND/.test(l));
-  const why = own ?? (missing || result.error ? 'the JHT program could not be started here' : null);
-  return `  ${label} did not complete${why ? `: ${why.replace(/^error:\s*/i, '')}` : ''}. More details: JHT_DEBUG=1 jht setup`;
+/** The one sentence for a step that did not complete, for the cases where the child could not even say it itself. */
+export function describeStepFailure(label, { missing = false, status = null } = {}) {
+  const why = missing ? 'the JHT program was not found here' : status === null ? 'it could not be started' : `it ended with code ${status}`;
+  return `  ${label} did not complete: ${why}. More details: JHT_DEBUG=1 jht setup`;
 }
 
 /**
  * Esegue un sub-comando JHT (lo stesso CLI Node, gia' in /app/cli/bin/jht.js)
- * con stdio inherited. Ritorna true se exit code = 0.
+ * con stdio inherited: le sue domande e i suoi messaggi arrivano mentre li scrive, senza tetti di buffer.
+ * Ritorna true se exit code = 0. Il caso che mostrava una traccia di Node in mezzo al wizard (il programma non
+ * c'e') si controlla prima, e diventa una frase.
  */
 function runJhtSubcommand(args, label) {
   const entry = process.env.JHT_NODE_ENTRY || '/app/cli/bin/jht.js';
-  // stderr is held: a failing step ends as one sentence, not as the child's stack trace in the middle of the wizard.
-  // JHT_DEBUG=1 shows everything it said.
-  const result = spawnSync(process.execPath, [entry, ...args], {
-    stdio: ['inherit', 'inherit', 'pipe'],
-    encoding: 'utf8',
-    env: process.env,
-  });
-  const said = String(result.stderr ?? '');
-  if (result.status !== 0) {
-    console.error(describeStepFailure(label, said, result));
-    if (process.env.JHT_DEBUG && said) console.error(said);
+  if (!existsSync(entry)) {
+    console.error(describeStepFailure(label, { missing: true }));
+    if (process.env.JHT_DEBUG) console.error(`  (looked for ${entry})`);
     return false;
   }
-  if (said.trim()) process.stderr.write(said);
+  const result = spawnSync(process.execPath, [entry, ...args], {
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    console.error(describeStepFailure(label, { status: result.status }));
+    return false;
+  }
   return true;
 }
 
