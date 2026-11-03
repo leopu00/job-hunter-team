@@ -1843,9 +1843,9 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // The page of a position in a profile with no cloud account: what the team's own writers refuse, in the page's words.
   already_applied: copy(
     "Per questa posizione la candidatura è già stata inviata.",
-    "Un nuovo CV non serve.",
+    "Non c’è altro da fare da qui.",
     "The application for this position has already been sent.",
-    "A new CV is not needed.",
+    "There is nothing more to do from here.",
   ),
   applied_by_team: copy(
     "La candidatura l’ha inviata il team, non tu.",

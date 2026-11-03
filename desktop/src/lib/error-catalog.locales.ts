@@ -1904,11 +1904,11 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["Esta posição já não está na equipa.", "Atualiza a página: o baralho é lido de novo."],
   ),
   already_applied: tr(
-    ["Die Bewerbung für diese Position wurde schon gesendet.", "Ein neuer Lebenslauf ist nicht nötig."],
-    ["La candidatura para esta posición ya se envió.", "No hace falta un CV nuevo."],
-    ["La candidature pour ce poste a déjà été envoyée.", "Un nouveau CV n’est pas nécessaire."],
-    ["A jelentkezést erre a pozícióra már elküldték.", "Új önéletrajzra nincs szükség."],
-    ["A candidatura a esta vaga já foi enviada.", "Não é preciso um novo CV."],
+    ["Die Bewerbung für diese Position wurde schon gesendet.", "Hier ist nichts weiter zu tun."],
+    ["La candidatura para esta posición ya se envió.", "Desde aquí no hay nada más que hacer."],
+    ["La candidature pour ce poste a déjà été envoyée.", "Il n’y a rien d’autre à faire d’ici."],
+    ["A jelentkezést erre a pozícióra már elküldték.", "Innen nincs több teendő."],
+    ["A candidatura a esta vaga já foi enviada.", "Daqui não há mais nada a fazer."],
   ),
   applied_by_team: tr(
     ["Das Team hat diese Bewerbung gesendet, nicht du.", "Von hier aus lässt sie sich nicht zurücknehmen."],
