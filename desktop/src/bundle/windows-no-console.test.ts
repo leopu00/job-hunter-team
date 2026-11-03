@@ -32,7 +32,7 @@ describe("the Windows app opens no console of its own", () => {
   it.each([
     ["onboarding.rs", /hide_console\(&mut command\);\s*let mut child = command\s*\.spawn\(\)\s*\.map_err\(\|_\| failure\("provider_login_start_failed"\)\)/],
     ["broker_view.rs", /hide_console\(&mut command\);\s*let mut child = command\.spawn\(\)\.map_err\(\|_\| "tunnel_start_failed"\)/],
-    ["direct_chat.rs", /hide_console\(&mut command\);\s*let child = command\.spawn\(\)\.map_err\(\|_\| failure\("tunnel_start_failed"\)\)/],
+    ["direct_chat.rs", /hide_console\(&mut command\);\s*let child = (?:command\.spawn\(\)|crate::runtime_host::spawn_retrying_busy\(&mut command\))\.map_err\(\|_\| failure\("tunnel_start_failed"\)\)/],
   ])("%s: the console program it spawns is hidden right before it starts", (file, pattern) => {
     expect(read(file)).toMatch(pattern);
     expect(read(file)).toContain("crate::runtime_host::hide_console(&mut command);");

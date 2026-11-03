@@ -176,7 +176,11 @@ def test_wsl_preflight_is_hidden_actionable_and_retried_on_the_next_prepare():
     host = RUNTIME_HOST.read_text(encoding="utf-8")
     for launcher in ("pub(crate) fn run_program<I, S>", "pub(crate) fn run_program_keeping_stderr<I, S>"):
         body = host[host.index(launcher) :]
-        body = body[: body.index("command.spawn()")]
+        # the launch is `command.spawn()` or, for a program file that may have just been written, the same with
+        # a retry while the file is busy (runtime_host::spawn_retrying_busy): console hidden before either
+        starts = [at for at in (body.find("command.spawn()"), body.find("spawn_retrying_busy(&mut command)")) if at >= 0]
+        assert starts, launcher
+        body = body[: min(starts)]
         assert "hide_console(&mut command);" in body, launcher
     assert "const CREATE_NO_WINDOW: u32 = 0x0800_0000" in host
 
