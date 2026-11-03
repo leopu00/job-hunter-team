@@ -51,6 +51,8 @@ import { registerDownloadCommand } from './commands/download.js';
 import { registerGameCommand } from './commands/game.js';
 import { renderFullHelp } from './lib/help-groups.js';
 import { errorBlock } from './lib/ui.js';
+import { say } from './lib/texts.js';
+import { parserLine } from './lib/parser-messages.js';
 
 // Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
@@ -65,20 +67,7 @@ import { errorBlock } from './lib/ui.js';
 // sono finite le cose) e la prima schermata dopo l'install non può raccomandare
 // un comando che non fa niente. Al suo posto `team`, senza il quale l'help
 // essenziale non diceva in nessun punto come si avvia il team.
-const ESSENTIAL_HELP = `Usage: jht [command]
-
-Job Hunter Team — CLI
-
-Essential commands:
-  setup        Initial configuration (starts the wizard)
-  team         Start and stop agents (jht team start)
-  status       System status (container, agents, database)
-  agents       List agents and current tasks
-  doctor       Diagnose setup and dependencies
-
-For the complete command list:
-  jht help
-`;
+// the short list is a text of the catalog (`help.essential`), in the language of the person
 
 export function buildProgram() {
   const program = new Command();
@@ -173,9 +162,9 @@ export function buildProgram() {
       const [first, ...rest] = String(text).trim().split('\n');
       const path = typedCommandPath();
       write(`${errorBlock({
-        what: first.replace(/^error:\s*/i, ''),
-        why: rest.join(' ').replace(/^\(|\)$/g, '') || null,
-        fix: path.length ? `Help for this command: jht ${path.join(' ')} --help` : 'All the commands: jht help',
+        what: parserLine(first.replace(/^error:\s*/i, '')),
+        why: parserLine(rest.join(' ').replace(/^\(|\)$/g, '')) || null,
+        fix: path.length ? say('error.help_command', { path: path.join(' ') }) : say('error.help_all'),
       })}\n`);
     },
   };
@@ -193,12 +182,12 @@ export function buildProgram() {
 
   // `jht --help` is the short essential list; `jht help` is the long one, in groups, for the width of the terminal.
   program.helpInformation = function () {
-    return ESSENTIAL_HELP;
+    return say('help.essential');
   };
 
   program
     .command('help')
-    .description('Show all available commands (long form)')
+    .description(say('help.long_description'))
     .action(() => {
       process.stdout.write(renderFullHelp(program, process.stdout.columns || 80));
     });

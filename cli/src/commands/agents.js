@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { c } from './_colors.js';
 import { hint, marks, table, title } from '../lib/ui.js';
+import { say } from '../lib/texts.js';
 
 const AGENTS = [
   { id: 'capitano',   name: 'Capitano',   session: 'CAPITANO' },
@@ -33,22 +34,22 @@ function handleAgents(options) {
     return;
   }
 
-  console.log(title('Agents', `${running.length} of ${rows.length} running`));
+  console.log(title(say('agents.title'), say('agents.running_of', { running: running.length, total: rows.length })));
   const m = marks();
   console.log(table(
-    [{ label: 'Agent' }, { label: 'Session' }, { label: 'State' }],
+    [{ label: say('agents.col_agent') }, { label: say('agents.col_session') }, { label: say('agents.col_state') }],
     rows.map((a) => [
       `${a.running ? c.green(m.ok) : c.gray(m.info)} ${a.name}`,
       a.session,
-      a.running ? c.green('running') : c.gray('stopped'),
+      a.running ? c.green(say('agents.running')) : c.gray(say('agents.stopped')),
     ]),
   ));
   if (running.length === 0) {
     console.log('');
-    console.log(hint('Start the team with: jht team start'));
+    console.log(hint(say('team.next_start')));
   }
   if (options.verbose && running.length > 0) {
-    console.log(`\n  ${c.gray('Session names in tmux:')}`);
+    console.log(`\n  ${c.gray(say('agents.sessions_in_tmux'))}`);
     for (const s of sessions.filter((x) => AGENTS.some((a) => a.session === x))) console.log(`    ${s}`);
   }
   console.log('');
@@ -57,8 +58,8 @@ function handleAgents(options) {
 export function registerAgentsCommand(program) {
   program
     .command('agents')
-    .description('List the agents and whether each one is running')
-    .option('-v, --verbose', 'show the tmux session names')
-    .option('--json', 'machine-readable output')
+    .description(say('agents.description'))
+    .option('-v, --verbose', say('agents.verbose'))
+    .option('--json', say('option.json'))
     .action(handleAgents);
 }

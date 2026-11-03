@@ -11,28 +11,18 @@ import { runSetupWizard } from '../../wizard/setup.js';
 import { runNonInteractiveSetup } from '../../wizard/setup-noninteractive.js';
 import { t } from '../../wizard/i18n.js';
 
-function printBanner() {
-  console.log('');
-  console.log(pc.bold(pc.cyan('   ╔═══════════════════════════════════════╗')));
-  console.log(pc.bold(pc.cyan('   ║                                       ║')));
-  console.log(pc.bold(pc.cyan('   ║') + '    JOB HUNTER TEAM  —  Setup Wizard   ' + pc.cyan('║')));
-  console.log(pc.bold(pc.cyan('   ║                                       ║')));
-  console.log(pc.bold(pc.cyan('   ╚═══════════════════════════════════════╝')));
-  console.log('');
-}
-
 async function handleSetup(opts) {
   if (opts.nonInteractive) {
     await runNonInteractiveSetup(opts);
     return;
   }
 
-  printBanner();
   const prompter = createClackPrompter();
   try {
-    await runSetupWizard(prompter);
+    // a setup that stopped before its end leaves a code that a script can read
+    if (!(await runSetupWizard(prompter))) process.exitCode = 1;
   } catch (err) {
-    if (err instanceof WizardCancelledError) return;
+    if (err instanceof WizardCancelledError) { process.exitCode = 1; return; }
     console.error(pc.red(t('wizard.cli.unexpected_error')), err.message);
     process.exitCode = 1;
   }
@@ -46,6 +36,7 @@ export function registerSetupCommand(program) {
     .option('--provider <name>', t('wizard.cli.provider'), 'openai')
     .option('--auth-method <method>', t('wizard.cli.auth_method'), 'api_key')
     .option('--api-key <key>', t('wizard.cli.api_key'))
+    .option('--api-key-file <path>', t('wizard.cli.api_key_file'))
     .option('--secret-mode <mode>', t('wizard.cli.secret_mode'), 'plaintext')
     .option('--secret-env <name>', t('wizard.cli.secret_env'))
     .option('--secret-file <path>', t('wizard.cli.secret_file'))

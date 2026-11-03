@@ -110,8 +110,6 @@ export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
           baseProviders, workingHours } = params;
 
-  const progress = prompter.progress('Saving configuration...');
-
   const providerConfig = { name: providerChoice, auth_method: authMethod };
   if (authMethod === 'api_key' && apiKey) {
     // SecretRef: salva l'oggetto intero o estrai il plaintext per retrocompatibilita'
@@ -143,8 +141,8 @@ export async function assembleAndSaveConfig(prompter, params) {
     config.team.working_hours = workingHours;
   }
 
+  // Written without a word: «saved» is said at the end of the setup, not before the steps that can still fail.
   writeConfigFile(config);
-  progress.stop('Configuration saved!');
   return config;
 }
 
@@ -158,13 +156,13 @@ export async function showSummary(prompter, params) {
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const summary = [
     `Provider:   ${selectedProvider.label}`,
-    'Auth:       OAuth (sign-in follows later in this wizard)',
+    'Sign-in:    through the provider, done',
     '',
     `Config:     ${JHT_CONFIG_PATH}`,
     `JHT home:   ${JHT_CONFIG_DIR}`,
   ].join('\n');
 
-  await prompter.note(summary, 'Summary');
+  await prompter.note(summary, 'Configuration saved');
   // L'outro finale viene emesso dal wizard chiamante (setup.js) DOPO gli step
   // post-config (providers update / OAuth / team start). Qui non chiudiamo il
   // flow perche' c'e' altro da chiedere.

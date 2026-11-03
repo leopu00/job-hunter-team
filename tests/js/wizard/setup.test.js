@@ -211,13 +211,15 @@ describe('runSetupWizard — config esistente', () => {
 });
 
 describe('runSetupWizard — provider proposto', () => {
-  it('propone Codex da solo e già scelto: Claude e Kimi non si possono scegliere', async () => {
-    const prompter = createMockPrompter({ selects: ['openai'], confirms: [false, false] });
+  it('dice che il provider è Codex senza chiederlo: con una sola scelta non c’è domanda, e Claude e Kimi non si possono scegliere', async () => {
+    const prompter = createMockPrompter({ selects: [], confirms: [false, false] });
 
     await runSetupWizard(prompter);
 
-    const [params] = prompter.select.mock.calls.find(([p]) => p?.options?.some((o) => o.value === 'openai'));
-    expect(params.options.map((o) => o.value)).toEqual(['openai']);
-    expect(params.initialValue).toBe('openai');
+    // nessuna domanda con una sola risposta: il provider è una riga, e la configurazione lo salva
+    expect(prompter.select.mock.calls.some(([p]) => p?.options?.some((o) => o.value === 'openai'))).toBe(false);
+    expect(prompter.note.mock.calls.some(([, title]) => title === 'wizard.provider.prompt' || title === 'AI Provider')).toBe(true);
+    const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
+    expect(savedConfig.active_provider).toBe('openai');
   });
 });

@@ -35,7 +35,7 @@ function guardCancel(value) {
 export function createClackPrompter() {
   return {
     intro: async (title) => {
-      intro(pc.bgCyan(pc.black(` ${title} `)));
+      intro(pc.bold(title));
     },
 
     outro: async (message) => {
@@ -91,15 +91,18 @@ export function createClackPrompter() {
         await confirm({
           message: pc.bold(params.message),
           initialValue: params.initialValue,
+          // what each answer does, when the question says it («Yes, carry on» / «No, stop here»)
+          ...(params.active ? { active: params.active } : {}),
+          ...(params.inactive ? { inactive: params.inactive } : {}),
         }),
       ),
 
     progress: (label) => {
       const spin = spinner();
-      spin.start(pc.cyan(label));
+      spin.start(label);
       return {
         update: (message) => {
-          spin.message(pc.cyan(message));
+          spin.message(message);
         },
         stop: (message) => {
           spin.stop(message ? pc.green(message) : undefined);
