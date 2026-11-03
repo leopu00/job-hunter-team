@@ -413,6 +413,12 @@ const APPLY_NOT_READY = copy(
     "This position is not ready to be sent yet.",
     "Wait for the team to prepare the CV and the letter, then try again.",
 );
+const APPLY_WITHDRAWAL_UNCONFIRMED = copy(
+    "Il team non ha registrato l’autorizzazione e non so se l’abbia ritirata.",
+    "Aggiorna la pagina e guarda lo stato della candidatura prima di riprovare.",
+    "The team did not record the authorisation and I do not know whether it was withdrawn.",
+    "Refresh the page and look at the state of the application before trying again.",
+);
 const APPLY_ALREADY_SENT = copy(
     "Per questa posizione la candidatura è già partita.",
     "Non si può autorizzare di nuovo.",
@@ -475,10 +481,11 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // The native side has already withdrawn the request when its broker receipt
   // cannot be recorded. The shared retry copy is available in every locale.
   apply_authorisation_unrecorded: RETRY,
+  apply_withdrawal_unconfirmed: APPLY_WITHDRAWAL_UNCONFIRMED,
   consent_absent: APPLY_CONSENT_OFF,
   consent_disabled: APPLY_CONSENT_OFF,
-  consent_mode_unknown: APPLY_CONSENT_OFF,
-  consent_cap_invalid: APPLY_CONSENT_OFF,
+  consent_mode_unknown: APPLY_SETTINGS_UNREADABLE,
+  consent_cap_invalid: APPLY_SETTINGS_UNREADABLE,
   config_missing: APPLY_SETTINGS_UNREADABLE,
   config_unreadable: APPLY_SETTINGS_UNREADABLE,
   config_malformed: APPLY_SETTINGS_UNREADABLE,

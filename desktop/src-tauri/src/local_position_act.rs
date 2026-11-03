@@ -528,8 +528,13 @@ pub(crate) fn act_with(
                 if !recorded {
                     // withdrawn again, with the same closed line the page would have sent
                     let withdraw = Act::More(MoreRequest::ApplyRequest { id: act.id().to_owned(), on: false, confirmed: false, confirm: None, token: act.token().to_owned() });
-                    let _ = run(&script_input(ACT_PY, &withdraw.line(ino, dev)));
-                    return failure("apply_authorisation_unrecorded");
+                    // The withdrawal is read too: if the team does not confirm it the flag may still be on, and the person
+                    // is told that, not that nothing was recorded.
+                    let withdrawn = run(&script_input(ACT_PY, &withdraw.line(ino, dev)))
+                        .ok()
+                        .and_then(|output| close_answer(&output))
+                        .is_some_and(|answer| answer.get("ok") == Some(&Value::Bool(true)));
+                    return failure(if withdrawn { "apply_authorisation_unrecorded" } else { "apply_withdrawal_unconfirmed" });
                 }
             }
             // a preview is a read: the positions did not change, nobody is told
@@ -935,6 +940,19 @@ mod tests {
             let (reply, lines, recorded, told) = authorise(&[bad], said(0, r#"{"ok":true}"#));
             assert_eq!((reply, recorded, told, lines.len()), (failure("apply_authorisation_unrecorded"), None, 0, 2), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_withdrawal_the_team_does_not_confirm_is_told_as_that_and_not_as_nothing_recorded() {
+        // the broker did not record, and the flag could not be taken back either: it may still be on
+        for withdrawal in [r#"{"ok":false,"error":"write_not_observed"}"#, "the container fell", ""] {
+            let (reply, lines, _, told) = authorise(&[WRITTEN, withdrawal], said(0, r#"{"ok":false}"#));
+            assert_eq!(reply, failure("apply_withdrawal_unconfirmed"), "{withdrawal}");
+            assert_eq!((told, lines.len()), (0, 2), "{withdrawal}");
+        }
+        // taken back: the person is told nothing was recorded
+        let (reply, _, _, _) = authorise(&[WRITTEN, r#"{"ok":true,"op":"apply-request","apply_requested":false}"#], said(0, r#"{"ok":false}"#));
+        assert_eq!(reply, failure("apply_authorisation_unrecorded"));
     }
 
     #[test]
