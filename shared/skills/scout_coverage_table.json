@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik». api: a public JSON or open-data address, no key, that answered 200 on the date in its hint (a hint, not a promise): the Scout asks it instead of the site's page. The kit of 03/11 for FR, DE, ES, PT, NL, BE, CH and AT was checked from the Mac with one request per address, nothing bypassed; a refusal seen only there closes nothing.",
+ "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik». api: a public, documented API address, no key, that answered 200 on the date in its hint (a hint, not a promise): the Scout asks it instead of the site's page. Only public pages and documented public APIs are read, and a page or address that the site's robots.txt disallows is not (access closed, with the reason in the hint). The kit of 03/11 for FR, DE, ES, PT, NL, BE, CH and AT was checked from the Mac with one request per address, nothing bypassed; a refusal seen only there closes nothing.",
  "retired": [
   "xing-jobs",
   "bundesagentur-fuer-arbeit"
@@ -559,8 +559,7 @@
     "tier": "core",
     "access": "search",
     "host": "jobs.ch",
-    "hint": "Use the JSON the site itself reads, no key: GET /api/v1/public/search?query={q}&location={city}&rows=20&page=N (rows above 20 answer 422). Answer: total_hits, num_pages, documents[]{title, company_name, place, publication_date, preview, _links.detail_en.href}. Wide word alone answers a lot («Praktikum» 808 ads on 03/11, 41 pages): read the pages, filter locally. 200 on 03/11.",
-    "api": "https://www.jobs.ch/api/v1/public/search"
+    "hint": "Search: jobs.ch/de/stellenangebote/?term={q}&location={city} (200 on 03/11, «Praktikum» 570 ads); page= for more. Switzerland. Only the page the site shows to everybody is read: its internal JSON is not documented for outside use and is not asked."
    },
    {
     "slug": "stepstone-at",
@@ -640,9 +639,9 @@
     "name": "HelloWork",
     "country": "fr",
     "tier": "core",
-    "access": "search",
+    "access": "closed",
     "host": "hellowork.com",
-    "hint": "Search: hellowork.com/fr-fr/emploi/recherche.html?k={q} (200 on 03/11)."
+    "hint": "Closed to programs by its own robots.txt (03/11): its search page is disallowed, so it is not read. Log nothing there."
    },
    {
     "slug": "linkedin",
@@ -673,7 +672,7 @@
     "tier": "core",
     "access": "search",
     "host": "apec.fr",
-    "hint": "Search: apec.fr/candidat/recherche-emploi.html/emploi?q={q} (the older motsCles address redirects there, 301 on 03/11). Mostly experienced profiles: young graduates are few."
+    "hint": "Search: apec.fr/candidat/recherche-emploi.html/emploi?q={q} (the older motsCles address redirects there, 301 on 03/11). Mostly experienced profiles: young graduates are few. Its robots.txt answered 403 on 03/11: read only the page a person sees, one search at a time."
    },
    {
     "slug": "meteojob",
@@ -706,14 +705,13 @@
     "slug": "le-forem",
     "name": "Le Forem",
     "country": "be",
-    "tier": "core",
-    "access": "search",
+    "tier": "minor",
+    "access": "closed",
     "host": "leforem.be",
     "aliases": [
      "forem"
     ],
-    "hint": "Open data of Le Forem (Wallonia), no key, 24,809 ads on 03/11, refreshed every day: GET records?where=search(titreoffre,\"stage\")&order_by=datedebutdiffusion desc&limit=100&offset=N (offset+limit up to 10000). Fields: titreoffre, nomemployeur, lieuxtravaillocalite, typecontrat, niveauxetudes, experiencerequise, langues, url, datedebutdiffusion. Ads in French and in Nederlands. 200 on 03/11.",
-    "api": "https://www.odwb.be/api/explore/v2.1/catalog/datasets/offres-d-emploi-forem/records"
+    "hint": "Closed to programs on 03/11: leforem.be disallows /recherche-offres/ in its robots.txt, and the open data of the Forem (a documented Opendatasoft API on odwb.be) is on a host whose robots.txt disallows /api/ for programs. Not read until someone with the authority decides otherwise."
    }
   ],
   "it": [
@@ -887,14 +885,13 @@
     "slug": "landing-jobs",
     "name": "Landing.jobs",
     "country": "pt",
-    "tier": "core",
+    "tier": "minor",
     "access": "search",
     "host": "landing.jobs",
     "aliases": [
      "landingjobs"
     ],
-    "hint": "Public JSON, no key: GET ?limit=50&offset=N. Only 57 ads on 03/11 (50, then 7, then none), so two calls read it all. No search word: filter by title and by locations[].country_code (PT, a few DE). Fields: title, role_description, remote, type, tags, locations, url, published_at, expires_at. 200 on 03/11.",
-    "api": "https://landing.jobs/api/v1/jobs"
+    "hint": "Page: landing.jobs/jobs (200 on 03/11, robots.txt allows it; about 57 ads). Its /api/ and /jobs/search are disallowed by its robots.txt: not asked."
    }
   ],
   "en": [
