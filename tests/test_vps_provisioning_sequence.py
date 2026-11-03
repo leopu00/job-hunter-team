@@ -833,3 +833,19 @@ def test_a_range_is_chosen_after_the_one_readable_file_when_the_other_is_missing
     done = install_podman(server, source, FAKE_LINGER="no")
     assert done.returncode == 0, done.stderr.decode()
     assert "sudo -n usermod --add-subuids 165536-231071 --add-subgids 165536-231071 app" in server.calls()
+
+
+def test_a_fresh_account_with_no_rc_file_still_finds_jht_in_its_next_terminal(server, source):
+    assert not any((server.home / name).exists() for name in (".bashrc", ".zshrc", ".profile"))
+    done = install(server, source)
+    assert done.returncode == 0, done.stderr.decode()
+    written = [name for name in (".profile", ".bashrc", ".zshrc") if (server.home / name).exists()]
+    assert ".profile" in written
+    for name in written:
+        assert (server.home / name).read_text().count("Added by JHT install.sh") == 1
+        assert ".local/bin" in (server.home / name).read_text()
+    assert "No shell rc file was written" not in done.stdout.decode() + done.stderr.decode()
+    # and a second run adds nothing
+    before = {name: (server.home / name).read_text() for name in written}
+    assert install(server, source).returncode == 0
+    assert {name: (server.home / name).read_text() for name in written} == before

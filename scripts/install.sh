@@ -1325,8 +1325,30 @@ download_runtime_files() {
         done
       fi
       if [ "$persistent_added" -eq 0 ]; then
+        # A fresh account may have none of the rc files, and a PATH that nobody wrote leaves `jht` "not found" in the
+        # next terminal. If none of them already has the line, they are created: ~/.profile (login shells) and the
+        # rc of the shell in use (bash or zsh).
+        local already=0 rc created_rc
+        for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+          if [ -f "$rc" ] && grep -q "$BIN_DIR" "$rc" 2>/dev/null; then already=1; fi
+        done
+        if [ "$already" -eq 0 ]; then
+          created_rc="$HOME/.profile"
+          case "${SHELL##*/}" in
+            zsh) created_rc="$created_rc $HOME/.zshrc" ;;
+            bash) created_rc="$created_rc $HOME/.bashrc" ;;
+          esac
+          for rc in $created_rc; do
+            printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc" \
+              && { ok "PATH added to $rc"; persistent_added=1; }
+          done
+        fi
+      fi
+      if [ "$persistent_added" -eq 0 ]; then
         warn "No shell rc file was written. Add manually:"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
+      else
+        PATH_NEW_SHELL=1
       fi
       # Also update this subshell's PATH so the commands install.sh runs
       # afterwards (e.g. the wizard) can find `jht`. The parent shell PATH
@@ -1985,6 +2007,9 @@ final_message() {
   if ! will_auto_onboard; then
     printf "  ${BOLD}Next steps:${RESET}\n"
     printf "\n"
+    if [ "${PATH_NEW_SHELL:-0}" -eq 1 ]; then
+      printf "      ${DIM}Open a new terminal window first (or run: . ~/.profile), so that it finds jht.${RESET}\n\n"
+    fi
     if [ "${PATH_READY:-0}" -eq 1 ]; then
       if [ "$USE_DOCKER" -eq 1 ]; then
         printf "      ${BOLD}jht setup${RESET}        ${DIM}# configuration wizard (also starts the container)${RESET}\n"

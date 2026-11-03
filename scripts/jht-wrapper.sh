@@ -311,6 +311,15 @@ jht_text_en() {
     download.release_no_app) printf '%s' "This release (v%s) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded." ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
+    status.title) printf '%s' "Status" ;;
+    status.container) printf '%s' "Container" ;;
+    status.image) printf '%s' "Image" ;;
+    status.running) printf '%s' "running since %s" ;;
+    status.state) printf '%s' "%s since %s" ;;
+    status.next_running) printf '%s' "Who is working: jht agents" ;;
+    status.next_other) printf '%s' "Start the team with: jht up" ;;
+    status.not_running) printf '%s' "The team's container is not running." ;;
+    status.not_running_next) printf '%s' "Start it with: jht up" ;;
     uninstall.phase.machine) printf '%s' "Removing the Podman machine, or JHT's containers and volumes..." ;;
     uninstall.phase.data) printf '%s' "Deleting ~/.jht and the Documents folder (--purge)..." ;;
     uninstall.phase.runtime) printf '%s' "Removing the host runtime..." ;;
@@ -340,6 +349,15 @@ jht_text_it() {
     download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
+    status.title) printf '%s' "Stato" ;;
+    status.container) printf '%s' "Container" ;;
+    status.image) printf '%s' "Immagine" ;;
+    status.running) printf '%s' "acceso dal %s" ;;
+    status.state) printf '%s' "%s dal %s" ;;
+    status.next_running) printf '%s' "Chi sta lavorando: jht agents" ;;
+    status.next_other) printf '%s' "Accendi la squadra con: jht up" ;;
+    status.not_running) printf '%s' "Il container della squadra non e' acceso." ;;
+    status.not_running_next) printf '%s' "Accendilo con: jht up" ;;
     uninstall.phase.machine) printf '%s' "Rimuovo la macchina Podman, oppure i container e i volumi di JHT..." ;;
     uninstall.phase.data) printf '%s' "Cancello ~/.jht e la cartella Documenti (--purge)..." ;;
     uninstall.phase.runtime) printf '%s' "Rimuovo il runtime dell'host..." ;;
@@ -5114,6 +5132,33 @@ else
   EXEC_FLAGS="-i"
 fi
 
+# ── jht status: a sentence for a person, key=value for the app ───────────
+# The app (and the tests) read `name=… status=… started=… image=…` from a pipe; at a terminal the same facts come
+# as a short screen with the next step. JHT_MACHINE_OUTPUT=1 forces the first form, =0 the second.
+status_human_title() { printf '\n  %b%s%b\n\n' "$BOLD" "$(jht_say status.title)" "$RESET"; }
+
+status_human_next() { printf '\n  %b→ %s%b\n\n' "$DIM" "$1" "$RESET"; }
+
+status_human_running() {
+  local line="$1" state started image
+  state="${line%%|*}"; line="${line#*|}"; started="${line%%|*}"; image="${line#*|}"
+  started="$(printf '%s' "$started" | sed 's/T/ /; s/\..*//; s/ \([0-9][0-9]:[0-9][0-9]\):[0-9][0-9]$/ \1/')"
+  status_human_title
+  if [ "$state" = running ]; then
+    printf '  %-12s %s\n' "$(jht_say status.container)" "$(jht_say status.running "$started")"
+  else
+    printf '  %-12s %s\n' "$(jht_say status.container)" "$(jht_say status.state "$state" "$started")"
+  fi
+  printf '  %-12s %s\n' "$(jht_say status.image)" "${image##*/}"
+  if [ "$state" = running ]; then status_human_next "$(jht_say status.next_running)"; else status_human_next "$(jht_say status.next_other)"; fi
+}
+
+status_human_not_running() {
+  status_human_title
+  printf '  %b✗%b %s\n' "$RED" "$RESET" "$(jht_say status.not_running)"
+  status_human_next "$(jht_say status.not_running_next)"
+}
+
 # ── jht uninstall ─────────────────────────────────────────────────────────
 # Stesso contratto del wrapper Windows: una sola conferma esplicita, righe
 # stabili JHT_PHASE/JHT_LEFT su stdout, uscita 0 (niente resta), 2 (uso) o
@@ -5880,7 +5925,7 @@ case "$SUB" in
     # Una machine che vede tutto il Mac non risulta "attiva" nemmeno qui.
     require_confined_podman_machine
     if ! docker_reachable; then
-      printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+      if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else status_human_not_running; fi
       exit 1
     fi
     why_file="$(mktemp "${TMPDIR:-/tmp}/jht-why.XXXXXX" 2>/dev/null)" || why_file=""
@@ -5888,15 +5933,19 @@ case "$SUB" in
     if container_id="$(read_only_container_id)"; then
       JHT_ATTEST_WHY_FILE=""
       [ -z "$why_file" ] || rm -f -- "$why_file"
-      docker inspect "$container_id" --format \
-        'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
+      if jht_machine_output; then
+        docker inspect "$container_id" --format \
+          'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
+      else
+        status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
+      fi
     else
       attest_status=$?
       JHT_ATTEST_WHY_FILE=""
       # 3 = the project has no such container; anything else = a container is there and cannot be attested.
       # Saying «non attivo» for the second hid a team that was running (TEST 19g).
       if [ "$attest_status" -eq 3 ]; then
-        printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"
+        if jht_machine_output; then printf "container '%s' non attivo\n" "$CONTAINER_SERVICE"; else status_human_not_running; fi
       else
         printf "container '%s' non attestabile: c'e' qualcosa che non si riesce a verificare (una configurazione diversa dall'attesa, o il motore che non risponde); non vuol dire che non giri.\n" "$CONTAINER_SERVICE"
         if [ "$CONTAINER_RUNTIME" = podman ] && podman_caller_env_set; then
