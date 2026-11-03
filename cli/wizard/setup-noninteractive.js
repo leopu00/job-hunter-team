@@ -8,6 +8,7 @@
  *   jht setup --non-interactive --provider claude --api-key sk-ant-... --model claude-sonnet-4-6
  *   jht setup --non-interactive --provider claude --secret-mode env --secret-env ANTHROPIC_API_KEY
  */
+import { readFileSync } from 'node:fs';
 import pc from 'picocolors';
 import {
   AI_PROVIDERS,
@@ -43,7 +44,7 @@ function silentPrompter() {
  * @param {object} opts — flag CLI da Commander
  */
 export async function runNonInteractiveSetup(opts) {
-  console.log(pc.bold(pc.cyan('\n  JHT Setup — Non-interactive mode\n')));
+  console.log(pc.bold('\n  JHT Setup — Non-interactive mode\n'));
 
   // --- Validazione flag obbligatori ---
   const providerName = opts.provider || RECOMMENDED_PROVIDER;
@@ -73,14 +74,26 @@ export async function runNonInteractiveSetup(opts) {
       }
       apiKeySecret = formatSecretForConfig('file', opts.secretFile);
     } else {
-      if (!opts.apiKey) {
-        console.error(pc.red('--api-key is required (or use --secret-mode env/file)'));
+      // the key comes from a file (never on the command line, where other programs and the history see it) or, as
+      // before, from --api-key
+      let key = opts.apiKey;
+      if (opts.apiKeyFile) {
+        try {
+          key = readFileSync(opts.apiKeyFile, 'utf8').split(/\r?\n/)[0];
+        } catch {
+          console.error(pc.red(`The file given to --api-key-file cannot be read: ${opts.apiKeyFile}`));
+          process.exitCode = 1;
+          return;
+        }
+      }
+      if (!key || !key.trim()) {
+        console.error(pc.red(opts.apiKeyFile ? 'The file given to --api-key-file is empty.' : '--api-key-file (or --api-key) is required, or use --secret-mode env/file'));
         process.exitCode = 1;
         return;
       }
-      const err = validateApiKey(selectedProvider, opts.apiKey);
+      const err = validateApiKey(selectedProvider, key);
       if (err) { console.error(pc.red(err)); process.exitCode = 1; return; }
-      apiKeySecret = formatSecretForConfig('plaintext', opts.apiKey.trim());
+      apiKeySecret = formatSecretForConfig('plaintext', key.trim());
     }
   } else if (authMethod === 'subscription') {
     if (!opts.subscriptionEmail) {

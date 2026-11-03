@@ -60,8 +60,8 @@ describe("jht setup CLI", () => {
       expect(src).toContain(o);
     expect(src).not.toContain("--workspace");
   });
-  it("printBanner + runSetupWizard + runNonInteractiveSetup + WizardCancelledError", () => {
-    expect(src).toContain("function printBanner"); expect(src).toContain("runSetupWizard");
+  it("runSetupWizard + runNonInteractiveSetup + WizardCancelledError, and no banner box of its own", () => {
+    expect(src).not.toContain("printBanner"); expect(src).toContain("runSetupWizard");
     expect(src).toContain("runNonInteractiveSetup"); expect(src).toContain("WizardCancelledError");
   });
 });

@@ -34,29 +34,17 @@ process.on('SIGINT', () => {
   restoreTerminal();
   process.stdout.write('\n');
   cancel(pc.red(t('wizard.cli.interrupted')));
-  process.exit(0);
+  process.exit(1);
 });
 
-function printBanner() {
-  console.log('');
-  console.log(pc.bold(pc.cyan('   ╔═══════════════════════════════════════╗')));
-  console.log(pc.bold(pc.cyan('   ║                                       ║')));
-  console.log(pc.bold(pc.cyan('   ║') + '    JOB HUNTER TEAM  —  Setup Wizard   ' + pc.cyan('║')));
-  console.log(pc.bold(pc.cyan('   ║                                       ║')));
-  console.log(pc.bold(pc.cyan('   ╚═══════════════════════════════════════╝')));
-  console.log('');
-}
-
 async function main() {
-  printBanner();
-
   const prompter = createClackPrompter();
 
   try {
-    await runSetupWizard(prompter);
+    if (!(await runSetupWizard(prompter))) process.exitCode = 1;
   } catch (err) {
     if (err instanceof WizardCancelledError) {
-      process.exit(0);
+      process.exit(1);
     }
     console.error(pc.red(t('wizard.cli.unexpected_error')), err.message);
     process.exit(1);

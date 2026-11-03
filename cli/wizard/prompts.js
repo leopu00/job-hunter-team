@@ -36,6 +36,8 @@
  * @typedef {Object} WizardConfirmParams
  * @property {string} message
  * @property {boolean} [initialValue]
+ * @property {string} [active] what answering yes does, when the question says it
+ * @property {string} [inactive] what answering no does
  */
 
 /**
