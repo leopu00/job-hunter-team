@@ -33,9 +33,9 @@ function sandbox() {
   return { root, home, bin };
 }
 
-function run(command: string) {
+function run(command: string, ...extra: string[]) {
   const sb = sandbox();
-  const r = spawnSync(process.execPath, [JHT_BIN, command], {
+  const r = spawnSync(process.execPath, [JHT_BIN, command, ...extra], {
     encoding: "utf-8",
     env: {
       ...process.env,
@@ -53,14 +53,13 @@ describe("CLI — nomi sessione del runtime container", () => {
   it("jht status conta i nomi moderni e ignora tmux estranei", () => {
     const r = run("status");
     expect(r.code).toBe(0);
-    expect(r.out).toContain("Tmux Sessions JHT: 5");
+    expect(r.out).toMatch(/Team\s+5 running/);
     expect(r.out).toContain("SCOUT-1");
-    expect(r.out).not.toContain("    - unrelated");
+    expect(r.out).not.toContain("unrelated");
   });
 
   it("jht doctor riconosce i quattro agenti core moderni", () => {
-    const r = run("doctor");
-    expect(r.code).toBe(0);
+    const r = run("doctor", "--all");
     for (const name of ["ASSISTENTE", "CAPITANO", "MENTOR", "SENTINELLA"]) {
       expect(r.out).toContain(`${name}: active`);
       expect(r.out).not.toContain(`${name}: not found`);

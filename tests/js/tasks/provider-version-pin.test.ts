@@ -164,13 +164,13 @@ describe("il percorso di install non contiene riferimenti mutabili", () => {
 
 posixOnly("jht providers (la lista) vede la CLI dove l'install la mette", () => {
   // L'install scrive nel volume jht-deps (NPM_CONFIG_PREFIX), non in JHT_HOME/.npm-global: dopo la
-  // ricreazione della macchina la lista diceva «CLI: —» con la CLI al suo posto.
+  // ricreazione della macchina la lista diceva «CLI —» con la CLI al suo posto.
   it("la trova dal binario sul PATH, anche se la cartella vecchia e' vuota", () => {
     const sb = makeSandbox({ provider: "codex", version: PINS.codex.version });
     const r = runCli(sb, ["providers"]);
     expect(r.code).toBe(0);
-    expect(r.out).toContain(`CLI: ${PINS.codex.version}`);
-    expect(r.out).not.toContain("CLI: —");
+    expect(r.out).toContain(`CLI ${PINS.codex.version}`);
+    expect(r.out).not.toContain("CLI —");
   });
 
   it("la trova dal prefisso dell'install (volume) quando il binario non risponde", () => {
@@ -185,7 +185,7 @@ posixOnly("jht providers (la lista) vede la CLI dove l'install la mette", () => 
     );
     const r = runCli(sb, ["providers"]);
     expect(r.code).toBe(0);
-    expect(r.out).toContain(`CLI: ${PINS.codex.version}`);
+    expect(r.out).toContain(`CLI ${PINS.codex.version}`);
   });
 
   it("con la CLI davvero assente dice «—», non una versione", () => {
@@ -196,7 +196,7 @@ posixOnly("jht providers (la lista) vede la CLI dove l'install la mette", () => 
       "utf-8",
     );
     const r = runCli(sb, ["providers"]);
-    expect(r.out).toContain("CLI: —");
+    expect(r.out).toContain("CLI —");
   });
 });
 

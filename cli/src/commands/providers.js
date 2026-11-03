@@ -12,6 +12,7 @@ import { isContainer } from '../../../shared/runtime/container.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
+import { hint, marks, title } from '../lib/ui.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -57,9 +58,9 @@ function isArchived(id) {
   return Object.entries(KNOWN_PROVIDERS).some(([key, known]) => known.archived && [key, ...(known.aliases ?? [])].includes(lower));
 }
 
-const OK = c.green('●');
-const WARN = c.yellow('◐');
-const ERR = c.red('✗');
+const OK = c.green(marks().ok);
+const WARN = c.yellow(marks().warn);
+const ERR = c.red(marks().fail);
 
 // ── Version detection ───────────────────────────────────────────────────────
 // Specchio di web/app/api/providers/route.ts. I path risolvono dal HOST
@@ -121,7 +122,7 @@ async function fileExists(p) {
 }
 
 async function handleProviders() {
-  console.log('\n  JHT — Provider LLM\n');
+  console.log(title('Providers'));
 
   let config = {};
   if (await fileExists(CONFIG_PATH)) {
@@ -143,26 +144,26 @@ async function handleProviders() {
     const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'none');
     const model = provCfg?.model ?? '—';
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
-    const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
+    const activeLabel = isActive ? ` ${GREEN}· active${RESET}` : '';
 
     const recommendedLabel = known.recommended ? ` ${DIM}· recommended${RESET}` : '';
-    console.log(`  ${icon}  ${known.name}${recommendedLabel}${activeLabel}`);
-    console.log(`     ${DIM}ID: ${id} · Model: ${model} · Auth: ${authMethod}${RESET}`);
-    if (hasEnv) console.log(`     ${DIM}Env: ${known.envKey} ✓${RESET}`);
-    if (hasCred) console.log(`     ${DIM}Credentials: encrypted file ✓${RESET}`);
+    console.log(`  ${icon} ${known.name}${recommendedLabel}${activeLabel}`);
+    console.log(`    ${DIM}${id} · model ${model} · sign-in: ${authMethod}${RESET}`);
+    if (hasEnv) console.log(`    ${DIM}key in ${known.envKey}${RESET}`);
+    if (hasCred) console.log(`    ${DIM}credentials: encrypted file${RESET}`);
     const ver = getVersionInfo(id);
     // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
     // "il registry ne ha una più nuova" — quella è una versione che questa
     // release non ha provato — ma "sei fuori dalla versione dichiarata".
     const pin = pinnedVersion(resolveUpdateTarget(id) || '');
     if (ver.installed || ver.latest || pin) {
-      let line = `     ${DIM}CLI: ${ver.installed || '—'}`;
+      let line = `    ${DIM}CLI ${ver.installed || '—'}`;
       if (pin && ver.installed && ver.installed !== pin) {
-        line += ` ${YELLOW}⚠ this release is tested with ${pin} — jht providers update installs it${RESET}${DIM}`;
+        line += ` ${YELLOW}${marks().warn} this release is tested with ${pin}; jht providers update installs it${RESET}${DIM}`;
       } else if (pin) {
         line += ` (the version this release is tested with)`;
       } else if (ver.installed && ver.latest && ver.installed !== ver.latest) {
-        line += ` ${YELLOW}→ ${ver.latest} ⚠ update available${RESET}${DIM}`;
+        line += ` ${YELLOW}${marks().warn} ${ver.latest} is available${RESET}${DIM}`;
       }
       line += RESET;
       console.log(line);
@@ -184,7 +185,8 @@ async function handleProviders() {
   }
 
   if (!activeProvider) {
-    console.log(`  ${DIM}No active providers. Recommended: jht providers use codex${RESET}\n`);
+    console.log(hint('No provider is active. Choose one with: jht providers use codex'));
+    console.log('');
   }
 }
 
