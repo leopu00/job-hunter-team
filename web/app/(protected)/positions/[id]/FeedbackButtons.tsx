@@ -63,8 +63,10 @@ const VERDICTS: Record<
     Icon: IconThumbsUp,
     color: "var(--color-blue)",
   },
-  // Giallo oro: la stella è oro ovunque (21/07).
-  top: { ...VERDICT_SIGNAL.top, Icon: IconStar, color: "var(--color-yellow)" },
+  // Quattro colori del tema, i più lontani fra loro in TUTTI i temi: rosso, arancio, blu, viola. Il giallo
+  // non c'è più: nei temi chiari (e in «foresta») arancio e giallo sono lo stesso marrone/oro e due giudizi
+  // diversi si leggevano uguali. Sono variabili del tema scelto, controllate per contrasto sia in chiaro che in scuro.
+  top: { ...VERDICT_SIGNAL.top, Icon: IconStar, color: "var(--color-purple)" },
 };
 
 const ORDER = VERDICT_ORDER;
@@ -740,16 +742,20 @@ export function FeedbackButtons({
               title={frozenTitle}
               aria-pressed={selected}
               className="flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2.5 transition-colors disabled:opacity-60"
+              data-verdict={v}
               style={{
                 color,
-                borderColor: selected ? color : "var(--color-border)",
-                background: selected
-                  ? `color-mix(in srgb, ${color} 12%, transparent)`
-                  : "transparent",
+                borderColor: selected
+                  ? color
+                  : `color-mix(in srgb, ${color} 45%, var(--color-border))`,
+                background: `color-mix(in srgb, ${color} ${selected ? 20 : 7}%, transparent)`,
               }}
             >
               <Icon size={20} />
-              <span className="text-[9px] font-semibold leading-tight text-center text-[var(--color-muted)]">
+              <span
+                className="text-[9px] font-semibold leading-tight text-center"
+                style={{ color }}
+              >
                 {t.verdicts[v]}
               </span>
             </button>

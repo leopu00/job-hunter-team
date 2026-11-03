@@ -48,6 +48,10 @@ const READ_ONLY_PATHS = new Set([
   "/api/positions/locations",
 ]);
 
+/** The reason shared by the routes of the position page, which the native command `local_team_position_act` answers. */
+const POSITION_ACT =
+  "what the person asks of the team or says about a position of the team on this computer, answered by lib/local-judgement-api.ts through local_team_position_act, which writes it in the database of that team with the token of the position's own read; never the cloud";
+
 /**
  * What a non-GET /api call may still do while the pages show the team of this computer (a profile with no
  * cloud account), and why. Each entry needs its reason here and a line in local-team-writes.test.ts.
@@ -61,6 +65,32 @@ export const LOCAL_TEAM_NON_GET_ALLOWED: Readonly<Record<string, string>> = {
     "the person's «not interested» on a position of the Swipe, with its reason: the same native command, an exclusion in the team's own database",
   "DELETE /api/positions/[legacyId]/user-exclude":
     "putting an excluded position back: the same native command, the state it had before",
+  "POST /api/positions/[legacyId]/user-note":
+    `the private note on a position: ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/user-note":
+    `clearing the private note: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/mark-applied":
+    `«I applied myself»: ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/mark-applied":
+    `taking «I applied myself» back: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/outcome":
+    `how the application went (interview or rejected, and why): ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/outcome":
+    `taking the outcome back: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/recheck-request":
+    `asking the team to check that the ad is still open: ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/recheck-request":
+    `withdrawing that request: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/geocode-request":
+    `asking the team for the office's exact place: ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/geocode-request":
+    `withdrawing that request: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/write-request":
+    `asking for the CV or the cover letter: ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/write-request":
+    `withdrawing that request: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/ticket":
+    `a new request to the team: a rescore or a free one: ${POSITION_ACT}`,
 };
 
 /** Whether a non-GET call is one of those listed above: the path alone, or its method and path with the position's number as the route folder writes it. */

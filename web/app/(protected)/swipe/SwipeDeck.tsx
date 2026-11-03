@@ -269,6 +269,8 @@ function packChips(defs: ChipDef[], maxW: number): ChipDef[][] {
 
 // Durata dell'animazione di uscita — deve combaciare con la transition CSS.
 const FLY_MS = 280;
+// Quanto si aspetta la descrizione di una card prima di dire che non è arrivata (e offrire «Riprova»).
+const SUMMARY_WAIT_MS = 6000;
 // Trascinamento orizzontale oltre questa soglia = cambio card.
 const NAV_THRESHOLD = 90;
 
@@ -499,6 +501,9 @@ export default function SwipeDeck({
   // Sintesi JD on-demand (il deck arriva senza testi, vedi getSwipeDecks):
   // cache per id + set richieste in volo. null = fetch fatta, nessun testo.
   const [summaries, setSummaries] = useState<Record<string, string | null>>({});
+  // La descrizione che non è arrivata (errore o attesa oltre SUMMARY_WAIT_MS): la card lo dice e offre «Riprova»,
+  // invece di restare a scheletri. Una risposta tardiva buona la toglie da qui.
+  const [summaryFailed, setSummaryFailed] = useState<Record<string, true>>({});
   const summaryInflight = useRef<Set<string>>(new Set());
   // Sezioni collassabili: slider aperti di default, chip chiuse.
   const [openSecs, setOpenSecs] = useState<Record<string, boolean>>({
@@ -570,12 +575,36 @@ export default function SwipeDeck({
       if (!c || c.jd_summary != null) continue;
       if (c.id in summaries || summaryInflight.current.has(c.id)) continue;
       summaryInflight.current.add(c.id);
+      const id = c.id;
+      let settled = false;
+      const fail = () => {
+        summaryInflight.current.delete(id);
+        setSummaries((m) => (id in m ? m : { ...m, [id]: null }));
+        setSummaryFailed((m) => ({ ...m, [id]: true }));
+      };
+      // Un tetto di attesa: se la risposta non arriva (il team appena riacceso, la rete) lo scheletro non
+      // resta per sempre; se arriva dopo, vale lo stesso.
+      const timer = setTimeout(() => {
+        if (!settled) fail();
+      }, SUMMARY_WAIT_MS);
       fetch(`/api/positions/${c.legacy_id}/summary`)
-        .then((r) => (r.ok ? r.json() : { summary: null }))
-        .catch(() => ({ summary: null }))
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((b: { summary?: string | null }) => {
-          summaryInflight.current.delete(c.id);
-          setSummaries((m) => ({ ...m, [c.id]: b.summary ?? null }));
+          settled = true;
+          clearTimeout(timer);
+          summaryInflight.current.delete(id);
+          setSummaries((m) => ({ ...m, [id]: b.summary ?? null }));
+          setSummaryFailed((m) => {
+            if (!(id in m)) return m;
+            const { [id]: _gone, ...rest } = m;
+            void _gone;
+            return rest;
+          });
+        })
+        .catch(() => {
+          settled = true;
+          clearTimeout(timer);
+          fail();
         });
     }
   }, [idx, cards, summaries]);
@@ -1393,7 +1422,48 @@ export default function SwipeDeck({
                             </div>
                           );
                         }
-                        return null;
+                        // Arrivata vuota o non arrivata: lo si dice, non si lascia la card muta.
+                        return summaryFailed[card.id] ? (
+                          <div
+                            data-swipe-summary-failed
+                            role="status"
+                            className="flex-1 min-h-0 pt-1 text-[12px] leading-relaxed flex flex-col items-start gap-2"
+                            style={{ color: "var(--color-muted)" }}
+                          >
+                            <span>{t.summaryFailed}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const id = card.id;
+                                setSummaryFailed((m) => {
+                                  const { [id]: _gone, ...rest } = m;
+                                  void _gone;
+                                  return rest;
+                                });
+                                setSummaries((m) => {
+                                  const { [id]: _gone, ...rest } = m;
+                                  void _gone;
+                                  return rest;
+                                });
+                              }}
+                              className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold"
+                              style={{
+                                color: "var(--color-blue)",
+                                borderColor: "var(--color-blue)",
+                              }}
+                            >
+                              {t.summaryRetry}
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            data-swipe-summary-empty
+                            className="flex-1 min-h-0 pt-1 text-[12px]"
+                            style={{ color: "var(--color-dim)" }}
+                          >
+                            {t.summaryEmpty}
+                          </div>
+                        );
                       })()}
                     </div>
                   </div>
