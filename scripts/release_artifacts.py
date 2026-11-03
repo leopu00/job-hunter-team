@@ -316,7 +316,7 @@ def render_release_notes(
 
 ### Windows
 
-Windows is not part of 0.4.0: there is no Windows installer in this release. It is coming soon.
+Windows is not part of 0.4.0: there is no Windows installer in this release.
 
 ### macOS and Linux
 
