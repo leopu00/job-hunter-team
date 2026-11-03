@@ -331,3 +331,23 @@ def test_the_same_words_on_another_page_are_the_same_query(a, b):
 ])
 def test_different_words_stay_different_queries(a, b):
     assert plog.query_hash(a) != plog.query_hash(b)
+
+
+def test_a_long_run_of_blanks_after_a_page_word_is_read_in_linear_time():
+    # «page» + blanks + a letter used to take the square of the length (20,000 blanks: 1.7 s): the Scout's own query is text from outside
+    for query in ("page" + " " * 60000 + "x", "page " * 20000, "offset=" + " " * 60000, "from" + "\t" * 60000 + "=="):
+        started = time.monotonic()
+        plog.query_hash(query)
+        assert time.monotonic() - started < 1.0, "the page words must not cost the square of the query"
+
+
+@pytest.mark.parametrize("a,b", [
+    ("junior offset=100", "junior offset=200"), ("junior offset 100", "junior"), ("junior page: 3", "junior page 4"),
+    ("junior page   4", "junior"), ("junior from#5", "junior"), ("junior Seite 2", "junior pagina 7"), ("junior start3", "junior"),
+])
+def test_the_page_words_still_make_the_same_question_after_the_pattern_change(a, b):
+    assert plog.query_hash(a) == plog.query_hash(b)
+
+
+def test_a_word_that_only_looks_like_a_page_word_is_part_of_the_question():
+    assert plog.query_hash("junior pageant 3") != plog.query_hash("junior")
