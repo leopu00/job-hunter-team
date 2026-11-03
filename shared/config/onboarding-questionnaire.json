@@ -361,6 +361,10 @@
             ]
           }
         }
+      ],
+      "skip_when_profile_has": [
+        "experience_years",
+        "seniority_target"
       ]
     },
     {
