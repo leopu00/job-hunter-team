@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "Procura os portais nacionais core das línguas do perfil ANTES de qualquer fonte menor e sabe quanto do plano está feito. `next` indica o portal, o país a registar e o tipo de consulta; um portal está coberto com 3 passagens e 3 consultas diferentes, e «esgotado» exige os portais core cobertos. Corre `next` no início de cada pesquisa."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
 ---
 
 # scout-coverage — onde procurar primeiro, e quanto está feito
@@ -12,9 +12,15 @@ Procura PRIMEIRO onde estão os mercados próprios do perfil e sabe quanto está
 
 `next` imprime uma linha JSON: o portal (`source`, `country`, `tier`), o TIPO de consulta (`query_kind`: `broad` = uma consulta AMPLA, sempre a primeira: a família do papel ou uma palavra de entrada sozinha (em `broad_terms`), sem título completo e sem lugar, `role_language` = o título na língua do portal, `role` = o título em inglês, `synonym` = um título próximo, `level` = o título com uma palavra de nível da língua, listadas em `level_terms`, `city` = o título com um lugar, listados em `cities`), o que tens (`have`) contra o necessário (`need`) e a linha `log` a usar depois. Procura exatamente isso e regista a passagem com o mesmo `--query-kind`. `plan_done: true` quer dizer plano feito: passa às outras fontes.
 
+`next` diz também, com o teu id, se o perfil mudou desde que construíste os teus círculos: `"profile": {"changed": true, "groups": [...]}`. Relê o perfil, refaz os círculos dos grupos que mudaram, mantém as tuas posições e passagens, depois `profile_version.py ack`.
+
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
 python3 /app/shared/skills/scout_coverage.py next
+
+# com o teu id: diz também se o perfil mudou desde que construíste os teus círculos (então relê-o, refaz os círculos e faz ack)
+python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID
+python3 /app/shared/skills/profile_version.py ack --agent $MY_ID
 
 # the whole plan for this profile (once), and how much of it is done (any time)
 python3 /app/shared/skills/scout_coverage.py plan
