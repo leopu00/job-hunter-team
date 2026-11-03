@@ -12,7 +12,8 @@ import type {
   DesktopVpsRead,
 } from "../../../web/lib/desktop-vps-positions";
 import type { DashboardStats, PositionWithScore } from "../../../web/lib/types";
-import type { TeamActivityCounts } from "../../../web/lib/team-activity";
+import { normActor, TEAM_ACTIVITY_ROLES } from "../../../web/lib/team-activity";
+import type { RecentActivityEvent, TeamActivityCounts, TeamActivityRole } from "../../../web/lib/team-activity";
 import type { DashboardPosition } from "./dashboard-data";
 import type {
   PositionDetail,
@@ -41,6 +42,7 @@ type Request =
   | { op: "piles" }
   | { op: "map"; offset: number }
   | { op: "team_activity"; from: string; to: string }
+  | { op: "team_activity_log" }
   | { op: "directives" };
 
 function listRequest(opts?: PositionFilterOpts): Request {
@@ -392,6 +394,36 @@ export async function readDesktopVpsTeamActivity(
     return { source: "unavailable", code: "desktop_bad_reply" };
   }
   return { source: "vps", data: data as unknown as TeamActivityCounts };
+}
+
+/**
+ * Every event of the team of this computer, newest first, each with the position it touched: the Activity log page.
+ * Only for the team of this computer, like the activity (a profile with no cloud account has no other log to read).
+ */
+export async function readDesktopVpsTeamActivityLog(): Promise<DesktopVpsRead<RecentActivityEvent[]>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "team_activity_log" });
+  if (value.source !== "vps") return value;
+  const data = value.data;
+  if (!isRecord(data) || !Array.isArray(data.items) || !data.items.every(isRecord)) {
+    return { source: "unavailable", code: "desktop_bad_reply" };
+  }
+  const events: RecentActivityEvent[] = [];
+  for (const item of data.items) {
+    const role = item.role;
+    // what the log draws is closed here: a known role, a time, an instance id as the web normalises it, text that is text
+    if (typeof role !== "string" || !(TEAM_ACTIVITY_ROLES as readonly string[]).includes(role) || typeof item.ts !== "string") continue;
+    events.push({
+      role: role as TeamActivityRole,
+      actor: normActor(role as TeamActivityRole, typeof item.actor === "string" ? item.actor : null),
+      ts: item.ts,
+      pid: typeof item.pid === "string" ? item.pid : null,
+      title: typeof item.title === "string" ? item.title : null,
+      company: typeof item.company === "string" ? item.company : null,
+      legacyId: typeof item.legacyId === "number" && Number.isInteger(item.legacyId) ? item.legacyId : null,
+    });
+  }
+  return { source: "vps", data: events };
 }
 
 /**
