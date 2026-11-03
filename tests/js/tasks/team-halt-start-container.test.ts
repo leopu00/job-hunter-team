@@ -213,6 +213,22 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(dockerLog(sb).some((row) => row.command[0] === "rm")).toBe(false);
   });
 
+  it("lo start del team numera i passi, dice quando ha finito e cosa fare adesso; il singolo agente non numera", () => {
+    const sb = sandbox();
+    const all = run(sb, ["start"], { FAKE_START_SUCCESS_ROLES: "capitano" });
+    expect(all.status, `${all.stdout}\n${all.stderr}`).toBe(0);
+    expect(all.stdout).toMatch(/\[1\/\d\]/);
+    expect(all.stdout).toMatch(/\[\d\/(\d)\].*CAPITANO started|\[\d\/\d\] .*✓ CAPITANO started/);
+    expect(all.stdout).toMatch(/Team on: 1 started in \d+ s/);
+    expect(all.stdout).toContain("See how it is going with: jht agents");
+
+    const sb2 = sandbox();
+    const one = run(sb2, ["start", "scout"], { FAKE_START_SUCCESS_ROLES: "scout" });
+    expect(one.status, `${one.stdout}\n${one.stderr}`).toBe(0);
+    expect(one.stdout).not.toMatch(/\[\d\/\d\]/);
+    expect(one.stdout).not.toContain("Team on:");
+  }, 15_000);
+
   it("bootstrap parziale con CAPITANO fallito non dichiara successo", () => {
     const sb = sandbox();
     const result = run(sb, ["start"], {

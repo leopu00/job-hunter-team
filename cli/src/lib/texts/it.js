@@ -184,5 +184,13 @@ export default {
   'welcome.next_start': 'Accendi la squadra con: jht team start',
   'welcome.next_running': 'Guarda come va con: jht agents',
   'welcome.more': 'Tutto il resto: jht help',
+  'team.starting_container': 'Accendo gli agenti nel container jht...',
+  'team.result': 'Esito: {started}, {skipped}{errors}',
+  'team.n_started': '{n} accesi',
+  'team.n_already': '{n} già accesi',
+  'team.n_errors': '{n} errori',
+  'team.captain_scales': 'Il CAPITANO regola gli altri agenti in base alle soglie del Bridge.',
+  'team.done': 'Squadra accesa: {n} agenti in {s} s',
+  'team.next_agents': 'Guarda come va con: jht agents',
   'help.group_other': 'Altro',
 };

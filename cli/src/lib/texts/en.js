@@ -151,5 +151,13 @@ export default {
   'welcome.next_start': 'Turn the team on with: jht team start',
   'welcome.next_running': 'See how it is going with: jht agents',
   'welcome.more': 'Everything else: jht help',
+  'team.starting_container': 'Starting agents in the jht container...',
+  'team.result': 'Result: {started}, {skipped}{errors}',
+  'team.n_started': '{n} started',
+  'team.n_already': '{n} already active',
+  'team.n_errors': '{n} errors',
+  'team.captain_scales': 'CAPITANO will scale the other agents according to the Bridge thresholds.',
+  'team.done': 'Team on: {n} started in {s} s',
+  'team.next_agents': 'See how it is going with: jht agents',
   'help.group_other': 'Other',
 };
