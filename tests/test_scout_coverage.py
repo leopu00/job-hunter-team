@@ -361,3 +361,80 @@ def test_the_wide_english_queries_that_returned_positions_in_the_field_are_in_th
     assert step["query_kind"] == "broad" and step["broad_worked_in_english"] == list(worked)
     # nothing but the words and numbers: no profile text, no company
     assert set(json.dumps(data["broad_examples"])) <= set(json.dumps(data["broad_examples"]).encode("ascii", "ignore").decode())
+
+
+# ── the kit of 03/11 for the countries where the Scout found nothing (FR, DE, ES, PT, NL, BE, CH, AT) ──────────────────────
+KIT_COUNTRIES = ("fr", "de", "es", "pt", "nl", "be", "ch", "at")
+KIT_APIS = {"arbeitnow"}
+
+
+def test_every_country_of_the_kit_has_company_boards_the_tool_can_read():
+    ats = _load("ats_board_search_for_coverage_tests", SKILLS / "ats_board_search.py")
+    data = cov.table()
+    for country in KIT_COUNTRIES:
+        block = data["ats_boards"][country]
+        slugs = [s for provider in ("greenhouse", "lever") for s in (block.get(provider) or {}).get("slugs", [])]
+        assert len(slugs) >= 5, country
+        for provider in ("greenhouse", "lever"):
+            for slug in (block.get(provider) or {}).get("slugs", []):
+                assert ats.SLUG.match(slug), (country, slug)
+                assert ats.url_for(provider, slug, data["ats_boards"]).startswith("https://"), (country, slug)
+        assert ats.COUNTRY.match(country) and country in ats.COUNTRIES, country
+
+
+def test_the_public_documented_apis_of_the_kit_are_core_https_with_a_hint_that_says_how_to_ask():
+    data = cov.table()
+    found = set()
+    for group in data["groups"].values():
+        for entry in group:
+            if entry.get("api"):
+                assert entry["api"].startswith("https://") and "@" not in entry["api"], entry["slug"]
+                assert len(entry.get("hint", "")) > 80, entry["slug"]
+                assert "key" in entry["hint"].lower() or "no login" in entry["hint"].lower(), entry["slug"]
+                found.add(entry["slug"])
+    assert KIT_APIS <= found
+    for group, slug in (("de", "arbeitnow"),):
+        assert next(e for e in data["groups"][group] if e["slug"] == slug)["tier"] == "core"
+
+
+def test_a_german_profile_gets_the_german_api_before_any_minor_portal(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    spoken = {"de": 6, "en": 4}
+    plan = cov.build_plan(spoken)
+    order = [(e["slug"], e["tier"]) for e in plan["entries"]]
+    core = [s for s, tier in order if tier == "core"]
+    assert "arbeitnow" in core and "jobs-ch" in core  # jobs.ch is core as a page, not as an API
+    assert order.index(("arbeitnow", "core")) < min(i for i, (_, tier) in enumerate(order) if tier == "minor")
+
+
+def test_the_wide_words_of_the_kit_countries_are_more_than_one_and_in_their_language():
+    data = cov.table()
+    for lang in ("de", "fr", "es", "pt", "nl"):
+        assert len(data["broad_terms"][lang]) >= 2, lang
+
+
+def test_next_gives_the_public_api_and_the_hint_of_the_portal_when_the_table_has_them(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    plan = cov.build_plan({"de": 6, "en": 4})
+    plan["entries"] = [e for e in plan["entries"] if e["slug"] == "arbeitnow"]
+    step = cov.next_step(plan, [])
+    assert step["source"] == "arbeitnow" and step["api"].startswith("https://www.arbeitnow.com/")
+    assert "no key" in step["hint"].lower()
+    plain = cov.build_plan({"de": 6, "en": 4})
+    plain["entries"] = [dict(e, access="search") for e in plain["entries"] if e["slug"] == "indeed"]
+    assert "api" not in cov.next_step(plain, [])
+
+
+def test_jobs_ch_is_read_through_its_public_search_page_not_through_an_internal_json():
+    data = cov.table()
+    entry = next(e for e in data["groups"]["de"] if e["slug"] == "jobs-ch")
+    assert "api" not in entry and "jobs.ch/de/stellenangebote" in entry["hint"]
+
+
+def test_a_source_whose_robots_txt_disallows_programs_is_closed_in_the_table_with_the_reason_and_has_no_api():
+    data = cov.table()
+    for group, slug in (("fr", "hellowork"), ("fr", "le-forem")):
+        entry = next(e for e in data["groups"][group] if e["slug"] == slug)
+        assert entry["access"] == "closed" and "api" not in entry and "robots.txt" in entry["hint"], slug
+    landing = next(e for e in data["groups"]["pt"] if e["slug"] == "landing-jobs")
+    assert "api" not in landing and "robots.txt" in landing["hint"]
