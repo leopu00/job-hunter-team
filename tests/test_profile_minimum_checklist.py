@@ -194,3 +194,50 @@ def test_has_degree_that_is_there_and_is_not_a_boolean_is_still_an_error(tmp_pat
     verdict = _check(tmp_path, {**_eight_fields(), "has_degree": wrong}, "--strict", "--minimum")
     assert verdict["ok"] is False
     assert any(line.startswith("has_degree:") for line in verdict["errors"]), verdict["errors"]
+
+
+# ── --launch: the least the team needs to START searching ───────────────────
+
+def test_the_launch_list_is_a_part_of_the_eight_and_the_validator_says_the_same():
+    sys.path.insert(0, str(VALIDATOR.parent))
+    try:
+        import validate_profile  # type: ignore
+    finally:
+        sys.path.pop(0)
+    shared = _shared()
+    assert list(validate_profile.LAUNCH_REQUIRED) == shared["launch_required"]
+    assert set(shared["launch_required"]) <= set(shared["required"])
+    assert shared["launch_required"] == ["target_role", "location", "languages"]
+
+
+@pytest.mark.parametrize("case", _shared()["cases"], ids=lambda case: case["name"])
+def test_launch_missing_is_what_the_shared_cases_miss_among_the_launch_fields(tmp_path: Path, case: dict):
+    launch = _shared()["launch_required"]
+    verdict = _check(tmp_path, case["profile"], "--launch")
+    assert verdict["launch_missing"] == [key for key in case["missing"] if key in launch]
+    assert "missing" not in verdict  # only --minimum says the eight
+
+
+def test_a_profile_with_a_role_a_place_and_a_language_may_start_without_the_rest(tmp_path: Path):
+    """No name, no email, no years, no skills: the questionnaire asks them while the team already searches."""
+    started = {"target_role": "Backend Engineer", "location": "Stockholm, Sweden",
+               "languages": [{"language": "Swedish", "level": "B2"}]}
+    verdict = _check(tmp_path, started, "--launch")
+    # `ok` is still the whole schema (a name, years, skills are required there): what lets the team start is `launch_missing`
+    assert verdict["launch_missing"] == [] and not any(e.startswith("missing for the team") for e in verdict["errors"])
+    assert _check(tmp_path, started, "--minimum")["ok"] is False  # the eight are still the complete profile
+
+
+@pytest.mark.parametrize("gone", ("target_role", "location", "languages"))
+def test_each_launch_field_missing_stops_the_start_and_is_named(tmp_path: Path, gone: str):
+    profile = {"target_role": "Backend Engineer", "location": "Rome, Italy", "languages": [{"language": "Italian", "level": "native"}]}
+    del profile[gone]
+    verdict = _check(tmp_path, profile, "--launch")
+    assert verdict["launch_missing"] == [gone] and verdict["ok"] is False
+    assert f"missing for the team to start: {gone}" in verdict["errors"]
+
+
+def test_with_both_flags_a_field_is_said_once(tmp_path: Path):
+    verdict = _check(tmp_path, {"name": "X"}, "--minimum", "--launch")
+    assert verdict["errors"].count("missing for the team to start: location") == 1
+    assert verdict["launch_missing"] == ["target_role", "location", "languages"]

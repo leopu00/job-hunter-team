@@ -908,11 +908,9 @@ impl Drop for PrivateTempFile {
 /// The streams a pipe-free call keeps in files: `jht-ssh-<kind>-<pid>-<nanos>.tmp`.
 const PIPE_FREE_FILE_KINDS: [&str; 3] = ["in", "out", "messages"];
 /// Well past the longest pipe-free call (the chat's send, 105 s): a file this old belongs to no call.
-#[cfg_attr(not(windows), allow(dead_code))]
 const PIPE_FREE_FILE_STALE_AFTER: Duration = Duration::from_secs(600);
 
 /// Whether `name` is exactly the name of a file of a pipe-free call.
-#[cfg_attr(not(windows), allow(dead_code))]
 fn is_pipe_free_file_name(name: &str) -> bool {
     let Some(rest) = name.strip_prefix("jht-ssh-").and_then(|rest| rest.strip_suffix(".tmp")) else {
         return false;
@@ -922,11 +920,38 @@ fn is_pipe_free_file_name(name: &str) -> bool {
     parts.len() == 3 && PIPE_FREE_FILE_KINDS.contains(&parts[0]) && number(parts[1]) && number(parts[2])
 }
 
+/// Whether the file is the user's own. On Linux the temporary folder is a `/tmp` shared with other users, and a
+/// file with the name of ours that belongs to somebody else is not ours to remove; on macOS and Windows the folder
+/// is the user's own already, and the check costs nothing.
+fn is_ours(metadata: &fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // SAFETY: geteuid has no arguments or pointers.
+        metadata.uid() == unsafe { libc::geteuid() }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = metadata;
+        true
+    }
+}
+
 /// Removes, in `dir`, the files of pipe-free calls older than `stale_after`: what a crash of the app
-/// left in the middle of a call (the input of a chat command among them). Only regular files with
-/// exactly that name: never a link, a reparse point or a folder.
-#[cfg_attr(not(windows), allow(dead_code))]
+/// left in the middle of a call (the input of a chat command among them; on macOS and Linux the `-E` file
+/// of ssh's own messages). Only regular files of the user with exactly that name: never a link, a reparse
+/// point, a folder or somebody else's file.
 fn remove_stale_pipe_free_files_in(dir: &Path, stale_after: Duration, now: std::time::SystemTime) -> usize {
+    remove_stale_files_where(dir, stale_after, now, &is_ours)
+}
+
+/// The same, with the judgement of whose a file is given (the tests cannot make a file of another user).
+fn remove_stale_files_where(
+    dir: &Path,
+    stale_after: Duration,
+    now: std::time::SystemTime,
+    mine: &dyn Fn(&fs::Metadata) -> bool,
+) -> usize {
     let Ok(entries) = fs::read_dir(dir) else {
         return 0;
     };
@@ -939,7 +964,7 @@ fn remove_stale_pipe_free_files_in(dir: &Path, stale_after: Duration, now: std::
         let Ok(metadata) = fs::symlink_metadata(&path) else {
             continue;
         };
-        if !metadata.file_type().is_file() || is_reparse_point(&metadata) {
+        if !metadata.file_type().is_file() || is_reparse_point(&metadata) || !mine(&metadata) {
             continue;
         }
         let old = metadata
@@ -962,18 +987,15 @@ fn is_reparse_point(metadata: &fs::Metadata) -> bool {
 }
 
 #[cfg(not(windows))]
-#[allow(dead_code)]
 fn is_reparse_point(_metadata: &fs::Metadata) -> bool {
     false
 }
 
-/// At start, on Windows only (the one place the pipe-free calls run), in the user's own temporary
-/// folder: never in a /tmp shared with other users.
+/// At start, on every system, in the user's own temporary folder (`std::env::temp_dir()`): Windows' pipe-free calls
+/// leave their three files there when the app dies in the middle of one, and on macOS and Linux the ssh calls leave
+/// the file of ssh's own messages. A `/tmp` shared with other users is safe too: only the user's own files go.
 pub(crate) fn remove_stale_pipe_free_files() {
-    #[cfg(windows)]
-    {
-        let _ = remove_stale_pipe_free_files_in(&std::env::temp_dir(), PIPE_FREE_FILE_STALE_AFTER, std::time::SystemTime::now());
-    }
+    let _ = remove_stale_pipe_free_files_in(&std::env::temp_dir(), PIPE_FREE_FILE_STALE_AFTER, std::time::SystemTime::now());
 }
 
 /// A program with no pipe at all: stdin from a private file (or the null
@@ -1002,7 +1024,7 @@ where
         .stdout(stdout.stdio_for_writing()?)
         .stderr(Stdio::null());
     hide_console(&mut command);
-    let mut child = command.spawn().map_err(|error| spawn_failure(program, &error))?;
+    let mut child = spawn_retrying_busy(&mut command).map_err(|error| spawn_failure(program, &error))?;
     // the command holds this process's copies of the files: closed now, so only the child has them
     drop(command);
     let status = wait_until(&mut child, Instant::now(), timeout, Duration::from_millis(50))?;
@@ -1099,6 +1121,41 @@ pub(crate) fn hide_console(command: &mut Command) {
 #[cfg(not(windows))]
 pub(crate) fn hide_console(command: &mut Command) {
     clean_appimage_env(command);
+}
+
+/// How many times a program that is «busy» is tried again, and the pause between the tries: half a second at the most.
+const BUSY_RETRIES: u32 = 100;
+const BUSY_PAUSE: Duration = Duration::from_millis(5);
+
+/// «Text file busy» (ETXTBSY): the program file is open for writing somewhere, for a moment. It happens to a script that has
+/// just been written and is run at once (the app publishes the wrapper and runs it; the tests write a stand-in and run it)
+/// when another thread of this process forks in between: the child that thread started holds a copy of the open file until it
+/// execs, a few microseconds. Not a failure of the program, so it is tried again; any other error is returned as it is.
+fn is_text_file_busy(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        error.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+/// `Command::spawn` that tries again while the program file is busy (`is_text_file_busy`). Every program the app starts from a
+/// file that may have just been written goes through it.
+pub(crate) fn spawn_retrying_busy(command: &mut Command) -> std::io::Result<std::process::Child> {
+    let mut retries = 0;
+    loop {
+        match command.spawn() {
+            Err(error) if is_text_file_busy(&error) && retries < BUSY_RETRIES => {
+                retries += 1;
+                thread::sleep(BUSY_PAUSE);
+            }
+            other => return other,
+        }
+    }
 }
 
 // ── the program an AppImage starts is the system's, not the AppImage's ───────────────────────────────────────────
@@ -1266,7 +1323,7 @@ where
         .stderr(Stdio::piped());
     ask_for_machine_output(&mut command);
     hide_console(&mut command);
-    let mut child = match command.spawn() {
+    let mut child = match spawn_retrying_busy(&mut command) {
         Ok(child) => child,
         Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
@@ -1479,7 +1536,7 @@ where I: IntoIterator<Item = S>, S: AsRef<OsStr>,
     } else {
         command.stdin(Stdio::null());
     }
-    let mut child = match command.spawn() {
+    let mut child = match spawn_retrying_busy(&mut command) {
         Ok(child) => child,
         Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
@@ -2157,6 +2214,39 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// The file of ssh's own messages (`-E`) that a crash left on macOS or Linux goes at the next start, like the
+    /// files of Windows' calls; a file that is not the user's own (a shared `/tmp` on Linux) is never touched.
+    #[test]
+    fn the_messages_file_a_crash_left_goes_on_every_system_and_another_users_file_stays() {
+        use std::time::{Duration, SystemTime};
+        let dir = std::env::temp_dir().join(format!("jht-stale-owner-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let now = SystemTime::now();
+        let old = |name: &str| {
+            let path = dir.join(name);
+            fs::write(&path, b"synthetic").unwrap();
+            fs::File::options().write(true).open(&path).unwrap().set_modified(now - Duration::from_secs(3600)).unwrap();
+            path
+        };
+        let mine = old("jht-ssh-messages-4242-1700000000000000000.tmp");
+        let theirs = old("jht-ssh-messages-4243-1700000000000000001.tmp");
+        // the real judgement: a file this test just made is the user's own
+        assert_eq!(super::remove_stale_pipe_free_files_in(&dir, Duration::from_secs(600), now), 2);
+        assert!(!mine.exists() && !theirs.exists());
+        // with the judgement that says «not mine» nothing goes, however old
+        let kept = old("jht-ssh-messages-4244-1700000000000000002.tmp");
+        assert_eq!(super::remove_stale_files_where(&dir, Duration::from_secs(600), now, &|_| false), 0);
+        assert!(kept.exists());
+        assert_eq!(super::remove_stale_files_where(&dir, Duration::from_secs(600), now, &|_| true), 1);
+        assert!(!kept.exists());
+        // the sweep is not limited to Windows any more, in the code that runs at start
+        let production = include_str!("runtime_host.rs").split("#[cfg(test)]").next().unwrap();
+        let sweep = production.split("pub(crate) fn remove_stale_pipe_free_files() {").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(!sweep.contains("cfg(windows)"), "the sweep runs on every system");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     /// The files of this process's pipe-free ssh calls still on disk.
     #[cfg(unix)]
     fn pipe_free_files_left() -> Vec<PathBuf> {
@@ -2397,6 +2487,63 @@ mod tests {
             &[("JHT_MACHINE_OUTPUT", "0")],
         );
         assert_eq!(String::from_utf8_lossy(&own.unwrap().stdout), "M=0\n");
+    }
+
+    /// The cause of the tests that failed at random on Linux with `process_start_failed after 0.0 s` (a runtime-log test of
+    /// onboarding three times in a day, and the fake ssh): a script written and run at once is refused with ETXTBSY, «text
+    /// file busy», when another thread forks between the moment the file is opened for writing and the moment it is closed:
+    /// the child the other thread started holds a copy of the open file until it execs. The tests of the crate run in parallel
+    /// and start programs all the time, so it happens to the ones that write a script. This stands in for them: the other
+    /// threads start programs without stopping, and every script must run.
+    #[cfg(unix)]
+    #[test]
+    fn a_script_written_and_run_at_once_runs_even_while_other_threads_start_programs() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let noise: Vec<_> = (0..4)
+            .map(|_| {
+                let stop = stop.clone();
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        let _ = std::process::Command::new("/bin/true").status();
+                    }
+                })
+            })
+            .collect();
+        let dir = std::env::temp_dir().join(format!("jht-busy-script-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mut refused = Vec::new();
+        for n in 0..300 {
+            let path = dir.join(format!("script-{n}"));
+            fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            match super::run_program(path.to_str().unwrap(), std::iter::empty::<&str>(), None, std::time::Duration::from_secs(20)) {
+                Ok(done) if done.code == 0 => {}
+                other => refused.push((n, other.map(|done| done.code))),
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        for thread in noise {
+            thread.join().unwrap();
+        }
+        let _ = fs::remove_dir_all(&dir);
+        assert!(refused.is_empty(), "{} of 300 scripts did not run: {refused:?}", refused.len());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_a_busy_program_file_is_tried_again_any_other_error_is_returned_at_once() {
+        assert!(super::is_text_file_busy(&std::io::Error::from_raw_os_error(libc::ETXTBSY)));
+        for other in [libc::ENOENT, libc::EACCES, libc::ENOEXEC, libc::EAGAIN] {
+            assert!(!super::is_text_file_busy(&std::io::Error::from_raw_os_error(other)), "{other}");
+        }
+        // a program that is not there is not waited for: half a second of tries would be the cost of every missing program
+        let started = std::time::Instant::now();
+        let error = super::spawn_retrying_busy(&mut std::process::Command::new("/nonexistent/jht-no-such-program")).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+        assert!(started.elapsed() < std::time::Duration::from_millis(400), "{:?}", started.elapsed());
     }
 
     #[cfg(unix)]

@@ -174,10 +174,10 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   if (deb && platform !== 'linux') {
     throw new Error('The --deb option is available only for Linux.');
   }
-  // The 0.4 release has no Windows installer (coming soon); the older ones did.
+  // The 0.4 release has no Windows installer; the older ones did. The words are «not in this release» everywhere (CLI, wrapper, notes): no promise of when.
   if (platform === 'windows' && releaseHasNoWindows(version)) {
     throw new Error(
-      'Windows is not part of 0.4.0: there is no Windows installer in this release (coming soon). '
+      'Windows is not part of 0.4.0: there is no Windows installer in this release. '
       + 'Nothing was downloaded.',
     );
   }

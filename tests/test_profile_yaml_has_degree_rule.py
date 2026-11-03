@@ -84,16 +84,29 @@ def _profile_yaml(lang: str) -> list[str]:
 
 
 @pytest.mark.parametrize("lang", LANGS, ids=lambda l: l or ".en")
-def test_the_flag_waits_for_the_eight_fields_and_not_for_experience_or_degrees(lang: str) -> None:
-    """The fourth checklist (profile-yaml: the minimum shape and the flag) says what the other three say
-    (shared/config/profile-minimum.json): eight fields; experiences and degrees are recommended."""
+def test_the_flag_waits_for_the_three_that_start_the_search_and_not_for_the_eight_or_for_experience_or_degrees(lang: str) -> None:
+    """The flag (profile-yaml) is for the three fields that start the search (shared/config/profile-minimum.json,
+    `launch_required`: role, place, a language); the other five of the eight are asked while the team already works.
+    Experiences and degrees are recommended and block nothing."""
     lines = _profile_yaml(lang)
     after_invalid = next(i for i, l in enumerate(lines) if l.startswith("- ") and "INVALID_PROFILE" in l)
     missing = [l for l in lines[after_invalid + 1:after_invalid + 4] if l.startswith("- ")]
-    assert len(missing) == 1, f"SKILL{lang}.md: the flag has {len(missing)} 'missing' bullets, one is the eight fields"
-    assert "`seniority_target`" in missing[0], f"SKILL{lang}.md: the eight fields lack seniority_target"
-    # skills (≥2) and languages (≥1): the old bullet also asked experiences (≥1) and degrees (≥1)
+    assert len(missing) == 1, f"SKILL{lang}.md: the flag has {len(missing)} 'missing' bullets, one is the list of what holds it back"
+    # the language (≥1) is the last of the three and comes first; the other five follow, skills (≥2) among them
     assert missing[0].count("≥1") == 1 and missing[0].count("≥2") == 1, missing[0]
+    assert missing[0].index("≥1") < missing[0].index("`seniority_target`") < missing[0].index("≥2"), missing[0]
+    # the message that tells the Capitano says the profile can START, not that it is complete
+    sent = next(l for l in lines if "[PROFILO-PRONTO] " in l)
+    assert "completo e validato" not in sent and "complet" not in sent.split("[PROFILO-PRONTO]")[1].split("—")[0], sent
+
+
+@pytest.mark.parametrize("lang", LANGS, ids=lambda l: l or ".en")
+def test_the_onboarding_flow_starts_the_team_at_the_three_and_goes_on_asking(lang: str) -> None:
+    text = (ROOT / "agents" / "_skills" / "onboarding-flow" / f"SKILL{lang}.md").read_text(encoding="utf-8").splitlines()
+    heading = next(i for i, l in enumerate(text) if l.startswith("## 🔴"))
+    paragraph = text[heading + 2]
+    assert "`ready.flag`" in paragraph and "`profile-yaml`" in paragraph, f"SKILL{lang}.md: the paragraph does not send to the flag"
+    assert paragraph.count("**") >= 6, f"SKILL{lang}.md: the three fields and 'go on asking' are not marked"
 
 
 @pytest.mark.parametrize("lang", LANGS, ids=lambda l: l or ".en")

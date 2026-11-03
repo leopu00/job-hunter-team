@@ -226,7 +226,7 @@ def test_windows_is_refused_for_a_release_that_has_no_installer(tmp_path, versio
         )
 
     assert result.returncode != 0
-    assert "Windows is not part of 0.4.0" in result.stderr and "coming soon" in result.stderr
+    assert "Windows is not part of 0.4.0" in result.stderr and "coming soon" not in result.stderr
     assert "Nothing was downloaded" in result.stderr
     assert not (tmp_path / "user" / "downloads").exists()
 

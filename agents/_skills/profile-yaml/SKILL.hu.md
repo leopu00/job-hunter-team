@@ -185,6 +185,8 @@ Tehat gyakran a gomb mar feloldott a fallback altal, amikor a profil teljes — 
 
 ### Mikor hozd letre a flag-et (3 SZIGORU lepes, soha ne ugord at, soha ne valtoztasd a sorrendet)
 
+**Hozd létre, amint a profilban megvan a célpozíció, a város/terület és legalább egy nyelv** — nem vársz a nyolc mezőre: a csapat elindul, a kérdések folytatódnak (a profil többi része munka közben egészül ki).
+
 ```bash
 # 1. Hozd letre a flag-et UTC idobelyeggel
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -204,7 +206,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 Csak `FLAG_OK` utan, es csak egyszer:
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] a jelolt profilja teljes es validalt — a csapat indulhat."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] a jelolt profilja az indulashoz szukseges minimummal (pozicio, terulet, nyelv) — a csapat indulhat; a profil tobbi resze munka kozben egeszul ki."
 ```
 
 A Capitano nem nezi a profilfajlt: amig senki nem szol neki, az elso inditasnal a
@@ -229,8 +231,8 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 
 ### NE hozd letre a flag-et, ha
 
-- az utolso profil validalas `INVALID_PROFILE`-t irt ki (meg egyszer is az utolso Write utan);
-- hianyzik (a nyolc minimalis mezo): nev, email, cel pozicio, varos, tapasztalati evek, `seniority_target`, kepessegek (≥2), nyelvek (≥1).
+- a profil utolso validalasa `INVALID_PROFILE`-t irt ki, mert a YAML nem olvashato vagy egy mezo hibas erteket tartalmaz (az olyan mezorol szolo `ERROR:` sorok, amit a szemely meg nem adott meg, nem szamitanak: azt akkor kerdezzuk, amikor a csapat mar dolgozik);
+- hianyzik (a harom, amelyik elinditja a keresest): celpozicio, varos/terulet, nyelvek (≥1). A nyolcbol a tobbi ot (nev, e-mail, tapasztalati evek, `seniority_target`, kepessegek ≥2) kozvetlenul utana kerul sorra, amikor a csapat mar dolgozik: nem tartjak vissza a flaget.
 
 A tapasztalatok es a vegzettsegek ajanlottak: nem blokkoljak a flag-et. Kerdezd meg oket kozvetlenul a letrehozas utan.
 

@@ -98,7 +98,7 @@ fn command_inner(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let mut child = command.spawn().map_err(|error| match error.kind() {
+    let mut child = crate::runtime_host::spawn_retrying_busy(&mut command).map_err(|error| match error.kind() {
         io::ErrorKind::NotFound => CommandFailure::NotFound,
         _ => CommandFailure::Failed,
     })?;

@@ -2644,7 +2644,7 @@ function Invoke-HostDownload {
   if ($deb -and $platform -ne 'linux') { Write-Err '--deb vale solo per Linux.'; $script:HostDownloadExitCode = 2; return }
   $parts = $version.Split('-')[0].Split('.')
   if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
-    Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e'' stato scaricato niente.'
+    Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'' stato scaricato niente.'
     $script:HostDownloadExitCode = 1
     return
   }

@@ -185,6 +185,8 @@ Asi que a menudo el boton ya esta desbloqueado por el respaldo cuando el perfil 
 
 ### Cuando crear el flag (3 pasos ESTRICTOS, nunca saltarlos, nunca cambiar el orden)
 
+**Créalo en cuanto el perfil tenga rol objetivo, ciudad/zona y al menos un idioma** — no esperas a los ocho campos: el equipo arranca y las preguntas continúan (el resto del perfil se completa mientras trabaja).
+
 ```bash
 # 1. Crear el flag con timestamp UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -204,7 +206,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 Solo despues de `FLAG_OK`, y una sola vez:
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] perfil del candidato completo y validado — el equipo puede arrancar."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] perfil del candidato con el minimo para arrancar (rol, zona, idioma) — el equipo puede arrancar; el resto del perfil se completa mientras trabaja."
 ```
 
 El Capitano no mira el archivo del perfil: mientras nadie se lo diga, en el primer
@@ -229,8 +231,8 @@ Y avisa al usuario: "he puesto el boton en espera — revisemos este punto antes
 
 ### NO crear el flag si
 
-- la ultima validacion del perfil imprimio `INVALID_PROFILE` (incluso una sola vez despues del ultimo Write);
-- faltan (los ocho campos minimos): nombre, email, rol objetivo, ciudad, anos de experiencia, `seniority_target`, skills (≥2), idiomas (≥1).
+- la ultima validacion del perfil imprimio `INVALID_PROFILE` porque el YAML no se lee o un campo tiene un valor erroneo (las lineas `ERROR:` sobre un campo que la persona aun no ha dado no cuentan: se pide mientras el equipo ya trabaja);
+- faltan (los tres que arrancan la busqueda): rol objetivo, ciudad/zona, idiomas (≥1). Los otros cinco de los ocho (nombre, email, anos de experiencia, `seniority_target`, skills ≥2) se piden justo despues, mientras el equipo ya trabaja: no retienen el flag.
 
 Experiencias y titulos de estudio son recomendados: no bloquean el flag. Pidelos justo despues de crearlo.
 

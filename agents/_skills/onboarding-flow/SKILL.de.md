@@ -39,9 +39,7 @@ Team frei · 🟡 RECOMMENDED blockiert nicht, verbessert aber stark · 🟢 OPT
 
 ## 🔴 Blockierende Checkliste — REQUIRED (schaltet das Team frei)
 
-Das Team startet NICHT, bis **jedes** Feld unten vorhanden und nicht leer ist (oder bis du
-`ready.flag` explizit setzt — siehe `profile-yaml`). Es ist das Minimum, um Stellen zu
-**suchen und zu bewerten**:
+Das Team startet, **sobald drei dieser Felder da sind: Zielrolle, Stadt/Gebiet und mindestens eine Sprache** (und der Plan erklärt ist): es wartet nicht auf die anderen. Sind die drei da, setze `ready.flag` und benachrichtige den Capitano (siehe `profile-yaml`), sag es dem Nutzer in einer Zeile („das Team legt los; die nächsten Fragen machen die Suche genauer“) und **frag weiter**: die anderen fünf Felder und die Karten des Fragebogens kommen, während das Team schon arbeitet. Die acht Felder unten sind das **vollständige Profil** (das, was die App als vollständig zeigt) und das Minimum, um Stellen gut zu **suchen und zu bewerten**:
 
 | Feld                 | YAML-Pfad                    | Neutrales Fragebeispiel                           |
 |----------------------|------------------------------|---------------------------------------------------|

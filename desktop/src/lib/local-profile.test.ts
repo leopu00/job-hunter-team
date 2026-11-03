@@ -11,7 +11,10 @@ import {
   createAndActivateLocalProfile,
   createAndActivatePlaygroundLocalProfile,
   finalizeLocalProfileMigration,
+  labelLocalProfiles,
   listLocalProfiles,
+  localProfileLabel,
+  nameInitial,
   localIdentitySelected,
   readLocalProfile,
   readTeamOwnerCopy,
@@ -463,3 +466,86 @@ describe("going back to the profile that owns the runtime", () => {
     expect(readLocalProfile()?.profileId).toBe("b".repeat(64));
   });
 });
+
+describe("the names a person gives (03/11)", () => {
+  it.each([
+    ["Test 1", "Test 1"],
+    ["  Test   1  ", "Test 1"],
+    ["José Ñandú 2", "José Ñandú 2"],
+    ["Zoë\tAnne\n3", "Zoë Anne 3"],
+    ["山田 太郎", "山田 太郎"],
+  ])("keeps %j as %j, spaces gathered, accents and numbers as typed", async (typed, kept) => {
+    const profile = await make("profile-a", typed);
+    expect(profile.displayName).toBe(kept);
+    expect(listLocalProfiles()[0].displayName).toBe(kept);
+    // the name never reaches the backend: only the id does
+    expect(vi.mocked(activateDesktopLocalScope)).toHaveBeenCalledWith("profile-a");
+  });
+
+  it("cuts a long name at 80 characters as people count them, never in the middle of an emoji", async () => {
+    const profile = await make("profile-a", "😀".repeat(100));
+    expect(Array.from(profile.displayName)).toHaveLength(80);
+    expect(profile.displayName).toBe("😀".repeat(80));
+    expect(JSON.parse(JSON.stringify(profile)).displayName).toBe(profile.displayName);
+  });
+
+  it("refuses a name that is only spaces and makes no profile at the backend", async () => {
+    await expect(createAndActivateLocalProfile(" \n\t ")).rejects.toThrow("local-display-name-required");
+    expect(createDesktopLocalProfile).not.toHaveBeenCalled();
+    expect(listLocalProfiles()).toEqual([]);
+  });
+
+  it("gives the first letter of a name whole, an emoji included, and J when there is none", () => {
+    expect(nameInitial("ágata")).toBe("Á");
+    expect(nameInitial("😀 Dan")).toBe("😀");
+    expect(nameInitial("  ")).toBe("J");
+    expect(nameInitial(null)).toBe("J");
+  });
+});
+
+describe("two profiles with the same name on one computer (03/11)", () => {
+  it("keeps both, with their own ids, and shows the second under «Name (2)»", async () => {
+    await make("profile-a", "Test 1");
+    await make("profile-b", "Test 1");
+    expect(listLocalProfiles().map((p) => p.profileId)).toEqual(["profile-a", "profile-b"]);
+    expect(labelLocalProfiles(listLocalProfiles()).map((p) => p.label)).toEqual(["Test 1", "Test 1 (2)"]);
+    expect(localProfileLabel("profile-b")).toBe("Test 1 (2)");
+    expect(localProfileLabel("nobody")).toBeNull();
+  });
+
+  it("counts a name alike in case, accents composed or not, and spaces", async () => {
+    await make("profile-a", "José");
+    await make("profile-b", "josé");
+    await make("profile-c", "Jose");
+    expect(labelLocalProfiles(listLocalProfiles()).map((p) => p.label)).toEqual(["José", "josé (2)", "Jose"]);
+  });
+
+  it("leaves a name that is alone as it is, and the ordinals follow the order they were made", async () => {
+    await make("profile-a", "Ada");
+    await make("profile-b", "Test 1");
+    await make("profile-c", "Bea");
+    await make("profile-d", "Test 1");
+    await make("profile-e", "Test 1");
+    expect(labelLocalProfiles(listLocalProfiles()).map((p) => p.label)).toEqual(["Ada", "Test 1", "Bea", "Test 1 (2)", "Test 1 (3)"]);
+  });
+
+  it("renaming one to the name of the other shows the labels apart, the stored names untouched", async () => {
+    await make("profile-a", "Ada");
+    await make("profile-b", "Bea");
+    renameLocalProfile("Ada");
+    expect(listLocalProfiles().map((p) => p.displayName)).toEqual(["Ada", "Ada"]);
+    expect(localProfileLabel("profile-b")).toBe("Ada (2)");
+  });
+
+  it("a profile deleted gives its place to the next one with that name", async () => {
+    await make("profile-a", "Test 1");
+    await make("profile-b", "Test 1");
+    removeLocalProfile("profile-a");
+    expect(localProfileLabel("profile-b")).toBe("Test 1");
+    expect(selectLocalProfileByIdSafe("profile-a")).toBe("missing");
+  });
+});
+
+function selectLocalProfileByIdSafe(id: string): "missing" | "ok" {
+  try { selectLocalProfileById(id); return "ok"; } catch { return "missing"; }
+}

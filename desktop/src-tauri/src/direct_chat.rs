@@ -1037,7 +1037,7 @@ fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     crate::runtime_host::hide_console(&mut command);
-    let child = command.spawn().map_err(|_| failure("tunnel_start_failed")).map_err(|error| {
+    let child = crate::runtime_host::spawn_retrying_busy(&mut command).map_err(|_| failure("tunnel_start_failed")).map_err(|error| {
         remove_tunnel_socket(&control_path);
         error
     })?;
@@ -2145,7 +2145,7 @@ impl AttestedLocalTeam {
             command.env_remove(name);
         }
         crate::runtime_host::hide_console(&mut command);
-        command.spawn().map_err(|_| "process_start_failed")
+        crate::runtime_host::spawn_retrying_busy(&mut command).map_err(|_| "process_start_failed")
     }
 
     /// `exec [-i] <container> <argv>`: `-i` only when there is stdin to give.

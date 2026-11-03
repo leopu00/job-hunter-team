@@ -39,9 +39,7 @@ l'équipe · 🟡 RECOMMENDED ne bloque pas mais améliore beaucoup · 🟢 OPTI
 
 ## 🔴 Checklist bloquante — REQUIRED (débloque l'équipe)
 
-L'équipe NE démarre PAS tant que **chaque** champ ci-dessous n'est pas présent et non-vide
-(ou tant que vous ne définissez pas `ready.flag` explicite — voir `profile-yaml`). C'est le
-minimum pour **chercher et noter** les offres :
+L'équipe démarre **dès que trois de ces champs sont là : rôle visé, ville/zone et au moins une langue** (et le plan est déclaré) : elle n'attend pas les autres. Quand les trois y sont, définissez `ready.flag` et prévenez le Capitano (voir `profile-yaml`), dites-le à l'utilisateur en une ligne (« l'équipe démarre ; les prochaines questions rendent la recherche plus précise ») et **continuez à demander** : les cinq autres champs et les cartes du questionnaire arrivent pendant que l'équipe travaille déjà. Les huit champs ci-dessous sont le **profil complet** (celui que l'app affiche comme complet) et le minimum pour bien **chercher et noter** les offres :
 
 | Champ                | Chemin YAML                  | Exemple de question neutre                        |
 |----------------------|------------------------------|---------------------------------------------------|
