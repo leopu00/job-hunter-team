@@ -144,5 +144,12 @@ export default {
   'providers.other': 'Other providers:',
   'providers.other_line': '{id}{active} — model {model}',
   'providers.none_active': 'No provider is active. Choose one with: jht providers use codex',
+  'welcome.title': 'Job Hunter Team',
+  'welcome.about': 'Your team finds job offers, scores them against you and writes the CV and the letter.',
+  'welcome.first_run': 'Start here: jht setup',
+  'welcome.config_unreadable': 'The configuration cannot be read. Start again with: jht setup --reset',
+  'welcome.next_start': 'Turn the team on with: jht team start',
+  'welcome.next_running': 'See how it is going with: jht agents',
+  'welcome.more': 'Everything else: jht help',
   'help.group_other': 'Other',
 };

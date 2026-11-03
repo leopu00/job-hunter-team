@@ -81,9 +81,15 @@ process.on('uncaughtException', (err) => {
 });
 
 try {
-  const { buildProgram } = await import('../src/program.js');
-  const program = buildProgram();
-  await program.parseAsync(process.argv);
+  if (process.argv.length === 2) {
+    // a bare `jht`, by a person: the welcome, and exit 0 (it was the short help with exit 1)
+    const { renderWelcome } = await import('../src/lib/welcome.js');
+    process.stdout.write(`${renderWelcome()}\n`);
+  } else {
+    const { buildProgram } = await import('../src/program.js');
+    const program = buildProgram();
+    await program.parseAsync(process.argv);
+  }
 } catch (err) {
   report(err, { fatal: true });
   process.exitCode = 1;

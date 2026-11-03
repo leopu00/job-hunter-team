@@ -177,5 +177,12 @@ export default {
   'providers.other': 'Altri provider:',
   'providers.other_line': '{id}{active} — modello {model}',
   'providers.none_active': 'Nessun provider è attivo. Sceglilo con: jht providers use codex',
+  'welcome.title': 'Job Hunter Team',
+  'welcome.about': 'La tua squadra trova le offerte di lavoro, le confronta con te e scrive CV e lettera.',
+  'welcome.first_run': 'Comincia da qui: jht setup',
+  'welcome.config_unreadable': 'La configurazione non si legge. Ricomincia con: jht setup --reset',
+  'welcome.next_start': 'Accendi la squadra con: jht team start',
+  'welcome.next_running': 'Guarda come va con: jht agents',
+  'welcome.more': 'Tutto il resto: jht help',
   'help.group_other': 'Altro',
 };
