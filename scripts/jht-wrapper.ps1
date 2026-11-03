@@ -1054,9 +1054,12 @@ function Invoke-DesktopChat {
       $script:DesktopChatExitCode = $LASTEXITCODE
     }
     'send' {
-      if ($ChatArgs.Count -ne 2 -or $ChatArgs[1] -notin @(
-        'CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO'
-      )) { $script:DesktopChatExitCode = 2; return }
+      # the eight fixed sessions, or an instance of a numbered role (SCOUT-2.. up to four digits, no zero in front;
+      # -cmatch: case counts, as it does in the bash wrapper's case)
+      $fixedSessions = @('CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO')
+      if ($ChatArgs.Count -ne 2 -or -not ($ChatArgs[1] -in $fixedSessions -or $ChatArgs[1] -cmatch '\A(SCOUT|ANALISTA|SCORER|SCRITTORE)-[1-9][0-9]{0,3}\z')) {
+        $script:DesktopChatExitCode = 2; return
+      }
       # No double quote inside a native argument (5.1 drops it, T71): an empty IFS keeps the message
       # one word without quotes, and set -f keeps its * and ? from matching file names.
       & docker exec -i $containerId sh -c 'IFS=; set -f; msg=$(cat); exec jht-tmux-send $1 $msg' sh $ChatArgs[1]

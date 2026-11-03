@@ -50,7 +50,7 @@ export default function TeamCard({ readOnly, read = readTeamState }: { readOnly:
           <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{sections.budgetNote}</span>
         </button>
       )}
-      {!readOnly && <BurstStrip compact={false} />}
+      {!readOnly && <BurstStrip />}
     </section>
   );
 }

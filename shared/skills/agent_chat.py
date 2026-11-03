@@ -119,7 +119,25 @@ STUCK = re.compile(r"^JHT_STUCK$", re.M)
 MESSAGE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 # The ids are the roles' keys; the value is the tmux session.
-AGENTS = {
+# A role with several sessions is also spoken to by instance: «analista-2» is the session ANALISTA-2 and the folder
+# agents/analista-2 (the launcher's own names). The bare «scout» stays: the first instance, as the app has always said.
+NUMBERED_AGENT = re.compile(r"\A(scout|analista|scorer|scrittore)-([1-9][0-9]{0,3})\Z")   # \Z, not $: a name ending in a newline is not one
+
+
+class _Agents(dict):
+    """The eight fixed ids, and the numbered ones of the closed grammar above, each with its tmux session."""
+
+    def __contains__(self, key) -> bool:
+        return dict.__contains__(self, key) or (isinstance(key, str) and NUMBERED_AGENT.match(key) is not None)
+
+    def __missing__(self, key):
+        found = NUMBERED_AGENT.match(key) if isinstance(key, str) else None
+        if found is None:
+            raise KeyError(key)
+        return f"{found.group(1).upper()}-{found.group(2)}"
+
+
+AGENTS = _Agents({
     "capitano": "CAPITANO",
     "assistente": "ASSISTENTE",
     "mentor": "MENTOR",
@@ -128,7 +146,7 @@ AGENTS = {
     "scorer": "SCORER-1",
     "scrittore": "SCRITTORE-1",
     "critico": "CRITICO",
-}
+})
 
 CLIENT_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 # A byte offset into a chat file: 12 digits are a terabyte.
@@ -192,8 +210,15 @@ def jht_home() -> Path:
     return Path(os.environ.get("JHT_HOME") or (Path.home() / ".jht"))
 
 
+def store_name(agent: str) -> str:
+    """The name the team files this agent under: the launcher's instance name («scout-1»), the one `jht-send` and
+    `jht-notify-user` write with. The app's id for a numbered role is the bare role («scout»), which no folder
+    of the team has: reading `agents/scout/` showed the person's own turns and never the agent's answers."""
+    return AGENTS[agent].lower()
+
+
 def chat_path(agent: str) -> Path:
-    return jht_home() / "agents" / agent / "chat.jsonl"
+    return jht_home() / "agents" / store_name(agent) / "chat.jsonl"
 
 
 def agent_of(value: str) -> str:
@@ -1684,7 +1709,7 @@ def _plain_questions(conn, agent: str) -> list:
         "SELECT id, body, created_at, user_reply, user_reply_at, agent_seen_reply_at FROM pending_user_messages "
         "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' AND COALESCE(source_action, '') = '' "
         "AND replace(substr(created_at, 1, 19), 'T', ' ') >= ? ORDER BY id DESC LIMIT ?",
-        (agent, since, QUESTIONS_SHOWN),
+        (store_name(agent), since, QUESTIONS_SHOWN),
     ).fetchall()
     views = []
     for row_id, body, created_at, reply, reply_at, seen_at in rows:
@@ -1724,7 +1749,7 @@ def close_plain_questions(agent: str, text: str, seen: bool = True) -> None:
                 "agent_seen_reply_at = CASE WHEN ? THEN CURRENT_TIMESTAMP END "
                 "WHERE lower(agent) = ? AND author = 'agent' AND kind = 'question' "
                 "AND COALESCE(source_action, '') = '' AND user_reply IS NULL",
-                (text[:MAX_TEXT], 1 if seen else 0, agent),
+                (text[:MAX_TEXT], 1 if seen else 0, store_name(agent)),
             )
     except sqlite3.Error:
         pass
@@ -1746,7 +1771,7 @@ def questions_of(agent: str) -> list | None:
         rows = conn.execute(
             "SELECT source_id, created_at FROM pending_user_messages WHERE agent = ? AND source_action = ? "
             "ORDER BY id DESC LIMIT ?",
-            (agent, aq.SOURCE_ACTION, QUESTIONS_SHOWN),
+            (store_name(agent), aq.SOURCE_ACTION, QUESTIONS_SHOWN),
         ).fetchall()
         views = [view for view in (_question_view(aq, conn, sid, at) for sid, at in rows) if view]
         views.extend(_plain_questions(conn, agent))
@@ -2103,7 +2128,7 @@ def reply(agent: str, text: str) -> dict:
         return {"result": "chat"}
     try:
         try:
-            typed = aq.resolve_terminal_reply(conn, agent, text)
+            typed = aq.resolve_terminal_reply(conn, store_name(agent), text)
         except (aq.QuestionRejected, aq.AnswerRejected, sqlite3.Error):
             return {"result": "chat"}
     finally:
@@ -2133,7 +2158,7 @@ def questions(agent: str) -> dict:
     except sqlite3.Error:
         return {"questions": []}
     try:
-        return {"questions": aq.open_cards(conn, agent)}
+        return {"questions": aq.open_cards(conn, store_name(agent))}
     except (aq.QuestionRejected, sqlite3.Error):
         return {"questions": []}
     finally:

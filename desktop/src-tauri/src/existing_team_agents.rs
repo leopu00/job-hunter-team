@@ -33,7 +33,7 @@ const MAX_REPLY: usize = 256 * 1024;
 const MAX_SESSIONS: usize = 200;
 /// The terminal of one agent: its last lines, at most this many bytes.
 const SCREEN_MAX_BYTES: usize = 16 * 1024;
-const SCREEN_LINES: usize = 60;
+const SCREEN_LINES: usize = 120;
 
 /// The tmux sessions the product creates for its agents, as the launcher
 /// names them: `get_agent_info` and `jht_spawn_session_name` in
@@ -140,7 +140,7 @@ if req.get('op')=='screen':
  name=req.get('name')
  if not isinstance(name,str) or not NAME.match(name): fail('agents_unavailable')
  if name not in sessions(): emit({'ok':True,'data':{'name':name,'up':False,'text':None}})
- try: done=subprocess.run(['tmux','capture-pane','-p','-J','-t','='+name+':','-S','-60'],capture_output=True,timeout=8)
+ try: done=subprocess.run(['tmux','capture-pane','-p','-J','-t','='+name+':','-S','-120'],capture_output=True,timeout=8)
  except Exception: fail('agents_unavailable')
  if done.returncode!=0: fail('agents_unavailable')
  raw=done.stdout.decode('utf-8','replace')
@@ -154,7 +154,7 @@ if req.get('op')=='screen':
  except Exception: fail('agent_screen_unfiltered')
  if done.returncode!=0: fail('agent_screen_unfiltered')
  raw=done.stdout.decode('utf-8','replace')
- raw='\n'.join(raw.rstrip('\n').split('\n')[-60:])
+ raw='\n'.join(raw.rstrip('\n').split('\n')[-120:])
  data=raw.encode('utf-8')
  if len(data)>16384: raw=data[-16384:].decode('utf-8','ignore')
  emit({'ok':True,'data':{'name':name,'up':True,'text':raw}})
@@ -916,10 +916,10 @@ mod tests {
     fn the_terminal_is_text_without_escape_sequences() {
         let raw = "\u{1b}[31mred\u{1b}[0m line\n\u{1b}]0;title\u{7}next\u{1b}]8;;http://x\u{1b}\\link\u{0}\u{8}\n<script>x</script>\t\n";
         assert_eq!(plain_text(raw), "red line\nnextlink\n<script>x</script>\t");
-        let long: String = (0..100).map(|n| format!("line {n}\n")).collect();
+        let long: String = (0..200).map(|n| format!("line {n}\n")).collect();
         let text = plain_text(&long);
         assert_eq!(text.lines().count(), SCREEN_LINES);
-        assert!(text.ends_with("line 99"));
+        assert!(text.starts_with("line 80\n") && text.ends_with("line 199"));
         let wide = "è".repeat(SCREEN_MAX_BYTES);
         assert!(plain_text(&wide).len() <= SCREEN_MAX_BYTES);
     }

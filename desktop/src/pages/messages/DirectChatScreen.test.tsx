@@ -675,7 +675,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     await waitFor(() => expect(within(mine).getByTestId("direct-chat-queued")).toHaveTextContent("In coda"));
     held = false;
     await waitFor(
-      () => expect(within(screen.getByText("Sei occupato?").closest("article")!).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"),
+      () => expect(within(screen.getByText("Sei occupato?").closest("article")!).getByTestId("direct-chat-sent")).toHaveTextContent("Letto"),
       { timeout: 4_000 },
     );
     expect(within(screen.getByText("Sei occupato?").closest("article")!).queryByTestId("direct-chat-queued")).toBeNull();

@@ -47,6 +47,15 @@ export interface DirectChatText {
   sent: string;
   /** Under a message of the person's that waits in the agent's mailbox: sent, not yet taken. */
   queued: string;
+  /** Under a message the agent's CLI took (the team proved it): not that the agent understood it. */
+  read: string;
+  readHelp: string;
+  /** Under a message the agent has answered since. */
+  answered: string;
+  /** The title of the marks: what each says. */
+  sentHelp: string;
+  queuedHelp: string;
+  answeredHelp: string;
   /** While the agent works on a turn of the person's: a line with moving dots at the end of the chat. */
   working: string; // {name}
   /** Under a message of the person's that waited too long for its agent and was never typed. */
@@ -146,6 +155,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destinazione: la chat di {name}. Il testo gli arriva come messaggio, non come tasti nel suo terminale.",
     sent: "Inviato",
     queued: "In coda",
+    read: "Letto",
+    readHelp: "L’agente ha preso il messaggio: non vuol dire che l’abbia già capito.",
+    answered: "Risposto",
+    sentHelp: "Inviato: il messaggio è nella conversazione dell’agente.",
+    queuedHelp: "In coda: l’agente sta lavorando, lo riceverà appena può.",
+    answeredHelp: "L’agente ha risposto dopo questo messaggio.",
     working: "{name} sta lavorando…",
     queueExpired: "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo.",
     queueLate: "Inviato in ritardo: il testo era rimasto nella casella dell'agente e ha avuto il suo Invio dopo la scadenza. Guarda il terminale prima di riscrivere.",
@@ -213,6 +228,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Goes to: the chat with {name}. The text reaches it as a message, not as keys in its terminal.",
     sent: "Sent",
     queued: "Queued",
+    read: "Read",
+    readHelp: "The agent took the message: that does not mean it has understood it yet.",
+    answered: "Answered",
+    sentHelp: "Sent: the message is in the agent’s conversation.",
+    queuedHelp: "Queued: the agent is working and will receive it as soon as it can.",
+    answeredHelp: "The agent answered after this message.",
     working: "{name} is working…",
     queueExpired: "Not sent: the agent stayed busy for too long. Write it again.",
     queueLate: "Sent late: the text had stayed in the agent's input box and got its Enter after the time ran out. Look at its terminal before writing again.",
@@ -280,6 +301,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Ziel: der Chat mit {name}. Der Text kommt als Nachricht an, nicht als Tasten in seinem Terminal.",
     sent: "Gesendet",
     queued: "In der Warteschlange",
+    read: "Gelesen",
+    readHelp: "Der Agent hat die Nachricht übernommen: Das heißt nicht, dass er sie schon verstanden hat.",
+    answered: "Beantwortet",
+    sentHelp: "Gesendet: Die Nachricht ist in der Unterhaltung des Agenten.",
+    queuedHelp: "In der Warteschlange: Der Agent arbeitet und erhält sie, sobald er kann.",
+    answeredHelp: "Der Agent hat nach dieser Nachricht geantwortet.",
     working: "{name} arbeitet…",
     queueExpired: "Nicht gesendet: der Agent war zu lange beschäftigt. Schreib es noch einmal.",
     queueLate: "Verspätet gesendet: Der Text war im Eingabefeld des Agenten geblieben und bekam seinen Enter erst nach Ablauf der Zeit. Schau in sein Terminal, bevor du erneut schreibst.",
@@ -347,6 +374,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destination : la discussion avec {name}. Le texte lui arrive comme un message, pas comme des touches dans son terminal.",
     sent: "Envoyé",
     queued: "En attente",
+    read: "Lu",
+    readHelp: "L’agent a pris le message : cela ne veut pas dire qu’il l’a déjà compris.",
+    answered: "Répondu",
+    sentHelp: "Envoyé : le message est dans la conversation de l’agent.",
+    queuedHelp: "En attente : l’agent travaille et le recevra dès qu’il le pourra.",
+    answeredHelp: "L’agent a répondu après ce message.",
     working: "{name} travaille…",
     queueExpired: "Non envoyé : l'agent est resté occupé trop longtemps. Réécris-le.",
     queueLate: "Envoyé en retard : le texte était resté dans la zone de saisie de l'agent et a reçu son Entrée après l'expiration. Regarde son terminal avant de réécrire.",
@@ -414,6 +447,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destino: el chat con {name}. El texto le llega como mensaje, no como teclas en su terminal.",
     sent: "Enviado",
     queued: "En cola",
+    read: "Leído",
+    readHelp: "El agente tomó el mensaje: no significa que ya lo haya entendido.",
+    answered: "Respondido",
+    sentHelp: "Enviado: el mensaje está en la conversación del agente.",
+    queuedHelp: "En cola: el agente está trabajando y lo recibirá en cuanto pueda.",
+    answeredHelp: "El agente respondió después de este mensaje.",
     working: "{name} está trabajando…",
     queueExpired: "No enviado: el agente estuvo ocupado demasiado tiempo. Vuelve a escribirlo.",
     queueLate: "Enviado con retraso: el texto se quedó en el cuadro de entrada del agente y recibió su Intro tras agotarse el tiempo. Mira su terminal antes de volver a escribir.",
@@ -481,6 +520,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Destino: o chat com {name}. O texto chega-lhe como mensagem, não como teclas no terminal.",
     sent: "Enviado",
     queued: "Em fila",
+    read: "Lido",
+    readHelp: "O agente recebeu a mensagem: isso não quer dizer que já a tenha percebido.",
+    answered: "Respondido",
+    sentHelp: "Enviado: a mensagem está na conversa do agente.",
+    queuedHelp: "Em fila: o agente está a trabalhar e vai recebê-la assim que puder.",
+    answeredHelp: "O agente respondeu depois desta mensagem.",
     working: "{name} está a trabalhar…",
     queueExpired: "Não enviado: o agente esteve ocupado demasiado tempo. Volta a escrevê-lo.",
     queueLate: "Enviado com atraso: o texto ficou na caixa de escrita do agente e recebeu o seu Enter depois de acabar o tempo. Vê o seu terminal antes de voltar a escrever.",
@@ -548,6 +593,12 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     destination: "Cél: a csevegés vele: {name}. A szöveg üzenetként érkezik, nem billentyűként a termináljában.",
     sent: "Elküldve",
     queued: "Sorban",
+    read: "Elolvasva",
+    readHelp: "Az ügynök átvette az üzenetet: ez nem jelenti, hogy már meg is értette.",
+    answered: "Megválaszolva",
+    sentHelp: "Elküldve: az üzenet az ügynök beszélgetésében van.",
+    queuedHelp: "Sorban: az ügynök dolgozik, amint tud, megkapja.",
+    answeredHelp: "Az ügynök válaszolt az üzenet után.",
     working: "{name} dolgozik…",
     queueExpired: "Nem lett elküldve: az ügynök túl sokáig volt elfoglalt. Írd meg újra.",
     queueLate: "Késve elküldve: a szöveg az ügynök beviteli mezőjében maradt, és az idő lejárta után kapta meg az Entert. Nézd meg a terminálját, mielőtt újra írsz.",

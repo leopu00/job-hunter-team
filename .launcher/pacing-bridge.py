@@ -638,10 +638,10 @@ def _read_window_samples(since_ts: float, now_ts: float, last_session_only: bool
 def _long_ratio(by_agent, now_ts: float):
     """I kT per punto del team misurati in ORE (pace_rate.kt_per_point), o None se i dati non bastano.
 
-    Il rapporto di una sola finestra da un'ora e' sbagliato per costruzione: il delta di quel tick esce da
-    pace_rate.adjust_series, che toglie i salti da 3 punti o piu' fra due campioni (altro uso dell'account), mentre i kT
-    restano interi; su un contatore che il provider aggiorna a scatti quei salti sono consumo del team. Misurato su
-    un team reale, 28/10-03/11: 930 kT/punto dal tick contro i ~400 della settimana intera (29.886 kT su 75 punti).
+    Il rapporto di una sola finestra e' rumore per costruzione: il contatore e' un intero (un punto = ~400 kT), una
+    finestra vede 0, 1 o 2 passi, e il rapporto di quella finestra va da 51 a 593 (10o-90o percentile, finestre da un'ora)
+    o da 110 a 1295 (finestre da 15 minuti: l'immagine di quel team le usava, i «930» dei suoi messaggi) attorno ai ~400
+    della settimana (29.886 kT su 75 punti, 28/10-03/11). Su 6-48 ore con almeno 8 punti guadagnati sta fra 146 e 517.
     `by_agent` e' collect_events() da almeno RATIO_MAX_SPAN_H ore fa."""
     pr = _pace_rate()
     if pr is None:

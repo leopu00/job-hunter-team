@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik».",
+ "note": "Where the Scout searches FIRST, by the language the profile speaks. DATA, not code: a portal that changes address, closes or opens is corrected here and nowhere else. `host` is a hint for the Scout, not a promise that it answers. access: search (a list the Scout reads), email (not searched: its alerts arrive by mail, so it counts as covered), closed (confirmed closed on a real run: 403, login wall, challenge; it counts as covered, say so). tier: core (covered BEFORE any minor source and required for `exhausted`) or minor. Retired (410, dead endpoint, taken off the lists): xing-jobs, bundesagentur-fuer-arbeit. broad_terms: an entry word on its own (internship); with level_terms they are the WIDE queries (query-kind broad): a portal that ANDs words answers 0 to a full title plus a place and hundreds to «praktik». api: a public, documented API address, no key, that answered 200 on the date in its hint (a hint, not a promise): the Scout asks it instead of the site's page. Only public pages and documented public APIs are read, and a page or address that the site's robots.txt disallows is not (access closed, with the reason in the hint). The kit of 03/11 for FR, DE, ES, PT, NL, BE, CH and AT was checked from the Mac with one request per address, nothing bypassed; a refusal seen only there closes nothing.",
  "retired": [
   "xing-jobs",
   "bundesagentur-fuer-arbeit"
@@ -79,22 +79,27 @@
    "harjoittelu"
   ],
   "nl": [
-   "stage"
+   "stage",
+   "traineeship"
   ],
   "de": [
-   "Praktikum"
+   "Praktikum",
+   "Werkstudent"
   ],
   "fr": [
-   "stage"
+   "stage",
+   "alternance"
   ],
   "it": [
    "tirocinio"
   ],
   "es": [
-   "prácticas"
+   "prácticas",
+   "becario"
   ],
   "pt": [
-   "estágio"
+   "estágio",
+   "estagiário"
   ],
   "en": [
    "internship",
@@ -393,7 +398,8 @@
     "host": "werk.nl",
     "aliases": [
      "werknl"
-    ]
+    ],
+    "hint": "Did not answer from the Mac on 03/11 (000). If it does not answer on the field, log --status closed."
    },
    {
     "slug": "stepstone-nl",
@@ -401,7 +407,8 @@
     "country": "nl",
     "tier": "core",
     "access": "search",
-    "host": "stepstone.nl"
+    "host": "stepstone.nl",
+    "hint": "Search: stepstone.nl/vacatures/{q} (200 on 03/11)."
    },
    {
     "slug": "linkedin",
@@ -450,7 +457,8 @@
     "host": "jobbird.com",
     "aliases": [
      "jobbird-netherlands"
-    ]
+    ],
+    "hint": "Search: jobbird.com/nl/vacature?s={q} (200 on 03/11)."
    },
    {
     "slug": "magnet-me",
@@ -458,7 +466,8 @@
     "country": "nl",
     "tier": "minor",
     "access": "search",
-    "host": "magnet.me"
+    "host": "magnet.me",
+    "hint": "magnet.me/nl/vacancies answered 404 on 03/11: find its search address on the site; if it has none, log --status gone."
    },
    {
     "slug": "vdab",
@@ -466,7 +475,8 @@
     "country": "be",
     "tier": "minor",
     "access": "search",
-    "host": "vdab.be"
+    "host": "vdab.be",
+    "hint": "Search: vdab.be/vindeenjob/vacatures?trefwoord={q} (200 on 03/11, a script app: if the page carries no ads, log --status empty). Flanders."
    },
    {
     "slug": "jobat",
@@ -488,7 +498,8 @@
     "aliases": [
      "stepstone-germany",
      "stepstone"
-    ]
+    ],
+    "hint": "Search: stepstone.de/jobs/{q} (200 from the Mac on 03/11, the list is in the page); page by the link «next»."
    },
    {
     "slug": "linkedin",
@@ -514,12 +525,23 @@
     "host": "de.indeed.com"
    },
    {
+    "slug": "arbeitnow",
+    "name": "Arbeitnow",
+    "country": "de",
+    "tier": "core",
+    "access": "search",
+    "host": "arbeitnow.com",
+    "api": "https://www.arbeitnow.com/api/job-board-api",
+    "hint": "Public JSON, no key, no login: GET ?page=N (300 ads a page, links.next). It has NO search word: read the pages and filter by title and place yourself (broad = read everything). Fields: title, company_name, location, remote, job_types, tags, url, created_at; ?visa_sponsorship=true keeps only ads that offer a visa. Mostly Germany, some Austria and Switzerland. 200 on 03/11."
+   },
+   {
     "slug": "get-in-it",
     "name": "get in IT",
     "country": "de",
     "tier": "core",
     "access": "search",
-    "host": "get-in-it.de"
+    "host": "get-in-it.de",
+    "hint": "Search: get-in-it.de/jobsuche?keywords={q} (200 on 03/11). IT jobs, many for beginners."
    },
    {
     "slug": "karriere-at",
@@ -527,7 +549,8 @@
     "country": "at",
     "tier": "core",
     "access": "search",
-    "host": "karriere.at"
+    "host": "karriere.at",
+    "hint": "Search: karriere.at/jobs?keywords={q} (200 on 03/11; «Praktikum» alone answers 350+ ads). Austria."
    },
    {
     "slug": "jobs-ch",
@@ -535,7 +558,8 @@
     "country": "ch",
     "tier": "core",
     "access": "search",
-    "host": "jobs.ch"
+    "host": "jobs.ch",
+    "hint": "Search: jobs.ch/de/stellenangebote/?term={q}&location={city} (200 on 03/11, «Praktikum» 570 ads); page= for more. Switzerland. Only the page the site shows to everybody is read: its internal JSON is not documented for outside use and is not asked."
    },
    {
     "slug": "stepstone-at",
@@ -554,7 +578,8 @@
     "host": "willhaben.at/jobs",
     "aliases": [
      "willhaben-austria"
-    ]
+    ],
+    "hint": "Search: willhaben.at/jobs/suche?keyword={q} (200 on 03/11)."
    },
    {
     "slug": "kimeta",
@@ -562,7 +587,8 @@
     "country": "de",
     "tier": "minor",
     "access": "search",
-    "host": "kimeta.de"
+    "host": "kimeta.de",
+    "hint": "kimeta.de/jobs/{q} answered 404 on 03/11: find its search address on the site before counting passes; if it has none, log --status gone."
    },
    {
     "slug": "jobscout24",
@@ -570,7 +596,8 @@
     "country": "ch",
     "tier": "minor",
     "access": "search",
-    "host": "jobscout24.ch"
+    "host": "jobscout24.ch",
+    "hint": "Search: jobscout24.ch/de/jobs/{q}/ (200 on 03/11, «Praktikum» 1070 ads)."
    },
    {
     "slug": "jobware",
@@ -592,7 +619,8 @@
     "aliases": [
      "france-travail",
      "pole-emploi"
-    ]
+    ],
+    "hint": "Search: candidat.francetravail.fr/offres/recherche?motsCles={q} (200 on 03/11). The official API needs an account key: not used."
    },
    {
     "slug": "welcome-to-the-jungle",
@@ -603,15 +631,17 @@
     "host": "welcometothejungle.com",
     "aliases": [
      "wttj"
-    ]
+    ],
+    "hint": "Search: welcometothejungle.com/fr/jobs?query={q} (200 on 03/11). The list may load by script: if the page carries no ads, log the pass with --status empty and go on."
    },
    {
     "slug": "hellowork",
     "name": "HelloWork",
     "country": "fr",
     "tier": "core",
-    "access": "search",
-    "host": "hellowork.com"
+    "access": "closed",
+    "host": "hellowork.com",
+    "hint": "Closed to programs by its own robots.txt (03/11): its search page is disallowed, so it is not read. Log nothing there."
    },
    {
     "slug": "linkedin",
@@ -641,7 +671,8 @@
     "country": "fr",
     "tier": "core",
     "access": "search",
-    "host": "apec.fr"
+    "host": "apec.fr",
+    "hint": "Search: apec.fr/candidat/recherche-emploi.html/emploi?q={q} (the older motsCles address redirects there, 301 on 03/11). Mostly experienced profiles: young graduates are few. Its robots.txt answered 403 on 03/11: read only the page a person sees, one search at a time."
    },
    {
     "slug": "meteojob",
@@ -649,7 +680,8 @@
     "country": "fr",
     "tier": "minor",
     "access": "search",
-    "host": "meteojob.com"
+    "host": "meteojob.com",
+    "hint": "Search: meteojob.com/jobs?what={q} (200 on 03/11)."
    },
    {
     "slug": "jobup",
@@ -657,7 +689,8 @@
     "country": "ch",
     "tier": "minor",
     "access": "search",
-    "host": "jobup.ch"
+    "host": "jobup.ch",
+    "hint": "Search: jobup.ch/fr/emplois/?term={q} (200 on 03/11, «Stage» 507 ads). Romandy."
    },
    {
     "slug": "actiris",
@@ -665,18 +698,20 @@
     "country": "be",
     "tier": "minor",
     "access": "search",
-    "host": "actiris.brussels"
+    "host": "actiris.brussels",
+    "hint": "Search: actiris.brussels/fr/citoyens/offres-d-emploi/ (200 on 03/11, the list loads by script). Brussels."
    },
    {
     "slug": "le-forem",
     "name": "Le Forem",
     "country": "be",
     "tier": "minor",
-    "access": "search",
+    "access": "closed",
     "host": "leforem.be",
     "aliases": [
      "forem"
-    ]
+    ],
+    "hint": "Closed to programs on 03/11: leforem.be disallows /recherche-offres/ in its robots.txt, and the open data of the Forem (a documented Opendatasoft API on odwb.be) is on a host whose robots.txt disallows /api/ for programs. Not read until someone with the authority decides otherwise."
    }
   ],
   "it": [
@@ -734,7 +769,8 @@
     "country": "es",
     "tier": "core",
     "access": "search",
-    "host": "infojobs.net"
+    "host": "infojobs.net",
+    "hint": "Answered 405 to the reader on 03/11 (a refusal of automated clients). If it answers the same on the field, log --status closed."
    },
    {
     "slug": "tecnoempleo",
@@ -742,7 +778,8 @@
     "country": "es",
     "tier": "core",
     "access": "search",
-    "host": "tecnoempleo.com"
+    "host": "tecnoempleo.com",
+    "hint": "Search: tecnoempleo.com/ofertas-trabajo/?te={q} (200 on 03/11, «prácticas» 279 ads). IT jobs."
    },
    {
     "slug": "linkedin",
@@ -764,6 +801,33 @@
     "tier": "core",
     "access": "email",
     "host": "es.indeed.com"
+   },
+   {
+    "slug": "infoempleo",
+    "name": "Infoempleo",
+    "country": "es",
+    "tier": "minor",
+    "access": "search",
+    "host": "infoempleo.com",
+    "hint": "Search: infoempleo.com/trabajo/?q={q} (200 on 03/11)."
+   },
+   {
+    "slug": "getmanfred",
+    "name": "Manfred",
+    "country": "es",
+    "tier": "minor",
+    "access": "search",
+    "host": "getmanfred.com",
+    "hint": "IT jobs: getmanfred.com/ofertas-empleo (200 on 03/11), filter by title."
+   },
+   {
+    "slug": "trabajos-com",
+    "name": "Trabajos.com",
+    "country": "es",
+    "tier": "minor",
+    "access": "search",
+    "host": "trabajos.com",
+    "hint": "Search: trabajos.com/ofertas-empleo/?q={q} (200 on 03/11)."
    }
   ],
   "pt": [
@@ -773,7 +837,8 @@
     "country": "pt",
     "tier": "core",
     "access": "search",
-    "host": "net-empregos.com"
+    "host": "net-empregos.com",
+    "hint": "Did not answer from the Mac on 03/11 (000). If it does not answer on the field, log --status closed."
    },
    {
     "slug": "itjobs-pt",
@@ -784,7 +849,8 @@
     "host": "itjobs.pt",
     "aliases": [
      "itjobs"
-    ]
+    ],
+    "hint": "Search: itjobs.pt/emprego?q={q} (200 on 03/11). Its API needs a key: not used."
    },
    {
     "slug": "sapo-emprego",
@@ -792,7 +858,8 @@
     "country": "pt",
     "tier": "core",
     "access": "search",
-    "host": "emprego.sapo.pt"
+    "host": "emprego.sapo.pt",
+    "hint": "Search: emprego.sapo.pt/oferta?q={q} (200 on 03/11)."
    },
    {
     "slug": "linkedin",
@@ -823,7 +890,8 @@
     "host": "landing.jobs",
     "aliases": [
      "landingjobs"
-    ]
+    ],
+    "hint": "Page: landing.jobs/jobs (200 on 03/11, robots.txt allows it; about 57 ads). Its /api/ and /jobs/search are disallowed by its robots.txt: not asked."
    }
   ],
   "en": [
@@ -1198,6 +1266,254 @@
      "twoday": "https://career.twoday.se/jobs"
     },
     "feed": "append .rss to the /jobs address"
+   }
+  },
+  "fr": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "sumup",
+     "datadog",
+     "mirakl",
+     "databricks",
+     "algolia",
+     "hellofresh",
+     "anthropic",
+     "ivalua",
+     "helsing",
+     "airbnb",
+     "celonis",
+     "gitlab",
+     "mongodb",
+     "proton",
+     "idnow",
+     "ebury",
+     "stripe",
+     "dataiku",
+     "adyen",
+     "catawiki",
+     "okta",
+     "figma",
+     "n26",
+     "contentful"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "veepee",
+     "pigment",
+     "swile",
+     "brevo",
+     "blablacar"
+    ]
+   }
+  },
+  "de": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "helsing",
+     "hellofresh",
+     "celonis",
+     "getyourguide",
+     "sumup",
+     "flix",
+     "databricks",
+     "wolt",
+     "raisin",
+     "parloa",
+     "n26",
+     "trivago",
+     "scout24",
+     "dept",
+     "anthropic",
+     "staffbase",
+     "gitlab",
+     "commercetools",
+     "ebury",
+     "stripe",
+     "grafanalabs",
+     "mongodb",
+     "figma",
+     "elastic",
+     "vercel",
+     "idnow",
+     "intercom",
+     "samsara",
+     "adyen",
+     "typeform",
+     "bitpanda",
+     "riotgames",
+     "contentful",
+     "thoughtworks",
+     "okta",
+     "asana",
+     "airbnb",
+     "catawiki",
+     "jfrog"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "finn",
+     "netlight",
+     "pigment",
+     "mendix",
+     "sonarsource",
+     "veepee"
+    ]
+   }
+  },
+  "es": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "ebury",
+     "elastic",
+     "celonis",
+     "cabify",
+     "lighthouse",
+     "grafanalabs",
+     "sumup",
+     "bitpanda",
+     "n26",
+     "helsing",
+     "monzo",
+     "datadog",
+     "gitlab",
+     "stripe",
+     "veriff",
+     "databricks",
+     "newrelic",
+     "typeform",
+     "commercetools",
+     "proton",
+     "mongodb",
+     "okta",
+     "airbnb",
+     "adyen",
+     "wallapop",
+     "catawiki",
+     "jfrog"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "veepee",
+     "jobandtalent",
+     "netlight"
+    ]
+   }
+  },
+  "pt": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "elastic",
+     "flix",
+     "catawiki",
+     "epicgames",
+     "gocardless",
+     "feedzai",
+     "typeform",
+     "ebury",
+     "sumup"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "farfetch"
+    ]
+   }
+  },
+  "nl": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "adyen",
+     "databricks",
+     "dept",
+     "catawiki",
+     "datadog",
+     "hellofresh",
+     "celonis",
+     "sumup",
+     "typeform",
+     "gitlab",
+     "ebury",
+     "elastic",
+     "grafanalabs"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "mendix"
+    ]
+   }
+  },
+  "be": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "catawiki",
+     "showpad",
+     "lighthouse",
+     "elastic",
+     "collibra"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "veepee"
+    ]
+   }
+  },
+  "ch": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "databricks",
+     "elastic",
+     "proton",
+     "getyourguide",
+     "anthropic",
+     "hellofresh",
+     "ebury",
+     "dept",
+     "celonis"
+    ]
+   },
+   "lever": {
+    "url": "https://api.lever.co/v0/postings/{slug}?mode=json",
+    "slugs": [
+     "sonarsource"
+    ]
+   }
+  },
+  "at": {
+   "note": "Company boards, one GET per company, filtered by place and by title. Checked 200 on 03/11/2026 with at least 3 ads in the country; an empty or missing board is skipped, never retried in a loop. Many are international companies: the same board is listed under each country where it has ads, and the country filter of the tool keeps only that country's.",
+   "greenhouse": {
+    "url": "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs",
+    "slugs": [
+     "bitpanda",
+     "kununu",
+     "gitlab",
+     "wolt",
+     "bitmovin"
+    ]
    }
   }
  },

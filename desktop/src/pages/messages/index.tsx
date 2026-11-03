@@ -4,7 +4,9 @@ import { useLeaveReadOnly } from "../../lib/leave-read-only";
 import { useReconfirmExistingTeam } from "../../lib/reconfirm-existing-team";
 import type { ExistingTeamBridge } from "../../lib/existing-team";
 import type { PageProps } from "../types";
-import DirectChatScreen, { isDirectChatAgentId } from "./DirectChatScreen";
+import DirectChatScreen from "./DirectChatScreen";
+import { isChatAgentId } from "./chat-agents";
+import { loadChatSessions } from "./chat-sessions";
 import ExistingTeamReconfirmDialog from "./ExistingTeamReconfirmDialog";
 import { directChatClient } from "./direct-chat-client";
 import { loadQuietFacts } from "./quiet-facts";
@@ -16,7 +18,7 @@ import { loadQuietFacts } from "./quiet-facts";
  */
 export default function MessagesPage({ search, reconfirmBridge, embedded }: PageProps & { reconfirmBridge?: ExistingTeamBridge; embedded?: boolean }) {
   const requestedAgent = search.get("agent");
-  const initialAgentId = isDirectChatAgentId(requestedAgent) ? requestedAgent : "capitano";
+  const initialAgentId = isChatAgentId(requestedAgent) ? requestedAgent : "capitano";
   const readOnly = useExistingTeamReadOnly() !== null;
   const leaveReadOnly = useLeaveReadOnly();
   const reconfirm = useReconfirmExistingTeam();
@@ -26,7 +28,7 @@ export default function MessagesPage({ search, reconfirmBridge, embedded }: Page
   const onConnect = readOnly ? (reconfirm ? () => setConfirming(true) : leaveReadOnly ?? undefined) : undefined;
   return (
     <>
-      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} loadQuietFacts={loadQuietFacts} />
+      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} loadQuietFacts={loadQuietFacts} loadSessions={loadChatSessions} />
       {readOnly && reconfirm && confirming && (
         <ExistingTeamReconfirmDialog reconfirm={reconfirm} onClose={() => setConfirming(false)} bridge={reconfirmBridge} />
       )}

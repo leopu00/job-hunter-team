@@ -192,10 +192,10 @@ describe("the page and the conversation", () => {
 
 describe("what a receipt says of the person's message", () => {
   it("sent, never taken; in the mailbox; pasted but not sent; not known", () => {
-    expect(outcomeOf({ taken: true }, 0)).toEqual({ kind: "sent" });
+    expect(outcomeOf({ taken: true }, 0)).toEqual({ kind: "sent", taken: true });
     expect(outcomeOf({}, 0)).toEqual({ kind: "sent" });
     expect(outcomeOf({ state: "queued" }, 0)).toEqual({ kind: "queued" });
-    expect(outcomeOf({ state: "queued", taken: true }, 0)).toEqual({ kind: "sent" });
+    expect(outcomeOf({ state: "queued", taken: true }, 0)).toEqual({ kind: "sent", taken: true });
     expect(outcomeOf({ taken: false }, 2)).toEqual({ kind: "notSent", presses: 2 });
     expect(outcomeOf({ taken: null }, 0)).toEqual({ kind: "unknown" });
   });
@@ -219,7 +219,7 @@ describe("what a receipt says of the person's message", () => {
     ]);
     // the same mapping as the direct send: taken = sent, still in the composer = Enter may be pressed,
     // no proof = not known, and a turn that waited too long was never typed
-    expect(settled.get("m1")).toEqual({ kind: "sent" });
+    expect(settled.get("m1")).toEqual({ kind: "sent", taken: true });
     expect(settled.get("m2")).toEqual({ kind: "notSent", presses: 0 });
     expect(settled.get("m3")).toEqual({ kind: "queued" });
     expect(settled.get("m4")).toEqual({ kind: "unknown", reason: "unconfirmed" });
