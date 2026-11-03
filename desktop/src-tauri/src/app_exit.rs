@@ -257,7 +257,24 @@ fn exec_local(
     }
 }
 
+/// `step` (`state`, `order`, `poll`, `finish`) names the command in the runtime log, where a failure of it is
+/// written by its code: «I could not stop everything» used to leave nothing there.
 async fn on_scope<T: Send + 'static>(
+    window: &tauri::Window,
+    scopes: &State<'_, AccountScopeState>,
+    step: &'static str,
+    work: impl FnOnce(&crate::account_scope::AccountScope) -> Result<T, &'static str> + Send + 'static,
+) -> Result<T, ExitError> {
+    let result = on_scope_unlogged(window, scopes, work).await;
+    if let Err(error) = &result {
+        if let Some(log) = crate::runtime_log::RuntimeLog::new(window.app_handle()) {
+            log.record_app_exit_failure(step, error.code);
+        }
+    }
+    result
+}
+
+async fn on_scope_unlogged<T: Send + 'static>(
     window: &tauri::Window,
     scopes: &State<'_, AccountScopeState>,
     work: impl FnOnce(&crate::account_scope::AccountScope) -> Result<T, &'static str> + Send + 'static,
@@ -307,7 +324,7 @@ pub(crate) async fn app_exit_state(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<ExitState, ExitError> {
-    on_scope(&window, &scopes, move |scope| {
+    on_scope(&window, &scopes, "state", move |scope| {
         let team = local_destination(&app, scope)?;
         // only a team on this computer has a machine to speak of, and only a Mac or a Windows has one (Linux runs the container itself)
         let other_containers = if team == TeamHost::Local && cfg!(any(target_os = "macos", windows)) {
@@ -328,7 +345,7 @@ pub(crate) async fn app_exit_order(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<(), ExitError> {
-    on_scope(&window, &scopes, move |scope| {
+    on_scope(&window, &scopes, "order", move |scope| {
         if local_destination(&app, scope)? != TeamHost::Local {
             return Err("app_exit_vps_untouched");
         }
@@ -349,7 +366,7 @@ pub(crate) async fn app_exit_poll(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<ExitProgress, ExitError> {
-    on_scope(&window, &scopes, move |scope| {
+    on_scope(&window, &scopes, "poll", move |scope| {
         if local_destination(&app, scope)? != TeamHost::Local {
             return Err("app_exit_vps_untouched");
         }
@@ -370,7 +387,7 @@ pub(crate) async fn app_exit_finish(
     mode: ExitMode,
 ) -> Result<(), ExitError> {
     let handle = app.clone();
-    on_scope(&window, &scopes, move |scope| {
+    on_scope(&window, &scopes, "finish", move |scope| {
         // a team the app cannot look at is not stopped, but the window can always close
         let host = match (mode, local_destination(&app, scope)) {
             (ExitMode::Detach, host) => host.unwrap_or(TeamHost::None),
@@ -569,6 +586,20 @@ mod tests {
         assert!(finish.contains("MachineStop::Stopped | crate::podman::MachineStop::KeptForOthers(_) => {}"));
         // a state that could not be read is its own answer, not a machine said to be off
         assert!(finish.contains("MachineStop::StateUnknown => return Err(\"app_exit_machine_state_unknown\")"));
+    }
+
+    #[test]
+    fn a_failure_of_a_command_of_leaving_is_written_in_the_runtime_log_with_the_name_of_its_step() {
+        let source = include_str!("app_exit.rs").split("#[cfg(test)]").next().unwrap().replace("\r\n", "\n");
+        // «I could not stop everything» left nothing in the log: every command names its step...
+        for (command, step) in [("app_exit_state", "state"), ("app_exit_order", "order"), ("app_exit_poll", "poll"), ("app_exit_finish", "finish")] {
+            let body = source.split(&format!("async fn {command}(")).nth(1).unwrap().split("\n}\n").next().unwrap();
+            assert!(body.contains(&format!("on_scope(&window, &scopes, \"{step}\", move |scope| {{")), "{command}");
+        }
+        // ...and the one place they all pass through writes the code of what failed, whatever it was
+        let wrapper = source.split("async fn on_scope<").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(wrapper.contains("RuntimeLog::new(window.app_handle())"));
+        assert!(wrapper.contains("record_app_exit_failure(step, error.code)"));
     }
 
     #[test]
