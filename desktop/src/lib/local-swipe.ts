@@ -2,7 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { SwipeReviewedRow } from "@/lib/swipe-decks";
 import { salaryPreference } from "@/lib/salary-source";
 import type { PositionWithScore } from "@/lib/types";
-import { reportLocalTeamRead } from "./local-team-data";
+import { localTeamDataKey, reportLocalTeamRead } from "./local-team-data";
 
 /**
  * The two decks of the Swipe of a local profile, read from the jobs.db of the team on this computer by the
@@ -21,6 +21,34 @@ export function localDeckToken(id: string): string | null {
 
 export function forgetLocalDeck(): void {
   tokens = new Map();
+}
+
+/**
+ * The token a position's own detail read came with (the page of one position, not the Swipe's deck). Kept with the
+ * profile it was read for: a token of another profile is never lent. The native side accepts either token.
+ */
+let positionTokens = new Map<string, { identity: string | null; token: string }>();
+
+export function rememberLocalPositionToken(id: string, token: string): void {
+  if (positionTokens.size >= 64) positionTokens = new Map([...positionTokens].slice(-32));
+  positionTokens.set(id, { identity: localTeamDataKey(), token });
+}
+
+export function forgetLocalPositionTokens(): void {
+  positionTokens = new Map();
+}
+
+/** The token of the last detail read of the position, if it was read for the profile now shown; else the deck's. */
+export function localPositionToken(id: string): string | null {
+  const own = positionTokens.get(id);
+  if (own && own.identity === localTeamDataKey()) return own.token;
+  return tokens.get(id) ?? null;
+}
+
+/** Whether the token that would be sent is the deck's (the Swipe's command takes only that one). */
+export function localPositionTokenIsDeck(id: string): boolean {
+  const own = positionTokens.get(id);
+  return !(own && own.identity === localTeamDataKey()) && tokens.has(id);
 }
 
 export class LocalSwipeError extends Error {

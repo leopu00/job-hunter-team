@@ -5,7 +5,7 @@ import { scoreSpectrumCss } from "@/lib/score-color";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CORNER_CARD_W,
-  RAIL_QUERY,
+  railQuery,
   railClearance,
 } from "@/lib/map-panels-layout";
 import { useLocale } from "@/lib/use-locale";
@@ -125,7 +125,7 @@ export default function MapCharts({
   // Finestra media: i pannelli stanno in una colonna a sinistra (vedi
   // lib/map-panels-layout.ts) e se ne apre uno per volta, altrimenti due
   // aperti superano l'altezza della mappa. Altrove restano indipendenti.
-  const railMode = useMediaQuery(RAIL_QUERY);
+  const railMode = useMediaQuery(railQuery());
   const shellRef = useRef<HTMLDivElement>(null);
   const [railPadding, setRailPadding] = useState(0);
   useEffect(() => {
