@@ -1002,7 +1002,7 @@ where
         .stdout(stdout.stdio_for_writing()?)
         .stderr(Stdio::null());
     hide_console(&mut command);
-    let mut child = command.spawn().map_err(|error| spawn_failure(program, &error))?;
+    let mut child = spawn_retrying_busy(&mut command).map_err(|error| spawn_failure(program, &error))?;
     // the command holds this process's copies of the files: closed now, so only the child has them
     drop(command);
     let status = wait_until(&mut child, Instant::now(), timeout, Duration::from_millis(50))?;
@@ -1099,6 +1099,41 @@ pub(crate) fn hide_console(command: &mut Command) {
 #[cfg(not(windows))]
 pub(crate) fn hide_console(command: &mut Command) {
     clean_appimage_env(command);
+}
+
+/// How many times a program that is «busy» is tried again, and the pause between the tries: half a second at the most.
+const BUSY_RETRIES: u32 = 100;
+const BUSY_PAUSE: Duration = Duration::from_millis(5);
+
+/// «Text file busy» (ETXTBSY): the program file is open for writing somewhere, for a moment. It happens to a script that has
+/// just been written and is run at once (the app publishes the wrapper and runs it; the tests write a stand-in and run it)
+/// when another thread of this process forks in between: the child that thread started holds a copy of the open file until it
+/// execs, a few microseconds. Not a failure of the program, so it is tried again; any other error is returned as it is.
+fn is_text_file_busy(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        error.raw_os_error() == Some(libc::ETXTBSY)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+/// `Command::spawn` that tries again while the program file is busy (`is_text_file_busy`). Every program the app starts from a
+/// file that may have just been written goes through it.
+pub(crate) fn spawn_retrying_busy(command: &mut Command) -> std::io::Result<std::process::Child> {
+    let mut retries = 0;
+    loop {
+        match command.spawn() {
+            Err(error) if is_text_file_busy(&error) && retries < BUSY_RETRIES => {
+                retries += 1;
+                thread::sleep(BUSY_PAUSE);
+            }
+            other => return other,
+        }
+    }
 }
 
 // ── the program an AppImage starts is the system's, not the AppImage's ───────────────────────────────────────────
@@ -1266,7 +1301,7 @@ where
         .stderr(Stdio::piped());
     ask_for_machine_output(&mut command);
     hide_console(&mut command);
-    let mut child = match command.spawn() {
+    let mut child = match spawn_retrying_busy(&mut command) {
         Ok(child) => child,
         Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
@@ -1479,7 +1514,7 @@ where I: IntoIterator<Item = S>, S: AsRef<OsStr>,
     } else {
         command.stdin(Stdio::null());
     }
-    let mut child = match command.spawn() {
+    let mut child = match spawn_retrying_busy(&mut command) {
         Ok(child) => child,
         Err(error) => return (Err(spawn_failure(program, &error)), Vec::new()),
     };
@@ -2397,6 +2432,63 @@ mod tests {
             &[("JHT_MACHINE_OUTPUT", "0")],
         );
         assert_eq!(String::from_utf8_lossy(&own.unwrap().stdout), "M=0\n");
+    }
+
+    /// The cause of the tests that failed at random on Linux with `process_start_failed after 0.0 s` (a runtime-log test of
+    /// onboarding three times in a day, and the fake ssh): a script written and run at once is refused with ETXTBSY, «text
+    /// file busy», when another thread forks between the moment the file is opened for writing and the moment it is closed:
+    /// the child the other thread started holds a copy of the open file until it execs. The tests of the crate run in parallel
+    /// and start programs all the time, so it happens to the ones that write a script. This stands in for them: the other
+    /// threads start programs without stopping, and every script must run.
+    #[cfg(unix)]
+    #[test]
+    fn a_script_written_and_run_at_once_runs_even_while_other_threads_start_programs() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let noise: Vec<_> = (0..4)
+            .map(|_| {
+                let stop = stop.clone();
+                std::thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        let _ = std::process::Command::new("/bin/true").status();
+                    }
+                })
+            })
+            .collect();
+        let dir = std::env::temp_dir().join(format!("jht-busy-script-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mut refused = Vec::new();
+        for n in 0..300 {
+            let path = dir.join(format!("script-{n}"));
+            fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            match super::run_program(path.to_str().unwrap(), std::iter::empty::<&str>(), None, std::time::Duration::from_secs(20)) {
+                Ok(done) if done.code == 0 => {}
+                other => refused.push((n, other.map(|done| done.code))),
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        for thread in noise {
+            thread.join().unwrap();
+        }
+        let _ = fs::remove_dir_all(&dir);
+        assert!(refused.is_empty(), "{} of 300 scripts did not run: {refused:?}", refused.len());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_a_busy_program_file_is_tried_again_any_other_error_is_returned_at_once() {
+        assert!(super::is_text_file_busy(&std::io::Error::from_raw_os_error(libc::ETXTBSY)));
+        for other in [libc::ENOENT, libc::EACCES, libc::ENOEXEC, libc::EAGAIN] {
+            assert!(!super::is_text_file_busy(&std::io::Error::from_raw_os_error(other)), "{other}");
+        }
+        // a program that is not there is not waited for: half a second of tries would be the cost of every missing program
+        let started = std::time::Instant::now();
+        let error = super::spawn_retrying_busy(&mut std::process::Command::new("/nonexistent/jht-no-such-program")).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+        assert!(started.elapsed() < std::time::Duration::from_millis(400), "{:?}", started.elapsed());
     }
 
     #[cfg(unix)]
