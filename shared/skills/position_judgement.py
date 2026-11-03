@@ -309,6 +309,12 @@ def do_mark_applied(args):
             if row is None:
                 raise Refused("position_not_found")
             if args.on:
+                # an application the TEAM sent is not rewritten as done by hand (the mark would overwrite
+                # applied_via, and taking it back would then turn it into a draft); the person's own, again, is fine
+                sent = conn.execute("SELECT applied, applied_via FROM applications WHERE position_id = ?",
+                                    (args.id,)).fetchone()
+                if sent and sent[0] and sent[1] and sent[1] != APPLIED_VIA_USER:
+                    raise Refused("already_applied")
                 applied_at = now_iso()
                 # one transaction: the position and the application must not tell two stories
                 conn.execute(
