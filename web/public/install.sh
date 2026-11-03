@@ -7,12 +7,13 @@
 # ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash                 ║
 # ║                                                                          ║
 # ║    # "Expert mode" install without a container:                          ║
-# ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker ║
+# ║    curl -fsSL https://jobhunterteam.ai/install.sh \                      ║
+# ║      | bash -s -- --no-docker                                            ║
 # ║                                                                          ║
 # ║  Default (Docker mode): installs nothing on the host except Docker.      ║
 # ║  Downloads:                                                              ║
 # ║    - host runtime outside $HOME/.jht (compose + preflight)               ║
-# ║    - $HOME/.local/bin/jht         (bash wrapper, ~165 lines)             ║
+# ║    - $HOME/.local/bin/jht         (the bash wrapper)                     ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
 # ║  running container managed by compose. No Node/Python/tmux on the host.  ║
 # ║  No Docker socket inside the container.                                  ║
@@ -33,7 +34,7 @@
 # ║                            missing is installed with sudo -n (no         ║
 # ║                            password prompt), never Docker.               ║
 # ║    --dry-run               Only show the actions that would be executed  ║
-# ║    --publish-runtime-bundle  Migrate one verified candidate installer,  ║
+# ║    --publish-runtime-bundle  Migrate one verified candidate installer,   ║
 # ║                              wrapper, compose and host-setup transaction;║
 # ║                              no engine, GUI, account or container I/O.   ║
 # ║    --expected-installer-sha256 <hex> Required with the mode above.       ║
@@ -55,10 +56,10 @@
 # ║      curl ...install.sh | bash -s -- --branch dev-1                      ║
 # ║    JHT_BRANCH=dev-1        Source branch (env var, alternative to        ║
 # ║                            --branch). default: production                ║
-# ║    JHT_INSTALL_DIR         Where to clone the repo (default: $HOME/.jht/src,║
-# ║                            only used by --no-docker)                     ║
+# ║    JHT_INSTALL_DIR         Where to clone the repo (default:             ║
+# ║                            $HOME/.jht/src, only used by --no-docker)     ║
 # ║    JHT_RUNTIME_DIR         Where to download docker-compose.yml          ║
-# ║                            (default: XDG/App Support host-runtime)        ║
+# ║                            (default: XDG/App Support host-runtime)       ║
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
 # ║    JHT_IMAGE               Container image override (default: immutable  ║
@@ -68,12 +69,8 @@
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
 # ║    JHT_SKIP_ONBOARD=1      Do not launch the wizard at the end           ║
 # ║                                                                          ║
-# ║  Design reference:                                                       ║
-# ║    docs/internal/ops/vps.md                      ║
-# ║                                                                          ║
 # ║  Supports: macOS (Colima, Podman, or Docker Desktop), Linux              ║
-# ║  (Debian/Ubuntu/Fedora/                                                  ║
-# ║  Arch), WSL2.                                                             ║
+# ║  (Debian/Ubuntu/Fedora/Arch), WSL2.                                      ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
@@ -345,12 +342,22 @@ info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
 
+jht_machine_output() {
+  case "${JHT_MACHINE_OUTPUT:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [ ! -t 1 ]
+}
+
 jht_phase() {
   case "$1" in
     homebrew_check|podman_install|compose_install|machine_create|image_pull|machine_start) ;;
     *) fail "Unknown installer phase: $1" ;;
   esac
-  printf 'JHT_PHASE %s\n' "$1"
+  # The marker is for the desktop app, which reads the installer through a pipe. A person at a terminal gets the
+  # human lines (✓ ▸) only. JHT_MACHINE_OUTPUT=1 forces the marker, =0 forbids it, unset: only when stdout is not a terminal.
+  if jht_machine_output; then printf 'JHT_PHASE %s\n' "$1"; fi
 }
 
 # Wrap commands with system side effects. In dry-run, print instead of executing.
