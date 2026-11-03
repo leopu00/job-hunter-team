@@ -203,6 +203,31 @@ def _hours_until_reset(parsed, now):
     return fallback_hours
 
 
+def _without_isolated_drop(parsed, last, now):
+    """(parsed, lettura scartata o None): `parsed` con il livello di prima al posto di un crollo isolato."""
+    usage = parsed.get("usage")
+    if not last or not isinstance(usage, (int, float)) or isinstance(usage, bool):
+        return parsed, None
+    before = last.get("usage")
+    if not isinstance(before, (int, float)) or before - usage <= RESET_DROP:
+        return parsed, None
+    window_ended = False
+    last_reset = last.get("reset_at_unix")
+    if isinstance(last_reset, (int, float)) and not isinstance(last_reset, bool):
+        window_ended = float(last_reset) - now.timestamp() <= RESET_EDGE_GUARD_HOURS * 3600.0
+    if window_ended:
+        return parsed, None            # la finestra e' finita: il calo e' il reset
+    earlier = last.get("discarded_usage")
+    if isinstance(earlier, (int, float)) and abs(usage - earlier) <= RESET_DROP:
+        return parsed, None            # seconda lettura bassa di fila: e' un reset vero
+    kept = dict(parsed)
+    kept["usage"] = before
+    if isinstance(parsed.get("weekly_usage"), (int, float)) and isinstance(last.get("weekly_usage"), (int, float)):
+        if last["weekly_usage"] - parsed["weekly_usage"] > RESET_DROP:
+            kept["weekly_usage"] = last["weekly_usage"]
+    return kept, usage
+
+
 def _parse_iso(ts):
     if not ts:
         return None
@@ -234,11 +259,15 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
 
     Vedi modulo doc per il contratto. Output dict pronto per JSONL.
     """
-    usage = parsed["usage"]
     provider = parsed.get("provider", "openai")
     now = datetime.now(timezone.utc)
     ts = now.isoformat()
     history = history or []
+    # Una lettura che crolla di piu' di RESET_DROP punti con la finestra ancora aperta non e' un reset: o il provider ha
+    # risposto con uno zero sbagliato, o e' un reset vero. Il campione isolato e' scartato (il livello resta quello di
+    # prima, `suspect_drop`/`discarded_usage` lo dicono); se la lettura dopo e' ancora li' in basso, e' un reset vero.
+    parsed, discarded_usage = _without_isolated_drop(parsed, last, now)
+    usage = parsed["usage"]
 
     # ── Delta + velocity ──
     # `delta` e' il passo fra due campioni; la `velocity` NON e' delta / 5 minuti (un punto intero = 12 %/h, tre =
@@ -303,6 +332,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     velocity_ideal = None
     projection = None
     projection_lo = None
+    projection_hi = None
     projection_naive = None
     last_hour_delta = cumulative_delta_last_hour(
         history + [{"ts": ts, "delta": delta}], now
@@ -318,6 +348,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
             or reset_event
         )
         effective_lo = 0.0
+        effective_hi = None
         if cold_start:
             # Sessione nuova: niente media disponibile, vel=0
             effective_vel = 0.0
@@ -326,8 +357,10 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
             # interi delle ultime 30 righe (2,5 h) per le ore al reset, cioe' 1 punto = +30 di proiezione su 76 h.
             effective_vel = rate_res["rate"] if rate_res is not None else 0.0
             effective_lo = rate_res["lo"] if rate_res is not None else 0.0
+            effective_hi = rate_res["hi"] if rate_res is not None else None
         projection = usage + effective_vel * hours_to_reset
         projection_lo = usage + effective_lo * hours_to_reset
+        projection_hi = (usage + effective_hi * hours_to_reset) if effective_hi is not None else None
 
     # ── Dead-band: velocity in calo? ──
     vs_prev = (last or {}).get("velocity_smooth")
@@ -355,7 +388,10 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         status, throttle = "ATTENZIONE", 1
     elif projection is not None and PROJ_STEADY_LOW <= projection <= PROJ_STEADY_HIGH:
         status, throttle = "STEADY", 0
-    elif projection is not None and projection < PROJ_LOW:
+    elif projection_hi is not None and projection_hi < PROJ_LOW:
+        # «Sotto il ritmo» (accelera) solo se anche il limite ALTO dell'intervallo sta sotto (pace_rate.py, regola 2), e
+        # mai senza un ritmo misurato: con il ritmo ignoto la proiezione e' il livello (77 -> «SOTTOUTILIZZO 77 %
+        # con il reset fra 22 h»), non un verdetto.
         status, throttle = "SOTTOUTILIZZO", 0
     else:
         status, throttle = "OK", 0
@@ -501,6 +537,8 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         "provider": provider,
         "session_id": session_id,
         "usage": usage,
+        "suspect_drop": discarded_usage is not None,
+        "discarded_usage": discarded_usage,
         "delta": round(delta, 2),
         "velocity": round(velocity, 2),
         "velocity_smooth": round(velocity_smooth, 2),
