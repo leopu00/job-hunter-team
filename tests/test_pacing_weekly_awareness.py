@@ -37,10 +37,21 @@ def _parsed(usage, weekly_usage):
     }
 
 
+def _flat(usage, hours=3.0):
+    """(last, history): il contatore fermo a `usage` da `hours` ore, un campione ogni 5 minuti (ritmo misurato = 0).
+
+    Senza un ritmo misurato non c'e' verdetto «sotto»: la proiezione e' il livello, non un consumo (pace_rate.py)."""
+    now = datetime.now(timezone.utc)
+    history = [{"ts": (now - timedelta(minutes=5 * k)).isoformat(), "usage": usage, "provider": "codex"}
+               for k in range(int(hours * 12), 0, -1)]
+    return history[-1], history
+
+
 def test_weekly_alto_non_forza_attenzione():
-    # primary 5h basso (cold-start last=None → vel=0 → projection=usage=5 < 90)
+    # primary 5h basso e fermo da 3 h (ritmo 0 → projection=usage=5 < 90)
     # = SOTTOUTILIZZO. Con il vecchio codice weekly=92>=75 forzava ATTENZIONE.
-    res = compute_metrics(_parsed(usage=5, weekly_usage=92), last=None, history=[])
+    last, history = _flat(5)
+    res = compute_metrics(_parsed(usage=5, weekly_usage=92), last=last, history=history)
     assert res["status"] == "SOTTOUTILIZZO", f"status forzato dal weekly: {res['status']}"
     assert res["weekly_binding"] is False
     # awareness resta esposta
@@ -49,8 +60,9 @@ def test_weekly_alto_non_forza_attenzione():
 
 def test_status_indipendente_dal_livello_weekly():
     # Stesso primary, weekly basso vs altissimo → STESSO status.
-    low = compute_metrics(_parsed(usage=5, weekly_usage=10), last=None, history=[])
-    high = compute_metrics(_parsed(usage=5, weekly_usage=99), last=None, history=[])
+    last, history = _flat(5)
+    low = compute_metrics(_parsed(usage=5, weekly_usage=10), last=last, history=history)
+    high = compute_metrics(_parsed(usage=5, weekly_usage=99), last=last, history=history)
     assert low["status"] == high["status"] == "SOTTOUTILIZZO"
     assert low["weekly_binding"] is False
     assert high["weekly_binding"] is False
