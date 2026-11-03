@@ -24,6 +24,7 @@ mod existing_team_register;
 #[cfg(all(test, unix))]
 mod existing_team_register_tests;
 mod existing_team_runtime;
+mod linux_render;
 mod live_screen;
 mod local_swipe;
 mod mail;
@@ -64,6 +65,7 @@ pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    linux_render::apply();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         // a new position's system notification (lib/notify): only what capabilities/new-position-notification.json allows
