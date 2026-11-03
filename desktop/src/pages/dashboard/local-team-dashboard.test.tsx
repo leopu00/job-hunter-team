@@ -98,6 +98,12 @@ describe("Dashboard of a local profile", () => {
     const bar = await screen.findByTestId("local-team-stopped");
     const told = describeError("local_team_not_running", { locale: "it" });
     expect(bar).toHaveTextContent(told.text);
+    // the page itself is calm: one line, no red alert, no code, no second button (the bar holds the only one)
+    expect(await screen.findByTestId("dashboard-team-off")).toHaveTextContent("Il team è spento");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(document.body).not.toHaveTextContent("local_team_not_running");
+    expect(screen.getAllByTestId("start-team")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Riprova" })).toBeNull();
     await userEvent.click(within(bar).getByTestId("start-team"));
     expect(await screen.findByText("12 posizioni totali · 1 escluse · 11 attive")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByTestId("local-team-stopped")).toBeNull());
