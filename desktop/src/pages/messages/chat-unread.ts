@@ -53,6 +53,19 @@ export function unreadAfter(messages: readonly DirectChatMessage[], mark: number
   return count;
 }
 
+/** The last thing said in a chat, for its line in the list of conversations. */
+export type LastLine = { role: "user" | "agent"; text: string; at: number };
+
+/** The newest line of the person's or the agent's (a system line is not said by anyone), or null. */
+export function lastLineOf(messages: readonly DirectChatMessage[]): LastLine | null {
+  let found: LastLine | null = null;
+  for (const message of messages) {
+    if ((message.role !== "user" && message.role !== "agent") || typeof message.text !== "string" || message.text.trim() === "") continue;
+    if (found === null || message.at >= found.at) found = { role: message.role, text: message.text, at: message.at };
+  }
+  return found;
+}
+
 /** «7», or «99+»: the text of the badge. */
 export function unreadLabel(count: number): string {
   return count > UNREAD_SHOWN_MAX ? `${UNREAD_SHOWN_MAX}+` : String(count);
@@ -81,12 +94,22 @@ export function useChatUnread({
   read: Read;
   /** False while the chat is not connected, on a slow link, or in a pane that has no list of agents. */
   peeking: boolean;
-}): { counts: Readonly<Record<string, number>>; total: number; lastAgentAt: number } {
+}): { counts: Readonly<Record<string, number>>; total: number; lastAgentAt: number; last: Readonly<Record<string, LastLine>> } {
   const marks = useRef<SeenMarks | null>(null);
   if (marks.current === null) marks.current = loadSeen();
   const [counts, setCounts] = useState<Readonly<Record<string, number>>>({});
   // The newest message any agent wrote, in the time of the messages (0: none seen): the team's last sign of life.
   const [lastAgentAt, setLastAgentAt] = useState(0);
+
+  // The last line of each chat, as far as this view has read it (the open chat, and the others as they are looked at).
+  const [last, setLast] = useState<Readonly<Record<string, LastLine>>>({});
+  const setLastRef = useRef((agent: string, found: LastLine | null) => {
+    if (found === null) return;
+    setLast((current) => {
+      const had = current[agent];
+      return had && had.at === found.at && had.text === found.text && had.role === found.role ? current : { ...current, [agent]: found };
+    });
+  });
 
   const setCount = (agent: string, count: number) =>
     setCounts((current) => (current[agent] === count || (!current[agent] && count === 0) ? current : { ...current, [agent]: count }));
@@ -100,6 +123,7 @@ export function useChatUnread({
   useEffect(() => {
     const m = marks.current!;
     const apply = () => {
+      setLastRef.current(openAgent, lastLineOf(openMessages));
       const newest = newestAgentAt(openMessages);
       if (newest === 0) return;
       setLastAgentAt((current) => Math.max(current, newest));
@@ -134,6 +158,7 @@ export function useChatUnread({
           const page = await readRef.current({ agentId: agent });
           if (!active) return;
           const m = marks.current!;
+          setLastRef.current(agent, lastLineOf(page.messages));
           const newest = newestAgentAt(page.messages);
           if (newest > 0) setLastAgentAt((current) => Math.max(current, newest));
           if (m[agent] === undefined) {
@@ -158,5 +183,5 @@ export function useChatUnread({
   }, [others, peeking]);
 
   const total = useMemo(() => Object.values(counts).reduce((sum, count) => sum + count, 0), [counts]);
-  return { counts, total, lastAgentAt };
+  return { counts, total, lastAgentAt, last };
 }

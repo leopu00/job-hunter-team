@@ -22,8 +22,10 @@ import {
   cleanMessage,
   dayKey,
   dayLabel,
+  conversationTime,
   ENTER_AGAIN_MAX,
   excerpt,
+  previewText,
   outcomeOf,
   sightAfter,
   NOT_WORKING,
@@ -381,7 +383,10 @@ export default function DirectChatScreen({
     return [...listed, { id: agentId, session, label: agentTitle(session, t.agents), up: false }];
   }, [sessions, t, agentId]);
   const selected = agents.find((agent) => agent.id === agentId) ?? agents[0];
-  const agentIds = useMemo(() => agents.map((agent) => agent.id), [agents]);
+  // The same list of ids stays the same array while the sessions are read again every 20 s: the unread peeks go
+  // round the agents one by one, and a new array would send them back to the first each time.
+  const idsKey = agents.map((agent) => agent.id).join("|");
+  const agentIds = useMemo(() => idsKey.split("|"), [idsKey]);
   // How many messages of each agent the person has not read: the chat on screen is read, the others are looked at slowly.
   const unread = useChatUnread({
     agents: agentIds,
@@ -882,6 +887,7 @@ export default function DirectChatScreen({
               key={agent.id}
               type="button"
               aria-current={agent.id === agentId ? "page" : undefined}
+              aria-describedby={agent.id !== agentId && unread.last[agent.id] ? `direct-chat-preview-${agent.id}` : undefined}
               onClick={() => setAgentId(agent.id)}
               className="min-h-9 rounded px-3 py-2 text-left text-[14px] font-semibold transition-colors"
               style={{
@@ -899,6 +905,16 @@ export default function DirectChatScreen({
                   />
                   <span className="min-w-0 break-words">{agent.label}</span>
                 </span>
+                {unread.last[agent.id] && (
+                  <time
+                    aria-hidden
+                    data-testid={`direct-chat-last-time-${agent.id}`}
+                    dateTime={new Date(unread.last[agent.id].at * 1000).toISOString()}
+                    className="shrink-0 text-[14px] font-normal text-[var(--color-dim)]"
+                  >
+                    {conversationTime(unread.last[agent.id].at, DICTATION_LOCALE[locale])}
+                  </time>
+                )}
                 {unread.counts[agent.id] > 0 && (
                   <span
                     data-testid={`unread-${agent.id}`}
@@ -911,6 +927,18 @@ export default function DirectChatScreen({
                   </span>
                 )}
               </span>
+              {agent.id !== agentId && unread.last[agent.id] && (
+                // The open conversation shows its lines itself, so its row does not repeat them.
+                // aria-hidden: the name of the button stays the agent's; the line is its description
+                <span
+                  id={`direct-chat-preview-${agent.id}`}
+                  aria-hidden
+                  data-testid={`direct-chat-preview-${agent.id}`}
+                  className="mt-0.5 block truncate text-[14px] font-normal text-[var(--color-dim)]"
+                >
+                  {previewText(unread.last[agent.id], t.you)}
+                </span>
+              )}
             </button>
           ))}
         </nav>

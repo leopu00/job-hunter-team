@@ -345,6 +345,21 @@ export function timeLabel(at: number, dateLocale: string): string {
   return new Date(at * 1000).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" });
 }
 
+/** The time of a conversation's last line in the list: today the clock, another day a short date. */
+export function conversationTime(at: number, dateLocale: string, now = Date.now()): string {
+  const day = new Date(at * 1000);
+  return day.toDateString() === new Date(now).toDateString()
+    ? timeLabel(at, dateLocale)
+    : day.toLocaleDateString(dateLocale, { day: "numeric", month: "short" });
+}
+
+/** What a line of the list says of the last message: one line of plain words, the person's own marked with «You: ». */
+export function previewText(line: { role: "user" | "agent"; text: string; at: number }, you: string): string {
+  const { text } = line.role === "agent" ? cleanMessage({ id: "preview", role: "agent", text: line.text, at: line.at }) : { text: line.text };
+  const plain = excerpt(text.replace(/[*_`#>]+/g, " "));
+  return line.role === "user" ? `${you}: ${plain}` : plain;
+}
+
 /** The whole date and time of a message, for the tooltip. */
 export function fullStamp(at: number, dateLocale: string): string {
   return new Date(at * 1000).toLocaleString(dateLocale, { dateStyle: "full", timeStyle: "medium" });
