@@ -121,7 +121,15 @@ fn no_follow(options: &mut fs::OpenOptions) {
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW);
     }
-    #[cfg(not(unix))]
+    // Windows: the open takes the link or junction itself and not what it points to, so the check on the open file
+    // (`is_file`) refuses it; the path is checked too, for the gap that remains there
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    #[cfg(not(any(unix, windows)))]
     let _ = options;
 }
 
@@ -135,6 +143,10 @@ enum Content {
 
 /// What the file holds, read through the one handle that was checked (`fstat` of the open file, not of the path).
 fn content_of(path: &Path) -> Content {
+    #[cfg(windows)]
+    if fs::symlink_metadata(path).is_ok_and(|metadata| !metadata.file_type().is_file()) {
+        return Content::Refused;
+    }
     let mut options = fs::OpenOptions::new();
     options.read(true);
     no_follow(&mut options);
@@ -413,6 +425,26 @@ mod tests {
             assert!(append(&path, "{}").is_err());
             assert!(lines_of(&path).is_empty(), "a link is not read");
             assert_eq!(fs::read_to_string(&outside).unwrap(), "{\"action\":\"team.start\"}\n", "nothing was written through it");
+        }
+        // Windows: a symbolic link needs a privilege (or the developer mode), so the check runs only where one can be made
+        #[cfg(windows)]
+        {
+            let _ = fs::remove_dir(&path);
+            let outside = path.parent().unwrap().join("outside.txt");
+            fs::write(&outside, "keep me").unwrap();
+            if std::os::windows::fs::symlink_file(&outside, &path).is_ok() {
+                assert!(append(&path, "{}").is_err(), "a link at the file's name is refused");
+                assert!(lines_of(&path).is_empty(), "a link is not read");
+                assert_eq!(fs::read_to_string(&outside).unwrap(), "keep me", "nothing was written through it");
+                fs::remove_file(&path).unwrap();
+            }
+            let temporary = path.with_extension("jsonl.tmp");
+            if std::os::windows::fs::symlink_file(&outside, &temporary).is_ok() {
+                for n in 0..(REWRITE_AT + 2) {
+                    append(&path, &line("team.stop", &Subject::Target("all".into()), &format!("{n}-3"), AT).unwrap()).unwrap();
+                }
+                assert_eq!(fs::read_to_string(&outside).unwrap(), "keep me", "the rotation did not write through the link");
+            }
         }
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
