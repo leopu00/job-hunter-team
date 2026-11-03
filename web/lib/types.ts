@@ -149,6 +149,8 @@ export interface Company {
   glassdoor_rating: number | null;
   red_flags: string | null;
   culture_notes: string | null;
+  // Le due frasi dell'Analista su chi è l'azienda e di cosa si occupa (lingua dell'utente). Null = non ancora scritte.
+  about?: string | null;
   analyzed_by: string | null;
   analyzed_at: string | null;
   verdict: "GO" | "CAUTIOUS" | "NO_GO" | null;

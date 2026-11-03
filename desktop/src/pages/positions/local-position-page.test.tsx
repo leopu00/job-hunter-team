@@ -38,6 +38,24 @@ vi.mock("../office", () => ({ default: () => <h1>Ufficio</h1> }));
 
 
 const TOKEN = "position-token-synthetic";
+const RICH = {
+  ...syntheticDetail,
+  position: {
+    ...syntheticDetail.position,
+    remote_type: "hybrid",
+    notes: "Fine fit. NOTE_MISMATCH: [GEO] Hybrid in a far city that needs a long commute every week. NOTE_MISMATCH: [DOMAIN] Works in an unrelated field with no overlap.",
+  },
+  company: {
+    ...syntheticDetail.company,
+    about: "Synthetic Co A builds scheduling tools. It sells them to small clinics.",
+    verdict: "CAUTIOUS" as const,
+    glassdoor_rating: 3.2,
+    red_flags: "Synthetic review warning",
+    culture_notes: "Synthetic culture note",
+  },
+  userNote: { body: "synthetic private note" },
+};
+let detail: unknown = { ...syntheticDetail };
 let calls: Array<{ command: string; request: Record<string, unknown> }> = [];
 
 let restoreBridge: () => void;
@@ -45,12 +63,13 @@ beforeEach(() => {
   fake.current = createPermissiveSupabase();
   document.cookie = "NEXT_LOCALE=it; path=/";
   calls = [];
+  detail = { ...syntheticDetail };
   native.isTauri.mockReturnValue(true);
   native.invoke.mockReset();
   native.invoke.mockImplementation(async (command: string, args?: { request: Record<string, unknown> }) => {
     if (command === POSITIONS) {
       const request = args!.request as { op: string; id?: string };
-      if (request.op === "detail") return { ok: true, data: request.id === "101" ? { ...syntheticDetail, token: TOKEN } : null };
+      if (request.op === "detail") return { ok: true, data: request.id === "101" ? { ...(detail as object), token: TOKEN } : null };
       if (request.op === "facets") return { ok: true, data: { items: syntheticFacets } };
       if (request.op === "stats") return { ok: true, data: syntheticStats() };
       return { ok: true, data: { items: [syntheticPosition], total: 1 } };
@@ -106,5 +125,73 @@ describe("the page of a position of the team on this computer", () => {
     await waitFor(() => expect(calls.length).toBe(1));
     expect(calls[0].request).toMatchObject({ op: "feedback", id: "101", token: TOKEN });
     expect(fake.current!.calls).toEqual([]);
+  }, 20_000);
+
+  it("keeps the company's reviews and reputation under a closed entry, with the two sentences on top, and orders the right column Company, Location, Team analysis", async () => {
+    detail = RICH;
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+
+    const about = await screen.findByTestId("company-about");
+    expect(about).toHaveTextContent("builds scheduling tools");
+    const reputation = screen.getByTestId("company-reputation") as HTMLDetailsElement;
+    expect(reputation.open).toBe(false);
+    // all of it is inside the closed entry, and nothing of it outside
+    for (const text of ["CAUTIOUS", "Glassdoor: 3.2/5", "Synthetic review warning"]) {
+      expect(reputation).toHaveTextContent(text);
+    }
+    expect(about.closest("details")).toBeNull();
+    const labels = [...document.querySelectorAll(".section-label")].map((node) => node.textContent);
+    const at = (name: RegExp) => labels.findIndex((label) => name.test(label ?? ""));
+    expect(at(/^azienda$/i)).toBeGreaterThan(-1);
+    expect(at(/^azienda$/i)).toBeLessThan(at(/località/i));
+    expect(at(/località/i)).toBeLessThan(at(/analisi/i));
+  }, 20_000);
+
+  it("shows each mismatch as a block: the badge in a header row, the text under it on the full width", async () => {
+    detail = RICH;
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+    const blocks = await screen.findAllByTestId("mismatch");
+    expect(blocks).toHaveLength(2);
+    for (const block of blocks) {
+      const head = within(block).getByTestId("mismatch-head");
+      const text = block.querySelector("p") as HTMLElement;
+      expect(head.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(head.contains(text)).toBe(false);
+      expect(text.className).toContain("w-full");
+    }
+    expect(within(blocks[0]).getByTestId("mismatch-head")).toHaveTextContent("GEO");
+    expect(within(blocks[1]).getByTestId("mismatch-head")).toHaveTextContent("DOMAIN");
+  }, 20_000);
+
+  it("keeps the private notes closed, with a sign when there are some, opens to read them all and closes again; the empty box has no sideways scroll", async () => {
+    const user = userEvent.setup();
+    detail = RICH;
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+    const toggle = await screen.findByRole("button", { name: /note private/i, expanded: false });
+    expect(screen.getByTestId("user-note-sign")).toBeInTheDocument();
+    const box = document.getElementById(toggle.getAttribute("aria-controls")!) as HTMLElement;
+    expect(box.hidden).toBe(true);
+    await user.click(toggle);
+    expect(box.hidden).toBe(false);
+    expect(within(box).getByRole("textbox")).toHaveValue("synthetic private note");
+    await user.click(screen.getByRole("button", { name: /note private/i, expanded: true }));
+    expect(box.hidden).toBe(true);
+    expect(within(box).getByRole("textbox", { hidden: true }).className).toContain("overflow-x-hidden");
+  }, 20_000);
+
+  it("gives the four judgements four different colours of the chosen theme", async () => {
+    navigate("/positions/101", { replace: true });
+    render(<Shell />);
+    await screen.findAllByText("Synthetic role A");
+    const colours = [...document.querySelectorAll<HTMLElement>("[data-verdict]")].map((node) => node.style.color);
+    expect(colours).toHaveLength(4);
+    expect(new Set(colours).size).toBe(4);
+    for (const colour of colours) expect(colour).toMatch(/^var\(--color-(red|orange|blue|purple|yellow|green)\)$/);
   }, 20_000);
 });
