@@ -36,6 +36,8 @@ const MAX_ROWS: usize = 500;
 const REWRITE_AT: usize = 600;
 const READ_ROWS: usize = 100;
 const LINE_MAX: usize = 1024;
+/// A file past this size (only a change from outside makes one) is not read as the log: it is replaced.
+const FILE_MAX: u64 = 2 * 1024 * 1024;
 const FOLDER: &str = "action-log";
 
 static WRITING: Mutex<()> = Mutex::new(());
@@ -112,12 +114,55 @@ fn file_of(app: &tauri::AppHandle, scope: &AccountScope) -> Option<PathBuf> {
     Some(root.join(FOLDER).join(format!("{}.jsonl", scope_tag(scope))))
 }
 
-fn lines_of(path: &Path) -> Vec<String> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_file() && metadata.len() <= 2 * 1024 * 1024 => {}
-        _ => return Vec::new(),
+/// A file opened without following a link (on unix the open itself refuses one: no gap between a check and the open).
+fn no_follow(options: &mut fs::OpenOptions) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
     }
-    fs::read_to_string(path).map(|text| text.lines().map(str::to_owned).collect()).unwrap_or_default()
+    #[cfg(not(unix))]
+    let _ = options;
+}
+
+enum Content {
+    Lines(Vec<String>),
+    /// More than `FILE_MAX` bytes: not the log the app wrote.
+    TooBig,
+    /// A link, a folder, a device or a file that cannot be opened: neither read nor written through.
+    Refused,
+}
+
+/// What the file holds, read through the one handle that was checked (`fstat` of the open file, not of the path).
+fn content_of(path: &Path) -> Content {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    no_follow(&mut options);
+    let file = match options.open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Content::Lines(Vec::new()),
+        Err(_) => return Content::Refused,
+    };
+    let Ok(metadata) = file.metadata() else { return Content::Refused };
+    if !metadata.is_file() {
+        return Content::Refused;
+    }
+    if metadata.len() > FILE_MAX {
+        return Content::TooBig;
+    }
+    use std::io::Read;
+    let mut text = String::new();
+    match file.take(FILE_MAX).read_to_string(&mut text) {
+        Ok(_) => Content::Lines(text.lines().map(str::to_owned).collect()),
+        Err(_) => Content::Refused,
+    }
+}
+
+fn lines_of(path: &Path) -> Vec<String> {
+    match content_of(path) {
+        Content::Lines(lines) => lines,
+        _ => Vec::new(),
+    }
 }
 
 /// Appends one closed line to the file, and keeps it down to the cap. Errors are the caller's to ignore.
@@ -129,23 +174,43 @@ fn append(path: &Path, text: &str) -> Result<(), &'static str> {
     }
     set_private_dir_permissions(dir)?;
     let _guard = WRITING.lock().map_err(|_| "action_log_failed")?;
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_file() => return Err("action_log_invalid"),
-        _ => {}
-    }
-    let existing = lines_of(path);
-    if existing.len() + 1 >= REWRITE_AT {
+    // a file that is too big is replaced by the new line; a link, a folder or what cannot be opened is refused
+    let (existing, replace) = match content_of(path) {
+        Content::Lines(lines) => (lines, false),
+        Content::TooBig => (Vec::new(), true),
+        Content::Refused => return Err("action_log_invalid"),
+    };
+    if replace || existing.len() + 1 >= REWRITE_AT {
         let keep = MAX_ROWS - 1;
         let mut kept: Vec<&str> = existing.iter().skip(existing.len().saturating_sub(keep)).map(String::as_str).collect();
         kept.push(text);
         let temporary = path.with_extension("jsonl.tmp");
-        let mut file = fs::OpenOptions::new().create(true).write(true).truncate(true).open(&temporary).map_err(|_| "action_log_failed")?;
+        // whatever stands at the temporary name (a leftover, a link someone put there) is removed, not followed,
+        // and the file is created new: it is this call's own or the call fails
+        let _ = fs::remove_file(&temporary);
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        no_follow(&mut options);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temporary).map_err(|_| "action_log_failed")?;
         set_private_permissions(&temporary)?;
         file.write_all((kept.join("\n") + "\n").as_bytes()).map_err(|_| "action_log_failed")?;
         file.sync_all().map_err(|_| "action_log_failed")?;
         return fs::rename(&temporary, path).map_err(|_| "action_log_failed");
     }
-    let mut file = fs::OpenOptions::new().create(true).append(true).open(path).map_err(|_| "action_log_failed")?;
+    let mut options = fs::OpenOptions::new();
+    options.create(true).append(true);
+    no_follow(&mut options);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(|_| "action_log_failed")?;
     set_private_permissions(path)?;
     file.write_all(format!("{text}\n").as_bytes()).map_err(|_| "action_log_failed")
 }
@@ -348,6 +413,35 @@ mod tests {
             assert!(append(&path, "{}").is_err());
             assert!(lines_of(&path).is_empty(), "a link is not read");
             assert_eq!(fs::read_to_string(&outside).unwrap(), "{\"action\":\"team.start\"}\n", "nothing was written through it");
+        }
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_file_that_is_too_big_is_replaced_not_read_as_empty_and_a_link_at_the_temporary_name_is_not_followed() {
+        let path = temp("big");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, vec![b'x'; (FILE_MAX + 1) as usize]).unwrap();
+        assert!(matches!(content_of(&path), Content::TooBig));
+        assert!(rows_of(&path).is_empty());
+        let one = line("team.start", &Subject::Target("all".into()), "1-1", AT).unwrap();
+        append(&path, &one).unwrap();
+        assert_eq!(lines_of(&path), vec![one.clone()], "the old content is gone, the new line is the log");
+        #[cfg(unix)]
+        {
+            // a link planted at the temporary name: the rotation removes it and writes its own file
+            let outside = path.parent().unwrap().join("outside.txt");
+            fs::write(&outside, "keep me").unwrap();
+            for n in 0..(REWRITE_AT + 2) {
+                if n == REWRITE_AT - 3 {
+                    let _ = fs::remove_file(path.with_extension("jsonl.tmp"));
+                    std::os::unix::fs::symlink(&outside, path.with_extension("jsonl.tmp")).unwrap();
+                }
+                append(&path, &line("team.stop", &Subject::Target("all".into()), &format!("{n}-2"), AT).unwrap()).unwrap();
+            }
+            assert_eq!(fs::read_to_string(&outside).unwrap(), "keep me", "nothing was written through the link");
+            assert!(lines_of(&path).len() >= MAX_ROWS - 1);
+            assert!(!path.with_extension("jsonl.tmp").exists());
         }
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
