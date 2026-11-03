@@ -39,7 +39,7 @@ function retained() {
   expect(screen.getByLabelText(t.sshPort)).toHaveValue(2222);
   expect(screen.getByText("key", { selector: "strong" })).toBeInTheDocument();
   expect(next()).toBeEnabled();
-  expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeEnabled();
+  expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeNull();
 }
 function noOperation(props: OnboardingFlowProps) {
   expect(native.invoke).not.toHaveBeenCalled();
@@ -83,7 +83,7 @@ describe("environment selection is idempotent for the current environment", () =
     expect(screen.getByLabelText(t.sshPort)).toHaveValue(22);
     expect(screen.queryByText("key", { selector: "strong" })).toBeNull();
     expect(next()).toBeDisabled();
-    expect(screen.getByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: ASSISTANCE_TEXT.en.connect })).toBeNull();
     noOperation(props);
   });
 });
