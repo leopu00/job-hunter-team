@@ -172,9 +172,12 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
   const readOnly = linkedTeam !== null;
   // A profile with no cloud account: the pages show the team of this computer, which they only read.
   const localTeam = useLocalTeamData();
+  // The page of one position is the exception: what the person says or asks there is written in the team's own
+  // database through the native command (lib/local-judgement-api.ts), so its controls stay on.
+  const onPositionPage = /^\/positions\/[^/]+\/?$/.test(path);
   const localReadOnly = useMemo(
-    () => (localTeam ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly } : { readOnly: false, reason: "" }),
-    [localTeam],
+    () => (localTeam && !onPositionPage ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly } : { readOnly: false, reason: "" }),
+    [localTeam, onPositionPage],
   );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   // The old address of a page that is now a section of Settings: it goes on to the section, before anything is drawn.

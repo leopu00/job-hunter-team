@@ -1,25 +1,39 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { apiPath, json, type ApiFetch } from "../shell/api-bridge";
-import { localDeckToken } from "./local-swipe";
+import { localPositionToken, localPositionTokenIsDeck } from "./local-swipe";
 import { localTeamData } from "./local-team-data";
 
 /**
- * The person's verdict on a position of the Swipe, when the profile shows the team of this computer (no
- * cloud account): the routes of the card are answered by the native command, which writes in the team's
- * database through the team's own script (src-tauri/src/local_swipe.rs). Three routes only:
+ * What the person does on a position, when the profile shows the team of this computer (no cloud account):
+ * the routes of the position page and of the Swipe's card are answered by a native command, which writes in
+ * the team's database through the team's own script (src-tauri/src/local_swipe.rs). The Swipe's three routes
+ * (verdict, exclude, put back) go to `local_team_position_judge` when the position was read in the deck; every
+ * route goes to `local_team_position_act` with the token of the position's own detail read.
  *
- *   POST   /api/positions/<n>/feedback      like, dislike, hide, star, clear (score, direction, reason, note)
- *   POST   /api/positions/<n>/user-exclude  exclude with a reason (and a note)
- *   DELETE /api/positions/<n>/user-exclude  put it back
+ *   POST   /api/positions/<n>/feedback        like, dislike, hide, star, clear (score, direction, reason, note)
+ *   POST   /api/positions/<n>/user-exclude    exclude with a reason (and a note); DELETE puts it back
+ *   POST   /api/positions/<n>/user-note       the private note; DELETE clears it
+ *   POST   /api/positions/<n>/mark-applied    «I applied myself»; DELETE takes it back
+ *   POST   /api/positions/<n>/outcome         interview / rejected (+ why); DELETE takes it back
+ *   POST   /api/positions/<n>/recheck-request, geocode-request   ask the team; DELETE withdraws
+ *   POST   /api/positions/<n>/write-request   the CV or the cover letter (`kind`); DELETE withdraws
+ *   POST   /api/positions/<n>/apply-request   authorise the application (`confirmed`); DELETE withdraws
+ *   POST   /api/positions/<n>/ticket          a rescore (`kind: "rescore"`) or a free request (`request_text`)
  *
  * It never falls through to the cloud: in this mode a call of these routes is answered here, with the code
  * of its refusal, whatever the native side says. Every other route stays refused by the bridge.
  */
-const WRITE = "local_team_position_judge";
+const JUDGE = "local_team_position_judge";
+const ACT = "local_team_position_act";
 
 type Body = Record<string, unknown>;
-type NativeRequest = { op: "feedback" | "exclude" | "restore"; id: string } & Body;
+type Op =
+  | "feedback" | "exclude" | "restore" | "user_note" | "mark_applied" | "outcome"
+  | "recheck" | "geocode" | "write_request" | "apply_request" | "ticket";
+type NativeRequest = { op: Op; id: string } & Body;
 type Build = (id: string, body: Body) => NativeRequest | Response;
+/** What the page reads back from the route, from the closed answer of the native side. */
+type Shape = (request: NativeRequest, reply: Body) => Body;
 
 const invalid = (error: string) => json({ error }, 400);
 
@@ -30,7 +44,12 @@ function text(value: unknown): string | undefined {
 const FEEDBACK_ACTIONS = new Set(["like", "dislike", "hide", "star", "clear"]);
 const DIRECTIONS = new Set(["more_like_this", "less_like_this"]);
 
-const ROUTES: Array<{ method: string; path: RegExp; build: Build }> = [
+const WRITE_KINDS = new Set(["cv", "cover_letter"]);
+/** The ops the Swipe's command knows. */
+const JUDGE_OPS = new Set<Op>(["feedback", "exclude", "restore"]);
+const DECLARABLE = new Set(["interview", "rejected"]);
+
+const ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: Shape }> = [
   {
     method: "POST",
     path: /^\/api\/positions\/(\d+)\/feedback$/,
@@ -66,10 +85,118 @@ const ROUTES: Array<{ method: string; path: RegExp; build: Build }> = [
   { method: "DELETE", path: /^\/api\/positions\/(\d+)\/user-exclude$/, build: (id) => ({ op: "restore", id }) },
 ];
 
+const toggle = (method: string) => method === "POST";
+const ownStamp = (reply: Body, key: string) => (typeof reply[key] === "string" ? (reply[key] as string) : null);
+
+const both = (path: RegExp, build: (id: string, body: Body, on: boolean) => NativeRequest | Response, shape?: Shape) =>
+  (["POST", "DELETE"] as const).map((method) => ({
+    method: method as string,
+    path,
+    build: (id: string, body: Body) => build(id, body, toggle(method)),
+    shape,
+  }));
+
+const MORE_ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: Shape }> = [
+  {
+    method: "POST",
+    path: /^\/api\/positions\/(\d+)\/user-note$/,
+    build: (id, body) => {
+      const note = typeof body.note === "string" ? body.note.trim() : "";
+      return note ? { op: "user_note", id, body: note } : invalid("note_empty");
+    },
+    shape: (request) => ({ id: request.id, note: request.body, source: "local" }),
+  },
+  {
+    method: "DELETE",
+    path: /^\/api\/positions\/(\d+)\/user-note$/,
+    build: (id) => ({ op: "user_note", id, body: null }),
+    shape: (request) => ({ id: request.id, note: null, source: "local" }),
+  },
+  ...both(
+    /^\/api\/positions\/(\d+)\/mark-applied$/,
+    (id, _body, on) => ({ op: "mark_applied", id, on }),
+    // The database of the team on this computer is the only copy: there is no cloud mirror to wait for.
+    (request, reply) => ({ ok: true, id: request.id, applied_at: request.on === true ? ownStamp(reply, "applied_at") : null, source: "local", cloud_synced: null }),
+  ),
+  {
+    method: "POST",
+    path: /^\/api\/positions\/(\d+)\/outcome$/,
+    build: (id, body) => {
+      const value = body.outcome;
+      if (typeof value !== "string" || !DECLARABLE.has(value)) return invalid("outcome_invalid");
+      const request: NativeRequest = { op: "outcome", id, value };
+      if (value === "rejected") {
+        const reason = text(body.rejection_reason);
+        const note = text(body.rejection_note);
+        if (reason) request.rejection_reason = reason;
+        if (note) request.rejection_note = note;
+      }
+      return request;
+    },
+    shape: (request) => ({ ok: true, id: request.id, response: request.value, source: "local", cloud_synced: null }),
+  },
+  {
+    method: "DELETE",
+    path: /^\/api\/positions\/(\d+)\/outcome$/,
+    build: (id) => ({ op: "outcome", id, value: "clear" }),
+    shape: (request) => ({ ok: true, id: request.id, response: null, source: "local", cloud_synced: null }),
+  },
+  ...both(/^\/api\/positions\/(\d+)\/recheck-request$/, (id, _body, on) => ({ op: "recheck", id, on }), (request) => ({
+    id: request.id,
+    recheck_requested: request.on === true,
+    source: "local",
+  })),
+  ...both(/^\/api\/positions\/(\d+)\/geocode-request$/, (id, _body, on) => ({ op: "geocode", id, on }), (request) => ({
+    position: { id: request.id, geocode_requested: request.on === true },
+    source: "local",
+  })),
+  ...both(
+    /^\/api\/positions\/(\d+)\/write-request$/,
+    (id, body, on) => {
+      const kind = body.kind ?? "cv";
+      return typeof kind === "string" && WRITE_KINDS.has(kind) ? { op: "write_request", id, on, kind } : invalid("request_kind_invalid");
+    },
+    (request) => ({
+      position: { id: request.id, write_requested: request.on === true, write_request_kind: request.on === true ? request.kind : null },
+      source: "local",
+    }),
+  ),
+  ...both(
+    /^\/api\/positions\/(\d+)\/apply-request$/,
+    // The click that authorises is the authorisation to send, given in the page's dialog and said in the body.
+    (id, body, on) => (on && body.confirmed !== true ? invalid("position_write_not_confirmed") : { op: "apply_request", id, on }),
+    (request) => ({ ok: true, state: "queued", id: request.id, apply_requested: request.on === true, source: "local" }),
+  ),
+  {
+    method: "POST",
+    path: /^\/api\/positions\/(\d+)\/ticket$/,
+    build: (id, body) => {
+      const requestText = text(body.request_text);
+      if (!requestText) return invalid("request_text_required");
+      if (body.attachment !== undefined && body.attachment !== null) return invalid("attachment_not_supported");
+      return { op: "ticket", id, kind: body.kind === "rescore" ? "rescore" : "free", text: requestText };
+    },
+    shape: (request, reply) => ({
+      id: reply.ticket_id ?? reply.id ?? null,
+      status: typeof reply.status === "string" ? reply.status : "open",
+      kind: request.kind,
+      source: "local",
+    }),
+  },
+];
+ROUTES.push(...MORE_ROUTES);
+
 function statusOf(code: string): number {
   if (code === "position_not_found") return 404;
   if (["position_write_read_only", "position_write_window_refused", "account_scope_unavailable", "account_scope_changed"].includes(code)) return 403;
-  if (["position_write_request_invalid", "reason_invalid", "note_too_long", "note_invalid"].includes(code)) return 400;
+  if (
+    [
+      "position_write_request_invalid", "position_write_not_confirmed", "reason_invalid", "note_too_long", "note_invalid", "note_empty",
+      "outcome_invalid", "request_kind_invalid", "request_text_required", "attachment_not_supported",
+    ].includes(code)
+  ) {
+    return 400;
+  }
   if (["existing_team_unavailable", "existing_team_runtime_outdated", "local_team_not_running"].includes(code)) return 503;
   return 409;
 }
@@ -81,6 +208,12 @@ function safeCode(value: unknown): string {
 async function readBody(input: RequestInfo | URL, init?: RequestInit): Promise<Body | null> {
   const raw = init?.body ?? (input instanceof Request ? await input.clone().text() : null);
   if (raw === null || raw === undefined || raw === "") return {};
+  // A free request is sent as a form (its text and an optional file): only the text is kept, a file is flagged.
+  if (typeof FormData !== "undefined" && raw instanceof FormData) {
+    const form: Body = {};
+    for (const [key, value] of raw.entries()) form[key] = typeof value === "string" ? value : "[file]";
+    return form;
+  }
   if (typeof raw !== "string") return null;
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -91,11 +224,15 @@ async function readBody(input: RequestInfo | URL, init?: RequestInit): Promise<B
 }
 
 export interface LocalJudgementNative {
+  /** The Swipe's command, with the token of the deck. */
   write(request: NativeRequest & { token: string }): Promise<unknown>;
+  /** The position page's command, with the token of the position's own read (or the deck's). */
+  act?(request: NativeRequest & { token: string }): Promise<unknown>;
 }
 
 export const localJudgementNative: LocalJudgementNative = {
-  write: (request) => invoke<unknown>(WRITE, { request }),
+  write: (request) => invoke<unknown>(JUDGE, { request }),
+  act: (request) => invoke<unknown>(ACT, { request }),
 };
 
 export function localJudgementApi(
@@ -115,11 +252,14 @@ export function localJudgementApi(
     if (body === null) return invalid("invalid_json");
     const built = route.build(route.path.exec(path)![1]!, body);
     if (built instanceof Response) return built;
-    const token = localDeckToken(built.id);
+    const token = localPositionToken(built.id);
     if (!token) return json({ error: "deck_outdated" }, 409);
+    // The Swipe's three ops on a card of the deck keep their command; everything else is the page's.
+    const useJudge = JUDGE_OPS.has(built.op) && localPositionTokenIsDeck(built.id);
     let reply: Body;
     try {
-      const answered = await native.write({ ...built, token });
+      const send = useJudge || !native.act ? native.write : native.act;
+      const answered = await send({ ...built, token });
       reply = answered && typeof answered === "object" && !Array.isArray(answered) ? (answered as Body) : {};
     } catch {
       return json({ error: "existing_team_unavailable" }, 503);
@@ -128,6 +268,7 @@ export function localJudgementApi(
       const code = safeCode(reply.error);
       return json({ error: code }, statusOf(code));
     }
+    if (route.shape) return json(route.shape(built, reply));
     const id = built.id;
     if (built.op === "feedback") return json({ ok: true, legacy_id: id, action: built.value, source: "local" });
     const status = typeof reply.status === "string" ? reply.status : null;

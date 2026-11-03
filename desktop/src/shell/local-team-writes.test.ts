@@ -65,12 +65,27 @@ describe("a local profile never writes through /api", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("lists each exception with a reason, and the list is the language cookie and the three verdicts of the Swipe", () => {
+  it("lists each exception with a reason, and the list is the language cookie, the three verdicts of the Swipe and the routes of the position page", () => {
     expect(Object.keys(LOCAL_TEAM_NON_GET_ALLOWED)).toEqual([
       "/api/i18n",
       "POST /api/positions/[legacyId]/feedback",
       "POST /api/positions/[legacyId]/user-exclude",
       "DELETE /api/positions/[legacyId]/user-exclude",
+      "POST /api/positions/[legacyId]/user-note",
+      "DELETE /api/positions/[legacyId]/user-note",
+      "POST /api/positions/[legacyId]/mark-applied",
+      "DELETE /api/positions/[legacyId]/mark-applied",
+      "POST /api/positions/[legacyId]/outcome",
+      "DELETE /api/positions/[legacyId]/outcome",
+      "POST /api/positions/[legacyId]/recheck-request",
+      "DELETE /api/positions/[legacyId]/recheck-request",
+      "POST /api/positions/[legacyId]/geocode-request",
+      "DELETE /api/positions/[legacyId]/geocode-request",
+      "POST /api/positions/[legacyId]/write-request",
+      "DELETE /api/positions/[legacyId]/write-request",
+      "POST /api/positions/[legacyId]/apply-request",
+      "DELETE /api/positions/[legacyId]/apply-request",
+      "POST /api/positions/[legacyId]/ticket",
     ]);
     for (const [path, reason] of Object.entries(LOCAL_TEAM_NON_GET_ALLOWED)) {
       expect(reason.length, path).toBeGreaterThan(30);
@@ -78,21 +93,28 @@ describe("a local profile never writes through /api", () => {
   });
 });
 
-describe("the verdicts of the Swipe are the only positions routes a local profile may write", () => {
-  it("lets the three verdict calls through to the link that answers them, by method, and refuses the rest of the position's routes", async () => {
+describe("only the routes of the position page and the Swipe may be written by a local profile", () => {
+  it("lets the listed calls through to the link that answers them, by method, and refuses the rest of the position's routes", async () => {
     setLocalTeamData("local:abc");
     const next = vi.fn(async () => new Response("{}", { status: 200 }));
     const api = shellApi(next);
-    for (const [method, path] of [["POST", "/api/positions/7/feedback"], ["POST", "/api/positions/7/user-exclude"], ["DELETE", "/api/positions/7/user-exclude"]] as const) {
+    const allowed = [
+      ["POST", "/api/positions/7/feedback"], ["POST", "/api/positions/7/user-exclude"], ["DELETE", "/api/positions/7/user-exclude"],
+      ["POST", "/api/positions/7/user-note"], ["DELETE", "/api/positions/7/user-note"], ["POST", "/api/positions/7/write-request"],
+      ["DELETE", "/api/positions/7/write-request"], ["POST", "/api/positions/7/apply-request"], ["DELETE", "/api/positions/7/apply-request"],
+      ["POST", "/api/positions/7/recheck-request"], ["DELETE", "/api/positions/7/recheck-request"], ["POST", "/api/positions/7/geocode-request"],
+      ["DELETE", "/api/positions/7/geocode-request"], ["POST", "/api/positions/7/mark-applied"], ["DELETE", "/api/positions/7/mark-applied"],
+      ["POST", "/api/positions/7/outcome"], ["DELETE", "/api/positions/7/outcome"], ["POST", "/api/positions/7/ticket"],
+    ] as const;
+    for (const [method, path] of allowed) {
       expect((await api(path, { method })).status, `${method} ${path}`).toBe(200);
     }
-    expect(next).toHaveBeenCalledTimes(3);
+    expect(next).toHaveBeenCalledTimes(allowed.length);
     next.mockClear();
     for (const [method, path] of [
       ["PUT", "/api/positions/7/feedback"], ["DELETE", "/api/positions/7/feedback"], ["PATCH", "/api/positions/7/user-exclude"],
-      ["POST", "/api/positions/7/user-note"], ["DELETE", "/api/positions/7/user-note"], ["POST", "/api/positions/7/write-request"],
-      ["POST", "/api/positions/7/apply-request"], ["POST", "/api/positions/7/recheck-request"], ["POST", "/api/positions/7/mark-applied"],
-      ["POST", "/api/positions/7/ticket"], ["POST", "/api/positions/7/feedback/extra"], ["POST", "/api/positions/feedback"],
+      ["PUT", "/api/positions/7/user-note"], ["DELETE", "/api/positions/7/ticket"], ["PATCH", "/api/positions/7/write-request"],
+      ["POST", "/api/positions/7/feedback/extra"], ["POST", "/api/positions/feedback"], ["POST", "/api/positions/7/delete"],
     ] as const) {
       const answer = await api(path, { method });
       expect(answer.status, `${method} ${path}`).toBe(403);

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localJudgementApi, type LocalJudgementNative } from "./local-judgement-api";
-import { forgetLocalDeck, getSwipeDecksLocal } from "./local-swipe";
+import { forgetLocalDeck, forgetLocalPositionTokens, getSwipeDecksLocal, rememberLocalPositionToken } from "./local-swipe";
 import { setLocalTeamData } from "./local-team-data";
 
 // The verdicts of the Swipe of a local profile: three routes answered by the native command with the token of
@@ -11,13 +11,15 @@ vi.mock("@tauri-apps/api/core", () => native);
 const TOKEN = "deck-token-one";
 const write = vi.fn<LocalJudgementNative["write"]>();
 const next = vi.fn(async () => new Response(JSON.stringify({ from: "next" }), { status: 200 }));
-const api = localJudgementApi(next, { write }, () => true);
+const act = vi.fn<NonNullable<LocalJudgementNative["act"]>>();
+const api = localJudgementApi(next, { write, act }, () => true);
 
 const post = (path: string, body: unknown, method = "POST") =>
   api(`/api/positions/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
 
 beforeEach(async () => {
   write.mockReset();
+  act.mockReset();
   next.mockClear();
   native.isTauri.mockReturnValue(true);
   native.invoke.mockResolvedValue({ ok: true, token: TOKEN, pending: [{ id: 7, status: "scored" }], reviewed: [{ row: { id: 9, status: "excluded" }, action: "like", fbScore: null }] });
@@ -26,6 +28,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   forgetLocalDeck();
+  forgetLocalPositionTokens();
   setLocalTeamData(null);
 });
 
@@ -113,7 +116,7 @@ describe("a verdict of a local profile", () => {
   });
 
   it("leaves every other route, and every call when the profile is not local, to the next link", async () => {
-    for (const [path, method] of [["7/user-note", "POST"], ["7/write-request", "POST"], ["7/apply-request", "POST"], ["7/feedback", "GET"], ["7/feedback", "DELETE"], ["x/feedback", "POST"]] as const) {
+    for (const [path, method] of [["7/delete", "POST"], ["7/profile-files", "POST"], ["7/user-note", "PUT"], ["7/feedback", "GET"], ["7/feedback", "DELETE"], ["x/feedback", "POST"]] as const) {
       await post(path, {}, method);
     }
     expect(write).not.toHaveBeenCalled();
@@ -123,5 +126,93 @@ describe("a verdict of a local profile", () => {
     await post("7/feedback", { action: "like" });
     expect(next).toHaveBeenCalledTimes(1);
     expect(write).not.toHaveBeenCalled();
+  });
+});
+
+
+// The page of one position: its own read brings a token, and every control of the page goes through one native command.
+describe("what a local profile does on the page of a position", () => {
+  const TOKEN_P = "position-token-one";
+  beforeEach(() => {
+    forgetLocalDeck();
+    rememberLocalPositionToken("12", TOKEN_P);
+  });
+
+  it("sends each route to the page's command with the token of the position's read, and answers as the page reads it", async () => {
+    act.mockResolvedValue({ ok: true });
+    const note = await post("12/user-note", { note: " mia " });
+    expect(act).toHaveBeenLastCalledWith({ op: "user_note", id: "12", body: "mia", token: TOKEN_P });
+    expect(await note.json()).toEqual({ id: "12", note: "mia", source: "local" });
+    await post("12/user-note", undefined, "DELETE");
+    expect(act).toHaveBeenLastCalledWith({ op: "user_note", id: "12", body: null, token: TOKEN_P });
+
+    const cv = await post("12/write-request", { kind: "cover_letter" });
+    expect(act).toHaveBeenLastCalledWith({ op: "write_request", id: "12", on: true, kind: "cover_letter", token: TOKEN_P });
+    expect(await cv.json()).toEqual({ position: { id: "12", write_requested: true, write_request_kind: "cover_letter" }, source: "local" });
+    const off = await post("12/write-request", undefined, "DELETE");
+    expect(await off.json()).toEqual({ position: { id: "12", write_requested: false, write_request_kind: null }, source: "local" });
+
+    expect(await (await post("12/recheck-request", {})).json()).toEqual({ id: "12", recheck_requested: true, source: "local" });
+    expect(await (await post("12/geocode-request", {})).json()).toEqual({ position: { id: "12", geocode_requested: true }, source: "local" });
+    expect(await (await post("12/apply-request", { confirmed: true })).json()).toEqual({ ok: true, state: "queued", id: "12", apply_requested: true, source: "local" });
+    expect(await (await post("12/apply-request", undefined, "DELETE")).json()).toMatchObject({ apply_requested: false });
+    expect(write).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("writes «I applied myself» and the outcome as local acknowledgements the page accepts", async () => {
+    act.mockResolvedValue({ ok: true, applied_at: "2026-01-02T03:04:05Z" });
+    expect(await (await post("12/mark-applied", {})).json()).toEqual({ ok: true, id: "12", applied_at: "2026-01-02T03:04:05Z", source: "local", cloud_synced: null });
+    const rejected = await post("12/outcome", { outcome: "rejected", rejection_reason: "other", rejection_note: " n " });
+    expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "rejected", rejection_reason: "other", rejection_note: "n", token: TOKEN_P });
+    expect(await rejected.json()).toMatchObject({ response: "rejected", source: "local", cloud_synced: null });
+    await post("12/outcome", { outcome: "interview", rejection_reason: "other" });
+    expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "interview", token: TOKEN_P });
+    await post("12/outcome", undefined, "DELETE");
+    expect(act).toHaveBeenLastCalledWith({ op: "outcome", id: "12", value: "clear", token: TOKEN_P });
+  });
+
+  it("opens a rescore or a free request as a ticket, and refuses a file", async () => {
+    act.mockResolvedValue({ ok: true, ticket_id: 5, status: "open" });
+    const rescore = await post("12/ticket", { kind: "rescore", request_text: "Rivaluta" });
+    expect(act).toHaveBeenLastCalledWith({ op: "ticket", id: "12", kind: "rescore", text: "Rivaluta", token: TOKEN_P });
+    expect(await rescore.json()).toMatchObject({ id: 5, status: "open", kind: "rescore" });
+    const form = new FormData();
+    form.append("request_text", "Cerca altro");
+    await api("/api/positions/12/ticket", { method: "POST", body: form });
+    expect(act).toHaveBeenLastCalledWith({ op: "ticket", id: "12", kind: "free", text: "Cerca altro", token: TOKEN_P });
+    const withFile = new FormData();
+    withFile.append("request_text", "x");
+    withFile.append("attachment", new Blob(["a"]), "a.txt");
+    const refused = await api("/api/positions/12/ticket", { method: "POST", body: withFile });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toEqual({ error: "attachment_not_supported" });
+  });
+
+  it("uses the Swipe's command for a verdict of a card of the deck, and the page's for the same verdict on a position read on its page", async () => {
+    write.mockResolvedValue({ ok: true });
+    act.mockResolvedValue({ ok: true });
+    await getSwipeDecksLocal();
+    await post("7/feedback", { action: "like" });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(act).not.toHaveBeenCalled();
+    await post("12/feedback", { action: "like" });
+    expect(act).toHaveBeenLastCalledWith({ op: "feedback", id: "12", value: "like", token: TOKEN_P });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it("is refused before the native side for a request that is not valid, a position of no read, or an authorisation not confirmed", async () => {
+    expect((await post("12/write-request", { kind: "poem" })).status).toBe(400);
+    expect((await post("12/outcome", { outcome: "ghosted" })).status).toBe(400);
+    expect((await post("12/user-note", { note: "  " })).status).toBe(400);
+    expect((await post("12/apply-request", {})).status).toBe(400);
+    expect((await post("13/recheck-request", {})).status).toBe(409);
+    expect(act).not.toHaveBeenCalled();
+  });
+
+  it("does not lend the token read for another profile", async () => {
+    setLocalTeamData("local:other");
+    expect((await post("12/recheck-request", {})).status).toBe(409);
+    expect(act).not.toHaveBeenCalled();
   });
 });

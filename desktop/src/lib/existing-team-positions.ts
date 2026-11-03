@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
 import { nativeReadStarted } from "./page-timing";
+import { rememberLocalPositionToken } from "./local-swipe";
 import { localTeamData, reportLocalTeamRead } from "./local-team-data";
 import { REFRESH_EVENT } from "../shell/refresh-event";
 // The pages show an empty list for a list that could not be read, as the web does for a query
@@ -394,7 +395,16 @@ export async function readDesktopVpsDirectives(): Promise<DesktopVpsRead<{ items
 export function readDesktopVpsPosition(
   id: string,
 ): Promise<DesktopVpsRead<PositionDetail | null>> {
-  return read<unknown>({ op: "detail", id }).then(detailRead);
+  return read<unknown>({ op: "detail", id }).then((value) => {
+    // The detail of the team of this computer carries a token for the writes of this position
+    // (local-judgement-api.ts); it is kept apart and does not reach the page.
+    if (value.source === "vps" && localTeamData() && isRecord(value.data) && typeof value.data.token === "string") {
+      const { token, ...rest } = value.data;
+      rememberLocalPositionToken(id, token);
+      return detailRead({ ...value, data: rest });
+    }
+    return detailRead(value);
+  });
 }
 
 export function readDesktopVpsPositionFacets(): Promise<

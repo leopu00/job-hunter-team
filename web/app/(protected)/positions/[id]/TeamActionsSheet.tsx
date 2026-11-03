@@ -5,9 +5,10 @@ import { createPortal } from "react-dom";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 
-// Popup "Feedback e richieste": raccoglie in un'unica finestra il giudizio
-// dell'utente (scala a 4 come /swipe) e tutte le azioni utente→team della
-// posizione (geocodifica, recheck, CV, esclusione, ticket liberi). Su
+// Popup "Feedback e richieste": raccoglie in un'unica finestra tutte le azioni
+// utente→team della posizione (geocodifica, recheck, rivalutazione, CV, lettera,
+// esclusione, richieste libere). I 4 giudizi NON sono qui: stanno nella
+// Panoramica, sopra il pulsante che apre questo popup (una serie sola). Su
 // telefono sale dal basso come bottom-sheet, su desktop è un modal centrato.
 // Prima erano 4+ bottoni impilati nell'header.
 const T: Record<Locale, { label: string; close: string }> = {
@@ -58,14 +59,10 @@ function IconClose({ size = 18 }: { size?: number }) {
 }
 
 export function TeamActionsSheet({
-  feedback,
   actions,
   tickets,
   active = false,
 }: {
-  // Sezione giudizio (FeedbackButtons) in testa al popup — assente in
-  // local mode, dove position_feedback non esiste.
-  feedback?: ReactNode;
   actions: ReactNode;
   tickets?: ReactNode;
   // true quando c'è già qualcosa in corso (flag richiesti o ticket aperti):
@@ -99,7 +96,7 @@ export function TeamActionsSheet({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)]"
+        className="flex w-full items-center justify-center gap-2 px-4 py-2 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)]"
         style={{
           borderColor: "var(--color-purple)",
           color: "var(--color-purple)",
@@ -144,11 +141,6 @@ export function TeamActionsSheet({
                   <IconClose />
                 </button>
               </div>
-              {feedback && (
-                <div className="mb-4 pb-4 border-b border-[var(--color-border)]">
-                  {feedback}
-                </div>
-              )}
               {/* items-stretch sui wrapper dei bottoni (nascono items-end per
                 l'header largo): nel popup diventano righe a tutta larghezza. */}
               <div className="flex flex-col gap-2.5 [&>div]:items-stretch">
