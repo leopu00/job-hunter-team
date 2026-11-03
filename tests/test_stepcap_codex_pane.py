@@ -104,6 +104,8 @@ def home(tmp_path, monkeypatch):
                         lambda msg: CAPTAIN_MSGS.append(msg) or True)
     CAPTAIN_MSGS.clear()
     monkeypatch.setattr(wd, "HEARTBEAT_SEC", 10 ** 9)
+    # Il motore dei throttle non gira nei test: nessuna sveglia sua, la ripresa e' del watchdog.
+    monkeypatch.setattr(wd, "ENGINE_WAKE_GRACE_SEC", 0.0)
     # Solo per accorciare il test: la soglia vera non si tocca (15 giri).
     monkeypatch.setattr(wd, "IDLE_STALL_ROUNDS", ROUNDS)
     return tmp_path
