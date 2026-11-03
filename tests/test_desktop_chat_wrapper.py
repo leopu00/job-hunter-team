@@ -449,6 +449,8 @@ SCRIPT = "python3 -I /app/shared/skills/agent_chat.py"
     (
         (("read", "capitano"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read capitano"),
         (("read", "mentor", "4096"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read mentor 4096"),
+        (("read", "analista-2"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} read analista-2"),
+        (("chat-send", "scout-12", "0b1c2d3e-4f50"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} send scout-12 0b1c2d3e-4f50"),
         (("chat-send", "assistente", "0b1c2d3e-4f50"), f"docker exec -i aaaaaaaaaaaa {SCRIPT} send assistente 0b1c2d3e-4f50"),
         (("chat-answer", "capitano", "aq:capitano:1792700000-a1b2c3"),
          f"docker exec -i aaaaaaaaaaaa {SCRIPT} answer capitano aq:capitano:1792700000-a1b2c3"),
@@ -494,6 +496,30 @@ def test_a_chat_action_with_the_wrong_arguments_answers_2_and_runs_no_script(tmp
     )
     assert done.returncode == 2, done.stderr
     assert "agent_chat.py" not in log.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("session", "allowed"),
+    (
+        ("CAPITANO", True), ("CRITICO", True), ("SCOUT-1", True), ("SCOUT-2", True), ("ANALISTA-12", True),
+        ("SCORER-4", True), ("SCRITTORE-9999", True),
+        ("SCOUT-0", False), ("SCOUT-01", False), ("SCOUT-10000", False), ("SCOUT-", False), ("SCOUT-2;ls", False),
+        ("SCOUT-2-3", False), ("scout-2", False), ("CRITICO-2", False), ("CAPITANO-2", False), ("CLOSER-1", False),
+    ),
+)
+def test_the_older_send_action_names_a_fixed_session_or_an_instance_of_a_numbered_role(tmp_path: Path, session: str, allowed: bool):
+    wrapper, env, log = _runtime(tmp_path)
+    env["JHT_TEST_RUNTIME_READY"] = "1"
+    done = subprocess.run(
+        [str(wrapper), "desktop-chat", "send", session], env=env, input="ciao", text=True, capture_output=True, timeout=10, check=False
+    )
+    typed = any("jht-tmux-send" in line for line in log.read_text(encoding="utf-8").splitlines())
+    assert (done.returncode == 0 and typed) if allowed else (done.returncode == 2 and not typed), (session, done.stderr)
+
+
+def test_the_wrapper_with_the_instances_says_so_by_a_marker_of_its_own():
+    text = WRAPPER.read_text(encoding="utf-8")
+    assert text.splitlines().count("JHT_DESKTOP_CHAT_INSTANCES=1") == 1
 
 
 def test_the_wrapper_with_the_chat_actions_says_so_by_a_marker_the_app_asks_for_first():

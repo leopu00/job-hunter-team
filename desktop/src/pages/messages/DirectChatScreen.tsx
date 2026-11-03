@@ -46,6 +46,9 @@ import { JumpToLatest, useStickToBottom } from "./stick-to-bottom";
 import { useChooseDestination } from "../../lib/choose-destination";
 import { NO_DESTINATION_CODES } from "../../shell/VpsLinkBar";
 import { VPS_LINK_TEXT } from "../../lib/vps-link.i18n";
+import Link from "../../web-shims/next-link";
+import { agentTitle } from "../agents/agent-names";
+import { conversationsOf, isChatAgentId, sessionOfChatId, type ChatSession } from "./chat-agents";
 
 // The ids are the roles' keys on the VPS; the names come from the dictionary.
 const AGENT_IDS = ["capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico"] as const;
@@ -58,6 +61,8 @@ export function isDirectChatAgentId(value: string | null): value is DirectChatAg
 
 const INITIAL_STATUS: DirectChatStatus = { state: "connecting" };
 const MAX_MESSAGE_LENGTH = 4_000;
+/** The sessions of the team are looked at this often while the chat is on view. */
+const SESSIONS_POLL_MS = 20_000;
 const HISTORY_POLL_MS = 1_500;
 // When every read is a new ssh connection (Windows to a VPS: no ControlMaster there), each read
 // counts against the server's limits on new connections. So the page reads every 10 s, every 2 s for
@@ -217,7 +222,7 @@ function StatusBar({
 
   return (
     <div
-      className="shrink-0 min-h-9 px-4 py-2 flex items-center justify-between gap-3 border-b border-[var(--color-border)] text-[12px]"
+      className="shrink-0 min-h-9 px-4 py-2 flex items-center justify-between gap-3 border-b border-[var(--color-border)] text-[14px]"
       role={failed || operationError ? "alert" : "status"}
       data-testid="direct-chat-status"
       style={{ color: failed || operationError ? "var(--color-red)" : "var(--color-muted)" }}
@@ -233,7 +238,7 @@ function StatusBar({
               type="button"
               data-testid="direct-chat-choose-destination"
               onClick={chooseDestination ?? undefined}
-              className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)]"
+              className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[14px] font-semibold text-[var(--color-bright)]"
             >
               {VPS_LINK_TEXT[locale].chooseDestination}
             </button>
@@ -242,7 +247,7 @@ function StatusBar({
               type="button"
               onClick={onRetry}
               disabled={reconnecting}
-              className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
+              className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[14px] font-semibold text-[var(--color-bright)] disabled:opacity-50"
             >
               {reconnecting ? t.reconnecting : t.retry}
             </button>
@@ -261,10 +266,11 @@ export default function DirectChatScreen({
   writeLocked = false,
   onConnect,
   loadQuietFacts,
+  loadSessions,
 }: {
   client: DirectChatClient;
   voiceInputBridge?: VoiceInputBridge;
-  initialAgentId?: DirectChatAgentId;
+  initialAgentId?: string;
   /**
    * One agent, inside another page (the Chat tab of the Agents page): no list of agents, no title,
    * the connection stays open when the pane goes away, and a connection that fell is opened again.
@@ -276,8 +282,13 @@ export default function DirectChatScreen({
   onConnect?: () => void;
   /** What the team says about itself to explain a long silence (hours, budget...); without it the chat does not explain one. */
   loadQuietFacts?: () => Promise<QuietFacts | null>;
+  /**
+   * The sessions the team has up, to list a conversation for each instance (Analista 1, Analista 2…). Without it
+   * (an older shell, a pane inside another page) the list is the eight roles, as it has always been.
+   */
+  loadSessions?: () => Promise<ChatSession[] | null>;
 }) {
-  const [agentId, setAgentId] = useState<DirectChatAgentId>(initialAgentId);
+  const [agentId, setAgentId] = useState<string>(initialAgentId);
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
   // The agent's questions: each read brings the open ones and the latest closed ones, whole.
@@ -339,14 +350,44 @@ export default function DirectChatScreen({
   currentAgent.current = agentId;
   const locale = appLocale();
   const t = DIRECT_CHAT_TEXT[locale];
-  const agents = AGENT_IDS.map((id) => ({ id, label: t.agents[id] }));
-  const selected = agents.find((agent) => agent.id === agentId)!;
+  // The conversations are the sessions the team has up: one per instance. The open one is always there, even
+  // when its session went down meanwhile (its history stays readable).
+  const [sessions, setSessions] = useState<ChatSession[] | null>(null);
+  useEffect(() => {
+    if (!loadSessions || embedded) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const again = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const found = await loadSessions();
+          if (live && found) setSessions(found);
+        } catch {
+          // the list stays as it was: a failed read is not a reason to empty it
+        }
+      }
+      if (live) timer = setTimeout(() => void again(), SESSIONS_POLL_MS);
+    };
+    void again();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [loadSessions, embedded]);
+  const agents = useMemo(() => {
+    const listed = conversationsOf(sessions, t.agents);
+    if (listed.some((agent) => agent.id === agentId) || !isChatAgentId(agentId)) return listed;
+    const session = sessionOfChatId(agentId) ?? agentId.toUpperCase();
+    return [...listed, { id: agentId, session, label: agentTitle(session, t.agents), up: false }];
+  }, [sessions, t, agentId]);
+  const selected = agents.find((agent) => agent.id === agentId) ?? agents[0];
+  const agentIds = useMemo(() => agents.map((agent) => agent.id), [agents]);
   // How many messages of each agent the person has not read: the chat on screen is read, the others are looked at slowly.
   const unread = useChatUnread({
-    agents: AGENT_IDS,
+    agents: agentIds,
     openAgent: agentId,
     openMessages: messages,
-    read: (request) => client.read({ agentId: request.agentId as DirectChatAgentId }),
+    read: (request) => client.read({ agentId: request.agentId }),
     peeking: !embedded && status.state === "ready" && !slowLink,
   });
 
@@ -766,6 +807,14 @@ export default function DirectChatScreen({
     [questions, answersInFlight],
   );
   const items = useMemo(() => groupRepeatedMessages(conversationItems(messages, shownQuestions)), [messages, shownQuestions]);
+  // A line of the person's is «answered» when the agent wrote anything after it.
+  const answeredIds = useMemo(() => {
+    const answered = new Set<string>();
+    let newestAgent = 0;
+    for (const message of messages) if (message.role === "agent" && message.at > newestAgent) newestAgent = message.at;
+    for (const message of messages) if (message.role === "user" && message.at < newestAgent) answered.add(message.id);
+    return answered;
+  }, [messages]);
   const newDays = useMemo(() => items.map((item, index) => index === 0 || dayKey(items[index - 1].at) !== dayKey(item.at)), [items]);
 
   // What the composer replies to now: gone from the view, it is nothing; an open question that
@@ -823,8 +872,8 @@ export default function DirectChatScreen({
       data-testid="direct-chat-shell"
     >
       {!embedded && (
-      <aside className="hidden md:flex w-52 shrink-0 min-h-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-panel)]">
-        <div className="shrink-0 px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-dim)]">
+      <aside className="hidden md:flex w-60 shrink-0 min-h-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-panel)]">
+        <div className="shrink-0 px-4 pt-4 pb-2 text-[14px] font-semibold uppercase tracking-[0.14em] text-[var(--color-dim)]">
           {t.agentsHeading}
         </div>
         <nav aria-label={t.agentsNavAria} className="min-h-0 overflow-y-auto px-2 pb-3 grid content-start gap-1">
@@ -834,20 +883,28 @@ export default function DirectChatScreen({
               type="button"
               aria-current={agent.id === agentId ? "page" : undefined}
               onClick={() => setAgentId(agent.id)}
-              className="min-h-9 rounded px-3 py-2 text-left text-[13px] font-semibold transition-colors"
+              className="min-h-9 rounded px-3 py-2 text-left text-[14px] font-semibold transition-colors"
               style={{
                 color: agent.id === agentId ? "var(--color-green)" : "var(--color-muted)",
                 background: agent.id === agentId ? "var(--color-card)" : "transparent",
               }}
             >
               <span className="flex items-center justify-between gap-2">
-                <span>{agent.label}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    aria-hidden
+                    data-testid={`direct-chat-led-${agent.id}`}
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: agent.up ? "var(--color-green)" : "var(--color-border)" }}
+                  />
+                  <span className="min-w-0 break-words">{agent.label}</span>
+                </span>
                 {unread.counts[agent.id] > 0 && (
                   <span
                     data-testid={`unread-${agent.id}`}
                     role="img"
                     aria-label={pluralText(locale, unread.counts[agent.id], t.unreadAria)}
-                    className="min-w-5 rounded-full px-1.5 text-center text-[11px] font-bold leading-5"
+                    className="min-w-5 rounded-full px-1.5 text-center text-[12px] font-bold leading-5"
                     style={{ background: "var(--color-green)", color: "var(--color-void)" }}
                   >
                     {unreadLabel(unread.counts[agent.id])}
@@ -864,16 +921,24 @@ export default function DirectChatScreen({
         {!embedded && (
         <header className="shrink-0 min-h-14 px-4 sm:px-5 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-dim)]">{t.title}</div>
-            <h1 className="m-0 text-[16px] font-bold tracking-wide text-[var(--color-white)]">{selected.label}</h1>
+            <div className="text-[14px] uppercase tracking-[0.14em] text-[var(--color-dim)]">{t.title}</div>
+            <h1 className="m-0 text-[18px] font-bold tracking-wide text-[var(--color-white)]">
+              <Link
+                href={`/agents/${encodeURIComponent(selected.session)}`}
+                data-testid="direct-chat-agent-page"
+                className="text-inherit no-underline hover:underline"
+              >
+                {selected.label}
+              </Link>
+            </h1>
           </div>
-          <label className="md:hidden text-[11px] uppercase tracking-wider text-[var(--color-dim)]">
+          <label className="md:hidden text-[14px] uppercase tracking-wider text-[var(--color-dim)]">
             {t.agentSelect}
             <select
               aria-label={t.agentSelect}
               value={agentId}
               onChange={(event) => setAgentId(event.target.value as typeof agentId)}
-              className="ml-2 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-[13px] text-[var(--color-bright)]"
+              className="ml-2 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-[14px] text-[var(--color-bright)]"
             >
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
@@ -906,10 +971,10 @@ export default function DirectChatScreen({
         >
           <div className="w-full flex flex-col gap-3">
             {loading && items.length === 0 && (
-              <p role="status" className="m-0 py-8 text-center text-[13px] text-[var(--color-muted)]">{t.loadingConversation}</p>
+              <p role="status" className="m-0 py-8 text-center text-[14px] text-[var(--color-muted)]">{t.loadingConversation}</p>
             )}
             {!loading && items.length === 0 && (
-              <p className="m-0 py-8 text-center text-[13px] text-[var(--color-muted)]">{t.empty}</p>
+              <p className="m-0 py-8 text-center text-[14px] text-[var(--color-muted)]">{t.empty}</p>
             )}
             {items.map((item, index) => {
               const newDay = newDays[index];
@@ -919,7 +984,7 @@ export default function DirectChatScreen({
                     <div
                       role="separator"
                       data-testid="direct-chat-day"
-                      className="self-center py-1 text-[12px] font-semibold uppercase tracking-wider text-[var(--color-dim)]"
+                      className="self-center py-1 text-[14px] font-semibold uppercase tracking-wider text-[var(--color-dim)]"
                     >
                       {dayLabel(item.at, t, DICTATION_LOCALE[locale])}
                     </div>
@@ -950,6 +1015,7 @@ export default function DirectChatScreen({
                       pressingThis={pressing === item.message.id}
                       pressingAny={pressing !== null}
                       suggestionsOff={item.message.suggestions ? suggestionsOff : false}
+                      answered={item.message.role === "user" && answeredIds.has(item.message.id)}
                       onMenu={onMenu}
                       onSend={onSend}
                       onEnterAgain={onEnterAgain}
@@ -959,7 +1025,7 @@ export default function DirectChatScreen({
               );
             })}
             {sight.working && status.state === "ready" && (
-              <div role="status" data-testid="direct-chat-working" className="flex items-center gap-2 text-[13px] text-[var(--color-muted)]">
+              <div role="status" data-testid="direct-chat-working" className="flex items-center gap-2 text-[14px] text-[var(--color-muted)]">
                 <span aria-hidden="true" className="inline-flex items-center gap-1">
                   {[0, 1, 2].map((dot) => (
                     <span
@@ -996,7 +1062,7 @@ export default function DirectChatScreen({
               autoFocus
               data-testid="direct-chat-menu-reply"
               onClick={() => replyFromMenu(menu.kind, menu.id)}
-              className="block w-full px-3 py-1.5 text-left text-[13px] text-[var(--color-bright)] hover:bg-[var(--color-card)]"
+              className="block w-full px-3 py-1.5 text-left text-[14px] text-[var(--color-bright)] hover:bg-[var(--color-card)]"
             >
               {t.replyAction}
             </button>
@@ -1007,14 +1073,14 @@ export default function DirectChatScreen({
           <p
             role="note"
             data-testid="direct-chat-read-only-invite"
-            className="shrink-0 m-0 border-t border-[var(--color-border)] bg-[var(--color-panel)] px-4 sm:px-6 py-2 text-[13px] text-[var(--color-muted)] flex flex-wrap items-center gap-3"
+            className="shrink-0 m-0 border-t border-[var(--color-border)] bg-[var(--color-panel)] px-4 sm:px-6 py-2 text-[14px] text-[var(--color-muted)] flex flex-wrap items-center gap-3"
           >
             <span>{t.readOnlyInvite}</span>
             {onConnect && (
               <button
                 type="button"
                 onClick={onConnect}
-                className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)]"
+                className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[14px] font-semibold text-[var(--color-bright)]"
               >
                 {t.readOnlyConnect}
               </button>
@@ -1031,7 +1097,8 @@ export default function DirectChatScreen({
         >
           <p
             data-testid="direct-chat-destination"
-            className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-muted)]"
+            // Said to a screen reader, not shown: where the text goes is a detail of the transport, not a line the person must read
+            className="sr-only"
           >
             {withName(t.destination, selected.label)}
           </p>
@@ -1039,7 +1106,7 @@ export default function DirectChatScreen({
             <div
               data-testid="direct-chat-reply-to"
               data-answer={target.kind === "question" && target.words ? "true" : undefined}
-              className="w-full mb-1.5 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-[13px]"
+              className="w-full mb-1.5 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1 text-[14px]"
             >
               <span className="shrink-0 text-[var(--color-muted)]">
                 {target.kind === "question" && target.words ? t.replyingToQuestion : t.replyingTo}
@@ -1063,12 +1130,12 @@ export default function DirectChatScreen({
             </div>
           )}
           {answerRefusal && (
-            <p role="alert" data-testid="direct-chat-answer-refused" className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-red)]">
+            <p role="alert" data-testid="direct-chat-answer-refused" className="w-full m-0 mb-1.5 text-[14px] text-[var(--color-red)]">
               {answerRefusal}
             </p>
           )}
           {attachHere && attachState && !attachState.available && attachState.code && attachState.code in t.attachOff && (
-            <p data-testid="direct-chat-attach-off" className="w-full m-0 mb-1.5 text-[13px] text-[var(--color-muted)]">
+            <p data-testid="direct-chat-attach-off" className="w-full m-0 mb-1.5 text-[14px] text-[var(--color-muted)]">
               {t.attachOff[attachState.code as keyof typeof t.attachOff]}
             </p>
           )}
@@ -1077,7 +1144,7 @@ export default function DirectChatScreen({
               role="alert"
               data-testid="direct-chat-attach-note"
               data-kind={attachNote.kind}
-              className={`w-full m-0 mb-1.5 text-[13px] ${attachNote.kind === "warn" ? "text-[var(--color-yellow)]" : "text-[var(--color-red)]"}`}
+              className={`w-full m-0 mb-1.5 text-[14px] ${attachNote.kind === "warn" ? "text-[var(--color-yellow)]" : "text-[var(--color-red)]"}`}
             >
               {attachNote.text}
             </p>
@@ -1139,12 +1206,12 @@ export default function DirectChatScreen({
             <button
               type="submit"
               disabled={!canSend}
-              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[12px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:opacity-40"
+              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[14px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:opacity-40"
             >
               {sending ? t.sending : t.send}
             </button>
           </div>
-          <p data-testid="direct-chat-keys" className="w-full m-0 mt-1 text-[13px] text-[var(--color-dim)]">
+          <p data-testid="direct-chat-keys" className="w-full m-0 mt-1 text-[14px] text-[var(--color-dim)]">
             {t.keysHint}
           </p>
         </form>

@@ -320,6 +320,19 @@ def test_a_long_chat_opens_on_its_newest_messages_not_on_the_oldest_of_its_tail(
 # ── send: the turn, the envelope, the fence ──────────────────────────────────
 
 
+def test_a_turn_to_an_instance_goes_to_its_own_session_and_its_own_folder(box):
+    box.stub_delivery()
+    code, receipt = box.run("send", "scout-2", "id-i1", stdin="Cerca anche a Malmo", FAKE_TMUX_SESSIONS="SCOUT-1 SCOUT-2")
+    assert code == 0 and receipt["accepted"] is True
+    (row,) = box.chat("scout-2")
+    assert row["text"] == "Cerca anche a Malmo" and box.chat("scout-1") == [] and box.chat("scout") == []
+    assert box.envelopes() == ["[@utente -> @scout-2] [CHAT] Cerca anche a Malmo"]
+    # SCOUT-2 is not up: nothing is written, whatever SCOUT-1 does
+    code, answer = box.run("send", "scout-3", "id-i2", stdin="ci sei?", FAKE_TMUX_SESSIONS="SCOUT-1 SCOUT-2")
+    assert (code, answer) == (122, {"error": "agent_not_running"})
+    assert box.chat("scout-3") == []
+
+
 def test_the_turn_is_written_once_and_typed_in_the_users_envelope(box):
     box.stub_delivery()
     code, receipt = box.run("send", "capitano", "id-1", stdin="Ciao capitano, a che punto siamo?")
@@ -455,7 +468,11 @@ def test_a_delivery_that_did_not_happen_says_why(box, rc, code, error):
 @pytest.mark.parametrize(
     ("args", "stdin"),
     [
-        (("send", "scout-9", "id-8"), "ciao"),                    # not in the closed list
+        (("send", "scout-0", "id-8"), "ciao"),                    # not in the closed grammar
+        (("send", "scout-10000", "id-8"), "ciao"),
+        (("send", "scout-09", "id-8"), "ciao"),
+        (("send", "critico-2", "id-8"), "ciao"),
+        (("send", "scout-2\n", "id-8"), "ciao"),
         (("send", "../capitano", "id-8"), "ciao"),
         (("send", "capitano", "bad id"), "ciao"),                 # outside the alphabet
         (("send", "capitano", "with_underscore"), "ciao"),

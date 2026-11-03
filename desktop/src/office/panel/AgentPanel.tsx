@@ -202,7 +202,7 @@ export default function AgentPanel({ target, subtitle, statuses, readOnly, child
         </section>
       )}
 
-      <SecondaryLink label={t.openAgentPage} onClick={() => onNavigate(`/agents?agent=${encodeURIComponent(target.role)}`)} />
+      <SecondaryLink label={t.openAgentPage} onClick={() => onNavigate(`/agents/${encodeURIComponent(view.session)}`)} />
 
       {pending && list && (
         <ConfirmLayer onCancel={() => !acting && setPending(null)}>
