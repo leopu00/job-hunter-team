@@ -59,6 +59,8 @@ const NOT_ERRORS: Record<string, string> = {
       // local_action_log.rs: the action log's own codes. The list tells any failure as «I cannot read the log»
       // (local-action-log.ts keeps only that), and a write that fails is never the act's problem: none is shown.
       "action_log_failed", "action_log_invalid", "action_log_unavailable", "action_log_window_refused",
+      // local_position_act.rs: the operations of the authorisation to apply and the fields of its request and answer
+      "apply_preview", "apply_request", "apply_requested",
       // team_settings.rs: the word of a settings request that writes (`op` = `write`), compared in code
       "write",
     ].map((word) => [word, "a name or a value of the position page's act (an operation, a field of its request or of the answer); never shown"]),

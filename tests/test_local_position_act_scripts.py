@@ -128,6 +128,37 @@ def test_an_application_marked_by_hand_gets_an_answer_and_both_are_taken_back(tm
     assert _act(home, {"op": "outcome_undo", "id": "1"})["code"] == "no_outcome"
 
 
+def _consent(home: Path, enabled: bool = True) -> None:
+    (home / "jht.config.json").write_text(json.dumps({"applications": {"auto_apply": {"enabled": enabled}}}), encoding="utf-8")
+
+
+def test_an_authorisation_needs_the_consent_then_the_preview_digest_and_is_withdrawn_with_off(tmp_path):
+    home = _team(tmp_path)
+    # no config, then a consent that says no: the preview and the authorisation are refused, nothing is written
+    assert _act(home, {"op": "apply_preview", "id": "2"})["code"] == "config_missing"
+    _consent(home, False)
+    assert _act(home, {"op": "apply_preview", "id": "2"})["code"] in ("consent_disabled", "consent_absent")
+    assert _act(home, {"op": "apply_request", "id": "2", "on": True, "confirm": "ab" * 32})["code"] in ("consent_disabled", "consent_absent")
+    assert _query(home, "SELECT apply_requested FROM positions WHERE id = 2") == [(0,)]
+    _consent(home)
+    preview = _act(home, {"op": "apply_preview", "id": "2"})
+    assert preview["ok"] is True and re.fullmatch(r"[0-9a-f]{64}", preview["confirm"]) and preview["summary"]
+    assert re.fullmatch(r"web:[a-z0-9.-]+|portal:[a-z]+", preview["destination"])
+    assert _query(home, "SELECT apply_requested FROM positions WHERE id = 2") == [(0,)], "a preview writes nothing"
+    # without the digest of that preview, or with another, it is refused; with it, the flag is written
+    assert _act(home, {"op": "apply_request", "id": "2", "on": True})["code"] == "confirmation_required"
+    assert _act(home, {"op": "apply_request", "id": "2", "on": True, "confirm": "00" * 32})["code"] == "position_changed"
+    assert _query(home, "SELECT apply_requested FROM positions WHERE id = 2") == [(0,)]
+    done = _act(home, {"op": "apply_request", "id": "2", "on": True, "confirm": preview["confirm"]})
+    assert done["ok"] is True and done["apply_requested"] is True
+    assert _query(home, "SELECT apply_requested, apply_requested_by FROM positions WHERE id = 2") == [(1, "user_local")]
+    # the position the gate does not let through (scored, not ready) is refused with its reason
+    assert _act(home, {"op": "apply_request", "id": "1", "on": True, "confirm": "ab" * 32})["code"] == "position_not_ready"
+    off = _act(home, {"op": "apply_request", "id": "2", "on": False})
+    assert off["ok"] is True and off["apply_requested"] is False
+    assert _query(home, "SELECT apply_requested FROM positions WHERE id = 2") == [(0,)]
+
+
 def test_the_judgement_still_works_through_the_same_script(tmp_path):
     home = _team(tmp_path)
     out = _act(home, {"op": "exclude", "id": "2", "reason": "wrong_stack", "note": "no thanks"})
@@ -153,7 +184,12 @@ def test_a_read_on_another_database_is_an_old_read_and_nothing_is_written(tmp_pa
     "request_",
     [
         {"op": "note", "id": "1"},
-        {"op": "apply_request", "id": "1", "on": True},
+        {"op": "apply_cancel", "id": "1", "on": True},
+        {"op": "apply_request", "id": "1"},
+        {"op": "apply_request", "id": "1", "on": True, "confirm": "ZZ" * 32},
+        {"op": "apply_request", "id": "1", "on": True, "confirm": "ab" * 31},
+        {"op": "apply_request", "id": "1", "on": True, "confirm": 5},
+        {"op": "apply_preview", "id": "1", "on": True},
         {"op": "recheck", "id": "1"},
         {"op": "recheck", "id": "1", "on": 1},
         {"op": "recheck", "id": "1", "on": "yes"},

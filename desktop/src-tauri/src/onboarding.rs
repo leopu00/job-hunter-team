@@ -1409,6 +1409,17 @@ pub(crate) fn wrapper_has_agent_control(path: &Path) -> bool {
     })
 }
 
+/// Whether this account's wrapper has the branch that records an authorisation to apply in the broker
+/// (`desktop-apply record`), which never starts anything. An older wrapper would route it through its
+/// generic branch, which does: the app does not call it at all then, and writes no authorisation.
+pub(crate) fn wrapper_has_desktop_apply(path: &Path) -> bool {
+    wrapper_source(path).is_some_and(|source| {
+        source.lines().map(|line| line.trim_end_matches('\r').trim()).any(|line| {
+            line == "JHT_DESKTOP_APPLY_PROTOCOL=1" || line == "$JHT_DESKTOP_APPLY_PROTOCOL = 1"
+        })
+    })
+}
+
 fn valid_host_wrapper_file(path: &Path) -> bool {
     wrapper_source(path)
         .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))

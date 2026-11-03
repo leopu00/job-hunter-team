@@ -51,6 +51,10 @@ const ACTIONS: &[(&str, &str, &str)] = &[
     ("settings.update", "L2", "settings"),
     ("exclusion.decide", "L1", "exclusion decided"),
     ("exclusion.withdraw", "L1", "exclusion withdrawn"),
+    // the authorisation to apply (level 3: it goes outside). The phrase is empty on purpose: the page names the
+    // position by its number, and the site's phrase («title @ company») is a text of the position, never kept here.
+    ("position.apply_authorize", "L3", ""),
+    ("position.apply_revoke", "L3", ""),
 ];
 
 /// The settings the site may change (`WEB_ACTION_SETTINGS`), in the order they are named.
@@ -90,7 +94,7 @@ fn line(action: &str, subject: &Subject, id: &str, at: &str) -> Option<String> {
         (code, Subject::Target(target)) if code.starts_with("team.") && target_ok(target) => {
             params.insert("target".into(), json!(target));
         }
-        (code, Subject::Position(number)) if code.starts_with("exclusion.") && (1..=1_000_000_000_000).contains(number) => {
+        (code, Subject::Position(number)) if (code.starts_with("exclusion.") || code.starts_with("position.")) && (1..=1_000_000_000_000).contains(number) => {
             params.insert("legacy_id".into(), json!(number));
         }
         (code, Subject::Settings(keys)) if code.starts_with("settings.") && !keys.is_empty() && keys.iter().all(|key| SETTINGS.contains(key)) => {
@@ -294,7 +298,7 @@ fn close_row(raw: &str) -> Option<Value> {
     if action.starts_with("team.") {
         let target = params.get("target")?.as_str().filter(|target| target_ok(target))?;
         closed.insert("target".into(), json!(target));
-    } else if action.starts_with("exclusion.") {
+    } else if action.starts_with("exclusion.") || action.starts_with("position.") {
         if let Some(number) = params.get("legacy_id") {
             closed.insert("legacy_id".into(), json!(number.as_u64().filter(|n| (1..=1_000_000_000_000).contains(n))?));
         }

@@ -1740,9 +1740,91 @@ function translated(englishText: string): ErrorTranslations {
  * Stable catalog entries only. Entries owned by the ongoing screen migration
  * are added once their Italian and English source copy is final.
  */
+// The authorisation to apply, in a profile with no cloud account: what the consent, the settings and the position refuse, in words.
+const APPLY_CONSENT_OFF = tr(
+  ["Das automatische Senden von Bewerbungen ist nicht eingeschaltet.", "Schalte es in den Einstellungen ein und gib die Bewerbung dann erneut frei."],
+  ["El envío automático de candidaturas no está activado.", "Actívalo en los ajustes y vuelve a autorizar la candidatura."],
+  ["L’envoi automatique des candidatures n’est pas activé.", "Active-le dans les réglages, puis autorise de nouveau la candidature."],
+  ["A jelentkezések automatikus küldése nincs bekapcsolva.", "Kapcsold be a beállításokban, majd engedélyezd újra a jelentkezést."],
+  ["O envio automático de candidaturas não está ativado.", "Ativa-o nas definições e autoriza de novo a candidatura."],
+);
+const APPLY_SETTINGS_UNREADABLE = tr(
+  ["Ich kann die Einstellungen des automatischen Sendens nicht lesen.", "Prüfe die Einstellungen und versuche es erneut; bleibt es so, sieh dir den Zustand des Teams an."],
+  ["No puedo leer los ajustes del envío automático.", "Revisa los ajustes y vuelve a intentarlo; si sigue igual, mira el estado del equipo."],
+  ["Je ne peux pas lire les réglages de l’envoi automatique.", "Vérifie les réglages et réessaie ; si cela persiste, regarde l’état de l’équipe."],
+  ["Nem tudom elolvasni az automatikus küldés beállításait.", "Ellenőrizd a beállításokat, és próbáld újra; ha így marad, nézd meg a csapat állapotát."],
+  ["Não consigo ler as definições do envio automático.", "Verifica as definições e tenta novamente; se continuar assim, vê o estado da equipa."],
+);
+const APPLY_NOT_READY = tr(
+  ["Diese Position ist noch nicht zum Senden bereit.", "Warte, bis das Team Lebenslauf und Anschreiben vorbereitet hat, und versuche es dann erneut."],
+  ["Esta posición todavía no está lista para enviarse.", "Espera a que el equipo prepare el CV y la carta, y vuelve a intentarlo."],
+  ["Ce poste n’est pas encore prêt à être envoyé.", "Attends que l’équipe prépare le CV et la lettre, puis réessaie."],
+  ["Ez a pozíció még nem áll készen a küldésre.", "Várd meg, amíg a csapat elkészíti az önéletrajzot és a levelet, majd próbáld újra."],
+  ["Esta vaga ainda não está pronta para ser enviada.", "Espera que a equipa prepare o CV e a carta e tenta novamente."],
+);
+const APPLY_ALREADY_SENT = tr(
+  ["Die Bewerbung für diese Position ist schon rausgegangen.", "Sie lässt sich nicht erneut freigeben."],
+  ["La candidatura para esta posición ya salió.", "No se puede autorizar de nuevo."],
+  ["La candidature pour ce poste est déjà partie.", "Elle ne peut pas être autorisée de nouveau."],
+  ["A jelentkezés erre a pozícióra már elment.", "Nem lehet újra engedélyezni."],
+  ["A candidatura a esta vaga já foi enviada.", "Não se pode autorizar de novo."],
+);
+const APPLY_NO_DESTINATION = tr(
+  ["Ich kann nicht erkennen, wohin die Bewerbung gesendet würde.", "Öffne die Anzeige und bewirb dich von Hand, markiere dann «Ich habe mich beworben»."],
+  ["No puedo saber adónde se enviaría la candidatura.", "Abre el anuncio y candidátate a mano; luego marca «Me he candidatado»."],
+  ["Je ne peux pas savoir où la candidature serait envoyée.", "Ouvre l’annonce et postule à la main, puis marque «J’ai postulé»."],
+  ["Nem tudom megállapítani, hová menne a jelentkezés.", "Nyisd meg a hirdetést, jelentkezz kézzel, majd jelöld meg, hogy jelentkeztél."],
+  ["Não consigo perceber para onde a candidatura seria enviada.", "Abre o anúncio e candidata-te à mão; depois marca «Candidatei-me»."],
+);
+const APPLY_PREVIEW_CHANGED = tr(
+  ["Die Position hat sich nach der Vorschau geändert.", "Öffne die Vorschau erneut und bestätige noch einmal."],
+  ["La posición cambió después de la vista previa.", "Abre la vista previa otra vez y confirma de nuevo."],
+  ["Le poste a changé après l’aperçu.", "Rouvre l’aperçu et confirme de nouveau."],
+  ["A pozíció az előnézet után megváltozott.", "Nyisd meg újra az előnézetet, és erősítsd meg újra."],
+  ["A vaga mudou depois da pré-visualização.", "Abre a pré-visualização outra vez e confirma de novo."],
+);
+const APPLY_NOT_RECORDED = tr(
+  ["Das Team hat die Freigabe nicht gespeichert.", "Aktualisiere die Seite und versuche es erneut."],
+  ["El equipo no registró la autorización.", "Actualiza la página y vuelve a intentarlo."],
+  ["L’équipe n’a pas enregistré l’autorisation.", "Actualise la page et réessaie."],
+  ["A csapat nem rögzítette az engedélyt.", "Frissítsd az oldalt, és próbáld újra."],
+  ["A equipa não registou a autorização.", "Atualiza a página e tenta novamente."],
+);
+const APPLY_ONLY_THE_PERSON = tr(
+  ["Das kann nur die Person selbst in der App tun.", "Nutze die Schaltfläche auf der Seite."],
+  ["Esto solo lo puede hacer la persona, desde la app.", "Usa el botón de la página."],
+  ["Seule la personne peut le faire, depuis l’appli.", "Utilise le bouton de la page."],
+  ["Ezt csak maga a személy teheti meg, az alkalmazásból.", "Használd az oldal gombját."],
+  ["Isto só a pessoa o pode fazer, a partir da app.", "Usa o botão da página."],
+);
+const APPLY_BAD_NUMBER = tr(
+  ["Die Nummer der Position ist ungültig.", "Aktualisiere die Seite und versuche es erneut."],
+  ["El número de la posición no es válido.", "Actualiza la página y vuelve a intentarlo."],
+  ["Le numéro du poste n’est pas valide.", "Actualise la page et réessaie."],
+  ["A pozíció száma érvénytelen.", "Frissítsd az oldalt, és próbáld újra."],
+  ["O número da vaga não é válido.", "Atualiza a página e tenta novamente."],
+);
+
 export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> = {
   unknown: translated("The operation did not succeed."),
   apply_authorisation_unrecorded: translated("The operation did not succeed."),
+  consent_absent: APPLY_CONSENT_OFF,
+  consent_disabled: APPLY_CONSENT_OFF,
+  consent_mode_unknown: APPLY_CONSENT_OFF,
+  consent_cap_invalid: APPLY_CONSENT_OFF,
+  config_missing: APPLY_SETTINGS_UNREADABLE,
+  config_unreadable: APPLY_SETTINGS_UNREADABLE,
+  config_malformed: APPLY_SETTINGS_UNREADABLE,
+  rule_unavailable: APPLY_SETTINGS_UNREADABLE,
+  authorisation_unreadable: APPLY_SETTINGS_UNREADABLE,
+  position_not_ready: APPLY_NOT_READY,
+  already_submitted: APPLY_ALREADY_SENT,
+  destination_invalid: APPLY_NO_DESTINATION,
+  position_changed: APPLY_PREVIEW_CHANGED,
+  write_not_observed: APPLY_NOT_RECORDED,
+  apply_request_refused: APPLY_NOT_RECORDED,
+  agent_caller: APPLY_ONLY_THE_PERSON,
+  position_id_invalid: APPLY_BAD_NUMBER,
   desktop_only: translated("This feature is only available in the desktop app."),
   state_failed: translated("The app cannot read its own internal state."),
   state_unavailable: translated("The app cannot read its own internal state."),
