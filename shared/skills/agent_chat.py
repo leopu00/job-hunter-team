@@ -543,6 +543,7 @@ def _footer_follows(below: list[tuple[str, str]]) -> bool:
     return bool(_CODEX_DOT_FOOTER.match(first) or _CODEX_HINT.search(first))
 
 
+_MODEL_PATH_FOOTER = re.compile(r"^\s+\S.*·\s*(?:~|/|[A-Za-z]:[\\/])\S*\s*$")
 _WRAPPED_MARKER_MIN = 100
 _WRAPPED_ROWS_MAX = 12
 _WRAPPED_FULL_RATIO = 0.85
@@ -563,6 +564,8 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
     for offset, (_raw, plain) in enumerate(lines[index + 1:], 1):
         if _ESC_AGAIN.match(plain):
             break                 # the footer sits right under the draft, no blank row between: it is not the draft's
+        if run and _is_closing_footer(lines, index + offset, width):
+            break                 # the model/path line under the draft's last row, no blank row between, is not the draft's
         if not plain.strip():
             # A message that holds an empty line (the Dottore's [UNBLOCK], TEST 19f) is drawn with a blank row between
             # its rows. One blank row does not end the draft when more text follows it; it ends it when nothing
@@ -580,6 +583,25 @@ def _wrapped_continuation(lines: list[tuple[str, str]], index: int) -> int:
     if any(len(row.strip()) < _WRAPPED_FULL_RATIO * width for row in run[:-1]):
         return 0
     return consumed
+
+
+def _is_closing_footer(lines: list[tuple[str, str]], at: int, width: int) -> bool:
+    """The model/path line (or a hint) that closes the screen, drawn right under a wrapped draft.
+
+    Codex 0.147 draws it with no blank row between the draft's last row and itself, so the walk of
+    ``_wrapped_continuation`` took it for one more row of the draft, then found the real last row of text too short to be a
+    wrapped one, and the composer was not found: the screen read as a menu (rc=3, «shows a menu, login, or permission
+    request») and no wake-up could be typed. It is the footer only when nothing at all is drawn below it and it is shorter
+    than a wrapped row: a draft row with a «·» in it has the footer under it, and a draft row that fills the line is a row.
+    """
+    plain = lines[at][1]
+    # The model line carries a path after its «·»; a menu's hint («Esc to cancel · Enter to confirm») does not, and
+    # is never taken for the composer's footer here.
+    if not (_MODEL_PATH_FOOTER.match(plain) or _CODEX_HINT.search(plain)):
+        return False
+    if len(plain.strip()) >= _WRAPPED_FULL_RATIO * width:
+        return False
+    return not any(row.strip() for _raw, row in lines[at + 1:])
 
 
 def _text_row_follows(below: list[tuple[str, str]]) -> bool:
