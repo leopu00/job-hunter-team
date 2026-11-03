@@ -295,11 +295,7 @@ struct ProbeKnownHosts {
 
 impl ProbeKnownHosts {
     fn create() -> Result<Self, &'static str> {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("jht-hostkey-{}-{nanos}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("jht-hostkey-{}-{}", std::process::id(), unique_stamp()));
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -850,6 +846,19 @@ fn run_ssh_command_with(
     result
 }
 
+/// A number for the name of a temporary file that no other call of this process gets: the clock in nanoseconds, then
+/// six digits of a counter of the process (so two different pairs never make the same number). The clock alone is not
+/// enough: macOS reads it to the microsecond, and two calls that start together (two threads, two tests) got the same
+/// name and the second `create_new` failed with «storage_unavailable».
+fn unique_stamp() -> u128 {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    nanos * 1_000_000 + u128::from(COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 1_000_000)
+}
+
 /// A file that stands in for one of ssh's streams: ssh's own messages (`-E`),
 /// its stdout, its stdin. Private (created exclusively, owner-only before
 /// anything is written in it), used once, removed with this value.
@@ -859,11 +868,7 @@ struct PrivateTempFile {
 
 impl PrivateTempFile {
     fn create(kind: &str) -> Result<Self, &'static str> {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("jht-ssh-{kind}-{}-{nanos}.tmp", std::process::id()));
+        let path = std::env::temp_dir().join(format!("jht-ssh-{kind}-{}-{}.tmp", std::process::id(), unique_stamp()));
         debug_assert!(PIPE_FREE_FILE_KINDS.contains(&kind));
         fs::OpenOptions::new()
             .write(true)
@@ -2245,6 +2250,21 @@ mod tests {
         let sweep = production.split("pub(crate) fn remove_stale_pipe_free_files() {").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(!sweep.contains("cfg(windows)"), "the sweep runs on every system");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Two calls that start in the same microsecond (macOS reads the clock to the microsecond) do not get the same
+    /// name: the second used to fail with «storage_unavailable» and failed a test of the key scan at random.
+    #[test]
+    fn the_names_of_temporary_files_started_together_are_all_different() {
+        use std::collections::HashSet;
+        let stamps: HashSet<u128> = (0..2000).map(|_| super::unique_stamp()).collect();
+        assert_eq!(stamps.len(), 2000);
+        let threads: Vec<_> = (0..8).map(|_| std::thread::spawn(|| (0..500).map(|_| super::unique_stamp()).collect::<Vec<_>>())).collect();
+        let all: Vec<u128> = threads.into_iter().flat_map(|t| t.join().unwrap()).collect();
+        assert_eq!(all.iter().collect::<HashSet<_>>().len(), all.len());
+        // a name made with it is still exactly the name of a pipe-free file (the sweep knows it)
+        let name = format!("jht-ssh-messages-{}-{}.tmp", std::process::id(), super::unique_stamp());
+        assert!(super::is_pipe_free_file_name(&name), "{name}");
     }
 
     /// The files of this process's pipe-free ssh calls still on disk.

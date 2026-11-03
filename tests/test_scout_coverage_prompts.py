@@ -83,3 +83,33 @@ def test_every_scout_prompt_and_pass_log_skill_say_every_local_drop_gets_its_rea
     log = (REPO_ROOT / "shared" / "skills" / "scout_pass_log.py").read_text(encoding="utf-8")
     for outcome in ("role", "area"):
         assert '"%s"' % outcome in log
+
+
+# ── the profile that changes under the Scout (03/11) ────────────────────────
+
+@pytest.mark.parametrize("suffix", SUFFIXES)
+def test_every_scout_prompt_tells_it_to_read_the_profile_again_and_keep_what_it_found(suffix):
+    text = _prompt(suffix)
+    for needle in ("scout_coverage.py next --agent $MY_ID", "profile_version.py ack --agent $MY_ID", '"changed": true',
+                   "roles", "places", "languages", "mode", "STEP 1", "STEP 2"):
+        assert needle in text, "%s: %r" % (suffix or "en", needle)
+    assert text.count("scout_coverage.py next --agent $MY_ID") >= 2, "the pointer in STEP 3 and the one in the paragraph"
+    step3 = text[text.index("STEP 3 —"):text.index("STEP 4 —")]
+    assert "scout_coverage.py next --agent $MY_ID" in step3
+
+
+@pytest.mark.parametrize("suffix", SUFFIXES)
+def test_the_skill_names_the_ack_and_may_run_it(suffix):
+    skill = (REPO_ROOT / "agents" / "_skills" / "scout-coverage" / ("SKILL%s.md" % suffix)).read_text(encoding="utf-8")
+    header = skill.split("---")[1]
+    assert "Bash(python3 /app/shared/skills/profile_version.py *)" in header, suffix or "en"
+    for needle in ("scout_coverage.py next --agent $MY_ID", "profile_version.py ack --agent $MY_ID", '"changed": true'):
+        assert needle in skill, "%s: %r" % (suffix or "en", needle)
+
+
+def test_the_tool_the_prompts_name_exists_and_takes_what_they_say():
+    tool = (REPO_ROOT / "shared" / "skills" / "profile_version.py").read_text(encoding="utf-8")
+    for needle in ('"check"', '"ack"', "--agent", '"roles"', '"places"', '"languages"', '"mode"'):
+        assert needle in tool, needle
+    coverage = (REPO_ROOT / "shared" / "skills" / "scout_coverage.py").read_text(encoding="utf-8")
+    assert "--agent" in coverage and "profile_news" in coverage
