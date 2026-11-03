@@ -104,6 +104,16 @@ while [ $# -gt 0 ]; do
     *) url="$1"; shift ;;
   esac
 done
+# every call is written down, to count the tries of a check; CURL_FAIL_FIRST=N makes the first N calls to
+# api.telegram.org fail the way a reset TLS handshake does (exit 35, nothing printed but the zero codes)
+printf '%s %s\n' "$port" "$url" >> "$CURL_TABLE.log"
+if [ -n "${CURL_FAIL_FIRST:-}" ] && [ "$url" = "https://api.telegram.org/" ]; then
+  calls="$(grep -c ' https://api.telegram.org/$' "$CURL_TABLE.log")"
+  if [ "$calls" -le "$CURL_FAIL_FIRST" ]; then
+    printf %s "$format" | sed -e "s/%{http_code}/000/" -e "s/%{http_connect}/000/"
+    exit 35
+  fi
+fi
 answer="$(awk -v key="$port $url" '$1" "$2 == key { print $3; exit }' "$CURL_TABLE")"
 code=000; connect=000; rc=0
 case "$answer" in
@@ -144,7 +154,7 @@ def machine(tmp_path):
         ]
         table.write_text("".join(f"{p} {u} {a}\n" for p, u, a in rows if a is not None), encoding="utf-8")
 
-    def run(ready_seconds=5, check_ports=None):
+    def run(ready_seconds=5, check_ports=None, extra_env=None):
         if WINDOWS:
             # Git's bash by path: `bash` on a Windows PATH can be WSL's. The fakes first, then Git's tools.
             bash = str(git_bash())
@@ -152,14 +162,20 @@ def machine(tmp_path):
         else:
             bash = "bash"
             env = {"PATH": f"{bin_dir}:/usr/bin:/bin"}
-        env.update({"CURL_TABLE": str(table), "JHT_PROXY_READY_SECONDS": str(ready_seconds)})
+        # no pause between the tries of a check here: the test is about how many, not how long
+        env.update({"CURL_TABLE": str(table), "JHT_PROXY_READY_SECONDS": str(ready_seconds), "JHT_PROXY_PAUSE": "0", **(extra_env or {})})
+        (tmp_path / "curl-table.log").unlink(missing_ok=True)
         started = time.monotonic()
         done = subprocess.run([bash, "-s", "--", *map(str, check_ports or ports)], input=_proxy_check(),
                               capture_output=True, text=True, env=env, timeout=60)
         return done, time.monotonic() - started
 
     answers()
-    yield type("Machine", (), {"ports": ports, "answers": answers, "run": run, "sockets": sockets})
+    def calls():
+        log = tmp_path / "curl-table.log"
+        return log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+
+    yield type("Machine", (), {"ports": ports, "answers": answers, "run": run, "sockets": sockets, "calls": calls})
     for sock in sockets:
         sock.close()
 
@@ -180,6 +196,53 @@ def test_the_three_proxies_pass_and_every_check_says_what_it_asked_and_got(machi
         ["broker", broker, "http://example.com/", "403", "403"],
         ["telegram", telegram, "https://example.com/", "403", "403"],
     ]
+
+
+def test_a_moment_of_the_network_does_not_fail_the_check_but_a_proxy_that_stays_wrong_does(machine):
+    # curl 35 on the telegram check in the first run of the Windows Podman job that got that far (T146): twice, then it answers
+    machine.answers()
+    done, _ = machine.run(extra_env={"CURL_FAIL_FIRST": "2"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    telegram = str(machine.ports[2])
+    assert ["telegram", telegram, "https://api.telegram.org/", "reachable", "200"] in _checks(done.stdout)
+    assert [call for call in machine.calls() if call.endswith("https://api.telegram.org/")] == [f"{telegram} https://api.telegram.org/"] * 3
+    # three in all and no more: a network that stays down is a red check, named
+    done, _ = machine.run(extra_env={"CURL_FAIL_FIRST": "99"})
+    assert done.returncode == 1
+    assert ["telegram", telegram, "https://api.telegram.org/", "reachable", "curl-35"] in _checks(done.stdout)
+    # three tries, then the diagnosis asks twice more (straight from the machine, and through the proxy again)
+    assert len([call for call in machine.calls() if call.endswith("https://api.telegram.org/")]) == 3 + 2
+
+
+def test_a_check_that_stays_red_says_what_the_machine_gets_straight_and_through_the_proxy(machine):
+    machine.answers(telegram=None)
+    done, _ = machine.run()
+    assert done.returncode == 1
+    diag = [line for line in done.stdout.splitlines() if line.startswith("JHT_PROXY_DIAG ")]
+    assert [line.split()[1:3] for line in diag] == [["telegram", "direct"], ["telegram", "via-proxy"]], diag
+    assert all(" exit=" in line for line in diag)
+    # a green check, and a refusal that is wrong, say nothing more: the diagnosis is for what leaves the machine
+    machine.answers()
+    done, _ = machine.run()
+    assert "JHT_PROXY_DIAG" not in done.stdout
+    machine.answers(agent_imap=403)
+    done, _ = machine.run()
+    assert done.returncode == 1 and "JHT_PROXY_DIAG" not in done.stdout
+
+
+def test_a_refusal_is_asked_once_so_a_proxy_that_lets_the_wrong_thing_through_gets_no_second_look(machine):
+    agent = str(machine.ports[0])
+    machine.answers(agent_imap=403)  # the agent proxy opens the tunnel to the mail port instead of refusing it
+    done, _ = machine.run()
+    assert done.returncode == 1
+    assert ["agent", agent, "https://example.com:993/", "403", "200"] in _checks(done.stdout)
+    assert machine.calls().count(f"{agent} https://example.com:993/") == 1
+    # what leaves the machine and is wrong IS asked three times (ghcr.io answering nothing)
+    machine.answers(agent_ghcr=None)
+    done, _ = machine.run()
+    assert done.returncode == 1
+    # three tries, and the diagnosis asks through the proxy once more
+    assert machine.calls().count(f"{agent} https://ghcr.io/v2/") == 3 + 1
 
 
 def test_a_wrong_answer_is_named_with_its_proxy_and_the_other_checks_still_run(machine):
