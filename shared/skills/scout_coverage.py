@@ -252,6 +252,9 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None) ->
                 "tier": entry["tier"], "host": entry.get("host"), "query_kind": kind,
                 "query_language": entry["portal_language"] if kind in ("role_language", "broad") else "en",
                 "have": {"passes": numbers["passes"], "queries": numbers["queries"]}, "need": need}
+        for field in ("api", "hint"):
+            if entry.get(field):
+                step[field] = entry[field]
         if kind == "broad":
             step["broad_terms"] = list(data.get("broad_terms", {}).get(entry["portal_language"], data.get("broad_terms", {}).get("en", []))) + list(terms)
             step["broad_worked_in_english"] = [e["term"] for e in data.get("broad_examples", {}).get("en", [])]
