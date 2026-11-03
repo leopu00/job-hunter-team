@@ -118,7 +118,7 @@ export default function ExistingTeamStatusPage(_props: PageProps) {
         <div role="alert" data-testid="team-status-error" className="text-[12px]" style={{ color: "var(--color-red)" }}>
           <strong>{t.failed}</strong>
           <p>
-            {failure.text} {failure.action} ({reading.code})
+            {failure.text} {failure.action}
           </p>
           <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
             {t.failedAt.replace("{time}", stamp(reading.at))}
