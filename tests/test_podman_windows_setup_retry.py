@@ -99,7 +99,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --proxy) port="${2##*:}"; shift 2 ;;
     --write-out) format="$2"; shift 2 ;;
-    --output|--max-time) shift 2 ;;
+    --output|--max-time|--noproxy) shift 2 ;;
     --*) shift ;;
     *) url="$1"; shift ;;
   esac
@@ -220,7 +220,11 @@ def test_a_check_that_stays_red_says_what_the_machine_gets_straight_and_through_
     assert done.returncode == 1
     diag = [line for line in done.stdout.splitlines() if line.startswith("JHT_PROXY_DIAG ")]
     assert [line.split()[1:3] for line in diag] == [["telegram", "direct"], ["telegram", "via-proxy"]], diag
-    assert all(" exit=" in line for line in diag)
+    # nothing answers either way in this table: curl's exit 7 is what each line carries, not only the word
+    assert all(" exit=7 " in line for line in diag), diag
+    # the straight one is asked with --noproxy '*', so a proxy in the machine's environment cannot make it indirect
+    source = NETWORK.read_text(encoding="utf-8")
+    assert "--noproxy '*' --write-out '%{http_code}' \"$url\"" in source
     # a green check, and a refusal that is wrong, say nothing more: the diagnosis is for what leaves the machine
     machine.answers()
     done, _ = machine.run()

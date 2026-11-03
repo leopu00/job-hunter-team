@@ -382,9 +382,10 @@ check() {
   [ "$ok" -eq 1 ] || failed=1
   echo "JHT_PROXY_CHECK $name $port $url $expected $result"
   # What separates the network from our proxy, when what leaves the machine stays wrong after the tries: the same
-  # request straight from the machine (no proxy) and through the proxy with curl's own words, one line each.
+  # request straight from the machine (--noproxy '*': an http_proxy in the machine's environment would not make it direct)
+  # and through the proxy with curl's own words, one line each.
   if [ "$ok" -eq 0 ] && [ "$expected" != 403 ]; then
-    direct=$(curl --silent --show-error --output /dev/null --max-time 15 --write-out '%{http_code}' "$url" 2>&1)
+    direct=$(curl --silent --show-error --output /dev/null --max-time 15 --noproxy '*' --write-out '%{http_code}' "$url" 2>&1)
     echo "JHT_PROXY_DIAG $name direct exit=$? $(printf %s "$direct" | tr '\n' ' ' | cut -c1-200)"
     viaproxy=$(curl --silent --show-error --output /dev/null --max-time 15 --write-out '%{http_code}' --proxy "http://127.0.0.1:$port" "$url" 2>&1)
     echo "JHT_PROXY_DIAG $name via-proxy exit=$? $(printf %s "$viaproxy" | tr '\n' ' ' | cut -c1-200)"
