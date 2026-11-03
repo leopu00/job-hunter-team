@@ -37,6 +37,9 @@ JHT_DESKTOP_CHAT_FIXED=1
 # And `desktop-chat chat-answer` and `desktop-chat chat-enter`, which came later: the app asks for this
 # second marker before it calls them.
 JHT_DESKTOP_CHAT_ANSWER=1
+# And the chat with a numbered role by instance (`analista-2`, the session ANALISTA-2): the app asks for this marker
+# before it names an instance after the first, so a wrapper without it is told apart by name too.
+JHT_DESKTOP_CHAT_INSTANCES=1
 JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1
 # Il pannello agenti del desktop chiama `agent-control` solo se trova questa
 # riga: un wrapper che non la ha passerebbe il comando al ramo generico, che
@@ -3058,7 +3061,7 @@ EOF
 }
 
 desktop_chat() {
-  local action="${1:-}" container_id session="${2:-}"
+  local action="${1:-}" container_id session="${2:-}" instance
   container_id="$(desktop_chat_container_id)" || {
     err "runtime o container JHT non disponibile"
     return 1
@@ -3076,6 +3079,14 @@ desktop_chat() {
       [ "$#" -eq 2 ] || return 2
       case "$session" in
         CAPITANO|ASSISTENTE|MENTOR|SCOUT-1|ANALISTA-1|SCORER-1|SCRITTORE-1|CRITICO) ;;
+        # an instance of a numbered role: SCOUT-2.. up to four digits, no zero in front
+        SCOUT-*|ANALISTA-*|SCORER-*|SCRITTORE-*)
+          instance="${session#*-}"
+          case "$instance" in
+            ''|0*|*[!0-9]*) return 2 ;;
+          esac
+          [ "${#instance}" -le 4 ] || return 2
+          ;;
         *) return 2 ;;
       esac
       docker exec -i "$container_id" sh -c \

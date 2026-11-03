@@ -119,7 +119,25 @@ STUCK = re.compile(r"^JHT_STUCK$", re.M)
 MESSAGE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 
 # The ids are the roles' keys; the value is the tmux session.
-AGENTS = {
+# A role with several sessions is also spoken to by instance: «analista-2» is the session ANALISTA-2 and the folder
+# agents/analista-2 (the launcher's own names). The bare «scout» stays: the first instance, as the app has always said.
+NUMBERED_AGENT = re.compile(r"\A(scout|analista|scorer|scrittore)-([1-9][0-9]{0,3})\Z")   # \Z, not $: a name ending in a newline is not one
+
+
+class _Agents(dict):
+    """The eight fixed ids, and the numbered ones of the closed grammar above, each with its tmux session."""
+
+    def __contains__(self, key) -> bool:
+        return dict.__contains__(self, key) or (isinstance(key, str) and NUMBERED_AGENT.match(key) is not None)
+
+    def __missing__(self, key):
+        found = NUMBERED_AGENT.match(key) if isinstance(key, str) else None
+        if found is None:
+            raise KeyError(key)
+        return f"{found.group(1).upper()}-{found.group(2)}"
+
+
+AGENTS = _Agents({
     "capitano": "CAPITANO",
     "assistente": "ASSISTENTE",
     "mentor": "MENTOR",
@@ -128,7 +146,7 @@ AGENTS = {
     "scorer": "SCORER-1",
     "scrittore": "SCRITTORE-1",
     "critico": "CRITICO",
-}
+})
 
 CLIENT_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 # A byte offset into a chat file: 12 digits are a terabyte.

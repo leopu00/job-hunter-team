@@ -95,3 +95,43 @@ def test_a_plain_question_of_an_instance_reaches_the_chat(home):
         )
     page = read(home, "scout")
     assert [q["text"] for q in page.get("questions", [])] == ["Cerco anche da remoto?"]
+
+
+# ── a numbered role is spoken to by instance ────────────────────────────────
+INSTANCES = {"scout-2": "SCOUT-2", "analista-12": "ANALISTA-12", "scorer-4": "SCORER-4", "scrittore-9999": "SCRITTORE-9999"}
+
+
+@pytest.mark.parametrize("agent,session", sorted(INSTANCES.items()))
+def test_an_instance_has_its_own_session_and_folder(home, agent, session):
+    sys.path.insert(0, str(SKILLS))
+    try:
+        import agent_chat
+    finally:
+        sys.path.remove(str(SKILLS))
+    assert agent in agent_chat.AGENTS and agent_chat.AGENTS[agent] == session
+    assert agent_chat.agent_of(agent) == agent
+    assert agent_chat.store_name(agent) == agent
+    chat = home.path / "agents" / agent / "chat.jsonl"
+    chat.parent.mkdir(parents=True)
+    chat.write_text(json.dumps({"role": "assistant", "text": f"da {session}", "ts": 3.0, "message_id": "i1"}) + "\n", encoding="utf-8")
+    assert [m["text"] for m in read(home, agent)["messages"]] == [f"da {session}"]
+
+
+@pytest.mark.parametrize("bad", [
+    "scout-0", "scout-01", "scout-10000", "scout-", "scout-x", "scout--1", "scout-1-2", "Scout-1",
+    "critico-2", "capitano-2", "mentor-1", "closer-1", "scout_2", " scout-2", "scout-2 ", "../scout-2", "scout-2/..", "scout-2\n",
+])
+def test_a_name_outside_the_grammar_is_refused_before_it_touches_a_file(home, bad):
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "read", bad], env=home.env, capture_output=True, text=True)
+    assert done.returncode != 0
+    assert not (home.path / "agents").exists()
+
+
+def test_two_instances_keep_two_conversations(home):
+    for agent, text in (("scout-1", "uno"), ("scout-2", "due")):
+        chat = home.path / "agents" / agent / "chat.jsonl"
+        chat.parent.mkdir(parents=True)
+        chat.write_text(json.dumps({"role": "assistant", "text": text, "ts": 1.0}) + "\n", encoding="utf-8")
+    assert [m["text"] for m in read(home, "scout")["messages"]] == ["uno"]       # the bare role is the first instance
+    assert [m["text"] for m in read(home, "scout-1")["messages"]] == ["uno"]
+    assert [m["text"] for m in read(home, "scout-2")["messages"]] == ["due"]

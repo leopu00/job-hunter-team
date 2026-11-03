@@ -2176,11 +2176,9 @@ pub(crate) fn delivery_command(
     target: &RuntimeTarget,
     session: &str,
 ) -> Result<String, &'static str> {
-    let session = match session {
-        "CAPITANO" | "ASSISTENTE" | "MENTOR" | "SCOUT-1" | "ANALISTA-1" | "SCORER-1"
-        | "SCRITTORE-1" | "CRITICO" => session,
-        _ => return Err("invalid_agent"),
-    };
+    if !chat_session_ok(session) {
+        return Err("invalid_agent");
+    }
     command(
         target,
         &format!(
@@ -2194,6 +2192,50 @@ pub(crate) fn delivery_command(
 pub(crate) const CHAT_AGENTS: [&str; 8] = [
     "capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico",
 ];
+
+/// The roles that have several sessions and are also spoken to by instance: `analista-2` is the session
+/// ANALISTA-2 and the folder `agents/analista-2` (the launcher's own names). `agent_chat.py` has the same grammar.
+const NUMBERED_CHAT_ROLES: [&str; 4] = ["scout", "analista", "scorer", "scrittore"];
+
+/// An instance of a numbered role: the role, then a number from 1 to 9999 with no zero in front. Nothing else.
+pub(crate) fn chat_instance(agent: &str) -> Option<(&'static str, u16)> {
+    let (role, number) = agent.split_once('-')?;
+    let role = NUMBERED_CHAT_ROLES.iter().copied().find(|known| *known == role)?;
+    if number.is_empty() || number.len() > 4 || number.starts_with('0') || !number.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some((role, number.parse().ok()?))
+}
+
+/// An id the chat may be opened with: the eight fixed ones, or an instance of a numbered role.
+pub(crate) fn chat_agent_ok(agent: &str) -> bool {
+    CHAT_AGENTS.contains(&agent) || chat_instance(agent).is_some()
+}
+
+/// The tmux session of a chat id («scout» is the first instance, SCOUT-1).
+pub(crate) fn chat_session(agent: &str) -> Option<String> {
+    let fixed = match agent {
+        "capitano" => "CAPITANO",
+        "assistente" => "ASSISTENTE",
+        "mentor" => "MENTOR",
+        "scout" => "SCOUT-1",
+        "analista" => "ANALISTA-1",
+        "scorer" => "SCORER-1",
+        "scrittore" => "SCRITTORE-1",
+        "critico" => "CRITICO",
+        _ => "",
+    };
+    if !fixed.is_empty() {
+        return Some(fixed.to_owned());
+    }
+    let (role, number) = chat_instance(agent)?;
+    Some(format!("{}-{number}", role.to_ascii_uppercase()))
+}
+
+/// A session the chat may write to: the session of an id above, in capitals and nothing else.
+pub(crate) fn chat_session_ok(session: &str) -> bool {
+    session == session.to_ascii_uppercase() && chat_session(&session.to_ascii_lowercase()).is_some_and(|known| known == session)
+}
 
 /// What the app asks of the chat in a pinned container: four operations, each with its few
 /// arguments. The user's text is never one of them: it goes on standard input (the words of an
@@ -2242,7 +2284,7 @@ fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
 pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
     match operation {
         ChatOperation::Read { agent, cursor } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             let mut arguments = vec!["read".to_owned(), (*agent).to_owned()];
@@ -2254,7 +2296,7 @@ pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String
             Ok(arguments)
         }
         ChatOperation::Send { agent, client_message_id } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             if !chat_token(client_message_id, 64, false) {
@@ -2263,7 +2305,7 @@ pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String
             Ok(vec!["send".to_owned(), (*agent).to_owned(), (*client_message_id).to_owned()])
         }
         ChatOperation::Answer { agent, question_id } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             if !chat_question_id(question_id) {
@@ -2272,7 +2314,7 @@ pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String
             Ok(vec!["answer".to_owned(), (*agent).to_owned(), (*question_id).to_owned()])
         }
         ChatOperation::Enter { agent, message_id } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             if !chat_token(message_id, 64, false) {
@@ -3307,8 +3349,30 @@ mod tests {
     }
 
     #[test]
+    fn an_instance_of_a_numbered_role_is_a_closed_form_of_the_chat_command() {
+        let last = |command: String| command.lines().last().expect("a last line").to_owned();
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Read { agent: "analista-2", cursor: None }).unwrap()),
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'analista-2'"
+        );
+        assert_eq!(
+            chat_wrapper_arguments(&ChatOperation::Send { agent: "scout-12", client_message_id: "id-1" }).unwrap(),
+            ["desktop-chat", "chat-send", "scout-12", "id-1"]
+        );
+        assert_eq!(chat_session("scout-12").as_deref(), Some("SCOUT-12"));
+        assert_eq!(chat_session("scout").as_deref(), Some("SCOUT-1"));
+        assert!(chat_session_ok("SCRITTORE-9999") && chat_session_ok("CRITICO"));
+        for bad in ["scout", "SCOUT", "SCOUT-0", "SCOUT-01", "scout-2", "SCOUT-2 ", "CRITICO-2", "CAPITANO-1", ""] {
+            assert!(!chat_session_ok(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
     fn nothing_outside_the_closed_forms_enters_the_chat_command() {
-        for agent in ["", "CAPITANO", "capitano ", "capitano'; id #", "scout-1", "../mentor", "capitano\n", "agente"] {
+        for agent in [
+            "", "CAPITANO", "capitano ", "capitano'; id #", "scout-0", "scout-01", "scout-10000", "scout-1-2", "SCOUT-1", "scout-2\n",
+            "scout-2'; id #", "critico-2", "../mentor", "capitano\n", "agente",
+        ] {
             assert_eq!(chat_command(&target(), &ChatOperation::Read { agent, cursor: None }), Err("invalid_agent"), "{agent:?}");
             assert_eq!(chat_command(&target(), &ChatOperation::Send { agent, client_message_id: "id" }), Err("invalid_agent"), "{agent:?}");
         }

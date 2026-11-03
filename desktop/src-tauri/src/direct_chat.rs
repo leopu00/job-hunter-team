@@ -658,30 +658,10 @@ fn ready_status(validated: &ValidatedHost, link: VpsLink) -> DirectChatStatus {
 }
 
 fn valid_agent(value: &str) -> bool {
-    matches!(
-        value,
-        "capitano"
-            | "assistente"
-            | "mentor"
-            | "scout"
-            | "analista"
-            | "scorer"
-            | "scrittore"
-            | "critico"
-    )
+    existing_team_runtime::chat_agent_ok(value)
 }
-fn session_for(agent: &str) -> Option<&'static str> {
-    Some(match agent {
-        "capitano" => "CAPITANO",
-        "assistente" => "ASSISTENTE",
-        "mentor" => "MENTOR",
-        "scout" => "SCOUT-1",
-        "analista" => "ANALISTA-1",
-        "scorer" => "SCORER-1",
-        "scrittore" => "SCRITTORE-1",
-        "critico" => "CRITICO",
-        _ => return None,
-    })
+fn session_for(agent: &str) -> Option<String> {
+    existing_team_runtime::chat_session(agent)
 }
 
 fn emit(inner: &DirectChatInner, event: DirectChatEvent) {
@@ -2258,7 +2238,7 @@ fn run_connection(
                 ),
                 (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
                 (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
-                (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?.to_owned(),
+                (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?,
             };
             match connection.link {
                 VpsLink::Master => run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()),
@@ -2572,7 +2552,14 @@ fn remote_wrapper_command(arguments: &[String], answer_actions: bool) -> String 
     } else {
         String::new()
     };
-    format!(r#"{checks}grep -Fqx 'JHT_DESKTOP_CHAT_FIXED=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; {answer}exec "$JHT_BIN" {}"#, quoted.join(" "))
+    // An instance of a numbered role (`analista-2`) came later still: it needs its own marker. Without it the
+    // caller takes the older path, which does not know instances and says «update the team».
+    let instances = if arguments.iter().any(|argument| existing_team_runtime::chat_instance(argument).is_some()) {
+        format!(r#"grep -Fqx 'JHT_DESKTOP_CHAT_INSTANCES=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; "#)
+    } else {
+        String::new()
+    };
+    format!(r#"{checks}grep -Fqx 'JHT_DESKTOP_CHAT_FIXED=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; {answer}{instances}exec "$JHT_BIN" {}"#, quoted.join(" "))
 }
 
 /// The exit that says «the host's wrapper does not have the chat actions».
@@ -2787,34 +2774,15 @@ pub(crate) async fn direct_chat_read(
     }
 }
 
-fn delivery_command(agent: &str) -> Option<&'static str> {
-    Some(match agent {
-        "capitano" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send CAPITANO"#
-        }
-        "assistente" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send ASSISTENTE"#
-        }
-        "mentor" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send MENTOR"#
-        }
-        "scout" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send SCOUT-1"#
-        }
-        "analista" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send ANALISTA-1"#
-        }
-        "scorer" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send SCORER-1"#
-        }
-        "scrittore" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send SCRITTORE-1"#
-        }
-        "critico" => {
-            r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat send CRITICO"#
-        }
-        _ => return None,
-    })
+/// The wrapper's older `send` action for one session, on a host reached by ssh: the checks of
+/// `REMOTE_PYTHON_STDIN`, then `desktop-chat send SESSION`. The session is a capital-letter name of the chat's
+/// closed grammar (the eight fixed ones, or an instance of a numbered role), checked here again.
+fn delivery_command(session: &str) -> Option<String> {
+    if !existing_team_runtime::chat_session_ok(session) {
+        return None;
+    }
+    let checks = REMOTE_PYTHON_STDIN.strip_suffix("python")?;
+    Some(format!("{checks}send {session}"))
 }
 
 fn local_delivery_args(session: &str) -> [&str; 3] {
@@ -2950,6 +2918,7 @@ fn send_impl(
         )?
     };
     let session = session_for(&agent).ok_or_else(|| failure("invalid_agent"))?;
+    let session = session.as_str();
     let mut envelope = Zeroizing::new(format!("[@utente -> @{agent}] [CHAT] {text}"));
     let mut delivered = run_connection(
         connection,
@@ -5480,6 +5449,19 @@ mod tests {
         assert_eq!(run_with(&format!("#!/bin/sh\n{protocol}printf 'ran'\n")), (Some(UNKNOWN_ACTION), String::new()));
         // the script's own 2 (python3: no such file, an image older than the chat) is not «no chat actions»
         assert_eq!(run_with(&format!("#!/bin/sh\n{protocol}{marker}exit 2\n")), (Some(2), String::new()));
+        // an instance of a numbered role needs the marker of the instances: without it 64, with it the arguments given
+        let instance_command = remote_wrapper_command(&["desktop-chat".to_owned(), "read".to_owned(), "analista-2".to_owned()], false);
+        let instances_marker = "JHT_DESKTOP_CHAT_INSTANCES=1\n";
+        assert_eq!(
+            run_command_with(&instance_command, &format!("#!/bin/sh\n{protocol}{marker}printf 'ran'\n")),
+            (Some(UNKNOWN_ACTION), String::new())
+        );
+        assert_eq!(
+            run_command_with(&instance_command, &format!("#!/bin/sh\n{protocol}{marker}{instances_marker}printf 'ran:%s' \"$*\"\n")),
+            (Some(0), "ran:desktop-chat read analista-2".to_owned())
+        );
+        // the fixed ids do not ask for it: an older wrapper keeps serving them
+        assert_eq!(run_with(&format!("#!/bin/sh\n{protocol}{marker}printf 'ran'\n")), (Some(0), "ran".to_owned()));
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -5813,35 +5795,58 @@ mod tests {
     #[test]
     fn send_allowlist_maps_to_fixed_sessions() {
         assert!(valid_agent("assistente"));
-        assert_eq!(session_for("assistente"), Some("ASSISTENTE"));
+        assert_eq!(session_for("assistente").as_deref(), Some("ASSISTENTE"));
+        assert_eq!(session_for("scout").as_deref(), Some("SCOUT-1"));
         for bad in ["", "CAPITANO;touch", "dottore", "../capitano"] {
             assert!(!valid_agent(bad));
         }
     }
 
     #[test]
+    fn an_instance_of_a_numbered_role_is_an_id_of_the_chat_and_nothing_near_it_is() {
+        for (id, session) in [("scout-2", "SCOUT-2"), ("analista-12", "ANALISTA-12"), ("scorer-4", "SCORER-4"), ("scrittore-9999", "SCRITTORE-9999"), ("scout-1", "SCOUT-1")] {
+            assert!(valid_agent(id), "{id}");
+            assert_eq!(session_for(id).as_deref(), Some(session), "{id}");
+        }
+        for bad in [
+            "scout-0", "scout-01", "scout-10000", "scout-", "scout-x", "scout--1", "scout-1-2", "Scout-2", "SCOUT-2", "critico-2",
+            "capitano-2", "mentor-1", "closer-1", "scout_2", " scout-2", "scout-2 ", "scout-2\n", "../scout-2", "scout-2/..", "scout-2;ls", "scout-٢",
+        ] {
+            assert!(!valid_agent(bad), "{bad:?}");
+            assert_eq!(session_for(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
     fn every_vps_chat_command_uses_the_attested_wrapper() {
-        let mut commands = vec![REMOTE_CONTAINER_PROBE, REMOTE_PYTHON_STDIN];
+        let mut commands = vec![REMOTE_CONTAINER_PROBE.to_owned(), REMOTE_PYTHON_STDIN.to_owned()];
         commands.extend(
             [
-                "capitano",
-                "assistente",
-                "mentor",
-                "scout",
-                "analista",
-                "scorer",
-                "scrittore",
-                "critico",
+                "CAPITANO",
+                "ASSISTENTE",
+                "MENTOR",
+                "SCOUT-1",
+                "ANALISTA-1",
+                "SCORER-1",
+                "SCRITTORE-1",
+                "CRITICO",
+                "SCOUT-2",
+                "ANALISTA-12",
             ]
             .into_iter()
-            .map(|agent| delivery_command(agent).unwrap()),
+            .map(|session| delivery_command(session).unwrap()),
         );
 
-        assert_eq!(commands.len(), 10);
-        for command in commands {
+        assert_eq!(commands.len(), 12);
+        for command in &commands {
             assert!(command.contains("JHT_DESKTOP_CHAT_PROTOCOL=1"));
             assert!(command.contains("exec \"$JHT_BIN\" desktop-chat"));
             assert!(!command.contains("docker "));
+        }
+        assert!(commands[10].ends_with("desktop-chat send SCOUT-2"));
+        // the id of the chat is not a session, and nothing but the closed grammar becomes one
+        for bad in ["scout", "scout-2", "SCOUT-0", "SCOUT-01", "SCOUT-2;ls", "SCOUT-2 ", "CRITICO-2", "CLOSER-1", ""] {
+            assert!(delivery_command(bad).is_none(), "{bad:?}");
         }
     }
 
