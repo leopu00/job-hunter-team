@@ -160,7 +160,7 @@ def test_the_powershell_branch_reads_and_never_starts():
         assert forbidden not in body
     assert "$script:AgentControlExitCode = 113" in text
     assert "'agent-control' {\n    Invoke-AgentControl $Rest\n    exit $script:AgentControlExitCode" in text
-    assert "$Sub -notin @('game', 'gui', 'agent-control')" in text
+    assert "$Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')" in text
 
 
 def test_the_bash_branch_is_dispatched_before_the_generic_one():

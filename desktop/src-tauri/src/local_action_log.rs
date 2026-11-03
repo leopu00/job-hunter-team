@@ -444,8 +444,10 @@ mod tests {
             }
             let temporary = path.with_extension("jsonl.tmp");
             if std::os::windows::fs::symlink_file(&outside, &temporary).is_ok() {
+                // On Windows the private folder's own check refuses a link anywhere inside it (`secure_descendants`), so
+                // these appends may fail before the rotation is reached; whether they do or not, nothing is written through
                 for n in 0..(REWRITE_AT + 2) {
-                    append(&path, &line("team.stop", &Subject::Target("all".into()), &format!("{n}-3"), AT).unwrap()).unwrap();
+                    let _ = append(&path, &line("team.stop", &Subject::Target("all".into()), &format!("{n}-3"), AT).unwrap());
                 }
                 assert_eq!(fs::read_to_string(&outside).unwrap(), "keep me", "the rotation did not write through the link");
             }

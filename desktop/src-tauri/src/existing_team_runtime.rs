@@ -253,7 +253,7 @@ try:
   db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON')
  db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
-if op=='detail': emit({'ok':True,'data':position_detail(int(req['id'])),'ident':ident})
+if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))} if absent else {'ok':True,'data':position_detail(int(req['id'])),'ident':ident})
 def trunc(value,size): return value[:size] if isinstance(value,str) else value
 def number(value): return value if isinstance(value,(int,float)) and not isinstance(value,bool) else None
 # An office coordinate the globe may place a pin on: a finite number within the globe, else None
@@ -4493,7 +4493,7 @@ mod tests {
         let listed = json!({"ok": true, "data": {"items": []}, "ident": [77, 5]}).to_string();
         assert_eq!(positions_reply_from_output(&list, exited(0, &listed).unwrap(), Some("0123456789abcdef")), json!({"ok": true, "data": {"items": []}}));
         // and the reader answers the identity of the file only for a detail
-        assert!(POSITIONS_READ_PY.contains("if op=='detail': emit({'ok':True,'data':position_detail(int(req['id'])),'ident':ident})"));
+        assert!(POSITIONS_READ_PY.contains("if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))} if absent else {'ok':True,'data':position_detail(int(req['id'])),'ident':ident})"));
     }
 
     #[test]
