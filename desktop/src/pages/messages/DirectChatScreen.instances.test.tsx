@@ -84,4 +84,29 @@ describe("DirectChatScreen: one conversation per instance", () => {
     const mine = await screen.findByText("Ultima");
     expect(await within(mine.closest("article")!).findByTestId("direct-chat-sent")).toBeInTheDocument();
   });
+
+  it("shows under each conversation its last line and time once it has been read: the others in turn, the open one by its own lines", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const at = Math.floor(Date.now() / 1000) - 60;
+      const mock = client({
+        capitano: [{ id: "c1", role: "agent", text: "Buongiorno, ecco il punto.", at }],
+        "analista-2": [{ id: "a1", role: "user", text: "Mi serve la lista", at }, { id: "a2", role: "agent", text: "[caldo] Eccola: sei aziende.", at: at + 5 }],
+      });
+      render(<DirectChatScreen client={mock} initialAgentId="capitano" loadSessions={sessions("CAPITANO", "ANALISTA-1", "ANALISTA-2")} />);
+      expect(await screen.findByTestId("direct-chat-last-time-capitano")).toBeInTheDocument();
+      // the open conversation shows its lines itself: its row does not repeat them
+      expect(screen.queryByTestId("direct-chat-preview-capitano")).toBeNull();
+      // the others are looked at one by one, 45 s apart (the first after a few seconds)
+      expect(screen.queryByTestId("direct-chat-preview-analista-2")).toBeNull();
+      await vi.advanceTimersByTimeAsync(200_000);
+      await waitFor(() => expect(screen.getByTestId("direct-chat-preview-analista-2")).toHaveTextContent("Eccola: sei aziende."));
+      // the name of the button stays the agent's: the line is its description, not part of its name
+      const nav = screen.getByRole("navigation", { name: "Chat agenti" });
+      // (its name may also say «1 messaggio non letto»: the marks of the earlier tests are kept in the window's storage)
+      expect(within(nav).getByRole("button", { name: /^Analista 2/ })).toHaveAccessibleDescription("Eccola: sei aziende.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

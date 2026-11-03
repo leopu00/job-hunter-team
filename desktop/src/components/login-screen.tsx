@@ -16,6 +16,7 @@ import {
 } from "../lib/supabase";
 import {
   createAndActivateLocalProfile,
+  labelLocalProfiles,
   listLocalProfiles,
   readLocalProfile,
   readTeamOwnerCopy,
@@ -258,7 +259,7 @@ export function LoginScreen({
 
   const ownerId = !ownerAsked ? null : nativeOwnerId !== undefined ? nativeOwnerId : ownerLocal()?.profileId ?? null;
   // The profile with the team on this Mac comes first (the others keep the order they were made in).
-  const savedProfiles = [...listLocal()].sort(
+  const savedProfiles = labelLocalProfiles(listLocal()).sort(
     (a, b) => Number(b.profileId === ownerId) - Number(a.profileId === ownerId),
   );
   const hasSavedLocalProfile = savedProfiles.length > 0;
@@ -364,7 +365,7 @@ export function LoginScreen({
                         onClick={() => chooseLocal(profile.profileId)}
                         disabled={localBusy}
                       >
-                        {localBusy ? t.preparing : profilesText.useProfile.replace("{name}", () => profile.displayName)}
+                        {localBusy ? t.preparing : profilesText.useProfile.replace("{name}", () => profile.label)}
                       </button>
                       {(profile.profileId === ownerId || profile.profileId === lastUsedId || !hasDestination(profile.profileId)) && (
                         <span className="login-card__tags">

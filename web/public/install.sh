@@ -7,12 +7,13 @@
 # ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash                 ║
 # ║                                                                          ║
 # ║    # "Expert mode" install without a container:                          ║
-# ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker ║
+# ║    curl -fsSL https://jobhunterteam.ai/install.sh \                      ║
+# ║      | bash -s -- --no-docker                                            ║
 # ║                                                                          ║
 # ║  Default (Docker mode): installs nothing on the host except Docker.      ║
 # ║  Downloads:                                                              ║
 # ║    - host runtime outside $HOME/.jht (compose + preflight)               ║
-# ║    - $HOME/.local/bin/jht         (bash wrapper, ~165 lines)             ║
+# ║    - $HOME/.local/bin/jht         (the bash wrapper)                     ║
 # ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
 # ║  running container managed by compose. No Node/Python/tmux on the host.  ║
 # ║  No Docker socket inside the container.                                  ║
@@ -33,7 +34,7 @@
 # ║                            missing is installed with sudo -n (no         ║
 # ║                            password prompt), never Docker.               ║
 # ║    --dry-run               Only show the actions that would be executed  ║
-# ║    --publish-runtime-bundle  Migrate one verified candidate installer,  ║
+# ║    --publish-runtime-bundle  Migrate one verified candidate installer,   ║
 # ║                              wrapper, compose and host-setup transaction;║
 # ║                              no engine, GUI, account or container I/O.   ║
 # ║    --expected-installer-sha256 <hex> Required with the mode above.       ║
@@ -55,10 +56,10 @@
 # ║      curl ...install.sh | bash -s -- --branch dev-1                      ║
 # ║    JHT_BRANCH=dev-1        Source branch (env var, alternative to        ║
 # ║                            --branch). default: production                ║
-# ║    JHT_INSTALL_DIR         Where to clone the repo (default: $HOME/.jht/src,║
-# ║                            only used by --no-docker)                     ║
+# ║    JHT_INSTALL_DIR         Where to clone the repo (default:             ║
+# ║                            $HOME/.jht/src, only used by --no-docker)     ║
 # ║    JHT_RUNTIME_DIR         Where to download docker-compose.yml          ║
-# ║                            (default: XDG/App Support host-runtime)        ║
+# ║                            (default: XDG/App Support host-runtime)       ║
 # ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
 # ║    JHT_IMAGE               Container image override (default: immutable  ║
@@ -68,12 +69,8 @@
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
 # ║    JHT_SKIP_ONBOARD=1      Do not launch the wizard at the end           ║
 # ║                                                                          ║
-# ║  Design reference:                                                       ║
-# ║    docs/internal/ops/vps.md                      ║
-# ║                                                                          ║
 # ║  Supports: macOS (Colima, Podman, or Docker Desktop), Linux              ║
-# ║  (Debian/Ubuntu/Fedora/                                                  ║
-# ║  Arch), WSL2.                                                             ║
+# ║  (Debian/Ubuntu/Fedora/Arch), WSL2.                                      ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
@@ -94,6 +91,14 @@ elif [ "$(id -u 2>/dev/null || echo 1000)" -eq 0 ] && [ -w /usr/local/bin ]; the
 else
   BIN_DIR="$HOME/.local/bin"
 fi
+# The folder is written between double quotes into a shell startup file (and into /etc/profile.d as root): a quote,
+# a dollar sign, a backtick, a backslash or a line break in it would run something there, so it is refused here.
+case "$BIN_DIR" in
+  *'"'*|*'$'*|*'`'*|*'\'*|*$'\n'*|*$'\r'*)
+    printf 'The folder for the jht command (JHT_BIN_DIR) has a character that cannot be written safely into a shell startup file: nothing was installed.\n' >&2
+    exit 2
+    ;;
+esac
 
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
@@ -345,12 +350,22 @@ info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
 
+jht_machine_output() {
+  case "${JHT_MACHINE_OUTPUT:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [ ! -t 1 ]
+}
+
 jht_phase() {
   case "$1" in
     homebrew_check|podman_install|compose_install|machine_create|image_pull|machine_start) ;;
     *) fail "Unknown installer phase: $1" ;;
   esac
-  printf 'JHT_PHASE %s\n' "$1"
+  # The marker is for the desktop app, which reads the installer through a pipe. A person at a terminal gets the
+  # human lines (✓ ▸) only. JHT_MACHINE_OUTPUT=1 forces the marker, =0 forbids it, unset: only when stdout is not a terminal.
+  if jht_machine_output; then printf 'JHT_PHASE %s\n' "$1"; fi
 }
 
 # Wrap commands with system side effects. In dry-run, print instead of executing.
@@ -1318,8 +1333,32 @@ download_runtime_files() {
         done
       fi
       if [ "$persistent_added" -eq 0 ]; then
+        # A fresh account may have none of the rc files, and a PATH that nobody wrote leaves `jht` "not found" in the
+        # next terminal. If none of them already has the line, they are created: ~/.profile (login shells) and the
+        # rc of the shell in use (bash or zsh).
+        local already=0 rc
+        local -a created_rc
+        for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+          if [ -f "$rc" ] && grep -q "$BIN_DIR" "$rc" 2>/dev/null; then already=1; fi
+        done
+        if [ "$already" -eq 0 ]; then
+          # one word per file, quoted: a HOME with a space in it stays one path
+          created_rc=("$HOME/.profile")
+          case "${SHELL##*/}" in
+            zsh) created_rc+=("$HOME/.zshrc") ;;
+            bash) created_rc+=("$HOME/.bashrc") ;;
+          esac
+          for rc in "${created_rc[@]}"; do
+            printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc" \
+              && { ok "PATH added to $rc"; persistent_added=1; }
+          done
+        fi
+      fi
+      if [ "$persistent_added" -eq 0 ]; then
         warn "No shell rc file was written. Add manually:"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
+      else
+        PATH_NEW_SHELL=1
       fi
       # Also update this subshell's PATH so the commands install.sh runs
       # afterwards (e.g. the wizard) can find `jht`. The parent shell PATH
@@ -1978,6 +2017,9 @@ final_message() {
   if ! will_auto_onboard; then
     printf "  ${BOLD}Next steps:${RESET}\n"
     printf "\n"
+    if [ "${PATH_NEW_SHELL:-0}" -eq 1 ]; then
+      printf "      ${DIM}Open a new terminal window first (or run: . ~/.profile), so that it finds jht.${RESET}\n\n"
+    fi
     if [ "${PATH_READY:-0}" -eq 1 ]; then
       if [ "$USE_DOCKER" -eq 1 ]; then
         printf "      ${BOLD}jht setup${RESET}        ${DIM}# configuration wizard (also starts the container)${RESET}\n"

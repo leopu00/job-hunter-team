@@ -108,13 +108,13 @@ async function handleHealth() {
   }
 
   const overallLabel = overall === 'ok' ? 'OK' : overall === 'warn' ? 'WARNING' : 'ERROR';
-  const coda = gone > 0 ? `, ${gone} with no remaining data source` : '';
+  const coda = gone > 0 ? `, ${gone} no longer used` : '';
   console.log(`\n  State: ${COLOR[overall]}${overallLabel}${RESET} — ${checks.length - errors - warns - gone} ok, ${warns} warnings, ${errors} errors${coda}\n`);
 }
 
 export function registerHealthCommand(program) {
   program
     .command('health')
-    .description('Shows the health status of JHT modules')
+    .description('Check the health of each part of JHT: configuration, credentials, memory, agents')
     .action(handleHealth);
 }

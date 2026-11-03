@@ -11,6 +11,9 @@ import type { OnboardingRuntimeStage } from "./onboarding";
 const it = {
   gateError: "Non riesco a verificare la configurazione dell’account. Riprova.",
   accountScopeError: "Non riesco a verificare l’isolamento dell’account. Nessun runtime è stato aperto.",
+  profileGoneError: "Questo profilo non c’è più su questo computer: i suoi dati locali non si trovano. Nessun runtime è stato aperto.",
+  chooseAnotherProfile: "Scegli un altro profilo",
+  forgetThisProfile: "Dimentica questo profilo",
   providerActionInvalid: "La richiesta del provider non è valida. Riavvia l’accesso.",
   migrationErrorTitle: "Non riesco a collegare il profilo locale.",
   migrationStaysLocal: "Non è cambiato niente: la squadra resta del profilo locale.",
@@ -90,6 +93,9 @@ type StateCopy = typeof it;
 const en: StateCopy = {
   gateError: "I cannot check the account’s configuration. Try again.",
   accountScopeError: "I cannot check the account’s isolation. No runtime was opened.",
+  profileGoneError: "This profile is no longer on this computer: its local data cannot be found. No runtime was opened.",
+  chooseAnotherProfile: "Choose another profile",
+  forgetThisProfile: "Forget this profile",
   providerActionInvalid: "The provider’s request is not valid. Start the login again.",
   migrationErrorTitle: "I cannot link the local profile.",
   migrationStaysLocal: "Nothing changed: the team stays with the local profile.",
@@ -167,6 +173,9 @@ const en: StateCopy = {
 const de: StateCopy = {
   gateError: "Ich kann die Konfiguration des Kontos nicht prüfen. Versuche es erneut.",
   accountScopeError: "Ich kann die Isolierung des Kontos nicht prüfen. Es wurde keine Runtime geöffnet.",
+  profileGoneError: "Dieses Profil gibt es auf diesem Computer nicht mehr: seine lokalen Daten sind nicht zu finden. Es wurde keine Runtime geöffnet.",
+  chooseAnotherProfile: "Anderes Profil wählen",
+  forgetThisProfile: "Dieses Profil vergessen",
   providerActionInvalid: "Die Anfrage des Anbieters ist ungültig. Starte die Anmeldung neu.",
   migrationErrorTitle: "Ich kann das lokale Profil nicht verbinden.",
   migrationStaysLocal: "Es hat sich nichts geändert: Das Team bleibt beim lokalen Profil.",
@@ -244,6 +253,9 @@ const de: StateCopy = {
 const es: StateCopy = {
   gateError: "No puedo comprobar la configuración de la cuenta. Vuelve a intentarlo.",
   accountScopeError: "No puedo comprobar el aislamiento de la cuenta. No se ha abierto ningún runtime.",
+  profileGoneError: "Este perfil ya no está en este ordenador: no se encuentran sus datos locales. No se ha abierto ningún runtime.",
+  chooseAnotherProfile: "Elegir otro perfil",
+  forgetThisProfile: "Olvidar este perfil",
   providerActionInvalid: "La petición del proveedor no es válida. Reinicia el acceso.",
   migrationErrorTitle: "No puedo conectar el perfil local.",
   migrationStaysLocal: "No ha cambiado nada: el equipo sigue siendo del perfil local.",
@@ -321,6 +333,9 @@ const es: StateCopy = {
 const fr: StateCopy = {
   gateError: "Je ne peux pas vérifier la configuration du compte. Réessaie.",
   accountScopeError: "Je ne peux pas vérifier l’isolement du compte. Aucun runtime n’a été ouvert.",
+  profileGoneError: "Ce profil n’est plus sur cet ordinateur : ses données locales sont introuvables. Aucun runtime n’a été ouvert.",
+  chooseAnotherProfile: "Choisir un autre profil",
+  forgetThisProfile: "Oublier ce profil",
   providerActionInvalid: "La demande du fournisseur n’est pas valide. Relance la connexion.",
   migrationErrorTitle: "Je ne peux pas relier le profil local.",
   migrationStaysLocal: "Rien n’a changé : l’équipe reste celle du profil local.",
@@ -398,6 +413,9 @@ const fr: StateCopy = {
 const hu: StateCopy = {
   gateError: "Nem tudom ellenőrizni a fiók beállításait. Próbáld újra.",
   accountScopeError: "Nem tudom ellenőrizni a fiók elkülönítését. Egyetlen runtime sem nyílt meg.",
+  profileGoneError: "Ez a profil már nincs ezen a számítógépen: a helyi adatai nem találhatók. Egyetlen runtime sem nyílt meg.",
+  chooseAnotherProfile: "Másik profil választása",
+  forgetThisProfile: "Profil elfelejtése",
   providerActionInvalid: "A szolgáltató kérése érvénytelen. Indítsd újra a bejelentkezést.",
   migrationErrorTitle: "Nem tudom összekapcsolni a helyi profilt.",
   migrationStaysLocal: "Semmi sem változott: a csapat a helyi profilé marad.",
@@ -475,6 +493,9 @@ const hu: StateCopy = {
 const pt: StateCopy = {
   gateError: "Não consigo verificar a configuração da conta. Tenta novamente.",
   accountScopeError: "Não consigo verificar o isolamento da conta. Nenhum runtime foi aberto.",
+  profileGoneError: "Este perfil já não está neste computador: os seus dados locais não se encontram. Nenhum runtime foi aberto.",
+  chooseAnotherProfile: "Escolher outro perfil",
+  forgetThisProfile: "Esquecer este perfil",
   providerActionInvalid: "O pedido do fornecedor não é válido. Reinicia o acesso.",
   migrationErrorTitle: "Não consigo ligar o perfil local.",
   migrationStaysLocal: "Não mudou nada: a equipa continua a ser do perfil local.",

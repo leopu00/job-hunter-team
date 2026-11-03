@@ -69,16 +69,16 @@ describe("jht setup CLI", () => {
 /* ── jht doctor CLI ── */
 describe("jht doctor CLI", () => {
   const src = readCli("src/commands/doctor.js");
-  it("registerDoctorCommand + 7 check functions", () => {
+  it("registerDoctorCommand + the check functions", () => {
     expect(src).toContain("export function registerDoctorCommand");
     expect(src).toContain("'doctor'");
-    for (const fn of ["checkNode", "checkConfig", "checkProvider", "checkApiKey", "checkDatabase", "checkDeps", "checkWorkers"])
+    for (const fn of ["nodeIsTooOld", "checkConfig", "checkProvider", "checkApiKey", "checkDatabase", "checkDeps", "checkWorkers"])
       expect(src).toContain(`function ${fn}`);
   });
-  it("5 sezioni diagnostica: Ambiente, Config, Provider LLM, Database, Workers", () => {
-    for (const sec of ["Environment", "Config", "Provider LLM", "Database", "Workers"])
+  it("5 sezioni diagnostica: Environment, Config, AI provider, Database, Team; riassunto prima, --all e --json", () => {
+    for (const sec of ["Environment", "Config", "AI provider", "Database", "Team"])
       expect(src).toContain(sec);
-    expect(src).toContain("printCheck"); expect(src).toContain("spinner");
+    expect(src).toContain("--all"); expect(src).toContain("--json");
   });
   it("deps required node/npm/tmux/git + optional claude/pandoc/typst/python3", () => {
     for (const d of ["node", "npm", "tmux", "git"]) expect(src).toContain(`'${d}'`);

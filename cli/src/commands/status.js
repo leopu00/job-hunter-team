@@ -6,6 +6,8 @@ import { JHT_HOME } from '../jht-paths.js';
 import { AGENTS, isAgentSession } from './team/agents.js';
 import { fetchLatestRelease, updateNotice } from '../lib/release-check.js';
 import pkg from '../../package.json' with { type: 'json' };
+import { c } from './_colors.js';
+import { hint, keyValues, marks, statusLine, title } from '../lib/ui.js';
 
 const CONFIG_DIR = JHT_HOME;
 const CONFIG_FILE = join(CONFIG_DIR, 'jht.config.json');
@@ -31,79 +33,62 @@ function getTmuxSessions() {
   }
 }
 
-async function handleStatus() {
-  console.log('\n  JHT — System Status\n');
-  console.log(`  Version:   ${pkg.version}`);
+async function handleStatus(options) {
+  const facts = [['Version', pkg.version]];
+  let config = null;
+  if (await fileExists(CONFIG_FILE)) {
+    try { config = JSON.parse(await readFile(CONFIG_FILE, 'utf-8')); } catch { config = false; }
+  }
+  const provConfig = config ? config.providers?.[config.active_provider] : null;
+  const tgBots = config ? config.channels?.telegram?.bots : null;
 
-  // Config
-  const hasConfig = await fileExists(CONFIG_FILE);
-  if (hasConfig) {
-    const raw = await readFile(CONFIG_FILE, 'utf-8');
-    const config = JSON.parse(raw);
-    const activeProvider = config.active_provider || 'not set';
-    const provConfig = config.providers?.[config.active_provider];
-    const model = provConfig?.model || 'not set';
-    const auth = provConfig?.auth_method || 'not set';
-    console.log(`  Config:    ${CONFIG_FILE}`);
-    console.log(`  Provider:  ${activeProvider}`);
-    console.log(`  Model:     ${model}`);
-    console.log(`  Auth:      ${auth}`);
-    if (config.workspace) console.log(`  Workspace: ${config.workspace}`);
-    const tgBots = config.channels?.telegram?.bots;
-    if (tgBots?.assistente?.bot_token && tgBots?.capitano?.bot_token && tgBots?.mentor?.bot_token) {
-      console.log('  Telegram: 3 bots configured');
-    } else if (tgBots) {
+  // Team sessions. The container's sessions are CAPITANO / SCOUT-1 / ASSISTENTE and the old host path puts JHT-
+  // in front: both are recognised, or a working team would read as "0".
+  const sessions = getTmuxSessions().filter((s) => s.startsWith('lab-') || AGENTS.some((agent) => isAgentSession(s, agent)));
+  const notice = options.json ? null : updateNotice(pkg.version, await fetchLatestRelease());
+
+  if (options.json) {
+    console.log(JSON.stringify({
+      version: pkg.version,
+      configured: Boolean(config),
+      provider: config ? { id: config.active_provider ?? null, model: provConfig?.model ?? null, auth: provConfig?.auth_method ?? null } : null,
+      sessions,
+    }, null, 2));
+    return;
+  }
+
+  console.log(title('Status'));
+  if (config) {
+    facts.push(['Provider', config.active_provider ? `${config.active_provider}${provConfig?.model ? ` (${provConfig.model})` : ''}` : 'not set']);
+    if (provConfig?.auth_method) facts.push(['Sign-in', provConfig.auth_method]);
+    if (config.workspace) facts.push(['Workspace', config.workspace]);
+    if (tgBots) {
       const n = ['assistente', 'capitano', 'mentor'].filter((r) => tgBots?.[r]?.bot_token).length;
-      console.log(`  Telegram: incomplete (${n}/3 bots)`);
+      facts.push(['Telegram', n === 3 ? '3 bots configured' : `incomplete (${n} of 3 bots)`]);
     }
   } else {
-    console.log('  Config: not found (run: jht setup)');
+    facts.push(['Configuration', config === false ? 'unreadable' : 'not found']);
   }
-
-  // Tmux sessions
-  const sessions = getTmuxSessions();
-  // I container moderni usano CAPITANO / SCOUT-1 / ASSISTENTE, mentre il
-  // vecchio path host antepone JHT-. Il filtro precedente riconosceva solo il
-  // secondo formato e mostrava "0" dentro un team perfettamente operativo.
-  const jhtSessions = sessions.filter(s =>
-    s.startsWith('lab-') || AGENTS.some(agent => isAgentSession(s, agent))
-  );
-  console.log(`\n  Tmux Sessions JHT: ${jhtSessions.length}`);
-  for (const s of jhtSessions) {
-    console.log(`    - ${s}`);
+  facts.push(['Team', sessions.length ? `${sessions.length} running` : 'not running']);
+  console.log(keyValues(facts));
+  if (sessions.length) {
+    console.log('');
+    for (const name of sessions) console.log(`    ${c.green(marks().ok)} ${name}`);
   }
-
-  // Git
-  try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    const shortSha = execSync('git rev-parse --short HEAD', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    console.log(`\n  Git:       ${branch} (${shortSha})`);
-  } catch {
-    console.log('\n  Git: not available');
-  }
-
-  // Una versione più nuova, se c'è e se si riesce a saperlo. In fondo e non
-  // in cima perché non è un allarme: è la cosa che mancava del tutto, non
-  // la più urgente da leggere. Silenzio quando la risposta non arriva —
-  // offline è un giorno in cui non si controlla, non un guasto da annunciare.
-  const notice = updateNotice(pkg.version, await fetchLatestRelease());
+  console.log('');
+  if (!config) console.log(hint('Set it up with: jht setup'));
+  else if (!sessions.length) console.log(hint('Start the team with: jht team start'));
   if (notice) {
-    console.log(`\n  Update:    ${notice.latest} available (you run ${notice.current})`);
-    console.log(`             Run "${notice.command}" ${notice.where}.`);
+    console.log('');
+    console.log(statusLine('warn', `Version ${notice.latest} is available (you run ${notice.current})`, { hint: `Run "${notice.command}" ${notice.where}` }));
   }
-
   console.log('');
 }
 
 export function registerStatusCommand(program) {
   program
     .command('status')
-    .description('Show system status JHT')
+    .description('Show the state of the system: version, configuration, team sessions')
+    .option('--json', 'machine-readable output')
     .action(handleStatus);
 }

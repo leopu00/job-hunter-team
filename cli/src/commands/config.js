@@ -1,3 +1,4 @@
+import { errorBlock } from '../lib/ui.js';
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -51,7 +52,7 @@ function setNestedValue(obj, keyPath, value) {
 async function handleGet(keyPath) {
   const config = await loadConfig();
   if (!config) {
-    console.error('No configuration found. Run: jht setup');
+    console.error(errorBlock({ what: 'there is no configuration yet', fix: 'Set it up with: jht setup' }));
     process.exitCode = 1;
     return;
   }
@@ -63,7 +64,7 @@ async function handleGet(keyPath) {
 
   const value = getNestedValue(config, keyPath);
   if (value === undefined) {
-    console.error(`Key "${keyPath}" not found.`);
+    console.error(errorBlock({ what: `there is no setting called "${keyPath}"`, fix: 'See all the settings with: jht config get' }));
     process.exitCode = 1;
     return;
   }

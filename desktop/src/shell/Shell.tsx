@@ -179,8 +179,9 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
     () =>
       localTeam && !onPositionPage
         ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly }
-        : // on the page of a position only the authorisation of an application stays off (it writes the team's broker too)
-          { readOnly: false, reason: "", ...(localTeam ? { applyReason: LOCAL_TEAM_DATA_TEXT[appLocale()].applyOff } : {}) },
+        : // on the page of a position the authorisation of an application is on too, in two steps: the host's preview
+          // (summary, destination, digest), then the person's click carrying the digest and the destination back
+          { readOnly: false, reason: "", ...(localTeam ? { applyTwoStep: true } : {}) },
     [localTeam, onPositionPage],
   );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);

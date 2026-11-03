@@ -34,11 +34,11 @@ describe('Codex consigliato nella CLI', () => {
   it('usa Codex quando nessuno sceglie: jht setup, il setup non interattivo, doctor e providers', () => {
     expect(read('cli/src/commands/setup.js')).toContain("t('wizard.cli.provider'), 'openai')");
     expect(read('cli/wizard/setup-noninteractive.js')).toContain('opts.provider || RECOMMENDED_PROVIDER');
-    expect(read('cli/src/commands/doctor.js')).toContain('jht providers use codex (recommended');
+    expect(read('cli/src/commands/doctor.js')).toContain('jht providers use codex');
     const providers = read('cli/src/commands/providers.js');
     const known = providers.slice(providers.indexOf('const KNOWN_PROVIDERS = {'));
     expect(known.indexOf('openai:')).toBeLessThan(known.indexOf('anthropic:'));
     expect(providers).toContain("const UPDATE_TARGETS = ['codex'];");
-    expect(providers).toContain('Recommended: jht providers use codex');
+    expect(providers).toContain('Choose one with: jht providers use codex');
   });
 });

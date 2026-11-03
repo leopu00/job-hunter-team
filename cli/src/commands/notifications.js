@@ -50,7 +50,7 @@ async function listNotifications(options) {
   if (!options.all) notifs = notifs.filter(n => !n.read);
 
   if (notifs.length === 0) {
-    console.log(`\n  ${DIM}No notification${options.all ? '' : ' not read'}.${RESET}\n`);
+    console.log(`\n  ${DIM}${options.all ? 'No notifications.' : 'No unread notifications.'}${RESET}\n`);
     return;
   }
 

@@ -94,7 +94,7 @@ pub fn run() {
             if let Ok(dir) = tauri::Manager::path(app).app_local_data_dir() {
                 std::thread::spawn(move || private_copy::init(dir));
             }
-            // what a crash left of the pipe-free ssh calls (Windows only), off the start's path
+            // what a crash left of the ssh calls' temporary files (the pipe-free calls on Windows, the file of ssh's own messages on macOS and Linux), off the start's path
             std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
             Ok(())
         })

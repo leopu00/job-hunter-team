@@ -214,7 +214,7 @@ function rootsAction(options) {
 
 export function registerArtifactCommand(program) {
   const cmd = new Command('artifact')
-    .description('Documents produced by the team, and documents you hand to it (proxy to artifact.py)');
+    .description('Documents produced by the team, and documents you hand to it');
 
   cmd
     .command('fetch <path>')

@@ -8,6 +8,9 @@ export interface AgentPageText {
   /** The team is not reachable: the reason comes from the error catalog. */
   lastWork: string;
   lastActive: string; // {time}
+  lastMessage: string; // {who} {time}
+  noMessage: string;
+  you: string;
   neverActive: string;
   sessions: string;
   terminalTitle: string; // {name}
@@ -23,6 +26,9 @@ const it: AgentPageText = {
   notFound: "{name} non è nel team: controlla il nome o torna all’elenco.",
   lastWork: "Ultimo lavoro",
   lastActive: "Ultima attività {time}",
+  lastMessage: "Ultimo messaggio: {who}, {time}",
+  noMessage: "Nessun messaggio letto da quando hai aperto l’app: apri la chat per vederli.",
+  you: "Tu",
   neverActive: "Nessuna attività registrata",
   sessions: "Sessioni precedenti",
   terminalTitle: "Terminale di {name} in diretta",
@@ -38,6 +44,9 @@ const en: AgentPageText = {
   notFound: "{name} is not in the team: check the name or go back to the list.",
   lastWork: "Last work",
   lastActive: "Last activity {time}",
+  lastMessage: "Last message: {who}, {time}",
+  noMessage: "No message read since you opened the app: open the chat to see them.",
+  you: "You",
   neverActive: "No activity recorded",
   sessions: "Earlier sessions",
   terminalTitle: "{name}’s terminal, live",
@@ -53,6 +62,9 @@ const de: AgentPageText = {
   notFound: "{name} gehört nicht zum Team: Prüfe den Namen oder gehe zurück zur Liste.",
   lastWork: "Letzte Arbeit",
   lastActive: "Letzte Aktivität {time}",
+  lastMessage: "Letzte Nachricht: {who}, {time}",
+  noMessage: "Seit dem Öffnen der App wurde keine Nachricht gelesen: Öffne den Chat, um sie zu sehen.",
+  you: "Du",
   neverActive: "Keine Aktivität aufgezeichnet",
   sessions: "Frühere Sitzungen",
   terminalTitle: "Terminal von {name}, live",
@@ -68,6 +80,9 @@ const es: AgentPageText = {
   notFound: "{name} no está en el equipo: revisa el nombre o vuelve a la lista.",
   lastWork: "Último trabajo",
   lastActive: "Última actividad {time}",
+  lastMessage: "Último mensaje: {who}, {time}",
+  noMessage: "Ningún mensaje leído desde que abriste la app: abre el chat para verlos.",
+  you: "Tú",
   neverActive: "Sin actividad registrada",
   sessions: "Sesiones anteriores",
   terminalTitle: "Terminal de {name} en directo",
@@ -83,6 +98,9 @@ const fr: AgentPageText = {
   notFound: "{name} n’est pas dans l’équipe : vérifiez le nom ou revenez à la liste.",
   lastWork: "Dernier travail",
   lastActive: "Dernière activité {time}",
+  lastMessage: "Dernier message : {who}, {time}",
+  noMessage: "Aucun message lu depuis l’ouverture de l’app : ouvrez le chat pour les voir.",
+  you: "Vous",
   neverActive: "Aucune activité enregistrée",
   sessions: "Sessions précédentes",
   terminalTitle: "Terminal de {name} en direct",
@@ -98,6 +116,9 @@ const hu: AgentPageText = {
   notFound: "{name} nincs a csapatban: ellenőrizd a nevet, vagy térj vissza a listához.",
   lastWork: "Utolsó munka",
   lastActive: "Utolsó aktivitás: {time}",
+  lastMessage: "Utolsó üzenet: {who}, {time}",
+  noMessage: "Az alkalmazás megnyitása óta nem olvastál üzenetet: nyisd meg a csevegést.",
+  you: "Te",
   neverActive: "Nincs rögzített aktivitás",
   sessions: "Korábbi munkamenetek",
   terminalTitle: "{name} terminálja élőben",
@@ -113,6 +134,9 @@ const pt: AgentPageText = {
   notFound: "{name} não está na equipa: verifique o nome ou volte à lista.",
   lastWork: "Último trabalho",
   lastActive: "Última atividade {time}",
+  lastMessage: "Última mensagem: {who}, {time}",
+  noMessage: "Nenhuma mensagem lida desde que abriu a app: abra o chat para as ver.",
+  you: "Você",
   neverActive: "Sem atividade registada",
   sessions: "Sessões anteriores",
   terminalTitle: "Terminal de {name} em direto",

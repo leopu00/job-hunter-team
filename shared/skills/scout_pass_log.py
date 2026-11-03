@@ -98,7 +98,9 @@ class Refused(ValueError):
 # The page of a list is not another question. On a real run 13 of the 17 passes of one Scout on Platsbanken were the same few
 # queries at offset 0, 100, 200...: logged with their offset they would have counted as thirteen different queries and a portal
 # as covered by one question asked thirteen times. The words that name a page are taken out before the hash.
-_PAGE = re.compile(r"\b(?:offset|page|pagina|seite|start|skip|from)\s*[=:#]?\s*\d+\b")
+# The separator is ONE of two shapes (a sign with its blanks, or blanks alone): `\s*[=:#]?\s*` let a long run of blanks split
+# between the two `\s*` in every possible way, so «page» + 20,000 blanks + a letter took 1.7 s and the time grew with the square.
+_PAGE = re.compile(r"\b(?:offset|page|pagina|seite|start|skip|from)(?:\s*[=:#]\s*|\s+)?\d+\b")
 
 
 def query_hash(query: str) -> str:

@@ -34,7 +34,7 @@ function reportRetired(mancanti) {
   const files = mancanti.map(rel => retiredStoreFile(RETIRED_ENTRIES[rel])).join(', ');
   console.log(`  Missing: ${files}`);
   console.log(`  ${mancanti.length > 1 ? 'These files are' : 'This file is'} no longer produced by any component.`);
-  console.log(`  ${mancanti.length > 1 ? 'They belonged' : 'It belonged'} to the retired text interface (${RETIRED_SINCE}), so this backup is complete.`);
+  console.log(`  ${mancanti.length > 1 ? 'They are' : 'It is'} no longer used by the product, so this backup is complete.`);
 }
 
 async function fileExists(p) {
@@ -217,7 +217,7 @@ async function restoreBackup(options) {
   if (retiredRipristinati.length > 0) {
     const files = retiredRipristinati.map(rel => retiredStoreFile(RETIRED_ENTRIES[rel])).join(', ');
     console.log(`  Note: ${files} ${retiredRipristinati.length > 1 ? 'were' : 'was'} restored, but no screen reads ${retiredRipristinati.length > 1 ? 'them' : 'it'} anymore.`);
-    console.log(`  The retired text interface was removed on ${RETIRED_SINCE}.\n`);
+    console.log('');
   }
 }
 

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Locale } from "@/i18n/config";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
 import { READ_ONLY_ROUTES, ROUTES } from "../../shell/routes";
+import { forgetChatMessages, rememberChatPage } from "../../lib/chat-last-message";
 import AgentPage from "./AgentPage";
 import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { agentTitle, chatIdOfSession, SESSION_NAME } from "./agent-names";
@@ -43,6 +44,7 @@ beforeEach(() => {
   restoreBridge = installApiBridge(shellApi(notInDesktop));
 });
 afterEach(() => {
+  forgetChatMessages();
   cleanup();
   restoreBridge();
   vi.unstubAllGlobals();
@@ -90,6 +92,25 @@ describe("the page of one agent", () => {
     show("DOTTORE");
     expect(await screen.findByTestId("agent-page-no-chat")).toHaveTextContent("non c’è una chat");
     expect(screen.queryByTestId("agent-page-chat")).toBeNull();
+  });
+
+  it("shows the last message of the chat with the agent, and says so when none was read", async () => {
+    show("SCOUT-2");
+    expect(await screen.findByTestId("agent-page-last-message")).toHaveTextContent("Nessun messaggio letto");
+    cleanup();
+    rememberChatPage("scout-2", { messages: [{ id: "m1", role: "user", text: "Cerca a Malmo", at: NOW_S - 120 }, { id: "m2", role: "agent", text: "[caldo] Fatto: **tre** annunci.", at: NOW_S - 60 }] });
+    show("SCOUT-2");
+    const last = await screen.findByTestId("agent-page-last-message");
+    expect(last).toHaveTextContent("Scout 2");
+    expect(last).toHaveTextContent("Fatto: tre annunci.");
+    expect(last).not.toHaveTextContent("[caldo]");
+    expect(screen.getByTestId("agent-page-activity")).toHaveTextContent("Ultima attività");
+  });
+
+  it("has no line for the chat on an agent the chat does not speak with", async () => {
+    show("DOTTORE");
+    await screen.findByTestId("agent-page-title");
+    expect(screen.queryByTestId("agent-page-last-message")).toBeNull();
   });
 
   it("says when the team has no such agent", async () => {

@@ -39,9 +39,7 @@ csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = max
 
 ## 🔴 Blokkoló ellenőrzőlista — REQUIRED (feloldja a csapatot)
 
-A csapat NEM indul el, amíg az alábbi **összes** mező jelen van és nem üres (vagy amíg
-kifejezetten be nem állítod a `ready.flag`-et — lásd `profile-yaml`). Ez a minimum a
-pozíciók **kereséséhez és pontozásához**:
+A csapat **azonnal elindul, amint ebből három mező megvan: célpozíció, város/terület és legalább egy nyelv** (és a csomag deklarálva van): nem vár a többire. Ha a három megvan, állítsd be a `ready.flag`-et és értesítsd a Capitanót (lásd `profile-yaml`), mondd el a felhasználónak egy sorban („a csapat elindul; a következő kérdések pontosabbá teszik a keresést”), és **kérdezz tovább**: a másik öt mező és a kérdőív kártyái akkor érkeznek, amikor a csapat már dolgozik. Az alábbi nyolc mező a **teljes profil** (amit az app teljesnek mutat), és ez a minimum a pozíciók jó **kereséséhez és pontozásához**:
 
 | Mező                 | YAML útvonal                 | Semleges kérdéspélda                              |
 |----------------------|------------------------------|---------------------------------------------------|

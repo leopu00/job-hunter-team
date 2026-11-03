@@ -191,6 +191,8 @@ Quindi spesso il bottone è già sbloccato dal fallback quando il profilo è com
 
 ### Quando creare il flag (3 step RIGIDI, mai saltarli, mai cambiarli di ordine)
 
+**Crealo appena il profilo ha ruolo target, città/zona e almeno una lingua** — non aspetti gli otto campi: la squadra parte e le domande continuano (il resto del profilo si completa mentre lavora).
+
 ```bash
 # 1. Crea il flag con timestamp UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -210,7 +212,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 Solo dopo `FLAG_OK`, e una sola volta:
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profilo del candidato completo e validato — il team può partire."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profilo del candidato con il minimo per partire (ruolo, zona, lingua) — il team può partire; il resto del profilo si completa mentre lavora."
 ```
 
 Il Capitano non guarda il file del profilo: finché nessuno glielo dice, al primo
@@ -235,8 +237,8 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 
 ### NON creare il flag se
 
-- l'ultima validazione del profilo ha stampato `INVALID_PROFILE` (anche una sola volta dopo l'ultimo Write);
-- mancano (gli otto campi minimi): nome, email, ruolo target, città, anni di esperienza, `seniority_target`, skills (≥2), lingue (≥1).
+- l'ultima validazione del profilo ha stampato `INVALID_PROFILE` perché lo YAML non si legge o un campo ha un valore sbagliato (le righe `ERROR:` su un campo che la persona non ha ancora dato non contano: si chiede mentre il team già lavora);
+- mancano (i tre che fanno partire la ricerca): ruolo target, città/zona, lingue (≥1). Gli altri cinque degli otto (nome, email, anni di esperienza, `seniority_target`, skills ≥2) si chiedono subito dopo, mentre il team già lavora: non trattengono il flag.
 
 Esperienze e titoli di studio sono consigliati: non bloccano il flag. Chiedili subito dopo averlo creato.
 

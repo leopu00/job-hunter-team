@@ -39,9 +39,7 @@ equipa · 🟡 RECOMMENDED não bloqueia mas melhora muito · 🟢 OPTIONAL = pe
 
 ## 🔴 Checklist de bloqueio — REQUIRED (desbloqueia a equipa)
 
-A equipa NÃO arranca enquanto **cada** campo abaixo não estiver presente e não-vazio (ou
-enquanto não definires `ready.flag` explícito — ver `profile-yaml`). É o mínimo para
-**procurar e pontuar** as vagas:
+A equipa arranca **assim que houver três destes campos: função-alvo, cidade/zona e pelo menos um idioma** (e o plano estiver declarado): não espera pelos outros. Quando os três estiverem lá, define `ready.flag` e avisa o Capitano (ver `profile-yaml`), diz ao utilizador numa linha («a equipa arranca; as próximas perguntas tornam a pesquisa mais precisa») e **continua a perguntar**: os outros cinco campos e os cartões do questionário chegam enquanto a equipa já trabalha. Os oito campos abaixo são o **perfil completo** (o que a app mostra como completo) e o mínimo para **procurar e pontuar** bem as vagas:
 
 | Campo                | Caminho YAML                 | Exemplo de pergunta neutra                        |
 |----------------------|------------------------------|---------------------------------------------------|

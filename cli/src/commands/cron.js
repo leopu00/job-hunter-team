@@ -157,7 +157,7 @@ export function registerCronCommand(program) {
     .action(handleList);
 
   cron.command('add <name>')
-    .description('Add a job (e.g. jht cron add "research" --schedule "0 9 * *")')
+    .description('Add a job (e.g. jht cron add "research" --schedule "0 9 * * *")')
     .requiredOption('-s, --schedule <expr>', 'Schedule: cron expr, "every:30m", "at:ISO"')
     .option('-d, --description <desc>', 'description')
     .option('-p, --payload <json>', 'Payload JSON')
