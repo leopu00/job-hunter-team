@@ -39,9 +39,7 @@ equipo · 🟡 RECOMMENDED no bloquea pero mejora mucho · 🟢 OPTIONAL = máxi
 
 ## 🔴 Checklist bloqueante — REQUIRED (desbloquea el equipo)
 
-El equipo NO arranca hasta que **cada** campo de abajo esté presente y no vacío (o hasta
-que establezcas `ready.flag` explícito — ver `profile-yaml`). Es el mínimo para **buscar y
-puntuar** las ofertas:
+El equipo arranca **en cuanto hay tres de estos campos: rol objetivo, ciudad/zona y al menos un idioma** (y el plan está declarado): no espera a los demás. Cuando los tres están, establece `ready.flag` y avisa al Capitano (ver `profile-yaml`), díselo al usuario en una línea («el equipo arranca; las próximas preguntas hacen la búsqueda más precisa») y **sigue preguntando**: los otros cinco campos y las tarjetas del cuestionario llegan mientras el equipo ya trabaja. Los ocho campos de abajo son el **perfil completo** (el que la app muestra como completo) y el mínimo para **buscar y puntuar** bien las ofertas:
 
 | Campo                | Ruta YAML                    | Ejemplo de pregunta neutral                       |
 |----------------------|------------------------------|---------------------------------------------------|
