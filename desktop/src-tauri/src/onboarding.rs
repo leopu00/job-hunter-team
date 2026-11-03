@@ -2492,7 +2492,9 @@ pub(crate) const REMOTE_LINKEDIN_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v
 pub(crate) const REMOTE_LINKEDIN_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin login --stop"#;
 pub(crate) const REMOTE_LINKEDIN_STATUS: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" linkedin status --json"#;
 const REMOTE_OAUTH_LOGIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login"#;
-const REMOTE_OAUTH_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; exec "$JHT_BIN" oauth-login --stop"#;
+// A `jht` on the VPS older than this command would take `oauth-login --stop` for `oauth-login` and START a login: the script
+// stops here, doing nothing, unless the wrapper it found mentions the command.
+const REMOTE_OAUTH_LOGIN_STOP: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; grep -qF 'oauth-login --stop' "$JHT_BIN" 2>/dev/null || exit 0; exec "$JHT_BIN" oauth-login --stop"#;
 
 fn ensure_success(
     result: Result<ProcessResult, &'static str>,
@@ -4906,6 +4908,10 @@ pub(crate) fn onboarding_provider_login(
         }
     }
     *slot = None;
+    // A device login that an earlier sign-in left in the container (its window closed or killed, a second opening of
+    // the app) still waits for a code nobody will enter and would finish later over the credentials: it ends before
+    // the new one starts, so there are never two. Best effort, on the same host the login will run on.
+    stop_provider_login_in_container(&app, scope.scope(), &host);
     let diagnostics = OnboardingDiagnosticSink::new(
         &app,
         scope.scope(),
@@ -9451,6 +9457,28 @@ exit 0
             Some(b"/login\n".as_slice())
         );
         assert_eq!(provider_bootstrap_input(SubscriptionProvider::Codex), None);
+    }
+
+    #[test]
+    fn a_new_provider_login_first_ends_the_one_an_earlier_sign_in_left_in_the_container() {
+        let source = include_str!("onboarding.rs");
+        let body = source
+            .split("pub(crate) fn onboarding_provider_login(")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(crate) fn onboarding_provider_login_input(").next())
+            .expect("the login command");
+        let stop = body.find("stop_provider_login_in_container(").expect("the login ends the earlier one");
+        let spawn = body.find(".spawn()").expect("the login starts its process");
+        assert!(stop < spawn, "the earlier login ends BEFORE the new process starts");
+    }
+
+    #[test]
+    fn the_remote_stop_does_nothing_unless_the_wrapper_on_the_vps_knows_the_command() {
+        // an older `jht` would read `oauth-login --stop` as `oauth-login` and start a login
+        let check = super::REMOTE_OAUTH_LOGIN_STOP.find("grep -qF 'oauth-login --stop'").expect("the check");
+        let exec = super::REMOTE_OAUTH_LOGIN_STOP.find("exec \"$JHT_BIN\" oauth-login --stop").expect("the command");
+        assert!(check < exec);
+        assert!(super::REMOTE_OAUTH_LOGIN_STOP[check..exec].contains("|| exit 0"));
     }
 
     #[test]
