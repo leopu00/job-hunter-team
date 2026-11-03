@@ -54,6 +54,8 @@ const NOT_ERRORS: Record<string, string> = {
       "applied_via", "free", "geocode_requested", "interview", "interview_round", "mark_applied", "outcome_undo",
       "recheck_requested", "rejected", "rejection_note", "rejection_reason", "rescore", "response_at", "ticket_id",
       "ticket_status", "user_note", "write_request", "write_request_kind", "write_requested",
+      // existing_team_runtime.rs: the name of the Activity log's read, an operation of the positions reader
+      "team_activity_log",
     ].map((word) => [word, "a name or a value of the position page's act (an operation, a field of its request or of the answer); never shown"]),
   ),
   // team_provider.rs: the verb the box's door is asked for (`agent-control provider logout`), never shown.
