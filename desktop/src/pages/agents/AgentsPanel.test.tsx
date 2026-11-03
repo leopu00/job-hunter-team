@@ -1124,35 +1124,31 @@ describe("«Agenti», the previous sessions and the lanes of the last day", () =
     expect(await screen.findByTestId("panel-history")).toHaveTextContent("Lo storico parte da");
   });
 
-  it("shows the lanes of the last day on request, one per role, the numbers written and not only coloured", async () => {
+  it("shows the last day as a gantt on request: one row per agent, one bar per session, the times written and not only coloured", async () => {
     historyReply = HISTORY();
     show();
     fireEvent.click(await screen.findByTestId("panel-view-lanes"));
-    const scout = await screen.findByTestId("panel-lane-scout");
-    const cells = scout.querySelectorAll("[data-moves]");
-    expect(cells).toHaveLength(24);
-    // the last hour is the last box; 2 moves in the last hour, 5 two hours before
-    expect(cells[23]).toHaveAttribute("data-moves", "2");
-    expect(cells[21]).toHaveAttribute("data-moves", "5");
-    expect(cells[23]).toHaveTextContent("2");
-    expect(cells[0]).toHaveTextContent("·");
-    // the sessions say when an agent of the role was up (SCOUT-1 started an hour ago and is running)
-    expect(cells[23]).toHaveAttribute("data-up", "true");
-    // …and not between the end of the one that stopped (8 hours ago) and the start of the one before the running one
-    expect(cells[16]).toHaveAttribute("data-up", "false");
-    expect(screen.getByTestId("panel-lane-capitano")).toBeInTheDocument();
-    // the list is gone while the lanes are shown, and comes back
+    const scout = await screen.findByTestId("panel-lane-SCOUT-1");
+    const bars = scout.querySelectorAll("[data-testid='panel-bar-SCOUT-1']");
+    // SCOUT-1 has a running session, one that was restarted 5 h ago, one that stopped 8 h ago and one traced for a day with no end
+    expect(bars.length).toBeGreaterThanOrEqual(3);
+    const running = Array.from(bars).find((bar) => /ora/.test(bar.getAttribute("aria-label") ?? ""));
+    expect(running).toBeDefined();
+    expect(running!.getAttribute("aria-label")).toMatch(/^SCOUT-1 · \d{2}:\d{2}–ora/);
+    // the bar of a session whose end nobody wrote is a mark, and it says so
+    const unknownEnd = Array.from(bars).filter((bar) => bar.getAttribute("data-known") === "false");
+    for (const bar of unknownEnd) expect(bar.getAttribute("aria-label")).toContain("fine non registrata");
+    // the list is gone while the gantt is shown, and comes back
     expect(screen.queryByTestId("panel-row-SCOUT-1")).toBeNull();
     fireEvent.click(screen.getByTestId("panel-view-list"));
     expect(await screen.findByTestId("panel-row-SCOUT-1")).toBeInTheDocument();
   });
 
-  it("tells the moves are not known, never zero, when the team's database could not be read", async () => {
-    historyReply = HISTORY({ lanes: null });
+  it("says no agent was up when the history holds no session of the last day", async () => {
+    historyReply = HISTORY({ items: [] });
     show();
     fireEvent.click(await screen.findByTestId("panel-view-lanes"));
-    expect(await screen.findByTestId("panel-lanes-unknown")).toHaveTextContent("non lo so, non è zero");
-    expect(screen.queryByTestId("panel-lane-scout")).toBeNull();
+    expect(await screen.findByTestId("panel-lanes-empty")).toHaveTextContent("Nessun agente acceso nelle ultime 24 ore");
   });
 
   it("starts on the list when the browser keeps nothing, and the failed history never fails the list", async () => {
@@ -1167,12 +1163,12 @@ describe("«Agenti», the previous sessions and the lanes of the last day", () =
       for (const key of [
         "historyTitle", "historyReading", "historyUnavailable", "historyEmpty", "historyRunning", "historyRestarted", "historyStopped",
         "historyContained", "historyRetired", "historyStartedAgain", "historyUnknown", "unitDay", "unitHour", "unitMin", "viewLabel",
-        "viewList", "viewLanes", "lanesTitle", "lanesHelp", "lanesUnknown", "lanesUp", "lanesDown", "lanesAxisStart", "lanesAxisEnd",
+        "viewList", "viewLanes", "lanesTitle", "lanesHelp", "lanesEmpty", "lanesEndUnknown", "lanesAxisStart", "lanesAxisEnd",
       ] as const) {
         expect(text[key], `${locale} ${key}`).toMatch(/\S/);
       }
       expect(text.historySince, locale).toContain("{time}");
-      for (const forms of [text.historyFailed, text.lanesMoves]) {
+      for (const forms of [text.historyFailed]) {
         expect(forms.one, locale).toContain("{count}");
         expect(forms.other, locale).toContain("{count}");
       }

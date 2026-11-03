@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pickHistory, type PanelHistory, type PastSession } from "../../lib/agent-control";
-import { buildLanes, durationText, roleOfSession, sessionSeconds } from "./history";
+import { buildGantt, durationText, roleOfSession, sessionSeconds } from "./history";
 
 // The history of the agents' sessions (JHT-T43): synthetic data only.
 const NOW = 1_790_000_000;
@@ -81,50 +81,39 @@ describe("pickHistory", () => {
   });
 });
 
-describe("buildLanes", () => {
+describe("buildGantt", () => {
   const session = (start: number, end: number | null, reason: PastSession["reason"]): PastSession => ({ start, end, reason });
-  const history = (lanes: PanelHistory["lanes"], agents: PanelHistory["agents"] = {}): PanelHistory => ({ agents, since: null, lanes });
+  const history = (agents: PanelHistory["agents"]): PanelHistory => ({ agents, since: null, lanes: null });
 
-  it("is null when the moves could not be read: not known is not zero", () => {
-    expect(buildLanes(history(null), ["scout"], NOW)).toBeNull();
+  it("makes one row per agent that was up in the last day, one bar per session, cut to the window", () => {
+    const rows = buildGantt(
+      history({
+        "SCOUT-1": { failed: [], sessions: [session(NOW - 1800, null, "running"), session(NOW - 30 * 3600, NOW - 20 * 3600, "restarted_by_user")] },
+        "MENTOR-1": { failed: [], sessions: [session(NOW - 95000, NOW - 87000, "stopped_by_user")] },
+      }),
+      ["scout", "mentor"],
+      NOW,
+    );
+    expect(rows.map((row) => row.agent)).toEqual(["SCOUT-1"]); // MENTOR-1 ended more than a day ago
+    expect(rows[0].role).toBe("scout");
+    expect(rows[0].bars).toHaveLength(2);
+    // the older one started before the window: it is cut to its start
+    expect(rows[0].bars[0]).toMatchObject({ start: NOW - 24 * 3600, end: NOW - 20 * 3600, open: false, endKnown: true });
+    expect(rows[0].bars[1]).toMatchObject({ start: NOW - 1800, end: NOW, open: true, endKnown: true });
   });
 
-  it("puts the last hour in the last box and the hour before in the box before", () => {
-    const [lane] = buildLanes(history({ scout: hours(2, 0, 5) }), ["scout"], NOW)!;
-    expect(lane.cells).toHaveLength(24);
-    expect(lane.cells[23].moves).toBe(2);
-    expect(lane.cells[21].moves).toBe(5);
-    expect(lane.total).toBe(7);
-    expect(lane.cells[23].to).toBe(NOW);
-    expect(lane.cells[23].from).toBe(NOW - 3600);
-    expect(lane.cells[0].from).toBe(NOW - 24 * 3600);
+  it("covers no more than the team said of a session whose end nobody wrote: a mark at its start", () => {
+    const [row] = buildGantt(history({ "SCOUT-1": { failed: [], sessions: [session(NOW - 5 * 3600, null, "unknown")] } }), ["scout"], NOW);
+    expect(row.bars).toEqual([{ start: NOW - 5 * 3600, end: NOW - 5 * 3600, open: false, endKnown: false, reason: "unknown" }]);
   });
 
-  it("gives a role the team did not count an empty lane, not a missing one", () => {
-    const lanes = buildLanes(history({ scout: hours(1) }), ["scout", "mentor"], NOW)!;
-    expect(lanes.map((lane) => lane.role)).toEqual(["scout", "mentor"]);
-    expect(lanes[1].total).toBe(0);
+  it("orders the rows by the team's departments, then by name with the numbers as numbers", () => {
+    const up = { failed: [], sessions: [session(NOW - 3600, null, "running")] };
+    const rows = buildGantt(history({ "SCOUT-10": up, "SCOUT-2": up, "CAPITANO": up, "ZZ-1": up }), ["capitano", "scout"], NOW);
+    expect(rows.map((row) => row.agent)).toEqual(["CAPITANO", "SCOUT-2", "SCOUT-10", "ZZ-1"]);
   });
 
-  it("marks the hours an agent of the role was up, from every instance's sessions", () => {
-    const agents = {
-      "SCOUT-1": { failed: [], sessions: [session(NOW - 3 * 3600 - 600, NOW - 2 * 3600 - 600, "restarted_by_user")] },
-      "SCOUT-2": { failed: [], sessions: [session(NOW - 1800, null, "running")] },
-      "ANALISTA-1": { failed: [], sessions: [session(NOW - 20 * 3600, null, "running")] },
-    };
-    const [scout] = buildLanes(history({}, agents), ["scout"], NOW)!;
-    const up = scout.cells.map((cell) => cell.up);
-    expect(up[23]).toBe(true); // SCOUT-2 started half an hour ago
-    expect(up[22]).toBe(false);
-    expect(up[20] && up[21]).toBe(true); // SCOUT-1 covered these two (ended 2 h 10 min ago, started 3 h 10 min ago)
-    expect(up[19]).toBe(false);
-    // another role's session does not mark this lane
-    expect(up.filter(Boolean)).toHaveLength(3);
-  });
-
-  it("covers no more than the team said of a session whose end nobody wrote", () => {
-    const agents = { "SCOUT-1": { failed: [], sessions: [session(NOW - 5 * 3600, null, "unknown")] } };
-    const [scout] = buildLanes(history({}, agents), ["scout"], NOW)!;
-    expect(scout.cells.filter((cell) => cell.up)).toHaveLength(1);
+  it("is empty when no agent was up in the day: nothing to draw, not an error", () => {
+    expect(buildGantt(history({}), ["scout"], NOW)).toEqual([]);
   });
 });
