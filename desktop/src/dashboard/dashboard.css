@@ -11,6 +11,17 @@
 /* The desktop owns eleven palettes but every screen consumes the same semantic
    tokens. data-theme keeps reused web views on their light/dark contract;
    data-jht-theme selects the exact desktop palette. */
+/* Names the reused web views ask for that no palette defines by itself: each one follows the palette's own token, so
+   the page is never left with a missing colour (an undefined variable draws nothing, and the page looks like another
+   theme). dashboard-css-tokens.test.ts fails when a variable is used with no fallback and defined nowhere. */
+:root {
+  --color-bg: var(--color-deep);
+  --color-text: var(--color-bright);
+  --color-fg: var(--color-white);
+  --color-surface: var(--color-panel);
+  --color-cyan: var(--color-blue);
+}
+
 :root[data-jht-theme="dark"] {
   color-scheme: dark;
   --color-void: #060608;
