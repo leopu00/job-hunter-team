@@ -82,6 +82,9 @@ const NOT_ERRORS: Record<string, string> = {
       "label_image", "label_windows",
     ].map((word) => [word, "reason word of runtime.log beside a container check failure, never shown to the person"]),
   ),
+  // runtime_log.rs, app_exit.<step>: the word for a step that is none of the four the app names (state, order, poll, finish);
+  // it stands in a line of runtime.log, for whoever reads it, and is never shown to the person.
+  other: "step word of an app_exit line in runtime.log; never shown",
   // private_copy.rs: the extensions a private copy of a document can have, from a fixed list in the module. Words of a file
   // name, never an error the person is told.
   ...Object.fromEntries(
