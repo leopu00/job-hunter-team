@@ -357,6 +357,23 @@ export async function readDesktopVpsStats(): Promise<DesktopVpsRead<DesktopVpsSt
  * What each role did per day and instance in a range, counted in the team's database: only for the team of
  * this computer (a profile with no cloud account). An existing team's page keeps reading what it read.
  */
+/**
+ * The description of one position of the team on this computer, for the card of the Swipe: the team's own
+ * `jd_summary`, else the first 1500 characters of the full text (as the web route does). `null` is a position with
+ * neither, and the card says so. Only for the team of this computer; it never keeps the position's write token.
+ */
+export async function readDesktopPositionSummary(id: string): Promise<DesktopVpsRead<string | null>> {
+  if (!localTeamData()) return { source: "not_desktop" };
+  const value = await read<unknown>({ op: "detail", id });
+  if (value.source !== "vps") return value;
+  if (value.data === null) return { source: "vps", data: null };
+  const position = isRecord(value.data) && isRecord(value.data.position) ? value.data.position : null;
+  if (position === null) return { source: "unavailable", code: "desktop_bad_reply" };
+  const summary = typeof position.jd_summary === "string" && position.jd_summary.trim() ? position.jd_summary : null;
+  const text = typeof position.jd_text === "string" && position.jd_text.trim() ? position.jd_text.replace(/\r\n/g, "\n").trim().slice(0, 1500) : null;
+  return { source: "vps", data: summary ?? text };
+}
+
 export async function readDesktopVpsTeamActivity(
   from: string,
   to: string,

@@ -132,6 +132,7 @@ describe("the local mode's «signed in» is not an identity", () => {
     expect(callers).toEqual([
       "lib/existing-team-positions.ts",
       "lib/local-judgement-api.ts",
+      "lib/local-summary-api.ts",
       "lib/local-team-data.ts",
       "pages/map/map-api.ts",
       "pages/swipe/load-swipe.ts",
