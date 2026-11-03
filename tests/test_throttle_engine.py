@@ -1487,6 +1487,47 @@ def test_a_pause_that_the_flag_forgot_is_closed_and_the_agent_woken(home):
     assert eng.ack("analista-1", now=T0 + 500 + margin)["ok"] is True
 
 
+def test_the_scorer_start_without_end_with_an_active_flag_is_woken(home):
+    """Il caso di un team reale (02/11): lo Scorer ha uno `start` senza `end` (19:48:12, 60 s per la coda; qui 300 s: il pavimento
+    del config), il flag e' un ACTIVE senza scadenza con la stessa durata e lo stesso motivo («waiting for checked positions»): per il motore non era in
+    pausa, per lo Scorer si'. Due volte nella serata, risolto a mano dal Capitano dopo 34-51 minuti."""
+    set_config(home, **{"scorer-4": 300})
+    eng.register("scorer-4", reason="waiting for checked positions", now=T0 - 1000)
+    eng.tick(now=T0 - 700)
+    eng.ack("scorer-4", now=T0 - 699)
+    assert flag("scorer-4")["state"] == eng.ACTIVE and flag("scorer-4")["until"] is None
+    assert flag("scorer-4")["applied_sec"] == 300 and flag("scorer-4")["reason"] == "waiting for checked positions"
+    eng.emit_pause("start", "scorer-4", T0, id="scorer-4-%d" % int(T0), requested_sec=300, applied_sec=300,
+                   reason="waiting for checked positions", source="config")     # no `end`, ever
+    SENT.clear()
+    eng.tick(now=T0 + 300 + eng.PAUSE_END_MARGIN_SEC + 1)
+    assert [m["agent"] for m in SENT] == ["scorer-4"], "woken within about two minutes, not after 34 minutes"
+    assert len(events("pause_recovered")) == 1
+
+
+def test_queue_is_empty_is_true_only_for_a_queue_role_with_a_queue_read_and_empty(home, monkeypatch):
+    class Db:
+        def __init__(self, n):
+            self.n = n
+
+        def get_db(self):
+            return self
+
+        def close(self):
+            pass
+
+        def role_queue_count(self, conn, role):
+            return self.n
+
+    monkeypatch.setattr(eng, "_load_shared", lambda name, filename: Db(0))
+    assert eng.queue_is_empty("scorer-4") is True and eng.queue_is_empty("analista-1") is True
+    assert eng.queue_is_empty("scout-1") is False, "a role without a queue is never «waiting for work»"
+    monkeypatch.setattr(eng, "_load_shared", lambda name, filename: Db(7))
+    assert eng.queue_is_empty("scorer-4") is False
+    monkeypatch.setattr(eng, "_load_shared", lambda name, filename: None)
+    assert eng.queue_is_empty("scorer-4") is False, "no answer: not «empty»"
+
+
 def test_a_lost_pause_of_a_session_that_is_gone_is_closed_without_a_wake(home, monkeypatch):
     monkeypatch.setattr(eng, "live_sessions", lambda: {"CAPITANO"})
     eng.emit_pause("start", "analista-1", T0, id="analista-1-%d" % int(T0), applied_sec=300, reason="x", source="config")
