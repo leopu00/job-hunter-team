@@ -45,6 +45,8 @@ def _function(name: str) -> str:
 
 @pytest.fixture
 def fake(tmp_path):
+    if os.name == "nt":
+        pytest.skip("the sh branch runs on macOS and Linux; Windows has its own (test_windows_desktop_apply_ps.py)")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     docker = bin_dir / "docker"
