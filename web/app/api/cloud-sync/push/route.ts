@@ -773,7 +773,7 @@ export async function POST(req: NextRequest) {
         logo: c.logo ?? null,
         logo_source: c.logo_source ?? null,
         logo_fetched: !!c.logo_fetched,
-        about: c.about ?? null,
+        about: typeof c.about === "string" ? c.about.slice(0, 600) || null : null,
       }));
 
     if (payload.length !== companies.length) {

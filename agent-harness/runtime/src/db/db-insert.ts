@@ -12,6 +12,7 @@
 import type { Parsed } from "./argv.ts";
 import type { Database } from "./jobs-db.ts";
 import { pySlice } from "./py-format.ts";
+import { cleanAbout } from "./company-about.ts";
 import type { ScriptResult } from "./tools.ts";
 
 export function insertCompany(db: Database, a: Parsed): ScriptResult {
@@ -39,7 +40,7 @@ export function insertCompany(db: Database, a: Parsed): ScriptResult {
       a["name"] as string, a["website"] as string | null, a["hq_country"] as string | null, a["sector"] as string | null,
       a["size"] as string | null, a["glassdoor_rating"] as number | null, a["red_flags"] as string | null,
       a["culture_notes"] as string | null, a["analyzed_by"] as string | null, a["verdict"] as string | null,
-      a["about"] as string | null,
+      cleanAbout(a["about"]),
     );
   // lastInsertRowid says nothing after an update: the id is read.
   const row = db.prepare("SELECT id FROM companies WHERE name = ?").get(a["name"] as string) as { id: number };

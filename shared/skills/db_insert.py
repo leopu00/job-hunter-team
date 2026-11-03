@@ -29,6 +29,7 @@ from external_content import (
     normalize_external_inline_fields,
 )
 import maintenance_log
+from company_about import clean_about
 import profile_exclusions
 import first_run
 
@@ -433,7 +434,7 @@ def insert_company(args):
             analyzed_at      = CURRENT_TIMESTAMP
     """, (args.name, args.website, args.hq_country, args.sector, args.size,
           args.glassdoor_rating, args.red_flags, args.culture_notes,
-          args.analyzed_by, args.verdict, args.about))
+          args.analyzed_by, args.verdict, clean_about(args.about)))
     conn.commit()
     # lastrowid non dice niente dopo un aggiornamento: l'id si legge.
     company_id = conn.execute("SELECT id FROM companies WHERE name = ?", (args.name,)).fetchone()[0]

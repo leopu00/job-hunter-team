@@ -37,6 +37,7 @@ from _db import get_db, ensure_schema, resolve_company_id, _column_exists, LOCAT
 from external_content import normalize_external_inline_fields
 import role_taxonomy
 import maintenance_log
+from company_about import clean_about
 
 # Campi il cui valore racconta la manutenzione. Vengono fotografati PRIMA
 # dell'UPDATE e riletti dopo, così l'evento registra il diff e non il fatto
@@ -724,9 +725,9 @@ def update_company(args):
     if args.culture_notes:
         updates.append("culture_notes = ?")
         params.append(args.culture_notes)
-    if args.about:
+    if args.about and clean_about(args.about):
         updates.append("about = ?")
-        params.append(args.about)
+        params.append(clean_about(args.about))
     if args.sector:
         updates.append("sector = ?")
         params.append(args.sector)

@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 
 import type { Parsed } from "./argv.ts";
+import { cleanAbout } from "./company-about.ts";
 import { flattenExternalValue, EXTERNAL_INLINE_FIELDS } from "./external-content.ts";
 import type { Database } from "./jobs-db.ts";
 import { interpretEscapes, pyFloatRepr, pySlice, pyStr, pyTruthy, PY_SPACE_CLASS } from "./py-format.ts";
@@ -531,11 +532,17 @@ export function updateCompany(db: Database, a: Parsed, actor: string): ScriptRes
     const before = pyTruthy(action) && companyId ? snapshot(db, "companies", companyId, COMPANY_TRACKED) : new Map();
     const sets: string[] = [];
     const params: Value[] = [];
-    for (const k of ["verdict", "red_flags", "culture_notes", "about", "sector", "size", "glassdoor_rating", "analyzed_by", "hq_country", "website"]) {
+    for (const k of ["verdict", "red_flags", "culture_notes", "sector", "size", "glassdoor_rating", "analyzed_by", "hq_country", "website"]) {
       if (pyTruthy(a[k])) {
         sets.push(`${k} = ?`);
         params.push(a[k] as Value);
       }
+    }
+    // The company's two sentences come from a web page: cleaned and capped (company_about.py).
+    const about = pyTruthy(a["about"]) ? cleanAbout(a["about"]) : null;
+    if (about !== null) {
+      sets.push("about = ?");
+      params.push(about);
     }
     if (sets.length === 0) {
       db.exec("ROLLBACK");
