@@ -211,7 +211,7 @@ describe("Squadra on an existing team read only", () => {
     expect(screen.getByRole("button", { name: T.refreshing })).toBeDisabled();
   });
 
-  it("shows the real code of a failed read and never an older state as the present", async () => {
+  it("tells a failed read in the catalog's words, never its code, and never an older state as the present", async () => {
     const user = userEvent.setup();
     navigate("/team", { replace: true });
     render(<Shell />);
@@ -222,7 +222,7 @@ describe("Squadra on an existing team read only", () => {
     };
     await user.click(pageRefresh());
     const alert = await screen.findByTestId("team-status-error");
-    expect(alert).toHaveTextContent("(snapshot_failed)");
+    expect(alert).not.toHaveTextContent("snapshot_failed");
     expect(alert).toHaveTextContent(describeError("snapshot_failed", { fallback: "existing_team_unavailable", locale: "it" }).text);
     expect(alert).toHaveTextContent(T.failed);
     // the last good reading is gone, not offered as current
@@ -240,7 +240,9 @@ describe("Squadra on an existing team read only", () => {
     answer = async () => ({ runtimeInstalled: true });
     navigate("/team", { replace: true });
     render(<Shell />);
-    expect(await screen.findByTestId("team-status-error")).toHaveTextContent("(desktop_bad_reply)");
+    const bad = await screen.findByTestId("team-status-error");
+    expect(bad).toHaveTextContent(T.failed);
+    expect(bad).not.toHaveTextContent("desktop_bad_reply");
     expect(screen.queryByTestId("team-status-read")).not.toBeInTheDocument();
   });
 

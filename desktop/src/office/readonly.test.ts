@@ -102,7 +102,7 @@ describe("officeFromTeamProbe", () => {
       expect(office.notice!.alert, locale).toBe(true);
       expect(office.notice!.text, locale).toContain(failure.text);
       expect(office.notice!.text, locale).toContain(failure.action);
-      expect(office.notice!.text, locale).toContain("(ssh_unavailable)");
+      expect(office.notice!.text, locale).not.toContain("ssh_unavailable");
     }
   });
 
