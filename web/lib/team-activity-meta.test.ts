@@ -49,3 +49,12 @@ describe("dmhm", () => {
     expect(dmhm(stamp)).toBe(`${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`);
   });
 });
+
+describe("the role colours of the charts", () => {
+  it("are tokens of the chosen theme, one for each role and all different", async () => {
+    const { ROLE_META } = await import("./team-activity-meta");
+    const colors = Object.values(ROLE_META).map((meta) => meta.color);
+    for (const color of colors) expect(color).toMatch(/^var\(--color-[a-z-]+\)$/);
+    expect(new Set(colors).size).toBe(colors.length);
+  });
+});

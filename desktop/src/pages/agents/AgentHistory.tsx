@@ -4,7 +4,8 @@ import { pluralText } from "../../lib/plural";
 import { formatRelative } from "@/lib/message-display";
 import type { Outcome, PanelHistory, SessionEnd } from "../../lib/agent-control";
 import type { AgentsPanelText } from "./AgentsPanel.i18n";
-import { buildLanes, durationText, sessionSeconds } from "./history";
+import { roleColor } from "../../lib/role-color";
+import { buildGantt, durationText, GANTT_SECONDS, sessionSeconds } from "./history";
 
 // The previous sessions of an agent and the lanes of the last day (JHT-T43). Both read the team's own files through
 // the panel's history read; a part the team does not say is shown as not known, never as zero or as nothing.
@@ -99,55 +100,75 @@ export function SessionHistory({ t, history, session, nowS }: { t: AgentsPanelTe
 
 /** One lane per department, an hour per box, for the last day. */
 export function Lanes({ t, history, roles, nowS }: { t: AgentsPanelText; history: Outcome<PanelHistory> | null; roles: string[]; nowS: number }) {
-  const lanes = history?.ok ? buildLanes(history.value, roles, nowS) : null;
-  const most = Math.max(1, ...(lanes ?? []).flatMap((lane) => lane.cells.map((cell) => cell.moves)));
+  const rows = history?.ok ? buildGantt(history.value, roles, nowS) : null;
+  // The axis: now, and a tick every six hours back to the start of the window, each with the clock time it stands for.
+  const ticks = [0, 6, 12, 18, 24].map((hoursAgo) => ({ hoursAgo, at: nowS - hoursAgo * 3600, left: ((24 - hoursAgo) / 24) * 100 }));
+  const place = (seconds: number) => ((seconds - (nowS - GANTT_SECONDS)) / GANTT_SECONDS) * 100;
   return (
-    <section data-testid="panel-lanes" aria-label={t.lanesTitle} className="rounded border p-3" style={{ borderColor: "var(--color-border)" }}>
-      <h2 className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "var(--color-bright)" }}>
+    <section data-testid="panel-lanes" aria-label={t.lanesTitle} className="rounded-xl border p-4" style={{ borderColor: "var(--color-border)" }}>
+      <h2 className="m-0 text-[14px] font-semibold" style={{ color: "var(--color-white)" }}>
         {t.lanesTitle}
       </h2>
-      <p className="text-[11px] mt-1 mb-2 text-[var(--color-muted)]">{t.lanesHelp}</p>
-      {history === null && <p className="text-[11px] text-[var(--color-muted)]">{t.historyReading}</p>}
-      {history && !history.ok && <p className="text-[11px] text-[var(--color-muted)]">{t.historyUnavailable}</p>}
-      {history?.ok && lanes === null && (
-        <p data-testid="panel-lanes-unknown" className="text-[11px] text-[var(--color-muted)]">
-          {t.lanesUnknown}
+      <p className="text-[13px] leading-5 mt-1 mb-3 text-[var(--color-muted)]">{t.lanesHelp}</p>
+      {history === null && <p className="text-[13px] text-[var(--color-muted)]">{t.historyReading}</p>}
+      {history && !history.ok && <p className="text-[13px] text-[var(--color-muted)]">{t.historyUnavailable}</p>}
+      {rows && rows.length === 0 && (
+        <p data-testid="panel-lanes-empty" className="text-[13px] text-[var(--color-muted)]">
+          {t.lanesEmpty}
         </p>
       )}
-      {lanes && (
+      {rows && rows.length > 0 && (
         <div className="overflow-x-auto">
           <div className="min-w-[640px]">
-            <div className="flex items-center text-[11px] text-[var(--color-dim)]">
-              <span className="w-[96px] shrink-0" />
-              <span className="flex-1">{t.lanesAxisStart}</span>
-              <span>{t.lanesAxisEnd}</span>
-            </div>
-            <ul className="flex flex-col gap-1">
-              {lanes.map((lane) => (
-                <li key={lane.role} data-testid={`panel-lane-${lane.role}`} className="flex items-stretch">
-                  <span className="w-[96px] shrink-0 text-[11px] font-semibold uppercase tracking-wider self-center" style={{ color: "var(--color-bright)" }}>
-                    {lane.role}
+            <div className="flex items-end">
+              <span className="w-[120px] shrink-0" />
+              <div className="relative h-5 flex-1 text-[12px] text-[var(--color-muted)]" aria-hidden="true">
+                {ticks.map((tick) => (
+                  <span
+                    key={tick.hoursAgo}
+                    className="absolute bottom-0 whitespace-nowrap tabular-nums"
+                    style={{ left: `${tick.left}%`, transform: tick.hoursAgo === 24 ? "none" : tick.hoursAgo === 0 ? "translateX(-100%)" : "translateX(-50%)" }}
+                  >
+                    {tick.hoursAgo === 0 ? t.lanesAxisEnd : shortTime(tick.at)}
                   </span>
-                  <div className="flex-1 grid gap-px" style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}>
-                    {lane.cells.map((cell) => (
-                      <div
-                        key={cell.from}
-                        data-moves={cell.moves}
-                        data-up={cell.up ? "true" : "false"}
-                        title={`${pluralText(appLocale(), cell.moves, t.lanesMoves)} · ${shortTime(cell.from)}–${shortTime(cell.to)} · ${cell.up ? t.lanesUp : t.lanesDown}`}
-                      >
-                        <div
-                          className="text-[11px] text-center leading-5 rounded-sm"
-                          style={{
-                            background: cell.moves > 0 ? `color-mix(in srgb, var(--color-green) ${Math.round(15 + (70 * cell.moves) / most)}%, transparent)` : "var(--color-row)",
-                            color: cell.moves > 0 ? "var(--color-white)" : "var(--color-dim)",
-                          }}
-                        >
-                          {cell.moves > 0 ? cell.moves : "·"}
-                        </div>
-                        <div className="h-[3px] mt-px rounded-sm" style={{ background: cell.up ? "var(--color-blue)" : "transparent" }} />
-                      </div>
+                ))}
+              </div>
+            </div>
+            <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-1">
+              {rows.map((row) => (
+                <li key={row.agent} data-testid={`panel-lane-${row.agent}`} className="flex items-center">
+                  <span className="w-[120px] shrink-0 flex items-center gap-2 pr-2 text-[13px] font-semibold text-[var(--color-bright)]">
+                    <span aria-hidden="true" className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: roleColor(row.role) }} />
+                    <span className="truncate">{row.agent}</span>
+                  </span>
+                  <div className="relative h-6 flex-1 rounded bg-[var(--color-row)]">
+                    {ticks.map((tick) => (
+                      <span key={tick.hoursAgo} aria-hidden="true" className="absolute inset-y-0 w-px bg-[var(--color-border)]" style={{ left: `${tick.left}%` }} />
                     ))}
+                    {row.bars.map((bar) => {
+                      const when = `${shortTime(bar.start)}–${bar.open ? t.lanesAxisEnd : bar.endKnown ? shortTime(bar.end) : t.lanesEndUnknown}`;
+                      const length = bar.endKnown ? ` · ${durationText(Math.max(0, bar.end - bar.start), { day: t.unitDay, hour: t.unitHour, min: t.unitMin })}` : "";
+                      const label = `${row.agent} · ${when}${length}`;
+                      return (
+                        <div
+                          key={`${bar.start}-${bar.end}`}
+                          role="img"
+                          aria-label={label}
+                          title={label}
+                          data-testid={`panel-bar-${row.agent}`}
+                          data-known={bar.endKnown ? "true" : "false"}
+                          className="absolute top-1 h-4 rounded-sm"
+                          style={{
+                            left: `${place(bar.start)}%`,
+                            width: bar.endKnown ? `max(4px, ${place(bar.end) - place(bar.start)}%)` : "4px",
+                            background: roleColor(row.role),
+                            opacity: bar.endKnown ? 1 : 0.55,
+                            boxShadow: bar.open ? "0 0 0 2px var(--color-card)" : undefined,
+                          }}
+                        />
+                      );
+                    })}
+                    <span aria-hidden="true" className="absolute inset-y-0 right-0 w-[2px] bg-[var(--color-white)]" />
                   </div>
                 </li>
               ))}

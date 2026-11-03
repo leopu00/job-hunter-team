@@ -110,7 +110,7 @@ describe("work flat out until a time", () => {
     expect(screen.getByTestId("burst-start")).toBeInTheDocument();
   });
 
-  it("next to «Stop the team» the strip reads the settings itself, in the short form, and shows nothing until it can", async () => {
+  it("next to «Stop the team» the strip reads the settings itself, is the same control as everywhere, and shows nothing until it can", async () => {
     native.invoke.mockImplementation(async () => ({ ok: false, error: "team_settings_unavailable" }));
     const { container } = render(<BurstStrip />);
     await waitFor(() => expect(requests()).toEqual([{ op: "read" }]));
@@ -119,7 +119,8 @@ describe("work flat out until a time", () => {
     answer(() => reply());
     render(<BurstStrip />);
     expect(await screen.findByTestId("burst-start")).toHaveTextContent("Work at full throttle");
-    expect(screen.queryByText(BURST_TEXT.en.burstIntro)).toBeNull();
+    expect(screen.getByText(BURST_TEXT.en.burstIntro)).toBeInTheDocument();
+    expect(screen.getByText(BURST_TEXT.en.burstLimit)).toBeInTheDocument();
   });
 
   it("is written in the seven languages with the time slot intact", () => {
