@@ -80,7 +80,7 @@ describe("the chat in a short window", () => {
   });
 
   it("is a full-bleed page, the swipe deck included, in the app", () => {
-    expect(ROUTES.filter((route) => route.fullBleed).map((route) => route.path).sort()).toEqual(["/messages", "/office", "/swipe"]);
+    expect(ROUTES.filter((route) => route.fullBleed).map((route) => route.path).sort()).toEqual(["/agents/:name", "/messages", "/office", "/swipe"]);
   });
 
   it("caps the read-only bars at a third of the window too, the navbar above them and out of the block", async () => {

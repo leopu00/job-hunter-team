@@ -537,6 +537,15 @@ export const T = {
     fr: "Site de l'entreprise",
     pt: "Site da empresa",
   },
+  company_reputation: {
+    it: "Recensioni e reputazione",
+    en: "Reviews & reputation",
+    hu: "Értékelések és hírnév",
+    es: "Reseñas y reputación",
+    de: "Bewertungen und Ruf",
+    fr: "Avis et réputation",
+    pt: "Avaliações e reputação",
+  },
   notes: {
     it: "Note",
     en: "Notes",

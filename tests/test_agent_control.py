@@ -990,3 +990,16 @@ def test_the_lanes_read_never_writes_the_database(team):
     before = (path.stat().st_mtime_ns, path.read_bytes())
     team.tool.read_history(NOW)
     assert (path.stat().st_mtime_ns, path.read_bytes()) == before
+
+
+# ── Lo schermo di un agente ─────────────────────────────────────────────────
+def test_the_screen_is_the_last_120_lines_and_nothing_is_typed(team, capsys):
+    team.up("SCOUT-2")
+    _script(team.tmp / "bin" / "tmux", FAKE_TMUX.replace('capture-pane) echo "pane of $(target "$5")" ;;', "capture-pane) seq 1 200 ;;"))
+    code, answer = team.run("screen", "SCOUT-2", capsys=capsys)
+    assert code == 0 and answer["ok"] is True
+    lines = answer["data"]["text"].split("\n")
+    assert (lines[0], lines[-1], len(lines)) == ("81", "200", 120)
+    calls = (team.tmp / "tmux.log").read_text().splitlines()
+    assert any(call.startswith("capture-pane") and "-S -120" in call for call in calls)
+    assert not any(call.split(" ")[0] in ("send-keys", "paste-buffer", "load-buffer") for call in calls)

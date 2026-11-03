@@ -32,6 +32,10 @@ const SUPPORT_REPORTS_KEPT: usize = 50;
 
 /// How often the same refusal of the owner of `~/.jht` is written again.
 const OWNER_REFUSAL_EVERY: Duration = Duration::from_secs(60);
+/// How often the same failure of the exit poll is written again: the page asks every second or so.
+const EXIT_POLL_FAILURE_EVERY: Duration = Duration::from_secs(30);
+/// The last failure of the exit poll written: the log it went to, its code and when.
+static LAST_EXIT_POLL_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 /// The last refusal written: the log it went to, its code and when.
 static LAST_OWNER_REFUSAL: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 
@@ -43,7 +47,7 @@ pub(crate) struct RuntimeLog {
 }
 
 /// The kinds of read the load-times log names, in the order of the core's operations.
-pub(crate) const POSITIONS_READ_KINDS: [&str; 10] = ["list", "detail", "facets", "stats", "map", "profile", "cloud_sync", "team_activity", "directives", "piles"];
+pub(crate) const POSITIONS_READ_KINDS: [&str; 11] = ["list", "detail", "facets", "stats", "map", "profile", "cloud_sync", "team_activity", "directives", "piles", "team_activity_log"];
 const POSITIONS_READ_OTHER: &str = "other";
 
 /// The pages whose load time is written down, as the load-times log names them.
@@ -202,6 +206,35 @@ impl RuntimeLog {
             _ => "io_error_other",
         };
         let entry = format!("=== {} direct_chat.send: {code}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// A step of leaving the app that failed (`state`, `order`, `poll`, `finish`), by its closed code only: no
+    /// agent, host or account. Without it «I could not stop everything» left nothing in the log. The poll asks
+    /// every second: the same failure of it is written once in 30 seconds.
+    pub(crate) fn record_app_exit_failure(&self, step: &str, code: &str) {
+        let step = match step {
+            "state" | "order" | "poll" | "finish" => step,
+            _ => "other",
+        };
+        // the codes are ours (`app_exit_down_failed`, `agent_control_no_team`...): a word of lowercase letters,
+        // digits and underscores, or it is not written as it is
+        let code = if !code.is_empty() && code.len() <= 64 && code.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_') {
+            code
+        } else {
+            "io_error_other"
+        };
+        if step == "poll" {
+            let now = std::time::Instant::now();
+            let mut last = LAST_EXIT_POLL_FAILURE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some((path, said, at)) = last.as_ref() {
+                if path == &self.path && said == code && now.duration_since(*at) < EXIT_POLL_FAILURE_EVERY {
+                    return;
+                }
+            }
+            *last = Some((self.path.clone(), code.to_owned(), now));
+        }
+        let entry = format!("=== {} app_exit.{step}: {code}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -566,7 +599,7 @@ fn chat_failure_code(code: &str) -> &str {
     }
 }
 
-fn utc(at: SystemTime) -> String {
+pub(crate) fn utc(at: SystemTime) -> String {
     let seconds = at.duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or(0);
     let (days, rest) = ((seconds / 86_400) as i64, seconds % 86_400);
     // Days to a civil date (Howard Hinnant's algorithm).
@@ -916,6 +949,53 @@ mod tests {
         let text = fs::read_to_string(log.path()).unwrap();
         assert!(text.contains(" local_owner.refused: local_account_owner_missing\n"));
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_step_of_leaving_the_app_that_failed_is_written_by_its_code_only() {
+        let root = dir("app-exit");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record_app_exit_failure("order", "app_exit_no_container");
+        log.record_app_exit_failure("finish", "app_exit_down_failed");
+        log.record_app_exit_failure("finish", "app_exit_machine_not_stopped");
+        log.record_app_exit_failure("state", "agent_control_no_team");
+        // not ours: a step that is not one of the four, a code that is not a word of ours
+        log.record_app_exit_failure("delete everything", "app_exit_order_not_sent");
+        log.record_app_exit_failure("order", "capitano at 203.0.113.7 said no");
+        log.record_app_exit_failure("order", "");
+        let text = fs::read_to_string(log.path()).unwrap();
+        for line in [
+            " app_exit.order: app_exit_no_container\n",
+            " app_exit.finish: app_exit_down_failed\n",
+            " app_exit.finish: app_exit_machine_not_stopped\n",
+            " app_exit.state: agent_control_no_team\n",
+            " app_exit.other: app_exit_order_not_sent\n",
+            " app_exit.order: io_error_other\n",
+        ] {
+            assert!(text.contains(line), "{line}");
+        }
+        assert!(!text.contains("203.0.113.7") && !text.contains("said no"));
+        assert_eq!(text.matches("=== ").count(), 7, "one entry for each call");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_exit_poll_that_keeps_failing_is_written_once_but_the_other_steps_every_time() {
+        let root = dir("app-exit-poll");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        for _ in 0..5 {
+            log.record_app_exit_failure("poll", "app_exit_no_container");
+        }
+        // another code of the poll is another failure
+        log.record_app_exit_failure("poll", "app_exit_unanswered");
+        // an order sent twice that fails twice is two lines: each try of the person is told
+        log.record_app_exit_failure("order", "app_exit_order_not_sent");
+        log.record_app_exit_failure("order", "app_exit_order_not_sent");
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert_eq!(text.matches(" app_exit.poll: app_exit_no_container\n").count(), 1);
+        assert_eq!(text.matches(" app_exit.poll: app_exit_unanswered\n").count(), 1);
+        assert_eq!(text.matches(" app_exit.order: app_exit_order_not_sent\n").count(), 2);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

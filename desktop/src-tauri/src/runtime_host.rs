@@ -1241,6 +1241,15 @@ const MAX_LINE_BYTES: u64 = 4096;
 /// for that one.
 const LINES_DRAIN_GRACE: Duration = Duration::from_secs(2);
 
+/// The scripts the app runs (install.sh, install.ps1, the wrapper) print their `JHT_PHASE` markers only to a program or on
+/// request: at a terminal they are noise. The app asks on every program it starts, whatever the pipe or the pty it reads from,
+/// so it never depends on the way its output happens to be read. A caller's own environment entry for it still wins.
+pub(crate) const MACHINE_OUTPUT_ENV: (&str, &str) = ("JHT_MACHINE_OUTPUT", "1");
+
+fn ask_for_machine_output(command: &mut Command) {
+    command.env(MACHINE_OUTPUT_ENV.0, MACHINE_OUTPUT_ENV.1);
+}
+
 /// run_program for a long installer that says what it is doing: stdin
 /// closed, each stdout line handed to `on_line` while the program runs, the
 /// exit code returned. stdout is not kept and stderr is drained unread, as
@@ -1277,6 +1286,7 @@ where
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    ask_for_machine_output(&mut command);
     hide_console(&mut command);
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -1482,6 +1492,7 @@ where I: IntoIterator<Item = S>, S: AsRef<OsStr>,
     for name in removed_env {
         command.env_remove(name);
     }
+    ask_for_machine_output(&mut command);
     for (name, value) in environment { command.env(name, value); }
     if let Some(current_dir) = current_dir { command.current_dir(current_dir); }
     hide_console(&mut command);
@@ -2412,6 +2423,35 @@ mod tests {
             seen.push(line.to_owned())
         });
         (result, seen)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_scripts_the_app_runs_are_asked_for_their_machine_markers_on_either_way_of_reading() {
+        // read line by line (install.ps1, the uninstall) and read whole (install.sh, the wrapper): both ask for them,
+        // so a pty or a pipe makes no difference to what the app reads
+        let (result, seen) = lines_of("echo \"M=$JHT_MACHINE_OUTPUT\"", std::time::Duration::from_secs(20));
+        assert_eq!(result, Ok(0));
+        assert_eq!(seen, ["M=1\n"]);
+        let (whole, _) = super::run_program_keeping_stderr(
+            "/bin/sh",
+            ["-c", "echo \"M=$JHT_MACHINE_OUTPUT\""],
+            None,
+            std::time::Duration::from_secs(20),
+        );
+        assert_eq!(String::from_utf8_lossy(&whole.unwrap().stdout), "M=1\n");
+        // a caller that says otherwise for itself is heard (the environment entries come after)
+        let dir = std::env::temp_dir();
+        let (own, _) = super::run_program_keeping_stderr_with_environment(
+            "/bin/sh",
+            ["-c", "echo \"M=$JHT_MACHINE_OUTPUT\""],
+            None,
+            std::time::Duration::from_secs(20),
+            &dir,
+            &[],
+            &[("JHT_MACHINE_OUTPUT", "0")],
+        );
+        assert_eq!(String::from_utf8_lossy(&own.unwrap().stdout), "M=0\n");
     }
 
     #[cfg(unix)]

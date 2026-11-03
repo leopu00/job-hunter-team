@@ -24,3 +24,12 @@ describe("login identity layout", () => {
     expect(artworkCss).toMatch(/object-fit:\s*contain/);
   });
 });
+
+describe("the «Open with» list", () => {
+  it("is drawn dark with readable entries: light text on the system's white list read as an empty menu", () => {
+    expect(css).toMatch(/\.login-screen\s*\{\s*color-scheme:\s*dark;\s*\}/);
+    const option = css.match(/\.login-card__browser select option\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(option).toMatch(/color:\s*var\(--ink\)/);
+    expect(option).toMatch(/background:\s*var\(--panel\)/);
+  });
+});

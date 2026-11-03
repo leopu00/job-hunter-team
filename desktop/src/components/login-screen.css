@@ -66,6 +66,10 @@
 .login-card__local input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .login-card__browser { width: 100%; margin-bottom: 14px; display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
 .login-card__browser select { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--panel-soft); font: inherit; font-size: 14px; letter-spacing: normal; text-transform: none; }
+/* The list that opens is the system's, drawn on the system's colours unless the page says it is dark: light text on a white list read as an empty menu. */
+.login-screen { color-scheme: dark; }
+.login-card__browser select { color-scheme: dark; }
+.login-card__browser select option { color: var(--ink); background: var(--panel); }
 .login-card__browser select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .login-card__waiting { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 13px; }
 .login-card__waiting p { margin: 0; }

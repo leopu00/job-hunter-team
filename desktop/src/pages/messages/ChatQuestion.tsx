@@ -82,7 +82,7 @@ export default function ChatQuestion({
         boxShadow: colour ? `inset 3px 0 0 ${colour}` : undefined,
       }}
     >
-      <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
+      <div className="mb-1 flex items-center gap-2 text-[14px] font-semibold uppercase tracking-wider text-[var(--color-dim)]">
         <span>{agentName}</span>
         <span data-testid="direct-chat-kind" style={{ color: colour ?? "var(--color-muted)" }}>
           {t.kinds[question.kind]}
@@ -131,7 +131,7 @@ export default function ChatQuestion({
       )}
 
       {open && canAnswer && question.options.length === 0 && !question.free && (
-        <p data-testid="direct-chat-answer-below" className="m-0 mt-2 text-[13px] text-[var(--color-muted)]">
+        <p data-testid="direct-chat-answer-below" className="m-0 mt-2 text-[14px] text-[var(--color-muted)]">
           {t.answerBelow}
         </p>
       )}
@@ -155,7 +155,7 @@ export default function ChatQuestion({
               data-testid="direct-chat-answer-in-words"
               disabled={!live}
               onClick={onAnswerInWords}
-              className="text-[13px] text-[var(--color-muted)] underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+              className="text-[14px] text-[var(--color-muted)] underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
             >
               {t.answerInWords}
             </button>
@@ -169,22 +169,22 @@ export default function ChatQuestion({
         </p>
       )}
       {question.state === "expired" && (
-        <p data-testid="direct-chat-answer-expired" className="m-0 mt-1 text-[13px] text-[var(--color-muted)]">
+        <p data-testid="direct-chat-answer-expired" className="m-0 mt-1 text-[14px] text-[var(--color-muted)]">
           {t.answerExpired}
         </p>
       )}
       {question.state === "answered" && bySystem && (
-        <p data-testid="direct-chat-answer-resolved" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
+        <p data-testid="direct-chat-answer-resolved" className="m-0 mt-1 text-right text-[14px] text-[var(--color-muted)]">
           {t.answerResolved}
         </p>
       )}
       {question.state === "answered" && !bySystem && (
-        <p data-testid="direct-chat-answer-seen" className="m-0 mt-1 text-right text-[13px] text-[var(--color-muted)]">
+        <p data-testid="direct-chat-answer-seen" className="m-0 mt-1 text-right text-[14px] text-[var(--color-muted)]">
           {question.answer?.seenAt ? t.answerSeen : t.answerWaiting}
         </p>
       )}
       {error && (
-        <p role="alert" className="m-0 mt-1 text-[13px] text-[var(--color-red)]">
+        <p role="alert" className="m-0 mt-1 text-[14px] text-[var(--color-red)]">
           {error}
         </p>
       )}

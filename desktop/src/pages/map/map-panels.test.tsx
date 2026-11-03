@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MapCharts from "@/app/components/MapCharts";
@@ -9,7 +9,11 @@ import {
   MAP_PANELS_CSS,
   RAIL_BOTTOM,
   RAIL_CARD_W,
+  DESKTOP_RAIL_MAX_WIDTH,
   RAIL_MAX_WIDTH,
+  mapPanelsCss,
+  railQuery,
+  setMapRailMaxWidth,
   RAIL_MIN_WIDTH,
   RAIL_QUERY,
   RAIL_SIDE,
@@ -166,7 +170,7 @@ describe("phone layout (390 px)", () => {
 
   it("starts the rail exactly where the phone stack ends, with no width in both and none in neither", () => {
     expect(page).toContain(`@media (max-width: ${RAIL_MIN_WIDTH - 1}px)`);
-    expect(page).toContain("${MAP_PANELS_CSS}");
+    expect(page).toContain("${mapPanelsCss()}");
   });
 });
 
@@ -193,5 +197,44 @@ describe("the filters' badge", () => {
     fireEvent.click((await screen.findAllByText("Data")).at(-1)!.closest("li")!);
     await waitFor(() => expect(screen.getAllByTestId("filters-count").map((e) => e.textContent)).toEqual(expect.arrayContaining(["1"])));
     for (const count of screen.getAllByTestId("filters-count")) expect(count.textContent).toBe("1");
+  });
+});
+
+describe("the app's map: the four panels in the four corners from 1500 px", () => {
+  beforeEach(stubFetch);
+  afterEach(() => {
+    setMapRailMaxWidth(RAIL_MAX_WIDTH);
+    vi.unstubAllGlobals();
+    delete (window as { matchMedia?: unknown }).matchMedia;
+  });
+
+  it("the web keeps its column up to 1599 px, and the app's map page moves the limit to 1499 px", async () => {
+    expect(railQuery()).toBe(RAIL_QUERY);
+    expect(mapPanelsCss()).toBe(MAP_PANELS_CSS);
+    await import("./index");
+    expect(railQuery()).toBe(`(min-width: ${RAIL_MIN_WIDTH}px) and (max-width: ${DESKTOP_RAIL_MAX_WIDTH}px)`);
+    expect(mapPanelsCss()).toContain(`@media ${railQuery()}`);
+    expect(mapPanelsCss()).not.toContain(`max-width: ${RAIL_MAX_WIDTH}px`);
+    // a 14" Mac at full screen (1512 px) is in the corners, and its bottom cards clear the controls
+    expect(1512).toBeGreaterThan(DESKTOP_RAIL_MAX_WIDTH);
+    expect((DESKTOP_RAIL_MAX_WIDTH + 1) / 2 - 440 / 2).toBeGreaterThan((CORNER_CARD_W + RAIL_SIDE) * 1.15 - 20);
+  });
+
+  it("at 1512 px the panels open independently and the globe keeps the whole map; in a narrow window the column stays", async () => {
+    setMapRailMaxWidth(DESKTOP_RAIL_MAX_WIDTH);
+    // the 1512 px window matches no rail query
+    window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    await renderMap();
+    fireEvent.click(header(/location/i));
+    fireEvent.click(header(/score distribution/i));
+    expect(open()).toHaveLength(2);
+    expect(screen.getByTestId("globe")).toHaveAttribute("data-fit-padding-left", "0");
+    cleanup();
+    // a 1200 px window matches the app's query: one panel at a time
+    window.matchMedia = ((query: string) => ({ matches: query === railQuery(), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    await renderMap();
+    fireEvent.click(header(/location/i));
+    fireEvent.click(header(/score distribution/i));
+    expect(open()).toHaveLength(1);
   });
 });

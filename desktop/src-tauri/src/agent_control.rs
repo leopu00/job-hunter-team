@@ -796,6 +796,12 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
                     data.insert("ownVps".into(), json!(state.word()));
                 }
             }
+            // An act that worked on the team of this computer goes in the action log of this profile.
+            if let (Destination::Local { .. }, Some(true)) = (&destination, reply.get("ok").and_then(Value::as_bool)) {
+                if let Some((action, subject)) = crate::local_action_log::control_event(&request) {
+                    crate::local_action_log::record(app, scope, action, &subject);
+                }
+            }
             reply
         }
         Err(error) => failure(error),

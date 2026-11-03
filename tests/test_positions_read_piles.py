@@ -163,4 +163,4 @@ def test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_lo
         assert forbidden not in block, forbidden
     assert "SUM(" in block and "fetchone()" in block
     log = (ROOT / "desktop" / "src-tauri" / "src" / "runtime_log.rs").read_text(encoding="utf-8")
-    assert '"directives", "piles"]' in log
+    assert '"directives", "piles", "team_activity_log"]' in log

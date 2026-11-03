@@ -8,7 +8,10 @@ import {
   type WebActionLogClient,
   type WebActionLogRead,
 } from "@/lib/web-action-log";
-import { WEB_ACTION_LOG_TEXT } from "@/lib/web-action-log.i18n";
+import {
+  WEB_ACTION_LOG_APP_TEXT,
+  WEB_ACTION_LOG_TEXT,
+} from "@/lib/web-action-log.i18n";
 import ActionLogList from "./ActionLogList";
 
 /**
@@ -20,11 +23,18 @@ import ActionLogList from "./ActionLogList";
 export default function ActionLogPanel({
   client,
   locale,
+  variant = "site",
 }: {
   client: WebActionLogClient | null;
   locale: Locale;
+  /** `app`: the log is the app's own (what it did on the team of this computer), not the site's. */
+  variant?: "site" | "app";
 }) {
-  const t = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
+  const site = WEB_ACTION_LOG_TEXT[locale] ?? WEB_ACTION_LOG_TEXT.en;
+  const t =
+    variant === "app"
+      ? { ...site, ...(WEB_ACTION_LOG_APP_TEXT[locale] ?? WEB_ACTION_LOG_APP_TEXT.en) }
+      : site;
   const [read, setRead] = useState<WebActionLogRead | null>(null);
   const turn = useRef(0);
 
@@ -83,7 +93,11 @@ export default function ActionLogPanel({
   } else {
     body = (
       <>
-        <ActionLogList rows={read.rows} locale={locale} />
+        <ActionLogList
+          rows={read.rows}
+          locale={locale}
+          listLabel={variant === "app" ? t.listLabel : undefined}
+        />
         {read.rows.length >= WEB_ACTION_LOG_LIMIT && (
           <p className="text-[11px] mt-2 text-[var(--color-dim)]">
             {t.limitNote.replace("{n}", String(WEB_ACTION_LOG_LIMIT))}

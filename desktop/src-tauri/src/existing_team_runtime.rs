@@ -158,14 +158,14 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','piles','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','piles','profile','cloud_sync','map','team_activity','team_activity_log','directives'): fail('positions_request_invalid')
 DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
 if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
 if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','piles','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','piles','profile','cloud_sync','directives','team_activity_log') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 if op=='cloud_sync':
  # How the box's push to the website is going: its periodic push keeps the last outcome in
@@ -243,7 +243,8 @@ try:
  # A team that has never run has no jobs.db yet: that is no positions, not a failure. Only a file
  # missing from the team's home counts; a jobs.db that is there and cannot be read stays a failure,
  # and so does a missing home. The reads below then run on an empty database, as for a team with none.
- try: os.lstat('/jht_home/jobs.db'); absent=False
+ ident=[0,0]
+ try: info=os.lstat('/jht_home/jobs.db'); ident=[info.st_ino,info.st_dev]; absent=False
  except FileNotFoundError: absent=os.path.isdir('/jht_home')
  if absent:
   db=sqlite3.connect(':memory:'); db.row_factory=sqlite3.Row
@@ -252,7 +253,7 @@ try:
   db=sqlite3.connect('file:/jht_home/jobs.db?mode=ro',uri=True); db.row_factory=sqlite3.Row; db.execute('PRAGMA query_only=ON')
  db.execute('SELECT 1 FROM positions LIMIT 1')
 except Exception: fail('positions_unavailable')
-if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))})
+if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))} if absent else {'ok':True,'data':position_detail(int(req['id'])),'ident':ident})
 def trunc(value,size): return value[:size] if isinstance(value,str) else value
 def number(value): return value if isinstance(value,(int,float)) and not isinstance(value,bool) else None
 # An office coordinate the globe may place a pin on: a finite number within the globe, else None
@@ -360,6 +361,32 @@ if op=='directives':
     items.append(row)
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':items,'truncated':truncated}})
+if op=='team_activity_log':
+ # Every event of the team, newest first, each with the position it touched: the Activity log page. The same five
+ # sources as `team_activity` (found_at, last_checked, scored_at, written_at, critic_reviewed_at), joined to the position
+ # for its title, company and number. Text is cut here; at most EVENTS rows, and the reply is held to a byte budget
+ # (the oldest events leave first), so nothing here fails for volume.
+ EVENTS=5000; BUDGET=1363148
+ sources=(('scout','positions','found_at','found_by','t.id'),('analista','positions','last_checked',None,'t.id'),('scorer','scores','scored_at','scored_by','t.position_id'),('scrittore','applications','written_at','written_by','t.position_id'),('critico','applications','critic_reviewed_at','reviewed_by','t.position_id'))
+ try:
+  pcols=columns('positions'); items=[]
+  for role,table,column,actor,joined in sources:
+   have=columns(table)
+   if column not in have: continue
+   if table!='positions' and 'position_id' not in have: continue
+   if actor and actor in have: who='t.'+actor
+   elif role=='analista' and 'last_actor' in pcols: who="CASE WHEN t.last_actor LIKE 'analista%' THEN t.last_actor ELSE NULL END"
+   else: who='NULL'
+   legacy='p.legacy_id' if 'legacy_id' in pcols else 'NULL'
+   title='p.title' if 'title' in pcols else 'NULL'; company='p.company' if 'company' in pcols else 'NULL'
+   sql='SELECT '+who+' AS actor, t.'+column+' AS ts, p.id AS pid, '+title+' AS title, '+company+' AS company, '+legacy+' AS legacy FROM '+table+' t LEFT JOIN positions p ON p.id='+joined+' WHERE t.'+column+' IS NOT NULL ORDER BY t.'+column+' DESC LIMIT '+str(EVENTS)
+   for row in db.execute(sql):
+    legacy_id=row['legacy']
+    items.append({'role':role,'actor':trunc(row['actor'],40),'ts':trunc(row['ts'],40),'pid':None if row['pid'] is None else sid(row['pid']),'title':trunc(row['title'],200),'company':trunc(row['company'],120),'legacyId':legacy_id if type(legacy_id) is int else None})
+  items.sort(key=lambda item:item['ts'] or '',reverse=True); items=items[:EVENTS]
+  while items and len(json.dumps({'items':items},separators=(',',':')))>BUDGET: items=items[:max(1,len(items)*3//4)] if len(items)>1 else []
+  emit({'ok':True,'data':{'items':items}})
+ except sqlite3.Error: fail('positions_unavailable')
 if op=='team_activity':
  # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
  # newest events with the position they touched. The columns are the ones the web's own local reader reads
@@ -516,6 +543,9 @@ enum PositionsRequest {
         from: String,
         to: String,
     },
+    /// Every event of the team, newest first, each with the position it touched (the script's `team_activity_log`).
+    #[serde(rename = "team_activity_log")]
+    TeamActivityLog,
     /// The standing orders of the user's board (the script's `directives`), read only.
     Directives,
     /// How the box's push to the website is going (its periodic push's last outcome).
@@ -657,6 +687,7 @@ impl PositionsRequest {
             Self::TeamActivity { .. } => 7,
             Self::Directives => 8,
             Self::Piles => 9,
+            Self::TeamActivityLog => 10,
         }]
     }
 
@@ -668,7 +699,7 @@ impl PositionsRequest {
             }
             Self::Map { offset } => *offset <= 1_000_000,
             Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
-            Self::Facets | Self::Stats | Self::Piles | Self::Profile | Self::CloudSync | Self::Directives => true,
+            Self::Facets | Self::Stats | Self::Piles | Self::Profile | Self::CloudSync | Self::Directives | Self::TeamActivityLog => true,
         }
     }
 }
@@ -699,7 +730,7 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
         return false;
     };
     match request {
-        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives => data
+        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives | PositionsRequest::TeamActivityLog => data
             .as_object()
             .and_then(|data| data.get("items"))
             .is_some_and(|items| {
@@ -2176,11 +2207,9 @@ pub(crate) fn delivery_command(
     target: &RuntimeTarget,
     session: &str,
 ) -> Result<String, &'static str> {
-    let session = match session {
-        "CAPITANO" | "ASSISTENTE" | "MENTOR" | "SCOUT-1" | "ANALISTA-1" | "SCORER-1"
-        | "SCRITTORE-1" | "CRITICO" => session,
-        _ => return Err("invalid_agent"),
-    };
+    if !chat_session_ok(session) {
+        return Err("invalid_agent");
+    }
     command(
         target,
         &format!(
@@ -2194,6 +2223,50 @@ pub(crate) fn delivery_command(
 pub(crate) const CHAT_AGENTS: [&str; 8] = [
     "capitano", "assistente", "mentor", "scout", "analista", "scorer", "scrittore", "critico",
 ];
+
+/// The roles that have several sessions and are also spoken to by instance: `analista-2` is the session
+/// ANALISTA-2 and the folder `agents/analista-2` (the launcher's own names). `agent_chat.py` has the same grammar.
+const NUMBERED_CHAT_ROLES: [&str; 4] = ["scout", "analista", "scorer", "scrittore"];
+
+/// An instance of a numbered role: the role, then a number from 1 to 9999 with no zero in front. Nothing else.
+pub(crate) fn chat_instance(agent: &str) -> Option<(&'static str, u16)> {
+    let (role, number) = agent.split_once('-')?;
+    let role = NUMBERED_CHAT_ROLES.iter().copied().find(|known| *known == role)?;
+    if number.is_empty() || number.len() > 4 || number.starts_with('0') || !number.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some((role, number.parse().ok()?))
+}
+
+/// An id the chat may be opened with: the eight fixed ones, or an instance of a numbered role.
+pub(crate) fn chat_agent_ok(agent: &str) -> bool {
+    CHAT_AGENTS.contains(&agent) || chat_instance(agent).is_some()
+}
+
+/// The tmux session of a chat id («scout» is the first instance, SCOUT-1).
+pub(crate) fn chat_session(agent: &str) -> Option<String> {
+    let fixed = match agent {
+        "capitano" => "CAPITANO",
+        "assistente" => "ASSISTENTE",
+        "mentor" => "MENTOR",
+        "scout" => "SCOUT-1",
+        "analista" => "ANALISTA-1",
+        "scorer" => "SCORER-1",
+        "scrittore" => "SCRITTORE-1",
+        "critico" => "CRITICO",
+        _ => "",
+    };
+    if !fixed.is_empty() {
+        return Some(fixed.to_owned());
+    }
+    let (role, number) = chat_instance(agent)?;
+    Some(format!("{}-{number}", role.to_ascii_uppercase()))
+}
+
+/// A session the chat may write to: the session of an id above, in capitals and nothing else.
+pub(crate) fn chat_session_ok(session: &str) -> bool {
+    session == session.to_ascii_uppercase() && chat_session(&session.to_ascii_lowercase()).is_some_and(|known| known == session)
+}
 
 /// What the app asks of the chat in a pinned container: four operations, each with its few
 /// arguments. The user's text is never one of them: it goes on standard input (the words of an
@@ -2242,7 +2315,7 @@ fn chat_token(value: &str, max: usize, digits_only: bool) -> bool {
 pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String>, &'static str> {
     match operation {
         ChatOperation::Read { agent, cursor } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             let mut arguments = vec!["read".to_owned(), (*agent).to_owned()];
@@ -2254,7 +2327,7 @@ pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String
             Ok(arguments)
         }
         ChatOperation::Send { agent, client_message_id } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             if !chat_token(client_message_id, 64, false) {
@@ -2263,7 +2336,7 @@ pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String
             Ok(vec!["send".to_owned(), (*agent).to_owned(), (*client_message_id).to_owned()])
         }
         ChatOperation::Answer { agent, question_id } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             if !chat_question_id(question_id) {
@@ -2272,7 +2345,7 @@ pub(crate) fn chat_arguments(operation: &ChatOperation<'_>) -> Result<Vec<String
             Ok(vec!["answer".to_owned(), (*agent).to_owned(), (*question_id).to_owned()])
         }
         ChatOperation::Enter { agent, message_id } => {
-            if !CHAT_AGENTS.contains(agent) {
+            if !chat_agent_ok(agent) {
                 return Err("invalid_agent");
             }
             if !chat_token(message_id, 64, false) {
@@ -2891,6 +2964,7 @@ fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &
     let reply = positions_read_local_with(
         request,
         request_bytes,
+        &crate::local_swipe::scope_tag(scope),
         |input| crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "python"], Some(input), READ_TIMEOUT),
         || {
             crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "probe"], None, LOCAL_PROBE_TIMEOUT)
@@ -2930,6 +3004,7 @@ pub(crate) fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope)
 fn positions_read_local_with(
     request: &PositionsRequest,
     request_bytes: &[u8],
+    token_tag: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
 ) -> Value {
@@ -2938,7 +3013,7 @@ fn positions_read_local_with(
     input.extend_from_slice(request_bytes);
     input.push(b'\n');
     match run(&input) {
-        Ok(output) if output.success() => positions_reply_from_output(request, output),
+        Ok(output) if output.success() => positions_reply_from_output(request, output, Some(token_tag)),
         _ if !team_is_up() => positions_failure("local_team_not_running"),
         _ => positions_answer_failure("positions_unavailable"),
     }
@@ -2967,25 +3042,33 @@ fn positions_read_with(
             ))
         }
     };
-    positions_reply_from_output(request, output)
+    positions_reply_from_output(request, output, None)
 }
 
 /// What the reader printed, as the page's reply: a bounded, well-formed answer of the shape the request asked
 /// for, or why it is not one. The same for the VPS and for this computer's container.
-fn positions_reply_from_output(request: &PositionsRequest, output: ProcessResult) -> Value {
+fn positions_reply_from_output(request: &PositionsRequest, output: ProcessResult, token_tag: Option<&str>) -> Value {
     if output.stdout.len() > 2 * 1024 * 1024 {
         return positions_answer_failure("positions_unavailable");
     }
-    let reply: Value = match serde_json::from_slice(&output.stdout) {
+    let mut reply: Value = match serde_json::from_slice(&output.stdout) {
         Ok(reply) => reply,
         Err(_) => return positions_answer_failure("positions_unavailable"),
     };
+    // The identity of the database file, which only a detail read of this computer's team turns into a token.
+    let ident = reply.as_object_mut().and_then(|object| object.remove("ident"));
     if valid_positions_reply(request, &reply) {
-        return if matches!(request, PositionsRequest::Profile) {
-            shape_profile(reply)
-        } else {
-            reply
-        };
+        if matches!(request, PositionsRequest::Profile) {
+            return shape_profile(reply);
+        }
+        if let (Some(tag), PositionsRequest::Detail { .. }, Some(ident)) = (token_tag, request, ident) {
+            if let Some(token) = crate::local_swipe::token_from_ident(tag, &ident) {
+                if let Some(data) = reply.get_mut("data").and_then(Value::as_object_mut) {
+                    data.insert("token".into(), Value::String(token));
+                }
+            }
+        }
+        return reply;
     }
     match reply.get("error").and_then(Value::as_str) {
         Some("positions_request_invalid") => positions_answer_failure("positions_request_invalid"),
@@ -3307,8 +3390,30 @@ mod tests {
     }
 
     #[test]
+    fn an_instance_of_a_numbered_role_is_a_closed_form_of_the_chat_command() {
+        let last = |command: String| command.lines().last().expect("a last line").to_owned();
+        assert_eq!(
+            last(chat_command(&target(), &ChatOperation::Read { agent: "analista-2", cursor: None }).unwrap()),
+            "exec \"$JHT_ENGINE\" exec -i \"$JHT_CID\" python3 -I /app/shared/skills/agent_chat.py read 'analista-2'"
+        );
+        assert_eq!(
+            chat_wrapper_arguments(&ChatOperation::Send { agent: "scout-12", client_message_id: "id-1" }).unwrap(),
+            ["desktop-chat", "chat-send", "scout-12", "id-1"]
+        );
+        assert_eq!(chat_session("scout-12").as_deref(), Some("SCOUT-12"));
+        assert_eq!(chat_session("scout").as_deref(), Some("SCOUT-1"));
+        assert!(chat_session_ok("SCRITTORE-9999") && chat_session_ok("CRITICO"));
+        for bad in ["scout", "SCOUT", "SCOUT-0", "SCOUT-01", "scout-2", "SCOUT-2 ", "CRITICO-2", "CAPITANO-1", ""] {
+            assert!(!chat_session_ok(bad), "{bad:?}");
+        }
+    }
+
+    #[test]
     fn nothing_outside_the_closed_forms_enters_the_chat_command() {
-        for agent in ["", "CAPITANO", "capitano ", "capitano'; id #", "scout-1", "../mentor", "capitano\n", "agente"] {
+        for agent in [
+            "", "CAPITANO", "capitano ", "capitano'; id #", "scout-0", "scout-01", "scout-10000", "scout-1-2", "SCOUT-1", "scout-2\n",
+            "scout-2'; id #", "critico-2", "../mentor", "capitano\n", "agente",
+        ] {
             assert_eq!(chat_command(&target(), &ChatOperation::Read { agent, cursor: None }), Err("invalid_agent"), "{agent:?}");
             assert_eq!(chat_command(&target(), &ChatOperation::Send { agent, client_message_id: "id" }), Err("invalid_agent"), "{agent:?}");
         }
@@ -3784,7 +3889,7 @@ mod tests {
         }
         // the reader knows the op, takes no field but `op`, and every kind of read has its name in the load-times log
         assert!(POSITIONS_READ_PY.contains("if op=='piles':"));
-        assert!(POSITIONS_READ_PY.contains("('facets','stats','piles','profile','cloud_sync','directives') and set(req)!={'op'}"));
+        assert!(POSITIONS_READ_PY.contains("('facets','stats','piles','profile','cloud_sync','directives','team_activity_log') and set(req)!={'op'}"));
         assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[9], "piles");
         assert_eq!(PositionsRequest::Piles.op(), "piles");
     }
@@ -4108,6 +4213,30 @@ mod tests {
     }
 
     #[test]
+    fn the_activity_log_read_takes_no_argument_and_answers_a_list_of_rows() {
+        let parsed = parse_positions_request(json!({"op": "team_activity_log"})).unwrap();
+        assert_eq!(parsed.op(), "team_activity_log");
+        assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[10], "team_activity_log");
+        // like piles: whatever else a caller adds is gone before the reader, which refuses it anyway
+        for extra in [
+            json!({"op": "team_activity_log", "from": "2026-10-01", "to": "2026-10-02"}),
+            json!({"op": "team_activity_log", "limit": 3}),
+            json!({"op": "team_activity_log", "id": "1"}),
+        ] {
+            let forwarded = parse_positions_request(extra.clone()).map(|request| serde_json::to_value(request).expect("request serializes"));
+            assert_eq!(forwarded, Ok(json!({"op": "team_activity_log"})), "{extra}");
+        }
+        assert!(POSITIONS_READ_PY.contains("'directives','team_activity_log') and set(req)!={'op'}"));
+        assert!(valid_positions_reply(&parsed, &json!({"ok": true, "data": {"items": [{"role": "scout", "ts": "2026-10-01"}]}})));
+        for broken in [json!({"ok": true, "data": {"rows": []}}), json!({"ok": true, "data": []}), json!({"ok": true, "data": {"items": [1]}})] {
+            assert!(!valid_positions_reply(&parsed, &broken), "{broken}");
+        }
+        // it reads the five sources' time columns and the position's title, company and number, never a whole row
+        let reader = POSITIONS_READ_PY.split("if op=='team_activity_log':").nth(1).unwrap().split("if op=='team_activity':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && !reader.contains("jd_text") && reader.contains("LIMIT") && reader.contains("BUDGET"));
+    }
+
+    #[test]
     fn a_failed_positions_read_says_network_application_version_or_blocked() {
         let failure = |code: &str, kind: &str| json!({"ok": false, "error": code, "kind": kind});
         assert_eq!(read_stats(Err("process_timeout"), None), (failure("timeout", "network"), 0));
@@ -4138,6 +4267,7 @@ mod tests {
         let reply = positions_read_local_with(
             &PositionsRequest::Facets,
             br#"{"op":"facets"}"#,
+            "0123456789abcdef",
             |input| {
                 // the same reader and request as the VPS gets, on stdin: the reader in hex, then the request
                 let text = String::from_utf8(input.to_vec()).unwrap();
@@ -4398,6 +4528,36 @@ mod tests {
         assert!(POSITIONS_READ_PY.contains("mode=ro"));
         assert!(POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
         assert!(!POSITIONS_READ_PY.contains("req.get('sql')"));
+    }
+
+    #[test]
+    fn a_detail_read_of_this_computers_team_carries_the_token_to_write_with_and_no_other_read_or_team_does() {
+        let detail = PositionsRequest::Detail { id: "42".into() };
+        let body = json!({"position":{},"score":null,"highlights":[],"company":null,"application":null,"tickets":[],"userNote":null,"exclusionEventAt":null});
+        let said = json!({"ok": true, "data": body, "ident": [77, 5]}).to_string();
+        let with_token = positions_reply_from_output(&detail, exited(0, &said).unwrap(), Some("0123456789abcdef"));
+        assert_eq!(with_token["data"]["token"], "0123456789abcdef.77.5");
+        assert!(with_token.get("ident").is_none(), "the identity is not passed on as it is");
+        // a team on a VPS: the same reader, the same reply, no token
+        let vps = positions_reply_from_output(&detail, exited(0, &said).unwrap(), None);
+        assert_eq!(vps, json!({"ok": true, "data": body}));
+        // a position that is not there has nothing to write to; a database that is not there (0) gives no token
+        let none = json!({"ok": true, "data": null, "ident": [77, 5]}).to_string();
+        assert_eq!(positions_reply_from_output(&detail, exited(0, &none).unwrap(), Some("0123456789abcdef")), json!({"ok": true, "data": null}));
+        let absent = json!({"ok": true, "data": body, "ident": [0, 0]}).to_string();
+        assert!(positions_reply_from_output(&detail, exited(0, &absent).unwrap(), Some("0123456789abcdef"))["data"].get("token").is_none());
+        // a garbled identity gives no token and does not break the read
+        for ident in [json!([1]), json!("1.2"), json!([-1, 5]), json!([1.5, 5]), json!(null)] {
+            let garbled = json!({"ok": true, "data": body, "ident": ident}).to_string();
+            let reply = positions_reply_from_output(&detail, exited(0, &garbled).unwrap(), Some("0123456789abcdef"));
+            assert_eq!(reply, json!({"ok": true, "data": body}), "{ident}");
+        }
+        // only a detail read is given one: a list that carries an identity is the list, closed as before
+        let list = PositionsRequest::List { filters: None };
+        let listed = json!({"ok": true, "data": {"items": []}, "ident": [77, 5]}).to_string();
+        assert_eq!(positions_reply_from_output(&list, exited(0, &listed).unwrap(), Some("0123456789abcdef")), json!({"ok": true, "data": {"items": []}}));
+        // and the reader answers the identity of the file only for a detail
+        assert!(POSITIONS_READ_PY.contains("if op=='detail': emit({'ok':True,'data':position_detail(int(req['id']))} if absent else {'ok':True,'data':position_detail(int(req['id'])),'ident':ident})"));
     }
 
     #[test]

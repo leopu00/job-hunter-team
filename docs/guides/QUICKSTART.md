@@ -111,6 +111,8 @@ curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --runtime podman
 
 **Windows (PowerShell; WSL must be enabled):** Windows is not supported in 0.4: these steps are untested and may not work.
 
+Requirements on Windows: WSL enabled, and **winget** (the Windows Package Manager, which comes with "App Installer"): the installer gets Podman through it. Windows 11 has it; on Windows 10 install "App Installer" from the Microsoft Store (<https://apps.microsoft.com/detail/9nblggh4nns1>, or the official link <https://aka.ms/getwinget>). Without winget, and without a Podman already installed, the installer stops at once, before it writes anything, and says so: install App Installer, open a new PowerShell window and run the same command again.
+
 ```powershell
 $f = Join-Path $env:TEMP ("jht-install-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
 iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f

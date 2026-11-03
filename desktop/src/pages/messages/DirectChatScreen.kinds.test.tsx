@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectChatScreen from "./DirectChatScreen";
@@ -361,10 +361,15 @@ describe("DirectChatScreen: whether the agent's CLI took the person's message", 
     return { mock, user, mine };
   }
 
-  it("taken: «Inviato», never «Consegnato» while the delivery cannot prove it", async () => {
+  it("taken, with the team's proof: «Letto»; without a word on taking: only «Inviato», never «Consegnato»", async () => {
     const { mine } = await sendWith({ taken: true });
-    await waitFor(() => expect(within(mine()).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"));
+    await waitFor(() => expect(within(mine()).getByTestId("direct-chat-sent")).toHaveTextContent("Letto"));
+    expect(within(mine()).getByTestId("direct-chat-sent")).toHaveAttribute("data-mark", "read");
     expect(mine()).not.toHaveTextContent(/consegnato|preso/i);
+    cleanup();
+    const older = await sendWith({});
+    await waitFor(() => expect(within(older.mine()).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"));
+    expect(within(older.mine()).getByTestId("direct-chat-sent")).toHaveAttribute("data-mark", "sent");
   });
 
   it("not taken: «incollato ma non inviato», and the button presses Enter once, never the text again", async () => {
@@ -375,7 +380,7 @@ describe("DirectChatScreen: whether the agent's CLI took the person's message", 
     expect(mock.enter).toHaveBeenCalledTimes(1);
     expect(mock.enter).toHaveBeenCalledWith({ agentId: "capitano", messageId: "remote-7" });
     expect(mock.send).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(within(mine()).getByTestId("direct-chat-sent")).toHaveTextContent("Inviato"));
+    await waitFor(() => expect(within(mine()).getByTestId("direct-chat-sent")).toHaveTextContent("Letto"));
     expect(within(mine()).queryByTestId("direct-chat-not-sent")).toBeNull();
   });
 

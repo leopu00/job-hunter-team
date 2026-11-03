@@ -44,6 +44,9 @@ const T: Record<
     remove: string;
     error: string;
     noLocalDb: string;
+    hasNotes: string;
+    open: string;
+    close: string;
   }
 > = {
   it: {
@@ -57,6 +60,9 @@ const T: Record<
     error: "Non è riuscito a salvare la nota",
     noLocalDb:
       "Il database del team non è raggiungibile: avvia il team una volta, poi riprova.",
+    hasNotes: "Ci sono note salvate",
+    open: "Apri le note",
+    close: "Chiudi le note",
   },
   en: {
     title: "Private notes",
@@ -70,6 +76,9 @@ const T: Record<
     error: "Could not save the note",
     noLocalDb:
       "The team database isn't reachable: start the team once, then try again.",
+    hasNotes: "Notes saved",
+    open: "Open the notes",
+    close: "Close the notes",
   },
   es: {
     title: "Notas privadas",
@@ -82,6 +91,9 @@ const T: Record<
     error: "No se pudo guardar la nota",
     noLocalDb:
       "No se puede acceder a la base de datos del equipo: inicia el equipo una vez y vuelve a intentarlo.",
+    hasNotes: "Hay notas guardadas",
+    open: "Abrir las notas",
+    close: "Cerrar las notas",
   },
   de: {
     title: "Private Notizen",
@@ -95,6 +107,9 @@ const T: Record<
     error: "Notiz konnte nicht gespeichert werden",
     noLocalDb:
       "Die Team-Datenbank ist nicht erreichbar: starte das Team einmal und versuche es erneut.",
+    hasNotes: "Notizen gespeichert",
+    open: "Notizen öffnen",
+    close: "Notizen schließen",
   },
   fr: {
     title: "Notes privées",
@@ -107,6 +122,9 @@ const T: Record<
     error: "Impossible d'enregistrer la note",
     noLocalDb:
       "La base de données de l'équipe est inaccessible : démarrez l'équipe une fois, puis réessayez.",
+    hasNotes: "Notes enregistrées",
+    open: "Ouvrir les notes",
+    close: "Fermer les notes",
   },
   pt: {
     title: "Notas privadas",
@@ -119,6 +137,9 @@ const T: Record<
     error: "Não foi possível guardar a nota",
     noLocalDb:
       "A base de dados da equipa está inacessível: inicie a equipa uma vez e tente novamente.",
+    hasNotes: "Há notas guardadas",
+    open: "Abrir as notas",
+    close: "Fechar as notas",
   },
   hu: {
     title: "Privát jegyzetek",
@@ -131,6 +152,9 @@ const T: Record<
     error: "A jegyzetet nem sikerült menteni",
     noLocalDb:
       "A csapat adatbázisa nem érhető el: indítsd el egyszer a csapatot, majd próbáld újra.",
+    hasNotes: "Vannak mentett jegyzetek",
+    open: "Jegyzetek megnyitása",
+    close: "Jegyzetek bezárása",
   },
 };
 
@@ -148,6 +172,9 @@ export default function UserNote({
   const [saved, setSaved] = useState<string | null>(initialNote);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Chiuso di default: le note non spingono giù il resto della pagina. Il testo resta montato (nascosto)
+  // anche da chiuso, così quello che si sta scrivendo non si perde chiudendo.
+  const [open, setOpen] = useState(false);
 
   const dirty = text.trim() !== (saved ?? "");
 
@@ -178,57 +205,94 @@ export default function UserNote({
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[11px] font-semibold tracking-[0.15em] uppercase text-[var(--color-base)]">
-          {t.title}
-        </h2>
-        <span className="text-[10px] text-[var(--color-dim)]">{t.private}</span>
-      </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value.slice(0, MAX))}
-        placeholder={t.placeholder}
-        rows={4}
-        disabled={readOnly.readOnly}
-        title={readOnly.readOnly ? readOnly.reason : undefined}
-        className="mt-3 w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[12px] text-[var(--color-base)] placeholder:text-[var(--color-dim)]"
-      />
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-[10px] text-[var(--color-dim)]">
-          {pending ? t.saving : saved && !dirty ? `✓ ${t.saved}` : ""}
-        </span>
-        <span className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={`user-note-body-${legacyId}`}
+        title={open ? t.close : t.open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <svg
+            viewBox="0 0 10 6"
+            className={`w-2.5 h-2.5 shrink-0 text-[var(--color-dim)] transition-transform ${open ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M1 1l4 4 4-4" />
+          </svg>
+          <h2 className="text-[11px] font-semibold tracking-[0.15em] uppercase text-[var(--color-base)]">
+            {t.title}
+          </h2>
+          {/* Il segno che ci sono note: si vede anche a pannello chiuso. */}
           {saved && (
+            <span
+              data-testid="user-note-sign"
+              role="img"
+              aria-label={t.hasNotes}
+              title={t.hasNotes}
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ background: "var(--color-green)" }}
+            />
+          )}
+        </span>
+        <span className="text-[10px] text-[var(--color-dim)] text-right">
+          {t.private}
+        </span>
+      </button>
+      <div id={`user-note-body-${legacyId}`} hidden={!open}>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value.slice(0, MAX))}
+          placeholder={t.placeholder}
+          rows={4}
+          disabled={readOnly.readOnly}
+          title={readOnly.readOnly ? readOnly.reason : undefined}
+          wrap="soft"
+          className="mt-3 block w-full resize-y overflow-x-hidden whitespace-pre-wrap rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[12px] text-[var(--color-base)] [overflow-wrap:anywhere] placeholder:text-[var(--color-dim)]"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-[var(--color-dim)]">
+            {pending ? t.saving : saved && !dirty ? `✓ ${t.saved}` : ""}
+          </span>
+          <span className="flex gap-2">
+            {saved && (
+              <button
+                type="button"
+                onClick={() => void persist(true)}
+                disabled={pending || readOnly.readOnly}
+                title={readOnly.readOnly ? readOnly.reason : undefined}
+                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-row)] disabled:opacity-60"
+              >
+                {t.remove}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => void persist(true)}
-              disabled={pending || readOnly.readOnly}
+              onClick={() => void persist(false)}
+              disabled={pending || !dirty || !text.trim() || readOnly.readOnly}
               title={readOnly.readOnly ? readOnly.reason : undefined}
-              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] transition-colors hover:bg-[var(--color-row)] disabled:opacity-60"
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-40"
+              style={{
+                color: "var(--color-green)",
+                borderColor: "var(--color-green)",
+              }}
             >
-              {t.remove}
+              {t.save}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void persist(false)}
-            disabled={pending || !dirty || !text.trim() || readOnly.readOnly}
-            title={readOnly.readOnly ? readOnly.reason : undefined}
-            className="rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-40"
-            style={{
-              color: "var(--color-green)",
-              borderColor: "var(--color-green)",
-            }}
-          >
-            {t.save}
-          </button>
-        </span>
+          </span>
+        </div>
+        {error && (
+          <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
+            {error}
+          </p>
+        )}
       </div>
-      {error && (
-        <p className="mt-2 text-[10px]" style={{ color: "var(--color-red)" }}>
-          {error}
-        </p>
-      )}
     </div>
   );
 }

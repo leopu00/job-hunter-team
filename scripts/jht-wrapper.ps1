@@ -42,6 +42,9 @@ $JHT_ONBOARDING_SNAPSHOT_PROTOCOL = 1
 # riga: un wrapper che non la ha passerebbe il comando al ramo generico, che
 # avvia il container.
 $JHT_AGENT_CONTROL_PROTOCOL = 1
+# L'app del desktop registra nel broker l'autorizzazione a una candidatura con `desktop-apply record` solo se
+# trova questa riga: un wrapper che non la ha passerebbe il comando al ramo generico, che avvia il container.
+$JHT_DESKTOP_APPLY_PROTOCOL = 1
 $JHT_UNINSTALL_PROTOCOL = 1
 $JhtUninstallRemovalNotice = 'Vengono cancellati anche la password della posta e i token di Telegram salvati; ~/.jht e Documenti restano, e con loro la sessione LinkedIn salvata (secrets/linkedin-profile e .cache/linkedin): si toglie con jht reset --scope creds.'
 
@@ -1051,9 +1054,12 @@ function Invoke-DesktopChat {
       $script:DesktopChatExitCode = $LASTEXITCODE
     }
     'send' {
-      if ($ChatArgs.Count -ne 2 -or $ChatArgs[1] -notin @(
-        'CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO'
-      )) { $script:DesktopChatExitCode = 2; return }
+      # the eight fixed sessions, or an instance of a numbered role (SCOUT-2.. up to four digits, no zero in front;
+      # -cmatch: case counts, as it does in the bash wrapper's case)
+      $fixedSessions = @('CAPITANO', 'ASSISTENTE', 'MENTOR', 'SCOUT-1', 'ANALISTA-1', 'SCORER-1', 'SCRITTORE-1', 'CRITICO')
+      if ($ChatArgs.Count -ne 2 -or -not ($ChatArgs[1] -in $fixedSessions -or $ChatArgs[1] -cmatch '\A(SCOUT|ANALISTA|SCORER|SCRITTORE)-[1-9][0-9]{0,3}\z')) {
+        $script:DesktopChatExitCode = 2; return
+      }
       # No double quote inside a native argument (5.1 drops it, T71): an empty IFS keeps the message
       # one word without quotes, and set -f keeps its * and ? from matching file names.
       & docker exec -i $containerId sh -c 'IFS=; set -f; msg=$(cat); exec jht-tmux-send $1 $msg' sh $ChatArgs[1]
@@ -1083,6 +1089,44 @@ function Invoke-AgentControl {
   }
   & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $containerId node $NodeEntry agent-control @ControlArgs
   $script:AgentControlExitCode = $LASTEXITCODE
+}
+
+# Autorizzazione a una candidatura, dal desktop (`jht desktop-apply record ID INSTANT DESTINATION`). Il CLOSER
+# invia solo cio' che il broker ha registrato, e il broker registra solo da canali che gli agenti non hanno:
+# l'host e' uno. Come Invoke-AgentControl NON avvia mai niente: col broker spento o non attestato risponde col
+# codice chiuso apply_record_no_broker (113). Ogni campo e' chiuso QUI (confronto che distingue le maiuscole,
+# cifre ASCII; fine stringa con \z: in .NET `$` accetta anche un a capo finale) prima di finire in una riga di comando; la risposta e' una riga sola, mai il testo del broker.
+# Il codice sta in $script:DesktopApplyExitCode, come per Invoke-AgentControl.
+$script:DesktopApplyExitCode = 2
+function Invoke-DesktopApply {
+  param([string[]]$ApplyArgs)
+  $script:DesktopApplyExitCode = 2
+  if (
+    $ApplyArgs.Count -ne 4 -or $ApplyArgs[0] -cne 'record' -or
+    $ApplyArgs[1] -cnotmatch '^[1-9][0-9]{0,9}\z' -or
+    $ApplyArgs[2] -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\z' -or
+    $ApplyArgs[3] -cnotmatch '^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})\z'
+  ) {
+    [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_invalid"}')
+    return
+  }
+  $brokerId = $null
+  if (Test-RuntimeBundleTrusted) { $brokerId = Get-RunningComposeServiceId $BrokerContainer }
+  if (-not $brokerId) {
+    [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_no_broker"}')
+    $script:DesktopApplyExitCode = 113
+    return
+  }
+  # stdin aperto e vuoto, come `apply record`; l'errore nativo non diventa un'eccezione (5.1)
+  $answer = ('' | & { $ErrorActionPreference = 'Continue'; $input | & docker exec -i $brokerId jht-broker-admin apply record $ApplyArgs[1] $ApplyArgs[2] $ApplyArgs[3] 2>$null }) -join ''
+  $code = $LASTEXITCODE
+  if ($code -ne 0 -or $answer -cnotmatch '"status": ?"(recorded|already_recorded)"') {
+    [Console]::Out.WriteLine('{"ok":false,"error":"apply_record_refused"}')
+    $script:DesktopApplyExitCode = 1
+    return
+  }
+  [Console]::Out.WriteLine('{"ok":true}')
+  $script:DesktopApplyExitCode = 0
 }
 
 function Test-BrokerUp {
@@ -3192,7 +3236,7 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 $HelpRequested = @($Rest | Where-Object { $_ -in @('-h', '--help') }).Count -gt 0
 # `agent-control` ne resta fuori: le sue forme sono chiuse e un `--help` fra i
 # suoi argomenti e' una richiesta da rifiutare con il suo codice, non aiuto.
-if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control')) {
+if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-apply')) {
   if (Test-HostCommandUsesLocalHelp $Sub) {
     Write-LocalHelp
     exit 0
@@ -3244,6 +3288,11 @@ switch ($Sub) {
   'agent-control' {
     Invoke-AgentControl $Rest
     exit $script:AgentControlExitCode
+  }
+
+  'desktop-apply' {
+    Invoke-DesktopApply $Rest
+    exit $script:DesktopApplyExitCode
   }
 
   'game' {
