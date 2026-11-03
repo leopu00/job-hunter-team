@@ -132,7 +132,7 @@ except Exception: fail('request_invalid')
 emit(answer)
 "#;
 
-fn failure(code: &str) -> Value {
+pub(crate) fn failure(code: &str) -> Value {
     json!({ "ok": false, "error": code })
 }
 
@@ -250,7 +250,7 @@ impl JudgeRequest {
 }
 
 /// What identifies the scope in a token, without being the scope: 16 hex characters of a hash.
-fn scope_tag(scope: &AccountScope) -> String {
+pub(crate) fn scope_tag(scope: &AccountScope) -> String {
     let mut hash = Sha256::new();
     hash.update(b"jht-swipe-deck/1:");
     hash.update(scope.digest().as_bytes());
@@ -270,6 +270,14 @@ fn parse_token(token: &str, tag: &str) -> Option<(u64, u64)> {
     }
     let number = |text: &str| (!text.is_empty() && text.len() <= 20 && text.bytes().all(|b| b.is_ascii_digit())).then(|| text.parse::<u64>().ok()).flatten();
     Some((number(ino)?, number(dev)?))
+}
+
+/// The token of a detail read: the identity of the database file as the reader saw it (`[ino, dev]`), whole
+/// numbers only. Anything else is no token, and the page has nothing to write with.
+pub(crate) fn token_from_ident(tag: &str, ident: &Value) -> Option<String> {
+    let pair = ident.as_array().filter(|pair| pair.len() == 2)?;
+    let (ino, dev) = (pair[0].as_u64()?, pair[1].as_u64()?);
+    (ino != 0).then(|| make_token(tag, ino, dev))
 }
 
 fn script_input(script: &str, line: &Value) -> Vec<u8> {
@@ -467,7 +475,7 @@ pub(crate) fn deck_with(
 
 /// This computer's team, for a verdict or for the deck: the host is the local one (an existing team's VPS
 /// is read only here) and this account owns the folder. Returns the wrapper the script goes through.
-fn local_wrapper(app: &tauri::AppHandle, scope: &AccountScope, writing: bool) -> Result<PathBuf, &'static str> {
+pub(crate) fn local_wrapper(app: &tauri::AppHandle, scope: &AccountScope, writing: bool) -> Result<PathBuf, &'static str> {
     let refused = if writing { "position_write_read_only" } else { "existing_team_runtime_required" };
     let host = direct_chat::load_persisted_host(app, scope).map_err(|_| refused)?;
     let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope).map_err(|_| refused)?;
@@ -484,17 +492,17 @@ fn local_wrapper(app: &tauri::AppHandle, scope: &AccountScope, writing: bool) ->
     })
 }
 
-fn run_script(wrapper: &Path, input: &[u8]) -> Result<ProcessResult, &'static str> {
+pub(crate) fn run_script(wrapper: &Path, input: &[u8]) -> Result<ProcessResult, &'static str> {
     crate::onboarding::run_verified_local_wrapper(wrapper, &["desktop-chat", "python"], Some(input), TIMEOUT)
 }
 
-fn team_is_up(wrapper: &Path) -> bool {
+pub(crate) fn team_is_up(wrapper: &Path) -> bool {
     crate::onboarding::run_verified_local_wrapper(wrapper, &["desktop-chat", "probe"], None, PROBE_TIMEOUT)
         .map(|probe| probe.success())
         .unwrap_or(false)
 }
 
-async fn on_worker(
+pub(crate) async fn on_worker(
     scopes: &AccountScopeState,
     expected: AccountScope,
     work: impl FnOnce(&AccountScope) -> Value + Send + 'static,
