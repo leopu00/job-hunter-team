@@ -8,6 +8,8 @@ with it.
 import os
 import pty
 import subprocess
+
+import pytest
 from pathlib import Path
 
 
@@ -342,3 +344,24 @@ def test_the_phase_marker_goes_to_the_app_on_a_pipe_and_not_to_a_person_at_a_ter
     # explicit wins in both directions: =1 on a terminal, =0 on a pipe
     assert "JHT_PHASE image_pull" in _phase_output(tmp_path, terminal=True, machine_output="1")
     assert "JHT_PHASE" not in _phase_output(tmp_path, terminal=False, machine_output="0")
+
+
+@pytest.mark.parametrize("folder", ['/tmp/a"b', "/tmp/a$b", "/tmp/a`b", "/tmp/a\\b", "/tmp/a\nb"])
+def test_a_bin_folder_that_would_run_something_in_a_startup_file_is_refused_before_anything_is_written(tmp_path: Path, folder: str):
+    result = subprocess.run(
+        ["bash", "-c", f'. "{INSTALLER}"; echo reached'],
+        env={"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "JHT_INSTALLER_SOURCE_ONLY": "1", "JHT_BIN_DIR": folder},
+        text=True, capture_output=True, timeout=20, check=False,
+    )
+    assert result.returncode == 2 and "reached" not in result.stdout
+    assert "cannot be written safely into a shell startup file" in result.stderr
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_bin_folder_with_a_space_is_accepted(tmp_path: Path):
+    result = subprocess.run(
+        ["bash", "-c", f'. "{INSTALLER}"; echo "[$BIN_DIR]"'],
+        env={"HOME": str(tmp_path), "PATH": "/usr/bin:/bin", "JHT_INSTALLER_SOURCE_ONLY": "1", "JHT_BIN_DIR": "/opt/Mary Ann/bin"},
+        text=True, capture_output=True, timeout=20, check=False,
+    )
+    assert result.returncode == 0 and "[/opt/Mary Ann/bin]" in result.stdout

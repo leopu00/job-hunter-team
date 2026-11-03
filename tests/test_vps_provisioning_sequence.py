@@ -849,3 +849,17 @@ def test_a_fresh_account_with_no_rc_file_still_finds_jht_in_its_next_terminal(se
     before = {name: (server.home / name).read_text() for name in written}
     assert install(server, source).returncode == 0
     assert {name: (server.home / name).read_text() for name in written} == before
+
+
+def test_a_home_with_a_space_in_it_gets_its_startup_file_in_that_home_and_nowhere_else(tmp_path, source):
+    base = tmp_path / "Mary Ann"
+    base.mkdir()
+    spaced = Server(base)
+    spaced.pin()
+    done = install(spaced, source)
+    assert done.returncode == 0, done.stderr.decode()
+    profile = spaced.home / ".profile"
+    assert profile.exists() and profile.read_text().count("Added by JHT install.sh") == 1
+    # the path was not split at the space: no file named after the first word, none beside the home
+    assert not (tmp_path / "Mary").exists()
+    assert not (base / ".profile").exists() and not (tmp_path / ".profile").exists()

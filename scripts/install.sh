@@ -91,6 +91,14 @@ elif [ "$(id -u 2>/dev/null || echo 1000)" -eq 0 ] && [ -w /usr/local/bin ]; the
 else
   BIN_DIR="$HOME/.local/bin"
 fi
+# The folder is written between double quotes into a shell startup file (and into /etc/profile.d as root): a quote,
+# a dollar sign, a backtick, a backslash or a line break in it would run something there, so it is refused here.
+case "$BIN_DIR" in
+  *'"'*|*'$'*|*'`'*|*'\'*|*$'\n'*|*$'\r'*)
+    printf 'The folder for the jht command (JHT_BIN_DIR) has a character that cannot be written safely into a shell startup file: nothing was installed.\n' >&2
+    exit 2
+    ;;
+esac
 
 if [ -n "${JHT_RUNTIME_DIR:-}" ]; then
   RUNTIME_DIR="$JHT_RUNTIME_DIR"
@@ -1328,17 +1336,19 @@ download_runtime_files() {
         # A fresh account may have none of the rc files, and a PATH that nobody wrote leaves `jht` "not found" in the
         # next terminal. If none of them already has the line, they are created: ~/.profile (login shells) and the
         # rc of the shell in use (bash or zsh).
-        local already=0 rc created_rc
+        local already=0 rc
+        local -a created_rc
         for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
           if [ -f "$rc" ] && grep -q "$BIN_DIR" "$rc" 2>/dev/null; then already=1; fi
         done
         if [ "$already" -eq 0 ]; then
-          created_rc="$HOME/.profile"
+          # one word per file, quoted: a HOME with a space in it stays one path
+          created_rc=("$HOME/.profile")
           case "${SHELL##*/}" in
-            zsh) created_rc="$created_rc $HOME/.zshrc" ;;
-            bash) created_rc="$created_rc $HOME/.bashrc" ;;
+            zsh) created_rc+=("$HOME/.zshrc") ;;
+            bash) created_rc+=("$HOME/.bashrc") ;;
           esac
-          for rc in $created_rc; do
+          for rc in "${created_rc[@]}"; do
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc" \
               && { ok "PATH added to $rc"; persistent_added=1; }
           done
