@@ -158,14 +158,14 @@ try: req=json.loads(sys.stdin.readline())
 except Exception: fail('positions_request_invalid')
 if not isinstance(req,dict) or set(req)-{'op','filters','id','offset','from','to'}: fail('positions_request_invalid')
 op=req.get('op')
-if op not in ('list','detail','facets','stats','piles','profile','cloud_sync','map','team_activity','directives'): fail('positions_request_invalid')
+if op not in ('list','detail','facets','stats','piles','profile','cloud_sync','map','team_activity','team_activity_log','directives'): fail('positions_request_invalid')
 DAY=re.compile(r'^\d{4}-\d{2}-\d{2}$')
 if op=='team_activity' and (set(req)!={'op','from','to'} or not all(isinstance(req[key],str) and DAY.match(req[key]) for key in ('from','to')) or req['from']>req['to']): fail('positions_request_invalid')
 if op!='team_activity' and (('from' in req) or ('to' in req)): fail('positions_request_invalid')
 if op=='map' and (set(req)-{'op','offset'} or type(req.get('offset',0)) is not int or not 0<=req.get('offset',0)<=1000000): fail('positions_request_invalid')
 if op!='map' and 'offset' in req: fail('positions_request_invalid')
 if op=='detail' and (set(req)!={'op','id'} or not isinstance(req['id'],str) or not req['id'].isdigit() or len(req['id'])>20): fail('positions_request_invalid')
-if op in ('facets','stats','piles','profile','cloud_sync','directives') and set(req)!={'op'}: fail('positions_request_invalid')
+if op in ('facets','stats','piles','profile','cloud_sync','directives','team_activity_log') and set(req)!={'op'}: fail('positions_request_invalid')
 if op=='list' and (set(req)-{'op','filters'} or (req.get('filters') is not None and not isinstance(req.get('filters'),dict))): fail('positions_request_invalid')
 if op=='cloud_sync':
  # How the box's push to the website is going: its periodic push keeps the last outcome in
@@ -361,6 +361,32 @@ if op=='directives':
     items.append(row)
  except sqlite3.Error: fail('positions_unavailable')
  emit({'ok':True,'data':{'items':items,'truncated':truncated}})
+if op=='team_activity_log':
+ # Every event of the team, newest first, each with the position it touched: the Activity log page. The same five
+ # sources as `team_activity` (found_at, last_checked, scored_at, written_at, critic_reviewed_at), joined to the position
+ # for its title, company and number. Text is cut here; at most EVENTS rows, and the reply is held to a byte budget
+ # (the oldest events leave first), so nothing here fails for volume.
+ EVENTS=5000; BUDGET=1363148
+ sources=(('scout','positions','found_at','found_by','t.id'),('analista','positions','last_checked',None,'t.id'),('scorer','scores','scored_at','scored_by','t.position_id'),('scrittore','applications','written_at','written_by','t.position_id'),('critico','applications','critic_reviewed_at','reviewed_by','t.position_id'))
+ try:
+  pcols=columns('positions'); items=[]
+  for role,table,column,actor,joined in sources:
+   have=columns(table)
+   if column not in have: continue
+   if table!='positions' and 'position_id' not in have: continue
+   if actor and actor in have: who='t.'+actor
+   elif role=='analista' and 'last_actor' in pcols: who="CASE WHEN t.last_actor LIKE 'analista%' THEN t.last_actor ELSE NULL END"
+   else: who='NULL'
+   legacy='p.legacy_id' if 'legacy_id' in pcols else 'NULL'
+   title='p.title' if 'title' in pcols else 'NULL'; company='p.company' if 'company' in pcols else 'NULL'
+   sql='SELECT '+who+' AS actor, t.'+column+' AS ts, p.id AS pid, '+title+' AS title, '+company+' AS company, '+legacy+' AS legacy FROM '+table+' t LEFT JOIN positions p ON p.id='+joined+' WHERE t.'+column+' IS NOT NULL ORDER BY t.'+column+' DESC LIMIT '+str(EVENTS)
+   for row in db.execute(sql):
+    legacy_id=row['legacy']
+    items.append({'role':role,'actor':trunc(row['actor'],40),'ts':trunc(row['ts'],40),'pid':None if row['pid'] is None else sid(row['pid']),'title':trunc(row['title'],200),'company':trunc(row['company'],120),'legacyId':legacy_id if type(legacy_id) is int else None})
+  items.sort(key=lambda item:item['ts'] or '',reverse=True); items=items[:EVENTS]
+  while items and len(json.dumps({'items':items},separators=(',',':')))>BUDGET: items=items[:max(1,len(items)*3//4)] if len(items)>1 else []
+  emit({'ok':True,'data':{'items':items}})
+ except sqlite3.Error: fail('positions_unavailable')
 if op=='team_activity':
  # What each role of the team did, per day and per instance, in the range asked (at most a year), and the
  # newest events with the position they touched. The columns are the ones the web's own local reader reads
@@ -517,6 +543,9 @@ enum PositionsRequest {
         from: String,
         to: String,
     },
+    /// Every event of the team, newest first, each with the position it touched (the script's `team_activity_log`).
+    #[serde(rename = "team_activity_log")]
+    TeamActivityLog,
     /// The standing orders of the user's board (the script's `directives`), read only.
     Directives,
     /// How the box's push to the website is going (its periodic push's last outcome).
@@ -658,6 +687,7 @@ impl PositionsRequest {
             Self::TeamActivity { .. } => 7,
             Self::Directives => 8,
             Self::Piles => 9,
+            Self::TeamActivityLog => 10,
         }]
     }
 
@@ -669,7 +699,7 @@ impl PositionsRequest {
             }
             Self::Map { offset } => *offset <= 1_000_000,
             Self::TeamActivity { from, to } => valid_day(from) && valid_day(to) && from <= to,
-            Self::Facets | Self::Stats | Self::Piles | Self::Profile | Self::CloudSync | Self::Directives => true,
+            Self::Facets | Self::Stats | Self::Piles | Self::Profile | Self::CloudSync | Self::Directives | Self::TeamActivityLog => true,
         }
     }
 }
@@ -700,7 +730,7 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
         return false;
     };
     match request {
-        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives => data
+        PositionsRequest::List { .. } | PositionsRequest::Facets | PositionsRequest::Directives | PositionsRequest::TeamActivityLog => data
             .as_object()
             .and_then(|data| data.get("items"))
             .is_some_and(|items| {
@@ -3795,7 +3825,7 @@ mod tests {
         }
         // the reader knows the op, takes no field but `op`, and every kind of read has its name in the load-times log
         assert!(POSITIONS_READ_PY.contains("if op=='piles':"));
-        assert!(POSITIONS_READ_PY.contains("('facets','stats','piles','profile','cloud_sync','directives') and set(req)!={'op'}"));
+        assert!(POSITIONS_READ_PY.contains("('facets','stats','piles','profile','cloud_sync','directives','team_activity_log') and set(req)!={'op'}"));
         assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[9], "piles");
         assert_eq!(PositionsRequest::Piles.op(), "piles");
     }
@@ -4116,6 +4146,30 @@ mod tests {
         assert!(!reader.contains("SELECT *") && reader.contains("LIMIT"));
         // every kind of read has its name in the load-times log
         assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[8], "directives");
+    }
+
+    #[test]
+    fn the_activity_log_read_takes_no_argument_and_answers_a_list_of_rows() {
+        let parsed = parse_positions_request(json!({"op": "team_activity_log"})).unwrap();
+        assert_eq!(parsed.op(), "team_activity_log");
+        assert_eq!(crate::runtime_log::POSITIONS_READ_KINDS[10], "team_activity_log");
+        // like piles: whatever else a caller adds is gone before the reader, which refuses it anyway
+        for extra in [
+            json!({"op": "team_activity_log", "from": "2026-10-01", "to": "2026-10-02"}),
+            json!({"op": "team_activity_log", "limit": 3}),
+            json!({"op": "team_activity_log", "id": "1"}),
+        ] {
+            let forwarded = parse_positions_request(extra.clone()).map(|request| serde_json::to_value(request).expect("request serializes"));
+            assert_eq!(forwarded, Ok(json!({"op": "team_activity_log"})), "{extra}");
+        }
+        assert!(POSITIONS_READ_PY.contains("'directives','team_activity_log') and set(req)!={'op'}"));
+        assert!(valid_positions_reply(&parsed, &json!({"ok": true, "data": {"items": [{"role": "scout", "ts": "2026-10-01"}]}})));
+        for broken in [json!({"ok": true, "data": {"rows": []}}), json!({"ok": true, "data": []}), json!({"ok": true, "data": {"items": [1]}})] {
+            assert!(!valid_positions_reply(&parsed, &broken), "{broken}");
+        }
+        // it reads the five sources' time columns and the position's title, company and number, never a whole row
+        let reader = POSITIONS_READ_PY.split("if op=='team_activity_log':").nth(1).unwrap().split("if op=='team_activity':").next().unwrap();
+        assert!(!reader.contains("SELECT *") && !reader.contains("jd_text") && reader.contains("LIMIT") && reader.contains("BUDGET"));
     }
 
     #[test]
