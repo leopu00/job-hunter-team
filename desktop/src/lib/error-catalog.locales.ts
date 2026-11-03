@@ -1762,6 +1762,13 @@ const APPLY_NOT_READY = tr(
   ["Ez a pozíció még nem áll készen a küldésre.", "Várd meg, amíg a csapat elkészíti az önéletrajzot és a levelet, majd próbáld újra."],
   ["Esta vaga ainda não está pronta para ser enviada.", "Espera que a equipa prepare o CV e a carta e tenta novamente."],
 );
+const APPLY_WITHDRAWAL_UNCONFIRMED = tr(
+  ["Das Team hat die Freigabe nicht gespeichert, und ich weiß nicht, ob es sie zurückgezogen hat.", "Aktualisiere die Seite und sieh dir den Stand der Bewerbung an, bevor du es erneut versuchst."],
+  ["El equipo no registró la autorización y no sé si la retiró.", "Actualiza la página y mira el estado de la candidatura antes de volver a intentarlo."],
+  ["L’équipe n’a pas enregistré l’autorisation et je ne sais pas si elle l’a retirée.", "Actualise la page et regarde l’état de la candidature avant de réessayer."],
+  ["A csapat nem rögzítette az engedélyt, és nem tudom, visszavonta-e.", "Frissítsd az oldalt, és nézd meg a jelentkezés állapotát, mielőtt újra próbálkozol."],
+  ["A equipa não registou a autorização e não sei se a retirou.", "Atualiza a página e vê o estado da candidatura antes de tentar novamente."],
+);
 const APPLY_ALREADY_SENT = tr(
   ["Die Bewerbung für diese Position ist schon rausgegangen.", "Sie lässt sich nicht erneut freigeben."],
   ["La candidatura para esta posición ya salió.", "No se puede autorizar de nuevo."],
@@ -1808,10 +1815,11 @@ const APPLY_BAD_NUMBER = tr(
 export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> = {
   unknown: translated("The operation did not succeed."),
   apply_authorisation_unrecorded: translated("The operation did not succeed."),
+  apply_withdrawal_unconfirmed: APPLY_WITHDRAWAL_UNCONFIRMED,
   consent_absent: APPLY_CONSENT_OFF,
   consent_disabled: APPLY_CONSENT_OFF,
-  consent_mode_unknown: APPLY_CONSENT_OFF,
-  consent_cap_invalid: APPLY_CONSENT_OFF,
+  consent_mode_unknown: APPLY_SETTINGS_UNREADABLE,
+  consent_cap_invalid: APPLY_SETTINGS_UNREADABLE,
   config_missing: APPLY_SETTINGS_UNREADABLE,
   config_unreadable: APPLY_SETTINGS_UNREADABLE,
   config_malformed: APPLY_SETTINGS_UNREADABLE,
