@@ -233,6 +233,6 @@ describe("SecretRef wizard (JS)", () => {
   });
   it("supporta env/file/exec/plaintext + non espone valori ('****')", () => {
     expect(src).toContain("'env'"); expect(src).toContain("'file'"); expect(src).toContain("'exec'");
-    expect(src).toContain("'plaintext'"); expect(src).toContain("****");
+    expect(src).toContain("'plaintext'"); expect(src).toContain("plaintext (hidden)");
   });
 });
