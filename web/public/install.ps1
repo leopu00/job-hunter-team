@@ -4,10 +4,11 @@
 # ║                                                                          ║
 # ║  Usage: download the file, check its SHA-256, then run it with -File.    ║
 # ║  Do not run it straight from the download (no pipe into                  ║
-# ║  Invoke-Expression, no compile in memory): Microsoft Defender blocks     ║
-# ║  that scheme as malicious content (AMSI), whatever the script.           ║
+# ║  Invoke-Expression, no compile in memory): in our tests Microsoft        ║
+# ║  Defender has blocked that scheme as malicious content (AMSI),           ║
+# ║  whatever the script was.                                                ║
 # ║                                                                          ║
-# ║    $f = Join-Path $env:TEMP 'jht-install.ps1'                            ║
+# ║    $f = Join-Path $env:TEMP ("jht-install-{0}.ps1" -f [guid]::NewGuid().ToString('N'))
 # ║    iwr -useb https://jobhunterteam.ai/install.ps1 -OutFile $f            ║
 # ║    $published = (iwr -useb https://raw.githubusercontent.com/leopu00/job-hunter-team/master/desktop/src-tauri/installer-windows.sha256).Content.Trim()
 # ║    if ((Get-FileHash $f -Algorithm SHA256).Hash -eq $published) { powershell -NoProfile -ExecutionPolicy Bypass -File $f } else { Remove-Item $f; Write-Error 'SHA-256 does not match: stop, do not run it' }
@@ -179,15 +180,48 @@ $TotalSteps = 5
 function Write-Ok   { param([string]$Msg) Write-Host "  $([char]0x2713) $Msg" -ForegroundColor Green }
 function Write-Warn { param([string]$Msg) Write-Host "  ! $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host "  > $Msg" -ForegroundColor Cyan }
-function Write-Fail { param([string]$Msg) Write-Host "  x $Msg" -ForegroundColor Red; exit 1 }
+# An error says what went wrong in red and, under it, what to do now in yellow:
+# a person at a terminal needs the next step, not only the cause.
+function Write-JhtProblem {
+  param([Parameter(Mandatory)][string]$What, [string[]]$Todo = @())
+  Write-Host ""
+  Write-Host "  x $What" -ForegroundColor Red
+  if ($Todo.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  What to do now:" -ForegroundColor Yellow
+    foreach ($line in $Todo) { Write-Host "    $line" -ForegroundColor Yellow }
+  }
+  Write-Host ""
+}
+# The folders this run created and a failure leaves empty: removed again, with a
+# delete that refuses a folder holding anything (nothing recursive, nothing
+# that was already there).
+$script:JhtCreatedDirs = @()
+function Remove-JhtCreatedEmptyDirs {
+  foreach ($dir in @($script:JhtCreatedDirs | Sort-Object { $_.Length } -Descending)) {
+    try { [IO.Directory]::Delete($dir) } catch { }
+  }
+  $script:JhtCreatedDirs = @()
+}
+function Write-Fail {
+  param([string]$Msg, [string[]]$Todo = @())
+  if ($Todo.Count -gt 0) { Write-JhtProblem -What $Msg -Todo $Todo } else { Write-Host "  x $Msg" -ForegroundColor Red }
+  Remove-JhtCreatedEmptyDirs
+  exit 1
+}
 function Write-Step { param([int]$N, [int]$Total, [string]$Title) Write-Host ""; Write-Host "[$N/$Total] $Title" -ForegroundColor White }
 function Write-Dry  { param([string]$Cmd) Write-Host "  [dry-run] would execute: $Cmd" -ForegroundColor DarkGray }
+# The JHT_PHASE lines are for the desktop app, which reads this script's output
+# through a pipe; at a terminal they are noise. JHT_MACHINE_OUTPUT=1 asks for
+# them anyway, =0 never; unset, they follow whether the output is redirected.
 function Write-JhtPhase {
   param([Parameter(Mandatory)][ValidateSet(
     'wsl_check', 'podman_install', 'podman_machine_init',
     'podman_machine_start', 'runtime_download', 'image_pull'
   )][string]$Id)
-  [Console]::Out.WriteLine("JHT_PHASE $Id")
+  # JHT_MACHINE_OUTPUT=1 asks for the line, =0 refuses it; unset, it follows whether the output is redirected.
+  $machine = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
+  if ($machine) { [Console]::Out.WriteLine("JHT_PHASE $Id") }
 }
 # A notice the desktop keeps on screen for the whole setup (a phase is replaced
 # by the next one). The install goes on after it.
@@ -327,16 +361,67 @@ function Invoke-PodmanRuntimeEnabler {
   if ($TestChannel) { $enablerArgs += '-PersistImagePin' }
   $oldRuntimeDir = $env:JHT_RUNTIME_DIR
   $oldBinDir = $env:JHT_BIN_DIR
+  $oldMachineOutput = $env:JHT_MACHINE_OUTPUT
   try {
     $env:JHT_RUNTIME_DIR = $RuntimeDir
     $env:JHT_BIN_DIR = $BinDir
+    # The enabler's output comes back through this script, so it cannot tell on
+    # its own whether a person or the app is reading: it is told.
+    $machineOutput = if ($env:JHT_MACHINE_OUTPUT -eq '1') { $true } elseif ($env:JHT_MACHINE_OUTPUT -eq '0') { $false } else { [Console]::IsOutputRedirected }
+    $env:JHT_MACHINE_OUTPUT = if ($machineOutput) { '1' } else { '0' }
     & $powerShell @enablerArgs
     $code = $LASTEXITCODE
   } finally {
     $env:JHT_RUNTIME_DIR = $oldRuntimeDir
     $env:JHT_BIN_DIR = $oldBinDir
+    $env:JHT_MACHINE_OUTPUT = $oldMachineOutput
   }
-  if ($code -ne 0) { exit $code }
+  # The caller leaves with it once the staging folder is gone and the empty
+  # folders of this run are removed.
+  $script:EnablerExitCode = $code
+}
+
+# What the person does next, for the codes the enabler leaves with. The reason
+# itself is the line the enabler wrote on stderr just above.
+function Show-PodmanSetupProblem {
+  param([int]$Code)
+  $again = 'Then run the same install command again: it starts over from the beginning.'
+  switch ($Code) {
+    21 {
+      Write-JhtProblem -What 'Podman could not be installed.' -Todo @(
+        'The line above says why. Podman comes from winget: if winget is missing or broken,',
+        'install or repair "App Installer" from the Microsoft Store:',
+        '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
+        $again)
+    }
+    22 {
+      Write-JhtProblem -What 'The Podman machine of Job Hunter Team could not be created or started.' -Todo @(
+        'The line above says why. Check that WSL works: run "wsl --status" in PowerShell.',
+        'If a restart of Windows is pending, restart it.',
+        $again)
+    }
+    23 {
+      Write-JhtProblem -What 'The Podman machine started but its network is not ready.' -Todo @(
+        'The line above says why. Wait a minute and run the same install command again;',
+        'if it stops here again, restart Windows first.')
+    }
+    24 {
+      Write-JhtProblem -What 'Another Podman version is installed on this computer.' -Todo @(
+        'Job Hunter Team runs on Podman 6 and does not change another Podman.',
+        'Update it to version 6, or remove it (Settings > Apps), whichever you prefer.',
+        $again)
+    }
+    25 {
+      Write-JhtProblem -What 'Podman is installed for another Windows user of this computer.' -Todo @(
+        'Run the installer as that Windows user, or remove Podman for the computer',
+        '(Settings > Apps) and run the install command again.')
+    }
+    default {
+      Write-JhtProblem -What "The Podman setup stopped (exit code $Code)." -Todo @(
+        'The line above says why. Run the same install command again;',
+        'if it stops at the same place, keep that line and ask for help.')
+    }
+  }
 }
 
 function Get-RuntimeFiles {
@@ -383,6 +468,26 @@ function Get-RuntimeFiles {
     Write-Fail "Protected host wrapper path overlaps a container-writable tree: $binFull"
   }
 
+  # Podman comes from winget (docker-compose and the runtime come from here, and
+  # a Podman already on the PATH needs nothing): with neither, this setup cannot
+  # go on. Said now, before a single folder is written, with the way out.
+  if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue) -and
+      -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-JhtProblem -What 'winget is missing, and the installer needs it to install Podman.' -Todo @(
+      'Install "App Installer" from the Microsoft Store (it brings winget):',
+      '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
+      'Then open a new PowerShell window and check it with: winget --version',
+      'Then run the same install command again. Nothing was installed or left behind.')
+    [Console]::Error.WriteLine('podman_not_installable: winget is required to install Podman dependencies.')
+    exit 21
+  }
+
+  # The folders that do not exist yet, with the ones above them: if the setup
+  # stops, the ones it made and left empty go away again.
+  $script:JhtCreatedDirs = @(foreach ($target in @($RuntimeDir, $BinDir, $JhtHome)) {
+    $walk = [IO.Path]::GetFullPath($target).TrimEnd('\', '/')
+    while ($walk -and -not (Test-Path -LiteralPath $walk)) { $walk; $walk = Split-Path -Parent $walk }
+  }) | Select-Object -Unique
   New-Item -ItemType Directory -Force -Path $RuntimeDir, $BinDir, $JhtHome | Out-Null
   Protect-JhtHomeAcl -Path $JhtHome
   foreach ($protectedPath in @($RuntimeDir, $BinDir)) {
@@ -425,6 +530,11 @@ function Get-RuntimeFiles {
     Invoke-PodmanRuntimeEnabler -ScriptPath (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')
   } finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  if ($script:EnablerExitCode) {
+    Show-PodmanSetupProblem -Code $script:EnablerExitCode
+    Remove-JhtCreatedEmptyDirs
+    exit $script:EnablerExitCode
   }
 
   $wrapperDest = Join-Path $BinDir 'jht.ps1'
