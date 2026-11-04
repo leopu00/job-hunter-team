@@ -46,10 +46,6 @@ jobs:
             label: macOS arm64
             args: --target aarch64-apple-darwin --bundles app,dmg
             artifact_name: app-macos-release
-          - os: ubuntu-22.04
-            label: Linux x64
-            args: --bundles appimage,deb
-            artifact_name: app-linux-release
     defaults:
       run:
         shell: bash
@@ -77,12 +73,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
-
-      - name: Install Tauri system libraries
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Prepare Rust targets
         run: |
@@ -139,8 +129,7 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 
       # Tauri firma l'app con Developer ID e usa le credenziali Apple per
-      # notarizzare e fare staple del DMG. Linux resta unsigned, e dichiarato
-      # sperimentale e non provato a mano nelle note e nelle pagine di download.
+      # notarizzare e fare staple del DMG.
       - name: Build Tauri bundles
         working-directory: desktop
         env:
@@ -193,23 +182,6 @@ jobs:
       - name: Install the signed DMG and open the app
         if: runner.os == 'macOS'
         run: python3 scripts/ci/smoke_macos_dmg.py release-assets/job-hunter-team-macos-universal.dmg --arch arm64 --timeout 120
-
-      - name: Collect and inspect Linux packages
-        if: runner.os == 'Linux'
-        run: |
-          mkdir -p release-assets
-          bundle_root=desktop/src-tauri/target/release/bundle
-          appimage="$(find "$bundle_root/appimage" -type f -name '*.AppImage' -print -quit)"
-          deb="$(find "$bundle_root/deb" -type f -name '*.deb' -print -quit)"
-          test -n "$appimage"
-          test -n "$deb"
-          cp "$appimage" release-assets/job-hunter-team-linux-x64.AppImage
-          cp "$deb" release-assets/job-hunter-team-linux-x64.deb
-          chmod +x release-assets/job-hunter-team-linux-x64.AppImage
-          extract_dir="$(mktemp -d)"
-          (cd "$extract_dir" && "$GITHUB_WORKSPACE/release-assets/job-hunter-team-linux-x64.AppImage" --appimage-extract >/dev/null)
-          test -x "$extract_dir/squashfs-root/AppRun"
-          dpkg-deb --info release-assets/job-hunter-team-linux-x64.deb >/dev/null
 
       - name: Gate collected artifact bytes
         run: |

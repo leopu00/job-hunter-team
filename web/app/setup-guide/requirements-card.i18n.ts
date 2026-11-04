@@ -66,11 +66,11 @@ export const REQUIREMENTS_CARD_VALUES: Record<string, GuideText> = {
 
 /** What this version supports, said plainly under the card: no measurement is claimed for a system. */
 export const REQUIREMENTS_CARD_SYSTEMS: GuideText = {
-  en: "Supported in this version: Macs with Apple silicon. Windows is not supported in 0.4. Linux is experimental and has not been tested by hand.",
-  it: "Supportati in questa versione: Mac con Apple silicon. Windows non è supportato nella 0.4. Linux è sperimentale e non è stato provato a mano.",
-  es: "Compatibles en esta versión: Mac con Apple silicon. Windows no es compatible en la 0.4. Linux es experimental y no se ha probado a mano.",
-  fr: "Pris en charge dans cette version : les Mac Apple silicon. Windows n’est pas pris en charge dans la 0.4. Linux est expérimental et n’a pas été testé à la main.",
-  de: "In dieser Version unterstützt: Macs mit Apple Silicon. Windows wird in 0.4 nicht unterstützt. Linux ist experimentell und wurde nicht von Hand getestet.",
-  pt: "Suportados nesta versão: Macs com Apple silicon. O Windows não é suportado na 0.4. O Linux é experimental e não foi testado à mão.",
-  hu: "Ebben a verzióban támogatott: az Apple silicon Macek. A Windows a 0.4-ben nem támogatott. A Linux kísérleti, és kézzel nem tesztelték.",
+  en: "Supported in this version: Macs with Apple silicon. Windows is not supported in 0.4. There is no desktop app for Linux in this version: use the CLI installer.",
+  it: "Supportati in questa versione: Mac con Apple silicon. Windows non è supportato nella 0.4. Per Linux in questa versione non c'è l'app desktop: usa l'installer da terminale.",
+  es: "Compatibles en esta versión: Mac con Apple silicon. Windows no es compatible en la 0.4. Para Linux no hay app de escritorio en esta versión: usa el instalador de terminal.",
+  fr: "Pris en charge dans cette version : les Mac Apple silicon. Windows n’est pas pris en charge dans la 0.4. Pour Linux, il n’y a pas d’application de bureau dans cette version : utilisez l’installateur en terminal.",
+  de: "In dieser Version unterstützt: Macs mit Apple Silicon. Windows wird in 0.4 nicht unterstützt. Für Linux gibt es in dieser Version keine Desktop-App: nutze den Installer im Terminal.",
+  pt: "Suportados nesta versão: Macs com Apple silicon. O Windows não é suportado na 0.4. Para Linux não há app de ambiente de trabalho nesta versão: usa o instalador de terminal.",
+  hu: "Ebben a verzióban támogatott: az Apple silicon Macek. A Windows a 0.4-ben nem támogatott. Linuxra ebben a verzióban nincs asztali app: használd a terminálos telepítőt.",
 };

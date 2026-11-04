@@ -81,7 +81,7 @@ def test_directly_rendered_shared_surfaces_default_to_english():
     scraper = (SKILLS / "web_scrape_robust.py").read_text(encoding="utf-8")
 
     assert '"label": "Adagio (free)"' in plan
-    assert "/month" in plan
+    assert "/month" not in plan  # no price is stated, in any language
     assert "gratuito" not in plan
     assert "/mese" not in plan
     assert "playwright non installato" not in scraper.lower()

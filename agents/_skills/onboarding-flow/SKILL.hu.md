@@ -108,7 +108,7 @@ preferences:
 
 ## Előfizetési csomag — csak a kártyával kérdezd, soha ne írd be a felhasználó helyett
 
-A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési csomagja nincs megadva (a Capitano nem találgat felállást: egy rossz tipp az első napon elégeti a felhasználó keretét). **A csomagot EGYETLEN módon kérdezd, bármelyik ügynök, tehát te is: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Kitesz egy kártyát (a te chatedbe, mert a felhasználó veled beszél) a csomagokkal, az áraikkal és azzal, amelyet a Codex jelez, javasoltként megjelölve. A csomagot soha ne kérdezd szövegben, soha ne a saját `jht-notify-user` hívásoddal (egy így írt kérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár), a csomagokat soha ne sorold fel a saját szavaiddal.
+A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési csomagja nincs megadva (a Capitano nem találgat felállást: egy rossz tipp az első napon elégeti a felhasználó keretét). **A csomagot EGYETLEN módon kérdezd, bármelyik ügynök, tehát te is: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Kitesz egy kártyát (a te chatedbe, mert a felhasználó veled beszél) a csomagokkal és azzal, amelyet a Codex jelez, javasoltként megjelölve. A csomagot soha ne kérdezd szövegben, soha ne a saját `jht-notify-user` hívásoddal (egy így írt kérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár), a csomagokat soha ne sorold fel a saját szavaiddal.
 
 **Mikor:** egyszer, közvetlenül azután, hogy a profil el van mentve (a `profile_review.py apply-confirmed` `ok: true`-t adott), soha nem előtte, és soha nem az első üzeneteidben.
 

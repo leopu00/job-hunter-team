@@ -41,12 +41,10 @@ def _published() -> set[str]:
     return copied
 
 
-def test_the_workflow_publishes_the_three_installers_of_0_4_0() -> None:
-    assert _published() == {
-        "job-hunter-team-macos-universal.dmg",
-        "job-hunter-team-linux-x64.AppImage",
-        "job-hunter-team-linux-x64.deb",
-    }
+def test_the_workflow_publishes_the_one_installer_of_0_4_0() -> None:
+    # no desktop app for Linux in this version (the operator, 03/11): the CLI install.sh is the way in
+    assert _published() == {"job-hunter-team-macos-universal.dmg"}
+    assert "linux" not in " ".join(_published()).lower()
 
 
 def test_the_bash_wrapper_asks_for_the_published_names() -> None:
@@ -68,3 +66,10 @@ def test_the_windows_name_is_only_for_the_old_releases() -> None:
     assert WINDOWS_OF_THE_OLD_RELEASES not in RELEASE
     for text in (WRAPPER_SH, WRAPPER_PS1, CLI_DOWNLOAD):
         assert WINDOWS_OF_THE_OLD_RELEASES in text
+
+
+def test_no_linux_installer_is_built_expected_attached_or_asked_for() -> None:
+    for text in (RELEASE, CLI_DOWNLOAD, _between(WRAPPER_SH, "handle_host_download() {", "# ── Upgrade runtime"),
+                 _between(WRAPPER_PS1, "function Invoke-HostDownload {", "# ── Upgrade runtime")):
+        assert "AppImage" not in text and "linux-x64" not in text and ".deb'" not in text
+    assert "appimage" not in RELEASE.lower() and "dpkg-deb" not in RELEASE

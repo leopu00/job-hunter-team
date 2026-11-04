@@ -24,8 +24,8 @@ supported in 0.4), and **Homebrew must already be installed** on the Mac, which
 needs macOS 15 or later. A Mac with at least **16 GB of RAM** is recommended.
 The container machine the app creates uses 2 CPUs and 4 GiB of memory, and a
 disk that grows up to 30 GiB. No minimum of free disk space has been measured;
-leave room for the team's image and persistent data. Linux x64 is experimental
-and was not tested by hand. Windows is not in this version.
+leave room for the team's image and persistent data. There is no desktop app for
+Linux in this version (use the CLI installer, Path 2). Windows is not in this version.
 
 Before installing, use [Choose where to run Job Hunter Team](CHOOSE-WHERE-TO-RUN.md)
 to compare a local PC, dedicated Linux PC on the LAN and VPS. The team itself
@@ -60,7 +60,7 @@ Download the current release from
 | ----------- | --------------------------------------- | ------------ |
 | Windows x64 | not in this version | Windows is not part of 0.4.0: there is no Windows installer in this release. |
 | macOS       | `job-hunter-team-macos-universal.dmg`   | Open the disk image and drag the app into Applications. It is signed with an Apple Developer ID and notarized by Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4. The file name says “universal”, but in 0.4 it holds only the Apple silicon build. |
-| Linux x64   | `job-hunter-team-linux-x64.AppImage` or `job-hunter-team-linux-x64.deb` | Experimental, not tested by hand in 0.4. Make the AppImage executable (`chmod +x`) and open it, or install the `.deb` on Debian-based systems. |
+| Linux x64   | not in this version | There is no desktop app for Linux in this version: use the CLI installer (`install.sh`, Path 2). |
 
 On first launch, choose **Continue with Google** or **Use locally**; setting up
 a new team on a VPS needs the Google sign-in. The setup then has four steps:
@@ -75,10 +75,9 @@ depends on your connection and your computer.
 - **macOS:** the app installs Podman with Homebrew, which must already be
   installed; without it, the app says so before installing anything. It creates
   a Podman machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB.
-- **Linux:** the app uses rootless Podman (5.0 or later) with podman-compose,
-  installed with `sudo` for your user; sudo must work without asking for a
-  password. The Linux release is experimental and this setup has not been
-  tested by hand.
+- **Linux:** there is no desktop app for Linux in this version: use the CLI
+  installer (Path 2), which sets up rootless Podman (5.0 or later) with
+  podman-compose.
 
 If a step fails, the screen gives its cause with **Retry the preparation** and
 **Show the log file**. If the app closes halfway, the next launch offers

@@ -2642,15 +2642,20 @@ function Invoke-HostDownload {
   $version = $version -replace '^v', ''
   if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err "versione non valida: $version. Esempio: 0.3.5."; $script:HostDownloadExitCode = 2; return }
   if ($deb -and $platform -ne 'linux') { Write-Err '--deb vale solo per Linux.'; $script:HostDownloadExitCode = 2; return }
+  if ($platform -eq 'linux') {
+    Write-Err 'In questa versione non c''e'' l''app desktop per Linux: usa install.sh. Non e'' stato scaricato niente.'
+    $script:HostDownloadExitCode = 1
+    return
+  }
   $parts = $version.Split('-')[0].Split('.')
   if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
     Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'' stato scaricato niente.'
     $script:HostDownloadExitCode = 1
     return
   }
-  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e Linux e' dalla 0.4.0.
+  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e' dalla 0.4.0.
   if ($platform -ne 'windows' -and [int]$parts[0] -eq 0 -and [int]$parts[1] -lt 4) {
-    Write-Err "Questa release (v$version) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente."
+    Write-Err "Questa release (v$version) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente."
     $script:HostDownloadExitCode = 1
     return
   }
@@ -2660,9 +2665,7 @@ function Invoke-HostDownload {
     return
   }
   $asset = if ($platform -eq 'windows') { 'job-hunter-team-windows-x64-setup.exe' }
-           elseif ($platform -eq 'macos') { 'job-hunter-team-macos-universal.dmg' }
-           elseif ($deb) { 'job-hunter-team-linux-x64.deb' }
-           else { 'job-hunter-team-linux-x64.AppImage' }
+           else { 'job-hunter-team-macos-universal.dmg' }
 
   # Destinazione: di base Downloads del profilo, mai una cartella condivisa con il team; un --output li' dentro si rifiuta.
   $destination = if ($output) { [IO.Path]::GetFullPath($output) } else { Join-Path (Join-Path $env:USERPROFILE 'Downloads') $asset }

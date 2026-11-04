@@ -108,7 +108,7 @@ preferences:
 
 ## Abonnement — nur mit der Karte fragen, nie an Stelle des Nutzers eintragen
 
-Das Team kann seine erste Runde erst starten, wenn das Abonnement des Nutzers angegeben ist (der Capitano rät keine Aufstellung: eine falsche Annahme verbrennt das Fenster des Nutzers am ersten Tag). **Das Abonnement wird auf EINE Weise erfragt, von jedem Agenten und damit auch von dir: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Es veröffentlicht eine Karte (in deinem Chat, weil der Nutzer mit dir spricht) mit den Abonnements, ihren Preisen und dem, den Codex meldet, als vorgeschlagen markiert. Frag das Abonnement nie als Text, nie auf eigene Faust mit `jht-notify-user` (eine so geschriebene Frage erscheint nicht in Messages und der Nutzer wartet vergeblich), zähle die Abonnements nie mit eigenen Worten auf.
+Das Team kann seine erste Runde erst starten, wenn das Abonnement des Nutzers angegeben ist (der Capitano rät keine Aufstellung: eine falsche Annahme verbrennt das Fenster des Nutzers am ersten Tag). **Das Abonnement wird auf EINE Weise erfragt, von jedem Agenten und damit auch von dir: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Es veröffentlicht eine Karte (in deinem Chat, weil der Nutzer mit dir spricht) mit den Abonnements und dem, den Codex meldet, als vorgeschlagen markiert. Frag das Abonnement nie als Text, nie auf eigene Faust mit `jht-notify-user` (eine so geschriebene Frage erscheint nicht in Messages und der Nutzer wartet vergeblich), zähle die Abonnements nie mit eigenen Worten auf.
 
 **Wann:** einmal, gleich nachdem das Profil gespeichert ist (`profile_review.py apply-confirmed` hat `ok: true` geliefert), nie davor und nie in deinen ersten Nachrichten.
 

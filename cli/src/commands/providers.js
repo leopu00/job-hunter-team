@@ -260,7 +260,7 @@ function handlePlan(id, opts = {}) {
       provider: table.provider,
       declared: current ? { id: current.id, label: current.label } : null,
       ...(current === undefined ? { declaredUnreadable: true } : {}),
-      plans: table.plans.map((p) => ({ id: p.id, label: p.label, price: p.price })),
+      plans: table.plans.map((p) => ({ id: p.id, label: p.label })),
       suggested: suggestedPlan(active),
     }));
     return;

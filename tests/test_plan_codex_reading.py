@@ -2,7 +2,7 @@
 
 Codex names the plan `prolite` and shows ONE weekly window; the table had plus / pro / pro-max, none of them
 called that, and its `window_5h` was a hand-written seed for all three. Now the bridge keeps the last reading
-(`logs/codex-plan-reading.json`) and `plan_registry.py` uses it: the name (`prolite` is the table's Pro, 100 $)
+(`logs/codex-plan-reading.json`) and `plan_registry.py` uses it: the name (`prolite` is the table's Pro)
 and the window (derived from the reading, the seed only when there is none).
 """
 import importlib.util
@@ -69,10 +69,11 @@ def listing(capsys):
 
 # ── The registry ────────────────────────────────────────────────────────
 
-def test_prolite_is_said_to_be_the_100_dollar_pro_and_its_window_is_the_weekly_one(home, capsys):
+def test_prolite_is_said_to_be_the_pro_row_and_its_window_is_the_weekly_one(home, capsys):
     reading(home, "prolite", single_weekly=True)
     out = listing(capsys)
-    assert "  Codex reports: prolite → Pro 100 $\n" in out
+    assert "  Codex reports: prolite → Pro\n" in out
+    assert "$" not in out
     assert openai_plans()["pro"]["window_5h"] is False and openai_plans()["pro"]["window_5h_observed"] is True
 
 
@@ -121,14 +122,14 @@ def test_a_reading_that_cannot_be_trusted_is_ignored(home, capsys, breakage):
 def test_a_plus_account_is_named_as_the_plus_row_not_as_unknown(home, capsys):
     reading(home, "plus", single_weekly=False)
     out = listing(capsys)
-    assert "  Codex reports: plus → Plus 20 $\n" in out
+    assert "  Codex reports: plus → Plus\n" in out
     assert "not in this table" not in out
 
 
-def test_codex_pro_is_the_200_dollar_row(home, capsys):
+def test_codex_pro_is_the_pro_20x_row(home, capsys):
     reading(home, "pro", single_weekly=True)
     out = listing(capsys)
-    assert "  Codex reports: pro → Pro 20x 200 $\n" in out
+    assert "  Codex reports: pro → Pro 20x\n" in out
     assert "not in this table" not in out
     plans = openai_plans()
     assert plans["pro-max"]["window_5h"] is False and plans["pro-max"]["window_5h_observed"] is True
@@ -178,7 +179,7 @@ def test_the_note_is_in_the_language_of_the_person(home, capsys, monkeypatch):
     reading(home, "prolite", True)
     monkeypatch.setenv("JHT_LANG", "it")
     i18n._resolve_lang.cache_clear()
-    assert "Codex indica: prolite → Pro 100 $" in listing(capsys)
+    assert "Codex indica: prolite → Pro\n" in listing(capsys)
 
 
 # ── The bridge keeps the reading ────────────────────────────────────────

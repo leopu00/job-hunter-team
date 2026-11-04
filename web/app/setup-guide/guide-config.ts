@@ -27,15 +27,9 @@ const RELEASE_BASE =
  *  `app/download/DownloadClient.tsx`: se cambia lì, cambia qui. */
 const DESKTOP_ASSET: Partial<Record<OsId, string>> = {
   macos: "job-hunter-team-macos-universal.dmg",
-  // Windows is not part of 0.4.0: no asset, so no download link for it.
-  linux: "job-hunter-team-linux-x64.AppImage",
+  // Windows and Linux have no desktop app in 0.4.0: no asset, so no download link for them
+  // (on Linux the way in is the CLI, `CLI_INSTALL_CMD`).
 };
-
-/** Asset alternativi, che esistono solo su certi sistemi. Linux offre anche
- *  un pacchetto Debian oltre all'AppImage portabile mostrata per prima. */
-export const ALT_ASSET = {
-  linuxDeb: "job-hunter-team-linux-x64.deb",
-} as const;
 
 /** URL di download diretto. Senza `asset` prende quello predefinito del
  *  sistema; con `asset` scarica quel file preciso dalla stessa release. */

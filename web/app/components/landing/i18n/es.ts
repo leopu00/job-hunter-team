@@ -72,11 +72,10 @@ export const es: Record<string, string> = {
   dl_windows_portable_label: "Windows: el instalador es la opción recomendada.",
   dl_windows_portable_link: "Descarga en su lugar la versión portátil",
   dl_desktop_unsigned_note:
-    "En macOS el DMG está firmado y notarizado. En Linux el paquete no está firmado: haz ejecutable la AppImage antes de abrirla.",
+    "En macOS el DMG está firmado y notarizado. Para Linux no hay app de escritorio en esta versión: usa el terminal (install.sh).",
   dl_mac_apple_silicon_only:
     "Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4.",
   dl_windows_not_in_version: "No en esta versión",
-  dl_linux_experimental: "Experimental, no probado a mano.",
   dl_help_text: "¿Has descargado la app?",
   dl_help_link: "Sigue la configuración paso a paso",
 

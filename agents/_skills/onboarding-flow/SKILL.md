@@ -110,7 +110,7 @@ preferences:
 
 ## Subscription plan — ask only with the card, never write it for them
 
-The team cannot open its first run until the user's subscription plan is declared (the Capitano does not guess a roster: a wrong guess burns the user's window on day one). **The plan is asked ONE way, from any agent and you included: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** It posts a card (in your chat, because the user is talking to you) with the plans, their prices and the one Codex reports marked as suggested. Never ask the plan as text, never with `jht-notify-user` yourself (a question written that way does not appear in the Messages and the user is left waiting), never list the plans in your own words.
+The team cannot open its first run until the user's subscription plan is declared (the Capitano does not guess a roster: a wrong guess burns the user's window on day one). **The plan is asked ONE way, from any agent and you included: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** It posts a card (in your chat, because the user is talking to you) with the plans and the one Codex reports marked as suggested. Never ask the plan as text, never with `jht-notify-user` yourself (a question written that way does not appear in the Messages and the user is left waiting), never list the plans in your own words.
 
 **When:** once, right after the profile is saved (`profile_review.py apply-confirmed` returned `ok: true`), never before and never in your first messages.
 

@@ -123,7 +123,6 @@
   "common.done": "Concluído",
   "common.retry": "Tentar de novo",
   "plan.free": "gratuito",
-  "plan.price_month": "%s $/mês",
   "plan.unknown": "plano desconhecido: %s",
   "plan.config_unreadable": "%s não se consegue ler (danificado, ou não é um objeto JSON): o plano não foi escrito e o ficheiro ficou como estava",
   "plan.not_selected": "plano de subscrição não selecionado",

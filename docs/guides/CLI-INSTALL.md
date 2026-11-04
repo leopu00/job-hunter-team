@@ -22,7 +22,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
 | Container runtime | Podman with `--runtime podman`: the path of the app and of 0.4, on macOS and on Linux. Without the flag, macOS uses Colima (or your running Docker) and Linux sets up Docker Engine, as earlier versions did |
 | Expert mode | `--no-docker` (clone + build from source) |
-| OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental |
+| OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental. On Linux this script is the way in: there is no desktop app for Linux in this version |
 | Windows | Windows is not in this version |
 
 ---

@@ -314,7 +314,8 @@ export JHT_USER_TZ
 jht_text_en() {
   case "$1" in
     download.windows_missing) printf '%s' "Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded." ;;
-    download.release_no_app) printf '%s' "This release (v%s) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded." ;;
+    download.linux_no_app) printf '%s' "In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded." ;;
+    download.release_no_app) printf '%s' "This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded." ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
@@ -352,7 +353,8 @@ jht_text_en() {
 jht_text_it() {
   case "$1" in
     download.windows_missing) printf '%s' "Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e' stato scaricato niente." ;;
-    download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
+    download.linux_no_app) printf '%s' "In questa versione non c'e' l'app desktop per Linux: usa install.sh. Non e' stato scaricato niente." ;;
+    download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
@@ -4108,13 +4110,14 @@ handle_host_download() {
     return 2
   fi
   if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "--deb vale solo per Linux."; return 2; fi
+  if [ "$platform" = linux ]; then err "$(jht_say download.linux_no_app)"; return 1; fi
   local major minor
   major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"
   if [ "$platform" = windows ] && { [ "$major" -gt 0 ] || [ "$minor" -ge 4 ]; }; then
     err "$(jht_say download.windows_missing)"
     return 1
   fi
-  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e Linux e' dalla 0.4.0.
+  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e' dalla 0.4.0.
   if [ "$platform" != windows ] && [ "$major" -eq 0 ] && [ "$minor" -lt 4 ]; then
     err "$(jht_say download.release_no_app "$version")"
     return 1
@@ -4126,8 +4129,6 @@ handle_host_download() {
   case "$platform:$deb" in
     windows:*) asset="job-hunter-team-windows-x64-setup.exe" ;;
     macos:*) asset="job-hunter-team-macos-universal.dmg" ;;
-    linux:1) asset="job-hunter-team-linux-x64.deb" ;;
-    linux:*) asset="job-hunter-team-linux-x64.AppImage" ;;
   esac
   command -v curl >/dev/null 2>&1 || { err "curl non trovato: serve per scaricare la release."; return 1; }
 

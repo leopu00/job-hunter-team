@@ -26,17 +26,12 @@ mentre lavora.
 
 1. **Scarica l'app desktop nativa.** Vai su
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   è già selezionato: clicca una volta macOS o Linux (Windows è indicato «Non in questa versione») per avviare il
+   è già selezionato: clicca una volta macOS (Windows è indicato «Non in questa versione»; per Linux non c'è l'app desktop in questa versione) per avviare il
    download della release corrente per quella piattaforma.
 2. **Apri il download per il tuo sistema.** Windows non fa parte della 0.4.0: non c'è un installer in questa release.
    Su macOS apri `job-hunter-team-macos-universal.dmg` e trascina l'app in
    Applicazioni; è firmata con un Developer ID Apple e notarizzata da Apple. Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4. Il nome del file dice «universal», ma nella 0.4 contiene solo la build per Apple silicon.
-   Su
-   Linux consenti a `job-hunter-team-linux-x64.AppImage` di essere eseguito
-   come programma e aprilo, oppure installa `job-hunter-team-linux-x64.deb` sui
-   sistemi basati su Debian. Linux nella 0.4 è sperimentale e non è stato provato a mano; può mostrare un avviso:
-   prosegui solo se il download viene dal sito ufficiale o dalla release
-   collegata.
+   Per Linux in questa versione non c'è l'app desktop: usa l'installer da terminale (`install.sh`).
 3. **Scegli come iniziare.** L'app usa la lingua del sistema, oppure l'inglese
    se non ha quella lingua. Seleziona **Continua con Google**, oppure **Usa in
    locale**: inserisci un nome visualizzato, che resta su questo dispositivo, e
@@ -47,10 +42,9 @@ mentre lavora.
    che deve essere già installato (richiede macOS 15 o successivo); se manca,
    l'app lo dice prima di installare qualsiasi cosa. Crea una macchina Podman
    con 2 CPU, 4 GiB di memoria e un disco fino a 30 GiB, quindi si consiglia
-   un Mac con almeno 16 GB di RAM. Su Linux l'app usa Podman rootless (5.0 o
-   successivo) con podman-compose, installati con `sudo` per il tuo utente:
-   sudo deve funzionare senza chiedere la password. La release per Linux è
-   sperimentale e questo setup non è stato provato a mano.
+   un Mac con almeno 16 GB di RAM. Su Linux non c'è l'app desktop in questa versione:
+   l'installer da terminale (`install.sh`) prepara Podman rootless (5.0 o
+   successivo) con podman-compose.
    Per una VPS inserisci indirizzo, utente SSH, porta
    e file della chiave privata, che resta su questo computer.
 5. **Scegli il provider.** Seleziona Codex, poi
@@ -212,16 +206,12 @@ trabaja.
 
 1. **Descarga la aplicación de escritorio nativa.** Ve a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   ya está seleccionado: haz clic una vez en macOS o Linux (Windows aparece como «No en esta versión») para iniciar
+   ya está seleccionado: haz clic una vez en macOS (Windows aparece como «No en esta versión»; para Linux no hay app de escritorio en esta versión) para iniciar
    la descarga de la versión actual para esa plataforma.
 2. **Abre la descarga para tu sistema.** Windows no forma parte de la 0.4.0: esta versión no incluye instalador. En macOS abre `job-hunter-team-macos-universal.dmg` y arrastra la
    aplicación a Aplicaciones; está firmada con un Developer ID de Apple y
    notarizada por Apple. Solo Mac con Apple silicon (M1 y posteriores). Los Mac con procesador Intel no son compatibles con la 0.4. El nombre del archivo dice «universal», pero en la 0.4 contiene solo la versión para Apple silicon.
-   En Linux permite que
-   `job-hunter-team-linux-x64.AppImage` se ejecute como programa y ábrelo, o
-   instala `job-hunter-team-linux-x64.deb` en sistemas basados en Debian.
-   Linux es experimental en la 0.4 y no se ha probado a mano; puede mostrar un aviso: continúa solo si descargaste desde
-   el sitio oficial o desde la versión enlazada.
+   Para Linux no hay app de escritorio en esta versión: usa el instalador de terminal (`install.sh`).
 3. **Elige cómo empezar.** La aplicación usa el idioma de tu sistema, o el
    inglés si no tiene ese idioma. Selecciona **Continuar con Google**, o **Usar
    en local**: escribe un nombre visible, que se queda en este dispositivo, y
@@ -232,10 +222,9 @@ trabaja.
    Homebrew, que ya debe estar instalado (requiere macOS 15 o posterior); si
    falta, la aplicación lo dice antes de instalar nada. Crea una máquina
    Podman con 2 CPU, 4 GiB de memoria y un disco de hasta 30 GiB, por lo que
-   se recomienda un Mac con al menos 16 GB de RAM. En Linux la aplicación usa
-   Podman sin root (5.0 o posterior) con podman-compose, instalados con `sudo`
-   para tu usuario: sudo debe funcionar sin pedir contraseña. La versión para
-   Linux es experimental y esta configuración no se ha probado a mano.
+   se recomienda un Mac con al menos 16 GB de RAM. En Linux no hay app de escritorio en esta versión:
+   el instalador de terminal (`install.sh`) prepara Podman sin root (5.0 o
+   posterior) con podman-compose.
    Para un VPS,
    introduce su dirección, el usuario SSH, el puerto y el archivo de la clave
    privada, que se queda en este ordenador.
@@ -404,17 +393,12 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
 
 1. **Téléchargez l'application de bureau native.** Allez sur
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   est déjà sélectionné : cliquez une fois sur macOS ou Linux (Windows est indiqué « Pas dans cette version ») pour
+   est déjà sélectionné : cliquez une fois sur macOS (Windows est indiqué « Pas dans cette version » ; pour Linux, il n'y a pas d'application de bureau dans cette version) pour
    lancer le téléchargement de la version actuelle pour cette plateforme.
 2. **Ouvrez le téléchargement pour votre système.** Windows ne fait pas partie de la 0.4.0 : cette version ne contient pas d'installeur. Sous macOS, ouvrez `job-hunter-team-macos-universal.dmg`
    et faites glisser l'application dans Applications ; elle est signée avec un
    Developer ID Apple et notarisée par Apple. Uniquement les Mac avec Apple silicon (M1 et suivants). Les Mac Intel ne sont pas pris en charge dans la 0.4. Le nom du fichier dit « universal », mais dans la 0.4 il ne contient que la version pour Apple silicon.
-   Sous Linux, autorisez
-   `job-hunter-team-linux-x64.AppImage` à s'exécuter comme programme et
-   ouvrez-le, ou installez `job-hunter-team-linux-x64.deb` sur les systèmes
-   basés sur Debian. Linux est expérimental dans la 0.4 et n'a pas été testé à la main ; il peut afficher un avertissement :
-   continuez uniquement si le téléchargement vient du site officiel ou de la
-   version liée.
+   Pour Linux, il n'y a pas d'application de bureau dans cette version : utilisez l'installeur en terminal (`install.sh`).
 3. **Choisissez comment commencer.** L'application utilise la langue de votre
    système, ou l'anglais si elle n'a pas cette langue. Sélectionnez **Continuer
    avec Google**, ou **Utiliser en local** : saisissez un nom affiché, qui
@@ -427,11 +411,9 @@ ordinateur. Gardez l'application ouverte pendant qu'elle travaille.
    macOS 15 ou plus récent) ; s'il manque, l'application le dit avant
    d'installer quoi que ce soit. Elle crée une machine Podman avec 2 CPU, 4
    GiB de mémoire et un disque allant jusqu'à 30 GiB : un Mac avec au moins 16
-   Go de RAM est recommandé. Sous Linux, l'application utilise Podman sans
-   root (5.0 ou plus récent) avec podman-compose, installés avec `sudo` pour
-   votre utilisateur : sudo doit fonctionner sans demander de mot de passe. La
-   version Linux est expérimentale et cette configuration n'a pas été testée à
-   la main.
+   Go de RAM est recommandé. Sous Linux, il n'y a pas d'application de bureau dans cette version :
+   l'installeur en terminal (`install.sh`) prépare Podman sans root (5.0 ou
+   plus récent) avec podman-compose.
    Pour un VPS, saisissez son adresse,
    l'utilisateur SSH, le port et le fichier de la clé privée, qui reste sur cet
    ordinateur.
@@ -605,17 +587,12 @@ geöffnet, während sie arbeitet.
 
 1. **Lade die native Desktop-App herunter.** Gehe zu
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   ist bereits ausgewählt: Klicke einmal auf macOS oder Linux (Windows steht als „Nicht in dieser Version“ da), um den
+   ist bereits ausgewählt: Klicke einmal auf macOS (Windows steht als „Nicht in dieser Version“ da; für Linux gibt es in dieser Version keine Desktop-App), um den
    Download der aktuellen Version für diese Plattform zu starten.
 2. **Öffne den Download für dein System.** Windows ist nicht Teil von 0.4.0: Dieses Release enthält keinen Installer. Öffne unter macOS `job-hunter-team-macos-universal.dmg` und ziehe
    die App in den Ordner Programme; sie ist mit einer Apple Developer ID
    signiert und von Apple notarisiert. Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt. Der Dateiname sagt „universal“, enthält in 0.4 aber nur die Version für Apple Silicon.
-   Erlaube unter Linux
-   `job-hunter-team-linux-x64.AppImage`, als Programm ausgeführt zu werden, und
-   öffne es, oder installiere `job-hunter-team-linux-x64.deb` auf
-   Debian-basierten Systemen. Linux ist in 0.4 experimentell und wurde nicht von Hand getestet; es kann eine Warnung anzeigen:
-   fahre nur fort, wenn der Download von der offiziellen Website oder der
-   verlinkten Version stammt.
+   Für Linux gibt es in dieser Version keine Desktop-App: nutze den Installer im Terminal (`install.sh`).
 3. **Wähle, wie du beginnst.** Die App verwendet die Sprache deines Systems,
    oder Englisch, wenn sie diese Sprache nicht hat. Wähle **Mit Google
    fortfahren** oder **Lokal verwenden**: Gib einen Anzeigenamen ein, der auf
@@ -627,10 +604,9 @@ geöffnet, während sie arbeitet.
    neuer); fehlt es, sagt die App das, bevor sie etwas installiert. Sie legt
    eine Podman-Maschine mit 2 CPUs, 4 GiB Arbeitsspeicher und einer Festplatte
    bis 30 GiB an, deshalb wird ein Mac mit mindestens 16 GB RAM empfohlen.
-   Unter Linux verwendet die App Podman ohne Root (ab 5.0) mit podman-compose,
-   für deinen Benutzer mit `sudo` installiert: sudo muss ohne Passwortabfrage
-   funktionieren. Die Linux-Version ist experimentell, und diese Einrichtung
-   wurde nicht von Hand getestet.
+   Für Linux gibt es in dieser Version keine Desktop-App:
+   der Installer im Terminal (`install.sh`) richtet Podman ohne Root (ab 5.0)
+   mit podman-compose ein.
    Für einen VPS gibst du
    seine Adresse, den SSH-Benutzer, den Port und die Datei des privaten
    Schlüssels ein, der auf diesem Computer bleibt.
@@ -805,16 +781,12 @@ trabalha.
 
 1. **Descarrega a aplicação de ambiente de trabalho nativa.** Vai a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   já está selecionado: clica uma vez em macOS ou Linux (o Windows aparece como «Não nesta versão») para iniciar
+   já está selecionado: clica uma vez em macOS (o Windows aparece como «Não nesta versão»; para Linux não há app de ambiente de trabalho nesta versão) para iniciar
    a transferência da versão atual para essa plataforma.
 2. **Abre o download para o teu sistema.** O Windows não faz parte da 0.4.0: esta versão não inclui instalador. No macOS abre `job-hunter-team-macos-universal.dmg` e arrasta a
    aplicação para Aplicações; está assinada com um Developer ID da Apple e
    notarizada pela Apple. Apenas Macs com Apple silicon (M1 e posteriores). Os Macs com processador Intel não são suportados na 0.4. O nome do ficheiro diz «universal», mas na 0.4 contém apenas a versão para Apple silicon.
-   No Linux permite que
-   `job-hunter-team-linux-x64.AppImage` seja executado como programa e abre-o,
-   ou instala `job-hunter-team-linux-x64.deb` em sistemas baseados em Debian.
-   O Linux é experimental na 0.4 e não foi testado à mão; pode mostrar um aviso: avança apenas se o download vier do
-   site oficial ou da versão ligada.
+   Para Linux não há app de ambiente de trabalho nesta versão: usa o instalador de terminal (`install.sh`).
 3. **Escolhe como começar.** A aplicação usa o idioma do teu sistema, ou o
    inglês se não tiver esse idioma. Seleciona **Continuar com Google**, ou
    **Usar localmente**: escreve um nome apresentado, que fica neste
@@ -825,11 +797,9 @@ trabalha.
    o Homebrew, que já tem de estar instalado (exige macOS 15 ou posterior); se
    faltar, a aplicação diz isso antes de instalar o que quer que seja. Cria
    uma máquina Podman com 2 CPU, 4 GiB de memória e um disco até 30 GiB, por
-   isso recomenda-se um Mac com pelo menos 16 GB de RAM. No Linux a aplicação
-   usa o Podman sem root (5.0 ou posterior) com podman-compose, instalados com
-   `sudo` para o teu utilizador: o sudo tem de funcionar sem pedir
-   palavra-passe. A versão para Linux é experimental e esta configuração não
-   foi testada à mão.
+   isso recomenda-se um Mac com pelo menos 16 GB de RAM. Para Linux não há app de ambiente de trabalho nesta versão:
+   o instalador de terminal (`install.sh`) prepara o Podman sem root (5.0 ou
+   posterior) com podman-compose.
    Para
    uma VPS, introduz o endereço, o utilizador SSH, a porta e o ficheiro da
    chave privada, que fica neste computador.
@@ -998,16 +968,11 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
 
 1. **Töltsd le a natív asztali alkalmazást.** Nyisd meg a
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download) oldalt. A
-   **Desktop** már ki van jelölve: kattints egyszer a macOS vagy Linux lehetőségre (a Windows „Nem ebben a verzióban” jelzéssel szerepel) az adott platform aktuális kiadásának letöltéséhez.
+   **Desktop** már ki van jelölve: kattints egyszer a macOS lehetőségre (a Windows „Nem ebben a verzióban” jelzéssel szerepel; Linuxra ebben a verzióban nincs asztali app) az adott platform aktuális kiadásának letöltéséhez.
 2. **Nyisd meg a rendszeredhez való letöltést.** A Windows nem része a 0.4.0-nak: ebben a kiadásban nincs telepítő. macOS-en nyisd meg a `job-hunter-team-macos-universal.dmg`
    fájlt, és húzd az alkalmazást az Alkalmazások mappába; Apple Developer
    ID-val van aláírva, és az Apple hitelesítette. Csak Apple silicon-os Mac-ekhez (M1 és újabb). Az Intel-es Mac-ek a 0.4-ben nem támogatottak. A fájlnév „universal”, de a 0.4-ben csak az Apple silicon-os verziót tartalmazza.
-   Linuxon engedélyezd, hogy a
-   `job-hunter-team-linux-x64.AppImage` programként fusson, és nyisd meg, vagy
-   Debian-alapú rendszeren telepítsd a `job-hunter-team-linux-x64.deb`
-   csomagot. A Linux a 0.4-ben kísérleti, és kézzel nem tesztelték; figyelmeztetést jeleníthet meg: csak akkor
-   folytasd, ha a letöltés a hivatalos oldalról vagy a hivatkozott kiadásból
-   származik.
+   Linuxra ebben a verzióban nincs asztali app: használd a terminálos telepítőt (`install.sh`).
 3. **Válaszd ki, hogyan kezdesz.** Az alkalmazás a rendszered nyelvét
    használja, vagy az angolt, ha azt a nyelvet nem ismeri. Válaszd a
    **Folytatás Google-fiókkal** lehetőséget, vagy a **Helyi használat**
@@ -1020,11 +985,9 @@ számítógépedtől függ. Hagyd nyitva az alkalmazást, amíg dolgozik.
    telepítve kell lennie (macOS 15-öt vagy újabbat igényel), és ha hiányzik,
    az alkalmazás ezt még a telepítés előtt jelzi. Létrehoz egy Podman-gépet 2
    CPU-val, 4 GiB memóriával és legfeljebb 30 GiB-ra növekvő lemezzel, ezért
-   legalább 16 GB RAM-mal rendelkező Mac ajánlott. Linuxon az alkalmazás root
-   nélküli Podmant (5.0 vagy újabb) használ podman-compose-szal, amelyeket a
-   felhasználódnak `sudo`-val telepít: a sudónak jelszókérés nélkül kell
-   működnie. A linuxos kiadás kísérleti, és ezt a beállítást nem tesztelték
-   kézzel.
+   legalább 16 GB RAM-mal rendelkező Mac ajánlott. Linuxra ebben a verzióban nincs asztali app:
+   a terminálos telepítő (`install.sh`) root nélküli Podmant (5.0 vagy újabb)
+   állít be podman-compose-szal.
    VPS esetén
    add meg a címét, az SSH-felhasználót, a portot és a privát kulcs fájlját,
    amely ezen a számítógépen marad.

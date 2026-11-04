@@ -68,7 +68,7 @@ def test_what_codex_reports_is_a_suggestion_that_writes_nothing(home: Path):
     (home / "logs" / "codex-plan-reading.json").write_text(
         json.dumps({"plan_type": "prolite", "single_weekly": True, "observed_at": time.time()}), encoding="utf-8")
     listing = _run("plan_registry.py", "list", "codex", home=home)
-    assert listing.stdout.rstrip().splitlines()[-1].strip() == "Codex reports: prolite → Pro 100 $"
+    assert listing.stdout.rstrip().splitlines()[-1].strip() == "Codex reports: prolite → Pro"
     # Listing and reading the reading never declare a plan.
     assert _run("plan_registry.py", "get", home=home).returncode == 1
     assert json.loads((home / "jht.config.json").read_text(encoding="utf-8")) == {"active_provider": "codex"}
