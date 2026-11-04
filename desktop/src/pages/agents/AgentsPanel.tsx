@@ -9,6 +9,7 @@ import {
   answerQuestion,
   controlAgent,
   pauseTeam,
+  readPanelActivity,
   readPanelHistory,
   readPanelList,
   readPanelScreen,
@@ -20,6 +21,8 @@ import {
   type AnswerResult,
   type AgentAction,
   type Outcome,
+  type ActivityWindow,
+  type PanelActivity,
   type PanelHistory,
   type PanelList,
   type PauseExit,
@@ -36,7 +39,8 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { UsageShort } from "./AgentUsage";
 import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
-import { Lanes, SessionHistory } from "./AgentHistory";
+import { SessionHistory } from "./AgentHistory";
+import { readWorkWindow, rememberWorkWindow, WorkLanes } from "./AgentWork";
 import ActionLogSection from "./ActionLogSection";
 import { BurstStrip } from "../work-hours/BurstControl";
 import Link from "../../web-shims/next-link";
@@ -513,6 +517,9 @@ export function Confirm({
 const VIEW_KEY = "jht.agents.view";
 
 /** The view the person chose last, a convenience only: without storage the list is shown. */
+/** How often the lanes read again while open: the work is in buckets of minutes. */
+export const WORK_REFRESH_MS = 30_000;
+
 function readView(): "list" | "lanes" {
   try {
     return window.localStorage.getItem(VIEW_KEY) === "lanes" ? "lanes" : "list";
@@ -551,6 +558,9 @@ export default function AgentsPanel({ search }: PageProps) {
   // The previous sessions and the last day's lanes: read with the list, and never a reason to fail it.
   const [history, setHistory] = useState<Outcome<PanelHistory> | null>(null);
   const [view, setView] = useState<"list" | "lanes">(readView);
+  // What each agent worked on (the «lanes» view): one window of the person's choice, read while that view is open.
+  const [workWindow, setWorkWindow] = useState<ActivityWindow>(readWorkWindow);
+  const [activity, setActivity] = useState<Outcome<PanelActivity> | null>(null);
   const latest = useRef(0);
   const failedInARow = useRef(0);
   const [givenUp, setGivenUp] = useState(false);
@@ -586,6 +596,21 @@ export default function AgentsPanel({ search }: PageProps) {
       latest.current++;
     };
   }, [read]);
+  // The lanes' own read: when the view or the window changes, and every 30 s while it is open (a bucket is minutes long).
+  useEffect(() => {
+    if (view !== "lanes") return;
+    let alive = true;
+    const load = async () => {
+      const done = await readPanelActivity(workWindow);
+      if (alive) setActivity(done);
+    };
+    void load();
+    const timer = setInterval(() => void load(), WORK_REFRESH_MS);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [view, workWindow]);
   useRefresh(() => void read());
   // One read at a time, and none while an action or a start is on its way: their own read follows them.
   const occupied = useRef(false);
@@ -903,7 +928,17 @@ export default function AgentsPanel({ search }: PageProps) {
             ))}
           </div>
 
-          {view === "lanes" && <Lanes t={t} history={history} roles={list.value.roles.map((item) => item.role)} nowS={Math.floor(now / 1000)} />}
+          {view === "lanes" && (
+            <WorkLanes
+              t={t}
+              activity={activity}
+              window={workWindow}
+              onWindow={(value) => {
+                setWorkWindow(value);
+                rememberWorkWindow(value);
+              }}
+            />
+          )}
           {view === "list" && (
             <div className="flex flex-col lg:flex-row gap-3 min-h-0">
               <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-y-auto lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100svh/var(--zoom,1)-5rem)]" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
