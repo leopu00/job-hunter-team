@@ -16,6 +16,8 @@
 // a colonna DB + lettura data-driven il 2026-05-23. Roadmap per la pipeline
 // LLM in `docs/internal/roadmap/2026-05-23-position-classifier-llm-roadmap.md`.
 
+import { categoryColor } from "./category-colors";
+
 export const UNCATEGORIZED_LABEL = "Da categorizzare";
 
 export type RoleFamilyCount = {
@@ -45,28 +47,10 @@ function hashString(s: string): number {
   return Math.abs(h);
 }
 
-// I colori delle categorie sono i token del tema scelto (le undici palette del
-// desktop, il chiaro e lo scuro del web), mai hex: cambiando tema cambiano, e
-// ogni voce visibile ne ha uno diverso. Sei tinte dei token e quattro miscele di
-// due token (`color-mix`): sei non bastano per otto categorie, e in alcuni temi
-// (forest, contrast) verde, giallo e arancio sono quasi lo stesso oro, quindi
-// l'ordine e le miscele sono scelti perché, in tutti i temi, due voci della
-// palette non scendano mai sotto ΔE 12 (lo verifica position-classifier.test.ts
-// sui valori veri dei token). Oltre le 10 voci si ripete, nello stesso ordine.
-const mix = (a: string, b: string, aShare: number) =>
-  `color-mix(in srgb, var(--color-${a}) ${aShare}%, var(--color-${b}))`;
-export const FAMILY_PALETTE: readonly string[] = [
-  "var(--color-blue)",
-  "var(--color-yellow)",
-  mix("red", "purple", 75),
-  mix("blue", "yellow", 50),
-  mix("blue", "red", 50),
-  mix("orange", "purple", 75),
-  mix("blue", "yellow", 75),
-  "var(--color-purple)",
-  mix("blue", "yellow", 25),
-  mix("red", "orange", 75),
-];
+// I colori delle categorie derivano dal colore PRINCIPALE del tema scelto (theme-palette.ts): `var(--cat-N)` cambia quando si
+// cambia tema, un tema verde ha sfumature di verde, uno arancio sfumature di arancio. Sono 14, tutti diversi in ogni tema
+// (lo verifica theme-palette.test.ts sui token veri); oltre le 10 voci di un donut non si va, ma una lista piu' lunga ripete in ordine.
+export const FAMILY_PALETTE: readonly string[] = Array.from({ length: 10 }, (_, index) => categoryColor(index));
 
 // Neutri: "Da categorizzare" e "Altre" (la coda del donut) non sono categorie
 // vere, ma sono due voci diverse e non hanno lo stesso grigio.
@@ -88,29 +72,22 @@ export function colorForFamily(name: string): string {
 }
 
 /**
- * Un colore diverso per ogni nome dell'insieme (fino a 10; poi la palette si
- * ripete in ordine). Ogni nome prende la casella del suo hash se è libera, se no
- * la prima libera dopo: così un tipo tiene lo stesso colore finché l'insieme che
- * si vede non lo spinge via, e la scelta non dipende dall'ordine in ingresso.
+ * Un colore diverso per ogni nome, NELL'ORDINE in cui arrivano (di solito dal piu' numeroso): il primo prende il colore
+ * principale del tema, il secondo la sua prima variante, e cosi' via fino a 10; poi la palette si ripete in ordine. Cosi' il tipo piu'
+ * grande e' sempre il colore del tema e le prime voci, quelle che si vedono di piu', sono le piu' vicine alla sua famiglia.
  */
 export function assignFamilyColors(names: readonly string[]): Map<string, string> {
   const colors = new Map<string, string>();
-  const n = FAMILY_PALETTE.length;
-  const uses = new Array<number>(n).fill(0);
-  const real = Array.from(new Set(names)).filter((name) => !isNeutral(name));
-  const preferred = (name: string) => hashString(name) % n;
-  real.sort((a, b) => preferred(a) - preferred(b) || (a < b ? -1 : a > b ? 1 : 0));
-  for (const name of real) {
-    const start = preferred(name);
-    let slot = start;
-    for (let k = 1; k < n; k++) {
-      const cand = (start + k) % n;
-      if (uses[cand] < uses[slot]) slot = cand;
+  let slot = 0;
+  for (const name of names) {
+    if (colors.has(name)) continue;
+    if (isNeutral(name)) {
+      colors.set(name, UNCATEGORIZED_COLOR);
+      continue;
     }
-    uses[slot] += 1;
-    colors.set(name, FAMILY_PALETTE[slot]);
+    colors.set(name, FAMILY_PALETTE[slot % FAMILY_PALETTE.length]);
+    slot += 1;
   }
-  for (const name of names) if (isNeutral(name)) colors.set(name, UNCATEGORIZED_COLOR);
   return colors;
 }
 
@@ -252,7 +229,7 @@ export function aggregateRoleFamilies(
     }
   }
 
-  const colors = assignFamilyColors(Array.from(counts.keys()));
+  const colors = assignFamilyColors(Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([family]) => family));
   return Array.from(counts.entries())
     .map(([family, count]) => {
       const sN = scoreN.get(family) ?? 0;
