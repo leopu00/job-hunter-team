@@ -1,7 +1,7 @@
 {
-  "digest": "sha256:bd6412949b62ba744e2e6c37887babdf6c63513ef823ccb201b214c170ae153f",
+  "digest": "sha256:298191c0c926b387e7bb385d296881d74c4a7d4d9d3c48c437153cb7f09aaeea",
   "release_version": "0.4.0",
   "repository": "ghcr.io/leopu00/jht",
   "schema_version": 1,
-  "source_revision": "be919d056302c25017c5ad96b588fc05e91dafda"
+  "source_revision": "a5d9eb24c23caa9107d52c41317bbc15b0a0bf2d"
 }
