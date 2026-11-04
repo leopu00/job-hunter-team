@@ -10,13 +10,13 @@ The desktop app reaches this file in two ways, and only these:
         agent_control.py start|stop|restart SESSION
         agent_control.py pause (--for-hours N | --until ISO | --wake-on-weekly)
         agent_control.py resume | stop-team
-        agent_control.py list | screen SESSION | team | history
+        agent_control.py list | screen SESSION | team | history | activity WINDOW
         agent_control.py exclusions | exclusion-accept CODE | exclusion-withdraw CODE
         agent_control.py answer QUESTION_ID OPTION_ID
 
   * without arguments, with one JSON request on stdin, for the reads only
     (`{"op":"list"}`, `{"op":"screen","name":...}`, `{"op":"team"}`,
-    `{"op":"history"}`, `{"op":"exclusions"}`). This is
+    `{"op":"history"}`, `{"op":"activity","window":"1h"}`, `{"op":"exclusions"}`). This is
     the read-only view's channel: on stdin an action is refused, always.
 
 Nothing here takes free text: no keys and no message ever reach an agent's
@@ -129,6 +129,8 @@ START_AGENT = _first(Path("/app/.launcher/start-agent.sh"), HERE.parent.parent /
 APPLY_GATE = _first(SKILLS / "apply_gate.py", HERE / "apply_gate.py")
 HOST_VITALS = _first(SKILLS / "host_vitals.py", HERE / "host_vitals.py")
 AGENT_STATE = _first(SKILLS / "agent_state.py", HERE / "agent_state.py")
+WORK_ACTIVITY = _first(SKILLS / "agent_work_activity.py", HERE / "agent_work_activity.py")
+TOKEN_SERIES = _first(SKILLS / "token-by-agent-series.py", HERE / "token-by-agent-series.py")
 REDACTOR = _first(Path("/app/shared/redact-cli.mjs"), HERE.parent / "redact-cli.mjs")
 PROFILE_EXCLUSIONS = _first(SKILLS / "profile_exclusions.py", HERE / "profile_exclusions.py")
 AGENT_QUESTIONS = _first(SKILLS / "agent_questions.py", HERE / "agent_questions.py")
@@ -620,19 +622,46 @@ def _questions(known: dict):
     return value if isinstance(value, dict) else None
 
 
-def read_list() -> dict:
-    live = _sessions()
-    if live is None:
-        return {"ok": False, "error": "agents_unavailable"}
-    states = None
+def _agent_states() -> dict | None:
+    """agent_state.py's answer ({agent lowercase: {state, ...}}), or None when it cannot be had: no state is «unknown», never an error."""
     try:
         done = subprocess.run([sys.executable, str(AGENT_STATE)], capture_output=True, text=True, timeout=10)
         if done.returncode == 0:
             value = json.loads(done.stdout)
             if isinstance(value, dict):
-                states = value
-    except Exception:  # noqa: BLE001 - no state is «unknown», never an error
-        states = None
+                return value
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _now() -> float:
+    return datetime.now(timezone.utc).timestamp()
+
+
+def read_activity(window) -> dict:
+    """What each agent worked on over `window` (5m 15m 1h 5h 24h 7d): tokens in aligned buckets, and `lavora` now.
+    One answer for every view of the page; the rule is in agent_work_activity.py."""
+    try:
+        spec = importlib.util.spec_from_file_location("agent_work_activity", WORK_ACTIVITY)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception:  # noqa: BLE001 - an image without it: the app says «update the team»
+        return {"ok": False, "error": "agents_unavailable"}
+    if not isinstance(window, str) or window not in module.WINDOWS:
+        return {"ok": False, "error": "agent_control_invalid"}
+    states = _agent_states()
+    names = {n: (s.get("state") if isinstance(s, dict) else None) for n, s in (states or {}).items()}
+    sessions = _sessions()
+    live = {name.lower() for name in sessions} if sessions else None
+    return module.read_activity(window, _now(), names if states is not None else None, live, series_path=TOKEN_SERIES)
+
+
+def read_list() -> dict:
+    live = _sessions()
+    if live is None:
+        return {"ok": False, "error": "agents_unavailable"}
+    states = _agent_states()
     identities = _identities(set(live))
     hour = _hour_usage()
     items = []
@@ -1026,7 +1055,8 @@ READS = {"exclusions": lambda req: read_exclusions(),
          "list": lambda req: read_list(),
          "screen": lambda req: read_screen(req.get("name")),
          "team": lambda req: read_team(),
-         "history": lambda req: read_history()}
+         "history": lambda req: read_history(),
+         "activity": lambda req: read_activity(req.get("window"))}
 
 
 def from_stdin() -> int:
@@ -1060,6 +1090,7 @@ def _parser() -> argparse.ArgumentParser:
     exit_condition.add_argument("--wake-on-weekly", action="store_true")
     for op in ("resume", "stop-team", "list", "team", "history", "exclusions"):
         sub.add_parser(op, add_help=False)
+    sub.add_parser("activity", add_help=False).add_argument("window")
     for op in ("exclusion-accept", "exclusion-withdraw"):
         sub.add_parser(op, add_help=False).add_argument("code")
     answer_parser = sub.add_parser("answer", add_help=False)
@@ -1095,6 +1126,9 @@ def main(argv: list[str]) -> int:
         code = getattr(args, "code", None)
         question = getattr(args, "question", None)
         choice = getattr(args, "choice", None)
+        if op == "activity":
+            _emit(read_activity(getattr(args, "window", None)))
+            return 0
         if op == "exclusions":
             _emit(read_exclusions())
             return 0

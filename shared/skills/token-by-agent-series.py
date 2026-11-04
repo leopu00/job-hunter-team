@@ -297,6 +297,9 @@ def _collect_claude(by_agent: dict, since_ts: float) -> None:
         if not name.startswith(CLAUDE_AGENT_PREFIX):
             continue
         agent = name[len(CLAUDE_AGENT_PREFIX):]
+        # Lo stesso message.id compare piu' volte (un blocco per riga) e, dopo un resume, anche in un
+        # altro file: un messaggio conta una volta, col valore piu' grande che ha avuto.
+        seen: dict = {}
         for jsonl_file in proj_dir.glob("*.jsonl"):
             try:
                 if jsonl_file.stat().st_mtime < since_ts - 3600:
@@ -321,9 +324,16 @@ def _collect_claude(by_agent: dict, since_ts: float) -> None:
                         w = billing_weighted_claude(usage)
                         if w <= 0:
                             continue
+                        mid = msg.get("id") if isinstance(msg, dict) else None
+                        if isinstance(mid, str) and mid:
+                            old_ts, old_w = seen.get(mid, (ts, 0.0))
+                            seen[mid] = (min(old_ts, ts), max(old_w, float(w)))
+                            continue
                         by_agent[agent].append((ts, float(w)))
             except OSError:
                 continue
+        for ts, w in seen.values():
+            by_agent[agent].append((ts, w))
 
 
 def _collect_codex(by_agent: dict, since_ts: float) -> None:
@@ -352,6 +362,9 @@ def _collect_codex(by_agent: dict, since_ts: float) -> None:
         if mtime < cutoff:
             continue
         agent = None
+        # Codex ripete lo stesso token_count (stesso totale cumulativo) piu' volte: sui rollout veri
+        # il 3% degli eventi, +4% di kT se si sommano tutti. Conta solo quando il totale CAMBIA.
+        prev_total = None
         try:
             with rollout.open() as f:
                 for line in f:
@@ -377,6 +390,11 @@ def _collect_codex(by_agent: dict, since_ts: float) -> None:
                     last = info.get("last_token_usage")
                     if not isinstance(last, dict):
                         continue
+                    total = (info.get("total_token_usage") or {}).get("total_tokens")
+                    if isinstance(total, (int, float)) and not isinstance(total, bool):
+                        if total == prev_total:
+                            continue
+                        prev_total = total
                     ts_raw = e.get("timestamp")
                     ts = _parse_iso_to_ts(ts_raw) if isinstance(ts_raw, str) else 0.0
                     if ts <= 0 or ts < since_ts:
