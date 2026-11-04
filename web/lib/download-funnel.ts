@@ -4,19 +4,15 @@ export const DOWNLOAD_RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO
 const RELEASE_BASE = `https://github.com/${RELEASE_REPO}/releases/download/${DOWNLOAD_RELEASE_TAG}`;
 
 // Windows is not part of 0.4.0: no slug, no link. The page shows it as "not in this version".
+// Linux has no desktop app in this version either (the CLI install.sh is the way in): no slug, no card.
 export const DOWNLOAD_TARGETS = {
   mac: `${RELEASE_BASE}/job-hunter-team-macos-universal.dmg`,
-  linux: `${RELEASE_BASE}/job-hunter-team-linux-x64.AppImage`,
 } as const;
 
 export type DownloadSlug = keyof typeof DOWNLOAD_TARGETS;
 
 const DOWNLOAD_ASSET_CANDIDATES: Record<DownloadSlug, readonly string[]> = {
   mac: ["job-hunter-team-macos-universal.dmg", "job-hunter-team.zip"],
-  linux: [
-    "job-hunter-team-linux-x64.AppImage",
-    "job-hunter-team-linux-x64.tar.gz",
-  ],
 };
 
 /**

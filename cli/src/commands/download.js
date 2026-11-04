@@ -14,10 +14,10 @@ const RELEASE_BASE_URL = 'https://github.com/leopu00/job-hunter-team/releases/do
 const ASSETS = Object.freeze({
   windows: 'job-hunter-team-windows-x64-setup.exe',
   macos: 'job-hunter-team-macos-universal.dmg',
-  linux: 'job-hunter-team-linux-x64.AppImage',
 });
 
-const LINUX_DEB_ASSET = 'job-hunter-team-linux-x64.deb';
+// This version has no desktop app for Linux: the command-line install is the way in. --os linux and --deb still parse, so they get this answer and not an "unknown option".
+const LINUX_NO_APP = 'In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded.';
 
 
 function normalizePlatform(value) {
@@ -42,8 +42,8 @@ function releaseHasNoWindows(version) {
   return major > 0 || minor >= 4;
 }
 
-// The releases before 0.4 have other files (tar.gz, setup.exe, zip): the macOS and Linux apps start with 0.4.0.
-function releaseHasNoMacLinuxApp(version) {
+// The releases before 0.4 have other files (tar.gz, setup.exe, zip): the macOS app starts with 0.4.0.
+function releaseHasNoMacApp(version) {
   const [major, minor] = String(version).split('.').map((part) => Number.parseInt(part, 10));
   return major === 0 && minor < 4;
 }
@@ -174,6 +174,9 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   if (deb && platform !== 'linux') {
     throw new Error('The --deb option is available only for Linux.');
   }
+  if (platform === 'linux') {
+    throw new Error(LINUX_NO_APP);
+  }
   // The 0.4 release has no Windows installer; the older ones did. The words are «not in this release» everywhere (CLI, wrapper, notes): no promise of when.
   if (platform === 'windows' && releaseHasNoWindows(version)) {
     throw new Error(
@@ -181,9 +184,9 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
       + 'Nothing was downloaded.',
     );
   }
-  if (platform !== 'windows' && releaseHasNoMacLinuxApp(version)) {
+  if (platform !== 'windows' && releaseHasNoMacApp(version)) {
     throw new Error(
-      `This release (v${version}) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded.`,
+      `This release (v${version}) has no app for macOS: use 0.4.0 or later. Nothing was downloaded.`,
     );
   }
   if (platform === 'macos' && hostIsIntelMac()) {
@@ -193,7 +196,7 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
     );
   }
 
-  const asset = deb ? LINUX_DEB_ASSET : ASSETS[platform];
+  const asset = ASSETS[platform];
   const tag = `v${version}`;
   const base = `${releaseBaseUrl()}/${tag}`;
   const checksumResponse = await fetchReleaseFile(`${base}/SHA256SUMS`);
@@ -273,6 +276,6 @@ export function registerDownloadCommand(program) {
     .requiredOption('--os <platform>', 'operating system: windows, macos, or linux')
     .option('--version <release>', 'the release to download (required), for example 0.4.0')
     .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
-    .option('--deb', 'download the Debian package instead of the Linux AppImage')
+    .option('--deb', 'Linux only, and there is no desktop app for Linux in this version: use install.sh')
     .action(downloadAction);
 }

@@ -15,12 +15,19 @@ google-auth==2.56.2
 google-auth-oauthlib==1.4.0
 google-api-python-client==2.198.0
 gspread==6.2.1
+# Pin delle transitive con advisory noti, alzate a mano (04/11): requests porta
+# certifi (corretto nella 2026.10.18: CA di emSign con intermedi compromessi) e
+# le librerie google-* portano protobuf (4.25: profondita' JSON fuori limite;
+# corretto nella 5.29.6 e nella 6.33.5). Nessun codice nostro li importa
+# direttamente: sono qui perche' l'immagine non risolva a caso una versione vecchia.
+certifi==2026.10.18
+protobuf==6.33.5
 # NB: niente SDK `anthropic` / `openai` qui. Gli agenti non parlano ai modelli
 # da Python: ogni ruolo è un processo CLI (`claude`, `codex`, `kimi`) in una
 # finestra tmux. I due SDK erano installati a ogni build per la sola
 # `shared/llm/`, che nessuno importava — rimossi con essa il 2026-07-25.
 # PDF reading per gli agenti che leggono CV/lettere degli utenti.
-pypdf==6.19.0
+pypdf==6.21.4
 # BeautifulSoup per gli agenti che parsano pagine job boards (LinkedIn, etc.)
 beautifulsoup4==4.15.0
 lxml==6.1.1

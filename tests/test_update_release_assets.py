@@ -15,17 +15,18 @@ def test_public_downloads_are_verified_release_assets() -> None:
         "} as const", 1
     )[0]
     targets = set(re.findall(r"RELEASE_BASE}/([^`]+)`", primary_targets))
-    assert targets == {
-        "job-hunter-team-macos-universal.dmg",
-        "job-hunter-team-linux-x64.AppImage",
-    }
+    assert targets == {"job-hunter-team-macos-universal.dmg"}
     assert targets <= expected
     assert 'DOWNLOAD_RELEASE_TAG = "v0.4.0"' in DOWNLOADS
     assert "releases/latest/download" not in DOWNLOADS
 
 
-def test_release_has_linux_debian_alternative() -> None:
-    assert "--expected-asset job-hunter-team-linux-x64.deb" in WORKFLOW
+def test_linux_is_not_in_the_release() -> None:
+    # the operator's decision of 03/11: no desktop app for Linux in this version, so no AppImage and no deb
+    # built, collected, expected, attached or linked (the CLI install.sh is the way in)
+    for linux in ("linux-x64", "AppImage", "appimage", ".deb", "dpkg-deb", "ubuntu-22", "runner.os == 'Linux'"):
+        assert linux not in WORKFLOW, linux
+    assert "linux-x64" not in DOWNLOADS and "AppImage" not in DOWNLOADS
 
 
 def test_the_site_links_the_release_of_the_manifest() -> None:
