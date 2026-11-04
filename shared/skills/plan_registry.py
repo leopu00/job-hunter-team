@@ -3,7 +3,7 @@
 plan_registry.py — which subscription plan the user has and what it can do.
 
 The provider alone (`kimi`, `claude`, `openai`) is NOT enough to decide how
-many agents to keep active: Kimi Moderato at $19 and Kimi Vivace at $199 use
+many agents to keep active: Kimi Moderato and Kimi Vivace use
 the same `active_provider`, but their capacities differ by 30x. Until a plan
 is selected, the team uses cautious calibration (1 worker → observe for 30
 minutes → move up one step), so a new user sees only one position in ten
@@ -14,8 +14,9 @@ This module is the single source of truth for:
   - whether a plan has a WEEKLY cap in addition to the 5-hour window
   - how many workers to spawn on first run (`burst roster`)
 
-⚠️ Prices and multipliers are a seed dated 2026-07-26 (web research). They
-age and are used to size the roster, not for billing. Real pacing remains
+⚠️ The multipliers are a seed dated 2026-07-26 (web research). They
+age and are used to size the roster, not for billing. No price is kept here:
+they belong to the providers and change. Real pacing remains
 measurement-driven (`window_ratio_meter` → `provider_capacity`) and corrects
 these values as soon as actual data is available.
 
