@@ -148,9 +148,12 @@ def _open_transcript(path):
         return None
 
 
+MAX_COUNT = 1e12  # a trillion tokens in one response: no honest team writes it, and four of them must not add up to infinity
+
+
 def _count(value) -> float:
-    """A token count: a finite number, not negative; anything else (a string, null, a list, NaN) counts as 0."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+    """A token count: a finite number from 0 to a trillion; anything else (a string, null, a list, NaN, a negative, a huge one) counts as 0."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= MAX_COUNT:
         return 0.0
     return float(value)
 
@@ -332,7 +335,7 @@ def _collect_kimi(by_agent: dict, since_ts: float) -> None:
                         if not isinstance(tu, dict):
                             continue
                         w = billing_weighted(tu)
-                        if w <= 0:
+                        if not math.isfinite(w) or w <= 0:
                             continue
                         by_agent[agent].append((float(ts), float(w)))
             except (OSError, ValueError):
@@ -380,7 +383,7 @@ def _collect_claude(by_agent: dict, since_ts: float) -> None:
                         if not isinstance(usage, dict):
                             continue
                         w = billing_weighted_claude(usage)
-                        if w <= 0:
+                        if not math.isfinite(w) or w <= 0:
                             continue
                         mid = msg.get("id")
                         if isinstance(mid, str) and mid:
@@ -460,7 +463,7 @@ def _collect_codex(by_agent: dict, since_ts: float) -> None:
                     if ts <= 0 or ts < since_ts:
                         continue
                     w = billing_weighted_codex(last)
-                    if w <= 0:
+                    if not math.isfinite(w) or w <= 0:
                         continue
                     by_agent[agent or "?unknown"].append((ts, float(w)))
         except (OSError, ValueError):

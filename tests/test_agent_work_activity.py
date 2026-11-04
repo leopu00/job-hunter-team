@@ -237,6 +237,25 @@ class TestHostileFiles:
         assert reply["ok"] is True
         assert row(reply["data"], "scout-1")["total_kt"] == 3.0
 
+    def test_a_count_too_big_to_be_a_count_cannot_add_up_to_infinity_and_take_the_whole_read_with_it(self, home):
+        def huge(ts, value):
+            return {"timestamp": iso(ts), "type": "event_msg", "payload": {"type": "token_count", "info": {
+                "total_token_usage": {"total_tokens": int(ts)}, "last_token_usage": {"input_tokens": value, "output_tokens": value, "reasoning_output_tokens": value}}}}
+        fname, rows = codex_session("scout-1", [(NOW - 5 * MIN, usage(fresh=1000))], "rollout-huge")
+        rows += [huge(NOW - 4 * MIN, 1e308), huge(NOW - 3 * MIN, 1.7976931348623157e308), huge(NOW - 2 * MIN, 10**30)]
+        path = home / ".codex" / "sessions" / "2026" / "11" / "04" / f"{fname}.jsonl"
+        write_jsonl(path, rows)
+        os.utime(path, (NOW, NOW))
+        claude = home / ".claude" / "projects" / "-jht-home-agents-capitano" / "s1.jsonl"
+        write_jsonl(claude, [{"timestamp": iso(NOW - 5 * MIN), "message": {"id": "m1", "usage": {"input_tokens": 1e308, "output_tokens": 1e308, "cache_read_input_tokens": 1e308}}},
+                             {"timestamp": iso(NOW - 4 * MIN), "message": {"id": "m2", "usage": {"input_tokens": 700}}}])
+        reply = read_within(5)
+        assert reply["ok"] is True
+        text = json.dumps(reply)
+        assert "Infinity" not in text and "NaN" not in text  # what the native side would refuse
+        assert row(reply["data"], "scout-1")["total_kt"] == 1.0  # the honest response counts, the absurd ones count nothing
+        assert row(reply["data"], "capitano")["total_kt"] == 0.7
+
     def test_a_row_with_a_usage_that_is_not_a_number_counts_nothing_and_the_others_still_count(self, home):
         def bad(ts, value):
             return {"timestamp": iso(ts), "type": "event_msg", "payload": {"type": "token_count", "info": {
