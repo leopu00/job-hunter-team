@@ -34,6 +34,7 @@ import json
 import math
 import os
 import re
+import stat
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -120,18 +121,67 @@ def _extract_agent_from_text(text: str):
     return None
 
 
+# Everything this script reads is written where the team's agents can write, so none of it is trusted: a file is opened only if it
+# is a REGULAR file (not a FIFO or device, which would hang the read, and not a link to somewhere else) of a sane size, and
+# a line that is not what it should be is skipped, never a reason to lose the whole answer.
+MAX_TRANSCRIPT_BYTES = 256 * 1024 * 1024  # a transcript of the team is ~1 MB a day; this is far above any honest one
+
+
+def _open_transcript(path):
+    """The file as text for reading, or None when it is not a regular file, is a link, is too big or cannot be read.
+    O_NONBLOCK so that opening a FIFO returns at once (it is then refused by fstat, never waited on)."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0))
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_TRANSCRIPT_BYTES:
+            os.close(fd)
+            return None
+        return os.fdopen(fd, "r", encoding="utf-8", errors="replace")
+    except OSError:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        return None
+
+
+def _count(value) -> float:
+    """A token count: a finite number, not negative; anything else (a string, null, a list, NaN) counts as 0."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        return 0.0
+    return float(value)
+
+
+def _dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
+def _json_object(line):
+    """The line as a JSON object, or None (not JSON, or JSON of another kind: a list, a string, a number)."""
+    try:
+        value = json.loads(line)
+    except (json.JSONDecodeError, ValueError, RecursionError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def _first_user_input_text(wire_path: Path) -> str:
     """Legge il primo `user_input` dal wire.jsonl. Lo schema può essere
     str o list[{type,text}]. Ritorna stringa concatenata (max 500 char,
     bastano per riconoscere il pattern `[@x -> @y]`)."""
+    f = _open_transcript(wire_path)
+    if f is None:
+        return ""
     try:
-        with wire_path.open() as f:
+        with f:
             for line in f:
-                try:
-                    e = json.loads(line)
-                except json.JSONDecodeError:
+                e = _json_object(line)
+                if e is None:
                     continue
-                pl = (e.get("message") or {}).get("payload") or {}
+                pl = _dict(_dict(e.get("message")).get("payload"))
                 ui = pl.get("user_input")
                 if ui is None:
                     continue
@@ -144,7 +194,7 @@ def _first_user_input_text(wire_path: Path) -> str:
                             parts.append(p["text"])
                     return " ".join(parts)[:500]
                 return ""
-    except OSError:
+    except (OSError, ValueError):
         return ""
     return ""
 
@@ -157,12 +207,17 @@ def session_to_agent(state_path: Path, wire_path: Path | None = None):
       2. primo `user_input` nel wire.jsonl  (fallback per sessioni
          dove Kimi non ha ancora generato il titolo, vedi `title_generated:false`)
     """
-    try:
-        with state_path.open() as f:
-            state = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        state = {}
+    state = {}
+    f = _open_transcript(state_path)
+    if f is not None:
+        try:
+            with f:
+                state = _dict(json.load(f))
+        except (OSError, ValueError, RecursionError):
+            state = {}
     title = state.get("custom_title") or ""
+    if not isinstance(title, str):
+        title = ""
     agent = _extract_agent_from_text(title)
     if agent:
         return agent
@@ -178,10 +233,10 @@ def billing_weighted(token_usage: dict) -> float:
     Pesi derivati dal pricing ufficiale Kimi K2 standard.
     """
     return (
-        token_usage.get("input_other", 0) * W_INPUT
-        + token_usage.get("output", 0) * W_OUTPUT
-        + token_usage.get("input_cache_read", 0) * CACHE_R_W
-        + token_usage.get("input_cache_creation", 0) * CACHE_C_W
+        _count(token_usage.get("input_other")) * W_INPUT
+        + _count(token_usage.get("output")) * W_OUTPUT
+        + _count(token_usage.get("input_cache_read")) * CACHE_R_W
+        + _count(token_usage.get("input_cache_creation")) * CACHE_C_W
     )
 
 
@@ -193,10 +248,10 @@ def billing_weighted_claude(usage: dict) -> float:
     gira interamente su Claude, vale la pena introdurre pesi separati.
     """
     return (
-        usage.get("input_tokens", 0) * W_INPUT
-        + usage.get("output_tokens", 0) * W_OUTPUT
-        + usage.get("cache_read_input_tokens", 0) * CACHE_R_W
-        + usage.get("cache_creation_input_tokens", 0) * CACHE_C_W
+        _count(usage.get("input_tokens")) * W_INPUT
+        + _count(usage.get("output_tokens")) * W_OUTPUT
+        + _count(usage.get("cache_read_input_tokens")) * CACHE_R_W
+        + _count(usage.get("cache_creation_input_tokens")) * CACHE_C_W
     )
 
 
@@ -212,10 +267,10 @@ def billing_weighted_codex(usage: dict) -> float:
     """
     if not isinstance(usage, dict):
         return 0.0
-    in_t = int(usage.get("input_tokens", 0) or 0)
-    cached = int(usage.get("cached_input_tokens", 0) or 0)
-    out_t = int(usage.get("output_tokens", 0) or 0)
-    reasoning = int(usage.get("reasoning_output_tokens", 0) or 0)
+    in_t = _count(usage.get("input_tokens"))
+    cached = _count(usage.get("cached_input_tokens"))
+    out_t = _count(usage.get("output_tokens"))
+    reasoning = _count(usage.get("reasoning_output_tokens"))
     fresh_input = max(0, in_t - cached)
     return float(fresh_input * W_INPUT + (out_t + reasoning) * W_OUTPUT)
 
@@ -257,21 +312,22 @@ def _collect_kimi(by_agent: dict, since_ts: float) -> None:
             except OSError:
                 continue
             agent = session_to_agent(state, wire) or "?unknown"
+            f = _open_transcript(wire)
+            if f is None:
+                continue
             try:
-                with wire.open() as f:
+                with f:
                     for line in f:
                         line = line.strip()
                         if not line:
                             continue
-                        try:
-                            e = json.loads(line)
-                        except json.JSONDecodeError:
+                        e = _json_object(line)
+                        if e is None:
                             continue
                         ts = e.get("timestamp")
-                        if not isinstance(ts, (int, float)) or ts < since_ts:
+                        if isinstance(ts, bool) or not isinstance(ts, (int, float)) or not math.isfinite(ts) or ts < since_ts:
                             continue
-                        msg = e.get("message") or {}
-                        pl = msg.get("payload") or {}
+                        pl = _dict(_dict(e.get("message")).get("payload"))
                         tu = pl.get("token_usage")
                         if not isinstance(tu, dict):
                             continue
@@ -279,7 +335,7 @@ def _collect_kimi(by_agent: dict, since_ts: float) -> None:
                         if w <= 0:
                             continue
                         by_agent[agent].append((float(ts), float(w)))
-            except OSError:
+            except (OSError, ValueError):
                 continue
 
 
@@ -304,33 +360,35 @@ def _collect_claude(by_agent: dict, since_ts: float) -> None:
             try:
                 if jsonl_file.stat().st_mtime < since_ts - 3600:
                     continue
-                with jsonl_file.open() as f:
+                f = _open_transcript(jsonl_file)
+                if f is None:
+                    continue
+                with f:
                     for line in f:
                         line = line.strip()
                         if not line:
                             continue
-                        try:
-                            e = json.loads(line)
-                        except json.JSONDecodeError:
+                        e = _json_object(line)
+                        if e is None:
                             continue
                         ts_raw = e.get("timestamp") or e.get("ts")
                         ts = _parse_iso_to_ts(ts_raw) if isinstance(ts_raw, str) else 0.0
                         if ts <= 0 or ts < since_ts:
                             continue
-                        msg = e.get("message") or {}
-                        usage = msg.get("usage") if isinstance(msg, dict) else None
+                        msg = _dict(e.get("message"))
+                        usage = msg.get("usage")
                         if not isinstance(usage, dict):
                             continue
                         w = billing_weighted_claude(usage)
                         if w <= 0:
                             continue
-                        mid = msg.get("id") if isinstance(msg, dict) else None
+                        mid = msg.get("id")
                         if isinstance(mid, str) and mid:
                             old_ts, old_w = seen.get(mid, (ts, 0.0))
                             seen[mid] = (min(old_ts, ts), max(old_w, float(w)))
                             continue
                         by_agent[agent].append((ts, float(w)))
-            except OSError:
+            except (OSError, ValueError):
                 continue
         for ts, w in seen.values():
             by_agent[agent].append((ts, w))
@@ -365,18 +423,20 @@ def _collect_codex(by_agent: dict, since_ts: float) -> None:
         # Codex ripete lo stesso token_count (stesso totale cumulativo) piu' volte: sui rollout veri
         # il 3% degli eventi, +4% di kT se si sommano tutti. Conta solo quando il totale CAMBIA.
         prev_total = None
+        f = _open_transcript(rollout)
+        if f is None:
+            continue
         try:
-            with rollout.open() as f:
+            with f:
                 for line in f:
                     line = line.strip()
                     if not line:
                         continue
-                    try:
-                        e = json.loads(line)
-                    except json.JSONDecodeError:
+                    e = _json_object(line)
+                    if e is None:
                         continue
                     typ = e.get("type")
-                    pl = e.get("payload") or {}
+                    pl = _dict(e.get("payload"))
                     if typ == "session_meta":
                         cwd = pl.get("cwd") or ""
                         if isinstance(cwd, str) and cwd:
@@ -386,11 +446,11 @@ def _collect_codex(by_agent: dict, since_ts: float) -> None:
                         continue
                     if pl.get("type") != "token_count":
                         continue
-                    info = pl.get("info") or {}
+                    info = _dict(pl.get("info"))
                     last = info.get("last_token_usage")
                     if not isinstance(last, dict):
                         continue
-                    total = (info.get("total_token_usage") or {}).get("total_tokens")
+                    total = _dict(info.get("total_token_usage")).get("total_tokens")
                     if isinstance(total, (int, float)) and not isinstance(total, bool):
                         if total == prev_total:
                             continue
@@ -403,7 +463,7 @@ def _collect_codex(by_agent: dict, since_ts: float) -> None:
                     if w <= 0:
                         continue
                     by_agent[agent or "?unknown"].append((ts, float(w)))
-        except OSError:
+        except (OSError, ValueError):
             continue
 
 

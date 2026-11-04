@@ -13,6 +13,7 @@ import io
 import json
 import os
 import sys
+import threading
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
 
@@ -158,6 +159,105 @@ class TestClaude:
         self.claude_file(home, "capitano", shared, name="first")
         self.claude_file(home, "capitano", shared + [self.message(NOW - 2 * MIN, "m2", 200)], name="resumed")
         assert row(read("1h"), "capitano")["total_kt"] == 1.3
+
+
+def with_series(**limits):
+    series = activity.load_series(os.path.join(SKILLS_DIR, "token-by-agent-series.py"))
+    for name, value in limits.items():
+        setattr(series, name, value)
+    return series
+
+
+def read_within(seconds, series=None, window="1h"):
+    """The read, with a time limit: a FIFO that is opened and waited on would never return."""
+    series = series or with_series()
+    box = {}
+
+    def run():
+        box["reply"] = activity.read_activity(window, NOW, None, None, series=series)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    assert not thread.is_alive(), "the read is stuck (a file that blocks was opened)"
+    return box["reply"]
+
+
+class TestHostileFiles:
+    """Transcripts are written where the agents can write (JHT-T171, the two lows of the security review): a file that is not a regular one, a link, a
+    huge one, or a line that is not what it should be, is skipped and never costs the rest of the answer."""
+
+    def honest(self, home):
+        codex_file(home, "scout-1", [(NOW - 5 * MIN, usage(fresh=1000))], name="rollout-honest")
+
+    def test_a_link_in_the_transcripts_is_not_followed(self, home, tmp_path_factory):
+        self.honest(home)
+        elsewhere = tmp_path_factory.mktemp("elsewhere")
+        fname, rows = codex_session("analista-1", [(NOW - 4 * MIN, usage(fresh=9000))], "rollout-elsewhere")
+        write_jsonl(elsewhere / "real.jsonl", rows)
+        link = home / ".codex" / "sessions" / "2026" / "11" / "04" / "rollout-link.jsonl"
+        os.symlink(elsewhere / "real.jsonl", link)
+        reply = read_within(5)
+        assert reply["ok"] is True
+        assert [a["name"] for a in reply["data"]["agents"]] == ["scout-1"]  # the linked file's tokens are not counted
+
+    def test_a_fifo_where_a_transcript_should_be_does_not_hang_the_read(self, home):
+        self.honest(home)
+        for where in (home / ".codex" / "sessions" / "2026" / "11" / "04", home / ".claude" / "projects" / "-jht-home-agents-capitano"):
+            where.mkdir(parents=True, exist_ok=True)
+            os.mkfifo(where / ("rollout-fifo.jsonl" if "codex" in str(where) else "s1.jsonl"))
+        wire = home / ".kimi" / "sessions" / "hash" / "session"
+        wire.mkdir(parents=True)
+        os.mkfifo(wire / "wire.jsonl")
+        os.mkfifo(wire / "state.json")
+        for path in (home / ".codex" / "sessions" / "2026" / "11" / "04" / "rollout-fifo.jsonl",):
+            os.utime(path, (NOW, NOW)) if os.path.exists(path) else None
+        reply = read_within(8)
+        assert reply["ok"] is True
+        assert row(reply["data"], "scout-1")["total_kt"] == 1.0
+
+    def test_a_transcript_over_the_byte_cap_is_skipped(self, home):
+        self.honest(home)
+        series = with_series(MAX_TRANSCRIPT_BYTES=200)  # the honest file is bigger than this: nothing is read
+        assert read_within(5, series)["data"]["agents"] == []
+        assert row(read_within(5)["data"], "scout-1")["total_kt"] == 1.0  # with the real cap it is read
+
+    def test_a_line_that_is_not_a_json_object_costs_that_line_only(self, home):
+        fname, rows = codex_session("scout-1", [(NOW - 5 * MIN, usage(fresh=1000)), (NOW - 4 * MIN, usage(fresh=2000))], "rollout-odd")
+        path = home / ".codex" / "sessions" / "2026" / "11" / "04" / f"{fname}.jsonl"
+        write_jsonl(path, rows)
+        with path.open("a", encoding="utf-8") as f:
+            for odd in ('[1, 2]', '"text"', "3", "null", "true", "{not json", '{"type":"event_msg","payload":"x"}',
+                        '{"type":"event_msg","payload":[1]}', '{"type":"event_msg","payload":{"type":"token_count","info":"x"}}',
+                        '{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":"x"}}}',
+                        '{"type":"session_meta","payload":5}'):
+                f.write(odd + "\n")
+        os.utime(path, (NOW, NOW))
+        reply = read_within(5)
+        assert reply["ok"] is True
+        assert row(reply["data"], "scout-1")["total_kt"] == 3.0
+
+    def test_a_row_with_a_usage_that_is_not_a_number_counts_nothing_and_the_others_still_count(self, home):
+        def bad(ts, value):
+            return {"timestamp": iso(ts), "type": "event_msg", "payload": {"type": "token_count", "info": {
+                "total_token_usage": {"total_tokens": 1}, "last_token_usage": {"input_tokens": value, "output_tokens": value, "reasoning_output_tokens": value}}}}
+        fname, rows = codex_session("scout-1", [(NOW - 5 * MIN, usage(fresh=1000))], "rollout-bad")
+        rows += [bad(NOW - 4 * MIN, "lots"), bad(NOW - 4 * MIN, None), bad(NOW - 4 * MIN, [5]), bad(NOW - 4 * MIN, -5), bad(NOW - 4 * MIN, {"a": 1})]
+        path = home / ".codex" / "sessions" / "2026" / "11" / "04" / f"{fname}.jsonl"
+        write_jsonl(path, rows)
+        os.utime(path, (NOW, NOW))
+        # Claude: usage that is a string, a list, a message that is not an object
+        claude = home / ".claude" / "projects" / "-jht-home-agents-capitano" / "s1.jsonl"
+        write_jsonl(claude, [
+            {"timestamp": iso(NOW - 5 * MIN), "message": {"id": "m1", "usage": {"input_tokens": 500, "output_tokens": "x"}}},
+            {"timestamp": iso(NOW - 5 * MIN), "message": {"id": "m2", "usage": "lots"}},
+            {"timestamp": iso(NOW - 5 * MIN), "message": [1]},
+            {"timestamp": iso(NOW - 5 * MIN), "message": "x"},
+        ])
+        reply = read_within(5)
+        assert reply["ok"] is True
+        assert row(reply["data"], "scout-1")["total_kt"] == 1.0
+        assert row(reply["data"], "capitano")["total_kt"] == 0.5
 
 
 class TestWork:
