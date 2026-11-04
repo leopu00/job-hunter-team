@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "A profil nyelveinek core nemzeti portáljait keresd MINDEN kisebb forrás ELŐTT, és tudd, a terv mekkora része kész. A `next` megmondja a portált, a naplózandó országot és a lekérdezés fajtáját; egy portál 3 menettel és 3 különböző lekérdezéssel lefedett, a «kimerült» pedig lefedett core portálokat kíván. Minden keresés elején futtasd a `next`-et."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
 ---
 
 # scout-coverage — hol keress előbb, és mennyi van meg
@@ -12,9 +12,15 @@ Előbb ott keress, ahol a profil saját piacai vannak, és tudd, mennyi van meg 
 
 A `next` egy JSON-sort ír ki: a portált (`source`, `country`, `tier`), a lekérdezés FAJTÁJÁT (`query_kind`: `broad` = SZÉLES lekérdezés, mindig az első: a szerep családja vagy egy belépő szó magában (a `broad_terms`-ben), teljes cím és hely nélkül, `role_language` = a cím a portál nyelvén, `role` = a cím angolul, `synonym` = egy rokon cím, `level` = a cím a nyelv egy szintjelölő szavával, a `level_terms`-ben felsorolva, `city` = a cím egy hellyel, a `cities`-ben felsorolva), mid van (`have`) a szükségeshez (`need`) képest, és a utána használandó `log` sort. Pontosan azt keresd, majd naplózd a menetet ugyanazzal a `--query-kind`-dal. A `plan_done: true` azt jelenti: a terv kész, mehetsz a többi forráshoz.
 
+A `next` az azonosítóddal azt is megmondja, változott-e a profil, amióta a köreidet felépítetted: `"profile": {"changed": true, "groups": [...]}`. Olvasd újra a profilt, építsd újra a megváltozott csoportok köreit, tartsd meg a pozícióidat és a keresésnaplódat, majd `profile_version.py ack`.
+
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
 python3 /app/shared/skills/scout_coverage.py next
+
+# az azonosítóddal: azt is megmondja, változott-e a profil, amióta a köreidet felépítetted (akkor olvasd újra, építsd újra a köröket, és ack)
+python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID
+python3 /app/shared/skills/profile_version.py ack --agent $MY_ID
 
 # the whole plan for this profile (once), and how much of it is done (any time)
 python3 /app/shared/skills/scout_coverage.py plan

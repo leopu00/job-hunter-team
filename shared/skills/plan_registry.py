@@ -3,7 +3,7 @@
 plan_registry.py — which subscription plan the user has and what it can do.
 
 The provider alone (`kimi`, `claude`, `openai`) is NOT enough to decide how
-many agents to keep active: Kimi Moderato at $19 and Kimi Vivace at $199 use
+many agents to keep active: Kimi Moderato and Kimi Vivace use
 the same `active_provider`, but their capacities differ by 30x. Until a plan
 is selected, the team uses cautious calibration (1 worker → observe for 30
 minutes → move up one step), so a new user sees only one position in ten
@@ -14,8 +14,9 @@ This module is the single source of truth for:
   - whether a plan has a WEEKLY cap in addition to the 5-hour window
   - how many workers to spawn on first run (`burst roster`)
 
-⚠️ Prices and multipliers are a seed dated 2026-07-26 (web research). They
-age and are used to size the roster, not for billing. Real pacing remains
+⚠️ The multipliers are a seed dated 2026-07-26 (web research). They
+age and are used to size the roster, not for billing. No price is kept here:
+they belong to the providers and change. Real pacing remains
 measurement-driven (`window_ratio_meter` → `provider_capacity`) and corrects
 these values as soon as actual data is available.
 
@@ -48,7 +49,6 @@ try:
 except ImportError:
     _FALLBACK = {
         "plan.free": "free",
-        "plan.price_month": "%s $/month",
         "plan.unknown": "unknown plan: %s",
         "plan.config_unreadable": "%s cannot be read (damaged, or not a JSON object): the plan was not written and the file was left as it is",
         "plan.not_selected": "subscription plan not selected",
@@ -100,7 +100,7 @@ def normalize_provider(provider: str | None) -> str:
 # Campi:
 #   id            — chiave stabile scritta in jht.config.json
 #   label         — nome commerciale mostrato all'utente
-#   price         — prezzo di listino mensile, come stringa (solo display)
+#   (nessun prezzo: sono di terzi e cambiano, non li dichiariamo; la tabella tiene nomi e id)
 #   tier          — capacità relativa al tier base del provider (1 / 5 / 15 / 20 / 30)
 #   weekly_capped — il piano ha un tetto oltre la finestra 5h (settimanale o
 #                   di ciclo di fatturazione). Se True il pacing DEVE
@@ -108,38 +108,37 @@ def normalize_provider(provider: str | None) -> str:
 #   window_5h     — esiste una finestra rolling 5h che può bloccarti prima
 #                   che il weekly sia finito.
 #
-# Fonti: Kimi/Moonshot 5 tier (Adagio free · Moderato 19$ · Allegretto 39$ ·
-# Allegro 99$ · Vivace 199$, quote settimanali + finestra 5h) · Claude
-# (Pro 20$ · Max 5x 100$ · Max 20x 200$, 5h + due tetti settimanali) ·
-# Codex/OpenAI (Plus 20$ · Pro 100$ · Pro 200$; la finestra 5h è stata
-# RIMOSSA il 2026-07-12, resta il weekly).
+# Fonti: Kimi/Moonshot 5 tier (Adagio free · Moderato · Allegretto · Allegro ·
+# Vivace, quote settimanali + finestra 5h) · Claude (Pro · Max 5x · Max 20x,
+# 5h + due tetti settimanali) · Codex/OpenAI (Plus · Pro · Pro 20x; la finestra
+# 5h è stata RIMOSSA il 2026-07-12, resta il weekly).
 PLANS: dict[str, list[dict]] = {
     "kimi": [
-        {"id": "adagio",     "label": "Adagio (free)", "price": "0",
+        {"id": "adagio",     "label": "Adagio (free)",
          "tier": 0.2, "weekly_capped": True, "window_5h": True},
-        {"id": "moderato",   "label": "Moderato",          "price": "19 $/month",
+        {"id": "moderato",   "label": "Moderato",
          "tier": 1,   "weekly_capped": True, "window_5h": True},
-        {"id": "allegretto", "label": "Allegretto",        "price": "39 $/month",
+        {"id": "allegretto", "label": "Allegretto",
          "tier": 5,   "weekly_capped": True, "window_5h": True},
-        {"id": "allegro",    "label": "Allegro",           "price": "99 $/month",
+        {"id": "allegro",    "label": "Allegro",
          "tier": 15,  "weekly_capped": True, "window_5h": True},
-        {"id": "vivace",     "label": "Vivace",            "price": "199 $/month",
+        {"id": "vivace",     "label": "Vivace",
          "tier": 30,  "weekly_capped": True, "window_5h": True},
     ],
     "claude": [
-        {"id": "pro",     "label": "Pro",     "price": "20 $/month",
+        {"id": "pro",     "label": "Pro",
          "tier": 1,  "weekly_capped": True, "window_5h": True},
-        {"id": "max5",    "label": "Max 5x",  "price": "100 $/month",
+        {"id": "max5",    "label": "Max 5x",
          "tier": 5,  "weekly_capped": True, "window_5h": True},
-        {"id": "max20",   "label": "Max 20x", "price": "200 $/month",
+        {"id": "max20",   "label": "Max 20x",
          "tier": 20, "weekly_capped": True, "window_5h": True},
     ],
     "openai": [
-        {"id": "plus",    "label": "Plus",    "price": "20 $/month",
+        {"id": "plus",    "label": "Plus",
          "tier": 1,  "weekly_capped": True, "window_5h": False},
-        {"id": "pro",     "label": "Pro",     "price": "100 $/month",
+        {"id": "pro",     "label": "Pro",
          "tier": 5,  "weekly_capped": True, "window_5h": False},
-        {"id": "pro-max", "label": "Pro 20x", "price": "200 $/month",
+        {"id": "pro-max", "label": "Pro 20x",
          "tier": 20, "weekly_capped": True, "window_5h": False},
     ],
 }
@@ -156,9 +155,8 @@ PLANS: dict[str, list[dict]] = {
 # Una lettura vale per il piano che l'account ha davvero, non per tutta la riga del provider.
 #
 # Where each name comes from: `prolite` is what `codex app-server` reported (planType) on the real account of the
-# 27/10 collaudo, whose plan is the 100 $ one; the public price list says that plan exists and costs 100 $. `plus`
-# is the table's own id. `pro` is ChatGPT Pro, the 200 $ plan (the public price list), the table's `pro-max`: this
-# pair is from the list, not yet from a reading of such an account.
+# 27/10 collaudo, whose plan is the table's `pro`. `plus` is the table's own id. Codex's `pro` is ChatGPT Pro, the
+# table's `pro-max`: this pair is from the public plan list, not yet from a reading of such an account.
 # The reading is per machine, not per account: the bridge refreshes it at least once a day while it runs, and it
 # is ignored after 30 days without one.
 _CODEX_PLAN_TYPE_TO_ID = {
@@ -299,9 +297,6 @@ def _localized_plan(plan: dict, prov: str | None = None) -> dict:
         localized["window_5h_observed"] = True
     if plan["id"] == "adagio":
         localized["label"] = f"Adagio ({_t('plan.free')})"
-    amount = str(plan["price"]).split(" ", 1)[0]
-    if amount != "0":
-        localized["price"] = _tf("plan.price_month", amount)
     return localized
 
 
@@ -337,8 +332,7 @@ def question_options(provider: str | None = None) -> dict:
     suggested = _CODEX_PLAN_TYPE_TO_ID.get((reading or {}).get("plan_type") or "") if reading else None
     options = []
     for plan in plans:
-        price = str(plan["price"])
-        label = plan["label"] if price == "0" else f"{plan['label']} — {price}"
+        label = plan["label"]
         if plan["id"] == suggested:
             label = f"{label} ({_t('plan.question_suggested')})"
         options.append({"id": option_id(plan["id"]), "label": label})
@@ -517,7 +511,7 @@ def _cmd_list(argv: list[str]) -> int:
                 else _t("plan.no_weekly_cap")
             win = _t("plan.window_5h") if p["window_5h"] \
                 else _t("plan.no_window_5h")
-            print(f"  {p['id']:<12} {p['label']:<16} {p['price']:<12} "
+            print(f"  {p['id']:<12} {p['label']:<16} "
                   f"{p['tier']:>4}x  [{weekly}, {win}]")
         note = _codex_note(prov, plans)
         if note:
@@ -526,7 +520,7 @@ def _cmd_list(argv: list[str]) -> int:
 
 
 def _codex_note(prov: str, plans: list[dict]) -> Optional[str]:
-    """«Codex reports: prolite → Pro 100 $»: the name Codex gives the plan, in the table's terms."""
+    """«Codex reports: prolite → Pro»: the name Codex gives the plan, in the table's terms."""
     reading = _codex_reading() if prov == "openai" else None
     plan_type = reading.get("plan_type") if reading else None
     if not plan_type:
@@ -534,8 +528,7 @@ def _codex_note(prov: str, plans: list[dict]) -> Optional[str]:
     mapped = next((p for p in plans if p["id"] == _CODEX_PLAN_TYPE_TO_ID.get(plan_type)), None)
     if mapped is None:
         return _tf("plan.codex_reports_unlisted", plan_type)
-    amount = str(mapped["price"]).split(" ", 1)[0]
-    return _tf("plan.codex_reports", plan_type, f"{mapped['label']} {amount} $")
+    return _tf("plan.codex_reports", plan_type, mapped["label"])
 
 
 def suggested_plan_id(provider: str) -> Optional[str]:

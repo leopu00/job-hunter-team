@@ -190,6 +190,8 @@ So the button is often already unlocked by the fallback when the profile is comp
 
 ### When to create the flag (3 STRICT steps, never skip them, never reorder them)
 
+**Create it as soon as the profile has a target role, a city or area and at least one language** — you do not wait for the eight fields: the team starts and the questions go on (the rest of the profile is completed while it works).
+
 ```bash
 # 1. Create the flag with a UTC timestamp
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -209,7 +211,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 Only after `FLAG_OK`, and only once:
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profilo del candidato completo e validato — il team può partire."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] profilo del candidato con il minimo per partire (ruolo, zona, lingua) — il team può partire; il resto del profilo si completa mentre lavora."
 ```
 
 The Capitano does not look at the profile file: until someone tells it, on the first
@@ -234,8 +236,8 @@ And tell the user: "I've put the button back on hold — let's review this point
 
 ### Do NOT create the flag if
 
-- the last profile validation printed `INVALID_PROFILE` (even once after the last Write);
-- these are missing (the eight minimum fields): name, email, target role, city, years of experience, `seniority_target`, skills (≥2), languages (≥1).
+- the last profile validation printed `INVALID_PROFILE` because the YAML cannot be read or a field holds a wrong value (the `ERROR:` lines about a field the person has not given yet do not count: those are asked while the team already works);
+- these are missing (the three that start the search): target role, city or area, languages (≥1). The other five of the eight (name, email, years of experience, `seniority_target`, skills ≥2) are asked right after, while the team already works: they do not hold the flag back.
 
 Experiences and degrees are recommended: they do not block the flag. Ask for them right after creating it.
 

@@ -19,7 +19,10 @@ import { localTeamData } from "./local-team-data";
  *   POST   /api/positions/<n>/write-request   the CV or the cover letter (`kind`); DELETE withdraws
  *   POST   /api/positions/<n>/ticket          a rescore (`kind: "rescore"`) or a free request (`request_text`)
  *
- * The authorisation of an application (apply-request) is not here: it writes the team's broker too, and stays off.
+ *   POST   /api/positions/<n>/apply-request  no body: the preview of an authorisation (summary, destination, digest);
+ *                                              {confirmId, destination}: the authorisation, on the person's click, carrying
+ *                                              back the digest and the destination the preview showed
+ *   DELETE /api/positions/<n>/apply-request  withdraws the authorisation
  *
  * It never falls through to the cloud: in this mode a call of these routes is answered here, with the code
  * of its refusal, whatever the native side says. Every other route stays refused by the bridge.
@@ -30,7 +33,7 @@ const ACT = "local_team_position_act";
 type Body = Record<string, unknown>;
 type Op =
   | "feedback" | "exclude" | "restore" | "user_note" | "mark_applied" | "outcome"
-  | "recheck" | "geocode" | "write_request" | "ticket" | "outcome_undo";
+  | "recheck" | "geocode" | "write_request" | "ticket" | "outcome_undo" | "apply_preview" | "apply_request";
 type NativeRequest = { op: Op; id: string } & Body;
 type Build = (id: string, body: Body) => NativeRequest | Response;
 /** What the page reads back from the route, from the closed answer of the native side. */
@@ -96,6 +99,9 @@ const both = (path: RegExp, build: (id: string, body: Body, on: boolean) => Nati
     build: (id: string, body: Body) => build(id, body, toggle(method)),
     shape,
   }));
+
+const DIGEST = /^[0-9a-f]{64}$/;
+const DESTINATION = /^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$/;
 
 const MORE_ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: Shape }> = [
   {
@@ -163,6 +169,39 @@ const MORE_ROUTES: Array<{ method: string; path: RegExp; build: Build; shape?: S
     }),
   ),
   {
+    // No body = the first step (nothing is authorised); a confirmation = the second, which carries the digest AND the
+    // destination of the preview back, so the host knows the person saw where it goes.
+    method: "POST",
+    path: /^\/api\/positions\/(\d+)\/apply-request$/,
+    build: (id, body) => {
+      if (body.confirmId === undefined && body.destination === undefined) return { op: "apply_preview", id };
+      const { confirmId, destination } = body;
+      if (typeof confirmId !== "string" || !DIGEST.test(confirmId) || typeof destination !== "string" || !DESTINATION.test(destination)) {
+        return invalid("confirmation_required");
+      }
+      return { op: "apply_request", id, on: true, confirmed: true, confirm: confirmId, destination };
+    },
+    shape: (request, reply) =>
+      request.op === "apply_preview"
+        ? {
+            ok: true,
+            state: "awaiting_confirm",
+            id: reply.confirm,
+            summary: reply.summary,
+            destination: reply.destination,
+            expiresAt: null,
+            source: "local",
+          }
+        : // only what the host confirmed counts: a reply without the flag is not an authorisation
+          { ok: true, state: reply.apply_requested === true ? "queued" : "not_authorised", apply_requested: reply.apply_requested === true, source: "local" },
+  },
+  {
+    method: "DELETE",
+    path: /^\/api\/positions\/(\d+)\/apply-request$/,
+    build: (id) => ({ op: "apply_request", id, on: false }),
+    shape: (_request, reply) => ({ ok: true, state: reply.apply_requested === false ? "done" : "not_withdrawn", apply_requested: reply.apply_requested !== false, source: "local" }),
+  },
+  {
     method: "POST",
     path: /^\/api\/positions\/(\d+)\/ticket$/,
     build: (id, body) => {
@@ -188,7 +227,7 @@ function statusOf(code: string): number {
   if (
     [
       "position_write_request_invalid", "position_write_not_confirmed", "reason_invalid", "note_too_long", "note_invalid", "note_empty",
-      "outcome_invalid", "request_kind_invalid", "request_text_required", "attachment_not_supported",
+      "outcome_invalid", "request_kind_invalid", "request_text_required", "attachment_not_supported", "confirmation_required",
     ].includes(code)
   ) {
     return 400;

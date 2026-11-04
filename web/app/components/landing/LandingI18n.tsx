@@ -217,9 +217,9 @@ const translations = {
     hu: "Helyette a hordozható verzió letöltése",
   },
   dl_desktop_unsigned_note: {
-    it: "Su macOS il DMG è firmato e notarizzato. Su Linux il pacchetto non è firmato: rendi eseguibile l'AppImage prima di aprirla.",
-    en: "On macOS the DMG is signed and notarized. On Linux the package is unsigned: make the AppImage executable before opening it.",
-    hu: "macOS-en a DMG aláírt és notarizált. Linuxon a csomag nincs aláírva: megnyitás előtt tedd futtathatóvá az AppImage fájlt.",
+    it: "Su macOS il DMG è firmato e notarizzato. Per Linux in questa versione non c'è l'app desktop: usa il terminale (install.sh).",
+    en: "On macOS the DMG is signed and notarized. There is no desktop app for Linux in this version: use the terminal (install.sh).",
+    hu: "macOS-en a DMG aláírt és notarizált. Linuxra ebben a verzióban nincs asztali app: használd a terminált (install.sh).",
   },
   dl_mac_apple_silicon_only: {
     it: "Solo Mac con Apple silicon (M1 e successivi). I Mac Intel non sono supportati nella 0.4.",
@@ -230,11 +230,6 @@ const translations = {
     it: "Non in questa versione",
     en: "Not in this version",
     hu: "Nem ebben a verzióban",
-  },
-  dl_linux_experimental: {
-    it: "Sperimentale, non provato a mano.",
-    en: "Experimental, not tested by hand.",
-    hu: "Kísérleti, kézzel nem tesztelt.",
   },
   dl_help_text: {
     it: "Hai scaricato l'app?",

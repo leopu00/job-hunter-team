@@ -17,7 +17,7 @@ posto di .language; skills come lista piatta) emettendo WARNING non bloccanti. G
 sono bloccanti.
 
 Uso:
-    python3 validate_profile.py <path/candidate_profile.yml> [--strict] [--json] [--minimum] [--lang XX]
+    python3 validate_profile.py <path/candidate_profile.yml> [--strict] [--json] [--minimum] [--launch] [--lang XX]
 Output:
     VALID_PROFILE   (exit 0)   eventuali "WARN: ..." su stderr
     INVALID_PROFILE (exit 1)   "ERROR: ..." su stderr
@@ -27,6 +27,9 @@ seniority, 2+ competenze, 1+ lingua: gli otto campi obbligatori dell'app, elenco
 shared/config/profile-minimum.json): i campi che mancano sono errori e, con --json, sotto
 "missing". Esperienza e titolo di studio sono raccomandati, non obbligatori. Lo usa
 `jht profile import`.
+Con --launch si controlla solo il minimo per FAR PARTIRE la ricerca (ruolo, citta', 1+ lingua: una
+parte dei campi di --minimum, "launch_required" in profile-minimum.json): i campi che mancano sono
+errori e, con --json, sotto "launch_missing". Il resto si chiede mentre la squadra lavora gia'.
 
 Lingua (RULE-T14): il testo libero che l'utente legge (narrative, key_points, timeline, summary)
 deve essere nella lingua dell'utente (i18n-prefs.json, poi JHT_LANG; `--lang XX` la forza). Un testo
@@ -300,6 +303,17 @@ def team_minimum_missing(profile) -> list:
     return [key for key, ok in checks if not ok]
 
 
+# What the team needs to START searching (a part of the eight): the role, the place and a language. The rest is asked
+# while the team already works. shared/config/profile-minimum.json (`launch_required`) says the same, and
+# tests/test_profile_minimum_checklist.py proves it.
+LAUNCH_REQUIRED = ("target_role", "location", "languages")
+
+
+def team_launch_missing(profile) -> list:
+    """The fields of LAUNCH_REQUIRED the profile lacks, by the names of `team_minimum_missing`."""
+    return [key for key in team_minimum_missing(profile) if key in LAUNCH_REQUIRED]
+
+
 _expected_language = None
 
 
@@ -316,6 +330,7 @@ def main() -> int:
     strict = "--strict" in args
     as_json = "--json" in args
     minimum = "--minimum" in args
+    launch = "--launch" in args
     paths = [a for a in args if not a.startswith("--")]
     if not paths:
         print("usage: validate_profile.py <candidate_profile.yml> [--strict] [--json]", file=sys.stderr)
@@ -339,6 +354,10 @@ def main() -> int:
     missing = team_minimum_missing(data) if minimum else []
     for key in missing:
         err(f"missing for the team to start: {key}")
+    launch_missing = team_launch_missing(data) if launch else []
+    for key in launch_missing:
+        if key not in missing:  # --minimum already said it
+            err(f"missing for the team to start: {key}")
     blocking = errors + (warnings if strict else [])
 
     if as_json:
@@ -346,6 +365,8 @@ def main() -> int:
                "language_warnings": language_warnings}
         if minimum:
             out["missing"] = missing
+        if launch:
+            out["launch_missing"] = launch_missing
         print(json.dumps(out))
     else:
         for w in warnings:

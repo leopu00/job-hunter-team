@@ -486,6 +486,21 @@ describe("push sync di una candidatura", () => {
     await expect(schema.json()).resolves.not.toHaveProperty("rejection_scope");
   });
 
+  it("taglia le due frasi dell'azienda a 600 caratteri veri, mai a meta' di un'emoji", async () => {
+    // 599 lettere e poi un'emoji di due unita' UTF-16: un taglio a 600 unita' lascia meta' emoji, e PostgREST rifiuta il JSON.
+    const about = "a".repeat(599) + "\u{1F469}\u{200d}\u{1F4BB}" + "b".repeat(50);
+    const response = await pushBody({ companies: [{ id: 5, name: "Synthetic company", about }] });
+    expect(response.status).toBe(200);
+    const written = calls.find((call) => call.kind === "upsert" && call.table === "companies");
+    const sent = (written?.payload as { about: string }[])[0].about;
+    expect(Array.from(sent)).toHaveLength(600);
+    expect(sent.startsWith("a".repeat(599) + "\u{1F469}")).toBe(true);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(sent)).toBe(false);
+    // nothing is invented for an empty text or a missing one
+    const empty = await pushBody({ companies: [{ id: 6, name: "Other", about: "" }] });
+    expect(empty.status).toBe(200);
+  });
+
   it("emette receipt causali per ogni tabella del convoglio", async () => {
     const deletedAt = "2026-08-13T10:00:00.000Z";
     const transitionAt = "2026-08-13T10:01:00.000Z";

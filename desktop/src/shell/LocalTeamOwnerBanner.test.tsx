@@ -138,6 +138,31 @@ describe("the backend's answer over the renderer's copy", () => {
     await expect(readNativeTeamOwnerView(async () => null)).resolves.toEqual({ owner: "none" });
   });
 
+  it("never names the person who looks: two profiles called alike are told apart by the order they were made in", async () => {
+    localStorage.setItem(V2, JSON.stringify({
+      version: 2, activeId: B, teamOwnerId: null,
+      profiles: [
+        { profileId: A, displayName: "Test 1", createdAt: 1 },
+        { profileId: B, displayName: "Test 1", createdAt: 2 },
+      ],
+    }));
+    localStorage.setItem("jht.desktop.identity.v1", "local");
+    localStorage.setItem(`jht.desktop.onboarding.local:${A}`, "started-v1");
+    // the first made owns the team, the person is the second: «Test 1» owns it, not «Test 1 (2)»
+    await expect(readNativeTeamOwnerView(async () => ({ kind: "local", profileId: A }))).resolves.toEqual({ owner: "other", name: "Test 1" });
+    expect(readTeamOwnerView()).toEqual({ owner: "other", name: "Test 1" });
+    // seen from the first, the owner is the second: it is not called by the same words
+    localStorage.setItem(V2, JSON.stringify({
+      version: 2, activeId: A, teamOwnerId: B,
+      profiles: [
+        { profileId: A, displayName: "Test 1", createdAt: 1 },
+        { profileId: B, displayName: "Test 1", createdAt: 2 },
+      ],
+    }));
+    await expect(readNativeTeamOwnerView(async () => ({ kind: "local", profileId: B }))).resolves.toEqual({ owner: "other", name: "Test 1 (2)" });
+    expect(readTeamOwnerView()).toEqual({ owner: "other", name: "Test 1 (2)" });
+  });
+
   it("is another owner (an account, or a profile this list does not have) without a name", async () => {
     saveReal();
     await expect(readNativeTeamOwnerView(async () => ({ kind: "google" }))).resolves.toEqual({ owner: "other", name: null, account: true });

@@ -18,7 +18,7 @@ from test_windows_host_env_is_not_written_through_a_link import SHELLS, _run, wi
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = ROOT / "scripts" / "jht-wrapper.ps1"
-ASSET = "job-hunter-team-linux-x64.AppImage"
+ASSET = "job-hunter-team-macos-universal.dmg"
 BYTES = b"the installer the release published"
 SUM = hashlib.sha256(BYTES).hexdigest()
 
@@ -86,19 +86,19 @@ def _download(shell: str, tmp_path: Path, site, *args: str, extra: str = ""):
 @pytest.mark.parametrize("shell", SHELLS)
 def test_the_installer_is_checked_on_the_host_and_saved_where_it_was_asked(shell: str, tmp_path: Path, site):
     (tmp_path / "temp").mkdir()
-    out = tmp_path / "chosen" / "client.AppImage"
-    done, _ = _download(shell, tmp_path, site, "--os", "linux", "--version", "0.4.0", "--output", str(out))
+    out = tmp_path / "chosen" / "client.dmg"
+    done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(out))
     assert "RC=0" in done.stdout, done.stdout + done.stderr
     assert out.read_bytes() == BYTES and SUM in done.stdout
     assert list((tmp_path / "temp").iterdir()) == [], "a private download folder was left"
-    assert [p.name for p in out.parent.iterdir()] == ["client.AppImage"]
+    assert [p.name for p in out.parent.iterdir()] == ["client.dmg"]
 
 
 @windows_only
 @pytest.mark.parametrize("shell", SHELLS)
 def test_by_default_it_goes_to_downloads_not_to_a_shared_folder(shell: str, tmp_path: Path, site):
     (tmp_path / "temp").mkdir()
-    done, home = _download(shell, tmp_path, site, "--os", "linux", "--version", "0.4.0")
+    done, home = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0")
     assert "RC=0" in done.stdout, done.stdout + done.stderr
     assert (home / "Downloads" / ASSET).read_bytes() == BYTES
     assert not (home / "Documents").exists() and not (home / ".jht").exists()
@@ -109,8 +109,8 @@ def test_by_default_it_goes_to_downloads_not_to_a_shared_folder(shell: str, tmp_
 def test_a_wrong_hash_saves_nothing_and_leaves_nothing(shell: str, tmp_path: Path, site):
     (tmp_path / "temp").mkdir()
     (site.root / "SHA256SUMS").write_text(f"{'0' * 64}  {ASSET}\n", encoding="utf-8")
-    out = tmp_path / "out" / "client.AppImage"
-    done, _ = _download(shell, tmp_path, site, "--os", "linux", "--version", "0.4.0", "--output", str(out))
+    out = tmp_path / "out" / "client.dmg"
+    done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(out))
     assert "RC=1" in done.stdout and "SHA-256 non valido" in done.stdout
     assert not out.exists() and list(out.parent.iterdir()) == [] and list((tmp_path / "temp").iterdir()) == []
 
@@ -121,8 +121,8 @@ def test_a_destination_in_a_shared_folder_is_refused_even_through_a_junction(she
     (tmp_path / "temp").mkdir()
     shared = tmp_path / "profile" / ".jht"
     shared.mkdir(parents=True)
-    plain = shared / "client.AppImage"
-    done, _ = _download(shell, tmp_path, site, "--os", "linux", "--version", "0.4.0", "--output", str(plain))
+    plain = shared / "client.dmg"
+    done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(plain))
     assert "RC=1" in done.stdout and "condivisa con il team" in done.stdout and not plain.exists()
 
     elsewhere = tmp_path / "elsewhere"
@@ -130,7 +130,7 @@ def test_a_destination_in_a_shared_folder_is_refused_even_through_a_junction(she
     link = elsewhere / "inside"
     made = _run(shell, f"New-Item -ItemType Junction -Path '{link}' -Target '{shared}' | Out-Null", tmp_path)
     assert made.returncode == 0, made.stdout + made.stderr
-    done, _ = _download(shell, tmp_path, site, "--os", "linux", "--version", "0.4.0", "--output", str(link / "client.AppImage"))
+    done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(link / "client.dmg"))
     assert "RC=1" in done.stdout and "condivisa con il team" in done.stdout
     assert list(shared.iterdir()) == []
 
@@ -139,12 +139,12 @@ def test_a_destination_in_a_shared_folder_is_refused_even_through_a_junction(she
 @pytest.mark.parametrize("shell", SHELLS)
 def test_an_existing_different_file_is_kept_and_a_wrong_ask_answers_2(shell: str, tmp_path: Path, site):
     (tmp_path / "temp").mkdir()
-    out = tmp_path / "out" / "client.AppImage"
+    out = tmp_path / "out" / "client.dmg"
     out.parent.mkdir()
     out.write_bytes(b"keep me")
-    done, _ = _download(shell, tmp_path, site, "--os", "linux", "--version", "0.4.0", "--output", str(out))
+    done, _ = _download(shell, tmp_path, site, "--os", "macos", "--version", "0.4.0", "--output", str(out))
     assert "RC=1" in done.stdout and out.read_bytes() == b"keep me"
-    done, _ = _download(shell, tmp_path, site, "--os", "linux")
+    done, _ = _download(shell, tmp_path, site, "--os", "macos")
     assert "RC=2" in done.stdout
     done, _ = _download(shell, tmp_path, site, "--os", "windows", "--version", "0.4.0")
     assert "RC=1" in done.stdout and "Windows non fa parte" in done.stdout
@@ -152,14 +152,26 @@ def test_an_existing_different_file_is_kept_and_a_wrong_ask_answers_2(shell: str
 
 @windows_only
 @pytest.mark.parametrize("shell", SHELLS)
-@pytest.mark.parametrize("os_name", ("macos", "linux"))
-def test_a_release_before_0_4_is_said_to_have_no_macos_linux_app(shell: str, os_name: str, tmp_path: Path, site):
+@pytest.mark.parametrize("extra", ((), ("--deb",)))
+@pytest.mark.parametrize("version", ("0.4.0", "0.4.1", "0.3.9"))
+def test_linux_is_said_to_have_no_desktop_app_in_this_version(shell: str, extra: tuple, version: str, tmp_path: Path, site):
+    (tmp_path / "temp").mkdir()
+    done, home = _download(shell, tmp_path, site, "--os", "linux", "--version", version, *extra)
+    assert "RC=1" in done.stdout, done.stdout + done.stderr
+    assert "non c'e' l'app desktop per Linux: usa install.sh. Non e' stato scaricato niente." in done.stdout
+    assert not (home / "Downloads").exists()
+
+
+@windows_only
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("os_name", ("macos",))
+def test_a_release_before_0_4_is_said_to_have_no_macos_app(shell: str, os_name: str, tmp_path: Path, site):
     (tmp_path / "temp").mkdir()
     old = site.root.parent / "v0.3.9"
     old.mkdir()
     (old / "SHA256SUMS").write_text(f"{'a' * 64}  job-hunter-team-linux-x64.tar.gz\n", encoding="utf-8")
     done, home = _download(shell, tmp_path, site, "--os", os_name, "--version", "0.3.9")
     assert "RC=1" in done.stdout, done.stdout + done.stderr
-    assert "non ha l'app per macOS/Linux: usa la 0.4.0 o successive" in done.stdout
+    assert "non ha l'app per macOS: usa la 0.4.0 o successive" in done.stdout
     assert "non trovato" not in done.stdout
     assert not (home / "Downloads").exists()

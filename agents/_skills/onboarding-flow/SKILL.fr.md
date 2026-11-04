@@ -39,9 +39,7 @@ l'équipe · 🟡 RECOMMENDED ne bloque pas mais améliore beaucoup · 🟢 OPTI
 
 ## 🔴 Checklist bloquante — REQUIRED (débloque l'équipe)
 
-L'équipe NE démarre PAS tant que **chaque** champ ci-dessous n'est pas présent et non-vide
-(ou tant que vous ne définissez pas `ready.flag` explicite — voir `profile-yaml`). C'est le
-minimum pour **chercher et noter** les offres :
+L'équipe démarre **dès que trois de ces champs sont là : rôle visé, ville/zone et au moins une langue** (et le plan est déclaré) : elle n'attend pas les autres. Quand les trois y sont, définissez `ready.flag` et prévenez le Capitano (voir `profile-yaml`), dites-le à l'utilisateur en une ligne (« l'équipe démarre ; les prochaines questions rendent la recherche plus précise ») et **continuez à demander** : les cinq autres champs et les cartes du questionnaire arrivent pendant que l'équipe travaille déjà. Les huit champs ci-dessous sont le **profil complet** (celui que l'app affiche comme complet) et le minimum pour bien **chercher et noter** les offres :
 
 | Champ                | Chemin YAML                  | Exemple de question neutre                        |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -110,7 +108,7 @@ preferences:
 
 ## Formule d'abonnement — demande-la seulement avec la carte, ne l'écris jamais à la place de l'utilisateur
 
-L'équipe ne peut pas ouvrir son premier tour tant que la formule d'abonnement de l'utilisateur n'est pas déclarée (le Capitano ne devine pas une formation : une supposition fausse brûle la fenêtre de l'utilisateur dès le premier jour). **La formule se demande d'UNE seule façon, par n'importe quel agent et donc par toi aussi : `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Il publie une carte (dans ton chat, car l'utilisateur te parle) avec les formules, leurs prix et celle que Codex indique marquée comme suggérée. Ne demande jamais la formule en texte, jamais avec `jht-notify-user` de ton côté (une question écrite ainsi n'apparaît pas dans Messages et l'utilisateur reste à attendre), n'énumère jamais les formules avec tes mots.
+L'équipe ne peut pas ouvrir son premier tour tant que la formule d'abonnement de l'utilisateur n'est pas déclarée (le Capitano ne devine pas une formation : une supposition fausse brûle la fenêtre de l'utilisateur dès le premier jour). **La formule se demande d'UNE seule façon, par n'importe quel agent et donc par toi aussi : `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Il publie une carte (dans ton chat, car l'utilisateur te parle) avec les formules et celle que Codex indique marquée comme suggérée. Ne demande jamais la formule en texte, jamais avec `jht-notify-user` de ton côté (une question écrite ainsi n'apparaît pas dans Messages et l'utilisateur reste à attendre), n'énumère jamais les formules avec tes mots.
 
 **Quand :** une fois, juste après l'enregistrement du profil (`profile_review.py apply-confirmed` a répondu `ok: true`), jamais avant et jamais dans tes premiers messages.
 

@@ -136,15 +136,40 @@ def _active(step: dict[str, Any], answers: dict[str, str]) -> bool:
     return answers.get(when.get("step")) in (when.get("in") or [])
 
 
-def _next_step(steps: list[dict[str, Any]], answers: dict[str, str]) -> dict[str, Any] | None:
+def _given(value: Any) -> bool:
+    """Whether a profile field holds an answer: a text that is not blank, or a number (zero years is an answer)."""
+    if isinstance(value, bool):
+        return False
+    return (isinstance(value, str) and bool(value.strip())) or isinstance(value, (int, float))
+
+
+def _profile_fields() -> dict[str, Any]:
+    """The profile as it is now, to know what the person already said; empty when it cannot be read (then no step is skipped)."""
+    try:
+        import profile_review  # type: ignore
+
+        profile, _raw = profile_review._read_profile()
+    except Exception:  # noqa: BLE001  (whatever the file is, the questionnaire asks as it always did)
+        return {}
+    return profile if isinstance(profile, dict) else {}
+
+
+def _known(step: dict[str, Any], profile: dict[str, Any] | None) -> bool:
+    """A step whose answer the profile already holds (`skip_when_profile_has`): the person gave it before, in the
+    chat or in a file they imported, and a card would ask it twice."""
+    fields = step.get("skip_when_profile_has")
+    return bool(profile) and isinstance(fields, list) and bool(fields) and all(_given(profile.get(f)) for f in fields)
+
+
+def _next_step(steps: list[dict[str, Any]], answers: dict[str, str], profile: dict[str, Any] | None = None) -> dict[str, Any] | None:
     for step in steps:
-        if _active(step, answers) and step["id"] not in answers:
+        if _active(step, answers) and step["id"] not in answers and not _known(step, profile):
             return step
     return None
 
 
-def _progress(steps: list[dict[str, Any]], answers: dict[str, str]) -> dict[str, int]:
-    active = [s for s in steps if _active(s, answers)]
+def _progress(steps: list[dict[str, Any]], answers: dict[str, str], profile: dict[str, Any] | None = None) -> dict[str, int]:
+    active = [s for s in steps if _active(s, answers) and (s["id"] in answers or not _known(s, profile))]
     return {"answered": sum(1 for s in active if s["id"] in answers), "total": len(active)}
 
 
@@ -156,11 +181,12 @@ def status() -> dict[str, Any]:
     steps = load_steps()
     state = _read_state()
     answers = _answers(state)
-    following = _next_step(steps, answers)
+    profile = _profile_fields()
+    following = _next_step(steps, answers, profile)
     card = state.get("card") if isinstance(state.get("card"), dict) else None
     return {
         "ok": True, "done": following is None, "next": following["id"] if following else None,
-        "answers": answers, "open_card": card.get("question_id") if card else None, **_progress(steps, answers),
+        "answers": answers, "open_card": card.get("question_id") if card else None, **_progress(steps, answers, profile),
         "waiting_text": state.get("waiting_text"),
     }
 
@@ -215,9 +241,10 @@ def ask() -> dict[str, Any]:
     with _lock():
         state = _read_state()
         answers = _answers(state)
-        step = _next_step(steps, answers)
+        profile = _profile_fields()
+        step = _next_step(steps, answers, profile)
         if step is None:
-            return {"ok": True, "asked": False, "done": True, **_progress(steps, answers)}
+            return {"ok": True, "asked": False, "done": True, **_progress(steps, answers, profile)}
         if state.get("waiting_text"):
             return {"ok": True, "asked": False, "waiting_text": state["waiting_text"],
                     "reason": "the person has to write this one in the chat: answer-text, then ask again"}
@@ -244,7 +271,7 @@ def ask() -> dict[str, Any]:
             raise QuestionnaireError("card_not_posted")
         state["card"] = {"step": step["id"], "question_id": posted, "cards": cards + 1}
         _write_state(state)
-        return {"ok": True, "asked": True, "step": step["id"], "question_id": posted, **_progress(steps, answers)}
+        return {"ok": True, "asked": True, "step": step["id"], "question_id": posted, **_progress(steps, answers, profile)}
 
 
 # ── writing what a choice says ───────────────────────────────────────────────
@@ -269,6 +296,8 @@ def write_effect(profile: dict[str, Any], step: dict[str, Any], option: dict[str
     for field, value in (effect.get("set") or {}).items():
         if field not in CLOSED_FIELDS["set"]:
             raise QuestionnaireError("field_not_allowed")
+        if field == "experience_years" and _given(profile.get(field)):
+            continue  # the band's threshold (1, 3, 7...) is not the years the person gave: it does not take their place
         profile[field] = value
         if field == "target_role_category_id":
             profile.pop("target_specialty", None)  # a specialty belongs to its category: the old one is not kept
@@ -343,9 +372,10 @@ def apply(option_id: str | None = None) -> dict[str, Any]:
             state["waiting_text"] = {"step": step["id"], "field": free.get("field"), "prompt_key": free.get("prompt_key")}
         state["card"] = {"step": step["id"], "question_id": card["question_id"], "cards": card.get("cards", 1), "done": True}
         _write_state(state)
-        following = _next_step(steps, answers)
+        profile = _profile_fields()
+        following = _next_step(steps, answers, profile)
         out = {"ok": True, "applied": True, "step": step["id"], "option": picked["id"], "ask_in_chat": to_ask,
-               "next": following["id"] if following else None, "done": following is None and not free, **_progress(steps, answers)}
+               "next": following["id"] if following else None, "done": following is None and not free, **_progress(steps, answers, profile)}
         if free:
             out["write_in_chat"] = {"field": free.get("field"), "prompt": t(str(free.get("prompt_key")))}
         return out
@@ -376,7 +406,7 @@ def answer_text(step_id: str, text: str) -> dict[str, Any]:
             raise QuestionnaireError(f"profile_{error.code}") from None
         state.pop("waiting_text", None)
         _write_state(state)
-        following = _next_step(load_steps(), _answers(state))
+        following = _next_step(load_steps(), _answers(state), _profile_fields())
         return {"ok": True, "written": True, "field": waiting["field"], "next": following["id"] if following else None}
 
 

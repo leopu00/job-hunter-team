@@ -4,9 +4,9 @@ Job Hunter Team (JHT) has one containerized team and more than one place to
 run it. The desktop application stays on the computer you use, and the
 container can run on that same computer or on a Linux host reached over SSH.
 The desktop app runs the local container in Podman on macOS (installed with
-Homebrew), and on Linux the team runs in rootless Podman. Windows is not in this
-version (there is no Windows installer to download), and the Linux release is
-experimental and was not tested by hand.
+Homebrew), and on Linux the team runs in rootless Podman, started by the CLI
+installer. Windows is not in this version (there is no Windows installer to
+download), and there is no desktop app for Linux in this version.
 
 This guide compares three deployment paths. It does not compare the native
 application with the command-line interface (CLI): those are two ways to
@@ -89,12 +89,12 @@ awake while the agents work.
 ### What you need
 
 - A desktop release for your system: macOS on Apple silicon (M1 and later; Intel
-  Macs are not supported in 0.4), or Linux x64 (experimental, not tested by
-  hand). Windows is not in this version.
+  Macs are not supported in 0.4). Windows and Linux have no desktop app in this
+  version (on Linux, use the CLI installer).
 - On macOS, **Homebrew already installed** (it needs macOS 15 or later): the app
   installs Podman with it and manages it, and Docker Desktop is not needed. On
-  Linux, rootless Podman 5.0 or later with podman-compose, installed before you
-  start; the Linux release is built, but this setup has not been tested yet.
+  Linux, rootless Podman 5.0 or later with podman-compose, which the CLI
+  installer sets up.
 - A Mac with at least **16 GB of RAM** is recommended. The container machine the
   app creates uses 2 CPUs and 4 GiB of memory, and a disk that grows up to 30 GiB.
 - No minimum of free disk space has been measured: leave room for the image and

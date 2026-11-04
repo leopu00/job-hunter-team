@@ -12,6 +12,8 @@ import { isContainer } from '../../../shared/runtime/container.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
+import { hint, marks, title } from '../lib/ui.js';
+import { say } from '../lib/texts.js';
 
 const JHT_DIR     = JHT_HOME;
 const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
@@ -57,9 +59,9 @@ function isArchived(id) {
   return Object.entries(KNOWN_PROVIDERS).some(([key, known]) => known.archived && [key, ...(known.aliases ?? [])].includes(lower));
 }
 
-const OK = c.green('●');
-const WARN = c.yellow('◐');
-const ERR = c.red('✗');
+const OK = c.green(marks().ok);
+const WARN = c.yellow(marks().warn);
+const ERR = c.red(marks().fail);
 
 // ── Version detection ───────────────────────────────────────────────────────
 // Specchio di web/app/api/providers/route.ts. I path risolvono dal HOST
@@ -121,7 +123,7 @@ async function fileExists(p) {
 }
 
 async function handleProviders() {
-  console.log('\n  JHT — Provider LLM\n');
+  console.log(title(say('providers.title')));
 
   let config = {};
   if (await fileExists(CONFIG_PATH)) {
@@ -140,29 +142,29 @@ async function handleProviders() {
     const hasCred = await fileExists(join(CREDS_DIR, `${id}.enc`)) || await fileExists(join(CREDS_DIR, `${id}.json`));
     const isActive = activeProvider === id;
 
-    const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : 'none');
+    const authMethod = provCfg?.auth_method ?? (hasEnv ? 'env' : hasCred ? 'file' : say('providers.auth_none'));
     const model = provCfg?.model ?? '—';
     const icon = hasConfig && (hasEnv || hasCred || provCfg?.api_key) ? OK : hasConfig ? WARN : ERR;
-    const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
+    const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
 
-    const recommendedLabel = known.recommended ? ` ${DIM}· recommended${RESET}` : '';
-    console.log(`  ${icon}  ${known.name}${recommendedLabel}${activeLabel}`);
-    console.log(`     ${DIM}ID: ${id} · Model: ${model} · Auth: ${authMethod}${RESET}`);
-    if (hasEnv) console.log(`     ${DIM}Env: ${known.envKey} ✓${RESET}`);
-    if (hasCred) console.log(`     ${DIM}Credentials: encrypted file ✓${RESET}`);
+    const recommendedLabel = known.recommended ? ` ${DIM}· ${say('providers.recommended')}${RESET}` : '';
+    console.log(`  ${icon} ${known.name}${recommendedLabel}${activeLabel}`);
+    console.log(`    ${DIM}${say('providers.line', { id, model, auth: authMethod })}${RESET}`);
+    if (hasEnv) console.log(`    ${DIM}${say('providers.key_in', { env: known.envKey })}${RESET}`);
+    if (hasCred) console.log(`    ${DIM}${say('providers.credentials')}${RESET}`);
     const ver = getVersionInfo(id);
     // Con un pin di release (issue #130) "aggiornamento disponibile" non è più
     // "il registry ne ha una più nuova" — quella è una versione che questa
     // release non ha provato — ma "sei fuori dalla versione dichiarata".
     const pin = pinnedVersion(resolveUpdateTarget(id) || '');
     if (ver.installed || ver.latest || pin) {
-      let line = `     ${DIM}CLI: ${ver.installed || '—'}`;
+      let line = `    ${DIM}CLI ${ver.installed || '—'}`;
       if (pin && ver.installed && ver.installed !== pin) {
-        line += ` ${YELLOW}⚠ differs from the release pin ${pin} → jht providers update${RESET}${DIM}`;
+        line += ` ${YELLOW}${marks().warn} ${say('providers.pinned_other', { pin })}${RESET}${DIM}`;
       } else if (pin) {
-        line += ` (release pin ${pin})`;
+        line += ` ${say('providers.pinned_same')}`;
       } else if (ver.installed && ver.latest && ver.installed !== ver.latest) {
-        line += ` ${YELLOW}→ ${ver.latest} ⚠ update available${RESET}${DIM}`;
+        line += ` ${YELLOW}${marks().warn} ${say('providers.newer', { latest: ver.latest })}${RESET}${DIM}`;
       }
       line += RESET;
       console.log(line);
@@ -173,18 +175,19 @@ async function handleProviders() {
   // Provider aggiuntivi non noti
   const custom = Object.keys(providers).filter(k => !KNOWN_PROVIDERS[k]);
   if (custom.length > 0) {
-    console.log(`  ${DIM}Provider custom:${RESET}`);
+    console.log(`  ${DIM}${say('providers.other')}${RESET}`);
     for (const id of custom) {
       const p = providers[id];
       const isActive = activeProvider === id;
-      const activeLabel = isActive ? ` ${GREEN}[ACTIVE]${RESET}` : '';
-      console.log(`  ${WARN}  ${id}${activeLabel} — model: ${p?.model ?? '—'}`);
+      const activeLabel = isActive ? ` ${GREEN}· ${say('providers.active')}${RESET}` : '';
+      console.log(`  ${WARN} ${say('providers.other_line', { id, active: activeLabel, model: p?.model ?? '—' })}`);
     }
     console.log('');
   }
 
   if (!activeProvider) {
-    console.log(`  ${DIM}No active providers. Recommended: jht providers use codex${RESET}\n`);
+    console.log(hint(say('providers.none_active')));
+    console.log('');
   }
 }
 
@@ -257,7 +260,7 @@ function handlePlan(id, opts = {}) {
       provider: table.provider,
       declared: current ? { id: current.id, label: current.label } : null,
       ...(current === undefined ? { declaredUnreadable: true } : {}),
-      plans: table.plans.map((p) => ({ id: p.id, label: p.label, price: p.price })),
+      plans: table.plans.map((p) => ({ id: p.id, label: p.label })),
       suggested: suggestedPlan(active),
     }));
     return;
@@ -1017,7 +1020,7 @@ function handleLimits(opts = {}) {
 }
 
 export function registerProvidersCommand(program) {
-  const cmd = new Command('providers').description('Provider LLM — list / current / use');
+  const cmd = new Command('providers').description('AI providers: list, show the active one, switch');
 
   // Default action: list (back-compat con `jht providers`)
   cmd.action(handleProviders);

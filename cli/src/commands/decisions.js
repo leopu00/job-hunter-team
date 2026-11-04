@@ -28,7 +28,7 @@ const run = (skill, args) => { process.exitCode = runSkill(skill, args); };
 
 export function registerTicketCommand(program) {
   const cmd = new Command('ticket')
-    .description('Send user tickets about a position to the team (proxy to ticket.py)');
+    .description('Send user tickets about a position to the team');
 
   cmd
     .command('open <position_id> <text>')
@@ -98,7 +98,7 @@ export function registerTicketCommand(program) {
 
 export function registerFeedbackCommand(program) {
   const cmd = new Command('feedback')
-    .description('Read the judgements the user gave on positions (proxy to feedback_query.py)');
+    .description('Read the judgements the user gave on positions');
 
   // La scrittura è arrivata il 2026-08-10, con l'autorizzazione esplicita
   // dell'operatore: fino a quel giorno la route rispondeva 403 a un token di
@@ -154,7 +154,7 @@ export function registerFeedbackCommand(program) {
 
 export function registerDirectivesCommand(program) {
   const cmd = new Command('directives')
-    .description('Board: persistent team directives (proxy to team_directives.py)');
+    .description('Board: persistent team directives');
 
   // `jht directives` da solo = le direttive attive: è la domanda che uno si fa
   // il 90% delle volte ("cosa ho ordinato al team?").

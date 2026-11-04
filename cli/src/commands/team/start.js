@@ -11,6 +11,8 @@ import {
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
+import { say } from '../../lib/texts.js';
+import { hint } from '../../lib/ui.js';
 
 const CONTAINER_TEAM_HALTED_FLAG = '/jht_home/.team-halted.flag';
 const SPAWN_ERROR_TAIL_LINES = 5;
@@ -244,6 +246,7 @@ function reportSyncNotApplied(label, res) {
 // ── Container mode ─────────────────────────────────────────────────
 async function startActionContainer(agentArg, options = {}, releaseHaltGate = () => true) {
   const mode = options.mode || 'default';
+  const startedAt = Date.now();
 
   // Senza arg: bootstrap completo (SENTINELLA + BRIDGE + CAPITANO),
   // come fa la web UI. Con arg: lancia il singolo agente specificato.
@@ -251,7 +254,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   const bootstrap = useBootstrap ? buildContainerBootstrap() : null;
 
   console.log('');
-  console.log(c.bold('Starting agents in the jht container...'));
+  console.log(c.bold(say('team.starting_container')));
   console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + TG-BRIDGE + SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO' : ''}`));
   console.log('');
 
@@ -281,7 +284,8 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
       }
       if (!releaseHaltGate()) return;
       console.log('');
-      console.log(`Result: ${c.green('0 started')}, ${c.yellow(`${coreSessions.length} already active`)}`);
+      console.log(say('team.result', { started: c.green(say('team.n_started', { n: 0 })), skipped: c.yellow(say('team.n_already', { n: coreSessions.length })), errors: '' }));
+      console.log(hint(say('team.next_agents')));
       if (mentorWaits) console.log(c.dim(`  MENTOR ${MENTOR_WAITING}`));
       console.log(c.dim('  Team already running: no bridge or sync process restarted.'));
       console.log('');
@@ -342,9 +346,12 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
     // un retry idempotente, se la precedente era già attiva, ripetere tutti i
     // 41 secondi di attesa non protegge nulla e fa sembrare morto il click.
     let previousStarted = false;
+    let step = 0;
     for (const item of bootstrap) {
+      step++;
+      const progress = c.dim(`[${step}/${bootstrap.length}]`);
       if (item.role === 'mentor' && mentorWaits) {
-        console.log(`  ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
+        console.log(`  ${progress} ${c.yellow('⏭')} MENTOR — ${MENTOR_WAITING}`);
         deferred++;
         continue;
       }
@@ -352,7 +359,7 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
         console.log(c.dim(`  ⏳ Waiting ${Math.round(item.preDelayMs / 1000)}s before ${item.session}...`));
         await sleep(item.preDelayMs);
       }
-      const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session });
+      const result = launchInContainer({ role: item.role, instance: null, mode, env: item.env, notATmuxSession: item.notATmuxSession, sessionLabel: item.session, progress });
       if (result === 'started') started++;
       else if (result === 'skipped') skipped++;
       else errored++;
@@ -378,9 +385,17 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   }
 
   console.log('');
-  console.log(`Result: ${c.green(started + ' started')}, ${c.yellow(skipped + ' already active')}${errored ? `, ${c.red(errored + ' errors')}` : ''}`);
+  console.log(say('team.result', {
+    started: c.green(say('team.n_started', { n: started })),
+    skipped: c.yellow(say('team.n_already', { n: skipped })),
+    errors: errored ? `, ${c.red(say('team.n_errors', { n: errored }))}` : '',
+  }));
   if (useBootstrap) {
-    console.log(c.dim('  CAPITANO will scale the other agents according to the Bridge thresholds.'));
+    console.log(c.dim(`  ${say('team.captain_scales')}`));
+    if (coordinatorReady && started > 0) {
+      console.log(c.green(`  ${say('team.done', { n: started, s: Math.max(1, Math.round((Date.now() - startedAt) / 1000)) })}`));
+    }
+    if (coordinatorReady) console.log(hint(say('team.next_agents')));
   }
   console.log('');
 
@@ -404,13 +419,14 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   }
 }
 
-function launchInContainer({ role, instance, mode, env, notATmuxSession, sessionLabel }) {
+function launchInContainer({ role, instance, mode, env, notATmuxSession, sessionLabel, progress = '' }) {
   const sName = sessionLabel || sessionName(role, instance);
+  const lead = progress ? `${progress} ` : '';
 
   // Skip has-session check per i ruoli non-tmux (bridge): start-agent.sh
   // gestisce il singleton internamente via /proc cmdline scan.
   if (!notATmuxSession && isSessionActive(sName)) {
-    console.log(`  ${c.yellow('⏭')} ${sName} — already active`);
+    console.log(`  ${lead}${c.yellow('⏭')} ${sName} — already active`);
     return 'skipped';
   }
 
@@ -431,6 +447,7 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
     ...(mode === 'fast' ? { JHT_MODE: 'fast' } : {}),
     ...(env || {}),
   };
+  const launchedAt = Date.now();
   const r = execScriptInContainer('/app/.launcher/start-agent.sh', scriptArgs, {
     env: Object.keys(childEnv).length ? childEnv : null,
     // Cold starts can spend close to 30s in provider/config preflight before
@@ -439,11 +456,12 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
     timeoutMs: 90_000,
   });
   if (r.code === 0) {
-    console.log(`  ${c.green('✓')} ${sName} started`);
+    const took = Math.round((Date.now() - launchedAt) / 1000);
+    console.log(`  ${lead}${c.green('✓')} ${sName} started${took >= 2 ? c.dim(` (${took} s)`) : ''}`);
     return 'started';
   }
   const msg = spawnErrorTail(r.stderr || r.stdout);
-  console.log(`  ${c.red('✗')} ${sName} — ${msg.replace(/\n/g, '\n      ')}`);
+  console.log(`  ${lead}${c.red('✗')} ${sName} — ${msg.replace(/\n/g, '\n      ')}`);
   return 'error';
 }
 

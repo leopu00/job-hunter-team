@@ -83,37 +83,37 @@ const MODES: Mode[] = [
     it: {
       title: "Su un PC dedicato",
       body: "Un computer sempre acceso — anche un piccolo mini-PC — dedicato solo alla squadra. Il tuo portatile resta libero e il team lavora giorno e notte senza interruzioni.",
-      req: "Un Mac con Apple silicon (Linux è sperimentale) e una rete stabile.",
+      req: "Un Mac con Apple silicon (per Linux non c'è l'app desktop) e una rete stabile.",
     },
     en: {
       title: "On a dedicated PC",
       body: "An always-on computer — even a small mini-PC — devoted to the team alone. Your laptop stays free and the team works day and night without interruption.",
-      req: "A Mac with Apple silicon (Linux is experimental), and a stable network.",
+      req: "A Mac with Apple silicon (no desktop app for Linux), and a stable network.",
     },
     es: {
       title: "En un PC dedicado",
       body: "Un ordenador siempre encendido — incluso un pequeño mini-PC — dedicado solo al equipo. Tu portátil queda libre y el equipo trabaja día y noche sin interrupciones.",
-      req: "Un Mac con Apple silicon (Linux es experimental) y una red estable.",
+      req: "Un Mac con Apple silicon (para Linux no hay app de escritorio) y una red estable.",
     },
     fr: {
       title: "Sur un PC dédié",
       body: "Un ordinateur toujours allumé — même un petit mini-PC — consacré uniquement à l'équipe. Votre portable reste libre et l'équipe travaille jour et nuit sans interruption.",
-      req: "Un Mac Apple silicon (Linux est expérimental) et un réseau stable.",
+      req: "Un Mac Apple silicon (pas d'application de bureau pour Linux) et un réseau stable.",
     },
     de: {
       title: "Auf einem dedizierten PC",
       body: "Ein stets eingeschalteter Computer — auch ein kleiner Mini-PC — der allein dem Team gewidmet ist. Dein Laptop bleibt frei und das Team arbeitet Tag und Nacht ohne Unterbrechung.",
-      req: "Ein Mac mit Apple Silicon (Linux ist experimentell) und ein stabiles Netzwerk.",
+      req: "Ein Mac mit Apple Silicon (für Linux gibt es keine Desktop-App) und ein stabiles Netzwerk.",
     },
     pt: {
       title: "Num PC dedicado",
       body: "Um computador sempre ligado — mesmo um pequeno mini-PC — dedicado apenas à equipa. O teu portátil fica livre e a equipa trabalha dia e noite sem interrupções.",
-      req: "Um Mac com Apple silicon (o Linux é experimental) e uma rede estável.",
+      req: "Um Mac com Apple silicon (para Linux não há app de ambiente de trabalho) e uma rede estável.",
     },
     hu: {
       title: "Egy dedikált gépen",
       body: "Egy mindig bekapcsolt számítógép — akár egy kis mini-PC — kizárólag a csapatnak szentelve. A laptopod szabad marad, a csapat pedig éjjel-nappal megszakítás nélkül dolgozik.",
-      req: "Apple silicon Mac (a Linux kísérleti) és stabil hálózat.",
+      req: "Apple silicon Mac (Linuxra nincs asztali app) és stabil hálózat.",
     },
   },
   {

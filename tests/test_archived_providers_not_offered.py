@@ -57,7 +57,7 @@ def test_the_list_shows_an_archived_provider_only_to_the_team_that_still_uses_it
     for active, config, shown in (("kimi", {"kimi": {"model": "k2"}}, "Kimi"), ("claude", {"claude": {"model": "c"}}, "Claude")):
         make_config(jht_home / ".jht", {"active_provider": active, "providers": config})
         code, out, err = run_jht("providers", "list", env={"HOME": str(jht_home)})
-        assert shown in out and "[ACTIVE]" in out, (active, out)
+        assert shown in out and "· active" in out, (active, out)
 
 
 def test_the_wizard_and_its_languages_offer_only_codex():

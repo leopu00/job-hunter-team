@@ -30,7 +30,10 @@ What it prints is slugs, country codes, closed vocabularies and counts. Never th
 
   python3 scout_coverage.py plan   [--profile FILE] [--json]
   python3 scout_coverage.py status [--profile FILE] [--since-hours H] [--json]
-  python3 scout_coverage.py next   [--profile FILE] [--since-hours H] [--json]
+  python3 scout_coverage.py next   [--profile FILE] [--since-hours H] [--agent MY_ID] [--json]
+        with --agent the answer also says whether the profile changed since this Scout built its circles (`profile`:
+        changed, the groups, see profile_version.py): the plan above is read from the profile every time, so a language
+        added to it adds its portals, and the passes already logged stay counted.
   python3 scout_coverage.py boards --country se
         the company boards checked and open for a country (Greenhouse, Lever, Teamtailor): read one GET per company.
 """
@@ -270,6 +273,26 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None) ->
     return {"plan_done": True, "core_done": not core_missing(portal_states(rows, profile)), "entries": len(plan["entries"])}
 
 
+def profile_news(agent: str, profile_path=None) -> dict:
+    """What the Scout `agent` has to know about the profile it built its circles on: `changed`, the `groups` that changed
+    (roles, places, languages, mode) and, when it did, what to do. Silence (no version file, a profile that cannot be read,
+    a name that is not an agent's) is `changed: false`: the search is never stopped by this."""
+    try:
+        import profile_version
+        name = agent.strip().lower()
+        if not profile_version.AGENT.match(name):
+            return {"changed": False}
+        news = profile_version.check(name, Path(profile_path) if profile_path else None)
+    except Exception:  # noqa: BLE001 — a question about news never costs the search
+        return {"changed": False}
+    out = {"changed": bool(news.get("changed")), "groups": news.get("groups", []), "version": news.get("version")}
+    if out["changed"]:
+        out["do"] = ("read the profile again, widen or narrow your circles for the groups that changed (the portals of a new "
+                     "language are in this plan already), keep every position and every pass you logged, then run "
+                     "profile_version.py ack --agent %s" % agent.strip().lower())
+    return out
+
+
 def default_since(now: float) -> float:
     try:
         import scout_exhaustion
@@ -314,6 +337,8 @@ def main(argv=None) -> int:
         p.add_argument("--json", action="store_true")
         if name != "plan":
             p.add_argument("--since-hours", type=float, default=None)
+        if name == "next":
+            p.add_argument("--agent", default=None, help="the Scout's own id: the answer says if the profile changed since it last acknowledged")
     args = ap.parse_args(argv)
     if args.cmd == "boards":
         boards = table().get("ats_boards", {}).get(args.country.lower())
@@ -335,6 +360,8 @@ def main(argv=None) -> int:
             print(render(plan, report))
         return 0
     step = next_step(plan, rows, profile=args.profile)
+    if args.agent:
+        step["profile"] = profile_news(args.agent, args.profile)
     print(json.dumps(step, sort_keys=True, ensure_ascii=False))
     return 0
 

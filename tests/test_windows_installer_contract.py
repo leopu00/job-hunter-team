@@ -1,4 +1,4 @@
-"""Windows is not part of the 0.4.0 download: the page says "coming soon" and links nothing.
+"""Windows is not part of the 0.4.0 download: the page says "not in this version" and links nothing.
 
 The Tauri NSIS installer is not built or attached by the release (D13); the
 download page keeps Windows as a card that is not a link, and the funnel has no
@@ -24,11 +24,11 @@ def test_download_page_links_no_windows_installer() -> None:
     assert '{ id: "windows", label: "Windows" }' in client
     assert "data-windows-not-in-version" in client
     assert 't("dl_windows_not_in_version")' in client
-    assert 'mac: "mac"' in client and 'linux: "linux"' in client
+    assert 'mac: "mac"' in client and 'linux: "linux"' not in client
     assert 'windows: "' not in client.split("const DOWNLOAD_SLUG", 1)[1].split("};", 1)[0]
-    # Linux says it is experimental where the button is
-    assert "data-linux-experimental" in client
-    assert 't("dl_linux_experimental")' in client
+    # no desktop app for Linux in this version: no card, no slug, no experimental badge
+    assert '{ id: "linux"' not in client and "data-linux" not in client and "dl_linux" not in client
+    assert "linux" not in funnel.split("DOWNLOAD_TARGETS", 1)[1].split("} as const", 1)[0].lower()
 
 
 SENTENCE = "Windows is not supported in 0.4: these steps are untested and may not work."

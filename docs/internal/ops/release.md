@@ -2,7 +2,7 @@
 
 A release is a `vX.Y.Z` tag on the current `production` HEAD. The tag starts
 [`.github/workflows/release.yml`](../../../.github/workflows/release.yml), which
-checks version coherence, builds the Tauri 2 desktop on Windows/macOS/Linux,
+checks version coherence, builds the Tauri 2 desktop on macOS,
 promotes the immutable runtime image and creates a draft GitHub Release. The
 draft becomes public only after its downloaded bytes pass the independent
 provenance audit.
@@ -83,15 +83,14 @@ pin must be added to the list, or it is red at the next release.
 | Platform | Tauri bundle | Stable asset |
 |---|---|---|
 | macOS Apple silicon (arm64) | DMG | `job-hunter-team-macos-universal.dmg` |
-| Linux x64 | AppImage | `job-hunter-team-linux-x64.AppImage` |
-| Linux x64 | Debian package | `job-hunter-team-linux-x64.deb` |
 
 The macOS build requires all five existing Apple secrets. Tauri signs with the
 Developer ID identity, notarizes with Apple and staples the result; the job
 then verifies `codesign`, `spctl`, `stapler` and `hdiutil`. Windows is not part
 of 0.4.0: no installer is built, the release has none and the site shows Windows as
-"coming soon" with no link. Linux is unsigned, experimental and not tested by
-hand, and the public copy says so.
+"not in this version" with no link. There is no desktop app for Linux in this version
+either: no AppImage and no deb is built, collected, expected or attached, and the public
+copy says that Linux goes through the CLI (`install.sh`).
 
 Each runner records a tag/commit/size/SHA-256 sidecar after packaging. The
 final job downloads those artifacts, adds `RUNTIME-IMAGE.json`, verifies the
@@ -120,7 +119,7 @@ provenance, so filenames and checksums have one authority.
 2. Wait for every required and non-required release-relevant workflow.
 3. Merge `master` into `production`; the release refuses any other source.
 4. Run **Tag Production Release** with the semantic version without `v`.
-5. Follow `release.yml` through both Tauri builders (macOS, Linux), runtime promotion and
+5. Follow `release.yml` through the Tauri builder (macOS), runtime promotion and
    draft creation. Never tag on red or while a required run is pending.
 6. Audit the draft bytes and publish only after the audit succeeds:
 

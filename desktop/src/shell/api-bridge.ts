@@ -91,6 +91,10 @@ export const LOCAL_TEAM_NON_GET_ALLOWED: Readonly<Record<string, string>> = {
     `withdrawing that request: ${POSITION_ACT}`,
   "POST /api/positions/[legacyId]/ticket":
     `a new request to the team: a rescore or a free one: ${POSITION_ACT}`,
+  "POST /api/positions/[legacyId]/apply-request":
+    `the two steps of authorising an application: the preview (title, company, where it goes, its digest) and, on the person's explicit click, the authorisation carrying that digest and destination back; the host checks both and records it: ${POSITION_ACT}`,
+  "DELETE /api/positions/[legacyId]/apply-request":
+    `withdrawing the authorisation of an application: ${POSITION_ACT}`,
 };
 
 /** Whether a non-GET call is one of those listed above: the path alone, or its method and path with the position's number as the route folder writes it. */

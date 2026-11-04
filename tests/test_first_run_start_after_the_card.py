@@ -85,7 +85,7 @@ def test_the_click_alone_gets_the_first_run_going(sender):
     (call,) = box.calls()
     assert call["session"] == "CAPITANO" and call["from"] == "user-console"
     assert "begin-burst" in call["message"] and "first-run-burst" in call["message"]
-    assert "subscription plan is declared" in call["message"] and "profile is complete" in call["message"]
+    assert "subscription plan is declared" in call["message"] and "what the search needs to start" in call["message"]
     assert "The person" not in call["message"], "it is not known who wrote the plan: the sentence does not say"
     # the Capitano's step: the burst opens with the roster of the plan the person picked
     burst = run(box, "begin-burst")
@@ -282,7 +282,7 @@ def test_a_burst_the_capitano_opens_while_the_reminder_is_being_recorded_is_not_
 # a composer that holds exactly our text, a limited number of times.
 
 MESSAGE = (
-    "The subscription plan is declared and the candidate profile is complete: the team can start. "
+    "The subscription plan is declared and the candidate profile has what the search needs to start (role, place, language): the team can start, the rest of the profile is still being filled in. "
     "Run first_run.py begin-burst and follow your first-run-burst skill."
 )
 RULE = "─" * 170

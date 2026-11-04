@@ -316,13 +316,17 @@ def render_release_notes(
 
 ### Windows
 
-Windows is not part of 0.4.0: there is no Windows installer in this release. It is coming soon.
+Windows is not part of 0.4.0: there is no Windows installer in this release.
 
-### macOS and Linux
+### macOS
 
-`job-hunter-team-macos-universal.dmg` is a Tauri 2 build for Apple silicon (M1 and later) signed with Developer ID, notarized by Apple and stapled. The file name says "universal" but it holds only the Apple silicon build. Linux is experimental and was not tested by hand: it provides the unsigned `job-hunter-team-linux-x64.AppImage` plus `job-hunter-team-linux-x64.deb` for Debian-based systems.
+`job-hunter-team-macos-universal.dmg` is a Tauri 2 build for Apple silicon (M1 and later) signed with Developer ID, notarized by Apple and stapled. The file name says "universal" but it holds only the Apple silicon build.
 
 On a Mac the team runs in a Podman machine of 4 GiB of memory: a Mac with at least 16 GB of RAM is recommended.
+
+### Linux
+
+There is no desktop app for Linux in this version: use the command-line install (`install.sh`).
 
 ### SHA-256 checksums
 

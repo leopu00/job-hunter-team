@@ -1952,6 +1952,7 @@ function mapCompany(r: any): Company {
     analyzed_at: r.analyzed_at,
     verdict: r.verdict,
     logo: r.logo ?? null,
+    about: r.about ?? null,
   };
 }
 

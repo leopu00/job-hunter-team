@@ -125,6 +125,10 @@ DAILY_HALT_RETRY_SEC = float(os.environ.get(
 # Capitano. Non si abbandona mai un agente: un timer che smette di riprovare
 # riproduce esattamente lo stallo che questo motore esiste per chiudere.
 NOTIFY_RETRY_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_NOTIFY_RETRY", "60"))
+# Dopo la rinuncia, uno schermo che il sender legge come menu/login/permesso (rc=3) si ricontrolla dopo poco: un menu vero
+# passa appena qualcuno lo risponde, e uno letto male da un lettore sbagliato non deve costare un quarto d'ora di lavoro
+# perso a ogni giro (un team reale, 02/11: sveglia entrata dopo 25 minuti).
+NOTIFY_BLOCKED_RETRY_SEC = float(os.environ.get("JHT_THROTTLE_ENGINE_BLOCKED_RETRY", "300"))
 MAX_NOTIFY_ATTEMPTS = int(os.environ.get("JHT_THROTTLE_ENGINE_NOTIFY_ATTEMPTS", "5"))
 # Budget di tempo per una singola consegna: `jht-tmux-send` può attendere fino a
 # 90s che un turno in corso finisca (JHT_TMUX_BUSY_WAIT), più i tentativi di
@@ -1207,23 +1211,40 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
 
     attempts = int(entry.get("notify_attempts") or 0) + 1
     entry["notify_attempts"] = attempts
+    # rc=3: the sender reads the screen as a menu, a sign-in or a permission request, and types nothing. The event says so
+    # in a closed word, not with the screen's text (which can hold whatever a page or a model wrote).
+    blocked = {"screen": "menu_login_or_permission"} if rc == 3 else {}
     emit("notify_failed", agent=agent, ts=now, session=session, rc=rc,
-         attempt=attempts)
+         attempt=attempts, **blocked)
     if attempts >= MAX_NOTIFY_ATTEMPTS:
         # Bounded: si smette di martellare ogni minuto, NON si smette di
         # provare. Il Capitano lo sa una volta, poi il ritmo scende a
-        # GATE_RETRY_SEC e il contatore riparte.
+        # GATE_RETRY_SEC (a NOTIFY_BLOCKED_RETRY_SEC per rc=3) e il contatore riparte.
+        retry_sec = NOTIFY_BLOCKED_RETRY_SEC if rc == 3 else GATE_RETRY_SEC
         entry["notify_attempts"] = 0
-        entry["until"] = int(now + GATE_RETRY_SEC)
+        entry["until"] = int(now + retry_sec)
         emit("notify_gave_up", agent=agent, ts=now, session=session, rc=rc,
-             attempts=attempts)
-        notify_captain(
-            "[DA @SISTEMA A @CAPITANO] I cannot wake %s: its pause expired "
-            "and %d delivery attempts failed (jht-tmux-send rc=%d). The pane "
-            "may have text stuck in its prompt (a Doctor case: kill+recreate) "
-            "or may be a bare shell after a crash. I will keep retrying every "
-            "%d min. History: logs/throttle-engine.jsonl."
-            % (agent, attempts, rc, max(1, int(GATE_RETRY_SEC // 60))))
+             attempts=attempts, retry_sec=int(retry_sec), **blocked)
+        if rc == 3:
+            notify_captain(
+                "[DA @SISTEMA A @CAPITANO] I cannot wake %s: its pause expired "
+                "and %d delivery attempts failed (jht-tmux-send rc=3): the sender "
+                "reads its screen as a menu, a sign-in or a permission request and "
+                "types nothing. Look at the screen first (capture-pane, the last 25 "
+                "rows): a real menu or permission request is the agent's to answer; "
+                "a /status card, an update banner or a long unsent message in the "
+                "box is NOT a menu and the reader is wrong: say so in the diary, do "
+                "not recreate the session. I will keep retrying every %d min. "
+                "History: logs/throttle-engine.jsonl."
+                % (agent, attempts, max(1, int(retry_sec // 60))))
+        else:
+            notify_captain(
+                "[DA @SISTEMA A @CAPITANO] I cannot wake %s: its pause expired "
+                "and %d delivery attempts failed (jht-tmux-send rc=%d). The pane "
+                "may have text stuck in its prompt (a Doctor case: kill+recreate) "
+                "or may be a bare shell after a crash. I will keep retrying every "
+                "%d min. History: logs/throttle-engine.jsonl."
+                % (agent, attempts, rc, max(1, int(retry_sec // 60))))
     else:
         entry["until"] = int(now + NOTIFY_RETRY_SEC)
     return False

@@ -107,7 +107,6 @@ def test_the_signing_and_notarization_steps_are_really_there() -> None:
         "Gate macOS bundle — shell and companion shipped",
         "Collect and verify signed macOS installer",
         "Install the signed DMG and open the app",
-        "Collect and inspect Linux packages",
         "Gate collected artifact bytes",
     ):
         assert needed in names, needed

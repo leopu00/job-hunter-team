@@ -49,6 +49,10 @@ import { registerProfileCommand } from './commands/profile.js';
 import { registerPid1Command } from './commands/pid1.js';
 import { registerDownloadCommand } from './commands/download.js';
 import { registerGameCommand } from './commands/game.js';
+import { renderFullHelp } from './lib/help-groups.js';
+import { errorBlock } from './lib/ui.js';
+import { say } from './lib/texts.js';
+import { parserLine } from './lib/parser-messages.js';
 
 // Help "essenziale" mostrato di default da `jht`, `jht --help`, `jht -h`.
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
@@ -63,20 +67,7 @@ import { registerGameCommand } from './commands/game.js';
 // sono finite le cose) e la prima schermata dopo l'install non può raccomandare
 // un comando che non fa niente. Al suo posto `team`, senza il quale l'help
 // essenziale non diceva in nessun punto come si avvia il team.
-const ESSENTIAL_HELP = `Usage: jht [command]
-
-Job Hunter Team — CLI
-
-Essential commands:
-  setup        Initial configuration (starts the wizard)
-  team         Start and stop agents (jht team start)
-  status       System status (container, agents, database)
-  agents       List agents and current tasks
-  doctor       Diagnose setup and dependencies
-
-For the complete command list:
-  jht help
-`;
+// the short list is a text of the catalog (`help.essential`), in the language of the person
 
 export function buildProgram() {
   const program = new Command();
@@ -150,20 +141,55 @@ export function buildProgram() {
   registerDownloadCommand(program);
   registerGameCommand(program);
 
-  // Salviamo il riferimento all'help "lungo" autogenerato da commander
-  // PRIMA di sovrascrivere helpInformation. `jht help` lo invoca per
-  // mostrare tutti i sotto-comandi registrati sopra.
-  const fullHelp = Command.prototype.helpInformation.bind(program);
+  // The parser's own errors ("error: unknown command 'x'") come out in the same shape as every other error of the
+  // program: what happened, the parser's suggestion if it has one, and where to look next (the help of the command
+  // that was being used, found from what was typed). Commander shares one output configuration among the
+  // commands, so there is one handler and it looks at the arguments.
+  const typedCommandPath = () => {
+    const path = [];
+    let level = program;
+    for (const word of process.argv.slice(2)) {
+      if (word.startsWith('-')) continue;
+      const next = level.commands.find((c) => c.name() === word || c.aliases().includes(word));
+      if (!next) break;
+      path.push(next.name());
+      level = next;
+    }
+    return path;
+  };
+  const shapeError = {
+    outputError: (text, write) => {
+      const [first, ...rest] = String(text).trim().split('\n');
+      const path = typedCommandPath();
+      write(`${errorBlock({
+        what: parserLine(first.replace(/^error:\s*/i, '')),
+        why: parserLine(rest.join(' ').replace(/^\(|\)$/g, '')) || null,
+        fix: path.length ? say('error.help_command', { path: path.join(' ') }) : say('error.help_all'),
+      })}\n`);
+    },
+  };
+  const applyToAll = (command) => {
+    command.configureOutput(shapeError);
+    command.commands.forEach(applyToAll);
+  };
+  applyToAll(program);
 
+  // A group of commands asked without a subcommand (`jht cron`) is a request for its help, not an error:
+  // the help goes to stdout and the exit code is 0.
+  for (const command of program.commands) {
+    if (command.commands.length > 0 && !command._actionHandler) command.action(() => command.help());
+  }
+
+  // `jht --help` is the short essential list; `jht help` is the long one, in groups, for the width of the terminal.
   program.helpInformation = function () {
-    return ESSENTIAL_HELP;
+    return say('help.essential');
   };
 
   program
     .command('help')
-    .description('Show all available commands (long form)')
+    .description(say('help.long_description'))
     .action(() => {
-      process.stdout.write(fullHelp());
+      process.stdout.write(renderFullHelp(program, process.stdout.columns || 80));
     });
 
   return program;

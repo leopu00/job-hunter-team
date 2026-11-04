@@ -5,7 +5,7 @@ import { appLocale } from "../lib/app-locale";
 import { waitAtMost } from "../lib/wait-at-most";
 import { probeDesktopLocalTeamOwner } from "../lib/desktop-account-scope";
 import { readDesktopTeamOwnerIdentity } from "../lib/desktop-team-owner";
-import { listLocalProfiles, localIdentitySelected, readLocalProfile, readTeamOwnerCopy } from "../lib/local-profile";
+import { labelLocalProfiles, listLocalProfiles, localIdentitySelected, localProfileLabel, readLocalProfile, readTeamOwnerCopy } from "../lib/local-profile";
 import { localOwnerWays } from "../lib/local-owner";
 import { useProviderSetup } from "../lib/provider-setup";
 import { useLocation } from "./router";
@@ -30,7 +30,8 @@ export function readTeamOwnerView(): TeamOwnerView {
   const active = readLocalProfile();
   const owner = readTeamOwnerCopy();
   if (!active || !owner) return { owner: "none" };
-  return owner.profileId === active.profileId ? { owner: "self" } : { owner: "other", name: owner.displayName };
+  if (owner.profileId === active.profileId) return { owner: "self" };
+  return { owner: "other", name: localProfileLabel(owner.profileId) ?? owner.displayName };
 }
 
 /**
@@ -61,7 +62,7 @@ export async function readNativeTeamOwnerView(
   }
   if (identity.kind === "local" && identity.profileId === active.profileId) return { owner: "self" };
   if (identity.kind === "google") return { owner: "other", name: null, account: true };
-  const name = listLocalProfiles().find((profile) => profile.profileId === identity.profileId)?.displayName ?? null;
+  const name = labelLocalProfiles(listLocalProfiles()).find((profile) => profile.profileId === identity.profileId)?.label ?? null;
   return { owner: "other", name };
 }
 

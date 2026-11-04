@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { readTeamState, type TeamControlState } from "../../lib/agent-control";
+import UpdateTeamHelp from "../../components/UpdateTeamHelp";
 import { describeError } from "../../lib/error-catalog";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { ROLE_COLOR } from "../../lib/role-color";
@@ -310,6 +311,7 @@ export default function BudgetPage(_props: PageProps) {
         <div role="alert" data-testid="budget-failed" className="rounded-xl border border-[var(--color-border)] px-5 py-4 text-[14px]">
           <p className="m-0 text-[var(--color-yellow)]">{t.readFailed}</p>
           <p className="m-0 mt-1 text-[var(--color-base)]">{failureText(loaded.code)}</p>
+          <UpdateTeamHelp code={loaded.code} />
           <button
             type="button"
             onClick={() => void load(false)}

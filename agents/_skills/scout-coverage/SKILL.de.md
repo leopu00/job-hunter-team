@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "Durchsuche die nationalen Kernportale der Profilsprachen VOR jeder kleinen Quelle und wisse, wie viel des Plans erledigt ist. `next` nennt das Portal, das zu loggende Land und die Art der Anfrage; ein Portal ist mit 3 Durchgängen und 3 verschiedenen Anfragen abgedeckt, und «erschöpft» verlangt abgedeckte Kernportale. Führe `next` zu Beginn jeder Suche aus."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
 ---
 
 # scout-coverage — wo zuerst suchen, und wie viel erledigt ist
@@ -12,9 +12,15 @@ Suche ZUERST dort, wo die eigenen Märkte des Profils liegen, und wisse, wie vie
 
 `next` gibt eine JSON-Zeile aus: das Portal (`source`, `country`, `tier`), die ART der Anfrage (`query_kind`: `broad` = eine BREITE Anfrage, immer die erste: die Rollenfamilie oder ein Einstiegswort allein (in `broad_terms`), ohne vollen Titel und ohne Ort, `role_language` = der Titel in der Sprache des Portals, `role` = der Titel auf Englisch, `synonym` = ein verwandter Titel, `level` = der Titel mit einem Level-Wort der Sprache, aufgelistet in `level_terms`, `city` = der Titel mit einem Ort, aufgelistet in `cities`), was du hast (`have`) gegen das Nötige (`need`) und die `log`-Zeile für danach. Suche genau das und logge den Durchgang mit demselben `--query-kind`. `plan_done: true` heißt: Plan erledigt, weiter mit den anderen Quellen.
 
+`next` sagt mit deiner ID auch, ob sich das Profil geändert hat, seit du deine Kreise gebaut hast: `"profile": {"changed": true, "groups": [...]}`. Lies das Profil neu, mach die Kreise der geänderten Gruppen neu, behalte deine Positionen und Durchläufe, dann `profile_version.py ack`.
+
 ```bash
 # the next thing to search: portal, country to log, kind of query, and the line to log it with
 python3 /app/shared/skills/scout_coverage.py next
+
+# mit deiner ID: sagt auch, ob sich das Profil seit dem Bau deiner Kreise geändert hat (dann neu lesen, Kreise neu machen, ack)
+python3 /app/shared/skills/scout_coverage.py next --agent $MY_ID
+python3 /app/shared/skills/profile_version.py ack --agent $MY_ID
 
 # the whole plan for this profile (once), and how much of it is done (any time)
 python3 /app/shared/skills/scout_coverage.py plan

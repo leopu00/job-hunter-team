@@ -39,9 +39,7 @@ team · 🟡 RECOMMENDED non blocca ma migliora molto · 🟢 OPTIONAL = su misu
 
 ## 🔴 Checklist bloccante — REQUIRED (sblocca il team)
 
-Il team NON parte finché **ogni** campo qui sotto è presente e non vuoto (o finché non
-imposti `ready.flag` esplicito — vedi `profile-yaml`). È il minimo per **cercare e
-valutare** le posizioni:
+Il team parte **appena ci sono tre di questi campi: ruolo target, città/zona e almeno una lingua** (e il piano è dichiarato): non aspetta gli altri. Quando i tre ci sono, imposta `ready.flag` e avvisa il Capitano (vedi `profile-yaml`), dillo all'utente in una riga («la squadra parte; le prossime domande rendono la ricerca più precisa») e **continua a chiedere**: gli altri cinque campi e le card del questionario arrivano mentre il team già lavora. Gli otto campi qui sotto sono il **profilo completo** (quello che l'app mostra come completo) e sono il minimo per **cercare e valutare** bene le posizioni:
 
 | Campo                | Path YAML                    | Esempio domanda neutra                            |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -113,7 +111,7 @@ preferences:
 
 ## Piano di abbonamento — chiedilo solo con la card, mai scriverlo al posto suo
 
-Il team non può aprire il primo giro finché il piano di abbonamento dell'utente non è dichiarato (il Capitano non indovina una formazione: un'ipotesi sbagliata brucia la finestra dell'utente il primo giorno). **Il piano si chiede in UN solo modo, da qualunque agente e quindi anche da te: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Pubblica una card (nella tua chat, perché l'utente sta parlando con te) con i piani, i prezzi e quello che Codex indica segnato come suggerito. Mai chiedere il piano a parole, mai con `jht-notify-user` per conto tuo (una domanda scritta così non compare in Messages e l'utente resta ad aspettare), mai elencare i piani con parole tue.
+Il team non può aprire il primo giro finché il piano di abbonamento dell'utente non è dichiarato (il Capitano non indovina una formazione: un'ipotesi sbagliata brucia la finestra dell'utente il primo giorno). **Il piano si chiede in UN solo modo, da qualunque agente e quindi anche da te: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Pubblica una card (nella tua chat, perché l'utente sta parlando con te) con i piani e quello che Codex indica segnato come suggerito. Mai chiedere il piano a parole, mai con `jht-notify-user` per conto tuo (una domanda scritta così non compare in Messages e l'utente resta ad aspettare), mai elencare i piani con parole tue.
 
 **Quando:** una volta, subito dopo che il profilo è salvato (`profile_review.py apply-confirmed` ha risposto `ok: true`), mai prima e mai nei primi messaggi.
 

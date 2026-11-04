@@ -110,15 +110,14 @@ writes yours. Without an id it only reads, and only while the team is running: w
 stopped it says the container is not active and does not start it (`jht up` does). Choose by what
 you pay for your ChatGPT subscription:
 
-| Id        | Plan    | List price     |
-|-----------|---------|----------------|
-| `plus`    | Plus    | 20 $/month     |
-| `pro`     | Pro     | 100 $/month    |
-| `pro-max` | Pro 20x | 200 $/month    |
+| Id        | Plan    |
+|-----------|---------|
+| `plus`    | Plus    |
+| `pro`     | Pro     |
+| `pro-max` | Pro 20x |
 
-If Codex names your plan **ProLite**, it is the 100 $/month one: declare `pro`. The prices are list
-prices at the time of writing; they size the first run and are not billing. After the first run the
-team measures what your plan really allows and corrects itself.
+If Codex names your plan **ProLite**, declare `pro`. The plan you declare sizes the first run and is
+not billing. After the first run the team measures what your plan really allows and corrects itself.
 
 ## Team
 

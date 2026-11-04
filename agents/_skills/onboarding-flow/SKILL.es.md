@@ -39,9 +39,7 @@ equipo · 🟡 RECOMMENDED no bloquea pero mejora mucho · 🟢 OPTIONAL = máxi
 
 ## 🔴 Checklist bloqueante — REQUIRED (desbloquea el equipo)
 
-El equipo NO arranca hasta que **cada** campo de abajo esté presente y no vacío (o hasta
-que establezcas `ready.flag` explícito — ver `profile-yaml`). Es el mínimo para **buscar y
-puntuar** las ofertas:
+El equipo arranca **en cuanto hay tres de estos campos: rol objetivo, ciudad/zona y al menos un idioma** (y el plan está declarado): no espera a los demás. Cuando los tres están, establece `ready.flag` y avisa al Capitano (ver `profile-yaml`), díselo al usuario en una línea («el equipo arranca; las próximas preguntas hacen la búsqueda más precisa») y **sigue preguntando**: los otros cinco campos y las tarjetas del cuestionario llegan mientras el equipo ya trabaja. Los ocho campos de abajo son el **perfil completo** (el que la app muestra como completo) y el mínimo para **buscar y puntuar** bien las ofertas:
 
 | Campo                | Ruta YAML                    | Ejemplo de pregunta neutral                       |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -110,7 +108,7 @@ preferences:
 
 ## Plan de suscripción — pídelo solo con la tarjeta, nunca lo escribas por el usuario
 
-El equipo no puede abrir su primera ronda hasta que el plan de suscripción del usuario esté declarado (el Capitano no adivina una formación: una suposición equivocada gasta la ventana del usuario el primer día). **El plan se pregunta de UNA sola forma, desde cualquier agente y por tanto también desde ti: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Publica una tarjeta (en tu chat, porque el usuario habla contigo) con los planes, sus precios y el que indica Codex marcado como sugerido. Nunca preguntes el plan con texto, nunca con `jht-notify-user` por tu cuenta (una pregunta escrita así no aparece en Messages y el usuario se queda esperando), nunca enumeres los planes con tus palabras.
+El equipo no puede abrir su primera ronda hasta que el plan de suscripción del usuario esté declarado (el Capitano no adivina una formación: una suposición equivocada gasta la ventana del usuario el primer día). **El plan se pregunta de UNA sola forma, desde cualquier agente y por tanto también desde ti: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Publica una tarjeta (en tu chat, porque el usuario habla contigo) con los planes y el que indica Codex marcado como sugerido. Nunca preguntes el plan con texto, nunca con `jht-notify-user` por tu cuenta (una pregunta escrita así no aparece en Messages y el usuario se queda esperando), nunca enumeres los planes con tus palabras.
 
 **Cuándo:** una vez, justo después de guardar el perfil (`profile_review.py apply-confirmed` respondió `ok: true`), nunca antes y nunca en tus primeros mensajes.
 

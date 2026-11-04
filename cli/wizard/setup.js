@@ -10,6 +10,7 @@
  * Pattern copiato da OpenClaw (openclaw/src/wizard/setup.ts).
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import {
   AI_PROVIDERS,
   RECOMMENDED_PROVIDER,
@@ -28,6 +29,12 @@ import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { runProviderLoginStep } from './provider-login.js';
+import pc from 'picocolors';
+
+/** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
+export function stepLine(n, total, text) {
+  return `${pc.dim(`[${n}/${total}]`)} ${text}`;
+}
 
 // Mappa provider scelto nel wizard → ID accettato da `providers update`
 // (i providers.js usa "claude" / "codex" / "kimi" come keys).
@@ -51,18 +58,31 @@ const PROVIDER_OAUTH_CMD = {
   kimi: 'kimi',
 };
 
+/** The one sentence for a step that did not complete, for the cases where the child could not even say it itself. */
+export function describeStepFailure(label, { missing = false, status = null } = {}) {
+  const why = missing ? 'the JHT program was not found here' : status === null ? 'it could not be started' : `it ended with code ${status}`;
+  return `  ${label} did not complete: ${why}. More details: JHT_DEBUG=1 jht setup`;
+}
+
 /**
  * Esegue un sub-comando JHT (lo stesso CLI Node, gia' in /app/cli/bin/jht.js)
- * con stdio inherited. Ritorna true se exit code = 0.
+ * con stdio inherited: le sue domande e i suoi messaggi arrivano mentre li scrive, senza tetti di buffer.
+ * Ritorna true se exit code = 0. Il caso che mostrava una traccia di Node in mezzo al wizard (il programma non
+ * c'e') si controlla prima, e diventa una frase.
  */
 function runJhtSubcommand(args, label) {
   const entry = process.env.JHT_NODE_ENTRY || '/app/cli/bin/jht.js';
+  if (!existsSync(entry)) {
+    console.error(describeStepFailure(label, { missing: true }));
+    if (process.env.JHT_DEBUG) console.error(`  (looked for ${entry})`);
+    return false;
+  }
   const result = spawnSync(process.execPath, [entry, ...args], {
     stdio: 'inherit',
     env: process.env,
   });
   if (result.status !== 0) {
-    console.error(`[setup] ${label} failed (exit ${result.status})`);
+    console.error(describeStepFailure(label, { status: result.status }));
     return false;
   }
   return true;
@@ -93,7 +113,7 @@ export async function runSetupWizard(prompter) {
   const prereqOk = await checkPrerequisites(prompter);
   if (!prereqOk) {
     await prompter.outro(t('wizard.aborted_prereqs'));
-    return;
+    return false;
   }
 
   // --- Config snapshot ---
@@ -134,11 +154,11 @@ export async function runSetupWizard(prompter) {
         });
         if (!keptLogin) {
           await prompter.outro(t('wizard.oauth.aborted'));
-          return;
+          return false;
         }
       }
       await prompter.outro(t('wizard.config_kept'));
-      return;
+      return true;
     }
     if (action === 'reset') baseConfig = {};
   }
@@ -174,11 +194,19 @@ export async function runSetupWizard(prompter) {
   }
 
   // --- Step 2: Provider AI (l'unica scelta tecnica vera del wizard) ---
-  const providerChoice = await prompter.select({
-    message: t('wizard.provider.prompt'),
-    options: AI_PROVIDERS.map((p) => ({ value: p.value, label: t(`wizard.provider.${PROVIDER_LABEL_KEY[p.value]}`) })),
-    initialValue: baseConfig.active_provider || RECOMMENDED_PROVIDER,
-  });
+  // With one provider offered there is nothing to choose: it is said, not asked.
+  const providerLabel = (p) => t(`wizard.provider.${PROVIDER_LABEL_KEY[p.value]}`);
+  let providerChoice;
+  if (AI_PROVIDERS.length === 1) {
+    providerChoice = AI_PROVIDERS[0].value;
+    await prompter.note(providerLabel(AI_PROVIDERS[0]), t('wizard.provider.prompt'));
+  } else {
+    providerChoice = await prompter.select({
+      message: t('wizard.provider.prompt'),
+      options: AI_PROVIDERS.map((p) => ({ value: p.value, label: providerLabel(p) })),
+      initialValue: baseConfig.active_provider || RECOMMENDED_PROVIDER,
+    });
+  }
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
 
   // --- Auth: solo subscription, nessun input richiesto ---
@@ -211,11 +239,6 @@ export async function runSetupWizard(prompter) {
     baseProviders: baseConfig.providers || {}, workingHours,
   });
 
-  await showSummary(prompter, {
-    selectedProvider, authMethod, apiKeySecret, subscriptionConfig,
-    model,
-  });
-
   // ────────────────────────────────────────────────────────────────────────
   // POST-CONFIG: providers update + OAuth login + team start
   // Tutti opzionali (l'utente puo' rispondere "no" e farli a mano dopo) ma
@@ -226,16 +249,18 @@ export async function runSetupWizard(prompter) {
   const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
   if (updateProviderId) {
     console.log('');
-    console.log(tf('wizard.provider.install_cli', selectedProvider.label));
+    console.log(stepLine(1, 3, tf('wizard.provider.install_cli', selectedProvider.label)));
     const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
     if (!ok) {
       const cont = await prompter.confirm({
         message: t('wizard.provider.install_failed_continue'),
+        active: t('wizard.provider.install_failed_yes'),
+        inactive: t('wizard.provider.install_failed_no'),
         initialValue: false,
       });
       if (!cont) {
         await prompter.outro(t('wizard.outro_aborted'));
-        return;
+        return false;
       }
     }
   }
@@ -258,24 +283,29 @@ export async function runSetupWizard(prompter) {
   // ────────────────────────────────────────────────────────────────────────
   const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
   // a login that is already there ends the step; otherwise the person is told where to log in
+  console.log('');
+  console.log(stepLine(2, 3, t('wizard.step.login')));
   const loggedIn = await runProviderLoginStep({
     cmdName: oauthCmd, label: selectedProvider.label, isVps, prompter, t, tf,
   });
   if (!loggedIn) {
     await prompter.outro(t('wizard.oauth.aborted'));
-    return;
+    return false;
   }
 
   // ────────────────────────────────────────────────────────────────────────
   // STEP 8: avvia il team automatically (no prompt)
   // ────────────────────────────────────────────────────────────────────────
   console.log('');
-  console.log(t('wizard.team.starting'));
+  console.log(stepLine(3, 3, t('wizard.team.starting')));
   const startOk = runJhtSubcommand(['team', 'start'], 'team start');
   if (!startOk) {
     await prompter.outro(t('wizard.team.start_failed'));
-    return;
+    return false;
   }
 
+  // The configuration is said to be saved here, at the end, once everything it was for has been done.
+  await showSummary(prompter, { selectedProvider });
   await prompter.outro(t('wizard.outro_done'));
+  return true;
 }

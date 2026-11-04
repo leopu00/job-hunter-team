@@ -329,3 +329,41 @@ describe("two roads to the same route, chosen by the page", () => {
     expect(body).not.toHaveProperty("params");
   });
 });
+
+describe("the destination of a preview (the desktop on the team of this computer)", () => {
+  const ROW = "22222222-2222-4222-8222-222222222222";
+  const reply = (status: number, body: unknown) =>
+    vi.fn(async (..._a: unknown[]) => new Response(JSON.stringify(body), { status }));
+  it("is kept when the host says it, and sent back with the id on the second call", async () => {
+    const { startAuthorisation, confirmAuthorisation } =
+      await import("@/app/(protected)/positions/[id]/ApplyRequestButton");
+    const first = reply(200, {
+      ok: true,
+      state: "awaiting_confirm",
+      id: ROW,
+      summary: "Backend Engineer @ Acme",
+      destination: "portal:ashby",
+    });
+    expect(await startAuthorisation(7, first as unknown as typeof fetch)).toMatchObject({
+      step: "confirm",
+      destination: "portal:ashby",
+    });
+    const second = reply(200, { ok: true, state: "queued" });
+    await confirmAuthorisation(7, ROW, second as unknown as typeof fetch, "portal:ashby");
+    const [, init] = second.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ confirmId: ROW, destination: "portal:ashby" });
+    // with no destination (the website) the body is only the id, as before
+    const web = reply(200, { ok: true, state: "queued" });
+    await confirmAuthorisation(7, ROW, web as unknown as typeof fetch);
+    expect(JSON.parse(String((web.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({ confirmId: ROW });
+  });
+
+  it("tells a consent that is off from a setting that is not valid", async () => {
+    const { refusalText } = await import("@/app/(protected)/positions/[id]/ApplyRequestButton");
+    const t = (key: string) => key;
+    for (const off of ["consent_absent", "consent_disabled"]) expect(refusalText(t, off)).toBe("refused_consent");
+    for (const bad of ["consent_cap_invalid", "consent_mode_unknown", "config_missing", "config_malformed", "rule_unavailable"]) {
+      expect(refusalText(t, bad)).toBe("refused_settings");
+    }
+  });
+});

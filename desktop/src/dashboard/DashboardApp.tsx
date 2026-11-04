@@ -10,6 +10,7 @@ import { cleanImages } from "../lib/clean-images";
 import { declarePlan, loadPlans } from "../lib/provider-plan";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
 import { failureText, stateText } from "../lib/onboarding-state.i18n";
+import { AccountScopeError } from "./AccountScopeError";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
   connectDirectChat,
@@ -32,6 +33,7 @@ import {
   finalizeLocalProfileMigration,
   localIdentitySelected,
   readLocalProfile,
+  removeLocalProfile,
   renameLocalProfile,
 } from "../lib/local-profile";
 import { localOwnerWays } from "../lib/local-owner";
@@ -521,6 +523,8 @@ export default function DashboardApp() {
   const [accountScope, setAccountScope] = useState<{
     identityKey: string;
     phase: "pending" | "ready" | "error";
+    /** with `error`: the code of the refusal, when it carries one */
+    code?: string | null;
   } | null>(null);
   const accountScopeRef = useRef(accountScope);
   accountScopeRef.current = accountScope;
@@ -565,9 +569,9 @@ export default function DashboardApp() {
     try {
       if (localProfile) await activateDesktopLocalScope(localProfile.profileId);
       else await activateDesktopAccountScope();
-    } catch {
+    } catch (error) {
       if (activeIdentityKeyRef.current === initializingKey) {
-        setAccountScope({ identityKey: initializingKey, phase: "error" });
+        setAccountScope({ identityKey: initializingKey, phase: "error", code: errorCodeOf(error) });
       }
       return;
     }
@@ -1906,10 +1910,15 @@ export default function DashboardApp() {
   }
   if (accountScope.phase === "error") {
     return (
-      <main role="alert">
-        <p>{stateText().accountScopeError}</p>
-        <button type="button" onClick={() => void initializeAccount()}>{stateText().retry}</button>
-      </main>
+      <AccountScopeError
+        code={accountScope.code}
+        onRetry={() => void initializeAccount()}
+        onChoose={logout ? () => void logout().catch(() => goTo(LOGIN_PAGE)) : undefined}
+        onForget={localProfile && logout ? () => {
+          try { removeLocalProfile(localProfile.profileId); } catch { /* already gone from the list */ }
+          void logout().catch(() => goTo(LOGIN_PAGE));
+        } : undefined}
+      />
     );
   }
   const connectDialogElement = connectDialog && connectDialog.identityKey === identityKey ? (

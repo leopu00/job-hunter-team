@@ -185,6 +185,8 @@ Portanto, frequentemente o botao ja esta desbloqueado pelo fallback quando o per
 
 ### Quando criar o flag (3 passos RIGOROSOS, nunca saltar, nunca mudar a ordem)
 
+**Cria-o assim que o perfil tiver função-alvo, cidade/zona e pelo menos um idioma** — não esperas pelos oito campos: a equipa arranca e as perguntas continuam (o resto do perfil completa-se enquanto trabalha).
+
 ```bash
 # 1. Crie o flag com timestamp UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
@@ -204,7 +206,7 @@ test -f "$JHT_HOME/profile/ready.flag" && echo FLAG_OK || echo FLAG_MISSING
 So depois de `FLAG_OK`, e uma unica vez:
 
 ```bash
-jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] perfil do candidato completo e validado — a equipa pode arrancar."
+jht-tmux-send CAPITANO "[@assistente -> @capitano] [PROFILO-PRONTO] perfil do candidato com o minimo para arrancar (funcao, zona, idioma) — a equipa pode arrancar; o resto do perfil completa-se enquanto trabalha."
 ```
 
 O Capitano nao olha para o ficheiro do perfil: enquanto ninguem lhe disser, no
@@ -229,8 +231,8 @@ E avise o utilizador: "voltei a colocar o botao em espera — vamos rever este p
 
 ### NAO criar o flag se
 
-- a ultima validacao do perfil mostrou `INVALID_PROFILE` (mesmo uma unica vez apos o ultimo Write);
-- faltam (os oito campos minimos): nome, email, cargo alvo, cidade, anos de experiencia, `seniority_target`, competencias (≥2), linguas (≥1).
+- a ultima validacao do perfil imprimiu `INVALID_PROFILE` porque o YAML nao se le ou um campo tem um valor errado (as linhas `ERROR:` sobre um campo que a pessoa ainda nao deu nao contam: pergunta-se enquanto a equipa ja trabalha);
+- faltam (os tres que arrancam a pesquisa): funcao-alvo, cidade/zona, idiomas (≥1). Os outros cinco dos oito (nome, email, anos de experiencia, `seniority_target`, skills ≥2) pedem-se logo a seguir, enquanto a equipa ja trabalha: nao seguram o flag.
 
 Experiencias e formacoes sao recomendadas: nao bloqueiam o flag. Pede-as logo a seguir a cria-lo.
 

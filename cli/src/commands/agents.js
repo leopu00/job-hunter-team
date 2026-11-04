@@ -1,27 +1,17 @@
-import { readFile, access } from 'node:fs/promises';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
-import { JHT_HOME } from '../jht-paths.js';
-import { GREEN, RED, YELLOW, DIM, BOLD, RESET } from './_colors.js';
-
-const JHT_DIR     = JHT_HOME;
-const CONFIG_PATH = join(JHT_DIR, 'jht.config.json');
-const TASKS_PATH  = join(JHT_DIR, 'tasks', 'tasks.json');
+import { c } from './_colors.js';
+import { hint, marks, table, title } from '../lib/ui.js';
+import { say } from '../lib/texts.js';
 
 const AGENTS = [
-  { id: 'capitano',       name: 'Capitano',    session: 'CAPITANO' },
-  { id: 'scout',      name: 'Scout',       session: 'SCOUT-1' },
-  { id: 'analista',   name: 'Analista',    session: 'ANALISTA-1' },
-  { id: 'scorer',     name: 'Scorer',      session: 'SCORER-1' },
-  { id: 'scrittore',  name: 'Scrittore',   session: 'SCRITTORE-1' },
-  { id: 'critico',    name: 'Critico',     session: 'CRITICO' },
-  { id: 'assistente', name: 'Assistente',  session: 'ASSISTENTE' },
+  { id: 'capitano',   name: 'Capitano',   session: 'CAPITANO' },
+  { id: 'scout',      name: 'Scout',      session: 'SCOUT-1' },
+  { id: 'analista',   name: 'Analista',   session: 'ANALISTA-1' },
+  { id: 'scorer',     name: 'Scorer',     session: 'SCORER-1' },
+  { id: 'scrittore',  name: 'Scrittore',  session: 'SCRITTORE-1' },
+  { id: 'critico',    name: 'Critico',    session: 'CRITICO' },
+  { id: 'assistente', name: 'Assistente', session: 'ASSISTENTE' },
 ];
-
-async function fileExists(p) {
-  try { await access(p); return true; } catch { return false; }
-}
 
 function getTmuxSessions() {
   try {
@@ -30,62 +20,46 @@ function getTmuxSessions() {
   } catch { return []; }
 }
 
-async function handleAgents(options) {
+/**
+ * The agents and whether each one runs. (There used to be a "Task" column fed by tasks.json, a store nobody has
+ * written since the text interface was removed: it was always a dash, and it is gone.)
+ */
+function handleAgents(options) {
   const sessions = getTmuxSessions();
+  const rows = AGENTS.map((a) => ({ ...a, running: sessions.includes(a.session) }));
+  const running = rows.filter((a) => a.running);
 
-  // Task per agente
-  let tasksByAgent = {};
-  if (await fileExists(TASKS_PATH)) {
-    try {
-      const store = JSON.parse(await readFile(TASKS_PATH, 'utf-8'));
-      for (const t of store.tasks ?? []) {
-        if (!t.agentId) continue;
-        if (!tasksByAgent[t.agentId]) tasksByAgent[t.agentId] = { total: 0, succeeded: 0, failed: 0, running: 0 };
-        tasksByAgent[t.agentId].total++;
-        if (t.status === 'succeeded') tasksByAgent[t.agentId].succeeded++;
-        if (t.status === 'failed') tasksByAgent[t.agentId].failed++;
-        if (t.status === 'running') tasksByAgent[t.agentId].running++;
-      }
-    } catch { /* skip */ }
+  if (options.json) {
+    console.log(JSON.stringify({ running: running.length, total: rows.length, agents: rows.map(({ id, name, session, running: r }) => ({ id, name, session, running: r })) }, null, 2));
+    return;
   }
 
-  const running = AGENTS.filter(a => sessions.includes(a.session));
-  const stopped = AGENTS.filter(a => !sessions.includes(a.session));
-
-  console.log(`\n  ${BOLD}JHT — Agents${RESET} (${running.length}/${AGENTS.length} active)\n`);
-  console.log(`  ${'Agent'.padEnd(14)} ${'Session'.padEnd(16)} ${'State'.padEnd(10)} ${'Task'.padEnd(20)}`);
-  console.log(`  ${'─'.repeat(14)} ${'─'.repeat(16)} ${'─'.repeat(10)} ${'─'.repeat(20)}`);
-
-  for (const a of AGENTS) {
-    const isRunning = sessions.includes(a.session);
-    const icon = isRunning ? `${GREEN}●${RESET}` : `${DIM}○${RESET}`;
-    const status = isRunning ? `${GREEN}active${RESET}` : `${DIM}stopped${RESET}`;
-    const t = tasksByAgent[a.id];
-    let taskInfo = `${DIM}—${RESET}`;
-    if (t) {
-      const parts = [];
-      if (t.succeeded) parts.push(`${GREEN}${t.succeeded}✓${RESET}`);
-      if (t.failed) parts.push(`${RED}${t.failed}✗${RESET}`);
-      if (t.running) parts.push(`${YELLOW}${t.running}⟳${RESET}`);
-      taskInfo = `${t.total} total ${parts.join(' ')}`;
-    }
-    console.log(`  ${icon} ${a.name.padEnd(12)} ${a.session.padEnd(16)} ${status.padEnd(19)} ${taskInfo}`);
+  console.log(title(say('agents.title'), say('agents.running_of', { running: running.length, total: rows.length })));
+  const m = marks();
+  console.log(table(
+    [{ label: say('agents.col_agent') }, { label: say('agents.col_session') }, { label: say('agents.col_state') }],
+    rows.map((a) => [
+      `${a.running ? c.green(m.ok) : c.gray(m.info)} ${a.name}`,
+      a.session,
+      a.running ? c.green(say('agents.running')) : c.gray(say('agents.stopped')),
+    ]),
+  ));
+  if (running.length === 0) {
+    console.log('');
+    console.log(hint(say('team.next_start')));
   }
-
   if (options.verbose && running.length > 0) {
-    console.log(`\n  ${DIM}Active JHT tmux sessions:${RESET}`);
-    for (const s of sessions.filter(s => AGENTS.some(a => a.session === s))) {
-      console.log(`    ${s}`);
-    }
+    console.log(`\n  ${c.gray(say('agents.sessions_in_tmux'))}`);
+    for (const s of sessions.filter((x) => AGENTS.some((a) => a.session === x))) console.log(`    ${s}`);
   }
-
   console.log('');
 }
 
 export function registerAgentsCommand(program) {
   program
     .command('agents')
-    .description('List agents with tmux status and current tasks')
-    .option('-v, --verbose', 'show tmux session details')
+    .description(say('agents.description'))
+    .option('-v, --verbose', say('agents.verbose'))
+    .option('--json', say('option.json'))
     .action(handleAgents);
 }

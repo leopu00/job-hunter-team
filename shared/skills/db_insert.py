@@ -29,6 +29,7 @@ from external_content import (
     normalize_external_inline_fields,
 )
 import maintenance_log
+from company_about import clean_about
 import profile_exclusions
 import first_run
 
@@ -417,8 +418,8 @@ def insert_company(args):
     conn.execute("""
         INSERT INTO companies (name, website, hq_country, sector, size,
                                glassdoor_rating, red_flags, culture_notes,
-                               analyzed_by, verdict)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               analyzed_by, verdict, about)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             website          = COALESCE(excluded.website, companies.website),
             hq_country       = COALESCE(excluded.hq_country, companies.hq_country),
@@ -429,10 +430,11 @@ def insert_company(args):
             culture_notes    = COALESCE(excluded.culture_notes, companies.culture_notes),
             analyzed_by      = COALESCE(excluded.analyzed_by, companies.analyzed_by),
             verdict          = COALESCE(excluded.verdict, companies.verdict),
+            about            = COALESCE(excluded.about, companies.about),
             analyzed_at      = CURRENT_TIMESTAMP
     """, (args.name, args.website, args.hq_country, args.sector, args.size,
           args.glassdoor_rating, args.red_flags, args.culture_notes,
-          args.analyzed_by, args.verdict))
+          args.analyzed_by, args.verdict, clean_about(args.about)))
     conn.commit()
     # lastrowid non dice niente dopo un aggiornamento: l'id si legge.
     company_id = conn.execute("SELECT id FROM companies WHERE name = ?", (args.name,)).fetchone()[0]
@@ -619,6 +621,7 @@ def build_parser():
     c.add_argument('--glassdoor-rating', type=float)
     c.add_argument('--red-flags')
     c.add_argument('--culture-notes')
+    c.add_argument('--about', help="Two sentences on who the company is and what it does (the company, not the role), user's language, plain text")
     c.add_argument('--analyzed-by')
     c.add_argument('--verdict', choices=['GO', 'CAUTIOUS', 'NO_GO'])
 

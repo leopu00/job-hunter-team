@@ -5,6 +5,7 @@ import { mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { Readable, Transform } from 'node:stream';
+import { errorBlock } from '../lib/ui.js';
 import { pipeline } from 'node:stream/promises';
 
 
@@ -13,10 +14,10 @@ const RELEASE_BASE_URL = 'https://github.com/leopu00/job-hunter-team/releases/do
 const ASSETS = Object.freeze({
   windows: 'job-hunter-team-windows-x64-setup.exe',
   macos: 'job-hunter-team-macos-universal.dmg',
-  linux: 'job-hunter-team-linux-x64.AppImage',
 });
 
-const LINUX_DEB_ASSET = 'job-hunter-team-linux-x64.deb';
+// This version has no desktop app for Linux: the command-line install is the way in. --os linux and --deb still parse, so they get this answer and not an "unknown option".
+const LINUX_NO_APP = 'In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded.';
 
 
 function normalizePlatform(value) {
@@ -41,8 +42,8 @@ function releaseHasNoWindows(version) {
   return major > 0 || minor >= 4;
 }
 
-// The releases before 0.4 have other files (tar.gz, setup.exe, zip): the macOS and Linux apps start with 0.4.0.
-function releaseHasNoMacLinuxApp(version) {
+// The releases before 0.4 have other files (tar.gz, setup.exe, zip): the macOS app starts with 0.4.0.
+function releaseHasNoMacApp(version) {
   const [major, minor] = String(version).split('.').map((part) => Number.parseInt(part, 10));
   return major === 0 && minor < 4;
 }
@@ -173,16 +174,19 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
   if (deb && platform !== 'linux') {
     throw new Error('The --deb option is available only for Linux.');
   }
-  // The 0.4 release has no Windows installer (coming soon); the older ones did.
+  if (platform === 'linux') {
+    throw new Error(LINUX_NO_APP);
+  }
+  // The 0.4 release has no Windows installer; the older ones did. The words are «not in this release» everywhere (CLI, wrapper, notes): no promise of when.
   if (platform === 'windows' && releaseHasNoWindows(version)) {
     throw new Error(
-      'Windows is not part of 0.4.0: there is no Windows installer in this release (coming soon). '
+      'Windows is not part of 0.4.0: there is no Windows installer in this release. '
       + 'Nothing was downloaded.',
     );
   }
-  if (platform !== 'windows' && releaseHasNoMacLinuxApp(version)) {
+  if (platform !== 'windows' && releaseHasNoMacApp(version)) {
     throw new Error(
-      `This release (v${version}) has no app for macOS/Linux: use 0.4.0 or later. Nothing was downloaded.`,
+      `This release (v${version}) has no app for macOS: use 0.4.0 or later. Nothing was downloaded.`,
     );
   }
   if (platform === 'macos' && hostIsIntelMac()) {
@@ -192,7 +196,7 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
     );
   }
 
-  const asset = deb ? LINUX_DEB_ASSET : ASSETS[platform];
+  const asset = ASSETS[platform];
   const tag = `v${version}`;
   const base = `${releaseBaseUrl()}/${tag}`;
   const checksumResponse = await fetchReleaseFile(`${base}/SHA256SUMS`);
@@ -247,6 +251,11 @@ export async function downloadRelease({ platform: requestedPlatform, version: re
 
 async function downloadAction(options) {
   try {
+    // The system is checked first, then the release: a wrong system must not read as a missing release.
+    normalizePlatform(options.os);
+    if (!options.version) {
+      throw new Error('Which release? Add --version, for example: jht download --os macos --version 0.4.0');
+    }
     await downloadRelease({
       platform: options.os,
       version: options.version,
@@ -254,7 +263,7 @@ async function downloadAction(options) {
       deb: options.deb,
     });
   } catch (error) {
-    console.error(`\n  Error: ${error.message}\n`);
+    console.error(errorBlock({ what: error.message }));
     process.exitCode = 1;
   }
 }
@@ -265,8 +274,8 @@ export function registerDownloadCommand(program) {
     .command('download')
     .description('Download and verify a desktop client from GitHub Releases')
     .requiredOption('--os <platform>', 'operating system: windows, macos, or linux')
-    .requiredOption('--version <release>', 'release version (for example, 0.3.5)')
+    .option('--version <release>', 'the release to download (required), for example 0.4.0')
     .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
-    .option('--deb', 'download the Debian package instead of the Linux AppImage')
+    .option('--deb', 'Linux only, and there is no desktop app for Linux in this version: use install.sh')
     .action(downloadAction);
 }

@@ -489,6 +489,38 @@ def test_5d_una_sveglia_non_consegnabile_finisce_al_capitano_non_nel_silenzio(
     assert flag("scout-1")["state"] == eng.NOTIFIED
 
 
+def test_5e_uno_schermo_letto_come_menu_rc3_lo_dice_con_la_causa_vera_e_riprova_prima(home, monkeypatch):
+    """rc=3 = il sender legge lo schermo come menu/login/permesso e non digita niente. Un team reale (02/11): sveglia
+    entrata dopo 25 minuti, e il messaggio al Capitano parlava di «testo appeso» da ricreare. Ora: l'evento nomina la
+    causa (parola chiusa, mai il testo dello schermo), il messaggio manda a GUARDARE lo schermo e a non ricreare, e dopo la
+    rinuncia si riprova dopo NOTIFY_BLOCKED_RETRY_SEC, non dopo un quarto d'ora."""
+    set_config(home, **{"scout-1": 300})
+    eng.register("scout-1", now=T0)
+    monkeypatch.setattr(eng, "send_wakeup", _wakeup_returning(3))
+    now = T0 + 300
+    for _ in range(eng.MAX_NOTIFY_ATTEMPTS):
+        eng.tick(now=now)
+        now = float(flag("scout-1")["until"])
+    failed = events("notify_failed")
+    assert len(failed) == eng.MAX_NOTIFY_ATTEMPTS and all(e["screen"] == "menu_login_or_permission" for e in failed)
+    gave_up = events("notify_gave_up")
+    assert len(gave_up) == 1 and gave_up[0]["rc"] == 3 and gave_up[0]["retry_sec"] == int(eng.NOTIFY_BLOCKED_RETRY_SEC)
+    message = next(m for m in CAPTAIN_MSGS if "I cannot wake scout-1" in m)
+    assert "reads its screen as a menu" in message and "capture-pane" in message and "do not recreate" in message
+    assert "text stuck in its prompt" not in message
+    assert now - (T0 + 300 + (eng.MAX_NOTIFY_ATTEMPTS - 1) * eng.NOTIFY_RETRY_SEC) == eng.NOTIFY_BLOCKED_RETRY_SEC
+    # rc=5 keeps the old message and the old pace
+    set_config(home, **{"scout-2": 300})
+    eng.register("scout-2", now=T0)
+    monkeypatch.setattr(eng, "send_wakeup", _wakeup_returning(5))
+    later = T0 + 300
+    for _ in range(eng.MAX_NOTIFY_ATTEMPTS):
+        eng.tick(now=later)
+        later = float(flag("scout-2")["until"])
+    other = [e for e in events("notify_gave_up") if e["agent"] == "scout-2"]
+    assert len(other) == 1 and other[0]["retry_sec"] == int(eng.GATE_RETRY_SEC) and "screen" not in other[0]
+
+
 # ── Test 6 — burn-intent: la deroga passa dal motore, non dagli agenti ───
 @pytest.fixture
 def burn(home):

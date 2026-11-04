@@ -123,7 +123,6 @@
   "common.done": "Fertig",
   "common.retry": "Erneut versuchen",
   "plan.free": "kostenlos",
-  "plan.price_month": "%s $/Monat",
   "plan.unknown": "unbekannter Tarif: %s",
   "plan.config_unreadable": "%s ist nicht lesbar (beschädigt oder kein JSON-Objekt): Das Abonnement wurde nicht geschrieben, die Datei blieb unverändert",
   "plan.not_selected": "kein Abonnement ausgewählt",

@@ -76,6 +76,7 @@ FIELDS = [
     ("position", "1", "--location-notes", "positions", "location_notes"),
     ("company", "Acme", "--red-flags", "companies", "red_flags"),
     ("company", "Acme", "--culture-notes", "companies", "culture_notes"),
+    ("company", "Acme", "--about", "companies", "about"),
     ("application", "1", "--critic-notes", "applications", "critic_notes"),
     ("application", "1", "--response", "applications", "response"),
 ]

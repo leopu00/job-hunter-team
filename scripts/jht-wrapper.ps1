@@ -366,7 +366,7 @@ $BrokerLegacyMarker = Join-Path $RuntimeDir '.broker-legacy-migrated'
 $NodeEntry   = if ($env:JHT_NODE_ENTRY)     { $env:JHT_NODE_ENTRY }     else { '/app/cli/bin/jht.js' }
 $RawBaseOverride = if ($env:JHT_RAW_BASE) { $env:JHT_RAW_BASE.TrimEnd('/') } else { '' }
 $ReleaseRef = if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }
-$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598'
+$DefaultRuntimeImage = 'ghcr.io/leopu00/jht@sha256:298191c0c926b387e7bb385d296881d74c4a7d4d9d3c48c437153cb7f09aaeea'
 $DefaultRuntimeVersion = '0.4.0'
 $GameControlDir = if ($env:JHT_GAME_CONTROL_DIR) { $env:JHT_GAME_CONTROL_DIR } else { Join-Path $env:APPDATA 'Godot\app_userdata\Job Hunter Team\client' }
 $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } else { Join-Path $env:LOCALAPPDATA 'Programs\Job Hunter Team\job-hunter-team.exe' }
@@ -2642,15 +2642,20 @@ function Invoke-HostDownload {
   $version = $version -replace '^v', ''
   if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err "versione non valida: $version. Esempio: 0.3.5."; $script:HostDownloadExitCode = 2; return }
   if ($deb -and $platform -ne 'linux') { Write-Err '--deb vale solo per Linux.'; $script:HostDownloadExitCode = 2; return }
-  $parts = $version.Split('-')[0].Split('.')
-  if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
-    Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows (in arrivo). Non e'' stato scaricato niente.'
+  if ($platform -eq 'linux') {
+    Write-Err 'In questa versione non c''e'' l''app desktop per Linux: usa install.sh. Non e'' stato scaricato niente.'
     $script:HostDownloadExitCode = 1
     return
   }
-  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e Linux e' dalla 0.4.0.
+  $parts = $version.Split('-')[0].Split('.')
+  if ($platform -eq 'windows' -and (([int]$parts[0] -gt 0) -or ([int]$parts[1] -ge 4))) {
+    Write-Err 'Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e'' stato scaricato niente.'
+    $script:HostDownloadExitCode = 1
+    return
+  }
+  # Le release 0.3.x hanno altri file (tar.gz, setup.exe, zip): l'app per macOS e' dalla 0.4.0.
   if ($platform -ne 'windows' -and [int]$parts[0] -eq 0 -and [int]$parts[1] -lt 4) {
-    Write-Err "Questa release (v$version) non ha l'app per macOS/Linux: usa la 0.4.0 o successive. Non e' stato scaricato niente."
+    Write-Err "Questa release (v$version) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente."
     $script:HostDownloadExitCode = 1
     return
   }
@@ -2660,9 +2665,7 @@ function Invoke-HostDownload {
     return
   }
   $asset = if ($platform -eq 'windows') { 'job-hunter-team-windows-x64-setup.exe' }
-           elseif ($platform -eq 'macos') { 'job-hunter-team-macos-universal.dmg' }
-           elseif ($deb) { 'job-hunter-team-linux-x64.deb' }
-           else { 'job-hunter-team-linux-x64.AppImage' }
+           else { 'job-hunter-team-macos-universal.dmg' }
 
   # Destinazione: di base Downloads del profilo, mai una cartella condivisa con il team; un --output li' dentro si rifiuta.
   $destination = if ($output) { [IO.Path]::GetFullPath($output) } else { Join-Path (Join-Path $env:USERPROFILE 'Downloads') $asset }

@@ -39,9 +39,7 @@ csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = max
 
 ## 🔴 Blokkoló ellenőrzőlista — REQUIRED (feloldja a csapatot)
 
-A csapat NEM indul el, amíg az alábbi **összes** mező jelen van és nem üres (vagy amíg
-kifejezetten be nem állítod a `ready.flag`-et — lásd `profile-yaml`). Ez a minimum a
-pozíciók **kereséséhez és pontozásához**:
+A csapat **azonnal elindul, amint ebből három mező megvan: célpozíció, város/terület és legalább egy nyelv** (és a csomag deklarálva van): nem vár a többire. Ha a három megvan, állítsd be a `ready.flag`-et és értesítsd a Capitanót (lásd `profile-yaml`), mondd el a felhasználónak egy sorban („a csapat elindul; a következő kérdések pontosabbá teszik a keresést”), és **kérdezz tovább**: a másik öt mező és a kérdőív kártyái akkor érkeznek, amikor a csapat már dolgozik. Az alábbi nyolc mező a **teljes profil** (amit az app teljesnek mutat), és ez a minimum a pozíciók jó **kereséséhez és pontozásához**:
 
 | Mező                 | YAML útvonal                 | Semleges kérdéspélda                              |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -110,7 +108,7 @@ preferences:
 
 ## Előfizetési csomag — csak a kártyával kérdezd, soha ne írd be a felhasználó helyett
 
-A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési csomagja nincs megadva (a Capitano nem találgat felállást: egy rossz tipp az első napon elégeti a felhasználó keretét). **A csomagot EGYETLEN módon kérdezd, bármelyik ügynök, tehát te is: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Kitesz egy kártyát (a te chatedbe, mert a felhasználó veled beszél) a csomagokkal, az áraikkal és azzal, amelyet a Codex jelez, javasoltként megjelölve. A csomagot soha ne kérdezd szövegben, soha ne a saját `jht-notify-user` hívásoddal (egy így írt kérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár), a csomagokat soha ne sorold fel a saját szavaiddal.
+A csapat nem nyithatja meg az első körét, amíg a felhasználó előfizetési csomagja nincs megadva (a Capitano nem találgat felállást: egy rossz tipp az első napon elégeti a felhasználó keretét). **A csomagot EGYETLEN módon kérdezd, bármelyik ügynök, tehát te is: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Kitesz egy kártyát (a te chatedbe, mert a felhasználó veled beszél) a csomagokkal és azzal, amelyet a Codex jelez, javasoltként megjelölve. A csomagot soha ne kérdezd szövegben, soha ne a saját `jht-notify-user` hívásoddal (egy így írt kérdés nem jelenik meg a Messagesben, és a felhasználó hiába vár), a csomagokat soha ne sorold fel a saját szavaiddal.
 
 **Mikor:** egyszer, közvetlenül azután, hogy a profil el van mentve (a `profile_review.py apply-confirmed` `ok: true`-t adott), soha nem előtte, és soha nem az első üzeneteidben.
 

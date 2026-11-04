@@ -116,11 +116,11 @@ describe("a verdict of a local profile", () => {
   });
 
   it("leaves every other route, and every call when the profile is not local, to the next link", async () => {
-    for (const [path, method] of [["7/delete", "POST"], ["7/apply-request", "POST"], ["7/profile-files", "POST"], ["7/user-note", "PUT"], ["7/feedback", "GET"], ["7/feedback", "DELETE"], ["x/feedback", "POST"]] as const) {
+    for (const [path, method] of [["7/delete", "POST"], ["7/profile-files", "POST"], ["7/user-note", "PUT"], ["7/feedback", "GET"], ["7/feedback", "DELETE"], ["x/feedback", "POST"]] as const) {
       await post(path, {}, method);
     }
     expect(write).not.toHaveBeenCalled();
-    expect(next).toHaveBeenCalledTimes(7);
+    expect(next).toHaveBeenCalledTimes(6);
     next.mockClear();
     setLocalTeamData(null);
     await post("7/feedback", { action: "like" });
@@ -212,5 +212,54 @@ describe("what a local profile does on the page of a position", () => {
     setLocalTeamData("local:other");
     expect((await post("12/recheck-request", {})).status).toBe(409);
     expect(act).not.toHaveBeenCalled();
+  });
+});
+
+describe("the authorisation of an application of a local profile, in two steps", () => {
+  const DIGEST = "a".repeat(64);
+
+  it("asks the host for the preview first, with no authorisation, and gives the page the summary, the digest and the destination", async () => {
+    act.mockResolvedValue({ ok: true, op: "apply-preview", summary: "Engineer @ Acme · jobs.example.com", confirm: DIGEST, destination: "web:jobs.example.com" });
+    const answer = await post("7/apply-request", {});
+    expect(act).toHaveBeenCalledWith({ op: "apply_preview", id: "7", token: TOKEN });
+    expect(await answer.json()).toEqual({
+      ok: true, state: "awaiting_confirm", id: DIGEST, summary: "Engineer @ Acme · jobs.example.com", destination: "web:jobs.example.com", expiresAt: null, source: "local",
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("authorises only on the click that carries the digest AND the destination of the preview, and says «queued» only if the host confirmed the flag", async () => {
+    act.mockResolvedValue({ ok: true, op: "apply-request", apply_requested: true, result: "authorised" });
+    const answer = await post("7/apply-request", { confirmId: DIGEST, destination: "portal:ashby" });
+    expect(act).toHaveBeenCalledWith({ op: "apply_request", id: "7", on: true, confirmed: true, confirm: DIGEST, destination: "portal:ashby", token: TOKEN });
+    expect(await answer.json()).toMatchObject({ ok: true, state: "queued", apply_requested: true });
+    act.mockResolvedValue({ ok: true, op: "apply-request" });
+    expect(await (await post("7/apply-request", { confirmId: DIGEST, destination: "portal:ashby" })).json()).toMatchObject({ state: "not_authorised", apply_requested: false });
+  });
+
+  it("sends nothing to the host when the confirmation lacks the digest or the destination, or they do not fit", async () => {
+    for (const body of [{ confirmId: DIGEST }, { destination: "portal:ashby" }, { confirmId: "A".repeat(64), destination: "portal:ashby" }, { confirmId: DIGEST, destination: "web:a b; reboot" }, { confirmId: DIGEST, destination: "ftp:example.com" }]) {
+      act.mockClear();
+      const answer = await post("7/apply-request", body);
+      expect(answer.status).toBe(400);
+      expect(await answer.json()).toEqual({ error: "confirmation_required" });
+      expect(act).not.toHaveBeenCalled();
+    }
+  });
+
+  it("withdraws on its own, and answers «done» only when the host says the flag is off", async () => {
+    act.mockResolvedValue({ ok: true, op: "apply-request", apply_requested: false, result: "withdrawn" });
+    const answer = await post("7/apply-request", undefined, "DELETE");
+    expect(act).toHaveBeenCalledWith({ op: "apply_request", id: "7", on: false, token: TOKEN });
+    expect(await answer.json()).toMatchObject({ ok: true, state: "done", apply_requested: false });
+    act.mockResolvedValue({ ok: true, op: "apply-request" });
+    expect(await (await post("7/apply-request", undefined, "DELETE")).json()).toMatchObject({ state: "not_withdrawn" });
+  });
+
+  it("carries the host's refusal as its code, and a position changed since the preview is a conflict", async () => {
+    act.mockResolvedValue({ ok: false, error: "position_changed" });
+    const answer = await post("7/apply-request", { confirmId: DIGEST, destination: "portal:ashby" });
+    expect(answer.status).toBe(409);
+    expect(await answer.json()).toEqual({ error: "position_changed" });
   });
 });

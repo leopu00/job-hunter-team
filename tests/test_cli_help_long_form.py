@@ -31,4 +31,6 @@ def test_the_cli_answers_help_with_the_long_list_and_the_flag_with_the_short_one
     run = lambda *args: subprocess.run(["node", str(ROOT / "cli" / "bin" / "jht.js"), *args], capture_output=True, text=True, timeout=60).stdout
     assert "Essential commands" in run("--help")
     long = run("help")
-    assert "Essential commands" not in long and "Commands:" in long and "doctor" in long
+    # the long list is the grouped one: the groups, the commands, and the ones that live on the computer
+    assert "Essential commands" not in long and "Every day:" in long and "Maintenance:" in long and "doctor" in long
+    assert "up" in long.split("On your computer, outside the container:")[1]

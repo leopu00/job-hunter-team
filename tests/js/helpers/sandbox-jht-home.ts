@@ -15,6 +15,9 @@ import { afterAll } from "vitest";
 // for ".jht" in a path, or for a missing home, behave as they always did.
 const root = mkdtempSync(join(tmpdir(), "jht-home-sandbox-"));
 process.env.JHT_HOME = join(root, ".jht");
+// The screens of the CLI follow the language of the system (LC_ALL, LANG): the tests read their English, so they run
+// with the system's language off, as on the CI, and not with the one of the computer of whoever runs them.
+process.env.LC_ALL = "C.UTF-8";
 
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
