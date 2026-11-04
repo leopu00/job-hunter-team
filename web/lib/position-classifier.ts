@@ -47,7 +47,7 @@ function hashString(s: string): number {
   return Math.abs(h);
 }
 
-// I colori delle categorie derivano dal colore PRINCIPALE del tema scelto (theme-palette.ts): `var(--cat-N)` cambia quando si
+// I colori delle categorie derivano dal colore PRINCIPALE del tema scelto (theme-palette.ts): le variabili --cat-N cambiano quando si
 // cambia tema, un tema verde ha sfumature di verde, uno arancio sfumature di arancio. Sono 14, tutti diversi in ogni tema
 // (lo verifica theme-palette.test.ts sui token veri); oltre le 10 voci di un donut non si va, ma una lista piu' lunga ripete in ordine.
 export const FAMILY_PALETTE: readonly string[] = Array.from({ length: 10 }, (_, index) => categoryColor(index));
