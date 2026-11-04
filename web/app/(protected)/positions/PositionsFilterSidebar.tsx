@@ -313,7 +313,7 @@ export default function PositionsFilterSidebar({
       byFamily.set(f, (byFamily.get(f) ?? 0) + 1);
     }
     const total = pool.length;
-    const colors = assignFamilyColors(Array.from(byFamily.keys()));
+    const colors = assignFamilyColors(Array.from(byFamily.entries()).sort((a, b) => b[1] - a[1]).map(([family]) => family));
     return {
       total,
       rows: Array.from(byFamily.entries())

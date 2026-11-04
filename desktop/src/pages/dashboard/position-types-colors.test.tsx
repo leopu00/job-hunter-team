@@ -30,7 +30,8 @@ function renderCard() {
   return { data, view };
 }
 
-const isThemeColor = (value: string) => /^(var\(--color-[a-z-]+\)|color-mix\(in srgb, var\(--color-[a-z-]+\) \d+%, var\(--color-[a-z-]+\)\))$/.test(value);
+// a type is a slot of the theme's palette; «Altre» (the long tail) and «Da categorizzare» are the two neutral greys
+const isThemeColor = (value: string) => /^var\(--cat-\d{1,2}, /.test(value) || ["var(--color-muted)", "var(--color-dim)"].includes(value);
 
 describe("the TYPES card of the Dashboard", () => {
   it("paints the donut, the dots and the bars with tokens of the theme, one colour for each visible type", () => {

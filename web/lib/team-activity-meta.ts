@@ -9,43 +9,44 @@
 // attore, e l'affermazione era finita pari pari nel testo di #160. Un commento
 // che dichiara una parentela inesistente non e' un dettaglio: e' la fonte da
 // cui la parentela viene poi citata come fatto.
+import { categoryColor, ROLE_SLOT } from "./category-colors";
 import type { TeamActivityRole } from "./team-activity";
 import { intlTag } from "./locale-tag";
 import { parseStamp } from "./parse-stamp";
 
-// Colours of the roles in the charts: tokens of the CHOSEN theme (the desktop's eleven palettes and the web's light and dark),
-// one for each role and all five apart, so a chart follows the theme and no role looks like its neighbour. Never a hex here.
+// Colours of the roles in the charts: derived from the MAIN colour of the CHOSEN theme (category-colors.ts), one slot for each role
+// and all apart, so a chart follows the theme (a green theme has shades of green, an orange one of orange). Never a hex here.
 export const ROLE_META: Record<
   TeamActivityRole,
   { label: string; color: string; verb: string; action: string }
 > = {
   scout: {
     label: "Scout",
-    color: "var(--color-blue)",
+    color: categoryColor(ROLE_SLOT.scout),
     verb: "posizioni trovate",
     action: "ha trovato una posizione",
   },
   analista: {
     label: "Analista",
-    color: "var(--color-green)",
+    color: categoryColor(ROLE_SLOT.analista),
     verb: "posizioni analizzate",
     action: "ha analizzato una posizione",
   },
   scorer: {
     label: "Scorer",
-    color: "var(--color-purple)",
+    color: categoryColor(ROLE_SLOT.scorer),
     verb: "score assegnati",
     action: "ha assegnato uno score",
   },
   scrittore: {
     label: "Scrittore",
-    color: "var(--color-yellow)",
+    color: categoryColor(ROLE_SLOT.scrittore),
     verb: "CV scritti",
     action: "ha scritto un CV",
   },
   critico: {
     label: "Critico",
-    color: "var(--color-red)",
+    color: categoryColor(ROLE_SLOT.critico),
     verb: "review completate",
     action: "ha completato una review",
   },
