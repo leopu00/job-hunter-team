@@ -443,7 +443,7 @@ describe("the office of a local profile", () => {
     expect(calls(SNAPSHOT)).toHaveLength(0);
     // the doctor and the maintainer wear a character that exists, and keep their own name
     const looks = Object.fromEntries(applied.filter((e): e is Extract<OfficeEvent, { type: "enter" }> => e.type === "enter").map((e) => [e.agent.uid, e.agent.look]));
-    expect(looks).toMatchObject({ dottore: "assistente", mantenitore: "sentinella" });
+    expect(looks).toMatchObject({ dottore: "assistente", mantenitore: "mentor" });
     expect(looks.capitano).toBeUndefined();
   });
 

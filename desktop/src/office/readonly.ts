@@ -59,7 +59,7 @@ const OFFICE_ROLES: readonly AgentRole[] = [
 ];
 
 /** The character a role without its own wears. */
-const LOOKS_LIKE: Partial<Record<AgentRole, AgentRole>> = { dottore: "assistente", mantenitore: "sentinella" };
+const LOOKS_LIKE: Partial<Record<AgentRole, AgentRole>> = { dottore: "assistente", mantenitore: "mentor" };
 
 const UNKNOWN_PILES: Piles = { scout: null, analisti: null, scorer: null, scrittori: null, critici: null };
 
