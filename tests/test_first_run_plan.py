@@ -79,9 +79,8 @@ def test_plan_display_defaults_to_english_without_changing_contract(jht_home):
         "adagio", "moderato", "allegretto", "allegro", "vivace",
     ]
     assert plans[0]["label"] == "Adagio (free)"
-    assert [plan["price"] for plan in plans] == [
-        "0", "19 $/month", "39 $/month", "99 $/month", "199 $/month",
-    ]
+    # no price anywhere: they are a third party's, they change, and the registry keeps names and ids only
+    assert all("price" not in plan for plan in plans)
     assert [plan["tier"] for plan in plans] == [0.2, 1, 5, 15, 30]
     assert all(plan["weekly_capped"] is True for plan in plans)
 
@@ -91,12 +90,12 @@ def test_plan_display_uses_the_existing_backend_catalog(jht_home, monkeypatch):
     i18n._resolve_lang.cache_clear()
     plans = plan_registry.list_plans("kimi")["kimi"]
     assert plans[0]["label"] == "Adagio (gratuito)"
-    assert plans[1]["price"] == "19 $/mese"
+    assert plans[1]["label"] == "Moderato" and "price" not in plans[1]
 
 
 def test_plan_catalog_keys_exist_in_all_seven_languages():
     keys = {
-        "plan.free", "plan.price_month", "plan.unknown",
+        "plan.free", "plan.unknown",
         "plan.not_selected", "plan.select_hint", "plan.none_known",
         "plan.weekly_cap", "plan.no_weekly_cap", "plan.window_5h",
         "plan.no_window_5h", "plan.usage_pair", "plan.usage_single",

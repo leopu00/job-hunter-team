@@ -126,7 +126,6 @@
   "common.done": "Fatto",
   "common.retry": "Riprova",
   "plan.free": "gratuito",
-  "plan.price_month": "%s $/mese",
   "plan.unknown": "piano sconosciuto: %s",
   "plan.config_unreadable": "%s non si legge (danneggiato, o non è un oggetto JSON): il piano non è stato scritto e il file è rimasto com'è",
   "plan.not_selected": "piano di abbonamento non selezionato",

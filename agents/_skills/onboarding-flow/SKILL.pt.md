@@ -108,7 +108,7 @@ preferences:
 
 ## Plano de subscrição — pergunta só com o cartão, nunca o escrevas pelo utilizador
 
-A equipa não pode abrir a primeira ronda enquanto o plano de subscrição do utilizador não estiver declarado (o Capitano não adivinha uma formação: um palpite errado queima a janela do utilizador no primeiro dia). **O plano pergunta-se de UMA só forma, a partir de qualquer agente e portanto também a partir de ti: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Publica um cartão (no teu chat, porque o utilizador está a falar contigo) com os planos, os preços e o que o Codex indica marcado como sugerido. Nunca perguntes o plano em texto, nunca com o `jht-notify-user` por tua conta (uma pergunta escrita assim não aparece em Messages e o utilizador fica à espera), nunca listes os planos com palavras tuas.
+A equipa não pode abrir a primeira ronda enquanto o plano de subscrição do utilizador não estiver declarado (o Capitano não adivinha uma formação: um palpite errado queima a janela do utilizador no primeiro dia). **O plano pergunta-se de UMA só forma, a partir de qualquer agente e portanto também a partir de ti: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Publica um cartão (no teu chat, porque o utilizador está a falar contigo) com os planos e o que o Codex indica marcado como sugerido. Nunca perguntes o plano em texto, nunca com o `jht-notify-user` por tua conta (uma pergunta escrita assim não aparece em Messages e o utilizador fica à espera), nunca listes os planos com palavras tuas.
 
 **Quando:** uma vez, logo depois de o perfil ficar guardado (`profile_review.py apply-confirmed` respondeu `ok: true`), nunca antes e nunca nas tuas primeiras mensagens.
 

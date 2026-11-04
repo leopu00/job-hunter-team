@@ -123,7 +123,6 @@
   "common.done": "Terminé",
   "common.retry": "Réessayer",
   "plan.free": "gratuit",
-  "plan.price_month": "%s $/mois",
   "plan.unknown": "formule inconnue : %s",
   "plan.config_unreadable": "%s est illisible (endommagé, ou pas un objet JSON) : la formule n’a pas été écrite et le fichier est resté tel quel",
   "plan.not_selected": "formule d'abonnement non sélectionnée",

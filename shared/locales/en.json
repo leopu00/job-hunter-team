@@ -157,7 +157,6 @@
   "common.done": "Done",
   "common.retry": "Retry",
   "plan.free": "free",
-  "plan.price_month": "%s $/month",
   "plan.unknown": "unknown plan: %s",
   "plan.config_unreadable": "%s cannot be read (damaged, or not a JSON object): the plan was not written and the file was left as it is",
   "plan.not_selected": "subscription plan not selected",
