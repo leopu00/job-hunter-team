@@ -85,6 +85,8 @@ pub(crate) enum StreamRead<'a> {
     AgentsList,
     AgentsTeam,
     AgentsHistory,
+    /// What each agent worked on in a window of the page's six (JHT-T171).
+    AgentsActivity { window: &'a str },
     AgentsExclusions,
     TeamSettings,
     TeamStart,
@@ -112,6 +114,7 @@ impl StreamRead<'_> {
             Self::AgentsList => "agents.list",
             Self::AgentsTeam => "agents.team",
             Self::AgentsHistory => "agents.history",
+            Self::AgentsActivity { .. } => "agents.activity",
             Self::AgentsExclusions => "agents.exclusions",
             Self::TeamSettings => "team.settings",
             Self::TeamStart => "team.start",
@@ -141,6 +144,12 @@ impl StreamRead<'_> {
                     return None;
                 }
                 request.insert("args".into(), json!({ "name": name }));
+            }
+            Self::AgentsActivity { window } => {
+                if !crate::agent_control::ACTIVITY_WINDOWS.iter().any(|(name, _, _)| name == window) {
+                    return None;
+                }
+                request.insert("args".into(), json!({ "window": window }));
             }
             Self::AgentsList | Self::AgentsTeam | Self::AgentsHistory | Self::AgentsExclusions | Self::TeamSettings | Self::TeamStart | Self::WorkStats | Self::ProfileProgress => {}
         }
@@ -576,7 +585,7 @@ fn hello_accepted(hello: &Hello, container: &str) -> Result<Vec<String>, &'stati
 }
 
 /// The reads this side knows: every `StreamRead::op`. A hello that lists any other operation is ignored for it.
-const READ_OPS: [&str; 10] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.exclusions", "team.settings", "agents.screen", "profile.progress", "team.start", "work.stats"];
+const READ_OPS: [&str; 11] = ["chat.read", "agents.list", "agents.team", "agents.history", "agents.activity", "agents.exclusions", "team.settings", "agents.screen", "profile.progress", "team.start", "work.stats"];
 
 /// The digest of the script an operation runs from the image, when it runs one; the script is the app's own constant.
 /// The container declares its digest in the hello. That is NOT an authentication (the container is not trusted): it
@@ -1030,6 +1039,12 @@ mod tests {
         assert_eq!(value(StreamRead::AgentsScreen { name: "SCOUT-12" }), json!({"id":5,"op":"agents.screen","args":{"name":"SCOUT-12"}}));
         assert_eq!(value(StreamRead::ProfileProgress), json!({"id":5,"op":"profile.progress"}));
         assert_eq!(value(StreamRead::AgentsHistory), json!({"id":5,"op":"agents.history"}));
+        for window in ["5m", "15m", "1h", "5h", "24h", "7d"] {
+            assert_eq!(value(StreamRead::AgentsActivity { window }), json!({"id":5,"op":"agents.activity","args":{"window":window}}));
+        }
+        for window in ["", "2h", "1H", "1h ", "-1h", "1h\n", "7d;x", "30d"] {
+            assert!(StreamRead::AgentsActivity { window }.request(1).is_none(), "{window:?}");
+        }
         assert_eq!(value(StreamRead::AgentsExclusions), json!({"id":5,"op":"agents.exclusions"}));
         assert_eq!(value(StreamRead::TeamSettings), json!({"id":5,"op":"team.settings"}));
         assert_eq!(value(StreamRead::TeamStart), json!({"id":5,"op":"team.start"}));
@@ -1135,6 +1150,7 @@ mod tests {
             StreamRead::AgentsList.op(),
             StreamRead::AgentsTeam.op(),
             StreamRead::AgentsHistory.op(),
+            StreamRead::AgentsActivity { window: "1h" }.op(),
             StreamRead::AgentsExclusions.op(),
             StreamRead::TeamSettings.op(),
             StreamRead::AgentsScreen { name: "CAPITANO" }.op(),

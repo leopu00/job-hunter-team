@@ -106,6 +106,14 @@ export const READERS = {
   'agents.list': { ttl: 1000, argv: (args) => (NO_ARGS(args) ? control(['list']) : null) },
   'agents.team': { ttl: 1000, argv: (args) => (NO_ARGS(args) ? control(['team']) : null) },
   'agents.history': { ttl: 2000, argv: (args) => (NO_ARGS(args) ? control(['history']) : null) },
+  // what each agent worked on in a window (the page's six windows; agent-control-args.js checks the word)
+  'agents.activity': {
+    ttl: 5000,
+    argv(args) {
+      if (!keysOnly(args, ['window']) || typeof args.window !== 'string') return null;
+      return control(['activity', args.window]);
+    },
+  },
   'agents.exclusions': { ttl: 1000, argv: (args) => (NO_ARGS(args) ? control(['exclusions']) : null) },
   'team.settings': { ttl: 3000, argv: (args) => (NO_ARGS(args) ? [NODE, JHT_ENTRY, 'agent-control', 'settings', 'get'] : null) },
   'agents.screen': {

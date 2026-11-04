@@ -108,8 +108,8 @@ pub(crate) fn start_command(kind: StartKind) -> TeamCommand<'static> {
 }
 
 /// The operations of `agent_control.py`, as `ControlRequest::argv` names them.
-const AGENT_CONTROL_OPS: [&str; 14] = [
-    "list", "team", "history", "screen", "start", "stop", "restart", "pause", "resume", "stop-team",
+const AGENT_CONTROL_OPS: [&str; 15] = [
+    "list", "team", "history", "activity", "screen", "start", "stop", "restart", "pause", "resume", "stop-team",
     "exclusions", "exclusion-accept", "exclusion-withdraw", "answer",
 ];
 /// The only options a request carries (`pause`).
@@ -238,7 +238,7 @@ mod tests {
         assert_eq!(command.input, Some(input));
         // Every form ControlRequest::argv builds.
         for ok in [
-            vec!["list"], vec!["team"], vec!["history"], vec!["resume"], vec!["stop-team"], vec!["exclusions"],
+            vec!["list"], vec!["team"], vec!["history"], vec!["activity", "1h"], vec!["activity", "24h"], vec!["resume"], vec!["stop-team"], vec!["exclusions"],
             vec!["start", "SCOUT-1"], vec!["stop", "CRITICO-S2"], vec!["restart", "CAPITANO"],
             vec!["pause", "--for-hours", "24"], vec!["pause", "--until", "2026-10-24T10:00:00Z"], vec!["pause", "--wake-on-weekly"],
             vec!["exclusion-accept", "wrong_location"], vec!["exclusion-withdraw", "company"],

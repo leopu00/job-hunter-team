@@ -57,7 +57,7 @@ test('the first line is the hello: protocol, ops, the container id, and the scri
   assert.equal(hello.proto, 1);
   assert.equal(hello.cid, 'b'.repeat(64));
   assert.deepEqual(hello.sha256, { 'profile.progress': 'a'.repeat(64), 'team.start': 'c'.repeat(64), 'work.stats': 'd'.repeat(64) });
-  assert.deepEqual(hello.ops, ['chat.read', 'agents.list', 'agents.team', 'agents.history', 'agents.exclusions', 'team.settings', 'agents.screen', 'profile.progress', 'team.start', 'work.stats', 'watch', 'invalidate', 'ping', 'bye']);
+  assert.deepEqual(hello.ops, ['chat.read', 'agents.list', 'agents.team', 'agents.history', 'agents.activity', 'agents.exclusions', 'team.settings', 'agents.screen', 'profile.progress', 'team.start', 'work.stats', 'watch', 'invalidate', 'ping', 'bye']);
 });
 
 test('an image without the profile script does not declare that op, and asking for it is an unknown op', async () => {
@@ -149,6 +149,31 @@ test('a value that could be an option, a list, or too long never reaches a reade
   assert.ok(answers.every((line) => line.ok === false && ['args_invalid', 'busy'].includes(line.err)));
   assert.equal(answers.filter((line) => line.err === 'args_invalid').length >= 10, true);
   assert.deepEqual(h.ended, []);
+});
+
+test('the agents\' activity runs agent_control.py activity with one of the page\'s six windows, and nothing else gets that far', async () => {
+  const h = harness();
+  let id = 0;
+  for (const window of ['5m', '15m', '1h', '5h', '24h', '7d']) h.send({ id: (id += 1), op: 'agents.activity', args: { window } });
+  await h.next();
+  const argvs = h.calls.map((call) => call.argv);
+  assert.deepEqual(argvs.map((argv) => argv.slice(0, 4)), Array(6).fill(['/usr/bin/python3', '-I', '/app/shared/skills/agent_control.py', 'activity']));
+  assert.deepEqual(argvs.map((argv) => argv[4]), ['5m', '15m', '1h', '5h', '24h', '7d']);
+  assert.ok(argvs.every((argv) => argv.length === 5 && argv[0].startsWith('/')));
+
+  const bad = harness();
+  let n = 0;
+  for (const window of ['', '2h', '1H', '1h ', '-1h', '30d', '1h;x', '5m\n', '--help', 'x'.repeat(257)]) {
+    bad.send({ id: (n += 1), op: 'agents.activity', args: { window } });
+  }
+  bad.send({ id: (n += 1), op: 'agents.activity', args: { window: 3600 } });
+  bad.send({ id: (n += 1), op: 'agents.activity', args: { window: '1h', more: 1 } });
+  bad.send({ id: (n += 1), op: 'agents.activity' });
+  await bad.next();
+  assert.equal(bad.calls.length, 0);
+  const answers = bad.lines.filter((line) => line.t === 'res');
+  assert.equal(answers.length, n);
+  assert.ok(answers.every((line) => line.ok === false && ['args_invalid', 'busy'].includes(line.err)));
 });
 
 test('an op that is not in the table is answered, not run; an op that is not a string ends the stream', async () => {
@@ -522,7 +547,7 @@ test('source: the table holds absolute programs only, and every program is one o
   assert.ok(/const PYTHON = '\/usr\/bin\/python3'/.test(CODE) && /const TMUX = '\/usr\/bin\/tmux'/.test(CODE));
   assert.ok(/const CWD|export const CWD = '\/app'/.test(CODE));
   for (const reader of Object.values(READERS)) {
-    const sample = reader === READERS['chat.read'] ? { agent: 'capitano' } : reader === READERS['agents.screen'] ? { name: 'CAPITANO' } : undefined;
+    const sample = reader === READERS['chat.read'] ? { agent: 'capitano' } : reader === READERS['agents.screen'] ? { name: 'CAPITANO' } : reader === READERS['agents.activity'] ? { window: '1h' } : undefined;
     const argv = reader.argv(sample);
     if (reader === READERS['team.settings']) {
       assert.deepEqual(argv, ['/usr/local/bin/node', '/app/cli/bin/jht.js', 'agent-control', 'settings', 'get']);
