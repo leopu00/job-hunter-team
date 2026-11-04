@@ -1449,7 +1449,7 @@ done"#
         let code = code.as_str();
         // the reads of the closed set, and nothing else, have an operation
         let ops = code.split("fn op(&self)").nth(1).unwrap().split("\n    }\n").next().unwrap();
-        assert_eq!(ops.matches('"').count() / 2, 10);
+        assert_eq!(ops.matches('"').count() / 2, 11);
         for forbidden in ["app_exit", "ChatOperation::Send", "ChatOperation::Answer", "ChatOperation::Enter", "\"start\"", "\"stop\"", "\"restart\"", "\"pause\"", "\"resume\"", "\"send\"", "\"answer\"", "write_access", "team_control", "start_command"] {
             assert!(!code.contains(forbidden), "{forbidden}");
         }
@@ -1459,14 +1459,14 @@ done"#
         // and the statistics' read is the script's constant too, never its clearing (the stream asks for a read of 30 nights only)
         assert_eq!(code.matches("crate::work_stats::").count(), 1);
         assert!(code.contains("crate::work_stats::WORK_STATS_PY") && !code.contains("work_stats_clear"));
-        // the callers: the chat's Read only, the panel's three reads only, the profile read only
+        // the callers: the chat's Read only, the panel's reads only (the activity among them), the profile read only
         let chat = include_str!("direct_chat.rs");
         let chat_arm = chat.split("// The hot read goes over the state stream").nth(1).unwrap().split("let writes =").next().unwrap();
         assert!(chat_arm.contains("ChatOperation::Read { agent, cursor }") && chat_arm.matches("read_local(").count() == 1);
         let control = include_str!("agent_control.rs");
         let hot = control.split("let hot = match request {").nth(1).unwrap().split("};").next().unwrap();
-        assert_eq!(hot.matches("Some(crate::state_stream::StreamRead::").count(), 5);
-        assert!(hot.contains("List {}") && hot.contains("Team {}") && hot.contains("Screen { session }") && hot.contains("History {}") && hot.contains("Exclusions {}"));
+        assert_eq!(hot.matches("Some(crate::state_stream::StreamRead::").count(), 6);
+        assert!(hot.contains("List {}") && hot.contains("Team {}") && hot.contains("Screen { session }") && hot.contains("History {}") && hot.contains("Activity { window }") && hot.contains("Exclusions {}"));
         // the settings: only the read goes over the stream, and a change made the old way drops what it kept
         let settings = include_str!("team_settings.rs");
         let local = settings.split("Destination::Local { wrapper, runtime } => {").nth(1).unwrap().split("\n        }\n").next().unwrap();
