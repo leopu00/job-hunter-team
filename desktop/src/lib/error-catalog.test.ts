@@ -39,6 +39,13 @@ const NOT_ERRORS: Record<string, string> = {
     ["lockout_risk", "no_data", "on_pace", "pace_ahead", "daily_cap_stop", "recovering_after_freeze", "pause_between_jobs"]
       .map((code) => [code, "a code of the Budget page's closed lists, told by the page in its own lines; never shown as a code"]),
   ),
+  // agent_control.rs (the activity read): the name of one field of the container's answer that the native side reads
+  // (`bucket_s`, `unattributed_kt`) and a state word of the team's own list (`aspetta_umano`). The page tells the state
+  // in its own lines; none of them is ever shown as a code.
+  ...Object.fromEntries(
+    ["bucket_s", "unattributed_kt", "aspetta_umano"]
+      .map((code) => [code, "a key of the activity read's answer or a state word the Agents page tells in its own lines; never shown as a code"]),
+  ),
   // local_swipe.rs: the names of the fields of a deck and of the verdict's answer, and the start of the owner
   // codes the write turns into «read only». They are keys of a JSON the page reads, never a sentence.
   ...Object.fromEntries(
