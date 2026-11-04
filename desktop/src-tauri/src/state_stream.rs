@@ -1394,7 +1394,7 @@ done"#
         let ops = hello_accepted(&hello, &format!("{}{}", hello.cid.clone().unwrap(), "0".repeat(64 - hello.cid.as_ref().unwrap().len()))).unwrap();
         println!("accepted: {ops:?}");
         session.ops.set(ops).unwrap();
-        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::TeamStart, StreamRead::WorkStats, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
+        for read in [StreamRead::AgentsList, StreamRead::AgentsTeam, StreamRead::AgentsHistory, StreamRead::AgentsActivity { window: "1h" }, StreamRead::AgentsActivity { window: "7d" }, StreamRead::AgentsExclusions, StreamRead::TeamSettings, StreamRead::TeamStart, StreamRead::WorkStats, StreamRead::ChatRead { agent: "capitano", cursor: None }, StreamRead::AgentsScreen { name: "CAPITANO" }, StreamRead::ProfileProgress] {
             for round in 0..2 {
                 let at = Instant::now();
                 let done = session.read(&read).expect("answered");
