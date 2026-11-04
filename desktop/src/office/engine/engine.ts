@@ -319,10 +319,11 @@ class Engine implements OfficeEngine {
   private enter(info: OfficeAgent, atOnce: boolean): void {
     if (this.agents.has(info.uid)) return;
     const { n } = parseUid(info.uid);
-    const variants = this.layout.sheets[info.role] ?? [];
+    const look = info.look ?? info.role;
+    const variants = this.layout.sheets[look] ?? [];
     const sheet = info.sheet || variants[(Math.max(1, n) - 1) % Math.max(1, variants.length)] || "";
     const sheetSit = this.sitBySheet ? this.sitBySheet.get(sheet) === true : true;
-    const home = this.homeOf(info.role, n);
+    const home = this.homeOf(look, n);
     const agent: Agent = {
       info: { ...info, sheet },
       hasSit: home.furniture !== null && (sheetSit || home.furniture.occupiedImage !== undefined),
@@ -344,7 +345,7 @@ class Engine implements OfficeEngine {
       t: this.random() * 10,
       gone: false,
       typing: isTyping(this.statuses, info.uid),
-      wander: home.dept ? [] : this.layout.coreSeats.find((c) => c.role === info.role)?.wander ?? [],
+      wander: home.dept ? [] : this.layout.coreSeats.find((c) => c.role === look)?.wander ?? [],
       patrolIn: 0,
       patrol: false,
       settle: null,
@@ -389,7 +390,7 @@ class Engine implements OfficeEngine {
     const deptId = DEPT_OF_ROLE[role];
     const dept = deptId ? this.deptById.get(deptId) ?? null : null;
     const taken = new Set([...this.agents.values()].flatMap((a) => (a.home.furniture ? [a.home.furniture.id] : [])));
-    const copies = [...this.agents.values()].filter((a) => a.info.role === role && a.home.furniture === null).length;
+    const copies = [...this.agents.values()].filter((a) => (a.info.look ?? a.info.role) === role && a.home.furniture === null).length;
     if (dept) {
       const desks = [...dept.desks].sort((x, y) => x.index - y.index).filter((d) => !taken.has(d.furniture.id));
       const desk = desks.find((d) => d.index === n - 1) ?? desks[0];

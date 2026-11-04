@@ -28,6 +28,9 @@ export interface ExistingTeamAgentsText {
   officeReadAt: string; // {time}
   /** Under the office's scene: the VPS has no agent session up that the office can draw. */
   officeNoneUp: string;
+  /** the same two sentences for the team on THIS computer (a local profile) */
+  officeReadAtHere: string; // {time}
+  officeNoneUpHere: string;
 }
 
 export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> = {
@@ -55,6 +58,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Sola lettura: da qui non si scrive agli agenti e non si premono tasti nei loro terminali.",
     officeReadAt: "Agenti letti dalla VPS alle {time}.",
     officeNoneUp: "Sulla VPS non c’è nessun agente attivo da mostrare nell’ufficio.",
+    officeReadAtHere: "Agenti letti da questo computer alle {time}.",
+    officeNoneUpHere: "Su questo computer non c’è nessun agente attivo da mostrare nell’ufficio.",
   },
   en: {
     title: "Agents",
@@ -80,6 +85,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Read only: from here you do not write to the agents or press keys in their terminals.",
     officeReadAt: "Agents read from the VPS at {time}.",
     officeNoneUp: "The VPS has no running agent to show in the office.",
+    officeReadAtHere: "Agents read from this computer at {time}.",
+    officeNoneUpHere: "This computer has no running agent to show in the office.",
   },
   de: {
     title: "Agenten",
@@ -105,6 +112,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Nur Lesen: Von hier aus schreibst du den Agenten nicht und drückst keine Tasten in ihren Terminals.",
     officeReadAt: "Agenten um {time} von der VPS gelesen.",
     officeNoneUp: "Auf der VPS läuft kein Agent, der im Büro gezeigt werden kann.",
+    officeReadAtHere: "Agenten um {time} von diesem Computer gelesen.",
+    officeNoneUpHere: "Auf diesem Computer läuft kein Agent, der im Büro gezeigt werden kann.",
   },
   es: {
     title: "Agentes",
@@ -130,6 +139,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Solo lectura: desde aquí no se escribe a los agentes ni se pulsan teclas en sus terminales.",
     officeReadAt: "Agentes leídos del VPS a las {time}.",
     officeNoneUp: "En el VPS no hay ningún agente activo que mostrar en la oficina.",
+    officeReadAtHere: "Agentes leídos de este ordenador a las {time}.",
+    officeNoneUpHere: "En este ordenador no hay ningún agente activo que mostrar en la oficina.",
   },
   fr: {
     title: "Agents",
@@ -155,6 +166,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Lecture seule : d’ici, on n’écrit pas aux agents et on n’appuie sur aucune touche dans leurs terminaux.",
     officeReadAt: "Agents lus depuis le VPS à {time}.",
     officeNoneUp: "Le VPS n’a aucun agent actif à montrer dans le bureau.",
+    officeReadAtHere: "Agents lus depuis cet ordinateur à {time}.",
+    officeNoneUpHere: "Cet ordinateur n’a aucun agent actif à montrer dans le bureau.",
   },
   hu: {
     title: "Ügynökök",
@@ -180,6 +193,8 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Csak olvasás: innen nem írsz az ügynököknek, és nem nyomsz billentyűt a termináljukban.",
     officeReadAt: "Az ügynökök beolvasva a VPS-ről: {time}.",
     officeNoneUp: "A VPS-en nincs olyan aktív ügynök, amelyet az irodában meg lehetne mutatni.",
+    officeReadAtHere: "Az ügynökök beolvasva erről a számítógépről: {time}.",
+    officeNoneUpHere: "Ezen a számítógépen nincs olyan aktív ügynök, amelyet az irodában meg lehetne mutatni.",
   },
   pt: {
     title: "Agentes",
@@ -205,5 +220,7 @@ export const EXISTING_TEAM_AGENTS_TEXT: Record<Locale, ExistingTeamAgentsText> =
     readOnly: "Só leitura: daqui não se escreve aos agentes nem se premem teclas nos terminais deles.",
     officeReadAt: "Agentes lidos da VPS às {time}.",
     officeNoneUp: "Na VPS não há nenhum agente ativo para mostrar no escritório.",
+    officeReadAtHere: "Agentes lidos deste computador às {time}.",
+    officeNoneUpHere: "Neste computador não há nenhum agente ativo para mostrar no escritório.",
   },
 };

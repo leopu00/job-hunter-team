@@ -152,12 +152,13 @@ describe("officeFromTeamProbe with the team's agents (the Agents page's read)", 
 
   it("draws every agent that is up and has a character, by role and instance, with the team's state", () => {
     const office = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM));
-    // the closer and the doctor have no character in the office: not drawn
+    // the closer has no character in the office: not drawn. The doctor wears an existing one, with its own name.
     expect(office.snapshot.roster).toEqual([
       { uid: "capitano", role: "capitano", sheet: "" },
       { uid: "scout-1", role: "scout", sheet: "" },
       { uid: "scout-2", role: "scout", sheet: "" },
       { uid: "critico-s3", role: "critico", sheet: "" },
+      { uid: "dottore", role: "dottore", sheet: "", look: "assistente" },
     ]);
     const agents = office.statuses!.agents;
     expect(office.statuses!.at).toBe(AT);
@@ -190,13 +191,14 @@ describe("officeFromTeamProbe with the team's agents (the Agents page's read)", 
 
   it("says above the scene how the team is: the counts by state the team computes, and who has no seat", () => {
     const office = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM));
-    // CAPITANO and CLOSER-1 work, SCOUT-1 is blocked, SCOUT-2 and DOTTORE are free; CRITICO-S3 is not known
+    // CAPITANO and CLOSER-1 work, SCOUT-1 is blocked, SCOUT-2 and DOTTORE are free; CRITICO-S3 is not known; only the closer has no seat
     expect(office.notice?.text).toContain("▶ lavora 2 · ⏸ bloccato 1 · ○ libero 2");
-    expect(office.notice?.text).toContain("CLOSER-1, DOTTORE");
+    expect(office.notice?.text).toContain("CLOSER-1");
+    expect(office.notice?.text).not.toContain("DOTTORE");
     // without the team's own state, no count: only who has no seat
     const unknown = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM, false));
     expect(unknown.notice?.text).not.toContain("▶");
-    expect(unknown.notice?.text).toContain("CLOSER-1, DOTTORE");
+    expect(unknown.notice?.text).toContain("CLOSER-1");
   });
 
   it("no sentence of the agents' office is left with a placeholder, in any language", () => {

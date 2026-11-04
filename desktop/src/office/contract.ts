@@ -41,7 +41,10 @@ export type AgentRole =
   | "critico"
   | "sentinella"
   | "assistente"
-  | "mentor";
+  | "mentor"
+  // These two have no character of their own in the office yet: they wear another role's (OfficeAgent.look).
+  | "dottore"
+  | "mantenitore";
 
 /** The five departments of the pipeline (DepartmentDefs.DEPT_ORDER), in order. */
 export type DeptId = "scout" | "analisti" | "scorer" | "scrittori" | "critici";
@@ -298,7 +301,7 @@ export type OfficeLayout = {
     basisY: Vec;
   };
   /** which sheet each role wears, and the variants for its instances */
-  sheets: Record<AgentRole, string[]>;
+  sheets: Partial<Record<AgentRole, string[]>>;
 };
 
 /** /office/manifest.json: the one file the page fetches first. */
@@ -324,6 +327,11 @@ export type OfficeAgent = {
    * instance number (scout-2 -> the second variant). Always set in poses().
    */
   sheet: string;
+  /**
+   * A role with no character or seat of its own wears another role's and stands by its seat (dottore and
+   * mantenitore, until each has a character); its name stays its own on every tag. Absent = its own role.
+   */
+  look?: AgentRole;
 };
 
 /** What the scene draws for an agent, every frame. */

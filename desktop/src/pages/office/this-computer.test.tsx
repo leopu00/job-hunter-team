@@ -32,6 +32,14 @@ vi.mock("../../lib/supabase", () => ({
 }));
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => native);
+// The channel to the team (lib/state-stream.ts): its events are sent by hand
+const channel = vi.hoisted(() => ({ handlers: new Map<string, (event: { payload: unknown }) => void>() }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (name: string, handler: (event: { payload: unknown }) => void) => {
+    channel.handlers.set(name, handler);
+    return () => channel.handlers.delete(name);
+  },
+}));
 const statusQuery = vi.hoisted(() => ({ calls: 0 }));
 vi.mock("../../office/status", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../office/status")>()),
@@ -48,6 +56,7 @@ vi.mock("../../office/parts", async (importOriginal) => ({
 
 import { resetVpsPositionsShared } from "../../lib/existing-team-positions-shared";
 import { resetTeamAgentsShared } from "../../lib/existing-team-agents";
+import { resetStateStreamForTests, startStateStream } from "../../lib/state-stream";
 import OfficePage, { THIS_COMPUTER_OFFICE_READ_MS } from "./index";
 
 const SNAPSHOT = "onboarding_resume_snapshot";
@@ -116,6 +125,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  resetStateStreamForTests();
+  channel.handlers.clear();
   setLocalTeamData(null);
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -124,23 +135,26 @@ afterEach(() => {
 describe("the office of a local profile", () => {
   it("draws the agents that work on this computer, the ones the Agents page lists, and asks the cloud for nothing", async () => {
     mount();
-    // the captain and the scout have a character; the doctor has none in the office
-    await waitFor(() => expect(entered()).toEqual(["capitano", "scout-1"]));
+    // the captain, the scout and the doctor are in the office (the doctor wears a character that exists)
+    await waitFor(() => expect(entered()).toEqual(["capitano", "dottore", "scout-1"]));
     expect(calls(CONTROL).length).toBeGreaterThan(0);
     expect(load).not.toHaveBeenCalled();
     expect(statusQuery.calls).toBe(0);
     expect(cloud.touched).toEqual([]);
     await waitFor(() =>
       expect(scene.setAgentStatuses).toHaveBeenLastCalledWith(
-        expect.objectContaining({ agents: { capitano: expect.objectContaining({ state: "lavora" }), "scout-1": expect.objectContaining({ state: "idle" }) } }),
+        expect.objectContaining({ agents: { capitano: expect.objectContaining({ state: "lavora" }), dottore: expect.objectContaining({ state: "idle" }), "scout-1": expect.objectContaining({ state: "idle" }) } }),
       ),
     );
   });
 
   it("says nothing about the cloud, and never «I cannot read the cloud»", async () => {
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     expect(screen.queryByText(/cloud/i)).toBeNull();
+    // and nothing about a VPS: the line under the title says the agents were read from this computer
+    expect(screen.queryByText(/VPS/)).toBeNull();
+    expect(await screen.findByText(/letti da questo computer/)).toBeInTheDocument();
   });
 
   const ops = () => calls(POSITIONS).map(([, args]) => (args as { request: { op: string } }).request.op);
@@ -166,7 +180,7 @@ describe("the office of a local profile", () => {
   it("a count that fails for any other reason leaves the piles unknown and does not read the list on top of it", async () => {
     positionsReply = (op) => (op === "piles" ? { ok: false, error: "positions_unavailable" } : { ok: true, data: { items: ROWS, total: ROWS.length } });
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     expect(ops()).toEqual(["piles"]);
   });
 
@@ -185,51 +199,54 @@ describe("the office of a local profile", () => {
   it("reads again by itself while the window is in view, and not while it is hidden", async () => {
     fakeInterval();
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
-    const first = calls(SNAPSHOT).length;
+    await waitFor(() => expect(entered()).toHaveLength(3));
+    const first = calls(CONTROL).length;
     await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
-    await waitFor(() => expect(calls(SNAPSHOT).length).toBe(first + 1));
+    await waitFor(() => expect(calls(CONTROL).length).toBe(first + 1));
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
     await pass(THIS_COMPUTER_OFFICE_READ_MS * 3);
-    expect(calls(SNAPSHOT).length).toBe(first + 1);
+    expect(calls(CONTROL).length).toBe(first + 1);
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
   });
 
   it("follows the team: an agent that appears is drawn at the next read", async () => {
     fakeInterval();
     mount();
-    await waitFor(() => expect(entered()).toEqual(["capitano", "scout-1"]));
+    await waitFor(() => expect(entered()).toEqual(["capitano", "dottore", "scout-1"]));
     agents = [...agents, agent("SCORER-1", "scorer", "1", "lavora")];
     await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
-    await waitFor(() => expect(entered()).toEqual(["capitano", "scorer-1", "scout-1"]));
+    await waitFor(() => expect(entered()).toEqual(["capitano", "dottore", "scorer-1", "scout-1"]));
   });
 
   it("a round of reads still on its way is not started again by the next tick", async () => {
     fakeInterval();
     let release: (value: unknown) => void = () => undefined;
-    snapshotReply = () => new Promise((resolve) => { release = resolve; });
+    const answer = () => ({ ok: true, data: { agents, roles: ROLES, states: true, target: "T-local", where: "local", label: null } });
+    controlReply = () => new Promise((resolve) => { release = resolve; });
     mount();
-    await until(() => expect(calls(SNAPSHOT)).toHaveLength(1));
+    await until(() => expect(calls(CONTROL)).toHaveLength(1));
     await pass(THIS_COMPUTER_OFFICE_READ_MS * 4 + 500);
-    expect(calls(SNAPSHOT)).toHaveLength(1);
-    snapshotReply = async () => realSnapshotReply();
-    release(await realSnapshotReply());
-    await until(() => expect(entered()).toHaveLength(2));
+    expect(calls(CONTROL)).toHaveLength(1);
+    controlReply = async () => answer();
+    release(answer());
+    await until(() => expect(entered()).toHaveLength(3));
     await pass(THIS_COMPUTER_OFFICE_READ_MS + 500);
-    await until(() => expect(calls(SNAPSHOT)).toHaveLength(2));
+    await until(() => expect(calls(CONTROL)).toHaveLength(2));
   });
 
   it("«Refresh» takes over from a round still on its way: the old round is not shown, the new one is", async () => {
     let release: (value: unknown) => void = () => undefined;
-    snapshotReply = () => new Promise((resolve) => { release = resolve; });
+    const answer = (list: typeof agents) => ({ ok: true, data: { agents: list, roles: ROLES, states: true, target: "T-local", where: "local", label: null } });
+    controlReply = () => new Promise((resolve) => { release = resolve; });
     mount();
-    await waitFor(() => expect(calls(SNAPSHOT)).toHaveLength(1));
-    snapshotReply = async () => realSnapshotReply();
+    await waitFor(() => expect(calls(CONTROL)).toHaveLength(1));
+    controlReply = async () => answer(agents);
     await act(async () => refresh());
-    await waitFor(() => expect(calls(SNAPSHOT)).toHaveLength(2));
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(calls(CONTROL)).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     const before = applied.length;
-    release(await realSnapshotReply({ containerRunning: false }));
+    // the old round comes back late with nobody up: it is not shown
+    release(answer([]));
     await act(async () => { await Promise.resolve(); });
     expect(applied.length).toBe(before);
   });
@@ -241,7 +258,7 @@ describe("the office of a local profile", () => {
   it("a click on an agent opens its panel: its state, Spegni and the chat, what the team does not publish said so, nothing of the cloud", async () => {
     controlReply = async (op) => (op === "team" ? { ok: true, data: TEAM } : listReply());
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     const click: OfficeClick = { kind: "agent", uid: "capitano", role: "capitano" };
     act(() => scene.options!.onClick(click));
     const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
@@ -267,7 +284,7 @@ describe("the office of a local profile", () => {
       return listReply();
     };
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     act(() => scene.options!.onClick({ kind: "agent", uid: "scout-1", role: "scout" }));
     const panel = await screen.findByRole("complementary", { name: "Pannello di SCOUT-1" });
     await user.click(await within(panel).findByRole("button", { name: "Spegni Scout-1" }));
@@ -310,7 +327,7 @@ describe("the office of a local profile", () => {
       return listReply();
     };
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     act(() => scene.options!.onClick({ kind: "agent", uid: "capitano", role: "capitano" }));
     const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
     const toggle = await within(panel).findByRole("button", { name: /Terminale \(sola lettura\)/ });
@@ -330,7 +347,7 @@ describe("the office of a local profile", () => {
     const user = userEvent.setup();
     controlReply = async (op) => (op === "team" ? { ok: true, data: TEAM } : listReply());
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     const button = await screen.findByRole("button", { name: /capitano/i });
     button.focus();
     await user.keyboard("{Enter}");
@@ -351,7 +368,7 @@ describe("the office of a local profile", () => {
   it("shows the last message exchanged with an agent the chat already read, and says so when it has read none", async () => {
     controlReply = async (op) => (op === "team" ? { ok: true, data: TEAM } : listReply());
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     act(() => scene.options!.onClick({ kind: "agent", uid: "capitano", role: "capitano" }));
     const first = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
     expect(within(first).getByText(/Nessun messaggio letto in questa sessione/)).toBeInTheDocument();
@@ -382,7 +399,7 @@ describe("the office of a local profile", () => {
       data: { load, diff: diffOfficeSnapshots },
     };
     mount();
-    await waitFor(() => expect(entered()).toHaveLength(2));
+    await waitFor(() => expect(entered()).toHaveLength(3));
     act(() => scene.options!.onClick({ kind: "agent", uid: "scout-1", role: "scout" }));
     await screen.findByRole("complementary", { name: "Pannello di SCOUT-1" });
     expect(select).toHaveBeenLastCalledWith("scout-1");
@@ -393,13 +410,67 @@ describe("the office of a local profile", () => {
     expect(select).toHaveBeenLastCalledWith(null);
   });
 
-  it("a team that is off draws an empty office and says so, without an error", async () => {
-    snapshotReply = async () => realSnapshotReply({ containerRunning: false });
+  it("a team with nobody up draws an empty office and says so, without an error", async () => {
+    agents = [];
     mount();
     expect(await screen.findByRole("status")).toBeInTheDocument();
     expect(entered()).toEqual([]);
-    expect(calls(CONTROL)).toHaveLength(0);
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(calls(POSITIONS)).toHaveLength(0);
+  });
+
+  // JHT-T175: the operator saw the agents up on Team › Agents and an empty office. The office asked a VPS probe
+  // whether «the container» was up before it looked at the agents; on this computer that probe says nothing.
+  const SEVEN = [
+    agent("CAPITANO", "capitano", null, "idle"),
+    agent("SENTINELLA", "sentinella", null, "idle"),
+    agent("ASSISTENTE", "assistente", null, "idle"),
+    agent("MENTOR", "mentor", null, "idle"),
+    agent("SCOUT-3", "scout", "3", "lavora"),
+    agent("DOTTORE", "dottore", null, "idle"),
+    agent("MANTENITORE", "mantenitore", null, "idle"),
+  ];
+  it("draws the agents the Agents page lists even when the VPS probe says the container is down", async () => {
+    agents = SEVEN;
+    snapshotReply = async () => realSnapshotReply({ containerRunning: false });
+    mount();
+    await waitFor(() => expect(entered()).toEqual(["assistente", "capitano", "dottore", "mantenitore", "mentor", "scout-3", "sentinella"]));
+    await waitFor(() =>
+      expect(scene.setAgentStatuses).toHaveBeenLastCalledWith(
+        expect.objectContaining({ agents: expect.objectContaining({ "scout-3": expect.objectContaining({ state: "lavora" }), capitano: expect.objectContaining({ state: "idle" }) }) }),
+      ),
+    );
+    expect(calls(SNAPSHOT)).toHaveLength(0);
+    // the doctor and the maintainer wear a character that exists, and keep their own name
+    const looks = Object.fromEntries(applied.filter((e): e is Extract<OfficeEvent, { type: "enter" }> => e.type === "enter").map((e) => [e.agent.uid, e.agent.look]));
+    expect(looks).toMatchObject({ dottore: "assistente", mantenitore: "sentinella" });
+    expect(looks.capitano).toBeUndefined();
+  });
+
+  it("draws them too when the VPS probe fails altogether", async () => {
+    agents = SEVEN;
+    snapshotReply = async () => { throw { code: "onboarding_host_missing" }; };
+    mount();
+    await waitFor(() => expect(entered()).toHaveLength(7));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("a list that cannot be read is said, and nothing old is drawn", async () => {
+    controlReply = async () => ({ ok: false, error: "agent_control_unavailable" });
+    mount();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(entered()).toEqual([]);
+  });
+
+  it("follows a hint of the state channel at once, not at the next tick", async () => {
+    resetStateStreamForTests();
+    channel.handlers.clear();
+    await startStateStream();
+    mount();
+    await waitFor(() => expect(entered()).toEqual(["capitano", "dottore", "scout-1"]));
+    agents = [...agents, agent("SCORER-1", "scorer", "1", "lavora")];
+    await act(async () => channel.handlers.get("state-stream://event")!({ payload: { topic: "agents" } }));
+    await waitFor(() => expect(entered()).toEqual(["capitano", "dottore", "scorer-1", "scout-1"]));
   });
 
   it("says in every language, for a click on an agent, that its moves cannot be read from here", () => {

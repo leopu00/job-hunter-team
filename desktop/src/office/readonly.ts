@@ -40,7 +40,10 @@ const SESSIONS: ReadonlyArray<{ field: "captainRunning" | "assistantRunning"; ag
   { field: "assistantRunning", agent: { uid: "assistente", role: "assistente", sheet: "" } },
 ];
 
-/** The roles that have a character in the office (AgentRole): the others (closer, dottore…) are not drawn. */
+/**
+ * The roles drawn in the office (AgentRole): the others (the closer…) are not. The doctor and the maintainer have
+ * no character of their own yet: they wear an existing one, with their own name on the tag (JHT-T175).
+ */
 const OFFICE_ROLES: readonly AgentRole[] = [
   "capitano",
   "scout",
@@ -51,7 +54,12 @@ const OFFICE_ROLES: readonly AgentRole[] = [
   "sentinella",
   "assistente",
   "mentor",
+  "dottore",
+  "mantenitore",
 ];
+
+/** The character a role without its own wears. */
+const LOOKS_LIKE: Partial<Record<AgentRole, AgentRole>> = { dottore: "assistente", mantenitore: "sentinella" };
 
 const UNKNOWN_PILES: Piles = { scout: null, analisti: null, scorer: null, scrittori: null, critici: null };
 
@@ -130,16 +138,41 @@ export function officeFromTeamProbe(
 }
 
 /**
+ * The office of the team on THIS computer (a local profile). Its agents are the list the Agents page
+ * reads (the native control, kept up to date by the state channel), and nothing else: the VPS probe
+ * behind readTeamStatus asks a remote host whether its container is up, which says nothing about a team
+ * on this computer, and gating the agents on it left the office empty beside an Agents page full of
+ * them (JHT-T175). A list that could not be read is said, not drawn from an old reading.
+ */
+export function officeFromThisComputer(
+  agents: TeamAgentsReading | null,
+  locale: Locale,
+  /** the piles' counts from the team's positions, when they could be read; otherwise unknown */
+  piles: Piles | null = null,
+): ProbeOffice {
+  const t = EXISTING_TEAM_STATUS_TEXT[locale];
+  if (!agents || agents.kind === "unknown") return { snapshot: snapshotOf(null, []), statuses: null, notice: { text: t.unknown, alert: false } };
+  if (agents.kind === "error") {
+    const failure = describeError(agents.code, { fallback: "existing_team_unavailable", locale });
+    return { snapshot: snapshotOf(null, []), statuses: null, notice: { text: `${t.failed}. ${failure.text} ${failure.action}`, alert: true } };
+  }
+  return officeFromAgents(agents, locale, piles, true);
+}
+
+/**
  * The office from the team's list of agents: each session that is up and has
  * a character, by role and instance. Its state is the team's own computation
  * when the VPS publishes it; otherwise, and for a state the catalog does not
  * know, the agent is grey («UNKNOWN»), never working and never waiting.
  */
-function officeFromAgents(agents: Extract<TeamAgentsReading, { kind: "read" }>, locale: Locale, piles: Piles | null): ProbeOffice {
+function officeFromAgents(agents: Extract<TeamAgentsReading, { kind: "read" }>, locale: Locale, piles: Piles | null, here = false): ProbeOffice {
   const t = EXISTING_TEAM_AGENTS_TEXT[locale];
-  const drawn = agents.read.agents.filter((agent) => (OFFICE_ROLES as readonly string[]).includes(agent.role));
-  const roster: OfficeAgent[] = drawn.map((agent) => ({ uid: agent.name.toLowerCase(), role: agent.role as AgentRole, sheet: "" }));
-  const read = t.officeReadAt.replace("{time}", stamp(agents.at, locale));
+  // the roles that wear another's character come last: the one who owns the seat sits in it
+  const drawn = agents.read.agents
+    .filter((agent) => (OFFICE_ROLES as readonly string[]).includes(agent.role))
+    .sort((a, b) => Number(a.role in LOOKS_LIKE) - Number(b.role in LOOKS_LIKE));
+  const roster: OfficeAgent[] = drawn.map((agent) => ({ uid: agent.name.toLowerCase(), role: agent.role as AgentRole, sheet: "", ...(LOOKS_LIKE[agent.role as AgentRole] ? { look: LOOKS_LIKE[agent.role as AgentRole] } : {}) }));
+  const read = (here ? t.officeReadAtHere : t.officeReadAt).replace("{time}", stamp(agents.at, locale));
   const unknown = agents.read.statesKnown ? "" : ` ${t.statesUnknown}`;
   // how the team is at a glance (summary.ts): the counts by state, when the team says them, and
   // the agents the office has no seat for
@@ -153,7 +186,7 @@ function officeFromAgents(agents: Extract<TeamAgentsReading, { kind: "read" }>, 
   );
   const lead = summary ? `${summary}  ·  ` : "";
   if (roster.length === 0) {
-    return { snapshot: snapshotOf(true, [], piles), statuses: null, notice: { text: `${lead}${t.officeNoneUp} ${read}${unknown}`, alert: false } };
+    return { snapshot: snapshotOf(true, [], piles), statuses: null, notice: { text: `${lead}${here ? t.officeNoneUpHere : t.officeNoneUp} ${read}${unknown}`, alert: false } };
   }
   const statuses: AgentStatuses["agents"] = {};
   for (const agent of drawn) {
