@@ -42,7 +42,7 @@ export default function UpdateTeamHelp({ code }: { code: string | null | undefin
         >
           <h3 id="update-team-title" className="m-0 text-[15px] font-semibold text-[var(--color-white)]">{t.title}</h3>
           <p className="m-0 mt-1">{t.intro}</p>
-          <ol className="m-0 mt-2 pl-5 flex flex-col gap-2">
+          <ol className="m-0 mt-2 pl-6 list-decimal flex flex-col gap-2">
             <li>{t.step1}</li>
             <li>
               {t.step2}
