@@ -248,7 +248,13 @@ function Show-Header {
   Write-Host ""
   Write-Host "  mode:    Podman machine (WSL)" -ForegroundColor DarkGray
   Write-Host "  image:   $RuntimeImage" -ForegroundColor DarkGray
-  Write-Host "  branch:  $Branch" -ForegroundColor DarkGray
+  # A test-channel install is one commit, not a branch: the banner says the commit that was asked for (the Linux installer
+  # does the same). Plain syntax only: this runs in Windows PowerShell 5.1.
+  if ($SourceSha) {
+    Write-Host "  commit:  $SourceSha" -ForegroundColor DarkGray
+  } else {
+    Write-Host "  branch:  $Branch" -ForegroundColor DarkGray
+  }
   Write-Host "  runtime: $RuntimeDir" -ForegroundColor DarkGray
   Write-Host "  bin:     $BinDir" -ForegroundColor DarkGray
   if ($DryRun)       { Write-Host "  dry-run: ON (no changes to the system)" -ForegroundColor Yellow }
