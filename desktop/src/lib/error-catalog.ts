@@ -1914,6 +1914,38 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team on this computer is not running.",
     "Start the team and try again.",
   ),
+  // The saved data of this computer's team, read while the team is off (host_db.rs): why they cannot be read. The pages
+  // show the saved data when they can, and these when they cannot; "missing" and "unavailable" are handled as «not running».
+  host_db_unsafe: copy(
+    "I dati salvati della squadra non si possono leggere in sicurezza.",
+    "Avvia la squadra: li leggerà lei.",
+    "The team’s saved data cannot be read safely.",
+    "Start the team: it reads its own data.",
+  ),
+  host_db_busy: copy(
+    "I dati salvati della squadra stanno cambiando.",
+    "Riprova tra un momento.",
+    "The team’s saved data are changing.",
+    "Try again in a moment.",
+  ),
+  host_db_unreadable: copy(
+    "Non riesco a leggere i dati salvati della squadra.",
+    "Avvia la squadra e riprova.",
+    "The team’s saved data cannot be read.",
+    "Start the team and try again.",
+  ),
+  host_db_invalid: copy(
+    "I dati salvati della squadra non sono leggibili.",
+    "Avvia la squadra: li ricontrollerà lei.",
+    "The team’s saved data are not readable.",
+    "Start the team: it will check them itself.",
+  ),
+  host_db_timeout: copy(
+    "Leggere i dati salvati della squadra ha richiesto troppo tempo.",
+    "Riprova, oppure avvia la squadra.",
+    "Reading the team’s saved data took too long.",
+    "Try again, or start the team.",
+  ),
   // The Swipe of this computer's team: a verdict is written only on the deck it was read from.
   deck_outdated: copy(
     "Il mazzo che stai guardando non è più quello della squadra.",
