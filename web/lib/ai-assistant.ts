@@ -102,7 +102,7 @@ function describeCurrentPage(pathname?: string): string {
       "/positions",
       "Elenco offerte di lavoro trovate dagli agenti (include stato candidatura: writing/review/ready/applied/response).",
     ],
-    ["/team", "Vista degli agenti AI del team."],
+    ["/team", "Vista degli agenti AI della squadra."],
     ["/providers", "Provider LLM configurati (Codex)."],
     ["/credentials", "Gestione credenziali e API key."],
     ["/secrets", "Secrets e token salvati localmente."],

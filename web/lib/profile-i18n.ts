@@ -618,7 +618,7 @@ export const T: Record<string, Entry> = {
     pt: "Opcionais",
   },
   ps_lvl_required_hint: {
-    it: "sbloccano il team",
+    it: "sbloccano la squadra",
     en: "unlock the team",
     hu: "feloldják a csapatot",
     es: "desbloquean el equipo",

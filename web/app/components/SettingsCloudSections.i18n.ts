@@ -64,7 +64,7 @@ export const T = {
     pt: "As estimativas salariais em listas, swipe e detalhe são convertidas para esta moeda.",
   },
   connect_title: {
-    it: "Collega il tuo team",
+    it: "Collega la tua squadra",
     en: "Connect your team",
     hu: "Kapcsold össze a csapatodat",
     es: "Conecta tu equipo",

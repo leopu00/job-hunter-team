@@ -23,7 +23,7 @@ export interface AgentPageText {
 const it: AgentPageText = {
   back: "Tutti gli agenti",
   reading: "Leggo l’agente…",
-  notFound: "{name} non è nel team: controlla il nome o torna all’elenco.",
+  notFound: "{name} non è nella squadra: controlla il nome o torna all’elenco.",
   lastWork: "Ultimo lavoro",
   lastActive: "Ultima attività {time}",
   lastMessage: "Ultimo messaggio: {who}, {time}",

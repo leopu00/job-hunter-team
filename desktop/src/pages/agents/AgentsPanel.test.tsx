@@ -481,7 +481,7 @@ describe("«Agenti», the agents' control panel", () => {
     expect(await screen.findByTestId("panel-error")).toBeInTheDocument(); // stopped: the sentence and the button
     fireEvent.click(await screen.findByTestId("start-team"));
     expect(await screen.findByTestId("start-team-progress")).toHaveTextContent(/.+/);
-    expect(screen.getByTestId("start-team")).toBeDisabled();
+    expect(screen.queryByTestId("start-team")).toBeNull(); // the progress has the button's place
     expect(screen.queryByTestId("panel-error")).toBeNull();
     // another reason the list cannot be read is not hidden by the start
     reason = "agents_unavailable";
@@ -561,9 +561,9 @@ describe("«Agenti», the agents' control panel", () => {
         show();
         await screen.findByTestId("panel-error");
         fireEvent.click(await screen.findByTestId("start-team"));
-        // the list answers, the team still shows as stopped by the person: the page says so and keeps the button
+        // the list answers, the team still shows as stopped by the person: the page says so and keeps the start (its progress)
         expect(await screen.findByText(/Squadra fermata da te/)).toBeInTheDocument();
-        expect(screen.getByTestId("start-team")).toBeInTheDocument();
+        expect(screen.getByTestId("start-team-action")).toBeInTheDocument();
         await act(async () => {
           await vi.advanceTimersByTimeAsync(20_000);
         });

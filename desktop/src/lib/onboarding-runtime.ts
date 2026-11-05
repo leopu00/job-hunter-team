@@ -11,6 +11,10 @@ import { appLocale } from "./app-locale";
 import { fillAmounts } from "./error-catalog";
 import { RUNTIME_TEXT, runtimeText, type RuntimeTextKey } from "./onboarding-runtime.i18n";
 
+/** The steps of «start the team», in the order they happen: the first only when the machine and the container are off. */
+export type TeamResumeStep = "machine" | "agents" | "verify";
+const RESUME_STEP = /^ui_team_resume_step_(machine|agents|verify)$/;
+
 export type OnboardingNativeProgressStage = "engine" | "runtime" | "container" | "provider" | "login" | "team" | "assistant";
 /** `notice`: a sentence the setup keeps on screen (install.ps1's JHT_NOTICE); the step goes on. */
 export type OnboardingNativeProgressStatus = "start" | "progress" | "done" | "error" | "notice";
@@ -43,6 +47,8 @@ export interface OnboardingNativeProgress {
   retryable: boolean | null;
   /** The installer phase the message belongs to, when it is one. */
   phase?: OnboardingInstallPhase;
+  /** The step of «start the team» the event belongs to (the native side says it when it begins one, the heartbeat repeats it). */
+  step?: TeamResumeStep;
   /** Only during `image_pull`, and only once podman has said something about the layers. */
   pull?: OnboardingImagePull;
 }
@@ -113,12 +119,14 @@ export function parseOnboardingNativeProgress(value: unknown): OnboardingNativeP
   const retryable = row.retryable === null || typeof row.retryable === "boolean" ? row.retryable : undefined;
   if (code === undefined || retryable === undefined) return null;
   if (status === "error" ? code === null || typeof retryable !== "boolean" : code !== null || retryable !== null) return null;
+  const step = (RESUME_STEP.exec(rawMessage)?.[1] as TeamResumeStep | undefined) ?? undefined;
   const phase = INSTALL_PHASES.find((known) => known === row.phase);
   const pull = phase === "image_pull" ? parseImagePull(row.pull) : undefined;
   return {
     stage, status, message: told, sequence: row.sequence as number, elapsedMs: row.elapsedMs as number, code, retryable,
     ...(phase ? { phase } : {}),
     ...(pull ? { pull } : {}),
+    ...(step ? { step } : {}),
   };
 }
 

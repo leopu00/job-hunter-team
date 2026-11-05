@@ -19,7 +19,7 @@ const SYNC_FAILURE = {
     pt: "Sincronização NÃO feita.",
   },
   no_local_db: {
-    it: "Il database locale non c'è ancora: avvia il team almeno una volta.",
+    it: "Il database locale non c'è ancora: avvia la squadra almeno una volta.",
     en: "The local database does not exist yet: start the team at least once.",
     hu: "A helyi adatbázis még nem létezik: indítsd el a csapatot legalább egyszer.",
     es: "La base de datos local aún no existe: inicia el equipo al menos una vez.",

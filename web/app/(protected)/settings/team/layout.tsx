@@ -3,7 +3,7 @@ import { getServerLocale } from "@/lib/server-locale";
 
 const META: Record<string, { title: string; description: string }> = {
   it: {
-    title: "Orari e modelli del team — Job Hunter",
+    title: "Orari e modelli della squadra — Job Hunter",
     description:
       "Orari di lavoro e modello di ogni ruolo, applicati dal tuo computer",
   },

@@ -15,14 +15,14 @@ export const T = {
     step1_title: "Configura il Profilo",
     step1_completed: "completato",
     step1_desc_done:
-      "Profilo configurato. Il team userà queste informazioni per personalizzare la ricerca.",
+      "Profilo configurato. La squadra userà queste informazioni per personalizzare la ricerca.",
     step1_desc_todo:
-      "Ruolo target, skill, preferenze e range stipendio. Il team userà queste informazioni per la ricerca.",
-    step2_title: "Avvia il Team",
+      "Ruolo target, skill, preferenze e range stipendio. La squadra userà queste informazioni per la ricerca.",
+    step2_title: "Avvia la squadra",
     step2_desc_done:
-      "Profilo pronto. Avvia il team di agenti per iniziare la ricerca automatica.",
+      "Profilo pronto. Avvia la squadra di agenti per iniziare la ricerca automatica.",
     step2_desc_todo:
-      "Configura prima il profilo. Il team ha bisogno delle tue informazioni per cercare posizioni compatibili.",
+      "Configura prima il profilo. La squadra ha bisogno delle tue informazioni per cercare posizioni compatibili.",
     help_text:
       "Hai bisogno di aiuto? L'assistente può guidarti nella compilazione del profilo.",
     open_assistant: "Apri assistente →",

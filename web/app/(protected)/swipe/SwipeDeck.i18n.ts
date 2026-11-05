@@ -82,9 +82,9 @@ export const T: Record<
     whyNo: "Perché vuoi escluderla?",
     whyPickPlaceholder: "Scegli un motivo…",
     whyHintTaste:
-      "La posizione verrà esclusa e il team userà il motivo per cercarti offerte più adatte.",
+      "La posizione verrà esclusa e la squadra userà il motivo per cercarti offerte più adatte.",
     whyHintFactual:
-      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
+      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi la squadra non impara niente da qui.",
     whyConfirmTaste: "Escludi",
     whyConfirmFactual: "Escludi",
     whySaveError: "Non è stato registrato: riprova fra un momento.",
@@ -94,7 +94,7 @@ export const T: Record<
     excludedStamp: "Esclusa",
     btnPrev: "Precedente",
     commentPh:
-      "Nota privata, max 200 caratteri (facoltativa): il team non la legge…",
+      "Nota privata, max 200 caratteri (facoltativa): la squadra non la legge…",
     commentClose: "Chiudi il commento",
     commentTitle: "Commento",
     commentDone: "Fatto",

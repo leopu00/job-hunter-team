@@ -189,7 +189,7 @@ export const PICKER_T: Record<
     pickReason: "Scegli una causa",
     writeReason: "Scrivi la causa",
     notePlaceholder: "Nota privata (facoltativa)",
-    notePrivate: "Solo tua: il team non la legge mai.",
+    notePrivate: "Solo tua: la squadra non la legge mai.",
   },
   en: {
     pickReason: "Pick a reason",

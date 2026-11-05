@@ -108,9 +108,9 @@ const T: Record<
     whyNo: "Perché vuoi escluderla?",
     pickPlaceholder: "Scegli un motivo…",
     hintTaste:
-      "La posizione verrà esclusa e il team userà il motivo per cercarti offerte più adatte.",
+      "La posizione verrà esclusa e la squadra userà il motivo per cercarti offerte più adatte.",
     hintFactual:
-      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi il team non impara niente da qui.",
+      "La posizione esce dal giro e basta: una scaduta non dice cosa ti piace, quindi la squadra non impara niente da qui.",
     confirmTaste: "Escludi",
     confirmFactual: "Escludi",
     cancel: "Annulla",
@@ -122,7 +122,7 @@ const T: Record<
     markAppliedUndoHint: "tocca per annullare",
     markAppliedUndoError: "Non è riuscito ad annullare la candidatura",
     markAppliedByTeam:
-      "Questa candidatura l’ha inviata il team: da qui non si annulla",
+      "Questa candidatura l’ha inviata la squadra: da qui non si annulla",
     outcomeQuestion: "Com’è andata?",
     outcomeRejected: "Respinta",
     outcomeInterview: "Vogliono un colloquio",

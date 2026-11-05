@@ -10,7 +10,7 @@ const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Swipe — Job Hunter",
     description:
-      "Recensisci rapidamente le posizioni dal telefono: assegna un giudizio e il tuo team di agenti AI impara i tuoi gusti per le offerte future",
+      "Recensisci rapidamente le posizioni dal telefono: assegna un giudizio e la tua squadra di agenti AI impara i tuoi gusti per le offerte future",
   },
   en: {
     title: "Swipe — Job Hunter",

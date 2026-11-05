@@ -8,7 +8,7 @@ const it = {
   signedInNobody: "Nessun account collegato.",
   signOut: "Disconnetti",
   signingOut: "Disconnessione…",
-  signOutNote: "Disconnettiti da questo account. Il team collegato e i tuoi dati non vengono cancellati.",
+  signOutNote: "Disconnettiti da questo account. La squadra collegata e i tuoi dati non vengono cancellati.",
   signOutFailed: "Non sono riuscito a uscire. Riprova.",
   exportAccount: "Esporta i dati dell’account",
   teamTitle: "Squadra",

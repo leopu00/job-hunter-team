@@ -63,7 +63,7 @@ export const THREAD_T: Record<string, Record<string, string>> = {
     pt: "Resposta NÃO enviada:",
   },
   delivery_signal_failed: {
-    it: "Il messaggio è salvato, ma il team non è stato avvisato. Controlla che sia online e riprova.",
+    it: "Il messaggio è salvato, ma la squadra non è stata avvisata. Controlla che sia online e riprova.",
     en: "The message is saved, but the team could not be notified. Check that it is online and try again.",
     hu: "Az üzenet mentve van, de a csapat nem kapott értesítést. Ellenőrizd, hogy online van-e, majd próbáld újra.",
     es: "El mensaje está guardado, pero no se pudo avisar al equipo. Comprueba que esté conectado e inténtalo de nuevo.",

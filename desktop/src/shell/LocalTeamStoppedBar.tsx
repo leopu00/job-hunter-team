@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/config";
+import { useState } from "react";
 import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
 import { useLocalTeamSavedAt, useLocalTeamStopped } from "../lib/local-team-data";
@@ -37,6 +38,8 @@ export function savedSentence(at: number, locale: Locale, now: Date = new Date()
 export function LocalTeamStoppedBar() {
   const stopped = useLocalTeamStopped();
   const savedAt = useLocalTeamSavedAt();
+  // While a start runs the bar's own sentence («start the team and try again») is not the thing to read: the progress is.
+  const [starting, setStarting] = useState(false);
   if (!stopped && savedAt === null) return null;
   const locale = appLocale();
   const copy = describeError("local_team_not_running", { locale });
@@ -49,14 +52,14 @@ export function LocalTeamStoppedBar() {
       className="px-4 py-2 text-[12px] flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-border)]"
       style={{ background: "var(--color-panel)", color: "var(--color-white)" }}
     >
-      {showing ? (
+      {starting ? null : showing ? (
         <span>
           {savedAt > 0 ? savedSentence(savedAt, locale) : saved.savedNoTime} {saved.savedHint}
         </span>
       ) : (
         <span>{copy.text} {copy.action}</span>
       )}
-      <StartTeamAction onStarted={() => window.dispatchEvent(new Event(REFRESH_EVENT))} />
+      <StartTeamAction onStarted={() => window.dispatchEvent(new Event(REFRESH_EVENT))} onBusy={setStarting} />
     </div>
   );
 }

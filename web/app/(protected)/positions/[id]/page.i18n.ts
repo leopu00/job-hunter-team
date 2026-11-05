@@ -295,7 +295,7 @@ export const T = {
     pt: "Erro — repetir",
   },
   cv_bridge_hint: {
-    it: "Il PDF arriva dal dispositivo dove gira il team tramite un ponte temporaneo: non viene salvato nel cloud.",
+    it: "Il PDF arriva dal dispositivo dove gira la squadra tramite un ponte temporaneo: non viene salvato nel cloud.",
     en: "The PDF is fetched from the device running your team through a temporary bridge — it isn't stored in the cloud.",
     hu: "A PDF a csapatot futtató eszközről érkezik egy ideiglenes hídon keresztül — nem tárolódik a felhőben.",
     es: "El PDF se obtiene del dispositivo donde se ejecuta tu equipo mediante un puente temporal: no se guarda en la nube.",
@@ -556,7 +556,7 @@ export const T = {
     pt: "Notas",
   },
   team_analysis: {
-    it: "Analisi del team",
+    it: "Analisi della squadra",
     en: "Team analysis",
     hu: "Csapat elemzése",
     es: "Análisis del equipo",
@@ -601,7 +601,7 @@ export const T = {
     pt: "Excluída por ti",
   },
   excl_by_team: {
-    it: "Esclusa dal team",
+    it: "Esclusa dalla squadra",
     en: "Excluded by the team",
     hu: "A csapat által kizárva",
     es: "Excluida por el equipo",
@@ -619,7 +619,7 @@ export const T = {
     pt: "Decisão tomada em",
   },
   an_notes: {
-    it: "Note del team",
+    it: "Note della squadra",
     en: "Team notes",
     hu: "Csapat jegyzetei",
     es: "Notas del equipo",

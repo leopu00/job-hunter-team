@@ -51,50 +51,50 @@ export const T: Record<Locale, Strings> = {
   it: {
     title: "Benvenuto su JHT",
     subtitle:
-      "Il tuo team di agenti cerca, analizza e prepara le candidature al posto tuo. Questo sito è la finestra sui dati che il team genera.",
+      "La tua squadra di agenti cerca, analizza e prepara le candidature al posto tuo. Questo sito è la finestra sui dati che la squadra genera.",
     q_lang: "In che lingua vuoi usare la piattaforma?",
     q_status: "A che punto sei?",
     opt_none: "Non ho ancora scaricato l'app desktop",
     opt_none_d: "Ti spieghiamo come funziona e dove scaricarla",
-    opt_downloaded: "Ho scaricato l'app ma non ho avviato il team",
+    opt_downloaded: "Ho scaricato l'app ma non ho avviato la squadra",
     opt_downloaded_d: "Ti guidiamo al primo avvio",
     opt_browsing: "Sto solo dando un'occhiata",
     opt_browsing_d: "Vai dritto alla demo interattiva della piattaforma",
-    opt_running: "Il mio team è già attivo",
+    opt_running: "La mia squadra è già attiva",
     opt_running_d: "Collegalo al tuo account con un token",
     back: "Indietro",
     continue_demo: "Continua",
     skip: "Salta, vai alla dashboard",
     dl_title: "Prima serve l'app desktop",
     dl_body:
-      "Il team di agenti gira sul TUO computer (o su un server tuo), dentro l'app desktop: è lì che nascono posizioni, analisi e CV. Senza un team al lavoro, questa dashboard resterebbe vuota.",
-    dl_modes: "Dove far girare il team",
+      "La squadra di agenti gira sul TUO computer (o su un server tuo), dentro l'app desktop: è lì che nascono posizioni, analisi e CV. Senza una squadra al lavoro, questa dashboard resterebbe vuota.",
+    dl_modes: "Dove far girare la squadra",
     dl_mode1: "Sul tuo Mac di tutti i giorni — parte e si ferma quando vuoi",
-    dl_mode2: "Su un computer dedicato sempre acceso — il team lavora 24/7",
+    dl_mode2: "Su un computer dedicato sempre acceso — la squadra lavora 24/7",
     dl_mode3: "Su una VPS nel cloud — nessun hardware tuo, sempre attivo",
     dl_cta: "Scarica l'app",
     dl_note:
-      "Quando il team sarà attivo, torna qui: in Impostazioni → Token dispositivi generi il codice per collegarlo a questo account.",
-    start_title: "Avvia il tuo team",
+      "Quando la squadra sarà attiva, torna qui: in Impostazioni → Token dispositivi generi il codice per collegarla a questo account.",
+    start_title: "Avvia la tua squadra",
     start_body:
-      "Apri l'app desktop e completa la configurazione guidata: profilo, preferenze e primo avvio del team. Quando il team lavora, collegalo a questo account (passi qui sotto) per vedere i dati anche dal telefono o da un altro computer.",
-    pair_title: "Collega il tuo team a questo account",
+      "Apri l'app desktop e completa la configurazione guidata: profilo, preferenze e primo avvio della squadra. Quando la squadra lavora, collegala a questo account (passi qui sotto) per vedere i dati anche dal telefono o da un altro computer.",
+    pair_title: "Collega la tua squadra a questo account",
     pair_body:
-      "Il team continua a girare dove sta: col pairing i dati vengono sincronizzati sul cloud e questa dashboard (telefono incluso) si popola da sola.",
+      "La squadra continua a girare dove sta: col pairing i dati vengono sincronizzati sul cloud e questa dashboard (telefono incluso) si popola da sola.",
     pair_s1: "Genera un token dispositivo da questo account",
     pair_s1_cta: "Apri Token dispositivi",
     pair_s2:
-      "Sulla macchina dove gira il team, incolla il token nella sezione Cloud dell'app (oppure lancia il comando qui sotto)",
+      "Sulla macchina dove gira la squadra, incolla il token nella sezione Cloud dell'app (oppure lancia il comando qui sotto)",
     pair_s3:
-      "Torna qui: al primo sync la dashboard mostra i dati veri del tuo team",
+      "Torna qui: al primo sync la dashboard mostra i dati veri della tua squadra",
     demo_q: "Nel frattempo, prova la demo",
     demo_hint:
       "Di che ambito ti occupi? Ti mostriamo una dashboard di esempio già popolata: puoi filtrare, aprire le posizioni e dare giudizi.",
     demo_note:
-      "Sono dati fittizi generati per la demo, chiaramente etichettati: i tuoi appariranno quando collegherai il team.",
-    synced_title: "Il tuo team è già collegato",
+      "Sono dati fittizi generati per la demo, chiaramente etichettati: i tuoi appariranno quando collegherai la squadra.",
+    synced_title: "La tua squadra è già collegata",
     synced_body:
-      "Questo account riceve già dati sincronizzati: la dashboard mostra il lavoro del tuo team.",
+      "Questo account riceve già dati sincronizzati: la dashboard mostra il lavoro della tua squadra.",
     synced_cta: "Vai alla dashboard",
   },
   en: {

@@ -21,7 +21,7 @@ export const UPDATE_BANNER_T = {
   // Dice entrambi i numeri: senza quello installato, "c'è la {latest}" non
   // fa capire quanto si è rimasti indietro.
   text: {
-    it: "È disponibile la versione {latest}: il tuo box è sulla {current}. L'aggiornamento si lancia dal computer o dalla VPS che ospita il team.",
+    it: "È disponibile la versione {latest}: il tuo box è sulla {current}. L'aggiornamento si lancia dal computer o dalla VPS che ospita la squadra.",
     en: "Version {latest} is out: your box runs {current}. The update is started from the computer or VPS that hosts the team.",
     hu: "Megjelent a {latest} verzió: a boxod a(z) {current} verzión fut. A frissítést arról a gépről vagy VPS-ről kell indítani, amelyik a csapatot futtatja.",
     es: "Está disponible la versión {latest}: tu box está en la {current}. La actualización se lanza desde el ordenador o el VPS que aloja el equipo.",

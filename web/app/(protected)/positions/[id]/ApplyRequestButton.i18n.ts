@@ -241,7 +241,7 @@ export const T = {
     pt: "Atingiste o limite de candidaturas autorizadas de hoje: tenta mais tarde.",
   },
   refused_unrecorded: {
-    it: "Il team non ha potuto registrare l'autorizzazione in modo sicuro, quindi non partirà niente. Riprova tra poco; se succede ancora, aggiorna il team.",
+    it: "La squadra non ha potuto registrare l'autorizzazione in modo sicuro, quindi non partirà niente. Riprova tra poco; se succede ancora, aggiorna la squadra.",
     en: "The team could not record the authorisation safely, so nothing will be sent. Try again shortly; if it happens again, update the team.",
     hu: "A csapat nem tudta biztonságosan rögzíteni az engedélyt, ezért semmi sem lesz elküldve. Próbáld újra kicsit később; ha ismét megtörténik, frissítsd a csapatot.",
     es: "El equipo no pudo registrar la autorización de forma segura, así que no se enviará nada. Inténtalo de nuevo en un momento; si vuelve a pasar, actualiza el equipo.",

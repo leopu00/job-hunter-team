@@ -40,7 +40,7 @@ export async function requireAuth(): Promise<NextResponse | null> {
  * (require-local-write.test.ts fails if another starts to), hence a team
  * wording (operator's decision, 27/09).
  */
-export const DESKTOP_READ_ONLY_MESSAGE = "I comandi al team dalla desktop sono in arrivo.";
+export const DESKTOP_READ_ONLY_MESSAGE = "I comandi alla squadra dalla desktop sono in arrivo.";
 
 export async function requireLocalWrite(): Promise<NextResponse | null> {
   return NextResponse.json({ error: "read_only", message: DESKTOP_READ_ONLY_MESSAGE }, { status: 403 });

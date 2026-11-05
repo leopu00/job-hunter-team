@@ -8,7 +8,7 @@ import type { Locale } from "@/i18n/config";
  */
 const it = {
   title: "Posta",
-  intro: "La casella da cui il team legge gli avvisi di lavoro e da cui invia le email. La password resta nel servizio protetto del team: gli agenti non la leggono.",
+  intro: "La casella da cui la squadra legge gli avvisi di lavoro e da cui invia le email. La password resta nel servizio protetto della squadra: gli agenti non la leggono.",
   statusAria: "Stato della casella",
   status: "Stato",
   checking: "verifica…",
@@ -22,15 +22,15 @@ const it = {
   formTitle: "Salva una nuova password per app",
   mailboxAddress: "Indirizzo della casella",
   dedicatedLegend: "È una casella dedicata agli avvisi di lavoro inoltrati?",
-  dedicatedYes: "Sì: il team legge tutta la casella",
-  dedicatedNo: "No: il team legge solo i mittenti ammessi",
+  dedicatedYes: "Sì: la squadra legge tutta la casella",
+  dedicatedNo: "No: la squadra legge solo i mittenti ammessi",
   serversSummary: "Server di posta (solo se il provider non è riconosciuto)",
   imapServer: "Server IMAP",
   smtpServer: "Server SMTP",
   appPassword: "Password per app (creata dal tuo provider di posta)",
   saving: "Salvataggio…",
   save: "Salva la password",
-  saved: "Password salvata. Il team usa la nuova da subito.",
+  saved: "Password salvata. La squadra usa la nuova da subito.",
   openMail: "Apri Posta",
 };
 

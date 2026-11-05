@@ -244,7 +244,7 @@ export const T = {
     pt: "Horário de trabalho",
   },
   wh_desc: {
-    it: "Le ore in cui il team lavora. Il budget weekly viene distribuito solo su queste ore.",
+    it: "Le ore in cui la squadra lavora. Il budget weekly viene distribuito solo su queste ore.",
     en: "The hours when the team works. The weekly budget is distributed only across these hours.",
     hu: "Az órák, amikor a csapat dolgozik. A heti keret csak ezekre az órákra oszlik el.",
     es: "Las horas en que trabaja el equipo. El presupuesto semanal se distribuye solo en estas horas.",

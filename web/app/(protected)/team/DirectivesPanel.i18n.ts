@@ -10,7 +10,7 @@ import type { Dictionary } from "@/lib/i18n-dict";
 
 export const T = {
   title: {
-    it: "Bacheca del team",
+    it: "Bacheca della squadra",
     en: "Team board",
     es: "Tablón del equipo",
     fr: "Tableau de l'équipe",

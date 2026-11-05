@@ -75,6 +75,6 @@ describe("the action log in the agents panel with a local profile", () => {
     const details = screen.getByTestId("panel-action-log") as HTMLDetailsElement;
     details.open = true;
     fireEvent(details, new Event("toggle"));
-    expect(await screen.findByText("L’app non ha ancora fatto nessuna azione sul team.")).toBeInTheDocument();
+    expect(await screen.findByText("L’app non ha ancora fatto nessuna azione sulla squadra.")).toBeInTheDocument();
   });
 });

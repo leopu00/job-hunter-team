@@ -118,7 +118,7 @@ export const T = {
     pt: "A carregar…",
   },
   no_local_db: {
-    it: "Database locale non trovato. Avvia il team almeno una volta per generare",
+    it: "Database locale non trovato. Avvia la squadra almeno una volta per generare",
     en: "Local database not found. Start the team at least once to generate",
     hu: "A helyi adatbázis nem található. Indítsd el a csapatot legalább egyszer a létrehozásához:",
     es: "Base de datos local no encontrada. Inicia el equipo al menos una vez para generar",

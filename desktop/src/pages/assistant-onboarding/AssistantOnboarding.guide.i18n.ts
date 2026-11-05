@@ -49,7 +49,7 @@ export const ASSISTANT_GUIDE_TEXT: Record<Locale, AssistantGuideText> = {
     defaultName: "Assistente",
     identityAria: "Presentazione {name}",
     role: "Guida dell’app",
-    intro: "Ti accompagno tra le aree principali. Questa introduzione non legge lo stato del team e non mostra dati simulati.",
+    intro: "Ti accompagno tra le aree principali. Questa introduzione non legge lo stato della squadra e non mostra dati simulati.",
     dialogueAria: "Dialogo guidato con {name}",
     startTitle: "Da dove vuoi iniziare?",
     startMessage: "Posso mostrarti il percorso, spiegarti cosa serve oppure lasciarti esplorare. Scegli tu: potrai sempre tornare indietro.",
@@ -72,11 +72,11 @@ export const ASSISTANT_GUIDE_TEXT: Record<Locale, AssistantGuideText> = {
       tour: [
         { eyebrow: "Tappa 01 · orientamento", title: "Parti dalla Dashboard", message: "La Dashboard riunisce ciò che merita attenzione. Da lì puoi entrare nelle aree di lavoro senza perdere il filo." },
         { eyebrow: "Tappa 02 · opportunità", title: "Leggi, confronta, decidi", message: "Posizioni raccoglie le opportunità, Map le mette nello spazio e Swipe aiuta a fare una prima scelta rapida." },
-        { eyebrow: "Tappa 03 · squadra", title: "Segui il lavoro del team", message: "Team e Agenti mostrano le persone e le attività. Messaggi è il punto in cui ritrovi le conversazioni disponibili." },
+        { eyebrow: "Tappa 03 · squadra", title: "Segui il lavoro della squadra", message: "Team e Agenti mostrano le persone e le attività. Messaggi è il punto in cui ritrovi le conversazioni disponibili." },
         { eyebrow: "Tappa 04 · Assistente", title: "Continua con parole tue", message: "La guida finisce qui. Nella chat libera puoi fare una domanda concreta all’Assistente, senza scegliere da un elenco." },
       ],
       requirements: [
-        { eyebrow: "Tappa 01 · ambiente", title: "Una casa per il team", message: "Il team ha bisogno di una macchina configurata e raggiungibile. La relativa procedura di setup resta separata da questa guida." },
+        { eyebrow: "Tappa 01 · ambiente", title: "Una casa per la squadra", message: "La squadra ha bisogno di una macchina configurata e raggiungibile. La relativa procedura di setup resta separata da questa guida." },
         { eyebrow: "Tappa 02 · provider", title: "Un modello collegato", message: "Gli agenti possono lavorare quando il provider previsto dalla tua installazione è configurato. Qui non fingiamo di verificarne lo stato." },
         { eyebrow: "Tappa 03 · profilo", title: "Indicazioni su ciò che cerchi", message: "Il Profilo aiuta la squadra a capire obiettivi e preferenze. Potrai correggere le informazioni anche in seguito." },
         { eyebrow: "Tappa 04 · conversazione", title: "Poi si parte da una domanda", message: "Quando la tua installazione è pronta, apri la chat e racconta all’Assistente da dove vuoi cominciare." },

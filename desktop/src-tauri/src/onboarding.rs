@@ -6526,6 +6526,13 @@ pub(crate) async fn onboarding_resume_runtime_wake(
     result
 }
 
+/// The steps of «start the team» that the page shows, in the order they happen (the first only when the container is off).
+/// The keys are texts of the page (lib/onboarding-runtime.i18n.ts); the numbers («step n of m») are the page's, from which step
+/// came first.
+const RESUME_STEP_MACHINE: &str = "ui_team_resume_step_machine";
+const RESUME_STEP_AGENTS: &str = "ui_team_resume_step_agents";
+const RESUME_STEP_VERIFY: &str = "ui_team_resume_step_verify";
+
 #[tauri::command]
 pub(crate) async fn onboarding_resume_team_start(
     window: tauri::Window,
@@ -6564,16 +6571,23 @@ pub(crate) async fn onboarding_resume_team_start(
                 let validated = validate_host(&app, &host).map_err(failure)?;
                 let before = snapshot_impl(&app, &worker_expected, &validated)?;
                 let runtime_log = RuntimeLog::new(&app);
+                // The steps the page shows («step n of m»): each is said when it begins and the heartbeat repeats it with the time.
+                // The first is only there when the container is off (the machine and the container are turned on again).
                 let before = woken_before_resume(
                     before,
                     matches!(validated, ValidatedHost::Local),
-                    || wake_local_runtime(&app, &worker_expected, runtime_log.as_ref()),
+                    || {
+                        reporter.phase(RESUME_STEP_MACHINE);
+                        wake_local_runtime(&app, &worker_expected, runtime_log.as_ref())
+                    },
                     || snapshot_impl(&app, &worker_expected, &validated),
                 )?;
+                reporter.phase(RESUME_STEP_AGENTS);
                 resume_team_prerequisite(&before)?;
                 let limits =
                     start_limits_gate(read_start_limits(&app, &worker_expected, &validated))?;
                 start_team_impl(&app, &worker_expected, &validated, runtime_log.as_ref())?;
+                reporter.phase(RESUME_STEP_VERIFY);
                 let snapshot = verified_team_snapshot(&app, &worker_expected, &validated, runtime_log.as_ref())?;
                 Ok(with_start_limits(snapshot, limits))
             },
@@ -7399,6 +7413,67 @@ mod tests {
     /// install.ps1's Windows 10 notice reaches the screen as a notice of the
     /// running step, once, and the heartbeat keeps repeating the phase: the
     /// setup goes on and ends done.
+    #[test]
+    fn the_start_of_the_team_reports_its_steps_in_order_and_each_is_repeated_by_the_heartbeat_with_the_time() {
+        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let captured = Arc::clone(&events);
+        let reporter = ProgressReporter::with_emitter(move |event| {
+            captured.lock().unwrap().push(event);
+        });
+        let inside = reporter.clone();
+        reporter
+            .run_with_interval(
+                OnboardingProgressStage::Team,
+                "ui_team_resume_start",
+                "ui_team_resume_progress",
+                "ui_team_resume_done",
+                Duration::from_millis(2),
+                move || {
+                    for step in [super::RESUME_STEP_MACHINE, super::RESUME_STEP_AGENTS, super::RESUME_STEP_VERIFY] {
+                        inside.phase(step);
+                        thread::sleep(Duration::from_millis(15));
+                    }
+                    Ok::<_, super::OnboardingError>(())
+                },
+            )
+            .unwrap();
+        let events = events.lock().unwrap();
+        assert_eq!(events.first().unwrap().status, OnboardingProgressStatus::Start);
+        assert_eq!(events.last().unwrap().status, OnboardingProgressStatus::Done);
+        // the steps, each said when it begins, in order
+        let begun: Vec<&str> = events
+            .iter()
+            .filter(|e| e.status == OnboardingProgressStatus::Progress)
+            .map(|e| e.message)
+            .fold(Vec::new(), |mut all, message| {
+                if all.last() != Some(&message) {
+                    all.push(message);
+                }
+                all
+            });
+        assert_eq!(begun, ["ui_team_resume_step_machine", "ui_team_resume_step_agents", "ui_team_resume_step_verify"]);
+        // none of them is an install notice or a phase of the Windows installer, and every event keeps the elapsed time of the whole start
+        assert!(events.iter().all(|e| e.phase.is_none() && e.stage == OnboardingProgressStage::Team));
+        assert!(events.windows(2).all(|pair| pair[0].elapsed_ms <= pair[1].elapsed_ms && pair[0].sequence < pair[1].sequence));
+        // the heartbeat inside a step repeats THAT step, not the generic message
+        assert!(events.iter().filter(|e| e.message == "ui_team_resume_step_agents").count() >= 2);
+    }
+
+    #[test]
+    fn the_resume_command_says_each_step_before_it_does_it_and_the_machine_only_when_it_wakes_the_runtime() {
+        let source = include_str!("onboarding.rs");
+        let command = source.split("pub(crate) async fn onboarding_resume_team_start(").nth(1).unwrap().split("pub(crate) async fn onboarding_assistant_open(").next().unwrap();
+        let at = |needle: &str| command.find(needle).unwrap_or_else(|| panic!("{needle}"));
+        // the machine step is inside the wake, so a start that finds the container up never says it
+        let wake = command.split("|| {\n                        reporter.phase(RESUME_STEP_MACHINE);").nth(1).expect("the machine step is said inside the wake");
+        assert!(wake.trim_start().starts_with("wake_local_runtime("));
+        assert_eq!(command.matches("RESUME_STEP_MACHINE").count(), 1);
+        assert!(at("woken_before_resume(") < at("reporter.phase(RESUME_STEP_AGENTS)"));
+        assert!(at("reporter.phase(RESUME_STEP_AGENTS)") < at("resume_team_prerequisite(&before)"));
+        assert!(at("start_team_impl(") < at("reporter.phase(RESUME_STEP_VERIFY)"));
+        assert!(at("reporter.phase(RESUME_STEP_VERIFY)") < at("verified_team_snapshot("));
+    }
+
     #[test]
     fn an_install_notice_is_sent_once_and_never_replaces_the_phase() {
         let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));

@@ -6,7 +6,7 @@
 import type { LocaleDict } from "@/lib/i18n-dict";
 
 export const READ_ONLY_FAILURE: LocaleDict = {
-  it: "Da qui non si può modificare: fallo dall'app sul computer dove gira il team.",
+  it: "Da qui non si può modificare: fallo dall'app sul computer dove gira la squadra.",
   en: "This cannot be changed from here: do it from the app on the computer where the team runs.",
   hu: "Innen nem módosítható: tedd meg az alkalmazásban azon a gépen, ahol a csapat fut.",
   es: "Esto no se puede cambiar desde aquí: hazlo desde la app en el ordenador donde funciona el equipo.",

@@ -99,7 +99,7 @@ describe("the /team routes in the desktop", () => {
     const res = await post("/api/team/send", { session: "SCOUT-1", message: "vai" });
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: string; message: string };
-    expect(body).toEqual({ error: "read_only", message: "I comandi al team dalla desktop sono in arrivo." });
+    expect(body).toEqual({ error: "read_only", message: "I comandi alla squadra dalla desktop sono in arrivo." });
     // The web's wording is false inside the desktop.
     expect(body.message).not.toMatch(/si fa dall'app desktop/);
   });

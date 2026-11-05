@@ -74,7 +74,7 @@ const T: Record<Locale, Copy> = {
   en: EN,
   it: {
     ...EN,
-    title: "Stato del team",
+    title: "Stato della squadra",
     readOnly: "La vista mobile è sola lettura, tranne lo stop d'emergenza.",
     running: "In esecuzione",
     stopping: "Arresto in corso…",
@@ -84,16 +84,16 @@ const T: Record<Locale, Copy> = {
     heartbeat: "Ultimo segnale del dispositivo",
     never: "mai ricevuto",
     stop: "Stop d'emergenza",
-    confirmTitle: "Fermare tutto il team?",
+    confirmTitle: "Fermare tutta la squadra?",
     confirmBody:
-      "Invia soltanto l'intenzione di stop. Non può eseguire comandi o riavviare il team.",
+      "Invia soltanto l'intenzione di stop. Non può eseguire comandi o riavviare la squadra.",
     cancel: "Annulla",
     confirm: "Ferma ora",
     requested: "Stop richiesto. Il dispositivo associato lo sta applicando.",
     failed: "Richiesta di stop fallita. Riprova.",
     refresh: "Aggiorna stato",
     chatDeliveryWarning:
-      "Alcuni messaggi che hai inviato potrebbero non essere ancora arrivati al team.",
+      "Alcuni messaggi che hai inviato potrebbero non essere ancora arrivati alla squadra.",
     detectedAt: "Rilevato",
   },
   es: {

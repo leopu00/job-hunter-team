@@ -36,7 +36,7 @@ const T: Record<
   it: {
     title: "{n} posizioni scartate come «{reason}»",
     question: "Vuoi escludere questo tipo di posizioni dal tuo profilo?",
-    acts: "Se accetti, il team abbassa il punteggio delle posizioni di questo tipo (−15, −30 per un'azienda): non le nasconde e non smette di cercarle. Puoi ritirare la scelta quando vuoi.",
+    acts: "Se accetti, la squadra abbassa il punteggio delle posizioni di questo tipo (−15, −30 per un'azienda): non le nasconde e non smette di cercarle. Puoi ritirare la scelta quando vuoi.",
     save: "Escludi questo tipo",
     later: "Non ora",
     saved: "Esclusione salvata.",

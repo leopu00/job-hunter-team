@@ -486,9 +486,9 @@ export type WebActionLogAppText = Pick<WebActionLogText, "intro" | "empty" | "li
 export const WEB_ACTION_LOG_APP_TEXT: Record<Locale, WebActionLogAppText> = {
   it: {
     intro:
-      "Quello che l’app ha fatto sul team di questo computer a nome tuo: accendere, fermare o riavviare la squadra, cambiare le impostazioni, escludere una posizione. Il registro si legge e basta: lo scrive l’app, nel momento in cui l’azione riesce.",
-    empty: "L’app non ha ancora fatto nessuna azione sul team.",
-    listLabel: "Azioni fatte dall’app sul team",
+      "Quello che l’app ha fatto sulla squadra di questo computer a nome tuo: accendere, fermare o riavviare la squadra, cambiare le impostazioni, escludere una posizione. Il registro si legge e basta: lo scrive l’app, nel momento in cui l’azione riesce.",
+    empty: "L’app non ha ancora fatto nessuna azione sulla squadra.",
+    listLabel: "Azioni fatte dall’app sulla squadra",
   },
   en: {
     intro:

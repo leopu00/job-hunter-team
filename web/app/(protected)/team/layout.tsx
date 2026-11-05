@@ -7,7 +7,7 @@ const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Team — Job Hunter",
     description:
-      "Stato e attività del tuo team di agenti AI, ottimizzati anche per telefono — con stop d'emergenza protetto",
+      "Stato e attività della tua squadra di agenti AI, ottimizzati anche per telefono — con stop d'emergenza protetto",
   },
   en: {
     title: "Team — Job Hunter",

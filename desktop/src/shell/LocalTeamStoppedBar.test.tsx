@@ -1,9 +1,16 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { reportLocalTeamRead, setLocalTeamData } from "../lib/local-team-data";
 import { LocalTeamStoppedBar, savedMoment, savedSentence } from "./LocalTeamStoppedBar";
 
-vi.mock("./StartTeamAction", () => ({ StartTeamAction: () => <button type="button">start</button> }));
+vi.mock("./StartTeamAction", () => ({
+  StartTeamAction: ({ onBusy }: { onBusy?: (busy: boolean) => void }) => (
+    <>
+      <button type="button" onClick={() => onBusy?.(true)}>start</button>
+      <button type="button" onClick={() => onBusy?.(false)}>over</button>
+    </>
+  ),
+}));
 vi.mock("../lib/app-locale", () => ({ appLocale: () => "en" }));
 
 afterEach(() => setLocalTeamData(null));
@@ -21,6 +28,18 @@ describe("the bar of a team that is off", () => {
     act(() => reportLocalTeamRead("local_team_not_running"));
     expect(screen.getByTestId("local-team-stopped")).toBeTruthy();
     expect(screen.queryByTestId("local-team-saved")).toBeNull();
+  });
+
+  it("does not tell «start the team and try again» while a start runs: the progress is what to read", () => {
+    setLocalTeamData("local:abc");
+    render(<LocalTeamStoppedBar />);
+    act(() => reportLocalTeamRead("local_team_not_running"));
+    const sentence = screen.getByTestId("local-team-stopped").textContent ?? "";
+    expect(sentence).toContain("Start the team and try again");
+    fireEvent.click(screen.getByRole("button", { name: "start" }));
+    expect(screen.getByTestId("local-team-stopped").textContent).not.toContain("try again");
+    fireEvent.click(screen.getByRole("button", { name: "over" }));
+    expect(screen.getByTestId("local-team-stopped").textContent).toContain("Start the team and try again");
   });
 
   it("says the data are the saved ones, and when they were written, with the button that starts the team", () => {

@@ -51,7 +51,7 @@ const T: Record<
 > = {
   it: {
     title: "Note private",
-    private: "Solo tue: il team non le legge",
+    private: "Solo tue: la squadra non le legge",
     placeholder: "Cosa ti servirà ricordare quando torni su questa posizione…",
     save: "Salva",
     saving: "Salvo…",
@@ -59,7 +59,7 @@ const T: Record<
     remove: "Elimina",
     error: "Non è riuscito a salvare la nota",
     noLocalDb:
-      "Il database del team non è raggiungibile: avvia il team una volta, poi riprova.",
+      "Il database della squadra non è raggiungibile: avvia la squadra una volta, poi riprova.",
     hasNotes: "Ci sono note salvate",
     open: "Apri le note",
     close: "Chiudi le note",

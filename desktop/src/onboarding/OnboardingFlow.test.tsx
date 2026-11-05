@@ -217,7 +217,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`);
     expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
     for (const id of packages) expect(installs).toHaveTextContent(id);
-    expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
+    expect(installs).toHaveTextContent(/servizio .* tiene accesa la squadra anche ad app chiusa/i);
     expect(installs).toHaveTextContent(/comando jht nel PATH del tuo utente/i);
     expect(installs).toHaveTextContent(/docker\.exe compatibile resta privato nel runtime e non cambia Docker per gli altri programmi/i);
     // How they are removed: JHT's own part (Compose included) from the app, Podman from Windows.
@@ -563,7 +563,7 @@ describe("OnboardingFlow technical setup", () => {
       status: "failed" as const,
       stage: "container" as const,
       title: "Versione del container non compatibile",
-      message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
+      message: "La versione installata non coincide con quella richiesta da questa app. La squadra non è stata avviata.",
       code: "container_version_incompatible",
       retryable: false,
     };
@@ -645,7 +645,7 @@ describe("OnboardingFlow technical setup", () => {
     const result = renderFlow({
       runtime: {
         status: "failed", stage: "container", title: "Avvio del container non riuscito",
-        message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+        message: "Il container della squadra non risulta pronto. La squadra non è stata avviata.",
         code: "container_start_failed", retryable: true,
       },
       activity: failedActivity,
@@ -697,7 +697,7 @@ describe("OnboardingFlow technical setup", () => {
     renderFlow({
       runtime: {
         status: "failed", stage: "container", title: "Avvio del container non riuscito",
-        message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+        message: "Il container della squadra non risulta pronto. La squadra non è stata avviata.",
         code: "container_start_failed", retryable: true,
       },
       onRetry,
