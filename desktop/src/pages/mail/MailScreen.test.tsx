@@ -8,7 +8,7 @@ import { MailScreen } from "./index";
 const PENDING: MailStatus = { configured: true, address: "jobs@example.com", admission: "allowlist", rotationPending: true };
 
 async function fillAndSave(user: ReturnType<typeof userEvent.setup>, password: string) {
-  await user.click(screen.getByLabelText(/No: il team legge solo i mittenti ammessi/));
+  await user.click(screen.getByLabelText(/No: la squadra legge solo i mittenti ammessi/));
   await user.type(screen.getByLabelText(/Password per app/), password);
   await user.click(screen.getByRole("button", { name: "Salva la password" }));
 }

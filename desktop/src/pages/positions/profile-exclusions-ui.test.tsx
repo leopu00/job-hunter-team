@@ -62,7 +62,7 @@ describe("the proposal to exclude a kind of position", () => {
     feedback = rejections("company");
     const { container } = render(asDesktop(<ExclusionProposalCard />));
     await waitFor(() => expect(container.querySelector("[data-exclusion-proposal='company']")).not.toBeNull());
-    expect(container).toHaveTextContent("il team abbassa il punteggio");
+    expect(container).toHaveTextContent("la squadra abbassa il punteggio");
     fireEvent.click(screen.getByRole("button", { name: "Escludi questo tipo" }));
     await waitFor(() => expect(posted).toEqual([{ reason: "company", status: "accepted", positions: 3 }]));
     expect(await screen.findByText("Esclusione salvata.")).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe("the proposal to exclude a kind of position", () => {
     feedback = rejections("too_senior");
     const { container } = render(asDesktop(<ExclusionProposalCard />));
     await waitFor(() => expect(container.querySelector("[data-exclusion-proposal='too_senior']")).not.toBeNull());
-    expect(container).toHaveTextContent("il team abbassa il punteggio");
+    expect(container).toHaveTextContent("la squadra abbassa il punteggio");
     expect(container).not.toHaveTextContent("Per ora salviamo solo");
     fireEvent.click(screen.getByRole("button", { name: "Escludi questo tipo" }));
     await waitFor(() => expect(posted).toEqual([{ reason: "too_senior", status: "accepted", positions: 3 }]));

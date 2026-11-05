@@ -98,7 +98,7 @@ describe("SSH host-key consent contract", () => {
     expect(onProgress).toHaveBeenCalledWith({
       ...runtimeStarted,
       stage: "container",
-      message: "Preparo il container del team.",
+      message: "Preparo il container della squadra.",
     });
     expect(JSON.stringify(onProgress.mock.calls)).not.toMatch(/private|192\.0\.2\.10|example\.invalid|token at/i);
   });
@@ -444,7 +444,7 @@ describe("what the native side reports is told in the app's language", () => {
   it("turns a ui_* key into the sentence of the app's language", () => {
     // vitest.setup.ts: an Italian system.
     expect(parseOnboardingNativeProgress(progress("ui_phase_image_pull"))?.message)
-      .toBe("Scarico l’immagine del team: è la parte più lunga");
+      .toBe("Scarico l’immagine della squadra: è la parte più lunga");
     localStorage.setItem("jht-lang", "de");
     try {
       expect(parseOnboardingNativeProgress(progress("ui_phase_image_pull"))?.message)

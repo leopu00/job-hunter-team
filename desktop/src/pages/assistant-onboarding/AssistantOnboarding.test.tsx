@@ -69,7 +69,7 @@ describe("AssistantOnboarding", () => {
     expect(screen.getByRole("progressbar", { name: "Avanzamento onboarding Assistente" })).toHaveAttribute("aria-valuenow", "0");
     const choices = screen.getByRole("group", { name: "Scegli il percorso di onboarding" });
     for (const { button } of PATHS) expect(within(choices).getByRole("button", { name: new RegExp(button) })).toBeInTheDocument();
-    expect(screen.getByText(/non legge lo stato del team e non mostra dati simulati/i)).toBeInTheDocument();
+    expect(screen.getByText(/non legge lo stato della squadra e non mostra dati simulati/i)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Dialogo guidato con Assistente" })).toBeInTheDocument();
   });
 

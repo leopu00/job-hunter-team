@@ -262,7 +262,7 @@ describe("the office of a local profile", () => {
     const click: OfficeClick = { kind: "agent", uid: "capitano", role: "capitano" };
     act(() => scene.options!.onClick(click));
     const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
-    expect(within(panel).getByTestId("office-agent-not-published")).toHaveTextContent("non pubblicati dal team");
+    expect(within(panel).getByTestId("office-agent-not-published")).toHaveTextContent("non pubblicati dalla squadra");
     expect(await within(panel).findByRole("button", { name: "Spegni Capitano" })).toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: /^Accendi/ })).toBeNull();
     expect(within(panel).getByRole("button", { name: "Scrivi a Capitano" })).toBeInTheDocument();

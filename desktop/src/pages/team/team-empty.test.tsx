@@ -24,7 +24,7 @@ afterEach(() => localStorage.removeItem("jht-lang"));
 
 describe("/team with no activity, in the desktop", () => {
   it.each([
-    ["it", "Nessun dato del team: arriva quando il tuo team sincronizza col cloud."],
+    ["it", "Nessun dato della squadra: arriva quando la tua squadra sincronizza col cloud."],
     ["en", "No team data yet: it arrives when your team syncs with the cloud."],
   ])("[%s] says the data arrives when the team syncs, never a local SQLite", async (lang, text) => {
     localStorage.setItem("jht-lang", lang);

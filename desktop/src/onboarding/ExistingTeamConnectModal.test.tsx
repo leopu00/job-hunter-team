@@ -103,7 +103,7 @@ describe("ExistingTeamConnectModal", () => {
     const native = bridge();
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
 
-    expect(screen.getByRole("dialog", { name: /hai già un team attivo su vps/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /hai già una squadra attiva su vps/i })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /vps proietta l’ufficio/i }))
       .toHaveAttribute("src", "/onboarding/environment-vps-v2.webp");
     expect(screen.getByLabelText(/utente ssh/i)).toHaveValue("");
@@ -155,7 +155,7 @@ describe("ExistingTeamConnectModal", () => {
     await screen.findByText(PROBE.fingerprint);
     await user.click(screen.getByRole("button", { name: /conferma e collega/i }));
     expect(await screen.findByText(/collegamento sicuro con la VPS da questo computer/i)).toBeInTheDocument();
-    expect(screen.queryByText(/collegamento al team non è riuscito/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/collegamento alla squadra non è riuscito/i)).not.toBeInTheDocument();
   });
 
   it("an Assistant that cannot be verified has its own sentence too", async () => {
@@ -239,7 +239,7 @@ describe("ExistingTeamConnectModal", () => {
 
     expect(screen.getByText("id_ed25519")).toBeInTheDocument();
     expect(screen.queryByText("/synthetic/private/id_ed25519")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /configura un nuovo team/i }));
+    await user.click(screen.getByRole("button", { name: /configura una nuova squadra/i }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
@@ -249,7 +249,7 @@ describe("ExistingTeamConnectModal", () => {
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={bridge()} onCancel={onCancel} onConnected={vi.fn()} onReadOnlyConnected={vi.fn()} />);
     await fillHost(user);
     await user.click(screen.getByRole("button", { name: /verifica vps/i }));
-    expect(await screen.findByRole("heading", { name: /hai già un team attivo su vps/i })).toHaveFocus();
+    expect(await screen.findByRole("heading", { name: /hai già una squadra attiva su vps/i })).toHaveFocus();
     await user.keyboard("{Escape}");
     expect(screen.getByLabelText(/host o indirizzo ip/i)).toBeInTheDocument();
     expect(onCancel).not.toHaveBeenCalled();

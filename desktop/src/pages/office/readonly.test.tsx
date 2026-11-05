@@ -287,7 +287,7 @@ describe("the office of an existing team, over its VPS", () => {
     act(() => scene.options!.onClick(click));
     const panel = await screen.findByRole("complementary", { name: "Pannello di CAPITANO" });
     // the VPS does not report an agent's moves: the panel says so, it never draws an empty list
-    expect(within(panel).getByTestId("office-agent-not-published")).toHaveTextContent("non pubblicati dal team");
+    expect(within(panel).getByTestId("office-agent-not-published")).toHaveTextContent("non pubblicati dalla squadra");
     // whatever the read of the list gave, nothing may be done to this team's agents from here
     await waitFor(() => expect(within(panel).getByTestId("office-agent-unavailable")).toBeInTheDocument());
     expect(within(panel).queryByRole("button", { name: /^(Spegni|Accendi)/ })).toBeNull();

@@ -26,7 +26,7 @@ describe("the notice of the team's silence", () => {
     const loadFacts = vi.fn(async () => OFFICE);
     render(<TeamQuietNotice lastAgentAt={secondsAgo(31 * 60)} loadFacts={loadFacts} />);
     await advance(10);
-    expect(screen.getByTestId("team-quiet")).toHaveTextContent("Il team non scrive perché ora è fuori dall'orario di lavoro: riprende domani alle 09:00.");
+    expect(screen.getByTestId("team-quiet")).toHaveTextContent("La squadra non scrive perché ora è fuori dall'orario di lavoro: riprende domani alle 09:00.");
     expect(screen.getByTestId("team-quiet")).toHaveAttribute("data-cause", "outside_hours");
   });
 
@@ -82,7 +82,7 @@ describe("the notice of the team's silence", () => {
 describe("the sentence", () => {
   const budget = (minutes: number, full: boolean) => ({ kind: "budget" as const, full, usagePct: 93.7, minutes });
   it("says the minutes, or the hours and minutes, the window opens again", () => {
-    expect(quietSentence(budget(25, true), "it")).toBe("Il team non scrive: ha esaurito la finestra di lavoro del provider. Riprende tra 25 min.");
+    expect(quietSentence(budget(25, true), "it")).toBe("La squadra non scrive: ha esaurito la finestra di lavoro del provider. Riprende tra 25 min.");
     expect(quietSentence(budget(125, true), "en")).toBe("The team is not writing: it has used up the provider's work window. It starts again in 2 h 05 min.");
     expect(quietSentence(budget(30, false), "en")).toBe("The provider's work window is at 93%: the team slows down and it reopens in 30 min.");
   });

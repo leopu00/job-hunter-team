@@ -156,7 +156,7 @@ describe("DirectChatScreen", () => {
     await user.type(screen.getByRole("textbox", { name: "Scrivi a Mentor" }), "Ciao{Enter}");
     const status = await screen.findByTestId("direct-chat-status");
     await waitFor(() => expect(status).toHaveTextContent("Il Mentor non è attivo in questo momento."));
-    expect(status).not.toHaveTextContent(/accendi il team/i);
+    expect(status).not.toHaveTextContent(/accendi la squadra/i);
     // true whether the Mentor was never started (first positions not scored) or stopped afterwards
     expect(status).toHaveTextContent(/o, se si era fermato, a breve/);
     expect(screen.getByRole("textbox", { name: "Scrivi a Mentor" })).toHaveValue("Ciao");
@@ -251,11 +251,11 @@ describe("DirectChatScreen", () => {
     render(<DirectChatScreen client={mock} />);
 
     const status = await screen.findByTestId("direct-chat-status");
-    expect(status).toHaveTextContent("Team non disponibile.");
+    expect(status).toHaveTextContent("Squadra non disponibile.");
     expect(status).not.toHaveTextContent("/private/key");
     await user.click(within(status).getByRole("button", { name: "Riprova" }));
     expect(mock.reconnect).toHaveBeenCalledOnce();
-    await waitFor(() => expect(status).toHaveTextContent("Team collegato"));
+    await waitFor(() => expect(status).toHaveTextContent("Squadra collegata"));
   });
 
   it("says the connection does not answer when it stays in «connecting», with the retry, instead of waiting in silence", async () => {
@@ -265,11 +265,11 @@ describe("DirectChatScreen", () => {
       const { mock } = client({ state: "connecting" });
       render(<DirectChatScreen client={mock} />);
       const status = await screen.findByTestId("direct-chat-status");
-      expect(status).toHaveTextContent("Connessione sicura al team");
+      expect(status).toHaveTextContent("Connessione sicura alla squadra");
       expect(within(status).queryByRole("button", { name: "Riprova" })).toBeNull();
 
       await act(async () => { vi.advanceTimersByTime(8_100); });
-      expect(status).toHaveTextContent("La connessione al team non risponde");
+      expect(status).toHaveTextContent("La connessione alla squadra non risponde");
       expect(status).toHaveAttribute("role", "alert");
       await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(within(status).getByRole("button", { name: "Riprova" }));
       expect(mock.reconnect).toHaveBeenCalledOnce();
@@ -328,7 +328,7 @@ describe("DirectChatScreen", () => {
       await act(async () => { vi.advanceTimersByTime(3_000); });
       act(() => emit({ kind: "status", status: { state: "ready" } }));
       await act(async () => { vi.advanceTimersByTime(10_000); });
-      expect(status).toHaveTextContent("Team collegato");
+      expect(status).toHaveTextContent("Squadra collegata");
       expect(status).not.toHaveTextContent("non risponde");
     } finally {
       vi.useRealTimers();
@@ -585,7 +585,7 @@ describe("DirectChatScreen", () => {
     expect(screen.getByRole("textbox", { name: "Write to Captain" })).toHaveAttribute("placeholder", "Connect the team to write");
     expect(await screen.findByRole("button", { name: "Dictate a message" })).toBeInTheDocument();
     expect(voice.mock.status).toHaveBeenCalledWith("en-US");
-    expect(document.body).not.toHaveTextContent(/Capitano|Riprova|Invia|Chat diretta|Collega il team/);
+    expect(document.body).not.toHaveTextContent(/Capitano|Riprova|Invia|Chat diretta|Collega la squadra/);
   });
 
   it("closes the direct channel when the page unmounts", async () => {
@@ -978,7 +978,7 @@ describe("the Messages page opened with the connection closed", () => {
     render(<DirectChatScreen client={mock} />);
     expect(await screen.findByText("Messaggio dal team")).toBeTruthy();
     expect(mock.reconnect).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("direct-chat-status")).toHaveTextContent("Team collegato");
+    expect(screen.getByTestId("direct-chat-status")).toHaveTextContent("Squadra collegata");
     expect(within(screen.getByTestId("direct-chat-status")).queryByRole("button", { name: "Riprova" })).toBeNull();
   });
 
