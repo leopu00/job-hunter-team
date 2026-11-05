@@ -888,7 +888,7 @@ ZIP_SHA256 = "2c055d363de03de917f79568a78b7d5902fc40453bbcc141ca18cf0a1fa1b78e"
 
 def test_the_zip_is_the_pinned_release_checked_before_anything_is_read_out_of_it():
     enabler = _code(ENABLER)
-    assert "$PodmanZipUrl = \"https://github.com/containers/podman/releases/download/v$PodmanCliVersion/podman-remote-release-windows_amd64.zip\"" in enabler
+    assert "$PodmanZipUrl = \"https://github.com/podman-container-tools/podman/releases/download/v$PodmanCliVersion/podman-remote-release-windows_amd64.zip\"" in enabler
     assert f"$PodmanZipSha256 = '{ZIP_SHA256}'" in enabler
     assert "$PodmanZipPrograms = @('podman.exe', 'gvproxy.exe', 'win-sshproxy.exe')" in enabler
     function = enabler[enabler.index("function Install-PodmanForThisUser {") :]
