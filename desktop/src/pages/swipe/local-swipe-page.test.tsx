@@ -8,6 +8,7 @@ import { setLocalTeamData } from "../../lib/local-team-data";
 import { installApiBridge, notInDesktop, shellApi } from "../../shell/api-bridge";
 import { fakeSupabase } from "../../test-support/fake-supabase";
 import { SwipePage } from ".";
+import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 
 // The Swipe of a local profile (no cloud account): the deck comes from the team on this computer, a verdict goes
 // to the native command with the token of that deck, and the cloud is asked for nothing. Synthetic data only.
@@ -61,6 +62,35 @@ afterEach(() => {
 });
 
 describe("SwipePage of a local profile", () => {
+  it("shows the deck the team saved while it is off, with the five verdicts off and the reason on them, and sends nothing", async () => {
+    const savedDeck = { ok: true, token: "tag.0.0", saved: { at: 1793879580 }, pending: [row(101, "Sviluppatrice di prova")], reviewed: [] };
+    native.invoke.mockImplementation(async (command: string, args?: { request?: unknown }) => {
+      if (command === "local_swipe_deck_read") return savedDeck;
+      if (command === "existing_team_positions_read") return detailAnswer(args?.request);
+      throw new Error(`unexpected native command ${command}`);
+    });
+    const { client } = fakeSupabase(() => ({ data: null, error: null }));
+    const reason = "Squadra spenta: per cambiare qualcosa, accendila.";
+    const { container } = render(
+      <ReadOnlyActionsProvider value={{ readOnly: true, teamOff: true, reason }}>
+        <SwipePage client={client} />
+      </ReadOnlyActionsProvider>,
+    );
+    expect(await screen.findByText("Sviluppatrice di prova")).toBeInTheDocument();
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("[data-swipe-verdict] button"));
+    expect(buttons).toHaveLength(4);
+    for (const button of buttons) {
+      expect(button).toBeDisabled();
+      expect(button.title).toContain(reason);
+    }
+    // the keyboard does not give a verdict either: the card stays and nothing goes out
+    await userEvent.keyboard("3");
+    expect(screen.getByText("Sviluppatrice di prova")).toBeInTheDocument();
+    expect(judged).toEqual([]);
+    // (the exchange-rate read is another thing: no call goes to the routes of a position)
+    expect(network.mock.calls.filter(([url]) => String(url).includes("/api/positions"))).toEqual([]);
+  });
+
   it("shows the deck of the team on this computer, with no cloud notice, and asks the cloud for nothing", async () => {
     const { client, queries } = fakeSupabase(() => ({ data: null, error: { message: "cloud must not be asked" } }));
     render(<SwipePage client={client} />);

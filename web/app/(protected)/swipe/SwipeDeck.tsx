@@ -93,6 +93,7 @@ import {
 } from "@/app/(protected)/positions/[id]/exclusion-reasons";
 import { NOTE_MAX, cleanNote } from "@/lib/feedback-reasons";
 import { T } from "./SwipeDeck.i18n";
+import { useReadOnlyActions } from "@/lib/read-only-actions";
 import { Chip, DualRange, FilterSection } from "./SwipeDeckParts";
 export type { Verdict };
 
@@ -777,9 +778,11 @@ export default function SwipeDeck({
     [],
   );
 
+  // The desktop with the team off shows its saved deck: a verdict needs the team, so the buttons say so and nothing is sent.
+  const { teamOff, reason: teamOffReason } = useReadOnlyActions();
   const judge = useCallback(
     (verdict: Verdict) => {
-      if (flyingRef.current || finished || pendingNo) return;
+      if (teamOff || flyingRef.current || finished || pendingNo) return;
       const card = cards[idx];
       flyingRef.current = true;
       stopVoice();
@@ -828,6 +831,7 @@ export default function SwipeDeck({
       stopVoice,
       setIdxCur,
       t.saveError,
+      teamOff,
     ],
   );
 
@@ -1484,6 +1488,7 @@ export default function SwipeDeck({
                 verdict={v}
                 label={t.verdicts[v]}
                 onClick={() => judge(v)}
+                disabledWhy={teamOff ? teamOffReason : undefined}
               />
             ))}
             <div
@@ -2115,10 +2120,12 @@ function VerdictButton({
   verdict,
   label,
   onClick,
+  disabledWhy,
 }: {
   verdict: Verdict;
   label: string;
   onClick: () => void;
+  disabledWhy?: string;
 }) {
   const { Icon, color } = VERDICTS[verdict];
   return (
@@ -2129,9 +2136,10 @@ function VerdictButton({
       <button
         type="button"
         aria-label={label}
-        title={label}
+        title={disabledWhy ? `${label} — ${disabledWhy}` : label}
+        disabled={disabledWhy !== undefined}
         onClick={onClick}
-        className="rounded-full border-2 flex items-center justify-center font-bold transition-transform active:scale-90"
+        className="rounded-full border-2 flex items-center justify-center font-bold transition-transform disabled:opacity-40 disabled:cursor-not-allowed active:scale-90"
         style={{
           width: 48,
           height: 48,

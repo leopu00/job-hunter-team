@@ -4,7 +4,7 @@ import MainChrome from "@/app/components/MainChrome";
 import Link from "../web-shims/next-link";
 import { DesktopWriteProvider } from "@/lib/desktop-write";
 import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
-import { useLocalTeamData } from "../lib/local-team-data";
+import { useLocalTeamData, useLocalTeamSavedAt } from "../lib/local-team-data";
 import { LOCAL_TEAM_DATA_TEXT } from "../lib/local-team-data.i18n";
 import { LocalTeamStoppedBar } from "./LocalTeamStoppedBar";
 import { signOut } from "../lib/supabase";
@@ -176,14 +176,18 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
   // The page of one position is the exception: what the person says or asks there is written in the team's own
   // database through the native command (lib/local-judgement-api.ts), so its controls stay on.
   const onPositionPage = /^\/positions\/[^/]+\/?$/.test(path);
+  // The pages show what the team saved while it is off: nothing that needs the team is written from them, the position page included.
+  const savedOnShow = useLocalTeamSavedAt() !== null;
   const localReadOnly = useMemo(
     () =>
-      localTeam && !onPositionPage
+      localTeam && savedOnShow
+        ? { readOnly: true, teamOff: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].savedHint }
+        : localTeam && !onPositionPage
         ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly }
         : // on the page of a position the authorisation of an application is on too, in two steps: the host's preview
           // (summary, destination, digest), then the person's click carrying the digest and the destination back
           { readOnly: false, reason: "", ...(localTeam ? { applyTwoStep: true } : {}) },
-    [localTeam, onPositionPage],
+    [localTeam, onPositionPage, savedOnShow],
   );
   const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
   // The old address of a page that is now a section of Settings: it goes on to the section, before anything is drawn.
