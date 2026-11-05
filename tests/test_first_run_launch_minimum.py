@@ -96,3 +96,20 @@ def test_the_plan_card_is_asked_with_the_launch_profile_too(sender):
     import_profile(box, minutes_ago=30, content=LAUNCHABLE)
     asked = run(box, "ask-plan", lang="en")
     assert asked.get("asked") is True, asked
+
+
+def test_the_net_closes_the_questionnaire_card_whose_step_the_profile_settles(sender):
+    import sqlite3
+
+    box = sender
+    from test_agent_questions import aq
+    from test_onboarding_questionnaire_tool import ok, put_profile, stale_experience_card
+
+    qid = stale_experience_card(box, experience_years=8, seniority_target="senior")
+
+    out = run(box, "plan-question-check")
+
+    assert out["action"] == "closed" and out["question_id"] == qid and out["choice"] == ["senior"], out
+    with sqlite3.connect(box.db, timeout=10) as conn:
+        assert aq.existing_answer(conn, qid)["origine"] == "sistema"
+    assert run(box, "plan-question-check")["action"] != "closed"

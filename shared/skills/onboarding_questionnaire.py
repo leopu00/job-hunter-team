@@ -9,6 +9,7 @@ person's OWN answer to it and writes what the choice says into candidate_profile
 
     python3 onboarding_questionnaire.py status                 # where the questionnaire stands
     python3 onboarding_questionnaire.py ask                    # post the card of the next step (idempotent)
+    python3 onboarding_questionnaire.py settle                 # close the open card if the profile already settles its step
     python3 onboarding_questionnaire.py apply                  # the person answered the open card: write the choice
     python3 onboarding_questionnaire.py apply --option ID      # they answered in words: record the choice their words name
     python3 onboarding_questionnaire.py answer-text STEP TEXT  # the free text a choice asked for (the title of «other»)
@@ -240,6 +241,8 @@ def ask() -> dict[str, Any]:
     t = _catalog()
     with _lock():
         state = _read_state()
+        if _settle_locked(steps, state).get("closed"):
+            _write_state(state)  # the old card had nothing left to ask: it is closed before the next one is chosen
         answers = _answers(state)
         profile = _profile_fields()
         step = _next_step(steps, answers, profile)
@@ -272,6 +275,70 @@ def ask() -> dict[str, Any]:
         state["card"] = {"step": step["id"], "question_id": posted, "cards": cards + 1}
         _write_state(state)
         return {"ok": True, "asked": True, "step": step["id"], "question_id": posted, **_progress(steps, answers, profile)}
+
+
+# ── a card whose step the profile settled ────────────────────────────────────
+
+def _options_the_profile_stands_for(step: dict[str, Any], profile: dict[str, Any]) -> list[str]:
+    """The choices of `step` that say what the profile already says, best first: the one whose text fields (the seniority)
+    are the profile's, else the band the years fall in. Empty when no choice says it (then nothing is closed in the
+    person's name or the system's)."""
+    watched = step.get("skip_when_profile_has") or []
+    found: list[str] = []
+    banded: list[tuple[float, str]] = []
+    years = profile.get("experience_years")
+    for option in step.get("options", []):
+        effect = (option.get("effect") or {}).get("set") or {}
+        texts = [f for f in effect if f in watched and isinstance(effect[f], str)]
+        if texts and all(profile.get(f) == effect[f] for f in texts):
+            found.append(option["id"])
+        threshold = effect.get("experience_years")
+        if isinstance(threshold, (int, float)) and not isinstance(threshold, bool) and isinstance(years, (int, float)) and threshold <= years:
+            banded.append((threshold, option["id"]))
+    found.extend(option_id for _threshold, option_id in sorted(banded, reverse=True) if option_id not in found)
+    return found
+
+
+def _settle_locked(steps: list[dict[str, Any]], state: dict[str, Any]) -> dict[str, Any]:
+    """The open card is for a step the profile already settles (a card posted before the profile held the answer, or
+    answered some other way since): close it as the system's answer, never the person's, so the Agents panel does not
+    keep «1 open question» for something already told. Marks the card done in `state`; the caller holds the lock and
+    writes `state`. A card the person already answered is left to `apply`."""
+    card = state.get("card") if isinstance(state.get("card"), dict) else None
+    question_id = card.get("question_id") if card else None
+    if not card or card.get("done") or not isinstance(question_id, str):
+        return {"closed": False, "reason": "no card is open"}
+    step = next((s for s in steps if s["id"] == card.get("step")), None)
+    if step is None or step["id"] in _answers(state):
+        return {"closed": False, "reason": "the step of the card is answered or unknown"}
+    profile = _profile_fields()
+    if not _known(step, profile):
+        return {"closed": False, "reason": "the step still needs its answer"}
+    prefer = _options_the_profile_stands_for(step, profile)
+    if not prefer:
+        return {"closed": False, "reason": "no choice of the card says what the profile says"}
+    import agent_questions as aq  # type: ignore
+
+    try:
+        with contextlib.closing(sqlite3.connect(_db_path(), timeout=10)) as conn:
+            done = aq.close_as_system(conn, question_id, prefer)
+    except (sqlite3.Error, ValueError) as error:  # AnswerRejected is a ValueError
+        return {"closed": False, "failed": True, "reason": f"the card was not closed: {error}"}
+    if done.status != "recorded":
+        return {"closed": False, "reason": "the card was answered meanwhile"}
+    state["card"] = {**card, "done": True}
+    return {"closed": True, "question_id": question_id, "step": step["id"], "choice": (done.answer.get("scelte") or [])[:1]}
+
+
+def settle() -> dict[str, Any]:
+    """Close the open card if the profile already settles its step. Idempotent: nothing to do is not an error."""
+    steps = load_steps()
+    with _lock():
+        state = _read_state()
+        out = _settle_locked(steps, state)
+        if out.get("closed"):
+            _write_state(state)
+        return {"ok": not out.get("failed"), **out}
 
 
 # ── writing what a choice says ───────────────────────────────────────────────
@@ -417,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
     sub.add_parser("ask")
+    sub.add_parser("settle")
     apply_parser = sub.add_parser("apply")
     apply_parser.add_argument("--option", default=None)
     text_parser = sub.add_parser("answer-text")
@@ -428,6 +496,8 @@ def main(argv: list[str] | None = None) -> int:
             out = status()
         elif args.command == "ask":
             out = ask()
+        elif args.command == "settle":
+            out = settle()
         elif args.command == "apply":
             out = apply(args.option)
         else:
