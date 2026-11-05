@@ -1896,8 +1896,8 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Repeat the operation and confirm it in the dialog that opens.",
   ),
   chat_runtime_outdated: copy(
-    "Il team non ha ancora questa chat.",
-    "Aggiorna il team all’ultima versione, poi riprova.",
+    "La squadra non ha ancora questa chat.",
+    "Aggiorna la squadra all’ultima versione, poi riprova.",
     "The team does not have this chat yet.",
     "Update the team to the latest version, then try again.",
   ),

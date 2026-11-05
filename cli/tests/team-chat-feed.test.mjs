@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { chatAgentOf, createChatFeed, createChatPump, formatChatMessage, readChatPage } from '../src/commands/team/chat.js';
+import { chatAgentOf, createChatFeed, createChatPump, formatChatMessage, readChatPage, withoutMoodTag } from '../src/commands/team/chat.js';
 
 const welcome = { id: 'm1', role: 'agent', text: 'Ciao! Sono l’Assistente.', at: Date.UTC(2026, 9, 29, 11, 15, 40) / 1000 };
 
@@ -137,4 +137,30 @@ test('read for real, as the REPL does: the replies that come after the history a
     encoding: 'utf8', timeout: 60000, env: { PATH: process.env.PATH, HOME: home, JHT_HOME: home, NO_COLOR: '1' },
   });
   assert.deepEqual(JSON.parse(r.stdout), { history: ['Benvenuto!'], one: ['Got it.'], two: ['profile prepared', 'Altro.'], none: [] }, r.stderr);
+});
+
+// JHT-T172: the Assistant's lines begin with the tag that moves her avatar in the app; a terminal showed it as text.
+test('the mood tag the agent starts a line with is not shown in the terminal, as the app does not show it', () => {
+  const shown = (text, role = 'agent') => formatChatMessage({ id: 'x', role, text, at: 0 }, 'assistente').split('\n').slice(1).join('\n');
+  assert.equal(shown('[caldo] Ciao! Come ti chiami?'), '  Ciao! Come ti chiami?');
+  assert.equal(shown('[neutro]Va bene.'), '  Va bene.');
+  assert.equal(shown('  [sorpreso]   Davvero?'), '  Davvero?');
+  assert.equal(shown('[caldo] Riga uno\nriga due'), '  Riga uno\n  riga due');
+  for (const tag of ['neutro', 'caldo', 'divertito', 'severo', 'pensieroso', 'sorpreso']) {
+    assert.doesNotMatch(shown(`[${tag}] Ciao`), /\[/, tag);
+  }
+});
+
+test('only ONE leading tag of the closed list is taken out; the rest of the text stays as written', () => {
+  assert.equal(withoutMoodTag('[caldo] [neutro] Ciao'), '[neutro] Ciao');
+  assert.equal(withoutMoodTag('Ciao [caldo] amico'), 'Ciao [caldo] amico');
+  assert.equal(withoutMoodTag('[CALDO] Ciao'), '[CALDO] Ciao');
+  assert.equal(withoutMoodTag('[arrabbiato] Ciao'), '[arrabbiato] Ciao');
+  assert.equal(withoutMoodTag('[caldo](https://esempio.it) Ciao'), '[caldo](https://esempio.it) Ciao');
+  assert.equal(withoutMoodTag('Ciao'), 'Ciao');
+});
+
+test('a person\'s own «[caldo]» stays in their line', () => {
+  const mine = formatChatMessage({ id: 'u', role: 'user', text: '[caldo] ciao', at: 0 }, 'assistente');
+  assert.match(mine, /\[caldo\] ciao/);
 });
