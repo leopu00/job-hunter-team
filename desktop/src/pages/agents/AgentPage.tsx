@@ -15,7 +15,8 @@ import type { PageProps } from "../types";
 import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { AGENTS_PANEL_TEXT } from "./AgentsPanel.i18n";
 import AgentStatusBar from "./AgentStatusBar";
-import { SessionHistory } from "./AgentHistory";
+import { Lanes, SessionHistory } from "./AgentHistory";
+import { roleOfSession } from "./history";
 import {
   ago,
   fill,
@@ -205,6 +206,9 @@ export default function AgentPage({ params }: PageProps) {
             <summary className="cursor-pointer text-[13px] text-[var(--color-muted)]">{p.sessions}</summary>
             <div className="mt-1">
               <SessionHistory t={t} history={history} session={row.session} nowS={Math.floor(now / 1000)} />
+              <div className="mt-3">
+                <Lanes t={t} history={history} roles={[roleOfSession(row.session)]} nowS={Math.floor(now / 1000)} only={row.session} />
+              </div>
             </div>
           </details>
         </section>

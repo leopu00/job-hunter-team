@@ -28,7 +28,9 @@ const ROLES = ["capitano", "scout", "dottore"].map((role) => ({ role, multi: rol
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
 
 let restoreBridge: () => void;
+let historyReply: Record<string, unknown> | null = null;
 beforeEach(() => {
+  historyReply = null;
   document.cookie = "NEXT_LOCALE=it; path=/";
   native.invoke.mockReset();
   native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
@@ -37,7 +39,7 @@ beforeEach(() => {
     if (op === "list") return { ok: true, data: { agents: AGENTS, roles: ROLES, states: true, target: "T1", where: "local", label: null } };
     if (op === "team") return { ok: true, data: { halted: false, standby: { state: "off", until: null, weeklyReset: false }, held: [] } };
     if (op === "screen") return { ok: true, data: { name: args.request.session, up: true, text: "<b>not html</b>\nlavoro in corso", refreshMs: 2000 } };
-    if (op === "history") return { ok: false, error: "agent_control_unsupported" };
+    if (op === "history") return historyReply ?? { ok: false, error: "agent_control_unsupported" };
     return { ok: false, error: "not_in_test" };
   });
   vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("no network"); }));
@@ -72,6 +74,26 @@ describe("the page of one agent", () => {
     // watched, not written: the page says so and offers no field and no key
     expect(screen.getByTestId("agent-page-watch-only")).toHaveTextContent("non il terminale");
     expect(document.querySelector("textarea, input")).toBeNull();
+  });
+
+  it("shows the sessions of THIS agent as bars of the last day, from the start of each to its end, and no other agent's", async () => {
+    historyReply = {
+      ok: true,
+      data: {
+        since: null,
+        lanes: null,
+        items: [
+          { name: "SCOUT-2", failed: [], sessions: [{ start: NOW_S - 3600, end: null, reason: "running" }, { start: NOW_S - 20000, end: NOW_S - 9000, reason: "restarted_by_user" }] },
+          { name: "SCOUT-1", failed: [], sessions: [{ start: NOW_S - 7200, end: null, reason: "running" }] },
+        ],
+      },
+    };
+    show("SCOUT-2");
+    const lanes = await screen.findByTestId("panel-lanes");
+    expect(lanes).toHaveTextContent("Sessioni delle ultime 24 ore");
+    expect(lanes.querySelectorAll("[data-testid^='panel-lane-']")).toHaveLength(1);
+    expect(screen.getByTestId("panel-lane-SCOUT-2").querySelectorAll("[data-testid='panel-bar-SCOUT-2']").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByTestId("panel-lane-SCOUT-1")).toBeNull();
   });
 
   it("only reads: it asks for the list, the team, the history and the screen of this session, never an action", async () => {

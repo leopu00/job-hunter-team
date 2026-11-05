@@ -138,6 +138,8 @@ pub(crate) enum ControlRequest {
     Team {},
     /// The previous sessions of the agents (JHT-T43): a read with no argument, from the files the team already writes.
     History {},
+    /// What each agent worked on in a window of the page's six (JHT-T171): tokens in aligned buckets, from the files the team already writes.
+    Activity { window: String },
     Screen { session: String },
     Start { session: String, target: String, confirmed: bool },
     Stop { session: String, target: String, confirmed: bool },
@@ -187,6 +189,7 @@ impl ControlRequest {
             Self::List {} => Some(vec!["list".into()]),
             Self::Team {} => Some(vec!["team".into()]),
             Self::History {} => Some(vec!["history".into()]),
+            Self::Activity { window } => activity_window(window).map(|_| vec!["activity".to_owned(), window.clone()]),
             Self::Screen { session } => with("screen", session),
             Self::Start { session, .. } => with("start", session),
             Self::Stop { session, .. } => with("stop", session),
@@ -328,6 +331,10 @@ pub(crate) fn read_input(request: &ControlRequest) -> Option<Vec<u8>> {
         ControlRequest::List {} => json!({"op": "list"}),
         ControlRequest::Team {} => json!({"op": "team"}),
         ControlRequest::History {} => json!({"op": "history"}),
+        ControlRequest::Activity { window } => {
+            activity_window(window)?;
+            json!({"op": "activity", "window": window})
+        }
         ControlRequest::Exclusions {} => json!({"op": "exclusions"}),
         ControlRequest::Screen { session } => json!({"op": "screen", "name": session}),
         _ => return None,
@@ -371,6 +378,7 @@ fn run(app: &tauri::AppHandle, scope: &AccountScope, destination: &Destination, 
                 ControlRequest::List {} => Some(crate::state_stream::StreamRead::AgentsList),
                 ControlRequest::Team {} => Some(crate::state_stream::StreamRead::AgentsTeam),
                 ControlRequest::History {} => Some(crate::state_stream::StreamRead::AgentsHistory),
+                ControlRequest::Activity { window } => Some(crate::state_stream::StreamRead::AgentsActivity { window }),
                 ControlRequest::Exclusions {} => Some(crate::state_stream::StreamRead::AgentsExclusions),
                 ControlRequest::Screen { session } => Some(crate::state_stream::StreamRead::AgentsScreen { name: session }),
                 _ => None,
@@ -516,6 +524,87 @@ fn shape_lanes(value: Option<&Value>) -> Value {
     Value::Object(out)
 }
 
+/// The windows of the activity read and their buckets: (word, length in seconds, bucket in seconds). The container
+/// cuts the same table (agent_work_activity.py WINDOWS); an answer that does not match it is not used.
+pub(crate) const ACTIVITY_WINDOWS: [(&str, i64, i64); 6] =
+    [("5m", 300, 15), ("15m", 900, 60), ("1h", 3600, 120), ("5h", 18_000, 600), ("24h", 86_400, 1800), ("7d", 604_800, 10_800)];
+const ACTIVITY_AGENTS: usize = 200;
+/// The states agent_state.py names, the only words the page has a sentence for.
+const ACTIVITY_STATES: &[&str] = &["spento", "idle", "lavora", "bloccato", "aspetta_umano", "sconosciuto"];
+/// More kT than a team could write in a bucket: a value above it is the container's mistake, not a figure.
+const ACTIVITY_MAX_KT: f64 = 1.0e9;
+
+fn activity_window(window: &str) -> Option<(i64, i64)> {
+    ACTIVITY_WINDOWS.iter().find(|(name, _, _)| *name == window).map(|(_, span, bucket)| (*span, *bucket))
+}
+
+/// A kT figure: finite, not negative, within what a team can write.
+fn kt_value(value: &Value) -> Option<f64> {
+    value.as_f64().filter(|v| v.is_finite() && (0.0..=ACTIVITY_MAX_KT).contains(v))
+}
+
+fn round2(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+
+/// What each agent worked on, reduced to closed fields. The window and its buckets must be the ones asked for, edges
+/// aligned to the bucket; an agent is a session name of the closed grammar, once; its tokens and its work marks are
+/// exactly one value for each bucket. The total, the average and the worked buckets are computed HERE from the
+/// buckets, never read from the container, so the figures on the page always add up to the bars.
+pub(crate) fn shape_activity(reply: &Value, window: &str) -> Option<Value> {
+    if reply.get("ok") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let (span, bucket) = activity_window(window)?;
+    let count = (span / bucket) as usize;
+    let data = reply.get("data")?.as_object()?;
+    if data.get("window")?.as_str()? != window || data.get("bucket_s")?.as_i64()? != bucket || data.get("buckets")?.as_u64()? != count as u64 {
+        return None;
+    }
+    let since = epoch_seconds(data.get("since"))?;
+    let end = epoch_seconds(data.get("end"))?;
+    let now = epoch_seconds(data.get("now"))?;
+    if end - since != span || end % bucket != 0 || !(end - bucket < now && now <= end) {
+        return None;
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let agents: Vec<Value> = data
+        .get("agents")?
+        .as_array()?
+        .iter()
+        .filter_map(|item| {
+            let name = item.get("name")?.as_str()?.to_ascii_uppercase();
+            crate::existing_team_agents::agent_session(&name)?;
+            let kt: Vec<f64> = item.get("kt")?.as_array().filter(|kt| kt.len() == count)?.iter().map(kt_value).collect::<Option<_>>()?;
+            let work: Vec<u8> = item
+                .get("work")?
+                .as_array()
+                .filter(|work| work.len() == count)?
+                .iter()
+                .map(|mark| mark.as_u64().filter(|mark| *mark <= 1).map(|mark| mark as u8))
+                .collect::<Option<_>>()?;
+            seen.insert(name.clone()).then_some(())?;
+            let total = round2(kt.iter().sum::<f64>());
+            Some(json!({
+                "name": name,
+                "state": word(item.get("state"), ACTIVITY_STATES),
+                "kt": kt.iter().map(|v| round2(*v)).collect::<Vec<_>>(),
+                "work": work,
+                "totalKt": total,
+                "avgKtH": round2(total / (span as f64 / 3600.0)),
+                "workedBuckets": work.iter().filter(|mark| **mark == 1).count(),
+            }))
+        })
+        .take(ACTIVITY_AGENTS)
+        .collect();
+    Some(json!({"ok": true, "data": {
+        "window": window, "now": now, "since": since, "end": end, "bucketS": bucket, "buckets": count,
+        "agents": agents,
+        "unattributedKt": data.get("unattributed_kt").and_then(kt_value).map(round2),
+        "states": data.get("states") == Some(&Value::Bool(true)),
+    }}))
+}
+
 /// A moment as seconds since the epoch, within what a clock can say.
 fn epoch_seconds(value: Option<&Value>) -> Option<i64> {
     value.and_then(Value::as_i64).filter(|seconds| (0..=4_102_444_800).contains(seconds))
@@ -644,6 +733,12 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
                 return failure(code_of(output.code));
             }
             reply.as_ref().and_then(shape_history).unwrap_or_else(|| failure("agents_unavailable"))
+        }
+        ControlRequest::Activity { window } => {
+            if output.code != 0 {
+                return failure(code_of(output.code));
+            }
+            reply.as_ref().and_then(|reply| shape_activity(reply, window)).unwrap_or_else(|| failure("agents_unavailable"))
         }
         ControlRequest::Exclusions {} => {
             if output.code != 0 {
@@ -1041,6 +1136,102 @@ mod tests {
         let history = req(json!({"op":"history"})).unwrap();
         assert_eq!(action_refusal(&history, Some(VpsMode::ReadOnly), "print"), None);
         assert!(history.action().is_none());
+    }
+
+    #[test]
+    fn the_activity_request_takes_only_the_pages_windows_and_is_a_read() {
+        for window in ["5m", "15m", "1h", "5h", "24h", "7d"] {
+            let request = req(json!({"op":"activity","window":window})).unwrap();
+            assert_eq!(request.argv(), Some(vec!["activity".to_owned(), window.to_owned()]));
+            assert!(read_input(&request).is_some(), "{window}");
+            assert!(request.action().is_none());
+            assert_eq!(action_refusal(&request, Some(VpsMode::ReadOnly), "print"), None);
+        }
+        for window in ["", "2h", "1H", "1h ", "-1h", "30d", "1h;x", "5m\n"] {
+            let request = req(json!({"op":"activity","window":window})).unwrap();
+            assert_eq!(request.argv(), None, "{window:?}");
+            assert!(read_input(&request).is_none(), "{window:?}");
+        }
+        assert!(req(json!({"op":"activity"})).is_none());
+        assert!(req(json!({"op":"activity","window":"1h","extra":1})).is_none());
+    }
+
+    fn activity_reply(kt: &[(usize, f64)], work: &[usize]) -> Value {
+        // the 1h window: 30 buckets of 120 s, the end a multiple of the bucket, `now` inside the last one
+        let (end, count) = (1_800_000_000_i64, 30);
+        let mut tokens = vec![0.0; count];
+        for (index, value) in kt {
+            tokens[*index] = *value;
+        }
+        let mut marks = vec![0; count];
+        for index in work {
+            marks[*index] = 1;
+        }
+        json!({"ok": true, "data": {
+            "window": "1h", "now": end - 30, "since": end - 3600, "end": end, "bucket_s": 120, "buckets": count,
+            "agents": [{"name": "scout-1", "state": "lavora", "kt": tokens, "work": marks, "total_kt": 999.0, "avg_kt_h": 999.0, "worked_buckets": 99}],
+            "unattributed_kt": 2.5, "states": true}})
+    }
+
+    #[test]
+    fn the_activity_read_is_closed_and_its_figures_are_added_up_here_from_the_buckets() {
+        let request = req(json!({"op":"activity","window":"1h"})).unwrap();
+        let run = |reply: &Value| answer(&request, &ProcessResult { code: 0, stdout: reply.to_string().into_bytes() }, "t", None);
+        let shaped = run(&activity_reply(&[(5, 1.5), (29, 2.0)], &[5, 29]));
+        let agent = &shaped["data"]["agents"][0];
+        // the container said 999 for the total: it is not believed, the buckets are added
+        assert_eq!((agent["name"].clone(), agent["totalKt"].clone(), agent["avgKtH"].clone(), agent["workedBuckets"].clone()), (json!("SCOUT-1"), json!(3.5), json!(3.5), json!(2)));
+        assert_eq!(agent["state"], json!("lavora"));
+        assert_eq!(agent["kt"].as_array().unwrap().len(), 30);
+        assert_eq!((shaped["data"]["bucketS"].clone(), shaped["data"]["buckets"].clone(), shaped["data"]["unattributedKt"].clone(), shaped["data"]["states"].clone()), (json!(120), json!(30), json!(2.5), json!(true)));
+
+        // a non-zero exit is the container's closed code, never a half answer
+        let failed = answer(&request, &ProcessResult { code: 2, stdout: b"".to_vec() }, "t", None);
+        assert_eq!(failed["ok"], json!(false));
+        // another window than the one asked, a bucket that is not the table's, an end that is not aligned, a `now`
+        // outside the last bucket, an answer that is not ok: nothing is used
+        let base = activity_reply(&[(5, 1.5)], &[5]);
+        let with = |path: &str, value: Value| {
+            let mut changed = base.clone();
+            changed["data"][path] = value;
+            changed
+        };
+        for bad in [with("window", json!("5m")), with("bucket_s", json!(60)), with("buckets", json!(29)), with("end", json!(1_800_000_001_i64)),
+                    with("now", json!(1_800_000_000_i64 - 3600)), with("since", json!(1_799_990_000_i64)), json!({"ok": false, "error": "x"})] {
+            assert_eq!(run(&bad), failure("agents_unavailable"), "{bad}");
+        }
+        assert_eq!(shape_activity(&base, "24h"), None);
+        assert_eq!(shape_activity(&base, "2h"), None);
+    }
+
+    #[test]
+    fn an_agent_that_is_not_one_the_team_has_or_has_the_wrong_shape_is_left_out_not_repaired() {
+        let good = activity_reply(&[(5, 1.5)], &[5]);
+        let agent = good["data"]["agents"][0].clone();
+        let with = |change: &dyn Fn(&mut Value)| {
+            let mut one = agent.clone();
+            change(&mut one);
+            one
+        };
+        let mut reply = good.clone();
+        reply["data"]["agents"] = json!([
+            agent.clone(),
+            agent.clone(), // the same agent twice: once
+            with(&|a| a["name"] = json!("rm -rf")),
+            with(&|a| a["name"] = json!("scout-0")),
+            with(&|a| { a["name"] = json!("scout-2"); a["kt"] = json!([1.0, 2.0]); }),
+            with(&|a| { a["name"] = json!("scout-3"); a["kt"][3] = json!(-1.0); }),
+            with(&|a| { a["name"] = json!("scout-4"); a["kt"][3] = json!(2.0e9); }),
+            with(&|a| { a["name"] = json!("scout-5"); a["kt"][3] = json!("x"); }),
+            with(&|a| { a["name"] = json!("scout-6"); a["work"][3] = json!(2); }),
+            with(&|a| { a["name"] = json!("scout-7"); a["state"] = json!("a sentence the team wrote"); }),
+            with(&|a| { a["name"] = json!("MENTOR"); }),
+        ]);
+        let shaped = shape_activity(&reply, "1h").unwrap();
+        let names: Vec<&str> = shaped["data"]["agents"].as_array().unwrap().iter().map(|a| a["name"].as_str().unwrap()).collect();
+        // scout-7 stays (an unknown state word is `null`, never the container's text); the others are out
+        assert_eq!(names, ["SCOUT-1", "SCOUT-7", "MENTOR"]);
+        assert_eq!(shaped["data"]["agents"][1]["state"], Value::Null);
     }
 
     #[test]
