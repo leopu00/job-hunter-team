@@ -1030,6 +1030,8 @@ mod tests {
         assert_eq!(merged_agents(&live, &json!({"ok": true, "data": {}})), None);
     }
 
+    // the reader of the files is the unix one (host_agents): elsewhere it says it is not there, and the list stays the live one
+    #[cfg(unix)]
     #[test]
     fn the_roster_read_from_the_files_is_shaped_like_a_live_list_with_every_agent_off() {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -1049,6 +1051,13 @@ mod tests {
         assert!(agents.iter().all(|a| a["state"] == json!("spento")), "every agent of the roster is off");
         assert_eq!(agents[1]["role"], json!("scout"));
         assert_eq!(agents[1]["created"], json!(1_793_608_200));
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn without_the_reader_of_the_files_the_roster_is_not_read_and_says_why() {
+        let home = std::env::temp_dir();
+        assert_eq!(crate::host_agents::read_roster(&home).unwrap_err(), "host_db_unavailable");
     }
 
     #[test]
