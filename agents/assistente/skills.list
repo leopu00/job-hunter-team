@@ -19,6 +19,9 @@ user-reply-check
 # Inter-agent (bridge to the Capitano when needed)
 tmux-send
 
+# JHT-T181: «fate una pausa» = pausa vera, lanciata dall'Assistente stesso e raccontata com'e'.
+team-pause
+
 # Emergency: spawn fresh DOTTORE quando l'utente chiede via Telegram
 # "fai partire il dottore" / "dottora" / "controlla il team". Tra i
 # cicli auto-watchdog (2h) la sessione DOTTORE è bash residua: scriverle

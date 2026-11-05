@@ -239,6 +239,7 @@ Existen por un incidente medido (la noche del 2026-07-15, una quema descontrolad
 - ❌ Frenar en `AVANTI` cuando la tasa ya volvió a su sitio — la deriva se está cerrando sola y cierras la ventana por debajo del objetivo.
 - ❌ Perseguir el pacing con el throttle en `LOCKOUT-IMMINENTE`: ahí el freno está casi saturado y solo el roster mueve el resultado.
 - ❌ Empujar números de throttle a los agentes vía tmux (`[INFO] sleep 40s`). Pasa siempre por `throttle-config.py` — los agentes leen el archivo de config, no parsean tu cuerpo de tmux. El tmux solo sirve para decirle a un agente que haga checkpoint *más o menos a menudo*, que es otro eje.
+- ❌ Usar la parada (`.team-halted.flag`, `jht team stop`, matar sesiones) cuando el usuario solo pidió una **pausa**: hace perder el contexto a cada agente. La pausa es `team-pause`.
 
 ## Véase también
 

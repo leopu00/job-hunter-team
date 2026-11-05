@@ -239,6 +239,7 @@ Esistono per un incidente misurato (la notte del 2026-07-15, una burn incontroll
 - ❌ Frenare su `AVANTI` quando il tasso è già rientrato — la deriva si sta chiudendo da sola e tu chiudi la finestra sotto target.
 - ❌ Inseguire il pacing col throttle su `LOCKOUT-IMMINENTE`: lì il freno è quasi saturo e solo il roster muove l'esito.
 - ❌ Spingere numeri di throttle agli agenti via tmux (`[INFO] sleep 40s`). Passa sempre da `throttle-config.py` — gli agenti leggono il file di config, non fanno il parsing del tuo corpo tmux. Il tmux serve solo a dire a un agente di fare checkpoint *più o meno spesso*, che è un altro asse.
+- ❌ Usare lo stop (`.team-halted.flag`, `jht team stop`, kill delle sessioni) quando l'utente ha chiesto solo una **pausa**: fa perdere il contesto a ogni agente. La pausa è `team-pause`.
 
 ## Vedi anche
 

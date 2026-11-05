@@ -239,6 +239,7 @@ Egy mért incidens miatt léteznek (2026-07-15 éjszakáján egy ellenőrizetlen
 - ❌ `AVANTI`-ra fékezni, amikor a sebesség már visszaállt — az elsodródás magától záródik, te pedig cél alatt zárod az ablakot.
 - ❌ A pacinget throttle-lal kergetni `LOCKOUT-IMMINENTE` esetén: ott a fék már közel telített, és csak a roster mozdítja a kimenetet.
 - ❌ Throttle-számokat tmux-on átküldeni az ágenseknek (`[INFO] sleep 40s`). Mindig a `throttle-config.py`-n keresztül menj — az ágensek a config-fájlt olvassák, nem a tmux-üzeneted törzsét elemzik. A tmux csak arra való, hogy megmondd egy ágensnek: *gyakrabban vagy ritkábban* csináljon checkpointot — az egy másik tengely.
+- ❌ A leállítás (`.team-halted.flag`, `jht team stop`, munkamenetek megölése) használata, amikor a felhasználó csak **szünetet** kért: minden ügynök elveszíti a kontextusát. A szünet a `team-pause`.
 
 ## Lásd még
 
