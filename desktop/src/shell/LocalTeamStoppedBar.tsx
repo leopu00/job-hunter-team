@@ -1,3 +1,4 @@
+import type { Locale } from "@/i18n/config";
 import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
 import { useLocalTeamSavedAt, useLocalTeamStopped } from "../lib/local-team-data";
@@ -5,17 +6,27 @@ import { LOCAL_TEAM_DATA_TEXT } from "../lib/local-team-data.i18n";
 import { REFRESH_EVENT } from "./refresh-event";
 import { StartTeamAction } from "./StartTeamAction";
 
-/** «14:05», or the day too when the data are not from today. */
-export function savedMoment(at: number, locale: string, now: Date = new Date()): string {
+/** The hour of the saved data and, when they are not from today, their day too («03/11»): an hour alone would make old data look new. */
+export function savedMoment(at: number, locale: string, now: Date = new Date()): { today: boolean; day: string; time: string } {
   const when = new Date(at * 1000);
-  const sameDay = when.toDateString() === now.toDateString();
+  const today = when.toDateString() === now.toDateString();
   try {
-    return sameDay
-      ? when.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
-      : when.toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return {
+      today,
+      day: when.toLocaleDateString(locale, { day: "2-digit", month: "2-digit" }),
+      time: when.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }),
+    };
   } catch {
-    return when.toISOString().slice(0, 16).replace("T", " ");
+    const iso = when.toISOString();
+    return { today, day: iso.slice(5, 10).replace("-", "/"), time: iso.slice(11, 16) };
   }
+}
+
+/** The sentence of the bar for saved data written at `at`: «…alle 14:05», or «…il 03/11 alle 23:10» when it is not today. */
+export function savedSentence(at: number, locale: Locale, now: Date = new Date()): string {
+  const { today, day, time } = savedMoment(at, locale, now);
+  const copy = LOCAL_TEAM_DATA_TEXT[locale];
+  return (today ? copy.savedAt : copy.savedAtDay).replace("{day}", day).replace("{time}", time);
 }
 
 /**
@@ -40,7 +51,7 @@ export function LocalTeamStoppedBar() {
     >
       {showing ? (
         <span>
-          {savedAt > 0 ? saved.savedAt.replace("{time}", savedMoment(savedAt, locale)) : saved.savedNoTime} {saved.savedHint}
+          {savedAt > 0 ? savedSentence(savedAt, locale) : saved.savedNoTime} {saved.savedHint}
         </span>
       ) : (
         <span>{copy.text} {copy.action}</span>

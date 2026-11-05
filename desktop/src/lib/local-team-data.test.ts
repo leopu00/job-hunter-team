@@ -85,6 +85,8 @@ describe("the pages that show the team of this computer", () => {
       expect(copy.readOnly.length, locale).toBeGreaterThan(30);
       expect(copy.teamPage.length, locale).toBeGreaterThan(60);
       expect(copy.savedAt, locale).toContain("{time}");
+      expect(copy.savedAtDay, locale).toContain("{day}");
+      expect(copy.savedAtDay, locale).toContain("{time}");
       expect(copy.savedNoTime.length, locale).toBeGreaterThan(15);
       expect(copy.savedHint.length, locale).toBeGreaterThan(30);
     }
