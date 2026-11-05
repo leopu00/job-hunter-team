@@ -140,25 +140,84 @@ describe("the Budget page", () => {
   });
 
   it("says the budget cannot be read, with the reason in words, and reads again on request", async () => {
-    native.invoke.mockRejectedValue(new Error("invalid_request"));
+    native.invoke.mockRejectedValue({ code: "process_timeout" });
     const user = userEvent.setup();
     show();
     const failed = await screen.findByTestId("budget-failed");
     expect(failed).toHaveTextContent("The budget cannot be read.");
-    expect(failed).toHaveTextContent("The team does not offer the budget figures yet.");
-    expect(failed).not.toHaveTextContent("budget_unavailable");
+    // a read that took too long says so: it is not «the team does not offer the figures»
+    expect(failed).toHaveTextContent("The operation took too long.");
+    expect(failed).not.toHaveTextContent("does not offer");
+    expect(failed).not.toHaveTextContent("process_timeout");
+    expect(within(failed).queryByTestId("update-team-button")).toBeNull();
     serve(fixtures.ahead_without_override);
     await user.click(within(failed).getByRole("button", { name: "Try again" }));
     expect(await screen.findByTestId("budget-week")).toBeInTheDocument();
   });
 
-  it("offers «Update the team» with its guide when the team does not offer the figures, and only then", async () => {
-    // outside the desktop app the button opens the guide with the command; inside it, it updates (next test)
-    native.isTauri.mockReturnValue(false);
-    native.invoke.mockRejectedValue(new Error("invalid_request"));
+  it("when the chat is not connected it connects it again by itself and shows the numbers, with no error and no update", async () => {
+    // the page was opened before the team was: the first read says «not connected», the chat is connected again, the second read works
+    let connected = false;
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "direct_chat_reconnect") {
+        connected = true;
+        return { state: "ready" };
+      }
+      if (!connected) throw { code: "disconnected" };
+      return fixtures.ahead_without_override;
+    });
+    show();
+    expect(await screen.findByTestId("budget-week")).toBeInTheDocument();
+    expect(screen.queryByTestId("budget-failed")).toBeNull();
+    expect(native.invoke.mock.calls.map((call) => call[0]).filter((name) => name !== "team_budget_read")).toEqual(["direct_chat_reconnect"]);
+  });
+
+  it("when the chat cannot be connected it says so, offers «Reconnect the chat» instead of asking the person to do it, and no update of the team", async () => {
+    let connectable = false;
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "direct_chat_reconnect") {
+        if (!connectable) throw { code: "connect_failed" };
+        return { state: "ready" };
+      }
+      if (!connectable) throw { code: "disconnected" };
+      return fixtures.ahead_without_override;
+    });
     const user = userEvent.setup();
     show();
     const failed = await screen.findByTestId("budget-failed");
+    expect(failed).toHaveTextContent("The chat is not connected to the team.");
+    expect(failed).not.toHaveTextContent("does not offer");
+    expect(within(failed).queryByTestId("update-team-button")).toBeNull();
+    // the button is there instead of «Try again»: the sentence asks for a reconnection and the page does it
+    expect(within(failed).queryByRole("button", { name: "Try again" })).toBeNull();
+    // the chat cannot be connected: the page says why (the reconnect's own code), not «not connected» again
+    await user.click(within(failed).getByTestId("budget-reconnect"));
+    await waitFor(() => expect(screen.getByTestId("budget-failed")).toHaveTextContent("The team cannot be reached."));
+    // it can now: «Try again» connects the chat again too, and the numbers are there
+    connectable = true;
+    await user.click(within(screen.getByTestId("budget-failed")).getByRole("button", { name: "Try again" }));
+    expect(await screen.findByTestId("budget-week")).toBeInTheDocument();
+    const asked = native.invoke.mock.calls.map((call) => call[0]);
+    expect(asked.filter((name) => name === "direct_chat_reconnect").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("tells an answer it does not recognise apart from a team without the figures, and offers no update for it", async () => {
+    serve({ ...clone(fixtures.ahead_without_override), verdict: { code: "something-new", brake: false, steps: 0 } });
+    show();
+    const failed = await screen.findByTestId("budget-failed");
+    expect(failed).toHaveTextContent("The team's budget answer is not in a form this app recognises.");
+    expect(failed).not.toHaveTextContent("does not offer");
+    expect(within(failed).queryByTestId("update-team-button")).toBeNull();
+  });
+
+  it("offers «Update the team» with its guide only when the team has no budget file, and only then", async () => {
+    // outside the desktop app the button opens the guide with the command; inside it, it updates (next test)
+    native.isTauri.mockReturnValue(false);
+    serve({ ok: false, error: "budget_unavailable" });
+    const user = userEvent.setup();
+    show();
+    const failed = await screen.findByTestId("budget-failed");
+    expect(failed).toHaveTextContent("The team does not offer the budget figures yet.");
     await user.click(within(failed).getByRole("button", { name: "Update the team" }));
     const guide = within(failed).getByTestId("update-team-guide");
     expect(guide).toHaveTextContent("Open the Terminal");
@@ -173,7 +232,7 @@ describe("the Budget page", () => {
   });
 
   it("in the desktop app «Update the team» asks first and runs nothing until the person confirms", async () => {
-    native.invoke.mockRejectedValue(new Error("invalid_request"));
+    serve({ ok: false, error: "budget_unavailable" });
     const user = userEvent.setup();
     show();
     const failed = await screen.findByTestId("budget-failed");
@@ -182,6 +241,14 @@ describe("the Budget page", () => {
     expect(within(failed).getByTestId("team-update-confirm")).toBeInTheDocument();
     expect(within(failed).queryByTestId("update-team-guide")).toBeNull();
     expect(native.invoke.mock.calls.slice(before).some(([command]) => command === "onboarding_team_update")).toBe(false);
+  });
+
+  it("shows the answer of a team with a week used and no rate yet («no data») as numbers and not as an error", async () => {
+    serve(JSON.parse(readFileSync("src-tauri/tests/fixtures/budget_team_week_no_rate.json", "utf8")));
+    show();
+    const week = await screen.findByTestId("budget-week");
+    expect(week).toHaveTextContent("37 %");
+    expect(screen.queryByTestId("budget-failed")).toBeNull();
   });
 
   it("reads again by itself while it is open, and stops when it is left", async () => {
