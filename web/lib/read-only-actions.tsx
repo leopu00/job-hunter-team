@@ -16,6 +16,11 @@ export type ReadOnlyActions = {
    * (the desktop on the team of this computer).
    */
   applyTwoStep?: boolean;
+  /**
+   * The pages show what the team saved while it is off (the desktop on the team of this computer): what needs the team to
+   * answer (a verdict on a card of the Swipe) stays on screen, disabled, with `reason`. Never set on the web.
+   */
+  teamOff?: boolean;
 };
 
 const NOT_READ_ONLY: ReadOnlyActions = { readOnly: false, reason: "" };

@@ -332,7 +332,7 @@ mod unix {
         other.map(|o| meta.mtime.max(o.mtime)).unwrap_or(meta.mtime)
     }
 
-    pub(super) fn open_snapshot_with(
+    pub(crate) fn open_snapshot_with(
         home: &Path,
         work: &Path,
         required: &[&str],
@@ -394,7 +394,7 @@ mod unix {
 }
 
 #[cfg(unix)]
-use unix::open_snapshot_with;
+pub(crate) use unix::open_snapshot_with;
 #[cfg(unix)]
 pub(crate) use unix::sweep as sweep_snapshots;
 

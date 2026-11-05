@@ -13,6 +13,13 @@ import { existingTeamView } from "./existing-team-readonly";
 let identity: string | null = null;
 /** The last read of the team said its container is not running (and no read has worked since). */
 let stopped = false;
+/**
+ * The pages are showing what the team saved because its container is off: seconds since the epoch the data were last written,
+ * 0 when the moment is not known (a team that never ran), null when they are not showing saved data. A read that is a
+ * failure of the team being off leaves it as it is (a page that asks for something only the team can give must not make the
+ * bar flip); only a read that worked without the mark (the team is up) or a change of team clears it.
+ */
+let savedAt: number | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -29,6 +36,7 @@ export function setLocalTeamData(key: string | null): void {
   if (identity === key) return;
   identity = key;
   stopped = false;
+  savedAt = null;
   queueMicrotask(emit);
 }
 
@@ -46,12 +54,21 @@ export function teamDataFromTheTeam(): boolean {
   return identity !== null || existingTeamView() !== null;
 }
 
-/** What a native read of the team answered: `code` is its failure, null when it worked. */
-export function reportLocalTeamRead(code: string | null): void {
+/** The mark a native read carries when its data are the ones the team saved: when they were last written (null: not known). */
+export interface SavedMark {
+  at: number | null;
+}
+
+/** What a native read of the team answered: `code` is its failure, null when it worked; `saved` is there when it worked from saved data. */
+export function reportLocalTeamRead(code: string | null, saved?: SavedMark | null): void {
   if (identity === null) return;
-  const next = code === "local_team_not_running";
-  if (next === stopped) return;
-  stopped = next;
+  const nextStopped = code === "local_team_not_running";
+  let nextSaved = savedAt;
+  if (saved) nextSaved = typeof saved.at === "number" && saved.at > 0 ? saved.at : 0;
+  else if (code === null) nextSaved = null;
+  if (nextStopped === stopped && nextSaved === savedAt) return;
+  stopped = nextStopped;
+  savedAt = nextSaved;
   emit();
 }
 
@@ -61,4 +78,14 @@ export function useLocalTeamData(): boolean {
 
 export function useLocalTeamStopped(): boolean {
   return useSyncExternalStore(subscribe, () => identity !== null && stopped, () => false);
+}
+
+/** When the saved data on show were last written (seconds since the epoch; 0: not known), or null when the data are the live team's. */
+export function useLocalTeamSavedAt(): number | null {
+  return useSyncExternalStore(subscribe, () => (identity !== null ? savedAt : null), () => null);
+}
+
+/** Whether the pages show what the team saved (its container is off): a verdict or a change cannot be written to it from them. */
+export function localTeamShowsSavedData(): boolean {
+  return identity !== null && savedAt !== null;
 }

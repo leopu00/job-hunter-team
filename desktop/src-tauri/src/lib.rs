@@ -19,6 +19,7 @@ mod team_provider;
 mod team_settings;
 mod export_file;
 mod host_db;
+mod host_positions;
 mod external_links;
 mod existing_team_register;
 // The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
@@ -261,7 +262,11 @@ pub fn run() {
                 }
             }
             // the app is really leaving: the private copies of documents go with it
-            tauri::RunEvent::Exit => private_copy::sweep_private_copies(),
+            tauri::RunEvent::Exit => {
+                // the copies of the team's saved data kept for reuse must not stay on the disk after the app
+                host_positions::drop_saved_copies();
+                private_copy::sweep_private_copies()
+            }
             _ => {}
         });
 }

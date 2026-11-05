@@ -2,7 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { existingTeamConnectionKey, reportPositionsNotice } from "./existing-team-readonly";
 import { nativeReadStarted } from "./page-timing";
 import { rememberLocalPositionToken } from "./local-swipe";
-import { localTeamData, reportLocalTeamRead } from "./local-team-data";
+import { localTeamData, reportLocalTeamRead, type SavedMark } from "./local-team-data";
 import { REFRESH_EVENT } from "../shell/refresh-event";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
@@ -55,6 +55,15 @@ function safeCode(value: unknown): string {
     : "runtime_data_unavailable";
 }
 
+/** The mark of an answer made from the data the team saved while it is off (native side: `saved: {at}`), or null. */
+function savedMarkOf(answer: unknown): SavedMark | null {
+  if (!answer || typeof answer !== "object" || (answer as { ok?: unknown }).ok !== true) return null;
+  const saved = (answer as { saved?: unknown }).saved;
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+  const at = (saved as { at?: unknown }).at;
+  return { at: typeof at === "number" && Number.isFinite(at) && at > 0 ? at : null };
+}
+
 function reply<T>(value: unknown): DesktopVpsRead<T> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { source: "unavailable", code: "desktop_bad_reply" };
@@ -74,10 +83,12 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
   // desktop, absence or drift of the native binding fails closed below.
   if (!isTauri()) return { source: "not_desktop" };
   let result: DesktopVpsRead<T>;
+  let mark: SavedMark | null = null;
   const readEnded = nativeReadStarted();
   try {
     const answer = await invoke<unknown>(COMMAND, { request });
     result = reply<T>(answer);
+    mark = savedMarkOf(answer);
     // A reply that says ok but carries no data is not a contact: the header says the reply was bad
     // (it is the one case the old «list not read» line had that a native failure code does not cover).
     reportVpsRead(result.source === "unavailable" && (answer as { ok?: unknown } | null)?.ok === true ? { ok: false, error: result.code } : answer);
@@ -86,7 +97,7 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
     result = { source: "unavailable", code: "desktop_transport_unavailable" };
   }
   readEnded(result.source === "vps");
-  reportLocalTeamRead(result.source === "unavailable" ? result.code : null);
+  reportLocalTeamRead(result.source === "unavailable" ? result.code : null, mark);
   return result;
 }
 

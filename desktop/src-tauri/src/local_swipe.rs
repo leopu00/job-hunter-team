@@ -27,7 +27,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::{cell::RefCell, path::{Path, PathBuf}, time::Duration};
-use tauri::State;
+use tauri::{Manager, State};
 
 const TIMEOUT: Duration = Duration::from_secs(40);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -37,7 +37,7 @@ const REPLY_MAX: usize = 4 * 1024 * 1024;
 
 /// The fixed script that reads the two decks. It opens the database read only and answers one JSON; a
 /// missing database is two empty decks. The identity of the file (`ino`, `dev`) goes into the token.
-const DECK_PY: &str = r#"import json,os,sqlite3,stat,sys
+pub(crate) const DECK_PY: &str = r#"import json,os,sqlite3,stat,sys
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 def fail(code): emit({'ok':False,'error':code})
 try: req=json.loads(sys.stdin.readline())
@@ -426,6 +426,11 @@ fn close_decks(output: &ProcessResult, tag: &str) -> Option<Value> {
         return None;
     }
     let reply: Value = serde_json::from_slice(&output.stdout).ok()?;
+    close_deck_reply(&reply, tag)
+}
+
+/// The same, for an answer already parsed (the script's, or the one the app makes from the saved data in its shape).
+fn close_deck_reply(reply: &Value, tag: &str) -> Option<Value> {
     let reply = reply.as_object()?;
     if reply.get("ok") != Some(&Value::Bool(true)) {
         return match reply.get("error").and_then(Value::as_str) {
@@ -458,6 +463,7 @@ pub(crate) fn deck_with(
     gate: impl FnOnce() -> Result<(), &'static str>,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
+    saved: impl FnOnce() -> Option<Result<(Value, Option<i64>), &'static str>>,
 ) -> Value {
     if !window_is_main {
         return failure("position_write_window_refused");
@@ -469,7 +475,18 @@ pub(crate) fn deck_with(
     match run(&input) {
         Ok(output) if output.success() => close_decks(&output, tag).unwrap_or_else(|| failure("positions_unavailable")),
         _ if team_is_up() => failure("positions_unavailable"),
-        _ => failure("local_team_not_running"),
+        // The team is off: the deck of what it saved (its token names no file, so no verdict can come back with it), marked as saved.
+        _ => match saved() {
+            Some(Ok((raw, at))) => match close_deck_reply(&raw, tag) {
+                Some(mut deck) => {
+                    deck.as_object_mut().map(|object| object.insert("saved".into(), json!({ "at": at })));
+                    deck
+                }
+                None => failure("positions_unavailable"),
+            },
+            Some(Err(code)) => failure(code),
+            None => failure("local_team_not_running"),
+        },
     }
 }
 
@@ -547,6 +564,11 @@ pub(crate) async fn local_swipe_deck_read(
             },
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
             || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
+            || {
+                let home = crate::account_scope::local_runtime_home(&app).ok()?;
+                let work = app.path().app_local_data_dir().ok()?.join("host-db");
+                crate::host_positions::read_saved_deck(&home, &work)
+            },
         )
     })
     .await)
@@ -796,13 +818,33 @@ mod tests {
         let reply = deck_with(main, TAG, || gate, |_| {
             runs.set(runs.get() + 1);
             exited(0, said)
-        }, || up);
+        }, || up, || None);
         (reply, runs.get())
     }
 
     fn row(id: i64, status: &str) -> Value {
         json!({"id": id, "status": status, "title": "Backend", "company": "Acme", "url": "https://jobs.example.com/1", "score": 80,
                "salary_declared_min": 40000, "salary_declared_max": 50000, "salary_declared_currency": "EUR"})
+    }
+
+    #[test]
+    fn a_team_that_is_off_gives_the_deck_of_what_it_saved_and_that_deck_cannot_judge() {
+        let saved = |raw: Value, at: Option<i64>| move || Some(Ok((raw, at)));
+        let raw = json!({"ok": true, "ino": 0, "dev": 0, "pending": [row(1, "scored")], "reviewed": [{"row": row(5, "excluded"), "action": "like", "fb_score": 4}]});
+        let off = |saved: Option<Result<(Value, Option<i64>), &'static str>>| deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || false, || saved);
+        let deck = off(Some(Ok((raw.clone(), Some(1793879580)))));
+        assert_eq!(deck["ok"], json!(true));
+        assert_eq!(deck["saved"], json!({"at": 1793879580}));
+        assert_eq!(deck["token"], json!(format!("{TAG}.0.0")), "a token that names no file: a verdict with it is refused as outdated");
+        assert_eq!(deck["pending"].as_array().unwrap().len(), 1);
+        assert_eq!(deck["reviewed"][0]["action"], json!("like"));
+        assert_eq!(off(Some(Ok((raw, None))))["saved"], json!({"at": null}));
+        // a failure of the saved data is its own code; nothing saved to give is «not running», as before
+        assert_eq!(off(Some(Err("host_db_unsafe"))), failure("host_db_unsafe"));
+        assert_eq!(off(None), failure("local_team_not_running"));
+        // the team is up and the script failed: the saved data are no stand-in
+        let up = deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || true, saved(json!({}), None));
+        assert_eq!(up, failure("positions_unavailable"));
     }
 
     #[test]
@@ -869,7 +911,7 @@ mod tests {
         assert_eq!(deck_run("not json", true, Ok(()), true).0, failure("positions_unavailable"));
         assert_eq!(deck_run(r#"{"ok":false,"error":"positions_unavailable"}"#, true, Ok(()), true).0, failure("positions_unavailable"));
         assert_eq!(deck_run(r#"{"ok":false,"error":"/etc/passwd"}"#, true, Ok(()), true).0, failure("positions_unavailable"));
-        let reply = deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || false);
+        let reply = deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || false, || None);
         assert_eq!(reply, failure("local_team_not_running"));
         let empty = json!({"ok": true, "ino": 0, "dev": 0, "pending": [], "reviewed": []}).to_string();
         let (reply, _) = deck_run(&empty, true, Ok(()), true);
