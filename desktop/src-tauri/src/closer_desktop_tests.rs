@@ -223,6 +223,12 @@ fn config_file_is_private_bounded_exact_host_and_not_a_symlink() {
 #[test]
 fn process_reply_overflow_and_deadline_never_return_partial_json() {
     fn run(script: &str, t: Duration) -> Result<Vec<u8>, &'static str> {
+        // The stand-in reads its stdin to the end first, as the real command (ssh) does with the envelope. Without it a
+        // script that never reads (`printf`, `head`) can be gone before the parent writes the two bytes of `{}`: the write
+        // then fails with a broken pipe, and a command that did everything right comes back as «transport unavailable».
+        // That is a race with the scheduler, not with the code under test: a loaded Linux runner lost it twice (29/10),
+        // and each time the first assertion below was the one that failed.
+        let script = format!("cat >/dev/null; {script}");
         transport::run_bounded(
             "/bin/sh",
             &[OsString::from("-c"), OsString::from(script)],
