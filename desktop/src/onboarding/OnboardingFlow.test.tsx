@@ -563,7 +563,7 @@ describe("OnboardingFlow technical setup", () => {
       status: "failed" as const,
       stage: "container" as const,
       title: "Versione del container non compatibile",
-      message: "La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.",
+      message: "La versione installata non coincide con quella richiesta da questa app. La squadra non è stata avviata.",
       code: "container_version_incompatible",
       retryable: false,
     };
@@ -645,7 +645,7 @@ describe("OnboardingFlow technical setup", () => {
     const result = renderFlow({
       runtime: {
         status: "failed", stage: "container", title: "Avvio del container non riuscito",
-        message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+        message: "Il container della squadra non risulta pronto. La squadra non è stata avviata.",
         code: "container_start_failed", retryable: true,
       },
       activity: failedActivity,
@@ -697,7 +697,7 @@ describe("OnboardingFlow technical setup", () => {
     renderFlow({
       runtime: {
         status: "failed", stage: "container", title: "Avvio del container non riuscito",
-        message: "Il container del team non risulta pronto. Il team non è stato avviato.",
+        message: "Il container della squadra non risulta pronto. La squadra non è stata avviata.",
         code: "container_start_failed", retryable: true,
       },
       onRetry,

@@ -1917,7 +1917,7 @@ describe("DashboardApp onboarding router", () => {
     await userEvent.click(await screen.findByRole("button", { name: "submit-onboarding" }));
     expect(await screen.findByText("failed:container")).toBeInTheDocument();
     expect(screen.getByText("title:Avvio del container non riuscito")).toBeInTheDocument();
-    expect(screen.getByText("Il container del team non risulta pronto. Il team non è stato avviato.")).toBeInTheDocument();
+    expect(screen.getByText("Il container della squadra non risulta pronto. La squadra non è stata avviata.")).toBeInTheDocument();
     expect(screen.queryByText("ignored raw output")).not.toBeInTheDocument();
     expect(markOnboardingReady).not.toHaveBeenCalled();
     expect(startOnboardingTeam).not.toHaveBeenCalled();
@@ -2346,7 +2346,7 @@ describe("DashboardApp onboarding router", () => {
 
     expect(await screen.findByText("failed:container")).toBeInTheDocument();
     expect(screen.getByText("title:Versione del container non compatibile")).toBeInTheDocument();
-    expect(screen.getByText("La versione installata non coincide con quella richiesta da questa app. Il team non è stato avviato.")).toBeInTheDocument();
+    expect(screen.getByText("La versione installata non coincide con quella richiesta da questa app. La squadra non è stata avviata.")).toBeInTheDocument();
     expect(screen.queryByText("raw version probe output")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "retry-runtime" })).not.toBeInTheDocument();
     expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
