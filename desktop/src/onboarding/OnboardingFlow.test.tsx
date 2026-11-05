@@ -217,7 +217,7 @@ describe("OnboardingFlow technical setup", () => {
     expect(installs).toHaveTextContent(`Docker Compose ${WINDOWS_SETUP.composeVersion}, scaricato dalla sua release ufficiale e verificato, privato nel runtime di JHT`);
     expect(installs).toHaveTextContent(`${cpus} CPU, ${Number(memoryMb) / 1024} GB di memoria, fino a ${diskGb} GB di disco`);
     for (const id of packages) expect(installs).toHaveTextContent(id);
-    expect(installs).toHaveTextContent(/servizio .* tiene acceso il team anche ad app chiusa/i);
+    expect(installs).toHaveTextContent(/servizio .* tiene accesa la squadra anche ad app chiusa/i);
     expect(installs).toHaveTextContent(/comando jht nel PATH del tuo utente/i);
     expect(installs).toHaveTextContent(/docker\.exe compatibile resta privato nel runtime e non cambia Docker per gli altri programmi/i);
     // How they are removed: JHT's own part (Compose included) from the app, Podman from Windows.
