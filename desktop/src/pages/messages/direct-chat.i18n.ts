@@ -20,6 +20,10 @@ export interface DirectChatText {
   messagesWith: string; // {name}
   connecting: string;
   connected: string;
+  /** The reason the box to write is off for an agent that is off: the name of the agent. */
+  agentOff: string;
+  unanswered: string;
+  unansweredHelp: string;
   disconnected: string;
   unavailable: string;
   operationFailed: string;
@@ -135,6 +139,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Messaggi con {name}",
     connecting: "Connessione sicura alla squadra…",
     connected: "Squadra collegata",
+    agentOff: "{name} è spento. Puoi leggere la chat; per scrivergli, avvialo.",
+    unanswered: "nessuna risposta",
+    unansweredHelp: "L’agente non ha ancora risposto a questo messaggio.",
     disconnected: "Squadra non collegata.",
     unavailable: "Squadra non disponibile.",
     operationFailed: "Operazione non riuscita.",
@@ -208,6 +215,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Messages with {name}",
     connecting: "Securely connecting to the team…",
     connected: "Team connected",
+    agentOff: "{name} is off. You can read the chat; to write to it, start it.",
+    unanswered: "no answer",
+    unansweredHelp: "The agent has not answered this message yet.",
     disconnected: "Team not connected.",
     unavailable: "Team unavailable.",
     operationFailed: "Operation failed.",
@@ -281,6 +291,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Nachrichten mit {name}",
     connecting: "Sichere Verbindung zum Team…",
     connected: "Team verbunden",
+    agentOff: "{name} ist aus. Du kannst den Chat lesen; um zu schreiben, starte ihn.",
+    unanswered: "keine Antwort",
+    unansweredHelp: "Der Agent hat auf diese Nachricht noch nicht geantwortet.",
     disconnected: "Team nicht verbunden.",
     unavailable: "Team nicht erreichbar.",
     operationFailed: "Vorgang fehlgeschlagen.",
@@ -354,6 +367,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Messages avec {name}",
     connecting: "Connexion sécurisée à l’équipe…",
     connected: "Équipe connectée",
+    agentOff: "{name} est éteint. Vous pouvez lire la discussion ; pour lui écrire, démarrez-le.",
+    unanswered: "pas de réponse",
+    unansweredHelp: "L’agent n’a pas encore répondu à ce message.",
     disconnected: "Équipe non connectée.",
     unavailable: "Équipe indisponible.",
     operationFailed: "L’opération a échoué.",
@@ -427,6 +443,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Mensajes con {name}",
     connecting: "Conexión segura con el equipo…",
     connected: "Equipo conectado",
+    agentOff: "{name} está apagado. Puedes leer el chat; para escribirle, enciéndelo.",
+    unanswered: "sin respuesta",
+    unansweredHelp: "El agente aún no ha respondido a este mensaje.",
     disconnected: "Equipo no conectado.",
     unavailable: "Equipo no disponible.",
     operationFailed: "La operación ha fallado.",
@@ -500,6 +519,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Mensagens com {name}",
     connecting: "Ligação segura à equipa…",
     connected: "Equipa ligada",
+    agentOff: "{name} está desligado. Podes ler a conversa; para lhe escrever, liga-o.",
+    unanswered: "sem resposta",
+    unansweredHelp: "O agente ainda não respondeu a esta mensagem.",
     disconnected: "Equipa não ligada.",
     unavailable: "Equipa indisponível.",
     operationFailed: "A operação falhou.",
@@ -573,6 +595,9 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     messagesWith: "Üzenetek: {name}",
     connecting: "Biztonságos kapcsolódás a csapathoz…",
     connected: "Csapat csatlakoztatva",
+    agentOff: "{name} ki van kapcsolva. Az üzenetek olvashatók; ha írni szeretnél neki, indítsd el.",
+    unanswered: "nincs válasz",
+    unansweredHelp: "Az ügynök még nem válaszolt erre az üzenetre.",
     disconnected: "A csapat nincs csatlakoztatva.",
     unavailable: "A csapat nem érhető el.",
     operationFailed: "A művelet nem sikerült.",

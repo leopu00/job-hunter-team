@@ -35,6 +35,8 @@ export interface ChatMessageRowProps {
   suggestionsOff: boolean;
   /** The agent wrote something after this line of the person's. */
   answered?: boolean;
+  /** The agent has not answered this line (a while has passed, or the agent is off). */
+  unanswered?: boolean;
   onMenu: (id: string, event: { preventDefault(): void; clientX: number; clientY: number }) => void;
   onSend: (line: string) => void;
   onEnterAgain: (id: string) => void;
@@ -54,11 +56,13 @@ function ChatMessageRowView({
   pressingAny,
   suggestionsOff,
   answered = false,
+  unanswered = false,
   onMenu,
   onSend,
   onEnterAgain,
 }: ChatMessageRowProps) {
-  const mark = markOf(outcome, answered);
+  // A line sent just now has its own marks (queued, sent, read); an older one, or one of the history, that nobody answered says so.
+  const mark = markOf(outcome, answered) ?? (unanswered && !outcome ? "unanswered" : null);
   function renderOutcome(messageId: string, outcome: Outcome) {
     if (outcome.kind === "notSent") {
       const canPress =

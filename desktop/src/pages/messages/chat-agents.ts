@@ -1,3 +1,5 @@
+import type { AgentStateInfo } from "@/lib/agent-state";
+
 /**
  * Who the chat can talk to. An id is one of the eight fixed ones (the roles with one session, and the bare
  * «scout», «analista», «scorer», «scrittore» for the first instance, as the app has always said them), or an
@@ -64,7 +66,7 @@ export function sessionOfChatId(id: string): string | null {
 }
 
 /** What the page knows of one session of the team: whether it is up, and the state it shows. */
-export type ChatSession = { session: string; up: boolean };
+export type ChatSession = { session: string; up: boolean; state?: AgentStateInfo };
 
 export type Conversation = {
   /** the id the chat reads and writes with */
@@ -73,6 +75,8 @@ export type Conversation = {
   /** the name shown: «Capitano», «Analista 2» (the number only where the role has more than one) */
   label: string;
   up: boolean;
+  /** what the team says of the agent now; null where the sessions are not known (an older shell, a team not read yet) */
+  state: AgentStateInfo | null;
 };
 
 /**
@@ -92,14 +96,18 @@ export function conversationsOf(
     if (found && up) upByRole.set(found[1].toLowerCase(), [...(upByRole.get(found[1].toLowerCase()) ?? []), Number(found[2])]);
   }
   const isUp = (session: string) => sessions === null || sessions.some((s) => s.session === session && s.up);
+  // What the team says of a session; a session it does not name is off (its roster has it, or it is the open one
+  // whose session went down); nothing at all is said while the sessions are not known.
+  const stateOf = (session: string): AgentStateInfo | null =>
+    sessions === null ? null : (sessions.find((s) => s.session === session)?.state ?? { state: "spento" });
   for (const id of FIXED_CHAT_AGENTS) {
     if (!(NUMBERED_ROLES as readonly string[]).includes(id)) {
-      out.push({ id, session: id.toUpperCase(), label: name(id), up: isUp(id.toUpperCase()) });
+      out.push({ id, session: id.toUpperCase(), label: name(id), up: isUp(id.toUpperCase()), state: stateOf(id.toUpperCase()) });
       continue;
     }
     const numbers = [...new Set(upByRole.get(id) ?? [])].sort((a, b) => a - b);
     if (sessions === null || numbers.length === 0) {
-      out.push({ id, session: `${id.toUpperCase()}-1`, label: name(id), up: sessions === null });
+      out.push({ id, session: `${id.toUpperCase()}-1`, label: name(id), up: sessions === null, state: stateOf(`${id.toUpperCase()}-1`) });
       continue;
     }
     for (const number of numbers) {
@@ -109,6 +117,7 @@ export function conversationsOf(
         session,
         label: numbers.length > 1 ? `${name(id)} ${number}` : name(id),
         up: true,
+        state: stateOf(session),
       });
     }
   }
