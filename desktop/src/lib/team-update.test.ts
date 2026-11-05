@@ -5,7 +5,7 @@ vi.mock("@tauri-apps/api/core", () => native);
 
 import { ERROR_CATALOG } from "./error-catalog";
 import {
-  applyTeamUpdate, checkTeamUpdate, noteTeamUpdateChecked, parseTeamUpdateOutcome, TEAM_UPDATE_COMMAND,
+  ackCurrentTeamImage, ackedTeamImage, applyTeamUpdate, checkTeamUpdate, noteTeamUpdateChecked, parseTeamUpdateOutcome, TEAM_UPDATE_COMMAND,
   TEAM_UPDATE_GUIDE_CODES, teamUpdateCheckDue, wantsTeamUpdate, type TeamUpdateOutcome,
 } from "./team-update";
 
@@ -17,7 +17,7 @@ afterEach(() => {
 
 const outcome = (overrides: Partial<TeamUpdateOutcome> = {}): TeamUpdateOutcome => ({
   ok: true, changed: true, phase: "complete", reason: null, rolledBack: false, restartRequired: false,
-  previousVersion: "0.4.0", currentVersion: "0.4.1", mode: "upgrade", ...overrides,
+  previousVersion: "0.4.0", currentVersion: "0.4.1", imageId: "", mode: "upgrade", ...overrides,
 });
 
 describe("wantsTeamUpdate", () => {
@@ -60,13 +60,14 @@ describe("the update itself", () => {
     for (const reply of [
       null, [], {}, { ...outcome(), phase: "teleport" }, { ...outcome(), reason: "because" }, { ...outcome(), mode: "other" },
       { ...outcome(), ok: "yes" }, { ...outcome(), currentVersion: "<b>x</b>" }, { ...outcome(), previousVersion: "9".repeat(65) },
+      { ...outcome(), imageId: "not-hex" }, { ...outcome(), imageId: undefined },
     ]) {
       native.invoke.mockResolvedValue(reply);
       await expect(applyTeamUpdate()).rejects.toEqual({ code: "team_update_failed" });
     }
     native.isTauri.mockReturnValue(false);
     await expect(checkTeamUpdate()).rejects.toEqual({ code: "desktop_only" });
-    expect(native.invoke).toHaveBeenCalledTimes(9);
+    expect(native.invoke).toHaveBeenCalledTimes(11);
   });
 
   it("keeps the failure of an update that was undone as an answer, not as an error", () => {
@@ -79,6 +80,19 @@ describe("the update itself", () => {
     for (const code of TEAM_UPDATE_GUIDE_CODES) {
       if (code !== "desktop_only") expect(ERROR_CATALOG[code], code).toBeDefined();
     }
+  });
+
+  it("remembers the pair of images it already updated the team to, and nothing else", async () => {
+    expect(ackedTeamImage()).toBeNull();
+    native.invoke.mockResolvedValue(outcome({ phase: "check", imageId: "aaaaaaaaaaaa:bbbbbbbbbbbb" }));
+    await ackCurrentTeamImage();
+    expect(ackedTeamImage()).toBe("aaaaaaaaaaaa:bbbbbbbbbbbb");
+    // a check that fails, or one with no pair (the VPS), keeps what was there
+    native.invoke.mockRejectedValue({ code: "team_update_unsupported" });
+    await ackCurrentTeamImage();
+    native.invoke.mockResolvedValue(outcome({ phase: "check", imageId: "" }));
+    await ackCurrentTeamImage();
+    expect(ackedTeamImage()).toBe("aaaaaaaaaaaa:bbbbbbbbbbbb");
   });
 
   it("asks once a day", () => {

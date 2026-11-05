@@ -179,8 +179,6 @@ pub(crate) enum LocalCliOperation {
     ProviderPlans,
     /// `jht providers plan <id> --json`: declares the plan the person chose (an id of `KNOWN_PLAN_IDS`).
     ProviderPlanSet(&'static str),
-    /// `jht upgrade --check --json`: is a newer image there? Changes nothing.
-    UpgradeCheck,
     /// `jht upgrade --json`: the wrapper's transaction (pull, activate, verify, roll back on failure).
     Upgrade,
     /// `jht down`: container and network away, never the volumes. Only before the test install is run again.
@@ -208,7 +206,6 @@ impl LocalCliOperation {
             Self::CleanImages => vec!["clean-images", "--json"],
             Self::ProviderPlans => vec!["providers", "plan", "--json"],
             Self::ProviderPlanSet(id) => vec!["providers", "plan", id, "--json"],
-            Self::UpgradeCheck => vec!["upgrade", "--check", "--json"],
             Self::Upgrade => vec!["upgrade", "--json"],
             Self::Down => vec!["down"],
         }
@@ -234,7 +231,6 @@ impl LocalCliOperation {
             Self::CleanImages => "clean-images",
             Self::ProviderPlans => "provider-plans",
             Self::ProviderPlanSet(_) => "provider-plan-set",
-            Self::UpgradeCheck => "upgrade-check",
             Self::Upgrade => "upgrade",
             Self::Down => "down",
         }
@@ -5911,15 +5907,14 @@ pub(crate) async fn onboarding_clean_images(
 
 /// An update pulls an image and swaps the container: as long as the installer of the onboarding may take.
 const TEAM_UPDATE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
-/// A check only asks the release server for the newest image.
-const TEAM_UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 /// `jht down` / `jht up` around the installer of a test install.
 const TEAM_UPDATE_STEP_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum TeamUpdateAction {
-    /// Only ask whether the team runs an older image than this app.
+    /// Only ask whether the team runs an image other than the one this app was made for. It downloads nothing and starts no
+    /// process (`jht upgrade --check` pulls the image, so it is never used for this).
     Check,
     /// Update it.
     Apply,
@@ -6040,14 +6035,16 @@ fn local_team_update(
     let pin = read_pin(&team_runtime_dir(app)?);
     match plan(channel.as_ref(), &pin).map_err(failure)? {
         Mode::Upgrade => {
+            if action == TeamUpdateAction::Check {
+                return crate::team_update::production_check(&team_runtime_dir(app)?).map_err(failure);
+            }
             if !wrapper_has_upgrade(&wrapper) {
                 return Err(failure("team_update_wrapper_outdated"));
             }
-            let (operation, timeout) = match action {
-                TeamUpdateAction::Check => (LocalCliOperation::UpgradeCheck, TEAM_UPDATE_CHECK_TIMEOUT),
-                TeamUpdateAction::Apply => (LocalCliOperation::Upgrade, TEAM_UPDATE_TIMEOUT),
-            };
-            team_update_outcome(run_scoped_local(app, scope, &wrapper, operation, timeout), Mode::Upgrade)
+            team_update_outcome(
+                run_scoped_local(app, scope, &wrapper, LocalCliOperation::Upgrade, TEAM_UPDATE_TIMEOUT),
+                Mode::Upgrade,
+            )
         }
         Mode::Reinstall => match (action, channel.as_ref(), pin) {
             (TeamUpdateAction::Check, Some(channel), Pin::Present(pin)) => Ok(reinstall_check(&pin, channel)),
@@ -6068,18 +6065,22 @@ fn team_update_on(
     match validated {
         ValidatedHost::Local => local_team_update(app, scope, action),
         ValidatedHost::Vps { .. } => {
-            let (operation, timeout) = match action {
-                TeamUpdateAction::Check => ("upgrade --check --json </dev/null", TEAM_UPDATE_CHECK_TIMEOUT),
-                TeamUpdateAction::Apply => ("upgrade --json </dev/null", TEAM_UPDATE_TIMEOUT),
-            };
-            let command = crate::agent_control::own_vps_wrapper(crate::team_update::UPGRADE_PROTOCOL, operation);
-            team_update_outcome(run_ssh(validated, &command, None, timeout, None), crate::team_update::Mode::Upgrade)
+            // The notice never reaches out to a VPS: a check there would be `jht upgrade --check`, which downloads the
+            // image. Only the button updates a VPS.
+            if action == TeamUpdateAction::Check {
+                return Err(failure("team_update_unsupported"));
+            }
+            team_update_outcome(
+                run_ssh(validated, crate::team_update::REMOTE_UPGRADE, None, TEAM_UPDATE_TIMEOUT, None),
+                crate::team_update::Mode::Upgrade,
+            )
         }
     }
 }
 
-/// «Update the team» and the notice that the team is older than the app. `check` changes nothing; `apply` updates
-/// the saved team's host. Both act on the host, so both need what every action on it needs (the full link on an
+/// «Update the team» and the notice that the team is not on the image of this app. `check` changes nothing, downloads
+/// nothing and starts no process (this computer only: two digests read as small files); `apply` updates the saved
+/// team's host. Both act on the host, so both need what every action on it needs (the full link on an
 /// existing team, the main window), and only one operation of the setup runs at a time.
 #[tauri::command]
 pub(crate) async fn onboarding_team_update(

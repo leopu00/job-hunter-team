@@ -42,6 +42,8 @@ export interface TeamUpdateOutcome {
   restartRequired: boolean;
   previousVersion: string;
   currentVersion: string;
+  /** A check: the two images compared, `<installed>:<this build's>` (12 hex each). Empty for everything else. */
+  imageId: string;
   /** `upgrade`: the host's `jht upgrade`. `reinstall`: the installer of a test install, run again. */
   mode: "upgrade" | "reinstall";
 }
@@ -50,6 +52,7 @@ export interface TeamUpdateOutcome {
 export const TEAM_UPDATE_GUIDE_CODES: readonly string[] = ["team_update_wrapper_outdated", "team_update_unsupported", "desktop_only"];
 
 const VERSION_TEXT = /^[A-Za-z0-9.,:_+@/-]{0,64}$/;
+const IMAGE_ID = /^([0-9a-f]{0,12}:[0-9a-f]{0,12})?$/;
 
 export function parseTeamUpdateOutcome(value: unknown): TeamUpdateOutcome | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -61,10 +64,11 @@ export function parseTeamUpdateOutcome(value: unknown): TeamUpdateOutcome | null
   if (r.mode !== "upgrade" && r.mode !== "reinstall") return null;
   if (typeof r.previousVersion !== "string" || !VERSION_TEXT.test(r.previousVersion)) return null;
   if (typeof r.currentVersion !== "string" || !VERSION_TEXT.test(r.currentVersion)) return null;
+  if (typeof r.imageId !== "string" || !IMAGE_ID.test(r.imageId)) return null;
   return {
     ok: r.ok, changed: r.changed, phase: r.phase as TeamUpdatePhase, reason: r.reason as TeamUpdateReason | null,
     rolledBack: r.rolledBack, restartRequired: r.restartRequired, previousVersion: r.previousVersion,
-    currentVersion: r.currentVersion, mode: r.mode,
+    currentVersion: r.currentVersion, imageId: r.imageId, mode: r.mode,
   };
 }
 
@@ -75,7 +79,11 @@ async function ask(action: "check" | "apply"): Promise<TeamUpdateOutcome> {
   return outcome;
 }
 
-/** Asks whether the team runs an older image than this app. Changes nothing. Rejects with `{ code }`. */
+/**
+ * Asks whether the team is on the image of this app. Changes nothing, downloads nothing and starts no process: the native
+ * side compares two digests it reads as small files (this computer only; a VPS answers `team_update_unsupported`).
+ * Rejects with `{ code }`.
+ */
 export const checkTeamUpdate = () => ask("check");
 
 /** Updates the team on its host. A failed update that was undone still resolves, with `ok: false` and `rolledBack`. */
@@ -91,6 +99,31 @@ export function teamUpdateCheckDue(now: number = Date.now()): boolean {
     return !Number.isFinite(last) || last <= 0 || now - last >= CHECK_EVERY_MS || now < last;
   } catch {
     return true;
+  }
+}
+
+const ACKED_KEY = "jht-team-update-acked";
+
+/** The pair of images (`TeamUpdateOutcome.imageId`) the person already updated the team to, or null. */
+export function ackedTeamImage(): string | null {
+  try {
+    return localStorage.getItem(ACKED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * After an update, the team runs the image the release had at that moment, which may be newer than the one this build was
+ * made for: the pair is remembered, so the notice does not tell the same difference again. A new build, or a team on another
+ * image, is a new pair and is told.
+ */
+export async function ackCurrentTeamImage(): Promise<void> {
+  try {
+    const checked = await checkTeamUpdate();
+    if (checked.imageId) localStorage.setItem(ACKED_KEY, checked.imageId);
+  } catch {
+    /* nothing to remember: the notice may tell it once more */
   }
 }
 

@@ -19,7 +19,7 @@ afterEach(() => {
 
 const outcome = (overrides: Partial<TeamUpdateOutcome> = {}): TeamUpdateOutcome => ({
   ok: true, changed: true, phase: "complete", reason: null, rolledBack: false, restartRequired: false,
-  previousVersion: "0.4.0", currentVersion: "0.4.1", mode: "upgrade", ...overrides,
+  previousVersion: "0.4.0", currentVersion: "0.4.1", imageId: "", mode: "upgrade", ...overrides,
 });
 
 describe("«Update the team» done by the app", () => {

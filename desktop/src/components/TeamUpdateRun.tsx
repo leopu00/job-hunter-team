@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { appLocale } from "../lib/app-locale";
 import { describeError, errorCodeOf } from "../lib/error-catalog";
-import { applyTeamUpdate, TEAM_UPDATE_GUIDE_CODES, type TeamUpdateOutcome } from "../lib/team-update";
+import { ackCurrentTeamImage, applyTeamUpdate, TEAM_UPDATE_GUIDE_CODES, type TeamUpdateOutcome } from "../lib/team-update";
 import { TEAM_UPDATE_RUN_TEXT, whereKey } from "./TeamUpdateRun.i18n";
 
 type View =
@@ -39,7 +39,10 @@ export default function TeamUpdateRun({
     try {
       const outcome = await apply();
       setView(outcome.ok ? { kind: "done", outcome } : { kind: "failed", outcome });
-      if (outcome.ok) onDone?.(outcome);
+      if (outcome.ok) {
+        void ackCurrentTeamImage();
+        onDone?.(outcome);
+      }
     } catch (error) {
       const code = errorCodeOf(error) ?? "team_update_failed";
       if (onGuide && TEAM_UPDATE_GUIDE_CODES.includes(code)) onGuide();

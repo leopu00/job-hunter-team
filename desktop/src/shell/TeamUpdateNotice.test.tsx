@@ -19,9 +19,9 @@ afterEach(() => {
   document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
 });
 
-const reply = (changed: boolean) => ({
+const reply = (changed: boolean, imageId = "aaaaaaaaaaaa:bbbbbbbbbbbb") => ({
   ok: true, changed, phase: "check", reason: null, rolledBack: false, restartRequired: false,
-  previousVersion: "", currentVersion: "", mode: "upgrade",
+  previousVersion: "", currentVersion: "", imageId, mode: "upgrade",
 });
 
 describe("the notice that the team is older than the app", () => {
@@ -38,6 +38,17 @@ describe("the notice that the team is older than the app", () => {
     fireEvent.click(screen.getByTestId("team-update-notice-button"));
     expect(screen.getByTestId("team-update-confirm")).toBeInTheDocument();
     expect(screen.queryByTestId("team-update-notice-button")).toBeNull();
+    fireEvent.click(screen.getByTestId("team-update-close"));
+    expect(screen.queryByTestId("team-update-notice")).toBeNull();
+  });
+
+  it("keeps the outcome on screen after a finished update, without saying the team is older, until it is closed", async () => {
+    native.invoke.mockResolvedValue({ ...reply(true), phase: "complete", previousVersion: "0.4.0", currentVersion: "0.4.1" });
+    render(<TeamUpdateNotice check={async () => true} />);
+    fireEvent.click(await screen.findByTestId("team-update-notice-button"));
+    fireEvent.click(screen.getByTestId("team-update-start"));
+    await waitFor(() => expect(screen.getByTestId("team-update-done")).toHaveTextContent("Team updated."));
+    expect(screen.getByTestId("team-update-notice")).not.toHaveTextContent("older version");
     fireEvent.click(screen.getByTestId("team-update-close"));
     expect(screen.queryByTestId("team-update-notice")).toBeNull();
   });
@@ -59,6 +70,15 @@ describe("the notice that the team is older than the app", () => {
     native.isTauri.mockReturnValue(false);
     expect(await teamIsOlderThanApp()).toBe(false);
     expect(native.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not tell again a difference the person already updated to, and tells a new one", async () => {
+    native.invoke.mockResolvedValue(reply(true, "aaaaaaaaaaaa:bbbbbbbbbbbb"));
+    localStorage.setItem("jht-team-update-acked", "aaaaaaaaaaaa:bbbbbbbbbbbb");
+    expect(await teamIsOlderThanApp()).toBe(false);
+    localStorage.removeItem("jht-team-update-checked");
+    native.invoke.mockResolvedValue(reply(true, "aaaaaaaaaaaa:cccccccccccc"));
+    expect(await teamIsOlderThanApp()).toBe(true);
   });
 
   it("says nothing, and asks again next time, when the check fails or the team is not older", async () => {
