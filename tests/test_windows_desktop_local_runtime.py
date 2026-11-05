@@ -413,8 +413,9 @@ def test_declining_dependency_installation_cannot_run_winget():
         )
     ]
     # the one command that runs winget, inside the consent guard
-    assert enabler.count("& winget") == 1
+    assert enabler.count("& winget") == 2, "install, and the one source update that fills an empty list of programs"
     assert guarded.count("& winget install") == 1
+    assert guarded.count("& winget source update") == 1
     assert "--source winget --version $PodmanCliVersion" in guarded
     assert "$PodmanCliVersion = '6.0.2'" in enabler
     assert "$ComposeProviderVersion = '5.1.2'" in enabler
