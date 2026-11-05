@@ -1169,36 +1169,51 @@ mod reuse {
         db: HostDb,
     }
 
+    /// A place where copies are kept. The app has one (`COPIES`); a test that counts or drops copies makes its own, so
+    /// that the reads of the other tests running at the same time (each keeps a copy, the place holds four, the exit
+    /// drops them all) cannot take the copy it is looking at.
+    pub(super) struct Store(Mutex<Vec<Copy>>);
+
+    impl Store {
+        pub(super) const fn new() -> Self {
+            Store(Mutex::new(Vec::new()))
+        }
+        fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Copy>> {
+            self.0.lock().unwrap_or_else(|e| e.into_inner())
+        }
+    }
+
     /// The copies in use. A page that asks five things in a row makes one copy, not five; a copy is dropped (its files
     /// removed) as soon as the original changes, after `REUSE`, or when another team's is made.
-    static COPIES: Mutex<Vec<Copy>> = Mutex::new(Vec::new());
+    pub(super) static COPIES: Store = Store::new();
 
-    /// Drop every kept copy (its files go with it): at the exit of the app, and by the timer after the reuse time.
-    pub(super) fn drop_all() {
-        COPIES.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    /// Drop every kept copy of the place (its files go with it): at the exit of the app.
+    pub(super) fn drop_all(store: &Store) {
+        store.lock().clear();
     }
 
     /// Drop the copies that are past the time they may be reused (each by its own time).
-    fn drop_expired() {
-        COPIES.lock().unwrap_or_else(|e| e.into_inner()).retain(|c| Instant::now() < c.until);
+    fn drop_expired(store: &Store) {
+        store.lock().retain(|c| Instant::now() < c.until);
     }
 
     /// A copy is not left on the disk after its use: a short-lived thread drops it once its reuse time has passed (a later read
     /// that reuses it, or makes a new one, is served first by the lock; the thread drops only what is expired by then).
-    fn drop_later(after: Duration) {
+    fn drop_later(store: &'static Store, after: Duration) {
         let _ = std::thread::Builder::new().name("host-db-expiry".into()).spawn(move || {
             std::thread::sleep(after + Duration::from_millis(500));
-            drop_expired();
+            drop_expired(store);
         });
     }
 
     pub(super) fn with_copy<T>(
+        store: &'static Store,
         home: &Path,
         work: &Path,
         reuse: Duration,
         f: impl FnOnce(Result<&HostDb, &'static str>) -> T,
     ) -> T {
-        let mut copies = COPIES.lock().unwrap_or_else(|e| e.into_inner());
+        let mut copies = store.lock();
         let now = Instant::now();
         let current = stamps(home);
         copies.retain(|c| now < c.until);
@@ -1215,7 +1230,7 @@ mod reuse {
                         copies.remove(0);
                     }
                     copies.push(Copy { home: home.to_path_buf(), work: work.to_path_buf(), stamps: current, until: now + reuse, db });
-                    drop_later(reuse);
+                    drop_later(store, reuse);
                     let last = copies.len() - 1;
                     f(Ok(&copies[last].db))
                 } else {
@@ -1230,7 +1245,7 @@ mod reuse {
 /// Drop the copies of the saved data that are kept for reuse, and their files: at the exit of the app.
 #[cfg(unix)]
 pub(crate) fn drop_saved_copies() {
-    reuse::drop_all();
+    reuse::drop_all(&reuse::COPIES);
 }
 
 #[cfg(not(unix))]
@@ -1240,23 +1255,24 @@ pub(crate) fn drop_saved_copies() {}
 /// shape plus `saved: {at}` (seconds since the epoch the data were last written; null for a team that never ran). `None`
 /// when this read has no saved answer (an operation that needs the team, or a system without the host reader), and the
 /// caller then says «the team is not running» as before. A failure of the saved data is an `ok: false` answer with its code.
+#[cfg(unix)]
 pub(crate) fn read_saved(home: &Path, work: &Path, request: &Value) -> Option<Value> {
-    read_saved_with(home, work, request, REUSE)
+    read_saved_with(&reuse::COPIES, home, work, request, REUSE)
 }
 
 #[cfg(not(unix))]
-fn read_saved_with(_home: &Path, _work: &Path, _request: &Value, _reuse: std::time::Duration) -> Option<Value> {
+pub(crate) fn read_saved(_home: &Path, _work: &Path, _request: &Value) -> Option<Value> {
     None
 }
 
 #[cfg(unix)]
-fn read_saved_with(home: &Path, work: &Path, request: &Value, reuse: std::time::Duration) -> Option<Value> {
+fn read_saved_with(store: &'static reuse::Store, home: &Path, work: &Path, request: &Value, reuse: std::time::Duration) -> Option<Value> {
     let op = request.get("op")?.as_str()?;
     if !matches!(op, "list" | "detail" | "facets" | "stats" | "piles" | "map") {
         return None;
     }
     host_db::sweep_snapshots(work, 3600);
-    let (answer, at) = reuse::with_copy(home, work, reuse, |opened| match opened {
+    let (answer, at) = reuse::with_copy(store, home, work, reuse, |opened| match opened {
         Ok(db) => Some((dispatch(db, op, request), Some(db.data_time()))),
         Err("host_db_missing") => EmptyDb::new().map(|empty| (dispatch(&empty, op, request), None)),
         Err("host_db_unavailable") => None,
@@ -1397,7 +1413,7 @@ pub(crate) fn deck(db: &impl Reads) -> Result<Value, &'static str> {
 #[cfg(unix)]
 pub(crate) fn read_saved_deck(home: &Path, work: &Path) -> Option<Result<(Value, Option<i64>), &'static str>> {
     host_db::sweep_snapshots(work, 3600);
-    reuse::with_copy(home, work, REUSE, |opened| match opened {
+    reuse::with_copy(&reuse::COPIES, home, work, REUSE, |opened| match opened {
         Ok(db) => Some(deck(db).map(|d| (d, Some(db.data_time())))),
         Err("host_db_missing") => EmptyDb::new().map(|empty| deck(&empty).map(|d| (d, None))),
         Err("host_db_unavailable") => None,
@@ -1810,6 +1826,12 @@ mod tests {
         assert_eq!(read_saved(&world.home, &world.work, &json!({"op": "list", "filters": {"limit": 0}})).unwrap()["error"], json!("positions_request_invalid"));
     }
 
+    /// A place for the copies of one test: the app's is shared by every test that reads, and the tests that count or drop
+    /// copies would find another test's reads in it (its cap of four, the drop of them all).
+    fn own_store() -> &'static reuse::Store {
+        Box::leak(Box::new(reuse::Store::new()))
+    }
+
     fn copies_in(world: &World) -> Vec<String> {
         let mut names: Vec<String> = std::fs::read_dir(&world.work).map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
         names.sort();
@@ -1821,7 +1843,8 @@ mod tests {
         let world = World::new("reuse");
         fixture(&world, 20, false);
         let minute = std::time::Duration::from_secs(60);
-        let ask = |op: Value| read_saved_with(&world.home, &world.work, &op, minute).unwrap();
+        let store = own_store();
+        let ask = |op: Value| read_saved_with(store, &world.home, &world.work, &op, minute).unwrap();
         let first = ask(json!({"op": "piles"}));
         let copies = copies_in(&world);
         assert_eq!(copies.len(), 1);
@@ -1842,14 +1865,14 @@ mod tests {
         assert_ne!(now, copies, "a new copy, and the old one is gone");
         // no reuse at all: the read has its own copy and nothing of it is left, the kept one is gone too
         let zero = std::time::Duration::ZERO;
-        read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), zero).unwrap();
+        read_saved_with(store, &world.home, &world.work, &json!({"op": "piles"}), zero).unwrap();
         assert!(copies_in(&world).is_empty());
-        read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), zero).unwrap();
+        read_saved_with(store, &world.home, &world.work, &json!({"op": "piles"}), zero).unwrap();
         assert!(copies_in(&world).is_empty());
-        // at the exit of the app the copies kept for reuse go, with their files (this test is the only one that clears them all)
+        // at the exit of the app the copies kept for reuse go, with their files (what the exit calls, on this test's own place)
         ask(json!({"op": "piles"}));
         assert_eq!(copies_in(&world).len(), 1);
-        drop_saved_copies();
+        reuse::drop_all(store);
         assert!(copies_in(&world).is_empty(), "nothing of the kept copies is left on the disk after the exit");
     }
 
@@ -1858,7 +1881,8 @@ mod tests {
         let world = World::new("timer");
         fixture(&world, 5, false);
         let short = std::time::Duration::from_millis(400);
-        read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), short).unwrap();
+        let store = own_store();
+        read_saved_with(store, &world.home, &world.work, &json!({"op": "piles"}), short).unwrap();
         assert_eq!(copies_in(&world).len(), 1, "kept for its reuse time");
         // no read follows: the files must not wait for the next one
         let mut left = 1;
@@ -1874,8 +1898,8 @@ mod tests {
         let long = std::time::Duration::from_secs(60);
         let other = World::new("timer-other");
         fixture(&other, 5, false);
-        read_saved_with(&other.home, &other.work, &json!({"op": "piles"}), long).unwrap();
-        read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), short).unwrap();
+        read_saved_with(store, &other.home, &other.work, &json!({"op": "piles"}), long).unwrap();
+        read_saved_with(store, &world.home, &world.work, &json!({"op": "piles"}), short).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1500));
         assert!(copies_in(&world).is_empty());
         assert_eq!(copies_in(&other).len(), 1);
@@ -1893,7 +1917,7 @@ mod tests {
         let world = World::new("pagecap");
         fixture(&world, 3, false);
         std::fs::OpenOptions::new().write(true).open(world.home.join("jobs.db")).unwrap().set_len(200 << 20).unwrap(); // a sparse file: costs nothing
-        let answer = read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), std::time::Duration::ZERO).unwrap();
+        let answer = read_saved_with(own_store(), &world.home, &world.work, &json!({"op": "piles"}), std::time::Duration::ZERO).unwrap();
         assert_eq!(answer, json!({"ok": false, "error": "host_db_unsafe"}));
         assert!(copies_in(&world).is_empty(), "not a byte was copied");
     }
