@@ -107,7 +107,7 @@ elif [ "$(uname -s)" = "Darwin" ]; then
 else
   RUNTIME_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/job-hunter-team/host-runtime"
 fi
-IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:298191c0c926b387e7bb385d296881d74c4a7d4d9d3c48c437153cb7f09aaeea}"
+IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:0e993369978160c91cb9fe9184f422674f6a538a8932c6abfc010d454c9ed9a4}"
 # Il compose scaricato può evolvere sul canale production; l'installer di
 # questa release deve comunque avviare l'immagine dichiarata qui.
 export JHT_IMAGE="$IMAGE"
