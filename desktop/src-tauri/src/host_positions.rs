@@ -1140,11 +1140,10 @@ const PAGE_LIMITS: host_db::Limits = host_db::Limits { max_db_bytes: 192 << 20, 
 /// How long a copy is reused for the reads that follow it, if the original has not changed.
 const REUSE: std::time::Duration = std::time::Duration::from_secs(10);
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod reuse {
     use super::*;
     use std::{
-        os::unix::fs::MetadataExt,
         path::PathBuf,
         sync::Mutex,
         time::{Duration, Instant},
@@ -1153,9 +1152,22 @@ mod reuse {
     type Stamp = Option<(u64, u64, u64, i64, i64, i64)>;
 
     /// What identifies the original now: the file and its wal (device, inode, size, change and modification time).
+    #[cfg(unix)]
     fn stamps(home: &Path) -> [Stamp; 2] {
+        use std::os::unix::fs::MetadataExt;
         let of = |name: &str| {
             std::fs::symlink_metadata(home.join(name)).ok().map(|m| (m.dev(), m.ino(), m.len(), m.ctime(), m.ctime_nsec(), m.mtime() * 1_000_000_000 + m.mtime_nsec()))
+        };
+        [of("jobs.db"), of("jobs.db-wal")]
+    }
+
+    /// The same on Windows, from what the path says without opening the file: its size and its last write time (the volume and
+    /// the index of a file are known only from an open handle, and the copy that is reused was taken from checked handles).
+    #[cfg(windows)]
+    fn stamps(home: &Path) -> [Stamp; 2] {
+        use std::os::windows::fs::MetadataExt;
+        let of = |name: &str| {
+            std::fs::symlink_metadata(home.join(name)).ok().map(|m| (0, 0, m.file_size(), 0, 0, m.last_write_time() as i64))
         };
         [of("jobs.db"), of("jobs.db-wal")]
     }
@@ -1243,29 +1255,29 @@ mod reuse {
 }
 
 /// Drop the copies of the saved data that are kept for reuse, and their files: at the exit of the app.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) fn drop_saved_copies() {
     reuse::drop_all(&reuse::COPIES);
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn drop_saved_copies() {}
 
 /// The answer to a positions read of this computer's team while its container is off, from the saved data: the script's own
 /// shape plus `saved: {at}` (seconds since the epoch the data were last written; null for a team that never ran). `None`
 /// when this read has no saved answer (an operation that needs the team, or a system without the host reader), and the
 /// caller then says «the team is not running» as before. A failure of the saved data is an `ok: false` answer with its code.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) fn read_saved(home: &Path, work: &Path, request: &Value) -> Option<Value> {
     read_saved_with(&reuse::COPIES, home, work, request, REUSE)
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn read_saved(_home: &Path, _work: &Path, _request: &Value) -> Option<Value> {
     None
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn read_saved_with(store: &'static reuse::Store, home: &Path, work: &Path, request: &Value, reuse: std::time::Duration) -> Option<Value> {
     let op = request.get("op")?.as_str()?;
     if !matches!(op, "list" | "detail" | "facets" | "stats" | "piles" | "map") {
@@ -1410,7 +1422,7 @@ pub(crate) fn deck(db: &impl Reads) -> Result<Value, &'static str> {
 
 /// The Swipe's deck from the saved data of this computer's team, with the moment they were written (null for a team that never
 /// ran). `None`: a system without the host reader. `Some(Err(code))`: the saved data cannot be read.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) fn read_saved_deck(home: &Path, work: &Path) -> Option<Result<(Value, Option<i64>), &'static str>> {
     host_db::sweep_snapshots(work, 3600);
     reuse::with_copy(&reuse::COPIES, home, work, REUSE, |opened| match opened {
@@ -1421,7 +1433,7 @@ pub(crate) fn read_saved_deck(home: &Path, work: &Path) -> Option<Result<(Value,
     })
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn read_saved_deck(_home: &Path, _work: &Path) -> Option<Result<(Value, Option<i64>), &'static str>> {
     None
 }
