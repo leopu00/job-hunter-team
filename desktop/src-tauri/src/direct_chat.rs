@@ -3445,7 +3445,15 @@ pub(crate) async fn team_script_read(
             if result.stdout.len() > TEAM_SCRIPT_REPLY_MAX {
                 return Err(failure("read_failed"));
             }
-            parse_json(result, "read_failed")
+            let (exit, bytes) = (result.code, result.stdout.len());
+            let parsed: Result<Value, DirectChatError> = parse_json(result, "read_failed");
+            if parsed.is_err() {
+                // why the answer was no JSON (the wrapper's exit and how much it printed, never what), for the runtime log
+                if let Some(log) = connection.app.as_ref().and_then(crate::runtime_log::RuntimeLog::new) {
+                    log.record_script_read_failure(exit, bytes);
+                }
+            }
+            parsed
         },
         "read_failed",
     )
