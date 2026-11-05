@@ -15,7 +15,7 @@ function client(pages: Record<string, DirectChatPage["messages"]> = {}): DirectC
     status: vi.fn(async () => ({ state: "ready" as const })),
     reconnect: vi.fn(async () => ({ state: "ready" as const })),
     read: vi.fn(async ({ agentId }): Promise<DirectChatPage> => ({ messages: pages[agentId] ?? [], cursor: "c", questions: [] })),
-    send: vi.fn(async ({ clientMessageId }) => ({ clientMessageId, accepted: true, messageId: "u9", at: 9 })),
+    send: vi.fn(async ({ clientMessageId }) => ({ clientMessageId, accepted: true as const, messageId: "u9", at: 9 })),
     answer: vi.fn(),
     close: vi.fn(),
   };
