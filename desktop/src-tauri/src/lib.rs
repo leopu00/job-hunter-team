@@ -262,7 +262,11 @@ pub fn run() {
                 }
             }
             // the app is really leaving: the private copies of documents go with it
-            tauri::RunEvent::Exit => private_copy::sweep_private_copies(),
+            tauri::RunEvent::Exit => {
+                // the copies of the team's saved data kept for reuse must not stay on the disk after the app
+                host_positions::drop_saved_copies();
+                private_copy::sweep_private_copies()
+            }
             _ => {}
         });
 }

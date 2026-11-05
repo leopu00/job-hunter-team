@@ -1164,13 +1164,33 @@ mod reuse {
         home: PathBuf,
         work: PathBuf,
         stamps: [Stamp; 2],
-        taken: Instant,
+        /// Until when the copy may be reused (its own reuse time from the moment it was made).
+        until: Instant,
         db: HostDb,
     }
 
     /// The copies in use. A page that asks five things in a row makes one copy, not five; a copy is dropped (its files
     /// removed) as soon as the original changes, after `REUSE`, or when another team's is made.
     static COPIES: Mutex<Vec<Copy>> = Mutex::new(Vec::new());
+
+    /// Drop every kept copy (its files go with it): at the exit of the app, and by the timer after the reuse time.
+    pub(super) fn drop_all() {
+        COPIES.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    }
+
+    /// Drop the copies that are past the time they may be reused (each by its own time).
+    fn drop_expired() {
+        COPIES.lock().unwrap_or_else(|e| e.into_inner()).retain(|c| Instant::now() < c.until);
+    }
+
+    /// A copy is not left on the disk after its use: a short-lived thread drops it once its reuse time has passed (a later read
+    /// that reuses it, or makes a new one, is served first by the lock; the thread drops only what is expired by then).
+    fn drop_later(after: Duration) {
+        let _ = std::thread::Builder::new().name("host-db-expiry".into()).spawn(move || {
+            std::thread::sleep(after + Duration::from_millis(500));
+            drop_expired();
+        });
+    }
 
     pub(super) fn with_copy<T>(
         home: &Path,
@@ -1181,8 +1201,8 @@ mod reuse {
         let mut copies = COPIES.lock().unwrap_or_else(|e| e.into_inner());
         let now = Instant::now();
         let current = stamps(home);
-        copies.retain(|c| now.duration_since(c.taken) < REUSE.max(reuse));
-        let hit = copies.iter().position(|c| c.home == home && c.work == work && c.stamps == current && now.duration_since(c.taken) < reuse && current[0].is_some());
+        copies.retain(|c| now < c.until);
+        let hit = copies.iter().position(|c| c.home == home && c.work == work && c.stamps == current && current[0].is_some() && reuse > Duration::ZERO);
         if let Some(i) = hit {
             return f(Ok(&copies[i].db));
         }
@@ -1194,7 +1214,8 @@ mod reuse {
                     if copies.len() >= 4 {
                         copies.remove(0);
                     }
-                    copies.push(Copy { home: home.to_path_buf(), work: work.to_path_buf(), stamps: current, taken: now, db });
+                    copies.push(Copy { home: home.to_path_buf(), work: work.to_path_buf(), stamps: current, until: now + reuse, db });
+                    drop_later(reuse);
                     let last = copies.len() - 1;
                     f(Ok(&copies[last].db))
                 } else {
@@ -1205,6 +1226,15 @@ mod reuse {
         }
     }
 }
+
+/// Drop the copies of the saved data that are kept for reuse, and their files: at the exit of the app.
+#[cfg(unix)]
+pub(crate) fn drop_saved_copies() {
+    reuse::drop_all();
+}
+
+#[cfg(not(unix))]
+pub(crate) fn drop_saved_copies() {}
 
 /// The answer to a positions read of this computer's team while its container is off, from the saved data: the script's own
 /// shape plus `saved: {at}` (seconds since the epoch the data were last written; null for a team that never ran). `None`
@@ -1816,6 +1846,46 @@ mod tests {
         assert!(copies_in(&world).is_empty());
         read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), zero).unwrap();
         assert!(copies_in(&world).is_empty());
+        // at the exit of the app the copies kept for reuse go, with their files (this test is the only one that clears them all)
+        ask(json!({"op": "piles"}));
+        assert_eq!(copies_in(&world).len(), 1);
+        drop_saved_copies();
+        assert!(copies_in(&world).is_empty(), "nothing of the kept copies is left on the disk after the exit");
+    }
+
+    #[test]
+    fn a_kept_copy_is_dropped_by_a_timer_once_its_reuse_time_has_passed_and_not_before() {
+        let world = World::new("timer");
+        fixture(&world, 5, false);
+        let short = std::time::Duration::from_millis(400);
+        read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), short).unwrap();
+        assert_eq!(copies_in(&world).len(), 1, "kept for its reuse time");
+        // no read follows: the files must not wait for the next one
+        let mut left = 1;
+        for _ in 0..40 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            left = copies_in(&world).len();
+            if left == 0 {
+                break;
+            }
+        }
+        assert_eq!(left, 0, "the timer removed the copy by itself");
+        // the timer of a short copy does not take the copy of another reuse time that is still good
+        let long = std::time::Duration::from_secs(60);
+        let other = World::new("timer-other");
+        fixture(&other, 5, false);
+        read_saved_with(&other.home, &other.work, &json!({"op": "piles"}), long).unwrap();
+        read_saved_with(&world.home, &world.work, &json!({"op": "piles"}), short).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        assert!(copies_in(&world).is_empty());
+        assert_eq!(copies_in(&other).len(), 1);
+    }
+
+    #[test]
+    fn the_exit_of_the_app_drops_the_kept_copies() {
+        let lib = include_str!("lib.rs");
+        let exit = lib.split("tauri::RunEvent::Exit =>").nth(1).unwrap().split("_ => {}").next().unwrap();
+        assert!(exit.contains("host_positions::drop_saved_copies()"), "the exit arm must drop the copies of the saved data");
     }
 
     #[test]
