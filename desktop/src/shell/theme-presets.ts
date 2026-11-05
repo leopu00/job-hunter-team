@@ -44,7 +44,7 @@ export const PRESETS: Record<Theme, { seeds: Seeds; status: StatusColors }> = {
     status: { "--color-yellow": "#ffd400", "--color-blue": "#7fc4ff", "--color-red": "#ff8a8a", "--color-orange": "#ffa94d", "--color-purple": "#d9a8ff", "--sync-warn": "#ffd400" },
   },
   mist: {
-    seeds: { background: "#dcdfe4", panel: "#eaecf0", text: "#1e222a", border: "#959ba7", accent: "#1a4fa6" },
+    seeds: { background: "#dcdfe4", panel: "#eaecf0", text: "#1e222a", border: "#959ba7", accent: "#005b6b" },
     status: { "--color-yellow": "#7a5200", "--color-blue": "#185aa8", "--color-red": "#b3192f", "--color-orange": "#9a3f00", "--color-purple": "#6f2da8", "--sync-warn": "#7a5200" },
   },
   contrastlight: {

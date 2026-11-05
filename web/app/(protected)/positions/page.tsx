@@ -7,7 +7,7 @@ import {
   getVerdictMapByLegacyId,
 } from "@/lib/queries";
 import { colorForFamily } from "@/lib/position-classifier";
-import { scoreSpectrumCss } from "@/lib/score-color";
+import { scoreInkCss } from "@/lib/score-color";
 import DeckSaver from "./DeckSaver";
 import { IconStar, IconThumbsMeh, IconThumbsUp, IconX } from "../swipe/icons";
 import {
@@ -698,8 +698,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     <span
                       className="flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
                       style={{
-                        color: scoreSpectrumCss(p.score),
-                        borderColor: scoreSpectrumCss(p.score),
+                        color: scoreInkCss(p.score),
+                        borderColor: scoreInkCss(p.score),
                       }}
                     >
                       {p.score ?? "—"}
@@ -1086,7 +1086,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           >
                             <span
                               className="text-[12px] font-semibold w-6 text-right tabular-nums"
-                              style={{ color: scoreSpectrumCss(p.score) }}
+                              style={{ color: scoreInkCss(p.score) }}
                             >
                               {p.score ?? "—"}
                             </span>
@@ -1098,7 +1098,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                                 className="h-full rounded-full"
                                 style={{
                                   width: `${p.score ?? 0}%`,
-                                  background: scoreSpectrumCss(p.score),
+                                  background: scoreInkCss(p.score),
                                 }}
                               />
                             </div>

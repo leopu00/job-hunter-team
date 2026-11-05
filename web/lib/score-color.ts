@@ -42,3 +42,16 @@ export function scoreSpectrumCss(score: number | null | undefined): string {
   if (score == null) return "var(--color-dim)";
   return scoreGreenCss(score);
 }
+
+/**
+ * The same scale as TEXT and small marks on the theme's own surfaces (the score numbers, their rings and bars in the
+ * lists). On a dark base it is the scale itself. On a light base the bright amber or yellow of a 52 or a 65 is unreadable
+ * on a white or grey card, so the colour is mixed with black: the light bases set `--score-ink-keep` (globals.css), and
+ * 55% keeps every score at 4.5:1 or more on every light card and row of the web and the desktop. The hue stays, so a 65
+ * still reads as the step between a 55 and a 75.
+ */
+export function scoreInkCss(score: number | null | undefined): string {
+  if (score == null) return "var(--color-dim)";
+  const [r, g, b] = scoreToRgb(score);
+  return `color-mix(in oklab, rgb(${r}, ${g}, ${b}) var(--score-ink-keep, 100%), black)`;
+}
