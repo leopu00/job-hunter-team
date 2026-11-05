@@ -535,7 +535,7 @@ mod tests {
             let row = match i % 9 {
                 0 => json!({"role": "user", "text": format!("  question {i} with an accent: è, and a line\nbreak  "), "ts": 1_793_000_000.0 + i as f64, "message_id": format!("u{i}")}),
                 1 => json!({"role": "agent", "text": format!("answer {i} — «quoted» 日本語"), "ts": 1_793_000_000 + i as i64, "kind": "urgent"}),
-                2 => json!({"role": "assistant", "text": format!("same as agent {i}"), "ts": "1793000001.5"}),
+                2 => json!({"role": "assistant", "text": format!("same as agent {i}"), "ts": "1793000001.5", "kind": "blocked"}),
                 3 => json!({"role": "SYSTEM", "text": format!("the mail was not taken {i}"), "code": "mail_not_taken"}),
                 4 => json!({"role": "agent", "text": format!("info kind {i}"), "kind": "info", "ts": null}),
                 5 => json!({"role": "agent", "text": "   ", "ts": 5}),
@@ -605,6 +605,17 @@ mod tests {
         assert_eq!(ours, script_page(&world.home, "analista", Some("0")).unwrap());
         let texts: Vec<String> = ours["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap().chars().take(10).collect()).collect();
         assert_eq!(texts, ["before the", "at the cap", "after the "], "the line at the cap is read, the one over it is not");
+        // lines so long that the tail holds fewer than a page of them: the size of the tail decides which ones the newest page has
+        let mut heavy = Vec::new();
+        for i in 0..300 {
+            heavy.extend_from_slice(serde_json::to_string(&json!({"role": "agent", "text": format!("heavy {i} {}", "z".repeat(1500)), "ts": i})).unwrap().as_bytes());
+            heavy.push(b'\n');
+        }
+        world.put("agents/scorer-1/chat.jsonl", &heavy);
+        let newest = read_chat(&world.home, "scorer", None).unwrap();
+        assert_eq!(newest, script_page(&world.home, "scorer", None).unwrap());
+        let held = newest["messages"].as_array().unwrap().len();
+        assert!(held > 60 && held < CHAT_ROWS_FOR_TEST, "the tail holds {held} of these lines");
         // a cursor past the end is the end; the other agents of the closed list read their own folders
         let end = read_chat(&world.home, "scout", Some("999999999")).unwrap();
         assert_eq!(end, script_page(&world.home, "scout", Some("999999999")).unwrap());
