@@ -179,6 +179,12 @@ pub(crate) enum LocalCliOperation {
     ProviderPlans,
     /// `jht providers plan <id> --json`: declares the plan the person chose (an id of `KNOWN_PLAN_IDS`).
     ProviderPlanSet(&'static str),
+    /// `jht upgrade --check --json`: is a newer image there? Changes nothing.
+    UpgradeCheck,
+    /// `jht upgrade --json`: the wrapper's transaction (pull, activate, verify, roll back on failure).
+    Upgrade,
+    /// `jht down`: container and network away, never the volumes. Only before the test install is run again.
+    Down,
 }
 
 impl LocalCliOperation {
@@ -202,6 +208,9 @@ impl LocalCliOperation {
             Self::CleanImages => vec!["clean-images", "--json"],
             Self::ProviderPlans => vec!["providers", "plan", "--json"],
             Self::ProviderPlanSet(id) => vec!["providers", "plan", id, "--json"],
+            Self::UpgradeCheck => vec!["upgrade", "--check", "--json"],
+            Self::Upgrade => vec!["upgrade", "--json"],
+            Self::Down => vec!["down"],
         }
     }
 
@@ -225,6 +234,9 @@ impl LocalCliOperation {
             Self::CleanImages => "clean-images",
             Self::ProviderPlans => "provider-plans",
             Self::ProviderPlanSet(_) => "provider-plan-set",
+            Self::UpgradeCheck => "upgrade-check",
+            Self::Upgrade => "upgrade",
+            Self::Down => "down",
         }
     }
 }
@@ -5884,6 +5896,222 @@ pub(crate) async fn onboarding_clean_images(
     })
     .await
     .unwrap_or_else(|_| Err(failure("clean_images_failed")));
+    state.preparing.store(false, Ordering::Release);
+    let _scope = scopes.lock_expected(&expected).map_err(failure)?;
+    result
+}
+
+// ── The team's update, from the app (JHT-T173) ────────────────────────────────────────────────
+//
+// «Update the team» used to be a guide with a command to paste. The app now runs it on the team's host: a
+// production build asks the host's wrapper for `jht upgrade --json` (this computer: the attested wrapper; a VPS: ssh,
+// the same wrapper checks as every other action on it); a test build runs the installer of the onboarding again,
+// checked against the digest compiled into the build, because `jht upgrade` refuses a test install on purpose.
+// `team_update.rs` decides which way (by the build's channel and the image pin, never both) and closes the answer.
+
+/// An update pulls an image and swaps the container: as long as the installer of the onboarding may take.
+const TEAM_UPDATE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+/// A check only asks the release server for the newest image.
+const TEAM_UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+/// `jht down` / `jht up` around the installer of a test install.
+const TEAM_UPDATE_STEP_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum TeamUpdateAction {
+    /// Only ask whether the team runs an older image than this app.
+    Check,
+    /// Update it.
+    Apply,
+}
+
+/// Whether this account's wrapper speaks `upgrade --json` (the line the update protocol is announced with in
+/// jht-wrapper.sh, and its PowerShell form in jht-wrapper.ps1). An older one would route `upgrade` through its
+/// generic branch: the app does not call it at all then.
+fn wrapper_has_upgrade(path: &Path) -> bool {
+    wrapper_source(path).is_some_and(|source| {
+        source.lines().map(|line| line.trim_end_matches('\r').trim()).any(|line| {
+            line == crate::team_update::UPGRADE_PROTOCOL || line == "$JHT_UPGRADE_PROTOCOL = 1"
+        })
+    })
+}
+
+fn team_update_outcome(
+    result: Result<ProcessResult, &'static str>,
+    mode: crate::team_update::Mode,
+) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
+    match result {
+        Ok(result) => crate::team_update::parse_upgrade(&result, mode).map_err(failure),
+        Err("process_timeout") => Err(failure("timeout")),
+        Err(error) => Err(local_failure(error, "team_update_failed")),
+    }
+}
+
+/// The base of the installer's command line for a test install run again: the onboarding's own, for this system.
+#[cfg(target_os = "macos")]
+fn reinstall_base_args() -> Vec<&'static str> {
+    LOCAL_PODMAN_INSTALL_ARGS.to_vec()
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn reinstall_base_args() -> Vec<&'static str> {
+    vec!["JHT_SKIP_ONBOARD=1", "/bin/bash", "-s", "--"]
+}
+
+/// A test install, updated: `jht down` (the volumes stay), the installer of the onboarding (`with_downloaded_installer`:
+/// the bytes are checked against the digest of the build before they run, with the build's own coordinates), then
+/// `jht up`. `up` runs whatever the installer did, so the team is not left down; the error of the first step that failed
+/// is the one told.
+#[cfg(unix)]
+fn reinstall_test_install(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    wrapper: &Path,
+) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
+    #[cfg(target_os = "macos")]
+    {
+        // a Mac installed with Colima holds its volumes there: Podman over it would start the team on empty ones
+        if installed_on_another_engine(local_runtime_marker(app).as_deref()) {
+            return Err(failure(RUNTIME_CHANGE_REQUIRES_MIGRATION));
+        }
+    }
+    crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
+    let log = RuntimeLog::new(app);
+    let log = log.as_ref();
+    ensure_success(
+        run_local_logged(wrapper, &LocalCliOperation::Down.argv(), TEAM_UPDATE_STEP_TIMEOUT, log),
+        "team_update_failed",
+    )?;
+    let installed = with_downloaded_installer(log, |installer, channel_args| {
+        let started = Instant::now();
+        let (result, stderr) = run_program_keeping_stderr(
+            "/usr/bin/env",
+            local_install_args(&reinstall_base_args(), channel_args),
+            Some(installer.bytes()),
+            PREPARE_TIMEOUT,
+        );
+        if let Some(log) = log {
+            log.record_result("install.sh", &result, &stderr, started.elapsed());
+        }
+        ensure_local_install_success(result)
+    });
+    // the installer may have published a new wrapper: the one the app finds now is the one to start the team with
+    let started_again = match wrapper_path(app) {
+        Some(wrapper) => ensure_success(
+            run_local_logged(&wrapper, &LocalCliOperation::Up.argv(), TEAM_UPDATE_STEP_TIMEOUT, log),
+            "team_update_failed",
+        ),
+        None => Err(failure("runtime_missing")),
+    };
+    installed?;
+    started_again?;
+    Ok(crate::team_update::reinstalled())
+}
+
+#[cfg(not(unix))]
+fn reinstall_test_install(
+    _app: &tauri::AppHandle,
+    _scope: &AccountScope,
+    _wrapper: &Path,
+) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
+    Err(failure("team_update_unsupported"))
+}
+
+/// The host runtime folder, where the install left the image pin of a test channel.
+#[cfg(unix)]
+fn team_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    local_runtime_dir(app)
+}
+
+#[cfg(windows)]
+fn team_runtime_dir(_app: &tauri::AppHandle) -> Result<PathBuf, OnboardingError> {
+    crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA")).ok_or_else(|| failure("storage_failed"))
+}
+
+/// This computer's team: the way is decided by the build's channel and the image pin of the install.
+fn local_team_update(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    action: TeamUpdateAction,
+) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
+    use crate::team_update::{plan, read_pin, reinstall_check, Mode, Pin};
+    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    let channel = release_channel::current().map_err(failure)?;
+    let pin = read_pin(&team_runtime_dir(app)?);
+    match plan(channel.as_ref(), &pin).map_err(failure)? {
+        Mode::Upgrade => {
+            if !wrapper_has_upgrade(&wrapper) {
+                return Err(failure("team_update_wrapper_outdated"));
+            }
+            let (operation, timeout) = match action {
+                TeamUpdateAction::Check => (LocalCliOperation::UpgradeCheck, TEAM_UPDATE_CHECK_TIMEOUT),
+                TeamUpdateAction::Apply => (LocalCliOperation::Upgrade, TEAM_UPDATE_TIMEOUT),
+            };
+            team_update_outcome(run_scoped_local(app, scope, &wrapper, operation, timeout), Mode::Upgrade)
+        }
+        Mode::Reinstall => match (action, channel.as_ref(), pin) {
+            (TeamUpdateAction::Check, Some(channel), Pin::Present(pin)) => Ok(reinstall_check(&pin, channel)),
+            (TeamUpdateAction::Apply, _, _) => reinstall_test_install(app, scope, &wrapper),
+            _ => Err(failure("team_update_runtime_invalid")),
+        },
+    }
+}
+
+/// The team's host: this computer, or the VPS through ssh with the wrapper checks every action on it makes (the
+/// wrapper there is a file, executable, not a link, and carries the update protocol line).
+fn team_update_on(
+    app: &tauri::AppHandle,
+    scope: &AccountScope,
+    validated: &ValidatedHost,
+    action: TeamUpdateAction,
+) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
+    match validated {
+        ValidatedHost::Local => local_team_update(app, scope, action),
+        ValidatedHost::Vps { .. } => {
+            let (operation, timeout) = match action {
+                TeamUpdateAction::Check => ("upgrade --check --json </dev/null", TEAM_UPDATE_CHECK_TIMEOUT),
+                TeamUpdateAction::Apply => ("upgrade --json </dev/null", TEAM_UPDATE_TIMEOUT),
+            };
+            let command = crate::agent_control::own_vps_wrapper(crate::team_update::UPGRADE_PROTOCOL, operation);
+            team_update_outcome(run_ssh(validated, &command, None, timeout, None), crate::team_update::Mode::Upgrade)
+        }
+    }
+}
+
+/// «Update the team» and the notice that the team is older than the app. `check` changes nothing; `apply` updates
+/// the saved team's host. Both act on the host, so both need what every action on it needs (the full link on an
+/// existing team, the main window), and only one operation of the setup runs at a time.
+#[tauri::command]
+pub(crate) async fn onboarding_team_update(
+    window: tauri::Window,
+    app: tauri::AppHandle,
+    state: State<'_, OnboardingNativeState>,
+    scopes: State<'_, AccountScopeState>,
+    action: TeamUpdateAction,
+) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &expected) {
+        return Err(failure(code));
+    }
+    if state
+        .preparing
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(failure("operation_in_progress"));
+    }
+    let scope_state = scopes.inner().clone();
+    let worker_expected = expected.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = scope_state
+            .lock_expected(&worker_expected)
+            .map_err(failure)?;
+        let host = crate::direct_chat::load_persisted_host(&app, &worker_expected).map_err(failure)?;
+        let validated = validate_host(&app, &host).map_err(failure)?;
+        team_update_on(&app, &worker_expected, &validated, action)
+    })
+    .await
+    .unwrap_or_else(|_| Err(failure("team_update_failed")));
     state.preparing.store(false, Ordering::Release);
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     result

@@ -1,17 +1,22 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { appLocale } from "../lib/app-locale";
 import { TEAM_UPDATE_COMMAND, wantsTeamUpdate } from "../lib/team-update";
+import TeamUpdateRun from "./TeamUpdateRun";
 import { UPDATE_TEAM_TEXT } from "./UpdateTeamHelp.i18n";
 
 type Copy = "idle" | "copied" | "failed";
 
 /**
- * Under any message that asks to «update the team»: a button that opens a short guide (which program to open, the command to
- * paste with a «Copy the command» button, what to do afterwards). It shows nothing for any other error. It does not run
- * anything itself: the update is done by the person in the Terminal.
+ * Under any message that asks to «update the team»: a button. In the desktop app it updates the team (JHT-T173: the native
+ * side runs `jht upgrade --json` on the team's host, or the installer of a test install again, after the person confirms,
+ * and the outcome is shown here). Where the app cannot do it (outside the desktop, or a host whose wrapper is older than
+ * the update protocol) it opens a short guide instead: which program to open, the command to paste with a «Copy the
+ * command» button, what to do afterwards. It shows nothing for any other error.
  */
 export default function UpdateTeamHelp({ code }: { code: string | null | undefined }) {
   const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
   const [copy, setCopy] = useState<Copy>("idle");
   if (!wantsTeamUpdate(code)) return null;
   const t = UPDATE_TEAM_TEXT[appLocale()];
@@ -29,8 +34,21 @@ export default function UpdateTeamHelp({ code }: { code: string | null | undefin
   const buttonClass = "text-[12px] font-semibold px-4 py-2 rounded border border-[var(--color-border)] text-[var(--color-bright)]";
   return (
     <div data-testid="update-team">
-      {!open ? (
-        <button type="button" data-testid="update-team-button" className={`mt-3 ${buttonClass}`} onClick={() => setOpen(true)}>
+      {running ? (
+        <TeamUpdateRun
+          onClose={() => setRunning(false)}
+          onGuide={() => {
+            setRunning(false);
+            setOpen(true);
+          }}
+        />
+      ) : !open ? (
+        <button
+          type="button"
+          data-testid="update-team-button"
+          className={`mt-3 ${buttonClass}`}
+          onClick={() => (isTauri() ? setRunning(true) : setOpen(true))}
+        >
           {t.button}
         </button>
       ) : (

@@ -54,6 +54,7 @@ mod chat_attachment;
 mod profile_progress;
 mod state_stream;
 mod team_start;
+mod team_update;
 mod work_stats;
 mod team_budget;
 mod text_file_export;
@@ -185,6 +186,7 @@ pub fn run() {
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
             onboarding::onboarding_clean_images,
+            onboarding::onboarding_team_update,
             onboarding::onboarding_plans,
             onboarding::onboarding_plan_declare,
             onboarding::onboarding_local_uninstall_available,

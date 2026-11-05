@@ -27,6 +27,7 @@ beforeEach(() => {
   document.cookie = "NEXT_LOCALE=en; path=/";
   localStorage.setItem("jht-lang", "en");
   native.invoke.mockReset();
+  native.isTauri.mockReturnValue(true);
   team.state.mockReset();
   team.state.mockResolvedValue(running);
   team.readOnly.mockReturnValue(null);
@@ -152,6 +153,8 @@ describe("the Budget page", () => {
   });
 
   it("offers «Update the team» with its guide when the team does not offer the figures, and only then", async () => {
+    // outside the desktop app the button opens the guide with the command; inside it, it updates (next test)
+    native.isTauri.mockReturnValue(false);
     native.invoke.mockRejectedValue(new Error("invalid_request"));
     const user = userEvent.setup();
     show();
@@ -167,6 +170,18 @@ describe("the Budget page", () => {
     const unreadable = await screen.findByTestId("budget-failed");
     expect(unreadable).toHaveTextContent("The team's budget cannot be read.");
     expect(within(unreadable).queryByTestId("update-team-button")).toBeNull();
+  });
+
+  it("in the desktop app «Update the team» asks first and runs nothing until the person confirms", async () => {
+    native.invoke.mockRejectedValue(new Error("invalid_request"));
+    const user = userEvent.setup();
+    show();
+    const failed = await screen.findByTestId("budget-failed");
+    const before = native.invoke.mock.calls.length;
+    await user.click(within(failed).getByRole("button", { name: "Update the team" }));
+    expect(within(failed).getByTestId("team-update-confirm")).toBeInTheDocument();
+    expect(within(failed).queryByTestId("update-team-guide")).toBeNull();
+    expect(native.invoke.mock.calls.slice(before).some(([command]) => command === "onboarding_team_update")).toBe(false);
   });
 
   it("reads again by itself while it is open, and stops when it is left", async () => {
