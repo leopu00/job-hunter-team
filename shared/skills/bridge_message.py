@@ -220,6 +220,12 @@ def render(v):
     st = fh.get("status")
     proj = fh.get("proj")
     proj_s = f"   ·   proj {proj}%" if isinstance(proj, (int, float)) else ""
+    if fh.get("proj_state") == "too_early":
+        # A inizio finestra il ritmo non dice niente sul resto: nessuna proiezione, nessun freno (pace_rate.projection_rate).
+        span, need = fh.get("proj_span_h"), fh.get("proj_need_h")
+        have = (f" — measured {span:g} h of the {need:g} h it needs"
+                if isinstance(span, (int, float)) and isinstance(need, (int, float)) else "")
+        proj_s = f"   ·   too early for a projection{have}"
     lines.append(f"   → {_display_status(st)}{proj_s}")
     lines.append("")
 

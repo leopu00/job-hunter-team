@@ -243,7 +243,8 @@ def read(now_ts: float | None = None, home: Path | None = None) -> dict:
         try:
             assessment = weekly_pace.weekly_pace_assessment(
                 None, now_ts, remaining, active_to_reset, weekly_total_active_hours=total_active,
-                burn_intent_on=burn_on, samples=[(r["t"], r["used"]) for r in rows])
+                burn_intent_on=burn_on, samples=[(r["t"], r["used"]) for r in rows],
+                hours_to_reset=(reset - now_ts) / 3600.0)
         except Exception:  # noqa: BLE001
             assessment = None
     try:
