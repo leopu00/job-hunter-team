@@ -32,8 +32,13 @@ def function_source(text: str, name: str) -> str:
     return match.group(0)
 
 
-def run_piped_installer(tmp_path: Path, installer: Path, *, wait: float = 15.0) -> tuple[str, str, int | None]:
-    """Feed bash a script through a pipe, inside a pty. Returns (what the fake `jht setup` saw, markers, exit code)."""
+def run_piped_installer(
+    tmp_path: Path, installer: Path, *, wait: float = 15.0, wizard_exit: int = 0, strict: bool = False, path_ready: int = 1,
+) -> tuple[str, str, int | None]:
+    """Feed bash a script through a pipe, inside a pty. Returns (what the fake `jht setup` saw, markers, exit code).
+
+    `wizard_exit` is the code the fake wizard ends with. `strict` runs the script as the real installer does (`set -euo pipefail`,
+    `maybe_onboard` as its last command), so the script's own exit code is the one under test."""
     import pty
 
     source = installer.read_text(encoding="utf-8")
@@ -42,19 +47,28 @@ def run_piped_installer(tmp_path: Path, installer: Path, *, wait: float = 15.0) 
     fake_bin.mkdir()
     jht = fake_bin / "jht"
     # The wizard's own view of its stdin: it must be the terminal, or `jht setup` could not ask anything.
-    jht.write_text('#!/bin/sh\nif [ -t 0 ]; then echo "setup-stdin=tty" >> "%s"; else echo "setup-stdin=not-a-tty" >> "%s"; fi\n' % (out, out))
+    jht.write_text(
+        '#!/bin/sh\nif [ -t 0 ]; then echo "setup-stdin=tty" >> "%s"; else echo "setup-stdin=not-a-tty" >> "%s"; fi\nexit %d\n'
+        % (out, out, wizard_exit)
+    )
     jht.chmod(0o755)
-    payload = "\n".join([
-        "DRY_RUN=0; PAIRING_TOKEN=''; BIN_DIR='%s'" % fake_bin,
-        "info() { :; }; warn() { :; }",
+    lines = [
+        "DRY_RUN=0; PAIRING_TOKEN=''; BIN_DIR='%s'; PATH_READY=%d" % (fake_bin, path_ready),
+        'info() { echo "info: $*" >> \'%s\'; }; warn() { echo "warn: $*" >> \'%s\'; }' % (out, out),
         function_source(source, "tty_can_be_opened"),
         function_source(source, "maybe_onboard"),
-        "maybe_onboard",
-        # What a real installer still has to do after the wizard: these lines must be read from the PIPE.
-        "echo after-wizard >> '%s'" % out,
-        "echo installer-done >> '%s'" % out,
-        "",
-    ])
+    ]
+    if strict:
+        lines = ["set -euo pipefail"] + lines + ["maybe_onboard", ""]
+    else:
+        lines += [
+            "maybe_onboard",
+            # What a real installer still has to do after the wizard: these lines must be read from the PIPE.
+            "echo after-wizard >> '%s'" % out,
+            "echo installer-done >> '%s'" % out,
+            "",
+        ]
+    payload = "\n".join(lines)
     inner = tmp_path / "payload.sh"
     inner.write_text(payload, encoding="utf-8")
     pid, master = pty.fork()
@@ -103,3 +117,29 @@ def test_the_two_copies_are_the_same_file_and_the_app_digest_follows():
     assert first == second
     digest = (ROOT / "desktop" / "src-tauri" / "installer.sha256").read_text(encoding="utf-8").strip()
     assert digest == hashlib.sha256(first).hexdigest()
+
+
+@pytest.mark.parametrize("installer", INSTALLERS, ids=lambda p: str(p.relative_to(ROOT)))
+@pytest.mark.parametrize("wizard_exit", (1, 130))
+def test_a_wizard_that_stops_is_not_a_finished_install_and_the_installer_says_what_to_do_next(tmp_path, installer, wizard_exit):
+    markers, screen, status = run_piped_installer(tmp_path, installer, wizard_exit=wizard_exit, strict=True)
+    # the installer ends with the wizard's own non-zero code (it used to swallow it and end with 0)
+    assert status == wizard_exit, f"status {status}; markers: {markers!r}"
+    lines = markers.splitlines()
+    assert lines[0] == "setup-stdin=tty"
+    assert any(line.startswith("warn: ") and f"exit code {wizard_exit}" in line and "not set up yet" in line for line in lines), lines
+    assert any(line == "info: Next step: run  jht setup  to finish the setup." for line in lines), lines
+
+
+@pytest.mark.parametrize("installer", INSTALLERS, ids=lambda p: str(p.relative_to(ROOT)))
+def test_the_next_step_names_the_full_path_when_jht_is_not_on_the_path_yet(tmp_path, installer):
+    markers, _, status = run_piped_installer(tmp_path, installer, wizard_exit=1, strict=True, path_ready=0)
+    assert status == 1
+    assert any(line.startswith("info: Next step: run  ") and line.endswith("/bin/jht setup  to finish the setup.") for line in markers.splitlines()), markers
+
+
+@pytest.mark.parametrize("installer", INSTALLERS, ids=lambda p: str(p.relative_to(ROOT)))
+def test_a_wizard_that_finishes_leaves_exit_0_and_no_warning(tmp_path, installer):
+    markers, _, status = run_piped_installer(tmp_path, installer, wizard_exit=0, strict=True)
+    assert status == 0, markers
+    assert markers.splitlines() == ["setup-stdin=tty"], markers
