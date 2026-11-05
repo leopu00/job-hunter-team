@@ -262,8 +262,8 @@
   --color-bright: #101216;
   --color-white: #070709;
   --color-grid: rgba(30, 34, 42, 0.04);
-  --color-green: #1a4fa6;
-  --color-ready: #1a4fa6;
+  --color-green: #005b6b;
+  --color-ready: #005b6b;
   --color-yellow: #7a5200;
   --color-blue: #185aa8;
   --color-red: #b3192f;
@@ -453,7 +453,7 @@
 .theme-picker__swatch[data-theme-preview="forest"] { --preview-bg: #101f16; --preview-border: #36624b; --preview-accent: #e9b949; }
 .theme-picker__swatch[data-theme-preview="dusk"] { --preview-bg: #220f1a; --preview-border: #6a3d5a; --preview-accent: #ff9d6b; }
 .theme-picker__swatch[data-theme-preview="contrast"] { --preview-bg: #0a0a0a; --preview-border: #a0a0a0; --preview-accent: #ffe14d; }
-.theme-picker__swatch[data-theme-preview="mist"] { --preview-bg: #eaecf0; --preview-border: #7c818d; --preview-accent: #1a4fa6; }
+.theme-picker__swatch[data-theme-preview="mist"] { --preview-bg: #eaecf0; --preview-border: #7c818d; --preview-accent: #005b6b; }
 .theme-picker__swatch[data-theme-preview="contrastlight"] { --preview-bg: #ffffff; --preview-border: #474747; --preview-accent: #0036a8; }
 .theme-picker__swatch[data-theme-preview="sage"] { --preview-bg: #fafbf7; --preview-border: #9aa98c; --preview-accent: #2f6b3a; }
 .theme-picker__swatch[data-theme-preview="lavender"] { --preview-bg: #fdfcff; --preview-border: #a496c0; --preview-accent: #5b3fa6; }
