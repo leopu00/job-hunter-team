@@ -28,7 +28,18 @@ Regole, valide per qualunque contatore intero e per qualunque asse:
   5. La finestra e' la piu' corta, fra MIN_SPAN_H e MAX_SPAN_H, che contiene MIN_DELTA punti; altrimenti la piu' lunga.
   6. Una lettura isolata che crolla e alla lettura dopo torna al livello di prima (77, 0, 77) non e' un reset: e' una
      lettura sbagliata del provider. Non entra in nessuna serie (drop_isolated_readings); un reset vero non torna su.
-  7. I kT per punto (kt_per_point) si misurano sui punti GUADAGNATI in ore, non in una finestra corta: con un contatore
+  7. Una PROIEZIONE a fine finestra (usage + ritmo x ore al reset) e' piu' esigente del ritmo: l'errore di arrotondamento
+     (+-1 punto) si moltiplica per le ore che restano. Misurata su un team reale (04-05/11, finestra settimanale appena
+     azzerata, 1-10 punti): con il ritmo delle ultime 2,5 h la proiezione a 144 h dal reset oscillava fra 62 e 185 punti
+     (ATTENZIONE dalle 21:55Z per 9 ore, 125,0 con 2 punti in 2,5 h) mentre il consumo vero era ~0,4 %/h dal reset
+     (69 a fine finestra): un solo punto in piu' o in meno spostava la proiezione di 60 punti, e «troppo presto» non
+     esisteva. Il FRENO (ATTENZIONE, fase, throttle) vuole alti entrambi i ritmi, quello dall'inizio della finestra e quello
+     delle ultime ore (counter_rate, 1-8 h), sempre sul limite basso: un burn finito fa decadere piano la media dall'inizio
+     (usage ferma a 29 dopo un burn: proiezione 131 per ore) e non deve frenare un team che non spende piu'. Regola: projection_rate() misura il ritmo dall'INIZIO
+     della finestra (fino a PROJ_MAX_SPAN_H) e produce una proiezione solo se l'incertezza dell'arrotondamento sul
+     tempo che resta pesa al piu' PROJ_MAX_UNCERTAINTY_PTS punti, cioe' le ore misurate sono almeno (ore al reset) /
+     (PROJ_MAX_UNCERTAINTY_PTS / 2) e, su una finestra lunga (> 24 h al reset), i punti guadagnati almeno PROJ_MIN_GAIN o passato un giorno; altrimenti «troppo presto», senza verdetto.
+  8. I kT per punto (kt_per_point) si misurano sui punti GUADAGNATI in ore, non in una finestra corta: con un contatore
      intero il rapporto di una finestra e' rumore. Su un team reale (28/10-03/11, 29.886 kT su 75 punti = ~400 per
      punto) le finestre da 15 minuti danno fra 110 e 1295 (10o-90o percentile, massimo 1476: i 930 dei messaggi del
      tick), quelle da un'ora fra 51 e 593; su 6-48 ore, almeno 8 punti, il rapporto sta fra 146 e 517 (mediana 371).
@@ -45,6 +56,11 @@ JUMP_MAX_DT_S = 600       # ...se avviene fra due campioni a meno di 10 minuti
 GLITCH_DROP_PTS = 3       # una lettura che scende di tanto, e poi torna al livello di prima...
 GLITCH_MAX_RUN = 3        # ...dopo al massimo tre letture...
 GLITCH_MAX_S = 1200       # ...e al massimo venti minuti, e' una lettura sbagliata, non un reset
+PROJ_MAX_UNCERTAINTY_PTS = 15.0   # una proiezione a fine finestra con piu' di +-7,5 punti di sola incertezza non esce
+PROJ_MIN_GAIN = 5                 # punti guadagnati dall'inizio di una finestra LUNGA per fidarsi di una proiezione...
+PROJ_LONG_HORIZON_H = 24.0        # ...lunga = piu' di un giorno al reset (la settimanale); una da 5 h con il contatore fermo e' un dato
+PROJ_QUIET_SPAN_H = 24.0          # ...e salvo che sia passato un giorno: un team fermo da ore non puo' restare «troppo presto»
+PROJ_MAX_SPAN_H = 48.0            # il ritmo di una proiezione e' quello dall'inizio della finestra, ma al piu' di 48 ore
 RATIO_MIN_GAIN = 8.0      # punti guadagnati che rendono affidabile un rapporto kT/punto (errore di arrotondamento < 13 %)
 RATIO_MIN_SPAN_H = 6.0
 RATIO_MAX_SPAN_H = 48.0
@@ -143,6 +159,48 @@ def counter_rate(samples, now_ts, *, min_span_h=MIN_SPAN_H, max_span_h=MAX_SPAN_
         "unattributed_pts": info["unattributed_pts"],
         "samples": series,
     }
+
+
+def projection_rate(samples, now_ts, hours_to_reset, *, max_span_h=PROJ_MAX_SPAN_H):
+    """Il ritmo da cui proiettare a fine finestra, o «troppo presto»: {state, rate, lo, hi, ...}.
+
+    `samples` = [(epoch, valore)] del contatore, `hours_to_reset` = le ore che restano alla fine della finestra. Il ritmo
+    e' (punti guadagnati) / (ore trascorse) dal PRIMO campione della finestra (dopo l'ultimo calo = reset o lettura
+    rinnovata; i salti non attribuibili sono tolti, come in counter_rate), fino a `max_span_h`. Ritorna sempre un dict:
+
+      state       "ok" | "too_early" ("troppo presto per una proiezione")
+      span_h      le ore misurate;  need_h  le ore che servivano;  gain  i punti guadagnati;  need_gain
+      rate/lo/hi  %/h con l'intervallo [(gain-1)/span, (gain+1)/span]: solo se state == "ok", altrimenti None
+
+    «ok» solo se span_h >= need_h = max(MIN_SPAN_H, hours_to_reset / (PROJ_MAX_UNCERTAINTY_PTS / 2)) e (gain >=
+    PROJ_MIN_GAIN o span_h >= PROJ_QUIET_SPAN_H; i punti contano solo se il reset e' a piu' di PROJ_LONG_HORIZON_H ore:
+    su una finestra corta i punti non sono il problema, le ore si). Con le ore al reset ignote o non positive non c'e' niente da proiettare:
+    «too_early» con need_h None.
+    """
+    out = {"state": "too_early", "rate": None, "lo": None, "hi": None, "span_h": 0.0, "need_h": None,
+           "gain": 0.0, "need_gain": PROJ_MIN_GAIN, "rebaselined": False, "unattributed_pts": 0.0}
+    if not isinstance(hours_to_reset, (int, float)) or isinstance(hours_to_reset, bool) or hours_to_reset <= 0:
+        return out
+    need_h = max(MIN_SPAN_H, hours_to_reset / (PROJ_MAX_UNCERTAINTY_PTS / 2.0))
+    out["need_h"] = need_h
+    since = now_ts - max_span_h * 3600.0
+    window = sorted((float(t), float(v)) for t, v in samples if since <= t <= now_ts)
+    if len(window) < 2:
+        return out
+    series, info = adjust_series(window)
+    out["rebaselined"] = info["rebaselined_at"] is not None
+    out["unattributed_pts"] = info["unattributed_pts"]
+    if len(series) < 2:
+        return out
+    first, newest = series[0], series[-1]
+    span_h = (newest[0] - first[0]) / 3600.0
+    gain = max(0.0, newest[1] - first[1])
+    out["span_h"], out["gain"] = span_h, gain
+    quiet_start = hours_to_reset > PROJ_LONG_HORIZON_H and gain < PROJ_MIN_GAIN and span_h < PROJ_QUIET_SPAN_H
+    if span_h < need_h or quiet_start:
+        return out
+    out.update({"state": "ok", "rate": gain / span_h, "lo": max(0.0, gain - 1.0) / span_h, "hi": (gain + 1.0) / span_h})
+    return out
 
 
 def kt_per_point(samples, events, now_ts, *, min_gain=RATIO_MIN_GAIN, min_span_h=RATIO_MIN_SPAN_H,

@@ -1980,6 +1980,9 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
         "reset_str": reset_str if (reset_str and reset_str != "?") else (entry.get("reset_at") or "?"),
         "reset_in": reset_in5, "vel_now": vel_now5, "vel_target": vel_tgt5,
         "single_weekly": single_weekly,
+        # «troppo presto per una proiezione» (compute_metrics.projection_state): proj assente, e il tick lo dice.
+        "proj_state": entry.get("projection_state"),
+        "proj_span_h": entry.get("projection_span_h"), "proj_need_h": entry.get("projection_need_h"),
     }
     now_dt = datetime.fromtimestamp(now_ts, tz=timezone.utc)
     daily = None
@@ -2138,8 +2141,15 @@ def load_last_sample(source=None):
         return None
 
 
-def load_recent_samples(n=30, source=None):
-    """Ultimi N sample dal JSONL, opzionalmente filtrati per source."""
+def _sample_epoch(sample):
+    try:
+        return datetime.fromisoformat(str(sample.get("ts"))).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def load_recent_samples(n=30, source=None, since_h=None):
+    """Ultimi N sample dal JSONL, opzionalmente filtrati per source e per eta' (`since_h` ore al massimo)."""
     if not DATA_JSONL.exists():
         return []
     try:
@@ -2153,6 +2163,9 @@ def load_recent_samples(n=30, source=None):
             if source is not None and s.get("source") != source:
                 continue
             out.append(s)
+        if since_h is not None:
+            cutoff = time.time() - since_h * 3600.0
+            out = [s for s in out if _sample_epoch(s) is None or _sample_epoch(s) >= cutoff]
         return out[-n:]
     except OSError:
         return []
@@ -2500,12 +2513,20 @@ def _notify_captain_pace_guard(result):
     return delivered
 
 
+def _proj_text(entry):
+    """«97.3%», «-» se la proiezione manca, «too-early(12.0h/19.2h)» se e' troppo presto per proiettare."""
+    if entry.get("projection_state") == "too_early":
+        return f"too-early({entry.get('projection_span_h')}h/{entry.get('projection_need_h')}h)"
+    proj = entry.get("projection")
+    return f"{proj}%" if proj is not None else "-"
+
+
 def write_log(entry):
     line = (
         f"[{entry['ts']}] provider={entry['provider']} "
         f"usage={entry['usage']}% "
         f"vel_smooth={entry.get('velocity_smooth', '-')}/h "
-        f"proj={entry.get('projection', '-')}% "
+        f"proj={_proj_text(entry)} "
         f"status={entry.get('status', '-')} src={entry.get('source', '-')}"
     )
     with LOG_TXT.open("a", encoding="utf-8") as f:
@@ -2620,7 +2641,8 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts, burn_intent_on=False):
         wtot = wht.active_hours_in_range(wreset_dt - timedelta(days=7), wreset_dt, cfg)
         return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah,
                                          weekly_total_active_hours=wtot,
-                                         burn_intent_on=bool(burn_intent_on))
+                                         burn_intent_on=bool(burn_intent_on),
+                                         hours_to_reset=(wreset_unix - now_ts) / 3600.0)
     except Exception:
         return None
 
@@ -3297,8 +3319,9 @@ def main():
                     last = None
                     history = []
                 else:
-                    # 100 righe = 8 h a 5 minuti: il ritmo si misura su ore (pace_rate.py), non sulle ultime 2,5 h.
-                    history = load_recent_samples(100)
+                    # La proiezione a fine finestra misura il ritmo DALL'INIZIO della finestra, fino a 48 h (pace_rate.py,
+                    # PROJ_MAX_SPAN_H): servono le righe di 50 ore, qualunque sia la cadenza dei tick (prima 100 righe).
+                    history = load_recent_samples(6000, since_h=50)
             # Verdetto weekly (rate active-hours) PRIMA del compute, così lo
             # status persistito è già composto bi-dimensionale (2026-06-29).
             # weekly_pace legge la storia dal JSONL (≤ tick precedente) + il
