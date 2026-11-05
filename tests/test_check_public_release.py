@@ -78,9 +78,9 @@ def run(*argv):
 
 
 def test_the_names_are_the_ones_the_site_links():
-    # D13: Mac and Linux; Windows is not in the release, so it is not asked for
-    assert TAG.startswith("v") and len(NAMES) == 2 and all(re.search(r"\.(dmg|AppImage)$", n) for n in NAMES)
-    assert not any(n.endswith(".exe") for n in NAMES)
+    # D13: Mac only; Windows and Linux are not in the release, so they are not asked for
+    assert TAG.startswith("v") and len(NAMES) == 1 and all(n.endswith(".dmg") for n in NAMES)
+    assert not any(n.endswith((".exe", ".AppImage", ".deb")) for n in NAMES)
 
 
 def test_a_public_release_that_holds_the_files_is_green(github, capsys):
@@ -124,7 +124,7 @@ def test_a_file_that_is_not_what_the_release_announces_is_red(github, capsys):
 
 
 def test_an_address_that_gives_404_is_red_even_without_downloading(github):
-    del github["files"][NAMES[1]]
+    del github["files"][NAMES[0]]
     assert run("--no-bytes") == 1
 
 

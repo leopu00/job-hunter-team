@@ -98,16 +98,18 @@ export function SessionHistory({ t, history, session, nowS }: { t: AgentsPanelTe
   );
 }
 
-/** One lane per department, an hour per box, for the last day. */
-export function Lanes({ t, history, roles, nowS }: { t: AgentsPanelText; history: Outcome<PanelHistory> | null; roles: string[]; nowS: number }) {
-  const rows = history?.ok ? buildGantt(history.value, roles, nowS) : null;
+/** The sessions of the last day as bars, from the start of each to its end: the page of ONE agent (`only`) shows its own.
+ *  A session is open all day, so this says when it was up, never whether the agent worked: that is `WorkLanes`. */
+export function Lanes({ t, history, roles, nowS, only }: { t: AgentsPanelText; history: Outcome<PanelHistory> | null; roles: string[]; nowS: number; only?: string }) {
+  const built = history?.ok ? buildGantt(history.value, roles, nowS) : null;
+  const rows = built && only ? built.filter((row) => row.agent === only) : built;
   // The axis: now, and a tick every six hours back to the start of the window, each with the clock time it stands for.
   const ticks = [0, 6, 12, 18, 24].map((hoursAgo) => ({ hoursAgo, at: nowS - hoursAgo * 3600, left: ((24 - hoursAgo) / 24) * 100 }));
   const place = (seconds: number) => ((seconds - (nowS - GANTT_SECONDS)) / GANTT_SECONDS) * 100;
   return (
-    <section data-testid="panel-lanes" aria-label={t.lanesTitle} className="rounded-xl border p-4" style={{ borderColor: "var(--color-border)" }}>
+    <section data-testid="panel-lanes" aria-label={t.sessionsTitle} className="rounded-xl border p-4" style={{ borderColor: "var(--color-border)" }}>
       <h2 className="m-0 text-[14px] font-semibold" style={{ color: "var(--color-white)" }}>
-        {t.lanesTitle}
+        {t.sessionsTitle}
       </h2>
       <p className="text-[13px] leading-5 mt-1 mb-3 text-[var(--color-muted)]">{t.lanesHelp}</p>
       {history === null && <p className="text-[13px] text-[var(--color-muted)]">{t.historyReading}</p>}

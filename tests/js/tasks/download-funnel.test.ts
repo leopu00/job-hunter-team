@@ -75,7 +75,6 @@ function releaseFixture(
 // 0.4.0: no Windows installer in the release
 const PRIMARY_RELEASE = releaseFixture([
   "job-hunter-team-macos-universal.dmg",
-  "job-hunter-team-linux-x64.AppImage",
 ]);
 
 function testDependencies(
@@ -124,9 +123,23 @@ describe("B8 download funnel", () => {
     }
   });
 
-  it("D13 offers Mac and Linux only: Windows has no slug and no link", () => {
-    expect(Object.keys(DOWNLOAD_TARGETS)).toEqual(["mac", "linux"]);
-    expect(Object.values(DOWNLOAD_TARGETS).join(" ")).not.toMatch(/windows|\.exe/i);
+  it("D13 offers Mac only: Windows and Linux have no slug and no link", () => {
+    expect(Object.keys(DOWNLOAD_TARGETS)).toEqual(["mac"]);
+    expect(Object.values(DOWNLOAD_TARGETS).join(" ")).not.toMatch(/windows|\.exe|linux|appimage|\.deb/i);
+    // a link to the Linux file of the old page: unknown slug, 404, nothing recorded, even if someone attaches the file
+    const linuxState = testDependencies(
+      undefined,
+      releaseFixture(["job-hunter-team-macos-universal.dmg", "job-hunter-team-linux-x64.AppImage"]),
+    );
+    const linux = handleDownloadRedirect(
+      new Request("https://jobhunterteam.ai/go/linux"),
+      "linux",
+      linuxState.dependencies,
+    );
+    expect(linux.status).toBe(404);
+    expect(linux.headers.has("location")).toBe(false);
+    expect(linuxState.tasks).toHaveLength(0);
+    expect(resolveDownloadTarget("linux", linuxState.dependencies.release)).toBeNull();
     // a link of the old page must not reach a file: unknown slug, 404, nothing recorded
     const state = testDependencies();
     const response = handleDownloadRedirect(
@@ -145,12 +158,11 @@ describe("B8 download funnel", () => {
     expect(resolveDownloadTarget("mac", withInstaller)).toBe(DOWNLOAD_TARGETS.mac);
   });
 
-  it("D13 the page shows Windows as not in this version without a link, and Linux as experimental", () => {
+  it("D13 the page shows Windows as not in this version without a link, and has no Linux card", () => {
     expect(DOWNLOAD_PAGE).not.toContain("win-setup");
     expect(DOWNLOAD_PAGE).toContain("data-windows-not-in-version");
     expect(DOWNLOAD_PAGE).toContain('t("dl_windows_not_in_version")');
-    expect(DOWNLOAD_PAGE).toContain("data-linux-experimental");
-    expect(DOWNLOAD_PAGE).toContain('t("dl_linux_experimental")');
+    expect(DOWNLOAD_PAGE).not.toMatch(/data-linux|dl_linux|LinuxIcon|id: "linux"|linux: "linux"/);
     // the Windows card is not an anchor
     expect(DOWNLOAD_PAGE).toMatch(/slug \? \(\s*<a[\s\S]*?\) : \(\s*<div[\s\S]*?aria-disabled="true"/);
   });
@@ -162,10 +174,12 @@ describe("B8 download funnel", () => {
     files.push(readFileSync(path.join(REPO, "web/app/components/landing/LandingI18n.tsx"), "utf8"));
     for (const source of files) {
       expect(source).toContain("dl_windows_not_in_version");
-      expect(source).toContain("dl_linux_experimental");
-      // the unsigned note no longer speaks of a Windows installer
+      expect(source).not.toContain("dl_linux_experimental");
+      // the note no longer speaks of a Windows installer, nor of an AppImage to make executable
       const note = source.match(/dl_desktop_unsigned_note[\s\S]*?dl_mac_apple_silicon_only/)![0];
-      expect(note).not.toMatch(/Windows|SmartScreen/);
+      expect(note).not.toMatch(/Windows|SmartScreen|AppImage/);
+      // and it says in the language of the file that Linux goes through install.sh
+      expect(note).toContain("install.sh");
     }
   });
 
@@ -173,22 +187,14 @@ describe("B8 download funnel", () => {
     const mixedRelease = releaseFixture([
       "job-hunter-team-macos-universal.dmg",
       "job-hunter-team.zip",
-      "job-hunter-team-linux-x64.AppImage",
-      "job-hunter-team-linux-x64.tar.gz",
     ]);
 
     expect(resolveDownloadTarget("mac", mixedRelease)).toBe(
       DOWNLOAD_TARGETS.mac,
     );
-    expect(resolveDownloadTarget("linux", mixedRelease)).toBe(
-      DOWNLOAD_TARGETS.linux,
-    );
   });
 
-  it.each([
-    ["mac", "job-hunter-team.zip"],
-    ["linux", "job-hunter-team-linux-x64.tar.gz"],
-  ] as const)(
+  it.each([["mac", "job-hunter-team.zip"]] as const)(
     "uses the legacy %s alias only inside the 0.4.0 release",
     (slug, legacyName) => {
       const state = testDependencies(undefined, releaseFixture([legacyName]));
@@ -211,7 +217,7 @@ describe("B8 download funnel", () => {
       "v0.3.9",
     );
 
-    for (const slug of ["mac", "linux"] as const) {
+    for (const slug of ["mac"] as const) {
       const state = testDependencies(undefined, godotRelease);
       const response = handleDownloadRedirect(
         new Request(`https://jobhunterteam.ai/go/${slug}`),
@@ -339,12 +345,12 @@ describe("B8 download funnel", () => {
   it("T5 handles HEAD without a body and rejects non-read methods", async () => {
     const state = testDependencies();
     const head = handleDownloadRedirect(
-      new Request("https://jobhunterteam.ai/go/linux", { method: "HEAD" }),
-      "linux",
+      new Request("https://jobhunterteam.ai/go/mac", { method: "HEAD" }),
+      "mac",
       state.dependencies,
     );
     expect(head.status).toBe(302);
-    expect(head.headers.get("location")).toBe(DOWNLOAD_TARGETS.linux);
+    expect(head.headers.get("location")).toBe(DOWNLOAD_TARGETS.mac);
     expect(await head.text()).toBe("");
 
     for (const handler of [POST, PUT, PATCH, DELETE, OPTIONS]) {
@@ -444,8 +450,8 @@ describe("B8 download funnel", () => {
   it("T8 also returns the redirect if background scheduling itself fails", () => {
     const logFailure = vi.fn();
     const response = handleDownloadRedirect(
-      new Request("https://jobhunterteam.ai/go/linux?utm_source=reddit"),
-      "linux",
+      new Request("https://jobhunterteam.ai/go/mac?utm_source=reddit"),
+      "mac",
       {
         release: PRIMARY_RELEASE,
         schedule: () => {
@@ -457,7 +463,7 @@ describe("B8 download funnel", () => {
       },
     );
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(DOWNLOAD_TARGETS.linux);
+    expect(response.headers.get("location")).toBe(DOWNLOAD_TARGETS.mac);
     expect(logFailure).toHaveBeenCalledOnce();
     expect(logFailure).toHaveBeenCalledWith();
   });
@@ -494,7 +500,6 @@ describe("B8 download funnel", () => {
       );
     }
     expect(DOWNLOAD_PAGE).toContain('mac: "mac"');
-    expect(DOWNLOAD_PAGE).toContain('linux: "linux"');
     expect(DOWNLOAD_PAGE).toContain("href={downloadHref(slug, attribution)}");
     expect(DOWNLOAD_PAGE).not.toContain("releases/latest/download");
 

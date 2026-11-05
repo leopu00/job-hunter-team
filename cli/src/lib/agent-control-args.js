@@ -25,6 +25,8 @@ const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2
 
 const WITH_SESSION = new Set(['start', 'stop', 'restart', 'screen']);
 const ALONE = new Set(['resume', 'stop-team', 'list', 'team', 'history', 'exclusions']);
+// The windows of the agents' activity (JHT-T171): the page's six, the script checks them again.
+const ACTIVITY_WINDOWS = new Set(['5m', '15m', '1h', '5h', '24h', '7d']);
 // A code of the exclusions' closed vocabulary (JHT-T24-b); the script checks it against the list.
 const WITH_CODE = new Set(['exclusion-accept', 'exclusion-withdraw']);
 const CODE = /^[a-z][a-z_]{0,31}$/;
@@ -46,6 +48,7 @@ export function agentControlArgv(args) {
   if (op === 'answer') {
     return rest.length === 2 && QUESTION_ID.test(rest[0]) && OPTION_ID.test(rest[1]) ? [op, rest[0], rest[1]] : null;
   }
+  if (op === 'activity') return rest.length === 1 && ACTIVITY_WINDOWS.has(rest[0]) ? [op, rest[0]] : null;
   if (ALONE.has(op)) return rest.length === 0 ? [op] : null;
   if (op !== 'pause') return null;
   if (rest.length === 1 && rest[0] === '--wake-on-weekly') return [op, '--wake-on-weekly'];

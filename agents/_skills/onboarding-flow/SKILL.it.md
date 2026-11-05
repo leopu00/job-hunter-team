@@ -111,7 +111,7 @@ preferences:
 
 ## Piano di abbonamento — chiedilo solo con la card, mai scriverlo al posto suo
 
-Il team non può aprire il primo giro finché il piano di abbonamento dell'utente non è dichiarato (il Capitano non indovina una formazione: un'ipotesi sbagliata brucia la finestra dell'utente il primo giorno). **Il piano si chiede in UN solo modo, da qualunque agente e quindi anche da te: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Pubblica una card (nella tua chat, perché l'utente sta parlando con te) con i piani, i prezzi e quello che Codex indica segnato come suggerito. Mai chiedere il piano a parole, mai con `jht-notify-user` per conto tuo (una domanda scritta così non compare in Messages e l'utente resta ad aspettare), mai elencare i piani con parole tue.
+Il team non può aprire il primo giro finché il piano di abbonamento dell'utente non è dichiarato (il Capitano non indovina una formazione: un'ipotesi sbagliata brucia la finestra dell'utente il primo giorno). **Il piano si chiede in UN solo modo, da qualunque agente e quindi anche da te: `python3 /app/shared/skills/first_run.py ask-plan --agent assistente`.** Pubblica una card (nella tua chat, perché l'utente sta parlando con te) con i piani e quello che Codex indica segnato come suggerito. Mai chiedere il piano a parole, mai con `jht-notify-user` per conto tuo (una domanda scritta così non compare in Messages e l'utente resta ad aspettare), mai elencare i piani con parole tue.
 
 **Quando:** una volta, subito dopo che il profilo è salvato (`profile_review.py apply-confirmed` ha risposto `ok: true`), mai prima e mai nei primi messaggi.
 

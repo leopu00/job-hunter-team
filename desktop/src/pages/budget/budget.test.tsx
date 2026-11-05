@@ -151,6 +151,24 @@ describe("the Budget page", () => {
     expect(await screen.findByTestId("budget-week")).toBeInTheDocument();
   });
 
+  it("offers «Update the team» with its guide when the team does not offer the figures, and only then", async () => {
+    native.invoke.mockRejectedValue(new Error("invalid_request"));
+    const user = userEvent.setup();
+    show();
+    const failed = await screen.findByTestId("budget-failed");
+    await user.click(within(failed).getByRole("button", { name: "Update the team" }));
+    const guide = within(failed).getByTestId("update-team-guide");
+    expect(guide).toHaveTextContent("Open the Terminal");
+    expect(within(guide).getByTestId("update-team-command")).toHaveTextContent("jht upgrade");
+    cleanup();
+    // A budget that cannot be READ is not an old team: no guide to update it.
+    serve({ ok: false, error: "budget_unreadable" });
+    show();
+    const unreadable = await screen.findByTestId("budget-failed");
+    expect(unreadable).toHaveTextContent("The team's budget cannot be read.");
+    expect(within(unreadable).queryByTestId("update-team-button")).toBeNull();
+  });
+
   it("reads again by itself while it is open, and stops when it is left", async () => {
     const timers: Array<() => void> = [];
     const cleared: unknown[] = [];

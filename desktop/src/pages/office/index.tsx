@@ -20,13 +20,14 @@ import { localizeLayout, officeText } from "../../office/office.i18n";
 import { PAGE_STATES_TEXT } from "../../lib/page-states.i18n";
 import { readTeamAgentsShared, type TeamAgentsReading } from "../../lib/existing-team-agents";
 import { readTeamStatus } from "../../lib/existing-team-status";
-import { officeFromTeamProbe } from "../../office/readonly";
+import { officeFromTeamProbe, officeFromThisComputer } from "../../office/readonly";
 import { readVpsPiles } from "../../office/panel/vps-panels";
 import { cloudClient } from "../../lib/cloud-client";
 import { useLocalTeamData } from "../../lib/local-team-data";
 import OfficeGreeting from "./OfficeGreeting";
 import { readThisComputerAgents } from "../../lib/this-computer-agents";
 import { navigate, useRefresh } from "../../shell/router";
+import { onStreamHint } from "../../lib/state-stream";
 import type { PageProps } from "../types";
 
 
@@ -238,7 +239,11 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
   const probeRead = useRef(0);
   const showProbe = () => {
     if (!parts.data || !engineRef.current) return;
-    const office = officeFromTeamProbe(reading.current, connection, appLocale(), probePiles.current, probeAgents.current);
+    // The team on this computer is its agents' list, as the Agents page reads it; the VPS probe is not asked (JHT-T175).
+    const office =
+      source === "this-computer"
+        ? officeFromThisComputer(probeAgents.current, appLocale(), probePiles.current)
+        : officeFromTeamProbe(reading.current, connection, appLocale(), probePiles.current, probeAgents.current);
     live.current ??= createLiveOffice(parts.data.diff, applyEvent);
     live.current.snapshot(office.snapshot);
     setSnapshot(office.snapshot);
@@ -255,6 +260,17 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     probeRunning.current = true;
     const mine = ++probeRead.current;
     try {
+      if (source === "this-computer") {
+        const agents = await readThisComputerAgents();
+        if (probeRead.current !== mine) return;
+        // the piles are counted only for a team that has someone up; a list that fails leaves the office saying so
+        const piles = agents.kind === "read" && agents.read.agents.length > 0 ? await readVpsPiles() : null;
+        if (probeRead.current !== mine) return;
+        probeAgents.current = agents;
+        probePiles.current = piles;
+        probeShow.current();
+        return;
+      }
       const result = await readTeamStatus();
       // A read that finished after a newer one started, or after leaving the page, is not shown.
       if (probeRead.current !== mine) return;
@@ -264,7 +280,7 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
       probePiles.current = null;
       probeAgents.current = null;
       if (result.kind === "read" && result.fields.containerRunning) {
-        const [piles, agents] = await Promise.all([readVpsPiles(), source === "this-computer" ? readThisComputerAgents() : readTeamAgentsShared()]);
+        const [piles, agents] = await Promise.all([readVpsPiles(), readTeamAgentsShared()]);
         if (probeRead.current !== mine) return;
         probePiles.current = piles;
         probeAgents.current = agents;
@@ -289,15 +305,18 @@ function Office({ ready, source }: { ready: Ready; source: OfficeSource }) {
     const every = source === "this-computer"
       ? setInterval(() => { if (document.visibilityState === "visible") void readProbe(); }, THIS_COMPUTER_OFFICE_READ_MS)
       : undefined;
+    // The state channel says when the agents of this computer change: the office follows at once, not at the next tick.
+    const stopHint = source === "this-computer" ? onStreamHint("agents", () => void readProbe(), 3_000) : undefined;
     return () => {
       if (every !== undefined) clearInterval(every);
+      stopHint?.();
       probeRead.current++;
       probeRunning.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, parts.data]);
   useEffect(() => {
-    if (source !== "cloud" && reading.current.kind !== "unknown") probeShow.current();
+    if (source === "team-probe" && reading.current.kind !== "unknown") probeShow.current();
   }, [source, connection]);
   // «Aggiorna» asks for a read too: the gap holds for it as well
   useRefresh(() => (source === "cloud" ? scheduler.current?.poke() : void readProbe(true)));

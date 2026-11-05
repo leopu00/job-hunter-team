@@ -22,7 +22,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
 | Container runtime | Podman with `--runtime podman`: the path of the app and of 0.4, on macOS and on Linux. Without the flag, macOS uses Colima (or your running Docker) and Linux sets up Docker Engine, as earlier versions did |
 | Expert mode | `--no-docker` (clone + build from source) |
-| OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental |
+| OS support | macOS (Apple silicon in the 0.4 app) · Linux (apt/dnf/pacman), experimental. On Linux this script is the way in: there is no desktop app for Linux in this version |
 | Windows | Windows is not in this version |
 
 ---
@@ -85,7 +85,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_INSTALL_DIR` | `$HOME/.jht/src` | Where the repo lands in native mode |
 | `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in Docker mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
-| `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598` | Content-addressed container image referenced by the compose |
+| `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:298191c0c926b387e7bb385d296881d74c4a7d4d9d3c48c437153cb7f09aaeea` | Content-addressed container image referenced by the compose |
 | `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
@@ -249,7 +249,7 @@ Example output of the older default on macOS (abridged; exact actions depend on 
 ╚══════════════════════════════════════════╝
 
   mode:   Docker (isolated)
-  image:  ghcr.io/leopu00/jht@sha256:07b154bee43f32d2e6313c54f28e389836556e2b5cbe1b76d03398684c38b598
+  image:  ghcr.io/leopu00/jht@sha256:298191c0c926b387e7bb385d296881d74c4a7d4d9d3c48c437153cb7f09aaeea
   branch: production
   runtime:$HOME/.jht/runtime
   dry-run: ON (no changes to the system)

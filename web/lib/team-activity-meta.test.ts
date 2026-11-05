@@ -51,10 +51,10 @@ describe("dmhm", () => {
 });
 
 describe("the role colours of the charts", () => {
-  it("are tokens of the chosen theme, one for each role and all different", async () => {
+  it("come from the main colour of the chosen theme (--cat-N), one for each role and all different", async () => {
     const { ROLE_META } = await import("./team-activity-meta");
     const colors = Object.values(ROLE_META).map((meta) => meta.color);
-    for (const color of colors) expect(color).toMatch(/^var\(--color-[a-z-]+\)$/);
+    for (const color of colors) expect(color).toMatch(/^var\(--cat-\d{1,2}, /);
     expect(new Set(colors).size).toBe(colors.length);
   });
 });

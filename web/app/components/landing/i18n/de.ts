@@ -73,11 +73,10 @@ export const de: Record<string, string> = {
     "Windows: Das Installationsprogramm wird empfohlen.",
   dl_windows_portable_link: "Stattdessen die portable Version herunterladen",
   dl_desktop_unsigned_note:
-    "Unter macOS ist das DMG signiert und notarisiert. Unter Linux ist das Paket nicht signiert; das AppImage muss vor dem Öffnen ausführbar gemacht werden.",
+    "Unter macOS ist das DMG signiert und notarisiert. Für Linux gibt es in dieser Version keine Desktop-App: nutze das Terminal (install.sh).",
   dl_mac_apple_silicon_only:
     "Nur Macs mit Apple Silicon (M1 und neuer). Intel-Macs werden in 0.4 nicht unterstützt.",
   dl_windows_not_in_version: "Nicht in dieser Version",
-  dl_linux_experimental: "Experimentell, nicht von Hand getestet.",
   dl_help_text: "Hast du die App heruntergeladen?",
   dl_help_link: "Folge der Einrichtung Schritt für Schritt",
 

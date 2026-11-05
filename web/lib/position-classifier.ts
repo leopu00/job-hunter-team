@@ -5,15 +5,18 @@
 // letta dal DB e raggruppata. Questo modulo offre solo:
 //   - il tipo `RoleFamilyCount` consumato dalla UI
 //   - `aggregateRoleFamilies()`: somma counts/score/critic per family
-//   - `colorForFamily()`: colore deterministico HSL dal nome family (palette
-//     non hardcoded — qualunque nuova family inventata dall'analista riceve
-//     subito un colore distinto, senza modifiche al codice)
+//   - `FAMILY_PALETTE` / `assignFamilyColors()` / `colorForFamily()`: il colore
+//     di ogni family, sempre dai token del TEMA scelto (mai un hex), uno diverso
+//     per ogni categoria visibile (qualunque nuova family inventata
+//     dall'analista riceve subito un colore, senza modifiche al codice)
 //
 // Storia: prima qui c'era una lista di regex priority-list per dedurre la
 // categoria dal title. Era hardcoded e tarata sui profili dev, dava 81%
 // "Other" sui profili non-dev (technical writer/CAD/translator). Migrata
 // a colonna DB + lettura data-driven il 2026-05-23. Roadmap per la pipeline
 // LLM in `docs/internal/roadmap/2026-05-23-position-classifier-llm-roadmap.md`.
+
+import { categoryColor } from "./category-colors";
 
 export const UNCATEGORIZED_LABEL = "Da categorizzare";
 
@@ -44,17 +47,48 @@ function hashString(s: string): number {
   return Math.abs(h);
 }
 
+// I colori delle categorie derivano dal colore PRINCIPALE del tema scelto (theme-palette.ts): le variabili --cat-N cambiano quando si
+// cambia tema, un tema verde ha sfumature di verde, uno arancio sfumature di arancio. Sono 14, tutti diversi in ogni tema
+// (lo verifica theme-palette.test.ts sui token veri); oltre le 10 voci di un donut non si va, ma una lista piu' lunga ripete in ordine.
+export const FAMILY_PALETTE: readonly string[] = Array.from({ length: 10 }, (_, index) => categoryColor(index));
+
+// Neutri: "Da categorizzare" e "Altre" (la coda del donut) non sono categorie
+// vere, ma sono due voci diverse e non hanno lo stesso grigio.
+const UNCATEGORIZED_COLOR = "var(--color-dim)";
+const OTHER_GROUP_COLOR = "var(--color-muted)";
+
+function isNeutral(name: string): boolean {
+  return !name || name === UNCATEGORIZED_LABEL;
+}
+
+/**
+ * Il colore di UN nome, da solo (il pallino di una posizione nell'elenco): la
+ * casella preferita dal suo hash. Dentro un grafico usa `assignFamilyColors`,
+ * che garantisce un colore diverso per ogni voce.
+ */
 export function colorForFamily(name: string): string {
-  // "Other" e "Da categorizzare" tinta dimmed: stesso slot visivo del resto
-  // ma de-enfatizzato, segnala che non e' una categoria semantica vera.
-  if (!name || name === "Other" || name === UNCATEGORIZED_LABEL) {
-    return "var(--color-dim)";
+  if (isNeutral(name)) return UNCATEGORIZED_COLOR;
+  return FAMILY_PALETTE[hashString(name) % FAMILY_PALETTE.length];
+}
+
+/**
+ * Un colore diverso per ogni nome, NELL'ORDINE in cui arrivano (di solito dal piu' numeroso): il primo prende il colore
+ * principale del tema, il secondo la sua prima variante, e cosi' via fino a 10; poi la palette si ripete in ordine. Cosi' il tipo piu'
+ * grande e' sempre il colore del tema e le prime voci, quelle che si vedono di piu', sono le piu' vicine alla sua famiglia.
+ */
+export function assignFamilyColors(names: readonly string[]): Map<string, string> {
+  const colors = new Map<string, string>();
+  let slot = 0;
+  for (const name of names) {
+    if (colors.has(name)) continue;
+    if (isNeutral(name)) {
+      colors.set(name, UNCATEGORIZED_COLOR);
+      continue;
+    }
+    colors.set(name, FAMILY_PALETTE[slot % FAMILY_PALETTE.length]);
+    slot += 1;
   }
-  // HSL con saturazione/luminosita' calibrate sul tema scuro: tinte
-  // sufficientemente distinte tra family senza spegnersi sullo sfondo
-  // (--color-card e' ~#13161b).
-  const hue = hashString(name) % 360;
-  return `hsl(${hue}, 42%, 60%)`;
+  return colors;
 }
 
 // Etichetta del gruppo che raccoglie la coda lunga del donut. Non è una
@@ -74,6 +108,12 @@ export type RoleFamilyGroup = RoleFamilyCount & {
 // livello — così F&B non si spezza in quattro spicchi da 3% — e manda sotto
 // un'unica voce "Altre" tutto ciò che resta sotto `minShare`. Nessuna lista
 // hardcoded: i gruppi emergono dai dati esattamente come le famiglie.
+// Le voci che si VEDONO nel donut prendono un colore ciascuna, diverso dalle altre.
+function withDistinctColors(groups: RoleFamilyGroup[]): RoleFamilyGroup[] {
+  const colors = assignFamilyColors(groups.map((g) => g.family));
+  return groups.map((g) => ({ ...g, color: colors.get(g.family) ?? g.color }));
+}
+
 export function groupRoleFamilies(
   families: RoleFamilyCount[],
   minShare = 0.03,
@@ -136,13 +176,13 @@ export function groupRoleFamilies(
     (g, i) => g.count / total >= minShare && i < maxSlices - 1,
   );
   const tail = groups.filter((g) => !keep.includes(g));
-  if (tail.length < 2) return groups;
+  if (tail.length < 2) return withDistinctColors(groups);
 
   const head = keep;
   const other: RoleFamilyGroup = {
     family: OTHER_GROUP_LABEL,
     count: tail.reduce((a, g) => a + g.count, 0),
-    color: "var(--color-dim)",
+    color: OTHER_GROUP_COLOR,
     avgScore: null,
     avgCritic: null,
     scores: tail.flatMap((g) => g.scores ?? []),
@@ -151,7 +191,7 @@ export function groupRoleFamilies(
   const s = other.scores ?? [];
   other.avgScore =
     s.length > 0 ? s.reduce((a, v) => a + v, 0) / s.length : null;
-  return [...head, other];
+  return [...withDistinctColors(head), other];
 }
 
 export function aggregateRoleFamilies(
@@ -189,6 +229,7 @@ export function aggregateRoleFamilies(
     }
   }
 
+  const colors = assignFamilyColors(Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([family]) => family));
   return Array.from(counts.entries())
     .map(([family, count]) => {
       const sN = scoreN.get(family) ?? 0;
@@ -196,7 +237,7 @@ export function aggregateRoleFamilies(
       return {
         family,
         count,
-        color: colorForFamily(family),
+        color: colors.get(family) ?? colorForFamily(family),
         avgScore: sN > 0 ? (scoreSum.get(family) ?? 0) / sN : null,
         avgCritic: cN > 0 ? (criticSum.get(family) ?? 0) / cN : null,
         scores: scoresByFamily.get(family) ?? [],

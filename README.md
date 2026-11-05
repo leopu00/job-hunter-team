@@ -87,7 +87,7 @@ team.
 **Before you install:**
 
 - a Mac with Apple silicon (M1 and later, macOS 15 or later: Homebrew's requirement; Intel Macs are not supported in 0.4).
-  Windows is not in this version, and Linux is experimental;
+  Windows and Linux have no desktop app in this version (on Linux, use the CLI below);
 - a supported subscription dedicated to JHT (the provider login happens in
   your browser; the subscription path does not ask for an API key);
 - Homebrew already installed on the Mac: the app installs Podman with it and
@@ -109,12 +109,12 @@ before installing.
 
 **Native office (recommended):** download the current build from
 [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases/latest).
-The release contains `job-hunter-team-macos-universal.dmg` for macOS, and both
-`job-hunter-team-linux-x64.AppImage` and `job-hunter-team-linux-x64.deb` for
-Linux. Windows is not in this version. The macOS build is
+The release contains `job-hunter-team-macos-universal.dmg` for macOS. There is
+no desktop app for Linux in this version: on Linux, use the CLI below
+(`install.sh`). Windows is not in this version. The macOS build is
 signed and notarized and holds only the Apple silicon build (M1 and later; Intel
-Macs are not supported in 0.4), even though the file name says “universal”;
-Linux is experimental, was not tested by hand, and is unsigned. Open the Tauri 2 office and
+Macs are not supported in 0.4), even though the file name says “universal”.
+Open the Tauri 2 office and
 select **Activate team**: the checklist requires all four gates — team runtime,
 provider login with a plan selected, candidate profile and working hours —
 before it starts the agents.

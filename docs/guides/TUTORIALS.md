@@ -22,17 +22,14 @@ Keep the app open while it works.
 
 1. **Download the native desktop app.** Go to
    [jobhunterteam.ai/download](https://jobhunterteam.ai/download). **Desktop**
-   is already selected: click macOS or Linux once (Windows is shown as “Not in this version”) to start the
+   is already selected: click macOS once (Windows is shown as “Not in this version”, and there is no desktop app for Linux in this version) to start the
    current release download for that platform.
 2. **Open the download for your system.** Windows is not part of 0.4.0: there is no Windows installer in this release.
    On macOS, open `job-hunter-team-macos-universal.dmg` and drag the app into
    Applications; it is signed with an Apple Developer ID and notarized by
    Apple. Only Macs with Apple silicon (M1 and later). Intel Macs are not supported in 0.4.
-   The file name says “universal”, but in 0.4 it holds only the Apple silicon build. On Linux, allow `job-hunter-team-linux-x64.AppImage` to run as a
-   program and open it, or install `job-hunter-team-linux-x64.deb` on
-   Debian-based systems. Linux is experimental in 0.4 and was not tested by hand; it can display a platform warning:
-   continue only when the download came from the official site or its linked
-   release.
+   The file name says “universal”, but in 0.4 it holds only the Apple silicon build.
+   There is no desktop app for Linux in this version: use the terminal installer (`install.sh`).
 3. **Choose how to start.** The app uses your system's language, or English
    when it does not have that language. Select **Continue with Google**, or
    select **Use locally**, enter a display name, which stays on this device,
@@ -43,10 +40,9 @@ Keep the app open while it works.
    Homebrew, which must already be installed (it needs macOS 15 or later);
    without it, the app says so before installing anything. It creates a Podman
    machine with 2 CPUs, 4 GiB of memory and a disk of up to 30 GiB, so a Mac with
-   at least 16 GB of RAM is recommended. On Linux the app uses rootless Podman
-   (5.0 or later) with podman-compose, installed with `sudo` for your user: sudo
-   must work without asking for a password. The Linux release is experimental
-   and this setup has not been tested by hand. For a VPS, enter its address, the SSH user, the port
+   at least 16 GB of RAM is recommended. There is no desktop app for Linux in this version:
+   the terminal installer (`install.sh`) sets up rootless Podman (5.0 or later)
+   with podman-compose. For a VPS, enter its address, the SSH user, the port
    and the private key file, which stays on this computer.
 5. **Choose the provider.** Select Codex, then
    **Review the setup**. You sign in with your subscription later in the setup:

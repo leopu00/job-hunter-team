@@ -39,15 +39,15 @@ export const APPPW = "https://myaccount.google.com/apppasswords";
 export const GMX = "https://signup.gmx.com";
 
 // L'app desktop della 0.4 è solo per Mac con Apple silicon: i passaggi della
-// guida che la citano valgono lì (Windows non c'è in questa versione, Linux è sperimentale).
+// guida che la citano valgono lì (Windows non c'è in questa versione, per Linux non c'è l'app desktop).
 export const DESKTOP_NOTE: Record<string, string> = {
-  it: "Nota: l'app desktop citata in questa guida è per i Mac con Apple silicon. Windows non è in questa versione e Linux è sperimentale.",
-  en: "Note: the desktop app mentioned in this guide is for Macs with Apple silicon. Windows is not in this version and Linux is experimental.",
-  es: "Nota: la app de escritorio mencionada en esta guía es para Mac con Apple silicon. Windows no está en esta versión y Linux es experimental.",
-  fr: "Remarque : l'application de bureau mentionnée dans ce guide est pour les Mac Apple silicon. Windows n'est pas dans cette version et Linux est expérimental.",
-  de: "Hinweis: Die in dieser Anleitung erwähnte Desktop-App ist für Macs mit Apple silicon. Windows ist in dieser Version nicht enthalten und Linux ist experimentell.",
-  hu: "Megjegyzés: az útmutatóban említett asztali app Apple silicon Macekhez készült. A Windows nincs benne ebben a verzióban, a Linux pedig kísérleti.",
-  pt: "Nota: a app de ambiente de trabalho mencionada neste guia é para Macs com Apple silicon. O Windows não está nesta versão e o Linux é experimental.",
+  it: "Nota: l'app desktop citata in questa guida è per i Mac con Apple silicon. Windows non è in questa versione e per Linux non c'è l'app desktop.",
+  en: "Note: the desktop app mentioned in this guide is for Macs with Apple silicon. Windows is not in this version and Linux has no desktop app.",
+  es: "Nota: la app de escritorio mencionada en esta guía es para Mac con Apple silicon. Windows no está en esta versión y para Linux no hay app de escritorio.",
+  fr: "Remarque : l'application de bureau mentionnée dans ce guide est pour les Mac Apple silicon. Windows n'est pas dans cette version et il n'y a pas d'application de bureau pour Linux.",
+  de: "Hinweis: Die in dieser Anleitung erwähnte Desktop-App ist für Macs mit Apple silicon. Windows ist in dieser Version nicht enthalten und für Linux gibt es keine Desktop-App.",
+  hu: "Megjegyzés: az útmutatóban említett asztali app Apple silicon Macekhez készült. A Windows nincs benne ebben a verzióban, Linuxra pedig nincs asztali app.",
+  pt: "Nota: a app de ambiente de trabalho mencionada neste guia é para Macs com Apple silicon. O Windows não está nesta versão e não há app de ambiente de trabalho para Linux.",
 };
 
 export type Strings = {

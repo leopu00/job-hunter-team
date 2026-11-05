@@ -148,34 +148,6 @@ const SCREEN_LIST: GuideScreen[] = [
     pending: "Tolta: la 0.4 non ha Windows. Nessuna ripresa da fare.",
   },
   {
-    id: "S04-installation-linux",
-    alt: {
-      en: "The extracted Linux binary ready to run.",
-      it: "Il binario Linux estratto, pronto all'esecuzione.",
-      es: "El binario de Linux extraído, listo para ejecutarse.",
-      fr: "Le binaire Linux extrait, prêt à être lancé.",
-      de: "Die entpackte Linux-Binärdatei, bereit zum Start.",
-      pt: "O binário Linux extraído, pronto a executar.",
-      hu: "A kicsomagolt Linux-bináris, futtatásra készen.",
-    },
-    caption: {
-      en: "Allow it to run: the executable permission may need enabling first.",
-      it: "Consentine l'esecuzione: il permesso di eseguire può richiedere un passaggio in più.",
-      es: "Permite su ejecución: puede que antes haya que activar el permiso de ejecución.",
-      fr: "Autorisez son exécution : le droit d'exécution peut devoir être activé d'abord.",
-      de: "Erlaube die Ausführung: Das Ausführungsrecht muss eventuell erst gesetzt werden.",
-      pt: "Permite a execução: pode ser preciso ativar antes a permissão de execução.",
-      hu: "Engedélyezd a futtatást: előbb szükség lehet a futtatási jog beállítására.",
-    },
-    assets: {
-      linux: {
-        src: "/setup-guide/S04-installation-linux.png",
-        width: 1920,
-        height: 1080,
-      },
-    },
-  },
-  {
     id: "S05-first-launch",
     alt: {
       en: "The first clean launch of the app.",

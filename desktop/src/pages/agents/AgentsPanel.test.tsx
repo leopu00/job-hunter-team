@@ -62,6 +62,7 @@ let burnIntent: Record<string, unknown> | undefined;
 let actionReply: Record<string, unknown> = { ok: true, data: { result: "stopped" } };
 let ownVps: string | undefined;
 let historyReply: Record<string, unknown> | null = null;
+let activityReply: ((window: string) => Record<string, unknown>) | null = null;
 const listReply = () => ({
   ok: true,
   data: { agents: AGENTS, roles: ROLES, states: true, target, where, label: "vps.example", ...(ownVps ? { ownVps } : {}) },
@@ -81,6 +82,7 @@ beforeEach(() => {
   actionReply = { ok: true, data: { result: "stopped" } };
   ownVps = undefined;
   historyReply = null;
+  activityReply = null;
   try {
     window.localStorage.clear();
   } catch {
@@ -98,6 +100,7 @@ beforeEach(() => {
     if (op === "team") return { ok: true, data: { halted: false, standby, held, ...(burnIntent ? { burnIntent } : {}) } };
     if (op === "screen") return { ok: true, data: { name: args.request.session, up: true, text: "<b>not html</b>\nworking" } };
     if (op === "history") return historyReply ?? { ok: false, error: "agent_control_unsupported" };
+    if (op === "activity") return activityReply ? activityReply(String(args.request.window)) : { ok: false, error: "agents_unavailable" };
     return actionReply;
   });
   vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("no network"); }));
@@ -1128,31 +1131,100 @@ describe("«Agenti», the previous sessions and the lanes of the last day", () =
     expect(await screen.findByTestId("panel-history")).toHaveTextContent("Lo storico parte da");
   });
 
-  it("shows the last day as a gantt on request: one row per agent, one bar per session, the times written and not only coloured", async () => {
-    historyReply = HISTORY();
+  // What each agent worked on (JHT-T171): the native side's answer for a window, as the panel gets it.
+  const WINDOWS: Record<string, [number, number]> = { "5m": [300, 15], "15m": [900, 60], "1h": [3600, 120], "5h": [18000, 600], "24h": [86400, 1800], "7d": [604800, 10800] };
+  const ACTIVITY = (agents: { name: string; state?: string | null; at?: Record<number, number> }[]) => (window: string) => {
+    const [span, bucket] = WINDOWS[window];
+    const count = span / bucket;
+    const end = Math.floor(NOW_S / 10800) * 10800 + 10800;
+    return {
+      ok: true,
+      data: {
+        window, now: end - 5, since: end - span, end, bucketS: bucket, buckets: count, unattributedKt: null, states: true,
+        agents: agents.map((a) => {
+          const kt = Array(count).fill(0);
+          for (const [index, value] of Object.entries(a.at ?? {})) kt[Number(index) < 0 ? count + Number(index) : Number(index)] = value;
+          const work = kt.map((v: number) => (v > 0 ? 1 : 0));
+          if (a.state === "lavora") work[count - 1] = 1;
+          const totalKt = Math.round(kt.reduce((x: number, y: number) => x + y, 0) * 100) / 100;
+          return { name: a.name, state: a.state ?? "idle", kt, work, totalKt, avgKtH: Math.round((totalKt / (span / 3600)) * 100) / 100, workedBuckets: work.filter(Boolean).length };
+        }),
+      },
+    };
+  };
+
+  it("shows the WORK of the window, not the sessions: a row per agent, a cell per bucket with tokens, the total and the average at the right", async () => {
+    activityReply = ACTIVITY([
+      { name: "SCOUT-1", state: "lavora", at: { 10: 2.5, 11: 1, [-3]: 4 } },
+      { name: "CAPITANO", state: "idle", at: { 5: 0.5 } },
+      { name: "MENTOR", state: "idle" },
+    ]);
     show();
     fireEvent.click(await screen.findByTestId("panel-view-lanes"));
-    const scout = await screen.findByTestId("panel-lane-SCOUT-1");
-    const bars = scout.querySelectorAll("[data-testid='panel-bar-SCOUT-1']");
-    // SCOUT-1 has a running session, one that was restarted 5 h ago, one that stopped 8 h ago and one traced for a day with no end
-    expect(bars.length).toBeGreaterThanOrEqual(3);
-    const running = Array.from(bars).find((bar) => /ora/.test(bar.getAttribute("aria-label") ?? ""));
-    expect(running).toBeDefined();
-    expect(running!.getAttribute("aria-label")).toMatch(/^SCOUT-1 · \d{2}:\d{2}–ora/);
-    // the bar of a session whose end nobody wrote is a mark, and it says so
-    const unknownEnd = Array.from(bars).filter((bar) => bar.getAttribute("data-known") === "false");
-    for (const bar of unknownEnd) expect(bar.getAttribute("aria-label")).toContain("fine non registrata");
-    // the list is gone while the gantt is shown, and comes back
+    const scout = await screen.findByTestId("work-lane-SCOUT-1");
+    const cells = scout.querySelectorAll("[data-work]");
+    expect(cells).toHaveLength(48); // the default window is the last day: 48 half-hours
+    // three buckets with tokens + the last one for «at work now»: 4 coloured cells, never the whole row
+    expect(Array.from(cells).filter((c) => c.getAttribute("data-work") === "1")).toHaveLength(4);
+    expect(screen.getByTestId("work-total-SCOUT-1")).toHaveTextContent("7,5 kT");
+    expect(screen.getByTestId("work-avg-SCOUT-1")).toHaveTextContent("0,3 kT/h");
+    expect(screen.getByTestId("work-now-SCOUT-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("work-now-CAPITANO")).toBeNull();
+    // an agent whose session is up but wrote nothing has an empty row and says so: the old bars were full for everyone
+    const mentor = screen.getByTestId("work-lane-MENTOR");
+    expect(Array.from(mentor.querySelectorAll("[data-work]")).every((c) => c.getAttribute("data-work") === "0")).toBe(true);
+    expect(mentor.querySelector("[role='img']")).toHaveAttribute("aria-label", "MENTOR · nessun lavoro in questa finestra");
+    expect(screen.getByTestId("work-summary")).toHaveTextContent("2 agenti su 3 hanno lavorato · 8 kT in totale");
+    // the sessions' bars are not on this page any more
+    expect(screen.queryByTestId("panel-lanes")).toBeNull();
     expect(screen.queryByTestId("panel-row-SCOUT-1")).toBeNull();
     fireEvent.click(screen.getByTestId("panel-view-list"));
     expect(await screen.findByTestId("panel-row-SCOUT-1")).toBeInTheDocument();
   });
 
-  it("says no agent was up when the history holds no session of the last day", async () => {
-    historyReply = HISTORY({ items: [] });
+  it("writes the time of a cell and its tokens, so the colour is never the only thing it says", async () => {
+    activityReply = ACTIVITY([{ name: "SCOUT-1", at: { 10: 2.5 } }]);
     show();
     fireEvent.click(await screen.findByTestId("panel-view-lanes"));
-    expect(await screen.findByTestId("panel-lanes-empty")).toHaveTextContent("Nessun agente acceso nelle ultime 24 ore");
+    const cell = (await screen.findByTestId("work-lane-SCOUT-1")).querySelector("[data-work='1']")!;
+    expect(cell.getAttribute("title")).toMatch(/^SCOUT-1 · \d{2}:\d{2}–\d{2}:\d{2} · 2,5 kT$/);
+  });
+
+  it("asks the window the person picks, remembers it, and says «reading» until the answer of that window is in", async () => {
+    activityReply = ACTIVITY([{ name: "SCOUT-1", at: { 3: 1 } }]);
+    show();
+    fireEvent.click(await screen.findByTestId("panel-view-lanes"));
+    await screen.findByTestId("work-lane-SCOUT-1");
+    expect(ops().filter((r) => r.op === "activity").map((r) => r.window)).toEqual(["24h"]);
+    expect(screen.getByTestId("work-window-24h")).toHaveAttribute("aria-pressed", "true");
+    for (const [window, count] of [["5m", 20], ["15m", 15], ["1h", 30], ["5h", 30], ["7d", 56]] as const) {
+      fireEvent.click(screen.getByTestId(`work-window-${window}`));
+      await waitFor(() => expect(screen.getByTestId("work-lane-SCOUT-1").querySelectorAll("[data-work]")).toHaveLength(count));
+      expect(screen.getByTestId(`work-window-${window}`)).toHaveAttribute("aria-pressed", "true");
+    }
+    expect(ops().filter((r) => r.op === "activity").map((r) => r.window)).toEqual(["24h", "5m", "15m", "1h", "5h", "7d"]);
+    expect(window.localStorage.getItem("jht-agents-work-window")).toBe("7d");
+    cleanup();
+    show();
+    expect(await screen.findByTestId("work-window-7d")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does not ask for the work while the list is shown", async () => {
+    activityReply = ACTIVITY([{ name: "SCOUT-1" }]);
+    show();
+    expect(await screen.findByTestId("panel-summary")).toBeInTheDocument();
+    expect(ops().some((r) => r.op === "activity")).toBe(false);
+  });
+
+  it("says no agent worked in the window, and that the work cannot be read, in words", async () => {
+    activityReply = ACTIVITY([]);
+    show();
+    fireEvent.click(await screen.findByTestId("panel-view-lanes"));
+    expect(await screen.findByTestId("work-empty")).toHaveTextContent("Nessun agente ha lavorato in questa finestra.");
+    cleanup();
+    activityReply = null; // an image without the read: the closed error
+    show();
+    expect(await screen.findByTestId("work-unavailable")).toHaveTextContent("Il lavoro degli agenti non si legge");
   });
 
   it("starts on the list when the browser keeps nothing, and the failed history never fails the list", async () => {
@@ -1168,10 +1240,15 @@ describe("«Agenti», the previous sessions and the lanes of the last day", () =
         "historyTitle", "historyReading", "historyUnavailable", "historyEmpty", "historyRunning", "historyRestarted", "historyStopped",
         "historyContained", "historyRetired", "historyStartedAgain", "historyUnknown", "unitDay", "unitHour", "unitMin", "viewLabel",
         "viewList", "viewLanes", "lanesTitle", "lanesHelp", "lanesEmpty", "lanesEndUnknown", "lanesAxisStart", "lanesAxisEnd",
+        "workTitle", "workHelp", "workWindowLabel", "window5m", "window15m", "window1h", "window5h", "window24h", "window7d", "workSummary",
+        "workColTotal", "workColAvg", "workEmpty", "workReading", "workUnavailable", "workNowWorking", "workNoWork", "workCellLabel", "sessionsTitle",
       ] as const) {
         expect(text[key], `${locale} ${key}`).toMatch(/\S/);
       }
       expect(text.historySince, locale).toContain("{time}");
+      expect(text.workSummary, locale).toMatch(/\{working\}.*\{total\}|\{total\}.*\{working\}/);
+      expect(text.workSummary, locale).toContain("{kt}");
+      expect(text.workCellLabel, locale).toMatch(/\{agent\}.*\{from\}.*\{to\}.*\{kt\}/);
       for (const forms of [text.historyFailed]) {
         expect(forms.one, locale).toContain("{count}");
         expect(forms.other, locale).toContain("{count}");

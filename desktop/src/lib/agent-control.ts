@@ -202,6 +202,92 @@ export async function readPanelHistory(): Promise<Outcome<PanelHistory>> {
   return history ? { ok: true, at: read.at, value: history } : { ok: false, at: read.at, code: "desktop_bad_reply" };
 }
 
+/** The windows of the activity read, the page's six; the container, the CLI and the native side check the same words. */
+export const ACTIVITY_WINDOWS = ["5m", "15m", "1h", "5h", "24h", "7d"] as const;
+export type ActivityWindow = (typeof ACTIVITY_WINDOWS)[number];
+const ACTIVITY_SHAPE: Record<ActivityWindow, { spanS: number; bucketS: number }> = {
+  "5m": { spanS: 300, bucketS: 15 },
+  "15m": { spanS: 900, bucketS: 60 },
+  "1h": { spanS: 3600, bucketS: 120 },
+  "5h": { spanS: 18_000, bucketS: 600 },
+  "24h": { spanS: 86_400, bucketS: 1800 },
+  "7d": { spanS: 604_800, bucketS: 10_800 },
+};
+
+/** What one agent worked on in the window: the tokens of each bucket (kT), and a mark for each bucket it worked in. */
+export type AgentActivity = {
+  /** agent session name, upper case */
+  name: string;
+  /** a state word of the team (`lavora`, `idle`, …) or null: only the last bucket is marked by it */
+  state: string | null;
+  kt: number[];
+  /** 1 = worked in that bucket: it wrote tokens, or it is `lavora` now (the last one). The ONE definition of «work». */
+  work: (0 | 1)[];
+  totalKt: number;
+  avgKtH: number;
+  workedBuckets: number;
+};
+
+export type PanelActivity = {
+  window: ActivityWindow;
+  /** epoch s: the window starts at `since` and ends at `end`, in `buckets` buckets of `bucketS` s, aligned to the clock */
+  since: number;
+  end: number;
+  now: number;
+  bucketS: number;
+  buckets: number;
+  /** the biggest first */
+  agents: AgentActivity[];
+  /** kT written by a session no agent owns; null when not known */
+  unattributedKt: number | null;
+  /** false: the team could not say who is `lavora`, so the last bucket is only tokens */
+  states: boolean;
+};
+
+const kt = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1e9 ? value : null;
+
+/** The activity the native side shaped, checked once more against the window that was asked: anything off is not used. */
+export function pickActivity(data: Record<string, unknown>, window: ActivityWindow): PanelActivity | null {
+  const shape = ACTIVITY_SHAPE[window];
+  if (!shape || data.window !== window || data.bucketS !== shape.bucketS || !Array.isArray(data.agents)) return null;
+  const buckets = shape.spanS / shape.bucketS;
+  const since = seconds(data.since);
+  const end = seconds(data.end);
+  const now = seconds(data.now);
+  if (data.buckets !== buckets || since === null || end === null || now === null || end - since !== shape.spanS || end % shape.bucketS !== 0) return null;
+  const agents: AgentActivity[] = [];
+  const seen = new Set<string>();
+  for (const raw of data.agents) {
+    if (!isRecord(raw) || typeof raw.name !== "string" || seen.has(raw.name) || !Array.isArray(raw.kt) || !Array.isArray(raw.work)) continue;
+    if (raw.kt.length !== buckets || raw.work.length !== buckets) continue;
+    const tokens = raw.kt.map(kt);
+    const marks = raw.work.map((mark) => (mark === 0 || mark === 1 ? mark : null));
+    const totalKt = kt(raw.totalKt);
+    const avgKtH = kt(raw.avgKtH);
+    if (tokens.some((v) => v === null) || marks.some((v) => v === null) || totalKt === null || avgKtH === null) continue;
+    seen.add(raw.name);
+    agents.push({
+      name: raw.name,
+      state: typeof raw.state === "string" && raw.state.length <= 40 ? raw.state : null,
+      kt: tokens as number[],
+      work: marks as (0 | 1)[],
+      totalKt,
+      avgKtH,
+      workedBuckets: (marks as number[]).reduce((a, b) => a + b, 0),
+    });
+  }
+  return { window, since, end, now, bucketS: shape.bucketS, buckets, agents, unattributedKt: kt(data.unattributedKt), states: data.states === true };
+}
+
+/** What each agent worked on in `window`: one answer for every view of the Agents page. */
+export async function readPanelActivity(window: ActivityWindow): Promise<Outcome<PanelActivity>> {
+  const read = await call({ op: "activity", window });
+  if (!read.ok) return read;
+  const activity = pickActivity(read.value, window);
+  return activity ? { ok: true, at: read.at, value: activity } : { ok: false, at: read.at, code: "desktop_bad_reply" };
+}
+
 /** The terminal of an agent, and how soon to read it again (`refreshMs`, the native side's pace; absent from an older one). */
 export async function readPanelScreen(
   session: string,

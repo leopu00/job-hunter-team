@@ -66,7 +66,8 @@ describe("SwipePage of a local profile", () => {
     render(<SwipePage client={client} />);
     expect(await screen.findByText("Sviluppatrice di prova")).toBeInTheDocument();
     expect(queries).toEqual([]);
-    expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["local_swipe_deck_read", "existing_team_positions_read"]);
+    // The card's description is read right after the deck shows: wait for that second read instead of racing it.
+    await waitFor(() => expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["local_swipe_deck_read", "existing_team_positions_read"]));
     expect(screen.queryByTestId("cloud-data-notice")).toBeNull();
   });
 

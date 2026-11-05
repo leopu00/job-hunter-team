@@ -70,7 +70,8 @@ test('it says what Codex reports and whether the plan has a 5-hour window, from 
     JSON.stringify({ plan_type: 'prolite', single_weekly: false, observed_at: Date.now() / 1000 }));
   const done = plan(dir);
   assert.equal(done.status, 0, done.stderr);
-  assert.match(done.stdout, /Codex reports: prolite → Pro 100 \$/);
+  assert.match(done.stdout, /Codex reports: prolite → Pro\n/);
+  assert.doesNotMatch(done.stdout, /\$/);
   assert.match(done.stdout, /pro\s+Pro .*\[weekly cap, 5-hour window\]/);
   assert.match(done.stdout, /plus\s+Plus .*\[weekly cap, no 5-hour window\]/);
 });
@@ -148,7 +149,7 @@ test('--json without an id: the plans, the declared one and the suggestion, as o
   assert.equal(answer.provider, 'openai');
   assert.equal(answer.declared, null);
   assert.deepEqual(answer.plans.map((p) => p.id), ['plus', 'pro', 'pro-max']);
-  assert.ok(answer.plans.every((p) => typeof p.label === 'string' && typeof p.price === 'string'));
+  assert.ok(answer.plans.every((p) => typeof p.label === 'string' && !('price' in p)), 'names and ids only: a third party\'s prices are not ours to state');
   assert.equal(answer.suggested, null);
   assert.equal(readFileSync(join(dir, 'jht.config.json'), 'utf8'), JSON.stringify({ active_provider: 'codex' }, null, 2), 'reading writes nothing');
 });

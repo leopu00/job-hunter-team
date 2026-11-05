@@ -64,18 +64,16 @@ def run_validator(path: Path, *flags: str) -> dict:
 def test_plan_table_is_the_registry_table_of_codex():
     plans = plan_registry().PLANS["openai"]
     body = section(CLI, "### Choosing your plan")
-    rows = re.findall(r"^\| `([a-z0-9-]+)`\s*\| ([^|]+?)\s*\| ([^|]+?)\s*\|$", body, re.M)
-    assert [(i, n, p) for i, n, p in rows] == [
-        (plan["id"], plan["label"], plan["price"]) for plan in plans
-    ]
+    rows = re.findall(r"^\| `([a-z0-9-]+)`\s*\| ([^|]+?)\s*\|$", body, re.M)
+    assert [(i, n) for i, n in rows] == [(plan["id"], plan["label"]) for plan in plans]
+    # the guide names the ids and the plans, never the prices of a third party (they change and are not ours to state)
+    assert "$" not in body and "price" not in body.lower()
 
 
-def test_prolite_is_the_hundred_dollar_plan_which_is_declared_as_pro():
+def test_prolite_is_declared_as_pro():
     body = flat(section(CLI, "### Choosing your plan"))
-    assert "Codex names your plan **ProLite**" in body
-    assert "100 $/month one: declare `pro`" in body
-    pro = next(plan for plan in plan_registry().PLANS["openai"] if plan["id"] == "pro")
-    assert pro["price"] == "100 $/month"
+    assert "If Codex names your plan **ProLite**, declare `pro`." in body
+    assert any(plan["id"] == "pro" for plan in plan_registry().PLANS["openai"])
 
 
 def test_reading_the_plan_does_not_start_the_container_and_the_guide_says_so():
