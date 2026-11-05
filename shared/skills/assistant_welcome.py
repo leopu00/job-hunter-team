@@ -119,7 +119,11 @@ def welcome_texts() -> tuple[str, str]:
     opening = _opening(base)
     if (jht_home() / "profile" / READY_FLAG).exists():
         ready = _lookup(t, "welcome.assistente_ready")
-        return opening, f"{opening}\n\n{ready}" if ready else opening
+        # the greeting and a line on who she is that does not say the team is about to start (it is working): the
+        # welcome is known by the greeting and the brand's name, so it stays the welcome
+        who = _lookup(t, "welcome.assistente_ready_who")
+        head = f"{base.split(chr(10) * 2)[0]}\n\n{who}" if who else opening
+        return opening, f"{head}\n\n{ready}" if ready else head
     first = _lookup(t, "welcome.assistente_first")
     return opening, f"{base}\n\n{first}" if first else base
 

@@ -113,8 +113,10 @@ def test_a_ready_profile_gets_the_welcome_without_the_question_and_without_the_r
     home.ready.write_text("2031-01-01T10:00:00Z\n", encoding="utf-8")
     home.deliver()
     [line] = home.lines()
-    opening = "\n\n".join(EN["welcome.assistente"].split("\n\n")[:2])
-    assert line["text"] == opening + "\n\n" + EN["welcome.assistente_ready"]
+    greeting = EN["welcome.assistente"].split("\n\n")[0]
+    assert line["text"] == greeting + "\n\n" + EN["welcome.assistente_ready_who"] + "\n\n" + EN["welcome.assistente_ready"]
+    # the team is working, not about to start
+    assert "about to start" not in line["text"]
     # nothing is left to send: no CV, no upload command, no folder, no question
     for asked in ("CV", "jht artifact upload", "allegati", EN["welcome.assistente_first"]):
         assert asked not in line["text"], asked
@@ -437,3 +439,17 @@ def test_the_ready_welcome_has_the_same_opening_in_every_language_and_asks_for_n
     # the opening (greeting and who it is) is the one every welcome since the first has: that is how a welcome is known
     greeting = catalog["welcome.assistente"].split("\n", 1)[0]
     assert greeting.endswith("\U0001F44B") and "Job Hunter Team" in "\n\n".join(catalog["welcome.assistente"].split("\n\n")[:2])
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_ready_welcome_says_who_she_is_without_saying_the_team_is_about_to_start_and_is_still_the_welcome(home, lang):
+    catalog = _catalog(lang)
+    who, base = catalog["welcome.assistente_ready_who"], catalog["welcome.assistente"]
+    paragraphs = base.split("\n\n")
+    assert who.strip() and "\n" not in who and "?" not in who
+    # a line of its own, not the shared one, and it names the brand as the shared one does
+    assert who != paragraphs[1] and "Job Hunter Team" in who
+    text = paragraphs[0] + "\n\n" + who + "\n\n" + catalog["welcome.assistente_ready"]
+    home.chat.parent.mkdir(parents=True, exist_ok=True)
+    home.chat.write_text(json.dumps({"role": "assistant", "text": text}) + "\n", encoding="utf-8")
+    assert "chat=already" in home.deliver().stdout
