@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { apiPath, json, type ApiFetch } from "../shell/api-bridge";
 import { localPositionToken, localPositionTokenIsDeck } from "./local-swipe";
-import { localTeamData } from "./local-team-data";
+import { localTeamData, localTeamShowsSavedData } from "./local-team-data";
 
 /**
  * What the person does on a position, when the profile shows the team of this computer (no cloud account):
@@ -287,6 +287,8 @@ export function localJudgementApi(
     if (body === null) return invalid("invalid_json");
     const built = route.build(route.path.exec(path)![1]!, body);
     if (built instanceof Response) return built;
+    // The pages show what the team saved while it is off: nothing is written to it from them, and the sentence says why.
+    if (localTeamShowsSavedData()) return json({ error: "local_team_not_running" }, 503);
     const token = localPositionToken(built.id);
     if (!token) return json({ error: "deck_outdated" }, 409);
     // The Swipe's three ops on a card of the deck keep their command; everything else is the page's.

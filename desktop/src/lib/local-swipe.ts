@@ -98,7 +98,10 @@ export async function getSwipeDecksLocal(): Promise<Decks> {
     reportLocalTeamRead("desktop_bad_reply");
     throw new LocalSwipeError("desktop_bad_reply");
   }
-  reportLocalTeamRead(null);
+  // Made from the data the team saved while it is off: it names no file, so no token is kept for it and no verdict goes out of it.
+  const saved = isRecord(answer.saved) ? answer.saved : null;
+  const mark = saved ? { at: typeof saved.at === "number" && Number.isFinite(saved.at) && saved.at > 0 ? saved.at : null } : null;
+  reportLocalTeamRead(null, mark);
   const decks = {
     pending: pending.filter(isRecord).map(card),
     reviewed: reviewed.filter(isRecord).flatMap((item) =>
@@ -107,6 +110,8 @@ export async function getSwipeDecksLocal(): Promise<Decks> {
         : [],
     ),
   };
-  tokens = new Map([...decks.pending, ...decks.reviewed.map((r) => r.position)].map((position) => [String(position.legacy_id), token]));
+  tokens = mark
+    ? new Map()
+    : new Map([...decks.pending, ...decks.reviewed.map((r) => r.position)].map((position) => [String(position.legacy_id), token]));
   return decks;
 }

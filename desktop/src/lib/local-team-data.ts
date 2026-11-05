@@ -84,3 +84,8 @@ export function useLocalTeamStopped(): boolean {
 export function useLocalTeamSavedAt(): number | null {
   return useSyncExternalStore(subscribe, () => (identity !== null ? savedAt : null), () => null);
 }
+
+/** Whether the pages show what the team saved (its container is off): a verdict or a change cannot be written to it from them. */
+export function localTeamShowsSavedData(): boolean {
+  return identity !== null && savedAt !== null;
+}

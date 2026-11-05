@@ -1,7 +1,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { forgetLocalDeck, getSwipeDecksLocal, LocalSwipeError, localDeckToken } from "./local-swipe";
-import { setLocalTeamData, useLocalTeamStopped } from "./local-team-data";
+import { setLocalTeamData, useLocalTeamSavedAt, useLocalTeamStopped } from "./local-team-data";
 
 // The Swipe of a local profile reads its decks from the team on this computer, and keeps the token the deck
 // came with for the verdict that follows. Synthetic data only.
@@ -40,6 +40,22 @@ describe("getSwipeDecksLocal", () => {
     // a declared salary is preferred to an estimated one, as the web's deck does
     expect(decks.pending[1]).toMatchObject({ salary_min: 50000, salary_max: 60000, salary_currency: "EUR" });
     expect(decks.reviewed.map((r) => [r.position.legacy_id, r.action, r.fb_score])).toEqual([[9, "like", 4], [10, "dislike", null]]);
+  });
+
+  it("shows the deck the team saved while it is off, tells the bar, and keeps no token: a verdict cannot go out of it", async () => {
+    const savedAt = renderHook(() => useLocalTeamSavedAt());
+    native.invoke.mockResolvedValueOnce({ ok: true, token: "tag.0.0", pending: [row(7)], reviewed: [{ row: row(9), action: "like", fbScore: 4 }], saved: { at: 1793879580 } });
+    const decks = await getSwipeDecksLocal();
+    expect(decks.pending.map((p) => p.legacy_id)).toEqual([7]);
+    expect(decks.reviewed.map((r) => r.position.legacy_id)).toEqual([9]);
+    expect(localDeckToken("7")).toBeNull();
+    expect(localDeckToken("9")).toBeNull();
+    await vi.waitFor(() => expect(savedAt.result.current).toBe(1793879580));
+    // the team is up again: the deck is the team's and its token is kept
+    native.invoke.mockResolvedValueOnce({ ok: true, token: "live-token", pending: [row(7)], reviewed: [] });
+    await getSwipeDecksLocal();
+    expect(localDeckToken("7")).toBe("live-token");
+    await vi.waitFor(() => expect(savedAt.result.current).toBeNull());
   });
 
   it("forgets the token of the last deck before it reads again, and keeps none for a read that failed", async () => {

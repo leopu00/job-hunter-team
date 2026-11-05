@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localJudgementApi, type LocalJudgementNative } from "./local-judgement-api";
 import { forgetLocalDeck, forgetLocalPositionTokens, getSwipeDecksLocal, rememberLocalPositionToken } from "./local-swipe";
-import { setLocalTeamData } from "./local-team-data";
+import { reportLocalTeamRead, setLocalTeamData } from "./local-team-data";
 
 // The verdicts of the Swipe of a local profile: three routes answered by the native command with the token of
 // the deck being judged, never by the cloud. Synthetic data only.
@@ -30,6 +30,22 @@ afterEach(() => {
   forgetLocalDeck();
   forgetLocalPositionTokens();
   setLocalTeamData(null);
+});
+
+describe("a verdict while the pages show what the team saved", () => {
+  it("is not sent: the sentence is «the team is not running», not «the deck is outdated», and nothing is written", async () => {
+    reportLocalTeamRead(null, { at: 1793879580 });
+    const answer = await post("7/feedback", { action: "dislike" });
+    expect(answer.status).toBe(503);
+    expect(await answer.json()).toEqual({ error: "local_team_not_running" });
+    expect(write).not.toHaveBeenCalled();
+    expect(act).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    // the team is up: the same verdict goes out again
+    reportLocalTeamRead(null);
+    write.mockResolvedValue({ ok: true, op: "feedback", value: "dislike" });
+    expect((await post("7/feedback", { action: "dislike" })).status).toBe(200);
+  });
 });
 
 describe("a verdict of a local profile", () => {

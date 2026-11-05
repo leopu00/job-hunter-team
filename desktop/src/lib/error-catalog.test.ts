@@ -27,6 +27,7 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
   // host_positions.rs (the positions the app reads from the saved data of a team that is off): the names of the columns of the
   // team's tables and of the fields of the answers (the same ones the script of existing_team_runtime.rs gives), the codes of the
   // scam signals and the public states. Words of a closed table, never shown as an error.
