@@ -25,6 +25,13 @@ $RuntimeShimDir = Join-Path $RuntimeDir 'bin'
 $JhtHome = Join-Path $env:USERPROFILE '.jht'
 $PodmanRegistryPaths = @('HKCU:\SOFTWARE\Podman', 'HKLM:\SOFTWARE\Podman')
 $PodmanCliVersion = '6.0.2'
+# Podman for THIS Windows user without winget, the Windows Installer or an administrator (JHT-T184, JHT-T144): the official
+# release's zip, pinned like docker-compose below. The SHA-256 is that of the asset of the release named by $PodmanCliVersion;
+# changing the version means changing it (tests/test_podman_windows_setup_retry.py reads both from here). Nothing is
+# extracted before the digest matches, and only the three programs named here are taken out, by their exact names.
+$PodmanZipUrl = "https://github.com/containers/podman/releases/download/v$PodmanCliVersion/podman-remote-release-windows_amd64.zip"
+$PodmanZipSha256 = '2c055d363de03de917f79568a78b7d5902fc40453bbcc141ca18cf0a1fa1b78e'
+$PodmanZipPrograms = @('podman.exe', 'gvproxy.exe', 'win-sshproxy.exe')
 $ComposeProviderVersion = '5.1.2'
 # JHT's own docker-compose.exe, private to the runtime: never one found in
 # PATH (Docker Desktop ships its own, of another version). The release asset
@@ -534,6 +541,87 @@ function Get-PodmanVersion {
   return $null
 }
 
+# The folder of Podman for this user is added to this user's PATH (as Podman's own per-user MSI does), once, where the
+# user's PATH lives (HKCU\Environment, kept as the expandable string it is), and to this process's PATH. The system is told
+# the environment changed, so the programs started after this one see it.
+function Add-UserPathEntry {
+  param(
+    [Parameter(Mandatory)][string]$Folder,
+    [string]$EnvironmentKey = 'HKCU:\Environment',
+    [switch]$NoBroadcast
+  )
+  $key = Get-Item -LiteralPath $EnvironmentKey
+  $current = [string]$key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+  $parts = @($current -split ';' | Where-Object { $_ })
+  $wanted = $Folder.TrimEnd('\')
+  if (-not @($parts | Where-Object { $_.TrimEnd('\') -ieq $wanted })) {
+    Set-ItemProperty -LiteralPath $EnvironmentKey -Name 'Path' -Value ((@($parts) + $Folder) -join ';') -Type ExpandString
+    if (-not $NoBroadcast) {
+      # setting a variable of the user broadcasts «the environment changed»; a throw-away one, put and taken away
+      [Environment]::SetEnvironmentVariable('JHT_ENV_REFRESH', '1', 'User')
+      [Environment]::SetEnvironmentVariable('JHT_ENV_REFRESH', $null, 'User')
+    }
+  }
+  if (-not (($env:PATH -split [IO.Path]::PathSeparator) -contains $Folder)) {
+    $env:PATH = $Folder + [IO.Path]::PathSeparator + $env:PATH
+  }
+}
+
+# Podman for this Windows user from the official release's zip (the way out when winget is missing, its list of programs is
+# empty, or Podman is registered for another Windows user): downloaded into the user's own folder, its SHA-256 checked BEFORE
+# anything is read out of it, then the three programs taken out by their exact names (no name comes from the zip, so no entry
+# can lead outside the folder), written beside the final names and moved over them, the version asked of the result.
+# $Url may be a file of this computer (the tests); a real address is never one.
+function Install-PodmanForThisUser {
+  param(
+    [string]$Destination = (Join-Path $LocalAppData 'Programs\Podman'),
+    [string]$Url = $PodmanZipUrl,
+    [string]$Sha256 = $PodmanZipSha256,
+    [string]$Version = $PodmanCliVersion,
+    [switch]$NoPath
+  )
+  New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+  if ((Get-Item -LiteralPath $Destination -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    throw "the folder $Destination is a link: Podman is not put there"
+  }
+  $zipFile = Join-Path $Destination ".podman-$PID.zip"
+  $staged = New-Object System.Collections.Generic.List[string]
+  # Windows PowerShell's progress bar slows a large download by minutes.
+  $previousProgress = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+  try {
+    if ([IO.File]::Exists($Url)) { Copy-Item -LiteralPath $Url -Destination $zipFile -Force }
+    else { Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $zipFile -ErrorAction Stop }
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipFile).Hash
+    if ($actual -ne $Sha256) { throw "the Podman $Version download has SHA-256 $actual, expected $Sha256" }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [IO.Compression.ZipFile]::OpenRead($zipFile)
+    try {
+      foreach ($name in $PodmanZipPrograms) {
+        $entry = $archive.GetEntry("podman-$Version/usr/bin/$name")
+        if (-not $entry -or $entry.Length -le 0 -or $entry.Length -gt 200MB) { throw "the Podman $Version download has no usable $name" }
+        $target = Join-Path $Destination "$name.new-$PID"
+        $staged.Add($target)
+        $from = $entry.Open()
+        try {
+          $to = [IO.File]::Open($target, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+          try { $from.CopyTo($to) } finally { $to.Dispose() }
+        } finally { $from.Dispose() }
+      }
+    } finally { $archive.Dispose() }
+    for ($i = 0; $i -lt $PodmanZipPrograms.Count; $i++) {
+      Move-Item -LiteralPath $staged[$i] -Destination (Join-Path $Destination $PodmanZipPrograms[$i]) -Force
+    }
+  } finally {
+    $ProgressPreference = $previousProgress
+    Remove-Item -LiteralPath $zipFile -Force -ErrorAction SilentlyContinue
+    foreach ($left in $staged) { Remove-Item -LiteralPath $left -Force -ErrorAction SilentlyContinue }
+  }
+  $got = Get-PodmanVersion (Join-Path $Destination 'podman.exe')
+  if ($got -ne $Version) { throw "the podman.exe taken out of the download says version '$got', not $Version" }
+  if (-not $NoPath) { Add-UserPathEntry -Folder $Destination }
+}
+
 # WSL opens its «Welcome to WSL» window (wslsettings) when one of the user's
 # distributions gets registered, unless the user's Lxss key says the welcome was
 # already shown: the DWORD OOBEComplete under HKCU\Software\Microsoft\Windows\
@@ -595,6 +683,7 @@ function Write-PodmanMismatch {
 if ($InstallDependencies) {
   Write-JhtPhase podman_install
   $otherUser = $false
+  $viaZip = $false
   $foundVersion = Get-PodmanVersion (Find-Podman)
   if ((Get-PodmanFit $foundVersion) -eq 'other') {
     Write-PodmanMismatch $foundVersion
@@ -602,41 +691,57 @@ if ($InstallDependencies) {
   }
   try {
     if ((Get-PodmanFit $foundVersion) -in 'absent', 'older') {
-      if (-not (Use-Winget)) {
-        throw "winget was not found: not on the PATH and not in $(Join-Path $LocalAppData 'Microsoft\WindowsApps') (the folder App Installer uses for this Windows user). winget is required to install Podman dependencies. Install or update `"App Installer`" from the Microsoft Store (https://aka.ms/getwinget), then run the installer again."
-      }
-      # «Already installed» while this user reaches no podman.exe: on a computer
-      # with two Windows users the package is registered for the computer and
-      # podman.exe sits in the other user's profile. Then once more, for this
-      # user (--force: winget would stop at «already installed» again); what
-      # the second pass leaves decides, never its exit code alone.
-      # Not `--scope user`: the manifest's one installer is Podman's dual-scope
-      # MSI with no scope declared, so winget finds «no applicable installer»
-      # (-1978335216). The MSI itself is asked for this user, the Windows way for
-      # a dual-scope package (ALLUSERS=2 MSIINSTALLPERUSER=1, into
-      # %LocalAppData%\Programs\Podman); winget still checks the manifest's hash.
-      # --override replaces winget's own switches, so the quiet ones are here too.
-      foreach ($forThisUser in $false, $true) {
-        $scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') } else { @() }
-        foreach ($attempt in 1, 2) {
-          & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
-          $wingetCode = $LASTEXITCODE
-          if ($wingetCode -ne $WingetSourceDataMissing -or $attempt -eq 2) { break }
-          & winget source update --disable-interactivity
+      # No winget to use (it is not there, or its list of programs stays empty): Podman for this user from the official
+      # release (below), not a stop. winget is asked first because it is the way a person with winget expects.
+      $viaZip = -not (Use-Winget)
+      if (-not $viaZip) {
+        # «Already installed» while this user reaches no podman.exe: on a computer
+        # with two Windows users the package is registered for the computer and
+        # podman.exe sits in the other user's profile. Then once more, for this
+        # user (--force: winget would stop at «already installed» again); what
+        # the second pass leaves decides, never its exit code alone.
+        # Not `--scope user`: the manifest's one installer is Podman's dual-scope
+        # MSI with no scope declared, so winget finds «no applicable installer»
+        # (-1978335216). The MSI itself is asked for this user, the Windows way for
+        # a dual-scope package (ALLUSERS=2 MSIINSTALLPERUSER=1, into
+        # %LocalAppData%\Programs\Podman); winget still checks the manifest's hash.
+        # --override replaces winget's own switches, so the quiet ones are here too.
+        foreach ($forThisUser in $false, $true) {
+          $scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') } else { @() }
+          foreach ($attempt in 1, 2) {
+            & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
+            $wingetCode = $LASTEXITCODE
+            if ($wingetCode -ne $WingetSourceDataMissing -or $attempt -eq 2) { break }
+            & winget source update --disable-interactivity
+          }
+          if ($wingetCode -eq $WingetSourceDataMissing) { $viaZip = $true; break }
+          if ($forThisUser) { $otherUser = -not (Find-Podman); break }
+          if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
+            throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
+          }
+          if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }
         }
-        if ($wingetCode -eq $WingetSourceDataMissing) {
-          throw "the list of programs of winget is empty for this Windows user (winget exited with $wingetCode, 0x8A15000F), also after winget source update. Open the Microsoft Store, go to Library and choose Get updates (this updates App Installer and fills the list), then run the installer again."
-        }
-        if ($forThisUser) { $otherUser = -not (Find-Podman); break }
-        if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
-          throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
-        }
-        if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }
       }
     }
   } catch {
     [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
     exit 21
+  }
+  # Podman for this user from the official release: when winget is missing or its list stays empty, and when Podman is
+  # registered for another Windows user and winget could not put one in this user's folder. A zip that fails is its own
+  # reason (the download, the digest); for the other user's case the code stays the one the app tells that from.
+  if ($viaZip -or $otherUser) {
+    try {
+      Install-PodmanForThisUser
+      $otherUser = $false
+      [Console]::Out.WriteLine("Podman $PodmanCliVersion was installed for this Windows user from the official release, without winget.")
+    } catch {
+      if (-not $otherUser) {
+        [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
+        exit 21
+      }
+      [Console]::Error.WriteLine("podman zip: $($_.Exception.Message)")
+    }
   }
   # Not a download that failed: the network is not the cause, and Try again
   # alone changes nothing.

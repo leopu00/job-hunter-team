@@ -396,9 +396,9 @@ function Show-PodmanSetupProblem {
   switch ($Code) {
     21 {
       Write-JhtProblem -What 'Podman could not be installed.' -Todo @(
-        'The line above says why. Podman comes from winget: if winget is missing or broken,',
-        'install or repair "App Installer" from the Microsoft Store:',
-        '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
+        'The line above says why. Podman comes from winget, or from its official release when winget',
+        'cannot be used: check that this computer can reach github.com, and that winget works if you have it',
+        '(for a broken one, install or repair "App Installer": https://aka.ms/getwinget).',
         $again)
     }
     22 {
@@ -475,24 +475,8 @@ function Get-RuntimeFiles {
     Write-Fail "Protected host wrapper path overlaps a container-writable tree: $binFull"
   }
 
-  # Podman comes from winget (docker-compose and the runtime come from here, and
-  # a Podman already on the PATH needs nothing): with neither, this setup cannot
-  # go on. Said now, before a single folder is written, with the way out.
-  # winget is also looked for where App Installer puts its alias for THIS user: a PATH that names another user's
-  # WindowsApps folder (an account made from an administrator's profile) does not find it by its name (JHT-T184).
-  $wingetAlias = Join-Path $LocalAppData 'Microsoft\WindowsApps\winget.exe'
-  if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue) -and
-      -not (Get-Command winget -ErrorAction SilentlyContinue) -and
-      -not (Test-Path -LiteralPath $wingetAlias -ErrorAction SilentlyContinue)) {
-    Write-JhtProblem -What 'winget is missing, and the installer needs it to install Podman.' -Todo @(
-      "It was not on the PATH and not in $(Split-Path -Parent $wingetAlias).",
-      'Install "App Installer" from the Microsoft Store (it brings winget):',
-      '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
-      'Then open a new PowerShell window and check it with: winget --version',
-      'Then run the same install command again. Nothing was installed or left behind.')
-    [Console]::Error.WriteLine('podman_not_installable: winget is required to install Podman dependencies.')
-    exit 21
-  }
+  # Podman comes from winget, or from its official release for this Windows user when winget is not usable (missing, an empty
+  # list of programs, Podman registered for another user): the enabler decides, so a PC without winget is no stop here (JHT-T184).
 
   # The folders that do not exist yet, with the ones above them: if the setup
   # stops, the ones it made and left empty go away again.

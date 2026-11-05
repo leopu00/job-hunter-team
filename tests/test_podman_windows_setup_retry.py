@@ -849,20 +849,14 @@ def test_use_winget_puts_the_folder_in_the_path_of_this_process_once(tmp_path):
     assert "RESULT=True,True,1" in done.stdout, done.stdout + done.stderr
 
 
-def test_both_installer_files_look_for_winget_in_this_users_alias_folder_and_say_where_they_looked():
+def test_the_enabler_looks_for_winget_in_this_users_alias_folder_before_it_runs_it():
     enabler = _code(ENABLER)
     block = enabler[enabler.index("if ($InstallDependencies) {") :]
     block = block[: block.index("$Podman = Find-Podman")]
-    # the lookup is the function's, before the one command that runs winget; the guard in the block is no bare Get-Command
+    # the lookup is the function's, before the one command that runs winget; no bare Get-Command in the block
     assert "Get-Command winget" not in block
     assert block.index("Use-Winget") < block.index("& winget install")
     assert "Microsoft\\WindowsApps\\winget.exe" in enabler
-    # the text names the folder it looked in and still says what to install
-    message = block[block.index("winget was not found") : block.index("then run the installer again")]
-    assert "$(Join-Path $LocalAppData 'Microsoft\\WindowsApps')" in message and "App Installer" in message
-    installer = _code(ROOT / "scripts" / "install.ps1")
-    assert "Join-Path $LocalAppData 'Microsoft\\WindowsApps\\winget.exe'" in installer
-    assert "Test-Path -LiteralPath $wingetAlias" in installer
 
 
 # ── JHT-T184 WX2: a winget with an empty list of programs ──
@@ -870,7 +864,7 @@ def test_both_installer_files_look_for_winget_in_this_users_alias_folder_and_say
 SOURCE_DATA_MISSING = 0x8A15000F - 2**32
 
 
-def test_the_empty_list_of_programs_is_recognised_updated_once_and_then_told():
+def test_the_empty_list_of_programs_is_recognised_updated_once_and_then_the_zip_takes_over():
     enabler = _code(ENABLER)
     assert re.search(r"\$WingetSourceDataMissing = (-?\d+)", enabler).group(1) == str(SOURCE_DATA_MISSING)
     block = enabler[enabler.index("if ($InstallDependencies) {") :]
@@ -879,33 +873,194 @@ def test_the_empty_list_of_programs_is_recognised_updated_once_and_then_told():
     assert block.count("& winget install") == 1 and block.count("& winget source update") == 1
     assert "foreach ($attempt in 1, 2)" in block
     assert block.index("& winget install") < block.index("& winget source update")
-    # still empty: its own sentence with what the person does (the Store), before the generic exit-code sentence
-    told = block.index("is empty for this Windows user")
-    assert block.index("& winget source update") < told < block.index("exited with $wingetCode.\"")
-    sentence = block[told : block.index("\n", told)]
-    assert "Microsoft Store" in sentence and "Get updates" in sentence and "run the installer again" in sentence
+    # still empty: Podman from the official release for this user, not a stop
+    assert "if ($wingetCode -eq $WingetSourceDataMissing) { $viaZip = $true; break }" in block
+    assert block.index("& winget source update") < block.index("$viaZip = $true") < block.index("Install-PodmanForThisUser")
+
+
+# ── JHT-T184 piece 3 (and JHT-T144): Podman for this user from the official release ──
+
+ZIP_SHA256 = "2c055d363de03de917f79568a78b7d5902fc40453bbcc141ca18cf0a1fa1b78e"
+
+
+def test_the_zip_is_the_pinned_release_checked_before_anything_is_read_out_of_it():
+    enabler = _code(ENABLER)
+    assert "$PodmanZipUrl = \"https://github.com/containers/podman/releases/download/v$PodmanCliVersion/podman-remote-release-windows_amd64.zip\"" in enabler
+    assert f"$PodmanZipSha256 = '{ZIP_SHA256}'" in enabler
+    assert "$PodmanZipPrograms = @('podman.exe', 'gvproxy.exe', 'win-sshproxy.exe')" in enabler
+    function = enabler[enabler.index("function Install-PodmanForThisUser {") :]
+    function = function[: function.index("\n}\n")]
+    # the digest first, then the archive is opened; the names come from the script, never from the archive
+    assert function.index("Get-FileHash") < function.index("-ne $Sha256") < function.index("OpenRead")
+    assert "GetEntry(\"podman-$Version/usr/bin/$name\")" in function
+    assert "Expand-Archive" not in enabler and "ExtractToDirectory" not in enabler and "ExtractToFile" not in enabler
+    assert "FullName" not in function and ".Name" not in function
+    # written beside the final names, moved over them, the version asked of the result, and the folder is never a link
+    assert function.index("CreateNew") < function.index("Move-Item") < function.index("Get-PodmanVersion")
+    assert "ReparsePoint" in function
+    # not run before it is checked and extracted: no podman.exe call before the digest
+    assert function.index("Get-PodmanVersion") > function.index("-ne $Sha256")
+
+
+def _zip(path: Path, entries: dict) -> str:
+    import hashlib
+    import zipfile
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, data in entries.items():
+            archive.writestr(name, data)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _unit_script(tmp_path: Path, call: str) -> str:
+    source = ENABLER.read_text(encoding="utf-8")
+    parts = [source[source.index("$PodmanCliVersion = "): source.index("$PodmanZipPrograms = ")].split("\n", 1)[0] + "\n"]
+    parts.append(source[source.index("$PodmanZipUrl = "): source.index("$ComposeProviderVersion")].replace("\n# JHT's own docker-compose", ""))
+    functions = "".join(source[source.index(f"function {name} {{") :].split("\n}\n", 1)[0] + "\n}\n"
+                        for name in ("Get-PodmanVersion", "Add-UserPathEntry", "Install-PodmanForThisUser"))
+    return "$ErrorActionPreference = 'Stop'\n" + f"$LocalAppData = '{tmp_path}'\n" + "".join(parts) + functions + call
+
+
+PODMAN_ENTRIES = {f"podman-6.0.2/usr/bin/{name}": b"program" for name in ("podman.exe", "gvproxy.exe", "win-sshproxy.exe")}
 
 
 @needs_powershell
-@pytest.mark.parametrize("update_fills_it", [True, False])
-def test_an_empty_list_of_programs_with_a_fake_winget(tmp_path, update_fills_it):
-    calls = tmp_path / "winget-calls"
-    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
-    fake_podman.parent.mkdir(parents=True)
-    fills = "$global:Updated = $true" if update_fills_it else ""
-    winget = (
-        f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
-        f"  if ($args[0] -eq 'source') {{ {fills}; $global:LASTEXITCODE = 0 }}\n"
-        "  elseif ($global:Updated) {\n" + _ps_make_podman(fake_podman, "6.0.2") + "    $global:LASTEXITCODE = 0\n  }\n"
-        f"  else {{ $global:LASTEXITCODE = {SOURCE_DATA_MISSING} }}\n"
+@pytest.mark.parametrize("case", ["wrong-digest", "missing-program", "empty-program"])
+def test_a_zip_that_is_not_the_release_installs_nothing_and_leaves_nothing(tmp_path, case):
+    entries = dict(PODMAN_ENTRIES)
+    if case == "missing-program":
+        del entries["podman-6.0.2/usr/bin/gvproxy.exe"]
+    if case == "empty-program":
+        entries["podman-6.0.2/usr/bin/podman.exe"] = b""
+    archive = tmp_path / "release.zip"
+    digest = _zip(archive, entries)
+    pinned = "0" * 64 if case == "wrong-digest" else digest
+    destination = tmp_path / "Podman"
+    body = _unit_script(tmp_path, f"try {{ Install-PodmanForThisUser -Destination '{destination}' -Url '{archive}' -Sha256 '{pinned}' -NoPath; exit 0 }} catch {{ [Console]::Error.WriteLine('FAILED: ' + $_.Exception.Message); exit 3 }}\n")
+    done = _ps(tmp_path, body)
+    assert done.returncode == 3, done.stdout + done.stderr
+    assert "FAILED:" in done.stderr
+    assert case != "wrong-digest" or "has SHA-256" in done.stderr
+    assert list(destination.iterdir()) == [], "no program, no half-written file, no download left"
+
+
+@needs_powershell
+def test_names_in_the_zip_that_try_to_leave_the_folder_are_never_used(tmp_path):
+    entries = dict(PODMAN_ENTRIES)
+    entries["podman-6.0.2/usr/bin/../../../evil.exe"] = b"x"
+    entries["../escape.exe"] = b"x"
+    entries["/rooted.exe"] = b"x"
+    archive = tmp_path / "release.zip"
+    digest = _zip(archive, entries)
+    destination = tmp_path / "deep" / "Podman"
+    body = _unit_script(tmp_path, f"try {{ Install-PodmanForThisUser -Destination '{destination}' -Url '{archive}' -Sha256 '{digest}' -NoPath }} catch {{ }}\nexit 0\n")
+    done = _ps(tmp_path, body)
+    assert done.returncode == 0, done.stdout + done.stderr
+    names = sorted(path.name for path in tmp_path.rglob("*") if path.is_file())
+    assert "evil.exe" not in names and "escape.exe" not in names and "rooted.exe" not in names, names
+
+
+@pytest.mark.skipif(not WINDOWS, reason="the programs it takes out have to run, and the registry is Windows'")
+def test_a_zip_with_the_programs_installs_them_for_the_user_and_puts_the_folder_in_the_path_once(tmp_path):
+    destination = tmp_path / "Programs" / "Podman"
+    destination.mkdir(parents=True)
+    # the fake podman.exe is a launcher that runs the .sh beside it: the .sh is not in the zip, so it is already there
+    (destination / "podman.sh").write_text("#!/bin/sh\necho 'podman version 6.0.2'\n", encoding="utf-8", newline="\n")
+    launcher_bytes = launcher().read_bytes()
+    entries = {f"podman-6.0.2/usr/bin/{name}": launcher_bytes if name == "podman.exe" else b"program" for name in ("podman.exe", "gvproxy.exe", "win-sshproxy.exe")}
+    archive = tmp_path / "release.zip"
+    digest = _zip(archive, entries)
+    key = f"HKCU:\\Software\\JhtTest-{os.getpid()}"
+    call = (
+        f"New-Item -Path '{key}' -Force | Out-Null\n"
+        f"Set-ItemProperty -LiteralPath '{key}' -Name 'Path' -Value '%SystemRoot%\\system32;C:\\Existing' -Type ExpandString\n"
+        "try {\n"
+        f"  Install-PodmanForThisUser -Destination '{destination}' -Url '{archive}' -Sha256 '{digest}' -NoPath\n"
+        f"  Add-UserPathEntry -Folder '{destination}' -EnvironmentKey '{key}' -NoBroadcast\n"
+        f"  Add-UserPathEntry -Folder '{destination}' -EnvironmentKey '{key}' -NoBroadcast\n"
+        f"  $raw = (Get-Item -LiteralPath '{key}').GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)\n"
+        f"  $kind = (Get-Item -LiteralPath '{key}').GetValueKind('Path')\n"
+        "  [Console]::Out.WriteLine('RAW=' + $raw); [Console]::Out.WriteLine('KIND=' + $kind)\n"
+        f"}} finally {{ Remove-Item -LiteralPath '{key}' -Recurse -Force -ErrorAction SilentlyContinue }}\n"
+        "exit 0\n"
     )
-    done = _run_block(tmp_path, winget)
-    lines = calls.read_text().splitlines()
-    assert [line.split(" ")[0] for line in lines] == ["install", "source", "install"], lines
-    assert lines[1] == "source update --disable-interactivity"
-    if update_fills_it:
+    done = _ps(tmp_path, _unit_script(tmp_path, call))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (destination / "gvproxy.exe").read_bytes() == b"program" and (destination / "win-sshproxy.exe").read_bytes() == b"program"
+    assert not list(destination.glob("*.new-*")) and not list(destination.glob(".podman-*"))
+    raw = re.search(r"^RAW=(.*)$", done.stdout, flags=re.MULTILINE).group(1)
+    assert raw.startswith("%SystemRoot%\\system32;C:\\Existing;") and raw.count(str(destination)) == 1, raw
+    assert "KIND=ExpandString" in done.stdout
+
+
+def _block_with(tmp_path, winget_body, stubs):
+    """The install block with `stubs` defined AFTER the real functions, so they win (the block's own functions come first)."""
+    _install_block_is_isolated()
+    source = ENABLER.read_text(encoding="utf-8")
+    block = source[source.index("$WingetUpdateNotApplicable = ") : source.index("$Podman = Find-Podman")]
+    return _ps(
+        tmp_path,
+        "$ErrorActionPreference = 'Stop'\n"
+        f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
+        "function Write-JhtPhase { }\n" + "function winget {\n" + winget_body + "}\n"
+        + _enabler_functions() + stubs + block + "\nexit 0\n",
+    )
+
+
+def _zip_stub(tmp_path, calls, creates, fails=""):
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True, exist_ok=True)
+    body = f"  Add-Content -LiteralPath '{calls}' -Value 'ZIP'\n"
+    if fails:
+        body += f"  throw '{fails}'\n"
+    elif creates:
+        body += _ps_make_podman(fake_podman, "6.0.2")
+    return "function Install-PodmanForThisUser {\n" + body + "}\n"
+
+
+@needs_powershell
+def test_without_winget_podman_comes_from_the_zip_and_winget_is_never_run(tmp_path):
+    calls = tmp_path / "calls"
+    done = _block_with(tmp_path, f"  Add-Content -LiteralPath '{calls}' -Value 'WINGET'\n  $global:LASTEXITCODE = 0\n",
+                       "function Use-Winget { return $false }\n" + _zip_stub(tmp_path, calls, True))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert calls.read_text().split() == ["ZIP"]
+    assert "was installed for this Windows user from the official release, without winget" in done.stdout
+
+
+@needs_powershell
+def test_a_zip_that_fails_without_winget_is_its_own_reason_and_not_the_other_users(tmp_path):
+    calls = tmp_path / "calls"
+    done = _block_with(tmp_path, "  $global:LASTEXITCODE = 0\n",
+                       "function Use-Winget { return $false }\n" + _zip_stub(tmp_path, calls, False, fails="the Podman 6.0.2 download has SHA-256 abc, expected def"))
+    assert done.returncode == 21, done.stdout + done.stderr
+    assert "podman_not_installable: the Podman 6.0.2 download has SHA-256 abc, expected def" in done.stderr
+    assert "podman_other_user" not in done.stderr
+
+
+@needs_powershell
+@pytest.mark.parametrize("zip_works", [True, False])
+def test_podman_of_another_user_is_installed_for_this_one_from_the_zip_or_keeps_its_own_code(tmp_path, zip_works):
+    calls = tmp_path / "calls"
+    winget = (f"  Add-Content -LiteralPath '{calls}' -Value ('WINGET ' + $args[0])\n"
+              f"  $global:LASTEXITCODE = {ALREADY}\n")
+    stub = "function Use-Winget { return $true }\n" + (_zip_stub(tmp_path, calls, True) if zip_works else _zip_stub(tmp_path, calls, False, fails="the download failed"))
+    done = _block_with(tmp_path, winget, stub)
+    assert calls.read_text().split()[-1] == "ZIP"
+    if zip_works:
         assert done.returncode == 0, done.stdout + done.stderr
+        assert "podman_other_user" not in done.stderr
     else:
-        assert done.returncode == 21, done.stdout + done.stderr
-        assert "podman_not_installable: the list of programs of winget is empty for this Windows user" in done.stderr
-        assert "0x8A15000F" in done.stderr and "Microsoft Store" in done.stderr
+        assert done.returncode == 25, done.stdout + done.stderr
+        assert "podman zip: the download failed" in done.stderr and "podman_other_user:" in done.stderr
+
+
+@needs_powershell
+def test_an_empty_list_of_programs_is_updated_once_and_then_the_zip_installs_podman(tmp_path):
+    calls = tmp_path / "calls"
+    winget = (f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+              f"  if ($args[0] -eq 'source') {{ $global:LASTEXITCODE = 0 }} else {{ $global:LASTEXITCODE = {SOURCE_DATA_MISSING} }}\n")
+    done = _block_with(tmp_path, winget, "function Use-Winget { return $true }\n" + _zip_stub(tmp_path, calls, True))
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = calls.read_text().splitlines()
+    assert [line.split(" ")[0] for line in lines] == ["install", "source", "install", "ZIP"], lines
+    assert lines[1] == "source update --disable-interactivity"
