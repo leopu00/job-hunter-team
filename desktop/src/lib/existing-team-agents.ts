@@ -27,6 +27,8 @@ export type TeamAgent = {
   usage: AgentUsage;
   /** the questions it asked the user and its unread messages; null when the team does not say them, never 0 */
   questions: AgentQuestions | null;
+  /** the user paused THIS agent (JHT-T181): its session is on with its context and nobody works it until it is resumed */
+  paused: boolean;
 };
 
 export type QuestionType = "urgente" | "blocco" | "domanda" | "completamento" | "comunicazione";
@@ -226,6 +228,7 @@ function pickAgent(value: unknown, statesKnown: boolean): TeamAgent | null {
     state,
     usage: pickUsage(value.usage),
     questions: pickQuestions(value.questions),
+    paused: value.paused === true,
   };
 }
 

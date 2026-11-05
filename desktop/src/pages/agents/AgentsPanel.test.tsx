@@ -57,7 +57,9 @@ const AGENTS = [
 let target = "T1";
 let where: "vps" | "local" = "vps";
 let held: { session: string; byUser: boolean }[] = [];
-let standby = { state: "off", until: null as string | null, weeklyReset: false };
+let standby: Record<string, unknown> = { state: "off", until: null as string | null, weeklyReset: false };
+// the agents the user paused alone (JHT-T181): the list says it for each row
+let pausedAgents = new Set<string>();
 let burnIntent: Record<string, unknown> | undefined;
 let actionReply: Record<string, unknown> = { ok: true, data: { result: "stopped" } };
 let ownVps: string | undefined;
@@ -65,10 +67,10 @@ let historyReply: Record<string, unknown> | null = null;
 let activityReply: ((window: string) => Record<string, unknown>) | null = null;
 const listReply = () => ({
   ok: true,
-  data: { agents: AGENTS, roles: ROLES, states: true, target, where, label: "vps.example", ...(ownVps ? { ownVps } : {}) },
+  data: { agents: AGENTS.map((a) => ({ ...a, paused: pausedAgents.has(a.name) })), roles: ROLES, states: true, target, where, label: "vps.example", ...(ownVps ? { ownVps } : {}) },
 });
 const ops = () => native.invoke.mock.calls.filter(([c]) => c === COMMAND).map(([, a]) => (a as { request: Record<string, unknown> }).request);
-const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "stop_team", "answer"]);
+const ACTIONS = new Set(["start", "stop", "restart", "pause", "resume", "stop_team", "answer", "pause_agent", "resume_agent"]);
 
 let restoreBridge: () => void;
 beforeEach(() => {
@@ -78,6 +80,7 @@ beforeEach(() => {
   where = "vps";
   held = [];
   standby = { state: "off", until: null, weeklyReset: false };
+  pausedAgents = new Set();
   burnIntent = undefined;
   actionReply = { ok: true, data: { result: "stopped" } };
   ownVps = undefined;
@@ -225,6 +228,72 @@ describe("«Agenti», the agents' control panel", () => {
     expect(String((pause.exit as { until: string }).until)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$/);
   });
 
+  it("JHT-T181: the pause waits for the person by default, and says it is not a shutdown", async () => {
+    show();
+    fireEvent.click(await screen.findByTestId("panel-pause"));
+    const dialog = screen.getByTestId("panel-confirm");
+    expect(within(dialog).getByLabelText("Finché non la riprendo io (al massimo 7 giorni)")).toBeChecked();
+    expect(dialog).toHaveTextContent("restano accesi con tutto quello che avevano in mente");
+    actionReply = { ok: true, data: { result: "paused" } };
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+    await screen.findByText("La squadra è in pausa.");
+    expect(ops().filter((r) => r.op === "pause")).toEqual([{ op: "pause", exit: { kind: "until_resumed" }, target: "T1", confirmed: true }]);
+  });
+
+  it("JHT-T181: a pause that waits for the person says so, and offers to resume it", async () => {
+    standby = { state: "active", until: "2026-11-12T22:00:00+00:00", weeklyReset: false, mode: "pause", untilResumed: true };
+    show();
+    expect(await screen.findByTestId("panel-team-state")).toHaveTextContent("Squadra in pausa: riprende quando lo dici tu");
+    expect(screen.getByTestId("panel-resume")).toBeInTheDocument();
+  });
+
+  it("JHT-T181: Stop says it shuts the session down and loses what the agent had in mind, and points to Pause", async () => {
+    show("agent=SCOUT-1");
+    fireEvent.click(await screen.findByTestId("panel-stop"));
+    const dialog = screen.getByTestId("panel-confirm");
+    expect(dialog).toHaveTextContent("perde quello che aveva in mente");
+    expect(dialog).toHaveTextContent("usa «Pausa»");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Annulla" }));
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    expect(screen.getByTestId("panel-confirm")).toHaveTextContent("perdono quello che avevano in mente");
+  });
+
+  it("JHT-T181: pauses ONE agent from its own page, next to Restart and Stop, and says it is paused", async () => {
+    show("agent=SCOUT-1");
+    fireEvent.click(await screen.findByTestId("panel-agent-pause"));
+    const dialog = screen.getByTestId("panel-confirm");
+    expect(dialog).toHaveTextContent("Mettere in pausa Scout-1");
+    expect(dialog).toHaveTextContent("resta acceso con quello che aveva in mente");
+    expect(dialog).toHaveTextContent("Il resto della squadra continua a lavorare");
+    actionReply = { ok: true, data: { result: "agent_paused" } };
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma" }));
+    await screen.findByText("Scout-1 è in pausa.");
+    expect(ops().filter((r) => r.op === "pause_agent")).toEqual([{ op: "pause_agent", session: "SCOUT-1", target: "T1", confirmed: true }]);
+    // the team's own pause is not touched
+    expect(ops().filter((r) => r.op === "pause")).toEqual([]);
+  });
+
+  it("JHT-T181: a paused agent says so in the list and in its page, and offers Resume", async () => {
+    pausedAgents = new Set(["SCOUT-1"]);
+    show("agent=SCOUT-1");
+    expect(await screen.findByTestId("panel-state")).toHaveTextContent("In pausa: acceso, ma fermo finché non lo riprendi");
+    expect(screen.getByTestId("panel-row-SCOUT-1")).toHaveTextContent("In pausa");
+    expect(screen.getByTestId("panel-row-CAPITANO")).not.toHaveTextContent("In pausa");
+    expect(screen.queryByTestId("panel-agent-pause")).toBeNull();
+    fireEvent.click(screen.getByTestId("panel-agent-resume"));
+    expect(screen.getByTestId("panel-confirm")).toHaveTextContent("Riprendere Scout-1");
+    actionReply = { ok: true, data: { result: "agent_resumed" } };
+    fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
+    await screen.findByText("Scout-1 ha ripreso il lavoro.");
+    expect(ops().filter((r) => r.op === "resume_agent")).toEqual([{ op: "resume_agent", session: "SCOUT-1", target: "T1", confirmed: true }]);
+  });
+
+  it("JHT-T181: no pause button on a maintenance agent", async () => {
+    show("agent=DOTTORE");
+    await screen.findByTestId("panel-state");
+    expect(screen.queryByTestId("panel-agent-pause")).toBeNull();
+  });
+
   it("a paused team offers to resume it, and says until when", async () => {
     standby = { state: "active", until: null, weeklyReset: true };
     show();
@@ -345,7 +414,7 @@ describe("«Agenti», the agents' control panel", () => {
     render(<Shell />);
     expect(await screen.findByTestId("panel-read-only")).toHaveTextContent("Conferma e collega");
     await screen.findByTestId("panel-terminal-SCOUT-1");
-    for (const id of ["panel-stop", "panel-restart", "panel-start", "panel-pause", "panel-resume"]) {
+    for (const id of ["panel-stop", "panel-restart", "panel-start", "panel-pause", "panel-resume", "panel-agent-pause", "panel-agent-resume"]) {
       expect(screen.queryByTestId(id)).toBeNull();
     }
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
@@ -745,7 +814,7 @@ describe("«Agenti», stopping the whole team", () => {
     await screen.findByTestId("panel-summary");
     // pause and stop side by side, and a line that tells them apart
     expect(screen.getByTestId("panel-pause")).toBeInTheDocument();
-    expect(screen.getByTestId("panel-team-help")).toHaveTextContent("riparte da sola");
+    expect(screen.getByTestId("panel-team-help")).toHaveTextContent("non lavorano finché non riprendi");
     expect(screen.getByTestId("panel-team-help")).toHaveTextContent("non riparte finché");
     fireEvent.click(screen.getByTestId("panel-stop-team"));
     const dialog = screen.getByTestId("panel-confirm");

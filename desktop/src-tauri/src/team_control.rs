@@ -108,16 +108,16 @@ pub(crate) fn start_command(kind: StartKind) -> TeamCommand<'static> {
 }
 
 /// The operations of `agent_control.py`, as `ControlRequest::argv` names them.
-const AGENT_CONTROL_OPS: [&str; 15] = [
+const AGENT_CONTROL_OPS: [&str; 17] = [
     "list", "team", "history", "activity", "screen", "start", "stop", "restart", "pause", "resume", "stop-team",
-    "exclusions", "exclusion-accept", "exclusion-withdraw", "answer",
+    "exclusions", "exclusion-accept", "exclusion-withdraw", "answer", "pause-agent", "resume-agent",
 ];
 /// The only options a request carries (`pause`).
-const AGENT_CONTROL_OPTIONS: [&str; 3] = ["--for-hours", "--until", "--wake-on-weekly"];
+const AGENT_CONTROL_OPTIONS: [&str; 4] = ["--for-hours", "--until", "--wake-on-weekly", "--until-resumed"];
 
 /// `jht agent-control <args>`: what Invoke-AgentControl ran. The arguments are
 /// the closed forms `ControlRequest::argv` builds, checked again here: the first
-/// word is one of the operations, an option is one of the three `pause` takes,
+/// word is one of the operations, an option is one of the four `pause` takes,
 /// and any other word is made of the characters of an agent, question or option
 /// id or a timestamp, never an option or a second command.
 pub(crate) fn agent_control_command<'a>(
@@ -240,7 +240,8 @@ mod tests {
         for ok in [
             vec!["list"], vec!["team"], vec!["history"], vec!["activity", "1h"], vec!["activity", "24h"], vec!["resume"], vec!["stop-team"], vec!["exclusions"],
             vec!["start", "SCOUT-1"], vec!["stop", "CRITICO-S2"], vec!["restart", "CAPITANO"],
-            vec!["pause", "--for-hours", "24"], vec!["pause", "--until", "2026-10-24T10:00:00Z"], vec!["pause", "--wake-on-weekly"],
+            vec!["pause", "--for-hours", "24"], vec!["pause", "--until", "2026-10-24T10:00:00Z"], vec!["pause", "--wake-on-weekly"], vec!["pause", "--until-resumed"],
+            vec!["pause-agent", "SCOUT-1"], vec!["resume-agent", "CRITICO-S2"],
             vec!["exclusion-accept", "wrong_location"], vec!["exclusion-withdraw", "company"],
             vec!["answer", "aq:capitano:1792850852-ab12cd", "_rinvia"], vec!["answer", "aq:capitano:1792850852-ab12cd", "si"],
         ] {

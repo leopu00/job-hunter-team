@@ -1056,6 +1056,24 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team could not be resumed.",
     "Try again. If it keeps happening, report the code shown next to it.",
   ),
+  agent_pause_failed: copy(
+    "Non è stato possibile mettere in pausa l’agente.",
+    "Riprova. Se si ripete, segnala il codice che vedi accanto.",
+    "The agent could not be paused.",
+    "Try again. If it keeps happening, report the code shown next to it.",
+  ),
+  agent_resume_failed: copy(
+    "Non è stato possibile far riprendere l’agente.",
+    "Riprova. Se si ripete, segnala il codice che vedi accanto.",
+    "The agent could not be resumed.",
+    "Try again. If it keeps happening, report the code shown next to it.",
+  ),
+  pause_unsupported: copy(
+    "La squadra ha una versione che non sa mettere in pausa un solo agente, o fino a quando lo dici tu.",
+    "Aggiorna la squadra, poi riprova. Intanto puoi mettere in pausa tutta la squadra per qualche ora.",
+    "The team runs a version that cannot pause one agent, or pause until you say so.",
+    "Update the team, then try again. Meanwhile you can pause the whole team for a few hours.",
+  ),
   team_stop_unsupported: copy(
     "La squadra ha una versione che non si ferma dal pannello.",
     "Aggiorna la squadra, poi riprova. Intanto puoi spegnere gli agenti uno per uno con «Spegni».",
