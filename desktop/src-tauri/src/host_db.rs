@@ -206,12 +206,12 @@ fn open_hardened(path: &Path, required: &[&str], read_ms: u64) -> Result<Connect
 
 /// Take the snapshot of `home/jobs.db` into a private folder under `work` and open it. `home` is the data folder of
 /// the team of this computer (`~/.jht`), already attested as the active account's by the caller.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub(crate) fn open_snapshot(home: &Path, work: &Path, required: &[&str]) -> Result<HostDb, &'static str> {
     open_snapshot_with(home, work, required, Limits::default(), |_| {})
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn open_snapshot(_home: &Path, _work: &Path, _required: &[&str]) -> Result<HostDb, &'static str> {
     Err("host_db_unavailable")
 }
@@ -393,12 +393,116 @@ mod unix {
     }
 }
 
+/// The same reader on Windows: the saved data of the team are in `%USERPROFILE%\.jht` on the disk of Windows (the container
+/// sees that folder as `/jht_home`), so they are read from here with the team's machine off, never through it. The
+/// primitives that open a file written by the agents are in `host_files_windows`; the rest of this module (the copy, the
+/// hardened connection, the limits, the codes) is the one of Unix.
+#[cfg(windows)]
+mod windows {
+    use super::*;
+    use crate::host_files_windows as files;
+
+    /// The folder of the team: a real folder, not a link or a junction.
+    fn real_folder(path: &Path) -> Result<(), &'static str> {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.is_dir() && files::is_reparse_point(path) == Some(false) => Ok(()),
+            Ok(_) => Err("host_db_unsafe"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err("host_db_missing"),
+            Err(_) => Err("host_db_unreadable"),
+        }
+    }
+
+    /// The folder of the app where the copies live: made when absent, refused when it is a link, and given the
+    /// owner-only access (the DACL is written and read back; a folder it cannot be put on is not used).
+    fn private_folder(path: &Path) -> Result<(), &'static str> {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) => {
+                if !meta.is_dir() || files::is_reparse_point(path) != Some(false) {
+                    return Err("host_db_unsafe");
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => std::fs::create_dir_all(path).map_err(|_| "host_db_unreadable")?,
+            Err(_) => return Err("host_db_unreadable"),
+        }
+        crate::private_acl::protect_dir(path).map_err(|_| "host_db_unsafe")
+    }
+
+    /// The moment the data were last written: the later write time of the two files.
+    fn later(db: &files::Stamp, wal: Option<&files::Stamp>) -> i64 {
+        wal.map(|w| db.written_unix().max(w.written_unix())).unwrap_or(db.written_unix())
+    }
+
+    pub(crate) fn open_snapshot_with(
+        home: &Path,
+        work: &Path,
+        required: &[&str],
+        limits: Limits,
+        mut on_copied: impl FnMut(usize),
+    ) -> Result<HostDb, &'static str> {
+        real_folder(home)?;
+        private_folder(work)?;
+        let db_path = home.join(DB_NAME);
+        let wal_path = home.join(WAL_NAME);
+        for attempt in 0..limits.attempts.max(1) {
+            let db = files::open_source(&db_path, limits.max_db_bytes)?.ok_or("host_db_missing")?;
+            let wal = files::open_source(&wal_path, limits.max_wal_bytes)?;
+            let dir = work.join(format!("{SNAPSHOT_PREFIX}{}", files::random_name()?));
+            std::fs::create_dir(&dir).map_err(|_| "host_db_unreadable")?;
+            let snapshot = Snapshot { dir };
+            // the copy folder is owner-only before a byte goes into it
+            crate::private_acl::protect_dir(&snapshot.dir).map_err(|_| "host_db_unsafe")?;
+            files::copy_into(&db, &snapshot.dir.join(DB_NAME), limits.max_db_bytes)?;
+            if let Some(wal) = &wal {
+                files::copy_into(wal, &snapshot.dir.join(WAL_NAME), limits.max_wal_bytes)?;
+            }
+            on_copied(attempt);
+            // the same handles, the same names: nothing changed, nothing was swapped, no wal appeared
+            let wal_ok = match &wal {
+                Some(wal) => wal.still_the_same() && wal.path_names_it(&wal_path, limits.max_wal_bytes),
+                None => matches!(std::fs::symlink_metadata(&wal_path), Err(e) if e.kind() == std::io::ErrorKind::NotFound),
+            };
+            if !(db.still_the_same() && db.path_names_it(&db_path, limits.max_db_bytes) && wal_ok) {
+                continue; // the snapshot goes out of scope here and its files are removed
+            }
+            // the copy is ours, made a moment ago and owner-only: it is opened by its own name
+            let conn = open_hardened(&snapshot.dir.join(DB_NAME), required, limits.read_ms)?;
+            return Ok(HostDb { conn, data_time: later(&db.stamp(), wal.as_ref().map(|w| w.stamp()).as_ref()), snapshot, limits });
+        }
+        Err("host_db_busy")
+    }
+
+    /// Remove the folders of copies the app left behind (a crash, a kill): ours by name, older than an hour.
+    pub(crate) fn sweep(work: &Path, older_than_s: i64) {
+        let now = SystemTime::now();
+        let Ok(entries) = std::fs::read_dir(work) else { return };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            let Some(tail) = name.strip_prefix(SNAPSHOT_PREFIX) else { continue };
+            if tail.len() != 32 || !tail.bytes().all(|b| b.is_ascii_hexdigit()) {
+                continue;
+            }
+            let path = entry.path();
+            let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
+            let age = meta.modified().ok().and_then(|m| now.duration_since(m).ok()).map(|d| d.as_secs() as i64).unwrap_or(0);
+            if !meta.is_dir() || files::is_reparse_point(&path) != Some(false) || age < older_than_s {
+                continue;
+            }
+            remove_snapshot_dir(&path);
+        }
+    }
+}
+
 #[cfg(unix)]
 pub(crate) use unix::open_snapshot_with;
 #[cfg(unix)]
 pub(crate) use unix::sweep as sweep_snapshots;
+#[cfg(windows)]
+pub(crate) use windows::open_snapshot_with;
+#[cfg(windows)]
+pub(crate) use windows::sweep as sweep_snapshots;
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub(crate) fn sweep_snapshots(_work: &Path, _older_than_s: i64) {}
 
 #[cfg(test)]
@@ -908,5 +1012,396 @@ mod tests {
         // the copy is made from descriptors that were checked, and the page has no way in
         assert!(code.contains("O_NOFOLLOW") && code.contains("O_NONBLOCK") && code.contains("nlink() != 1"));
         assert!(!code.contains("tauri::command"));
+    }
+}
+
+// ── the same checks on Windows ──────────────────────────────────────────────────────────────────────────────
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const REQUIRED: [&str; 3] = ["positions", "scores", "applications"];
+
+    fn base(tag: &str) -> PathBuf {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("jht-host-db-{tag}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    struct World {
+        base: PathBuf,
+        home: PathBuf,
+        work: PathBuf,
+    }
+
+    impl World {
+        fn new(tag: &str) -> World {
+            let base = base(tag);
+            let home = base.join("home");
+            std::fs::create_dir(&home).unwrap();
+            World { work: base.join("work"), home, base }
+        }
+        fn db(&self) -> PathBuf {
+            self.home.join(DB_NAME)
+        }
+        fn snapshots(&self) -> usize {
+            std::fs::read_dir(&self.work).map(|d| d.count()).unwrap_or(0)
+        }
+    }
+
+    impl Drop for World {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.base);
+        }
+    }
+
+    fn schema(conn: &Connection) {
+        conn.execute_batch(
+            "CREATE TABLE positions(id TEXT PRIMARY KEY, title TEXT, status TEXT, description TEXT);
+             CREATE TABLE scores(position_id TEXT, total_score INTEGER);
+             CREATE TABLE applications(position_id TEXT, cv_path TEXT);",
+        )
+        .unwrap();
+    }
+
+    fn insert(conn: &Connection, id: &str) {
+        conn.execute("INSERT INTO positions(id, title, status) VALUES (?1, ?2, 'new')", [id, "Data Engineer"]).unwrap();
+    }
+
+    fn plain_db(world: &World, rows: usize) {
+        let conn = Connection::open(world.db()).unwrap();
+        schema(&conn);
+        for i in 0..rows {
+            insert(&conn, &format!("p{i}"));
+        }
+    }
+
+    fn count(db: &HostDb) -> i64 {
+        db.read(|c| c.query_row("SELECT COUNT(*) FROM positions", [], |r| r.get(0))).unwrap()
+    }
+
+    fn open(world: &World) -> Result<HostDb, &'static str> {
+        open_snapshot(&world.home, &world.work, &REQUIRED)
+    }
+
+    fn open_with(world: &World, limits: Limits) -> Result<HostDb, &'static str> {
+        open_snapshot_with(&world.home, &world.work, &REQUIRED, limits, |_| {})
+    }
+
+    fn digest(path: &Path) -> String {
+        format!("{:x}", Sha256::digest(std::fs::read(path).unwrap()))
+    }
+
+    fn listing(dir: &Path) -> Vec<(String, u64)> {
+        let mut all: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                (e.file_name().to_string_lossy().into_owned(), e.metadata().unwrap().len())
+            })
+            .collect();
+        all.sort();
+        all
+    }
+
+    /// A junction: the link a user without any privilege can make.
+    fn junction(link: &Path, target: &Path) -> bool {
+        std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    // ── what is read ───────────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_rows_of_a_plain_database_are_read_from_the_copy() {
+        let world = World::new("plain");
+        plain_db(&world, 5);
+        let db = open(&world).unwrap();
+        assert_eq!(count(&db), 5);
+        let title: String = db.read(|c| c.query_row("SELECT title FROM positions WHERE id='p3'", [], |r| r.get(0))).unwrap();
+        assert_eq!(title, "Data Engineer");
+        assert!(db.data_time() > 1_600_000_000, "the time the file was written, in seconds since 1970");
+    }
+
+    #[test]
+    fn rows_that_are_only_in_the_wal_are_in_the_snapshot_while_the_writer_is_open() {
+        let world = World::new("wal");
+        let writer = Connection::open(world.db()).unwrap();
+        writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;").unwrap();
+        schema(&writer);
+        writer.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        for i in 0..4 {
+            insert(&writer, &format!("w{i}"));
+        }
+        assert!(world.home.join(WAL_NAME).metadata().unwrap().len() > 0, "the rows must be in the wal, not in the file");
+        let db = open(&world).unwrap();
+        assert_eq!(count(&db), 4);
+        drop(writer);
+    }
+
+    #[test]
+    fn a_wal_database_without_a_wal_file_is_read() {
+        let world = World::new("nowal");
+        {
+            let conn = Connection::open(world.db()).unwrap();
+            conn.execute_batch("PRAGMA journal_mode=WAL;").unwrap();
+            schema(&conn);
+            insert(&conn, "a");
+        }
+        assert!(!world.home.join(WAL_NAME).exists());
+        assert_eq!(count(&open(&world).unwrap()), 1);
+    }
+
+    #[test]
+    fn the_original_is_never_touched_and_nothing_appears_next_to_it() {
+        let world = World::new("untouched");
+        plain_db(&world, 3);
+        let before = (digest(&world.db()), listing(&world.home));
+        let db = open(&world).unwrap();
+        assert_eq!(count(&db), 3);
+        drop(db);
+        assert_eq!((digest(&world.db()), listing(&world.home)), before);
+    }
+
+    #[test]
+    fn the_reader_does_not_stop_the_team_from_writing_or_replacing_the_file() {
+        let world = World::new("sharing");
+        plain_db(&world, 1);
+        let db = open(&world).unwrap();
+        // the reader keeps nothing of the original open: the team writes on, and the file can be replaced and removed
+        let conn = Connection::open(world.db()).unwrap();
+        insert(&conn, "after");
+        drop(conn);
+        std::fs::rename(world.db(), world.home.join("old.db")).unwrap();
+        std::fs::remove_file(world.home.join("old.db")).unwrap();
+        assert_eq!(count(&db), 1, "the copy is what it was");
+    }
+
+    // ── what is refused before any byte is read ────────────────────────────────────────────────────────
+
+    #[test]
+    fn no_file_is_missing_and_a_home_that_is_gone_is_missing() {
+        let world = World::new("missing");
+        assert_eq!(open(&world).err(), Some("host_db_missing"));
+        std::fs::remove_dir(&world.home).unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_missing"));
+        assert!(world.work.is_dir(), "the folder of the copies is made, and it is owner-only");
+        crate::private_acl::assert_owner_only(&world.work);
+    }
+
+    #[test]
+    fn a_home_that_is_a_file_or_a_junction_is_unsafe() {
+        let world = World::new("home");
+        plain_db(&world, 1);
+        let real = world.base.join("real");
+        std::fs::rename(&world.home, &real).unwrap();
+        std::fs::write(&world.home, b"not a folder").unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+        std::fs::remove_file(&world.home).unwrap();
+        if junction(&world.home, &real) {
+            assert_eq!(open(&world).err(), Some("host_db_unsafe"), "a junction in place of the folder leads nowhere");
+            std::fs::remove_dir(&world.home).unwrap();
+        }
+        assert_eq!(world.snapshots(), 0);
+    }
+
+    #[test]
+    fn a_folder_a_link_or_a_second_name_in_place_of_the_file_is_refused() {
+        let world = World::new("kinds");
+        plain_db(&world, 1);
+        let real = world.base.join("real.db");
+        std::fs::rename(world.db(), &real).unwrap();
+        // a folder named jobs.db
+        std::fs::create_dir(world.db()).unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+        std::fs::remove_dir(world.db()).unwrap();
+        // a symbolic link (needs the privilege or the developer mode: where it cannot be made, the other kinds still count)
+        if std::os::windows::fs::symlink_file(&real, world.db()).is_ok() {
+            assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+            std::fs::remove_file(world.db()).unwrap();
+        }
+        // a second name for the same file
+        std::fs::hard_link(&real, world.db()).unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+        std::fs::remove_file(world.db()).unwrap();
+        // and once it is a plain file again it is read
+        std::fs::rename(&real, world.db()).unwrap();
+        assert_eq!(count(&open(&world).unwrap()), 1);
+        assert_eq!(world.snapshots(), 1);
+    }
+
+    #[test]
+    fn a_wal_that_is_a_link_or_has_a_second_name_is_refused() {
+        let world = World::new("wal-kinds");
+        plain_db(&world, 1);
+        let other = world.base.join("other-wal");
+        std::fs::write(&other, b"x").unwrap();
+        std::fs::hard_link(&other, world.home.join(WAL_NAME)).unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+        std::fs::remove_file(world.home.join(WAL_NAME)).unwrap();
+        std::fs::create_dir(world.home.join(WAL_NAME)).unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+        assert_eq!(world.snapshots(), 0);
+    }
+
+    #[test]
+    fn a_file_over_the_cap_is_refused_unread_and_so_is_a_wal() {
+        let world = World::new("cap");
+        plain_db(&world, 50);
+        let size = world.db().metadata().unwrap().len();
+        let small = Limits { max_db_bytes: size - 1, ..Limits::default() };
+        assert_eq!(open_with(&world, small).err(), Some("host_db_unsafe"));
+        std::fs::write(world.home.join(WAL_NAME), vec![0u8; 100]).unwrap();
+        let small_wal = Limits { max_wal_bytes: 99, ..Limits::default() };
+        assert_eq!(open_with(&world, small_wal).err(), Some("host_db_unsafe"));
+        assert_eq!(world.snapshots(), 0, "nothing is left of a refused copy");
+    }
+
+    #[test]
+    fn bytes_that_are_not_a_database_and_a_missing_table_are_invalid() {
+        let world = World::new("invalid");
+        std::fs::write(world.db(), vec![b'x'; 4096]).unwrap();
+        assert_eq!(open(&world).err(), Some("host_db_invalid"));
+        std::fs::remove_file(world.db()).unwrap();
+        {
+            let conn = Connection::open(world.db()).unwrap();
+            conn.execute_batch("CREATE TABLE positions(id TEXT);").unwrap();
+        }
+        assert_eq!(open(&world).err(), Some("host_db_invalid"));
+        assert_eq!(world.snapshots(), 0);
+    }
+
+    #[test]
+    fn the_connection_cannot_write_and_a_statement_that_never_ends_is_interrupted() {
+        let world = World::new("hardened");
+        plain_db(&world, 1);
+        let db = open(&world).unwrap();
+        assert!(db.read(|c| c.execute("INSERT INTO positions(id) VALUES ('x')", [])).is_err());
+        let limits = Limits { read_ms: 150, ..Limits::default() };
+        let slow = open_with(&world, limits).unwrap();
+        let outcome = slow.read(|c| {
+            c.query_row(
+                "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT COUNT(*) FROM n",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+        });
+        assert_eq!(outcome.err(), Some("host_db_timeout"));
+    }
+
+    // ── the copy ───────────────────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_copy_is_owner_only_and_goes_away_with_the_handle() {
+        let world = World::new("private");
+        plain_db(&world, 2);
+        let db = open(&world).unwrap();
+        let dir = db.snapshot_dir().to_path_buf();
+        let user = crate::private_acl::current_user_sid().unwrap();
+        crate::private_acl::assert_owner_only(&world.work);
+        crate::private_acl::assert_owner_only(&dir);
+        let report = crate::private_acl::read_acl(&dir.join(DB_NAME)).unwrap();
+        assert!(crate::private_acl::grants_only_owner(&report, &user), "{report:?}");
+        assert_eq!(world.snapshots(), 1);
+        drop(db);
+        assert_eq!(world.snapshots(), 0);
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn a_work_folder_that_is_a_junction_is_refused() {
+        let world = World::new("work-link");
+        plain_db(&world, 1);
+        let elsewhere = world.base.join("elsewhere");
+        std::fs::create_dir(&elsewhere).unwrap();
+        if junction(&world.work, &elsewhere) {
+            assert_eq!(open(&world).err(), Some("host_db_unsafe"));
+            assert!(std::fs::read_dir(&elsewhere).unwrap().next().is_none(), "nothing was written through the junction");
+        }
+    }
+
+    #[test]
+    fn a_copy_taken_while_the_original_moved_is_made_again_and_after_three_it_is_busy() {
+        let world = World::new("moving");
+        plain_db(&world, 1);
+        let home = world.home.clone();
+        let db = open_snapshot_with(&world.home, &world.work, &REQUIRED, Limits::default(), |attempt| {
+            if attempt == 0 {
+                let conn = Connection::open(home.join(DB_NAME)).unwrap();
+                insert(&conn, "late");
+            }
+        })
+        .unwrap();
+        assert_eq!(count(&db), 2);
+        assert_eq!(world.snapshots(), 1, "the first, discarded copy is gone");
+        drop(db);
+        let mut n = 0;
+        let home = world.home.clone();
+        let outcome = open_snapshot_with(&world.home, &world.work, &REQUIRED, Limits::default(), |_| {
+            n += 1;
+            let conn = Connection::open(home.join(DB_NAME)).unwrap();
+            insert(&conn, &format!("again{n}"));
+        });
+        assert_eq!(outcome.err(), Some("host_db_busy"));
+        assert_eq!(n, 3);
+        assert_eq!(world.snapshots(), 0);
+    }
+
+    #[test]
+    fn a_file_swapped_for_another_between_the_open_and_the_end_of_the_copy_is_not_trusted() {
+        let world = World::new("swap");
+        plain_db(&world, 1);
+        let other = world.base.join("other.db");
+        {
+            let conn = Connection::open(&other).unwrap();
+            schema(&conn);
+        }
+        let home = world.home.clone();
+        let outcome = open_snapshot_with(&world.home, &world.work, &REQUIRED, Limits::default(), |attempt| {
+            if attempt == 0 {
+                // the open handle allows the rename: the path now names another file
+                std::fs::rename(home.join(DB_NAME), home.join("moved.db")).unwrap();
+                std::fs::rename(&other, home.join(DB_NAME)).unwrap();
+            }
+        });
+        let rows = outcome.as_ref().map(count).map_err(|e| *e);
+        assert_eq!(rows, Ok(0), "the rows are those of the file that stayed");
+        assert_eq!(world.snapshots(), 1);
+    }
+
+    #[test]
+    fn the_sweep_removes_only_old_folders_of_ours_by_name() {
+        let world = World::new("sweep");
+        plain_db(&world, 1);
+        let young = open(&world).unwrap();
+        let old = world.work.join(format!("{SNAPSHOT_PREFIX}{}", "ab".repeat(16)));
+        std::fs::create_dir(&old).unwrap();
+        std::fs::write(old.join(DB_NAME), b"x").unwrap();
+        let stranger = world.work.join("keep-me");
+        std::fs::create_dir(&stranger).unwrap();
+        let shaped = world.work.join(format!("{SNAPSHOT_PREFIX}not-ours"));
+        std::fs::create_dir(&shaped).unwrap();
+        let then = SystemTime::now() - Duration::from_secs(7200);
+        for dir in [&old, &stranger, &shaped] {
+            // a folder is opened with backup semantics, for the one right that sets its time
+            let folder = std::fs::OpenOptions::new()
+                .access_mode(windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES)
+                .custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS)
+                .open(dir)
+                .unwrap();
+            folder.set_modified(then).unwrap();
+        }
+        sweep_snapshots(&world.work, 3600);
+        assert!(!old.exists(), "an old folder of ours goes");
+        assert!(stranger.exists() && shaped.exists(), "what is not ours by name stays");
+        assert!(young.snapshot_dir().exists(), "and a young one stays");
     }
 }
