@@ -18,6 +18,7 @@ mod existing_team_judgement;
 mod team_provider;
 mod team_settings;
 mod export_file;
+mod host_agents;
 mod host_db;
 // The Windows primitives that open a file the team's agents wrote (links, junctions, second names refused).
 #[cfg(windows)]

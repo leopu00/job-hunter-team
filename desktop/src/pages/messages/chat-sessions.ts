@@ -9,5 +9,5 @@ import type { ChatSession } from "./chat-agents";
 export async function loadChatSessions(read: typeof readPanelList = readPanelList): Promise<ChatSession[] | null> {
   const reply = await read();
   if (!reply.ok) return null;
-  return reply.value.agents.map((agent) => ({ session: agent.name, up: agent.state.state !== "spento" }));
+  return reply.value.agents.map((agent) => ({ session: agent.name, up: agent.state.state !== "spento", state: agent.state }));
 }

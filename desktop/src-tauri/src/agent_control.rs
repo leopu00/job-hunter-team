@@ -897,10 +897,74 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
                     crate::local_action_log::record(app, scope, action, &subject);
                 }
             }
+            // This computer's team: the agents its roster names that the list does not (their session is not up) are «off».
+            if let (Destination::Local { wrapper, .. }, ControlRequest::List {}) = (&destination, &request) {
+                return off_agents_of_local(app, reply, wrapper, &print);
+            }
             reply
         }
-        Err(error) => failure(error),
+        Err(error) => match (&destination, &request) {
+            (Destination::Local { wrapper, .. }, ControlRequest::List {}) => off_agents_of_local(app, failure(error), wrapper, &print),
+            _ => failure(error),
+        },
     }
+}
+
+/// How long the wrapper's probe may take to say whether this computer's team is up.
+const LOCAL_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Whether the container of this computer's team is up, asked of the wrapper (which never starts it).
+fn local_team_is_up(wrapper: &Path) -> bool {
+    crate::onboarding::run_verified_local_wrapper(wrapper, &["desktop-chat", "probe"], None, LOCAL_PROBE_TIMEOUT)
+        .map(|probe| probe.success())
+        .unwrap_or(false)
+}
+
+/// The agents of this computer's team as its files say them, in the shape of a live list: every agent of the roster, «off».
+fn saved_list_reply(app: &tauri::AppHandle, print: &str) -> Option<Value> {
+    let home = crate::account_scope::local_runtime_home(app).ok()?;
+    let raw = crate::host_agents::read_roster(&home).ok()?;
+    let mut shaped = shape_reply(&AgentsRequest::List {}, &raw)?;
+    let data = shaped.get_mut("data")?.as_object_mut()?;
+    data.insert("target".into(), json!(print));
+    data.insert("where".into(), json!("local"));
+    data.insert("label".into(), Value::Null);
+    Some(shaped)
+}
+
+/// A live list with the agents of `saved` that it does not name added as they are («off»). Nothing is added to a list that
+/// does not say the states (an agent there would show as «unknown», not «off»), and nothing that is already in it is changed.
+fn merged_agents(live: &Value, saved: &Value) -> Option<Value> {
+    let mut out = live.clone();
+    let data = out.get_mut("data")?.as_object_mut()?;
+    if data.get("states") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let saved_agents = saved.pointer("/data/agents")?.as_array()?;
+    let agents = data.get_mut("agents")?.as_array_mut()?;
+    let known: Vec<String> = agents.iter().filter_map(|agent| agent.get("name").and_then(Value::as_str).map(str::to_owned)).collect();
+    for agent in saved_agents {
+        let Some(name) = agent.get("name").and_then(Value::as_str) else { continue };
+        if !known.iter().any(|known| known == name) {
+            agents.push(agent.clone());
+        }
+    }
+    Some(out)
+}
+
+/// The list of this computer's team, with its «off» agents (JHT-T177): the live list plus the roster's agents with no
+/// session; and when the team is not up at all, the roster's agents alone, instead of an error.
+fn off_agents_of_local(app: &tauri::AppHandle, reply: Value, wrapper: &Path, print: &str) -> Value {
+    if reply.get("ok") == Some(&Value::Bool(true)) {
+        return match saved_list_reply(app, print) {
+            Some(saved) => merged_agents(&reply, &saved).unwrap_or(reply),
+            None => reply,
+        };
+    }
+    if local_team_is_up(wrapper) {
+        return reply;
+    }
+    saved_list_reply(app, print).unwrap_or(reply)
 }
 
 /// The panel's one command. Only the main window may call it.
@@ -938,6 +1002,69 @@ mod tests {
 
     fn req(value: Value) -> Option<ControlRequest> {
         serde_json::from_value(value).ok()
+    }
+
+    #[test]
+    fn the_agents_of_the_roster_that_the_list_does_not_name_are_added_as_off_and_nothing_else_changes() {
+        let live = json!({"ok": true, "data": {"agents": [
+            {"name": "CAPITANO", "role": "capitano", "state": "idle", "activity": 5},
+            {"name": "ASSISTENTE", "role": "assistente", "state": "lavora"}
+        ], "roles": [], "states": true, "target": "t", "where": "local"}});
+        let saved = json!({"ok": true, "data": {"agents": [
+            {"name": "CAPITANO", "role": "capitano", "state": "spento", "activity": 1},
+            {"name": "SCOUT-1", "role": "scout", "instance": "1", "state": "spento"},
+            {"name": "SCORER-6", "role": "scorer", "instance": "6", "state": "spento"}
+        ], "roles": [], "states": true}});
+        let merged = merged_agents(&live, &saved).unwrap();
+        let names: Vec<&str> = merged["data"]["agents"].as_array().unwrap().iter().map(|a| a["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["CAPITANO", "ASSISTENTE", "SCOUT-1", "SCORER-6"], "the live ones first and untouched, the others after");
+        assert_eq!(merged["data"]["agents"][0]["state"], json!("idle"), "a live agent is never replaced by the roster's «off»");
+        assert_eq!(merged["data"]["agents"][2]["state"], json!("spento"));
+        assert_eq!(merged["data"]["target"], json!("t"), "the rest of the answer is the live one's");
+        // a list that does not say the states gets nothing: an agent there would show as «unknown», not «off»
+        let mut unknown = live.clone();
+        unknown["data"]["states"] = json!(false);
+        assert_eq!(merged_agents(&unknown, &saved), None);
+        // an answer that is not a list, or a roster that is not one, changes nothing
+        assert_eq!(merged_agents(&json!({"ok": false, "error": "x"}), &saved), None);
+        assert_eq!(merged_agents(&live, &json!({"ok": true, "data": {}})), None);
+    }
+
+    // the reader of the files is the unix one (host_agents): elsewhere it says it is not there, and the list stays the live one
+    #[cfg(unix)]
+    #[test]
+    fn the_roster_read_from_the_files_is_shaped_like_a_live_list_with_every_agent_off() {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let home = std::env::temp_dir().join(format!("jht-agent-control-roster-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(home.join("logs")).unwrap();
+        std::fs::write(
+            home.join("logs/team-roster.json"),
+            br#"{"version":1,"agents":{"SCOUT-1":{"status":"active","first_seen":"2026-11-02T08:30:00Z","last_spawn":"2026-11-04T22:00:00Z"},"CAPITANO":{"status":"active"},"SCOUT-2":{"status":"retired"}}}"#,
+        )
+        .unwrap();
+        let raw = crate::host_agents::read_roster(&home);
+        let _ = std::fs::remove_dir_all(&home);
+        let shaped = shape_reply(&AgentsRequest::List {}, &raw.unwrap()).unwrap();
+        assert_eq!(shaped["data"]["states"], json!(true));
+        let agents = shaped["data"]["agents"].as_array().unwrap();
+        assert_eq!(agents.iter().map(|a| a["name"].as_str().unwrap()).collect::<Vec<_>>(), ["CAPITANO", "SCOUT-1"]);
+        assert!(agents.iter().all(|a| a["state"] == json!("spento")), "every agent of the roster is off");
+        assert_eq!(agents[1]["role"], json!("scout"));
+        assert_eq!(agents[1]["created"], json!(1_793_608_200));
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn without_the_reader_of_the_files_the_roster_is_not_read_and_says_why() {
+        let home = std::env::temp_dir();
+        assert_eq!(crate::host_agents::read_roster(&home).unwrap_err(), "host_db_unavailable");
+    }
+
+    #[test]
+    fn the_list_of_this_computers_team_goes_through_the_off_agents_in_both_ways_it_can_come_back() {
+        let source = include_str!("agent_control.rs");
+        let body = source.split("pub(crate) fn control_for_scope").nth(1).unwrap().split("const LOCAL_PROBE_TIMEOUT").next().unwrap();
+        assert_eq!(body.matches("off_agents_of_local(").count(), 2, "the answer of the team and the failure to reach it");
     }
 
     #[test]

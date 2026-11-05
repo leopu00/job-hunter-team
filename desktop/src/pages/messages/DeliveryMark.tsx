@@ -6,7 +6,7 @@ import type { Outcome } from "./chat-kinds";
  * (sent), two ticks (the agent's CLI took it, proven by the team), a bent arrow (the agent answered since).
  * The mark is drawn, not typed, and says the same in words next to it and in its title.
  */
-export type Mark = "queued" | "sent" | "read" | "answered";
+export type Mark = "queued" | "sent" | "read" | "answered" | "unanswered";
 
 /** The mark of a line, or null where the outcome has its own words (not sent, expired, late, not known) or none is known. */
 export function markOf(outcome: Outcome | undefined, answered: boolean): Mark | null {
@@ -39,6 +39,13 @@ function Icon({ mark }: { mark: Mark }) {
         <path d="M7.4 11.2l.4.4 6.4-7.6" />
       </svg>
     );
+  if (mark === "unanswered")
+    return (
+      <svg {...common}>
+        <circle cx="8" cy="8" r="6" />
+        <path d="M5.4 8h5.2" />
+      </svg>
+    );
   return (
     <svg {...common}>
       <path d="M6.4 3.6L2.8 7l3.6 3.4" />
@@ -48,16 +55,16 @@ function Icon({ mark }: { mark: Mark }) {
 }
 
 export function DeliveryMark({ mark, t }: { mark: Mark; t: DirectChatText }) {
-  const word = { queued: t.queued, sent: t.sent, read: t.read, answered: t.answered }[mark];
-  const help = { queued: t.queuedHelp, sent: t.sentHelp, read: t.readHelp, answered: t.answeredHelp }[mark];
+  const word = { queued: t.queued, sent: t.sent, read: t.read, answered: t.answered, unanswered: t.unanswered }[mark];
+  const help = { queued: t.queuedHelp, sent: t.sentHelp, read: t.readHelp, answered: t.answeredHelp, unanswered: t.unansweredHelp }[mark];
   return (
     <div
       // «sent» and «read» are one family (the team took the line): the same test id, told apart by data-mark
-      data-testid={`direct-chat-${mark === "answered" ? "answered" : mark === "queued" ? "queued" : "sent"}`}
+      data-testid={`direct-chat-${mark === "answered" ? "answered" : mark === "unanswered" ? "unanswered" : mark === "queued" ? "queued" : "sent"}`}
       data-mark={mark}
       title={help}
       className="mt-1 flex items-center justify-end gap-1.5 text-[14px]"
-      style={{ color: mark === "answered" || mark === "read" ? "var(--color-green)" : "var(--color-muted)" }}
+      style={{ color: mark === "answered" || mark === "read" ? "var(--color-green)" : mark === "unanswered" ? "var(--color-yellow)" : "var(--color-muted)" }}
     >
       <Icon mark={mark} />
       <span>{word}</span>

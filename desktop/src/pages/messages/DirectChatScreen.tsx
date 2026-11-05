@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { appLocale } from "../../lib/app-locale";
+import { describeAgentState } from "@/lib/agent-state";
 import { describeError } from "../../lib/error-catalog";
 import OwnVpsClaim from "../../components/OwnVpsClaim";
 import { useTeamOff } from "../../lib/team-off";
@@ -152,6 +153,8 @@ function clientMessageId(): string {
 }
 
 /** How long «connecting» may last before the bar says so and offers the retry (never a silent wait). */
+/** A line of the person's that the agent has not answered after this long is said to be without an answer. */
+const UNANSWERED_AFTER_S = 600;
 const CONNECTING_SLOW_MS = 8_000;
 // An embedded pane opens a connection that was closed by itself. The first time the team has just come
 // up, so the first attempt can meet it not ready yet: it asks again, a little later each time, before
@@ -179,12 +182,15 @@ function StatusBar({
   status,
   operationError,
   reconnecting,
+  agentLine,
   onRetry,
   onReadAgain,
 }: {
   status: DirectChatStatus;
   operationError: string | null;
   reconnecting: boolean;
+  /** Where the connection is good: what the team says of the open agent, instead of a line about the connection. */
+  agentLine: string | null;
   onRetry: () => void;
   onReadAgain: () => Promise<boolean>;
 }) {
@@ -203,7 +209,7 @@ function StatusBar({
   const failed = status.state === "error" || status.state === "disconnected" || stuck;
   const code = safeCode(operationError ?? status.code);
   let text = stuck ? t.connectingSlow : t.connecting;
-  if (status.state === "ready") text = t.connected;
+  if (status.state === "ready") text = agentLine ?? t.connected;
   if (status.state === "disconnected") text = t.disconnected;
   if (status.state === "error") text = t.unavailable;
   if (operationError) text = t.operationFailed;
@@ -313,12 +319,21 @@ export default function DirectChatScreen({
   // Where the error on the bar came from: the connection (a «ready» that follows ends it) or a read or a
   // send that failed (it stays on the bar until a later read or send gets through, whatever the status says).
   const connectionError = useRef(false);
+  // A send that failed stays on the bar until the person writes again, presses «Riprova» or sends: a read that
+  // goes through in the meantime (they come every second or two) does not take it away.
+  const sendError = useRef(false);
   const failOperation = (code: string) => {
     connectionError.current = false;
+    sendError.current = false;
     // The Mentor is not always up (it is switched on when the first positions have a score, and the team brings
     // it back if it stops): «the agent is not running, start the team» would send the person to start a team
     // that is already running.
     setOperationError(code === "agent_not_running" && agentId === "mentor" ? "mentor_not_active" : code);
+  };
+  // The person's own action (writing, sending, retrying, changing agent) ends the error on the bar.
+  const clearOperationError = () => {
+    sendError.current = false;
+    setOperationError(null);
   };
   // Why an answer written in the composer did not go: it stays in the box.
   const [answerRefusal, setAnswerRefusal] = useState<string | null>(null);
@@ -380,9 +395,13 @@ export default function DirectChatScreen({
     const listed = conversationsOf(sessions, t.agents);
     if (listed.some((agent) => agent.id === agentId) || !isChatAgentId(agentId)) return listed;
     const session = sessionOfChatId(agentId) ?? agentId.toUpperCase();
-    return [...listed, { id: agentId, session, label: agentTitle(session, t.agents), up: false }];
+    return [...listed, { id: agentId, session, label: agentTitle(session, t.agents), up: false, state: sessions === null ? null : { state: "spento" as const } }];
   }, [sessions, t, agentId]);
   const selected = agents.find((agent) => agent.id === agentId) ?? agents[0];
+  // The agent is off when the team's sessions are known and this one is not up: its chat is read, and nothing is written to it.
+  const agentOff = sessions !== null && !selected.up;
+  // What the team says of this agent now, in the words of the agents' page («Scout · ▶ lavora»), instead of «team connected».
+  const agentLine = selected.state ? `${selected.label} · ${describeAgentState(selected.state, locale).line}` : null;
   // The same list of ids stays the same array while the sessions are read again every 20 s: the unread peeks go
   // round the agents one by one, and a new array would send them back to the first each time.
   const idsKey = agents.map((agent) => agent.id).join("|");
@@ -513,7 +532,7 @@ export default function DirectChatScreen({
     setOutcomes(new Map());
     setSight(NOT_WORKING);
     setPressing(null);
-    setOperationError(null);
+    clearOperationError();
     setLoading(false);
     if (status.state !== "ready") return;
     let active = true;
@@ -544,7 +563,7 @@ export default function DirectChatScreen({
           setQuestionsHere(true);
           setQuestions((current) => sameAsBefore(current, questionsOf(page)));
         }
-        setOperationError(null);
+        if (!sendError.current) setOperationError(null);
         return null;
       } catch (error) {
         const code = errorCode(error) ?? "read_failed";
@@ -655,7 +674,7 @@ export default function DirectChatScreen({
     try {
       const next = await client.reconnect();
       if (next.state !== "ready") return false;
-      setOperationError(null);
+      clearOperationError();
       setStatus(next);
       return true;
     } catch {
@@ -665,7 +684,7 @@ export default function DirectChatScreen({
 
   async function retry() {
     setReconnecting(true);
-    setOperationError(null);
+    clearOperationError();
     setStatus({ state: "connecting" });
     try {
       setStatus(await client.reconnect());
@@ -679,12 +698,12 @@ export default function DirectChatScreen({
   // `suggested`: a reply the agent suggested, sent as it is (the composer keeps what was typed).
   async function send(suggested?: string) {
     const typed = (suggested ?? text).trim();
-    if (!typed || sending || writeLocked || status.state !== "ready") return;
+    if (!typed || sending || writeLocked || agentOff || status.state !== "ready") return;
     const target = suggested === undefined ? replyTarget() : null;
     if (target?.kind === "question" && target.words) {
       // the words are the answer to the open question, not a message in the agent's terminal
       setSending(true);
-      setOperationError(null);
+      clearOperationError();
       const refusal = await answer(target.question.id, [], typed);
       setSending(false);
       if (refusal === null) {
@@ -708,7 +727,7 @@ export default function DirectChatScreen({
     setInFlight(id);
     lastSentAt.current = Date.now();
     readSoon.current?.();
-    setOperationError(null);
+    clearOperationError();
     setMessages((current) => mergeMessages(current, { messages: [optimistic] }));
     try {
       const receipt = await client.send({ agentId, text: body, clientMessageId: id });
@@ -726,6 +745,7 @@ export default function DirectChatScreen({
       // what was typed goes back to the composer; a suggestion leaves the composer as it is
       if (suggested === undefined) setText(typed);
       failOperation(errorCode(error) ?? "send_failed");
+      sendError.current = true;
     } finally {
       setSending(false);
       setInFlight(null);
@@ -765,7 +785,7 @@ export default function DirectChatScreen({
     if (!client.enter || pressing || before?.kind !== "notSent" || before.presses >= ENTER_AGAIN_MAX) return;
     if (writeLocked || status.state !== "ready") return;
     setPressing(messageId);
-    setOperationError(null);
+    clearOperationError();
     try {
       const receipt = await client.enter({ agentId, messageId });
       setOutcomes((current) => new Map(current).set(messageId, outcomeOf(receipt, before.presses + 1)));
@@ -820,6 +840,15 @@ export default function DirectChatScreen({
     for (const message of messages) if (message.role === "user" && message.at < newestAgent) answered.add(message.id);
     return answered;
   }, [messages]);
+  // A line of the person's that the agent has not answered: older than ten minutes, or the agent is off. Said under the line.
+  const unansweredIds = useMemo(() => {
+    const unanswered = new Set<string>();
+    let newestAgent = 0;
+    for (const message of messages) if (message.role === "agent" && message.at > newestAgent) newestAgent = message.at;
+    const old = Date.now() / 1000 - UNANSWERED_AFTER_S;
+    for (const message of messages) if (message.role === "user" && message.at >= newestAgent && (agentOff || message.at < old)) unanswered.add(message.id);
+    return unanswered;
+  }, [messages, agentOff]);
   const newDays = useMemo(() => items.map((item, index) => index === 0 || dayKey(items[index - 1].at) !== dayKey(item.at)), [items]);
 
   // What the composer replies to now: gone from the view, it is nothing; an open question that
@@ -862,12 +891,12 @@ export default function DirectChatScreen({
   const onMenu = useCallback((id: string, event: { preventDefault(): void; clientX: number; clientY: number }) => handlers.current.openMenu("message", id, event), []);
   const onSend = useCallback((line: string) => void handlers.current.send(line), []);
   const onEnterAgain = useCallback((id: string) => void handlers.current.enterAgain(id), []);
-  const enterAvailable = typeof client.enter === "function" && status.state === "ready" && !writeLocked;
-  const suggestionsOff = status.state !== "ready" || writeLocked || sending;
+  const enterAvailable = typeof client.enter === "function" && status.state === "ready" && !writeLocked && !agentOff;
+  const suggestionsOff = status.state !== "ready" || writeLocked || agentOff || sending;
   const dateLocale = DICTATION_LOCALE[locale];
 
-  const canSend = status.state === "ready" && !writeLocked && !sending && text.trim().length > 0;
-  const composerOff = status.state !== "ready" || sending || writeLocked;
+  const canSend = status.state === "ready" && !writeLocked && !agentOff && !sending && text.trim().length > 0;
+  const composerOff = status.state !== "ready" || sending || writeLocked || agentOff;
 
   return (
     <div
@@ -960,7 +989,9 @@ export default function DirectChatScreen({
               </Link>
             </h1>
           </div>
-          <label className="md:hidden text-[14px] uppercase tracking-wider text-[var(--color-dim)]">
+          {/* the wrapper is a div: the global rule of `label` (display: block) beats the utility `md:hidden` */}
+          <div data-testid="direct-chat-agent-picker" className="md:hidden">
+          <label className="text-[14px] uppercase tracking-wider text-[var(--color-dim)]">
             {t.agentSelect}
             <select
               aria-label={t.agentSelect}
@@ -975,16 +1006,17 @@ export default function DirectChatScreen({
               ))}
             </select>
           </label>
+          </div>
         </header>
         )}
 
-        <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} onRetry={() => void retry()} onReadAgain={readAgain} />
+        <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} agentLine={agentLine} onRetry={() => void retry()} onReadAgain={readAgain} />
         {loadQuietFacts && !embedded && status.state === "ready" && (
           <TeamQuietNotice lastAgentAt={unread.lastAgentAt} loadFacts={loadQuietFacts} />
         )}
         {!writeLocked && isOwnVpsClaimCode(operationError) && (
           <div className="shrink-0 px-4 pt-3">
-            <OwnVpsClaim reason={operationError} onClaimed={() => setOperationError(null)} />
+            <OwnVpsClaim reason={operationError} onClaimed={() => clearOperationError()} />
           </div>
         )}
 
@@ -1044,6 +1076,7 @@ export default function DirectChatScreen({
                       pressingAny={pressing !== null}
                       suggestionsOff={item.message.suggestions ? suggestionsOff : false}
                       answered={item.message.role === "user" && answeredIds.has(item.message.id)}
+                      unanswered={item.message.role === "user" && unansweredIds.has(item.message.id)}
                       onMenu={onMenu}
                       onSend={onSend}
                       onEnterAgain={onEnterAgain}
@@ -1177,6 +1210,12 @@ export default function DirectChatScreen({
               {attachNote.text}
             </p>
           )}
+          {agentOff && !writeLocked && (
+            // the box is one line: on a narrow window the reason would be cut in its placeholder, so it is said here
+            <p data-testid="direct-chat-agent-off" className="w-full m-0 mb-1.5 text-[14px] text-[var(--color-muted)]">
+              {withName(t.agentOff, selected.label)}
+            </p>
+          )}
           <div
             className="w-full flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
@@ -1184,7 +1223,10 @@ export default function DirectChatScreen({
             <textarea
               ref={composer}
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                if (sendError.current) clearOperationError();
+                setText(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && event.ctrlKey) {
                   event.preventDefault();
@@ -1206,9 +1248,11 @@ export default function DirectChatScreen({
               placeholder={
                 writeLocked
                   ? t.readOnlyInvite
-                  : status.state === "ready" ? withName(t.writeToPlaceholder, selected.label) : t.connectToWrite
+                  : agentOff
+                    ? withName(t.agentOff, selected.label)
+                    : status.state === "ready" ? withName(t.writeToPlaceholder, selected.label) : t.connectToWrite
               }
-              className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
+              className={`max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48${agentOff && !writeLocked ? " placeholder:text-transparent" : ""}`}
             />
             {attachHere && (
               <button
@@ -1234,7 +1278,7 @@ export default function DirectChatScreen({
             <button
               type="submit"
               disabled={!canSend}
-              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[14px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:opacity-40"
+              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[14px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:bg-[var(--color-border)] disabled:text-[var(--color-dim)]"
             >
               {sending ? t.sending : t.send}
             </button>
