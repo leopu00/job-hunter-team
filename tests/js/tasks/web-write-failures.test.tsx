@@ -152,7 +152,7 @@ describe("write-failure", () => {
 
   it("speaks the page's language", () => {
     expect(writeFailureReason("it", 403)).toBe(
-      "Da qui non si può modificare: fallo dall'app sul computer dove gira il team.",
+      "Da qui non si può modificare: fallo dall'app sul computer dove gira la squadra.",
     );
   });
 

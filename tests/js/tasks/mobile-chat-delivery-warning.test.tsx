@@ -17,7 +17,7 @@ const { renderToStaticMarkup } = webRequire("react-dom/server");
 const LOCALES: Locale[] = ["en", "it", "hu", "es", "de", "fr", "pt"];
 const COPY: Record<Locale, string> = {
   en: "Some messages you sent may not have reached the team yet.",
-  it: "Alcuni messaggi che hai inviato potrebbero non essere ancora arrivati al team.",
+  it: "Alcuni messaggi che hai inviato potrebbero non essere ancora arrivati alla squadra.",
   hu: "Előfordulhat, hogy néhány elküldött üzeneted még nem érkezett meg a csapathoz.",
   es: "Es posible que algunos mensajes que enviaste aún no hayan llegado al equipo.",
   de: "Einige deiner gesendeten Nachrichten haben das Team möglicherweise noch nicht erreicht.",

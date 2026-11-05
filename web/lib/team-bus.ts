@@ -36,7 +36,7 @@ export async function enqueueIfRemote(
       ok: false,
       error: "read_only",
       message:
-        "Il controllo della squadra si fa dall'app desktop. Dal browser è sola visualizzazione.",
+        "Il controllo del team si fa dall'app desktop. Dal browser è sola visualizzazione.",
     },
     { status: 403 },
   );

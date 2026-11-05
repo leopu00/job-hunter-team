@@ -200,7 +200,7 @@ describe("toggle buttons: CV, recheck, geocoding", () => {
     await click(container.querySelector("button"));
 
     expect(alerts()).toEqual([
-      "Richiesta NON registrata: il team non la vede. Errore del server, riprova tra poco.",
+      "Richiesta NON registrata: la squadra non la vede. Errore del server, riprova tra poco.",
     ]);
   });
 });
