@@ -18,6 +18,8 @@ import { syntheticStats } from "../test-support/existing-team-stats-fixture";
 import { enterExistingTeamReadOnly, leaveExistingTeamReadOnly, existingTeamReadOnly } from "./existing-team-readonly";
 import { startVpsLink, stopVpsLink, vpsLinkState } from "./vps-link";
 import { REFRESH_EVENT } from "../shell/refresh-event";
+import { act, renderHook } from "@testing-library/react";
+import { setLocalTeamData, useLocalTeamSavedAt } from "./local-team-data";
 
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => native);
@@ -26,6 +28,37 @@ beforeEach(() => {
   resetCachedReads();
   native.invoke.mockReset();
   native.isTauri.mockReturnValue(true);
+});
+
+describe("the positions of a team that is off", () => {
+  afterEach(() => setLocalTeamData(null));
+
+  it("tells the pages their data are the saved ones, with when they were written, and clears it when the team is up", async () => {
+    setLocalTeamData("local:abc");
+    const view = renderHook(() => useLocalTeamSavedAt());
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [position] }, saved: { at: 1793879580 } });
+    await act(async () => {
+      await expect(readDesktopVpsPositionFacets()).resolves.toMatchObject({ source: "vps" });
+    });
+    expect(view.result.current).toBe(1793879580);
+    // the list the page asks for next is the saved one too, and it stays on show
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [position] }, saved: { at: null } });
+    await act(async () => {
+      await readDesktopVpsPositions({ q: "other" });
+    });
+    expect(view.result.current).toBe(0);
+    // a mark that is not a number is no moment, and a bad mark is never a stand-in for a team that is up
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [position] }, saved: { at: "yesterday" } });
+    await act(async () => {
+      await readDesktopVpsPositions({ q: "third" });
+    });
+    expect(view.result.current).toBe(0);
+    native.invoke.mockResolvedValueOnce({ ok: true, data: { items: [position] } });
+    await act(async () => {
+      await readDesktopVpsPositions({ q: "up" });
+    });
+    expect(view.result.current).toBeNull();
+  });
 });
 
 describe("existing-team positions bridge", () => {
