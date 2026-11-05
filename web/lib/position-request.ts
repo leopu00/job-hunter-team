@@ -20,7 +20,7 @@ import { writeFailureReason } from "@/lib/write-failure";
 
 export const POSITION_REQUEST = {
   request: {
-    it: "Richiesta NON registrata: il team non la vede.",
+    it: "Richiesta NON registrata: la squadra non la vede.",
     en: "Request NOT registered: the team does not see it.",
     hu: "A kérés NEM lett rögzítve: a csapat nem látja.",
     es: "Solicitud NO registrada: el equipo no la ve.",
@@ -29,7 +29,7 @@ export const POSITION_REQUEST = {
     pt: "Pedido NÃO registado: a equipa não o vê.",
   },
   cancel: {
-    it: "Annullamento NON registrato: il team vede ancora la richiesta.",
+    it: "Annullamento NON registrato: la squadra vede ancora la richiesta.",
     en: "Cancellation NOT registered: the team still sees the request.",
     hu: "A visszavonás NEM lett rögzítve: a csapat továbbra is látja a kérést.",
     es: "Cancelación NO registrada: el equipo aún ve la solicitud.",
@@ -38,7 +38,7 @@ export const POSITION_REQUEST = {
     pt: "Cancelamento NÃO registado: a equipa ainda vê o pedido.",
   },
   authorise: {
-    it: "Candidatura NON autorizzata: il team non la invierà.",
+    it: "Candidatura NON autorizzata: la squadra non la invierà.",
     en: "Application NOT authorised: the team will not send it.",
     hu: "A jelentkezés NINCS jóváhagyva: a csapat nem küldi el.",
     es: "Candidatura NO autorizada: el equipo no la enviará.",
@@ -47,7 +47,7 @@ export const POSITION_REQUEST = {
     pt: "Candidatura NÃO autorizada: a equipa não a vai enviar.",
   },
   withdraw: {
-    it: "Autorizzazione NON ritirata: il team può ancora inviare la candidatura.",
+    it: "Autorizzazione NON ritirata: la squadra può ancora inviare la candidatura.",
     en: "Authorisation NOT withdrawn: the team can still send the application.",
     hu: "A jóváhagyás NEM lett visszavonva: a csapat még elküldheti a jelentkezést.",
     es: "Autorización NO retirada: el equipo aún puede enviar la candidatura.",

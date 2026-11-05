@@ -9,7 +9,7 @@ const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Messaggi — Job Hunter",
     description:
-      "I messaggi del tuo team di agenti AI: notifiche, domande e digest — non letti in evidenza e storico completo",
+      "I messaggi della tua squadra di agenti AI: notifiche, domande e digest — non letti in evidenza e storico completo",
   },
   en: {
     title: "Messages — Job Hunter",

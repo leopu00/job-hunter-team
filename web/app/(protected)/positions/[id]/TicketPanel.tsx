@@ -10,7 +10,7 @@ import { splitTicketRequest } from "@/lib/ticket-attachment";
 import { clipboardImageFile } from "@/lib/clipboard-image";
 import { ticketErrorMessage } from "@/lib/ticket-error";
 
-// Sezione "Richieste al team" sulla pagina posizione. L'utente scrive una
+// Sezione "Richieste alla squadra" sulla pagina posizione. L'utente scrive una
 // richiesta testuale libera (popup) → ticket 'open'; il Capitano l'assegna a un
 // agente; l'agente risolve con una risposta testuale che compare qui sotto.
 // I CODICI di status (open/assigned/resolved) sono stabili nel DB; le label sono i18n.
@@ -72,19 +72,19 @@ const T: Record<
       assigned: "In lavorazione",
       resolved: "Risolto",
     },
-    sectionTitle: "Richieste al team",
+    sectionTitle: "Richieste alla squadra",
     newRequest: "+ Nuova richiesta",
     close: "Chiudi",
     placeholder:
-      "Scrivi cosa vuoi che il team faccia su questa offerta (es. verifica lo stipendio reale, controlla la cultura aziendale, riassumi i requisiti…)",
+      "Scrivi cosa vuoi che la squadra faccia su questa offerta (es. verifica lo stipendio reale, controlla la cultura aziendale, riassumi i requisiti…)",
     cancel: "Annulla",
     sending: "Invio…",
     sendRequest: "Invia richiesta",
     writeRequest: "Scrivi la richiesta",
     networkError: "Errore di rete",
     emptyState:
-      "Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa su questa offerta.",
-    teamResponse: "Risposta del team",
+      "Nessuna richiesta. Usa “Nuova richiesta” per chiedere alla squadra qualcosa su questa offerta.",
+    teamResponse: "Risposta della squadra",
     attachFile: "Allega un file",
     removeFile: "Rimuovi allegato",
     pasteTooLarge: "L'immagine incollata supera il limite di 10 MB",

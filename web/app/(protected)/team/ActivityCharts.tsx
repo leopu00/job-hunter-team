@@ -68,7 +68,7 @@ const T: Record<
     pctActions: (pct) => `${pct}% · azioni`,
     noActivity: "Nessuna attività nel periodo selezionato",
     noActivityHint:
-      "Prova ad allargare il range, oppure avvia il team perché i grafici si popolino — i dati arrivano da SQLite locale (o da Supabase quando sincronizzato).",
+      "Prova ad allargare il range, oppure avvia la squadra perché i grafici si popolino — i dati arrivano da SQLite locale (o da Supabase quando sincronizzato).",
     leaderboard: "Leaderboard · nel periodo",
     leaderboardHint:
       "Per ruolo e per singola istanza (es. scout-1), sul range selezionato.",

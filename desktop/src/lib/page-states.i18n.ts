@@ -26,7 +26,7 @@ export const PAGE_STATES_TEXT: Record<Locale, PageStatesText> = {
     loadingAgents: "Caricamento agenti",
     loadingOffice: "Caricamento ufficio",
     dashboardFailed: "Non riesco a leggere la dashboard. Controlla la connessione e premi «Aggiorna».",
-    dashboardTeamOff: "Il team è spento. I dati della dashboard compaiono appena lo accendi.",
+    dashboardTeamOff: "La squadra è spenta. I dati della dashboard compaiono appena la accendi.",
     agentsFailed: "Non riesco a leggere gli agenti. Controlla la connessione e premi «Aggiorna».",
     officeNoAssets: "L'arte dell'ufficio non è ancora nell'app.",
     officeFailed: "Non riesco a caricare l'ufficio. Premi «Aggiorna» o riapri la pagina.",

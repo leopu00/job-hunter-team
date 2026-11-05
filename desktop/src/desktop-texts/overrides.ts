@@ -17,8 +17,8 @@ const MOBILE_TEAM_STATUS = "web/app/(protected)/team/MobileTeamStatus.tsx";
 export const TEXT_OVERRIDES: TextOverride[] = [
   {
     file: ACTIVITY_CHARTS,
-    from: "Prova ad allargare il range, oppure avvia il team perché i grafici si popolino — i dati arrivano da SQLite locale (o da Supabase quando sincronizzato).",
-    to: "Nessun dato del team: arriva quando il tuo team sincronizza col cloud.",
+    from: "Prova ad allargare il range, oppure avvia la squadra perché i grafici si popolino — i dati arrivano da SQLite locale (o da Supabase quando sincronizzato).",
+    to: "Nessun dato della squadra: arriva quando la tua squadra sincronizza col cloud.",
   },
   {
     file: ACTIVITY_CHARTS,
@@ -61,7 +61,7 @@ export const TEXT_OVERRIDES: TextOverride[] = [
   {
     file: MOBILE_TEAM_STATUS,
     from: "La vista mobile è sola lettura, tranne lo stop d'emergenza.",
-    to: "Qui vedi lo stato del team; la pausa e lo stop sono nel Pannello Agenti. Il runtime viene configurato durante l’onboarding.",
+    to: "Qui vedi lo stato della squadra; la pausa e lo stop sono nel Pannello Agenti. Il runtime viene configurato durante l’onboarding.",
   },
   {
     file: MOBILE_TEAM_STATUS,

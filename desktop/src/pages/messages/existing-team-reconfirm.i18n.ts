@@ -11,11 +11,11 @@ export interface ExistingTeamReconfirmText {
 
 export const EXISTING_TEAM_RECONFIRM_TEXT: Record<Locale, ExistingTeamReconfirmText> = {
   it: {
-    title: "Collega il team per scrivere",
+    title: "Collega la squadra per scrivere",
     intro: "Per scrivere agli agenti l’app deve collegarsi di nuovo a questa squadra, come al primo collegamento. Controlla che i dati siano quelli che ti aspetti.",
     account: "Account",
     loading: "Leggo il collegamento salvato…",
-    working: "Collego il team…",
+    working: "Collego la squadra…",
   },
   en: {
     title: "Connect the team to write",

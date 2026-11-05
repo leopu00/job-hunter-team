@@ -28,7 +28,7 @@ export const SHELL_TEXT: Record<Locale, ShellText> = {
     signOut: "Disconnetti",
     signingOut: "Disconnessione…",
     signOutFailed: "Disconnessione non riuscita. Il runtime resta bloccato su questo account.",
-    signOutNote: "Disconnettiti da questo account. Il team collegato e i tuoi dati non vengono cancellati.",
+    signOutNote: "Disconnettiti da questo account. La squadra collegata e i tuoi dati non vengono cancellati.",
     pageReadFailed: (refresh) => `Non riesco a leggere questa pagina. Controlla la connessione e premi «${refresh}».`,
   },
   en: {

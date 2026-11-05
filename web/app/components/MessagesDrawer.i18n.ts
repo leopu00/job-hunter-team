@@ -22,7 +22,7 @@ export const T = {
     pt: "Mensagens",
   },
   aria_open: {
-    it: "Apri i messaggi del team",
+    it: "Apri i messaggi della squadra",
     en: "Open team messages",
     hu: "Csapatüzenetek megnyitása",
     es: "Abrir mensajes del equipo",
@@ -49,7 +49,7 @@ export const T = {
     pt: "Voltar",
   },
   empty: {
-    it: "Nessun messaggio dal team, per ora.",
+    it: "Nessun messaggio dalla squadra, per ora.",
     en: "No messages from the team yet.",
     hu: "Egyelőre nincs üzenet a csapattól.",
     es: "Aún no hay mensajes del equipo.",

@@ -35,7 +35,7 @@ const T: Record<Locale, UserMenuStrings> = {
     legal: "Privacy e termini",
     backup: "Backup",
     logout: "Disconnetti",
-    connectTeam: "Collega il tuo team",
+    connectTeam: "Collega la tua squadra",
     support: "Segnala un problema",
   },
   en: {

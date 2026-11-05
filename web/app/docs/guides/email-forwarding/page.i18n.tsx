@@ -642,7 +642,7 @@ export const T: Record<Locale, Strings> = {
     ),
     rowDedicatedValue: (
       <>
-        scegli <strong>Sì: il team legge tutta la casella</strong>. Con{" "}
+        scegli <strong>Sì: la squadra legge tutta la casella</strong>. Con{" "}
         <em>No</em> il team legge solo i mittenti ammessi.
       </>
     ),
@@ -678,7 +678,7 @@ export const T: Record<Locale, Strings> = {
     step2Save: (
       <>
         Poi premi <strong>Salva la password</strong>. L&apos;app risponde{" "}
-        <em>Password salvata. Il team usa la nuova da subito.</em> e la pagina{" "}
+        <em>Password salvata. La squadra usa la nuova da subito.</em> e la pagina{" "}
         <strong>Posta</strong> mostra lo stato <strong>configurata</strong>. La
         sezione <strong>Server di posta</strong> serve solo se l&apos;app non
         riconosce il tuo provider.

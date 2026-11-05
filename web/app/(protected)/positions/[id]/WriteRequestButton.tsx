@@ -33,8 +33,8 @@ const T: Record<
 > = {
   it: {
     title: "Richiedi il CV su misura",
-    desc: "Il team scrive un CV su misura per questa offerta",
-    requestedDesc: "CV richiesto al team — tocca per annullare",
+    desc: "La squadra scrive un CV su misura per questa offerta",
+    requestedDesc: "CV richiesto alla squadra — tocca per annullare",
     sending: "Un momento…",
     unavailable: "Non disponibile",
   },

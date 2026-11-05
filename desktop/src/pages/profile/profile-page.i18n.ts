@@ -28,7 +28,7 @@ export const PROFILE_PAGE_TEXT: Record<Locale, ProfilePageText> = {
   it: {
     linkedinAria: "Accesso a LinkedIn",
     linkedinTitle: "Accesso a LinkedIn per le candidature",
-    linkedinIntro: "L’accesso si fa nel browser protetto del team, in una finestra a parte. Gli agenti non vedono la password e non leggono i dati della sessione: la usano solo per candidarsi al posto tuo.",
+    linkedinIntro: "L’accesso si fa nel browser protetto della squadra, in una finestra a parte. Gli agenti non vedono la password e non leggono i dati della sessione: la usano solo per candidarsi al posto tuo.",
     statusLabel: "Stato:",
     statusLoading: "verifica…",
     statusUnknown: "non disponibile",

@@ -12,10 +12,10 @@ const it = {
   title: "Questo computer",
   intro: "Job Hunter Team installato su questo computer.",
   removeTitle: "Rimuovi JHT da questo computer",
-  removeIntro: "Toglie il team da questo computer. Prima di confermare, leggi cosa si cancella e cosa resta.",
+  removeIntro: "Toglie la squadra da questo computer. Prima di confermare, leggi cosa si cancella e cosa resta.",
   removesTitle: "Si cancella",
   removes: [
-    "la macchina Podman di JHT in WSL, con il suo disco: il container del team, il servizio che lo tiene acceso, le CLI dei provider installate e i segreti del broker (password della posta, accessi ai portali)",
+    "la macchina Podman di JHT in WSL, con il suo disco: il container della squadra, il servizio che lo tiene acceso, le CLI dei provider installate e i segreti del broker (password della posta, accessi ai portali)",
     "l’attività pianificata «Job Hunter Team - Start runtime», che all’accesso a Windows riaccendeva la macchina",
     "il runtime di JHT nella cartella Job Hunter Team\\host-runtime dei dati delle app",
     "i comandi di JHT in .local\\bin (jht e docker.exe); la cartella e la sua voce nel PATH solo se non contiene altro",
@@ -30,7 +30,7 @@ const it = {
     "le altre macchine Podman, Docker Desktop e le tue distribuzioni WSL",
     "questa app: si disinstalla da Impostazioni › App",
   ],
-  after: "Dopo, l’app torna al primo avvio: potrai preparare di nuovo il team su questo computer oppure su una VPS.",
+  after: "Dopo, l’app torna al primo avvio: potrai preparare di nuovo la squadra su questo computer oppure su una VPS.",
   confirmLabel: "Ho letto cosa si cancella e cosa resta: confermo la rimozione.",
   removeButton: "Rimuovi JHT da questo computer",
   removing: "Rimozione in corso…",
@@ -47,7 +47,7 @@ const it = {
   },
   incompleteAction: "Riprova: la rimozione riprende da dove si è fermata. Se si ripete, riavvia il computer e riprova.",
   retry: "Riprova",
-  unavailable: "Da qui non c’è niente da rimuovere: su questo computer non risulta un team JHT installato dall’app con la rimozione disponibile.",
+  unavailable: "Da qui non c’è niente da rimuovere: su questo computer non risulta una squadra JHT installata dall’app con la rimozione disponibile.",
 };
 
 export type ComputerCopy = typeof it;

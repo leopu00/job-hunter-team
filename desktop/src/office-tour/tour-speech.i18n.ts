@@ -12,7 +12,7 @@ export const TOUR_SPEECH: Record<TourStopSlug, { greet: LocaleDict; reply: Local
   assistente: {
     greet: {
       en: "Come meet your new team.",
-      it: "Vieni, ti presento il tuo nuovo team.",
+      it: "Vieni, ti presento la tua nuova squadra.",
       hu: "Gyere, bemutatom az új csapatodat.",
       es: "Ven, te presento a tu nuevo equipo.",
       de: "Komm, ich stelle dir dein neues Team vor.",

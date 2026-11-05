@@ -43,7 +43,7 @@ const T: Record<
     assignedDesc: "Lo Scorer sta rivalutando questa posizione",
     sending: "Invio della richiesta…",
     unavailable: "La posizione non ha ancora uno score da rivalutare",
-    invalidResponse: "Il team non ha confermato la richiesta",
+    invalidResponse: "La squadra non ha confermato la richiesta",
   },
   en: {
     title: "Re-evaluate this position",

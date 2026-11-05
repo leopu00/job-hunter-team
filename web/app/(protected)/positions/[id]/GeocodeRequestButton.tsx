@@ -33,8 +33,8 @@ const T: Record<
   it: {
     title: "Trova l'ufficio sulla mappa",
     titleRecompute: "Ricalcola la posizione dell'ufficio",
-    desc: "Il team cerca l'indirizzo esatto della sede e mette il pin preciso sulla mappa",
-    requestedDesc: "Richiesta inviata al team — tocca per annullare",
+    desc: "La squadra cerca l'indirizzo esatto della sede e mette il pin preciso sulla mappa",
+    requestedDesc: "Richiesta inviata alla squadra — tocca per annullare",
     sending: "Un momento…",
   },
   en: {

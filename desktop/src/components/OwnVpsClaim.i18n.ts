@@ -24,7 +24,7 @@ const it: OwnVpsClaimText = {
   button: "È la mia VPS",
   confirmTitle: "Confermi che questa VPS è tua?",
   confirmBody:
-    "Confermi di averla creata tu con questa app, per il tuo team. L’app lo verifica chiedendo alla VPS di quale account è. Dopo la conferma l’app potrà avviare, fermare e riavviare gli agenti e scrivere ai tuoi agenti su questa VPS. Se non l’hai creata tu, annulla.",
+    "Confermi di averla creata tu con questa app, per la tua squadra. L’app lo verifica chiedendo alla VPS di quale account è. Dopo la conferma l’app potrà avviare, fermare e riavviare gli agenti e scrivere ai tuoi agenti su questa VPS. Se non l’hai creata tu, annulla.",
   confirmKeyChanged:
     "La chiave di sicurezza della VPS è diversa da quella che avevi confermato: confermala solo se l’hai reinstallata o sostituita tu.",
   confirm: "Sì, è la mia",

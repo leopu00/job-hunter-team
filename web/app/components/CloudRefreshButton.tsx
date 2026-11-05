@@ -87,13 +87,13 @@ const T: Record<
     quarantined: (n) =>
       `${n} record locali richiedono attenzione. Gli altri dati continuano a sincronizzarsi.`,
     vpsSlow:
-      "Nessuna conferma entro tre minuti. Controlla che il team sia online e riprova.",
+      "Nessuna conferma entro tre minuti. Controlla che la squadra sia online e riprova.",
     syncTimedOut:
       "La sincronizzazione ha impiegato troppo ed è stata interrotta. Riprova.",
     syncPushPartial:
-      "Una parte dei dati non è stata confermata. Il resto è arrivato e il team riprova le righe rimaste.",
+      "Una parte dei dati non è stata confermata. Il resto è arrivato e la squadra riprova le righe rimaste.",
     syncPushFailed:
-      "L'invio si è interrotto prima della fine. I dati già confermati restano; il team riprova da solo.",
+      "L'invio si è interrotto prima della fine. I dati già confermati restano; la squadra riprova da sola.",
     syncAckFailed:
       "I dati potrebbero essere arrivati, ma manca la conferma. Attendi qualche secondo e riprova.",
     syncSuperseded:

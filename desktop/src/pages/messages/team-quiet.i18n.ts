@@ -18,15 +18,15 @@ export interface TeamQuietText {
 
 export const TEAM_QUIET_TEXT: Record<Locale, TeamQuietText> = {
   it: {
-    outsideToday: "Il team non scrive perché ora è fuori dall'orario di lavoro: riprende alle {time}.",
-    outsideTomorrow: "Il team non scrive perché ora è fuori dall'orario di lavoro: riprende domani alle {time}.",
-    outsideDay: "Il team non scrive perché ora è fuori dall'orario di lavoro: riprende {day} alle {time}.",
-    budgetFull: "Il team non scrive: ha esaurito la finestra di lavoro del provider. Riprende {when}.",
-    budgetNear: "La finestra di lavoro del provider è al {pct}%: il team rallenta e si riapre {when}.",
+    outsideToday: "La squadra non scrive perché ora è fuori dall'orario di lavoro: riprende alle {time}.",
+    outsideTomorrow: "La squadra non scrive perché ora è fuori dall'orario di lavoro: riprende domani alle {time}.",
+    outsideDay: "La squadra non scrive perché ora è fuori dall'orario di lavoro: riprende {day} alle {time}.",
+    budgetFull: "La squadra non scrive: ha esaurito la finestra di lavoro del provider. Riprende {when}.",
+    budgetNear: "La finestra di lavoro del provider è al {pct}%: la squadra rallenta e si riapre {when}.",
     inMinutes: "tra {n} min",
     inHours: "tra {h} h {m} min",
-    containment: "Un agente del team è fermo per un contenimento di sicurezza: dall'app non si può riavviare.",
-    provider: "Il provider del team non ha un accesso valido: il team non può lavorare finché non accedi di nuovo.",
+    containment: "Un agente della squadra è fermo per un contenimento di sicurezza: dall'app non si può riavviare.",
+    provider: "Il provider della squadra non ha un accesso valido: la squadra non può lavorare finché non accedi di nuovo.",
   },
   en: {
     outsideToday: "The team is not writing because it is outside its working hours now: it starts again at {time}.",

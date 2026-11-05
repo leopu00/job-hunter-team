@@ -21,12 +21,12 @@ const T: Record<
     dashboard: "Dashboard",
     team: "Team",
     log: "Registro",
-    titleActivity: "Attività del team",
+    titleActivity: "Attività della squadra",
     titleLog: "Registro attività",
     subtitleActivity: (from, to, total) =>
       `Chi ha lavorato e quanto · dal ${from} al ${to} · ${total} azioni totali`,
     subtitleLog: (total) =>
-      `Tutte le azioni del team, una riga per azione · ${total} azioni totali`,
+      `Tutte le azioni della squadra, una riga per azione · ${total} azioni totali`,
     logHint:
       "Ogni azione è attribuita all'istanza reale che l'ha eseguita (scout-N, analista-N, scorer-N), dall'event-log sincronizzato delle transizioni di stato.",
   },

@@ -34,9 +34,9 @@ const T: Record<
 > = {
   it: {
     title: "Verifica che sia ancora aperta",
-    desc: "Il team ricontrolla che l'annuncio sia ancora online",
+    desc: "La squadra ricontrolla che l'annuncio sia ancora online",
     lastCheck: (age) => ` · ultima verifica: ${age}`,
-    requestedDesc: "Richiesta inviata al team — tocca per annullare",
+    requestedDesc: "Richiesta inviata alla squadra — tocca per annullare",
     sending: "Un momento…",
     today: "oggi",
     daysAgo: (n) => (n === 1 ? "1 giorno fa" : `${n} giorni fa`),

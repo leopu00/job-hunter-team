@@ -361,7 +361,7 @@ export const T = {
     pt: "Notificações",
   },
   web_notifications_desc: {
-    it: "Notifiche del browser: messaggi del team e regole sulle posizioni",
+    it: "Notifiche del browser: messaggi della squadra e regole sulle posizioni",
     en: "Browser notifications: team messages and position rules",
     hu: "Böngészőértesítések: csapatüzenetek és pozíciószabályok",
     es: "Notificaciones del navegador: mensajes del equipo y reglas de posiciones",

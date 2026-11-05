@@ -11,7 +11,7 @@ export const CONNECT_TEAM_PROMPT_TEXT: Record<Locale, ConnectTeamPromptText> = {
   it: {
     title: "Nessuna squadra collegata a questa app",
     body: "Se hai già una squadra attiva su una VPS, collegala: l’app ti chiede i dati della VPS e controlla l’impronta SSH prima di salvare qualcosa.",
-    button: "Collega un team",
+    button: "Collega una squadra",
   },
   en: {
     title: "No team is connected to this app",

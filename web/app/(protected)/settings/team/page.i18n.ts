@@ -13,7 +13,7 @@ export const T = {
     pt: "Configurações",
   },
   title: {
-    it: "Orari e modelli del team",
+    it: "Orari e modelli della squadra",
     en: "Team hours and models",
     hu: "A csapat munkaideje és modelljei",
     es: "Horarios y modelos del equipo",
@@ -49,7 +49,7 @@ export const T = {
     pt: "A carregar…",
   },
   load_error: {
-    it: "Non riesco a leggere le impostazioni del team. Ricarica la pagina tra poco.",
+    it: "Non riesco a leggere le impostazioni della squadra. Ricarica la pagina tra poco.",
     en: "I can't read the team settings. Reload the page in a moment.",
     hu: "Nem tudom beolvasni a csapat beállításait. Töltsd újra az oldalt kicsit később.",
     es: "No puedo leer los ajustes del equipo. Recarga la página en un momento.",
@@ -94,7 +94,7 @@ export const T = {
     pt: "Pedido enviado: o computador aplicá-lo-á assim que estiver conectado.",
   },
   err_reauth_required: {
-    it: "Per cambiare le impostazioni del team serve un accesso recente: esci, rientra e riprova.",
+    it: "Per cambiare le impostazioni della squadra serve un accesso recente: esci, rientra e riprova.",
     en: "Changing the team settings needs a recent sign-in: sign out, sign in again and retry.",
     hu: "A csapat beállításainak módosításához friss bejelentkezés kell: jelentkezz ki, majd be, és próbáld újra.",
     es: "Para cambiar los ajustes del equipo hace falta un acceso reciente: cierra sesión, vuelve a entrar y reinténtalo.",
@@ -157,7 +157,7 @@ export const T = {
     pt: "Modelo e esforço por função",
   },
   models_desc: {
-    it: "Vale per gli agenti su Codex: sol è il più capace, terra l'equilibrato, luna il più leggero. «Predefinito» lascia la scelta del team. I ruoli che non tocchi qui restano come li hai impostati sul computer.",
+    it: "Vale per gli agenti su Codex: sol è il più capace, terra l'equilibrato, luna il più leggero. «Predefinito» lascia la scelta della squadra. I ruoli che non tocchi qui restano come li hai impostati sul computer.",
     en: "Applies to agents on Codex: sol is the most capable, terra the balanced one, luna the lightest. «Default» leaves the team's choice. Roles you don't touch here stay as you set them on the computer.",
     hu: "A Codexen futó ügynökökre vonatkozik: a sol a legképesebb, a terra a kiegyensúlyozott, a luna a legkönnyebb. Az «Alapértelmezett» a csapat választását hagyja. Az itt nem érintett szerepek úgy maradnak, ahogy a számítógépen beállítottad.",
     es: "Se aplica a los agentes en Codex: sol es el más capaz, terra el equilibrado, luna el más ligero. «Predeterminado» deja la elección del equipo. Los roles que no tocas aquí quedan como los configuraste en el ordenador.",

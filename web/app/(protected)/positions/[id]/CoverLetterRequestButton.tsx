@@ -31,11 +31,11 @@ export const COVER_LETTER_REQUEST_TEXT: Record<
 > = {
   it: {
     title: "Richiedi una cover letter",
-    desc: "Il team prepara una lettera su misura senza modificare il CV",
-    requestedDesc: "Cover letter richiesta al team — tocca per annullare",
+    desc: "La squadra prepara una lettera su misura senza modificare il CV",
+    requestedDesc: "Cover letter richiesta alla squadra — tocca per annullare",
     sending: "Un momento…",
     unavailable: "Disponibile dopo la creazione del CV",
-    invalidResponse: "Il team non ha confermato la richiesta",
+    invalidResponse: "La squadra non ha confermato la richiesta",
   },
   en: {
     title: "Request a cover letter",

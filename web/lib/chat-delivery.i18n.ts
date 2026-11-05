@@ -51,7 +51,7 @@ export const CHAT_DELIVERY_T = {
   // l'agente NON ha il messaggio, arriverà da sé, e riscriverlo non serve
   // (senza questa terza riga l'utente manda lo stesso testo cinque volte).
   stalled_hint: {
-    it: "Il team non ha ancora ritirato questo messaggio: l'agente non l'ha ricevuto. Verrà consegnato da sé appena il tuo box torna a leggere la chat — non serve riscriverlo.",
+    it: "La squadra non ha ancora ritirato questo messaggio: l'agente non l'ha ricevuto. Verrà consegnato da sé appena il tuo box torna a leggere la chat — non serve riscriverlo.",
     en: "The team hasn't picked this message up yet: the agent has not received it. It will be delivered on its own as soon as your box reads the chat again — no need to send it twice.",
     hu: "A csapat még nem vette át ezt az üzenetet: az ügynök nem kapta meg. Magától átadásra kerül, amint a boxod újra olvassa a chatet — nem kell újraírni.",
     es: "El equipo aún no ha recogido este mensaje: el agente no lo ha recibido. Se entregará solo en cuanto tu box vuelva a leer el chat — no hace falta reescribirlo.",

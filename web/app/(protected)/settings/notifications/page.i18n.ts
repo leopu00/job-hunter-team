@@ -28,7 +28,7 @@ export const T = {
     pt: "Notificações",
   },
   subtitle: {
-    it: "Notifiche del browser mentre il sito è aperto: messaggi dal team e posizioni che rispettano le tue regole.",
+    it: "Notifiche del browser mentre il sito è aperto: messaggi dalla squadra e posizioni che rispettano le tue regole.",
     en: "Browser notifications while the site is open: team messages and positions matching your rules.",
     hu: "Böngészőértesítések, amíg az oldal nyitva van: csapatüzenetek és a szabályaidnak megfelelő pozíciók.",
     es: "Notificaciones del navegador mientras el sitio está abierto: mensajes del equipo y posiciones que cumplen tus reglas.",
