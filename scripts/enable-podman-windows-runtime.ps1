@@ -29,7 +29,7 @@ $PodmanCliVersion = '6.0.2'
 # release's zip, pinned like docker-compose below. The SHA-256 is that of the asset of the release named by $PodmanCliVersion;
 # changing the version means changing it (tests/test_podman_windows_setup_retry.py reads both from here). Nothing is
 # extracted before the digest matches, and only the three programs named here are taken out, by their exact names.
-$PodmanZipUrl = "https://github.com/containers/podman/releases/download/v$PodmanCliVersion/podman-remote-release-windows_amd64.zip"
+$PodmanZipUrl = "https://github.com/podman-container-tools/podman/releases/download/v$PodmanCliVersion/podman-remote-release-windows_amd64.zip"
 $PodmanZipSha256 = '2c055d363de03de917f79568a78b7d5902fc40453bbcc141ca18cf0a1fa1b78e'
 $PodmanZipPrograms = @('podman.exe', 'gvproxy.exe', 'win-sshproxy.exe')
 $ComposeProviderVersion = '5.1.2'
