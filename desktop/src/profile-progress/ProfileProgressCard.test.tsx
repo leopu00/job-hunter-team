@@ -1,9 +1,14 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { locales } from "@/i18n/config";
 import { ProfileProgressCard } from "./ProfileProgressCard";
-import { PROFILE_FIELD_KEYS, type ProfileProgress } from "./contract";
+import { PROFILE_FIELD_KEYS, PROFILE_REREAD_EVENT, type ProfileProgress } from "./contract";
+import { describeError } from "../lib/error-catalog";
 import { PROFILE_PROGRESS_TEXT } from "./profile-progress.i18n";
+
+const reconnectDirectChat = vi.hoisted(() => vi.fn(async () => ({ state: "ready" })));
+vi.mock("../lib/direct-chat", async (importOriginal) => ({ ...(await importOriginal<typeof import("../lib/direct-chat")>()), reconnectDirectChat }));
 
 function ready(filled: number, over: Partial<ProfileProgress> = {}): ProfileProgress {
   return {
@@ -86,6 +91,35 @@ describe("the profile card", () => {
     expect(screen.getByTestId("profile-progress-unavailable")).toHaveTextContent("Il profilo comparirà qui");
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByTestId("profile-progress-bar")).toBeNull();
+  });
+
+  it("says the reason of a read that failed — by its own sentence, never its code — and keeps «no profile yet» as the calm line", () => {
+    const failed = (reason: string) => ({ state: "unavailable" as const, reason, fields: [], filled: 0, total: 8 });
+    const view = render(<ProfileProgressCard progress={failed("process_timeout")} />);
+    const said = screen.getByTestId("profile-progress-failed");
+    expect(said).toHaveTextContent(describeError("process_timeout", { locale: "it" }).text);
+    expect(said).not.toHaveTextContent("process_timeout");
+    expect(screen.queryByTestId("profile-progress-unavailable")).toBeNull();
+    view.rerender(<ProfileProgressCard progress={failed("profile_reply_unexpected")} />);
+    expect(screen.getByTestId("profile-progress-failed")).toHaveTextContent("non riconosce");
+    view.rerender(<ProfileProgressCard progress={{ state: "unavailable", fields: [], filled: 0, total: 8 }} />);
+    expect(screen.queryByTestId("profile-progress-failed")).toBeNull();
+    expect(screen.getByTestId("profile-progress-unavailable")).toBeInTheDocument();
+  });
+
+  it("offers «Ricollega la chat» only when the chat is not connected, connects it and asks the cards to read again", async () => {
+    const failed = (reason: string) => ({ state: "unavailable" as const, reason, fields: [], filled: 0, total: 8 });
+    const view = render(<ProfileProgressCard progress={failed("process_timeout")} />);
+    expect(screen.queryByTestId("profile-progress-reconnect")).toBeNull();
+    view.rerender(<ProfileProgressCard progress={failed("disconnected")} />);
+    expect(screen.getByTestId("profile-progress-failed")).toHaveTextContent(describeError("disconnected", { locale: "it" }).text);
+    const reread = vi.fn();
+    window.addEventListener(PROFILE_REREAD_EVENT, reread);
+    await userEvent.setup().click(screen.getByTestId("profile-progress-reconnect"));
+    await waitFor(() => expect(reread).toHaveBeenCalledTimes(1));
+    expect(reconnectDirectChat).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("profile-progress-reconnect")).toHaveTextContent("Ricollega la chat");
+    window.removeEventListener(PROFILE_REREAD_EVENT, reread);
   });
 
   it("is in every language, with every field named and nothing left empty", () => {

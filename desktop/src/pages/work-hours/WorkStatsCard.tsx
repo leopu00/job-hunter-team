@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
-import { describeError } from "../../lib/error-catalog";
+import { reconnectDirectChat } from "../../lib/direct-chat";
+import { describeError, errorCodeOf } from "../../lib/error-catalog";
+import { BUDGET_TEXT } from "../budget/budget.i18n";
 import { clearWorkStats, readWorkStats, type WorkNight, type WorkStats } from "../../lib/work-stats-native";
 import type { WorkingHours } from "../../lib/team-settings-native";
 import type { Locale } from "@/i18n/config";
@@ -15,7 +17,7 @@ export const STALE_AFTER_DAYS = 7;
 type Loaded = { kind: "loading" } | { kind: "failed"; code: string } | { kind: "ready"; stats: WorkStats };
 
 function errorText(code: string): string {
-  const copy = describeError(code, { fallback: "stats_unavailable", locale: appLocale() });
+  const copy = describeError(code, { fallback: "stats_unreadable", locale: appLocale() });
   return `${copy.text} ${copy.action}`;
 }
 
@@ -51,6 +53,7 @@ export default function WorkStatsCard({ target, hours, now = new Date() }: { tar
   const [asking, setAsking] = useState(false);
   const [clearProblem, setClearProblem] = useState<string | null>(null);
   const [cleared, setCleared] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const load = useCallback(async () => {
     setLoaded({ kind: "loading" });
@@ -60,6 +63,20 @@ export default function WorkStatsCard({ target, hours, now = new Date() }: { tar
   useEffect(() => {
     void load();
   }, [load]);
+
+  // «Reconnect the chat»: the same native reconnect the Budget page and the chat's own page use; then the statistics are read again.
+  const reconnect = async () => {
+    setReconnecting(true);
+    try {
+      await reconnectDirectChat();
+    } catch (error) {
+      setLoaded({ kind: "failed", code: errorCodeOf(error) ?? "disconnected" });
+      setReconnecting(false);
+      return;
+    }
+    setReconnecting(false);
+    await load();
+  };
 
   const clear = async () => {
     setClearProblem(null);
@@ -94,9 +111,15 @@ export default function WorkStatsCard({ target, hours, now = new Date() }: { tar
         <div role="alert" data-testid="work-stats-failed" className="text-[12px]">
           <p className="m-0 text-[var(--color-yellow)]">{t.readFailed}</p>
           <p className="m-0 mt-1 text-[var(--color-muted)]">{errorText(loaded.code)}</p>
-          <button type="button" onClick={() => void load()} className="mt-2 text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]">
-            {t.retry}
-          </button>
+          {loaded.code === "disconnected" ? (
+            <button type="button" data-testid="work-stats-reconnect" disabled={reconnecting} onClick={() => void reconnect()} className="mt-2 text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)] disabled:opacity-60">
+              {BUDGET_TEXT[locale].reconnect}
+            </button>
+          ) : (
+            <button type="button" onClick={() => void load()} className="mt-2 text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]">
+              {t.retry}
+            </button>
+          )}
         </div>
       )}
       {loaded.kind === "ready" && <StatsBody stats={loaded.stats} t={t} locale={locale} unit={unit} sample={sample} now={now} />}
