@@ -72,6 +72,13 @@ const NOT_ERRORS: Record<string, string> = {
       "write",
     ].map((word) => [word, "a name or a value of the position page's act (an operation, a field of its request or of the answer); never shown"]),
   ),
+  // team_update.rs / onboarding.rs (JHT-T173): the phases and the reasons of `jht upgrade --json`, the two ways of the
+  // update and the ids of the steps in runtime.log. The page tells each of them in its own seven-language lines
+  // (TeamUpdateRun.i18n.ts); a word is never put in front of the person as an error.
+  ...Object.fromEntries(
+    ["candidate_metadata", "download_failed", "in_progress", "podman_machine_mounts", "release_unreachable", "test_channel", "reinstall", "upgrade", "down"]
+      .map((code) => [code, "a phase, a reason or a way of the team's update, told by TeamUpdateRun in seven languages; never shown as an error"]),
+  ),
   // team_provider.rs: the verb the box's door is asked for (`agent-control provider logout`), never shown.
   logout: "a verb of the box's door for the provider's sign-in, not an error",
   // team_start.rs: a value of the phase the first start is in, read by the page, not an error.

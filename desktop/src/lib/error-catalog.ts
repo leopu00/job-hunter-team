@@ -2627,6 +2627,38 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The subscription plan could not be saved.",
     "Try again, or choose later: the Assistant asks you in the chat.",
   ),
+
+  // ── The team's update from the app (onboarding_team_update, team_update.rs; JHT-T173) ──
+  team_update_failed: copy(
+    "L’aggiornamento della squadra non è riuscito.",
+    "Riprova. Se si ripete, riavvia Job Hunter Team.",
+    "The team could not be updated.",
+    "Try again. If it happens again, restart Job Hunter Team.",
+  ),
+  team_update_wrapper_outdated: copy(
+    "Questo computer non sa ancora aggiornare la squadra dall’app.",
+    "Apri il Terminale (su Windows: PowerShell) e lancia il comando «jht upgrade».",
+    "This computer cannot update the team from the app yet.",
+    "Open the Terminal (on Windows: PowerShell) and run the command “jht upgrade”.",
+  ),
+  team_update_unsupported: copy(
+    "Su questo sistema l’aggiornamento della squadra dall’app non c’è ancora.",
+    "Apri il Terminale (su Windows: PowerShell) e lancia il comando «jht upgrade».",
+    "Updating the team from the app is not available on this system yet.",
+    "Open the Terminal (on Windows: PowerShell) and run the command “jht upgrade”.",
+  ),
+  team_update_channel_mismatch: copy(
+    "Questa app e la squadra vengono da due build diverse (prova e produzione), quindi non aggiorno la squadra.",
+    "Installa di nuovo la stessa build di questa app, oppure usa l’app che corrisponde alla squadra.",
+    "This app and the team come from two different builds (test and production), so I do not update the team.",
+    "Install the same build as this app again, or use the app that matches the team.",
+  ),
+  team_update_runtime_invalid: copy(
+    "I file della squadra su questo computer non sono quelli attesi, quindi non la aggiorno.",
+    "Installa di nuovo Job Hunter Team, poi riprova.",
+    "The team’s files on this computer are not the expected ones, so I do not update it.",
+    "Install Job Hunter Team again, then try again.",
+  ),
 };
 
 /**

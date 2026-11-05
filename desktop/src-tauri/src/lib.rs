@@ -24,6 +24,7 @@ mod existing_team_register;
 #[cfg(all(test, unix))]
 mod existing_team_register_tests;
 mod existing_team_runtime;
+mod linux_render;
 mod live_screen;
 mod local_action_log;
 mod local_position_act;
@@ -53,6 +54,7 @@ mod chat_attachment;
 mod profile_progress;
 mod state_stream;
 mod team_start;
+mod team_update;
 mod work_stats;
 mod team_budget;
 mod text_file_export;
@@ -67,6 +69,7 @@ pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    linux_render::apply();
     tauri::Builder::default()
         // first of all the plugins: a second opening of the app hands over to the one already open and ends here
         // (single_instance.rs); the arguments and the folder it brings are not read
@@ -183,6 +186,7 @@ pub fn run() {
             onboarding::onboarding_existing_team_reopen,
             onboarding::onboarding_podman_machine_recreate,
             onboarding::onboarding_clean_images,
+            onboarding::onboarding_team_update,
             onboarding::onboarding_plans,
             onboarding::onboarding_plan_declare,
             onboarding::onboarding_local_uninstall_available,
