@@ -2965,6 +2965,7 @@ fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &
         request,
         request_bytes,
         &crate::local_swipe::scope_tag(scope),
+        local_machine_is_off,
         |input| crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "python"], Some(input), READ_TIMEOUT),
         || {
             crate::onboarding::run_verified_local_wrapper(&wrapper, &["desktop-chat", "probe"], None, LOCAL_PROBE_TIMEOUT)
@@ -2999,6 +3000,30 @@ pub(crate) fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope)
     Ok(wrapper)
 }
 
+/// Whether the machine that runs this computer's team is stopped. Only Windows has a machine of its own (Podman's); on
+/// the other systems the container is asked and the answer to a container that is off comes from the wrapper.
+pub(crate) fn local_machine_is_off() -> bool {
+    #[cfg(windows)]
+    {
+        // One question a few seconds apart, not one per read: a page asks several things in a row.
+        static LAST: std::sync::Mutex<Option<(Instant, bool)>> = std::sync::Mutex::new(None);
+        const FRESH: Duration = Duration::from_secs(3);
+        let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((at, off)) = *last {
+            if at.elapsed() < FRESH {
+                return off;
+            }
+        }
+        let off = crate::podman::jht_machine_is_off();
+        *last = Some((Instant::now(), off));
+        off
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 /// One run of the reader in this computer's container, then its reply. A run that fails is told apart by asking
 /// whether the team is up (`team_is_up`, asked only then): a container that is off says so, in the chat's own
 /// words; anything else is the reader's failure.
@@ -3006,10 +3031,16 @@ fn positions_read_local_with(
     request: &PositionsRequest,
     request_bytes: &[u8],
     token_tag: &str,
+    machine_is_off: impl FnOnce() -> bool,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
     saved: impl FnOnce() -> Option<Value>,
 ) -> Value {
+    // The team's machine is stopped (asked by a read of its state, which starts nothing): the wrapper is not called at all,
+    // because a call to the engine of a stopped machine is not known to leave it alone. The pages show what the team saved.
+    if machine_is_off() {
+        return saved().unwrap_or_else(|| positions_failure("local_team_not_running"));
+    }
     let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
     input.push(b'\n');
     input.extend_from_slice(request_bytes);
@@ -4294,14 +4325,40 @@ mod tests {
     fn a_team_that_is_off_answers_from_its_saved_data_and_one_that_is_up_does_not_ask_for_them() {
         let failed = || Err("spawn_failed");
         let saved = json!({"ok": true, "data": {"items": []}, "saved": {"at": 1793879580}});
-        let off = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", |_| failed(), || false, || Some(saved.clone()));
+        let off = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", || false, |_| failed(), || false, || Some(saved.clone()));
         assert_eq!(off, saved);
         // nothing saved to answer with: the sentence it always was
-        let none = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", |_| failed(), || false, || None);
+        let none = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", || false, |_| failed(), || false, || None);
         assert_eq!(none, positions_failure("local_team_not_running"));
         // the team is up and the reader failed: the saved data are not a stand-in for a failure of a team that is running
-        let up = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", |_| failed(), || true, || panic!("not asked"));
+        let up = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", || false, |_| failed(), || true, || panic!("not asked"));
         assert_eq!(up, positions_answer_failure("positions_unavailable"));
+    }
+
+    #[test]
+    fn a_stopped_machine_is_never_asked_for_anything_and_the_pages_show_what_the_team_saved() {
+        let saved = json!({"ok": true, "data": {"items": []}, "saved": {"at": 1793879580}});
+        let shown = positions_read_local_with(
+            &PositionsRequest::Facets,
+            br#"{"op":"facets"}"#,
+            "0123456789abcdef",
+            || true,
+            |_| panic!("the wrapper must not be called for a stopped machine"),
+            || panic!("nor the question whether the team is up"),
+            || Some(saved.clone()),
+        );
+        assert_eq!(shown, saved);
+        // nothing saved to show: the sentence it always was, and still nothing asked of the machine
+        let empty = positions_read_local_with(
+            &PositionsRequest::Facets,
+            br#"{"op":"facets"}"#,
+            "0123456789abcdef",
+            || true,
+            |_| panic!("the wrapper must not be called for a stopped machine"),
+            || panic!("nor the question whether the team is up"),
+            || None,
+        );
+        assert_eq!(empty, positions_failure("local_team_not_running"));
     }
 
     /// The read of this computer's team, with the fixed reader on stdin and the team's state asked only after a failure.
@@ -4311,6 +4368,7 @@ mod tests {
             &PositionsRequest::Facets,
             br#"{"op":"facets"}"#,
             "0123456789abcdef",
+            || false,
             |input| {
                 // the same reader and request as the VPS gets, on stdin: the reader in hex, then the request
                 let text = String::from_utf8(input.to_vec()).unwrap();

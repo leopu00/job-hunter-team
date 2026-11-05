@@ -370,6 +370,14 @@ fn machine_state(timeout: Duration) -> MachineState {
     machine_state_from(outcome, &stderr)
 }
 
+/// Whether Podman says the JHT machine is stopped (or not there): a read of its state, `machine inspect`, which starts
+/// nothing. An answer that is not a clear «stopped» (Podman not found, a timeout, any other state) is NOT «off»: the
+/// caller then does what it always did. Used to read the saved data of the team without ever touching its machine.
+#[cfg(windows)]
+pub(crate) fn jht_machine_is_off() -> bool {
+    machine_state(LISTING_TIMEOUT) == MachineState::Off
+}
+
 /// What to do with the machine, from what is known of it: the end, or to stop it. It falls on the safe side: a machine
 /// that may be on with containers nobody could list is not stopped.
 #[derive(Debug, PartialEq, Eq)]

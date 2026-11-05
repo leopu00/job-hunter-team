@@ -103,7 +103,7 @@ const NOT_ERRORS: Record<string, string> = {
   // host_db.rs (the saved data of a team that is off): the two answers the caller turns into «the team is not running»
   // before the page sees them; the other five codes of the module have their sentence in the catalog.
   host_db_missing: "no jobs.db yet (the team never ran here): the read answers an empty team, the page never gets the code",
-  host_db_unavailable: "a system without the host reader (Windows for now): the read falls back to local_team_not_running",
+  host_db_unavailable: "a system without the host reader: the read falls back to local_team_not_running",
   // runtime_log.rs: why a copy of a support report was not kept or its folder not shown. The report's box
   // answers in its own seven-language lines (copyFailed, showFailed); the code is never put in front of the person.
   ...Object.fromEntries(
