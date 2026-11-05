@@ -285,3 +285,103 @@ def test_host_preflight_rejects_invalid_environment_bootstrap(tmp_path):
     assert result.returncode == 0, result.stderr
     assert json.loads(prefs.read_text(encoding="utf-8")) == {"locale": "hu"}
     assert "JHT_LANG=hu\n" in (jht_home / "host.env").read_text(encoding="utf-8")
+
+
+# JHT-T172: a machine with NO choice at all takes the system's language, not English. The rule is the CLI's own
+# (cli/src/lib/texts.js): the first of LC_ALL, LC_MESSAGES, LANG that is set decides, and «C», «POSIX» or a
+# language we do not have mean English. A choice that exists (prefs, JHT_LANG, host.env) still wins, and RULE-T14
+# does not change: the language of a message never decides the team's.
+def _host_setup(tmp_path, env_line, *, prefs=None, host_env=None):
+    home = tmp_path / "host-home"
+    jht_home = home / ".jht"
+    jht_home.mkdir(parents=True)
+    if prefs is not None:
+        (jht_home / "i18n-prefs.json").write_text(json.dumps({"locale": prefs}), encoding="utf-8")
+    if host_env is not None:
+        (jht_home / "host.env").write_text(host_env, encoding="utf-8")
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            # the machine's own language settings are taken out first: only what the test says is set
+            "unset LC_ALL LC_MESSAGES LANG JHT_LANG; "
+            f"export HOME='{_bash_path(home)}' JHT_HOME_HOST='{_bash_path(jht_home)}' JHT_USER_TZ=Europe/Rome; "
+            f"{env_line}; "
+            "bash scripts/host-setup.sh --host-type=local --non-interactive",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    return jht_home, json.loads((jht_home / "i18n-prefs.json").read_text(encoding="utf-8"))["locale"], (
+        jht_home / "host.env"
+    ).read_text(encoding="utf-8")
+
+
+def test_with_no_choice_at_all_the_language_of_the_system_is_the_default(tmp_path):
+    _, locale, host_env = _host_setup(tmp_path, "export LANG=it_IT.UTF-8")
+    assert locale == "it"
+    assert "JHT_LANG=it\n" in host_env
+
+
+def test_the_first_system_variable_that_is_set_decides_and_c_or_an_unknown_language_is_english(tmp_path):
+    for n, (line, expected) in enumerate(
+        [
+            ("export LC_ALL=C LANG=it_IT.UTF-8", "en"),  # LC_ALL decides, and C is English: not «look at the next one»
+            ("export LC_MESSAGES=de_DE.UTF-8 LANG=it_IT.UTF-8", "de"),
+            ("export LANG=pt_BR.UTF-8", "pt"),
+            ("export LANG=hu", "hu"),
+            ("export LANG=ja_JP.UTF-8", "en"),
+            ("export LANG=POSIX", "en"),
+            ("export LANG=IT_it", "it"),
+            ("true", "en"),  # nothing set at all
+        ]
+    ):
+        _, locale, _ = _host_setup(tmp_path / str(n), line)
+        assert locale == expected, line
+
+
+def test_an_explicit_choice_always_beats_the_system_language(tmp_path):
+    assert _host_setup(tmp_path / "a", "export LANG=it_IT.UTF-8 JHT_LANG=de")[1] == "de"
+    assert _host_setup(tmp_path / "b", "export LANG=it_IT.UTF-8", prefs="fr")[1] == "fr"
+    assert _host_setup(tmp_path / "c", "export LANG=it_IT.UTF-8", host_env="JHT_LANG=hu\n")[1] == "hu"
+    # an explicit English is a choice too: it is not replaced by the system's Italian
+    assert _host_setup(tmp_path / "d", "export LANG=it_IT.UTF-8 JHT_LANG=en")[1] == "en"
+
+
+def test_an_italian_system_gives_an_italian_team_down_to_the_line_the_agents_are_told(tmp_path):
+    jht_home, locale, _ = _host_setup(tmp_path, "export LANG=it_IT.UTF-8")
+    assert locale == "it"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_jq(bin_dir)
+    env = os.environ.copy()
+    env.update({"PATH": f"{_bash_path(bin_dir)}:/usr/local/bin:/usr/bin:/bin"})
+    env.pop("JHT_LANG", None)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"export JHT_HOME='{_bash_path(jht_home)}'; source .launcher/spawn-lib.sh; "
+            "jht_spawn_user_locale; echo; jht_team_language_line",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    # the locale the agents' prompt is taken from (agents/assistente/assistente.it.md) and the line the kickoff carries
+    assert lines[0] == "it"
+    assert lines[1].startswith("[TEAM-LANGUAGE] Italian (it). Write in Italian every text the user can see")
+    assert (ROOT / "agents" / "assistente" / "assistente.it.md").is_file()
+    # the rule stays: the language of the message never changes the team's
+    assert "never changes it" in lines[1]

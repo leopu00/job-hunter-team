@@ -158,17 +158,42 @@ jht_read_i18n_locale() {
   case "$value" in en|it|hu|es|de|fr|pt) printf '%s' "$value" ;; *) return 1 ;; esac
 }
 
+# La lingua del sistema (LC_ALL, LC_MESSAGES, LANG: il primo che c'e' decide, come in
+# cli/src/lib/texts.js): una lingua che non abbiamo, «C» e «POSIX» valgono en, non «guarda il
+# successivo». Serve solo a chi non ha fatto NESSUNA scelta (vedi sotto).
+jht_system_language() {
+  local name value code
+  for name in LC_ALL LC_MESSAGES LANG; do
+    value="${!name:-}"
+    [ -n "$value" ] || continue
+    code="$(printf '%s' "${value%%[-_.@]*}" | tr '[:upper:]' '[:lower:]')"
+    if jht_host_env_value_valid JHT_LANG "$code"; then printf '%s' "$code"; else printf 'en'; fi
+    return 0
+  done
+  printf 'en'
+}
+
 JHT_LANG_DEFAULT=en
+JHT_LANG_CHOSEN=0
 # La preferenza canonica vince. Env e host.env inizializzano soltanto una
 # macchina che non ha ancora i18n-prefs.json (contratto lingua v1).
 if EXISTING_PREFS_LANG="$(jht_read_i18n_locale "$I18N_PREFS_PATH")"; then
   JHT_LANG_DEFAULT="$EXISTING_PREFS_LANG"
+  JHT_LANG_CHOSEN=1
 elif jht_host_env_value_valid JHT_LANG "${JHT_LANG:-}"; then
   JHT_LANG_DEFAULT="$JHT_LANG"
+  JHT_LANG_CHOSEN=1
 elif [ -f "$HOST_ENV_PATH" ]; then
   if EXISTING_LANG="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_LANG)"; then
     JHT_LANG_DEFAULT="$EXISTING_LANG"
+    JHT_LANG_CHOSEN=1
   fi
+fi
+# In coda alla cascata del contratto v1 (prefs -> JHT_LANG -> host.env -> en): se NESSUNA scelta
+# esiste, il default e' la lingua del sistema invece di en. Una scelta esplicita vince sempre
+# e RULE-T14 non cambia (la lingua del messaggio non decide mai quella della squadra).
+if [ "$JHT_LANG_CHOSEN" -eq 0 ]; then
+  JHT_LANG_DEFAULT="$(jht_system_language)"
 fi
 JHT_LANG="$JHT_LANG_DEFAULT"
 if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then

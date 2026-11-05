@@ -255,10 +255,26 @@ export function readOpenCards(agent, { run } = {}) {
 const CONTROLS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 
 /** A chat row as lines for the screen: who, when, and the words. */
+/**
+ * The mood tag an agent puts at the very start of a message in the chat («[caldo] Welcome!»): the app turns it into
+ * the avatar's expression and never shows it (desktop/src/lib/assistant-emotion.ts, the same closed list and the same
+ * rule); a terminal has no avatar, so the tag is taken out and the text shown is the words only. ONE leading tag of
+ * the list, with its spaces; anything else (another word, a tag in capitals, in the middle, a second one, a link
+ * `[x](…)`) stays as written.
+ */
+const MOOD_TAGS = ['neutro', 'caldo', 'divertito', 'severo', 'pensieroso', 'sorpreso'];
+const LEADING_MOOD = /^\s*\[([a-z]+)\](?!\()[ \t]*/;
+export function withoutMoodTag(text) {
+  const found = LEADING_MOOD.exec(text);
+  return found && MOOD_TAGS.includes(found[1]) ? text.slice(found[0].length) : text;
+}
+
 export function formatChatMessage(message, agent) {
   const who = message.role === 'user' ? 'you' : message.role === 'system' ? 'system' : agent;
   const at = Number(message.at) > 0 ? new Date(Number(message.at) * 1000).toTimeString().slice(0, 8) : '';
-  const text = String(message.text ?? '').replace(CONTROLS, '').trim();
+  const written = String(message.text ?? '').replace(CONTROLS, '').trim();
+  // only what the agent wrote carries a mood tag: a person's own «[caldo]» stays
+  const text = message.role === 'user' || message.role === 'system' ? written : withoutMoodTag(written).trim();
   const head = c.bold(who) + (at ? c.dim(` ${at}`) : '');
   const body = text.split('\n').map((l) => `  ${l}`).join('\n');
   const suggestions = Array.isArray(message.suggestions) && message.suggestions.length
