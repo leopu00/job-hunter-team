@@ -23,17 +23,68 @@
 use serde_json::Value;
 use std::path::Path;
 
-#[cfg(unix)]
-mod unix {
+/// The two things the readers need from the file system that are not the same on every system: «is this a real folder»
+/// and «open this file, only if it is a regular file with one name, without following a link». Everything else in this
+/// module (the grammar of the names, the roster, the page of a chat) is the same everywhere and uses only these two.
+/// Where a system has no version of them the readers answer `host_db_unavailable`.
+mod platform {
+    use super::*;
+    use std::fs::File;
+
+    #[cfg(unix)]
+    use std::{
+        fs::OpenOptions,
+        os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt},
+    };
+
+    /// `Ok(true)` for a real folder, `Ok(false)` for none, an error for a link or anything else in its place.
+    #[cfg(unix)]
+    pub(super) fn real_folder(path: &Path) -> Result<bool, &'static str> {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) if meta.file_type().is_dir() => Ok(true),
+            Ok(_) => Err("host_db_unsafe"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(_) => Err("host_db_unreadable"),
+        }
+    }
+
+    /// `None` when the file is not there; an error when it is there and is not safe to read: not a regular file, more
+    /// than one name, a link, or over the cap (when there is one).
+    #[cfg(unix)]
+    pub(super) fn open_regular(path: &Path, cap: Option<u64>) -> Result<Option<File>, &'static str> {
+        let file = match OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC).open(path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.raw_os_error() == Some(libc::ELOOP) => return Err("host_db_unsafe"),
+            Err(_) => return Err("host_db_unreadable"),
+        };
+        let meta = file.metadata().map_err(|_| "host_db_unreadable")?;
+        if !meta.file_type().is_file() || meta.file_type().is_fifo() || meta.nlink() != 1 || cap.is_some_and(|cap| meta.len() > cap) {
+            return Err("host_db_unsafe");
+        }
+        Ok(Some(file))
+    }
+
+    #[cfg(not(unix))]
+    pub(super) fn real_folder(_path: &Path) -> Result<bool, &'static str> {
+        Err("host_db_unavailable")
+    }
+
+    #[cfg(not(unix))]
+    pub(super) fn open_regular(_path: &Path, _cap: Option<u64>) -> Result<Option<File>, &'static str> {
+        Err("host_db_unavailable")
+    }
+}
+
+mod files {
+    use super::platform::{open_regular, real_folder};
     use super::*;
     use crate::existing_team_agents::agent_session;
     use serde_json::{json, Map};
     use sha2::{Digest, Sha256};
     use std::{
         collections::BTreeMap,
-        fs::{File, OpenOptions},
         io::{BufRead, BufReader, Read, Seek, SeekFrom},
-        os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt},
         time::UNIX_EPOCH,
     };
 
@@ -48,32 +99,6 @@ mod unix {
     const LINE_CAP: usize = 65_536;
     /// What one page may read from the file at most, so that a file of one huge line cannot hold the page.
     const PAGE_BYTES: u64 = 4 << 20;
-
-    /// `Ok(true)` for a real folder, `Ok(false)` for none, an error for a link or anything else in its place.
-    fn real_folder(path: &Path) -> Result<bool, &'static str> {
-        match std::fs::symlink_metadata(path) {
-            Ok(meta) if meta.file_type().is_dir() => Ok(true),
-            Ok(_) => Err("host_db_unsafe"),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(_) => Err("host_db_unreadable"),
-        }
-    }
-
-    /// `None` when the file is not there; an error when it is there and is not safe to read: not a regular file, more
-    /// than one name, a link, or over the cap (when there is one).
-    fn open_regular(path: &Path, cap: Option<u64>) -> Result<Option<File>, &'static str> {
-        let file = match OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC).open(path) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) if e.raw_os_error() == Some(libc::ELOOP) => return Err("host_db_unsafe"),
-            Err(_) => return Err("host_db_unreadable"),
-        };
-        let meta = file.metadata().map_err(|_| "host_db_unreadable")?;
-        if !meta.file_type().is_file() || meta.file_type().is_fifo() || meta.nlink() != 1 || cap.is_some_and(|cap| meta.len() > cap) {
-            return Err("host_db_unsafe");
-        }
-        Ok(Some(file))
-    }
 
     /// The folder the team files an agent's chat under: the launcher's own name («scout-1», `critico-S3`), lower case but
     /// for the writer's number of a critic.
@@ -322,25 +347,13 @@ mod unix {
 
 /// The agents of this computer's team with the container off: `agent_control.py list`'s own answer, every agent «off».
 /// `Err` is the code of the saved data (`host_db_*`); a system without this reader says `host_db_unavailable`.
-#[cfg(unix)]
 pub(crate) fn read_roster(home: &Path) -> Result<Value, &'static str> {
-    unix::roster(home)
-}
-
-#[cfg(not(unix))]
-pub(crate) fn read_roster(_home: &Path) -> Result<Value, &'static str> {
-    Err("host_db_unavailable")
+    files::roster(home)
 }
 
 /// One page of an agent's chat from the file on this computer: `{messages, cursor}`, the container reader's own shape.
-#[cfg(unix)]
 pub(crate) fn read_chat(home: &Path, agent: &str, cursor: Option<&str>) -> Result<Value, &'static str> {
-    unix::chat_page(home, agent, cursor)
-}
-
-#[cfg(not(unix))]
-pub(crate) fn read_chat(_home: &Path, _agent: &str, _cursor: Option<&str>) -> Result<Value, &'static str> {
-    Err("host_db_unavailable")
+    files::chat_page(home, agent, cursor)
 }
 
 #[cfg(test)]
@@ -653,7 +666,7 @@ mod tests {
 
     #[test]
     fn the_roster_time_is_read_as_utc_and_nothing_else_is_a_time() {
-        use super::unix::iso_seconds;
+        use super::files::iso_seconds;
         assert_eq!(iso_seconds("1970-01-01T00:00:00Z"), Some(0));
         assert_eq!(iso_seconds("2026-11-04T23:04:05Z"), Some(1_793_833_445));
         assert_eq!(iso_seconds("2024-02-29T12:00:00Z"), Some(1_709_208_000));
