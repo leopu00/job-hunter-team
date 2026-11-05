@@ -252,3 +252,19 @@ def test_a_release_before_0_4_is_said_to_have_no_macos_app(tmp_path: Path, site,
     assert "non ha l'app per macOS: usa la 0.4.0 o successive" in italian.stderr
     assert "non trovato" not in italian.stderr and "Non e' stato scaricato niente" in italian.stderr
     assert not (home / "Downloads").exists()
+
+
+def test_the_usage_offers_windows_and_macos_only_and_linux_still_gets_its_answer(tmp_path: Path, site):
+    # no arguments: the usage that is printed does not offer linux or --deb (there is no desktop app for Linux in this version)
+    done, _, _, _ = _run(tmp_path, site, JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+    text = done.stdout + done.stderr
+    assert done.returncode == 2
+    assert "usage: jht download --os windows|macos --version X.Y.Z [--output FILE]" in text
+    assert "linux" not in text.lower() and "--deb" not in text
+    (tmp_path / "help").mkdir()
+    (tmp_path / "other").mkdir()
+    helped, _, _, _ = _run(tmp_path / "help", site, "--help", JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+    assert helped.returncode == 0 and "linux" not in (helped.stdout + helped.stderr).lower() and "--deb" not in helped.stdout
+    # an unknown system is told the two that exist
+    other, _, _, _ = _run(tmp_path / "other", site, "--os", "plan9", "--version", "0.4.0", JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+    assert other.returncode == 2 and "Usa windows o macos." in other.stderr and "linux" not in other.stderr.lower()

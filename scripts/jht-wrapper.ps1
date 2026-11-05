@@ -2614,7 +2614,7 @@ function Invoke-HostDownload {
   # Un numero restituito da una funzione PowerShell viaggia sullo stesso success stream di stdout: il codice di uscita vive in
   # un canale scalare dedicato e parte fail-closed; stdout/stderr restano liberi di arrivare al terminale.
   $script:HostDownloadExitCode = 1
-  $usage = "usage: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]"
+  $usage = "usage: jht download --os windows|macos --version X.Y.Z [--output FILE]"
   $os = ''; $version = ''; $output = ''; $deb = $false
   for ($i = 0; $i -lt $DownloadArgs.Count; $i++) {
     $arg = $DownloadArgs[$i]
@@ -2638,7 +2638,7 @@ function Invoke-HostDownload {
     'linux' { 'linux' }
     default { $null }
   }
-  if (-not $platform) { Write-Err "sistema non supportato: $os. Usa windows, macos o linux."; $script:HostDownloadExitCode = 2; return }
+  if (-not $platform) { Write-Err "sistema non supportato: $os. Usa windows o macos."; $script:HostDownloadExitCode = 2; return }
   $version = $version -replace '^v', ''
   if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Err "versione non valida: $version. Esempio: 0.3.5."; $script:HostDownloadExitCode = 2; return }
   if ($deb -and $platform -ne 'linux') { Write-Err '--deb vale solo per Linux.'; $script:HostDownloadExitCode = 2; return }

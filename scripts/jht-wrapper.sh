@@ -4055,7 +4055,7 @@ handle_gui_command() {
 # JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
 download_usage() {
   cat <<'USAGE'
-usage: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]
+usage: jht download --os windows|macos --version X.Y.Z [--output FILE]
   Downloads the desktop app from the release, checks its SHA-256 and saves it (by default in ~/Downloads).
 USAGE
 }
@@ -4102,7 +4102,7 @@ handle_host_download() {
     win|win32|windows) platform=windows ;;
     darwin|mac|macos|osx) platform=macos ;;
     linux) platform=linux ;;
-    *) err "sistema non supportato: $os. Usa windows, macos o linux."; return 2 ;;
+    *) err "sistema non supportato: $os. Usa windows o macos."; return 2 ;;
   esac
   version="${version#v}"
   if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then

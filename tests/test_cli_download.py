@@ -75,8 +75,10 @@ def isolated_env(tmp_path: Path, base_url: str):
 def test_download_help_describes_required_contract():
     result = run_jht("download", "--help")
     assert result.returncode == 0
-    for flag in ("--os <platform>", "--version <release>", "--output <file>", "--deb"):
+    for flag in ("--os <platform>", "--version <release>", "--output <file>"):
         assert flag in result.stdout
+    # no desktop app for Linux in this version: the usage does not offer it (it still parses, and says so)
+    assert "linux" not in result.stdout.lower() and "--deb" not in result.stdout
 
 
 @pytest.mark.parametrize(

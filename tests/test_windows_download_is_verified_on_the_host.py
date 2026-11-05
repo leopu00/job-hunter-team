@@ -175,3 +175,15 @@ def test_a_release_before_0_4_is_said_to_have_no_macos_app(shell: str, os_name: 
     assert "non ha l'app per macOS: usa la 0.4.0 o successive" in done.stdout
     assert "non trovato" not in done.stdout
     assert not (home / "Downloads").exists()
+
+
+@windows_only
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_usage_offers_windows_and_macos_only(shell: str, tmp_path: Path, site):
+    (tmp_path / "temp").mkdir()
+    done, _ = _download(shell, tmp_path, site)
+    assert "RC=2" in done.stdout, done.stdout + done.stderr
+    assert "usage: jht download --os windows|macos --version X.Y.Z [--output FILE]" in done.stdout
+    assert "linux" not in done.stdout.lower().replace("--os and --version are required", "") and "--deb" not in done.stdout
+    other, _ = _download(shell, tmp_path, site, "--os", "plan9", "--version", "0.4.0")
+    assert "RC=2" in other.stdout and "Usa windows o macos." in other.stdout and "linux" not in other.stdout.lower()
