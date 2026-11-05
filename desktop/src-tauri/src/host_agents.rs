@@ -455,7 +455,7 @@ mod tests {
         std::fs::hard_link(hard.home.join("logs/team-roster.json"), hard.home.join("logs/other.json")).unwrap();
         assert_eq!(read_roster(&hard.home), Err("host_db_unsafe"));
         let big = World::new("roster-big");
-        big.put("logs/team-roster.json", &vec![b' '; (ROSTER_CAP as usize) + 1]);
+        big.put("logs/team-roster.json", &vec![b' '; (1 << 20) + 1]);
         assert_eq!(read_roster(&big.home), Err("host_db_unsafe"));
         // the logs folder as a link
         let logs = World::new("logs-link");
