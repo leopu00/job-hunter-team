@@ -14,6 +14,9 @@ export const PROFILE_FIELD_KEYS = [
   "languages",
 ] as const;
 
+/** Asks every mounted profile card to read the profile again at once (after the chat was connected again). */
+export const PROFILE_REREAD_EVENT = "jht:profile-progress-reread";
+
 export type ProfileFieldKey = (typeof PROFILE_FIELD_KEYS)[number];
 
 export interface ProfileProgressField {
@@ -28,6 +31,8 @@ export interface ProfileProgressField {
 export interface ProfileProgress {
   /** `loading`: not read yet; `ready`: read (and kept when a later read fails); `unavailable`: the team has no profile to read yet, or it cannot be read. */
   state: "loading" | "ready" | "unavailable";
+  /** With `unavailable`: the code of a read that FAILED (the chat not connected, a timeout, an answer the app does not recognise...); absent for «the team has no profile yet», which is not a failure. */
+  reason?: string;
   fields: ProfileProgressField[];
   filled: number;
   total: number;

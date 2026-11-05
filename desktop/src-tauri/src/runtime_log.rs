@@ -42,6 +42,10 @@ const BUDGET_FAILURE_EVERY: Duration = Duration::from_secs(300);
 static LAST_BUDGET_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 /// The last failed read of a fixed script of the app written (its exit and the size of what it printed): the log, the pair and when.
 static LAST_SCRIPT_READ_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
+/// The pages that read the team ask again and again: the same failure of the same read is written once in this long.
+const READ_FAILURE_EVERY: Duration = Duration::from_secs(300);
+/// The last failure written for each read: the log it went to, the read's name, its code and when.
+static LAST_READ_FAILURES: std::sync::Mutex<Vec<(PathBuf, &'static str, String, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
 /// The last refusal written: the log it went to, its code and when.
 static LAST_OWNER_REFUSAL: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 
@@ -297,6 +301,30 @@ impl RuntimeLog {
             *last = Some((self.path.clone(), said.clone(), now));
         }
         let entry = format!("=== {} script.read: read_failed {said}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// A read of the team (the work statistics, the profile's progress, the first start) that did not give its answer, by its
+    /// closed code only: `what` names the read (`stats.read`), `own` are the codes that read's own script and shape check may
+    /// say; any other code is one of the chat's or `io_error_other`. Never a figure, a role or what the team said. The same
+    /// code of the same read is written once in five minutes.
+    pub(crate) fn record_read_failure(&self, what: &'static str, own: &[&str], code: &str) {
+        let code = if own.contains(&code) { code } else { chat_failure_code(code) };
+        let now = std::time::Instant::now();
+        {
+            let mut last = LAST_READ_FAILURES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            match last.iter_mut().find(|entry| entry.0 == self.path && entry.1 == what) {
+                Some(entry) => {
+                    if entry.2 == code && now.duration_since(entry.3) < READ_FAILURE_EVERY {
+                        return;
+                    }
+                    entry.2 = code.to_owned();
+                    entry.3 = now;
+                }
+                None => last.push((self.path.clone(), what, code.to_owned(), now)),
+            }
+        }
+        let entry = format!("=== {} {what}: {code}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -1060,6 +1088,28 @@ mod tests {
         assert!(text.contains(" script.read: read_failed exit=64 bytes=12\n"));
         assert!(text.contains(" script.read: read_failed exit=-1 bytes=99999999\n"), "both numbers are bounded");
         assert_eq!(text.matches("=== ").count(), 3);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_read_of_the_team_that_fails_is_written_by_its_closed_code_once_in_a_while_each_read_on_its_own_and_never_with_data() {
+        let root = dir("read-failure");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        let own = ["stats_unreadable", "stats_unavailable", "stats_reply_unexpected"];
+        for _ in 0..4 {
+            log.record_read_failure("stats.read", &own, "disconnected");
+        }
+        log.record_read_failure("stats.read", &own, "stats_unavailable");
+        log.record_read_failure("stats.read", &own, "a sentence the team wrote, 203.0.113.7");
+        // another read has its own memory of the last code
+        log.record_read_failure("profile.read", &["profile_unavailable"], "disconnected");
+        log.record_read_failure("profile.read", &["profile_unavailable"], "profile_unavailable");
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert_eq!(text.matches(" stats.read: disconnected\n").count(), 1, "the same code of the same read once");
+        for line in [" stats.read: stats_unavailable\n", " stats.read: io_error_other\n", " profile.read: disconnected\n", " profile.read: profile_unavailable\n"] {
+            assert!(text.contains(line), "{line}");
+        }
+        assert!(!text.contains("203.0.113.7") && !text.contains("sentence"));
         fs::remove_dir_all(root).unwrap();
     }
 

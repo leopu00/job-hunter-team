@@ -157,31 +157,54 @@ fn shape(reply: &Value) -> Result<ProfileProgress, ()> {
     Ok(ProfileProgress { required: KEYS.len(), done, ready: done == KEYS.len(), fields })
 }
 
-/// A failure of the team's script is one of two words; anything else is «unavailable».
+/// A failure of the team's script is one of two words: «no profile yet / no such feature» (`profile_unavailable`) or «there is a
+/// file and it does not read» (`profile_unreadable`). Anything else the script says is «cannot be read», not «there is no profile».
 fn code_of(reply: &Value) -> &'static str {
     match reply.get("error").and_then(Value::as_str) {
-        Some("profile_unreadable") => "profile_unreadable",
-        _ => "profile_unavailable",
+        Some("profile_unavailable") => "profile_unavailable",
+        _ => "profile_unreadable",
     }
 }
 
-/// How far the candidate profile is from what the team needs to start. Reads: it works in the read-only view.
+/// The codes this reading may leave in the runtime log: its own, then the chat's (`log.record_read_failure`).
+const PROFILE_CODES: &[&str] = &["profile_unavailable", "profile_unreadable", "profile_reply_unexpected"];
+
+/// How far the candidate profile is from what the team needs to start. Reads: it works in the read-only view. A read that does
+/// not give the progress leaves its closed code in the runtime log (never a field), and the page is told that same code.
 #[tauri::command]
 pub(crate) async fn profile_progress_read(
     window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<ProgressReply, DirectChatError> {
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
-    let reply = team_script_read(&state, &scopes, PROFILE_PROGRESS_PY, json!({"op": "read"}), TIMEOUT).await?;
+    let result = read_progress(&state, &scopes).await;
+    let said = match &result {
+        Ok(reply) => reply.error,
+        Err(error) => Some(error.code),
+    };
+    if let (Some(code), Some(log)) = (said, crate::runtime_log::RuntimeLog::new(&app)) {
+        // «no profile yet» is the normal first minutes of a team, not a failure: it is not written
+        if code != "profile_unavailable" {
+            log.record_read_failure("profile.read", PROFILE_CODES, code);
+        }
+    }
+    result
+}
+
+/// One read through the chat's Python channel. An answer the app does not recognise is `profile_reply_unexpected`, not
+/// «there is no profile»; a chat that is not connected or a read that ran out of time is the chat's own error, passed on.
+async fn read_progress(state: &State<'_, DirectChatState>, scopes: &State<'_, AccountScopeState>) -> Result<ProgressReply, DirectChatError> {
+    let reply = team_script_read(state, scopes, PROFILE_PROGRESS_PY, json!({"op": "read"}), TIMEOUT).await?;
     if reply.get("ok") != Some(&Value::Bool(true)) {
         return Ok(ProgressReply::failed(code_of(&reply)));
     }
     Ok(match shape(&reply) {
         Ok(progress) => ProgressReply { ok: true, progress: Some(progress), error: None },
-        Err(()) => ProgressReply::failed("profile_unavailable"),
+        Err(()) => ProgressReply::failed("profile_reply_unexpected"),
     })
 }
 
@@ -279,8 +302,9 @@ mod tests {
     fn a_failure_is_one_of_two_words_and_nothing_else() {
         assert_eq!(code_of(&json!({"ok": false, "error": "profile_unreadable"})), "profile_unreadable");
         assert_eq!(code_of(&json!({"ok": false, "error": "profile_unavailable"})), "profile_unavailable");
-        assert_eq!(code_of(&json!({"ok": false, "error": "rm -rf / or a sentence"})), "profile_unavailable");
-        assert_eq!(code_of(&json!({"ok": false})), "profile_unavailable");
+        // anything else the script says is «cannot be read», never «there is no profile yet»
+        assert_eq!(code_of(&json!({"ok": false, "error": "rm -rf / or a sentence"})), "profile_unreadable");
+        assert_eq!(code_of(&json!({"ok": false})), "profile_unreadable");
         assert_eq!(serde_json::to_value(ProgressReply::failed("profile_unreadable")).unwrap(), json!({"ok": false, "error": "profile_unreadable"}));
     }
 
@@ -288,7 +312,12 @@ mod tests {
     fn the_command_takes_nothing_from_the_page_and_only_the_main_window_asks() {
         let code = include_str!("profile_progress.rs");
         let command = code.split("pub(crate) async fn profile_progress_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(command.contains("team_script_read(") && !command.contains("team_script_write("), "a read");
+        let read = code.split("async fn read_progress(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(read.contains("team_script_read(") && !read.contains("team_script_write("), "a read");
+        assert!(command.contains("read_progress(") && !command.contains("team_script_write("), "a read");
+        // a failed read leaves its code in the log, and an answer the app does not recognise is not «there is no profile yet»
+        assert!(command.contains("record_read_failure(\"profile.read\""));
+        assert!(read.contains("profile_reply_unexpected") && !read.contains("failed(\"profile_unavailable\")"));
         let signature = command.split(") -> Result").next().unwrap();
         assert!(!signature.contains("String") && !signature.contains("Value") && !signature.contains("u32"), "no argument from the page");
         assert!(command.contains("window.label() != \"main\""));

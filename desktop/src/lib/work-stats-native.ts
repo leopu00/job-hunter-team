@@ -1,10 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+import { reconnectDirectChat } from "./direct-chat";
+import { errorCodeOf } from "./error-catalog";
 
 /**
  * What the team did in the nights it worked, read and cleared through the native `work_stats_read` and
  * `work_stats_clear` commands (the work-hours statistics of the team on this computer or on the linked
  * VPS). Only numbers: the closed list of fields below is all the archive holds, and a reply that carries
- * anything else, or a value off its range, is `stats_unavailable` and never a number made up.
+ * anything else, or a value off its range, is `stats_reply_unexpected` and never a number made up; `stats_unavailable` is only
+ * «the team has no such file» (an old image), and every other failure says its own reason.
  *
  * A «night» is the hours worked inside one window of the working hours, dated by the local day the window
  * started (a 22:00-08:00 window of Monday is Monday's night); for hours with no night in them, or 24/7, it
@@ -41,7 +44,11 @@ export interface WorkStats {
   scheduleState: ScheduleState;
 }
 
-export type WorkStatsError = "stats_unreadable" | "stats_unavailable" | "stats_clear_failed";
+/**
+ * Why the numbers are not there: one of the page's own codes, or the code of the native error as the catalog knows it
+ * (`disconnected`, `process_timeout`, `account_scope_mismatch`...). `stats_unavailable` is only «the team has no such file» (an old image).
+ */
+export type WorkStatsError = string;
 export type WorkStatsResult = { ok: true; stats: WorkStats } | { ok: false; error: WorkStatsError };
 export type WorkStatsClearResult = { ok: true } | { ok: false; error: WorkStatsError };
 
@@ -51,7 +58,7 @@ const MAX_NIGHTS = 400;
 const NIGHT_KEYS = ["date", "hoursActive", "found", "aboveThreshold", "scoreThreshold", "consumptionPct", "turnMedianSec"];
 const STATS_KEYS = ["lastObservation", "nights", "from", "to", "retentionDays", "threshold", "scheduleState"];
 const SCHEDULE_STATES: readonly string[] = ["undeclared", "valid", "unreadable"];
-const KNOWN_ERRORS: ReadonlySet<string> = new Set<WorkStatsError>(["stats_unreadable", "stats_unavailable", "stats_clear_failed"]);
+const KNOWN_ERRORS: ReadonlySet<string> = new Set(["stats_unreadable", "stats_unavailable", "stats_reply_unexpected", "stats_clear_failed"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const sameKeys = (value: Record<string, unknown>, keys: string[]) =>
@@ -69,20 +76,20 @@ function pickNight(value: unknown): WorkNight | null {
   return { date, hoursActive, found, aboveThreshold, scoreThreshold, consumptionPct, turnMedianSec };
 }
 
-/** The reply of `work_stats_read` as the page uses it; anything off the closed shape is `stats_unavailable`. */
+/** The reply of `work_stats_read` as the page uses it; an answer off the closed shape is `stats_reply_unexpected`, never «the team does not offer it». */
 export function pickWorkStats(reply: unknown): WorkStatsResult {
-  const unavailable: WorkStatsResult = { ok: false, error: "stats_unavailable" };
-  if (!isRecord(reply)) return unavailable;
-  if (reply.ok === false) return { ok: false, error: typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error) ? (reply.error as WorkStatsError) : "stats_unavailable" };
-  if (reply.ok !== true) return unavailable;
+  const unexpected: WorkStatsResult = { ok: false, error: "stats_reply_unexpected" };
+  if (!isRecord(reply)) return unexpected;
+  if (reply.ok === false) return { ok: false, error: typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error) ? reply.error : "stats_unreadable" };
+  if (reply.ok !== true) return unexpected;
   const { ok: _ok, ...rest } = reply;
-  if (!sameKeys(rest, STATS_KEYS) || !Array.isArray(rest.nights) || rest.nights.length > MAX_NIGHTS) return unavailable;
+  if (!sameKeys(rest, STATS_KEYS) || !Array.isArray(rest.nights) || rest.nights.length > MAX_NIGHTS) return unexpected;
   const nights = rest.nights.map(pickNight);
   const lastObservation = rest.lastObservation;
-  if (nights.some((night) => night === null) || !dayOrNull(rest.from) || !dayOrNull(rest.to)) return unavailable;
-  if (lastObservation !== null && (typeof lastObservation !== "string" || Number.isNaN(Date.parse(lastObservation)))) return unavailable;
-  if (typeof rest.retentionDays !== "number" || !Number.isInteger(rest.retentionDays) || rest.retentionDays < 1 || rest.retentionDays > 366) return unavailable;
-  if (!numberOrNull(rest.threshold, 100) || typeof rest.scheduleState !== "string" || !SCHEDULE_STATES.includes(rest.scheduleState)) return unavailable;
+  if (nights.some((night) => night === null) || !dayOrNull(rest.from) || !dayOrNull(rest.to)) return unexpected;
+  if (lastObservation !== null && (typeof lastObservation !== "string" || Number.isNaN(Date.parse(lastObservation)))) return unexpected;
+  if (typeof rest.retentionDays !== "number" || !Number.isInteger(rest.retentionDays) || rest.retentionDays < 1 || rest.retentionDays > 366) return unexpected;
+  if (!numberOrNull(rest.threshold, 100) || typeof rest.scheduleState !== "string" || !SCHEDULE_STATES.includes(rest.scheduleState)) return unexpected;
   return {
     ok: true,
     stats: { nights: nights as WorkNight[], from: rest.from, to: rest.to, lastObservation, retentionDays: rest.retentionDays, threshold: rest.threshold, scheduleState: rest.scheduleState as ScheduleState },
@@ -92,22 +99,42 @@ export function pickWorkStats(reply: unknown): WorkStatsResult {
 type Call = (command: string) => Promise<unknown>;
 const nativeCall: Call = (command) => invoke<unknown>(command);
 
-export async function readWorkStats(call: Call = nativeCall): Promise<WorkStatsResult> {
+/** The one read, with the native error told by its own code (a throw without one is `stats_unreadable`). */
+async function readOnce(call: Call): Promise<WorkStatsResult> {
   try {
     return pickWorkStats(await call(READ));
-  } catch {
-    return { ok: false, error: "stats_unavailable" };
+  } catch (error) {
+    const code = errorCodeOf(error);
+    // the chat's «cannot read the messages» is not a sentence for the statistics: the page's own «cannot be read» says it
+    return { ok: false, error: code === null || code === "read_failed" ? "stats_unreadable" : code };
   }
 }
 
-/** Removes the archive; the team starts collecting again at its next check. */
+/**
+ * Reads the team's work statistics. When the native side says the chat is not connected (the page was opened before the team
+ * was, or the team was restarted under it), the chat is connected again once and the read repeated: the person is told the
+ * reason only if that does not help.
+ */
+export async function readWorkStats(call: Call = nativeCall, reconnect: () => Promise<unknown> = reconnectDirectChat): Promise<WorkStatsResult> {
+  const first = await readOnce(call);
+  if (first.ok || first.error !== "disconnected") return first;
+  try {
+    await reconnect();
+  } catch {
+    return first;
+  }
+  return readOnce(call);
+}
+
+/** Removes the archive; the team starts collecting again at its next check. A failure says its own reason, as the read does. */
 export async function clearWorkStats(call: Call = nativeCall): Promise<WorkStatsClearResult> {
   try {
     const reply = await call(CLEAR);
     if (isRecord(reply) && reply.ok === true && Object.keys(reply).length === 1) return { ok: true };
-    if (isRecord(reply) && reply.ok === false && typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error)) return { ok: false, error: reply.error as WorkStatsError };
+    if (isRecord(reply) && reply.ok === false && typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error)) return { ok: false, error: reply.error };
     return { ok: false, error: "stats_clear_failed" };
-  } catch {
-    return { ok: false, error: "stats_clear_failed" };
+  } catch (error) {
+    const code = errorCodeOf(error);
+    return { ok: false, error: code === null || code === "read_failed" ? "stats_clear_failed" : code };
   }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { appLocale } from "../lib/app-locale";
 import { onStreamHint, onStreamState, streamPace } from "../lib/state-stream";
-import { EMPTY_PROFILE_PROGRESS, progressFromReading, type ProfileProgress } from "./contract";
+import { EMPTY_PROFILE_PROGRESS, PROFILE_REREAD_EVENT, progressFromReading, type ProfileProgress } from "./contract";
 import { readProfileProgress, type ProfileProgressRead } from "./read";
 import { PROFILE_PROGRESS_TEXT } from "./profile-progress.i18n";
 
@@ -47,7 +47,9 @@ export function useProfileProgress(
             setProgress(progressFromReading(done.reading, PROFILE_PROGRESS_TEXT[appLocale()].fields));
           } else {
             complete = false;
-            setProgress((current) => (current.state === "ready" ? current : { ...EMPTY_PROFILE_PROGRESS, state: "unavailable" }));
+            // «no profile yet» is not a failure; any other code is told by the card
+            const reason = done.code === "profile_unavailable" ? undefined : done.code;
+            setProgress((current) => (current.state === "ready" ? current : { ...EMPTY_PROFILE_PROGRESS, state: "unavailable", ...(reason ? { reason } : {}) }));
           }
         } finally {
           reading.current = false;
@@ -64,6 +66,8 @@ export function useProfileProgress(
     };
     void again();
     document.addEventListener("visibilitychange", seen);
+    // the card's «Reconnect the chat» says the chat is back: read now
+    window.addEventListener(PROFILE_REREAD_EVENT, seen);
     // The profile changed, said the channel: read now (even a card that was complete, a field may have emptied).
     const stopHint = onStreamHint(
       "profile",
@@ -88,6 +92,7 @@ export function useProfileProgress(
       stopHint();
       stopState();
       document.removeEventListener("visibilitychange", seen);
+      window.removeEventListener(PROFILE_REREAD_EVENT, seen);
     };
   }, [read, everyMs]);
 

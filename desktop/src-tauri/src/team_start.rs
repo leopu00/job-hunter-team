@@ -68,6 +68,11 @@ impl TeamStartReply {
     fn failed() -> Self {
         TeamStartReply { ok: false, phase: None, workers: None, plan_declared: None, error: Some("team_start_unavailable") }
     }
+
+    /// The team answered, in a form the app does not recognise: not the same as «the team could not say».
+    fn unexpected() -> Self {
+        TeamStartReply { ok: false, phase: None, workers: None, plan_declared: None, error: Some("team_start_reply_unexpected") }
+    }
 }
 
 /// The team's answer closed again: a phase of the list or null, a count in range, a boolean; or the whole answer is
@@ -84,21 +89,40 @@ fn shape(reply: &Value) -> Result<TeamStartReply, ()> {
     Ok(TeamStartReply { ok: true, phase: Some(phase), workers: Some(if phase.is_some() { workers } else { 0 }), plan_declared: Some(declared), error: None })
 }
 
-/// Where the team's first start stands. Reads: it works in the read-only view.
+/// The codes this reading may leave in the runtime log: its own, then the chat's (`log.record_read_failure`).
+const START_CODES: &[&str] = &["team_start_unavailable", "team_start_reply_unexpected"];
+
+/// Where the team's first start stands. Reads: it works in the read-only view. A read that does not give the state leaves its
+/// closed code in the runtime log (never a field); the page treats any failure as «not started», as before.
 #[tauri::command]
 pub(crate) async fn team_start_read(
     window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<TeamStartReply, DirectChatError> {
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
-    let reply = team_script_read(&state, &scopes, TEAM_START_PY, json!({"op": "read"}), TIMEOUT).await?;
+    let result = read_start(&state, &scopes).await;
+    let said = match &result {
+        Ok(reply) => reply.error,
+        Err(error) => Some(error.code),
+    };
+    if let (Some(code), Some(log)) = (said, crate::runtime_log::RuntimeLog::new(&app)) {
+        log.record_read_failure("start.read", START_CODES, code);
+    }
+    result
+}
+
+/// One read through the chat's Python channel: the team's own «cannot say» is `team_start_unavailable`; an answer off the closed
+/// shape is `team_start_reply_unexpected`; a chat that is not connected or a read that ran out of time is the chat's own error.
+async fn read_start(state: &State<'_, DirectChatState>, scopes: &State<'_, AccountScopeState>) -> Result<TeamStartReply, DirectChatError> {
+    let reply = team_script_read(state, scopes, TEAM_START_PY, json!({"op": "read"}), TIMEOUT).await?;
     if reply.get("ok") != Some(&Value::Bool(true)) {
         return Ok(TeamStartReply::failed());
     }
-    Ok(shape(&reply).unwrap_or_else(|()| TeamStartReply::failed()))
+    Ok(shape(&reply).unwrap_or_else(|()| TeamStartReply::unexpected()))
 }
 
 #[cfg(test)]
@@ -143,13 +167,19 @@ mod tests {
         }
         assert!(shape(&json!({"ok": true})).is_err() && shape(&json!("burst")).is_err());
         assert_eq!(serde_json::to_value(TeamStartReply::failed()).unwrap(), json!({"ok": false, "error": "team_start_unavailable"}));
+        assert_eq!(serde_json::to_value(TeamStartReply::unexpected()).unwrap(), json!({"ok": false, "error": "team_start_reply_unexpected"}));
     }
 
     #[test]
     fn the_command_takes_nothing_from_the_page_and_only_the_main_window_asks() {
         let code = include_str!("team_start.rs");
         let command = code.split("pub(crate) async fn team_start_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(command.contains("team_script_read(") && !command.contains("team_script_write("), "a read");
+        let read = code.split("async fn read_start(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(read.contains("team_script_read(") && !read.contains("team_script_write("), "a read");
+        assert!(command.contains("read_start(") && !command.contains("team_script_write("), "a read");
+        // a failed read leaves its code in the log, and an answer off the shape is not «the team could not say»
+        assert!(command.contains("record_read_failure(\"start.read\""));
+        assert!(read.contains("TeamStartReply::unexpected()"));
         let signature = command.split(") -> Result").next().unwrap();
         assert!(!signature.contains("String") && !signature.contains("Value") && !signature.contains("u32"), "no argument from the page");
         assert!(command.contains("window.label() != \"main\""));
