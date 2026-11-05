@@ -301,3 +301,76 @@ def test_an_unreadable_profile_skips_nothing(box):
     path.parent.mkdir(exist_ok=True)
     path.write_text("{ not: [yaml", encoding="utf-8")
     assert ok(box, "status")["total"] == 9
+
+
+# ── a card posted before the profile held the answer (T179, addendum) ──
+
+def stale_experience_card(box, **fields) -> str:
+    """The experience card open, as an older tool posted it, and the profile settling that step afterwards."""
+    put_profile(box)
+    steps_until_experience(box)
+    asked = ok(box, "ask")
+    assert asked["step"] == "experience", asked
+    put_profile(box, target_role_category_id="software", target_specialty="backend", **fields)
+    return asked["question_id"]
+
+
+def answer_of(box, question_id: str):
+    with sqlite3.connect(box.db, timeout=10) as conn:
+        return aq.existing_answer(conn, question_id)
+
+
+def test_the_card_of_a_step_the_profile_now_settles_is_closed_as_the_systems_answer(box):
+    qid = stale_experience_card(box, experience_years=8, seniority_target="senior")
+
+    out = ok(box, "settle")
+
+    assert out["closed"] and out["question_id"] == qid and out["choice"] == ["senior"]
+    stored = answer_of(box, qid)
+    assert stored["origine"] == "sistema" and stored["scelte"] == ["senior"]
+    # it is closed, not answered by the person: the profile keeps what it held
+    assert profile(box)["experience_years"] == 8 and profile(box)["seniority_target"] == "senior"
+    assert ok(box, "settle")["closed"] is False  # idempotent
+
+
+def test_the_closing_picks_the_band_of_the_years_when_the_level_is_not_one_of_the_choices(box):
+    qid = stale_experience_card(box, experience_years=9, seniority_target="staff")
+
+    assert ok(box, "settle")["choice"] == ["senior"]
+    assert answer_of(box, qid)["origine"] == "sistema"
+
+
+def test_a_card_whose_step_the_profile_does_not_settle_stays_open(box):
+    qid = stale_experience_card(box, experience_years=8)  # no level: the step is still asked
+
+    out = ok(box, "settle")
+
+    assert out["closed"] is False and "still needs" in out["reason"]
+    assert answer_of(box, qid) is None
+
+
+def test_a_card_the_person_already_answered_is_left_to_apply(box):
+    qid = stale_experience_card(box, experience_years=8, seniority_target="senior")
+    click(box, qid, "mid")
+
+    out = ok(box, "settle")
+
+    assert out["closed"] is False
+    assert answer_of(box, qid)["origine"] == "utente"
+
+
+def test_settle_with_no_card_open_does_nothing(box):
+    put_profile(box, experience_years=8, seniority_target="senior")
+    assert ok(box, "settle")["closed"] is False
+    assert cards(box) == []
+
+
+def test_the_next_card_does_not_come_while_the_old_one_stays_open(box):
+    qid = stale_experience_card(box, experience_years=8, seniority_target="senior")
+
+    asked = ok(box, "ask")
+
+    assert asked["asked"] and asked["step"] == "current_status"
+    assert answer_of(box, qid)["origine"] == "sistema"  # one open card, not two
+    open_cards = [c for c in cards(box) if answer_of(box, c["id"]) is None]
+    assert [c["id"] for c in open_cards] == [asked["question_id"]]

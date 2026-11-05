@@ -891,6 +891,14 @@ def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[floa
     return {"action": "start", "plan": plan, "count": count + 1, "sent": sent, "pressed": pressed}
 
 
+def _settle_questionnaire_card() -> dict:
+    """Close the open card of the Assistente's questionnaire if the profile already settles its step."""
+    questionnaire = _load_module("onboarding_questionnaire", "onboarding_questionnaire.py")
+    if questionnaire is None:
+        return {"closed": False, "reason": "the questionnaire tool is unavailable"}
+    return questionnaire.settle()
+
+
 def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float = PLAN_REASK_AFTER_S,
                         now: Optional[datetime] = None) -> dict:
     """The net under `ask-plan`: with the profile imported and no plan declared, and nobody asking for `after_s`
@@ -910,6 +918,12 @@ def plan_question_check(after_s: float = PLAN_QUESTION_AFTER_S, reask_s: float =
         return {"action": "closed", "question_id": closed["question_id"], "choice": closed["choice"]}
     if closed.get("failed"):
         return {"action": "failed", "reason": closed["reason"]}
+    # The same for the card of the questionnaire whose step the profile already settles (it was posted before the profile
+    # held the answer): it must not stay in the Agents panel as «1 open question». A courtesy: it never stops the net.
+    with contextlib.suppress(Exception):
+        settled = _settle_questionnaire_card()
+        if settled.get("closed"):
+            return {"action": "closed", "question_id": settled["question_id"], "choice": settled["choice"]}
     imported = _profile_imported()
     if imported is None:
         return {"action": "none", "reason": "the profile is not imported yet"}
