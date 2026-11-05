@@ -90,7 +90,11 @@ export function StartTeamAction({
   const failure = state.phase === "failed" ? describeError(state.code, { locale, fallback: "team_start_failed" }) : null;
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="start-team-action">
-      {state.phase === "starting" && <span className="text-[var(--color-muted)]">{stateText().startingContainerAndAgents}</span>}
+      {state.phase === "starting" && (
+        <span role="status" data-testid="start-team-progress" className="text-[var(--color-muted)]">
+          {stateText().startingContainerAndAgents}
+        </span>
+      )}
       {failure && <span role="alert" data-testid="start-team-failed">{failure.text} {failure.action}</span>}
       <button
         type="button"
