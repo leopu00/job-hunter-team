@@ -42,7 +42,6 @@ export type AgentRole =
   | "sentinella"
   | "assistente"
   | "mentor"
-  // These two have no character of their own in the office yet: they wear another role's (OfficeAgent.look).
   | "dottore"
   | "mantenitore";
 
@@ -327,11 +326,6 @@ export type OfficeAgent = {
    * instance number (scout-2 -> the second variant). Always set in poses().
    */
   sheet: string;
-  /**
-   * A role with no character or seat of its own wears another role's and stands by its seat (dottore and
-   * mantenitore, until each has a character); its name stays its own on every tag. Absent = its own role.
-   */
-  look?: AgentRole;
 };
 
 /** What the scene draws for an agent, every frame. */

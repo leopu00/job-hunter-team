@@ -189,7 +189,8 @@
    },
    "occupiedImage": {
     "src": "/office/furniture/occupied/mantenitore_workbench_down_seated_v2.png"
-   }
+   },
+   "seatOf": "mantenitore"
   },
   {
    "id": "maintainer_parts",
@@ -293,7 +294,8 @@
    },
    "occupiedImage": {
     "src": "/office/furniture/occupied/dottore_armchair_seated_v2.png"
-   }
+   },
+   "seatOf": "dottore"
   },
   {
    "id": "coffee_table",
@@ -2805,6 +2807,32 @@
      "y": 1390.0
     }
    ]
+  },
+  {
+   "role": "mantenitore",
+   "seat": {
+    "x": 702,
+    "y": 886
+   },
+   "seatFacing": "down",
+   "furnitureId": "maintainer_workbench",
+   "seatOffset": {
+    "x": 0,
+    "y": 340
+   }
+  },
+  {
+   "role": "dottore",
+   "seat": {
+    "x": 850,
+    "y": 1357
+   },
+   "seatFacing": "down",
+   "furnitureId": "doctor_armchair",
+   "seatOffset": {
+    "x": 0,
+    "y": -24
+   }
   }
  ],
  "door": {
@@ -2958,6 +2986,12 @@
   ],
   "mentor": [
    "mentor_a"
+  ],
+  "dottore": [
+   "dottore_a"
+  ],
+  "mantenitore": [
+   "mantenitore_a"
   ]
  },
  "paperPile": {

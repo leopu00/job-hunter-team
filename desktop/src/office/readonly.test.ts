@@ -152,13 +152,13 @@ describe("officeFromTeamProbe with the team's agents (the Agents page's read)", 
 
   it("draws every agent that is up and has a character, by role and instance, with the team's state", () => {
     const office = officeFromTeamProbe(read(), CONNECTION, "it", null, agentsRead(TEAM));
-    // the closer has no character in the office: not drawn. The doctor wears an existing one, with its own name.
+    // the closer has no character in the office: not drawn. The doctor has one of its own.
     expect(office.snapshot.roster).toEqual([
       { uid: "capitano", role: "capitano", sheet: "" },
       { uid: "scout-1", role: "scout", sheet: "" },
       { uid: "scout-2", role: "scout", sheet: "" },
       { uid: "critico-s3", role: "critico", sheet: "" },
-      { uid: "dottore", role: "dottore", sheet: "", look: "assistente" },
+      { uid: "dottore", role: "dottore", sheet: "" },
     ]);
     const agents = office.statuses!.agents;
     expect(office.statuses!.at).toBe(AT);

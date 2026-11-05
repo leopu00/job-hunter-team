@@ -424,6 +424,42 @@
    }
   },
   {
+   "id": "dottore_a",
+   "sit": null,
+   "main": {
+    "src": "/office/characters/dottore_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
+   "id": "mantenitore_a",
+   "sit": null,
+   "main": {
+    "src": "/office/characters/mantenitore_a.png",
+    "cols": 6,
+    "rows": 12,
+    "cell": {
+     "w": 128,
+     "h": 192
+    },
+    "feet": {
+     "x": 64.0,
+     "y": 180.0
+    },
+    "scale": 0.85
+   }
+  },
+  {
    "id": "mentor_a",
    "sit": null,
    "main": {
