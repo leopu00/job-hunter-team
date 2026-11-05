@@ -354,6 +354,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
     projection_state = None       # "ok" | "too_early" | None (niente da proiettare)
     projection_span_h = None
     projection_need_h = None
+    projection_recent = None      # dove porta il ritmo delle ultime 1-8 h (diagnosi: il freno vuole alti entrambi)
     if hours_to_reset and hours_to_reset > 0:
         velocity_ideal = max(0.0, (SAFE_TARGET - usage) / hours_to_reset)
         # Il ritmo di una proiezione e' quello dall'INIZIO della finestra e c'e' solo se i dati bastano (pace_rate.py,
@@ -371,8 +372,16 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
             projection_need_h = round(proj_res["need_h"], 2) if proj_res["need_h"] is not None else None
             if projection_state == "ok":
                 projection = usage + proj_res["rate"] * hours_to_reset
-                projection_lo = usage + proj_res["lo"] * hours_to_reset
                 projection_hi = usage + proj_res["hi"] * hours_to_reset
+                # Il freno (ATTENZIONE, fase, throttle) vuole che ANCHE il ritmo delle ultime ore (1-8 h, `rate_res`) sia alto,
+                # non solo la media dall'inizio della finestra: un burn finito (usage ferma da ore) fa decadere piano la media
+                # dall'inizio e frenerebbe per ore un team che non spende piu'. Come sempre sul limite BASSO dell'intervallo:
+                # un'incertezza non frena.
+                alarm_lo = proj_res["lo"]
+                if rate_res is not None:
+                    projection_recent = usage + rate_res["rate"] * hours_to_reset
+                    alarm_lo = min(alarm_lo, rate_res["lo"])
+                projection_lo = usage + alarm_lo * hours_to_reset
                 projection_naive = usage + velocity_smooth * hours_to_reset
 
     # ── Dead-band: velocity in calo? ──
@@ -563,6 +572,7 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         "projection_state": projection_state,
         "projection_span_h": projection_span_h,
         "projection_need_h": projection_need_h,
+        "projection_recent": round(projection_recent, 2) if projection_recent is not None else None,
         "velocity_decreasing": velocity_decreasing,
         "status": status,
         # Composizione bi-dimensionale (2026-06-29): status_5h = l'asse 5h grezzo

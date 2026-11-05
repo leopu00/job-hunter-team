@@ -33,7 +33,9 @@ Regole, valide per qualunque contatore intero e per qualunque asse:
      azzerata, 1-10 punti): con il ritmo delle ultime 2,5 h la proiezione a 144 h dal reset oscillava fra 62 e 185 punti
      (ATTENZIONE dalle 21:55Z per 9 ore, 125,0 con 2 punti in 2,5 h) mentre il consumo vero era ~0,4 %/h dal reset
      (69 a fine finestra): un solo punto in piu' o in meno spostava la proiezione di 60 punti, e «troppo presto» non
-     esisteva. Regola: projection_rate() misura il ritmo dall'INIZIO
+     esisteva. Il FRENO (ATTENZIONE, fase, throttle) vuole alti entrambi i ritmi, quello dall'inizio della finestra e quello
+     delle ultime ore (counter_rate, 1-8 h), sempre sul limite basso: un burn finito fa decadere piano la media dall'inizio
+     (usage ferma a 29 dopo un burn: proiezione 131 per ore) e non deve frenare un team che non spende piu'. Regola: projection_rate() misura il ritmo dall'INIZIO
      della finestra (fino a PROJ_MAX_SPAN_H) e produce una proiezione solo se l'incertezza dell'arrotondamento sul
      tempo che resta pesa al piu' PROJ_MAX_UNCERTAINTY_PTS punti, cioe' le ore misurate sono almeno (ore al reset) /
      (PROJ_MAX_UNCERTAINTY_PTS / 2) e, su una finestra lunga (> 24 h al reset), i punti guadagnati almeno PROJ_MIN_GAIN o passato un giorno; altrimenti «troppo presto», senza verdetto.

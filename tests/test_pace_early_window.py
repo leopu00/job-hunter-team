@@ -8,7 +8,8 @@ dava ancora ATTENZIONE 464 alla settimana precedente con 7 punti: il ritmo di po
 
 Regola (pace_rate.py, regola 7): la proiezione a fine finestra esce solo se le ore misurate dall'inizio della finestra sono
 almeno (ore al reset) / 7,5 e, su una finestra lunga, i punti guadagnati almeno 5 (o e' passato un giorno). Sotto: «troppo
-presto», status OK, nessun throttle. Sopra: ritmo dall'inizio / ore trascorse, ATTENZIONE solo se anche il limite basso supera 95.
+presto», status OK, nessun throttle. Sopra: ritmo dall'inizio / ore trascorse, ATTENZIONE solo se il limite basso, sia del ritmo
+dall'inizio sia di quello delle ultime ore, supera 95 (un burn finito non frena piu', uno in corso si').
 
 Le serie sono ricostruite dai passi del contatore (ore dal reset), non sono i campioni del team; il file vero, quando sta
 accanto al repo (fuori da git), e' provato a parte (skip se manca).
@@ -81,6 +82,14 @@ def _replay(levels, reset_unix, history_h=50.0):
     return out
 
 
+def _interp(knots, hour):
+    """Il contatore che sale linearmente fra i nodi (ora, valore) e poi resta fermo all'ultimo valore."""
+    for (h0, v0), (h1, v1) in zip(knots, knots[1:]):
+        if h0 <= hour <= h1:
+            return v0 + (v1 - v0) * (hour - h0) / (h1 - h0)
+    return knots[-1][1]
+
+
 def _levels(steps, hours, start=START):
     n = int(hours * 12)
     return [(start + timedelta(minutes=5 * i), _level(steps, i / 12.0)) for i in range(n + 1)]
@@ -126,27 +135,59 @@ def test_a_real_burn_is_still_attenzione_once_the_minimum_is_measured():
     assert all(e["status"] != "ATTENZIONE" for e in ticks if e["projection_state"] == "too_early")
 
 
-def test_the_real_rows_have_no_attenzione_in_the_window():
-    if not REAL_FILES:
-        pytest.skip("i campioni veri stanno accanto al repo, fuori da git")
-    rows = [json.loads(line) for line in REAL_FILES[0].read_text(encoding="utf-8").splitlines() if line.strip()]
-    levels, resets = [], {}
+def _replay_rows(rows):
+    """Le righe vere (ts, usage, reset) rigiocate tick per tick: [(quando, status, throttle suggerito, entry)]."""
+    written, last, out = [], None, []
     for r in rows:
-        levels.append((datetime.fromisoformat(r["ts"]), r["usage"]))
-        resets[levels[-1][0]] = r["reset_at_unix"]
-    written, last, statuses = [], None, []
-    for when, usage in levels:
+        when = datetime.fromisoformat(r["ts"])
         history = [e for e in written if datetime.fromisoformat(e["ts"]) >= when - timedelta(hours=50)]
-        parsed = {"provider": "openai", "usage": usage, "weekly_usage": usage, "reset_at_unix": resets[when],
-                  "weekly_reset_at_unix": resets[when], "usage_is_weekly": True}
+        parsed = {"provider": "openai", "usage": r["usage"], "weekly_usage": r["usage"], "reset_at_unix": r["reset_at_unix"],
+                  "weekly_reset_at_unix": r["reset_at_unix"], "usage_is_weekly": True}
         with _Clock(when):
             entry = cm.compute_metrics(parsed, last, history=history if last is not None else [])
         written.append(entry)
         last = entry
-        statuses.append((when, entry["status"], entry["suggested_throttle_s"]))
-    window = [s for s in statuses if s[0] >= datetime(2026, 11, 4, 23, 0, tzinfo=UTC)]
-    assert window and not [s for s in window if s[1] == "ATTENZIONE" or s[2]]
-    assert not [s for s in statuses if s[1] == "ATTENZIONE"]
+        out.append((when, entry["status"], entry["suggested_throttle_s"], entry))
+    return out
+
+
+def _real_rows(name):
+    files = sorted((REPO.parent / "piani").glob(f"dati-*-pacing-*/{name}"))
+    if not files:
+        pytest.skip("i campioni veri stanno accanto al repo, fuori da git")
+    return [json.loads(line) for line in files[0].read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_the_real_rows_have_no_attenzione_in_the_window():
+    ticks = _replay_rows(_real_rows("sentinel-data-0411-0511.jsonl"))
+    window = [t for t in ticks if t[0] >= datetime(2026, 11, 4, 23, 0, tzinfo=UTC)]
+    assert window and not [t for t in window if t[1] == "ATTENZIONE" or t[2]]
+    assert not [t for t in ticks if t[1] == "ATTENZIONE"]
+
+
+def test_the_real_rows_of_a_finished_burn_stop_the_attenzione_and_a_burn_in_progress_keeps_it():
+    # settimana precedente (reset 28/10 06:40Z): il burn voluto va dalle 23:55Z del 28/10 alle 11:01Z del 29/10
+    rows = [r for r in _real_rows("sentinel-data-2810-0311.jsonl") if "2026-10-28T06:40" <= r["ts"] < "2026-10-30T00:00"]
+    ticks = _replay_rows(rows)
+    at = {t[0].strftime("%d %H:%M"): t for t in ticks}
+    assert at["29 15:45"][1] != "ATTENZIONE" and at["29 15:45"][2] == 0         # il burn e' finito da 4 h, usage ferma
+    assert at["29 15:45"][3]["projection_recent"] < at["29 15:45"][3]["projection"]   # il ritmo recente e' piu' basso
+    assert at["29 08:00"][1] == "ATTENZIONE" and at["29 08:00"][2] > 0           # in corso: frena
+    assert at["28 21:00"][1] != "ATTENZIONE"                                      # e a inizio finestra niente
+
+
+def test_a_finished_burn_stops_the_attenzione_and_a_burn_in_progress_keeps_it_synthetic():
+    # il burn: 29 punti in 28 h dall'inizio (ritmo ~1 %/h dalla 12a ora), poi il contatore fermo a 29
+    knots = [(0.0, 0), (12.0, 4), (17.3, 10), (20.0, 16), (23.0, 21), (26.0, 25), (28.3, 29)]
+    steps = [(h / 12.0, round(_interp(knots, h / 12.0))) for h in range(0, int(36 * 12) + 1)]
+    ticks = _replay(_levels(steps, 36.0), RESET)
+    by_hour = {round((datetime.fromisoformat(e["ts"]) - START).total_seconds() / 3600.0, 2): e for e in ticks}
+    during = by_hour[26.0]
+    assert during["status"] == "ATTENZIONE" and during["suggested_throttle_s"] > 0
+    after = by_hour[33.08]                                                         # 4,8 h con il contatore fermo
+    assert after["status"] != "ATTENZIONE" and after["suggested_throttle_s"] == 0 and after["phase"] == 1
+    # la media dall'inizio dice ancora «alto» (e si vede), il ritmo recente no: il freno vuole alti entrambi
+    assert after["projection"] > 95 > after["projection_recent"]
 
 
 # ── le regole di pace_rate.projection_rate ───────────────────────────────────────────────────────────────
