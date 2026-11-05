@@ -14,8 +14,8 @@ DOWNLOAD_FUNNEL = ROOT / "web" / "lib" / "download-funnel.ts"
 
 
 def test_download_page_links_no_windows_installer() -> None:
-    client = DOWNLOAD_CLIENT.read_text()
-    funnel = DOWNLOAD_FUNNEL.read_text()
+    client = DOWNLOAD_CLIENT.read_text(encoding="utf-8")
+    funnel = DOWNLOAD_FUNNEL.read_text(encoding="utf-8")
 
     assert "win-setup" not in client and "win-setup" not in funnel
     assert "win-portable" not in funnel
@@ -37,13 +37,13 @@ SENTENCE = "Windows is not supported in 0.4: these steps are untested and may no
 def test_every_windows_install_instruction_says_it_is_unsupported_in_04() -> None:
     # the steps stay (the CLI of someone on Windows must not break), with one sentence above each
     guides = ROOT / "docs" / "guides"
-    assert (guides / "QUICKSTART.md").read_text().count(SENTENCE) == 1
+    assert (guides / "QUICKSTART.md").read_text(encoding="utf-8").count(SENTENCE) == 1
     # the CLI install reference does not describe the Windows script any more: Windows is not in this version
-    cli_install = (guides / "CLI-INSTALL.md").read_text()
+    cli_install = (guides / "CLI-INSTALL.md").read_text(encoding="utf-8")
     assert cli_install.count(SENTENCE) == 0 and "install.ps1" not in cli_install and "wsl_not_ready" not in cli_install
     assert cli_install.count("Windows is not in this version") == 2
-    assert (guides / "AI-AGENT-INTEGRATION.md").read_text().count(SENTENCE) == 1
+    assert (guides / "AI-AGENT-INTEGRATION.md").read_text(encoding="utf-8").count(SENTENCE) == 1
     # the website's getting-started page has no Windows block: the page says Windows is not supported (path 2)
-    page = (ROOT / "web/app/docs/guides/getting-started/page.i18n.ts").read_text()
-    assert "path3WinIntro" not in page and "install.ps1" not in (ROOT / "web/app/docs/guides/getting-started/page.tsx").read_text()
+    page = (ROOT / "web/app/docs/guides/getting-started/page.i18n.ts").read_text(encoding="utf-8")
+    assert "path3WinIntro" not in page and "install.ps1" not in (ROOT / "web/app/docs/guides/getting-started/page.tsx").read_text(encoding="utf-8")
     assert page.count("Windows is not supported in 0.4") >= 1
