@@ -568,6 +568,15 @@ mod tests {
         with_long.push(b'\n');
         with_long.extend_from_slice(&file[cut..]);
         file = with_long;
+        // the two sides of the cap: a line of exactly 65536 bytes (its newline counted) is read, one of 65537 is skipped
+        let base = serde_json::to_string(&json!({"role": "agent", "text": ""})).unwrap().len() + 1;
+        for (length, text) in [(65_536usize, "at the cap"), (65_537, "over the cap")] {
+            let mut row = serde_json::to_string(&json!({"role": "agent", "text": format!("{text} {}", "y".repeat(length - base - text.len() - 1))})).unwrap().into_bytes();
+            row.push(b'\n');
+            assert_eq!(row.len(), length);
+            file.extend_from_slice(&row);
+        }
+        file.extend_from_slice(b"{\"role\":\"user\",\"text\":\"after the cap\"}\n");
         assert!(file.len() > 200_000, "a file longer than the tail the first page reads");
         world.put("agents/scout-1/chat.jsonl", &file);
         let Some(first) = script_page(&world.home, "scout", None) else { return };
