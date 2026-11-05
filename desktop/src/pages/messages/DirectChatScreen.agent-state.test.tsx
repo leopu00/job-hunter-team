@@ -122,6 +122,44 @@ describe("DirectChatScreen: the state of the agent", () => {
     expect(within(recent).getByTestId("direct-chat-unanswered")).toBeInTheDocument();
   });
 
+  it("tells a failed send with the reason of the real error code and keeps it through the reads until the person writes again", async () => {
+    const mock = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "send_failed" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} initialAgentId="capitano" loadSessions={sessions} />);
+    const box = await screen.findByRole("textbox", { name: "Scrivi a Capitano" });
+    await waitFor(() => expect(box).toBeEnabled());
+    await user.type(box, "Mi mandi il riepilogo?");
+    await user.click(screen.getByRole("button", { name: "Invia" }));
+    const status = await screen.findByTestId("direct-chat-status");
+    await waitFor(() => expect(status).toHaveTextContent("Il messaggio non è stato consegnato. Rimanda il messaggio."));
+    expect(status).not.toHaveTextContent("L’agente non è acceso");
+    expect(box).toHaveValue("Mi mandi il riepilogo?");
+    // two periodic reads go through: the reason stays
+    const reads = vi.mocked(mock.read).mock.calls.length;
+    await waitFor(() => expect(vi.mocked(mock.read).mock.calls.length).toBeGreaterThanOrEqual(reads + 2), { timeout: 6000 });
+    expect(status).toHaveTextContent("Il messaggio non è stato consegnato");
+    // writing again takes it away
+    await user.type(box, "!");
+    await waitFor(() => expect(status).not.toHaveTextContent("Il messaggio non è stato consegnato"));
+  }, 15000);
+
+  it("tells «not running» for an agent whose session went down between the read and the send", async () => {
+    const mock = client();
+    mock.send = vi.fn(async () => {
+      throw { code: "agent_not_running" };
+    });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} initialAgentId="capitano" loadSessions={sessions} />);
+    const box = await screen.findByRole("textbox", { name: "Scrivi a Capitano" });
+    await waitFor(() => expect(box).toBeEnabled());
+    await user.type(box, "Ciao");
+    await user.click(screen.getByRole("button", { name: "Invia" }));
+    await waitFor(() => expect(screen.getByTestId("direct-chat-status")).toHaveTextContent("L’agente non è acceso. Accendi la squadra, poi rimanda il messaggio."));
+  });
+
   it("puts the selector of the agent under a div that is hidden on a wide window (a `label` has a global display rule that wins over the utility)", async () => {
     render(<DirectChatScreen client={client()} initialAgentId="capitano" loadSessions={sessions} />);
     const picker = await screen.findByTestId("direct-chat-agent-picker");

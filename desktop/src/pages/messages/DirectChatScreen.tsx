@@ -319,12 +319,21 @@ export default function DirectChatScreen({
   // Where the error on the bar came from: the connection (a «ready» that follows ends it) or a read or a
   // send that failed (it stays on the bar until a later read or send gets through, whatever the status says).
   const connectionError = useRef(false);
+  // A send that failed stays on the bar until the person writes again, presses «Riprova» or sends: a read that
+  // goes through in the meantime (they come every second or two) does not take it away.
+  const sendError = useRef(false);
   const failOperation = (code: string) => {
     connectionError.current = false;
+    sendError.current = false;
     // The Mentor is not always up (it is switched on when the first positions have a score, and the team brings
     // it back if it stops): «the agent is not running, start the team» would send the person to start a team
     // that is already running.
     setOperationError(code === "agent_not_running" && agentId === "mentor" ? "mentor_not_active" : code);
+  };
+  // The person's own action (writing, sending, retrying, changing agent) ends the error on the bar.
+  const clearOperationError = () => {
+    sendError.current = false;
+    setOperationError(null);
   };
   // Why an answer written in the composer did not go: it stays in the box.
   const [answerRefusal, setAnswerRefusal] = useState<string | null>(null);
@@ -523,7 +532,7 @@ export default function DirectChatScreen({
     setOutcomes(new Map());
     setSight(NOT_WORKING);
     setPressing(null);
-    setOperationError(null);
+    clearOperationError();
     setLoading(false);
     if (status.state !== "ready") return;
     let active = true;
@@ -554,7 +563,7 @@ export default function DirectChatScreen({
           setQuestionsHere(true);
           setQuestions((current) => sameAsBefore(current, questionsOf(page)));
         }
-        setOperationError(null);
+        if (!sendError.current) setOperationError(null);
         return null;
       } catch (error) {
         const code = errorCode(error) ?? "read_failed";
@@ -665,7 +674,7 @@ export default function DirectChatScreen({
     try {
       const next = await client.reconnect();
       if (next.state !== "ready") return false;
-      setOperationError(null);
+      clearOperationError();
       setStatus(next);
       return true;
     } catch {
@@ -675,7 +684,7 @@ export default function DirectChatScreen({
 
   async function retry() {
     setReconnecting(true);
-    setOperationError(null);
+    clearOperationError();
     setStatus({ state: "connecting" });
     try {
       setStatus(await client.reconnect());
@@ -694,7 +703,7 @@ export default function DirectChatScreen({
     if (target?.kind === "question" && target.words) {
       // the words are the answer to the open question, not a message in the agent's terminal
       setSending(true);
-      setOperationError(null);
+      clearOperationError();
       const refusal = await answer(target.question.id, [], typed);
       setSending(false);
       if (refusal === null) {
@@ -718,7 +727,7 @@ export default function DirectChatScreen({
     setInFlight(id);
     lastSentAt.current = Date.now();
     readSoon.current?.();
-    setOperationError(null);
+    clearOperationError();
     setMessages((current) => mergeMessages(current, { messages: [optimistic] }));
     try {
       const receipt = await client.send({ agentId, text: body, clientMessageId: id });
@@ -736,6 +745,7 @@ export default function DirectChatScreen({
       // what was typed goes back to the composer; a suggestion leaves the composer as it is
       if (suggested === undefined) setText(typed);
       failOperation(errorCode(error) ?? "send_failed");
+      sendError.current = true;
     } finally {
       setSending(false);
       setInFlight(null);
@@ -775,7 +785,7 @@ export default function DirectChatScreen({
     if (!client.enter || pressing || before?.kind !== "notSent" || before.presses >= ENTER_AGAIN_MAX) return;
     if (writeLocked || status.state !== "ready") return;
     setPressing(messageId);
-    setOperationError(null);
+    clearOperationError();
     try {
       const receipt = await client.enter({ agentId, messageId });
       setOutcomes((current) => new Map(current).set(messageId, outcomeOf(receipt, before.presses + 1)));
@@ -1006,7 +1016,7 @@ export default function DirectChatScreen({
         )}
         {!writeLocked && isOwnVpsClaimCode(operationError) && (
           <div className="shrink-0 px-4 pt-3">
-            <OwnVpsClaim reason={operationError} onClaimed={() => setOperationError(null)} />
+            <OwnVpsClaim reason={operationError} onClaimed={() => clearOperationError()} />
           </div>
         )}
 
@@ -1213,7 +1223,10 @@ export default function DirectChatScreen({
             <textarea
               ref={composer}
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                if (sendError.current) clearOperationError();
+                setText(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && event.ctrlKey) {
                   event.preventDefault();
@@ -1265,7 +1278,7 @@ export default function DirectChatScreen({
             <button
               type="submit"
               disabled={!canSend}
-              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[14px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:opacity-40"
+              className="h-8 shrink-0 self-end rounded-md bg-[var(--color-green)] px-4 text-[14px] font-bold text-[var(--color-void)] disabled:cursor-default disabled:bg-[var(--color-border)] disabled:text-[var(--color-dim)]"
             >
               {sending ? t.sending : t.send}
             </button>
