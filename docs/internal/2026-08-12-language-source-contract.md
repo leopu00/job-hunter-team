@@ -45,7 +45,17 @@ processi del team la precedenza è quindi:
 1. `$JHT_HOME/i18n-prefs.json::locale` valido;
 2. `JHT_LANG` valido;
 3. `host.env::JHT_LANG` valido;
-4. `en`.
+4. la lingua del sistema (solo per il preflight dell'host, `scripts/host-setup.sh`, e solo
+   quando NESSUNA delle tre scelte sopra esiste): il primo fra `LC_ALL`, `LC_MESSAGES`,
+   `LANG` che è impostato decide, come in `cli/src/lib/texts.js`; «C», «POSIX» o una
+   lingua che non abbiamo valgono `en`, non «guarda il successivo». Aggiunto il 05/11
+   (JHT-T172): prima di allora il punto 4 era sempre `en`, e un'installazione non
+   interattiva su un sistema italiano dava un'Assistente in inglese;
+5. `en`.
+
+La regola in coda cambia solo il valore con cui si INIZIA una macchina senza scelta:
+una scelta esplicita vince sempre, e RULE-T14 non cambia (la lingua di un messaggio
+non decide mai quella del team).
 
 Il gioco può ancora accettare `JHT_LANG` come override effimero nei selftest e
 nelle registrazioni, ma non lo persiste. In una normale esecuzione desktop non
@@ -94,7 +104,8 @@ ma non può vincere sull'artefatto canonico.
    agente usa `fr`.
 3. artefatto assente, `JHT_LANG=hu` → bootstrap `hu`; il reader non inventa un
    file.
-4. artefatto assente e nessun bootstrap → `en` e picker iniziale.
+4. artefatto assente e nessun bootstrap → la lingua del sistema (`en` se è `C`, `POSIX`
+   o una lingua che non abbiamo) e picker iniziale.
 5. cambio gioco `es` → `i18n-prefs.json::locale=es`; `lang.cfg` non viene
    toccato.
 6. valore `xx` o scrittura fallita → nessun cambio in memoria e nessun
