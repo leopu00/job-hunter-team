@@ -18,6 +18,7 @@ mod existing_team_judgement;
 mod team_provider;
 mod team_settings;
 mod export_file;
+mod host_agents;
 mod host_db;
 mod host_positions;
 mod external_links;
