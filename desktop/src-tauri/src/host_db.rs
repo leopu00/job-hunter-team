@@ -364,7 +364,10 @@ mod unix {
             if !(still(&db) && same_path(&db_path, &db) && wal_ok) {
                 continue; // the snapshot goes out of scope here and its files are removed
             }
-            let conn = open_hardened(&snapshot.dir.join(DB_NAME), required, limits.read_ms)?;
+            // sqlite's NOFOLLOW refuses a path with a link in ANY component (on macOS the temp folder is under /var, a link to
+            // /private/var): the folder is ours, made a moment ago, so it is opened by its resolved name
+            let resolved = std::fs::canonicalize(&snapshot.dir).map_err(|_| "host_db_unreadable")?;
+            let conn = open_hardened(&resolved.join(DB_NAME), required, limits.read_ms)?;
             return Ok(HostDb { conn, data_time: later(&db.stamp, wal.as_ref().map(|w| &w.stamp)), snapshot, limits });
         }
         Err("host_db_busy")
@@ -398,8 +401,9 @@ pub(crate) use unix::sweep as sweep_snapshots;
 #[cfg(not(unix))]
 pub(crate) fn sweep_snapshots(_work: &Path, _older_than_s: i64) {}
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
+    #![cfg(unix)]
     use super::*;
     use sha2::{Digest, Sha256};
     use std::{
@@ -771,6 +775,26 @@ mod tests {
     }
 
     #[test]
+    fn a_work_folder_reached_through_a_link_in_its_path_is_read() {
+        // macOS: the temp folder is /var/folders/..., and /var is a link to /private/var. sqlite refuses such a path with
+        // NOFOLLOW, so the copy is opened by its resolved name; the same shape, made here, fails without it on every system
+        let world = World::new("pathlink");
+        plain_db(&world, 2);
+        let real = world.base.join("real-parent");
+        std::fs::create_dir(&real).unwrap();
+        let through = world.base.join("link-parent");
+        symlink(&real, &through).unwrap();
+        let db = open_snapshot(&world.home, &through.join("work"), &REQUIRED).unwrap();
+        assert_eq!(count(&db), 2);
+        assert!(real.join("work").is_dir(), "the copy lives in the real folder");
+        // and a home reached through a link in its path is read too: only its last name must be a real folder
+        let home_through = through.join("home");
+        std::fs::rename(&world.home, real.join("home")).unwrap();
+        let again = open_snapshot(&home_through, &world.work, &REQUIRED).unwrap();
+        assert_eq!(count(&again), 2);
+    }
+
+    #[test]
     fn a_work_folder_that_is_a_link_is_refused_and_one_open_to_others_is_closed() {
         let world = World::new("work");
         plain_db(&world, 1);
@@ -863,7 +887,7 @@ mod tests {
 
     fn production() -> String {
         let source = include_str!("host_db.rs");
-        let code = source.split("\n#[cfg(all(test, unix))]\nmod tests {").next().unwrap();
+        let code = source.split("\n#[cfg(test)]\nmod tests {").next().unwrap();
         code.lines().filter(|line| !line.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n")
     }
 

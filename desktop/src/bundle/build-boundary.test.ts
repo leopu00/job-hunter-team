@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { fileURLToPath } from "node:url";
 import { build, type Rollup } from "vite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { WEB_PUBLIC_FILES } from "./web-public-assets";
 
@@ -200,7 +200,16 @@ describe("the desktop bundle", () => {
       new URL("../../src-tauri/Cargo.toml", import.meta.url),
       "utf8",
     );
-    expect(manifest).not.toMatch(/^rusqlite\s*=/m);
+    // The retired bridge read the API team's spend with rusqlite. rusqlite is back for ONE reason, the saved data of a team that is
+    // off (host_db.rs, T174), so what is forbidden is the bridge, not the crate: its files are gone, nothing is registered, and
+    // the crate stays pinned and used by the host reader's modules only, with its features closed (no hooks, no extension loading).
+    expect(manifest).toMatch(/^rusqlite = \{ version = "=\d+\.\d+\.\d+", default-features = false, features = \["bundled", "limits"\] \}$/m);
+    const sources = readdirSync(new URL("../../src-tauri/src/", import.meta.url));
+    expect(sources).not.toContain("spend.rs");
+    const users = sources.filter(
+      (name) => name.endsWith(".rs") && /\buse rusqlite\b|\brusqlite::/.test(readFileSync(new URL(`../../src-tauri/src/${name}`, import.meta.url), "utf8")),
+    );
+    expect(users.sort()).toEqual(["host_db.rs"]);
   });
 
   it("does not package API runtime resources in Tauri", () => {
