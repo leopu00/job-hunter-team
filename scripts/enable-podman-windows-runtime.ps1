@@ -559,6 +559,11 @@ function Skip-WslWelcome {
 # install decides, never the exit code alone.
 $WingetUpdateNotApplicable = -1978335189
 
+# winget's «the data the source needs is missing» (0x8A15000F): an App Installer that was just installed for this user has
+# an EMPTY list of programs, and every search or install answers this (JHT-T184). `winget source update` fills it, so it
+# is run once and the install is asked again; if the list is still empty the person is told what to do about it.
+$WingetSourceDataMissing = -1978335217
+
 # Which Podman the team runs on. The pin is what the app installs, and what the
 # setup screen names. A Podman of the same major, as new as the pin or newer, is
 # used as it is, with a warning in the log: 6.1 changed nothing the team relies on
@@ -613,8 +618,15 @@ if ($InstallDependencies) {
       # --override replaces winget's own switches, so the quiet ones are here too.
       foreach ($forThisUser in $false, $true) {
         $scope = if ($forThisUser) { @('--force', '--override', '/qn /norestart ALLUSERS=2 MSIINSTALLPERUSER=1') } else { @() }
-        & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
-        $wingetCode = $LASTEXITCODE
+        foreach ($attempt in 1, 2) {
+          & winget install --exact --source winget --version $PodmanCliVersion --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --id Podman.CLI @scope
+          $wingetCode = $LASTEXITCODE
+          if ($wingetCode -ne $WingetSourceDataMissing -or $attempt -eq 2) { break }
+          & winget source update --disable-interactivity
+        }
+        if ($wingetCode -eq $WingetSourceDataMissing) {
+          throw "the list of programs of winget is empty for this Windows user (winget exited with $wingetCode, 0x8A15000F), also after winget source update. Open the Microsoft Store, go to Library and choose Get updates (this updates App Installer and fills the list), then run the installer again."
+        }
         if ($forThisUser) { $otherUser = -not (Find-Podman); break }
         if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
           throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."

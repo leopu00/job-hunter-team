@@ -863,3 +863,49 @@ def test_both_installer_files_look_for_winget_in_this_users_alias_folder_and_say
     installer = _code(ROOT / "scripts" / "install.ps1")
     assert "Join-Path $LocalAppData 'Microsoft\\WindowsApps\\winget.exe'" in installer
     assert "Test-Path -LiteralPath $wingetAlias" in installer
+
+
+# ── JHT-T184 WX2: a winget with an empty list of programs ──
+
+SOURCE_DATA_MISSING = 0x8A15000F - 2**32
+
+
+def test_the_empty_list_of_programs_is_recognised_updated_once_and_then_told():
+    enabler = _code(ENABLER)
+    assert re.search(r"\$WingetSourceDataMissing = (-?\d+)", enabler).group(1) == str(SOURCE_DATA_MISSING)
+    block = enabler[enabler.index("if ($InstallDependencies) {") :]
+    block = block[: block.index("$Podman = Find-Podman")]
+    # one install command, asked again after ONE source update, never a loop
+    assert block.count("& winget install") == 1 and block.count("& winget source update") == 1
+    assert "foreach ($attempt in 1, 2)" in block
+    assert block.index("& winget install") < block.index("& winget source update")
+    # still empty: its own sentence with what the person does (the Store), before the generic exit-code sentence
+    told = block.index("is empty for this Windows user")
+    assert block.index("& winget source update") < told < block.index("exited with $wingetCode.\"")
+    sentence = block[told : block.index("\n", told)]
+    assert "Microsoft Store" in sentence and "Get updates" in sentence and "run the installer again" in sentence
+
+
+@needs_powershell
+@pytest.mark.parametrize("update_fills_it", [True, False])
+def test_an_empty_list_of_programs_with_a_fake_winget(tmp_path, update_fills_it):
+    calls = tmp_path / "winget-calls"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    fills = "$global:Updated = $true" if update_fills_it else ""
+    winget = (
+        f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n"
+        f"  if ($args[0] -eq 'source') {{ {fills}; $global:LASTEXITCODE = 0 }}\n"
+        "  elseif ($global:Updated) {\n" + _ps_make_podman(fake_podman, "6.0.2") + "    $global:LASTEXITCODE = 0\n  }\n"
+        f"  else {{ $global:LASTEXITCODE = {SOURCE_DATA_MISSING} }}\n"
+    )
+    done = _run_block(tmp_path, winget)
+    lines = calls.read_text().splitlines()
+    assert [line.split(" ")[0] for line in lines] == ["install", "source", "install"], lines
+    assert lines[1] == "source update --disable-interactivity"
+    if update_fills_it:
+        assert done.returncode == 0, done.stdout + done.stderr
+    else:
+        assert done.returncode == 21, done.stdout + done.stderr
+        assert "podman_not_installable: the list of programs of winget is empty for this Windows user" in done.stderr
+        assert "0x8A15000F" in done.stderr and "Microsoft Store" in done.stderr
