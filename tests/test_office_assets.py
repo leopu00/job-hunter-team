@@ -46,8 +46,16 @@ def test_the_layout_has_the_offices_shape(committed):
     assert [d["id"] for d in committed["departments"]] == ["scout", "analisti", "scorer", "scrittori", "critici"]
     assert all(len(d["desks"]) == 6 for d in committed["departments"])
     assert [d["role"] for d in committed["departments"]] == ["scout", "analista", "scorer", "scrittore", "critico"]
-    assert {c["role"] for c in committed["coreSeats"]} >= {"capitano", "sentinella", "assistente", "mentor"}
-    assert set(committed["sheets"]) == {"capitano", "scout", "analista", "scorer", "scrittore", "critico", "sentinella", "assistente", "mentor"}
+    assert {c["role"] for c in committed["coreSeats"]} >= {"capitano", "sentinella", "assistente", "mentor", "dottore", "mantenitore"}
+    assert set(committed["sheets"]) == {
+        "capitano", "scout", "analista", "scorer", "scrittore", "critico", "sentinella", "assistente", "mentor", "dottore", "mantenitore",
+    }
+    # The doctor and the maintainer have a character of their own (not another role's), each at its own furniture.
+    assert committed["sheets"]["dottore"] == ["dottore_a"] and committed["sheets"]["mantenitore"] == ["mantenitore_a"]
+    by_id = {f["id"]: f for f in committed["furniture"]}
+    seats = {c["role"]: c for c in committed["coreSeats"]}
+    assert seats["dottore"]["furnitureId"] == "doctor_armchair" and by_id["doctor_armchair"]["seatOf"] == "dottore"
+    assert seats["mantenitore"]["furnitureId"] == "maintainer_workbench" and by_id["maintainer_workbench"]["seatOf"] == "mantenitore"
     assert committed["nav"]["cell"] == 32 and len(committed["nav"]["walls"]) == 13
     assert committed["pois"]["printer"] == {"x": 1265.0, "y": 300.0}
     # Rugs lie under everyone and block nobody.

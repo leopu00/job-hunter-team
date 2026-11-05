@@ -135,7 +135,7 @@ afterEach(() => {
 describe("the office of a local profile", () => {
   it("draws the agents that work on this computer, the ones the Agents page lists, and asks the cloud for nothing", async () => {
     mount();
-    // the captain, the scout and the doctor are in the office (the doctor wears a character that exists)
+    // the captain, the scout and the doctor are in the office
     await waitFor(() => expect(entered()).toEqual(["capitano", "dottore", "scout-1"]));
     expect(calls(CONTROL).length).toBeGreaterThan(0);
     expect(load).not.toHaveBeenCalled();
@@ -441,10 +441,9 @@ describe("the office of a local profile", () => {
       ),
     );
     expect(calls(SNAPSHOT)).toHaveLength(0);
-    // the doctor and the maintainer wear a character that exists, and keep their own name
-    const looks = Object.fromEntries(applied.filter((e): e is Extract<OfficeEvent, { type: "enter" }> => e.type === "enter").map((e) => [e.agent.uid, e.agent.look]));
-    expect(looks).toMatchObject({ dottore: "assistente", mantenitore: "mentor" });
-    expect(looks.capitano).toBeUndefined();
+    // the doctor and the maintainer are drawn as themselves: the engine picks their own sheets and seats (layout.json)
+    const roles = Object.fromEntries(applied.filter((e): e is Extract<OfficeEvent, { type: "enter" }> => e.type === "enter").map((e) => [e.agent.uid, e.agent.role]));
+    expect(roles).toMatchObject({ dottore: "dottore", mantenitore: "mantenitore", capitano: "capitano" });
   });
 
   it("draws them too when the VPS probe fails altogether", async () => {

@@ -40,10 +40,7 @@ const SESSIONS: ReadonlyArray<{ field: "captainRunning" | "assistantRunning"; ag
   { field: "assistantRunning", agent: { uid: "assistente", role: "assistente", sheet: "" } },
 ];
 
-/**
- * The roles drawn in the office (AgentRole): the others (the closer…) are not. The doctor and the maintainer have
- * no character of their own yet: they wear an existing one, with their own name on the tag (JHT-T175).
- */
+/** The roles drawn in the office (AgentRole): the others (the closer…) are not. */
 const OFFICE_ROLES: readonly AgentRole[] = [
   "capitano",
   "scout",
@@ -58,8 +55,6 @@ const OFFICE_ROLES: readonly AgentRole[] = [
   "mantenitore",
 ];
 
-/** The character a role without its own wears. */
-const LOOKS_LIKE: Partial<Record<AgentRole, AgentRole>> = { dottore: "assistente", mantenitore: "mentor" };
 
 const UNKNOWN_PILES: Piles = { scout: null, analisti: null, scorer: null, scrittori: null, critici: null };
 
@@ -167,11 +162,8 @@ export function officeFromThisComputer(
  */
 function officeFromAgents(agents: Extract<TeamAgentsReading, { kind: "read" }>, locale: Locale, piles: Piles | null, here = false): ProbeOffice {
   const t = EXISTING_TEAM_AGENTS_TEXT[locale];
-  // the roles that wear another's character come last: the one who owns the seat sits in it
-  const drawn = agents.read.agents
-    .filter((agent) => (OFFICE_ROLES as readonly string[]).includes(agent.role))
-    .sort((a, b) => Number(a.role in LOOKS_LIKE) - Number(b.role in LOOKS_LIKE));
-  const roster: OfficeAgent[] = drawn.map((agent) => ({ uid: agent.name.toLowerCase(), role: agent.role as AgentRole, sheet: "", ...(LOOKS_LIKE[agent.role as AgentRole] ? { look: LOOKS_LIKE[agent.role as AgentRole] } : {}) }));
+  const drawn = agents.read.agents.filter((agent) => (OFFICE_ROLES as readonly string[]).includes(agent.role));
+  const roster: OfficeAgent[] = drawn.map((agent) => ({ uid: agent.name.toLowerCase(), role: agent.role as AgentRole, sheet: "" }));
   const read = (here ? t.officeReadAtHere : t.officeReadAt).replace("{time}", stamp(agents.at, locale));
   const unknown = agents.read.statesKnown ? "" : ` ${t.statesUnknown}`;
   // how the team is at a glance (summary.ts): the counts by state, when the team says them, and
