@@ -6,7 +6,7 @@ import { categoryPalette, colorDistance, PALETTE_SIZE, parseHex, toOklch } from 
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// ── the REAL tokens of the themes: the desktop's eleven palettes, the web's dark and light ─────────────────────────
+// ── the REAL tokens of the themes: the desktop's thirteen palettes, the web's dark and light ─────────────────────────
 type Tokens = Record<string, string>;
 function tokensOf(block: string): Tokens {
   const t: Tokens = {};
@@ -32,8 +32,8 @@ const hueGap = (a: number, b: number) => {
 };
 
 describe("the colours of the categories, derived from the theme's main colour", () => {
-  it("are read from the 13 real themes (11 of the desktop, the web's dark and light)", () => {
-    expect(Object.keys(THEMES).length).toBeGreaterThanOrEqual(13);
+  it("are read from the 15 real themes (13 of the desktop, the web's dark and light)", () => {
+    expect(Object.keys(THEMES).length).toBeGreaterThanOrEqual(15);
     for (const [name, t] of Object.entries(THEMES)) expect(parseHex(t.green) && parseHex(t.card), name).toBeTruthy();
   });
 

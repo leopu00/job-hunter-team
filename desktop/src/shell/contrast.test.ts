@@ -7,7 +7,7 @@ const css = readFileSync(new URL("../dashboard/dashboard.css", import.meta.url),
 const palette = [...new Set([...css.matchAll(/#[0-9a-f]{6}\b/gi)].map((m) => m[0].toLowerCase()))];
 
 describe("fromOklch", () => {
-  it("gives back every colour of the eleven palettes", () => {
+  it("gives back every colour of the thirteen palettes", () => {
     expect(palette.length).toBeGreaterThan(100);
     for (const hex of palette) expect(fromOklch(toOklch(hex)), hex).toBe(hex);
   });

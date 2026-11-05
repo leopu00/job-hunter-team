@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { lightnessGap, relativeLuminance, toOklch, wcagContrast as contrast } from "./contrast";
 import { THEME_TEXT } from "./theme.i18n";
-import { THEMES, SYSTEM_THEME, themeFamily } from "./theme";
+import { READY_THEMES, TEMPLATE_THEMES, THEMES, SYSTEM_THEME, isStrictTheme, themeFamily } from "./theme";
 
 const css = readFileSync(new URL("../dashboard/dashboard.css", import.meta.url), "utf8").replace(/\r\n?/g, "\n");
 const html = readFileSync(new URL("../../dashboard.html", import.meta.url), "utf8");
@@ -32,8 +32,12 @@ function tokens(theme: string) {
 }
 
 describe("every palette is complete and consistent", () => {
-  it("lists eleven palettes, each once, each with a base", () => {
-    expect(THEMES).toHaveLength(11);
+  it("lists thirteen palettes, each once, each with a base: six ready ones (three dark, three light) and seven templates", () => {
+    expect(THEMES).toHaveLength(13);
+    expect(READY_THEMES.map((t) => t.value)).toEqual(["dark", "graphite", "contrast", "light", "mist", "contrastlight"]);
+    expect(READY_THEMES.filter((t) => t.family === "dark")).toHaveLength(3);
+    expect(READY_THEMES.filter((t) => t.family === "light")).toHaveLength(3);
+    expect(TEMPLATE_THEMES.map((t) => t.value)).toEqual(["ocean", "midnight", "forest", "dusk", "paper", "sage", "lavender"]);
     expect(new Set(THEMES.map((t) => t.value)).size).toBe(THEMES.length);
     expect(THEMES.every((t) => t.family === "dark" || t.family === "light")).toBe(true);
   });
@@ -96,15 +100,73 @@ describe("every palette stays readable", () => {
     }
   });
 
-  it("holds «High contrast» to 7:1 on every text and status colour against every surface, and gives it visible borders", () => {
-    const p = tokens("contrast");
+  it.each(["contrast", "contrastlight"])("holds the high contrast palette %s to 7:1 on every text and status colour against every surface, and gives it visible borders", (theme) => {
+    expect(isStrictTheme(theme)).toBe(true);
+    const p = tokens(theme);
     for (const name of [...TEXT, ...ACCENTS]) {
       for (const surface of SURFACES) {
-        expect(contrast(p.get(name)!, p.get(surface)!), `contrast: ${name} on ${surface}`).toBeGreaterThanOrEqual(7);
+        expect(contrast(p.get(name)!, p.get(surface)!), `${theme}: ${name} on ${surface}`).toBeGreaterThanOrEqual(7);
       }
     }
     expect(contrast(p.get("--color-border")!, p.get("--color-panel")!)).toBeGreaterThanOrEqual(3);
     expect(contrast(p.get("--color-border-glow")!, p.get("--color-panel")!)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("holds only the two high contrast palettes to 7:1", () => {
+    expect(THEMES.filter((t) => isStrictTheme(t.value)).map((t) => t.value)).toEqual(["contrast", "contrastlight"]);
+  });
+
+  // The base and the high contrast are the ones people use most: a new set of themes must not move them by one digit.
+  it("keeps «Dark» exactly as it was", () => {
+    expect(Object.fromEntries(tokens("dark"))).toEqual({
+      "--color-void": "#060608",
+      "--color-deep": "#0c0c10",
+      "--color-panel": "#111116",
+      "--color-card": "#181820",
+      "--color-row": "#1d1d26",
+      "--color-border": "#30303d",
+      "--color-border-glow": "#414153",
+      "--color-dim": "#84849b",
+      "--color-muted": "#9a9ab1",
+      "--color-base": "#c4c4d4",
+      "--color-bright": "#e4e4ee",
+      "--color-white": "#f7f7fb",
+      "--color-grid": "rgba(255, 255, 255, 0.022)",
+      "--color-green": "#31dd8a",
+      "--color-ready": "#7fffb2",
+      "--color-yellow": "#f5c518",
+      "--color-blue": "#68adff",
+      "--color-red": "#ff5f75",
+      "--color-orange": "#ff9b57",
+      "--color-purple": "#bd76ff",
+      "--sync-warn": "#ddb461",
+    });
+  });
+
+  it("keeps «High contrast» exactly as it was", () => {
+    expect(Object.fromEntries(tokens("contrast"))).toEqual({
+      "--color-void": "#000000",
+      "--color-deep": "#050505",
+      "--color-panel": "#0a0a0a",
+      "--color-card": "#141414",
+      "--color-row": "#1c1c1c",
+      "--color-border": "#767676",
+      "--color-border-glow": "#a0a0a0",
+      "--color-dim": "#c4c4c4",
+      "--color-muted": "#d6d6d6",
+      "--color-base": "#e8e8e8",
+      "--color-bright": "#f5f5f5",
+      "--color-white": "#ffffff",
+      "--color-grid": "rgba(255,255,255,0.06)",
+      "--color-green": "#ffe14d",
+      "--color-ready": "#fff08a",
+      "--color-yellow": "#ffd400",
+      "--color-blue": "#7fc4ff",
+      "--color-red": "#ff8a8a",
+      "--color-orange": "#ffa94d",
+      "--color-purple": "#d9a8ff",
+      "--sync-warn": "#ffd400",
+    });
   });
 });
 

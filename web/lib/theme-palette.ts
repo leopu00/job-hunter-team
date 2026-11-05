@@ -7,7 +7,7 @@
  * The recipe is fixed: the first colour is the accent itself; the next ones are the accent's own hue (±30°) at other
  * lightnesses and chromas, then its neighbours (±60°, ±90°), then its complement (+150°); the lightness is picked from a
  * band that stands out on the card of the theme (a dark card gets light colours, a light card dark ones). Chosen by a search so that,
- * in each of the eleven palettes of the desktop and the web's light and dark, no two of the 14 look alike and each one stands
+ * in each of the thirteen palettes of the desktop and the web's light and dark, no two of the 14 look alike and each one stands
  * out on its card (theme-palette.test.ts checks every one of them on the real tokens).
  *
  * Pure functions here; `category-colors.ts` writes the result into the page as the variables `--cat-0 … --cat-13`.

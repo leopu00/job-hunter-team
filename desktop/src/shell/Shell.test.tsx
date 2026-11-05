@@ -157,8 +157,9 @@ describe("Shell", () => {
       render(<Shell />);
       await user.click(screen.getByRole("button", { name: "Theme: Dark (system). Change theme" }));
       const menu = screen.getByRole("menu", { name: "App theme" });
-      expect(within(menu).getByRole("menuitemradio", { name: "Ocean" })).toBeInTheDocument();
-      expect(menu).not.toHaveTextContent(/Scuro|Chiaro|Oceano|Carta|Tema/);
+      expect(within(menu).getByRole("menuitemradio", { name: "Graphite" })).toBeInTheDocument();
+      expect(within(menu).getByRole("menuitemradio", { name: "High contrast light" })).toBeInTheDocument();
+      expect(menu).not.toHaveTextContent(/Scuro|Chiaro|Grafite|Grigio|Tema/);
     } finally {
       document.cookie = "NEXT_LOCALE=; path=/; max-age=0";
     }
@@ -281,15 +282,18 @@ describe("Shell", () => {
       screen.getByRole("button", { name: "Tema: Scuro (sistema). Cambia tema" }),
     );
     const menu = screen.getByRole("menu", { name: "Tema dell'app" });
-    // «follow the system» and the eleven palettes
-    expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(12);
-    await user.click(within(menu).getByRole("menuitemradio", { name: "Oceano" }));
+    // «follow the system» and the six ready palettes, three dark and three light; the coloured templates are not entries
+    expect(within(menu).getAllByRole("menuitemradio").map((item) => item.textContent?.replace("✓", "").trim())).toEqual([
+      "Segui il sistema", "Scuro", "Grafite", "Alto contrasto", "Chiaro", "Grigio chiaro", "Alto contrasto chiaro",
+    ]);
+    expect(within(menu).queryByRole("menuitemradio", { name: "Oceano" })).toBeNull();
+    await user.click(within(menu).getByRole("menuitemradio", { name: "Grafite" }));
 
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("ocean");
-    expect(document.documentElement).toHaveAttribute("data-jht-theme", "ocean");
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("graphite");
+    expect(document.documentElement).toHaveAttribute("data-jht-theme", "graphite");
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
     expect(
-      screen.getByRole("button", { name: "Tema: Oceano. Cambia tema" }),
+      screen.getByRole("button", { name: "Tema: Grafite. Cambia tema" }),
     ).toBeInTheDocument();
 
     first.unmount();
@@ -298,9 +302,26 @@ describe("Shell", () => {
     render(<Shell />);
 
     expect(
-      screen.getByRole("button", { name: "Tema: Oceano. Cambia tema" }),
+      screen.getByRole("button", { name: "Tema: Grafite. Cambia tema" }),
     ).toBeInTheDocument();
-    expect(document.documentElement).toHaveAttribute("data-jht-theme", "ocean");
+    expect(document.documentElement).toHaveAttribute("data-jht-theme", "graphite");
+  });
+
+  it("keeps the coloured palette of who chose one before it became a template, and shows it checked in the menu", async () => {
+    localStorage.setItem(THEME_STORAGE_KEY, "forest");
+    navigate("/dashboard", { replace: true });
+    const user = userEvent.setup();
+    render(<Shell />);
+
+    expect(document.documentElement).toHaveAttribute("data-jht-theme", "forest");
+    await user.click(screen.getByRole("button", { name: "Tema: Foresta. Cambia tema" }));
+    const menu = screen.getByRole("menu", { name: "Tema dell'app" });
+    expect(within(menu).getByRole("menuitemradio", { name: /Foresta/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(menu).queryByRole("menuitemradio", { name: /Oceano/ })).toBeNull();
+    // once another palette is chosen, the template leaves the menu
+    await user.click(within(menu).getByRole("menuitemradio", { name: "Scuro" }));
+    await user.click(screen.getByRole("button", { name: "Tema: Scuro. Cambia tema" }));
+    expect(within(screen.getByRole("menu")).queryByRole("menuitemradio", { name: /Foresta/ })).toBeNull();
   });
 
   it("keeps the bar to the positions and the team, and the person's pages in the account menu, and routes to all of them", async () => {
