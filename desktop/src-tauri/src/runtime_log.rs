@@ -40,6 +40,8 @@ static LAST_EXIT_POLL_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::ti
 const BUDGET_FAILURE_EVERY: Duration = Duration::from_secs(300);
 /// The last failed read of the budget written: the log it went to, its code and when.
 static LAST_BUDGET_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
+/// The last failed read of a fixed script of the app written (its exit and the size of what it printed): the log, the pair and when.
+static LAST_SCRIPT_READ_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 /// The last refusal written: the log it went to, its code and when.
 static LAST_OWNER_REFUSAL: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 
@@ -276,6 +278,25 @@ impl RuntimeLog {
             *last = Some((self.path.clone(), code.to_owned(), now));
         }
         let entry = format!("=== {} budget.read: {code}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// A read of the team through the chat's Python channel whose answer was not a JSON: only the exit of the wrapper and the
+    /// number of bytes it printed, never what it printed. The same pair is written once in five minutes (the pages ask every
+    /// few seconds), so the line says WHY a read failed when the page can only say that it did.
+    pub(crate) fn record_script_read_failure(&self, exit: i32, bytes: usize) {
+        let said = format!("exit={} bytes={}", exit.clamp(-1, 255), bytes.min(99_999_999));
+        let now = std::time::Instant::now();
+        {
+            let mut last = LAST_SCRIPT_READ_FAILURE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some((path, kept, at)) = last.as_ref() {
+                if path == &self.path && kept == &said && now.duration_since(*at) < BUDGET_FAILURE_EVERY {
+                    return;
+                }
+            }
+            *last = Some((self.path.clone(), said.clone(), now));
+        }
+        let entry = format!("=== {} script.read: read_failed {said}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -1022,6 +1043,23 @@ mod tests {
             assert!(text.contains(line), "{line}");
         }
         assert!(!text.contains("203.0.113.7") && !text.contains("sentence"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_script_read_that_gave_no_json_is_written_by_its_exit_and_size_only_once_in_a_while() {
+        let root = dir("script-read");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        for _ in 0..4 {
+            log.record_script_read_failure(0, 0);
+        }
+        log.record_script_read_failure(64, 12);
+        log.record_script_read_failure(-7, usize::MAX);
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert_eq!(text.matches(" script.read: read_failed exit=0 bytes=0\n").count(), 1, "the same pair once");
+        assert!(text.contains(" script.read: read_failed exit=64 bytes=12\n"));
+        assert!(text.contains(" script.read: read_failed exit=-1 bytes=99999999\n"), "both numbers are bounded");
+        assert_eq!(text.matches("=== ").count(), 3);
         fs::remove_dir_all(root).unwrap();
     }
 
