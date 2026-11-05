@@ -5,9 +5,10 @@ Origin: collaudo 03/11, Windows 10 without «App Installer»: the installer stop
 what to do, and left an empty `host-runtime` folder. The lines `JHT_PHASE ...` (for the desktop app) were on the
 screen of a person too, and the error was one line without colour or next step.
 
-Decision for 0.4.0: winget stays a requirement. The error says how to get it (App Installer from the Store, or
-the official link) and how to resume (run the same command again); the guide lists it among the requirements;
-the folders a stopped run created and left empty are removed again. JHT_PHASE goes to the app (output through
+Decision for 0.4.0: winget stayed a requirement; JHT-T184 (05/11) makes it a way, not a requirement: without a usable
+winget the enabler installs Podman for the user from the official release (checked by its SHA-256), so the installer no
+longer stops for it. The guide still lists winget (it is the usual way); the folders a stopped run created and left
+empty are removed again. JHT_PHASE goes to the app (output through
 a pipe) or to whoever asks with JHT_MACHINE_OUTPUT=1, never to a person at a terminal.
 
 The desktop reads the exit codes (windows_runtime.rs exit_failure) and the `code:` prefix of stderr: both stay.
@@ -42,20 +43,17 @@ def _runtime_files(text: str) -> str:
 
 
 @pytest.mark.parametrize("installer", [INSTALLER, PUBLIC_INSTALLER], ids=["scripts", "web"])
-def test_winget_is_checked_before_a_single_folder_is_written(installer):
+def test_a_missing_winget_is_no_stop_of_the_installer_the_enabler_has_a_way_out(installer):
+    # JHT-T184 / JHT-T144: winget is no longer a requirement. The installer does not stop before the first folder for it,
+    # and the one place that decides is the enabler (winget, or Podman for this user from the official release).
     runtime = _runtime_files(installer.read_text(encoding="utf-8"))
-    check = runtime.index("Get-Command winget")
-    assert check < runtime.index("New-Item -ItemType Directory -Force -Path $RuntimeDir"), "before the folders"
-    assert check < runtime.index("Get-File -Url"), "before any download"
-    # A Podman already on the PATH needs no winget.
-    assert "Get-Command podman.exe" in runtime[:check + 200]
-    block = runtime[check : runtime.index("exit 21", check) + len("exit 21")]
-    # the same code line and exit the app reads, with the way out written first
-    assert "podman_not_installable: winget is required to install Podman dependencies." in block
-    assert block.index("Write-JhtProblem") < block.index("podman_not_installable")
-    for url in APP_INSTALLER_URLS:
-        assert url in block
-    assert "App Installer" in block and "run the same install command again" in block
+    assert "Get-Command winget" not in runtime
+    assert "winget is required to install Podman dependencies" not in installer.read_text(encoding="utf-8")
+    # the next step for a Podman that could not be installed still names both ways, and is the one the app reads
+    text = installer.read_text(encoding="utf-8")
+    problem = text[text.index("function Show-PodmanSetupProblem") :]
+    problem = problem[problem.index("21 {") : problem.index("22 {")]
+    assert "winget" in problem and "github.com" in problem and "$again" in problem
 
 
 def test_the_folders_a_stopped_run_created_are_removed_again_but_never_recursively():
@@ -108,8 +106,9 @@ def test_every_enabler_exit_code_has_a_next_step():
 
 def test_the_enabler_tells_the_same_in_its_own_message():
     text = ENABLER.read_text(encoding="utf-8")
-    assert "winget is required to install Podman dependencies." in text
-    assert "https://aka.ms/getwinget" in text[text.index("winget is required") : text.index("winget is required") + 260]
+    # no winget at all is no stop any more: Podman for this user from the official release (JHT-T184)
+    assert "winget is required to install Podman dependencies" not in text
+    assert "$viaZip = -not (Use-Winget)" in text
     # still the line the app and the other tests read
     assert 'podman_not_installable: $($_.Exception.Message)")\n  exit 21' in text
 
