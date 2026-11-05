@@ -1234,8 +1234,9 @@ mod windows_tests {
         std::fs::remove_file(world.db()).unwrap();
         // and once it is a plain file again it is read
         std::fs::rename(&real, world.db()).unwrap();
-        assert_eq!(count(&open(&world).unwrap()), 1);
-        assert_eq!(world.snapshots(), 1);
+        let db = open(&world).unwrap();
+        assert_eq!(count(&db), 1);
+        assert_eq!(world.snapshots(), 1, "the copy is there while the handle is");
     }
 
     #[test]
