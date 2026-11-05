@@ -85,7 +85,7 @@ def _samples_from_file(jsonl_path, since, now_ts):
 
 def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
                            weekly_active_hours, window_h=2.0,
-                           weekly_total_active_hours=None, burn_intent_on=False, samples=None):
+                           weekly_total_active_hours=None, burn_intent_on=False, samples=None, hours_to_reset=None):
     """RATE weekly REALE (vel_weekly) su ~window_h vs sostenibile.
 
     Il weekly_usage e' integer-rounded e si muove ~+1%/tick → su pochi minuti e'
@@ -104,6 +104,13 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
     INFORMAZIONE (campi `debt_pct`, `ratio`, `kind` invariati) e non frenano; `binding` diventa il solo `lockout_risk`
     (pace_reference.lockout_risk: il limite BASSO del ritmo esaurisce il residuo piu' di LOCKOUT_MARGIN_ACTIVE_H ore attive
     prima del reset). Senza deroga `binding` e' quello di sempre.
+
+    `hours_to_reset` (ore di CALENDARIO al reset, se il chiamante le conosce): a inizio finestra il ritmo non basta per
+    dire niente sul resto della settimana (pace_rate.projection_rate: ore misurate dall'inizio >= ore al reset / 7,5 e
+    almeno PROJ_MIN_GAIN punti). Sotto quel minimo il verdetto e' «troppo presto»: kind ND, nessun lockout, nessun
+    burn_mode, nessuna proiezione (`too_early` True, con le ore misurate e quelle che servono); resta solo il debito
+    cumulativo sulla retta delle ore attive (e' un LIVELLO, non un ritmo: non dipende dal rumore del contatore).
+    Senza `hours_to_reset` tutto e' come prima.
     """
     if (not isinstance(weekly_remaining_pct, (int, float))
             or not isinstance(weekly_active_hours, (int, float))
@@ -114,7 +121,9 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
     # Lookback ampio: la finestra del rate e' ADATTIVA (sotto), non fissa a
     # window_h, per battere il rumore di quantizzazione del weekly_usage (intero).
     lookback_h = max(window_h, MAX_WINDOW_H)
-    since = now_ts - lookback_h * 3600.0
+    # il minimo di dati per un verdetto sul resto della finestra si misura dall'inizio della finestra (fino a 48 h)
+    read_h = max(lookback_h, pace_rate.PROJ_MAX_SPAN_H if hours_to_reset is not None else 0.0)
+    since = now_ts - read_h * 3600.0
     recent_since = now_ts - RECENT_WINDOW_H * 3600.0
     if samples is not None:
         # [(epoch, weekly_usage)] already read and checked by the caller (the app's read, budget_view.py)
@@ -130,6 +139,8 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
     # Il ritmo e' di pace_rate.py: almeno un'ora, intervallo [lo, hi] sul contatore intero, salti non attribuibili
     # tolti, un calo senza reset = nuovo punto di partenza (prima: finestra adattiva da 3 punti, `dw < 0` -> None,
     # cioe' cieco per ore dopo ogni calo).
+    proj_gate = (pace_rate.projection_rate(samples, now_ts, hours_to_reset)
+                 if hours_to_reset is not None else None)
     rate = pace_rate.counter_rate(samples, now_ts, max_span_h=lookback_h)
     if rate is None:
         return None
@@ -212,12 +223,26 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
         "unattributed_pts": rate["unattributed_pts"],
         "rebaselined": rate["rebaselined"],
     }
+    too_early = bool(proj_gate is not None and proj_gate["state"] != "ok")
+    res["too_early"] = too_early
+    if proj_gate is not None:
+        res["too_early_span_h"] = round(proj_gate["span_h"], 2)
+        res["too_early_need_h"] = round(proj_gate["need_h"], 2) if proj_gate["need_h"] is not None else None
+    if too_early:
+        # Il ritmo di poche ore non dice niente sul resto della settimana: nessun verdetto di ritmo, nessuna proiezione.
+        res.update({"kind": "ND", "early_lockout_h": None, "burn_mode": False, "projected_final_pct": None,
+                    "wasted_pct": None, "burst_transient": False})
+        rate = dict(rate, lo=0.0)
     risk, early_lo = pace_reference.lockout_risk(weekly_remaining_pct, weekly_active_hours, rate["lo"])
     res["lockout_risk"] = risk
     res["lockout_early_active_h"] = early_lo
     res["lockout_margin_active_h"] = pace_reference.LOCKOUT_MARGIN_ACTIVE_H
     res["burn_intent"] = bool(burn_intent_on)
-    if burn_intent_on:
+    if too_early:
+        # Solo il livello: il debito sulla retta delle ore attive, senza il rapporto col ritmo (rumore a inizio finestra).
+        debt = res.get("debt_pct")
+        res["binding"] = bool(not burn_intent_on and isinstance(debt, (int, float)) and debt >= DEBT_BIND_PCT)
+    elif burn_intent_on:
         res["binding"] = bool(risk and not burst_transient)
     else:
         res["binding"] = is_weekly_binding(res)

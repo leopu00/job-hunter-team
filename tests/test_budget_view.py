@@ -38,8 +38,10 @@ def iso(ts):
     return datetime.fromtimestamp(ts, UTC).isoformat().replace("+00:00", "Z")
 
 
-def series(rate, hours, end_pct, now=NOW, step=300.0):
-    out, t = [], now - hours * 3600.0
+def series(rate, hours, end_pct, now=NOW, step=300.0, lead_in_h=4.0):
+    """The counter at `rate` %/h over `hours`, after `lead_in_h` flat hours: a verdict on the rest of the window needs the
+    hours measured since its start (pace_rate.projection_rate), and a team that has just started is «too early»."""
+    out, t = [], now - (hours + lead_in_h) * 3600.0
     while t <= now:
         out.append((t, max(0, round(end_pct - rate * (now - t) / 3600.0))))
         t += step
@@ -113,7 +115,8 @@ def test_the_numbers_are_the_ones_the_bridge_computes_for_the_same_samples(home,
     assert ours["week"]["activeHoursToReset"] == round(theirs["reset_in_active_h"], 1)
     assert ours["rate"]["sustainablePctH"] == round(theirs["sustainable_pct_h"], 2)
     assert ours["rate"]["loPctH"] == round(theirs["vel_lo_pct_h"], 2) and ours["rate"]["hiPctH"] == round(theirs["vel_hi_pct_h"], 2)
-    assert ours["rate"]["projectedFinalPct"] == round(theirs["projected_final_pct"])
+    # «too early» (the first hours of the window): no landing point, on the page as in the bridge
+    assert ours["rate"]["projectedFinalPct"] == (round(theirs["projected_final_pct"]) if theirs["projected_final_pct"] is not None else None)
     assert ours["rate"]["lockoutEarlyActiveH"] == (round(theirs["lockout_early_active_h"], 1) if theirs["lockout_early_active_h"] is not None else None)
     # and the verdict is the bridge's own: a brake in the tick (binding) is a brake on the page
     assert ours["verdict"]["brake"] == bool(theirs["binding"])

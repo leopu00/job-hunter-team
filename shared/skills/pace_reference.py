@@ -71,11 +71,16 @@ def verdict(assessment, *, burn_intent_on=False, usage_pct=None, target_pct=100.
       INDIETRO      behind the line, room to go faster;
       IN-PARI       on the line, or ahead of it under a burn (information);
       ND            not enough data: no verdict, no brake.
+    An assessment that is `too_early` (the first hours of the window: pace_rate.projection_rate) carries no verdict of the
+    RATE (no lockout risk, no «behind», no spend-faster advice): what is left is the LEVEL on the active-hours line, which
+    a counter's rounding does not move, so a team that is already ahead of the line is still braked and the line is still
+    shown; reason `too_early` says why it never says «behind».
     """
     base = {"verdict": "ND", "brake": False, "steps": 0, "basis": "active_hours", "reason": "no_data",
             "ideal_pct": None, "deviation_pts": None, "early_lockout_h": None, "sustainable_pct_h": None,
             "burn_intent": bool(burn_intent_on)}
-    if not isinstance(assessment, dict) or assessment.get("kind") in (None, "ND"):
+    too_early = bool(isinstance(assessment, dict) and assessment.get("too_early"))
+    if not isinstance(assessment, dict) or (assessment.get("kind") in (None, "ND") and not too_early):
         return base
     ideal = assessment.get("ideal_used_pct")
     if isinstance(ideal, (int, float)) and isinstance(target_pct, (int, float)):
@@ -88,14 +93,14 @@ def verdict(assessment, *, burn_intent_on=False, usage_pct=None, target_pct=100.
     out = {**base, "ideal_pct": round(ideal, 2) if ideal is not None else None, "deviation_pts": deviation,
            "early_lockout_h": assessment.get("lockout_early_active_h", assessment.get("early_lockout_h")),
            "sustainable_pct_h": assessment.get("sustainable_pct_h"),
-           "reason": "on_line"}
+           "reason": "too_early" if too_early else "on_line"}
     if assessment.get("burst_transient"):
         return {**out, "verdict": "IN-PARI", "reason": "spike_leaving"}
     if burn_intent_on:
         if assessment.get("lockout_risk"):
             return {**out, "verdict": "LOCKOUT-RISK", "brake": True, "reason": "lockout_before_reset",
                     "steps": _steps_for_lockout(assessment.get("lockout_early_active_h") or LOCKOUT_MARGIN_ACTIVE_H)}
-        if deviation is not None and deviation < -STEP_PCT:
+        if deviation is not None and deviation < -STEP_PCT and not too_early:
             return {**out, "verdict": "INDIETRO", "steps": -int((-deviation) // STEP_PCT), "reason": "room_under_burn"}
         return {**out, "verdict": "IN-PARI", "reason": "burn_ahead_is_information" if (deviation or 0) > STEP_PCT else "on_line"}
     # no burn: the rule as it was (the ratio and the debt brake, on the same active-hours line)
@@ -104,6 +109,6 @@ def verdict(assessment, *, burn_intent_on=False, usage_pct=None, target_pct=100.
         return {**out, "verdict": "AVANTI", "brake": True, "steps": min(MAX_STEPS, steps), "reason": "above_pace_or_debt"}
     if deviation is not None and deviation > STEP_PCT:
         return {**out, "verdict": "AVANTI", "brake": True, "steps": min(MAX_STEPS, int(deviation // STEP_PCT)), "reason": "ahead_of_line"}
-    if deviation is not None and deviation < -STEP_PCT:
+    if deviation is not None and deviation < -STEP_PCT and not too_early:
         return {**out, "verdict": "INDIETRO", "steps": -int((-deviation) // STEP_PCT), "reason": "behind_line"}
     return {**out, "verdict": "IN-PARI"}

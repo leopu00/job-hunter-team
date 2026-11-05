@@ -73,10 +73,8 @@ def _load_pace_rate():
 _PR = _load_pace_rate()
 
 
-def _history_rate(history, usage, provider, now):
-    """Il ritmo (pace_rate.counter_rate) della serie `history` + il campione di adesso, o None."""
-    if _PR is None:
-        return None
+def _history_points(history, usage, provider, now):
+    """[(epoch, usage)] della serie `history` + il campione di adesso."""
     points = []
     for h in history or []:
         if h.get("provider") not in (None, provider):
@@ -86,7 +84,22 @@ def _history_rate(history, usage, provider, now):
         if ts is not None and isinstance(u, (int, float)) and not isinstance(u, bool):
             points.append((ts.timestamp(), float(u)))
     points.append((now.timestamp(), float(usage)))
-    return _PR.counter_rate(points, now.timestamp())
+    return points
+
+
+def _history_rate(history, usage, provider, now):
+    """Il ritmo (pace_rate.counter_rate) della serie `history` + il campione di adesso, o None."""
+    if _PR is None:
+        return None
+    return _PR.counter_rate(_history_points(history, usage, provider, now), now.timestamp())
+
+
+def _projection_rate(history, usage, provider, now, hours_to_reset):
+    """Il ritmo da cui proiettare a fine finestra (pace_rate.projection_rate): dall'inizio della finestra, oppure
+    «troppo presto». None solo se il modulo non c'e'."""
+    if _PR is None:
+        return None
+    return _PR.projection_rate(_history_points(history, usage, provider, now), now.timestamp(), hours_to_reset)
 
 
 def _fmt_reset(unix_ts, fallback=None):
@@ -338,29 +351,29 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         history + [{"ts": ts, "delta": delta}], now
     ) if history is not None else 0.0
 
+    projection_state = None       # "ok" | "too_early" | None (niente da proiettare)
+    projection_span_h = None
+    projection_need_h = None
     if hours_to_reset and hours_to_reset > 0:
         velocity_ideal = max(0.0, (SAFE_TARGET - usage) / hours_to_reset)
-        projection_naive = usage + velocity_smooth * hours_to_reset
-
-        cold_start = (
-            last is None
-            or session_discontinuity
-            or reset_event
-        )
-        effective_lo = 0.0
-        effective_hi = None
-        if cold_start:
-            # Sessione nuova: niente media disponibile, vel=0
-            effective_vel = 0.0
+        # Il ritmo di una proiezione e' quello dall'INIZIO della finestra e c'e' solo se i dati bastano (pace_rate.py,
+        # regola 7): a inizio finestra «troppo presto per una proiezione», senza proiezione, senza verdetto, senza
+        # throttle. Prima: i punti interi delle ultime 30 righe (2,5 h) per le ore al reset, cioe' 1 punto = +60 di
+        # proiezione su 144 h (ATTENZIONE 125 % con 10 punti dopo un giorno di settimana).
+        proj_res = _projection_rate(history, usage, provider, now, hours_to_reset)
+        if proj_res is None:
+            # Senza il modulo il ritmo e' ignoto: la proiezione e' il livello, ma non e' un «sotto ritmo».
+            projection = usage
+            projection_lo = usage
         else:
-            # Il ritmo e' quello di pace_rate (almeno un'ora, intervallo sul contatore intero): prima erano i punti
-            # interi delle ultime 30 righe (2,5 h) per le ore al reset, cioe' 1 punto = +30 di proiezione su 76 h.
-            effective_vel = rate_res["rate"] if rate_res is not None else 0.0
-            effective_lo = rate_res["lo"] if rate_res is not None else 0.0
-            effective_hi = rate_res["hi"] if rate_res is not None else None
-        projection = usage + effective_vel * hours_to_reset
-        projection_lo = usage + effective_lo * hours_to_reset
-        projection_hi = (usage + effective_hi * hours_to_reset) if effective_hi is not None else None
+            projection_state = proj_res["state"]
+            projection_span_h = round(proj_res["span_h"], 2)
+            projection_need_h = round(proj_res["need_h"], 2) if proj_res["need_h"] is not None else None
+            if projection_state == "ok":
+                projection = usage + proj_res["rate"] * hours_to_reset
+                projection_lo = usage + proj_res["lo"] * hours_to_reset
+                projection_hi = usage + proj_res["hi"] * hours_to_reset
+                projection_naive = usage + velocity_smooth * hours_to_reset
 
     # ── Dead-band: velocity in calo? ──
     vs_prev = (last or {}).get("velocity_smooth")
@@ -545,6 +558,11 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         "velocity_ideal": round(velocity_ideal, 2) if velocity_ideal is not None else None,
         "projection": round(projection, 2) if projection is not None else None,
         "projection_naive": round(projection_naive, 2) if projection_naive is not None else None,
+        # «ok» = la proiezione e' misurata; «too_early» = troppo presto per una proiezione (a inizio finestra): nessuna
+        # proiezione, status OK, nessun throttle. span = ore misurate dall'inizio della finestra, need = ore che servono.
+        "projection_state": projection_state,
+        "projection_span_h": projection_span_h,
+        "projection_need_h": projection_need_h,
         "velocity_decreasing": velocity_decreasing,
         "status": status,
         # Composizione bi-dimensionale (2026-06-29): status_5h = l'asse 5h grezzo

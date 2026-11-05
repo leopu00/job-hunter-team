@@ -139,7 +139,9 @@ def test_case3_compute_metrics_never_writes_negative_velocity_or_projection():
               "weekly_reset_at_unix": now.timestamp() + 7920 * 60}
     out = compute_metrics.compute_metrics(parsed, last, history=history)
     assert out["delta"] == -9
-    assert out["velocity"] >= 0 and out["projection"] >= 20 and out["status"] != "ATTENZIONE"
+    # dopo il calo la serie riparte da li': nessuna ora misurata, «troppo presto» (nessuna proiezione), mai negativa
+    assert out["velocity"] >= 0 and out["status"] != "ATTENZIONE"
+    assert out["projection"] is None and out["projection_state"] == "too_early"
 
 
 # ── caso 4a: due punti nelle ultime 2,5 h, 76 ore al reset ───────────────────────────────────────────────

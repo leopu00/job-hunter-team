@@ -43,6 +43,7 @@ import importlib.util
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
@@ -57,7 +58,8 @@ VALID_SOURCES = {
     "manual",
 }
 
-HISTORY_LOOKBACK = 30  # sample da considerare per burst filter / EMA
+HISTORY_LOOKBACK = 6000  # righe al massimo; il ritmo della proiezione si misura su 50 ore (HISTORY_LOOKBACK_H)
+HISTORY_LOOKBACK_H = 50  # ore di storia: pace_rate.PROJ_MAX_SPAN_H (48 h) + margine
 
 
 def _load_module(path, name):
@@ -116,7 +118,16 @@ def load_history():
                     continue
     except OSError:
         return []
-    return samples[-HISTORY_LOOKBACK:]
+    cutoff = datetime.now(timezone.utc).timestamp() - HISTORY_LOOKBACK_H * 3600.0
+    recent = []
+    for smp in samples:
+        try:
+            t = datetime.fromisoformat(str(smp.get("ts"))).timestamp()
+        except (TypeError, ValueError):
+            t = None
+        if t is None or t >= cutoff:
+            recent.append(smp)
+    return recent[-HISTORY_LOOKBACK:]
 
 
 def find_last_same_provider(samples, provider):
