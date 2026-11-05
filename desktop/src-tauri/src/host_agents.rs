@@ -601,8 +601,8 @@ mod tests {
         }
         edge.extend_from_slice(b"{\"role\":\"user\",\"text\":\"after the cap\"}\n");
         world.put("agents/analista-1/chat.jsonl", &edge);
-        let ours = read_chat(&world.home, "analista", None).unwrap();
-        assert_eq!(ours, script_page(&world.home, "analista", None).unwrap());
+        let ours = read_chat(&world.home, "analista", Some("0")).unwrap();
+        assert_eq!(ours, script_page(&world.home, "analista", Some("0")).unwrap());
         let texts: Vec<String> = ours["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap().chars().take(10).collect()).collect();
         assert_eq!(texts, ["before the", "at the cap", "after the "], "the line at the cap is read, the one over it is not");
         // a cursor past the end is the end; the other agents of the closed list read their own folders
