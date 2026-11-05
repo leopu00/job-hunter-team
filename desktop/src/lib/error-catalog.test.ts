@@ -28,6 +28,16 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
   position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
+  // host_agents.rs (the agents and the chats the app reads from the files of a team that is off): the fields of the roster
+  // and of the chat lines, and the words of the roles and the status the chat file uses. Words of a closed table.
+  agent: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  assistant: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  first_seen: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  last_spawn: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  message_id: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  retired: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  system: "field or value of the roster or the chat files (host_agents.rs), never an error",
+  user: "field or value of the roster or the chat files (host_agents.rs), never an error",
   // host_positions.rs (the positions the app reads from the saved data of a team that is off): the names of the columns of the
   // team's tables and of the fields of the answers (the same ones the script of existing_team_runtime.rs gives), the codes of the
   // scam signals and the public states. Words of a closed table, never shown as an error.
