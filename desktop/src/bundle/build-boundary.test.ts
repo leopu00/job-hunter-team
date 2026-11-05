@@ -202,14 +202,14 @@ describe("the desktop bundle", () => {
     );
     // The retired bridge read the API team's spend with rusqlite. rusqlite is back for ONE reason, the saved data of a team that is
     // off (host_db.rs, T174), so what is forbidden is the bridge, not the crate: its files are gone, nothing is registered, and
-    // the crate stays pinned and used by the host reader's modules only, with its features closed (no hooks, no extension loading).
+    // the crate stays pinned and used by the host reader's modules only (host_db.rs, host_positions.rs), with its features closed (no hooks, no extension loading).
     expect(manifest).toMatch(/^rusqlite = \{ version = "=\d+\.\d+\.\d+", default-features = false, features = \["bundled", "limits"\] \}$/m);
     const sources = readdirSync(new URL("../../src-tauri/src/", import.meta.url));
     expect(sources).not.toContain("spend.rs");
     const users = sources.filter(
       (name) => name.endsWith(".rs") && /\buse rusqlite\b|\brusqlite::/.test(readFileSync(new URL(`../../src-tauri/src/${name}`, import.meta.url), "utf8")),
     );
-    expect(users.sort()).toEqual(["host_db.rs"]);
+    expect(users.sort()).toEqual(["host_db.rs", "host_positions.rs"]);
   });
 
   it("does not package API runtime resources in Tauri", () => {

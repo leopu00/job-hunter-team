@@ -32,7 +32,7 @@ const OWN_VPS_FILE: &str = "own-vps-marker.json";
 const MAX_BYTES: usize = 8192;
 const READ_TIMEOUT: Duration = Duration::from_secs(15);
 
-const POSITIONS_READ_PY: &str = r#"import json,sqlite3,sys,re
+pub(crate) const POSITIONS_READ_PY: &str = r#"import json,sqlite3,sys,re
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 def fail(code): emit({'ok':False,'error':code})
 def as_dict(row): return dict(row) if row is not None else None
@@ -2971,6 +2971,7 @@ fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &
                 .map(|probe| probe.success())
                 .unwrap_or(false)
         },
+        || positions_saved_reply(app, request),
     );
     if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
         log.record_positions_read(&crate::runtime_log::PositionsReadTiming {
@@ -3007,6 +3008,7 @@ fn positions_read_local_with(
     token_tag: &str,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
+    saved: impl FnOnce() -> Option<Value>,
 ) -> Value {
     let mut input = hex_encode(POSITIONS_READ_PY.as_bytes()).into_bytes();
     input.push(b'\n');
@@ -3014,8 +3016,35 @@ fn positions_read_local_with(
     input.push(b'\n');
     match run(&input) {
         Ok(output) if output.success() => positions_reply_from_output(request, output, Some(token_tag)),
-        _ if !team_is_up() => positions_failure("local_team_not_running"),
+        // The container is off: the pages show what the team saved, read here from a private copy of its jobs.db, and say so.
+        _ if !team_is_up() => saved().unwrap_or_else(|| positions_failure("local_team_not_running")),
         _ => positions_answer_failure("positions_unavailable"),
+    }
+}
+
+/// The saved data of this computer's team for a read, checked like the container's own reply: a well-formed answer of the shape
+/// the request asked for (with the moment they were written beside it), or a failure of the saved data, or nothing.
+fn positions_saved_reply(app: &tauri::AppHandle, request: &PositionsRequest) -> Option<Value> {
+    let home = crate::account_scope::local_runtime_home(app).ok()?;
+    let work = app.path().app_local_data_dir().ok()?.join("host-db");
+    let asked = serde_json::to_value(request).ok()?;
+    let mut reply = crate::host_positions::read_saved(&home, &work, &asked)?;
+    let saved = reply.as_object_mut().and_then(|object| object.remove("saved"));
+    if reply.get("ok") == Some(&Value::Bool(true)) {
+        if !valid_positions_reply(request, &reply) {
+            return Some(positions_answer_failure("positions_unavailable"));
+        }
+        reply.as_object_mut()?.insert("saved".into(), saved?);
+        return Some(reply);
+    }
+    match reply.get("error").and_then(Value::as_str) {
+        Some("host_db_unsafe") => Some(positions_answer_failure("host_db_unsafe")),
+        Some("host_db_busy") => Some(positions_answer_failure("host_db_busy")),
+        Some("host_db_unreadable") => Some(positions_answer_failure("host_db_unreadable")),
+        Some("host_db_invalid") => Some(positions_answer_failure("host_db_invalid")),
+        Some("host_db_timeout") => Some(positions_answer_failure("host_db_timeout")),
+        Some("positions_request_invalid") => Some(positions_answer_failure("positions_request_invalid")),
+        _ => Some(positions_answer_failure("positions_unavailable")),
     }
 }
 
@@ -4261,6 +4290,20 @@ mod tests {
         assert_eq!(positions_failure("host_not_configured"), failure("host_not_configured", "application"));
     }
 
+    #[test]
+    fn a_team_that_is_off_answers_from_its_saved_data_and_one_that_is_up_does_not_ask_for_them() {
+        let failed = || Err("spawn_failed");
+        let saved = json!({"ok": true, "data": {"items": []}, "saved": {"at": 1793879580}});
+        let off = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", |_| failed(), || false, || Some(saved.clone()));
+        assert_eq!(off, saved);
+        // nothing saved to answer with: the sentence it always was
+        let none = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", |_| failed(), || false, || None);
+        assert_eq!(none, positions_failure("local_team_not_running"));
+        // the team is up and the reader failed: the saved data are not a stand-in for a failure of a team that is running
+        let up = positions_read_local_with(&PositionsRequest::Facets, br#"{"op":"facets"}"#, "0123456789abcdef", |_| failed(), || true, || panic!("not asked"));
+        assert_eq!(up, positions_answer_failure("positions_unavailable"));
+    }
+
     /// The read of this computer's team, with the fixed reader on stdin and the team's state asked only after a failure.
     fn read_local(run: Result<ProcessResult, &'static str>, team_is_up: bool) -> (Value, usize) {
         let mut asked = 0;
@@ -4280,6 +4323,7 @@ mod tests {
                 asked += 1;
                 team_is_up
             },
+            || None,
         );
         (reply, asked)
     }

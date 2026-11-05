@@ -19,6 +19,7 @@ mod team_provider;
 mod team_settings;
 mod export_file;
 mod host_db;
+mod host_positions;
 mod external_links;
 mod existing_team_register;
 // The tests rely on 0600 files, hard links and symlinks; Windows is not covered.
