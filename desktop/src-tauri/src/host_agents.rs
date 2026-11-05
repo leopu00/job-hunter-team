@@ -137,7 +137,13 @@ mod files {
 
     /// When the chat file of an agent was last written, in seconds; nothing for a file that is not there or not safe.
     fn chat_time(home: &Path, store: &str) -> Option<i64> {
-        let file = open_regular(&home.join("agents").join(store).join("chat.jsonl"), None).ok().flatten()?;
+        // the same folders as the page of a chat reads: a link in place of one is not followed, even for a time
+        let agents = home.join("agents");
+        let folder = agents.join(store);
+        if real_folder(&agents) != Ok(true) || real_folder(&folder) != Ok(true) {
+            return None;
+        }
+        let file = open_regular(&folder.join("chat.jsonl"), None).ok().flatten()?;
         let modified = file.metadata().ok()?.modified().ok()?;
         i64::try_from(modified.duration_since(UNIX_EPOCH).ok()?.as_secs()).ok()
     }
@@ -492,6 +498,31 @@ mod tests {
         agents.put("real/capitano/chat.jsonl", b"{\"text\":\"x\"}\n");
         symlink(agents.home.join("real"), agents.home.join("agents")).unwrap();
         assert_eq!(read_chat(&agents.home, "capitano", None), Err("host_db_unsafe"));
+    }
+
+    #[test]
+    fn the_time_of_a_chat_file_is_not_read_through_a_link_in_place_of_a_folder() {
+        use std::os::unix::fs::symlink;
+        // the roster says SCOUT-1 started at 2026-11-04T22:00:00Z; elsewhere there is a chat file written later
+        let later = UNIX_EPOCH + std::time::Duration::from_secs(1_793_900_000);
+        let linked_agents = World::new("time-agents-link");
+        linked_agents.put("logs/team-roster.json", ROSTER.as_bytes());
+        linked_agents.put("real/scout-1/chat.jsonl", b"{\"text\":\"x\"}\n");
+        std::fs::File::options().write(true).open(linked_agents.home.join("real/scout-1/chat.jsonl")).unwrap().set_modified(later).unwrap();
+        symlink(linked_agents.home.join("real"), linked_agents.home.join("agents")).unwrap();
+        let reply = read_roster(&linked_agents.home).unwrap();
+        let scout = reply["data"]["items"].as_array().unwrap().iter().find(|i| i["name"] == "SCOUT-1").unwrap();
+        assert_eq!(scout["activity"], json!(1_793_829_600), "only the last start of the roster: the linked file's time is not used");
+        // the agent's own folder as a link
+        let linked_folder = World::new("time-folder-link");
+        linked_folder.put("logs/team-roster.json", ROSTER.as_bytes());
+        linked_folder.put("elsewhere/chat.jsonl", b"{\"text\":\"x\"}\n");
+        std::fs::File::options().write(true).open(linked_folder.home.join("elsewhere/chat.jsonl")).unwrap().set_modified(later).unwrap();
+        std::fs::create_dir_all(linked_folder.home.join("agents")).unwrap();
+        symlink(linked_folder.home.join("elsewhere"), linked_folder.home.join("agents/scout-1")).unwrap();
+        let reply = read_roster(&linked_folder.home).unwrap();
+        let scout = reply["data"]["items"].as_array().unwrap().iter().find(|i| i["name"] == "SCOUT-1").unwrap();
+        assert_eq!(scout["activity"], json!(1_793_829_600));
     }
 
     #[test]
