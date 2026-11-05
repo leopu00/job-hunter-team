@@ -1200,6 +1200,12 @@ export default function DirectChatScreen({
               {attachNote.text}
             </p>
           )}
+          {agentOff && !writeLocked && (
+            // the box is one line: on a narrow window the reason would be cut in its placeholder, so it is said here
+            <p data-testid="direct-chat-agent-off" className="w-full m-0 mb-1.5 text-[14px] text-[var(--color-muted)]">
+              {withName(t.agentOff, selected.label)}
+            </p>
+          )}
           <div
             className="w-full flex flex-wrap items-end gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2 focus-within:border-[var(--color-border-glow)]"
             data-testid="direct-chat-composer-row"
@@ -1233,7 +1239,7 @@ export default function DirectChatScreen({
                     ? withName(t.agentOff, selected.label)
                     : status.state === "ready" ? withName(t.writeToPlaceholder, selected.label) : t.connectToWrite
               }
-              className="max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48"
+              className={`max-h-28 min-h-8 w-full min-w-0 flex-[1_1_16rem] resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-[var(--color-base)] outline-none disabled:opacity-50 sm:min-w-48${agentOff && !writeLocked ? " placeholder:text-transparent" : ""}`}
             />
             {attachHere && (
               <button

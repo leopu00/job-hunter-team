@@ -56,6 +56,8 @@ describe("DirectChatScreen: the state of the agent", () => {
     const box = screen.getByRole("textbox", { name: "Scrivi a Scout" });
     expect(box).toBeDisabled();
     expect(box).toHaveAttribute("placeholder", "Scout è spento. Puoi leggere la chat; per scrivergli, avvialo.");
+    // the same reason as a line of text, so a narrow window does not cut it in the one-line box
+    expect(screen.getByTestId("direct-chat-agent-off")).toHaveTextContent("Scout è spento. Puoi leggere la chat; per scrivergli, avvialo.");
     expect(screen.getByRole("button", { name: "Invia" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Invia" }));
     expect(mock.send).not.toHaveBeenCalled();
