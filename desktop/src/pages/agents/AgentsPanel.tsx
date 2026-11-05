@@ -811,7 +811,9 @@ export default function AgentsPanel({ search }: PageProps) {
       )}
 
       {list === null && <p className="text-[12px] text-[var(--color-muted)]">{t.reading}</p>}
-      {list && !list.ok && (
+      {/* While the team of this computer is being started «there is no running team» is not an error: the start's own line says what is
+          happening, and a red sentence next to it says the opposite. Any other reason a read fails is still told. */}
+      {list && !list.ok && !(starting && list.code === "agent_control_no_team") && (
         <div role="alert" data-testid="panel-error" className="text-[12px] text-[var(--color-red)]">
           <strong>{t.failed}</strong>
           <p>{readFailureText(list.code)}</p>

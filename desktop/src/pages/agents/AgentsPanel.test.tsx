@@ -464,6 +464,33 @@ describe("«Agenti», the agents' control panel", () => {
     expect(native.invoke.mock.calls.filter(([c]) => c === "onboarding_resume_team_start")).toHaveLength(1);
   });
 
+  it("shows no red error while the team starts, and keeps telling any other failure while it starts", async () => {
+    let finishStart: () => void = () => undefined;
+    let reason = "agent_control_no_team";
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "onboarding_resume_team_start") {
+        await new Promise<void>((done) => {
+          finishStart = done;
+        });
+        return {};
+      }
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      return { ok: false, error: reason };
+    });
+    show();
+    expect(await screen.findByTestId("panel-error")).toBeInTheDocument(); // stopped: the sentence and the button
+    fireEvent.click(await screen.findByTestId("start-team"));
+    expect(await screen.findByTestId("start-team-progress")).toHaveTextContent(/.+/);
+    expect(screen.getByTestId("start-team")).toBeDisabled();
+    expect(screen.queryByTestId("panel-error")).toBeNull();
+    // another reason the list cannot be read is not hidden by the start
+    reason = "agents_unavailable";
+    fireEvent.click(screen.getByRole("button", { name: /aggiorna|refresh/i }));
+    expect(await screen.findByTestId("panel-error")).toHaveTextContent(describeError("agents_unavailable", { locale: "it" }).text);
+    // (the start is left running: the page unmounts at the end of the test and stops reading by itself)
+    finishStart();
+  });
+
   it("reads the agents again by itself when the first read after the start finds nothing yet", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -488,7 +515,9 @@ describe("«Agenti», the agents' control panel", () => {
       fireEvent.click(await screen.findByTestId("start-team"));
       // the first read after the start is too early: the page asks again after a few seconds, with no Refresh
       await waitFor(() => expect(lists).toBe(2));
-      expect(screen.getByTestId("panel-error")).toBeInTheDocument();
+      // while it starts: the start's own line and the button, and NO red «no running team» next to them
+      expect(screen.getByTestId("start-team-progress")).toBeInTheDocument();
+      expect(screen.queryByTestId("panel-error")).toBeNull();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_500);
       });
