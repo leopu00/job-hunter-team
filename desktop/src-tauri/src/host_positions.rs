@@ -109,7 +109,7 @@ fn columns(c: &Connection, table: &str) -> rusqlite::Result<HashSet<String>> {
     // `table` is one of the three fixed names of this module, never a text from the file or the page
     debug_assert!(matches!(
         table,
-        "positions" | "scores" | "applications" | "companies" | "position_highlights" | "position_tickets" | "position_user_notes" | "position_state_transitions"
+        "positions" | "scores" | "applications" | "companies" | "position_highlights" | "position_tickets" | "position_user_notes" | "position_state_transitions" | "position_feedback"
     ));
     let mut statement = c.prepare(&format!("PRAGMA table_info({table})"))?;
     let names = statement.query_map([], |row| row.get::<_, String>(1))?.collect::<rusqlite::Result<HashSet<_>>>()?;
@@ -1246,6 +1246,140 @@ fn read_saved_with(home: &Path, work: &Path, request: &Value, reuse: std::time::
     })
 }
 
+// ── the Swipe's deck ────────────────────────────────────────────────────────────────────────────────
+
+const DECK_TEXT: [(&str, usize); 13] = [
+    ("title", 200), ("company", 120), ("location", 160), ("remote_type", 40), ("salary_declared_currency", 8), ("salary_estimated_currency", 8), ("url", 600),
+    ("source", 60), ("found_at", 40), ("status", 20), ("role_family", 80), ("loc_country", 80), ("loc_city", 80),
+];
+const DECK_NUMBERS: [&str; 4] = ["salary_declared_min", "salary_declared_max", "salary_estimated_min", "salary_estimated_max"];
+const DECK_LIMIT: usize = 1000;
+const DECK_BUDGET: usize = 3_000_000;
+
+/// The size of a value as Python's `json.dumps` writes it with its default separators (`, ` and `: `), every non-ASCII character
+/// as `\uXXXX`: the script counts its deck's bytes that way.
+fn spaced_json_len(value: &Value) -> usize {
+    let text = serde_json::to_string(value).unwrap_or_default();
+    let (mut in_string, mut escaped, mut length) = (false, false, 0usize);
+    for ch in text.chars() {
+        length += if ch.is_ascii() { 1 } else if (ch as u32) < 0x10000 { 6 } else { 12 };
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+        } else if ch == '"' {
+            in_string = true;
+        } else if ch == ',' || ch == ':' {
+            length += 1;
+        }
+    }
+    length
+}
+
+/// The two decks of the Swipe, in the shape of the script of `local_swipe.rs` (`ino` and `dev` are 0: a deck of saved data names no
+/// file, so a verdict sent with its token is refused as outdated and nothing can be written to the team from it).
+pub(crate) fn deck(db: &impl Reads) -> Result<Value, &'static str> {
+    db.read(|c| {
+        let have = columns(c, "positions")?;
+        let scores = columns(c, "scores")?;
+        let scored = scores.contains("total_score") && scores.contains("position_id");
+        let empty = json!({"ok": true, "ino": 0, "dev": 0, "pending": [], "reviewed": []});
+        if !have.contains("id") || !have.contains("status") {
+            return Ok(empty);
+        }
+        let mut wanted: Vec<&str> = vec!["id", "status"];
+        wanted.extend(DECK_TEXT.iter().map(|(n, _)| *n).filter(|n| *n != "status"));
+        wanted.extend(DECK_NUMBERS);
+        let pick: Vec<String> = wanted.iter().filter(|n| have.contains(**n)).map(|n| format!("p.{n}")).collect();
+        let sql = format!(
+            "SELECT {}{} FROM positions p{} WHERE p.status IN ('scored','ready','excluded') ORDER BY {}p.id ASC LIMIT {LIST_ROWS}",
+            pick.join(","),
+            if scored { ",s.total_score AS total_score" } else { "" },
+            if scored { " LEFT JOIN scores s ON s.position_id=p.id" } else { "" },
+            if have.contains("found_at") { "p.found_at ASC," } else { "" },
+        );
+        let feedback = columns(c, "position_feedback")?;
+        let mut judged: HashMap<String, (Value, Value)> = HashMap::new();
+        let mut cleared: HashSet<String> = HashSet::new();
+        if feedback.contains("position_id") && feedback.contains("action") {
+            let sql = format!(
+                "SELECT position_id,action,{} FROM position_feedback ORDER BY id DESC LIMIT {BULK_ROWS}",
+                if feedback.contains("score") { "score" } else { "NULL" }
+            );
+            let mut statement = c.prepare(&sql)?;
+            let mut rows = statement.query([])?;
+            while let Some(row) = rows.next()? {
+                let key = sid(Some(&cell(row.get_ref(0)?)));
+                if judged.contains_key(&key) || cleared.contains(&key) {
+                    continue;
+                }
+                let action = cell(row.get_ref(1)?);
+                if action == json!("clear") {
+                    cleared.insert(key);
+                } else {
+                    judged.insert(key, (action, cell(row.get_ref(2)?)));
+                }
+            }
+        }
+        let (mut pending, mut reviewed, mut used) = (Vec::new(), Vec::new(), 0usize);
+        for row in dicts(c, &sql, &[])? {
+            let mut item = Dict::new();
+            item.insert("id".into(), nullable(&row, "id"));
+            item.insert("status".into(), nullable(&row, "status"));
+            item.insert("score".into(), nullable(&row, "total_score"));
+            for (name, limit) in DECK_TEXT.iter().filter(|(n, _)| *n != "status") {
+                item.insert((*name).into(), match nullable(&row, name) {
+                    Value::String(text) => Value::String(text.chars().take(*limit).collect()),
+                    _ => Value::Null,
+                });
+            }
+            for name in DECK_NUMBERS {
+                item.insert(name.into(), nullable(&row, name));
+            }
+            let item = Value::Object(item);
+            used += spaced_json_len(&item);
+            if used > DECK_BUDGET {
+                break;
+            }
+            let key = sid(row.get("id"));
+            let status = row.get("status").and_then(Value::as_str).unwrap_or("");
+            if let Some((action, fb_score)) = judged.get(&key) {
+                if reviewed.len() < DECK_LIMIT {
+                    reviewed.push(json!({"row": item, "action": action, "fb_score": fb_score}));
+                }
+            } else if (status == "scored" || status == "ready") && pending.len() < DECK_LIMIT {
+                pending.push(item);
+            }
+            if pending.len() >= DECK_LIMIT && reviewed.len() >= DECK_LIMIT {
+                break;
+            }
+        }
+        Ok(json!({"ok": true, "ino": 0, "dev": 0, "pending": pending, "reviewed": reviewed}))
+    })
+}
+
+/// The Swipe's deck from the saved data of this computer's team, with the moment they were written (null for a team that never
+/// ran). `None`: a system without the host reader. `Some(Err(code))`: the saved data cannot be read.
+#[cfg(unix)]
+pub(crate) fn read_saved_deck(home: &Path, work: &Path) -> Option<Result<(Value, Option<i64>), &'static str>> {
+    host_db::sweep_snapshots(work, 3600);
+    reuse::with_copy(home, work, REUSE, |opened| match opened {
+        Ok(db) => Some(deck(db).map(|d| (d, Some(db.data_time())))),
+        Err("host_db_missing") => EmptyDb::new().map(|empty| deck(&empty).map(|d| (d, None))),
+        Err("host_db_unavailable") => None,
+        Err(code) => Some(Err(code)),
+    })
+}
+
+#[cfg(not(unix))]
+pub(crate) fn read_saved_deck(_home: &Path, _work: &Path) -> Option<Result<(Value, Option<i64>), &'static str>> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     #![cfg(unix)]
@@ -1707,6 +1841,59 @@ mod tests {
         std::fs::remove_file(world.home.join("jobs.db")).unwrap();
         std::os::unix::fs::symlink("/etc/hosts", world.home.join("jobs.db")).unwrap();
         assert_eq!(read_saved(&world.home, &world.work, &json!({"op": "facets"})).unwrap(), json!({"ok": false, "error": "host_db_unsafe"}));
+    }
+
+    /// The script of the Swipe's deck (local_swipe.rs) on the same database, its answer without the identity of the file.
+    fn deck_script(home: &Path) -> Option<Value> {
+        let script = crate::local_swipe::DECK_PY.replace("/jht_home", home.to_str().unwrap());
+        let mut child = Command::new("python3").args(["-I", "-c", &script]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().ok()?;
+        use std::io::Write;
+        child.stdin.take().unwrap().write_all(b"{\"op\":\"deck\"}\n").unwrap();
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        let mut answer: Value = serde_json::from_slice(&out.stdout).unwrap();
+        let object = answer.as_object_mut().unwrap();
+        object.insert("ino".into(), json!(0));
+        object.insert("dev".into(), json!(0));
+        Some(answer)
+    }
+
+    #[test]
+    fn the_swipe_deck_is_the_scripts_with_judged_cleared_and_pending_positions() {
+        for (tag, n) in [("d0", 4usize), ("d1", 60), ("d2", 140)] {
+            let world = World::new(tag);
+            fixture(&world, n, false);
+            {
+                let c = Connection::open(world.home.join("jobs.db")).unwrap();
+                c.execute_batch(
+                    "CREATE TABLE position_feedback(id INTEGER PRIMARY KEY, position_id INTEGER, action TEXT, score INTEGER);
+                     INSERT INTO position_feedback(position_id,action,score) VALUES (3,'like',4),(3,'clear',NULL),(6,'dislike',2),(6,'like',5),(9,'like',3),(9,'clear',NULL),(12,'star',5);",
+                )
+                .unwrap();
+            }
+            let Some(script) = deck_script(&world.home) else { return };
+            let db = open_snapshot(&world.home, &world.work, &REQUIRED).unwrap();
+            let mine = deck(&db).unwrap();
+            assert!(!script["pending"].as_array().unwrap().is_empty());
+            assert_eq!(mine, script, "the deck of {n} positions differs from the script's");
+        }
+        // a database with no feedback table, and a team that never ran
+        let world = World::new("d3");
+        fixture(&world, 30, false);
+        let Some(script) = deck_script(&world.home) else { return };
+        assert_eq!(deck(&open_snapshot(&world.home, &world.work, &REQUIRED).unwrap()).unwrap(), script);
+        let never = World::new("d4");
+        assert_eq!(deck(&EmptyDb::new().unwrap()).unwrap(), json!({"ok": true, "ino": 0, "dev": 0, "pending": [], "reviewed": []}));
+        let (answer, at) = read_saved_deck(&never.home, &never.work).unwrap().unwrap();
+        assert_eq!((answer["pending"].as_array().unwrap().len(), at), (0, None));
+    }
+
+    #[test]
+    fn the_size_of_a_deck_row_is_counted_as_the_script_counts_it() {
+        // json.dumps with its default separators and every non-ASCII character as \uXXXX
+        assert_eq!(spaced_json_len(&json!({"a": 1, "b": [1, 2]})), r#"{"a": 1, "b": [1, 2]}"#.len());
+        assert_eq!(spaced_json_len(&json!({"t": "é, 数: 😀"})), r#"{"t": "\u00e9, \u6570: \ud83d\ude00"}"#.len());
+        assert_eq!(spaced_json_len(&json!({"q": "a\"b,c:d"})), r#"{"q": "a\"b,c:d"}"#.len());
     }
 
     #[test]
