@@ -316,6 +316,9 @@ jht_text_en() {
     download.windows_missing) printf '%s' "Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded." ;;
     download.linux_no_app) printf '%s' "In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded." ;;
     download.release_no_app) printf '%s' "This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded." ;;
+    download.unsupported_os) printf '%s' "unsupported system: %s. Use windows or macos." ;;
+    download.bad_version) printf '%s' "invalid version: %s. Example: 0.3.5." ;;
+    download.deb_only_linux) printf '%s' "--deb is only for Linux." ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
@@ -355,6 +358,9 @@ jht_text_it() {
     download.windows_missing) printf '%s' "Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e' stato scaricato niente." ;;
     download.linux_no_app) printf '%s' "In questa versione non c'e' l'app desktop per Linux: usa install.sh. Non e' stato scaricato niente." ;;
     download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
+    download.unsupported_os) printf '%s' "sistema non supportato: %s. Usa windows o macos." ;;
+    download.bad_version) printf '%s' "versione non valida: %s. Esempio: 0.3.5." ;;
+    download.deb_only_linux) printf '%s' "--deb vale solo per Linux." ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
@@ -4102,14 +4108,14 @@ handle_host_download() {
     win|win32|windows) platform=windows ;;
     darwin|mac|macos|osx) platform=macos ;;
     linux) platform=linux ;;
-    *) err "sistema non supportato: $os. Usa windows o macos."; return 2 ;;
+    *) err "$(jht_say download.unsupported_os "$os")"; return 2 ;;
   esac
   version="${version#v}"
   if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-    err "versione non valida: $version. Esempio: 0.3.5."
+    err "$(jht_say download.bad_version "$version")"
     return 2
   fi
-  if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "--deb vale solo per Linux."; return 2; fi
+  if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "$(jht_say download.deb_only_linux)"; return 2; fi
   if [ "$platform" = linux ]; then err "$(jht_say download.linux_no_app)"; return 1; fi
   local major minor
   major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"

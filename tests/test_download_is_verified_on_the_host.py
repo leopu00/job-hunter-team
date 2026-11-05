@@ -267,4 +267,20 @@ def test_the_usage_offers_windows_and_macos_only_and_linux_still_gets_its_answer
     assert helped.returncode == 0 and "linux" not in (helped.stdout + helped.stderr).lower() and "--deb" not in helped.stdout
     # an unknown system is told the two that exist
     other, _, _, _ = _run(tmp_path / "other", site, "--os", "plan9", "--version", "0.4.0", JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
-    assert other.returncode == 2 and "Usa windows o macos." in other.stderr and "linux" not in other.stderr.lower()
+    assert other.returncode == 2 and "unsupported system: plan9. Use windows or macos." in other.stderr
+    assert "linux" not in other.stderr.lower() and "sistema" not in other.stderr
+
+
+def test_the_sentences_a_wrong_command_gets_follow_the_language_of_the_cli(tmp_path: Path, site):
+    # English by default, Italian when the installation speaks Italian: no Italian inside an English output
+    for name, args, english, italian in (
+        ("os", ("--os", "plan9", "--version", "0.4.0"), "unsupported system: plan9. Use windows or macos.", "sistema non supportato: plan9. Usa windows o macos."),
+        ("version", ("--os", "macos", "--version", "x.y"), "invalid version: x.y. Example: 0.3.5.", "versione non valida: x.y. Esempio: 0.3.5."),
+        ("deb", ("--os", "windows", "--version", "0.4.0", "--deb"), "--deb is only for Linux.", "--deb vale solo per Linux."),
+    ):
+        (tmp_path / name).mkdir()
+        (tmp_path / f"{name}-it").mkdir()
+        en, _, _, _ = _run(tmp_path / name, site, *args, JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+        it, _, _, _ = _run(tmp_path / f"{name}-it", site, *args, JHT_RELEASE_BASE_URL="http://127.0.0.1:9", JHT_LANG="it")
+        assert en.returncode == 2 and english in en.stderr, en.stderr
+        assert it.returncode == 2 and italian in it.stderr, it.stderr

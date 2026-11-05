@@ -76,10 +76,11 @@ function normalizeVersion(value) {
 }
 
 
+// The person's own Downloads folder, as the host command (`jht download` of the wrapper) does since 0.4. It used to be the folder
+// shared with the team (Documents/Job Hunter Team/downloads), where the agents can write too: a file verified here could be replaced
+// there before the person opened it.
 function userDownloadsDir() {
-  const userDir = process.env.JHT_USER_DIR
-    || join(homedir(), 'Documents', 'Job Hunter Team');
-  return join(userDir, 'downloads');
+  return join(homedir(), 'Downloads');
 }
 
 
@@ -276,7 +277,7 @@ export function registerDownloadCommand(program) {
     .description('Download and verify a desktop client from GitHub Releases')
     .requiredOption('--os <platform>', 'operating system: windows or macos')
     .option('--version <release>', 'the release to download (required), for example 0.4.0')
-    .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
+    .option('-o, --output <file>', 'destination file (default: ~/Downloads)')
     .addOption(new Option('--deb', 'Linux only: there is no desktop app for Linux in this version').hideHelp())
     .action(downloadAction);
 }

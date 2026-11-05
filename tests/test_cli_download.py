@@ -79,6 +79,8 @@ def test_download_help_describes_required_contract():
         assert flag in result.stdout
     # no desktop app for Linux in this version: the usage does not offer it (it still parses, and says so)
     assert "linux" not in result.stdout.lower() and "--deb" not in result.stdout
+    # the default folder in the help is the one the code uses: the person's Downloads, as the host command does
+    assert "(default: ~/Downloads)" in " ".join(result.stdout.split())
 
 
 @pytest.mark.parametrize(
@@ -97,9 +99,11 @@ def test_downloads_platform_asset_and_verifies_sha256(tmp_path, platform, asset)
             env=isolated_env(tmp_path, base_url),
         )
 
-    destination = tmp_path / "user" / "downloads" / asset
+    destination = tmp_path / "home" / "Downloads" / asset
     assert result.returncode == 0, result.stderr
     assert destination.read_bytes() == body
+    # the folder shared with the team is no longer where a download lands
+    assert not (tmp_path / "user" / "downloads").exists()
     assert "SHA-256 verified" in result.stdout
     assert "100%" in result.stdout + result.stderr
 
@@ -133,7 +137,7 @@ def test_linux_says_plainly_that_this_version_has_no_desktop_app(tmp_path, extra
     assert "there is no desktop app for Linux: use install.sh" in result.stderr
     assert "Nothing was downloaded" in result.stderr
     assert "unknown option" not in result.stderr
-    assert not (tmp_path / "user" / "downloads").exists()
+    assert not (tmp_path / "home" / "Downloads").exists()
 
 
 def test_checksum_mismatch_fails_and_removes_partial_file(tmp_path):
@@ -145,7 +149,7 @@ def test_checksum_mismatch_fails_and_removes_partial_file(tmp_path):
             env=isolated_env(tmp_path, base_url),
         )
 
-    download_dir = tmp_path / "user" / "downloads"
+    download_dir = tmp_path / "home" / "Downloads"
     assert result.returncode != 0
     assert "SHA-256" in result.stderr
     assert not (download_dir / asset).exists()
@@ -176,7 +180,7 @@ def test_network_error_is_nonzero_and_leaves_no_file(tmp_path):
     )
     assert result.returncode != 0
     assert "Download failed" in result.stderr
-    assert not (tmp_path / "user" / "downloads" / "job-hunter-team-macos-universal.dmg").exists()
+    assert not (tmp_path / "home" / "Downloads" / "job-hunter-team-macos-universal.dmg").exists()
 
 
 def test_existing_wrong_file_is_not_overwritten(tmp_path):
@@ -205,7 +209,7 @@ def test_an_intel_mac_is_refused_before_anything_is_downloaded(tmp_path):
     assert result.returncode != 0
     assert "Apple silicon" in result.stderr and "Intel Mac" in result.stderr and "not supported" in result.stderr
     assert "Nothing was downloaded" in result.stderr
-    assert not (tmp_path / "user" / "downloads").exists()
+    assert not (tmp_path / "home" / "Downloads").exists()
 
 
 def test_an_intel_mac_may_still_download_the_other_systems(tmp_path):
@@ -218,7 +222,7 @@ def test_an_intel_mac_may_still_download_the_other_systems(tmp_path):
         )
 
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "user" / "downloads" / asset).read_bytes() == b"bytes"
+    assert (tmp_path / "home" / "Downloads" / asset).read_bytes() == b"bytes"
 
 
 @pytest.mark.parametrize("version", ["0.4.0", "0.4.1", "1.0.0"])
@@ -233,7 +237,7 @@ def test_windows_is_refused_for_a_release_that_has_no_installer(tmp_path, versio
     assert result.returncode != 0
     assert "Windows is not part of 0.4.0" in result.stderr and "coming soon" not in result.stderr
     assert "Nothing was downloaded" in result.stderr
-    assert not (tmp_path / "user" / "downloads").exists()
+    assert not (tmp_path / "home" / "Downloads").exists()
 
 
 @pytest.mark.parametrize("version", ["0.3.5", "0.3.9", "v0.3.9"])
@@ -248,7 +252,7 @@ def test_macos_says_plainly_that_a_release_before_0_4_has_no_app(tmp_path, versi
     assert "has no app for macOS: use 0.4.0 or later" in result.stderr
     assert "Declared SHA-256 not found" not in result.stderr
     assert "Nothing was downloaded" in result.stderr
-    assert not (tmp_path / "user" / "downloads" / asset).exists()
+    assert not (tmp_path / "home" / "Downloads" / asset).exists()
 
 
 def test_windows_is_not_touched_by_the_before_0_4_message(tmp_path):
