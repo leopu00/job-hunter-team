@@ -1279,6 +1279,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team does not offer the budget figures yet.",
     "Update the team and try again.",
   ),
+  budget_reply_unexpected: copy(
+    "La squadra ha risposto sul budget in una forma che l’app non riconosce.",
+    "Controlla che l’app e la squadra siano alla stessa versione e riprova.",
+    "The team's budget answer is not in a form this app recognises.",
+    "Check that the app and the team are on the same version, then try again.",
+  ),
   stats_unreadable: copy(
     "Non riesco a leggere le statistiche della squadra.",
     "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",

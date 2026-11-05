@@ -304,23 +304,40 @@ fn code_of(reply: &Value, allowed: &[&'static str], fallback: &'static str) -> &
     allowed.iter().copied().find(|code| Some(*code) == said).unwrap_or(fallback)
 }
 
-/// The team's weekly budget, as the team computes it. Reads: it works in the read-only view.
+/// The team's weekly budget, as the team computes it. Reads: it works in the read-only view. A read that does not give the
+/// numbers leaves its closed code in the runtime log (never a number), and the page is told that same code.
 #[tauri::command]
 pub(crate) async fn team_budget_read(
     window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<BudgetReply, DirectChatError> {
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
-    let reply = team_script_read(&state, &scopes, BUDGET_PY, json!({"op": "read"}), TIMEOUT).await?;
+    let result = read_budget(&state, &scopes).await;
+    let said = match &result {
+        Ok(reply) => reply.error,
+        Err(error) => Some(error.code),
+    };
+    if let (Some(code), Some(log)) = (said, crate::runtime_log::RuntimeLog::new(&app)) {
+        log.record_budget_failure(code);
+    }
+    result
+}
+
+/// One read through the chat's Python channel, closed again. Each way of not getting the numbers has its own code: the file
+/// missing in an old image is `budget_unavailable` and nothing else is; a chat that is not connected, a read that failed or ran
+/// out of time is the chat's own error, passed on; an answer the app does not recognise is `budget_reply_unexpected`.
+async fn read_budget(state: &State<'_, DirectChatState>, scopes: &State<'_, AccountScopeState>) -> Result<BudgetReply, DirectChatError> {
+    let reply = team_script_read(state, scopes, BUDGET_PY, json!({"op": "read"}), TIMEOUT).await?;
     if reply.get("ok") != Some(&Value::Bool(true)) {
-        return Ok(BudgetReply::failed(code_of(&reply, &["budget_unreadable"], "budget_unavailable")));
+        return Ok(BudgetReply::failed(code_of(&reply, &["budget_unreadable", "budget_unavailable"], "budget_unreadable")));
     }
     Ok(match shape(&reply) {
         Ok(budget) => BudgetReply { ok: true, budget: Some(budget), error: None },
-        Err(()) => BudgetReply::failed("budget_unavailable"),
+        Err(()) => BudgetReply::failed("budget_reply_unexpected"),
     })
 }
 
@@ -426,9 +443,12 @@ mod tests {
     #[test]
     fn a_failure_is_one_of_the_closed_codes_and_nothing_else() {
         let said = |code: &str| json!({"ok": false, "error": code});
-        assert_eq!(code_of(&said("budget_unreadable"), &["budget_unreadable"], "budget_unavailable"), "budget_unreadable");
-        assert_eq!(code_of(&said("rm -rf / or a sentence"), &["budget_unreadable"], "budget_unavailable"), "budget_unavailable");
-        assert_eq!(code_of(&json!({"ok": false}), &["budget_unreadable"], "budget_unavailable"), "budget_unavailable");
+        let allowed = ["budget_unreadable", "budget_unavailable"];
+        assert_eq!(code_of(&said("budget_unreadable"), &allowed, "budget_unreadable"), "budget_unreadable");
+        // the file missing in the image is the one answer that says «the team does not offer it»
+        assert_eq!(code_of(&said("budget_unavailable"), &allowed, "budget_unreadable"), "budget_unavailable");
+        assert_eq!(code_of(&said("rm -rf / or a sentence"), &allowed, "budget_unreadable"), "budget_unreadable");
+        assert_eq!(code_of(&json!({"ok": false}), &allowed, "budget_unreadable"), "budget_unreadable");
         let failed = serde_json::to_value(BudgetReply::failed("budget_unavailable")).unwrap();
         assert_eq!(failed, json!({"ok": false, "error": "budget_unavailable"}));
     }
@@ -436,11 +456,28 @@ mod tests {
     #[test]
     fn the_command_takes_no_argument_from_the_page_and_is_a_read() {
         let code = include_str!("team_budget.rs");
-        let read = code.split("pub(crate) async fn team_budget_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let command = code.split("pub(crate) async fn team_budget_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let read = code.split("async fn read_budget(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(read.contains("team_script_read(") && !read.contains("team_script_write("), "reading is a read");
-        let signature = read.split(") -> Result").next().unwrap();
+        assert!(command.contains("read_budget(") && !command.contains("team_script_write("));
+        let signature = command.split(") -> Result").next().unwrap();
         assert!(!signature.contains("String") && !signature.contains("Value") && !signature.contains("u32"), "no argument from the page");
-        assert!(read.contains("window.label() != \"main\""));
+        assert!(command.contains("window.label() != \"main\""));
+        // a failed read is logged by its code, and the answer the app does not recognise is not «the team does not offer it»
+        assert!(command.contains("record_budget_failure(code)"));
+        assert!(read.contains("budget_reply_unexpected") && !read.contains("failed(\"budget_unavailable\")"));
+    }
+
+    #[test]
+    fn the_answer_of_a_team_with_a_week_and_no_rate_yet_is_taken_whole() {
+        let given: Value = serde_json::from_str(include_str!("../tests/fixtures/budget_team_week_no_rate.json")).unwrap();
+        let shown = serde_json::to_value(BudgetReply { ok: true, budget: Some(shape(&given).expect("this answer is refused")), error: None }).unwrap();
+        assert_eq!(shown["ok"], true);
+        assert_eq!(shown["verdict"]["code"], "no_data");
+        assert_eq!(shown["week"]["usedPct"], 37.0);
+        assert_eq!(shown["week"]["line"], Value::Null);
+        assert_eq!(shown["rate"], Value::Null);
+        assert_eq!(shown["roles"]["roles"].as_array().unwrap().len(), 8);
     }
 
     #[test]
