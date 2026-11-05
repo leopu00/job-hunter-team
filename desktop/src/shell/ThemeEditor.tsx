@@ -17,7 +17,7 @@ import {
   type Seeds,
   type TokenName,
 } from "./theme-custom";
-import { THEMES, deleteCustomTheme, readStoredCustom, saveCustomTheme, type Theme } from "./theme";
+import { THEMES, deleteCustomTheme, isStrictTheme, readStoredCustom, saveCustomTheme, type Theme } from "./theme";
 import { THEME_EDITOR_TEXT } from "./theme-editor.i18n";
 import { THEME_FILE_MAX_BYTES, readThemeFile, writeThemeFile } from "./theme-file";
 import { THEME_TEXT } from "./theme.i18n";
@@ -71,7 +71,7 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
   const issuesId = useId();
   const noteId = useId();
 
-  const context = useMemo(() => ({ status: PRESETS[start].status, strict: start === "contrast" }), [start]);
+  const context = useMemo(() => ({ status: PRESETS[start].status, strict: isStrictTheme(start) }), [start]);
   const { tokens, failures } = useMemo(() => checkSeeds(seeds, context), [seeds, context]);
   const invalid = SEED_KEYS.filter((key) => !isHexColour(typed[key]));
   const blocked = failures.length > 0 || invalid.length > 0;

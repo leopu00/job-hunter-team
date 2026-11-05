@@ -8,7 +8,7 @@
 @import "@fontsource/jetbrains-mono/700.css";
 @import "../../../web/app/globals.css";
 
-/* The desktop owns eleven palettes but every screen consumes the same semantic
+/* The desktop owns thirteen palettes (six ready, seven templates) but every screen consumes the same semantic
    tokens. data-theme keeps reused web views on their light/dark contract;
    data-jht-theme selects the exact desktop palette. */
 /* Names the reused web views ask for that no palette defines by itself: each one follows the palette's own token, so
@@ -49,52 +49,52 @@
 
 :root[data-jht-theme="light"] {
   color-scheme: light;
-  --color-void: #f5f6fa;
-  --color-deep: #e9ebf2;
+  --color-void: #ebedf0;
+  --color-deep: #ececec;
   --color-panel: #ffffff;
-  --color-card: #edeff5;
-  --color-row: #e4e7ef;
-  --color-border: #b9bdc9;
-  --color-border-glow: #969cab;
-  --color-dim: #616778;
-  --color-muted: #4c5264;
-  --color-base: #303647;
-  --color-bright: #181d2c;
-  --color-white: #080c17;
-  --color-grid: rgba(13, 20, 36, 0.035);
-  --color-green: #08713a;
-  --color-ready: #08713a;
-  --color-yellow: #795000;
-  --color-blue: #1d5fa7;
-  --color-red: #b6203a;
-  --color-orange: #914000;
-  --color-purple: #7330a6;
-  --sync-warn: #795000;
+  --color-card: #efefef;
+  --color-row: #e5e5e5;
+  --color-border: #a3a9b5;
+  --color-border-glow: #898f9b;
+  --color-dim: #515662;
+  --color-muted: #3b404b;
+  --color-base: #1d222c;
+  --color-bright: #0f1217;
+  --color-white: #06070a;
+  --color-grid: rgba(29, 34, 44, 0.04);
+  --color-green: #08703d;
+  --color-ready: #08703d;
+  --color-yellow: #7a5200;
+  --color-blue: #1b5cab;
+  --color-red: #b3192f;
+  --color-orange: #9a3f00;
+  --color-purple: #6f2da8;
+  --sync-warn: #7a5200;
 }
 
 :root[data-jht-theme="graphite"] {
   color-scheme: dark;
-  --color-void: #101111;
-  --color-deep: #151717;
-  --color-panel: #1a1c1c;
-  --color-card: #232626;
-  --color-row: #292c2c;
-  --color-border: #3b4040;
-  --color-border-glow: #535a59;
-  --color-dim: #8d9593;
-  --color-muted: #a4acab;
-  --color-base: #cbd0cf;
-  --color-bright: #e6e9e8;
-  --color-white: #f7f8f8;
-  --color-grid: rgba(255, 255, 255, 0.025);
-  --color-green: #b6e36b;
-  --color-ready: #c9f58a;
-  --color-yellow: #e8c75a;
-  --color-blue: #7eb8dc;
-  --color-red: #ef7a76;
-  --color-orange: #e6a568;
-  --color-purple: #b89bd8;
-  --sync-warn: #e1bd63;
+  --color-void: #141518;
+  --color-deep: #16171b;
+  --color-panel: #1c1d21;
+  --color-card: #25272b;
+  --color-row: #2c2d32;
+  --color-border: #4a4e58;
+  --color-border-glow: #616670;
+  --color-dim: #9b9da2;
+  --color-muted: #a9abb1;
+  --color-base: #d2d4da;
+  --color-bright: #eaebef;
+  --color-white: #f9f9fb;
+  --color-grid: rgba(210, 212, 218, 0.04);
+  --color-green: #5aa9ff;
+  --color-ready: #8ec3ff;
+  --color-yellow: #f5c518;
+  --color-blue: #68adff;
+  --color-red: #ff5f75;
+  --color-orange: #ff9b57;
+  --color-purple: #bd76ff;
+  --sync-warn: #ddb461;
 }
 
 :root[data-jht-theme="ocean"] {
@@ -247,6 +247,56 @@
   --sync-warn: #ffd400;
 }
 
+:root[data-jht-theme="mist"] {
+  color-scheme: light;
+  --color-void: #dcdfe4;
+  --color-deep: #d7d9dd;
+  --color-panel: #eaecf0;
+  --color-card: #dadce0;
+  --color-row: #d1d3d7;
+  --color-border: #959ba7;
+  --color-border-glow: #7c818d;
+  --color-dim: #4d525b;
+  --color-muted: #393e46;
+  --color-base: #1e222a;
+  --color-bright: #101216;
+  --color-white: #070709;
+  --color-grid: rgba(30, 34, 42, 0.04);
+  --color-green: #1a4fa6;
+  --color-ready: #1a4fa6;
+  --color-yellow: #7a5200;
+  --color-blue: #185aa8;
+  --color-red: #b3192f;
+  --color-orange: #9a3f00;
+  --color-purple: #6f2da8;
+  --sync-warn: #7a5200;
+}
+
+:root[data-jht-theme="contrastlight"] {
+  color-scheme: light;
+  --color-void: #f0f0f0;
+  --color-deep: #ececec;
+  --color-panel: #ffffff;
+  --color-card: #efefef;
+  --color-row: #e5e5e5;
+  --color-border: #5e5e5e;
+  --color-border-glow: #474747;
+  --color-dim: #414141;
+  --color-muted: #292929;
+  --color-base: #0a0a0a;
+  --color-bright: #040404;
+  --color-white: #010101;
+  --color-grid: rgba(10, 10, 10, 0.04);
+  --color-green: #0036a8;
+  --color-ready: #0036a8;
+  --color-yellow: #5c3d00;
+  --color-blue: #0a4590;
+  --color-red: #970a20;
+  --color-orange: #7a3000;
+  --color-purple: #5a1f8f;
+  --sync-warn: #5c3d00;
+}
+
 :root[data-jht-theme="sage"] {
   color-scheme: light;
   --color-void: #f1f4ee;
@@ -395,14 +445,16 @@
 }
 
 .theme-picker__swatch[data-theme-preview="dark"] { --preview-bg: #111116; --preview-border: #414153; --preview-accent: #31dd8a; }
-.theme-picker__swatch[data-theme-preview="light"] { --preview-bg: #fff; --preview-border: #b9bdc9; --preview-accent: #08713a; }
-.theme-picker__swatch[data-theme-preview="graphite"] { --preview-bg: #1a1c1c; --preview-border: #535a59; --preview-accent: #b6e36b; }
+.theme-picker__swatch[data-theme-preview="light"] { --preview-bg: #ffffff; --preview-border: #898f9b; --preview-accent: #08703d; }
+.theme-picker__swatch[data-theme-preview="graphite"] { --preview-bg: #1c1d21; --preview-border: #616670; --preview-accent: #5aa9ff; }
 .theme-picker__swatch[data-theme-preview="ocean"] { --preview-bg: #0c202c; --preview-border: #337089; --preview-accent: #44d9e6; }
 .theme-picker__swatch[data-theme-preview="paper"] { --preview-bg: #fbf7ee; --preview-border: #a89a84; --preview-accent: #2e6b4c; }
 .theme-picker__swatch[data-theme-preview="midnight"] { --preview-bg: #11142a; --preview-border: #3d4585; --preview-accent: #8f9bff; }
 .theme-picker__swatch[data-theme-preview="forest"] { --preview-bg: #101f16; --preview-border: #36624b; --preview-accent: #e9b949; }
 .theme-picker__swatch[data-theme-preview="dusk"] { --preview-bg: #220f1a; --preview-border: #6a3d5a; --preview-accent: #ff9d6b; }
 .theme-picker__swatch[data-theme-preview="contrast"] { --preview-bg: #0a0a0a; --preview-border: #a0a0a0; --preview-accent: #ffe14d; }
+.theme-picker__swatch[data-theme-preview="mist"] { --preview-bg: #eaecf0; --preview-border: #7c818d; --preview-accent: #1a4fa6; }
+.theme-picker__swatch[data-theme-preview="contrastlight"] { --preview-bg: #ffffff; --preview-border: #474747; --preview-accent: #0036a8; }
 .theme-picker__swatch[data-theme-preview="sage"] { --preview-bg: #fafbf7; --preview-border: #9aa98c; --preview-accent: #2f6b3a; }
 .theme-picker__swatch[data-theme-preview="lavender"] { --preview-bg: #fdfcff; --preview-border: #a496c0; --preview-accent: #5b3fa6; }
 .theme-picker__swatch[data-theme-preview="system"] { --preview-bg: linear-gradient(90deg, #111116 50%, #ffffff 50%); --preview-border: #7a7f90; --preview-accent: #7a7f90; }
