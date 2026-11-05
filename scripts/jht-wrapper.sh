@@ -316,6 +316,27 @@ jht_text_en() {
     download.windows_missing) printf '%s' "Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded." ;;
     download.linux_no_app) printf '%s' "In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded." ;;
     download.release_no_app) printf '%s' "This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded." ;;
+    download.unsupported_os) printf '%s' "unsupported system: %s. Use windows or macos." ;;
+    download.bad_version) printf '%s' "invalid version: %s. Example: 0.3.5." ;;
+    download.deb_only_linux) printf '%s' "--deb is only for Linux." ;;
+    download.no_curl) printf '%s' "curl not found: it is needed to download the release." ;;
+    download.mkdir_failed) printf '%s' "cannot create the destination folder: %s" ;;
+    download.parent_unreachable) printf '%s' "the destination folder cannot be reached: %s" ;;
+    download.shared_folder) printf '%s' "the destination is inside a folder shared with the team (%s): choose one outside it, like ~/Downloads." ;;
+    download.dest_is_link) printf '%s' "the destination is a link: %s" ;;
+    download.dest_not_file) printf '%s' "the destination exists and is not a file: %s" ;;
+    download.no_tmp) printf '%s' "the temporary folder could not be created" ;;
+    download.sums_failed) printf '%s' "download failed: SHA256SUMS of v%s" ;;
+    download.sum_missing) printf '%s' "no SHA-256 declared for %s." ;;
+    download.mismatch_existing) printf '%s' "the file %s exists but its SHA-256 does not match: it was not overwritten." ;;
+    download.asset_failed) printf '%s' "download failed: %s" ;;
+    download.hash_invalid) printf '%s' "invalid SHA-256 for %s: expected %s, got %s." ;;
+    download.copy_failed) printf '%s' "copying the verified download to the destination failed" ;;
+    download.dest_appeared) printf '%s' "the destination appeared during the download; it was not overwritten" ;;
+    download.present_verified) printf '%s' "File already present and verified: %s" ;;
+    download.sha_verified) printf '%s' "SHA-256 verified: %s" ;;
+    download.fetching) printf '%s' "Downloading %s..." ;;
+    download.saved_in) printf '%s' "Saved in: %s" ;;
     download.intel_mac) printf '%s' "The 0.4 macOS app only runs on Macs with Apple silicon (M1 and later); this is an Intel Mac, which 0.4 does not support. Nothing was downloaded." ;;
     uninstall.usage) printf '%s' "usage: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Status" ;;
@@ -355,6 +376,27 @@ jht_text_it() {
     download.windows_missing) printf '%s' "Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e' stato scaricato niente." ;;
     download.linux_no_app) printf '%s' "In questa versione non c'e' l'app desktop per Linux: usa install.sh. Non e' stato scaricato niente." ;;
     download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
+    download.unsupported_os) printf '%s' "sistema non supportato: %s. Usa windows o macos." ;;
+    download.bad_version) printf '%s' "versione non valida: %s. Esempio: 0.3.5." ;;
+    download.deb_only_linux) printf '%s' "--deb vale solo per Linux." ;;
+    download.no_curl) printf '%s' "curl non trovato: serve per scaricare la release." ;;
+    download.mkdir_failed) printf '%s' "impossibile creare la directory di destinazione: %s" ;;
+    download.parent_unreachable) printf '%s' "directory di destinazione non raggiungibile: %s" ;;
+    download.shared_folder) printf '%s' "la destinazione sta in una cartella condivisa con il team (%s): scegline una fuori, come ~/Downloads." ;;
+    download.dest_is_link) printf '%s' "la destinazione e' un link: %s" ;;
+    download.dest_not_file) printf '%s' "la destinazione esiste e non e' un file: %s" ;;
+    download.no_tmp) printf '%s' "cartella temporanea non creata" ;;
+    download.sums_failed) printf '%s' "download non riuscito: SHA256SUMS di v%s" ;;
+    download.sum_missing) printf '%s' "SHA-256 dichiarato non trovato per %s." ;;
+    download.mismatch_existing) printf '%s' "il file %s esiste ma il suo SHA-256 non corrisponde: non e' stato sovrascritto." ;;
+    download.asset_failed) printf '%s' "download non riuscito: %s" ;;
+    download.hash_invalid) printf '%s' "SHA-256 non valido per %s: atteso %s, ottenuto %s." ;;
+    download.copy_failed) printf '%s' "copia del download verificato verso la destinazione non riuscita" ;;
+    download.dest_appeared) printf '%s' "la destinazione e' comparsa durante il download; non e' stata sovrascritta" ;;
+    download.present_verified) printf '%s' "File gia' presente e verificato: %s" ;;
+    download.sha_verified) printf '%s' "SHA-256 verificato: %s" ;;
+    download.fetching) printf '%s' "Scarico %s..." ;;
+    download.saved_in) printf '%s' "Salvato in: %s" ;;
     download.intel_mac) printf '%s' "L'app per macOS della 0.4 gira solo su Mac con Apple silicon (M1 e successivi); questo e' un Mac Intel, non supportato nella 0.4. Non e' stato scaricato niente." ;;
     uninstall.usage) printf '%s' "uso: jht uninstall --confirm [--purge]" ;;
     status.title) printf '%s' "Stato" ;;
@@ -4055,7 +4097,7 @@ handle_gui_command() {
 # JHT_RELEASE_BASE_URL e' la seam per mirror e test: viene dall'ambiente di chi lancia il comando, mai da host.env.
 download_usage() {
   cat <<'USAGE'
-usage: jht download --os windows|macos|linux --version X.Y.Z [--output FILE] [--deb]
+usage: jht download --os windows|macos --version X.Y.Z [--output FILE]
   Downloads the desktop app from the release, checks its SHA-256 and saves it (by default in ~/Downloads).
 USAGE
 }
@@ -4102,14 +4144,14 @@ handle_host_download() {
     win|win32|windows) platform=windows ;;
     darwin|mac|macos|osx) platform=macos ;;
     linux) platform=linux ;;
-    *) err "sistema non supportato: $os. Usa windows, macos o linux."; return 2 ;;
+    *) err "$(jht_say download.unsupported_os "$os")"; return 2 ;;
   esac
   version="${version#v}"
   if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-    err "versione non valida: $version. Esempio: 0.3.5."
+    err "$(jht_say download.bad_version "$version")"
     return 2
   fi
-  if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "--deb vale solo per Linux."; return 2; fi
+  if [ "$deb" -eq 1 ] && [ "$platform" != linux ]; then err "$(jht_say download.deb_only_linux)"; return 2; fi
   if [ "$platform" = linux ]; then err "$(jht_say download.linux_no_app)"; return 1; fi
   local major minor
   major="${version%%.*}"; minor="${version#*.}"; minor="${minor%%.*}"
@@ -4130,33 +4172,33 @@ handle_host_download() {
     windows:*) asset="job-hunter-team-windows-x64-setup.exe" ;;
     macos:*) asset="job-hunter-team-macos-universal.dmg" ;;
   esac
-  command -v curl >/dev/null 2>&1 || { err "curl non trovato: serve per scaricare la release."; return 1; }
+  command -v curl >/dev/null 2>&1 || { err "$(jht_say download.no_curl)"; return 1; }
 
   # Destinazione: di base ~/Downloads, mai una cartella condivisa con il team; un --output li dentro si rifiuta.
   local dest parent real_parent
   dest="${output:-$HOME/Downloads/$asset}"
   case "$dest" in /*) ;; *) dest="$PWD/$dest" ;; esac
   parent="$(dirname -- "$dest")"
-  mkdir -p -- "$parent" || { err "impossibile creare la directory di destinazione: $parent"; return 1; }
-  real_parent="$(cd -P -- "$parent" 2>/dev/null && pwd -P)" || { err "directory di destinazione non raggiungibile: $parent"; return 1; }
+  mkdir -p -- "$parent" || { err "$(jht_say download.mkdir_failed "$parent")"; return 1; }
+  real_parent="$(cd -P -- "$parent" 2>/dev/null && pwd -P)" || { err "$(jht_say download.parent_unreachable "$parent")"; return 1; }
   local shared real_shared
   for shared in "$HOME/.jht" "${JHT_USER_DIR_HOST:-$HOME/Documents/Job Hunter Team}"; do
     real_shared="$(cd -P -- "$shared" 2>/dev/null && pwd -P)" || real_shared="$shared"
     if download_path_inside "$real_parent" "$real_shared" || download_path_inside "$real_parent" "$shared"; then
-      err "la destinazione sta in una cartella condivisa con il team ($shared): scegline una fuori, come ~/Downloads."
+      err "$(jht_say download.shared_folder "$shared")"
       return 1
     fi
   done
   dest="$real_parent/$(basename -- "$dest")"
-  if [ -L "$dest" ]; then err "la destinazione e' un link: $dest"; return 1; fi
-  if [ -e "$dest" ] && [ ! -f "$dest" ]; then err "la destinazione esiste e non e' un file: $dest"; return 1; fi
+  if [ -L "$dest" ]; then err "$(jht_say download.dest_is_link "$dest")"; return 1; fi
+  if [ -e "$dest" ] && [ ! -f "$dest" ]; then err "$(jht_say download.dest_not_file "$dest")"; return 1; fi
 
   local base tag work expected code=0 proto
   base="${JHT_RELEASE_BASE_URL:-https://github.com/leopu00/job-hunter-team/releases/download}"
   base="${base%/}/v$version"
   proto="=https"
   [ -z "${JHT_RELEASE_BASE_URL:-}" ] || proto="=https,http"
-  work="$(mktemp -d "${TMPDIR:-/tmp}/jht-download.XXXXXX")" || { err "cartella temporanea non creata"; return 1; }
+  work="$(mktemp -d "${TMPDIR:-/tmp}/jht-download.XXXXXX")" || { err "$(jht_say download.no_tmp)"; return 1; }
   chmod 700 "$work" 2>/dev/null || true
 
   download_fetch() {
@@ -4166,7 +4208,7 @@ handle_host_download() {
   download_cleanup() { rm -f -- "$work/SHA256SUMS" "$work/asset"; rmdir -- "$work" 2>/dev/null || true; }
 
   if ! download_fetch "$base/SHA256SUMS" "$work/SHA256SUMS"; then
-    err "download non riuscito: SHA256SUMS di v$version"; download_cleanup; return 1
+    err "$(jht_say download.sums_failed "$version")"; download_cleanup; return 1
   fi
   local line sum rest
   expected=""
@@ -4181,39 +4223,39 @@ handle_host_download() {
       break
     fi
   done < "$work/SHA256SUMS"
-  if [ -z "$expected" ]; then err "SHA-256 dichiarato non trovato per $asset."; download_cleanup; return 1; fi
+  if [ -z "$expected" ]; then err "$(jht_say download.sum_missing "$asset")"; download_cleanup; return 1; fi
 
   if [ -f "$dest" ]; then
     if [ "$(runtime_sha256 "$dest")" = "$expected" ]; then
-      printf "\n  File gia' presente e verificato: %s\n  SHA-256 verificato: %s\n\n" "$dest" "$expected"
+      printf "\n  %s\n  %s\n\n" "$(jht_say download.present_verified "$dest")" "$(jht_say download.sha_verified "$expected")"
       download_cleanup; return 0
     fi
-    err "il file $dest esiste ma il suo SHA-256 non corrisponde: non e' stato sovrascritto."
+    err "$(jht_say download.mismatch_existing "$dest")"
     download_cleanup; return 1
   fi
 
-  printf "\n  Scarico %s...\n" "$asset"
+  printf "\n  %s\n" "$(jht_say download.fetching "$asset")"
   if ! download_fetch "$base/$asset" "$work/asset"; then
-    err "download non riuscito: $asset"; download_cleanup; return 1
+    err "$(jht_say download.asset_failed "$asset")"; download_cleanup; return 1
   fi
   local actual
   actual="$(runtime_sha256 "$work/asset")"
   if [ "$actual" != "$expected" ]; then
-    err "SHA-256 non valido per $asset: atteso $expected, ottenuto $actual."
+    err "$(jht_say download.hash_invalid "$asset" "$expected" "$actual")"
     download_cleanup; return 1
   fi
 
   # Pubblicazione: copia in un nome nuovo accanto alla destinazione (esclusiva) e rinomina senza sostituire.
   local part="$dest.part-$$-${RANDOM:-0}"
   if ! ( set -C; cat -- "$work/asset" > "$part" ); then
-    err "copia del download verificato verso la destinazione non riuscita"; rm -f -- "$part"; download_cleanup; return 1
+    err "$(jht_say download.copy_failed)"; rm -f -- "$part"; download_cleanup; return 1
   fi
   if ! mv -n -- "$part" "$dest" || [ -e "$part" ]; then
-    err "la destinazione e' comparsa durante il download; non e' stata sovrascritta"
+    err "$(jht_say download.dest_appeared)"
     rm -f -- "$part"; download_cleanup; return 1
   fi
   download_cleanup
-  printf "  SHA-256 verificato: %s\n  Salvato in: %s\n\n" "$actual" "$dest"
+  printf "  %s\n  %s\n\n" "$(jht_say download.sha_verified "$actual")" "$(jht_say download.saved_in "$dest")"
   return "$code"
 }
 

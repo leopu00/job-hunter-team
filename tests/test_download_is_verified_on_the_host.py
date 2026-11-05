@@ -120,7 +120,7 @@ def test_a_wrong_hash_saves_nothing_and_leaves_nothing(tmp_path: Path, site):
     (site.root / "SHA256SUMS").write_text(f"{'0' * 64}  {ASSET}\n", encoding="utf-8")
     out = tmp_path / "out" / "client.dmg"
     done, home, tmpdir, _ = _run(tmp_path, site, *_asset_args(out))
-    assert done.returncode == 1 and "SHA-256 non valido" in done.stderr
+    assert done.returncode == 1 and "invalid SHA-256 for" in done.stderr
     assert not out.exists()
     _clean(tmp_path, tmpdir, out.parent)
 
@@ -148,7 +148,7 @@ def test_missing_sums_or_a_missing_asset_fail_and_leave_nothing(tmp_path: Path, 
 def test_an_asset_that_is_not_in_the_sums_is_refused(tmp_path: Path, site):
     (site.root / "SHA256SUMS").write_text(f"{SUM}  something-else.AppImage\n", encoding="utf-8")
     done, home, _, _ = _run(tmp_path, site, *_asset_args())
-    assert done.returncode == 1 and "non trovato" in done.stderr
+    assert done.returncode == 1 and "no SHA-256 declared for" in done.stderr
     assert not (home / "Downloads").exists() or list((home / "Downloads").iterdir()) == []
 
 
@@ -157,7 +157,7 @@ def test_an_existing_file_with_the_same_hash_is_kept_and_a_different_one_is_not_
     out.parent.mkdir()
     out.write_bytes(BYTES)
     done, _, _, _ = _run(tmp_path, site, *_asset_args(out))
-    assert done.returncode == 0 and "gia' presente e verificato" in done.stdout
+    assert done.returncode == 0 and "File already present and verified" in done.stdout
     out.write_bytes(b"keep me")
     done, _, tmpdir, _ = _run(tmp_path, site, *_asset_args(out))
     assert done.returncode == 1 and out.read_bytes() == b"keep me"
@@ -180,7 +180,7 @@ def test_a_destination_in_a_folder_shared_with_the_team_is_refused(tmp_path: Pat
     (home / shared).mkdir(parents=True)
     out = home / shared / "client.dmg"
     done, _, _, calls = _run(tmp_path, site, *_asset_args(out))
-    assert done.returncode == 1 and "condivisa con il team" in done.stderr
+    assert done.returncode == 1 and "shared with the team" in done.stderr
     assert not out.exists()
 
 
@@ -252,3 +252,71 @@ def test_a_release_before_0_4_is_said_to_have_no_macos_app(tmp_path: Path, site,
     assert "non ha l'app per macOS: usa la 0.4.0 o successive" in italian.stderr
     assert "non trovato" not in italian.stderr and "Non e' stato scaricato niente" in italian.stderr
     assert not (home / "Downloads").exists()
+
+
+def test_the_usage_offers_windows_and_macos_only_and_linux_still_gets_its_answer(tmp_path: Path, site):
+    # no arguments: the usage that is printed does not offer linux or --deb (there is no desktop app for Linux in this version)
+    done, _, _, _ = _run(tmp_path, site, JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+    text = done.stdout + done.stderr
+    assert done.returncode == 2
+    assert "usage: jht download --os windows|macos --version X.Y.Z [--output FILE]" in text
+    assert "linux" not in text.lower() and "--deb" not in text
+    (tmp_path / "help").mkdir()
+    (tmp_path / "other").mkdir()
+    helped, _, _, _ = _run(tmp_path / "help", site, "--help", JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+    assert helped.returncode == 0 and "linux" not in (helped.stdout + helped.stderr).lower() and "--deb" not in helped.stdout
+    # an unknown system is told the two that exist
+    other, _, _, _ = _run(tmp_path / "other", site, "--os", "plan9", "--version", "0.4.0", JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+    assert other.returncode == 2 and "unsupported system: plan9. Use windows or macos." in other.stderr
+    assert "linux" not in other.stderr.lower() and "sistema" not in other.stderr
+
+
+def test_the_sentences_a_wrong_command_gets_follow_the_language_of_the_cli(tmp_path: Path, site):
+    # English by default, Italian when the installation speaks Italian: no Italian inside an English output
+    for name, args, english, italian in (
+        ("os", ("--os", "plan9", "--version", "0.4.0"), "unsupported system: plan9. Use windows or macos.", "sistema non supportato: plan9. Usa windows o macos."),
+        ("version", ("--os", "macos", "--version", "x.y"), "invalid version: x.y. Example: 0.3.5.", "versione non valida: x.y. Esempio: 0.3.5."),
+        ("deb", ("--os", "windows", "--version", "0.4.0", "--deb"), "--deb is only for Linux.", "--deb vale solo per Linux."),
+    ):
+        (tmp_path / name).mkdir()
+        (tmp_path / f"{name}-it").mkdir()
+        en, _, _, _ = _run(tmp_path / name, site, *args, JHT_RELEASE_BASE_URL="http://127.0.0.1:9")
+        it, _, _, _ = _run(tmp_path / f"{name}-it", site, *args, JHT_RELEASE_BASE_URL="http://127.0.0.1:9", JHT_LANG="it")
+        assert en.returncode == 2 and english in en.stderr, en.stderr
+        assert it.returncode == 2 and italian in it.stderr, it.stderr
+
+
+def test_a_download_in_progress_and_its_failures_speak_the_language_of_the_installation(tmp_path: Path, site):
+    # English by default, Italian when the installation speaks Italian; no Italian inside an English output and the other way round
+    (tmp_path / "en").mkdir()
+    (tmp_path / "it").mkdir()
+    en_out, it_out = tmp_path / "en" / "client.dmg", tmp_path / "it" / "client.dmg"
+    en, _, _, _ = _run(tmp_path / "en", site, *_asset_args(en_out))
+    it, _, _, _ = _run(tmp_path / "it", site, *_asset_args(it_out), JHT_LANG="it")
+    assert en.returncode == 0 and it.returncode == 0, en.stderr + it.stderr
+    for line in (f"Downloading {ASSET}...", "SHA-256 verified:", "Saved in:"):
+        assert line in en.stdout, en.stdout
+    for line in (f"Scarico {ASSET}...", "SHA-256 verificato:", "Salvato in:"):
+        assert line in it.stdout, it.stdout
+    assert not any(word in en.stdout for word in ("Scarico", "verificato", "Salvato"))
+    # the refusals: a link, a shared folder, a wrong hash
+    for lang, link, shared, wrong in (
+        ("en", "the destination is a link:", "shared with the team", "invalid SHA-256 for"),
+        ("it", "la destinazione e' un link:", "condivisa con il team", "SHA-256 non valido per"),
+    ):
+        work = tmp_path / f"refusals-{lang}"
+        work.mkdir()
+        extra = {"JHT_LANG": "it"} if lang == "it" else {}
+        target = work / "victim.txt"
+        target.write_bytes(b"mine")
+        out = work / "out" / "client.dmg"
+        out.parent.mkdir()
+        out.symlink_to(target)
+        done, _, _, _ = _run(work, site, *_asset_args(out), **extra)
+        assert done.returncode == 1 and link in done.stderr, done.stderr
+        done, _, _, _ = _run(work, site, *_asset_args(work / "home" / ".jht" / "client.dmg"), **extra)
+        assert done.returncode == 1 and shared in done.stderr, done.stderr
+        (site.root / "SHA256SUMS").write_text(f"{'0' * 64}  {ASSET}\n", encoding="utf-8")
+        done, _, _, _ = _run(work, site, *_asset_args(work / "other" / "client.dmg"), **extra)
+        assert done.returncode == 1 and wrong in done.stderr, done.stderr
+        (site.root / "SHA256SUMS").write_text(f"{SUM} *{ASSET}\n", encoding="utf-8")

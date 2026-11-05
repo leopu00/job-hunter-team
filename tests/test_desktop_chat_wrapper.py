@@ -606,7 +606,7 @@ def test_download_is_not_a_container_command_any_more(tmp_path: Path):
         env=env, text=True, capture_output=True, timeout=30, check=False,
     )
 
-    assert done.returncode == 1 and "download non riuscito" in done.stderr, done.stderr
+    assert done.returncode == 1 and "download failed" in done.stderr, done.stderr
     calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
     assert [line for line in calls if line.startswith(("docker exec", "docker cp", "docker inspect", "docker logs"))] == []
     assert not (tmp_path / "out" / "x.dmg").exists()

@@ -2299,10 +2299,22 @@ maybe_onboard() {
   # the correct next action. Whoever wants to skip uses JHT_SKIP_ONBOARD=1.
   export PATH="$BIN_DIR:$PATH"
   printf "\n"
+  # A wizard that stops (cancelled, interrupted, failed) is not a finished install: the installer ends with the wizard's own
+  # non-zero code, and says what to do next. It used to swallow the code with `|| warn` and end with 0, so a script or a
+  # person reading the exit code saw «done» for a team that was installed but never set up.
+  local wizard_status=0
   if [ "$wizard_from_tty" -eq 1 ]; then
-    jht setup </dev/tty || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+    jht setup </dev/tty || wizard_status=$?
   else
-    jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
+    jht setup || wizard_status=$?
+  fi
+  if [ "$wizard_status" -ne 0 ]; then
+    local setup_command="jht setup"
+    [ "${PATH_READY:-0}" -eq 1 ] || setup_command="$BIN_DIR/jht setup"
+    printf "\n"
+    warn "The setup did not finish (exit code $wizard_status): Job Hunter Team is installed, but it is not set up yet."
+    info "Next step: run  $setup_command  to finish the setup."
+    return "$wizard_status"
   fi
 }
 

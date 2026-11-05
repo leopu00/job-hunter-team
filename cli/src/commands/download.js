@@ -1,3 +1,4 @@
+import { Option } from 'commander';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
@@ -16,7 +17,7 @@ const ASSETS = Object.freeze({
   macos: 'job-hunter-team-macos-universal.dmg',
 });
 
-// This version has no desktop app for Linux: the command-line install is the way in. --os linux and --deb still parse, so they get this answer and not an "unknown option".
+// This version has no desktop app for Linux: the command-line install is the way in. --os linux and --deb still parse, so they get this answer and not an "unknown option", but the usage does not offer them.
 const LINUX_NO_APP = 'In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded.';
 
 
@@ -29,7 +30,7 @@ function normalizePlatform(value) {
   const platform = aliases[String(value ?? '').trim().toLowerCase()];
   if (!platform) {
     throw new Error(
-      `Unsupported operating system: ${value}. Use windows, macos, or linux.`,
+      `Unsupported operating system: ${value}. Use windows or macos.`,
     );
   }
   return platform;
@@ -75,10 +76,11 @@ function normalizeVersion(value) {
 }
 
 
+// The person's own Downloads folder, as the host command (`jht download` of the wrapper) does since 0.4. It used to be the folder
+// shared with the team (Documents/Job Hunter Team/downloads), where the agents can write too: a file verified here could be replaced
+// there before the person opened it.
 function userDownloadsDir() {
-  const userDir = process.env.JHT_USER_DIR
-    || join(homedir(), 'Documents', 'Job Hunter Team');
-  return join(userDir, 'downloads');
+  return join(homedir(), 'Downloads');
 }
 
 
@@ -273,9 +275,9 @@ export function registerDownloadCommand(program) {
   program
     .command('download')
     .description('Download and verify a desktop client from GitHub Releases')
-    .requiredOption('--os <platform>', 'operating system: windows, macos, or linux')
+    .requiredOption('--os <platform>', 'operating system: windows or macos')
     .option('--version <release>', 'the release to download (required), for example 0.4.0')
-    .option('-o, --output <file>', 'destination file (default: Documents/Job Hunter Team/downloads)')
-    .option('--deb', 'Linux only, and there is no desktop app for Linux in this version: use install.sh')
+    .option('-o, --output <file>', 'destination file (default: ~/Downloads)')
+    .addOption(new Option('--deb', 'Linux only: there is no desktop app for Linux in this version').hideHelp())
     .action(downloadAction);
 }
