@@ -645,6 +645,7 @@ maybe_refresh_sentinella() {
   # nello stesso tick (subito sotto nel loop). Gli ALTRI core li rinfresca il
   # Dottore (refresh ricco). Qui solo lei.
   is_session_alive SENTINELLA || return 0   # se non viva, la (ri)crea ensure_agent
+  agent_is_paused SENTINELLA && return 0    # in pausa per volere dell'utente: il contesto non si tocca
   # Niente refresh fuori orario lavorativo: ricreare ora sprecherebbe un
   # kick-off LLM di notte (allineato alla regola "no LLM fuori finestra").
   python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skills.working_hours import is_within_working_hours as f; sys.exit(0 if f() else 1)" 2>/dev/null || return 0
@@ -844,6 +845,7 @@ maybe_ttl_refresh() {
     [ -z "$s" ] && continue
     is_agent_session "$s" || continue
     agent_is_contained "$s" && continue
+    agent_is_paused "$s" && continue
     age=$(session_age_h "$s") || continue
     [ -z "$age" ] && continue
     [ "$age" -ge "$AGENT_MAX_SESSION_AGE_H" ] || continue
@@ -878,11 +880,29 @@ agent_is_contained() {
   JHT_HOME="$JHT_HOME" python3 "$ROSTER_TOOL" is-contained "$1" >/dev/null 2>&1
 }
 
+# JHT-T181: l'utente ha messo in pausa QUESTO agente (agent_pause.py). La sessione resta accesa col suo contesto:
+# ricrearla (refresh a 12/24 h) lo cancellerebbe, e un messaggio automatico lo rimetterebbe al lavoro. UN predicato,
+# come per lo standby; la risposta è una PAROLA (paused|off) e, se non arriva, vale il marcatore: un guasto
+# di python non deve cancellare il contesto di un agente fermo apposta.
+AGENT_PAUSE_PY="${JHT_AGENT_PAUSE_PY:-/app/shared/skills/agent_pause.py}"
+[ -f "$AGENT_PAUSE_PY" ] || AGENT_PAUSE_PY="$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)/shared/skills/agent_pause.py"
+agent_is_paused() {
+  [ -e "$JHT_HOME/.agent-pauses/$1.json" ] || return 1
+  local state
+  state="$(JHT_HOME="$JHT_HOME" python3 "$AGENT_PAUSE_PY" active "$1" 2>/dev/null)"
+  case "$state" in
+    paused) return 0 ;;
+    off)    return 1 ;;
+    *)      return 0 ;;   # fallback: il marcatore c'è → in pausa
+  esac
+}
+
 maybe_mail_tick() {
   command -v "$MAIL_BIN" >/dev/null 2>&1 || return 0
   local session text
   "$MAIL_BIN" tick 2>/dev/null | while IFS=$'\t' read -r session text; do
     [ -n "$session" ] && [ -n "$text" ] || continue
+    agent_is_paused "$session" && continue
     "$TMUX_SENDER" "$session" "$text" >/dev/null 2>&1 || true
   done
   return 0

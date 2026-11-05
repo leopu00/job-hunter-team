@@ -232,14 +232,31 @@ def _tmux(*args, timeout: int = 10):
         return None
 
 
+def _paused_alone() -> set:
+    """Gli agenti che l'utente ha messo in pausa da soli (JHT-T181): lo sblocco non li spinge. Mai solleva."""
+    try:
+        import importlib.util as _u
+        here = Path(__file__).resolve().parent
+        for cand in (here / "agent_pause.py", Path("/app/shared/skills/agent_pause.py")):
+            if cand.exists():
+                spec = _u.spec_from_file_location("agent_pause_for_unblock", cand)
+                mod = _u.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                return set(mod.paused_sessions(home=jht_home()))
+    except Exception:  # noqa: BLE001
+        pass
+    return set()
+
+
 def agent_sessions() -> list:
     r = _tmux("list-sessions", "-F", "#{session_name}")
     if not r or r.returncode != 0:
         return []
     out = []
+    paused = _paused_alone()
     for ln in r.stdout.splitlines():
         s = ln.strip()
-        if not s or s in NEVER_TOUCH or s.startswith("DOTTORE"):
+        if not s or s in NEVER_TOUCH or s.startswith("DOTTORE") or s in paused:
             continue
         if s in COORDINATORS or any(s == p or s.startswith(p + "-") for p in OPERATIVE_PREFIXES):
             out.append(s)
