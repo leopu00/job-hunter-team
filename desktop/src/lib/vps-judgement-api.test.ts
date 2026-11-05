@@ -99,25 +99,35 @@ describe("the six judgement routes go to the VPS of a team connected in full", (
     // the dialog's first step: what the team would apply to, and nothing is written
     const preview = await call("/api/positions/5/apply-request", "POST", {});
     expect(preview.body).toEqual({
-      ok: true, state: "awaiting_confirm", id: DIGEST, summary: "Synthetic role @ Synthetic company · jobs.example.com", expiresAt: null, source: "vps",
+      ok: true, state: "awaiting_confirm", id: DIGEST, summary: "Synthetic role @ Synthetic company · jobs.example.com", destination: "web:example.com", expiresAt: null, source: "vps",
     });
-    // the old one-step body, and a confirmation that is not a digest, are not asked of the VPS
-    for (const body of [{ confirmed: true }, { confirmId: "x'; reboot" }, { confirmId: DIGEST.toUpperCase() }]) {
+    // the old one-step body, a confirmation that is not a digest, and one that does not carry the destination of the preview (or
+    // carries one that does not fit) are not asked of the VPS
+    for (const body of [
+      { confirmed: true }, { confirmId: "x'; reboot", destination: "web:example.com" }, { confirmId: DIGEST.toUpperCase(), destination: "web:example.com" },
+      { confirmId: DIGEST }, { confirmId: DIGEST, destination: "portal:Ashby" }, { confirmId: DIGEST, destination: "web:a b; reboot" }, { confirmId: DIGEST, destination: 7 },
+    ]) {
       expect(await call("/api/positions/5/apply-request", "POST", body)).toEqual({ status: 400, body: { error: "position_write_not_confirmed" } });
     }
-    const authorised = await call("/api/positions/5/apply-request", "POST", { confirmId: DIGEST });
+    const authorised = await call("/api/positions/5/apply-request", "POST", { confirmId: DIGEST, destination: "web:example.com" });
     expect(authorised.body).toMatchObject({ ok: true, state: "queued", apply_requested: true, source: "vps" });
     const withdrawn = await call("/api/positions/5/apply-request", "DELETE");
     expect(withdrawn.body).toMatchObject({ ok: true, state: "queued", apply_requested: false });
     expect(writes).toEqual([
       { op: "apply_preview", id: "5", connectionKey: KEY },
-      { op: "apply_request", id: "5", on: true, confirmed: true, confirm: DIGEST, connectionKey: KEY },
+      { op: "apply_request", id: "5", on: true, confirmed: true, confirm: DIGEST, destination: "web:example.com", connectionKey: KEY },
       { op: "apply_request", id: "5", on: false, confirmed: false, connectionKey: KEY },
     ]);
   });
 
   it("apply-request: a preview the dialog could not show is no confirmation to give", async () => {
-    for (const reply of [{ ok: true, summary: "", confirm: "ab".repeat(32) }, { ok: true, summary: "x", confirm: "short" }]) {
+    for (const reply of [
+      { ok: true, summary: "", confirm: "ab".repeat(32), destination: "web:example.com" },
+      { ok: true, summary: "x", confirm: "short", destination: "web:example.com" },
+      // a team whose preview names no destination, or one that does not fit, cannot be matched when confirming: not offered
+      { ok: true, summary: "x", confirm: "ab".repeat(32) },
+      { ok: true, summary: "x", confirm: "ab".repeat(32), destination: "portal:Ashby" },
+    ]) {
       const { call } = setup({ reply: () => reply });
       expect((await call("/api/positions/5/apply-request", "POST", {})).body).toEqual({ ok: false, source: "vps" });
     }
@@ -152,7 +162,7 @@ describe("what the link does not do", () => {
 
   it("a refusal of the VPS keeps its code; one that is not a code is not shown", async () => {
     const { call } = setup({ reply: () => ({ ok: false, error: "already_submitted" }) });
-    expect(await call("/api/positions/1/apply-request", "POST", { confirmId: "ab".repeat(32) })).toEqual({
+    expect(await call("/api/positions/1/apply-request", "POST", { confirmId: "ab".repeat(32), destination: "portal:ashby" })).toEqual({
       status: 409, body: { error: "already_submitted" },
     });
     const { call: odd } = setup({ reply: () => ({ ok: false, error: "<b>no</b>" }) });

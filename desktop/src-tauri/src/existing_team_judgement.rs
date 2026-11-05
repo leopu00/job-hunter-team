@@ -136,6 +136,10 @@ pub(crate) enum JudgementRequest {
         /// carries it back, and the script refuses it if the position changed in between.
         #[serde(default)]
         confirm: Option<String>,
+        /// The destination the preview showed. An authorisation carries it back too: the broker is told where the SCRIPT says
+        /// the application goes, and that must be where the person saw it going (as on this computer).
+        #[serde(default)]
+        destination: Option<String>,
         #[serde(rename = "connectionKey")]
         connection_key: String,
     },
@@ -290,9 +294,14 @@ impl JudgementRequest {
                 return Err("reason_invalid")
             }
             Self::ApplyRequest { on: true, confirmed: false, .. } => return Err("position_write_not_confirmed"),
-            Self::ApplyRequest { on: true, confirm, .. } if !confirm.as_deref().is_some_and(valid_digest) => {
+            // an authorisation carries the digest AND the destination of the preview the person saw: without them, or with ones that
+            // do not fit, nothing is asked of the VPS
+            Self::ApplyRequest { on: true, confirm, destination, .. }
+                if !confirm.as_deref().is_some_and(valid_digest) || !destination.as_deref().is_some_and(valid_destination) =>
+            {
                 return Err("position_write_not_confirmed")
             }
+            Self::ApplyRequest { on: false, destination: Some(_), .. } => return Err("position_write_request_invalid"),
             Self::Feedback { score: Some(score), .. } if !(1..=5).contains(score) => {
                 return Err("position_write_request_invalid")
             }
@@ -460,19 +469,30 @@ pub(crate) fn position_write_with(
         return failure(code);
     }
     let mut out = reply(run(&request));
-    if let JudgementRequest::ApplyRequest { id, on: true, connection_key, .. } = &request {
+    if let JudgementRequest::ApplyRequest { id, on: true, connection_key, destination, .. } = &request {
         if out.get("ok") == Some(&Value::Bool(true)) {
-            let recorded = BrokerRecord::from_reply(id, &out).is_some_and(|r| broker_recorded(record(&r)));
+            let from_script = BrokerRecord::from_reply(id, &out);
+            // where the script says the application goes must be where the person saw it going: if not, nothing reaches the broker
+            let as_seen = from_script.as_ref().is_some_and(|r| Some(r.fields().2) == destination.as_deref());
+            let recorded = as_seen && from_script.as_ref().is_some_and(|r| broker_recorded(record(r)));
             if !recorded {
                 let withdraw = JudgementRequest::ApplyRequest {
                     id: id.clone(),
                     on: false,
                     confirmed: false,
                     confirm: None,
+                    destination: None,
                     connection_key: connection_key.clone(),
                 };
-                let _ = run(&withdraw);
-                return failure("apply_authorisation_unrecorded");
+                // The withdrawal is read too: if the team does not confirm it the flag may still be on, and the person is
+                // told that, not that nothing was recorded.
+                let withdrawn = reply(run(&withdraw)).get("ok") == Some(&Value::Bool(true));
+                let changed = !as_seen && from_script.is_some();
+                return failure(match (withdrawn, changed) {
+                    (false, _) => "apply_withdrawal_unconfirmed",
+                    (true, true) => "position_changed",
+                    (true, false) => "apply_authorisation_unrecorded",
+                });
             }
             if let Value::Object(map) = &mut out {
                 map.retain(|key, _| key != "instant" && key != "destination");
@@ -638,7 +658,7 @@ mod tests {
     const DIGEST: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     fn authorise() -> Value {
-        json!({"op":"apply_request","id":"4","on":true,"confirmed":true,"confirm":DIGEST,"connectionKey":KEY})
+        json!({"op":"apply_request","id":"4","on":true,"confirmed":true,"confirm":DIGEST,"destination":"portal:ashby","connectionKey":KEY})
     }
 
     /// The script's answer to the authorisation, then what the broker answers; what ran, in order.
@@ -701,6 +721,48 @@ mod tests {
             assert_eq!(out["error"], "apply_authorisation_unrecorded", "{script}");
             assert_eq!(recorded, None, "{script}");
             assert_eq!(ran.last().unwrap(), &vec!["apply-request", "4", "--off"]);
+        }
+    }
+
+    #[test]
+    fn a_destination_other_than_the_one_the_person_saw_reaches_no_broker_and_the_flag_is_taken_back() {
+        // the preview showed portal:ashby (see `authorise`); the script's answer says the application goes elsewhere
+        let elsewhere = WRITTEN.replace("portal:ashby", "web:elsewhere.example.com");
+        let broker = Ok(ProcessResult { code: 0, stdout: br#"{"ok":true,"status":"recorded"}"#.to_vec() });
+        let (out, ran, recorded) = authorise_with(&elsewhere, broker);
+        assert_eq!(out, json!({"ok":false,"error":"position_changed"}));
+        assert_eq!(recorded, None, "nothing reached the broker");
+        assert_eq!(ran.last().unwrap(), &vec!["apply-request", "4", "--off"], "the flag was withdrawn");
+        // a destination that is the same type but another name, and one of another type, are both another destination
+        for other in ["portal:greenhouse", "email:jobs.example.com", "web:ashbyhq.com"] {
+            let (out, _, recorded) = authorise_with(&WRITTEN.replace("portal:ashby", other), Ok(ProcessResult { code: 0, stdout: br#"{"ok":true,"status":"recorded"}"#.to_vec() }));
+            assert_eq!((out["error"].as_str(), recorded), (Some("position_changed"), None), "{other}");
+        }
+    }
+
+    #[test]
+    fn when_the_flag_cannot_be_taken_back_that_is_what_is_told() {
+        let elsewhere = WRITTEN.replace("portal:ashby", "web:elsewhere.example.com");
+        for withdrawal in [r#"{"ok":false,"code":"already_submitted"}"#, "the container fell", r#"{"ok":true"#] {
+            let (calls, recorded) = (Cell::new(0), Cell::new(0));
+            let out = position_write_with(
+                authorise(),
+                true,
+                || Ok(KEY.to_owned()),
+                |_| Ok(()),
+                |request| {
+                    calls.set(calls.get() + 1);
+                    let code = if request.argv().contains(&"--on".to_owned()) { 0 } else if withdrawal.contains("already_submitted") { 1 } else { 0 };
+                    let stdout = if request.argv().contains(&"--on".to_owned()) { elsewhere.as_str() } else { withdrawal };
+                    Ok(ProcessResult { code, stdout: stdout.as_bytes().to_vec() })
+                },
+                |_| {
+                    recorded.set(recorded.get() + 1);
+                    Ok(ProcessResult { code: 0, stdout: br#"{"ok":true,"status":"recorded"}"#.to_vec() })
+                },
+            );
+            assert_eq!(out, json!({"ok":false,"error":"apply_withdrawal_unconfirmed"}), "{withdrawal}");
+            assert_eq!((calls.get(), recorded.get()), (2, 0), "{withdrawal}");
         }
     }
 
@@ -797,6 +859,11 @@ mod tests {
             (json!({"op":"apply_request","id":"1","on":true,"confirmed":true,"connectionKey":KEY}), "position_write_not_confirmed"),
             (json!({"op":"apply_request","id":"1","on":true,"confirmed":true,"confirm":"0'; reboot","connectionKey":KEY}), "position_write_not_confirmed"),
             (json!({"op":"apply_request","id":"1","on":true,"confirmed":true,"confirm":DIGEST.to_uppercase(),"connectionKey":KEY}), "position_write_not_confirmed"),
+            // the destination the person saw goes back with the digest: without it, or one that does not fit, nothing is asked
+            (json!({"op":"apply_request","id":"1","on":true,"confirmed":true,"confirm":DIGEST,"connectionKey":KEY}), "position_write_not_confirmed"),
+            (json!({"op":"apply_request","id":"1","on":true,"confirmed":true,"confirm":DIGEST,"destination":"portal:Ashby","connectionKey":KEY}), "position_write_not_confirmed"),
+            (json!({"op":"apply_request","id":"1","on":true,"confirmed":true,"confirm":DIGEST,"destination":"web:a b; reboot","connectionKey":KEY}), "position_write_not_confirmed"),
+            (json!({"op":"apply_request","id":"1","on":false,"confirmed":false,"destination":"portal:ashby","connectionKey":KEY}), "position_write_request_invalid"),
             (json!({"op":"apply_preview","id":"1;rm","connectionKey":KEY}), "position_write_request_invalid"),
             (json!({"op":"note","id":"1","text":"x".repeat(NOTE_MAX_BYTES + 1),"connectionKey":KEY}), "note_too_long"),
         ] {
@@ -838,7 +905,8 @@ mod tests {
             (json!({"op":"exclude","id":"4","reason":"other","connectionKey":KEY}), vec!["exclude", "4", "--reason", "other"]),
             (json!({"op":"restore","id":"4","connectionKey":KEY}), vec!["restore", "4"]),
             (json!({"op":"write_request","id":"4","on":true,"connectionKey":KEY}), vec!["write-request", "4", "--on"]),
-            (json!({"op":"apply_request","id":"4","on":true,"confirmed":true,"confirm":DIGEST,"connectionKey":KEY}), vec!["apply-request", "4", "--on", "--expect", DIGEST]),
+            // the destination stays in the app: the script is never told it
+            (json!({"op":"apply_request","id":"4","on":true,"confirmed":true,"confirm":DIGEST,"destination":"portal:ashby","connectionKey":KEY}), vec!["apply-request", "4", "--on", "--expect", DIGEST]),
             (json!({"op":"apply_request","id":"4","on":false,"confirmed":false,"connectionKey":KEY}), vec!["apply-request", "4", "--off"]),
             (json!({"op":"apply_preview","id":"4","connectionKey":KEY}), vec!["apply-preview", "4"]),
             (json!({"op":"recheck","id":"4","on":false,"connectionKey":KEY}), vec!["recheck", "4", "--off"]),

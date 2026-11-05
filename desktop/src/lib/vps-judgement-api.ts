@@ -14,9 +14,10 @@ import { apiPath, json, type ApiFetch } from "../shell/api-bridge";
  *   POST   write-request     ask for the CV or the cover letter (`kind`); DELETE withdraws it
  *   POST   apply-request     authorise the application in two steps, as the website's door does:
  *                            `{}` asks the team for the preview («title @ company · host») and its
- *                            digest; `{confirmId}` carries that digest back and authorises exactly
- *                            what was shown (the native side then records it in the team's broker,
- *                            which the CLOSER checks before it sends). DELETE withdraws.
+ *                            digest and destination; `{confirmId, destination}` carries both back and
+ *                            authorises exactly what was shown (the native side compares the destination
+ *                            with the one the team's script writes, and only then records it in the team's
+ *                            broker, which the CLOSER checks before it sends). DELETE withdraws.
  *   POST   recheck-request   ask for a new analysis; DELETE withdraws it
  *
  * Before each write the native side is asked which team this is (`..._target`, local files only):
@@ -58,6 +59,8 @@ const DIRECTIONS = new Set(["more_like_this", "less_like_this"]);
 const WRITE_KINDS = new Set(["cv", "cover_letter"]);
 /** The preview's digest (sha-256, lowercase hex), the only thing a confirmation carries. */
 const DIGEST = /^[0-9a-f]{64}$/;
+/** The closed destination of an application: what the preview shows and the broker records (the same shape the host checks). */
+const DESTINATION = /^((web|email):[a-z0-9.-]{3,253}|portal:[a-z]{2,20})$/;
 
 const ROUTES: Route[] = [
   {
@@ -147,16 +150,23 @@ const ROUTES: Route[] = [
     build: (id, body) => {
       if (method === "DELETE") return { op: "apply_request", id, on: false, confirmed: false };
       if (body.confirmId === undefined && body.confirmed === undefined) return { op: "apply_preview", id };
-      if (typeof body.confirmId === "string" && DIGEST.test(body.confirmId)) {
-        return { op: "apply_request", id, on: true, confirmed: true, confirm: body.confirmId };
+      // the confirmation carries the digest AND the destination of the preview the person saw: the command compares it with
+      // the one the team's script writes before anything reaches the broker
+      if (typeof body.confirmId === "string" && DIGEST.test(body.confirmId) && typeof body.destination === "string" && DESTINATION.test(body.destination)) {
+        return { op: "apply_request", id, on: true, confirmed: true, confirm: body.confirmId, destination: body.destination };
       }
       return json({ error: "position_write_not_confirmed" }, 400);
     },
     shape: (id, request, reply) => {
       if (request.op === "apply_preview") {
-        const preview = typeof reply.summary === "string" && reply.summary.trim() && typeof reply.confirm === "string" && DIGEST.test(reply.confirm);
-        // A preview that cannot be shown is no state the dialog reads: it says the refusal.
-        return preview ? { ok: true, state: "awaiting_confirm", id: reply.confirm, summary: reply.summary, expiresAt: null, source: "vps" } : { ok: false, source: "vps" };
+        const preview =
+          typeof reply.summary === "string" && reply.summary.trim() && typeof reply.confirm === "string" && DIGEST.test(reply.confirm) &&
+          typeof reply.destination === "string" && DESTINATION.test(reply.destination);
+        // A preview that cannot be shown is no state the dialog reads: it says the refusal. One with no destination of its own is
+        // not shown either (a team older than the destination): its confirmation could not be matched, so it is not offered.
+        return preview
+          ? { ok: true, state: "awaiting_confirm", id: reply.confirm, summary: reply.summary, destination: reply.destination, expiresAt: null, source: "vps" }
+          : { ok: false, source: "vps" };
       }
       return { ok: true, state: "queued", id, apply_requested: request.on === true, source: "vps" };
     },
