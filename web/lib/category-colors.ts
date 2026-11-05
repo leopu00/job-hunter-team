@@ -82,9 +82,11 @@ export function ensureCategoryPalette(): void {
   installed = true;
   let pending: ReturnType<typeof setTimeout> | null = null;
   const schedule = () => {
-    if (pending !== null) return;
+    if (pending !== null || typeof document === "undefined") return;
     pending = setTimeout(() => {
       pending = null;
+      // The page may be gone by the time the timer fires (a test environment torn down, a closed window).
+      if (typeof document === "undefined") return;
       applyCategoryPalette();
     }, 0);
   };
