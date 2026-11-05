@@ -95,33 +95,33 @@ const LOCAL_OWNER_UNAVAILABLE = copy(
   "Try again. If it happens again, restart Job Hunter Team.",
 );
 const LOCAL_UNSUPPORTED = copy(
-  "Il team su questo computer non è disponibile su questo sistema.",
-  "Usa una VPS per far lavorare il team.",
+  "La squadra su questo computer non è disponibile su questo sistema.",
+  "Usa una VPS per far lavorare la squadra.",
   "Running the team on this computer is not available on this system.",
   "Use a VPS to run the team.",
 );
 const RUNTIME_PREPARE = copy(
-  "La preparazione dell’ambiente del team non è riuscita.",
+  "La preparazione dell’ambiente della squadra non è riuscita.",
   "Controlla la connessione a internet e riprova.",
   "Preparing the team’s environment did not succeed.",
   "Check your internet connection and try again.",
 );
 /** The server answered the download with an error (the file is not there, or it is busy): not a connection problem. */
 const RUNTIME_DOWNLOAD_REFUSED = copy(
-  "Il server non ha consegnato il pacchetto dell’ambiente del team.",
+  "Il server non ha consegnato il pacchetto dell’ambiente della squadra.",
   "Riprova fra qualche minuto. Se si ripete, aggiorna Job Hunter Team.",
   "The server did not hand over the team’s environment package.",
   "Try again in a few minutes. If it happens again, update Job Hunter Team.",
 );
 /** The program that downloads (curl) did not run on this computer: missing, or refused by the libraries it was given. */
 const RUNTIME_DOWNLOAD_TOOL = copy(
-  "Il programma che scarica l’ambiente del team non si è avviato su questo computer.",
+  "Il programma che scarica l’ambiente della squadra non si è avviato su questo computer.",
   "Riavvia Job Hunter Team. Se si ripete, installa o ripara curl su questo computer.",
   "The program that downloads the team’s environment could not run on this computer.",
   "Restart Job Hunter Team. If it happens again, install or repair curl on this computer.",
 );
 const RUNTIME_INTEGRITY = copy(
-  "Il pacchetto dell’ambiente del team non supera la verifica di integrità.",
+  "Il pacchetto dell’ambiente della squadra non supera la verifica di integrità.",
   "Non usarlo: aggiorna Job Hunter Team all’ultima versione e riprova.",
   "The team environment package failed its integrity check.",
   "Do not use it: update Job Hunter Team to the latest version and try again.",
@@ -141,19 +141,19 @@ const RUNTIME_PAYLOAD_INVALID = copy(
   "Try again. If it happens again, check your internet connection or update Job Hunter Team.",
 );
 const RUNTIME_MISSING = copy(
-  "L’ambiente del team non è installato su questo computer.",
+  "L’ambiente della squadra non è installato su questo computer.",
   "Riparti dalla configurazione tecnica.",
   "The team environment is not installed on this computer.",
   "Start again from the technical setup.",
 );
 const CONTAINER_ENGINE_MISSING = copy(
-  "Il programma Docker non si trova su questo computer, quindi non posso parlare con il team.",
+  "Il programma Docker non si trova su questo computer, quindi non posso parlare con la squadra.",
   "Installa Docker (o riavvia Job Hunter Team dopo averlo installato) e riprova.",
   "The Docker program is not on this computer, so I cannot talk to the team.",
   "Install Docker (or restart Job Hunter Team once it is installed) and try again.",
 );
 const CONTAINER = copy(
-  "Il container del team non risulta pronto.",
+  "Il container della squadra non risulta pronto.",
   "Riprova. Se si ripete, riavvia il computer e ricomincia dalla configurazione.",
   "The team container is not ready.",
   "Try again. If it happens again, restart the computer and redo the setup.",
@@ -190,7 +190,7 @@ const TEAM_START = copy(
 );
 const HOST_SAVED = copy(
   "La destinazione salvata non è più disponibile.",
-  "Scegli di nuovo dove far lavorare il team.",
+  "Scegli di nuovo dove far lavorare la squadra.",
   "The saved destination is no longer available.",
   "Choose again where the team should run.",
 );
@@ -231,14 +231,14 @@ const LOCAL_STORAGE = copy(
   "Check the free disk space and try again.",
 );
 const PROCESS = copy(
-  "Un programma necessario al team non è partito o non ha risposto.",
+  "Un programma necessario alla squadra non è partito o non ha risposto.",
   "Riprova. Se si ripete, riavvia Job Hunter Team.",
   "A program the team needs did not start or did not answer.",
   "Try again. If it happens again, restart Job Hunter Team.",
 );
 const TEAM_UNREACHABLE = copy(
-  "Il team non è raggiungibile.",
-  "Controlla che il computer o la VPS del team sia acceso e connesso, poi riprova.",
+  "La squadra non è raggiungibile.",
+  "Controlla che il computer o la VPS della squadra sia acceso e connesso, poi riprova.",
   "The team cannot be reached.",
   "Check that the team’s computer or VPS is on and connected, then try again.",
 );
@@ -249,13 +249,13 @@ const SECURE_LINK_FAILED = copy(
   "Try again. If it happens again, close and reopen Job Hunter Team; if it goes on, report it from the app.",
 );
 const SECURE_LINK_UNPREPARED = copy(
-  "Non riesco a preparare il collegamento sicuro al team su questo computer.",
+  "Non riesco a preparare il collegamento sicuro alla squadra su questo computer.",
   "Chiudi e riapri Job Hunter Team e riprova. Se si ripete, segnalalo dall’app.",
   "I cannot prepare the secure link to the team on this computer.",
   "Close and reopen Job Hunter Team, then try again. If it happens again, report it from the app.",
 );
 const ASSISTANT_UNVERIFIED = copy(
-  "Il team risponde, ma non riesco a verificare che l’Assistente sia pronto per la chat.",
+  "La squadra risponde, ma non riesco a verificare che l’Assistente sia pronto per la chat.",
   "Riprova tra poco. Se si ripete, apri il Pannello Agenti e controlla che il Capitano e l’Assistente siano accesi.",
   "The team answers, but I cannot verify that the Assistant is ready to chat.",
   "Try again in a moment. If it happens again, open the Agents panel and check that the Captain and the Assistant are on.",
@@ -409,18 +409,18 @@ const APPLY_CONSENT_OFF = copy(
 );
 const APPLY_SETTINGS_UNREADABLE = copy(
     "Non riesco a leggere le impostazioni dell’invio automatico.",
-    "Controlla le impostazioni e riprova; se resta così, guarda lo stato del team.",
+    "Controlla le impostazioni e riprova; se resta così, guarda lo stato della squadra.",
     "I cannot read the settings of automatic sending.",
     "Check the settings and try again; if it stays so, look at the team’s state.",
 );
 const APPLY_NOT_READY = copy(
     "Questa posizione non è ancora pronta per l’invio.",
-    "Aspetta che il team prepari CV e lettera, poi riprova.",
+    "Aspetta che la squadra prepari CV e lettera, poi riprova.",
     "This position is not ready to be sent yet.",
     "Wait for the team to prepare the CV and the letter, then try again.",
 );
 const APPLY_WITHDRAWAL_UNCONFIRMED = copy(
-    "Il team non ha registrato l’autorizzazione e non so se l’abbia ritirata.",
+    "La squadra non ha registrato l’autorizzazione e non so se l’abbia ritirata.",
     "Aggiorna la pagina e guarda lo stato della candidatura prima di riprovare.",
     "The team did not record the authorisation and I do not know whether it was withdrawn.",
     "Refresh the page and look at the state of the application before trying again.",
@@ -444,7 +444,7 @@ const APPLY_PREVIEW_CHANGED = copy(
     "Open the preview again and confirm again.",
 );
 const APPLY_NOT_RECORDED = copy(
-    "Il team non ha registrato l’autorizzazione.",
+    "La squadra non ha registrato l’autorizzazione.",
     "Aggiorna la pagina e riprova.",
     "The team did not record the authorisation.",
     "Refresh the page and try again.",
@@ -554,13 +554,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Try again: the app installs it by itself. If it happens again, check your internet connection.",
   ),
   podman_network_unready: copy(
-    "La rete del team dentro la macchina Podman non si è preparata.",
+    "La rete della squadra dentro la macchina Podman non si è preparata.",
     "Riprova. Se si ripete, riavvia il computer e riprova: il registro della preparazione dice quale controllo non è passato.",
     "The team’s network inside the Podman machine did not get ready.",
     "Try again. If it happens again, restart the computer and try again: the setup log says which check did not pass.",
   ),
   podman_version_mismatch: copy(
-    "Su questo computer c’è Podman di una versione su cui il team non gira: serve Podman 6, dalla 6.0.2 in su.",
+    "Su questo computer c’è Podman di una versione su cui la squadra non gira: serve Podman 6, dalla 6.0.2 in su.",
     "Disinstalla Podman dalle app di Windows, poi premi Riprova: l’app installa la versione giusta. Un Podman 6 dalla 6.0.2 in su va bene così com’è.",
     "This computer has a Podman version the team does not run on: it needs Podman 6, from 6.0.2 on.",
     "Uninstall Podman from Windows’ apps, then press Try again: the app installs the right version. A Podman 6 from 6.0.2 on is fine as it is.",
@@ -580,7 +580,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Download Homebrew’s installer package (the .pkg file) from its official page brew.sh, open it and complete the macOS installation, then come back here and press Try again.",
   ),
   wsl_not_ready: copy(
-    "WSL non è pronto: su Windows è lui a far girare la macchina Podman del team.",
+    "WSL non è pronto: su Windows è lui a far girare la macchina Podman della squadra.",
     "Apri il Microsoft Store, installa o aggiorna «Sottosistema Windows per Linux», riavvia il computer e premi Riprova.",
     "WSL is not ready: on Windows it runs the team’s Podman machine.",
     "Open the Microsoft Store, install or update “Windows Subsystem for Linux”, restart the computer and press Try again.",
@@ -639,7 +639,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // team on empty volumes, and nothing moves them yet.
   runtime_change_requires_migration: copy(
     "Su questo Mac Job Hunter Team è già installato con un altro motore dei container (Docker con Colima). Se l’app passasse a Podman, le CLI dei provider, i segreti del broker (la password della posta e gli accessi ai portali, LinkedIn compreso) e il collegamento a Telegram resterebbero nel motore di prima.",
-    "Per ora l’app non può spostarli: continua a usare il team come l’hai installato, oppure scegli una VPS. Il profilo, i CV e i dati in ~/.jht e in Documenti › Job Hunter Team restano dove sono.",
+    "Per ora l’app non può spostarli: continua a usare la squadra come l’hai installata, oppure scegli una VPS. Il profilo, i CV e i dati in ~/.jht e in Documenti › Job Hunter Team restano dove sono.",
     "On this Mac Job Hunter Team is already installed with another container engine (Docker with Colima). If the app switched to Podman, the provider CLIs, the broker's secrets (the mail password and the portal logins, LinkedIn included) and the Telegram connection would stay behind in the previous engine.",
     "For now the app cannot move them: keep using the team the way you installed it, or choose a VPS. Your profile, CVs and the data in ~/.jht and in Documents › Job Hunter Team stay where they are.",
   ),
@@ -687,13 +687,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   container_timeout: CONTAINER,
   container_unavailable: TEAM_UNREACHABLE,
   container_version_incompatible: copy(
-    "La versione del team installata non coincide con quella richiesta da questa app.",
+    "La versione della squadra installata non coincide con quella richiesta da questa app.",
     "Aggiorna Job Hunter Team all’ultima versione e riparti dalla configurazione.",
     "The installed team version does not match the one this app needs.",
     "Update Job Hunter Team to the latest version and redo the setup.",
   ),
   snapshot_failed: copy(
-    "Il team risponde, ma non riesco a leggere il suo stato.",
+    "La squadra risponde, ma non riesco a leggere il suo stato.",
     "Attendi qualche secondo e riprova.",
     "The team answers, but I cannot read its state.",
     "Wait a few seconds and try again.",
@@ -739,7 +739,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   provider_limits_unverified: copy(
     "Limiti del provider non verificati: la squadra è partita senza sapere quanto resta del tuo abbonamento.",
-    "Se il team si ferma presto, controlla i limiti nella pagina del provider.",
+    "Se la squadra si ferma presto, controlla i limiti nella pagina del provider.",
     "Provider limits not verified: the team started without knowing how much of your subscription is left.",
     "If the team stops early, check the limits on the provider’s page.",
   ),
@@ -801,7 +801,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   host_not_configured: HOST_SAVED,
   host_config_invalid: HOST_SAVED,
   resume_runtime_not_ready: copy(
-    "L’ambiente del team salvato non risulta più pronto.",
+    "L’ambiente della squadra salvato non risulta più pronto.",
     "Riparti dalla configurazione tecnica.",
     "The saved team environment is no longer ready.",
     "Start again from the technical setup.",
@@ -827,26 +827,26 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
 
   // ── Existing team on a VPS ───────────────────────────────────────────────
   existing_team_vps_required: copy(
-    "Per collegare il team esistente serve una VPS.",
-    "Inserisci i dati di accesso della VPS su cui gira il team.",
+    "Per collegare la squadra esistente serve una VPS.",
+    "Inserisci i dati di accesso della VPS su cui gira la squadra.",
     "Connecting the existing team needs a VPS.",
     "Enter the access details of the VPS where the team runs.",
   ),
   invalid_team_id: BAD_DATA,
   existing_team_identity_mismatch: copy(
-    "Il team trovato sulla VPS appartiene a un altro team o account.",
+    "La squadra trovata sulla VPS appartiene a un’altra squadra o account.",
     "Controlla di aver indicato la VPS giusta.",
     "The team found on the VPS belongs to another team or account.",
     "Check that you entered the right VPS.",
   ),
   account_team_mismatch: copy(
-    "Il team trovato non appartiene a questo account Google.",
-    "Entra con l’account che ha creato il team, oppure indica un’altra VPS.",
+    "La squadra trovata non appartiene a questo account Google.",
+    "Entra con l’account che ha creato la squadra, oppure indica un’altra VPS.",
     "The team found does not belong to this Google account.",
     "Sign in with the account that created the team, or enter another VPS.",
   ),
   existing_team_not_active: copy(
-    "Nel team registrato non sono attive tutte le sessioni sulla VPS.",
+    "Nella squadra registrata non sono attive tutte le sessioni sulla VPS.",
     "Servono sia il capitano sia l’assistente: avviali sulla VPS e riprova. Gli annunci si possono comunque leggere in sola lettura.",
     "Not every session of the registered team is running on the VPS.",
     "Both the captain and the assistant must be running: start them on the VPS and try again. The positions can still be read in read-only mode.",
@@ -1701,13 +1701,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Ask whoever manages the VPS for sudo without a password, or to install podman, podman-compose and uidmap and enable lingering for your user, then try again.",
   ),
   vps_podman_missing: copy(
-    "Sulla VPS manca Podman, che serve per far girare il team.",
+    "Sulla VPS manca Podman, che serve per far girare la squadra.",
     "Chiedi a chi gestisce la VPS di installare Podman, poi riprova.",
     "Podman is not installed on the VPS, and the team needs it to run.",
     "Ask whoever manages the VPS to install Podman, then try again.",
   ),
   podman_rootful_refused: copy(
-    "Sulla VPS l’installazione girerebbe come amministratore (root), ma il team si installa solo con Podman senza privilegi.",
+    "Sulla VPS l’installazione girerebbe come amministratore (root), ma la squadra si installa solo con Podman senza privilegi.",
     "Chiedi a chi gestisce la VPS un utente normale, non root, e collegati con quello.",
     "On the VPS the install would run as the administrator (root), but the team only installs with Podman without privileges.",
     "Ask whoever manages the VPS for a regular user, not root, and connect with that one.",
@@ -1737,7 +1737,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Ask whoever manages the VPS to check that the podman info command works for your user, then try again.",
   ),
   podman_linger_missing: copy(
-    "Sulla VPS il tuo utente non può tenere acceso il team quando ti disconnetti.",
+    "Sulla VPS il tuo utente non può tenere accesa la squadra quando ti disconnetti.",
     "Chiedi a chi gestisce la VPS di attivare il linger per il tuo utente (loginctl enable-linger), poi riprova.",
     "On the VPS your user cannot keep the team running after you disconnect.",
     "Ask whoever manages the VPS to enable lingering for your user (loginctl enable-linger), then try again.",
@@ -1752,7 +1752,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // empty volumes, and nothing moves them yet. The install stopped before changing anything.
   vps_runtime_change_requires_migration: copy(
     "Su questa VPS Job Hunter Team gira già con Docker. Passarlo a Podman richiede una migrazione, che oggi l’app non sa ancora fare da sola.",
-    "I dati del team restano dove sono, sulla VPS: non è stato spostato né cancellato nulla. Collegati al team che c’è già, senza reinstallarlo, oppure scegli un’altra VPS.",
+    "I dati della squadra restano dove sono, sulla VPS: non è stato spostato né cancellato nulla. Collegati alla squadra che c’è già, senza reinstallarla, oppure scegli un’altra VPS.",
     "This VPS already runs Job Hunter Team with Docker. Moving it to Podman needs a migration, which the app cannot do by itself yet.",
     "The team’s data stays where it is, on the VPS: nothing was moved or deleted. Connect to the team that is already there, without reinstalling it, or choose another VPS.",
   ),
@@ -1760,7 +1760,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // configuration under it. The install stopped before changing anything.
   vps_team_running: copy(
     "Su questa VPS Job Hunter Team è acceso: installarlo di nuovo ora cambierebbe la sua configurazione mentre gira.",
-    "Non è stato cambiato nulla. Collegati al team che c’è già, senza reinstallarlo; oppure fermalo sulla VPS con «jht down» e riprova.",
+    "Non è stato cambiato nulla. Collegati alla squadra che c’è già, senza reinstallarla; oppure fermala sulla VPS con «jht down» e riprova.",
     "Job Hunter Team is running on this VPS: installing it again now would change its configuration while it runs.",
     "Nothing was changed. Connect to the team that is already there, without reinstalling it; or stop it on the VPS with «jht down» and try again.",
   ),
@@ -1806,7 +1806,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   status_failed: TEAM_UNREACHABLE,
   subscribe_failed: TEAM_UNREACHABLE,
   disconnected: copy(
-    "La chat non è collegata al team.",
+    "La chat non è collegata alla squadra.",
     "Ricollega la chat e riprova.",
     "The chat is not connected to the team.",
     "Reconnect the chat and try again.",
@@ -1836,32 +1836,32 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Send the message again.",
   ),
   invalid_agent: copy(
-    "Questo agente non esiste nel team.",
+    "Questo agente non esiste nella squadra.",
     "Scegli un agente dall’elenco.",
     "This agent does not exist in the team.",
     "Choose an agent from the list.",
   ),
   agent_not_running: copy(
     "L’agente non è acceso.",
-    "Accendi il team, poi rimanda il messaggio.",
+    "Accendi la squadra, poi rimanda il messaggio.",
     "The agent is not running.",
     "Start the team, then send the message again.",
   ),
   mentor_not_active: copy(
     "Il Mentor non è attivo in questo momento.",
-    "Il team lo accende da solo, quando le prime posizioni hanno un punteggio o, se si era fermato, a breve: scrivigli allora.",
+    "La squadra lo accende da sola, quando le prime posizioni hanno un punteggio o, se si era fermato, a breve: scrivigli allora.",
     "The Mentor is not active at the moment.",
     "The team switches it on by itself, once the first positions have a score or, if it had stopped, shortly after: write to it then.",
   ),
   team_not_running: copy(
-    "Il team non è acceso.",
-    "Accendi il team, poi rimanda il messaggio.",
+    "La squadra non è accesa.",
+    "Accendi la squadra, poi rimanda il messaggio.",
     "The team is not running.",
     "Start the team, then send the message again.",
   ),
   read_only_link: copy(
     "Questa vista è in sola lettura: il messaggio non è stato inviato.",
-    "Collega il team con «Conferma e collega» per scrivere.",
+    "Collega la squadra con «Conferma e collega» per scrivere.",
     "This view is read only: the message was not sent.",
     "Connect the team with “Confirm and connect” to write.",
   ),
@@ -1909,20 +1909,20 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   // The chat of this computer's own team (G7): the generic "computer or VPS off" sentence was wrong for it.
   local_team_not_running: copy(
-    "Il team di questo computer non è acceso.",
+    "La squadra di questo computer non è accesa.",
     "Avvia la squadra e riprova.",
     "The team on this computer is not running.",
     "Start the team and try again.",
   ),
   // The Swipe of this computer's team: a verdict is written only on the deck it was read from.
   deck_outdated: copy(
-    "Il mazzo che stai guardando non è più quello del team.",
+    "Il mazzo che stai guardando non è più quello della squadra.",
     "Aggiorna la pagina per rileggerlo e giudica di nuovo.",
     "The deck you are looking at is no longer the team's.",
     "Refresh the page to read it again and judge again.",
   ),
   position_not_found: copy(
-    "Questa posizione non c’è più nel team.",
+    "Questa posizione non c’è più nella squadra.",
     "Aggiorna la pagina: il mazzo si rilegge.",
     "This position is no longer in the team.",
     "Refresh the page: the deck is read again.",
@@ -1935,7 +1935,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "There is nothing more to do from here.",
   ),
   applied_by_team: copy(
-    "La candidatura l’ha inviata il team, non tu.",
+    "La candidatura l’ha inviata la squadra, non tu.",
     "Da qui non si può annullare.",
     "The team sent this application, not you.",
     "It cannot be taken back from here.",
@@ -1953,7 +1953,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Ask for the CV first.",
   ),
   geocode_refused: copy(
-    "Il team non ha registrato la richiesta di posizionare l’ufficio.",
+    "La squadra non ha registrato la richiesta di posizionare l’ufficio.",
     "Aggiorna la pagina e riprova.",
     "The team did not record the request to place the office.",
     "Refresh the page and try again.",
@@ -1990,7 +1990,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   request_empty: copy(
     "La richiesta è vuota.",
-    "Scrivi cosa vuoi chiedere al team.",
+    "Scrivi cosa vuoi chiedere alla squadra.",
     "The request is empty.",
     "Write what you want to ask the team.",
   ),
@@ -2001,50 +2001,50 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Shorten it (2000 characters at most) and send again.",
   ),
   write_request_refused: copy(
-    "Il team non ha registrato la richiesta del CV o della lettera.",
+    "La squadra non ha registrato la richiesta del CV o della lettera.",
     "Aggiorna la pagina e riprova.",
     "The team did not record the request for the CV or the letter.",
     "Refresh the page and try again.",
   ),
   feedback_refused: copy(
-    "Il team non ha registrato il giudizio.",
-    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "La squadra non ha registrato il giudizio.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato della squadra.",
     "The team did not record the verdict.",
     "Refresh the page and try again; if it stays so, look at the team's state.",
   ),
   exclude_refused: copy(
-    "Il team non ha escluso la posizione.",
-    "Aggiorna la pagina e riprova; se resta così, guarda lo stato del team.",
+    "La squadra non ha escluso la posizione.",
+    "Aggiorna la pagina e riprova; se resta così, guarda lo stato della squadra.",
     "The team did not exclude the position.",
     "Refresh the page and try again; if it stays so, look at the team's state.",
   ),
   note_invalid: copy(
-    "La nota non è un testo che il team accetta.",
+    "La nota non è un testo che la squadra accetta.",
     "Scrivila di nuovo, più semplice.",
     "The note is not a text the team accepts.",
     "Write it again, simpler.",
   ),
   profile_progress_invalid: copy(
     "Non riesco a leggere a che punto è il profilo.",
-    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
     "The profile's progress cannot be read.",
     "Try again in a moment; if it stays so, look at the team's state.",
   ),
   profile_unavailable: copy(
-    "Non riesco a leggere il profilo del team.",
-    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "Non riesco a leggere il profilo della squadra.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
     "The team's profile cannot be read.",
     "Try again in a moment; if it stays so, look at the team's state.",
   ),
   profile_unreadable: copy(
     "Il file del profilo c’è ma non si legge.",
-    "Chiedi all’Assistente di riscriverlo, o controlla il file dal team.",
+    "Chiedi all’Assistente di riscriverlo, o controlla il file dalla squadra.",
     "The profile file is there but cannot be read.",
     "Ask the Assistant to write it again, or check the file from the team.",
   ),
   team_start_unavailable: copy(
-    "Non riesco a leggere a che punto è la prima partenza del team.",
-    "Riprova tra poco; se resta così, guarda lo stato del team.",
+    "Non riesco a leggere a che punto è la prima partenza della squadra.",
+    "Riprova tra poco; se resta così, guarda lo stato della squadra.",
     "The team's first start cannot be read.",
     "Try again in a moment; if it stays so, look at the team's state.",
   ),
@@ -2131,7 +2131,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   agent_stuck: copy(
     "L’agente non risponde.",
-    "Attendi qualche minuto: il team lo riavvia da solo. Poi rimanda il messaggio.",
+    "Attendi qualche minuto: la squadra lo riavvia da sola. Poi rimanda il messaggio.",
     "The agent is not responding.",
     "Wait a few minutes: the team restarts it by itself. Then send the message again.",
   ),
@@ -2146,7 +2146,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   home_missing: RUNTIME_MISSING,
   invalid_password: copy(
     "La chiave dello schermo è danneggiata.",
-    "Riavvia il team: la chiave viene rigenerata.",
+    "Riavvia la squadra: la chiave viene rigenerata.",
     "The screen key is damaged.",
     "Restart the team: the key is generated again.",
   ),
@@ -2158,13 +2158,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   live_screen_failed: copy(
     "Non riesco a collegarmi allo schermo del CLOSER.",
-    "Controlla che il team sia acceso, poi riapri la finestra.",
+    "Controlla che la squadra sia accesa, poi riapri la finestra.",
     "I cannot connect to the CLOSER’s screen.",
     "Check that the team is running, then reopen the window.",
   ),
   screen_not_running: copy(
     "Lo schermo del CLOSER non è acceso.",
-    "Accendi il team: la finestra si collega da sola.",
+    "Accendi la squadra: la finestra si collega da sola.",
     "The CLOSER’s screen is not on.",
     "Start the team: the window connects by itself.",
   ),
@@ -2184,7 +2184,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   view_unavailable: copy(
     "Lo schermo di accesso a LinkedIn non è disponibile.",
-    "Controlla che il team sia acceso e riprova.",
+    "Controlla che la squadra sia accesa e riprova.",
     "The LinkedIn login screen is not available.",
     "Check that the team is running and try again.",
   ),
@@ -2222,7 +2222,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   ),
   mail_unavailable: copy(
     "Il servizio della posta non è raggiungibile.",
-    "Controlla che il team sia acceso e riprova.",
+    "Controlla che la squadra sia accesa e riprova.",
     "The mail service cannot be reached.",
     "Check that the team is running and try again.",
   ),
@@ -2306,7 +2306,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Try the import again.",
   ),
   existing_team_connect_failed: copy(
-    "Il collegamento al team non è riuscito. Nessun dato sensibile è stato salvato.",
+    "Il collegamento alla squadra non è riuscito. Nessun dato sensibile è stato salvato.",
     "Controlla i dati della VPS e riprova.",
     "Connecting to the team did not succeed. No sensitive data was saved.",
     "Check the VPS details and try again.",
@@ -2499,7 +2499,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   // ── Disk space (host_vitals.py, the launcher, `jht team start`, `jht upgrade`) ──
   disk_warning: copy(
     "Lo spazio sul disco sta finendo.",
-    "Libera un po’ di spazio, altrimenti il team smetterà di avviare nuovi agenti e aggiornamenti.",
+    "Libera un po’ di spazio, altrimenti la squadra smetterà di avviare nuovi agenti e aggiornamenti.",
     "Disk space is running low.",
     "Free some space, or the team will stop starting new agents and updates.",
   ),
