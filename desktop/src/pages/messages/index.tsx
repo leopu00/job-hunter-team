@@ -4,6 +4,10 @@ import { useLeaveReadOnly } from "../../lib/leave-read-only";
 import { useReconfirmExistingTeam } from "../../lib/reconfirm-existing-team";
 import type { ExistingTeamBridge } from "../../lib/existing-team";
 import type { PageProps } from "../types";
+import { appLocale } from "../../lib/app-locale";
+import { AgentInfoTab, AgentTerminalTab } from "../agents/AgentPage";
+import { TEAM_TABS_TEXT } from "./team-tabs.i18n";
+import type { AgentTabs } from "./DirectChatScreen";
 import DirectChatScreen from "./DirectChatScreen";
 import { isChatAgentId } from "./chat-agents";
 import { loadChatSessions } from "./chat-sessions";
@@ -19,6 +23,17 @@ import { loadQuietFacts } from "./quiet-facts";
 export default function MessagesPage({ search, reconfirmBridge, embedded }: PageProps & { reconfirmBridge?: ExistingTeamBridge; embedded?: boolean }) {
   const requestedAgent = search.get("agent");
   const initialAgentId = isChatAgentId(requestedAgent) ? requestedAgent : "capitano";
+  const requestedTab = search.get("tab");
+  const words = TEAM_TABS_TEXT[appLocale()];
+  // next to the chat, the agent's info and its terminal (read only), in the same place
+  const agentTabs: AgentTabs = {
+    tabs: [
+      { id: "info", label: words.info },
+      { id: "terminal", label: words.terminal },
+    ],
+    initial: requestedTab === "info" || requestedTab === "terminal" ? requestedTab : undefined,
+    render: (agent, tab) => (tab === "terminal" ? <AgentTerminalTab key={agent.session} session={agent.session} /> : <AgentInfoTab key={agent.session} session={agent.session} />),
+  };
   const readOnly = useExistingTeamReadOnly() !== null;
   const leaveReadOnly = useLeaveReadOnly();
   const reconfirm = useReconfirmExistingTeam();
@@ -28,7 +43,7 @@ export default function MessagesPage({ search, reconfirmBridge, embedded }: Page
   const onConnect = readOnly ? (reconfirm ? () => setConfirming(true) : leaveReadOnly ?? undefined) : undefined;
   return (
     <>
-      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} loadQuietFacts={loadQuietFacts} loadSessions={loadChatSessions} />
+      <DirectChatScreen client={directChatClient} initialAgentId={initialAgentId} embedded={embedded} writeLocked={readOnly} onConnect={onConnect} loadQuietFacts={loadQuietFacts} loadSessions={loadChatSessions} agentTabs={embedded ? undefined : agentTabs} />
       {readOnly && reconfirm && confirming && (
         <ExistingTeamReconfirmDialog reconfirm={reconfirm} onClose={() => setConfirming(false)} bridge={reconfirmBridge} />
       )}

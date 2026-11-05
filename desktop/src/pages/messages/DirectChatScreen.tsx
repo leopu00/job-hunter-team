@@ -51,6 +51,7 @@ import { NO_DESTINATION_CODES } from "../../shell/VpsLinkBar";
 import { VPS_LINK_TEXT } from "../../lib/vps-link.i18n";
 import Link from "../../web-shims/next-link";
 import { agentTitle } from "../agents/agent-names";
+import { TEAM_TABS_TEXT } from "./team-tabs.i18n";
 import { conversationsOf, isChatAgentId, sessionOfChatId, type ChatSession } from "./chat-agents";
 
 // The ids are the roles' keys on the VPS; the names come from the dictionary.
@@ -266,6 +267,17 @@ function StatusBar({
   );
 }
 
+export type AgentTabs = {
+  /** The tabs after «Chat», in order. */
+  tabs: readonly { id: string; label: string }[];
+  /** The tab to open first (from the address). */
+  initial?: string;
+  /** What a tab shows for the chosen agent (the session is its tmux name, ANALISTA-2). */
+  render: (agent: { id: string; session: string; label: string; up: boolean }, tab: string) => ReactNode;
+  /** The person chose another tab or agent: the page keeps the address. */
+  onChange?: (agentId: string, tab: string) => void;
+};
+
 export default function DirectChatScreen({
   client,
   voiceInputBridge,
@@ -275,6 +287,7 @@ export default function DirectChatScreen({
   onConnect,
   loadQuietFacts,
   loadSessions,
+  agentTabs,
 }: {
   client: DirectChatClient;
   voiceInputBridge?: VoiceInputBridge;
@@ -295,8 +308,15 @@ export default function DirectChatScreen({
    * (an older shell, a pane inside another page) the list is the eight roles, as it has always been.
    */
   loadSessions?: () => Promise<ChatSession[] | null>;
+  /**
+   * The Team page: next to the chat the agent has other sections (its info, its terminal), shown in the same place
+   * under tabs. `render` gives the section for the chosen agent; the chat is the first tab and stays mounted state-wise
+   * (its connection and its reads are the page's, not the tab's).
+   */
+  agentTabs?: AgentTabs;
 }) {
   const [agentId, setAgentId] = useState<string>(initialAgentId);
+  const [tab, setTab] = useState<string>(agentTabs?.initial ?? "chat");
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
   // The agent's questions: each read brings the open ones and the latest closed ones, whole.
@@ -1009,7 +1029,43 @@ export default function DirectChatScreen({
           </div>
         </header>
         )}
+        {agentTabs && !embedded && (
+          <div
+            role="tablist"
+            aria-label={TEAM_TABS_TEXT[locale].aria}
+            data-testid="team-tabs"
+            className="shrink-0 flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-panel)] px-3 sm:px-4"
+          >
+            {[{ id: "chat", label: TEAM_TABS_TEXT[locale].chat }, ...agentTabs.tabs].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`team-tab-${item.id}`}
+                aria-selected={tab === item.id}
+                data-testid={`team-tab-${item.id}`}
+                onClick={() => {
+                  setTab(item.id);
+                  agentTabs.onChange?.(agentId, item.id);
+                }}
+                className="min-h-10 shrink-0 border-b-2 px-3 text-[14px] font-semibold"
+                style={{
+                  borderColor: tab === item.id ? "var(--color-green)" : "transparent",
+                  color: tab === item.id ? "var(--color-bright)" : "var(--color-muted)",
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
 
+        {agentTabs && !embedded && tab !== "chat" ? (
+          <div role="tabpanel" aria-labelledby={`team-tab-${tab}`} data-testid="team-tab-panel" className="flex-1 min-h-0 overflow-y-auto">
+            {agentTabs.render({ id: selected.id, session: selected.session, label: selected.label, up: selected.up }, tab)}
+          </div>
+        ) : (
+        <>
         <StatusBar status={status} operationError={operationError} reconnecting={reconnecting} agentLine={agentLine} onRetry={() => void retry()} onReadAgain={readAgain} />
         {loadQuietFacts && !embedded && status.state === "ready" && (
           <TeamQuietNotice lastAgentAt={unread.lastAgentAt} loadFacts={loadQuietFacts} />
@@ -1287,6 +1343,8 @@ export default function DirectChatScreen({
             {t.keysHint}
           </p>
         </form>
+        </>
+        )}
       </section>
     </div>
   );
