@@ -108,12 +108,16 @@ def test_the_first_question_is_in_the_same_message_while_the_profile_is_not_read
     assert "Telegram" not in line["text"]
 
 
-def test_a_ready_profile_gets_the_welcome_without_the_question(home):
+def test_a_ready_profile_gets_the_welcome_without_the_question_and_without_the_request_for_the_cv(home):
     home.ready.parent.mkdir(parents=True)
     home.ready.write_text("2026-10-28T10:00:00Z\n", encoding="utf-8")
     home.deliver()
     [line] = home.lines()
-    assert line["text"] == EN["welcome.assistente"]
+    opening = "\n\n".join(EN["welcome.assistente"].split("\n\n")[:2])
+    assert line["text"] == opening + "\n\n" + EN["welcome.assistente_ready"]
+    # nothing is left to send: no CV, no upload command, no folder, no question
+    for asked in ("CV", "jht artifact upload", "allegati", EN["welcome.assistente_first"]):
+        assert asked not in line["text"], asked
 
 
 def test_the_flag_is_written_after_the_line_is_in_the_chat_never_before(home):
@@ -338,3 +342,98 @@ def test_all_seven_prompts_say_the_same_protocol(suffix):
     assert "mkdir -p $JHT_HOME/profile && touch" not in section
     assert "test -f $JHT_HOME/profile/welcomed.flag" not in section
     assert "sent + flag created" not in section
+
+
+# --- the welcome that is already there, whatever its text (JHT-T179) -------------------------------
+
+# The welcome of the first run of the operator's team (30/10): the catalog's text of that day (588 characters, the folder and no upload
+# command) and the first question, as `jht-send` posted it. Today's catalog says something else after the second paragraph, so
+# comparing the chat with today's whole text did not see it, and every start of the team posted the welcome again.
+OLD_EN_WELCOME = (
+    "Hi! \U0001F44B\n\nI'm the Job Hunter Team Assistant \u2014 your point of contact with the AI team that's about to start looking for jobs for you.\n\n"
+    "To get going I need to know you. Paste the text of your CV here, or just tell me in a couple of lines who you are and what you're looking for "
+    "\u2014 role, sector, city. If you'd rather give me the file, put it in the Documents/Job Hunter Team/allegati folder and tell me here. From that I build "
+    "the profile and the rest of the team gets to work for you.\n\nA draft or rough notes are perfectly fine, no need to have anything polished. \U0001F4C4 "
+    "I start from what you have."
+)
+
+
+def _chat_of_that_evening(home: Home, welcome: str) -> None:
+    """The welcome of 30/10, an exchange, and the profile ready since: what the chat of the operator's team held at 22:00 on 05/11."""
+    home.chat.parent.mkdir(parents=True)
+    rows = [
+        {"role": "assistant", "text": welcome + "\n\n" + EN["welcome.assistente_first"], "done": True},
+        {"role": "user", "text": "Mi chiamo Prova, cerco lavoro come analista dati a Milano.", "done": True},
+        {"role": "assistant", "text": "Thanks! How many years of experience do you have?", "done": True},
+        {"role": "assistant", "text": "I've read your CV and your profile is ready.", "done": True},
+    ]
+    home.chat.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    home.ready.parent.mkdir(parents=True, exist_ok=True)
+    home.ready.write_text("2026-10-30T08:30:00Z\n", encoding="utf-8")
+
+
+def test_the_welcome_of_an_older_text_is_still_the_welcome_and_the_team_restarting_posts_no_new_one(home):
+    assert OLD_EN_WELCOME != EN["welcome.assistente"] and not EN["welcome.assistente"].startswith(OLD_EN_WELCOME)
+    _chat_of_that_evening(home, OLD_EN_WELCOME)
+    before = home.chat.read_text(encoding="utf-8")
+    done = home.deliver()
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "WELCOME_DELIVERED chat=already telegram=replay flag=ok"
+    assert home.chat.read_text(encoding="utf-8") == before, "not a line more in the chat"
+    assert home.flag.exists()
+
+
+def test_a_start_after_another_start_still_posts_nothing(home):
+    _chat_of_that_evening(home, OLD_EN_WELCOME)
+    for _ in range(3):
+        assert "chat=already" in home.deliver().stdout
+    assert len(home.lines()) == 4
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_a_welcome_posted_in_any_language_is_the_welcome_whatever_language_the_catalog_speaks_now(home, lang):
+    # the chat holds the welcome in `lang`; the catalog in use is English
+    _chat_of_that_evening(home, _catalog(lang)["welcome.assistente"])
+    assert "chat=already" in home.deliver().stdout
+    assert len(home.lines()) == 4
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_welcome_is_still_the_welcome_with_the_first_question_or_the_ready_line_after_it(home, lang):
+    catalog = _catalog(lang)
+    for tail in (catalog["welcome.assistente_first"], catalog["welcome.assistente_ready"]):
+        home.chat.parent.mkdir(parents=True, exist_ok=True)
+        home.chat.write_text(json.dumps({"role": "assistant", "text": catalog["welcome.assistente"] + "\n\n" + tail}) + "\n", encoding="utf-8")
+        assert "chat=already" in home.deliver().stdout
+
+
+def test_a_line_that_only_starts_like_a_greeting_is_not_the_welcome(home):
+    home.chat.parent.mkdir(parents=True)
+    rows = [
+        {"role": "assistant", "text": "Hi! \U0001F44B How can I help?"},
+        {"role": "assistant", "text": "Ciao! \U0001F44B Ho trovato 3 posizioni nuove per te."},
+        {"role": "user", "text": OLD_EN_WELCOME},
+    ]
+    home.chat.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    assert "chat=posted" in home.deliver().stdout
+
+
+def test_a_ready_profile_with_no_welcome_in_the_chat_is_welcomed_once_without_the_cv_and_never_again(home):
+    home.ready.parent.mkdir(parents=True)
+    home.ready.write_text("2026-10-30T08:30:00Z\n", encoding="utf-8")
+    assert "chat=posted" in home.deliver().stdout
+    assert "chat=already" in home.deliver().stdout
+    [line] = home.lines()
+    assert "CV" not in line["text"]
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_ready_welcome_has_the_same_opening_in_every_language_and_asks_for_nothing(lang):
+    catalog = _catalog(lang)
+    ready = catalog["welcome.assistente_ready"]
+    assert ready.strip() and "\n" not in ready
+    # nothing it asks for: no upload command, no folder, no question mark
+    assert "jht artifact upload" not in ready and "allegati" not in ready and "?" not in ready
+    # the opening (greeting and who it is) is the one every welcome since the first has: that is how a welcome is known
+    greeting = catalog["welcome.assistente"].split("\n", 1)[0]
+    assert greeting.endswith("\U0001F44B") and "Job Hunter Team" in "\n\n".join(catalog["welcome.assistente"].split("\n\n")[:2])
