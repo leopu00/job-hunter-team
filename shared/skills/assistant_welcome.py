@@ -12,11 +12,15 @@ failed, leaves no flag, and whoever asked (the launcher watchdog) asks again.
 
 The first question of the onboarding travels in the same message when the
 profile is not ready (no `profile/ready.flag`), so it never arrives minutes
-after the greeting.
+after the greeting. With the profile ready the welcome does not ask for the CV
+(nothing is left to send): it is the greeting and one line saying so.
 
 Safe to run again: a welcome already in the chat is not sent twice (nor on
-Telegram), the flag is just refreshed. Two callers at once (the container boot
-and the agent) take one lock.
+Telegram), the flag is just refreshed. «A welcome already in the chat» is any
+welcome the Assistente ever posted, whatever its text was then, in whatever
+language and whichever version of the catalog (the text has changed since the
+first installs): it is known by its opening, not by today's whole text. Two
+callers at once (the container boot and the agent) take one lock.
 
 One line on stdout:
     WELCOME_DELIVERED chat=posted|already telegram=sent|failed|skipped|replay flag=ok|not_written
@@ -68,33 +72,76 @@ def _lookup(t, key: str) -> str:
     return "" if not value or value == key else value
 
 
+def _opening(text: str) -> str:
+    """The greeting and the line that says who the Assistente is: the first two paragraphs. They are the same in every version
+    of the text since the first one (what follows is what changed: the upload command, the question)."""
+    return "\n\n".join(text.split("\n\n")[:2])
+
+
+# The first line of a welcome, in each of the seven languages, and the words that make it THIS welcome: the brand's name in
+# the lines that follow. A welcome is known by these, so one posted with an older text, or in another language than the
+# one the catalog speaks today, is still the welcome.
+_BRAND = "Job Hunter Team"
+_BRAND_WITHIN = 240
+
+
+def _greetings() -> set[str]:
+    """The first line of `welcome.assistente` in every catalog next to the one in use."""
+    found: set[str] = set()
+    for path in sorted((HERE.parent / "locales").glob("*.json")):
+        try:
+            text = json.loads(path.read_text(encoding="utf-8")).get("welcome.assistente")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(text, str) and text.strip():
+            found.add(text.strip().split("\n", 1)[0].strip())
+    return found
+
+
+def looks_like_the_welcome(text: str, greetings: set[str] | None = None) -> bool:
+    """True for a line that is the Assistente's welcome, of any version and any language."""
+    text = text.strip()
+    if not text:
+        return False
+    first = text.split("\n", 1)[0].strip()
+    return first in (greetings if greetings is not None else _greetings()) and _BRAND in text[:_BRAND_WITHIN]
+
+
 def welcome_texts() -> tuple[str, str]:
-    """(the greeting, the greeting with the first question when the profile is not ready)."""
+    """(the opening that makes it the welcome, the text to post).
+
+    The text is the whole welcome with the first question of the onboarding while the profile is not ready; with the
+    profile ready it is the opening and one line that says there is nothing to send, never the request for the CV."""
     t = _catalog()
     base = _lookup(t, "welcome.assistente")
     if not base:
         return "", ""
+    opening = _opening(base)
+    if (jht_home() / "profile" / READY_FLAG).exists():
+        ready = _lookup(t, "welcome.assistente_ready")
+        return opening, f"{opening}\n\n{ready}" if ready else opening
     first = _lookup(t, "welcome.assistente_first")
-    ready = (jht_home() / "profile" / READY_FLAG).exists()
-    return base, base if ready or not first else f"{base}\n\n{first}"
+    return opening, f"{base}\n\n{first}" if first else base
 
 
-def _in_chat(base: str) -> bool:
+def _in_chat() -> bool:
+    """The Assistente has already posted a welcome (any text of it) in the chat of the app."""
     try:
         raw = chat_path().read_text(encoding="utf-8")
     except OSError:
         return False
+    greetings = _greetings()
     for line in raw.splitlines():
         try:
             row = json.loads(line)
         except ValueError:
             continue
-        if isinstance(row, dict) and row.get("role") == "assistant" and str(row.get("text", "")).startswith(base):
+        if isinstance(row, dict) and row.get("role") == "assistant" and looks_like_the_welcome(str(row.get("text", "")), greetings):
             return True
     return False
 
 
-def post_to_chat(text: str, base: str) -> str | None:
+def post_to_chat(text: str) -> str | None:
     """Write the text with `jht-send` and read it back. None on success, else the reason."""
     sender = _tool("JHT_WELCOME_SEND", "jht-send")
     env = dict(os.environ, JHT_HOME=str(jht_home()))
@@ -108,7 +155,7 @@ def post_to_chat(text: str, base: str) -> str | None:
         return f"chat_send_failed:{type(err).__name__}"
     if done.returncode != 0:
         return f"chat_send_failed:rc={done.returncode}"
-    if not _in_chat(base):
+    if not _in_chat():
         return "chat_line_not_found_after_send"
     return None
 
@@ -195,10 +242,10 @@ def deliver() -> int:
         print("WELCOME_NOT_DELIVERED no_welcome_text")
         return 3
     with _Lock():
-        if _in_chat(base):
+        if _in_chat():
             chat, telegram = "already", "replay"
         else:
-            failure = post_to_chat(text, base)
+            failure = post_to_chat(text)
             if failure:
                 _log_error(failure)
                 print(f"WELCOME_NOT_DELIVERED {failure}")
