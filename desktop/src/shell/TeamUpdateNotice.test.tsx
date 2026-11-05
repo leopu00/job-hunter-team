@@ -34,7 +34,7 @@ describe("the notice that the team is older than the app", () => {
 
   it("says it, offers the update and can be put off until the next start", async () => {
     render(<TeamUpdateNotice check={async () => true} />);
-    expect(await screen.findByTestId("team-update-notice")).toHaveTextContent("The team runs an older version than this app.");
+    expect(await screen.findByTestId("team-update-notice")).toHaveTextContent("The team is not on the version of this app: update it.");
     fireEvent.click(screen.getByTestId("team-update-notice-button"));
     expect(screen.getByTestId("team-update-confirm")).toBeInTheDocument();
     expect(screen.queryByTestId("team-update-notice-button")).toBeNull();
@@ -48,7 +48,7 @@ describe("the notice that the team is older than the app", () => {
     fireEvent.click(await screen.findByTestId("team-update-notice-button"));
     fireEvent.click(screen.getByTestId("team-update-start"));
     await waitFor(() => expect(screen.getByTestId("team-update-done")).toHaveTextContent("Team updated."));
-    expect(screen.getByTestId("team-update-notice")).not.toHaveTextContent("older version");
+    expect(screen.getByTestId("team-update-notice")).not.toHaveTextContent("not on the version");
     fireEvent.click(screen.getByTestId("team-update-close"));
     expect(screen.queryByTestId("team-update-notice")).toBeNull();
   });

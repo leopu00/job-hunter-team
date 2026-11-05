@@ -7,7 +7,7 @@ import type { TeamUpdatePhase, TeamUpdateReason } from "../lib/team-update";
  * {from}, {to} and {where} are filled by the page.
  */
 const it = {
-  notice: "La squadra gira su una versione più vecchia di questa app.",
+  notice: "La squadra non usa la versione di questa app: aggiornala.",
   noticeLater: "Più tardi",
   button: "Aggiorna la squadra",
   confirm:
@@ -45,7 +45,7 @@ const it = {
 export type TeamUpdateRunText = typeof it;
 
 const en: TeamUpdateRunText = {
-  notice: "The team runs an older version than this app.",
+  notice: "The team is not on the version of this app: update it.",
   noticeLater: "Later",
   button: "Update the team",
   confirm:
@@ -81,7 +81,7 @@ const en: TeamUpdateRunText = {
 };
 
 const de: TeamUpdateRunText = {
-  notice: "Das Team läuft in einer älteren Version als diese App.",
+  notice: "Das Team nutzt nicht die Version dieser App: aktualisiere es.",
   noticeLater: "Später",
   button: "Team aktualisieren",
   confirm:
@@ -117,7 +117,7 @@ const de: TeamUpdateRunText = {
 };
 
 const es: TeamUpdateRunText = {
-  notice: "El equipo funciona con una versión más antigua que esta app.",
+  notice: "El equipo no usa la versión de esta app: actualízalo.",
   noticeLater: "Más tarde",
   button: "Actualizar el equipo",
   confirm:
@@ -153,7 +153,7 @@ const es: TeamUpdateRunText = {
 };
 
 const fr: TeamUpdateRunText = {
-  notice: "L’équipe tourne sur une version plus ancienne que cette app.",
+  notice: "L’équipe n’utilise pas la version de cette app : mets-la à jour.",
   noticeLater: "Plus tard",
   button: "Mettre à jour l’équipe",
   confirm:
@@ -189,7 +189,7 @@ const fr: TeamUpdateRunText = {
 };
 
 const hu: TeamUpdateRunText = {
-  notice: "A csapat régebbi verzión fut, mint ez az app.",
+  notice: "A csapat nem ennek az appnak a verzióját használja: frissítsd.",
   noticeLater: "Később",
   button: "A csapat frissítése",
   confirm:
@@ -225,7 +225,7 @@ const hu: TeamUpdateRunText = {
 };
 
 const pt: TeamUpdateRunText = {
-  notice: "A equipa funciona com uma versão mais antiga do que esta app.",
+  notice: "A equipa não usa a versão desta app: atualiza-a.",
   noticeLater: "Mais tarde",
   button: "Atualizar a equipa",
   confirm:

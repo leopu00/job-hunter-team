@@ -22,7 +22,8 @@ export async function teamIsOlderThanApp(): Promise<boolean> {
 }
 
 /**
- * A line at the top while the team is not on the image of this app (JHT-T173), with the button that updates it.
+ * A line at the top while the team is not on the image of this app (JHT-T173), with the button that updates it. It says
+ * «not the version of this app», never «older»: the check compares two images, it does not tell which one is newer.
  * It asks once a day at startup, changes nothing by itself and can be put off until the next start. The update is the
  * same one the error messages offer: a confirmation, the wait, then the outcome. A finished update leaves its outcome
  * on screen (without the sentence that the team is older) until the person closes it.
