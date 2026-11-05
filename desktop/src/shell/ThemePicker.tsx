@@ -2,11 +2,14 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } f
 import { appLocale } from "../lib/app-locale";
 import { fill } from "../lib/text-slots";
 import {
+  activeSavedIndex,
   applyTheme,
+  chooseSavedTheme,
   CUSTOM_THEME,
   persistTheme,
   readStoredCustom,
   readStoredPreference,
+  readThemeLibrary,
   resolveTheme,
   isTemplateTheme,
   READY_THEMES,
@@ -14,6 +17,7 @@ import {
   watchSystemTheme,
   type AppliedTheme,
   type Theme,
+  type SavedTheme,
   type ThemePreference,
 } from "./theme";
 import { THEME_TEXT } from "./theme.i18n";
@@ -69,6 +73,17 @@ export default function ThemePicker() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [custom, setCustom] = useState(() => readStoredCustom(window.localStorage));
+  const [library, setLibrary] = useState<SavedTheme[]>(() => readThemeLibrary(window.localStorage));
+  const [activeIndex, setActiveIndex] = useState(() => activeSavedIndex(window.localStorage));
+  /** Reads again what is stored: the preference, the palette in force and the saved themes. */
+  const reread = () => {
+    const next = readStoredPreference(window.localStorage);
+    setCustom(readStoredCustom(window.localStorage));
+    setLibrary(readThemeLibrary(window.localStorage));
+    setActiveIndex(activeSavedIndex(window.localStorage));
+    setPreference(next);
+    setTheme(resolveTheme(next));
+  };
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -78,21 +93,15 @@ export default function ThemePicker() {
     preference === SYSTEM_THEME
       ? `${text.names[theme as Theme]} (${text.systemShort})`
       : theme === CUSTOM_THEME
-        ? text.custom
+        ? library[activeIndex]?.name || text.custom
         : text.names[theme];
 
   useEffect(() => applyTheme(theme), [theme]);
 
   // The other picker on screen chose a palette: this one shows it.
   useEffect(() => {
-    const follow = () => {
-      const next = readStoredPreference(window.localStorage);
-      setCustom(readStoredCustom(window.localStorage));
-      setPreference(next);
-      setTheme(resolveTheme(next));
-    };
-    window.addEventListener(THEME_CHANGED_EVENT, follow);
-    return () => window.removeEventListener(THEME_CHANGED_EVENT, follow);
+    window.addEventListener(THEME_CHANGED_EVENT, reread);
+    return () => window.removeEventListener(THEME_CHANGED_EVENT, reread);
   }, []);
 
   // While the system decides, a change of its light/dark applies at once.
@@ -130,6 +139,14 @@ export default function ThemePicker() {
   const choose = (next: ThemePreference) => {
     setPreference(next);
     setTheme(persistTheme(next));
+    window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const chooseSaved = (index: number) => {
+    chooseSavedTheme(index);
+    reread();
     window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
     setOpen(false);
     triggerRef.current?.focus();
@@ -196,13 +213,34 @@ export default function ThemePicker() {
         >
           <span className="theme-picker__heading">{text.heading}</span>
           {option(SYSTEM_THEME, text.system)}
-          {custom && option(CUSTOM_THEME, text.custom)}
+          {/* the palette in force is a personal one that is not in the list (a list that could not be written): still shown */}
+          {custom && preference === CUSTOM_THEME && activeIndex < 0 && option(CUSTOM_THEME, text.custom)}
           {/* a coloured palette chosen before it became a template: still the one in force, so still in the menu */}
           {isTemplateTheme(preference) && option(preference, text.names[preference])}
           <span className="theme-picker__heading">{text.groupDark}</span>
           {DARK_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
           <span className="theme-picker__heading">{text.groupLight}</span>
           {LIGHT_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
+          {library.length > 0 && <span className="theme-picker__heading">{text.groupMine}</span>}
+          {library.map((entry, index) => (
+            <button
+              key={`saved-${index}`}
+              type="button"
+              role="menuitemradio"
+              aria-checked={preference === CUSTOM_THEME && activeIndex === index}
+              className="theme-picker__option"
+              onClick={() => chooseSaved(index)}
+              onKeyDown={moveFocus}
+            >
+              <span className="theme-picker__swatch" style={swatchOf(entry.seeds)} aria-hidden="true">
+                <i />
+              </span>
+              <span>{entry.name || text.custom}</span>
+              <span className="theme-picker__check" aria-hidden="true">
+                {preference === CUSTOM_THEME && activeIndex === index ? "✓" : ""}
+              </span>
+            </button>
+          ))}
           <button
             type="button"
             role="menuitem"
@@ -225,10 +263,7 @@ export default function ThemePicker() {
             triggerRef.current?.focus();
           }}
           onChanged={() => {
-            const next = readStoredPreference(window.localStorage);
-            setCustom(readStoredCustom(window.localStorage));
-            setPreference(next);
-            setTheme(resolveTheme(next));
+            reread();
             window.dispatchEvent(new Event(THEME_CHANGED_EVENT));
           }}
         />

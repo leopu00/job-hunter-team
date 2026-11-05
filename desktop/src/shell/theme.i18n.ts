@@ -16,6 +16,7 @@ export interface ThemeText {
   custom: string; // the name of the person's own palette
   groupDark: string;
   groupLight: string;
+  groupMine: string; // the heading of the themes the person saved with a name
 }
 
 export const THEME_TEXT: Record<Locale, ThemeText> = {
@@ -29,6 +30,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Personale",
     groupDark: "Scuri",
     groupLight: "Chiari",
+    groupMine: "I tuoi temi",
   },
   en: {
     trigger: "Theme: {name}. Change theme",
@@ -40,6 +42,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Custom",
     groupDark: "Dark themes",
     groupLight: "Light themes",
+    groupMine: "Your themes",
   },
   de: {
     trigger: "Design: {name}. Design ändern",
@@ -51,6 +54,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Benutzerdefiniert",
     groupDark: "Dunkle Designs",
     groupLight: "Helle Designs",
+    groupMine: "Deine Designs",
   },
   fr: {
     trigger: "Thème : {name}. Changer de thème",
@@ -62,6 +66,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Personnalisé",
     groupDark: "Sombres",
     groupLight: "Clairs",
+    groupMine: "Vos thèmes",
   },
   es: {
     trigger: "Tema: {name}. Cambiar tema",
@@ -73,6 +78,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Personalizado",
     groupDark: "Oscuros",
     groupLight: "Claros",
+    groupMine: "Tus temas",
   },
   pt: {
     trigger: "Tema: {name}. Mudar de tema",
@@ -84,6 +90,7 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Personalizado",
     groupDark: "Escuros",
     groupLight: "Claros",
+    groupMine: "Os seus temas",
   },
   hu: {
     trigger: "Téma: {name}. Téma váltása",
@@ -95,5 +102,6 @@ export const THEME_TEXT: Record<Locale, ThemeText> = {
     custom: "Egyéni",
     groupDark: "Sötét",
     groupLight: "Világos",
+    groupMine: "Saját témák",
   },
 };

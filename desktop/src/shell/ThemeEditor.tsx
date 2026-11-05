@@ -17,7 +17,20 @@ import {
   type Seeds,
   type TokenName,
 } from "./theme-custom";
-import { THEMES, deleteCustomTheme, isStrictTheme, readStoredCustom, saveCustomTheme, type Theme } from "./theme";
+import {
+  LIBRARY_MAX,
+  THEMES,
+  THEME_NAME_MAX,
+  activeSavedIndex,
+  deleteCustomTheme,
+  deleteSavedTheme,
+  isStrictTheme,
+  isTemplateTheme,
+  readStoredCustom,
+  readThemeLibrary,
+  saveNamedTheme,
+  type Theme,
+} from "./theme";
 import { THEME_EDITOR_TEXT } from "./theme-editor.i18n";
 import { THEME_FILE_MAX_BYTES, readThemeFile, writeThemeFile } from "./theme-file";
 import { THEME_TEXT } from "./theme.i18n";
@@ -55,9 +68,31 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
   const text = THEME_EDITOR_TEXT[appLocale()];
   const themeNames = THEME_TEXT[appLocale()].names;
   const saved = useMemo(() => readStoredCustom(window.localStorage), []);
+  // The saved theme in force, if any: the one this editor edits (Save replaces it, under the name in the field).
+  const library = useMemo(() => readThemeLibrary(window.localStorage), []);
+  const editingIndex = useMemo(() => activeSavedIndex(window.localStorage, library), [library]);
+  const editingName = editingIndex >= 0 ? library[editingIndex].name : undefined;
+  // How a saved theme is called in the menu: the one saved before names existed is «Personale».
+  const customName = THEME_TEXT[appLocale()].custom;
+  const shownName = (entry: { name: string }) => entry.name || customName;
+  const nameUsedElsewhere = (candidate: string) =>
+    library.some((entry, index) => index !== editingIndex && shownName(entry).trim().toLocaleLowerCase() === candidate.trim().toLocaleLowerCase());
+  // A new theme is offered a name no other saved theme has: the template's own when it starts from one («Foresta»,
+  // «Foresta 2»), «Personale» otherwise, so it never reads like one of the ready themes of the menu.
+  const suggestName = (from: Theme) => {
+    const base = isTemplateTheme(from) ? themeNames[from] : customName;
+    for (let n = 1; ; n += 1) {
+      const candidate = n === 1 ? base : `${base} ${n}`;
+      if (!nameUsedElsewhere(candidate)) return candidate;
+    }
+  };
 
   const [start, setStart] = useState<Theme>(saved?.start ?? initialStart);
   const [seeds, setSeeds] = useState<Seeds>(saved?.seeds ?? PRESETS[start].seeds);
+  const [name, setName] = useState(() =>
+    editingName === undefined ? suggestName(saved?.start ?? initialStart) : editingName || customName,
+  );
+  const [nameTouched, setNameTouched] = useState(false);
   const [typed, setTyped] = useState<Seeds>(seeds);
   const [touched, setTouched] = useState<SeedKey | undefined>();
   const [note, setNote] = useState("");
@@ -96,6 +131,7 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
 
   const chooseStart = (next: Theme) => {
     setStart(next);
+    if (editingName === undefined && !nameTouched) setName(suggestName(next));
     adopt(PRESETS[next].seeds);
     setTouched(undefined);
     setNote("");
@@ -181,14 +217,19 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
 
   const save = () => {
     if (blocked) return;
-    const done = saveCustomTheme({ v: 1, start, family: seedFamily(seeds), seeds, vars: tokens });
-    if (!done) return setNote(text.saveBlocked);
+    if (name.trim().length === 0) return setNote(text.nameMissing);
+    if (nameUsedElsewhere(name)) return setNote(fill(text.nameTaken, { name: name.trim() }));
+    const result = saveNamedTheme({ v: 1, start, family: seedFamily(seeds), seeds, vars: tokens, name }, editingName);
+    if (result === "taken") return setNote(fill(text.nameTaken, { name: name.trim() }));
+    if (result === "full") return setNote(fill(text.libraryFull, { max: String(LIBRARY_MAX) }));
+    if (result !== "saved") return setNote(text.saveBlocked);
     onChanged();
     onClose();
   };
 
   const remove = () => {
-    deleteCustomTheme();
+    if (editingIndex >= 0) deleteSavedTheme(editingIndex);
+    else deleteCustomTheme();
     onChanged();
     onClose();
   };
@@ -336,6 +377,21 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
             </button>
           </div>
         )}
+
+        <label className="theme-editor__field">
+          <span>{text.name}</span>
+          <input
+            type="text"
+            value={name}
+            maxLength={THEME_NAME_MAX}
+            spellCheck={false}
+            onChange={(event) => {
+              setName(event.target.value);
+              setNameTouched(true);
+              setNote("");
+            }}
+          />
+        </label>
 
         <div className="theme-editor__actions">
           <button
