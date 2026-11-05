@@ -900,7 +900,7 @@ export default function DirectChatScreen({
         <div className="shrink-0 px-4 pt-4 pb-2 text-[14px] font-semibold uppercase tracking-[0.14em] text-[var(--color-dim)]">
           {t.agentsHeading}
         </div>
-        <nav aria-label={t.agentsNavAria} className="min-h-0 overflow-y-auto px-2 pb-3 grid content-start gap-1">
+        <nav aria-label={t.agentsNavAria} className="min-h-0 overflow-y-auto overflow-x-hidden px-2 pb-3 grid grid-cols-[minmax(0,1fr)] content-start gap-1">
           {agents.map((agent) => (
             <button
               key={agent.id}
@@ -908,7 +908,7 @@ export default function DirectChatScreen({
               aria-current={agent.id === agentId ? "page" : undefined}
               aria-describedby={agent.id !== agentId && unread.last[agent.id] ? `direct-chat-preview-${agent.id}` : undefined}
               onClick={() => setAgentId(agent.id)}
-              className="min-h-9 rounded px-3 py-2 text-left text-[14px] font-semibold transition-colors"
+              className="min-h-9 w-full min-w-0 rounded px-3 py-2 text-left text-[14px] font-semibold transition-colors"
               style={{
                 color: agent.id === agentId ? "var(--color-green)" : "var(--color-muted)",
                 background: agent.id === agentId ? "var(--color-card)" : "transparent",
@@ -953,7 +953,7 @@ export default function DirectChatScreen({
                   id={`direct-chat-preview-${agent.id}`}
                   aria-hidden
                   data-testid={`direct-chat-preview-${agent.id}`}
-                  className="mt-0.5 block truncate text-[14px] font-normal text-[var(--color-dim)]"
+                  className="mt-0.5 block min-w-0 truncate text-[14px] font-normal text-[var(--color-dim)]"
                 >
                   {previewText(unread.last[agent.id], t.you)}
                 </span>
