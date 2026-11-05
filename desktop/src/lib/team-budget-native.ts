@@ -1,10 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
+import { reconnectDirectChat } from "./direct-chat";
+import { errorCodeOf } from "./error-catalog";
 
 /**
  * How the team's weekly budget is going, read through the native `team_budget_read` command (the numbers the team computes with
  * the same rate, active-hours line and verdict as the Sentinella and the pace guard). Read only. The closed lists below are all
  * the page ever gets: numbers in their range, timestamps, and CODES from a closed list that the page puts in words. A reply that
- * carries anything else, or a value off its range, is `budget_unavailable` and never a number made up or a word the team chose.
+ * carries anything else, or a value off its range, is `budget_reply_unexpected` and never a number made up or a word the team chose;
+ * `budget_unavailable` is only «the team has no budget file» (an old image), and every other failure says its own reason.
  * A number the team does not have is `null`, which is not 0.
  */
 
@@ -83,7 +86,11 @@ export interface TeamBudget {
   roles: BudgetRoles | null;
 }
 
-export type BudgetError = "budget_unreadable" | "budget_unavailable";
+/**
+ * Why the numbers are not there: one of the page's own three, or the code of the native error as the catalog knows it
+ * (`disconnected`, `process_timeout`, `account_scope_mismatch`...). `budget_unavailable` is only «the team has no such file» (an old image).
+ */
+export type BudgetError = string;
 export type BudgetResult = { ok: true; budget: TeamBudget } | { ok: false; error: BudgetError };
 
 const READ = "team_budget_read";
@@ -98,7 +105,7 @@ const ROLES: readonly string[] = [
 const WINDOWS: readonly string[] = ["week", "5h"];
 const MAX_ROLES = 20;
 const MAX_BRAKES = 8;
-const KNOWN_ERRORS: ReadonlySet<string> = new Set<BudgetError>(["budget_unreadable", "budget_unavailable"]);
+const KNOWN_ERRORS: ReadonlySet<string> = new Set(["budget_unreadable", "budget_unavailable", "budget_reply_unexpected"]);
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[0-9+\-:Z.]{0,13}$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -208,17 +215,17 @@ function pickBudget(reply: Record<string, unknown>): TeamBudget {
   };
 }
 
-/** The reply of `team_budget_read` as the page uses it; anything off the closed shape is `budget_unavailable`. */
+/** The reply of `team_budget_read` as the page uses it; an answer off the closed shape is `budget_reply_unexpected`, never «the team does not offer it». */
 export function pickTeamBudget(reply: unknown): BudgetResult {
-  const unavailable: BudgetResult = { ok: false, error: "budget_unavailable" };
-  if (!isRecord(reply)) return unavailable;
-  if (reply.ok === false) return { ok: false, error: typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error) ? (reply.error as BudgetError) : "budget_unavailable" };
-  if (reply.ok !== true) return unavailable;
+  const unexpected: BudgetResult = { ok: false, error: "budget_reply_unexpected" };
+  if (!isRecord(reply)) return unexpected;
+  if (reply.ok === false) return { ok: false, error: typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error) ? reply.error : "budget_unreadable" };
+  if (reply.ok !== true) return unexpected;
   const { ok: _ok, ...rest } = reply;
   try {
     return { ok: true, budget: pickBudget(rest) };
   } catch (error) {
-    if (error instanceof Refused) return unavailable;
+    if (error instanceof Refused) return unexpected;
     throw error;
   }
 }
@@ -226,10 +233,29 @@ export function pickTeamBudget(reply: unknown): BudgetResult {
 type Call = (command: string) => Promise<unknown>;
 const nativeCall: Call = (command) => invoke<unknown>(command);
 
-export async function readTeamBudget(call: Call = nativeCall): Promise<BudgetResult> {
+/** The one read, with the native error told by its own code (a throw without one is `budget_unreadable`). */
+async function readOnce(call: Call): Promise<BudgetResult> {
   try {
     return pickTeamBudget(await call(READ));
-  } catch {
-    return { ok: false, error: "budget_unavailable" };
+  } catch (error) {
+    const code = errorCodeOf(error);
+    // the chat's «cannot read the messages» is not a sentence for the budget: the page's own «cannot be read» says it
+    return { ok: false, error: code === null || code === "read_failed" ? "budget_unreadable" : code };
   }
+}
+
+/**
+ * Reads the team's budget. When the native side says the chat is not connected (the page was opened before the team was, or
+ * the team was restarted under it), the chat is connected again once and the read repeated: the person is told the reason only
+ * if that does not help.
+ */
+export async function readTeamBudget(call: Call = nativeCall, reconnect: () => Promise<unknown> = reconnectDirectChat): Promise<BudgetResult> {
+  const first = await readOnce(call);
+  if (first.ok || first.error !== "disconnected") return first;
+  try {
+    await reconnect();
+  } catch {
+    return first;
+  }
+  return readOnce(call);
 }

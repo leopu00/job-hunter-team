@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
 import { readTeamState, type TeamControlState } from "../../lib/agent-control";
 import UpdateTeamHelp from "../../components/UpdateTeamHelp";
-import { describeError } from "../../lib/error-catalog";
+import { reconnectDirectChat } from "../../lib/direct-chat";
+import { describeError, errorCodeOf } from "../../lib/error-catalog";
 import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import { ROLE_COLOR } from "../../lib/role-color";
 import { readTeamBudget, type BudgetResult, type TeamBudget } from "../../lib/team-budget-native";
@@ -42,7 +43,7 @@ function Swatch({ color }: { color: string }) {
 }
 
 function failureText(code: string): string {
-  const copy = describeError(code, { fallback: "budget_unavailable", locale: appLocale() });
+  const copy = describeError(code, { fallback: "budget_unreadable", locale: appLocale() });
   return `${copy.text} ${copy.action}`;
 }
 
@@ -279,6 +280,7 @@ export default function BudgetPage(_props: PageProps) {
   const readOnly = useExistingTeamReadOnly() !== null;
   const [loaded, setLoaded] = useState<Loaded>({ kind: "loading" });
   const [stopped, setStopped] = useState<Stopped>(null);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const load = useCallback(async (keepWhileReading: boolean) => {
     if (!keepWhileReading) setLoaded({ kind: "loading" });
@@ -290,6 +292,20 @@ export default function BudgetPage(_props: PageProps) {
     const value: TeamControlState | null = state.ok ? state.value : null;
     setStopped(value === null ? null : value.halted ? "stopped" : value.standby.state === "active" ? "paused" : null);
   }, []);
+
+  // «Reconnect the chat»: the same native reconnect the chat's own page uses; then the budget is read again.
+  const reconnect = useCallback(async () => {
+    setReconnecting(true);
+    try {
+      await reconnectDirectChat();
+    } catch (error) {
+      setLoaded({ kind: "failed", code: errorCodeOf(error) ?? "disconnected" });
+      setReconnecting(false);
+      return;
+    }
+    setReconnecting(false);
+    await load(false);
+  }, [load]);
 
   useEffect(() => {
     let alive = true;
@@ -312,13 +328,25 @@ export default function BudgetPage(_props: PageProps) {
           <p className="m-0 text-[var(--color-yellow)]">{t.readFailed}</p>
           <p className="m-0 mt-1 text-[var(--color-base)]">{failureText(loaded.code)}</p>
           <UpdateTeamHelp code={loaded.code} />
-          <button
-            type="button"
-            onClick={() => void load(false)}
-            className="mt-3 text-[12px] font-semibold uppercase tracking-widest px-4 py-2 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
-          >
-            {t.retry}
-          </button>
+          {loaded.code === "disconnected" ? (
+            <button
+              type="button"
+              data-testid="budget-reconnect"
+              disabled={reconnecting}
+              onClick={() => void reconnect()}
+              className="mt-3 text-[12px] font-semibold uppercase tracking-widest px-4 py-2 rounded border border-[var(--color-border)] text-[var(--color-bright)] disabled:opacity-60"
+            >
+              {t.reconnect}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void load(false)}
+              className="mt-3 text-[12px] font-semibold uppercase tracking-widest px-4 py-2 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
+            >
+              {t.retry}
+            </button>
+          )}
         </div>
       )}
       {loaded.kind === "ready" && (

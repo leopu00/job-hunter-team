@@ -1329,6 +1329,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A csapat még nem kínálja a keret számait.", "Frissítsd a csapatot, majd próbáld újra."],
     pt: ["A equipa ainda não oferece os números do orçamento.", "Atualiza a equipa e tenta de novo."],
   },
+  "The team's budget answer is not in a form this app recognises.": {
+    de: ["Die Budget-Antwort des Teams hat eine Form, die diese App nicht erkennt.", "Prüfe, ob App und Team dieselbe Version haben, und versuche es erneut."],
+    es: ["La respuesta del equipo sobre el presupuesto tiene una forma que esta aplicación no reconoce.", "Comprueba que la aplicación y el equipo tengan la misma versión e inténtalo de nuevo."],
+    fr: ["La réponse de l’équipe sur le budget a une forme que l’application ne reconnaît pas.", "Vérifie que l’application et l’équipe sont à la même version, puis réessaie."],
+    hu: ["A csapat keretre adott válasza olyan formájú, amelyet az alkalmazás nem ismer fel.", "Ellenőrizd, hogy az alkalmazás és a csapat ugyanazon a verzión van-e, majd próbáld újra."],
+    pt: ["A resposta da equipa sobre o orçamento tem uma forma que esta aplicação não reconhece.", "Confirma que a aplicação e a equipa estão na mesma versão e tenta de novo."],
+  },
   "The team's statistics cannot be read.": {
     de: ["Die Statistiken des Teams lassen sich nicht lesen.", "Versuche es gleich noch einmal; ändert sich nichts, prüfe, ob das Team läuft."],
     es: ["No se pueden leer las estadísticas del equipo.", "Vuelve a intentarlo en un momento; si no cambia, comprueba que el equipo esté en marcha."],
@@ -2374,6 +2381,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   position_write_window_refused: translated("This can be done only from the app’s main window."),
   budget_unreadable: translated("The team's budget cannot be read."),
   budget_unavailable: translated("The team does not offer the budget figures yet."),
+  budget_reply_unexpected: translated("The team's budget answer is not in a form this app recognises."),
   stats_unreadable: translated("The team's statistics cannot be read."),
   stats_unavailable: translated("The team does not offer the working-hours statistics yet."),
   stats_clear_failed: translated("The statistics were not cleared."),

@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "generatedAt": "2031-03-17T09:30:00+00:00",
+  "sampleAt": "2031-03-17T09:28:00+00:00",
+  "sampleAgeMin": 2,
+  "week": {
+    "usedPct": 37.0,
+    "remainingPct": 63.0,
+    "resetAtUnix": 1931000000,
+    "activeHoursToReset": 51.5,
+    "idealUsedPct": null,
+    "deviationPts": null,
+    "line": null
+  },
+  "rate": null,
+  "verdict": {
+    "code": "no_data",
+    "brake": false,
+    "steps": 0
+  },
+  "brakes": [],
+  "pauseSec": 300,
+  "burn": {
+    "state": "off",
+    "grantedAt": null,
+    "expiresAt": null,
+    "remainingMin": null,
+    "spentPts": null,
+    "paceBeforePctH": null,
+    "paceNowPctH": null
+  },
+  "roles": {
+    "window": "week",
+    "roles": [
+      {
+        "role": "capitano",
+        "sharePct": 24.0,
+        "kt": 310.5,
+        "agents": 1
+      },
+      {
+        "role": "assistente",
+        "sharePct": 15.0,
+        "kt": 194.2,
+        "agents": 1
+      },
+      {
+        "role": "mentor",
+        "sharePct": 12.5,
+        "kt": 161.8,
+        "agents": 1
+      },
+      {
+        "role": "dottore",
+        "sharePct": 12.0,
+        "kt": 155.4,
+        "agents": 1
+      },
+      {
+        "role": "mantenitore",
+        "sharePct": 11.0,
+        "kt": 142.3,
+        "agents": 1
+      },
+      {
+        "role": "sentinella",
+        "sharePct": 10.5,
+        "kt": 135.9,
+        "agents": 1
+      },
+      {
+        "role": "analista",
+        "sharePct": 8.0,
+        "kt": 103.5,
+        "agents": 1
+      },
+      {
+        "role": "scout",
+        "sharePct": 7.0,
+        "kt": 90.6,
+        "agents": 2
+      }
+    ],
+    "unattributedPct": 0.0,
+    "totalKt": 1294.2,
+    "ageMin": 2
+  }
+}
