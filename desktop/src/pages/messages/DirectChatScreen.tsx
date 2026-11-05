@@ -881,8 +881,8 @@ export default function DirectChatScreen({
   const onMenu = useCallback((id: string, event: { preventDefault(): void; clientX: number; clientY: number }) => handlers.current.openMenu("message", id, event), []);
   const onSend = useCallback((line: string) => void handlers.current.send(line), []);
   const onEnterAgain = useCallback((id: string) => void handlers.current.enterAgain(id), []);
-  const enterAvailable = typeof client.enter === "function" && status.state === "ready" && !writeLocked;
-  const suggestionsOff = status.state !== "ready" || writeLocked || sending;
+  const enterAvailable = typeof client.enter === "function" && status.state === "ready" && !writeLocked && !agentOff;
+  const suggestionsOff = status.state !== "ready" || writeLocked || agentOff || sending;
   const dateLocale = DICTATION_LOCALE[locale];
 
   const canSend = status.state === "ready" && !writeLocked && !agentOff && !sending && text.trim().length > 0;

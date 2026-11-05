@@ -68,6 +68,25 @@ describe("DirectChatScreen: the state of the agent", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Scrivi a Capitano" })).toBeEnabled());
   });
 
+  it("sends nothing to an agent that is off by any way: text typed before, a suggested reply", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const mock = client({ scout: [{ id: "a1", role: "agent", text: "Procedo?", at: now - 60, suggestions: ["Sì, vai", "Aspetta"] }] });
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={mock} initialAgentId="capitano" loadSessions={sessions} />);
+    const box = await screen.findByRole("textbox", { name: "Scrivi a Capitano" });
+    await user.type(box, "Un testo scritto prima");
+    expect(screen.getByRole("button", { name: "Invia" })).toBeEnabled();
+    // the person goes to the agent that is off with the text still in the box: nothing can send it
+    await user.click(within(screen.getByRole("navigation", { name: "Chat agenti" })).getByRole("button", { name: /^Scout/ }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Scrivi a Scout" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Invia" })).toBeDisabled();
+    // a reply the agent suggested is shown but cannot be taken
+    const suggestions = await screen.findAllByTestId("direct-chat-suggestion");
+    for (const suggestion of suggestions) expect(suggestion).toBeDisabled();
+    await user.click(suggestions[0]);
+    expect(mock.send).not.toHaveBeenCalled();
+  });
+
   it("does not say an agent is off while the sessions are not known: the old line and the open box", async () => {
     render(<DirectChatScreen client={client()} initialAgentId="scout" />);
     const status = await screen.findByTestId("direct-chat-status");
