@@ -491,6 +491,41 @@ function Find-Podman {
   return $null
 }
 
+# Where winget is (JHT-T184): the PATH as the system and the user have it NOW, then the alias folder of THIS user.
+# App Installer registers winget.exe as an app-execution alias in %LOCALAPPDATA%\Microsoft\WindowsApps of the user it
+# was installed for; an account whose PATH names another user's WindowsApps (made from an administrator's profile)
+# never finds it by its name, although it is there.
+function Find-Winget {
+  param(
+    # Parameters, as in Find-Podman, so the lookup can be exercised without the PATH of the machine that runs it.
+    [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+    [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User'),
+    [string]$ProcessPath = $env:PATH,
+    [string]$LocalAppDataPath = $LocalAppData
+  )
+  Update-ProcessPath -MachinePath $MachinePath -UserPath $UserPath -ProcessPath $ProcessPath
+  # The program on the PATH, or else a function or alias of the session by that name (as a bare `winget` always found).
+  $command = Get-Command winget.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $command) { $command = Get-Command winget -CommandType Function, Alias -ErrorAction SilentlyContinue | Select-Object -First 1 }
+  if ($command) { return $(if ($command.Source) { $command.Source } else { 'winget' }) }
+  if ($LocalAppDataPath) {
+    $alias = Join-Path $LocalAppDataPath 'Microsoft\WindowsApps\winget.exe'
+    if (Test-Path -LiteralPath $alias -ErrorAction SilentlyContinue) { return $alias }
+  }
+  return $null
+}
+
+# winget found and reachable by its name for the commands that follow: its folder goes to this process's PATH only.
+function Use-Winget {
+  $found = Find-Winget
+  if (-not $found) { return $false }
+  $folder = Split-Path -Parent $found
+  if ($folder -and -not (($env:PATH -split [IO.Path]::PathSeparator) -contains $folder)) {
+    $env:PATH = $folder + [IO.Path]::PathSeparator + $env:PATH
+  }
+  return $true
+}
+
 function Get-PodmanVersion {
   param([string]$Path)
   if (-not $Path) { return $null }
@@ -562,7 +597,9 @@ if ($InstallDependencies) {
   }
   try {
     if ((Get-PodmanFit $foundVersion) -in 'absent', 'older') {
-      if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { throw 'winget is required to install Podman dependencies. Install "App Installer" from the Microsoft Store (https://aka.ms/getwinget), then run the installer again.' }
+      if (-not (Use-Winget)) {
+        throw "winget was not found: not on the PATH and not in $(Join-Path $LocalAppData 'Microsoft\WindowsApps') (the folder App Installer uses for this Windows user). winget is required to install Podman dependencies. Install or update `"App Installer`" from the Microsoft Store (https://aka.ms/getwinget), then run the installer again."
+      }
       # «Already installed» while this user reaches no podman.exe: on a computer
       # with two Windows users the package is registered for the computer and
       # podman.exe sits in the other user's profile. Then once more, for this

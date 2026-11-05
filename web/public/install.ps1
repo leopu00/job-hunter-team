@@ -478,9 +478,14 @@ function Get-RuntimeFiles {
   # Podman comes from winget (docker-compose and the runtime come from here, and
   # a Podman already on the PATH needs nothing): with neither, this setup cannot
   # go on. Said now, before a single folder is written, with the way out.
+  # winget is also looked for where App Installer puts its alias for THIS user: a PATH that names another user's
+  # WindowsApps folder (an account made from an administrator's profile) does not find it by its name (JHT-T184).
+  $wingetAlias = Join-Path $LocalAppData 'Microsoft\WindowsApps\winget.exe'
   if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue) -and
-      -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+      -not (Get-Command winget -ErrorAction SilentlyContinue) -and
+      -not (Test-Path -LiteralPath $wingetAlias -ErrorAction SilentlyContinue)) {
     Write-JhtProblem -What 'winget is missing, and the installer needs it to install Podman.' -Todo @(
+      "It was not on the PATH and not in $(Split-Path -Parent $wingetAlias).",
       'Install "App Installer" from the Microsoft Store (it brings winget):',
       '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
       'Then open a new PowerShell window and check it with: winget --version',

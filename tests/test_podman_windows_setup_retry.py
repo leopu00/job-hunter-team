@@ -457,7 +457,7 @@ def _enabler_functions() -> str:
     registry_paths = source[source.index("$PodmanRegistryPaths = ") :].split("\n", 1)[0] + "\n"
     return registry_paths + "".join(
         source[source.index(f"function {name} {{") :].split("\n}\n", 1)[0] + "\n}\n"
-        for name in ("Update-ProcessPath", "Get-Application", "Find-Podman", "Get-PodmanVersion")
+        for name in ("Update-ProcessPath", "Get-Application", "Find-Podman", "Get-PodmanVersion", "Find-Winget", "Use-Winget")
     )
 
 
@@ -779,3 +779,87 @@ def test_the_windows_powershell_shape_is_really_one_object(tmp_path):
     probe = WINDOWS_POWERSHELL_JSON + "@('[\"a\",\"b\"]' | ConvertFrom-Json).Count; @('[\"a\",\"b\"]' | Microsoft.PowerShell.Utility\\ConvertFrom-Json).Count\n"
     done = _ps(tmp_path, probe)
     assert done.stdout.split() == ["1", "2"], done.stdout + done.stderr
+
+
+# ── JHT-T184 WX1: winget is found where App Installer puts it for THIS user ──
+
+WINGET_SOURCES = ["machine-path", "user-path", "current-path", "alias-of-this-user"]
+
+
+@needs_powershell
+@pytest.mark.parametrize("source", WINGET_SOURCES)
+def test_find_winget_reads_the_path_and_the_alias_folder_of_this_user(tmp_path, source):
+    """An account whose PATH names another user's WindowsApps folder still finds its own winget."""
+    roots = {name: tmp_path / name for name in WINGET_SOURCES}
+    other_users_folder = tmp_path / "other-user" / "AppData" / "Local" / "Microsoft" / "WindowsApps"
+    other_users_folder.mkdir(parents=True)
+    local = roots["alias-of-this-user"]
+    folder = local / "Microsoft" / "WindowsApps" if source == "alias-of-this-user" else roots[source]
+    folder.mkdir(parents=True)
+    install_fake(folder, "winget.exe", "#!/bin/sh\necho v1.29.380\n")
+    paths = {name: str(roots[name]) if source == name else "" for name in ("machine-path", "user-path", "current-path")}
+    process = paths["current-path"] or str(other_users_folder)
+    body = (
+        "$ErrorActionPreference = 'Stop'\n"
+        + _enabler_functions()
+        + "[Console]::Out.WriteLine('FOUND=' + (Find-Winget "
+          f"-MachinePath '{paths['machine-path']}' -UserPath '{paths['user-path']}' -ProcessPath '{process}' "
+          f"-LocalAppDataPath '{local}'))\n"
+        + "exit 0\n"
+    )
+    done = _ps(tmp_path, body)
+    assert done.returncode == 0, done.stdout + done.stderr
+    expected = f"FOUND={folder / 'winget.exe'}".replace("\\", "/")
+    assert expected in done.stdout.replace("\\", "/"), done.stdout + done.stderr
+
+
+@needs_powershell
+def test_find_winget_finds_nothing_where_there_is_nothing_and_use_winget_says_so(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    body = (
+        "$ErrorActionPreference = 'Stop'\n"
+        + _enabler_functions()
+        + f"[Console]::Out.WriteLine('FOUND=[' + (Find-Winget -MachinePath '' -UserPath '' -ProcessPath '{empty}' -LocalAppDataPath '{empty}') + ']')\n"
+        + "function Find-Winget { return $null }\n"
+        + "[Console]::Out.WriteLine('USED=' + (Use-Winget))\n"
+        + "exit 0\n"
+    )
+    done = _ps(tmp_path, body)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "FOUND=[]" in done.stdout and "USED=False" in done.stdout, done.stdout + done.stderr
+
+
+@needs_powershell
+def test_use_winget_puts_the_folder_in_the_path_of_this_process_once(tmp_path):
+    folder = tmp_path / "apps"
+    folder.mkdir()
+    install_fake(folder, "winget.exe", "#!/bin/sh\necho v1\n")
+    body = (
+        "$ErrorActionPreference = 'Stop'\n"
+        + _enabler_functions()
+        + f"function Find-Winget {{ return '{folder / 'winget.exe'}' }}\n"
+        + "$first = Use-Winget; $second = Use-Winget\n"
+        + f"$count = @($env:PATH -split [IO.Path]::PathSeparator | Where-Object {{ $_ -eq '{folder}' }}).Count\n"
+        + "[Console]::Out.WriteLine(\"RESULT=$first,$second,$count\")\n"
+        + "exit 0\n"
+    )
+    done = _ps(tmp_path, body)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "RESULT=True,True,1" in done.stdout, done.stdout + done.stderr
+
+
+def test_both_installer_files_look_for_winget_in_this_users_alias_folder_and_say_where_they_looked():
+    enabler = _code(ENABLER)
+    block = enabler[enabler.index("if ($InstallDependencies) {") :]
+    block = block[: block.index("$Podman = Find-Podman")]
+    # the lookup is the function's, before the one command that runs winget; the guard in the block is no bare Get-Command
+    assert "Get-Command winget" not in block
+    assert block.index("Use-Winget") < block.index("& winget install")
+    assert "Microsoft\\WindowsApps\\winget.exe" in enabler
+    # the text names the folder it looked in and still says what to install
+    message = block[block.index("winget was not found") : block.index("then run the installer again")]
+    assert "$(Join-Path $LocalAppData 'Microsoft\\WindowsApps')" in message and "App Installer" in message
+    installer = _code(ROOT / "scripts" / "install.ps1")
+    assert "Join-Path $LocalAppData 'Microsoft\\WindowsApps\\winget.exe'" in installer
+    assert "Test-Path -LiteralPath $wingetAlias" in installer
