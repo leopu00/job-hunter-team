@@ -4,6 +4,7 @@ import { appLocale } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
 import { useTeamOff } from "../lib/team-off";
 import { TEAM_OFF_TEXT } from "./team-off.i18n";
+import { PlayIcon } from "./icons";
 
 /**
  * The fixed warning while the app is open without the team: which pages need it, and the two ways on.
@@ -51,8 +52,9 @@ export function TeamOffBanner({ locale: localeOverride }: { locale?: Locale }) {
           type="button"
           data-testid="team-off-start"
           onClick={() => teamOff.startTeam?.()}
-          className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)]"
+          className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)]"
         >
+          <PlayIcon />
           {t.start}
         </button>
       )}
