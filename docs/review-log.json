@@ -1829,6 +1829,41 @@
       "path": "docs/internal/ops/vps-provisioning-map.md",
       "description": "Mappa del provisioning di una VPS nuova (16/10/2026): cosa fanno desktop, gioco e CLI, fiducia nel server, installer e punti con prova automatica",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/scout-coverage/SKILL.md",
+      "description": "Core portal search order and coverage requirements for each profile market",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/scout-language-gate/SKILL.md",
+      "description": "Language screening of search candidates before fetching full advertisements",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/scout-pass-log/SKILL.md",
+      "description": "Search pass counts and candidate outcomes with a closed vocabulary",
+      "last_review": null
+    },
+    {
+      "path": "agents/_skills/team-pause/SKILL.md",
+      "description": "Pause and resume the team or one agent while preserving session context",
+      "last_review": null
+    },
+    {
+      "path": "desktop/public/assistant/SOURCES.md",
+      "description": "Sources and conversion settings of the Assistant portrait assets",
+      "last_review": null
+    },
+    {
+      "path": "docs/adr/0013-codex-sqlite-state-off-the-host-bind.md",
+      "description": "Decision to store Codex SQLite state in the dependency volume while retaining login and sessions in the home bind",
+      "last_review": null
+    },
+    {
+      "path": "web/app/fonts/SOURCE.md",
+      "description": "Source, license and checksums of the bundled JetBrains Mono font",
+      "last_review": null
     }
   ]
 }
