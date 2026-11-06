@@ -1472,21 +1472,11 @@ fn local_chat_runtime_valid(wrapper: &Path, runtime: &Path) -> bool {
     }
 }
 
+/// Docker's compose listing of the `jht` service, rooted in the attested runtime directory. Podman is not listed this
+/// way: the runtime's private shim is `podman --connection <attested machine>`, and `podman compose` may delegate to an
+/// arbitrary host provider, so it is not the runtime's authenticated Compose path. The fixed JHT project is listed by its
+/// labels (`local_listing_args`) and the labels are proved by `judge_candidate`.
 fn local_compose_args(engine: &LocalChatEngine, runtime: &Path) -> Vec<OsString> {
-    // The runtime's private shim is `podman --connection <attested machine>`.
-    // `podman compose` may delegate to an arbitrary host provider, so it is not the runtime's
-    // authenticated Compose path. Enumerate only the fixed JHT project and prove its labels below.
-    // Docker retains the historical Compose lookup, whose project is path based. On Windows too:
-    // compose would need the project name and the provider the wrapper sets in its own environment,
-    // which the app does not have, so the container is listed by its labels there as well.
-    if engine.podman {
-        return vec![
-            OsString::from("ps"),
-            OsString::from("-q"),
-            OsString::from("--filter"),
-            OsString::from("label=com.docker.compose.project=jht"),
-        ];
-    }
     let mut args = vec![OsString::from("compose")];
     args.push(OsString::from("-f"));
     args.push(runtime.join("docker-compose.yml").into_os_string());
@@ -1965,8 +1955,7 @@ fn local_chat_container(
         // On Windows the image is part of the identity, and `inspect` is where it was always read from: a listing that
         // did not carry it, or carried one that is not the runtime's, is settled by one inspect of this container (a
         // listing that agrees costs nothing more).
-        let listed_image_is_the_runtimes = candidate.image.as_deref().is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
-        let image = if cfg!(windows) && candidate.running && candidate.service_is_jht() && !listed_image_is_the_runtimes && engine.podman {
+        let image = if needs_image_inspect(cfg!(windows), engine.podman, &candidate, runtime) {
             inspected_image(engine, &candidate.id, timeout).or_else(|| candidate.image.clone())
         } else {
             candidate.image.clone()
@@ -2019,6 +2008,17 @@ enum Verdict {
     Unchecked(&'static str),
 }
 
+/// Whether the image a container reports is accepted: only Windows asks, where the labels alone are not an identity.
+fn image_is_accepted(windows: bool, image: Option<&str>, runtime: &Path) -> bool {
+    !windows || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime))
+}
+
+/// Whether the listing's image is to be settled by an `inspect`: on Windows, for a Podman container that is running as
+/// `jht`, when the listing carried no image or one that is not the runtime's (the inspect is where it was always read from).
+fn needs_image_inspect(windows: bool, podman: bool, candidate: &Candidate, runtime: &Path) -> bool {
+    windows && podman && candidate.running && candidate.service_is_jht() && !image_is_accepted(windows, candidate.image.as_deref(), runtime)
+}
+
 /// The rules a container meets to be the chat's target, for the Podman listing and the Docker inspect alike:
 /// running, the `jht` service, and (on Podman) the labels and, on Windows, the image of the installed runtime.
 fn judge_candidate(
@@ -2031,7 +2031,7 @@ fn judge_candidate(
     if !candidate.running || !candidate.service_is_jht() {
         return Verdict::Skip;
     }
-    let image_is_the_runtimes = !cfg!(windows) || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
+    let image_is_the_runtimes = image_is_accepted(cfg!(windows), image, runtime);
     if engine.podman {
         if let Some(reason) = attestation_refusal(expected_config_hash, &candidate.labels, runtime, image_is_the_runtimes) {
             return if attest_reason_may_pass(reason) { Verdict::Unchecked(reason) } else { Verdict::Refused(reason) };
@@ -5198,6 +5198,12 @@ mod tests {
     /// arguments and stdin: (root, runtime dir, wrapper, container id). The caller removes `root`.
     #[cfg(unix)]
     fn attested_local_fixture() -> (PathBuf, PathBuf, PathBuf, String) {
+        attested_local_fixture_with(None)
+    }
+
+    /// The fixture with the engine's answer to `ps` said by the test (a shell command), or the one container as Podman lists it.
+    /// Every call of the engine is written, one first word per line, in `engine-calls.log` next to the runtime.
+    fn attested_local_fixture_with(ps_arm: Option<&str>) -> (PathBuf, PathBuf, PathBuf, String) {
         use std::os::unix::fs::PermissionsExt;
 
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -5214,7 +5220,7 @@ mod tests {
         let wrapper = root.join("jht-wrapper.sh");
         fs::write(
             &wrapper,
-            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n[ \"$1:$2\" = desktop-chat:probe ] || exit 9\nprintf 'true\\n'\n",
+            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\ntouch \"$(dirname \"$0\")/wrapper-was-run\"\n[ \"$1:$2\" = desktop-chat:probe ] || exit 9\nprintf 'true\\n'\n",
         )
         .unwrap();
         fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
@@ -5241,10 +5247,14 @@ mod tests {
             ("io.podman.compose.version".to_owned(), serde_json::json!("1.6.0")),
             ("PODMAN_SYSTEMD_UNIT".to_owned(), serde_json::json!(podman_systemd_unit())),
         ]);
+        let listing = serde_json::json!([{"Id": id, "State": "running", "Labels": labels, "Image": "example.invalid/jht:test"}]).to_string();
+        let ps_arm = ps_arm.map(str::to_owned).unwrap_or_else(|| format!("printf '%s\\n' '{listing}'"));
+        let calls = root.join("engine-calls.log");
         fs::write(
             &engine,
             format!(
-                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '{id}\\n' ;;\n  inspect) printf 'true|{}\\n' ;;\n  exec) printf '%s\\n' \"$*\"; cat ;;\n  *) exit 9 ;;\nesac\n",
+                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\necho \"$1\" >> '{}'\ncase \"$1\" in\n  ps) {ps_arm} ;;\n  inspect) printf 'true|{}\\n' ;;\n  exec) printf '%s\\n' \"$*\"; cat ;;\n  *) exit 9 ;;\nesac\n",
+                calls.display(),
                 labels
             ),
         )
@@ -5332,17 +5342,173 @@ mod tests {
     }
 
     #[test]
-    fn a_podman_runtime_is_listed_by_label_on_every_system_and_never_through_compose() {
-        let words = |podman| {
-            local_compose_args(&LocalChatEngine { program: PathBuf::from("docker"), podman }, Path::new("/rt"))
-                .into_iter()
-                .map(|word| word.to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(words(true), ["ps", "-q", "--filter", "label=com.docker.compose.project=jht"]);
-        let docker = words(false);
+    fn a_podman_runtime_is_listed_once_by_the_project_and_service_labels_and_never_through_compose() {
+        let podman: Vec<String> = local_listing_args().into_iter().map(|word| word.to_string_lossy().into_owned()).collect();
+        assert_eq!(
+            podman,
+            ["ps", "-a", "--no-trunc", "--filter", "label=com.docker.compose.project=jht", "--filter", "label=com.docker.compose.service=jht", "--format", "json"]
+        );
+        // no word the Windows PowerShell of before had to be careful with: no quote, no space, no pipe
+        assert!(podman.iter().all(|word| !word.contains(['"', ' ', '|'])));
+        let docker: Vec<String> = local_compose_args(&LocalChatEngine { program: PathBuf::from("docker"), podman: false }, Path::new("/rt"))
+            .into_iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
         assert_eq!(docker[0], "compose");
         assert!(docker.iter().any(|word| word == "--project-directory"));
+    }
+
+    fn listed(rows: &str) -> Result<Vec<Candidate>, &'static str> {
+        parse_listing(rows.as_bytes())
+    }
+
+    #[test]
+    fn the_podman_listing_is_read_as_podman_prints_it() {
+        // the shape of `podman ps -a --format json` (Podman 5.8): an array, `Id`, `State`, `Labels` (an object), `Image`
+        let one = r#"[{"AutoRemove":false,"Id":"833f590b97fcb40a7788fe388c36841c2c5b7d5afd5a60431a41971a7477824f","Image":"example.invalid/jht:test","ImageID":"bf85","Labels":{"com.docker.compose.project":"jht","com.docker.compose.service":"jht"},"Names":["jht"],"State":"running","Status":"Up 2 seconds"}]"#;
+        let candidates = listed(one).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].id, "833f590b97fcb40a7788fe388c36841c2c5b7d5afd5a60431a41971a7477824f");
+        assert!(candidates[0].running && candidates[0].service_is_jht());
+        assert_eq!(candidates[0].image.as_deref(), Some("example.invalid/jht:test"));
+        // a stopped one is listed, and is not running
+        let stopped = listed(&one.replace("\"running\"", "\"exited\"")).unwrap();
+        assert!(!stopped[0].running);
+        // none listed, in the ways an engine says it
+        assert!(listed("[]").unwrap().is_empty());
+        assert!(listed("  \n").unwrap().is_empty());
+        // labels that are not an object are no labels; no image is no image
+        let bare = listed(r#"[{"Id":"aaaaaaaaaaaa","State":"running","Labels":null}]"#).unwrap();
+        assert!(!bare[0].service_is_jht() && bare[0].image.is_none());
+    }
+
+    #[test]
+    fn a_listing_that_is_not_podmans_takes_no_container() {
+        for broken in ["{}", "null", "true", "[1]", "not json", r#"[{"State":"running"}]"#, r#"[{"Id":"zz","State":"running"}]"#, r#"[{"Id":"abc","State":"running"}]"#] {
+            assert_eq!(listed(broken).err(), Some("container_unavailable"), "{broken}");
+        }
+        let many = format!("[{}]", vec![r#"{"Id":"aaaaaaaaaaaa","State":"running"}"#; 17].join(","));
+        assert_eq!(listed(&many).err(), Some("container_unavailable"));
+        assert_eq!(parse_listing(&[0xff, 0xfe]).err(), Some("container_unavailable"));
+    }
+
+    #[test]
+    fn only_windows_asks_for_the_image_and_settles_a_disagreeing_listing_with_one_inspect() {
+        let runtime = Path::new("/nonexistent-runtime");
+        let candidate = |running: bool, service: &str, image: Option<&str>| Candidate {
+            id: "a".repeat(64),
+            running,
+            labels: serde_json::json!({"com.docker.compose.service": service}),
+            image: image.map(str::to_owned),
+        };
+        let pinned = format!("ghcr.io/leopu00/jht@sha256:{}", "b".repeat(64));
+        // elsewhere the image is not asked, whatever the listing says
+        assert!(image_is_accepted(false, None, runtime));
+        assert!(!needs_image_inspect(false, true, &candidate(true, "jht", None), runtime));
+        // on Windows: no image, or one that is not the runtime's, for a running jht of Podman -> one inspect
+        assert!(!image_is_accepted(true, None, runtime));
+        assert!(needs_image_inspect(true, true, &candidate(true, "jht", None), runtime));
+        assert!(needs_image_inspect(true, true, &candidate(true, "jht", Some("example.invalid/other:latest")), runtime));
+        // ...but not for what is not a candidate (stopped, another service) and not for Docker
+        assert!(!needs_image_inspect(true, true, &candidate(false, "jht", None), runtime));
+        assert!(!needs_image_inspect(true, true, &candidate(true, "jht-broker", None), runtime));
+        assert!(!needs_image_inspect(true, false, &candidate(true, "jht", None), runtime));
+        // the runtime's own pinned image is accepted from the listing, with no inspect
+        let dir = std::env::temp_dir().join(format!("jht-image-pin-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("runtime-image"), format!("{pinned}\n")).unwrap();
+        assert!(image_is_accepted(true, Some(&pinned), &dir));
+        assert!(!needs_image_inspect(true, true, &candidate(true, "jht", Some(&pinned)), &dir));
+        assert!(!image_is_accepted(true, Some("example.invalid/other:latest"), &dir));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_container_is_found_with_one_engine_call() {
+        let (root, runtime, wrapper, id) = attested_local_fixture();
+        let team = AttestedLocalTeam::resolve(&wrapper, &runtime, LOCAL_TEST_TIMEOUT).unwrap();
+        assert_eq!(team.container_id(), id);
+        // before: a listing of ids and an inspect for each of the project's containers; now the listing is all
+        let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
+        assert_eq!(calls.lines().collect::<Vec<_>>(), ["ps"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_container_rules_hold_on_the_listing() {
+        let listing = |rows: serde_json::Value| format!("printf '%s\\n' '{rows}'");
+        let jht = |state: &str, service: &str| {
+            serde_json::json!({"Id": "a".repeat(64), "State": state, "Labels": {"com.docker.compose.service": service}})
+        };
+        // each case: what the engine lists -> what the chat finds (an error is the code the page answers with)
+        let cases: Vec<(&str, String, Option<&'static str>)> = vec![
+            ("nothing listed", "printf '[]\\n'".to_owned(), Some("local_team_not_running")),
+            ("a stopped jht", listing(serde_json::json!([jht("exited", "jht")])), Some("local_team_not_running")),
+            ("only the broker", listing(serde_json::json!([jht("running", "jht-broker")])), Some("local_team_not_running")),
+            ("the engine cannot be asked (machine off)", "echo 'cannot connect' >&2; exit 125".to_owned(), Some("local_team_not_running")),
+            ("not Podman's listing", "printf 'not json\\n'".to_owned(), Some("container_unavailable")),
+            ("two jht", listing(serde_json::json!([jht("running", "jht"), {"Id": "b".repeat(64), "State": "running", "Labels": {"com.docker.compose.service": "jht"}}])), Some("container_unavailable")),
+        ];
+        for (name, arm, expected) in cases {
+            let (root, runtime, wrapper, _id) = attested_local_fixture_with(Some(&arm));
+            let found = AttestedLocalTeam::resolve(&wrapper, &runtime, LOCAL_TEST_TIMEOUT).map(|team| team.container_id().to_owned());
+            assert_eq!(found.clone().err(), expected, "{name}: {found:?}");
+            let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
+            assert_eq!(calls.lines().collect::<Vec<_>>(), ["ps"], "{name}: one call, never an inspect or an exec");
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_probe_the_python_and_the_delivery_run_in_the_attested_container_with_the_wrappers_programs() {
+        let (root, runtime, wrapper, id) = attested_local_fixture();
+        let said = |result: Result<ProcessResult, &'static str>| String::from_utf8(result.unwrap().stdout).unwrap();
+        let operation = |operation: RemoteOperation<'_>, input: Option<&[u8]>| run_local_native(&wrapper, &runtime, &operation, input, LOCAL_TEST_TIMEOUT);
+        // the probe: the container is there, nothing is run in it
+        assert_eq!(said(operation(RemoteOperation::Probe, None)), "true\n");
+        // the Python: the launcher the wrapper ran, the program on stdin
+        assert_eq!(
+            said(operation(RemoteOperation::Python, Some(b"0a"))),
+            format!("exec -i {id} python3 -c {LOCAL_PYTHON_LAUNCH}\n0a")
+        );
+        // the delivery: the helper's line, the session as $1, the message on stdin
+        assert_eq!(
+            said(operation(RemoteOperation::Delivery("CAPITANO"), Some(b"[@utente -> @capitano] [CHAT] ciao"))),
+            format!("exec -i {id} sh -c {LOCAL_DELIVERY_SCRIPT} sh CAPITANO\n[@utente -> @capitano] [CHAT] ciao")
+        );
+        // a session outside the chat's grammar is refused before any engine call
+        for bad in ["capitano", "SCOUT-0", "SCOUT-12345", "CAPITANO; id", ""] {
+            assert_eq!(operation(RemoteOperation::Delivery(bad), Some(b"x")).err(), Some("invalid_agent"), "{bad:?}");
+        }
+        assert_eq!(operation(RemoteOperation::Chat(ChatOperation::Read { agent: "capitano", cursor: None }), None).err(), Some("invalid_request"));
+        // all of it found the container once
+        let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
+        assert_eq!(calls.lines().filter(|call| *call == "ps").count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_programs_the_container_runs_carry_no_quote_and_keep_the_wrappers_meaning() {
+        // no double quote in an argument: Windows PowerShell 5.1 dropped them (T71), and the engine gets these as they are
+        assert!(!LOCAL_PYTHON_LAUNCH.contains('"') && !LOCAL_DELIVERY_SCRIPT.contains('"'));
+        // the Python launcher is the wrapper's: read the hex of the program on the first line and run it
+        assert_eq!(LOCAL_PYTHON_LAUNCH, "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())");
+        // the delivery keeps the message one word and its * and ? from matching files, without quotes
+        assert!(LOCAL_DELIVERY_SCRIPT.starts_with("IFS=; set -f; msg=$(cat); exec jht-tmux-send"));
+        let wrapper = include_str!("../../../scripts/jht-wrapper.ps1");
+        assert!(wrapper.contains(&format!("'{LOCAL_PYTHON_LAUNCH}'")), "the wrapper's launcher changed: the native one must follow");
+        assert!(wrapper.contains(&format!("sh -c '{LOCAL_DELIVERY_SCRIPT}'")), "the wrapper's delivery changed: the native one must follow");
+    }
+
+    #[test]
+    fn the_local_operations_that_ask_the_container_no_longer_run_the_wrapper() {
+        let source = include_str!("direct_chat.rs");
+        let local = source.split("ValidatedHost::Local => {\n            crate::account_scope::verify_local_runtime_owner(").nth(1).unwrap().split("ValidatedHost::Vps { .. } => {").next().unwrap();
+        assert!(!local.contains("run_verified_local_wrapper"), "the local branch of run_connection starts the wrapper again");
+        assert!(local.contains("run_local_native("));
     }
 
     #[cfg(unix)]
@@ -5458,7 +5624,7 @@ mod tests {
         fs::write(
             &engine,
             format!(
-                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '{}\\n' ;;\n  inspect) printf 'true|{{}}\\n' ;;\n  exec) touch '{}' ;;\n  *) exit 9 ;;\nesac\n",
+                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '%s\\n' '[{{\"Id\":\"{}\",\"State\":\"running\",\"Labels\":{{}}}}]' ;;\n  exec) touch '{}' ;;\n  *) exit 9 ;;\nesac\n",
                 "a".repeat(64),
                 executed.display(),
             ),
@@ -5507,7 +5673,7 @@ mod tests {
         fs::write(
             &engine,
             format!(
-                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '{}\\n' ;;\n  inspect) printf 'true|{{\"com.docker.compose.service\":\"jht\"}}\\n' ;;\n  exec) touch '{}' ;;\n  *) exit 9 ;;\nesac\n",
+                "#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\ncase \"$1\" in\n  ps) printf '%s\\n' '[{{\"Id\":\"{}\",\"State\":\"running\",\"Labels\":{{\"com.docker.compose.service\":\"jht\"}}}}]' ;;\n  exec) touch '{}' ;;\n  *) exit 9 ;;\nesac\n",
                 "a".repeat(64),
                 executed.display(),
             ),
@@ -6121,28 +6287,12 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn local_probe_uses_verified_wrapper_and_redacts_runtime_failure() {
-        use std::{
-            fs,
-            os::unix::fs::PermissionsExt,
-            time::{SystemTime, UNIX_EPOCH},
-        };
-
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!("jht-chat-wrapper-{nonce}"));
-        fs::create_dir_all(&dir).unwrap();
-        let wrapper = dir.join("jht");
-        fs::write(
-            &wrapper,
-            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\n[ \"$1:$2\" = desktop-chat:probe ] || exit 9\nprintf 'true\\n'\n",
-        )
-        .unwrap();
-        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+    fn local_probe_finds_the_container_natively_and_never_runs_the_wrapper() {
+        // the fixture's wrapper leaves a flag next to itself if it is ever run
+        let (root, runtime, wrapper, _id) = attested_local_fixture();
+        let flag = root.join("wrapper-was-run");
         let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-a");
-        let owner = dir.join(".desktop-account-scope");
+        let owner = root.join(".desktop-account-scope");
         fs::write(&owner, format!("{}\n", scope.digest())).unwrap();
         let connection = Connection {
             app: None,
@@ -6151,7 +6301,7 @@ mod tests {
             validated: ValidatedHost::Local,
             runtime: None,
             local_wrapper: Some(wrapper.clone()),
-            local_runtime: None,
+            local_runtime: Some(runtime.clone()),
             local_owner_marker: Some(owner),
             control_path: None,
             tunnel: None,
@@ -6160,17 +6310,38 @@ mod tests {
         assert_eq!(probe(&connection).state, "ready");
         // a local chat never pays an ssh connection per read, even where ssh has no master
         assert_eq!(serde_json::to_value(probe(&connection)).unwrap(), serde_json::json!({"state": "ready"}));
+        // the engine was asked ONCE for both probes (the second used the kept container) and was only listed, never run in
+        let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
+        assert_eq!(calls.lines().collect::<Vec<_>>(), ["ps"]);
+        assert!(!flag.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
 
-        fs::write(
-            &wrapper,
-            "#!/bin/sh\nJHT_HOST_RUNTIME_PROTOCOL=1\nJHT_DESKTOP_CHAT_PROTOCOL=1\nJHT_ONBOARDING_SNAPSHOT_PROTOCOL=1\nprintf 'private runtime detail' >&2\nexit 1\n",
-        )
-        .unwrap();
+    #[cfg(unix)]
+    #[test]
+    fn local_probe_says_why_there_is_no_container() {
+        // no container listed: this computer's team is not running, the code the Messages page answers with «Start the team»
+        let (root, runtime, wrapper, _id) = attested_local_fixture_with(Some("printf '[]\\n'"));
+        let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-a");
+        let owner = root.join(".desktop-account-scope");
+        fs::write(&owner, format!("{}\n", scope.digest())).unwrap();
+        let connection = Connection {
+            app: None,
+            scope,
+            host: ExecutionHost::Local,
+            validated: ValidatedHost::Local,
+            runtime: None,
+            local_wrapper: Some(wrapper),
+            local_runtime: Some(runtime),
+            local_owner_marker: Some(owner),
+            control_path: None,
+            tunnel: None,
+            link: VpsLink::PerCommand,
+        };
         let failed = probe(&connection);
         assert_eq!(failed.state, "error");
-        // this computer's team with no container is «not running», the code the Messages page answers with «Start the team»
         assert_eq!(failed.code, Some("local_team_not_running"));
-        fs::remove_dir_all(dir).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
