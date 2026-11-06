@@ -150,8 +150,8 @@ interface SignInOptions {
   locale: Locale;
   /** Which provider the window names (the team's, else the one the app remembers). */
   provider: () => SubscriptionProvider;
-  /** Asks the team after the window ended; true when it holds the new sign-in. */
-  holds: () => Promise<boolean>;
+  /** Asks the team after the window ended: null when it holds the new sign-in, else the code the window says. */
+  holds: () => Promise<string | null>;
 }
 
 /**
@@ -189,11 +189,11 @@ export function useSignInWindow({ locale, provider, holds }: SignInOptions) {
     session.inputRequest = null;
     setLogin({ provider: provider(), status: "connecting", actions: [], connectionState: "connecting", startedAt: Date.now() });
     if (await runSession({ session, attempt, current, fail, setLogin, failureText }) !== "ended") return;
-    // The window says the sign-in ended; the team says whether it holds.
-    const held = await holds();
+    // The window says the sign-in ended; the team says whether it holds. Anything but a yes stays in the window, on the page in use.
+    const problem = await holds();
     if (!current()) return;
-    if (held) setLogin(null);
-    else fail("provider_relogin_unverified");
+    if (problem === null) setLogin(null);
+    else fail(problem);
   }, [failureText, holds, provider]);
 
   const cancel = useCallback(() => cancelSession(sessionRef.current, setLogin), []);

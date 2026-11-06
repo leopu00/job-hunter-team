@@ -6,8 +6,8 @@ import { readProviderLoginState, type LoginProvider, type ProviderLoginResult, t
 /** What the app knows of the team's provider sign-in right now. */
 export type LoginView =
   | { kind: "loading" }
-  | { kind: "state"; state: ProviderLoginState; provider: LoginProvider }
-  | { kind: "failed"; code: string };
+  | { kind: "state"; state: ProviderLoginState; provider: LoginProvider; here: boolean }
+  | { kind: "failed"; code: string; here?: boolean };
 
 /** The state is read again this often while the app is open. */
 export const REREAD_EVERY_MS = 5 * 60 * 1000;
@@ -15,7 +15,8 @@ export const REREAD_EVERY_MS = 5 * 60 * 1000;
 export const FOCUS_REREAD_MIN_MS = 60 * 1000;
 
 export function toView(result: ProviderLoginResult): LoginView {
-  return result.ok ? { kind: "state", state: result.state, provider: result.provider } : { kind: "failed", code: result.error };
+  if (result.ok) return { kind: "state", state: result.state, provider: result.provider, here: result.here };
+  return result.here === undefined ? { kind: "failed", code: result.error } : { kind: "failed", code: result.error, here: result.here };
 }
 
 /** The team's word on its sign-in: read at once, every few minutes, when the window comes back, and on demand. */
