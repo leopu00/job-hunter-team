@@ -132,4 +132,3 @@ describe("DirectChatScreen with the tabs of the Team page", () => {
     expect(screen.getByTestId("direct-chat-led-scout")).toBeInTheDocument();
   });
 });
-

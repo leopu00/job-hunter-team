@@ -1565,7 +1565,7 @@ describe("DashboardApp onboarding router", () => {
     // the team's VPS is what the pages read, with what writes turned on: never the cloud
     expect(existingTeamReadOnly()).toBeNull();
     expect(existingTeamView()).toMatchObject({ full: true });
-    expect(navigate).toHaveBeenCalledWith("/agents", { replace: true });
+    expect(navigate).toHaveBeenCalledWith("/messages?tab=squad", { replace: true });
     expect(markOnboardingStarted).toHaveBeenCalledWith("existing-agents-off");
     expect(markOnboardingReady).not.toHaveBeenCalled();
     expect(screen.queryByTestId("existing-team-modal")).not.toBeInTheDocument();
