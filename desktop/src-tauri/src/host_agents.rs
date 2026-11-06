@@ -65,12 +65,24 @@ mod platform {
         Ok(Some(file))
     }
 
-    #[cfg(not(unix))]
+    /// On Windows the same two, from `host_files_windows` (the primitives the saved positions use): a link or a junction is
+    /// not followed, the checks are made on the open handle, and the share mode never stops the team from writing.
+    #[cfg(windows)]
+    pub(super) fn real_folder(path: &Path) -> Result<bool, &'static str> {
+        crate::host_files_windows::real_folder(path)
+    }
+
+    #[cfg(windows)]
+    pub(super) fn open_regular(path: &Path, cap: Option<u64>) -> Result<Option<File>, &'static str> {
+        Ok(crate::host_files_windows::open_source(path, cap.unwrap_or(u64::MAX))?.map(|source| source.into_file()))
+    }
+
+    #[cfg(not(any(unix, windows)))]
     pub(super) fn real_folder(_path: &Path) -> Result<bool, &'static str> {
         Err("host_db_unavailable")
     }
 
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     pub(super) fn open_regular(_path: &Path, _cap: Option<u64>) -> Result<Option<File>, &'static str> {
         Err("host_db_unavailable")
     }
@@ -364,7 +376,7 @@ pub(crate) fn read_chat(home: &Path, agent: &str, cursor: Option<&str>) -> Resul
 
 #[cfg(test)]
 mod tests {
-    #![cfg(unix)]
+    #![cfg(any(unix, windows))]
     use super::*;
     use serde_json::json;
     use std::{
@@ -457,6 +469,7 @@ mod tests {
         assert_eq!(names(&read_roster(&broken.home).unwrap()), ["CAPITANO"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn what_is_not_safe_to_read_is_refused_and_never_followed() {
         use std::os::unix::fs::symlink;
@@ -500,6 +513,7 @@ mod tests {
         assert_eq!(read_chat(&agents.home, "capitano", None), Err("host_db_unsafe"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_time_of_a_chat_file_is_not_read_through_a_link_in_place_of_a_folder() {
         use std::os::unix::fs::symlink;
@@ -525,6 +539,78 @@ mod tests {
         assert_eq!(scout["activity"], json!(1_793_829_600));
     }
 
+    /// A junction (the link a user without any privilege can make): `mklink /J`.
+    #[cfg(windows)]
+    fn junction(link: &Path, target: &Path) -> bool {
+        Command::new("cmd").args(["/C", "mklink", "/J"]).arg(link).arg(target).output().map(|o| o.status.success()).unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_what_is_not_safe_to_read_is_refused_and_never_followed() {
+        // the roster: a folder in its place, a second name, over the cap
+        let dir = World::new("w-roster-dir");
+        std::fs::create_dir_all(dir.home.join("logs/team-roster.json")).unwrap();
+        assert_eq!(read_roster(&dir.home), Err("host_db_unsafe"));
+        let hard = World::new("w-roster-hard");
+        hard.put("logs/team-roster.json", ROSTER.as_bytes());
+        std::fs::hard_link(hard.home.join("logs/team-roster.json"), hard.home.join("logs/other.json")).unwrap();
+        assert_eq!(read_roster(&hard.home), Err("host_db_unsafe"));
+        let big = World::new("w-roster-big");
+        big.put("logs/team-roster.json", &vec![b' '; (1 << 20) + 1]);
+        assert_eq!(read_roster(&big.home), Err("host_db_unsafe"));
+        // a symbolic link, where Windows lets this user make one (it needs a privilege or the developer mode)
+        let linked = World::new("w-roster-link");
+        linked.put("elsewhere.json", ROSTER.as_bytes());
+        std::fs::create_dir_all(linked.home.join("logs")).unwrap();
+        if std::os::windows::fs::symlink_file(linked.home.join("elsewhere.json"), linked.home.join("logs/team-roster.json")).is_ok() {
+            assert_eq!(read_roster(&linked.home), Err("host_db_unsafe"));
+        }
+        // the logs folder and the agents' folder as junctions
+        let logs = World::new("w-logs-junction");
+        logs.put("real/team-roster.json", ROSTER.as_bytes());
+        if junction(&logs.home.join("logs"), &logs.home.join("real")) {
+            assert_eq!(read_roster(&logs.home), Err("host_db_unsafe"));
+        }
+        let agents = World::new("w-agents-junction");
+        agents.put("real/capitano/chat.jsonl", b"{\"text\":\"x\"}\n");
+        if junction(&agents.home.join("agents"), &agents.home.join("real")) {
+            assert_eq!(read_chat(&agents.home, "capitano", None), Err("host_db_unsafe"));
+        }
+        // a chat: a second name, a folder in its place
+        let chat = World::new("w-chat-hard");
+        chat.put("agents/capitano/chat.jsonl", b"{\"text\":\"x\"}\n");
+        std::fs::hard_link(chat.home.join("agents/capitano/chat.jsonl"), chat.home.join("copy.jsonl")).unwrap();
+        assert_eq!(read_chat(&chat.home, "capitano", None), Err("host_db_unsafe"));
+        let folder = World::new("w-chat-dir");
+        std::fs::create_dir_all(folder.home.join("agents/capitano/chat.jsonl")).unwrap();
+        assert_eq!(read_chat(&folder.home, "capitano", None), Err("host_db_unsafe"));
+        // the team's folder as a junction: not a team
+        let home = World::new("w-home-junction");
+        home.put("real/logs/team-roster.json", ROSTER.as_bytes());
+        let door = home.base.join("door");
+        if junction(&door, &home.home.join("real")) {
+            assert_eq!(read_roster(&door), Err("host_db_unsafe"));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_the_reader_does_not_stop_the_team_from_writing_the_chat() {
+        let world = World::new("w-sharing");
+        world.put("agents/capitano/chat.jsonl", b"{\"role\":\"user\",\"text\":\"first\"}\n");
+        let page = read_chat(&world.home, "capitano", Some("0")).unwrap();
+        assert_eq!(page["messages"].as_array().unwrap().len(), 1);
+        // nothing of ours is open any more: the team appends, and the next page sees it
+        let mut file = std::fs::OpenOptions::new().append(true).open(world.home.join("agents/capitano/chat.jsonl")).unwrap();
+        std::io::Write::write_all(&mut file, b"{\"role\":\"agent\",\"text\":\"second\"}\n").unwrap();
+        drop(file);
+        // (a page from a cursor above 0 starts at the next line, as the container's reader does; from 0 it is the whole file)
+        let again = read_chat(&world.home, "capitano", Some("0")).unwrap();
+        let texts: Vec<&str> = again["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
+        assert_eq!(texts, ["first", "second"]);
+    }
+
     #[test]
     fn an_agent_that_is_not_one_of_the_closed_grammar_is_never_a_path() {
         let world = World::new("grammar");
@@ -543,7 +629,7 @@ mod tests {
     /// The container's reader on the same folder, run with python3 (`None` where there is none).
     fn script_page(home: &Path, agent: &str, cursor: Option<&str>) -> Option<Value> {
         let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../shared/skills/agent_chat.py");
-        let mut command = Command::new("python3");
+        let mut command = Command::new(if cfg!(windows) { "python" } else { "python3" });
         command.arg(script).args(["read", agent]);
         if let Some(cursor) = cursor {
             command.arg(cursor);
@@ -552,6 +638,9 @@ mod tests {
             .env("JHT_HOME", home)
             .env("JHT_CHAT_FLUSH_ON_READ", "0")
             .env("PYTHONDONTWRITEBYTECODE", "1")
+            // the script prints text of every language: on Windows its output goes through the console's code page unless told
+            .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUTF8", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
