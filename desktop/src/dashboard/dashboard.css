@@ -538,6 +538,8 @@
   margin-bottom: 0.4rem;
 }
 .theme-editor__field { grid-template-columns: 7rem 1fr; }
+/* the name the theme is saved under: apart from the file buttons above, next to Save below */
+.theme-editor__name { margin-top: 0.9rem; }
 .theme-editor select,
 .theme-editor input[type="text"] {
   padding: 0.25rem 0.4rem;

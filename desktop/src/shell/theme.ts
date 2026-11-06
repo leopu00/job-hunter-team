@@ -272,3 +272,127 @@ export function watchSystemTheme(
   query.addEventListener("change", listener);
   return () => query?.removeEventListener("change", listener);
 }
+
+/**
+ * The person's themes, each with a name: a list kept apart from the theme in force. The theme in force stays the pair of
+ * keys above (the preference «custom» and the palette in CUSTOM_STORAGE_KEY), which dashboard.html reads before the
+ * page is drawn; choosing a saved theme copies it there. The single palette saved before names existed is the first
+ * entry of the list until the list is written, with no name (the menu calls it «Personale»).
+ */
+export const LIBRARY_STORAGE_KEY = "jht-desktop-theme-library";
+export const LIBRARY_MAX = 12;
+export const THEME_NAME_MAX = 40;
+export type SavedTheme = CustomTheme & { name: string };
+
+const nameKey = (name: string) => name.trim().toLocaleLowerCase();
+const paletteOf = ({ v, start, family, seeds, vars }: SavedTheme): CustomTheme => ({ v, start, family, seeds, vars });
+
+function parseSaved(raw: unknown): SavedTheme | null {
+  if (!isPlainObject(raw) || typeof raw.name !== "string") return null;
+  const name = raw.name.trim();
+  if (name.length > THEME_NAME_MAX) return null;
+  const { name: _name, ...rest } = raw;
+  const palette = parseCustomTheme(JSON.stringify(rest));
+  return palette ? { ...palette, name } : null;
+}
+
+/** The saved themes, in the order they were saved. An entry that is not exactly right is left out, never repaired. */
+export function readThemeLibrary(storage: ThemeStorage): SavedTheme[] {
+  let raw: string | null;
+  try {
+    raw = storage.getItem(LIBRARY_STORAGE_KEY);
+  } catch {
+    return [];
+  }
+  if (raw === null) {
+    const legacy = readStoredCustom(storage);
+    return legacy ? [{ ...legacy, name: "" }] : [];
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!isPlainObject(value) || value.v !== 1 || !Array.isArray(value.themes)) return [];
+  const seen = new Set<string>();
+  const out: SavedTheme[] = [];
+  for (const entry of value.themes) {
+    const saved = parseSaved(entry);
+    if (!saved || seen.has(nameKey(saved.name))) continue;
+    seen.add(nameKey(saved.name));
+    out.push(saved);
+    if (out.length === LIBRARY_MAX) break;
+  }
+  return out;
+}
+
+function writeThemeLibrary(storage: ThemeStorage, themes: SavedTheme[]) {
+  try {
+    storage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ v: 1, themes }));
+  } catch {
+    // A denied/full localStorage keeps the old list: the theme in force is still applied.
+  }
+}
+
+const samePalette = (a: CustomTheme, b: CustomTheme) => JSON.stringify(paletteOf(a as SavedTheme)) === JSON.stringify(paletteOf(b as SavedTheme));
+
+/** Which saved theme is in force (its place in the list), or -1 when none is. */
+export function activeSavedIndex(storage: ThemeStorage, library: SavedTheme[] = readThemeLibrary(storage)): number {
+  if (readStoredPreference(storage) !== CUSTOM_THEME) return -1;
+  const active = readStoredCustom(storage);
+  return active ? library.findIndex((saved) => samePalette(saved, active)) : -1;
+}
+
+export type SaveNamedResult = "saved" | "invalid" | "taken" | "full";
+
+/**
+ * Saves a theme under its name and puts it in force. `replacing` is the name of the saved theme being edited: that entry
+ * is replaced (and renamed). A name already used by ANOTHER saved theme is refused, so nothing is overwritten unasked;
+ * the list holds LIBRARY_MAX themes at most.
+ */
+export function saveNamedTheme(
+  theme: SavedTheme,
+  replacing?: string,
+  storage: ThemeStorage = window.localStorage,
+  root: HTMLElement = document.documentElement,
+): SaveNamedResult {
+  const name = theme.name.trim();
+  if (name.length === 0 || name.length > THEME_NAME_MAX) return "invalid";
+  const palette = parseCustomTheme(JSON.stringify(paletteOf(theme)));
+  if (!palette) return "invalid";
+  const library = readThemeLibrary(storage);
+  const own = replacing === undefined ? -1 : library.findIndex((saved) => nameKey(saved.name) === nameKey(replacing));
+  const clash = library.findIndex((saved) => nameKey(saved.name) === nameKey(name));
+  if (clash !== -1 && clash !== own) return "taken";
+  const entry = { ...palette, name };
+  if (own !== -1) library[own] = entry;
+  else if (library.length >= LIBRARY_MAX) return "full";
+  else library.push(entry);
+  writeThemeLibrary(storage, library);
+  return saveCustomTheme(palette, storage, root) ? "saved" : "invalid";
+}
+
+/** Puts the saved theme number `index` in force. */
+export function chooseSavedTheme(
+  index: number,
+  storage: ThemeStorage = window.localStorage,
+  root: HTMLElement = document.documentElement,
+): boolean {
+  const saved = readThemeLibrary(storage)[index];
+  return saved ? saveCustomTheme(paletteOf(saved), storage, root) : false;
+}
+
+/** Deletes the saved theme number `index`. If it was the one in force, the system's palette comes back. */
+export function deleteSavedTheme(
+  index: number,
+  storage: ThemeStorage & Pick<Storage, "removeItem"> = window.localStorage,
+  root: HTMLElement = document.documentElement,
+): AppliedTheme {
+  const library = readThemeLibrary(storage);
+  if (!library[index]) return readStoredTheme(storage);
+  const wasActive = activeSavedIndex(storage, library) === index;
+  library.splice(index, 1);
+  writeThemeLibrary(storage, library);
+  return wasActive ? deleteCustomTheme(storage, root) : readStoredTheme(storage);
+}

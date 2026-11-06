@@ -61,6 +61,11 @@ impl Source {
         self.stamp
     }
 
+    /// The open file itself, for a reader that goes on with it (the stamp was only for the copy).
+    pub(crate) fn into_file(self) -> File {
+        self.file
+    }
+
     /// The file this handle has open, still the same file and still with one name.
     pub(crate) fn still_the_same(&self) -> bool {
         match info_of(&self.file) {
@@ -163,4 +168,14 @@ pub(crate) fn random_name() -> Result<String, &'static str> {
         return Err("host_db_unreadable");
     }
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// `Ok(true)` for a real folder, `Ok(false)` for none, an error for a link, a junction or anything else in its place.
+pub(crate) fn real_folder(path: &Path) -> Result<bool, &'static str> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_dir() && is_reparse_point(path) == Some(false) => Ok(true),
+        Ok(_) => Err("host_db_unsafe"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err("host_db_unreadable"),
+    }
 }

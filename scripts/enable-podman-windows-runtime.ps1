@@ -592,23 +592,31 @@ function Install-PodmanForThisUser {
   try {
     if ([IO.File]::Exists($Url)) { Copy-Item -LiteralPath $Url -Destination $zipFile -Force }
     else { Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $zipFile -ErrorAction Stop }
-    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipFile).Hash
-    if ($actual -ne $Sha256) { throw "the Podman $Version download has SHA-256 $actual, expected $Sha256" }
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $archive = [IO.Compression.ZipFile]::OpenRead($zipFile)
+    # The file is opened ONCE, for reading, with a share mode that lets nobody write to it or delete it while it is open: the
+    # digest is taken of that open file and the archive is read from the same stream, so what is checked is what is read
+    # (a file put in its place between the check and the reading is not read).
+    $stream = [IO.File]::Open($zipFile, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     try {
-      foreach ($name in $PodmanZipPrograms) {
-        $entry = $archive.GetEntry("podman-$Version/usr/bin/$name")
-        if (-not $entry -or $entry.Length -le 0 -or $entry.Length -gt 200MB) { throw "the Podman $Version download has no usable $name" }
-        $target = Join-Path $Destination "$name.new-$PID"
-        $staged.Add($target)
-        $from = $entry.Open()
-        try {
-          $to = [IO.File]::Open($target, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
-          try { $from.CopyTo($to) } finally { $to.Dispose() }
-        } finally { $from.Dispose() }
-      }
-    } finally { $archive.Dispose() }
+      $hasher = [System.Security.Cryptography.SHA256]::Create()
+      try { $actual = ([BitConverter]::ToString($hasher.ComputeHash($stream)) -replace '-', '') } finally { $hasher.Dispose() }
+      if ($actual -ne $Sha256) { throw "the Podman $Version download has SHA-256 $actual, expected $Sha256" }
+      $stream.Position = 0
+      Add-Type -AssemblyName System.IO.Compression
+      $archive = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compression.ZipArchiveMode]::Read, $true)
+      try {
+        foreach ($name in $PodmanZipPrograms) {
+          $entry = $archive.GetEntry("podman-$Version/usr/bin/$name")
+          if (-not $entry -or $entry.Length -le 0 -or $entry.Length -gt 200MB) { throw "the Podman $Version download has no usable $name" }
+          $target = Join-Path $Destination "$name.new-$PID"
+          $staged.Add($target)
+          $from = $entry.Open()
+          try {
+            $to = [IO.File]::Open($target, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+            try { $from.CopyTo($to) } finally { $to.Dispose() }
+          } finally { $from.Dispose() }
+        }
+      } finally { $archive.Dispose() }
+    } finally { $stream.Dispose() }
     for ($i = 0; $i -lt $PodmanZipPrograms.Count; $i++) {
       Move-Item -LiteralPath $staged[$i] -Destination (Join-Path $Destination $PodmanZipPrograms[$i]) -Force
     }
