@@ -230,10 +230,12 @@ def test_the_command_line_answers_one_json_line(home, capsys):
     assert json.loads(capsys.readouterr().out) == {"ok": False, "code": "until_invalid"}
 
 
-def test_the_sentinel_sweeps_the_burst_at_every_tick_right_after_the_burn():
-    source = (REPO_ROOT / ".launcher" / "sentinel-bridge.py").read_text(encoding="utf-8")
-    body = source[source.index("_burn_intent_notify_user()\n        _burn_intent_sweep()"):]
-    assert body.index("_burn_intent_sweep()") < body.index("_burst_sweep()") < body.index("_burn_intent_status()")
+def test_the_sentinel_sweeps_the_burst_at_every_tick_right_after_the_burn(tmp_path, monkeypatch):
+    from sentinel_tick_fixture import SingleTick
+    world = SingleTick(tmp_path, monkeypatch)
+    world.run(ticks=2)
+    lifecycle = [event for event in world.trace if event in ("announce", "burn_sweep", "burst_sweep", "intent")]
+    assert lifecycle == ["announce", "burn_sweep", "burst_sweep", "intent"] * 2
 
 
 def test_the_script_runs_as_the_container_runs_it(home):

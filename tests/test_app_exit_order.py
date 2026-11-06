@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUST = (ROOT / "desktop" / "src-tauri" / "src" / "app_exit.rs").read_text(encoding="utf-8")
 GAME = (ROOT / "game" / "scripts" / "setup" / "setup_service.gd").read_text(encoding="utf-8")
+GAME_ORDER = (ROOT / "game/scripts/setup/graceful_shutdown_request.gd").read_text(encoding="utf-8")
 SKILL = (ROOT / "agents" / "_skills" / "graceful-shutdown" / "SKILL.md").read_text(encoding="utf-8")
 
 
@@ -21,8 +22,10 @@ def rust_const(name: str) -> str:
 
 def test_the_order_is_the_games_word_for_word():
     flag = rust_const("READY_FLAG")
-    game = re.search(r'var order := (.*?)\n\tvar res', GAME, re.S).group(1)
-    literals = re.findall(r'"((?:[^"\\]|\\.)*)"', game)
+    game = re.search(r'var order := (.*?)\n\tvar result', GAME_ORDER, re.S)
+    assert game is not None, "the shutdown order must be present in its delivery module"
+    literals = re.findall(r'"((?:[^"\\]|\\.)*)"', game.group(1))
+    assert len(literals) == 5, "every fragment of the protocol order must be compared"
     expected = literals[0] + literals[1] + literals[2] + literals[3] + flag + literals[4]
     assert rust_const("ORDER") == expected
 

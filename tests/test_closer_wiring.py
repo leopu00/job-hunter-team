@@ -148,13 +148,20 @@ def test_il_watchdog_riconosce_la_sessione_del_closer():
     assert r.stdout.split("\n")[1].strip() == "closer 1"
 
 
-def test_il_kickoff_del_watchdog_rimanda_il_closer_alla_coda():
-    """Il messaggio parte in background con lo stdout chiuso: si asserisce sul
-    ramo del `case`, che e' cio' che decide il testo."""
-    fn = _function(WATCHDOG, "worker_kickoff")
-    branch = re.search(r"^\s*closer\)\s*body=\"([^\"]*)\"", fn, re.M)
-    assert branch, "il watchdog ricrea CLOSER-1 senza dirgli da dove ripartire"
-    assert "apply_gate.py queue" in branch.group(1)
+def test_il_kickoff_del_watchdog_rimanda_il_closer_alla_coda(tmp_path, monkeypatch):
+    import agent_pause
+    import standby
+    from watchdog_delivery import kickoff
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    (tmp_path / "i18n-prefs.json").write_text('{"locale":"en"}', encoding="utf-8")
+    monkeypatch.setattr(agent_pause, "is_paused", lambda *a, **k: False)
+    monkeypatch.setattr(standby, "is_active", lambda *a, **k: False)
+    sent, delays = [], []
+    assert kickoff("CLOSER-1", "closer", sleeper=delays.append,
+                   sender=lambda session, text: sent.append((session, text)) or True)
+    assert len(sent) == 1 and sent[0][0] == "CLOSER-1"
+    assert "apply_gate.py queue" in sent[0][1]
+    assert delays == [12]
 
 
 # ── Prompt e skill ───────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ROSTER_PATH = ROOT / "shared" / "skills" / "team_roster.py"
 TOOL_PATH = ROOT / "agents" / "_tools" / "jht-agent-contain"
 WATCHDOG_PATH = ROOT / ".launcher" / "agent-watchdog.sh"
+WATCHDOG_DELIVERY = ROOT / "shared" / "skills" / "watchdog_delivery.py"
 
 
 def _load_python(name: str, path: Path):
@@ -223,6 +224,8 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
     bin_dir.mkdir()
     tmux_calls = tmp_path / "tmux-calls"
     sender_calls = tmp_path / "sender-calls"
+    sender = _executable(tmp_path / "fake-sender",
+                         f'printf "%s\\n" "$*" >> "{_bash_path(sender_calls)}"\n')
     fake_roster = tmp_path / "fake-roster.py"
     fake_roster.write_text(
         "import sys\n"
@@ -233,7 +236,8 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
     script = "\n".join((
         f'JHT_HOME="{_bash_path(tmp_path)}"',
         f'ROSTER_TOOL="{_bash_path(fake_roster)}"',
-        'TMUX_SENDER="fake_sender"',
+        f'TMUX_SENDER="{_bash_path(sender)}"',
+        f'JHT_WATCHDOG_DELIVERY="{_bash_path(WATCHDOG_DELIVERY)}"',
         f'LOG="{_bash_path(logs / "watchdog.log")}"',
         "\n".join((
             "tmux() {",
@@ -250,7 +254,6 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
             '  esac',
             "}",
         )),
-        f'fake_sender() {{ echo "$*" >> "{_bash_path(sender_calls)}"; }}',
         _watchdog_function("log"),
         _watchdog_function("capture_for_containment"),
         _watchdog_function("maybe_enforce_containments"),
@@ -262,7 +265,7 @@ def _reenforce(tmp_path, pane_text="preserved pane before enforcement"):
         ["bash", _bash_path(script_path)], text=True, capture_output=True,
         env={**os.environ, "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
              "JHT_HOME": str(tmp_path), "JHT_ROSTER_TOOL": str(ROSTER_PATH),
-             "JHT_TMUX_SENDER": "fake_sender"},
+             "JHT_TMUX_SENDER": str(sender)},
     )
     assert result.returncode == 0, result.stderr
     assert tmux_calls.exists(), f"stdout={result.stdout!r} stderr={result.stderr!r}"
@@ -366,6 +369,8 @@ def test_watchdog_lifts_an_expired_mode_hold_says_so_and_does_not_recapture_it(t
     logs = tmp_path / "logs"
     logs.mkdir()
     sender_calls = tmp_path / "sender-calls"
+    sender = _executable(tmp_path / "fake-sender",
+                         f'printf "%s\\n" "$*" >> "{_bash_path(sender_calls)}"\n')
     tmux_calls = tmp_path / "tmux-calls"
     fake_roster = tmp_path / "fake-roster.py"
     fake_roster.write_text(
@@ -377,10 +382,10 @@ def test_watchdog_lifts_an_expired_mode_hold_says_so_and_does_not_recapture_it(t
     script = "\n".join((
         f'JHT_HOME="{_bash_path(tmp_path)}"',
         f'ROSTER_TOOL="{_bash_path(fake_roster)}"',
-        'TMUX_SENDER="fake_sender"',
+        f'TMUX_SENDER="{_bash_path(sender)}"',
+        f'JHT_WATCHDOG_DELIVERY="{_bash_path(WATCHDOG_DELIVERY)}"',
         f'LOG="{_bash_path(logs / "watchdog.log")}"',
         f'tmux() {{ echo "$*" >> "{_bash_path(tmux_calls)}"; }}',
-        f'fake_sender() {{ echo "$*" >> "{_bash_path(sender_calls)}"; }}',
         _watchdog_function("log"),
         _watchdog_function("capture_for_containment"),
         _watchdog_function("maybe_enforce_containments"),

@@ -664,13 +664,20 @@ def test_only_the_agent_spawns_are_guarded_not_the_bridge_and_daemons():
 # ── il bridge manda l'avviso ──────────────────────────────────────────────────
 
 
-def test_the_sentinel_bridge_asks_host_vitals_to_notify_at_every_tick():
-    text = BRIDGE.read_text(encoding="utf-8")
-    body = text[text.index("def _sample_vitals_and_maybe_alert"):]
-    body = body[: body.index("\ndef ")]
-    assert '"notify-disk"' in body
-    # prima dell'uscita anticipata per RAM/CPU sotto soglia
-    assert body.index('"notify-disk"') < body.index("if not over:")
+def test_the_sentinel_bridge_asks_host_vitals_to_notify_at_every_tick(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    spec = importlib.util.spec_from_file_location("sentinel_disk_tick", BRIDGE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    calls = []
+    monkeypatch.setattr(module, "_take_vitals_sample", lambda: {"mem": {"pct": 20}})
+    monkeypatch.setattr(module, "_sustained_cpu", lambda: None)
+    monkeypatch.setattr(module, "jht_tmux_send", lambda *a: pytest.fail("quiet vitals sent an alarm"))
+    monkeypatch.setattr(module.subprocess, "run", lambda argv, **kw:
+        calls.append(argv) or subprocess.CompletedProcess(argv, 0, "none\n", ""))
+    module._sample_vitals_and_maybe_alert()
+    module._sample_vitals_and_maybe_alert()
+    assert calls == [[module.sys.executable, module.VITALS_SKILL, "notify-disk"]] * 2
 
 
 # ── (c) jht team start (CLI) ──────────────────────────────────────────────────

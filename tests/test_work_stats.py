@@ -454,12 +454,15 @@ def test_an_unreadable_database_is_a_closed_code(home, capsys):
     assert json.loads(capsys.readouterr().out) == {"error": "stats_unreadable"}
 
 
-def test_the_sentinel_bridge_records_after_each_reading_and_never_stops_on_a_failure():
-    source = (ROOT / ".launcher" / "sentinel-bridge.py").read_text(encoding="utf-8")
-    assert source.index("_write_role_usage(entry, time.time())\n            _record_work_stats()") > 0
-    body = source[source.index("def _record_work_stats"):source.index("def _atomic_write_json")]
-    assert "except Exception" in body and "work_stats.py" in body
-    assert "sentinel_path=DATA_JSONL" in body
+def test_the_sentinel_bridge_records_after_each_reading_and_never_stops_on_a_failure(home, monkeypatch, capsys):
+    from sentinel_tick_fixture import SingleTick
+    world = SingleTick(home, monkeypatch, stats_failure=True)
+    world.run(ticks=2)
+    ordered = [event for event in world.trace if event in ("sample", "role_usage", "stats", "published")]
+    assert ordered == ["sample", "role_usage", "stats", "published"] * 2
+    assert len(world.stats_args) == 2
+    assert all(args["sentinel_path"] == world.module.DATA_JSONL for args in world.stats_args)
+    assert capsys.readouterr().out.count("work-stats skipped: OSError") == 2
 
 
 def test_a_link_in_place_of_the_archive_is_not_read_and_a_second_name_neither(home, tmp_path):

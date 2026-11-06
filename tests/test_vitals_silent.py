@@ -103,6 +103,7 @@ def _bridge():
 @pytest.fixture()
 def world(tmp_path, monkeypatch):
     """The real `silent` command on a temp vitals.jsonl; `sample` is whatever the test says."""
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     module = _bridge()
     sent: list[str] = []
     attempts: list[int] = []
@@ -126,7 +127,8 @@ def world(tmp_path, monkeypatch):
 
     monkeypatch.setattr(module.subprocess, "run", run)
     monkeypatch.setattr(module, "VITALS_FILE", vitals)
-    monkeypatch.setattr(module, "jht_tmux_send", lambda session, text: sent.append(text))
+    monkeypatch.setattr(module, "session_exists", lambda session: True)
+    monkeypatch.setattr(module, "jht_tmux_send", lambda session, text: sent.append(text) or True)
     monkeypatch.setattr(module, "_LAST_VITALS_ALERT_AT", 0.0)
     monkeypatch.setattr(module, "_LAST_VITALS_SILENT_AT", 0.0)
     # the bridge has been up for a day

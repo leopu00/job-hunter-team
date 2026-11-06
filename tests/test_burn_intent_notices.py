@@ -186,11 +186,17 @@ def test_the_message_goes_through_the_channel_every_other_message_to_the_user_ta
     assert command[-1] == "hello"
 
 
-def test_the_sentinel_bridge_announces_before_it_sweeps():
-    src = (LAUNCHER / "sentinel-bridge.py").read_text(encoding="utf-8")
-    tick = src[src.index("_burn_intent_notify_user()\n"):]
-    assert tick.index("_burn_intent_notify_user()") < tick.index("_burn_intent_sweep()")
-    assert "announce()" in src
+def test_the_sentinel_bridge_announces_before_it_sweeps(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from sentinel_tick_fixture import SingleTick
+    world = SingleTick(tmp_path, monkeypatch)
+    world.run()
+    assert world.trace.index("announce") < world.trace.index("burn_sweep")
+    announced = []
+    monkeypatch.setattr(world.module, "_BURN_INTENT_MOD", SimpleNamespace(
+        announce=lambda: announced.append("notice") or ["fixture"]))
+    assert world.real_announce() == ["fixture"]
+    assert announced == ["notice"]
 
 
 def _team_in(bi, zone):

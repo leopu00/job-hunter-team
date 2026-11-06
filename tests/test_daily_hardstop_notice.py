@@ -280,22 +280,23 @@ def test_lo_stato_non_si_sporca_a_freno_sempre_inserito(state):
 # ── il cablaggio nel loop ─────────────────────────────────────────────────
 
 
-def test_il_loop_applica_la_deroga_tramite_la_fase_non_la_variabile():
-    """La mutazione che i test unitari non vedono: il call-site che torna a
-    `if _daily_hardstop_disabled() or _bi_on:` reintroduce la deroga eterna
-    con tutte le funzioni pure ancora verdi. Il loop non è testabile
-    direttamente (gira per sempre), quindi la proprietà si tiene ferma sul
-    sorgente — come fa test_host_env_security per i suoi invarianti.
-    """
-    with open(BRIDGE, encoding='utf-8') as handle:
-        src = handle.read()
-    # il cancello consulta la FASE...
-    assert 'if _hs_phase == HARDSTOP_RUNNING or _bi_on:' in src
-    # ...e il difetto originale non ricompare come cancello
-    assert 'if _daily_hardstop_disabled() or _bi_on:' not in src
-    # la fase è calcolata dallo stato persistito, non da un orologio in RAM
-    assert '_read_hardstop_override_started()' in src
-    assert '_persist_hardstop_override(_hs_phase, _hs_started)' in src
+@pytest.mark.parametrize("disabled,age,expected,halted", [
+    (True, None, "HARDSTOP_RUNNING", False),
+    (True, WINDOW + 1, "HARDSTOP_EXPIRED", True),
+    (False, None, "HARDSTOP_OFF", True),
+])
+def test_il_loop_applica_la_deroga_tramite_la_fase_non_la_variabile(
+        tmp_path, monkeypatch, disabled, age, expected, halted):
+    from sentinel_tick_fixture import SingleTick
+    started = None if age is None else 1000000.0 - age
+    world = SingleTick(tmp_path, monkeypatch, disabled=disabled, started=started, consumed=20)
+    world.run()
+    assert "read_override" in world.trace
+    assert len(world.phases) == 1
+    assert world.phases[0][0] == getattr(world.module, expected)
+    assert world.module.DAILY_HALT_FLAG.exists() is halted
+    assert ("halt" in world.trace) is halted
+    assert world.started == (world.now if expected == "HARDSTOP_RUNNING" else started)
 
 
 # ── fase + avviso insieme: la storia del ticket ───────────────────────────
