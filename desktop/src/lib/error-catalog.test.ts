@@ -27,6 +27,11 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // runtime_up.rs (the machine and the folders `jht up` needs, got ready by the app): the closed reason words of the runtime log; the
+  // person reads the error of the exit code (podman_missing, podman_start_failed), never these.
+  podman_not_installable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
+  podman_machine_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
+  user_dir_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   ok_slow: "the runtime log's word for a chat call that worked but took long (direct_chat.rs, runtime_log.rs); it is written there and never shown",
   position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
   // host_agents.rs (the agents and the chats the app reads from the files of a team that is off): the fields of the roster

@@ -2885,6 +2885,14 @@ fn run_scoped_local_logged(
     log: Option<&RuntimeLog>,
 ) -> Result<ProcessResult, &'static str> {
     crate::account_scope::validate_local_runtime(app, scope)?;
+    // On Windows with the Podman engine the machine and the folders `up` needs are got ready here, in the app, before the
+    // wrapper is asked for the rest of the start; when that cannot be done, `up` ends as the wrapper's would have.
+    #[cfg(windows)]
+    if operation == LocalCliOperation::Up {
+        if let Some(refused) = app.path().home_dir().ok().and_then(|home| crate::runtime_up::refusal_before_up(&home, log)) {
+            return Ok(refused);
+        }
+    }
     run_local_logged(wrapper, &operation.argv(), timeout, log)
 }
 
