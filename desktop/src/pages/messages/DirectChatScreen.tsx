@@ -972,7 +972,7 @@ export default function DirectChatScreen({
                 setSquadOn(true);
               }}
               className="min-h-9 w-full min-w-0 rounded border-b border-[var(--color-border)] px-3 py-2 text-left text-[14px] font-semibold uppercase tracking-wider"
-              style={{ color: squadSelected ? "var(--color-bright)" : "var(--color-muted)", background: squadSelected ? "var(--color-card)" : "transparent" }}
+              style={{ color: squadSelected ? "var(--color-bright)" : "var(--color-muted)", background: squadSelected ? "var(--color-card)" : "transparent", boxShadow: squadSelected ? "inset 2px 0 0 var(--color-green)" : undefined }}
             >
               {squad.label}
               {squad.line && sessions !== null && <span className="mt-0.5 block min-w-0 truncate text-[14px] font-normal normal-case tracking-normal text-[var(--color-dim)]">{squad.line(sessions.filter((entry) => entry.up).length, sessions.length)}</span>}
@@ -991,8 +991,10 @@ export default function DirectChatScreen({
               }}
               className="min-h-9 w-full min-w-0 rounded px-3 py-2 text-left text-[14px] font-semibold transition-colors"
               style={{
-                color: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-green)" : "var(--color-muted)",
+                // the chosen row: its own background and a bar on the left, the name in the bright colour (not the green of «working»)
+                color: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-bright)" : "var(--color-muted)",
                 background: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-card)" : "transparent",
+                boxShadow: !squadSelected && !otherSelected && agent.id === agentId ? "inset 2px 0 0 var(--color-green)" : undefined,
               }}
             >
               <span className="flex items-center justify-between gap-2">
@@ -1060,8 +1062,9 @@ export default function DirectChatScreen({
               }}
               className="min-h-9 w-full min-w-0 rounded px-3 py-2 text-left text-[14px] font-semibold"
               style={{
-                color: otherSelected?.session === entry.session && !squadSelected ? "var(--color-green)" : "var(--color-muted)",
+                color: otherSelected?.session === entry.session && !squadSelected ? "var(--color-bright)" : "var(--color-muted)",
                 background: otherSelected?.session === entry.session && !squadSelected ? "var(--color-card)" : "transparent",
+                boxShadow: otherSelected?.session === entry.session && !squadSelected ? "inset 2px 0 0 var(--color-green)" : undefined,
               }}
             >
               <span className="flex min-w-0 items-center gap-2">
