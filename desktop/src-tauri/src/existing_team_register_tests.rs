@@ -1129,7 +1129,7 @@ fn t12_the_definitive_file_is_never_made_by_rename() {
     let writer = source
         .split("pub(crate) fn write_candidate_hooked(")
         .nth(1)
-        .and_then(|rest| rest.split("/// Called only after the exact host/team identity").next())
+        .and_then(|rest| rest.split("\n}\n").next())
         .expect("the writer");
     assert!(writer.contains("fs::hard_link("));
     assert!(!writer.contains("fs::rename("), "rename would overwrite");
@@ -2855,7 +2855,7 @@ fn t47_a_record_that_cannot_be_written_or_taken_away_is_said_not_swallowed() {
 
 #[test]
 fn t48_the_code_that_gives_and_takes_the_permission_is_where_it_must_be() {
-    let runtime_source = include_str!("existing_team_runtime.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+    let runtime_source = include_str!("existing_team_runtime/full_link.rs");
     // the permission in memory is set by ONE function, and the restore goes through it
     assert_eq!(runtime_source.matches("*slot = Some(").count(), 1, "one place sets FULL_LINK");
     let restore = runtime_source.split("pub(crate) fn restore_full_link_at(").nth(1).unwrap().split("\n}\n").next().unwrap();
