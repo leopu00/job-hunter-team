@@ -38,9 +38,10 @@ import { useTeamOff } from "../../lib/team-off";
 import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
+import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { UsageShort } from "./AgentUsage";
 import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
-import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
+import { QuestionList, QuestionMarks, questionsPartlyKnown, questionsSummary } from "./AgentQuestions";
 import { PauseResumeButton } from "./PauseResumeButton";
 import { SessionHistory } from "./AgentHistory";
 import { readWorkWindow, rememberWorkWindow, WorkLanes } from "./AgentWork";
@@ -167,8 +168,9 @@ export function panelRows(list: PanelList, team: TeamControlState | null): Panel
 /** What the panel may do on a row; nothing in the read-only view. */
 export function rowActions(row: PanelRow, readOnly: boolean): AgentAction[] {
   if (readOnly || SCHEDULED.has(row.session)) return [];
-  if (REVIEWER.test(row.session)) return row.agent ? ["stop"] : [];
-  if (!row.agent) return row.heldBySafety ? [] : ["start"];
+  // an agent the team lists as «off» (the roster of a stopped team, or a session that ended meanwhile) is a row with no session: it is started, not restarted
+  if (REVIEWER.test(row.session)) return isUp(row) ? ["stop"] : [];
+  if (!isUp(row)) return row.heldBySafety ? [] : ["start"];
   if (row.heldBySafety) return ["stop"];
   return ["restart", "stop"];
 }
@@ -285,7 +287,7 @@ const CLI_NAME: Record<AgentIdentity["cli"], string> = { claude: "Claude", codex
 /**
  * Who the agent is, in pieces: «Codex», «gpt-5.6-terra», «effort alto».
  * Only shown, never decided on (the agent can rewrite its session's options).
- * A part the session does not say is «non so»; Kimi gets no model nor effort
+ * A part the session does not say is null (the screens show «—», or leave it out); Kimi gets no model nor effort
  * from the launcher (its own default), the local scorer neither.
  */
 export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null): IdentityParts | null {
@@ -294,8 +296,8 @@ export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null
   const effortName = { low: t.effortLow, medium: t.effortMedium, high: t.effortHigh };
   return {
     provider: CLI_NAME[identity.cli],
-    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : t.identityModelUnknown),
-    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : t.identityEffortUnknown,
+    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : null),
+    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : null,
   };
 }
 
@@ -587,7 +589,14 @@ function rememberView(view: "list" | "lanes"): void {
  * read-only view, the controls. Every action is confirmed, names where it
  * goes, and says what happened only once the team said so.
  */
-export default function AgentsPanel({ search }: PageProps) {
+/**
+ * `only`: a part of the panel inside the Team page, without the page around it (the title, the list of agents, the other parts):
+ * `commands` (the team's state with Pause, Resume and Stop), `lanes` (what each agent worked on), `log` (the registry of the actions),
+ * `agent` (the controls of the agent named by `agent`: its state, times, what it asks the person, Pause, Restart and Stop). Each part reads and
+ * confirms by itself, as the page does; without `only` this is the page of the Agents, as it has always been.
+ */
+export type PanelPart = "commands" | "lanes" | "log" | "agent";
+export default function AgentsPanel({ search, only, agent }: PageProps & { only?: PanelPart; agent?: string }) {
   const t = AGENTS_PANEL_TEXT[appLocale()];
   const readOnly = useExistingTeamReadOnly() !== null;
   const teamOff = useTeamOff();
@@ -595,7 +604,7 @@ export default function AgentsPanel({ search }: PageProps) {
   const [list, setList] = useState<Outcome<PanelList> | null>(null);
   const [team, setTeam] = useState<TeamControlState | null>(null);
   const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<string | null>(search.get("agent")?.toUpperCase() ?? null);
+  const [selected, setSelected] = useState<string | null>(agent?.toUpperCase() ?? search.get("agent")?.toUpperCase() ?? null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [acting, setActing] = useState(false);
   const [notices, setNotices] = useState<Record<string, Notice>>({});
@@ -643,7 +652,7 @@ export default function AgentsPanel({ search }: PageProps) {
   }, [read]);
   // The lanes' own read: when the view or the window changes, and every 30 s while it is open (a bucket is minutes long).
   useEffect(() => {
-    if (view !== "lanes") return;
+    if (view !== "lanes" && only !== "lanes") return;
     let alive = true;
     const load = async () => {
       const done = await readPanelActivity(workWindow);
@@ -655,7 +664,7 @@ export default function AgentsPanel({ search }: PageProps) {
       alive = false;
       clearInterval(timer);
     };
-  }, [view, workWindow]);
+  }, [view, workWindow, only]);
   useRefresh(() => void read());
   // One read at a time, and none while an action or a start is on its way: their own read follows them.
   const occupied = useRef(false);
@@ -737,11 +746,10 @@ export default function AgentsPanel({ search }: PageProps) {
   }, [occupiedNow]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
+  const wanted = only === "agent" ? agent?.toUpperCase() ?? null : selected;
   const current =
-    rows.find((row) => row.session === selected) ??
-    rows.find((row) => row.role === selected?.toLowerCase()) ??
-    rows[0] ??
-    null;
+    rows.find((row) => row.session === wanted) ??
+    (only === "agent" ? null : rows.find((row) => row.role === wanted?.toLowerCase()) ?? rows[0] ?? null);
   const where = list?.ok
     ? list.value.where === "vps"
       ? fill(t.whereVps, { label: list.value.label ?? "" })
@@ -812,6 +820,7 @@ export default function AgentsPanel({ search }: PageProps) {
       total: rows.length,
       // only to be shown: the questions of the agents that are up, null where the team does not say them
       questions: questionsSummary(t, up.map((row) => row.agent!.questions)),
+      questionsPartly: questionsPartlyKnown(up.map((row) => row.agent!.questions)),
     };
   }, [rows, t]);
 
@@ -825,7 +834,8 @@ export default function AgentsPanel({ search }: PageProps) {
         ? t.teamPausedWeekly
         : fill(t.teamPausedUntil, { time: stamp(Date.parse(team.standby.until)) });
     if (team.standby.state === "expired") return t.teamPauseEnding;
-    return t.teamActive;
+    // «active» is said only of a team that has an agent on: with none (or with the state not read, `team` is null above) there is nothing to say
+    return counts.up > 0 ? t.teamActive : null;
   })();
   const paused = team?.standby.state === "active";
   // The user's full-throttle override (JHT-T33): on with its end, ending within the hour, or ended.
@@ -838,8 +848,124 @@ export default function AgentsPanel({ search }: PageProps) {
     return fill(burn.remainingMin <= 60 ? t.burnEnding : t.burnOn, { time, minutes: String(burn.remainingMin) });
   })();
 
+  // The controls and facts of one agent (its state, times, what it asks the person, Pause, Restart and Stop, the last answer of the team):
+  // the top of the detail of the page of the Agents, and the whole of the `agent` part inside the Team page.
+  const detailTop = (current: PanelRow) => (
+                  <div className={only ? "p-3" : "shrink-0 max-h-[45%] overflow-y-auto p-3"} style={{ background: "var(--color-panel)" }}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Led row={current} />
+                        <Link
+                          href={`/agents/${encodeURIComponent(current.session)}`}
+                          data-testid="panel-agent-page"
+                          className="text-[13px] font-bold tracking-widest no-underline hover:underline"
+                          style={{ color: "var(--color-white)" }}
+                        >
+                          {current.session}
+                        </Link>
+                        {/* in pause = amber, never green (JHT-T181): the word says it, as the sign beside the name does */}
+                        <span
+                          data-testid={isUp(current) && current.agent?.paused ? "panel-paused-word" : undefined}
+                          className="text-[11px] uppercase tracking-widest"
+                          style={{ color: isUp(current) ? (current.agent?.paused ? "var(--color-yellow)" : "var(--color-green)") : "var(--color-dim)" }}
+                        >
+                          {isUp(current) ? (current.agent?.paused ? t.pausedWord : t.up) : current.heldByUser ? t.heldByUser : t.down}
+                        </span>
+                      </div>
+                      <p
+                        data-testid="panel-state"
+                        className="text-[11px] mt-1"
+                        style={{ color: current.agent ? TONE[describeAgentState(current.agent.state, appLocale()).tone] : "var(--color-dim)" }}
+                      >
+                        {stateLine(t, current)}
+                      </p>
+                      {current.agent && (
+                        <p
+                          data-testid="panel-times"
+                          className="text-[11px] mt-0.5 text-[var(--color-muted)]"
+                          title={`${fill(t.started, { time: current.agent.created === null ? "—" : fullStamp(current.agent.created * 1000) })} · ${fill(t.activity, { time: current.agent.activity === null ? "—" : fullStamp(current.agent.activity * 1000) })}`}
+                        >
+                          {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: ago(current.agent.activity) })}
+                          {current.agent.activity !== null &&
+                            current.agent.state.state !== "lavora" &&
+                            now - current.agent.activity * 1000 < MOVING_MS && (
+                              <span data-testid="panel-moving"> · {fill(t.screenMoving, { seconds: Math.max(0, Math.round((now - current.agent.activity * 1000) / 1000)) })}</span>
+                            )}
+                        </p>
+                      )}
+                      {isUp(current) && (
+                        <QuestionList
+                          t={t}
+                          questions={current.agent!.questions}
+                          readOnly={readOnly}
+                          now={now}
+                          answering={answering}
+                          onAnswer={readOnly ? undefined : (question, option) => chooseOption(current, question, option)}
+                          messagesAgent={chatAgentOf(current)}
+                        />
+                      )}
+                      {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
+                      {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {chatAgentOf(current) !== null && !only && (
+                        <Link
+                          href={`/messages?agent=${chatAgentOf(current)}`}
+                          data-testid="panel-chat-with"
+                          className="text-[12px] font-semibold px-3 py-1 rounded border no-underline"
+                          style={{ color: "var(--color-blue)", borderColor: "var(--color-blue)" }}
+                        >
+                          {fill(t.chatWith, { name: chatName(chatAgentOf(current)!) })}
+                        </Link>
+                      )}
+                      {/* the pause of THIS agent, next to Restart and Stop: its session stays on with its context */}
+                      {!readOnly && isUp(current) && !current.heldBySafety && !SCHEDULED.has(current.session) && !team?.halted && (
+                        <PauseResumeButton
+                          paused={current.agent?.paused === true}
+                          pauseLabel={t.pause}
+                          resumeLabel={t.resume}
+                          onPause={() => setPending({ kind: "pause-agent", row: current })}
+                          onResume={() => setPending({ kind: "resume-agent", row: current })}
+                          testIdBase="panel-agent"
+                        />
+                      )}
+                      {rowActions(current, readOnly).map((op) => (
+                        <button
+                          key={op}
+                          type="button"
+                          data-testid={`panel-${op}`}
+                          onClick={() => setPending({ kind: "agent", op, row: current })}
+                          className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
+                          style={
+                            op === "stop"
+                              ? { color: "var(--color-red)", borderColor: "var(--color-red)" }
+                              : op === "start"
+                                ? { color: "var(--color-green)", borderColor: "var(--color-green)" }
+                                : { color: "var(--color-bright)", borderColor: "var(--color-border)" }
+                          }
+                        >
+                          {{ start: t.start, stop: t.stop, restart: t.restart }[op]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {notices[current.session] && (
+                    <p
+                      role={notices[current.session].ok ? "status" : "alert"}
+                      data-testid="panel-notice"
+                      className="text-[11px] mt-2"
+                      style={{ color: notices[current.session].ok ? "var(--color-green)" : "var(--color-red)" }}
+                    >
+                      {notices[current.session].text}
+                    </p>
+                  )}
+                  </div>
+  );
+
   return (
-    <div className="max-w-6xl mx-auto px-5 pt-6 pb-8" style={{ animation: "fade-in 0.35s ease both" }}>
+    <div className={only ? "px-4 sm:px-5 py-3" : "max-w-6xl mx-auto px-5 pt-6 pb-8"} data-testid={only ? `panel-part-${only}` : undefined} style={only ? undefined : { animation: "fade-in 0.35s ease both" }}>
+      {!only && (
       <div className="flex items-start justify-between gap-4 mb-2">
         <h1 className="text-xl font-bold uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-white)" }}>
           {t.title}
@@ -853,8 +979,9 @@ export default function AgentsPanel({ search }: PageProps) {
           {busy ? t.refreshing : t.refresh}
         </button>
       </div>
-      {list?.ok && <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.intro, { where })}</p>}
-      {readOnly && (
+      )}
+      {!only && list?.ok && <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.intro, { where })}</p>}
+      {(!only || only === "commands") && readOnly && (
         <p data-testid="panel-read-only" className="text-[11px] mb-2 text-[var(--color-muted)]">
           {t.readOnly}
         </p>
@@ -887,6 +1014,8 @@ export default function AgentsPanel({ search }: PageProps) {
               onClaimed={() => void read()}
             />
           )}
+          {(!only || only === "commands") && (
+          <>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded border px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
             <span data-testid="panel-summary" className="text-[11px]" style={{ color: "var(--color-bright)" }}>
               {[
@@ -894,10 +1023,10 @@ export default function AgentsPanel({ search }: PageProps) {
                 pluralText(appLocale(), counts.working, t.summaryWorking),
                 pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
               ].join(" · ")}
-              {counts.up > 0 && (
+              {counts.up > 0 && counts.questions !== null && (
                 <>
                   {" · "}
-                  <span data-testid="panel-questions-summary" title={t.questionsSummaryHelp}>
+                  <span data-testid="panel-questions-summary" title={counts.questionsPartly ? `${t.questionsSummaryHelp} ${t.questionsPartlyUnknown}` : t.questionsSummaryHelp}>
                     {counts.questions}
                   </span>
                 </>
@@ -958,7 +1087,10 @@ export default function AgentsPanel({ search }: PageProps) {
               {t.statesUnknown}
             </p>
           )}
-          <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
+          </>
+          )}
+          {!only && <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>}
+          {!only && (
           <div role="group" aria-label={t.viewLabel} className="flex gap-2 mb-2">
             {(["list", "lanes"] as const).map((name) => (
               <button
@@ -980,8 +1112,9 @@ export default function AgentsPanel({ search }: PageProps) {
               </button>
             ))}
           </div>
+          )}
 
-          {view === "lanes" && (
+          {((view === "lanes" && !only) || only === "lanes") && (
             <WorkLanes
               t={t}
               activity={activity}
@@ -992,7 +1125,7 @@ export default function AgentsPanel({ search }: PageProps) {
               }}
             />
           )}
-          {view === "list" && (
+          {view === "list" && !only && (
             <div className="flex flex-col lg:flex-row gap-3 min-h-0">
               <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-y-auto lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100svh/var(--zoom,1)-5rem)]" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
                 {rows.map((row) => {
@@ -1038,111 +1171,7 @@ export default function AgentsPanel({ search }: PageProps) {
                   style={{ borderColor: "var(--color-border)" }}
                   aria-label={current.session}
                 >
-                  <div className="shrink-0 max-h-[45%] overflow-y-auto p-3" style={{ background: "var(--color-panel)" }}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Led row={current} />
-                        <Link
-                          href={`/agents/${encodeURIComponent(current.session)}`}
-                          data-testid="panel-agent-page"
-                          className="text-[13px] font-bold tracking-widest no-underline hover:underline"
-                          style={{ color: "var(--color-white)" }}
-                        >
-                          {current.session}
-                        </Link>
-                        <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
-                          {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
-                        </span>
-                      </div>
-                      <p
-                        data-testid="panel-state"
-                        className="text-[11px] mt-1"
-                        style={{ color: current.agent ? TONE[describeAgentState(current.agent.state, appLocale()).tone] : "var(--color-dim)" }}
-                      >
-                        {stateLine(t, current)}
-                      </p>
-                      {current.agent && (
-                        <p
-                          data-testid="panel-times"
-                          className="text-[11px] mt-0.5 text-[var(--color-muted)]"
-                          title={`${fill(t.started, { time: current.agent.created === null ? "—" : fullStamp(current.agent.created * 1000) })} · ${fill(t.activity, { time: current.agent.activity === null ? "—" : fullStamp(current.agent.activity * 1000) })}`}
-                        >
-                          {fill(t.started, { time: clock(current.agent.created) })} · {fill(t.activity, { time: ago(current.agent.activity) })}
-                          {current.agent.activity !== null &&
-                            current.agent.state.state !== "lavora" &&
-                            now - current.agent.activity * 1000 < MOVING_MS && (
-                              <span data-testid="panel-moving"> · {fill(t.screenMoving, { seconds: Math.max(0, Math.round((now - current.agent.activity * 1000) / 1000)) })}</span>
-                            )}
-                        </p>
-                      )}
-                      {isUp(current) && (
-                        <QuestionList
-                          t={t}
-                          questions={current.agent!.questions}
-                          readOnly={readOnly}
-                          now={now}
-                          answering={answering}
-                          onAnswer={readOnly ? undefined : (question, option) => chooseOption(current, question, option)}
-                          messagesAgent={chatAgentOf(current)}
-                        />
-                      )}
-                      {SCHEDULED.has(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.maintenance}</p>}
-                      {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {chatAgentOf(current) !== null && (
-                        <Link
-                          href={`/messages?agent=${chatAgentOf(current)}`}
-                          data-testid="panel-chat-with"
-                          className="text-[12px] font-semibold px-3 py-1 rounded border no-underline"
-                          style={{ color: "var(--color-blue)", borderColor: "var(--color-blue)" }}
-                        >
-                          {fill(t.chatWith, { name: chatName(chatAgentOf(current)!) })}
-                        </Link>
-                      )}
-                      {/* the pause of THIS agent, next to Restart and Stop: its session stays on with its context */}
-                      {!readOnly && isUp(current) && !current.heldBySafety && !SCHEDULED.has(current.session) && !team?.halted && (
-                        <PauseResumeButton
-                          paused={current.agent?.paused === true}
-                          pauseLabel={t.pause}
-                          resumeLabel={t.resume}
-                          onPause={() => setPending({ kind: "pause-agent", row: current })}
-                          onResume={() => setPending({ kind: "resume-agent", row: current })}
-                          testIdBase="panel-agent"
-                        />
-                      )}
-                      {rowActions(current, readOnly).map((op) => (
-                        <button
-                          key={op}
-                          type="button"
-                          data-testid={`panel-${op}`}
-                          onClick={() => setPending({ kind: "agent", op, row: current })}
-                          className={`text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border ${op === "stop" ? "ml-3" : ""}`}
-                          style={
-                            op === "stop"
-                              ? { color: "var(--color-red)", borderColor: "var(--color-red)" }
-                              : op === "start"
-                                ? { color: "var(--color-green)", borderColor: "var(--color-green)" }
-                                : { color: "var(--color-bright)", borderColor: "var(--color-border)" }
-                          }
-                        >
-                          {{ start: t.start, stop: t.stop, restart: t.restart }[op]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {notices[current.session] && (
-                    <p
-                      role={notices[current.session].ok ? "status" : "alert"}
-                      data-testid="panel-notice"
-                      className="text-[11px] mt-2"
-                      style={{ color: notices[current.session].ok ? "var(--color-green)" : "var(--color-red)" }}
-                    >
-                      {notices[current.session].text}
-                    </p>
-                  )}
-                  </div>
+                  {detailTop(current)}
 
                   {current.agent && (
                     <AgentStatusBar
@@ -1176,7 +1205,8 @@ export default function AgentsPanel({ search }: PageProps) {
         </>
       )}
 
-      <ActionLogSection />
+      {only === "agent" && list?.ok && (current ? detailTop(current) : <p data-testid="panel-part-agent-missing" className="text-[13px] text-[var(--color-muted)]">{fill(AGENT_PAGE_TEXT[appLocale()].notFound, { name: agent ?? "" })}</p>)}
+      {(!only || only === "log") && <ActionLogSection />}
 
       {pending && list?.ok && (
         <Confirm t={t} pending={pending} where={where} busy={acting} onCancel={() => setPending(null)} onConfirm={(exit) => void runPending(exit)} />

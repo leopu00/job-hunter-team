@@ -91,7 +91,7 @@ describe("the Team card", () => {
   it("leads to the agents' panel and, where the team is not only read, to the budget page", async () => {
     render(<TeamCard readOnly={false} read={ok(state())} />);
     await userEvent.click(screen.getByTestId("settings-agents-link"));
-    expect(window.location.hash).toBe("#/agents");
+    expect(window.location.hash).toBe("#/messages?tab=squad");
     await userEvent.click(screen.getByTestId("settings-budget-link"));
     expect(window.location.hash).toBe("#/budget");
     cleanup();
