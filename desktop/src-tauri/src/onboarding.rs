@@ -1370,6 +1370,11 @@ fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
     wrapper_path_from_home(&app.path().home_dir().ok()?)
 }
 
+/// Where this account's wrapper is expected, for the line of the log that says why none was accepted.
+pub(crate) fn expected_wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    wrapper_candidates(&app.path().home_dir().ok()?).into_iter().next()
+}
+
 pub(crate) fn verified_local_wrapper_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
     wrapper_path(app).ok_or_else(|| runtime_refusal(app))
 }
@@ -1392,17 +1397,33 @@ fn wrapper_source(path: &Path) -> Option<String> {
     fs::read_to_string(path).ok()
 }
 
-fn wrapper_has_protocol(source: &str, protocol: &str) -> bool {
-    source
-        .lines()
-        .map(|line| line.trim_end_matches('\r'))
-        .any(|line| line == protocol)
+/// The forms in which a wrapper declares one of its protocols: jht-wrapper.sh writes `NAME=1`, jht-wrapper.ps1
+/// writes `$NAME = 1`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProtocolForms {
+    /// Only the shell wrapper's line, for the checks that read the shell wrapper alone.
+    Bash,
+    /// The shell wrapper's line or the PowerShell one: what a check on this account's wrapper accepts, since on
+    /// Windows the wrapper is jht.ps1.
+    Both,
+}
+
+/// The one place that reads a protocol declaration of a wrapper. A whole line is compared, never a prefix or a
+/// part of it: a comment that quotes the line, `NAME=10` or `$NAME = 10` declare nothing. The shell form is
+/// compared as written (only a carriage return at the end is dropped); the PowerShell form may be indented.
+pub(crate) fn wrapper_declares(source: &str, name: &str, forms: ProtocolForms) -> bool {
+    let bash = format!("{name}=1");
+    let powershell = format!("${name} = 1");
+    source.lines().any(|line| {
+        let line = line.trim_end_matches('\r');
+        line == bash || (forms == ProtocolForms::Both && line.trim() == powershell)
+    })
 }
 
 /// Whether this account's wrapper speaks the desktop chat's protocol (`desktop-chat python`, `probe`: they
 /// find the attested container and never start it).
 pub(crate) fn wrapper_has_desktop_chat(path: &Path) -> bool {
-    wrapper_source(path).is_some_and(|source| wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1"))
+    wrapper_source(path).is_some_and(|source| wrapper_declares(&source, "JHT_DESKTOP_CHAT_PROTOCOL", ProtocolForms::Both))
 }
 
 /// Whether this account's wrapper has the agent control panel's own branch,
@@ -1410,35 +1431,27 @@ pub(crate) fn wrapper_has_desktop_chat(path: &Path) -> bool {
 /// `agent-control` through its generic branch, which does: the panel does
 /// not call it at all then.
 pub(crate) fn wrapper_has_agent_control(path: &Path) -> bool {
-    wrapper_source(path).is_some_and(|source| {
-        source.lines().map(|line| line.trim_end_matches('\r').trim()).any(|line| {
-            line == "JHT_AGENT_CONTROL_PROTOCOL=1" || line == "$JHT_AGENT_CONTROL_PROTOCOL = 1"
-        })
-    })
+    wrapper_source(path).is_some_and(|source| wrapper_declares(&source, "JHT_AGENT_CONTROL_PROTOCOL", ProtocolForms::Both))
 }
 
 /// Whether this account's wrapper has the branch that records an authorisation to apply in the broker
 /// (`desktop-apply record`), which never starts anything. An older wrapper would route it through its
 /// generic branch, which does: the app does not call it at all then, and writes no authorisation.
 pub(crate) fn wrapper_has_desktop_apply(path: &Path) -> bool {
-    wrapper_source(path).is_some_and(|source| {
-        source.lines().map(|line| line.trim_end_matches('\r').trim()).any(|line| {
-            line == "JHT_DESKTOP_APPLY_PROTOCOL=1" || line == "$JHT_DESKTOP_APPLY_PROTOCOL = 1"
-        })
-    })
+    wrapper_source(path).is_some_and(|source| wrapper_declares(&source, "JHT_DESKTOP_APPLY_PROTOCOL", ProtocolForms::Both))
 }
 
 fn valid_host_wrapper_file(path: &Path) -> bool {
     wrapper_source(path)
-        .is_some_and(|source| wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1"))
+        .is_some_and(|source| wrapper_declares(&source, "JHT_HOST_RUNTIME_PROTOCOL", ProtocolForms::Bash))
 }
 
 #[cfg(not(windows))]
 fn valid_wrapper_file(path: &Path) -> bool {
     wrapper_source(path).is_some_and(|source| {
-        wrapper_has_protocol(&source, "JHT_HOST_RUNTIME_PROTOCOL=1")
-            && wrapper_has_protocol(&source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
-            && wrapper_has_protocol(&source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
+        wrapper_declares(&source, "JHT_HOST_RUNTIME_PROTOCOL", ProtocolForms::Bash)
+            && wrapper_declares(&source, "JHT_DESKTOP_CHAT_PROTOCOL", ProtocolForms::Bash)
+            && wrapper_declares(&source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL", ProtocolForms::Bash)
     })
 }
 
@@ -1518,9 +1531,9 @@ fn publish_bundled_wrapper_with_failpoint(
 
     let source = std::str::from_utf8(BUNDLED_LOCAL_WRAPPER)
         .map_err(|_| failure("runtime_wrapper_publish_failed"))?;
-    if !wrapper_has_protocol(source, "JHT_HOST_RUNTIME_PROTOCOL=1")
-        || !wrapper_has_protocol(source, "JHT_DESKTOP_CHAT_PROTOCOL=1")
-        || !wrapper_has_protocol(source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL=1")
+    if !wrapper_declares(source, "JHT_HOST_RUNTIME_PROTOCOL", ProtocolForms::Bash)
+        || !wrapper_declares(source, "JHT_DESKTOP_CHAT_PROTOCOL", ProtocolForms::Bash)
+        || !wrapper_declares(source, "JHT_ONBOARDING_SNAPSHOT_PROTOCOL", ProtocolForms::Bash)
     {
         return Err(failure("runtime_wrapper_publish_failed"));
     }
@@ -6003,11 +6016,7 @@ pub(crate) enum TeamUpdateAction {
 /// jht-wrapper.sh, and its PowerShell form in jht-wrapper.ps1). An older one would route `upgrade` through its
 /// generic branch: the app does not call it at all then.
 fn wrapper_has_upgrade(path: &Path) -> bool {
-    wrapper_source(path).is_some_and(|source| {
-        source.lines().map(|line| line.trim_end_matches('\r').trim()).any(|line| {
-            line == crate::team_update::UPGRADE_PROTOCOL || line == "$JHT_UPGRADE_PROTOCOL = 1"
-        })
-    })
+    wrapper_source(path).is_some_and(|source| wrapper_declares(&source, "JHT_UPGRADE_PROTOCOL", ProtocolForms::Both))
 }
 
 fn team_update_outcome(
@@ -9373,6 +9382,95 @@ exit 0
         // a mention in a comment or in a longer line is not the marker
         assert!(!crate::onboarding::wrapper_has_desktop_chat(&write("quoted", "#!/bin/sh\n# JHT_DESKTOP_CHAT_PROTOCOL=1\nexit 0\n")));
         assert!(!crate::onboarding::wrapper_has_desktop_chat(&dir.join("missing")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    const PROTOCOL_NAMES: [&str; 6] = [
+        "JHT_UPGRADE_PROTOCOL",
+        "JHT_HOST_RUNTIME_PROTOCOL",
+        "JHT_DESKTOP_CHAT_PROTOCOL",
+        "JHT_ONBOARDING_SNAPSHOT_PROTOCOL",
+        "JHT_AGENT_CONTROL_PROTOCOL",
+        "JHT_DESKTOP_APPLY_PROTOCOL",
+    ];
+
+    /// A line is compared whole: a mention in a comment, a longer value, a prefix or another name is no declaration,
+    /// in the shell form and in the PowerShell one. The shell form is the only one that was exact before, and stays so.
+    #[test]
+    fn a_protocol_is_declared_by_a_whole_line_in_either_form_and_nothing_else_counts() {
+        use super::{wrapper_declares, ProtocolForms::{Bash, Both}};
+        let n = "JHT_DESKTOP_CHAT_PROTOCOL";
+        assert!(wrapper_declares("JHT_DESKTOP_CHAT_PROTOCOL=1\n", n, Bash));
+        assert!(wrapper_declares("JHT_DESKTOP_CHAT_PROTOCOL=1\r\n", n, Bash));
+        assert!(wrapper_declares("#!/bin/sh\nJHT_DESKTOP_CHAT_PROTOCOL=1", n, Both));
+        assert!(wrapper_declares("param()\r\n$JHT_DESKTOP_CHAT_PROTOCOL = 1\r\n", n, Both));
+        assert!(wrapper_declares("  $JHT_DESKTOP_CHAT_PROTOCOL = 1\n", n, Both));
+        // the PowerShell form is no declaration for a check that reads the shell wrapper alone
+        assert!(!wrapper_declares("$JHT_DESKTOP_CHAT_PROTOCOL = 1\n", n, Bash));
+        for text in [
+            "# JHT_DESKTOP_CHAT_PROTOCOL=1\n",
+            "# $JHT_DESKTOP_CHAT_PROTOCOL = 1\n",
+            "JHT_DESKTOP_CHAT_PROTOCOL=10\n",
+            "JHT_DESKTOP_CHAT_PROTOCOL=1 # note\n",
+            "JHT_DESKTOP_CHAT_PROTOCOL=1;\n",
+            "$JHT_DESKTOP_CHAT_PROTOCOL = 10\n",
+            "$JHT_DESKTOP_CHAT_PROTOCOL = 1 # note\n",
+            "$JHT_DESKTOP_CHAT_PROTOCOL = 0\n",
+            "XJHT_DESKTOP_CHAT_PROTOCOL=1\n",
+            "$XJHT_DESKTOP_CHAT_PROTOCOL = 1\n",
+            "JHT_DESKTOP_CHAT_PROTOCOL_V2=1\n",
+            "echo JHT_DESKTOP_CHAT_PROTOCOL=1\n",
+            "  JHT_DESKTOP_CHAT_PROTOCOL=1\n",
+            "JHT_DESKTOP_CHAT_PROTOCOL=1 \n",
+            "",
+        ] {
+            assert!(!wrapper_declares(text, n, Both), "{text:?}");
+        }
+        // a name that is only part of another does not declare the longer one
+        assert!(!wrapper_declares("JHT_DESKTOP_CHAT_PROTOCOL=1\n", "JHT_DESKTOP_CHAT", Both));
+    }
+
+    /// The wrappers of the repository, not a line written by hand: jht.ps1 declares every protocol the app checks in
+    /// the PowerShell form, jht (shell) in the shell one, and the app sees them in the form its own wrapper has.
+    #[test]
+    fn the_real_wrappers_declare_every_protocol_the_app_checks_in_their_own_form() {
+        use super::{wrapper_declares, ProtocolForms::{Bash, Both}};
+        let ps1 = include_str!("../../../scripts/jht-wrapper.ps1");
+        let sh = include_str!("../../../scripts/jht-wrapper.sh");
+        for name in PROTOCOL_NAMES {
+            assert!(wrapper_declares(ps1, name, Both), "jht.ps1 {name}");
+            assert!(!wrapper_declares(ps1, name, Bash), "jht.ps1 {name} is not a shell line");
+            assert!(wrapper_declares(sh, name, Both), "jht {name}");
+            assert!(wrapper_declares(sh, name, Bash), "jht {name}");
+        }
+        // the same with the checkout's CRLF endings
+        let crlf = ps1.replace("\r\n", "\n").replace('\n', "\r\n");
+        for name in PROTOCOL_NAMES {
+            assert!(wrapper_declares(&crlf, name, Both), "jht.ps1 CRLF {name}");
+        }
+    }
+
+    /// The check the app makes on the file it found: the jht.ps1 of the repository, written where the wrapper lives,
+    /// is a wrapper that speaks the desktop chat, the agent control, the apply and the upgrade.
+    #[test]
+    fn the_real_jht_ps1_on_disk_passes_every_check_made_on_the_wrapper_file() {
+        use crate::onboarding::{wrapper_has_agent_control, wrapper_has_desktop_apply, wrapper_has_desktop_chat, wrapper_has_upgrade};
+        let dir = std::env::temp_dir().canonicalize().unwrap().join(format!("jht-real-ps1-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ps1 = include_str!("../../../scripts/jht-wrapper.ps1");
+        for (name, text) in [("lf.ps1", ps1.to_owned()), ("crlf.ps1", ps1.replace("\r\n", "\n").replace('\n', "\r\n"))] {
+            let path = dir.join(name);
+            std::fs::write(&path, text).unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            assert!(wrapper_has_desktop_chat(&path), "{name} desktop chat");
+            assert!(wrapper_has_agent_control(&path), "{name} agent control");
+            assert!(wrapper_has_desktop_apply(&path), "{name} desktop apply");
+            assert!(wrapper_has_upgrade(&path), "{name} upgrade");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

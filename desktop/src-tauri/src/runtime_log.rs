@@ -46,8 +46,22 @@ static LAST_SCRIPT_READ_FAILURE: std::sync::Mutex<Option<(PathBuf, String, std::
 const READ_FAILURE_EVERY: Duration = Duration::from_secs(300);
 /// The last failure written for each read: the log it went to, the read's name, its code and when.
 static LAST_READ_FAILURES: std::sync::Mutex<Vec<(PathBuf, &'static str, String, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
+/// The last refusal of the reader of this computer's team written: the log it went to, the line and when.
+static LAST_READER_REFUSAL: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
 /// The last refusal written: the log it went to, its code and when.
 static LAST_OWNER_REFUSAL: std::sync::Mutex<Option<(PathBuf, String, std::time::Instant)>> = std::sync::Mutex::new(None);
+
+/// A path as the log shows it: under the home folder as `~/…` with `/` between the parts, anywhere else by its file
+/// name only. The home folder, which carries the user's name, is never written.
+fn path_without_home(path: &Path, home: Option<&Path>) -> String {
+    let shown = |parts: Vec<String>| parts.join("/");
+    if let Some(rest) = home.and_then(|home| path.strip_prefix(home).ok()) {
+        let mut parts = vec!["~".to_owned()];
+        parts.extend(rest.components().map(|part| part.as_os_str().to_string_lossy().into_owned()));
+        return shown(parts);
+    }
+    path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_else(|| "unknown".to_owned())
+}
 
 #[derive(Clone)]
 pub(crate) struct RuntimeLog {
@@ -206,6 +220,33 @@ impl RuntimeLog {
             *last = Some((self.path.clone(), code.to_owned(), now));
         }
         let entry = format!("=== {} local_owner.refused: {code}\n", utc(SystemTime::now()));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
+    /// The read of this computer's team (Positions, Profile, Dashboard) refused before it ran, by its closed code and
+    /// the wrapper it looked at, written without the home folder (`~/.local/bin/jht.ps1`; a wrapper outside it by its
+    /// file name only). No profile, account or digest. The same line is written once a minute at most: the pages ask
+    /// again and again.
+    pub(crate) fn record_local_reader_refusal(&self, code: &str, wrapper: Option<&Path>, home: Option<&Path>) {
+        let code = match code {
+            "local_chat_wrapper_outdated" | "runtime_missing" | "runtime_folder_shared" | "local_runtime_unsupported"
+            | "local_account_owner_mismatch" | "local_account_owner_missing" | "local_account_owner_invalid"
+            | "local_account_owner_unavailable" => code,
+            _ => "io_error_other",
+        };
+        let wrapper = wrapper.map(|path| path_without_home(path, home)).unwrap_or_else(|| "none".to_owned());
+        let line = format!("{code} wrapper={wrapper}");
+        let now = std::time::Instant::now();
+        {
+            let mut last = LAST_READER_REFUSAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some((path, said, at)) = last.as_ref() {
+                if path == &self.path && said == &line && now.duration_since(*at) < OWNER_REFUSAL_EVERY {
+                    return;
+                }
+            }
+            *last = Some((self.path.clone(), line.clone(), now));
+        }
+        let entry = format!("=== {} local_reader.refused: {line}\n", utc(SystemTime::now()));
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
@@ -1066,6 +1107,35 @@ mod tests {
         log.record_local_owner_refusal("local_account_owner_missing");
         let text = fs::read_to_string(log.path()).unwrap();
         assert!(text.contains(" local_owner.refused: local_account_owner_missing\n"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_refusal_of_the_reader_of_this_computers_team_is_written_with_its_code_and_the_wrapper_without_the_home() {
+        let root = dir("reader-refusal");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        let home = root.join("Users").join("someone-else");
+        let wrapper = home.join(".local").join("bin").join("jht.ps1");
+        log.record_local_reader_refusal("local_chat_wrapper_outdated", Some(&wrapper), Some(&home));
+        // asked again by the pages: the same line is not written again
+        log.record_local_reader_refusal("local_chat_wrapper_outdated", Some(&wrapper), Some(&home));
+        log.record_local_reader_refusal("local_chat_wrapper_outdated", Some(&wrapper), Some(&home));
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert_eq!(text.lines().count(), 1, "{text}");
+        assert!(text.contains(" local_reader.refused: local_chat_wrapper_outdated wrapper=~/.local/bin/jht.ps1\n"), "{text}");
+        assert!(!text.contains("someone-else") && !text.contains("Users"), "{text}");
+        // another code, or no wrapper found at all, is another line; free text is never written
+        log.record_local_reader_refusal("runtime_missing", None, Some(&home));
+        log.record_local_reader_refusal("owner is 203.0.113.7 and has a name", Some(&wrapper), Some(&home));
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" local_reader.refused: runtime_missing wrapper=none\n"), "{text}");
+        assert!(text.contains(" local_reader.refused: io_error_other wrapper=~/.local/bin/jht.ps1\n"), "{text}");
+        assert!(!text.contains("203.0.113.7") && !text.contains("has a name"), "{text}");
+        // a wrapper outside the home folder is named by its file only
+        log.record_local_reader_refusal("runtime_missing", Some(&root.join("elsewhere").join("jht")), Some(&home));
+        let text = fs::read_to_string(log.path()).unwrap();
+        assert!(text.contains(" local_reader.refused: runtime_missing wrapper=jht\n"), "{text}");
+        assert!(!text.contains("elsewhere"), "{text}");
         let _ = fs::remove_dir_all(root);
     }
 

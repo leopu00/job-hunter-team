@@ -2991,13 +2991,25 @@ fn positions_read_local(app: &tauri::AppHandle, scope: &AccountScope, request: &
 
 /// The host wrapper a read of this computer's team goes through, once this account is the runtime's owner.
 pub(crate) fn local_reader_wrapper(app: &tauri::AppHandle, scope: &AccountScope) -> Result<std::path::PathBuf, &'static str> {
-    let marker = crate::account_scope::local_owner_marker_path(app)?;
-    crate::account_scope::verify_local_runtime_owner(&marker, scope)?;
-    let wrapper = crate::onboarding::verified_local_wrapper_path(app)?;
-    if !crate::onboarding::wrapper_has_desktop_chat(&wrapper) {
-        return Err("local_chat_wrapper_outdated");
+    let mut found = None;
+    let checked = (|| {
+        let marker = crate::account_scope::local_owner_marker_path(app)?;
+        crate::account_scope::verify_local_runtime_owner(&marker, scope)?;
+        let wrapper = crate::onboarding::verified_local_wrapper_path(app)?;
+        found = Some(wrapper.clone());
+        if !crate::onboarding::wrapper_has_desktop_chat(&wrapper) {
+            return Err("local_chat_wrapper_outdated");
+        }
+        Ok(wrapper)
+    })();
+    // Every refusal leaves a line: pages that read nothing were silent, and the code said only «outdated».
+    if let Err(code) = checked {
+        if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
+            let wrapper = found.or_else(|| crate::onboarding::expected_wrapper_path(app));
+            log.record_local_reader_refusal(code, wrapper.as_deref(), app.path().home_dir().ok().as_deref());
+        }
     }
-    Ok(wrapper)
+    checked
 }
 
 /// Whether the machine that runs this computer's team is stopped. Only Windows has a machine of its own (Podman's); on
@@ -4433,6 +4445,9 @@ mod tests {
         let wrapper_fn = source.split("fn local_reader_wrapper(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(wrapper_fn.contains("verify_local_runtime_owner") && !wrapper_fn.contains("validate_local_runtime"));
         assert!(wrapper_fn.contains("wrapper_has_desktop_chat"));
+        // every way out with an error leaves a line in the runtime log, with the wrapper it looked at
+        assert!(wrapper_fn.contains("record_local_reader_refusal") && wrapper_fn.contains("if let Err(code) = checked"));
+        assert!(wrapper_fn.find("wrapper_has_desktop_chat").unwrap() < wrapper_fn.find("record_local_reader_refusal").unwrap());
         // read only: the reader opens the database that way and the wrapper's channel starts nothing
         assert!(POSITIONS_READ_PY.contains("mode=ro") && POSITIONS_READ_PY.contains("PRAGMA query_only=ON"));
     }
