@@ -272,13 +272,3 @@ function readOnlyResponse(): NextResponse {
     { status: 403 },
   );
 }
-
-/** Regex per path sicuri: alfanumerici, slash, underscore, trattino, punto, tilde, spazi, due punti */
-const SAFE_PATH_RE = /^[a-zA-Z0-9\/_\-.~ :]+$/;
-
-/**
- * Valida che un path non contenga traversal o caratteri pericolosi.
- */
-export function isValidPath(p: string): boolean {
-  return SAFE_PATH_RE.test(p) && !p.includes("..");
-}

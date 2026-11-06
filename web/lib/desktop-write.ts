@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext } from "react";
 
 /**
  * Who may write what commands the team or decides on the profile: the desktop app, not the
@@ -15,7 +15,3 @@ const WEB: DesktopWrite = { canChange: false };
 const DesktopWriteContext = createContext<DesktopWrite>(WEB);
 
 export const DesktopWriteProvider = DesktopWriteContext.Provider;
-
-export function useDesktopWrite(): DesktopWrite {
-  return useContext(DesktopWriteContext);
-}

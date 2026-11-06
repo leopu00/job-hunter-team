@@ -7,7 +7,7 @@
  * partire, persistiamo un esito leggibile e impediamo due push sovrapposti.
  */
 import { chmod, mkdir, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { JHT_HOME } from "../jht-paths.js";
 import { signatureIsEmpty, signaturesDiffer } from "./bootstrap-push.js";
@@ -317,9 +317,4 @@ export async function runPeriodicPushCycle({
   });
   const persisted = await save(nextState);
   return { ...decision, result, state: nextState, persisted };
-}
-
-/** Il file è osservabile senza confondere "mai partito" con "manca". */
-export function periodicPushStateExists(path = PERIODIC_PUSH_STATE_FILE) {
-  return existsSync(path);
 }
