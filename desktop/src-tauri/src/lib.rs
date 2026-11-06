@@ -62,6 +62,7 @@ mod team_export;
 mod team_owner;
 mod chat_attachment;
 mod profile_progress;
+mod provider_login;
 mod state_stream;
 mod team_start;
 mod team_update;
@@ -236,6 +237,7 @@ pub fn run() {
             app_exit::app_exit_order,
             app_exit::app_exit_poll,
             app_exit::app_exit_finish,
+            provider_login::provider_login_state,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
             team_budget::team_budget_read,
