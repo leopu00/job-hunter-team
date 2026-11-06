@@ -3071,7 +3071,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         (&onboarding, "onboarding_team_update", "saved_host_action_refusal(", &["compare_exchange", "spawn_blocking", "load_persisted_host("]),
         (&onboarding, "onboarding_plans", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_plan_declare", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
-        (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["state\n        .interactive", "validate_host(", "spawn("]),
+        (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["spawn_blocking", "start_provider_login(", "state\n        .interactive", "validate_host(", "spawn("]),
         (&onboarding, "onboarding_provider_login_input", "host_action_refusal(&app, window.label(), scope.scope(), &session.host)", &["write_provider_input("]),
         (&mail, "mail_save_password", "saved_host_action_refusal(", &["spawn_blocking", "active_host("]),
         (&broker, "broker_login_view_open", "saved_host_action_refusal(", &["get_webview_window", "compare_exchange", "spawn_blocking"]),
@@ -3099,6 +3099,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
     assert!(save.matches("request.password.zeroize()").count() >= 3);
     // the closing of a login only kills the person's own process: it stays open to a read-only view
     assert!(!body(&onboarding, "onboarding_provider_login_close").contains("window"));
+    assert!(!body(&onboarding, "close_provider_login").contains("window"));
     // a host that cannot be read is closed
     let saved = include_str!("agent_control.rs").split("pub(crate) fn saved_host_action_refusal(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
     assert!(saved.contains("Err(code) => Some(code)") && !saved.contains(".ok()?"));
