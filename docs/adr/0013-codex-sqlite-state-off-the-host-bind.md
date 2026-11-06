@@ -68,9 +68,13 @@ CODEX_SQLITE_HOME=/opt/jht-deps/codex-state
   unlocks every agent.
 - The directory is created by the launcher before an agent starts, with the
   owner `jht` and mode `0700`, so Codex never creates it with another owner.
+  The folder preparation lives in `.launcher/agent-directories.sh`, sourced by
+  `start-agent.sh`; this module runs inside the container.
 - When the launcher finds that folder new (no database in it), it writes one line
   to `~/.jht/logs/codex-state.log` on the host, once per folder: so a setup that
   makes the volume disappear shows up, with its date, on the user's computer.
+  If that append fails, the launcher reports it and removes its announcement
+  marker, allowing another attempt while the database folder is still empty.
 - `jht cache` prunes the logs database in its new place; its other targets
   (`.codex/.tmp/plugins`, `.codex/cache`, `models_cache.json`) did not move.
 

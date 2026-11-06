@@ -12,6 +12,7 @@ import os
 import re
 import stat
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = ROOT / "docker-compose.yml"
-START_AGENT = ROOT / ".launcher" / "start-agent.sh"
+DIRECTORIES = ROOT / ".launcher" / "agent-directories.sh"
 
 
 def _service(name: str = "jht") -> dict:
@@ -61,21 +62,19 @@ def test_the_other_services_do_not_get_the_variable() -> None:
         assert "CODEX_SQLITE_HOME" not in environment, name
 
 
-def _launcher_block() -> str:
-    text = START_AGENT.read_text(encoding="utf-8")
-    match = re.search(r'(if \[ "\$CLI_BIN" = "codex" \] && \[ -n "\$\{CODEX_SQLITE_HOME:-\}" \]; then\n.*?\nfi\n)', text, re.S)
-    assert match, "the block that makes the Codex SQLite folder is gone from start-agent.sh"
-    return match.group(1)
-
-
 def _run_block(cli: str, target: Path | None, logs: Path | None = None) -> subprocess.CompletedProcess[str]:
-    env = {"PATH": os.environ["PATH"], "CLI_BIN": cli, "ROLE": "analista"}
+    assert target is not None or logs is not None, "use only synthetic folders"
+    logs = logs if logs is not None else target.parent / "logs"
+    root = logs.parent
+    env = {
+        "PATH": os.environ["PATH"], "CLI_BIN": cli, "ROLE": "analista",
+        "JHT_HOME": str(root / "home"), "JHT_AGENTS_DIR": str(root / "agents"),
+        "JHT_USER_DIR": str(root / "documents"), "JHT_LOGS_DIR": str(logs),
+    }
     if target is not None:
         env["CODEX_SQLITE_HOME"] = str(target)
-    if logs is not None:
-        env["JHT_LOGS_DIR"] = str(logs)
     return subprocess.run(
-        ["bash", "-c", f'CLI_BIN="{cli}"\n{_launcher_block()}'],
+        ["bash", "-c", 'set -euo pipefail; source "$1"', "bash", str(DIRECTORIES)],
         env=env, capture_output=True, text=True, timeout=30,
     )
 
@@ -93,17 +92,17 @@ def test_the_launcher_makes_the_folder_for_codex_only_and_only_the_owner_reads_i
 
 
 def test_without_the_variable_the_launcher_makes_nothing(tmp_path: Path) -> None:
-    before = sorted(p.name for p in tmp_path.iterdir())
-    done = _run_block("codex", None)
+    done = _run_block("codex", None, tmp_path / "logs")
     assert done.returncode == 0, done.stderr
-    assert sorted(p.name for p in tmp_path.iterdir()) == before
+    assert not (tmp_path / "home" / ".codex").exists()
+    assert not list(tmp_path.rglob("*.sqlite"))
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the mode bits of a folder mean nothing on Windows")
 def test_a_folder_that_cannot_be_made_is_said_and_does_not_stop_the_agent(tmp_path: Path) -> None:
     blocker = tmp_path / "file"
     blocker.write_text("x")
-    done = _run_block("codex", blocker / "inside")
+    done = _run_block("codex", blocker / "inside", tmp_path / "logs")
     assert done.returncode == 0
     assert "cannot be created" in done.stdout
 
@@ -137,6 +136,14 @@ def test_a_folder_that_already_has_databases_says_nothing(tmp_path: Path) -> Non
     assert not (target / ".announced").exists()
 
 
+def test_seven_agents_starting_together_write_one_announcement(tmp_path: Path) -> None:
+    target, logs = tmp_path / "volume" / "codex-state", tmp_path / "logs"
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        results = list(pool.map(lambda _: _run_block("codex", target, logs), range(7)))
+    assert all(result.returncode == 0 for result in results)
+    assert len(_log_lines(logs)) == 1
+
+
 def test_a_volume_that_comes_back_empty_is_written_again(tmp_path: Path) -> None:
     target, logs = tmp_path / "volume" / "codex-state", tmp_path / "logs"
     logs.mkdir()
@@ -155,6 +162,24 @@ def test_a_volume_that_comes_back_empty_is_written_again(tmp_path: Path) -> None
     assert len(_log_lines(logs)) == 2
 
 
-def test_a_log_that_cannot_be_written_does_not_stop_the_agent(tmp_path: Path) -> None:
-    done = _run_block("codex", tmp_path / "volume" / "codex-state", tmp_path / "no-such-logs")
+def test_a_log_that_cannot_be_written_does_not_stop_the_agent_and_can_be_retried(tmp_path: Path) -> None:
+    target, logs = tmp_path / "volume" / "codex-state", tmp_path / "logs"
+    blocker = logs / "codex-state.log"
+    blocker.mkdir(parents=True)
+    done = _run_block("codex", target, logs)
     assert done.returncode == 0
+    assert "cannot write the new-folder announcement" in done.stderr
+    assert not (target / ".announced").exists()
+    blocker.rmdir()
+    assert _run_block("codex", target, logs).returncode == 0
+    assert len(_log_lines(logs)) == 1
+    assert (target / ".announced").is_dir()
+    assert _run_block("codex", target, logs).returncode == 0
+    assert len(_log_lines(logs)) == 1
+
+
+def test_the_module_prepares_the_same_team_and_document_folders(tmp_path: Path) -> None:
+    assert _run_block("claude", None, tmp_path / "logs").returncode == 0
+    expected = ["home", "agents", "logs", "documents/cv", "documents/critiche",
+                "documents/allegati", "documents/output"]
+    assert all((tmp_path / folder).is_dir() for folder in expected)
