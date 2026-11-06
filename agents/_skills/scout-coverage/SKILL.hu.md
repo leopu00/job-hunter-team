@@ -41,5 +41,5 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 - Előbb a core, aztán a kisebbek: nincs kisebb forrás, amíg a `next` core portált nevez meg.
 - Egy portál LEFEDETT 3 menettel és 3 KÜLÖNBÖZŐ lekérdezéssel (egy a portál nyelvén, ha az nem angol). Ugyanaz a lekérdezés háromszor egynek számít: a fajtát válts, ne a szavakat.
 - Az a portál, amelyik 403-at, 410-et, belépési falat vagy challenge-et ad, EGY `--status closed` (410-nél `gone`) menettel LEZÁRT: mondd ki, és menj tovább, ne erőltesd.
-- Az `exhausted` (`scout_exhaustion.py check`) a források, lekérdezések és percek mellett lefedett core portálokat is kíván: a `core_missing` megmondja, hová kell még menned.
+- Az `exhausted` (`scout_exhaustion.py check`) a források, lekérdezések és percek mellett a terv MINDEN portáljának lefedését kéri az elmúlt 24 órában (core és kisebb, minden ország): az `uncovered` megmondja, hová kell még menned (a `core_missing` ennek a core része). Az a forrás, amelyik kiszáradt, miközben mások nincsenek lefedve, nem száraz piac: folytasd a `next` paranccsal. Az a portál, amelyik hibával válaszolt, `blocked` (`--status blocked`): kb. 3 órát pihen, majd újra megkérdezik, és sem nem lefedett, sem nem száraz.
 - A profilból soha nem írunk semmit: a napló slugokat, országkódokat, fajtákat és számokat tartalmaz.

@@ -13,6 +13,9 @@ This is that list, as data (`scout_coverage_table.json`), and the counter over t
   status   one row per portal of the plan, over the current working window: covered | partial | untouched | closed |
            via_email, with its passes, different queries and kinds, candidates and positions inserted. The Scout's
            «log P1» (scout_pass_report.py --coverage) prints the same rows.
+           `blocked` is a portal that answered with an error (429, 5xx, timeout): it rests for JHT_SCOUT_BLOCKED_PAUSE_H hours
+           (default 3), `next` goes on to the next portal and lists it under `paused`, and it never counts as covered, closed or dry;
+           three blocked passes with no good one close it.
   next     the next thing to do: the first core portal not covered (then the first minor one) and the KIND of query to
            run there, so that three passes on a portal are three different questions: the title in the portal's own
            language, the title in English, a synonym, a level word, a city.
@@ -54,7 +57,13 @@ import scout_language as _lang  # noqa: E402 — the skills folder, put on the p
 
 TIER_ORDER = {"core": 0, "minor": 1}
 CLOSED_STATUSES = ("closed", "gone")
-STATES = ("covered", "partial", "untouched", "closed", "via_email")
+# `blocked` (a 429, a 5xx, a timeout, a network error) is NOT `closed` and NOT an empty answer: the source said nothing about
+# the market. It is neither a pass of the coverage nor a search of the exhaustion; the portal rests for a few hours and is
+# asked again, and three blocked passes with no good one close it (a source that never answers does not forbid the end forever).
+BLOCKED_STATUS = "blocked"
+DEFAULT_PAUSE_H = 3.0
+BLOCKS_THEN_CLOSED = 3
+STATES = ("covered", "partial", "untouched", "closed", "via_email", "blocked")
 # The order of the questions on one portal. WIDE first (the role's family or an entry word alone, read in full and filtered
 # against the profile: a title in AND with a place often answers 0), then the portal's own language (the title as people write
 # it there), the English title, an adjacent title, a level word, a place.
@@ -69,6 +78,14 @@ def _int_env(name: str, default: int) -> int:
         return value if value > 0 else default
     except ValueError:
         return default
+
+
+def pause_hours() -> float:
+    try:
+        value = float(os.environ.get("JHT_SCOUT_BLOCKED_PAUSE_H", ""))
+        return value if 0 < value <= 48 else DEFAULT_PAUSE_H
+    except ValueError:
+        return DEFAULT_PAUSE_H
 
 
 def needed() -> dict:
@@ -137,11 +154,14 @@ def _matches(entry: dict, row: dict) -> bool:
             and str(row.get("country", "")).lower() == entry["country"])
 
 
-def measure(entry: dict, rows: list, need: dict | None = None) -> dict:
+def measure(entry: dict, rows: list, need: dict | None = None, now: float | None = None) -> dict:
     """The state of one portal of the plan over `rows` (the log lines of the window)."""
     need = need or needed()
+    now = time.time() if now is None else now
     mine = [r for r in rows if r.get("kind") == "pass" and _matches(entry, r)]
     candidates = [r for r in rows if r.get("kind") == "candidate" and _matches(entry, r)]
+    blocked = [r for r in mine if r.get("status") == BLOCKED_STATUS]
+    mine = [r for r in mine if r.get("status") != BLOCKED_STATUS]       # a blocked pass says nothing about the market
     ok = [r for r in mine if r.get("status") not in CLOSED_STATUSES]
     hashes = {r["query_hash"] for r in ok if isinstance(r.get("query_hash"), str)}
     kinds = sorted({r["query_kind"] for r in ok if isinstance(r.get("query_kind"), str)})
@@ -149,10 +169,18 @@ def measure(entry: dict, rows: list, need: dict | None = None) -> dict:
               "returned": sum(r["returned"] for r in ok if isinstance(r.get("returned"), int) and not isinstance(r["returned"], bool)),
               "inserted": sum(1 for r in candidates if r.get("outcome") == "inserted")}
     last = max(mine, key=lambda r: r["ts"], default=None)
+    last_block = max((r["ts"] for r in blocked), default=None)
+    result["blocks"] = len(blocked)
+    result["retry_at"] = None
     if entry.get("access") == "email":
         state = "via_email"
     elif entry.get("access") == "closed" or (last is not None and last.get("status") in CLOSED_STATUSES):
         state = "closed"
+    elif len(blocked) >= BLOCKS_THEN_CLOSED and not ok:
+        state = "closed"                              # asked three times, never answered: the end does not wait for it
+    elif last_block is not None and (last is None or last_block > last["ts"]) and now < last_block + pause_hours() * 3600:
+        state = "blocked"
+        result["retry_at"] = last_block + pause_hours() * 3600
     elif not ok:
         state = "untouched"
     else:
@@ -176,11 +204,11 @@ def _missing(entry: dict, numbers: dict, need: dict) -> list:
     return missing
 
 
-def status(plan: dict, rows: list, need: dict | None = None) -> list:
+def status(plan: dict, rows: list, need: dict | None = None, now: float | None = None) -> list:
     need = need or needed()
     out = []
     for entry in plan["entries"]:
-        numbers = measure(entry, rows, need)
+        numbers = measure(entry, rows, need, now)
         out.append({"slug": entry["slug"], "name": entry["name"], "country": entry["country"], "language": entry["language"],
                     "tier": entry["tier"], "access": entry["access"], "priority": entry["priority"], **numbers})
     return out
@@ -206,24 +234,40 @@ def portal_states(rows: list, profile=None, now: float | None = None) -> list:
     need = needed()
     out = []
     for entry in plan["entries"]:
-        numbers = measure(entry, rows, need)
+        numbers = measure(entry, rows, need, now)
         done = numbers["state"] in DONE_STATES
         out.append({"source": entry["slug"], "name": entry["name"], "country": entry["country"], "language": entry["language"],
                     "tier": entry["tier"], "access": entry["access"], "priority": entry["priority"],
                     "state": numbers["state"], "passes": numbers["passes"], "distinct_queries": numbers["queries"],
                     "kinds": numbers["kinds"], "candidates": numbers["returned"], "inserted": numbers["inserted"],
-                    "missing": numbers["missing"], "next_kind": None if done else _next_kind(entry, numbers)})
+                    "missing": numbers["missing"], "next_kind": None if done or numbers["state"] == "blocked" else _next_kind(entry, numbers),
+                    "blocks": numbers["blocks"], "retry_at": numbers["retry_at"]})
     return out
 
 
-def core_missing(states: list) -> list:
-    """The core portals not done yet, as `platsbanken/se 1/3` (the smaller of passes and different queries, over what is
-    needed), with ` +role_language` when the query in the portal's language is still missing and ` +broad` when no wide query was
-    asked yet. Empty = the core is done."""
+def _hhmm(ts) -> str:
+    try:
+        return time.strftime("%H:%M", time.gmtime(float(ts))) + " UTC"
+    except (TypeError, ValueError, OverflowError):
+        return "?"
+
+
+def _iso(ts):
+    try:
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(float(ts)))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _missing_lines(states: list, tiers: tuple) -> list:
     need = needed()
     out = []
     for r in states:
-        if r["tier"] != "core" or r["state"] in DONE_STATES:
+        if r["tier"] not in tiers or r["state"] in DONE_STATES:
+            continue
+        if r["state"] == "blocked":
+            # the source answered with an error, not with «nothing»: it rests and is asked again, never counted as dry
+            out.append("%s/%s blocked, retry at %s" % (r["source"], r["country"], _hhmm(r.get("retry_at"))))
             continue
         have = min(r["passes"], r["distinct_queries"], need["passes"])
         tags = "".join(" +%s" % kind for kind in ("role_language", "broad") if any(kind in m for m in r["missing"]))
@@ -231,23 +275,43 @@ def core_missing(states: list) -> list:
     return out
 
 
-def status(plan: dict, rows: list, need: dict | None = None) -> list:
+def core_missing(states: list) -> list:
+    """The core portals not done yet, as `platsbanken/se 1/3` (the smaller of passes and different queries, over what is
+    needed), with ` +role_language` when the query in the portal's language is still missing and ` +broad` when no wide query was
+    asked yet, or `platsbanken/se blocked, retry at 03:10 UTC`. Empty = the core is done."""
+    return _missing_lines(states, ("core",))
+
+
+def plan_missing(states: list) -> list:
+    """EVERY portal of the plan not done yet (core first, then the minor ones, every country of the plan), in the same words as
+    `core_missing`. Empty = the whole plan is covered, closed or read by email: the only state in which the market can be called
+    saturated (JHT-T187)."""
+    return _missing_lines(states, ("core", "minor"))
+
+
+def status(plan: dict, rows: list, need: dict | None = None, now: float | None = None) -> list:
     """The same rows with the column names of the report (slug, queries, returned)."""
     need = need or needed()
     out = []
     for entry in plan["entries"]:
-        numbers = measure(entry, rows, need)
+        numbers = measure(entry, rows, need, now)
         out.append({"slug": entry["slug"], "name": entry["name"], "country": entry["country"], "language": entry["language"],
                     "tier": entry["tier"], "access": entry["access"], "priority": entry["priority"], **numbers})
     return out
 
 
-def next_step(plan: dict, rows: list, need: dict | None = None, profile=None) -> dict:
+def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, now: float | None = None) -> dict:
     need = need or needed()
+    now = time.time() if now is None else now
     data = table()
+    paused = []
     for entry in plan["entries"]:
-        numbers = measure(entry, rows, need)
+        numbers = measure(entry, rows, need, now)
         if numbers["state"] in DONE_STATES:
+            continue
+        if numbers["state"] == "blocked":
+            # it said nothing about the market: rest, go to the next portal, come back when the pause ends
+            paused.append({"source": entry["slug"], "country": entry["country"], "retry_at": _iso(numbers["retry_at"])})
             continue
         kind = _next_kind(entry, numbers)
         terms = data["level_terms"].get(entry["portal_language"], data["level_terms"]["en"])
@@ -268,9 +332,16 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None) ->
         if kind == "city":
             step["cities"] = entry.get("cities", [])
         step["log"] = ("scout_pass_log.py pass --source %s --country %s --query-kind %s --query \"<the query you ran>\" "
-                       "--returned <N> [--status closed|gone|empty]" % (entry["slug"], entry["country"], kind))
+                       "--returned <N> [--status closed|gone|empty|blocked]" % (entry["slug"], entry["country"], kind))
+        if paused:
+            step["paused"] = paused
         return step
-    return {"plan_done": True, "core_done": not core_missing(portal_states(rows, profile)), "entries": len(plan["entries"])}
+    if paused:
+        # everything left is resting after an error: neither «done» nor «dry». Do something else (a creative attempt, another
+        # country, the company boards) or wait for the first retry; never call the market saturated.
+        return {"plan_done": False, "waiting": True, "paused": paused, "retry_at": min(p["retry_at"] for p in paused if p["retry_at"]) if any(p["retry_at"] for p in paused) else None,
+                "do": "every portal left answered with an error and rests; search elsewhere (see boards) or retry at retry_at"}
+    return {"plan_done": True, "core_done": not core_missing(portal_states(rows, profile, now)), "entries": len(plan["entries"])}
 
 
 def profile_news(agent: str, profile_path=None) -> dict:
@@ -352,14 +423,15 @@ def main(argv=None) -> int:
     since = now - args.since_hours * 3600.0 if args.since_hours is not None else default_since(now)
     rows = rows_since(since)
     if args.cmd == "status":
-        report = status(plan, rows)
+        report = status(plan, rows, now=now)
         if args.json:
             print(json.dumps({"languages": plan["languages"], "unmapped": plan["unmapped"], "rows": report,
-                              "core_missing": core_missing(portal_states(rows, args.profile))}, sort_keys=True, ensure_ascii=False))
+                              "core_missing": core_missing(portal_states(rows, args.profile, now)),
+                              "plan_missing": plan_missing(portal_states(rows, args.profile, now))}, sort_keys=True, ensure_ascii=False))
         else:
             print(render(plan, report))
         return 0
-    step = next_step(plan, rows, profile=args.profile)
+    step = next_step(plan, rows, profile=args.profile, now=now)
     if args.agent:
         step["profile"] = profile_news(args.agent, args.profile)
     print(json.dumps(step, sort_keys=True, ensure_ascii=False))

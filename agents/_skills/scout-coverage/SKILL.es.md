@@ -41,5 +41,5 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 - Primero los core, luego los menores: ninguna fuente menor mientras `next` nombre un portal core.
 - Un portal está CUBIERTO con 3 pasadas y 3 consultas DISTINTAS (una en el idioma del portal si no es inglés). La misma consulta tres veces cuenta una: cambia el tipo, no las palabras.
 - Un portal que responde 403, 410, un muro de login o un challenge queda CERRADO con UNA pasada registrada `--status closed` (o `gone` para el 410): dilo y sigue, no insistas.
-- `exhausted` (`scout_exhaustion.py check`) exige los portales core cubiertos además de fuentes, consultas y minutos: `core_missing` dice adónde te falta ir.
+- `exhausted` (`scout_exhaustion.py check`) exige CADA portal del plan cubierto en las últimas 24 horas (core y menores, cada país) además de fuentes, consultas y minutos: `uncovered` dice adónde te falta ir (`core_missing` es su parte core). Una fuente seca mientras otras no están cubiertas no es un mercado seco: sigue con `next`. Un portal que respondió con un error es `blocked` (`--status blocked`): descansa unas 3 horas y se vuelve a consultar, y no está ni cubierto ni seco.
 - Del perfil nunca se escribe nada: el registro tiene slugs, códigos de país, tipos y cuentas.

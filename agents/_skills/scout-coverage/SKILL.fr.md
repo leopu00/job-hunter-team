@@ -41,5 +41,5 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 - Les core d'abord, les mineurs ensuite : aucune source mineure tant que `next` nomme un portail core.
 - Un portail est COUVERT avec 3 passes et 3 requêtes DIFFÉRENTES (une dans la langue du portail si ce n'est pas l'anglais). La même requête trois fois compte une fois : change le type, pas les mots.
 - Un portail qui répond 403, 410, un mur de connexion ou un challenge est FERMÉ avec UNE passe journalisée `--status closed` (ou `gone` pour le 410) : dis-le et continue, n'insiste pas.
-- `exhausted` (`scout_exhaustion.py check`) exige les portails core couverts en plus des sources, requêtes et minutes : `core_missing` dit où tu dois encore aller.
+- `exhausted` (`scout_exhaustion.py check`) exige CHAQUE portail du plan couvert dans les dernières 24 heures (core et mineurs, chaque pays) en plus des sources, requêtes et minutes : `uncovered` dit où tu dois encore aller (`core_missing` en est la partie core). Une source à sec alors que d'autres ne sont pas couvertes n'est pas un marché à sec : continue avec `next`. Un portail qui a répondu par une erreur est `blocked` (`--status blocked`) : il se repose environ 3 heures puis est réinterrogé, et il n'est ni couvert ni à sec.
 - Rien du profil n'est jamais écrit : le journal a des slugs, des codes pays, des types et des comptes.

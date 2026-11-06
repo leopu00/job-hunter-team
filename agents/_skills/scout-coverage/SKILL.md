@@ -41,5 +41,5 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 - Core before minor: no minor source while `next` names a core portal.
 - A portal is COVERED with 3 passes and 3 DIFFERENT queries (one in the portal's language when that is not English). The same query three times counts once: change the kind, not the wording.
 - A portal that answers 403, 410, a login wall or a challenge is CLOSED with ONE pass logged `--status closed` (or `gone` for 410): say so and move on, do not insist.
-- `exhausted` (`scout_exhaustion.py check`) needs the core portals covered as well as the sources, queries and minutes: `core_missing` says where you still have to go.
+- `exhausted` (`scout_exhaustion.py check`) needs EVERY portal of the plan covered in the last 24 hours (core and minor, every country) as well as the sources, queries and minutes: `uncovered` says where you still have to go (`core_missing` is its core part). A source that is dry while others are not covered is not a dry market: go on with `next`. A portal that answered with an error is `blocked` (`--status blocked`): it rests about 3 hours and is asked again, and it is neither covered nor dry.
 - Nothing of the profile is ever written: the log has slugs, country codes, kinds and counts.

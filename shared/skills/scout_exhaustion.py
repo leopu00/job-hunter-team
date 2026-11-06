@@ -10,10 +10,15 @@ WHAT «EXHAUSTED» MEANS (all of it, over the current working window, every Scou
   - at least N different sources: distinct (source, country) pairs in the pass log;         default 5
   - at least M different queries: distinct query hashes;                                      default 10
   - at least T minutes of searching: from the first to the last pass line;                    default 15
-  - the CORE portals of the coverage plan are covered (scout_coverage.py: the national portals of each language the
-    profile speaks, each asked with 3 passes and 3 different queries, or closed and declared so). Three numbers can be
-    reached on five LinkedIn pages; this one cannot: it says WHERE the Scout still has to go (`missing` names the portal);
-  - and NO candidate inserted: not one `inserted` outcome in the window.
+  - EVERY portal of the coverage plan is covered, in the last 24 hours (scout_coverage.py: core AND minor portals, every country of
+    the plan, of each language the profile speaks, each asked with 3 passes and 3 different queries, or closed / read by email). A
+    portal that answered with an ERROR (`--status blocked`: 429, 5xx, timeout) is neither covered nor dry: it rests and is asked
+    again, and while it does the market is not saturated. Three numbers can be reached on five LinkedIn pages; this one cannot:
+    it says WHERE the Scout still has to go (`missing` names the portal);
+  - and NO candidate inserted that is worth it: not one `inserted` outcome in the window whose position scored the bar (70,
+    `JHT_SCOUT_GOOD_SCORE`) or is not scored yet (scout_yield.py reads the database, read only). Positions found and scored
+    under the bar are not «the sources still give». If the database cannot be read, every inserted outcome counts, as before.
+A pass that ended in an error is not a search that found nothing: it does not count for the sources, the queries or the minutes.
 The coverage clause never makes «exhausted» impossible: if the profile cannot be read, the table has none of its
 languages, or scout_coverage.py is missing or fails, it does not block (the three numbers above stand alone).
 Sources, queries and time count over the whole window (a second round does not have to repeat the first one); the
@@ -61,6 +66,8 @@ MIN_QUERIES = 10
 MIN_SPAN_MIN = 15.0
 LADDER_MIN = (30, 60, 120, 240)
 DEFAULT_LOOKBACK_H = 12.0
+# «Recently» for the coverage of the plan: its passes are read over this many hours, the rest of the window stays the window's.
+DEFAULT_COVER_RECENT_H = 24.0
 RESET_REASONS = ("user", "new-sources", "other")
 
 
@@ -83,6 +90,14 @@ def thresholds() -> dict:
         "queries": _int_env("JHT_SCOUT_EXHAUST_MIN_QUERIES", MIN_QUERIES),
         "span_min": span,
     }
+
+
+def cover_recent_hours() -> float:
+    try:
+        value = float(os.environ.get("JHT_SCOUT_COVER_RECENT_H", ""))
+        return value if 0 < value <= 24 * 14 else DEFAULT_COVER_RECENT_H
+    except ValueError:
+        return DEFAULT_COVER_RECENT_H
 
 
 def ladder() -> tuple:
@@ -139,6 +154,8 @@ def read_rows(since_ts: float, path: Path | None = None) -> list:
 def measure(rows: list, since_declared: float | None = None) -> dict:
     """The numbers of a window. `inserted` and `passes_since` count since `since_declared` (the last accepted exhaustion
     of this window) when there is one, otherwise over the whole window."""
+    # an error is not a search: a blocked pass counts for nothing here (the coverage keeps its own account of it)
+    rows = [r for r in rows if not (r["kind"] == "pass" and r.get("status") == "blocked")]
     sources = {(r.get("source"), r.get("country")) for r in rows if r["kind"] == "pass" and r.get("source")}
     queries = {r["query_hash"] for r in rows if r["kind"] == "pass" and isinstance(r.get("query_hash"), str)}
     passes = [r for r in rows if r["kind"] == "pass"]
@@ -152,24 +169,42 @@ def measure(rows: list, since_declared: float | None = None) -> dict:
             "inserted": inserted, "span_min": round(span, 1)}
 
 
-def core_missing(rows: list) -> list:
-    """The core portals of the coverage plan still short of «covered», as «platsbanken/se 1/3» lines. Empty when they are all
-    covered AND when it cannot tell (no scout_coverage.py, an unreadable profile, a language the table does not have, any
-    error): the clause only ever adds a reason to keep searching that it can name, never one it cannot."""
+def uncovered_portals(rows: list, now: float | None = None, core_only: bool = False) -> list:
+    """The portals of the coverage plan still short of «covered» (every one, core and minor, or only the core ones), as
+    «platsbanken/se 1/3» lines, or «x/se blocked, retry at 03:10 UTC» for one that answered with an error. Empty when they are all
+    done AND when it cannot tell (no scout_coverage.py, an unreadable profile, a language the table does not have, any error): the
+    clause only ever adds a reason to keep searching that it can name, never one it cannot."""
     try:
         import scout_coverage  # noqa: PLC0415 — the skills folder, put on the path above
-        missing = scout_coverage.core_missing(scout_coverage.portal_states(rows))
+        states = scout_coverage.portal_states(rows, now=now)
+        missing = scout_coverage.core_missing(states) if core_only else scout_coverage.plan_missing(states)
     except Exception:  # noqa: BLE001 — the measure of coverage never stops the other three
         return []
     return [m for m in missing if isinstance(m, str) and m] if isinstance(missing, (list, tuple)) else []
+
+
+def still_give(since_ts: float) -> dict | None:
+    """What the sources gave since `since_ts` that is worth something: positions at the bar (70, `JHT_SCOUT_GOOD_SCORE`) and
+    positions not scored yet (they may still reach it). None when the database cannot be read: the caller then counts every
+    inserted position, as before, never a made-up zero."""
+    try:
+        import scout_yield  # noqa: PLC0415 — the skills folder, put on the path above
+        return scout_yield.read(since_ts)
+    except Exception:  # noqa: BLE001 — the measure of the yield never stops the other three
+        return None
 
 
 def verdict(numbers: dict, need: dict, after_declaration: bool = False, uncovered: list = None) -> dict:
     if numbers["passes"] == 0:
         return {"verdict": "unmeasured", "missing": ["no pass logged: log each search with scout_pass_log.py"]}
     missing = []
-    if numbers["inserted"] > 0:
-        missing.append("%d position(s) inserted since the last exhaustion: the sources still give" % numbers["inserted"])
+    give = numbers.get("still_give")
+    if give is None:
+        give = numbers["inserted"]
+    if give > 0:
+        missing.append("%d position(s) inserted since the last exhaustion that score %s or are not scored yet: the sources still give"
+                       % (give, numbers.get("good_bar", 70)) if numbers.get("still_give") is not None else
+                       "%d position(s) inserted since the last exhaustion: the sources still give" % give)
     if after_declaration and numbers["passes_since"] == 0:
         missing.append("no new search since the last exhaustion: run at least one pass before declaring again")
     if numbers["sources"] < need["sources"]:
@@ -179,8 +214,9 @@ def verdict(numbers: dict, need: dict, after_declaration: bool = False, uncovere
     if numbers["span_min"] < need["span_min"]:
         missing.append("search time %.0f/%.0f min" % (numbers["span_min"], need["span_min"]))
     if uncovered:
-        missing.append("core portals of the plan not covered yet (passes, different queries): %s; "
-                       "ask `scout_coverage.py next`" % ", ".join(uncovered[:8]))
+        missing.append("portals of the plan not covered yet in the last 24 h (core and minor; passes, different queries, or a blocked "
+                       "one resting): %s; ask `scout_coverage.py next`, and send the Scout there instead of letting it rest"
+                       % ", ".join(uncovered[:8]))
     return {"verdict": "not_exhausted" if missing else "exhausted", "missing": missing}
 
 
@@ -201,10 +237,17 @@ def check(now: float | None = None, since_hours: float | None = None, path: Path
     declared = _last_declaration(read_state(), start, now)
     rows = read_rows(since, path)
     numbers = measure(rows, declared)
+    # the night is worth the positions at the bar, not the ones found: an insert that scored below it is not «the sources still give»
+    yielded = still_give(declared if declared is not None else since) if numbers["inserted"] > 0 else None
+    if yielded is not None:
+        numbers.update({"still_give": yielded["good"] + yielded["pending"], "good": yielded["good"],
+                        "pending": yielded["pending"], "below": yielded["below"], "good_bar": yielded["min_score"]})
     need = thresholds()
-    uncovered = core_missing(rows) if rows else []
-    return {**verdict(numbers, need, declared is not None, uncovered), **numbers, "need": need,
-            "core_missing": uncovered,
+    recent_rows = read_rows(now - cover_recent_hours() * 3600, path)
+    left = uncovered_portals(recent_rows, now) if rows else []
+    core_left = uncovered_portals(recent_rows, now, core_only=True) if rows else []
+    return {**verdict(numbers, need, declared is not None, left), **numbers, "need": need,
+            "uncovered": left, "core_missing": core_left,
             "window_start": datetime.fromtimestamp(since, tz=timezone.utc).isoformat(timespec="seconds")}
 
 

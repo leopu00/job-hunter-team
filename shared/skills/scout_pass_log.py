@@ -31,6 +31,7 @@ Use:
   python3 scout_pass_log.py pass --source greenhouse --country nl --returned 25 \\
          --query-kind role --query "backend engineer amsterdam"
   python3 scout_pass_log.py pass --source arbetsformedlingen --country se --returned 0 --status closed   # 403: closed for the pass
+  python3 scout_pass_log.py pass --source indeed --country de --returned 0 --status blocked   # 429 / 5xx / timeout: rests, not «empty»
   python3 scout_pass_log.py candidate --source arbetsformedlingen --country se --outcome area --count 640   # 640 ads outside the places
   python3 scout_pass_log.py candidate --source greenhouse --country nl --outcome language --opened
   python3 scout_pass_log.py candidate --source greenhouse --country nl --outcome inserted --opened
@@ -46,6 +47,7 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 VERSION = 1
 # Where a candidate can end. `inserted` is the INSERT of Gate 5; the others are the reasons it never got there.
 OUTCOMES = (
@@ -74,7 +76,10 @@ MAX_COUNT_LINE = 100000
 QUERY_KINDS = ("role", "role_language", "synonym", "level", "city", "broad", "company", "generic", "other")
 # How the portal answered. Left out, the pass is a normal one. `closed` = it cannot be read this pass (403, a login wall,
 # a challenge, a page that is an empty shell); `gone` = 410, the endpoint is dead and the source comes off the lists.
-STATUSES = ("ok", "empty", "closed", "gone")
+# `blocked` = the source ANSWERED WITH AN ERROR, not with «nothing»: 429, a 5xx, a timeout, a network error. It says nothing
+# about the market: it is not an empty pass (`--returned 0` with no status, or `empty`) and not a closed source; the portal rests
+# a few hours and is asked again (scout_coverage.py), and it never makes the market «saturated».
+STATUSES = ("ok", "empty", "closed", "gone", "blocked")
 SOURCE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,39}$")
 COUNTRY = re.compile(r"^(?:[a-z]{2}|multi|remote)$")
 AGENT = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
@@ -216,8 +221,22 @@ def main(argv=None) -> int:
     except Refused as exc:
         print("scout_pass_log: refused: %s" % exc, file=sys.stderr)
         return 2
-    append(row)
+    if append(row) and row.get("kind") == "pass":
+        _watch_empty(row)
     return 0
+
+
+def _watch_empty(row: dict) -> None:
+    """Three empty passes in a row from the same source: one alert for the user and the Dottore, and a line for the Scout
+    (scout_empty_alert.py). Whatever goes wrong there is not the Scout's problem: the pass is already logged."""
+    try:
+        import scout_empty_alert  # noqa: PLC0415 — only after a pass, same folder
+        alert = scout_empty_alert.check(row["agent"], row["ts"])
+        if alert:
+            print("scout_pass_log: ALERT %d empty passes in a row on %s/%s: do not ask this source again now, run "
+                  "`python3 scout_coverage.py next` and go to the portal it names" % (alert["passes"], alert["source"], alert["country"]))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 if __name__ == "__main__":

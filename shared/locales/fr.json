@@ -275,6 +275,7 @@
   "web_action_notice.directive_changed_from_web": "Une consigne permanente de l'équipe a été ajoutée ou modifiée depuis le site. Si ce n'était pas toi, vérifie le tableau dans l'app.",
   "cloud_sync_notice.token_rejected": "La machine ne parvient plus à se synchroniser avec le site : le site refuse son jeton de synchronisation (expiré ou révoqué), et les nouvelles offres n'y arrivent plus. Génère un nouveau jeton sur le site (Paramètres › Cloud sync) et lance « jht cloud enable --token … » sur la machine, ou reconnecte l'équipe depuis l'app.",
   "cloud_sync_notice.session_lost": "La machine a perdu la session avec laquelle elle suit le site en temps réel : les commandes du site (synchro, chat, arrêt) lui parviennent maintenant avec un délai pouvant aller jusqu'à une minute environ. Le temps réel revient avec un nouvel appairage de l'appareil.",
+  "scout_empty_notice.streak": "L'un des Scouts a interrogé trois fois de suite le même site d'offres sans rien recevoir, sans passer à un autre site. Le Docteur est prévenu et le Scout passe à un site qu'il n'a pas encore couvert. Tu n'as rien à faire.",
   "onb.role.object": "Le type de travail que tu cherches",
   "onb.role.text": "Quelle famille de métiers décrit le mieux ce que tu cherches ?",
   "onb.role.opt.software": "Logiciel / ingénierie",

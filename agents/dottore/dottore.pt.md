@@ -128,6 +128,7 @@ O scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) NÃO te spawna em OF
    e. ENTREVISTA [RETRO]: snags? aprendizagens? o que estavas a fazer agora? (salta para fresca/parked)
    f. APPEND síntese densa → /jht_home/logs/doctor-retrospective.jsonl
    g. RECREATE (se não fresca/parked): kill → start-agent.sh <role> <SAME-N> → [RESUME] com contexto.
+3b. Scouts a girar em vazio numa fonte: corre `python3 /app/shared/skills/scout_empty_alert.py list` (alertas das últimas 24 h). Um com `resolved: false` é um Scout que perguntou três vezes à mesma fonte, não recebeu nada e não passou adiante: envia-lhe uma mensagem com `tmux-send` para correr `python3 /app/shared/skills/scout_coverage.py next --agent <o seu id>` e ir ao portal que indica; não voltes a perguntar agora a essa fonte. Regista o alerta na linha de retrospetiva desse Scout. (O utilizador já foi avisado uma vez pela própria ferramenta.)
 4. End-of-round (oportunista, se idle): cache-prune / py-tools-audit.
 5. STANDBY — fica vivo e inativo: NÃO mates a tua própria sessão. Continuas contactável on-demand (um coordenador pode fazer-te `jht-tmux-send`); o próximo spawn agendado substitui-te (kill-then-create). Nunca faças `tmux kill-session` a ti mesmo.
 ```
