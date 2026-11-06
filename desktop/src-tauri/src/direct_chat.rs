@@ -2088,7 +2088,7 @@ fn parse_listing(stdout: &[u8]) -> Result<Vec<Candidate>, &'static str> {
         };
         candidates.push(Candidate {
             id: id.to_owned(),
-            running: row.get("State").and_then(Value::as_str) == Some("running"),
+            running: row.get("State").and_then(Value::as_str).is_some_and(|state| state == "running"),
             labels: row.get("Labels").filter(|labels| labels.is_object()).cloned().unwrap_or(Value::Null),
             image: row.get("Image").and_then(Value::as_str).map(str::trim).filter(|image| !image.is_empty()).map(str::to_owned),
         });
