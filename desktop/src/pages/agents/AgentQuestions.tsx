@@ -7,8 +7,8 @@ import type { AgentsPanelText } from "./AgentsPanel.i18n";
 /**
  * The questions an agent asked the person and its unread messages, read by
  * the team (agent_state.py). Only to be shown: nothing decides on them. What
- * the team does not say is «non so», never 0: a zero is shown only when it was
- * read. Every text of a question is the agent's, as it wrote it: plain text,
+ * the team does not say is left out (never a «not known» on screen, never 0): a zero is
+ * shown only when it was read. Every text of a question is the agent's, as it wrote it: plain text,
  * never translated.
  */
 
@@ -44,15 +44,21 @@ export function badgeCount(n: number): string {
 
 /**
  * The count at the top: the open questions of the agents that are up. When the
- * team says it for none of them, «non so»; for only some, the count and that
- * the rest is not known.
+ * team says it for none of them there is no count (null: nothing is written, and
+ * no «?» in its place); for only some, the count of those (the rest is told on hover, see `questionsPartlyKnown`).
  */
-export function questionsSummary(t: AgentsPanelText, all: (AgentQuestions | null)[]): string {
+export function questionsSummary(t: AgentsPanelText, all: (AgentQuestions | null)[]): string | null {
   const known = all.filter((questions): questions is AgentQuestions => questions !== null);
-  if (known.length === 0) return t.questionsUnknown;
+  if (known.length === 0) return null;
   const open = known.reduce((sum, questions) => sum + questions.open, 0);
   const text = pluralText(appLocale(), open, t.questionsOpen);
-  return known.length < all.length ? `${text} ${t.questionsPartlyUnknown}` : text;
+  return text;
+}
+
+/** True where the team says the questions of some of the agents but not of all of them. */
+export function questionsPartlyKnown(all: (AgentQuestions | null)[]): boolean {
+  const known = all.filter((questions) => questions !== null).length;
+  return known > 0 && known < all.length;
 }
 
 /** Beside the agent's name in the list: its unread messages, and a mark when it asked something. */
@@ -209,13 +215,8 @@ export function QuestionList({
   /** The agent whose chat «Answer from Messages» opens; without one, Messages as it is. */
   messagesAgent?: string | null;
 }) {
-  if (!questions) {
-    return (
-      <p data-testid="panel-questions" className="text-[11px] mt-1 text-[var(--color-dim)]" title={t.questionsUnknownWhy}>
-        {t.questionsUnknownDetail}
-      </p>
-    );
-  }
+  // the team does not say them: nothing is written (a «not known» is no news to the person)
+  if (!questions) return null;
   const unread = questions.unread > 0 ? ` · ${pluralText(appLocale(), questions.unread, t.unreadMessages)}` : "";
   if (questions.open === 0) {
     return (

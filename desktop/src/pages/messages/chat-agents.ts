@@ -66,7 +66,7 @@ export function sessionOfChatId(id: string): string | null {
 }
 
 /** What the page knows of one session of the team: whether it is up, and the state it shows. */
-export type ChatSession = { session: string; up: boolean; state?: AgentStateInfo };
+export type ChatSession = { session: string; up: boolean; state?: AgentStateInfo; /** the person paused this agent: on, but nobody works it */ paused?: boolean };
 
 export type Conversation = {
   /** the id the chat reads and writes with */
@@ -75,6 +75,8 @@ export type Conversation = {
   /** the name shown: «Capitano», «Analista 2» (the number only where the role has more than one) */
   label: string;
   up: boolean;
+  /** the person paused it: shown with an amber «⏸» in the place of the dot, never green */
+  paused?: boolean;
   /** what the team says of the agent now; null where the sessions are not known (an older shell, a team not read yet) */
   state: AgentStateInfo | null;
 };
@@ -98,16 +100,17 @@ export function conversationsOf(
   const isUp = (session: string) => sessions === null || sessions.some((s) => s.session === session && s.up);
   // What the team says of a session; a session it does not name is off (its roster has it, or it is the open one
   // whose session went down); nothing at all is said while the sessions are not known.
+  const pausedOf = (session: string): boolean => sessions?.find((s) => s.session === session)?.paused === true;
   const stateOf = (session: string): AgentStateInfo | null =>
     sessions === null ? null : (sessions.find((s) => s.session === session)?.state ?? { state: "spento" });
   for (const id of FIXED_CHAT_AGENTS) {
     if (!(NUMBERED_ROLES as readonly string[]).includes(id)) {
-      out.push({ id, session: id.toUpperCase(), label: name(id), up: isUp(id.toUpperCase()), state: stateOf(id.toUpperCase()) });
+      out.push({ id, session: id.toUpperCase(), label: name(id), up: isUp(id.toUpperCase()), paused: pausedOf(id.toUpperCase()), state: stateOf(id.toUpperCase()) });
       continue;
     }
     const numbers = [...new Set(upByRole.get(id) ?? [])].sort((a, b) => a - b);
     if (sessions === null || numbers.length === 0) {
-      out.push({ id, session: `${id.toUpperCase()}-1`, label: name(id), up: sessions === null, state: stateOf(`${id.toUpperCase()}-1`) });
+      out.push({ id, session: `${id.toUpperCase()}-1`, label: name(id), up: sessions === null, paused: pausedOf(`${id.toUpperCase()}-1`), state: stateOf(`${id.toUpperCase()}-1`) });
       continue;
     }
     for (const number of numbers) {
@@ -117,6 +120,7 @@ export function conversationsOf(
         session,
         label: numbers.length > 1 ? `${name(id)} ${number}` : name(id),
         up: true,
+        paused: pausedOf(session),
         state: stateOf(session),
       });
     }
