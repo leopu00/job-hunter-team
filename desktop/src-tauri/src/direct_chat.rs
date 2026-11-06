@@ -5547,11 +5547,11 @@ mod tests {
 
     #[test]
     fn the_podman_listing_is_read_as_podman_prints_it() {
-        // the shape of `podman ps -a --format json` (Podman 5.8): an array, `Id`, `State`, `Labels` (an object), `Image`
-        let one = r#"[{"AutoRemove":false,"Id":"833f590b97fcb40a7788fe388c36841c2c5b7d5afd5a60431a41971a7477824f","Image":"example.invalid/jht:test","ImageID":"bf85","Labels":{"com.docker.compose.project":"jht","com.docker.compose.service":"jht"},"Names":["jht"],"State":"running","Status":"Up 2 seconds"}]"#;
+        // the shape of `podman ps -a --format json`, with made-up values: an array, `Id`, `State`, `Labels` (an object), `Image`
+        let one = r#"[{"AutoRemove":false,"Id":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","Image":"example.invalid/jht:test","ImageID":"0000","Labels":{"com.docker.compose.project":"jht","com.docker.compose.service":"jht"},"Names":["jht"],"State":"running","Status":"Up"}]"#;
         let candidates = listing_of(one).unwrap();
         assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].id, "833f590b97fcb40a7788fe388c36841c2c5b7d5afd5a60431a41971a7477824f");
+        assert_eq!(candidates[0].id, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
         assert!(candidates[0].running && candidates[0].service_is_jht());
         assert_eq!(candidates[0].image.as_deref(), Some("example.invalid/jht:test"));
         // a stopped one is listed, and is not running
