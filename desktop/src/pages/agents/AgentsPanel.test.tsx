@@ -279,6 +279,10 @@ describe("«Agenti», the agents' control panel", () => {
     expect(await screen.findByTestId("panel-state")).toHaveTextContent("In pausa: acceso, ma fermo finché non lo riprendi");
     expect(screen.getByTestId("panel-row-SCOUT-1")).toHaveTextContent("In pausa");
     expect(screen.getByTestId("panel-row-CAPITANO")).not.toHaveTextContent("In pausa");
+    // its own sign, not the green dot of one that works, in the list and in its page
+    expect(within(screen.getByTestId("panel-row-SCOUT-1")).getByTestId("panel-led-paused")).toBeInTheDocument();
+    expect(within(screen.getByTestId("panel-row-CAPITANO")).queryByTestId("panel-led-paused")).toBeNull();
+    expect(screen.getAllByTestId("panel-led-paused").length).toBe(2);
     expect(screen.queryByTestId("panel-agent-pause")).toBeNull();
     fireEvent.click(screen.getByTestId("panel-agent-resume"));
     expect(screen.getByTestId("panel-confirm")).toHaveTextContent("Riprendere Scout-1");

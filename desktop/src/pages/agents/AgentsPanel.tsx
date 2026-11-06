@@ -260,6 +260,15 @@ export function isUp(row: PanelRow): boolean {
 }
 
 export function Led({ row }: { row: PanelRow }) {
+  // The user paused THIS agent (JHT-T181): not the green dot of one that works. Its own sign, amber, a pause
+  // glyph in the dot's place (the same box), so the list and the agent's page say it at a glance.
+  if (isUp(row) && row.agent?.paused) {
+    return (
+      <span aria-hidden data-testid="panel-led-paused" className="inline-block w-2.5 text-[11px] leading-none shrink-0" style={{ color: "var(--color-yellow)" }}>
+        ⏸
+      </span>
+    );
+  }
   const tone = isUp(row) ? describeAgentState(row.agent!.state, appLocale()).tone : "grey";
   return (
     <span
@@ -501,8 +510,21 @@ export function Confirm({
                 ["weekly", t.pauseWeekly],
               ] as const
             ).map(([value, label]) => (
-              <label key={value} className="flex items-center gap-2">
-                <input type="radio" name="pause-exit" value={value} checked={exit === value} onChange={() => setExit(value)} />
+              // inline: the global `label` (block, upper case, small) and `input` (full width) rules of the web
+              // styles would put the dot above and centred and the text in capitals
+              <label
+                key={value}
+                className="flex items-center gap-2"
+                style={{ display: "flex", textTransform: "none", letterSpacing: "normal", fontSize: "12px", fontWeight: 400, marginBottom: 0, color: "var(--color-bright)" }}
+              >
+                <input
+                  type="radio"
+                  name="pause-exit"
+                  value={value}
+                  checked={exit === value}
+                  onChange={() => setExit(value)}
+                  style={{ width: "auto", padding: 0, flexShrink: 0 }}
+                />
                 {label}
               </label>
             ))}
