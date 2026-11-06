@@ -4,6 +4,7 @@ import { appLocale, languagePickedAtStart } from "../lib/app-locale";
 import { describeError } from "../lib/error-catalog";
 import { fill } from "../lib/text-slots";
 import {
+  putOffTeamLanguage,
   readTeamLanguage,
   rememberTeamLanguageAsked,
   setTeamLanguage,
@@ -12,16 +13,20 @@ import {
 } from "../lib/team-language";
 import { TEAM_LANGUAGE_TEXT } from "./TeamLanguagePrompt.i18n";
 
-/** The team may not be answering yet (the chat's link is still opening): look again this often, this many times. */
+/**
+ * The team may not be answering yet (the chat's link is still opening, the agents still starting after a setup):
+ * look again this often, this many times (two minutes in all).
+ */
 const RETRY_MS = 3000;
-const ATTEMPTS = 8;
+const ATTEMPTS = 40;
 
 /**
- * Asks once, «Team language: Italiano?», when the team a person has just linked (or just had prepared) still
- * speaks the English every team starts with and the app does not: the agents would answer in English to
- * someone who writes in Italian. The app's language is the one preselected. The answer is written to the team
- * the way the game's language setting writes it, and only over that English: a language already chosen is
- * never replaced. Either answer is remembered for this account, so the question is not asked again.
+ * Asks «Team language: Italiano?» when the team speaks another language than the app: the English every team
+ * starts with, or the language it had before the person changed the app's: the agents would answer in English to
+ * someone who now reads Italian. The app's language is the one preselected. The answer is the person's own
+ * choice and replaces the team's language (the way the game's language setting writes it). Either answer is
+ * remembered for this account and this language of the app: the question comes once per language chosen, never
+ * at every start or reload. Settings › Team changes the team's language at any time.
  */
 export default function TeamLanguagePrompt({
   identityKey,
@@ -31,31 +36,35 @@ export default function TeamLanguagePrompt({
   retryMs?: number;
 }) {
   const [asking, setAsking] = useState<Locale | null>(null);
+  // the language the team speaks while the question is open: English, or the one it had before
+  const [current, setCurrent] = useState<Locale>("en");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
-    if (teamLanguageAsked(identityKey)) return;
+    const app = appLocale();
+    if (teamLanguageAsked(identityKey, app)) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const look = async (attempt: number) => {
       const team = await readTeamLanguage();
       if (cancelled) return;
       if (team) {
-        if (shouldAskTeamLanguage(team, appLocale())) {
-          // The person already said the language on the app's first screen: that was the answer, and the team
-          // follows it without a question. If the team refuses (a read-only link, a VPS not claimed yet), the
-          // question is asked as before, with the refusal told.
-          if (languagePickedAtStart()) {
-            const done = await setTeamLanguage(appLocale());
+        if (shouldAskTeamLanguage(team, app)) {
+          // The person already said the language on the app's first screen and the team still speaks the English
+          // it was installed with: that was the answer, and the team follows it without a question. If the team
+          // refuses (a read-only link, a VPS not claimed yet), the question is asked as before.
+          if (team.locale === "en" && languagePickedAtStart()) {
+            const done = await setTeamLanguage(app);
             if (cancelled) return;
-            if (done.ok) {
-              rememberTeamLanguageAsked(identityKey);
+            if (done.ok && done.language.locale === app) {
+              rememberTeamLanguageAsked(identityKey, app);
               return;
             }
           }
-          setAsking(appLocale());
+          setCurrent(team.locale);
+          setAsking(app);
         }
         return;
       }
@@ -76,24 +85,28 @@ export default function TeamLanguagePrompt({
   const t = TEAM_LANGUAGE_TEXT[appLocale()];
 
   const close = () => {
-    rememberTeamLanguageAsked(identityKey);
+    rememberTeamLanguageAsked(identityKey, appLocale());
     setAsking(null);
   };
   const confirm = async () => {
-    if (asking === "en") return close();
+    if (asking === current) return close();
     setBusy(true);
     setFailure(null);
-    const done = await setTeamLanguage(asking);
+    const done = await setTeamLanguage(asking, { choose: true });
     setBusy(false);
     if (done.ok) return close();
     const copy = describeError(done.code, { fallback: "unknown", locale: appLocale() });
     setFailure(`${copy.text} ${copy.action}`);
   };
 
-  // Escape puts the question off to the next start (it is not an answer, so it is not remembered); Tab stays inside.
+  // Escape puts the question off to the next start (it is not an answer, so it is not remembered for good, but a
+  // reload of this run does not ask again); Tab stays inside.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
-      if (!busy) setAsking(null);
+      if (!busy) {
+        putOffTeamLanguage(identityKey, appLocale());
+        setAsking(null);
+      }
       return;
     }
     if (event.key !== "Tab") return;
@@ -123,7 +136,9 @@ export default function TeamLanguagePrompt({
         <h2 id="team-language-title" className="text-[14px] font-semibold text-[var(--color-bright)]">
           {fill(t.title, { language: localeLabels[asking].label })}
         </h2>
-        <p id="team-language-body" className="text-[12px] text-[var(--color-muted)]">{t.body}</p>
+        <p id="team-language-body" className="text-[12px] text-[var(--color-muted)]">
+          {current === "en" ? t.body : fill(t.bodyOther, { language: localeLabels[current].label })}
+        </p>
         <select
           ref={selectRef}
           aria-label={t.selectLabel}
@@ -147,7 +162,7 @@ export default function TeamLanguagePrompt({
             disabled={busy}
             className="text-[10px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)]"
           >
-            {t.keepEnglish}
+            {current === "en" ? t.keepEnglish : fill(t.keepCurrent, { language: localeLabels[current].label })}
           </button>
           <button
             type="button"

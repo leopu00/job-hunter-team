@@ -12,12 +12,13 @@ describe("team language", () => {
     }
   });
 
-  it("asks only of a team that speaks English, in an app that does not", () => {
+  it("asks of a team that speaks another language than the app, English or not", () => {
     const team = (locale: "en" | "it" | "hu") => ({ locale, stored: null });
     expect(shouldAskTeamLanguage(team("en"), "it")).toBe(true);
     expect(shouldAskTeamLanguage(team("en"), "en")).toBe(false);
     expect(shouldAskTeamLanguage(team("it"), "it")).toBe(false);
-    expect(shouldAskTeamLanguage(team("hu"), "it")).toBe(false);
+    expect(shouldAskTeamLanguage(team("hu"), "it")).toBe(true);
+    expect(shouldAskTeamLanguage(team("it"), "en")).toBe(true);
     expect(shouldAskTeamLanguage(null, "it")).toBe(false);
   });
 });

@@ -20,6 +20,7 @@ import { LinkedTeamNotice } from "./LinkedTeamGate";
 import NotifyCard from "./NotifyCard";
 import ProviderSignOut from "./ProviderSignOut";
 import TeamCard from "./TeamCard";
+import TeamLanguageCard from "./TeamLanguageCard";
 import UpdateCheckCard from "./UpdateCheckCard";
 import { SECTIONS_TEXT } from "./settings-sections.i18n";
 import { SETTINGS_TEXT } from "./settings.i18n";
@@ -75,6 +76,7 @@ export function TeamSection(_props: PageProps) {
           <At name="models"><TeamSettingsPage {...NO_PROPS} /></At>
         </>
       )}
+      {!readOnly && <TeamLanguageCard />}
       {providerSetup && (
         <section data-testid="settings-provider" aria-labelledby="settings-provider-title" className={cardCls}>
           <h2 id="settings-provider-title" className="text-[13px] font-semibold text-[var(--color-bright)]">{t.providerTitle}</h2>
