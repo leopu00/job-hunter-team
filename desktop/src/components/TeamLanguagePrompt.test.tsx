@@ -23,6 +23,7 @@ const sets = () => native.invoke.mock.calls.filter(([command]) => command === "d
 beforeEach(() => {
   document.cookie = "NEXT_LOCALE=it; path=/";
   localStorage.clear();
+  sessionStorage.clear();
   native.invoke.mockReset();
   native.isTauri.mockReturnValue(true);
 });
@@ -36,14 +37,14 @@ describe("TeamLanguagePrompt", () => {
     expect(dialog).toHaveTextContent("Lingua della squadra: Italiano?");
     expect(screen.getByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel)).toHaveValue("it");
     expect(native.invoke.mock.calls.map(([command]) => command)).toEqual(["direct_chat_team_language"]);
-    expect(teamLanguageAsked("a")).toBe(false);
+    expect(teamLanguageAsked("a", "it")).toBe(false);
   });
 
   it("follows the language said on the app's first screen without asking, and remembers it for the account", async () => {
     localStorage.setItem("jht-lang-picked", "1");
     team("en", "en");
     render(<TeamLanguagePrompt identityKey="a" />);
-    await waitFor(() => expect(teamLanguageAsked("a")).toBe(true));
+    await waitFor(() => expect(teamLanguageAsked("a", "it")).toBe(true));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "it" }]]);
   });
@@ -53,7 +54,7 @@ describe("TeamLanguagePrompt", () => {
     team("en", "en", () => { throw { code: "read_only_link" }; });
     render(<TeamLanguagePrompt identityKey="a" />);
     expect(await screen.findByRole("dialog")).toHaveTextContent("Lingua della squadra: Italiano?");
-    expect(teamLanguageAsked("a")).toBe(false);
+    expect(teamLanguageAsked("a", "it")).toBe(false);
   });
 
   it("does not touch a team that already speaks the app's language, even after the first screen", async () => {
@@ -65,14 +66,14 @@ describe("TeamLanguagePrompt", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("writes the language with the one set, closes, and is never asked again for that account", async () => {
+  it("writes the language with the one set, as the person's own choice, closes, and is never asked again for that account and language", async () => {
     team("en", null);
     const { unmount } = render(<TeamLanguagePrompt identityKey="a" />);
     await screen.findByRole("dialog");
     fireEvent.click(screen.getByTestId("team-language-confirm"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "it" }]]);
-    expect(teamLanguageAsked("a")).toBe(true);
+    expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "it", choose: true }]]);
+    expect(teamLanguageAsked("a", "it")).toBe(true);
     unmount();
     native.invoke.mockClear();
     render(<TeamLanguagePrompt identityKey="a" />);
@@ -89,7 +90,7 @@ describe("TeamLanguagePrompt", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent("Lingua della squadra: Deutsch?");
     fireEvent.click(screen.getByTestId("team-language-confirm"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "de" }]]);
+    expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "de", choose: true }]]);
   });
 
   it("«Lascia l'inglese» writes nothing and is remembered", async () => {
@@ -99,21 +100,72 @@ describe("TeamLanguagePrompt", () => {
     fireEvent.click(screen.getByTestId("team-language-keep"));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(sets()).toEqual([]);
-    expect(teamLanguageAsked("a")).toBe(true);
+    expect(teamLanguageAsked("a", "it")).toBe(true);
   });
 
   it.each([
-    ["a team that already has a language of its own", "it", "it"],
-    ["a team that has another language chosen", "de", "de"],
-    ["a team whose language comes from its environment", "hu", null],
-  ])("asks nothing of %s", async (_name, locale, stored) => {
-    team(locale, stored);
+    ["chosen in its file", "it"],
+    ["given by its environment", null],
+  ])("asks nothing of a team that already speaks the app's language, %s", async (_name, stored) => {
+    team("it", stored);
     render(<TeamLanguagePrompt identityKey="a" />);
     await waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(sets()).toEqual([]);
-    expect(teamLanguageAsked("a")).toBe(false);
+  });
+
+  it.each([
+    ["a team that has another language chosen", "de", "de", "Deutsch"],
+    ["a team whose language comes from its environment", "hu", null, "Magyar"],
+  ])("asks of %s, saying which one it speaks, and «keep» leaves it", async (_name, locale, stored, label) => {
+    team(locale, stored);
+    render(<TeamLanguagePrompt identityKey="a" />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Lingua della squadra: Italiano?");
+    expect(dialog).toHaveTextContent(fill(TEAM_LANGUAGE_TEXT.it.bodyOther, { language: label }));
+    expect(screen.getByTestId("team-language-keep")).toHaveTextContent(fill(TEAM_LANGUAGE_TEXT.it.keepCurrent, { language: label }));
+    fireEvent.click(screen.getByTestId("team-language-keep"));
+    expect(sets()).toEqual([]);
+    expect(teamLanguageAsked("a", "it")).toBe(true);
+  });
+
+  it("the first screen's language is followed by itself only over the English: a team with another language is asked", async () => {
+    localStorage.setItem("jht-lang-picked", "1");
+    team("de", "de");
+    render(<TeamLanguagePrompt identityKey="a" />);
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Lingua della squadra: Italiano?");
+    expect(sets()).toEqual([]);
+    fireEvent.click(screen.getByTestId("team-language-confirm"));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sets()).toEqual([["direct_chat_team_language_set", { locale: "it", choose: true }]]);
+  });
+
+  it("a language of the app changed in Settings asks once more, once: the answer for the language before does not count", async () => {
+    team("it", "it");
+    localStorage.setItem("jht-team-language-asked:a", "it");
+    // the person picks German in Settings: the page reloads in German, the team still speaks Italian
+    document.cookie = "NEXT_LOCALE=de; path=/";
+    const first = render(<TeamLanguagePrompt identityKey="a" />);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Sprache des Teams: Deutsch?");
+    expect(dialog).toHaveTextContent(fill(TEAM_LANGUAGE_TEXT.de.bodyOther, { language: "Italiano" }));
+    fireEvent.click(screen.getByTestId("team-language-keep"));
+    expect(teamLanguageAsked("a", "de")).toBe(true);
+    first.unmount();
+    // the reload after it, and the next start: no question
+    native.invoke.mockClear();
+    render(<TeamLanguagePrompt identityKey="a" />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(native.invoke).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("the answer of the older app (asked once, no language) asks again once for the app's language", async () => {
+    localStorage.setItem("jht-team-language-asked:a", "1");
+    team("en", "en");
+    render(<TeamLanguagePrompt identityKey="a" />);
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Lingua della squadra: Italiano?");
   });
 
   it("asks nothing when the app itself is in English: there is no other language to offer", async () => {
@@ -132,7 +184,7 @@ describe("TeamLanguagePrompt", () => {
     fireEvent.click(screen.getByTestId("team-language-confirm"));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.queryByTestId("team-language-failure")).toBeNull();
-    expect(teamLanguageAsked("a")).toBe(true);
+    expect(teamLanguageAsked("a", "it")).toBe(true);
   });
 
   it("a refused write is told with the catalog's sentence, keeps the dialog and is not remembered", async () => {
@@ -144,7 +196,7 @@ describe("TeamLanguagePrompt", () => {
     expect(await screen.findByTestId("team-language-failure")).toHaveTextContent(copy.text);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByTestId("team-language-confirm")).toBeEnabled();
-    expect(teamLanguageAsked("a")).toBe(false);
+    expect(teamLanguageAsked("a", "it")).toBe(false);
   });
 
   it("a reply that is not one of the seven languages is a failure, not a success", async () => {
@@ -153,10 +205,10 @@ describe("TeamLanguagePrompt", () => {
     await screen.findByRole("dialog");
     fireEvent.click(screen.getByTestId("team-language-confirm"));
     expect(await screen.findByTestId("team-language-failure")).toBeInTheDocument();
-    expect(teamLanguageAsked("a")).toBe(false);
+    expect(teamLanguageAsked("a", "it")).toBe(false);
   });
 
-  it("looks again while the team does not answer yet (the chat's link still opening), and gives up after eight tries", async () => {
+  it("looks again while the team does not answer yet (the chat's link still opening), and gives up after forty tries", async () => {
     let answers = false;
     native.invoke.mockImplementation(async () => {
       if (!answers) throw { code: "disconnected" };
@@ -171,9 +223,9 @@ describe("TeamLanguagePrompt", () => {
     native.invoke.mockReset();
     native.invoke.mockRejectedValue({ code: "disconnected" });
     render(<TeamLanguagePrompt identityKey="b" retryMs={1} />);
-    await waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(8));
+    await waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(40));
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(native.invoke).toHaveBeenCalledTimes(8);
+    expect(native.invoke).toHaveBeenCalledTimes(40);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -187,7 +239,7 @@ describe("TeamLanguagePrompt", () => {
     expect(native.invoke.mock.calls.length).toBeLessThanOrEqual(calls + 1);
   });
 
-  it("Escape puts the question off without writing and without remembering it: it comes back at the next start", async () => {
+  it("Escape puts the question off without writing and without remembering it: not at the reloads of this run, again at the next start", async () => {
     team("en", "en");
     const { unmount } = render(<TeamLanguagePrompt identityKey="a" />);
     const select = await screen.findByLabelText(TEAM_LANGUAGE_TEXT.it.selectLabel);
@@ -196,8 +248,15 @@ describe("TeamLanguagePrompt", () => {
     fireEvent.keyDown(select, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(sets()).toEqual([]);
-    expect(teamLanguageAsked("a")).toBe(false);
+    expect(localStorage.getItem("jht-team-language-asked:a")).toBeNull();
     unmount();
+    // a reload of the same run (a language picked, «back to home»): not asked again
+    const reloaded = render(<TeamLanguagePrompt identityKey="a" />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    reloaded.unmount();
+    // the next start of the app
+    sessionStorage.clear();
     render(<TeamLanguagePrompt identityKey="a" />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });

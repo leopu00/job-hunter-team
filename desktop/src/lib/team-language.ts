@@ -40,20 +40,26 @@ export async function readTeamLanguage(): Promise<TeamLanguage | null> {
   }
 }
 
-/** The ask is for a team that speaks English and an app that does not. */
+/** The ask is for a team that speaks another language than the app: the English it was installed with, or the one it had before the app's language changed. */
 export function shouldAskTeamLanguage(team: TeamLanguage | null, app: Locale): boolean {
-  return team !== null && team.locale === "en" && app !== "en";
+  return team !== null && team.locale !== app;
 }
 
 /**
- * Sets the team's language. It writes only over the English every team starts with: a team that has a
- * language of its own answers `changed: false` and keeps it. A native refusal (a read-only link, a VPS not
- * yet claimed) arrives as its code, which the caller tells with the error catalog.
+ * Sets the team's language. Without `choose` (the app following the language said on its first screen) it writes
+ * only over the English every team starts with: a team that has a language of its own answers `changed: false`
+ * and keeps it. With `choose` it is the person's own answer and replaces the team's language; the agents take it
+ * from their next message. A native refusal (a read-only link, a VPS not yet claimed) arrives as its code, which
+ * the caller tells with the error catalog.
  */
-export async function setTeamLanguage(locale: Locale): Promise<{ ok: true; language: TeamLanguage } | { ok: false; code: string }> {
+export async function setTeamLanguage(
+  locale: Locale,
+  options?: { choose?: boolean },
+): Promise<{ ok: true; language: TeamLanguage } | { ok: false; code: string }> {
   if (!isTauri()) return { ok: false, code: "desktop_only" };
   try {
-    const language = teamLanguageReply(await invoke("direct_chat_team_language_set", { locale }));
+    const args = options?.choose ? { locale, choose: true } : { locale };
+    const language = teamLanguageReply(await invoke("direct_chat_team_language_set", args));
     return language ? { ok: true, language } : { ok: false, code: "persist_failed" };
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
@@ -62,20 +68,39 @@ export async function setTeamLanguage(locale: Locale): Promise<{ ok: true; langu
 }
 
 const ASKED_PREFIX = "jht-team-language-asked:";
+const PUT_OFF_PREFIX = "jht-team-language-put-off:";
 
-/** Whether this person already answered the question for this account on this computer. */
-export function teamLanguageAsked(identityKey: string): boolean {
+/**
+ * Whether this person already answered the question for this account and this language of the app, on this
+ * computer. A new language of the app asks once more: a team left in English while the app spoke English is not a
+ * team that chose English for someone who now reads Italian. (The older «1» answered no language in particular.)
+ */
+export function teamLanguageAsked(identityKey: string, app: Locale): boolean {
   try {
-    return localStorage.getItem(ASKED_PREFIX + identityKey) === "1";
+    if (localStorage.getItem(ASKED_PREFIX + identityKey) === app) return true;
+  } catch {
+    /* no storage: asked as if new */
+  }
+  try {
+    return sessionStorage.getItem(PUT_OFF_PREFIX + identityKey) === app;
   } catch {
     return false;
   }
 }
 
-export function rememberTeamLanguageAsked(identityKey: string): void {
+export function rememberTeamLanguageAsked(identityKey: string, app: Locale): void {
   try {
-    localStorage.setItem(ASKED_PREFIX + identityKey, "1");
+    localStorage.setItem(ASKED_PREFIX + identityKey, app);
   } catch {
     /* no storage: the question may come once more */
+  }
+}
+
+/** Escape: not an answer, so not remembered for good; the reloads of this run of the app do not ask again. */
+export function putOffTeamLanguage(identityKey: string, app: Locale): void {
+  try {
+    sessionStorage.setItem(PUT_OFF_PREFIX + identityKey, app);
+  } catch {
+    /* no storage: the next reload asks again */
   }
 }

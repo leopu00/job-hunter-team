@@ -1,5 +1,5 @@
 import { localTeamData } from "../lib/local-team-data";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup as cleanupRender, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectDirectChat, directChatStatus, reconnectDirectChat } from "../lib/direct-chat";
@@ -350,6 +350,7 @@ describe("DashboardApp onboarding router", () => {
     vi.mocked(runtimeLogPath).mockResolvedValue(null);
     vi.mocked(openRuntimeLog).mockResolvedValue(false);
     localStorage.clear();
+    sessionStorage.clear();
     vi.mocked(readDesktopPlatform).mockResolvedValue("macos");
     vi.mocked(readPreviousLocalData).mockResolvedValue(false);
     vi.mocked(closeOnboardingProviderLogin).mockResolvedValue();
@@ -2835,6 +2836,37 @@ describe("DashboardApp onboarding router", () => {
     expect(markOnboardingReady).not.toHaveBeenCalled();
   });
 
+  it("a page reload of the app opened without the team opens it again without the team, and starts nothing", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("team-off-reload-account"));
+    vi.mocked(loadOnboardingGate).mockResolvedValue({
+      phase: "required",
+      account: { displayName: "Team Off Reload" },
+      resumeAvailable: true,
+      runtime: { status: "collecting", stage: "host" },
+    });
+    vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({
+      ...TEAM_READY, containerRunning: false, providerConfigured: false, providerAuthenticated: false,
+      assistantRunning: false, captainRunning: false, localHost: true,
+    });
+
+    const user = userEvent.setup();
+    const first = render(<DashboardApp />);
+    expect(await screen.findByText("action-required:team-start")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "open-without-team" }));
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    first.unmount();
+    vi.mocked(resumeOnboardingSnapshot).mockClear();
+
+    render(<DashboardApp />);
+    expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    // still the mode without the team: its banner and its «start the team»
+    expect(screen.getByRole("button", { name: "team-off-start" })).toBeInTheDocument();
+    expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+    expect(prepareOnboardingRuntime).not.toHaveBeenCalled();
+    expect(resumeOnboardingTeamStart).not.toHaveBeenCalled();
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
   it("a resume of a VPS or a saved team whose container is stopped keeps the refusal: nothing here can wake it", async () => {
     vi.mocked(useSession).mockReturnValue(signedInAs("stopped-remote-account"));
     vi.mocked(loadOnboardingGate).mockResolvedValue({
@@ -3744,6 +3776,63 @@ describe("DashboardApp onboarding router", () => {
       vi.mocked(markOnboardingStarted).mockImplementationOnce(() => { throw new Error("marker-failed"); });
       await user.click(screen.getByTestId("guided-continue-later"));
       expect(await screen.findByTestId("shell")).toBeInTheDocument();
+    });
+
+    /** The marker after «continue later» with the profile not complete: started, as the next load reads it. */
+    function startedGate() {
+      vi.mocked(loadOnboardingGate).mockResolvedValue({
+        phase: "required",
+        account: { displayName: "Synthetic Person" },
+        resumeAvailable: true,
+        runtime: { status: "collecting", stage: "host" },
+      });
+    }
+
+    it("a page reload after «continue later» (a language picked in Settings) opens the app again, and no setup runs", async () => {
+      // The Assistant does not answer (its provider sign-in expired): the profile is never complete.
+      const user = await toGuided("guided-reload-language", [{ ...TEAM_READY, profileReady: false }]);
+      await user.click(await screen.findByTestId("guided-continue-later"));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+      cleanupRender();
+
+      // the reload: the same run of the app, the gate asked again, the marker says «started»
+      startedGate();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+      expect(screen.queryByRole("button", { name: "submit-onboarding" })).not.toBeInTheDocument();
+      expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+      expect(resumeOnboardingSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("«Back to home» after a page error reloads into the app, not into the setup", async () => {
+      const user = await toGuided("guided-reload-home", [{ ...TEAM_READY, profileReady: false }]);
+      await user.click(await screen.findByTestId("guided-continue-later"));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      cleanupRender();
+
+      // main.tsx: the error boundary's «home» is window.location.reload(), the page is built again
+      startedGate();
+      render(<DashboardApp />);
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
+    });
+
+    it("the next start of the app comes back to the setup left half-done, as before", async () => {
+      const user = await toGuided("guided-next-start", [{ ...TEAM_READY, profileReady: false }]);
+      await user.click(await screen.findByTestId("guided-continue-later"));
+      expect(await screen.findByTestId("shell")).toBeInTheDocument();
+      cleanupRender();
+
+      // a new run of the app: what the run remembered is gone with it
+      sessionStorage.clear();
+      startedGate();
+      vi.mocked(resumeOnboardingSnapshot).mockResolvedValue({ ...TEAM_READY, profileReady: false, localHost: true });
+      render(<DashboardApp />);
+      await waitFor(() => expect(resumeOnboardingSnapshot).toHaveBeenCalled());
+      expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
+      expect(prepareOnboardingRuntime).toHaveBeenCalledOnce();
     });
   });
 });

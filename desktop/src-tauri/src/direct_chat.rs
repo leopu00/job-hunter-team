@@ -102,7 +102,9 @@ print(json.dumps({'exists':False,'clientMessageId':cid,'accepted':True,'messageI
 /// with the same atomic replace as the game's `language_save.py`. `read` tells the language the team
 /// speaks now (the file, then `$JHT_LANG`, then `host.env`, then English) and what the file itself says.
 /// `set` writes only while that language is the English everything starts with: a language already
-/// chosen is never replaced, and the reply says so (`changed: false`) instead of failing.
+/// chosen is never replaced, and the reply says so (`changed: false`) instead of failing. `choose` is
+/// the person's own choice (Settings, or the question after the app's language changed): it replaces
+/// whatever the team spoke, and the agents take it from their next message.
 const TEAM_LANGUAGE_PY: &str = r#"import json,os,sys,tempfile
 valid=('en','it','hu','es','de','fr','pt')
 req=json.loads(sys.stdin.readline()); op=req.get('op')
@@ -126,8 +128,8 @@ def bootstrap():
 current=stored() or bootstrap() or 'en'
 if op=='read': print(json.dumps({'locale':current,'stored':stored()})); raise SystemExit(0)
 locale=req.get('locale')
-if op!='set' or locale not in valid: raise SystemExit(2)
-if current!='en': print(json.dumps({'locale':current,'stored':stored(),'changed':False})); raise SystemExit(0)
+if op not in ('set','choose') or locale not in valid: raise SystemExit(2)
+if (op=='set' and current!='en') or (op=='choose' and stored()==locale): print(json.dumps({'locale':current,'stored':stored(),'changed':False})); raise SystemExit(0)
 fd,temporary=tempfile.mkstemp(prefix='.i18n-prefs.',dir=home)
 try:
  with os.fdopen(fd,'w',encoding='utf-8') as out:
@@ -3982,24 +3984,28 @@ pub(crate) async fn direct_chat_team_language(
     .await
 }
 
-/// Sets the team's language, once, while it is still the English it starts with: through the same
-/// file the game's language setting writes. A language the person already chose is never replaced
-/// (`changed: false`). Only the app's own window may ask, and a team the app may not write to
-/// (the read-only view, a VPS not yet claimed) refuses as every other write does.
+/// Sets the team's language through the same file the game's language setting writes. Without
+/// `choose` (the app following the language said on its first screen) it writes only over the English
+/// the team starts with: a language already chosen is never replaced (`changed: false`). With `choose`
+/// it is the person's own answer, and it replaces the team's language. Only the app's own window may
+/// ask, and a team the app may not write to (the read-only view, a VPS not yet claimed) refuses as every
+/// other write does.
 #[tauri::command]
 pub(crate) async fn direct_chat_team_language_set(
     window: tauri::Window,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
     locale: String,
+    choose: Option<bool>,
 ) -> Result<TeamLanguage, DirectChatError> {
     if !window_may_write(window.label()) || !TEAM_LANGUAGES.contains(&locale.as_str()) {
         return Err(failure("invalid_request"));
     }
+    let op = if choose == Some(true) { "choose" } else { "set" };
     chat_write(
         &state,
         &scopes,
-        move |inner| team_language_impl(inner, json!({"op": "set", "locale": locale}), true, "persist_failed"),
+        move |inner| team_language_impl(inner, json!({"op": op, "locale": locale}), true, "persist_failed"),
         "persist_failed",
     )
     .await
@@ -6836,6 +6842,37 @@ mod assistance_registration_tests {
 
     #[cfg(unix)]
     #[test]
+    fn the_person_s_own_choice_replaces_the_team_s_language_and_the_same_one_writes_nothing() {
+        let home = team_language_home("choose");
+        // a team the app aligned to the first screen's language, then a person who picks another one
+        let (_, set) = run_team_language(&home, None, json!({"op": "set", "locale": "fr"}));
+        assert_eq!(set, json!({"locale": "fr", "stored": "fr", "changed": true}));
+        let (code, chose) = run_team_language(&home, None, json!({"op": "choose", "locale": "de"}));
+        assert_eq!((code, &chose), (0, &json!({"locale": "de", "stored": "de", "changed": true})));
+        // back to English is a choice too: the file says it, the environment no longer decides
+        let (_, chose) = run_team_language(&home, Some("pt"), json!({"op": "choose", "locale": "en"}));
+        assert_eq!(chose, json!({"locale": "en", "stored": "en", "changed": true}));
+        let (_, read) = run_team_language(&home, Some("pt"), json!({"op": "read"}));
+        assert_eq!(read, json!({"locale": "en", "stored": "en"}));
+        // the language the file already says: nothing written
+        let before = fs::metadata(home.join("i18n-prefs.json")).unwrap().modified().unwrap();
+        let (_, same) = run_team_language(&home, None, json!({"op": "choose", "locale": "en"}));
+        assert_eq!(same, json!({"locale": "en", "stored": "en", "changed": false}));
+        assert_eq!(fs::metadata(home.join("i18n-prefs.json")).unwrap().modified().unwrap(), before);
+        // a language given only by host.env is replaced by a choice, which the file then keeps
+        let other = team_language_home("choose-host-env");
+        fs::write(other.join("host.env"), "JHT_LANG=en\n").unwrap();
+        let (_, chose) = run_team_language(&other, None, json!({"op": "choose", "locale": "es"}));
+        assert_eq!(chose, json!({"locale": "es", "stored": "es", "changed": true}));
+        assert_eq!(fs::read_to_string(other.join("host.env")).unwrap(), "JHT_LANG=en\n", "host.env is the install's, not touched");
+        let (code, _) = run_team_language(&other, None, json!({"op": "choose", "locale": "xx"}));
+        assert_eq!(code, 2);
+        let _ = fs::remove_dir_all(&home);
+        let _ = fs::remove_dir_all(&other);
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn the_team_language_script_refuses_a_language_it_does_not_have_and_writes_nothing() {
         let home = team_language_home("refused");
         for request in [json!({"op": "set", "locale": "xx"}), json!({"op": "set"}), json!({"op": "wipe"})] {
@@ -6864,7 +6901,9 @@ mod assistance_registration_tests {
         let source = include_str!("direct_chat.rs");
         let set = source.split("pub(crate) async fn direct_chat_team_language_set(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(set.contains("!window_may_write(window.label())"), "only the app's own window may write the language");
-        assert!(set.contains("team_language_impl(inner, json!({\"op\": \"set\""));
+        // the two ways of writing (over the English only, or the person's own choice), and nothing else
+        assert!(set.contains("let op = if choose == Some(true) { \"choose\" } else { \"set\" };"));
+        assert!(set.contains("team_language_impl(inner, json!({\"op\": op, \"locale\": locale}), true, \"persist_failed\")"), "both write as a write");
         let implementation = source.split("fn team_language_impl(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(implementation.contains("if write {\n        refuse_writing(connection)?;"), "a write goes through the gate of every write to the team");
         let read = source.split("pub(crate) async fn direct_chat_team_language(").nth(1).unwrap().split("\n}\n").next().unwrap();

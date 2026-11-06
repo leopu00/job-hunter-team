@@ -667,4 +667,45 @@ export function resetOnboardingMarker(
   }
   // A new first setup starts from the welcome, not from the steps of the one before.
   clearOnboardingDraft(userId, store);
+  forgetShellOpened(userId);
+}
+
+/** What a reload keeps of the app's screen: the store of this run of the app (sessionStorage), not of the computer. */
+export interface ShellOpenedStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+const OPENED_PREFIX = "jht.desktop.onboarding.opened.";
+const OPENED_PLAIN = "1";
+const OPENED_TEAM_OFF = "team-off";
+
+/** How the app was opened in this run: in full, or without the team (the person chose it). */
+export type ShellOpened = "open" | "team-off";
+
+/**
+ * The app opened in this run: the gate was passed («Continue later», «Open without the team», a finished setup).
+ * A reload of the page (a language picked in Settings, «Back to home» after an error) asks the gate again, and the
+ * marker alone would say «started» and put the person back in the setup. The run remembers it; the next start of
+ * the app does not, and comes back to the setup left half-done as before.
+ */
+export function rememberShellOpened(
+  userId: string, how: ShellOpened = "open", store: ShellOpenedStore = sessionStorage,
+): void {
+  try { store.setItem(`${OPENED_PREFIX}${userId}`, how === "team-off" ? OPENED_TEAM_OFF : OPENED_PLAIN); }
+  catch { /* no storage: a reload asks the gate as before */ }
+}
+
+export function shellOpenedThisRun(userId: string, store: ShellOpenedStore = sessionStorage): ShellOpened | null {
+  try {
+    const value = store.getItem(`${OPENED_PREFIX}${userId}`);
+    return value === OPENED_PLAIN ? "open" : value === OPENED_TEAM_OFF ? "team-off" : null;
+  } catch { return null; }
+}
+
+/** «Start over» and the removal of JHT: the next gate is the setup's, even before the app is closed. */
+export function forgetShellOpened(userId: string, store: ShellOpenedStore = sessionStorage): void {
+  try { store.removeItem(`${OPENED_PREFIX}${userId}`); }
+  catch { /* nothing to forget */ }
 }
