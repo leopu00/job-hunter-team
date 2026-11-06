@@ -30,6 +30,22 @@
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 $ErrorActionPreference = 'Stop'
+# PSMODULEPATH-BEGIN
+# An app started from PowerShell 7 hands its module folders (the 7 ones first) down to the Windows PowerShell 5.1 it starts, and
+# 5.1 then cannot load Microsoft.PowerShell.Security (Get-Acl, Get-FileHash): "could not autoload the matching module". The list
+# is rebuilt from the folders Windows PowerShell itself uses, before any command that needs a module. PowerShell 7 keeps its own.
+if ($PSVersionTable.PSEdition -eq 'Desktop') {
+  $jhtModuleFolders = New-Object System.Collections.Generic.List[string]
+  $jhtModuleFolders.Add([IO.Path]::Combine([Environment]::GetFolderPath('MyDocuments'), 'WindowsPowerShell', 'Modules'))
+  $jhtModuleFolders.Add([IO.Path]::Combine([Environment]::GetFolderPath('ProgramFiles'), 'WindowsPowerShell', 'Modules'))
+  $jhtModuleFolders.Add([IO.Path]::Combine($PSHOME, 'Modules'))
+  foreach ($jhtScope in 'Machine', 'User') {
+    $jhtScoped = [Environment]::GetEnvironmentVariable('PSModulePath', $jhtScope)
+    if ($jhtScoped) { $jhtModuleFolders.Add($jhtScoped) }
+  }
+  $env:PSModulePath = [string]::Join(';', $jhtModuleFolders.ToArray())
+}
+# PSMODULEPATH-END
 
 # Capacita' letta dal client desktop prima di invocare `upgrade --check --json`.
 # I wrapper storici non la espongono e richiedono il bootstrap temporaneo del
@@ -459,9 +475,12 @@ function Test-RuntimeDirectoryAcl {
     $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     foreach ($rule in $acl.Access) {
       if ($rule.AccessControlType -ne 'Allow') { continue }
-      $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
-      $writes = $rights -band ([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl)
-      if (-not $writes) { continue }
+      # What gives a right to CHANGE the folder (the same set as the desktop app's check): write data or add a file (0x2), append
+      # or add a folder (0x4), write extended attributes (0x10), delete what is in it (0x40), write attributes (0x100), delete it
+      # (0x10000), change its permissions (0x40000), take its ownership (0x80000), and the generic write (0x40000000) and all
+      # (0x10000000) bits. Reading, listing and running are not.
+      $changes = ([int]$rule.FileSystemRights) -band 0x500D0156
+      if (-not $changes) { continue }
       $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
       if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) { return $false }
     }

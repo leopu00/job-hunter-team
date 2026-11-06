@@ -635,6 +635,25 @@ pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
     }
 }
 
+/// Whether what a PowerShell wrote to stderr says it could not load one of its own modules (`Get-Acl` and `Get-FileHash` live in
+/// `Microsoft.PowerShell.Security`): the module folders it inherited are another PowerShell's. The error id is fixed and is not
+/// translated, the rest of the message is in the language of the system.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn powershell_modules_unavailable(stderr: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(stderr);
+    text.contains("CouldNotAutoloadMatchingModule") || text.contains("Import-Module Microsoft.PowerShell.")
+}
+
+/// install.ps1's end with what it wrote to stderr: a failure that is the PowerShell's own modules gets its own code, which says
+/// what to do, instead of the generic one.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn installer_outcome_with(result: Result<i32, &'static str>, stderr: &[u8]) -> Result<(), &'static str> {
+    match installer_outcome(result) {
+        Err("runtime_install_failed") if powershell_modules_unavailable(stderr) => Err("powershell_modules_unavailable"),
+        other => other,
+    }
+}
+
 /// install.ps1's end, from run_program_lines: its exit code, or the timeout.
 pub(crate) fn installer_outcome(result: Result<i32, &'static str>) -> Result<(), &'static str> {
     match result {
@@ -1377,6 +1396,21 @@ mod tests {
     }
 
     /// Which access masks of an ACE give a right to change: a group a sandboxing tool adds, with ReadAndExecute only, is not one.
+    #[test]
+    fn a_powershell_that_cannot_load_its_own_modules_is_told_apart_from_a_failed_install() {
+        let italian = "Get-Acl : Comando Get-Acl trovato nel modulo Microsoft.PowerShell.Security, ma impossibile caricare il modulo. Per ulteriori informazioni, eseguire 'Import-Module Microsoft.PowerShell.Security'.\n    + FullyQualifiedErrorId : CouldNotAutoloadMatchingModule\n";
+        let english = "Get-FileHash : The 'Get-FileHash' command was found in the module 'Microsoft.PowerShell.Utility', but the module could not be loaded.\n    + FullyQualifiedErrorId : CouldNotAutoloadMatchingModule\n";
+        for stderr in [italian, english] {
+            assert!(powershell_modules_unavailable(stderr.as_bytes()));
+            assert_eq!(installer_outcome_with(Ok(1), stderr.as_bytes()), Err("powershell_modules_unavailable"));
+        }
+        // any other stderr, or an exit the installer names itself, keeps its own code
+        assert_eq!(installer_outcome_with(Ok(1), b"Access to the path is denied."), Err("runtime_install_failed"));
+        assert_eq!(installer_outcome_with(Ok(21), italian.as_bytes()), Err("podman_missing"));
+        assert_eq!(installer_outcome_with(Err("process_timeout"), italian.as_bytes()), Err("timeout"));
+        assert_eq!(installer_outcome_with(Ok(0), italian.as_bytes()), Ok(()));
+    }
+
     #[test]
     fn only_a_mask_that_can_change_the_node_counts() {
         const READ_AND_EXECUTE_SYNCHRONIZE: u32 = 0x0012_00A9;

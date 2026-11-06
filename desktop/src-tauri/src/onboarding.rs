@@ -2107,7 +2107,7 @@ fn install_local_windows(
     phase: &dyn Fn(&'static str),
 ) -> Result<PathBuf, OnboardingError> {
     use crate::windows_runtime::{
-        installer_invocation, installer_outcome, notice_message, phase_message, powershell_path,
+        installer_invocation, notice_message, phase_message, powershell_path,
         wsl_path, wsl_state, INSTALL_PS1_SHA256,
     };
     let wsl = wsl_path(std::env::var_os("SystemRoot"));
@@ -2192,7 +2192,7 @@ fn install_local_windows(
                 }
                 log.record("install.ps1", ended, &stdout, &stderr, started.elapsed());
             }
-            installer_outcome(ended).map_err(failure)
+            crate::windows_runtime::installer_outcome_with(ended, &stderr).map_err(failure)
         })();
         let _ = fs::remove_dir_all(&dir);
         result
