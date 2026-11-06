@@ -26,6 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime.rs").read_text(encoding="utf-8")
+IDENTITY_SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime" / "identity.rs").read_text(encoding="utf-8")
 
 TEAM_ID = "00000000-0000-4000-8000-0000000000aa"  # synthetic
 TARGET = {
@@ -53,9 +54,9 @@ def _raw_string(after: str) -> str:
     return SOURCE[start : SOURCE.index('"#', start)]
 
 
-def _function(name: str) -> str:
-    start = SOURCE.index(f"pub(crate) fn {name}(")
-    return SOURCE[start : SOURCE.index("\n}\n", start) + 3]
+def _function(name: str, source: str = SOURCE) -> str:
+    start = source.index(f"pub(crate) fn {name}(")
+    return source[start : source.index("\n}\n", start) + 3]
 
 
 TEMPLATE = _raw_string("pub(crate) fn command(")
@@ -207,6 +208,6 @@ def test_the_only_interpolation_is_the_validated_target():
         return text
     assert masked(TARGET) == masked(OTHER)
     # and every field is one valid_target checks to a closed shape
-    valid = _function("valid_target")
+    valid = _function("valid_target", IDENTITY_SOURCE)
     for check in ("hex(&target.container_id, 64)", "hex(&target.oci_revision, 40)", 'target.os == "linux"', '"amd64" | "arm64"'):
         assert check in valid, check

@@ -12,21 +12,30 @@ struct Command {
     body: String,
 }
 
+pub(crate) fn rust_sources(dir: &std::path::Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).expect("source directory is readable") {
+        let path = entry.expect("source entry is readable").path();
+        if path.is_dir() {
+            files.extend(rust_sources(&path));
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+    files
+}
+
 /// Every Tauri command of the sources: file, name, whether it is async and its body.
 fn commands() -> Vec<Command> {
     // The marker is built here so that this file does not hold it as a literal.
     let marker = concat!("#[tauri", "::command");
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files: Vec<_> = fs::read_dir(&dir)
-        .expect("src is readable")
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
-        .collect();
+    let mut files = rust_sources(&dir);
     files.sort();
     let mut found = Vec::new();
     for path in files {
         let source = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
-        let file = path.file_name().unwrap().to_string_lossy().into_owned();
+        let file = path.strip_prefix(&dir).unwrap().to_string_lossy().replace('\\', "/");
         let mut rest = source.as_str();
         while let Some(at) = rest.find(marker) {
             let at_line_start = at == 0 || rest[..at].ends_with('\n');
@@ -88,7 +97,9 @@ fn squashed(text: &str) -> String {
 
 #[test]
 fn the_commands_of_the_chat_are_all_async_so_the_window_never_waits_for_them() {
-    let chat: Vec<_> = commands().into_iter().filter(|command| command.file == "direct_chat.rs").collect();
+    let chat: Vec<_> = commands().into_iter().filter(|command| {
+        command.file == "direct_chat.rs" || command.file.starts_with("direct_chat/")
+    }).collect();
     assert!(chat.len() >= 12, "the scan found only {} commands of the chat", chat.len());
     let sync: Vec<_> = chat.iter().filter(|command| !command.is_async).map(|command| command.name.as_str()).collect();
     assert!(sync.is_empty(), "sync commands of the chat run on the main thread: {sync:?}");
