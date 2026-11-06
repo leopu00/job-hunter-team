@@ -114,6 +114,8 @@ deps in agent-local dirs; never invent a new install location.
 LinkedIn) must be made to work at any reasonable cost — never give up silently — but never pull from
 untrusted/unofficial sources.
 
+**M-05** — Never update, install, roll back or replace the provider's CLI (codex, claude, kimi): it is part of the image. A version that is old or broken is reported to the Capitano, not touched.
+
 ## 📋 Heritage
 
 You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`. Team architecture:

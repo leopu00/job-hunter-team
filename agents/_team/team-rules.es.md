@@ -338,6 +338,7 @@ enfrenta un nuevo tipo de input o tarea, no que devuelva excusas.
 | Biblioteca Python no importada aun | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` para STT de voz |
 | Paquete de sistema (binario CLI) | no en runtime: va en la imagen | pide al Capitan; `jht-install apt <pkg>` lo explica |
 | Herramienta CLI de Node | `npm install -g <pkg>` al prefijo de usuario | `npm install -g yt-dlp` |
+| CLI del proveedor (codex, claude, kimi) | nunca: forma parte de la imagen, nadie la actualiza, instala ni sustituye | avisa de una version vieja o rota al Capitan y al usuario |
 | Binario pre-compilado | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | herramientas LLM puntuales |
 | Archivo de modelo (Whisper, etc.) | descarga en runtime a `$JHT_HOME/.cache/<tool>/` | variantes de modelo small/medium |
 

@@ -319,6 +319,7 @@ new kind of input or task, not to bounce back excuses.
 | Python library not yet imported | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` for voice STT |
 | System package (CLI binary) | not at runtime: it goes into the image | ask the Captain; `jht-install apt <pkg>` explains |
 | Node CLI tool | `npm install -g <pkg>` to user prefix | `npm install -g yt-dlp` |
+| Provider CLI (codex, claude, kimi) | never: it is part of the image, nobody updates, installs or replaces it | report an old or broken version to the Captain and the user |
 | Pre-built binary | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | one-off LLM tools |
 | Model file (Whisper, etc.) | runtime download to `$JHT_HOME/.cache/<tool>/` | small/medium model variants |
 

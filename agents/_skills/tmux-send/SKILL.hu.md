@@ -86,7 +86,7 @@ Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomi
   - Ha a címzett a postaládát használja (`mail_receivers`), a `0` **sorba állítva** jelent: az üzenet tartós fájl, a terminál csak egy rövid figyelmeztetést kapott. Hogy az ügynök *átvette*-e, azt a `jht-mail status <ügynök> <id>` mondja meg; amit senki nem vesz át időben, azt jelzik a feladónak. Sorba állítás után a kilépési kód `0`, bármi is történik a figyelmeztetéssel, kivéve a `3`-at (nem válaszoló terminál); a sorba állítás után eltűnő munkamenet már nem `2`-t ad, az üzenet a postaládában vár. A figyelmeztetést csak akkor gépeli be, ha a terminál a promptnál vár; különben visszatartja (a kilépési kód továbbra is `0`), és a watchdog megismétli.
 - `1` — hianyzo argumentumok
 - `2` — a celszessio nem letezik (ellenorizd a nevet a `tmux ls` paranccsal)
-- `3` — a szoveg soha nem jelent meg es a panel nem foglalt → nem fogado TUI. **Az egyetlen kod, ami halott/beragadt allapotra utal.**
+- `3` — a szoveg soha nem jelent meg es a panel nem foglalt → nem fogado TUI. **Az egyetlen kod, ami halott/beragadt allapotra utal.** 3-mal lep ki akkor is, **anelkul hogy barmit begepelt vagy megnyomott volna**, ha a panel **puszta shell** (az ugynok CLI-je nem indult el vagy kilepett): ne irj bele; kerj eletjel-ellenorzest vagy ujrainditast.
 - `4` — a peer hosszu koron dolgozik a varakozasi kereten tul → **el**. Probald ujra kesobb, soha ne respawnolj.
 - `5` — a szoveget elfogadta, de soha nem kuldte el ("el, de nema") → **el**. Probald ujra kesobb, soha ne respawnolj.
 - `7` — a szoveg elhagyta a composert, de semmi nem bizonyitja, hogy a CLI elvitte: **ismeretlen**. Nezd meg a panelt, mielott ujra irsz; soha ne respawnolj.

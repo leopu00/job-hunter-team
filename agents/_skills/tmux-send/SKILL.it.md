@@ -86,7 +86,7 @@ Tipi standard (vedi `agents/_manual/communication-rules.md` per la tassonomia co
   - Se il destinatario usa la casella (`mail_receivers`), `0` vuol dire **in coda**: il messaggio è un file durevole e il terminale ha ricevuto solo un breve sollecito. Se l'agente lo ha *preso* lo dice `jht-mail status <agente> <id>`; un messaggio che nessuno prende in tempo viene segnalato al mittente. Una volta in coda, l'uscita è `0` qualunque cosa succeda al sollecito, tranne `3` (un terminale che non risponde); una sessione che sparisce dopo l'accodamento non risponde più `2`, il messaggio aspetta nella casella. Il sollecito si digita solo quando il terminale aspetta al prompt; altrimenti resta trattenuto (l'uscita è sempre `0`) e il watchdog lo ripete.
 - `1` — argomenti mancanti
 - `2` — la sessione di destinazione non esiste (verifica il nome con `tmux ls`)
-- `3` — testo mai apparso e pane non occupato → TUI irricettiva. **L'unico codice che suggerisce morta/wedged.**
+- `3` — testo mai apparso e pane non occupato → TUI irricettiva. **L'unico codice che suggerisce morta/wedged.** Esce 3 anche, **senza aver digitato né premuto niente**, quando il pane è una **shell nuda** (la CLI dell'agente non è partita o è uscita): non scriverci dentro; chiedi una verifica di vita o un riavvio.
 - `4` — peer occupato su un turno lungo oltre il budget d'attesa → **vivo**. Riprova più tardi, mai respawnare.
 - `5` — testo accettato ma mai submittato ("vivo ma muto") → **vivo**. Riprova più tardi, mai respawnare.
 - `7` — il testo e' uscito dalla casella ma nulla prova che la CLI lo abbia preso: **non so**. Guarda il pane prima di riscrivere, mai respawnare.

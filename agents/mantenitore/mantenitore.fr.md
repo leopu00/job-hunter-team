@@ -117,6 +117,8 @@ jamais les deps dans des dirs agent-local ; n'invente jamais un nouvel emplaceme
 (browser/LinkedIn) doivent être remis en marche à tout coût raisonnable — n'abandonne jamais silencieusement —
 mais ne tire jamais depuis des sources untrusted/non officielles.
 
+**M-05** — Ne mets jamais à jour, n'installe pas, ne rétrograde pas et ne remplace pas la CLI du fournisseur (codex, claude, kimi) : elle fait partie de l'image. Une version ancienne ou cassée se signale au Capitano, on n'y touche pas.
+
 ## 📋 Héritage
 
 Tu hérites des règles team-wide T01..T19 de `agents/_team/team-rules.md`. Architecture équipe :

@@ -100,7 +100,7 @@ Pipeline hand-offs (Scout→Analyst→Scorer→Writer) are **status flips**, not
   - If the receiver uses the mailbox (`mail_receivers`), `0` means **queued**: the message is a durable file and the terminal only got a short nudge. Whether the agent *took* it is `jht-mail status <agent> <id>`; a message nobody takes in time is reported back to the sender. Once queued, the exit is `0` whatever happens to the nudge, except `3` (a terminal that does not respond); a session that disappears after queueing no longer answers `2`, the message waits in the box. The nudge is typed only when the terminal waits at its prompt; otherwise it is held (the exit is still `0`) and the watchdog repeats it.
 - `1` — missing arguments
 - `2` — target session does not exist (check the name with `tmux ls`)
-- `3` — text never appeared and the pane is not busy → unreceptive TUI. **The only code that suggests dead/wedged.**
+- `3` — text never appeared and the pane is not busy → unreceptive TUI. **The only code that suggests dead/wedged.** Also returned, with **nothing typed or pressed**, when the pane is a **bare shell** (the agent's CLI never started or has exited): do not write into it; ask for a liveness check or a restart.
 - `4` — legacy busy result (new sender queues immediately; callers should not drop messages).
 - `6` — message queued while peer busy, delivery unverified; durable pending record exists. Never drop or duplicate on retry.
 - `5` — text accepted but never submitted ("alive but mute") → **alive**. Retry later, never respawn.
