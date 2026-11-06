@@ -345,3 +345,58 @@ def test_the_refreshes_and_the_mail_tick_of_the_watchdog_ask_the_predicate():
 def test_the_sentinel_bridge_rings_the_cap_of_the_agent_pauses_every_tick():
     src = (REPO / ".launcher" / "sentinel-bridge.py").read_text()
     assert "_standby_step(parsed)\n        _agent_pause_step()" in src
+
+
+# ── a parole: skill, Capitano, Assistente, in ogni lingua ──────────────────
+LANGS = ("", ".it", ".es", ".fr", ".de", ".pt", ".hu")
+
+
+def _text(path):
+    return (REPO / path).read_text(encoding="utf-8")
+
+
+def test_the_skill_exists_in_every_language_and_both_roles_get_it():
+    for suffix in LANGS:
+        body = _text(f"agents/_skills/team-pause/SKILL{suffix}.md")
+        for needle in ("agent_control.py pause --until-resumed --from-assistant", "agent_control.py resume",
+                       "pause-agent SCOUT-1", "resume-agent SCOUT-1", "Paused ✅", "detail.not_reached", "7"):
+            assert needle in body, f"SKILL{suffix}.md lacks {needle!r}"
+    for role in ("capitano", "assistente"):
+        assert "team-pause" in _text(f"agents/{role}/skills.list").split()
+
+
+def test_every_command_the_skill_quotes_is_one_the_panel_accepts():
+    """Se qualcuno cambia i flag di agent_control.py, la skill (che li cita) non resta a mentire."""
+    import re
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("agent_control_for_skill", str(REPO / "shared/skills/agent_control.py"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    body = _text("agents/_skills/team-pause/SKILL.md")
+    quoted = re.findall(r"agent_control\.py ((?:pause|resume|pause-agent|resume-agent)[^\n`]*)", body)
+    assert len(quoted) >= 4
+    for line in quoted:
+        args = [a for a in line.split()]
+        module._parser().parse_args(args)       # SystemExit/Refusal se il comando non esiste
+
+
+def test_the_capitano_knows_a_pause_is_not_a_stop_in_every_language():
+    for suffix in LANGS:
+        text = _text(f"agents/capitano/capitano{suffix}.md")
+        block = next(line for line in text.splitlines() if line.startswith("**C-30"))
+        for needle in ("agent_control.py pause --until-resumed", ".team-halted.flag", "jht team stop", "kill-session",
+                       "freeze_team.py", "pause-agent", "[PAUSA TEAM]", "7"):
+            assert needle in block, f"capitano{suffix}.md C-30 lacks {needle!r}"
+
+
+def test_the_assistente_runs_the_pause_itself_and_never_asks_for_a_freeze():
+    for suffix in LANGS:
+        text = _text(f"agents/assistente/assistente{suffix}.md")
+        assert "agent_control.py pause --until-resumed --from-assistant" in text, suffix
+        assert "agent_control.py resume" in text and "team-pause" in text
+        # la vecchia riga che mandava un «freeze controllato» al Capitano non c'e' piu', in nessuna lingua
+        for old in ("Proceed with controlled freeze", "freeze controllato", "freeze controlado", "freeze contrôlé",
+                    "kontrolliertem Freeze", "freeze controlado", "kontrollált freeze"):
+            assert old not in text, f"assistente{suffix}.md still asks the Capitano for «{old}»"

@@ -9,6 +9,9 @@ tmux-send
 # Chiusura ordinata quando l'utente esce dall'applicazione: ogni agente
 # annota dove era arrivato, poi il flag lascia chiudere il gioco.
 graceful-shutdown
+
+# JHT-T181: pausa vera (sessioni accese, contesto intatto) contro lo stop che chiude tutto.
+team-pause
 chat-web
 game-reply-options
 # Phone-side outbound: notifiche batch + risposte all'utente sul bot Capitano
