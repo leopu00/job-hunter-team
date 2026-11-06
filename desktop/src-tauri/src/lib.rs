@@ -52,6 +52,7 @@ mod release_channel;
 mod resources;
 mod release_channel_rules;
 mod runtime_host;
+mod runtime_up;
 mod single_instance;
 mod runtime_log;
 mod saved_vps;
