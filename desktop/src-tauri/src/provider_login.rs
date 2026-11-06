@@ -86,8 +86,14 @@ pub(crate) async fn provider_login_state(
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
-    // Where the team runs is the app's own saved host (the chat reads the same one): only a team of this computer is signed in from here.
-    let here = scopes.active().is_ok_and(|scope| matches!(load_persisted_host(&app, &scope), Ok(ExecutionHost::Local)));
+    // The gate of every command that reaches the saved host comes first: a window, a link or a host that may not be acted on is
+    // told so, and nothing is read. Past it, where the team runs is the app's own saved host (the chat reads the same one):
+    // only a team of this computer is signed in from here.
+    let scope = scopes.active().map_err(failure)?;
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &scope) {
+        return Ok(ProviderLoginReply { here: Some(false), ..ProviderLoginReply::failed(code) });
+    }
+    let here = matches!(load_persisted_host(&app, &scope), Ok(ExecutionHost::Local));
     let reply = read_state(&state, &scopes).await.unwrap_or_else(|error| ProviderLoginReply::failed(error.code));
     if let (Some(code), Some(log)) = (reply.error, crate::runtime_log::RuntimeLog::new(&app)) {
         log.record_read_failure("login.read", LOGIN_CODES, code);
