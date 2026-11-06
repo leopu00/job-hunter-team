@@ -13,7 +13,10 @@ vi.mock("./StartTeamAction", () => ({
 }));
 vi.mock("../lib/app-locale", () => ({ appLocale: () => "en" }));
 
-afterEach(() => setLocalTeamData(null));
+afterEach(() => {
+  vi.useRealTimers();
+  setLocalTeamData(null);
+});
 
 describe("the bar of a team that is off", () => {
   it("says nothing while the team is up", () => {
@@ -43,6 +46,9 @@ describe("the bar of a team that is off", () => {
   });
 
   it("says the data are the saved ones, and when they were written, with the button that starts the team", () => {
+    // a fixed «now» in the middle of the day: ten minutes ago must be today also when the suite runs just after midnight
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 5, 15, 0, 0));
     setLocalTeamData("local:abc");
     render(<LocalTeamStoppedBar />);
     const at = Math.floor(Date.now() / 1000) - 600;
