@@ -107,6 +107,16 @@ pub(crate) fn start_command(kind: StartKind) -> TeamCommand<'static> {
     TeamCommand { argv, input: None }
 }
 
+/// `jht artifact upload --stdin --name=<name> [--json]`: the document's bytes on standard input, its base name (already
+/// cleaned by the caller) in one word with `=` so that a name that starts with a dash is still a name.
+pub(crate) fn artifact_upload_command<'a>(name_argument: &'a str, json: bool, document: &'a [u8]) -> TeamCommand<'a> {
+    let mut argv = vec!["node", NODE_ENTRY, "artifact", "upload", "--stdin", name_argument];
+    if json {
+        argv.push("--json");
+    }
+    TeamCommand { argv, input: Some(document) }
+}
+
 /// The operations of `agent_control.py`, as `ControlRequest::argv` names them.
 const AGENT_CONTROL_OPS: [&str; 17] = [
     "list", "team", "history", "activity", "screen", "start", "stop", "restart", "pause", "resume", "stop-team",
@@ -319,6 +329,16 @@ mod tests {
         // A resolution that fails keeps nothing: the next read finds it again, not the old one.
         assert_eq!(cache.get("b", start + Duration::from_secs(7), keep, false, || Err("container_unavailable")).err(), Some("container_unavailable"));
         assert_eq!(*cache.get("b", start + Duration::from_secs(7), keep, true, resolve).unwrap(), 5);
+    }
+
+    #[test]
+    fn an_uploaded_document_is_the_bytes_on_stdin_and_one_word_for_the_name() {
+        let bytes = b"made-up document".as_slice();
+        let plain = artifact_upload_command("--name=-odd name.pdf", false, bytes);
+        assert_eq!(plain.argv, ["node", "/app/cli/bin/jht.js", "artifact", "upload", "--stdin", "--name=-odd name.pdf"]);
+        assert_eq!(plain.input, Some(bytes));
+        let json = artifact_upload_command("--name=cv.pdf", true, bytes);
+        assert_eq!(json.argv.last().copied(), Some("--json"));
     }
 
     #[test]
