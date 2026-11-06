@@ -5343,7 +5343,7 @@ mod tests {
 
     #[test]
     fn a_podman_runtime_is_listed_once_by_the_project_and_service_labels_and_never_through_compose() {
-        let podman: Vec<String> = local_listing_args().into_iter().map(|word| word.to_string_lossy().into_owned()).collect();
+        let podman: Vec<String> = super::local_listing_args().into_iter().map(|word| word.to_string_lossy().into_owned()).collect();
         assert_eq!(
             podman,
             ["ps", "-a", "--no-trunc", "--filter", "label=com.docker.compose.project=jht", "--filter", "label=com.docker.compose.service=jht", "--format", "json"]
@@ -5358,44 +5358,44 @@ mod tests {
         assert!(docker.iter().any(|word| word == "--project-directory"));
     }
 
-    fn listed(rows: &str) -> Result<Vec<Candidate>, &'static str> {
-        parse_listing(rows.as_bytes())
+    fn listing_of(rows: &str) -> Result<Vec<super::Candidate>, &'static str> {
+        super::parse_listing(rows.as_bytes())
     }
 
     #[test]
     fn the_podman_listing_is_read_as_podman_prints_it() {
         // the shape of `podman ps -a --format json` (Podman 5.8): an array, `Id`, `State`, `Labels` (an object), `Image`
         let one = r#"[{"AutoRemove":false,"Id":"833f590b97fcb40a7788fe388c36841c2c5b7d5afd5a60431a41971a7477824f","Image":"example.invalid/jht:test","ImageID":"bf85","Labels":{"com.docker.compose.project":"jht","com.docker.compose.service":"jht"},"Names":["jht"],"State":"running","Status":"Up 2 seconds"}]"#;
-        let candidates = listed(one).unwrap();
+        let candidates = listing_of(one).unwrap();
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].id, "833f590b97fcb40a7788fe388c36841c2c5b7d5afd5a60431a41971a7477824f");
         assert!(candidates[0].running && candidates[0].service_is_jht());
         assert_eq!(candidates[0].image.as_deref(), Some("example.invalid/jht:test"));
         // a stopped one is listed, and is not running
-        let stopped = listed(&one.replace("\"running\"", "\"exited\"")).unwrap();
+        let stopped = listing_of(&one.replace("\"running\"", "\"exited\"")).unwrap();
         assert!(!stopped[0].running);
         // none listed, in the ways an engine says it
-        assert!(listed("[]").unwrap().is_empty());
-        assert!(listed("  \n").unwrap().is_empty());
+        assert!(listing_of("[]").unwrap().is_empty());
+        assert!(listing_of("  \n").unwrap().is_empty());
         // labels that are not an object are no labels; no image is no image
-        let bare = listed(r#"[{"Id":"aaaaaaaaaaaa","State":"running","Labels":null}]"#).unwrap();
+        let bare = listing_of(r#"[{"Id":"aaaaaaaaaaaa","State":"running","Labels":null}]"#).unwrap();
         assert!(!bare[0].service_is_jht() && bare[0].image.is_none());
     }
 
     #[test]
     fn a_listing_that_is_not_podmans_takes_no_container() {
         for broken in ["{}", "null", "true", "[1]", "not json", r#"[{"State":"running"}]"#, r#"[{"Id":"zz","State":"running"}]"#, r#"[{"Id":"abc","State":"running"}]"#] {
-            assert_eq!(listed(broken).err(), Some("container_unavailable"), "{broken}");
+            assert_eq!(listing_of(broken).err(), Some("container_unavailable"), "{broken}");
         }
         let many = format!("[{}]", vec![r#"{"Id":"aaaaaaaaaaaa","State":"running"}"#; 17].join(","));
-        assert_eq!(listed(&many).err(), Some("container_unavailable"));
-        assert_eq!(parse_listing(&[0xff, 0xfe]).err(), Some("container_unavailable"));
+        assert_eq!(listing_of(&many).err(), Some("container_unavailable"));
+        assert_eq!(super::parse_listing(&[0xff, 0xfe]).err(), Some("container_unavailable"));
     }
 
     #[test]
     fn only_windows_asks_for_the_image_and_settles_a_disagreeing_listing_with_one_inspect() {
         let runtime = Path::new("/nonexistent-runtime");
-        let candidate = |running: bool, service: &str, image: Option<&str>| Candidate {
+        let candidate = |running: bool, service: &str, image: Option<&str>| super::Candidate {
             id: "a".repeat(64),
             running,
             labels: serde_json::json!({"com.docker.compose.service": service}),
@@ -5403,23 +5403,23 @@ mod tests {
         };
         let pinned = format!("ghcr.io/leopu00/jht@sha256:{}", "b".repeat(64));
         // elsewhere the image is not asked, whatever the listing says
-        assert!(image_is_accepted(false, None, runtime));
-        assert!(!needs_image_inspect(false, true, &candidate(true, "jht", None), runtime));
+        assert!(super::image_is_accepted(false, None, runtime));
+        assert!(!super::needs_image_inspect(false, true, &candidate(true, "jht", None), runtime));
         // on Windows: no image, or one that is not the runtime's, for a running jht of Podman -> one inspect
-        assert!(!image_is_accepted(true, None, runtime));
-        assert!(needs_image_inspect(true, true, &candidate(true, "jht", None), runtime));
-        assert!(needs_image_inspect(true, true, &candidate(true, "jht", Some("example.invalid/other:latest")), runtime));
+        assert!(!super::image_is_accepted(true, None, runtime));
+        assert!(super::needs_image_inspect(true, true, &candidate(true, "jht", None), runtime));
+        assert!(super::needs_image_inspect(true, true, &candidate(true, "jht", Some("example.invalid/other:latest")), runtime));
         // ...but not for what is not a candidate (stopped, another service) and not for Docker
-        assert!(!needs_image_inspect(true, true, &candidate(false, "jht", None), runtime));
-        assert!(!needs_image_inspect(true, true, &candidate(true, "jht-broker", None), runtime));
-        assert!(!needs_image_inspect(true, false, &candidate(true, "jht", None), runtime));
+        assert!(!super::needs_image_inspect(true, true, &candidate(false, "jht", None), runtime));
+        assert!(!super::needs_image_inspect(true, true, &candidate(true, "jht-broker", None), runtime));
+        assert!(!super::needs_image_inspect(true, false, &candidate(true, "jht", None), runtime));
         // the runtime's own pinned image is accepted from the listing, with no inspect
         let dir = std::env::temp_dir().join(format!("jht-image-pin-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("runtime-image"), format!("{pinned}\n")).unwrap();
-        assert!(image_is_accepted(true, Some(&pinned), &dir));
-        assert!(!needs_image_inspect(true, true, &candidate(true, "jht", Some(&pinned)), &dir));
-        assert!(!image_is_accepted(true, Some("example.invalid/other:latest"), &dir));
+        assert!(super::image_is_accepted(true, Some(&pinned), &dir));
+        assert!(!super::needs_image_inspect(true, true, &candidate(true, "jht", Some(&pinned)), &dir));
+        assert!(!super::image_is_accepted(true, Some("example.invalid/other:latest"), &dir));
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -5464,26 +5464,28 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn the_probe_the_python_and_the_delivery_run_in_the_attested_container_with_the_wrappers_programs() {
+        use crate::existing_team_runtime::ChatOperation;
+        let (launch, delivery) = (super::LOCAL_PYTHON_LAUNCH, super::LOCAL_DELIVERY_SCRIPT);
         let (root, runtime, wrapper, id) = attested_local_fixture();
         let said = |result: Result<ProcessResult, &'static str>| String::from_utf8(result.unwrap().stdout).unwrap();
-        let operation = |operation: RemoteOperation<'_>, input: Option<&[u8]>| run_local_native(&wrapper, &runtime, &operation, input, LOCAL_TEST_TIMEOUT);
+        let operation = |operation: RemoteOperation<'_>, input: Option<&[u8]>| super::run_local_native(&wrapper, &runtime, &operation, input, LOCAL_TEST_TIMEOUT);
         // the probe: the container is there, nothing is run in it
-        assert_eq!(said(operation(RemoteOperation::Probe, None)), "true\n");
+        assert_eq!(said(operation(super::RemoteOperation::Probe, None)), "true\n");
         // the Python: the launcher the wrapper ran, the program on stdin
         assert_eq!(
-            said(operation(RemoteOperation::Python, Some(b"0a"))),
-            format!("exec -i {id} python3 -c {LOCAL_PYTHON_LAUNCH}\n0a")
+            said(operation(super::RemoteOperation::Python, Some(b"0a"))),
+            format!("exec -i {id} python3 -c {launch}\n0a")
         );
         // the delivery: the helper's line, the session as $1, the message on stdin
         assert_eq!(
-            said(operation(RemoteOperation::Delivery("CAPITANO"), Some(b"[@utente -> @capitano] [CHAT] ciao"))),
-            format!("exec -i {id} sh -c {LOCAL_DELIVERY_SCRIPT} sh CAPITANO\n[@utente -> @capitano] [CHAT] ciao")
+            said(operation(super::RemoteOperation::Delivery("CAPITANO"), Some(b"[@utente -> @capitano] [CHAT] ciao"))),
+            format!("exec -i {id} sh -c {delivery} sh CAPITANO\n[@utente -> @capitano] [CHAT] ciao")
         );
         // a session outside the chat's grammar is refused before any engine call
         for bad in ["capitano", "SCOUT-0", "SCOUT-12345", "CAPITANO; id", ""] {
-            assert_eq!(operation(RemoteOperation::Delivery(bad), Some(b"x")).err(), Some("invalid_agent"), "{bad:?}");
+            assert_eq!(operation(super::RemoteOperation::Delivery(bad), Some(b"x")).err(), Some("invalid_agent"), "{bad:?}");
         }
-        assert_eq!(operation(RemoteOperation::Chat(ChatOperation::Read { agent: "capitano", cursor: None }), None).err(), Some("invalid_request"));
+        assert_eq!(operation(super::RemoteOperation::Chat(ChatOperation::Read { agent: "capitano", cursor: None }), None).err(), Some("invalid_request"));
         // all of it found the container once
         let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
         assert_eq!(calls.lines().filter(|call| *call == "ps").count(), 1);
@@ -5493,14 +5495,14 @@ mod tests {
     #[test]
     fn the_programs_the_container_runs_carry_no_quote_and_keep_the_wrappers_meaning() {
         // no double quote in an argument: Windows PowerShell 5.1 dropped them (T71), and the engine gets these as they are
-        assert!(!LOCAL_PYTHON_LAUNCH.contains('"') && !LOCAL_DELIVERY_SCRIPT.contains('"'));
+        assert!(!super::LOCAL_PYTHON_LAUNCH.contains('"') && !super::LOCAL_DELIVERY_SCRIPT.contains('"'));
         // the Python launcher is the wrapper's: read the hex of the program on the first line and run it
-        assert_eq!(LOCAL_PYTHON_LAUNCH, "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())");
+        assert_eq!(super::LOCAL_PYTHON_LAUNCH, "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())");
         // the delivery keeps the message one word and its * and ? from matching files, without quotes
-        assert!(LOCAL_DELIVERY_SCRIPT.starts_with("IFS=; set -f; msg=$(cat); exec jht-tmux-send"));
+        assert!(super::LOCAL_DELIVERY_SCRIPT.starts_with("IFS=; set -f; msg=$(cat); exec jht-tmux-send"));
         let wrapper = include_str!("../../../scripts/jht-wrapper.ps1");
-        assert!(wrapper.contains(&format!("'{LOCAL_PYTHON_LAUNCH}'")), "the wrapper's launcher changed: the native one must follow");
-        assert!(wrapper.contains(&format!("sh -c '{LOCAL_DELIVERY_SCRIPT}'")), "the wrapper's delivery changed: the native one must follow");
+        assert!(wrapper.contains(&format!("'{}'", super::LOCAL_PYTHON_LAUNCH)), "the wrapper's launcher changed: the native one must follow");
+        assert!(wrapper.contains(&format!("sh -c '{}'", super::LOCAL_DELIVERY_SCRIPT)), "the wrapper's delivery changed: the native one must follow");
     }
 
     #[test]
