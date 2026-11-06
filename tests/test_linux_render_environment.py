@@ -2,11 +2,10 @@
 
 Origin: collaudo Linux 44cf (B5), AppImage on an Intel Haswell GPU with WebKitGTK 4.1 under Wayland: grey and green
 horizontal bands over half of the window from the Office page on, gone only by starting the app again. They go away with
-WEBKIT_DISABLE_DMABUF_RENDERER=1. The Rust side has its own tests (linux_render.rs); this one keeps the contract where
-the Python suite, which runs on every push, can see it.
+WEBKIT_DISABLE_DMABUF_RENDERER=1. The startup-order guard lives only in linux_render.rs, including the one-shot upload
+that exits before window startup. These Python tests cover platform wiring and the troubleshooting documentation.
 """
 
-import re
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parent.parent / "desktop" / "src-tauri" / "src"
@@ -25,15 +24,6 @@ def test_the_variable_is_set_to_one_on_linux_only_and_only_when_it_is_not_set():
     apply = source[source.index("pub(crate) fn apply()") - 40 : source.index("#[cfg(test)]")]
     assert '#[cfg(target_os = "linux")]' in apply and '#[cfg(not(target_os = "linux"))]' in apply
     assert "std::env::set_var(name, value)" in apply
-
-
-def test_it_runs_first_in_run_before_the_web_view_is_built():
-    lib = _text("lib.rs")
-    assert "mod linux_render;" in lib
-    run = lib.split("pub fn run() {\n", 1)[1]
-    assert run.startswith("    linux_render::apply();\n    tauri::Builder::default()")
-    # nothing that could start the web view comes before it
-    assert not re.search(r"Builder|WebviewWindow|generate_context", run.split("linux_render::apply();", 1)[0])
 
 
 def test_the_reason_for_always_on_linux_is_written_where_the_next_person_reads_it():
