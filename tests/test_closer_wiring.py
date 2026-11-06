@@ -290,7 +290,9 @@ def _flow_block_reasons() -> set[str]:
     interpretare un token che non ha mai visto — cioè a improvvisare proprio
     dove la spec vuole che si fermi.
     """
-    src = (SKILLS_DIR / "apply_flow.py").read_text()
+    flow_modules = sorted(SKILLS_DIR.glob("apply_flow*.py"))
+    assert flow_modules, "nessun modulo del flusso trovato"
+    src = "\n".join(path.read_text() for path in flow_modules)
     # The recipes and the shared account module stop the same flow: the gate
     # reads every recipe module, plus the two that do not match the pattern, so
     # a recipe added tomorrow cannot keep its stops out of the skill and a
