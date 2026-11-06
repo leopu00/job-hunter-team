@@ -1318,6 +1318,30 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team's budget answer is not in a form this app recognises.",
     "Check that the app and the team are on the same version, then try again.",
   ),
+  provider_login_unreadable: copy(
+    "Non riesco a leggere se l’accesso al provider della squadra funziona.",
+    "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",
+    "I cannot read whether the team's provider sign-in works.",
+    "Try again in a moment; if nothing changes, check that the team is running.",
+  ),
+  provider_login_reply_unexpected: copy(
+    "La squadra ha risposto sull’accesso al provider in una forma che l’app non riconosce.",
+    "Controlla che l’app e la squadra siano alla stessa versione e riprova.",
+    "The team's answer about the provider sign-in is not in a form this app recognises.",
+    "Check that the app and the team are on the same version, then try again.",
+  ),
+  provider_relogin_failed: copy(
+    "Il nuovo accesso al provider non è andato a buon fine.",
+    "Riprova; se non cambia, apri il registro dell’app e scrivici cosa dice.",
+    "The new sign-in to the provider did not succeed.",
+    "Try again; if nothing changes, open the app's log and tell us what it says.",
+  ),
+  provider_relogin_unverified: copy(
+    "L’accesso è finito, ma la squadra non lo risulta ancora valido.",
+    "Riprova ad accedere; se si ripete, controlla di aver usato l’account giusto.",
+    "The sign-in finished, but the team does not see it as valid yet.",
+    "Sign in again; if it repeats, check that you used the right account.",
+  ),
   stats_reply_unexpected: copy(
     "La squadra ha risposto sulle statistiche in una forma che l’app non riconosce.",
     "Controlla che l’app e la squadra siano alla stessa versione e riprova.",

@@ -2,6 +2,11 @@
 import { describe, expect, it } from "vitest";
 import { compiledRustSourceFiles, withoutRustTests } from "./rust-sources";
 
+function fixtureSources(files: Record<string, string>): string[] {
+  const key = (file: string) => file.replaceAll("\\", "/");
+  return compiledRustSourceFiles("/src/lib.rs", (file) => files[key(file)], (file) => key(file) in files);
+}
+
 describe("Rust production source inventory", () => {
   it("follows nested modules, mod.rs, inline modules and explicit paths", () => {
     const files: Record<string, string> = {
@@ -13,7 +18,7 @@ describe("Rust production source inventory", () => {
       "/src/runtime/selection.rs": "",
       "/src/inline/bridge.rs": "",
     };
-    const found = compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files);
+    const found = fixtureSources(files);
     expect(found).toEqual(["lib.rs", "chat.rs", "chat/wire.rs", "shared.rs", "runtime/mod.rs", "runtime/selection.rs", "inline/bridge.rs"]);
   });
 
@@ -25,14 +30,14 @@ describe("Rust production source inventory", () => {
     expect(stripped).toContain("mod production;");
     expect(stripped).toContain("mod windows;");
     const files: Record<string, string> = { "/src/lib.rs": code, "/src/production.rs": "", "/src/windows.rs": "" };
-    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files))
+    expect(fixtureSources(files))
       .toEqual(["lib.rs", "production.rs", "windows.rs"]);
   });
 
   it("ignores fake declarations and braces inside comments and literals", () => {
     const code = 'const S: &str = r##"\nmod absent;\n#[cfg(test)]\nmod fake {}\n"##;\n/* outer /* } */ mod absent; */\nfn f() { let c = \'{\'; let s = "}\\\""; }\nmod real;';
     const files: Record<string, string> = { "/src/lib.rs": code, "/src/real.rs": "" };
-    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files)).toEqual(["lib.rs", "real.rs"]);
+    expect(fixtureSources(files)).toEqual(["lib.rs", "real.rs"]);
     expect(withoutRustTests(code)).toBe(code);
   });
 
@@ -46,7 +51,7 @@ describe("Rust production source inventory", () => {
       "/src/fake.rs": "",
       "/src/production.rs": "",
     };
-    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files))
+    expect(fixtureSources(files))
       .toEqual(["lib.rs", "production.rs"]);
   });
 
@@ -59,7 +64,7 @@ describe("Rust production source inventory", () => {
     expect(production).toContain("Real");
     expect(production).toContain('failure("production_error")');
     const files: Record<string, string> = { "/src/lib.rs": source, "/src/after.rs": "" };
-    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files)).toEqual(["lib.rs", "after.rs"]);
+    expect(fixtureSources(files)).toEqual(["lib.rs", "after.rs"]);
   });
 
   it("follows multiple declarations and path attributes on the same line", () => {
@@ -67,7 +72,7 @@ describe("Rust production source inventory", () => {
       "/src/lib.rs": 'mod a; mod b; #[path = "x.rs"] mod y;',
       "/src/a.rs": "", "/src/b.rs": "", "/src/x.rs": "",
     };
-    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files))
+    expect(fixtureSources(files))
       .toEqual(["lib.rs", "a.rs", "b.rs", "x.rs"]);
   });
 

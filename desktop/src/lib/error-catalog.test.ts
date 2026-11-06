@@ -37,7 +37,21 @@ const NOT_ERRORS: Record<string, string> = {
   podman_not_installable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   podman_machine_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   user_dir_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
+  // artifact_upload.rs / host_path_policy.rs (`jht artifact upload` with a Windows path): the closed words the command prints on a terminal
+  // with their own sentence in Italian and English (host_path_policy::refusal_text, artifact_upload::read_refusal); the desktop screens never show them.
+  artifact_file_missing: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_is_link: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_not_file: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_path_invalid: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_path_not_allowed: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_too_big: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_unreadable: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  it: "language code the command line reads from JHT_LANG or host.env (artifact_upload.rs), never an error",
   ok_slow: "the runtime log's word for a chat call that worked but took long (direct_chat.rs, runtime_log.rs); it is written there and never shown",
+  // provider_login.rs: the words of the states of the provider sign-in (a closed table the page turns into a calm line or a banner;
+  // the failures of the reading have their own codes in the catalog).
+  not_applicable: "state of the provider sign-in (provider_login.rs): the team uses no subscription sign-in, never an error",
+  probably_expired: "state of the provider sign-in (provider_login.rs): old, the team keeps working; the card says so, never an error",
   position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
   // host_agents.rs (the agents and the chats the app reads from the files of a team that is off): the fields of the roster
   // and of the chat lines, and the words of the roles and the status the chat file uses. Words of a closed table.
