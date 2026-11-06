@@ -49,6 +49,7 @@ def use_coverage(monkeypatch, missing, *, fail=False):
         return ["states"]
     fake.portal_states = portal_states
     fake.core_missing = lambda states: list(missing)
+    fake.plan_missing = lambda states: list(missing)
     monkeypatch.setitem(sys.modules, "scout_coverage", fake)
     return fake
 
@@ -305,7 +306,7 @@ def test_dry_by_the_numbers_but_a_core_portal_not_covered_is_not_exhaustion(isol
     result = se.check(NOW)
     assert result["verdict"] == "not_exhausted"
     assert (result["sources"], result["queries"]) == (6, 12)          # the three numbers alone would have said yes
-    assert result["core_missing"] == ["platsbanken/se 1/3", "blocket-jobb/se 0/3"]
+    assert result["uncovered"] == ["platsbanken/se 1/3", "blocket-jobb/se 0/3"]
     assert any("platsbanken/se 1/3" in m and "scout_coverage.py next" in m for m in result["missing"])
 
 
@@ -334,6 +335,7 @@ def test_a_coverage_that_cannot_be_computed_never_blocks_exhaustion(isolated_hom
 def test_a_coverage_answer_that_is_not_a_list_of_lines_is_ignored(isolated_home, monkeypatch):
     fake = use_coverage(monkeypatch, [])
     fake.core_missing = lambda states: "everything"
+    fake.plan_missing = lambda states: "everything"
     write_log(isolated_home, passes(12, sources=6))
     assert se.check(NOW)["verdict"] == "exhausted"
 

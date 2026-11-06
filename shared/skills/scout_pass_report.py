@@ -171,7 +171,8 @@ def coverage(rows: list, as_json: bool) -> int:
     report = scout_coverage.status(plan, rows)
     if as_json:
         print(json.dumps({"languages": plan["languages"], "unmapped": plan["unmapped"], "rows": report,
-                          "core_missing": scout_coverage.core_missing(scout_coverage.portal_states(rows))},
+                          "core_missing": scout_coverage.core_missing(scout_coverage.portal_states(rows)),
+                          "plan_missing": scout_coverage.plan_missing(scout_coverage.portal_states(rows))},
                          sort_keys=True, ensure_ascii=False))
     else:
         print(scout_coverage.render(plan, report))
