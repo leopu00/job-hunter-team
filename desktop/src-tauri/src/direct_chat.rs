@@ -24,763 +24,124 @@ use std::{
 use tauri::{ipc::Channel, Manager, State};
 use zeroize::{Zeroize, Zeroizing};
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
-const READ_TIMEOUT: Duration = Duration::from_secs(20);
-const SEND_TIMEOUT: Duration = Duration::from_secs(105);
-/// The most bytes of the user's text that go on the chat command's standard input (the script
-/// refuses more again, after cleaning it).
-const MAX_CHAT_STDIN_BYTES: usize = 16 * 1024;
+mod scripts;
+use scripts::CHAT_READ_PY;
+use scripts::CHAT_PERSIST_PY;
+use scripts::TEAM_LANGUAGE_PY;
+mod state;
+use state::CONNECT_TIMEOUT;
+use state::READ_TIMEOUT;
+use state::SEND_TIMEOUT;
+use state::MAX_CHAT_STDIN_BYTES;
+pub(crate) use state::DirectChatState;
+use state::DirectChatInner;
+use state::PROBE_READY_KEPT;
+use state::PROBE_FAILED_KEPT;
+use state::ProbeMemo;
+use state::forget_probe;
+use state::status_kept_or_probed;
+use state::Connection;
+use state::VpsLink;
+use state::vps_link_for;
+use state::RemoteOperation;
+#[cfg(all(test, unix))]
+use state::synthetic_connection;
+use state::with_connection_read;
+pub(crate) use state::DirectChatStatus;
+pub(crate) use state::DirectChatError;
+pub(crate) use state::failure;
+use state::status;
+use state::ready_for;
+use state::ready_status;
+use state::emit;
+mod wire;
+use wire::CHAT_SYSTEM_CODES;
+use wire::closed_code;
+use wire::MESSAGE_KINDS;
+use wire::QUESTION_KINDS;
+use wire::QUESTION_STATES;
+use wire::ANSWER_ORIGINS;
+use wire::MAX_SUBJECT_CHARS;
+use wire::MAX_QUESTION_CHARS;
+use wire::MAX_LABEL_CHARS;
+use wire::MAX_ANSWER_CHARS;
+use wire::MAX_OPTIONS;
+use wire::MAX_QUESTIONS;
+use wire::string_in;
+use wire::closed_token;
+use wire::option_id;
+use wire::seconds;
+use wire::short_text;
+use wire::message_kind;
+use wire::MAX_SUGGESTIONS;
+use wire::MAX_SUGGESTION_CHARS;
+use wire::suggestions;
+use wire::taken_flag;
+use wire::TAKEN_REASONS;
+use wire::closed_reason;
+pub(crate) use wire::DirectChatMessage;
+pub(crate) use wire::DirectChatOption;
+pub(crate) use wire::DirectChatAnswer;
+pub(crate) use wire::DirectChatQuestion;
+use wire::closed_static;
+use wire::MAX_QUEUED_IDS;
+use wire::MAX_QUEUED_ID_LEN;
+use wire::queued_ids;
+use wire::QUEUE_ENDINGS;
+pub(crate) use wire::DirectChatQueueEnding;
+use wire::queue_endings;
+use wire::closed_queue;
+use wire::closed_activity;
+use wire::questions;
+pub(crate) use wire::DirectChatPage;
+pub(crate) use wire::DirectChatReceipt;
+use wire::ReceiptAsWritten;
+pub(crate) use wire::DirectChatAnswerReceipt;
+pub(crate) use wire::DirectChatEvent;
+mod host_store;
+use host_store::connection_config_path;
+use host_store::connection_config_path_at;
+pub(crate) use host_store::verify_optional_playground_local_host_at;
+pub(crate) use host_store::verify_migration_local_host_at;
+use host_store::HOST_PERSIST;
+use host_store::persist_host_at;
+use host_store::persist_host;
+use host_store::read_assistance_host_at;
+use host_store::register_assistance_host_at;
+pub(crate) use host_store::register_assistance_host;
+pub(crate) use host_store::persist_onboarding_host;
+pub(crate) use host_store::clear_persisted_host_at;
+use host_store::load_host;
+pub(crate) use host_store::load_persisted_host;
+mod ssh_link;
+use ssh_link::control_args;
+use ssh_link::check_tunnel;
+use ssh_link::SOCKET_PATH_MAX;
+use ssh_link::SSH_SOCKET_SUFFIX;
+use ssh_link::TUNNEL_DIR_PREFIX;
+use ssh_link::control_path_fits;
+use ssh_link::tunnel_socket_path;
+use ssh_link::tunnel_dir_name;
+use ssh_link::tunnel_socket_bases;
+use ssh_link::remove_tunnel_socket;
+use ssh_link::open_tunnel;
+use ssh_link::open_vps_link;
+use ssh_link::VPS_LINK_CHECK;
+use ssh_link::same_vps;
+use ssh_link::master_to_lend;
+#[cfg(unix)]
+use ssh_link::socket_folder_owned_by;
+#[cfg(unix)]
+pub(crate) use ssh_link::lent_socket_still_ours;
+#[cfg(not(unix))]
+pub(crate) use ssh_link::lent_socket_still_ours;
+pub(crate) use ssh_link::shared_master;
+use ssh_link::close_connection;
+
 const REMOTE_CONTAINER_PROBE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat probe"#;
 pub(crate) const REMOTE_PYTHON_STDIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat python"#;
 
-const CHAT_READ_PY: &str = r#"import hashlib,json,os,sys
-req=json.loads(sys.stdin.readline())
-agent=str(req.get('agent') or '')
-allowed={'capitano','assistente','mentor','scout','analista','scorer','scrittore','critico'}
-if agent not in allowed: raise SystemExit(2)
-path='/jht_home/agents/'+{'scout':'scout-1','analista':'analista-1','scorer':'scorer-1','scrittore':'scrittore-1'}.get(agent,agent)+'/chat.jsonl'
-if not os.path.isfile(path):
- print(json.dumps({'messages':[],'cursor':'0'})); raise SystemExit(0)
-size=os.path.getsize(path); raw_cursor=req.get('cursor')
-try: cursor=max(0,min(size,int(raw_cursor))) if raw_cursor not in (None,'') else max(0,size-131072)
-except Exception: raise SystemExit(2)
-messages=[]
-with open(path,'rb') as f:
- f.seek(cursor)
- if cursor: f.readline()
- while len(messages)<120:
-  start=f.tell(); raw=f.readline()
-  if not raw: break
-  if len(raw)>65536: continue
-  try: row=json.loads(raw.decode('utf-8'))
-  except Exception: continue
-  text=str(row.get('text') or '').strip()
-  if not text: continue
-  role=str(row.get('role') or '').lower()
-  role='user' if role=='user' else ('agent' if role in ('assistant','agent') else 'system')
-  try: at=float(row.get('ts') or 0)
-  except Exception: at=0
-  mid=str(row.get('message_id') or hashlib.sha256((agent+':'+str(start)+':').encode()+raw).hexdigest())
-  messages.append({'id':mid,'role':role,'text':text,'at':at})
- cursor=f.tell()
-print(json.dumps({'messages':messages,'cursor':str(cursor)},ensure_ascii=False))"#;
 
-const CHAT_PERSIST_PY: &str = r#"import hashlib,json,os,sys,time
-req=json.loads(sys.stdin.readline()); agent=str(req.get('agent') or '')
-allowed={'capitano','assistente','mentor','scout','analista','scorer','scrittore','critico'}
-if agent not in allowed: raise SystemExit(2)
-cid=str(req.get('clientMessageId') or ''); text=str(req.get('text') or '').strip(); mode=str(req.get('mode') or '')
-if not cid or len(cid)>128 or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in cid): raise SystemExit(2)
-path='/jht_home/agents/'+{'scout':'scout-1','analista':'analista-1','scorer':'scorer-1','scrittore':'scrittore-1'}.get(agent,agent)+'/chat.jsonl'
-def existing():
- if not os.path.isfile(path): return None
- size=os.path.getsize(path)
- with open(path,'rb') as f:
-  f.seek(max(0,size-1048576))
-  if f.tell(): f.readline()
-  for raw in f:
-   try: row=json.loads(raw.decode('utf-8'))
-   except Exception: continue
-   if row.get('client_message_id')==cid: return row
-found=existing()
-if found:
- print(json.dumps({'exists':True,'clientMessageId':cid,'accepted':True,'messageId':found.get('message_id'),'at':found.get('ts')})); raise SystemExit(0)
-if mode=='check': print(json.dumps({'exists':False})); raise SystemExit(0)
-if mode!='append' or not text or len(text)>4000: raise SystemExit(2)
-os.makedirs(os.path.dirname(path),exist_ok=True); at=time.time(); mid=hashlib.sha256((cid+':'+str(at)).encode()).hexdigest()
-row={'role':'user','text':text,'ts':at,'done':True,'client_message_id':cid,'message_id':mid}
-fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
-try:
- os.write(fd,(json.dumps(row,ensure_ascii=False,separators=(',',':'))+'\n').encode()); os.fsync(fd)
-finally: os.close(fd)
-found=existing()
-if not found or found.get('message_id')!=mid: raise SystemExit(3)
-print(json.dumps({'exists':False,'clientMessageId':cid,'accepted':True,'messageId':mid,'at':at}))"#;
-
-/// The team's language, read and written at the one place every reader of it looks first
-/// (`/jht_home/i18n-prefs.json`, the artefact of docs/internal/2026-08-12-language-source-contract.md),
-/// with the same atomic replace as the game's `language_save.py`. `read` tells the language the team
-/// speaks now (the file, then `$JHT_LANG`, then `host.env`, then English) and what the file itself says.
-/// `set` writes only while that language is the English everything starts with: a language already
-/// chosen is never replaced, and the reply says so (`changed: false`) instead of failing. `choose` is
-/// the person's own choice (Settings, or the question after the app's language changed): it replaces
-/// whatever the team spoke, and the agents take it from their next message.
-const TEAM_LANGUAGE_PY: &str = r#"import json,os,sys,tempfile
-valid=('en','it','hu','es','de','fr','pt')
-req=json.loads(sys.stdin.readline()); op=req.get('op')
-home='/jht_home'; path=home+'/i18n-prefs.json'
-def stored():
- try:
-  with open(path,encoding='utf-8') as f: value=json.load(f).get('locale')
- except Exception: return None
- return value if value in valid else None
-def bootstrap():
- value=(os.environ.get('JHT_LANG') or '').strip()
- if value in valid: return value
- try:
-  with open(home+'/host.env',encoding='utf-8') as f:
-   for line in f:
-    key,_,value=line.strip().partition('=')
-    value=value.strip().strip('"').strip("'")
-    if key.strip()=='JHT_LANG' and value in valid: return value
- except Exception: pass
- return None
-current=stored() or bootstrap() or 'en'
-if op=='read': print(json.dumps({'locale':current,'stored':stored()})); raise SystemExit(0)
-locale=req.get('locale')
-if op not in ('set','choose') or locale not in valid: raise SystemExit(2)
-if (op=='set' and current!='en') or (op=='choose' and stored()==locale): print(json.dumps({'locale':current,'stored':stored(),'changed':False})); raise SystemExit(0)
-fd,temporary=tempfile.mkstemp(prefix='.i18n-prefs.',dir=home)
-try:
- with os.fdopen(fd,'w',encoding='utf-8') as out:
-  json.dump({'locale':locale},out,indent=2,ensure_ascii=False); out.write('\n'); out.flush(); os.fsync(out.fileno())
- os.chmod(temporary,0o644); os.replace(temporary,path)
-except Exception:
- try: os.unlink(temporary)
- except OSError: pass
- raise
-print(json.dumps({'locale':locale,'stored':locale,'changed':True}))"#;
-
-#[derive(Default)]
-pub(crate) struct DirectChatState {
-    inner: Arc<DirectChatInner>,
-}
-
-#[derive(Default)]
-struct DirectChatInner {
-    connection: Mutex<Option<Connection>>,
-    /// What the last probe said, for a little while: see `ProbeMemo`.
-    probe_memo: Mutex<ProbeMemo>,
-    subscribers: Mutex<Vec<Channel<DirectChatEvent>>>,
-    send_lock: Mutex<()>,
-    /// An attachment is being chosen, copied or told: a second one waits for the person to finish.
-    /// Its own `Arc`: the guard that holds it must not carry the whole state (and the connection's drop glue) with it.
-    attach_busy: Arc<std::sync::atomic::AtomicBool>,
-}
-
-/// How long a probe's answer is kept. A probe is a process on the computer (seconds on a slow one), and the
-/// screens ask «is the chat there?» more often than that answer changes; the answer of a team that is up
-/// is kept longer than a failure, which the person may be fixing.
-const PROBE_READY_KEPT: Duration = Duration::from_secs(15);
-const PROBE_FAILED_KEPT: Duration = Duration::from_secs(5);
-
-/// The last probe's answer for an account, with the moment it was taken. Whoever finds it fresh uses it and
-/// starts no process; it is dropped whenever the connection changes (connect, reconnect, close, sign-out).
-#[derive(Default)]
-struct ProbeMemo {
-    kept: Option<(AccountScope, std::time::Instant, DirectChatStatus)>,
-}
-
-impl ProbeMemo {
-    fn fresh(&self, scope: &AccountScope, now: std::time::Instant) -> Option<DirectChatStatus> {
-        let (kept_scope, at, answer) = self.kept.as_ref()?;
-        let life = if answer.state == "ready" { PROBE_READY_KEPT } else { PROBE_FAILED_KEPT };
-        (kept_scope == scope && now.saturating_duration_since(*at) < life).then(|| answer.clone())
-    }
-
-    fn keep(&mut self, scope: &AccountScope, now: std::time::Instant, answer: &DirectChatStatus) {
-        self.kept = Some((scope.clone(), now, answer.clone()));
-    }
-
-    fn forget(&mut self) {
-        self.kept = None;
-    }
-}
-
-/// Drops the kept probe answer: the connection it described is gone or new.
-fn forget_probe(inner: &DirectChatInner) {
-    if let Ok(mut memo) = inner.probe_memo.lock() {
-        memo.forget();
-    }
-}
-
-/// The kept answer when it is fresh, otherwise `probe`'s, kept in its turn. The caller holds the connection's
-/// lock (on a VPS; on this computer the container's lookup is one at a time and kept), so a second ask that comes while a
-/// probe runs finds its answer here, or the container already found: no second process for both.
-fn status_kept_or_probed(
-    memo: &Mutex<ProbeMemo>,
-    scope: &AccountScope,
-    now: impl Fn() -> std::time::Instant,
-    probe: impl FnOnce() -> DirectChatStatus,
-) -> DirectChatStatus {
-    if let Some(answer) = memo.lock().ok().and_then(|memo| memo.fresh(scope, now())) {
-        return answer;
-    }
-    let answer = probe();
-    if let Ok(mut memo) = memo.lock() {
-        memo.keep(scope, now(), &answer);
-    }
-    answer
-}
-
-struct Connection {
-    app: Option<tauri::AppHandle>,
-    scope: AccountScope,
-    host: ExecutionHost,
-    validated: ValidatedHost,
-    runtime: Option<ActivatedTarget>,
-    local_wrapper: Option<PathBuf>,
-    local_runtime: Option<PathBuf>,
-    local_owner_marker: Option<PathBuf>,
-    control_path: Option<PathBuf>,
-    tunnel: Option<Child>,
-    link: VpsLink,
-}
-
-/// How the app talks to a VPS. `Master`: one ssh master (ControlMaster) that every command reuses.
-/// `PerCommand`: Windows' ssh (Win32-OpenSSH) has no ControlMaster (PowerShell/Win32-OpenSSH#405,
-/// T69), so every command is its own connection, and ssh gets no pipe (its 9.5p1 hangs on one).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum VpsLink {
-    Master,
-    PerCommand,
-}
-
-fn vps_link_for(os: &str) -> VpsLink {
-    if os == "windows" {
-        VpsLink::PerCommand
-    } else {
-        VpsLink::Master
-    }
-}
-
-enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str), Chat(ChatOperation<'a>) }
-
-impl Drop for Connection {
-    fn drop(&mut self) {
-        close_connection(self);
-    }
-}
-
-impl Connection {
-    /// This computer's team, as far as a call needs it: the paths of the attested runtime, the owner's marker, the
-    /// account. It owns no tunnel and no ssh master, so it can be used without the connection's lock and dropped with no
-    /// side effect. None for a VPS, whose master and tunnel belong to the connection itself.
-    fn detached_local(&self) -> Option<Connection> {
-        if !matches!(self.validated, ValidatedHost::Local) {
-            return None;
-        }
-        Some(Connection {
-            app: self.app.clone(),
-            scope: self.scope.clone(),
-            host: self.host.clone(),
-            validated: self.validated.clone(),
-            runtime: None,
-            local_wrapper: self.local_wrapper.clone(),
-            local_runtime: self.local_runtime.clone(),
-            local_owner_marker: self.local_owner_marker.clone(),
-            control_path: None,
-            tunnel: None,
-            link: self.link,
-        })
-    }
-}
-
-/// A connection of the tests of `with_connection_read`, built here and not in the tests' text: a test that builds one runs on
-/// Unix only (see `only_unix_tests_build_a_connection`).
-#[cfg(all(test, unix))]
-fn synthetic_connection(validated: ValidatedHost, scope: &AccountScope) -> Connection {
-    Connection {
-        app: None,
-        scope: scope.clone(),
-        host: ExecutionHost::Local,
-        validated,
-        runtime: None,
-        local_wrapper: Some(PathBuf::from("/synthetic/wrapper")),
-        local_runtime: Some(PathBuf::from("/synthetic/runtime")),
-        local_owner_marker: Some(PathBuf::from("/synthetic/marker")),
-        control_path: None,
-        tunnel: None,
-        link: VpsLink::Master,
-    }
-}
-
-/// Runs a READ of the connection of `scope`. On this computer the connection's lock is let go before the work (the
-/// exec in the team's container, a second or more, and many more with the old wrapper), so that a read of the profile,
-/// a read of the chat and a probe do not wait for each other; on a VPS the lock is kept, because the ssh master and the
-/// tunnel are the connection's own. A connection that is not of `scope`, or none, is refused before anything runs.
-fn with_connection_read<T>(
-    inner: &DirectChatInner,
-    scope: &AccountScope,
-    work: impl FnOnce(&Connection) -> Result<T, DirectChatError>,
-) -> Result<T, DirectChatError> {
-    let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
-    let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
-    if &connection.scope != scope {
-        return Err(failure("account_scope_mismatch"));
-    }
-    match connection.detached_local() {
-        Some(local) => {
-            drop(slot);
-            work(&local)
-        }
-        None => work(connection),
-    }
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
-pub(crate) struct DirectChatStatus {
-    state: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<&'static str>,
-    /// `per-command` when every read costs a new ssh connection (Windows to a VPS): the page reads
-    /// less often then.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    link: Option<&'static str>,
-}
-
-/// The codes a system line of the chat may carry. The page has a sentence for each, in every language.
-const CHAT_SYSTEM_CODES: [&str; 2] = ["mail_not_taken", "message_too_long"];
-
-fn closed_code<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // Anything that is not one of the closed codes (a number, a name every object has) is no code.
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(match raw {
-        Some(Value::String(code)) if CHAT_SYSTEM_CODES.contains(&code.as_str()) => Some(code),
-        _ => None,
-    })
-}
-
-/// The kinds an agent may give a message. `question` belongs to the questions only.
-const MESSAGE_KINDS: [&str; 4] = ["urgent", "blocked", "completed", "info"];
-/// The kinds of a question: the kinds of a message, and `question`.
-const QUESTION_KINDS: [&str; 5] = ["urgent", "blocked", "question", "completed", "info"];
-const QUESTION_STATES: [&str; 3] = ["open", "answered", "expired"];
-/// Who gave an answer: the person, the question's safe option when nobody answered in time, or the system
-/// closing a question that has no object any more (the plan was declared another way).
-/// Any other origin the team writes is `unknown`, and never said as the person's.
-const ANSWER_ORIGINS: [&str; 3] = ["user", "expiry", "system"];
-const MAX_SUBJECT_CHARS: usize = 200;
-const MAX_QUESTION_CHARS: usize = 4000;
-const MAX_LABEL_CHARS: usize = 200;
-const MAX_ANSWER_CHARS: usize = 2000;
-const MAX_OPTIONS: usize = 8;
-const MAX_QUESTIONS: usize = 50;
-
-fn string_in<'a>(value: Option<&'a Value>, list: &[&str]) -> Option<&'a str> {
-    value.and_then(Value::as_str).filter(|v| list.contains(v))
-}
-
-/// A closed code of the team's: lower-case letters, digits, `_` and `-`, at most 64. The page says
-/// only the codes its catalog has; this keeps anything else (a sentence, markup) from reaching it.
-fn closed_token(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 64
-        && value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'_' | b'-'))
-}
-
-/// The id of an option: the same alphabet as a closed code, at most 32.
-fn option_id(value: &str) -> bool {
-    closed_token(value) && value.len() <= 32
-}
-
-/// A time in seconds since the epoch, as the chat's read gives every time.
-fn seconds(value: Option<&Value>) -> Option<f64> {
-    value.and_then(Value::as_f64).filter(|v| v.is_finite() && *v >= 0.0)
-}
-
-fn short_text(value: Option<&Value>, max: usize) -> Option<String> {
-    value.and_then(Value::as_str).filter(|v| v.chars().count() <= max).map(str::to_owned)
-}
-
-fn message_kind<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // Outside the list (an older image, a typo, `question`) the row has no kind: the page shows it as info.
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(string_in(raw.as_ref(), &MESSAGE_KINDS).map(str::to_owned))
-}
-
-const MAX_SUGGESTIONS: usize = 5;
-const MAX_SUGGESTION_CHARS: usize = 240;
-
-fn suggestions<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // The replies an agent suggests to its message: one line each, at most 5, and a list only from two
-    // up (one is no choice). Anything out of that shape is left out.
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    let Some(Value::Array(items)) = raw else { return Ok(None) };
-    let labels: Vec<String> = items
-        .iter()
-        .take(MAX_SUGGESTIONS)
-        .filter_map(Value::as_str)
-        .filter(|l| !l.trim().is_empty() && l.chars().count() <= MAX_SUGGESTION_CHARS && !l.contains(['\n', '\r']))
-        .map(str::to_owned)
-        .collect();
-    Ok((labels.len() >= 2).then_some(labels))
-}
-
-fn taken_flag<'de, D>(deserializer: D) -> Result<Option<Option<bool>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // Present: true, false, or null for «not known». Anything else is «not known» too, never «taken».
-    let raw = Value::deserialize(deserializer)?;
-    Ok(Some(raw.as_bool()))
-}
-
-/// Why the team does not know whether the agent's CLI took a text: what it saw in the terminal.
-/// `unconfirmed`: the text went, and nothing on the screen proved it was taken.
-const TAKEN_REASONS: [&str; 8] = ["menu", "permission", "login", "busy", "not_ours", "empty_unseen", "unreadable", "unconfirmed"];
-
-fn closed_reason<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(string_in(raw.as_ref(), &TAKEN_REASONS).map(str::to_owned))
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DirectChatMessage {
-    id: String,
-    role: String,
-    text: String,
-    at: f64,
-    /// A closed code on a system line (`mail_not_taken`): the page says it in the person's language.
-    /// Only a code of the closed list passes; anything else is dropped here, whatever the host wrote.
-    #[serde(default, deserialize_with = "closed_code", skip_serializing_if = "Option::is_none")]
-    code: Option<String>,
-    /// The kind the agent gave the message, on the agent's rows only; outside the list, none.
-    #[serde(default, deserialize_with = "message_kind", skip_serializing_if = "Option::is_none")]
-    kind: Option<String>,
-    /// The replies the agent suggests, on its rows only: the page offers them as buttons.
-    #[serde(default, deserialize_with = "suggestions", skip_serializing_if = "Option::is_none")]
-    suggestions: Option<Vec<String>>,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq)]
-pub(crate) struct DirectChatOption {
-    id: String,
-    label: String,
-}
-
-#[derive(Clone, Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DirectChatAnswer {
-    choices: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    text: Option<String>,
-    at: f64,
-    origin: &'static str,
-    /// When the agent's tool took the answer; null until then.
-    seen_at: Option<f64>,
-}
-
-/// One of the agent's questions, as the page shows it. Built field by field from what the host
-/// wrote: a question with one field out of its shape is left out whole, never half shown.
-#[derive(Clone, Debug, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DirectChatQuestion {
-    id: String,
-    at: f64,
-    kind: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    subject: Option<String>,
-    text: String,
-    options: Vec<DirectChatOption>,
-    multiple: bool,
-    free: bool,
-    expires_at: Option<f64>,
-    state: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    answer: Option<DirectChatAnswer>,
-}
-
-fn closed_static(value: Option<&Value>, list: &[&'static str]) -> Option<&'static str> {
-    let value = value.and_then(Value::as_str)?;
-    list.iter().copied().find(|item| *item == value)
-}
-
-impl DirectChatQuestion {
-    fn from_value(value: &Value) -> Option<Self> {
-        let id = value.get("id").and_then(Value::as_str).filter(|v| existing_team_runtime::chat_question_id(v))?;
-        let options = value.get("options").and_then(Value::as_array)?;
-        if options.len() > MAX_OPTIONS {
-            return None;
-        }
-        let mut seen = Vec::with_capacity(options.len());
-        for option in options {
-            let option_key = option.get("id").and_then(Value::as_str).filter(|v| option_id(v))?;
-            let label = short_text(option.get("label"), MAX_LABEL_CHARS)?;
-            if seen.iter().any(|o: &DirectChatOption| o.id == option_key) {
-                return None;
-            }
-            seen.push(DirectChatOption { id: option_key.to_owned(), label });
-        }
-        let state = closed_static(value.get("state"), &QUESTION_STATES)?;
-        let answer = match value.get("answer") {
-            None | Some(Value::Null) => None,
-            Some(answer) => Some(DirectChatAnswer::from_value(answer, &seen)?),
-        };
-        Some(DirectChatQuestion {
-            id: id.to_owned(),
-            at: seconds(value.get("at"))?,
-            // A kind outside the list is a question that still waits for its answer: shown plain.
-            kind: closed_static(value.get("kind"), &QUESTION_KINDS).unwrap_or("question"),
-            subject: short_text(value.get("subject"), MAX_SUBJECT_CHARS),
-            text: short_text(value.get("text"), MAX_QUESTION_CHARS)?,
-            options: seen,
-            multiple: value.get("multiple").and_then(Value::as_bool).unwrap_or(false),
-            free: value.get("free").and_then(Value::as_bool).unwrap_or(false),
-            expires_at: seconds(value.get("expiresAt")),
-            state,
-            answer,
-        })
-    }
-}
-
-impl DirectChatAnswer {
-    fn from_value(value: &Value, options: &[DirectChatOption]) -> Option<Self> {
-        let choices = value.get("choices").and_then(Value::as_array)?;
-        let mut taken = Vec::with_capacity(choices.len());
-        for choice in choices {
-            let choice = choice.as_str().filter(|c| options.iter().any(|o| o.id == *c))?;
-            taken.push(choice.to_owned());
-        }
-        Some(DirectChatAnswer {
-            choices: taken,
-            text: short_text(value.get("text"), MAX_ANSWER_CHARS),
-            at: seconds(value.get("at"))?,
-            origin: closed_static(value.get("origin"), &ANSWER_ORIGINS).unwrap_or("unknown"),
-            seen_at: seconds(value.get("seenAt")),
-        })
-    }
-}
-
-/// How many queued message ids a page may carry, and how long one may be.
-const MAX_QUEUED_IDS: usize = 64;
-const MAX_QUEUED_ID_LEN: usize = 128;
-
-fn queued_ids<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // Absent (an older image, or a chat that never queued): none. A list: the ids of the turns still
-    // held back, each a short plain word; anything else in it is left out.
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(match raw {
-        Some(Value::Array(items)) => Some(
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .filter(|id| !id.is_empty() && id.len() <= MAX_QUEUED_ID_LEN && id.chars().all(|c| c.is_ascii_alphanumeric() || "-_.:".contains(c)))
-                .take(MAX_QUEUED_IDS)
-                .map(str::to_owned)
-                .collect(),
-        ),
-        _ => None,
-    })
-}
-
-/// How a queued turn ended, as the team says it: typed and taken, typed and still in the composer,
-/// typed with no proof, typed and given its Enter after the time (`late`), or never typed because it waited too long.
-const QUEUE_ENDINGS: [&str; 5] = ["taken", "pending", "late", "unconfirmed", "expired"];
-
-#[derive(Clone, Debug, Serialize, PartialEq)]
-pub(crate) struct DirectChatQueueEnding {
-    id: String,
-    how: String,
-}
-
-fn queue_endings<'de, D>(deserializer: D) -> Result<Option<Vec<DirectChatQueueEnding>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // Absent (an older image, or a chat that never queued): none. A list: the endings in their shape,
-    // each id a short plain word and each `how` of the closed list; the others are left out.
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(match raw {
-        Some(Value::Array(items)) => Some(
-            items
-                .iter()
-                .filter_map(|item| {
-                    let id = item.get("id")?.as_str()?;
-                    let how = string_in(item.get("how"), &QUEUE_ENDINGS)?;
-                    let plain = !id.is_empty() && id.len() <= MAX_QUEUED_ID_LEN && id.chars().all(|c| c.is_ascii_alphanumeric() || "-_.:".contains(c));
-                    plain.then(|| DirectChatQueueEnding { id: id.to_owned(), how: how.to_owned() })
-                })
-                .take(MAX_QUEUED_IDS)
-                .collect(),
-        ),
-        _ => None,
-    })
-}
-
-fn closed_queue<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(string_in(raw.as_ref(), &["terminal"]).map(str::to_owned))
-}
-
-/// What the agent's terminal shows while the person waits for an answer: a running turn, or an empty
-/// prompt. Any other word is left out: absent is «not known» and is never shown as idle.
-fn closed_activity<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(string_in(raw.as_ref(), &["working", "idle"]).map(str::to_owned))
-}
-
-fn questions<'de, D>(deserializer: D) -> Result<Option<Vec<DirectChatQuestion>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // Absent (an older image): none, and the page shows no buttons. A list: every question in its
-    // shape, the others left out.
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(match raw {
-        Some(Value::Array(items)) => Some(items.iter().take(MAX_QUESTIONS).filter_map(DirectChatQuestion::from_value).collect()),
-        _ => None,
-    })
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub(crate) struct DirectChatPage {
-    messages: Vec<DirectChatMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cursor: Option<String>,
-    /// The agent's open questions and its latest closed ones; absent from an older image.
-    #[serde(default, deserialize_with = "questions", skip_serializing_if = "Option::is_none")]
-    questions: Option<Vec<DirectChatQuestion>>,
-    /// The ids of the turns the team holds back while its agent works, each typed when the agent is idle;
-    /// absent from an older image or a chat that never queued. A sent turn that was queued is delivered
-    /// once its id is no longer here.
-    #[serde(default, deserialize_with = "queued_ids", skip_serializing_if = "Option::is_none")]
-    queued: Option<Vec<String>>,
-    /// How the turns that left the queue ended, for the last day: the page settles a queued turn only
-    /// from here, never from its absence in `queued`.
-    #[serde(default, deserialize_with = "queue_endings", skip_serializing_if = "Option::is_none")]
-    settled: Option<Vec<DirectChatQueueEnding>>,
-    /// `working` or `idle`, within half an hour of the person's last turn (the agent may answer first and go
-    /// on working); absent when the team does not say (an older image, a screen it cannot read, an older
-    /// turn): the page never reads absent as idle.
-    #[serde(default, deserialize_with = "closed_activity", skip_serializing_if = "Option::is_none")]
-    activity: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase", from = "ReceiptAsWritten")]
-pub(crate) struct DirectChatReceipt {
-    client_message_id: String,
-    accepted: bool,
-    message_id: String,
-    at: f64,
-    /// `queued` when the agent's mailbox holds the turn and nobody has taken it yet; absent when the
-    /// turn was typed into the agent's terminal, which is the only way a receipt says «delivered».
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    state: Option<String>,
-    /// Whether the agent's CLI took the text, with proof: true, false (still in its composer: only
-    /// Enter may be pressed again) or null (not known: nothing may be pressed). Absent from an older
-    /// image. Anything but a boolean is null: a receipt never says «taken» by mistake.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    taken: Option<Option<bool>>,
-    /// With `taken: null`, why it is not known: one of TAKEN_REASONS, or none.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<String>,
-    /// `terminal` with `state: queued`: the turn waits in the team for its agent to be idle, and the next
-    /// pages say when it is gone; absent for a mailbox turn, which nothing watches.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    queue: Option<String>,
-}
-
-/// A receipt as the team wrote it, before the one rule that ties two of its fields: a reason is said
-/// only for a text whose fate is not known (`taken: null`).
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ReceiptAsWritten {
-    client_message_id: String,
-    accepted: bool,
-    message_id: String,
-    at: f64,
-    #[serde(default)]
-    state: Option<String>,
-    #[serde(default, deserialize_with = "taken_flag")]
-    taken: Option<Option<bool>>,
-    #[serde(default, deserialize_with = "closed_reason")]
-    reason: Option<String>,
-    #[serde(default, deserialize_with = "closed_queue")]
-    queue: Option<String>,
-}
-
-impl From<ReceiptAsWritten> for DirectChatReceipt {
-    fn from(raw: ReceiptAsWritten) -> Self {
-        let reason = if raw.taken == Some(None) { raw.reason } else { None };
-        let queue = if raw.state.as_deref() == Some("queued") { raw.queue } else { None };
-        DirectChatReceipt {
-            client_message_id: raw.client_message_id,
-            accepted: raw.accepted,
-            message_id: raw.message_id,
-            at: raw.at,
-            state: raw.state,
-            taken: raw.taken,
-            reason,
-            queue,
-        }
-    }
-}
-
-/// The receipt of an answer: the question it answered, and when the team wrote it.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DirectChatAnswerReceipt {
-    question_id: String,
-    accepted: bool,
-    at: f64,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
-pub(crate) enum DirectChatEvent {
-    Status {
-        status: DirectChatStatus,
-    },
-    Messages {
-        #[serde(rename = "agentId")]
-        agent_id: String,
-        page: DirectChatPage,
-    },
-    Send {
-        receipt: DirectChatReceipt,
-    },
-    Error {
-        operation: &'static str,
-        code: &'static str,
-    },
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct DirectChatError {
-    pub(crate) code: &'static str,
-}
-pub(crate) fn failure(code: &'static str) -> DirectChatError {
-    DirectChatError { code }
-}
-fn status(state: &'static str, code: Option<&'static str>) -> DirectChatStatus {
-    DirectChatStatus { state, code, link: None }
-}
-
-/// A connection that answered, with the way its commands reach the VPS when that costs a connection each.
-fn ready_for(connection: &Connection) -> DirectChatStatus {
-    ready_status(&connection.validated, connection.link)
-}
-
-fn ready_status(validated: &ValidatedHost, link: VpsLink) -> DirectChatStatus {
-    DirectChatStatus {
-        link: (matches!(validated, ValidatedHost::Vps { .. }) && link == VpsLink::PerCommand).then_some("per-command"),
-        ..status("ready", None)
-    }
-}
 
 fn valid_agent(value: &str) -> bool {
     existing_team_runtime::chat_agent_ok(value)
@@ -789,510 +150,8 @@ fn session_for(agent: &str) -> Option<String> {
     existing_team_runtime::chat_session(agent)
 }
 
-fn emit(inner: &DirectChatInner, event: DirectChatEvent) {
-    if let Ok(mut subscribers) = inner.subscribers.lock() {
-        subscribers.retain(|channel| channel.send(event.clone()).is_ok());
-    }
-}
 
-fn connection_config_path(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-) -> Result<PathBuf, DirectChatError> {
-    app.path()
-        .app_local_data_dir()
-        .map(|path| connection_config_path_at(&path, scope))
-        .map_err(|_| failure("storage_unavailable"))
-}
 
-fn connection_config_path_at(root: &Path, scope: &AccountScope) -> PathBuf {
-    root.join("accounts")
-        .join(scope.digest())
-        .join("direct-chat-host.json")
-}
-
-pub(crate) fn verify_optional_playground_local_host_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(), &'static str> {
-    let path = connection_config_path_at(root, scope);
-    let metadata = match fs::symlink_metadata(&path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(_) => return Err("playground_reset_host_unavailable"),
-    };
-    if !metadata.file_type().is_file() || metadata.len() > 4096 {
-        return Err("playground_reset_host_invalid");
-    }
-    let raw = fs::read(path).map_err(|_| "playground_reset_host_unavailable")?;
-    let value: Value = serde_json::from_slice(&raw).map_err(|_| "playground_reset_host_invalid")?;
-    let object = value.as_object().ok_or("playground_reset_host_invalid")?;
-    match object.get("kind").and_then(Value::as_str) {
-        Some("local") if object.len() == 1 => Ok(()),
-        Some("vps") => Err("playground_reset_host_not_local"),
-        _ => Err("playground_reset_host_invalid"),
-    }
-}
-
-pub(crate) fn verify_migration_local_host_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(), &'static str> {
-    let path = connection_config_path_at(root, scope);
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
-    }
-    let mut file = options
-        .open(&path)
-        .map_err(|_| "local_migration_host_missing")?;
-    let metadata = file
-        .metadata()
-        .map_err(|_| "local_migration_host_invalid")?;
-    if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > 4096 {
-        return Err("local_migration_host_invalid");
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        let parent = path.parent().ok_or("local_migration_host_invalid")?;
-        let parent_metadata = fs::metadata(parent).map_err(|_| "local_migration_host_invalid")?;
-        if metadata.uid() != parent_metadata.uid()
-            || metadata.permissions().mode() & 0o777 != 0o600
-            || parent_metadata.permissions().mode() & 0o022 != 0
-        {
-            return Err("local_migration_host_invalid");
-        }
-    }
-    let mut raw = Vec::with_capacity(metadata.len() as usize);
-    Read::by_ref(&mut file)
-        .take(4097)
-        .read_to_end(&mut raw)
-        .map_err(|_| "local_migration_host_invalid")?;
-    if raw.len() as u64 != metadata.len() {
-        return Err("local_migration_host_invalid");
-    }
-    let value: Value = serde_json::from_slice(&raw).map_err(|_| "local_migration_host_invalid")?;
-    let object = value.as_object().ok_or("local_migration_host_invalid")?;
-    match object.get("kind").and_then(Value::as_str) {
-        Some("local") if object.len() == 1 => Ok(()),
-        Some("vps") => Err("local_migration_host_not_local"),
-        _ => Err("local_migration_host_invalid"),
-    }
-}
-
-// Every official connection writer shares this barrier. Registration may fill
-// an absent host, but must never overwrite an already selected different host.
-static HOST_PERSIST: Mutex<()> = Mutex::new(());
-
-fn persist_host_at(path: &Path, host: &ExecutionHost) -> Result<(), DirectChatError> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|_| failure("storage_unavailable"))?;
-        if fs::symlink_metadata(parent)
-            .map_err(|_| failure("storage_unavailable"))?
-            .file_type()
-            .is_symlink()
-        {
-            return Err(failure("storage_unavailable"));
-        }
-        set_private_dir_permissions(parent).map_err(failure)?;
-    }
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| failure("storage_unavailable"))?
-        .as_nanos();
-    let temporary = path.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    let bytes = serde_json::to_vec(host).map_err(|_| failure("storage_unavailable"))?;
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|_| failure("storage_unavailable"))?;
-    let result = (|| {
-        set_private_permissions(&temporary).map_err(failure)?;
-        file.write_all(&bytes)
-            .map_err(|_| failure("storage_unavailable"))?;
-        file.sync_all()
-            .map_err(|_| failure("storage_unavailable"))?;
-        drop(file);
-        fs::rename(&temporary, path).map_err(|_| failure("storage_unavailable"))
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
-}
-
-fn persist_host(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<(), DirectChatError> {
-    let _write = HOST_PERSIST
-        .lock()
-        .map_err(|_| failure("storage_unavailable"))?;
-    persist_host_at(&connection_config_path(app, scope)?, host)
-}
-
-fn read_assistance_host_at(path: &Path) -> Result<ExecutionHost, &'static str> {
-    let metadata = fs::symlink_metadata(path).map_err(|_| "host_config_invalid")?;
-    if !metadata.file_type().is_file() || metadata.len() > 4096 {
-        return Err("host_config_invalid");
-    }
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    let mut file = options.open(path).map_err(|_| "host_config_invalid")?;
-    let opened = file.metadata().map_err(|_| "host_config_invalid")?;
-    if !opened.is_file() || opened.len() > 4096 {
-        return Err("host_config_invalid");
-    }
-    let mut bytes = Vec::new();
-    Read::by_ref(&mut file)
-        .take(4097)
-        .read_to_end(&mut bytes)
-        .map_err(|_| "host_config_invalid")?;
-    if bytes.len() > 4096 {
-        return Err("host_config_invalid");
-    }
-    let value: Value = serde_json::from_slice(&bytes).map_err(|_| "host_config_invalid")?;
-    let host: ExecutionHost =
-        serde_json::from_value(value.clone()).map_err(|_| "host_config_invalid")?;
-    if serde_json::to_value(&host).map_err(|_| "host_config_invalid")? != value {
-        return Err("host_config_invalid");
-    }
-    Ok(host)
-}
-
-fn register_assistance_host_at(path: &Path, host: &ExecutionHost) -> Result<(), &'static str> {
-    let _write = HOST_PERSIST.lock().map_err(|_| "storage_unavailable")?;
-    match fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            persist_host_at(path, host).map_err(|error| error.code)?;
-        }
-        Err(_) => return Err("storage_unavailable"),
-        Ok(_) => {
-            if read_assistance_host_at(path)? != *host {
-                return Err("browser_connection_changed");
-            }
-            // Same host is idempotent: leave existing config bytes untouched.
-        }
-    }
-    if read_assistance_host_at(path)? != *host {
-        return Err("browser_connection_changed");
-    }
-    Ok(())
-}
-
-pub(crate) fn register_assistance_host(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<(), &'static str> {
-    let path = connection_config_path(app, scope).map_err(|error| error.code)?;
-    register_assistance_host_at(&path, host)
-}
-
-pub(crate) fn persist_onboarding_host(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<(), &'static str> {
-    persist_host(app, scope, host).map_err(|error| error.code)
-}
-
-/// Removes only this account's persisted connection configuration. It is used
-/// after the existing-team selection and candidate have been cleared.
-pub(crate) fn clear_persisted_host_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(), &'static str> {
-    match fs::remove_file(connection_config_path_at(root, scope)) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(_) => Err("storage_unavailable"),
-    }
-}
-
-fn load_host(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-) -> Result<ExecutionHost, DirectChatError> {
-    let raw = fs::read(connection_config_path(app, scope)?)
-        .map_err(|_| failure("host_not_configured"))?;
-    serde_json::from_slice(&raw).map_err(|_| failure("host_config_invalid"))
-}
-
-pub(crate) fn load_persisted_host(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-) -> Result<ExecutionHost, &'static str> {
-    load_host(app, scope).map_err(|error| error.code)
-}
-
-fn control_args(
-    host: &ValidatedHost,
-    control_path: &Path,
-    operation: &str,
-) -> Result<Vec<std::ffi::OsString>, DirectChatError> {
-    let mut args = ssh_base_args(host).map_err(failure)?;
-    let target = args.pop().ok_or_else(|| failure("invalid_host"))?;
-    args.extend([
-        "-S".into(),
-        control_path.as_os_str().to_owned(),
-        "-O".into(),
-        operation.into(),
-        target,
-    ]);
-    Ok(args)
-}
-
-fn check_tunnel(host: &ValidatedHost, control_path: &Path) -> bool {
-    control_args(host, control_path, "check")
-        .ok()
-        .and_then(|args| run_program("ssh", &args, None, Duration::from_secs(5)).ok())
-        .is_some_and(|result| result.success())
-}
-
-/// The longest path a Unix socket can have on macOS (its sun_path holds 104 bytes with the NUL;
-/// Linux holds 108): the shorter limit is the one for every platform.
-const SOCKET_PATH_MAX: usize = 103;
-/// ssh creates the master's socket as `ControlPath` + "." + 16 random characters, then renames it
-/// into place: the temporary name is the one that must fit.
-const SSH_SOCKET_SUFFIX: usize = 17;
-/// The folder of a tunnel's socket starts with this, so closing removes only a folder of ours.
-const TUNNEL_DIR_PREFIX: &str = "jc";
-
-/// Whether ssh can create the master socket at `path`, its temporary name included.
-fn control_path_fits(path: &Path) -> bool {
-    path.as_os_str().len() + SSH_SOCKET_SUFFIX <= SOCKET_PATH_MAX
-}
-
-/// The socket of a tunnel: `s`, alone in a folder made for it (0700 on Unix, a random name,
-/// created exclusively, so nobody can have prepared it or reach the socket), in the first of
-/// `bases` where it fits. The old name in TMPDIR was 95 characters on macOS (112 with ssh's
-/// suffix): ssh could never open the tunnel there.
-fn tunnel_socket_path(bases: &[PathBuf], mut name: impl FnMut() -> String) -> Result<PathBuf, &'static str> {
-    for base in bases {
-        for _ in 0..8 {
-            let dir = base.join(format!("{TUNNEL_DIR_PREFIX}{}", name()));
-            let socket = dir.join("s");
-            if !control_path_fits(&socket) {
-                break;
-            }
-            let mut builder = fs::DirBuilder::new();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::DirBuilderExt;
-                builder.mode(0o700);
-            }
-            match builder.create(&dir) {
-                Ok(()) => return Ok(socket),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(_) => break,
-            }
-        }
-    }
-    Err("tunnel_path_unavailable")
-}
-
-fn tunnel_dir_name() -> String {
-    use std::hash::{BuildHasher, Hasher};
-    // A fresh RandomState has random keys: with the pid and the time, a name nobody can guess.
-    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
-    hasher.write_u32(std::process::id());
-    hasher.write_u128(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos());
-    format!("{:010x}", hasher.finish() & 0xff_ffff_ffff)
-}
-
-/// On Unix /tmp first: the private folder keeps the socket ours there too, and the path stays
-/// far from the limit (/tmp/jc<10>/s is 19 characters, 36 with ssh's suffix, where macOS's
-/// TMPDIR alone is 49). The user's temporary folder is the fallback, and the only one elsewhere.
-fn tunnel_socket_bases() -> Vec<PathBuf> {
-    let mut bases = Vec::new();
-    #[cfg(unix)]
-    bases.push(PathBuf::from("/tmp"));
-    bases.push(std::env::temp_dir());
-    bases
-}
-
-/// Removes a tunnel's socket and the folder made for it.
-fn remove_tunnel_socket(path: &Path) {
-    let _ = fs::remove_file(path);
-    if let Some(dir) = path.parent() {
-        if dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with(TUNNEL_DIR_PREFIX)) {
-            let _ = fs::remove_dir(dir);
-        }
-    }
-}
-
-fn open_tunnel(host: &ValidatedHost) -> Result<(PathBuf, Child), DirectChatError> {
-    let mut args = ssh_base_args(host).map_err(failure)?;
-    let target = args.pop().ok_or_else(|| failure("invalid_host"))?;
-    let control_path = tunnel_socket_path(&tunnel_socket_bases(), tunnel_dir_name).map_err(failure)?;
-    args.extend([
-        "-M".into(),
-        "-N".into(),
-        "-o".into(),
-        "ControlMaster=yes".into(),
-        "-o".into(),
-        "ControlPersist=no".into(),
-        "-o".into(),
-        "ExitOnForwardFailure=yes".into(),
-        "-S".into(),
-        control_path.as_os_str().to_owned(),
-        target,
-    ]);
-    let mut command = Command::new("ssh");
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    crate::runtime_host::hide_console(&mut command);
-    let child = crate::runtime_host::spawn_retrying_busy(&mut command).map_err(|_| failure("tunnel_start_failed")).map_err(|error| {
-        remove_tunnel_socket(&control_path);
-        error
-    })?;
-    for _ in 0..40 {
-        if check_tunnel(host, &control_path) {
-            return Ok((control_path, child));
-        }
-        thread::sleep(Duration::from_millis(250));
-    }
-    let mut child = child;
-    let _ = child.kill();
-    let _ = child.wait();
-    remove_tunnel_socket(&control_path);
-    Err(failure("tunnel_verify_failed"))
-}
-
-/// The VPS link a connection starts with: the ssh master, or, where ssh has none (Windows), a check
-/// that one connection answers, with the same errors as the master: `tunnel_verify_failed`, or the
-/// code of the way in when ssh says why it failed (`ssh_rate_limited` when the server turns this
-/// computer away, a refused key, a refused connection, a host that cannot be reached). `exit 0` means the same in every
-/// shell, so the check assumes none.
-fn open_vps_link(
-    host: &ValidatedHost,
-    link: VpsLink,
-    check: impl FnOnce(&ValidatedHost) -> Result<ProcessResult, &'static str>,
-) -> Result<(Option<PathBuf>, Option<Child>), DirectChatError> {
-    match link {
-        VpsLink::Master => open_tunnel(host).map(|(path, child)| (Some(path), Some(child))),
-        VpsLink::PerCommand => match check(host) {
-            Ok(result) if result.success() => Ok((None, None)),
-            Err(code) if crate::runtime_host::SSH_WAY_IN_CODES.contains(&code) => Err(failure(code)),
-            _ => Err(failure("tunnel_verify_failed")),
-        },
-    }
-}
-
-const VPS_LINK_CHECK: &str = "exit 0";
-
-/// The same VPS, field by field: address, user, port, the key the app uses and the file with the
-/// host key it pinned for this account.
-fn same_vps(a: &ValidatedHost, b: &ValidatedHost) -> bool {
-    match (a, b) {
-        (
-            ValidatedHost::Vps { address, user, port, key_path, known_hosts },
-            ValidatedHost::Vps { address: address_b, user: user_b, port: port_b, key_path: key_b, known_hosts: known_b },
-        ) => address == address_b && user == user_b && port == port_b && key_path == key_b && known_hosts == known_b,
-        _ => false,
-    }
-}
-
-/// The chat's ssh master, if it may be lent to another read of the same team: the chat is
-/// connected in this account, on the master link, to exactly this VPS and to the same team (the
-/// pinned container, or none for the VPS the app set up). Its socket comes only from the chat's
-/// own connection, never from what a page sends.
-fn master_to_lend(
-    connection: Option<&Connection>,
-    scope: &AccountScope,
-    host: &ValidatedHost,
-    team: Option<(&str, &crate::existing_team_runtime::RuntimeTarget)>,
-) -> Option<PathBuf> {
-    let connection = connection?;
-    if &connection.scope != scope || connection.link != VpsLink::Master || !same_vps(&connection.validated, host) {
-        return None;
-    }
-    if connection.runtime.as_ref().map(|target| (target.team_id.as_str(), &target.runtime)) != team {
-        return None;
-    }
-    connection.control_path.clone()
-}
-
-/// The folder of a master's socket, as the chat makes it: a real folder (not a link), of `uid`,
-/// open to its owner only (0700), named with the chat's prefix. Once the chat closes its master the
-/// name can be free again, and ssh does not look at who owns a socket: a folder that is not
-/// still ours could hold another local user's socket.
-#[cfg(unix)]
-fn socket_folder_owned_by(socket: &Path, uid: u32) -> bool {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let Some(dir) = socket.parent() else { return false };
-    if !dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with(TUNNEL_DIR_PREFIX)) {
-        return false;
-    }
-    match fs::symlink_metadata(dir) {
-        Ok(meta) => meta.file_type().is_dir() && meta.uid() == uid && meta.permissions().mode() & 0o777 == 0o700,
-        Err(_) => false,
-    }
-}
-
-/// Whether a lent socket's folder is still the chat's, checked right before each use of it.
-#[cfg(unix)]
-pub(crate) fn lent_socket_still_ours(socket: &Path) -> bool {
-    // SAFETY: geteuid has no arguments or pointers.
-    socket_folder_owned_by(socket, unsafe { libc::geteuid() })
-}
-
-/// No master on this platform: nothing is ever lent.
-#[cfg(not(unix))]
-pub(crate) fn lent_socket_still_ours(_socket: &Path) -> bool {
-    false
-}
-
-/// The chat's master for a read of the agents' panel (the terminal of an agent), so that the read
-/// opens no ssh connection of its own: the socket of `master_to_lend`, only while its folder is
-/// still the chat's and the master answers. None means «open a connection as before».
-pub(crate) fn shared_master(
-    state: &DirectChatState,
-    scope: &AccountScope,
-    host: &ValidatedHost,
-    team: Option<(&str, &crate::existing_team_runtime::RuntimeTarget)>,
-) -> Option<PathBuf> {
-    let path = {
-        let slot = state.inner.connection.lock().ok()?;
-        master_to_lend(slot.as_ref(), scope, host, team)?
-    };
-    (lent_socket_still_ours(&path) && check_tunnel(host, &path)).then_some(path)
-}
-
-fn close_connection(connection: &mut Connection) {
-    if let (Some(path), ValidatedHost::Vps { .. }) =
-        (&connection.control_path, &connection.validated)
-    {
-        if let Ok(args) = control_args(&connection.validated, path, "exit") {
-            let _ = run_program("ssh", &args, None, Duration::from_secs(5));
-        }
-        remove_tunnel_socket(path);
-    }
-    if let Some(mut child) = connection.tunnel.take() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-}
 
 /// The installed runtime directory, not a renderer value. The wrapper is still verified when the
 /// connection opens; chat actions themselves intentionally do not invoke it.
@@ -4538,7 +3397,7 @@ mod tests {
             serde_json::json!({"state": "ready"})
         );
         // the status of a ready connection is this one
-        let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs")).split("mod tests {").next().unwrap();
         assert!(source.contains("fn ready_for(connection: &Connection) -> DirectChatStatus {\n    ready_status(&connection.validated, connection.link)\n}"));
     }
 
@@ -4578,7 +3437,7 @@ mod tests {
 
     #[test]
     fn only_the_per_command_link_to_a_vps_reads_small() {
-        let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs")).split("mod tests {").next().unwrap();
         let read = source.split("pub(crate) async fn direct_chat_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n                return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
         assert!(read.contains("read_page(connection, &agent_id, cursor.as_deref())"), "every other link reads as before");
@@ -5800,7 +4659,7 @@ mod tests {
 
     #[test]
     fn the_local_operations_that_ask_the_container_no_longer_run_the_wrapper() {
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         let local = source.split("ValidatedHost::Local => {\n            crate::account_scope::verify_local_runtime_owner(").nth(1).unwrap().split("ValidatedHost::Vps { .. } => {").next().unwrap();
         assert!(!local.contains("run_verified_local_wrapper"), "the local branch of run_connection starts the wrapper again");
         assert!(local.contains("run_local_native("));
@@ -6652,7 +5511,7 @@ mod tests {
         };
         assert_eq!(crate::direct_chat::probe_no_container_code(&vps), "container_unavailable");
         // a host that could not be asked at all stays «unavailable», whichever it is
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         let body = source.split("fn probe_unlogged(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(body.contains("Err(_) => status(\"error\", Some(\"container_unavailable\"))"));
         assert!(body.contains("tunnel_unavailable"));
@@ -6985,7 +5844,7 @@ mod assistance_registration_tests {
 
     #[test]
     fn the_team_language_commands_are_the_app_windows_and_the_write_goes_through_the_one_gate() {
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         let set = source.split("pub(crate) async fn direct_chat_team_language_set(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(set.contains("!window_may_write(window.label())"), "only the app's own window may write the language");
         // the two ways of writing (over the English only, or the person's own choice), and nothing else
@@ -7104,7 +5963,7 @@ mod attachment_command_tests {
 
     #[test]
     fn the_command_checks_before_it_opens_the_window_and_tells_the_assistant_only_what_the_team_sees() {
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         let command = source
             .split("pub(crate) async fn direct_chat_attach(")
             .nth(1)
@@ -7201,7 +6060,7 @@ mod chat_call_log_tests {
 
     #[test]
     fn every_call_of_the_chat_ends_in_the_log() {
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         for (name, call) in [
             ("pub(crate) async fn direct_chat_read(", "\"read\""),
             ("pub(crate) async fn direct_chat_send(", "\"send\""),
@@ -7286,7 +6145,7 @@ mod probe_memo_tests {
 
     #[test]
     fn the_status_of_a_connection_goes_through_the_memo_and_every_change_of_the_connection_drops_it() {
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         let body = source.split("fn status_for_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(body.contains("status_kept_or_probed("), "{body}");
         assert!(!body.contains("Ok(probe(connection))"));
@@ -7365,7 +6224,7 @@ mod connection_read_tests {
     #[cfg(unix)]
     #[test]
     fn the_reads_that_ran_a_process_under_the_lock_no_longer_do() {
-        let source = include_str!("direct_chat.rs");
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
         // the read of a page, the scripts' read and the probe go through the release; the sends keep their serial lock
         for (place, needle) in [
             ("pub(crate) async fn direct_chat_read(", "with_connection_read("),

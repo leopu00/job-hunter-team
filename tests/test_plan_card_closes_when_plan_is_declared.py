@@ -397,7 +397,7 @@ def test_the_header_of_the_reply_tool_names_the_origin_the_system_writes():
 
 
 def test_the_app_lists_the_origin_in_rust_and_in_the_screen():
-    rust = (ROOT / "desktop" / "src-tauri" / "src" / "direct_chat.rs").read_text(encoding="utf-8")
+    rust = (ROOT / "desktop" / "src-tauri" / "src" / "direct_chat" / "wire.rs").read_text(encoding="utf-8")
     cleaner = (ROOT / "desktop" / "src" / "pages" / "messages" / "chat-kinds.ts").read_text(encoding="utf-8")
 
     assert 'ANSWER_ORIGINS: [&str; 3] = ["user", "expiry", "system"]' in rust
