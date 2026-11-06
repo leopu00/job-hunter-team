@@ -279,4 +279,14 @@ mod tests {
         assert!(!root.join("logs").join("runtime.log").exists());
         let _ = fs::remove_dir_all(&root);
     }
+
+    /// Guard that reads a source (declared): the pages the log names are the keys of the shell's one list of routes, in the same
+    /// order, so a page added to the app is measured and a key the page sends is never «not one of the list».
+    #[test]
+    fn the_pages_of_the_log_are_the_keys_of_the_shells_routes() {
+        let source = include_str!("../../src/shell/route-paths.ts").replace("\r\n", "\n");
+        let block = source.split("export const ROUTE_PATHS = {").nth(1).unwrap().split("} as const;").next().unwrap();
+        let keys: Vec<&str> = block.lines().filter_map(|line| line.trim().split_once(':').map(|(key, _)| key)).filter(|key| !key.is_empty()).collect();
+        assert_eq!(keys, LOAD_PAGES.to_vec());
+    }
 }
