@@ -967,9 +967,12 @@ if ($legacyShimOwned) {
 }
 
 [Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')
-[Environment]::SetEnvironmentVariable('JHT_PODMAN_MACHINE', $MachineName, 'User')
+# The machine is named by the runtime's own podman-machine file (attested with the rest of the bundle), never by a variable of
+# the person's environment: a persistent one outlives an update in every terminal opened before it and in every program started
+# from them, and a program that reads it would start the wrong machine. Older installs wrote it: it is taken away.
+if ([Environment]::GetEnvironmentVariable('JHT_PODMAN_MACHINE', 'User')) { [Environment]::SetEnvironmentVariable('JHT_PODMAN_MACHINE', $null, 'User') }
 $env:JHT_CONTAINER_RUNTIME = 'podman'
-$env:JHT_PODMAN_MACHINE = $MachineName
+Remove-Item -LiteralPath Env:JHT_PODMAN_MACHINE -ErrorAction SilentlyContinue
 $env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
 
 # No double quote inside a native argument: Windows PowerShell 5.1, the shell the app runs, drops it,
