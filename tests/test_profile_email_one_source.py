@@ -94,6 +94,8 @@ def test_the_recipes_take_their_email_places_from_the_one_list():
     "apply_flow", "apply_generic", "workday_apply", "email_application", "profile_facts", "profile_review", "validate_profile",
 ])
 def test_no_module_keeps_its_own_list_of_email_places(name: str):
-    text = (SKILLS / f"{name}.py").read_text(encoding="utf-8")
+    paths = sorted(SKILLS.glob("apply_flow*.py")) if name == "apply_flow" else [SKILLS / f"{name}.py"]
+    assert paths
+    text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
     assert not re.search(r'\(\(?"contacts",\s*"email"\)?,\s*\("email",\)\)', text), name
     assert '.get("email") or' not in text, name

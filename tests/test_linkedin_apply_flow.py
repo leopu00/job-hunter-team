@@ -625,7 +625,11 @@ def test_a_linkedin_vacancy_served_from_another_host_is_refused(page, home: Path
     page.route("https://careers.example.invalid/**", lambda route: route.fulfill(status=200, content_type="text/html", body=job_page(True)))
     monkeypatch.setattr(ApplicationFlow, "_navigate", lambda self, p: p.goto("https://careers.example.invalid/job"))
     # Isolate the recipe-page guard from the earlier redirected-away check.
-    monkeypatch.setattr(apply_flow, "vacancy_redirected_away", lambda *_a: False)
+    import apply_flow_boundaries
+    import apply_flow_browser
+
+    monkeypatch.setattr(apply_flow_boundaries, "vacancy_redirected_away", lambda *_a: False)
+    monkeypatch.setattr(apply_flow_browser, "vacancy_redirected_away", lambda *_a: False)
 
     result = build_flow(home, cv_path).run(page=page, navigate=True)
 

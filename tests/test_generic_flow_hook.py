@@ -103,8 +103,12 @@ def test_a_known_ats_without_a_recipe_never_becomes_a_company_form(browser, cv_p
 def test_without_the_generic_module_an_unknown_page_stays_unsupported(browser, cv_path, tmp_path, monkeypatch):
     page = _site_page(browser, {"/jobs/7": CLASSIC})
     page.goto(f"{BASE}/jobs/7")
-    real = apply_flow._optional_module
-    monkeypatch.setattr(apply_flow, "_optional_module", lambda name: None if name == "apply_generic" else real(name))
+    import apply_flow_boundaries
+    import apply_flow_recipes
+
+    real = apply_flow_recipes._optional_module
+    for module in (apply_flow_recipes, apply_flow_boundaries):
+        monkeypatch.setattr(module, "_optional_module", lambda name: None if name == "apply_generic" else real(name))
 
     result = build_flow(tmp_path, cv_path, f"{BASE}/jobs/7").run(page=page, navigate=False)
 
