@@ -975,7 +975,8 @@ export default function DirectChatScreen({
               style={{ color: squadSelected ? "var(--color-bright)" : "var(--color-muted)", background: squadSelected ? "var(--color-card)" : "transparent", boxShadow: squadSelected ? "inset 2px 0 0 var(--color-green)" : undefined }}
             >
               {squad.label}
-              {squad.line && sessions !== null && <span className="mt-0.5 block min-w-0 truncate text-[14px] font-normal normal-case tracking-normal text-[var(--color-dim)]">{squad.line(sessions.filter((entry) => entry.up).length, sessions.length)}</span>}
+              {/* counted on the rows of this list, the same as the Commands tab counts: the agents with a chat and the sessions without one */}
+              {squad.line && sessions !== null && <span className="mt-0.5 block min-w-0 truncate text-[14px] font-normal normal-case tracking-normal text-[var(--color-dim)]">{squad.line(agents.filter((agent) => agent.up).length + others.filter((entry) => entry.up).length, agents.length + others.length)}</span>}
             </button>
           )}
           {agents.map((agent) => (
@@ -994,7 +995,8 @@ export default function DirectChatScreen({
                 // the chosen row: its own background and a bar on the left, the name in the bright colour (not the green of «working»)
                 color: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-bright)" : "var(--color-muted)",
                 background: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-card)" : "transparent",
-                boxShadow: !squadSelected && !otherSelected && agent.id === agentId ? "inset 2px 0 0 var(--color-green)" : undefined,
+                // in pause the bar is amber too: nothing about a paused agent is green
+                boxShadow: !squadSelected && !otherSelected && agent.id === agentId ? `inset 2px 0 0 ${agent.up && agent.paused ? "var(--color-yellow)" : "var(--color-green)"}` : undefined,
               }}
             >
               <span className="flex items-center justify-between gap-2">
@@ -1087,6 +1089,8 @@ export default function DirectChatScreen({
                 href={`/agents/${encodeURIComponent(selected.session)}`}
                 data-testid="direct-chat-agent-page"
                 className="text-inherit no-underline hover:underline"
+                // the global colour of a link is green: the name of an agent is not green (the one in pause least of all)
+                style={{ color: "var(--color-white)" }}
               >
                 {selected.label}
               </Link>}

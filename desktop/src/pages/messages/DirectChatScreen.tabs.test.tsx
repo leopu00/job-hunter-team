@@ -80,7 +80,8 @@ describe("DirectChatScreen with the tabs of the Team page", () => {
     const row = await screen.findByTestId("team-squad-row");
     const nav = screen.getByRole("navigation", { name: "Chat agenti" });
     expect(within(nav).getAllByRole("button")[0]).toBe(row);
-    await waitFor(() => expect(row).toHaveTextContent("1 su 2 accesi"));
+    // counted on the rows the list shows (every agent with a chat, on or off), not on the sessions the team has
+    await waitFor(() => expect(row).toHaveTextContent(`1 su ${within(nav).getAllByRole("button").length - 1} accesi`));
     await user.click(row);
     expect(row).toHaveAttribute("aria-current", "page");
     expect(within(screen.getByTestId("team-tabs")).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Comandi", "Corsie", "Registro"]);
@@ -118,6 +119,34 @@ describe("DirectChatScreen with the tabs of the Team page", () => {
     await user.click(screen.getByTestId("team-tab-terminal"));
     expect(screen.getByTestId("tab-body")).toHaveTextContent("terminal:DOTTORE");
     expect(screen.queryByTestId("direct-chat-composer")).toBeNull();
+  });
+
+  it("counts the team on the rows of its own list: the agents with a chat, on or off, and the sessions without one", async () => {
+    const more = async (): Promise<ChatSession[]> => [
+      ...(await sessions()),
+      { session: "DOTTORE", up: true, state: { state: "idle" } as ChatSession["state"] },
+      { session: "CRITICO-S2", up: false, state: { state: "spento" } as ChatSession["state"] },
+    ];
+    render(<DirectChatScreen client={client()} initialAgentId="capitano" loadSessions={more} agentTabs={withSquad()} />);
+    await screen.findByTestId("team-other-DOTTORE");
+    const nav = screen.getByTestId("team-squad-row").parentElement!;
+    const rows = within(nav).getAllByRole("button");
+    const rowsOfAgents = rows.filter((row) => row !== screen.getByTestId("team-squad-row"));
+    // the list shows every chat agent (on or off) and the two sessions without a chat; the line counts those, and only those
+    const on = rowsOfAgents.filter((row) => row.querySelector('[data-testid^="direct-chat-led-"]')?.getAttribute("style")?.includes("var(--color-green)") || row.getAttribute("data-testid") === "team-other-DOTTORE").length;
+    expect(screen.getByTestId("team-squad-row")).toHaveTextContent(`${on} su ${rowsOfAgents.length} accesi`);
+  });
+
+  it("marks the chosen row of a paused agent with an amber bar, never a green one", async () => {
+    const paused = async (): Promise<ChatSession[]> => [
+      { session: "CAPITANO", up: true, state: { state: "idle" } as ChatSession["state"], paused: true },
+      { session: "SCOUT-1", up: true, state: { state: "lavora" } as ChatSession["state"] },
+    ];
+    render(<DirectChatScreen client={client()} initialAgentId="capitano" loadSessions={paused} agentTabs={withSquad()} />);
+    const row = (await screen.findByTestId("direct-chat-paused-capitano")).closest("button")!;
+    await waitFor(() => expect(row.getAttribute("style")).toContain("var(--color-yellow)"));
+    expect(row.getAttribute("style")).not.toContain("var(--color-green)");
+    expect(screen.getByTestId("direct-chat-led-scout").closest("button")!.getAttribute("style") ?? "").not.toContain("var(--color-yellow)");
   });
 
   it("shows an agent the person paused with an amber pause sign in the place of the dot, never green", async () => {

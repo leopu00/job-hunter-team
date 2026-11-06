@@ -41,7 +41,7 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { UsageShort } from "./AgentUsage";
 import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
-import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
+import { QuestionList, QuestionMarks, questionsPartlyKnown, questionsSummary } from "./AgentQuestions";
 import { PauseResumeButton } from "./PauseResumeButton";
 import { SessionHistory } from "./AgentHistory";
 import { readWorkWindow, rememberWorkWindow, WorkLanes } from "./AgentWork";
@@ -286,7 +286,7 @@ const CLI_NAME: Record<AgentIdentity["cli"], string> = { claude: "Claude", codex
 /**
  * Who the agent is, in pieces: «Codex», «gpt-5.6-terra», «effort alto».
  * Only shown, never decided on (the agent can rewrite its session's options).
- * A part the session does not say is «non so»; Kimi gets no model nor effort
+ * A part the session does not say is null (the screens show «—», or leave it out); Kimi gets no model nor effort
  * from the launcher (its own default), the local scorer neither.
  */
 export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null): IdentityParts | null {
@@ -295,8 +295,8 @@ export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null
   const effortName = { low: t.effortLow, medium: t.effortMedium, high: t.effortHigh };
   return {
     provider: CLI_NAME[identity.cli],
-    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : t.identityModelUnknown),
-    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : t.identityEffortUnknown,
+    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : null),
+    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : null,
   };
 }
 
@@ -819,6 +819,7 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
       total: rows.length,
       // only to be shown: the questions of the agents that are up, null where the team does not say them
       questions: questionsSummary(t, up.map((row) => row.agent!.questions)),
+      questionsPartly: questionsPartlyKnown(up.map((row) => row.agent!.questions)),
     };
   }, [rows, t]);
 
@@ -832,7 +833,8 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
         ? t.teamPausedWeekly
         : fill(t.teamPausedUntil, { time: stamp(Date.parse(team.standby.until)) });
     if (team.standby.state === "expired") return t.teamPauseEnding;
-    return t.teamActive;
+    // «active» is said only of a team that has an agent on: with none (or with the state not read, `team` is null above) there is nothing to say
+    return counts.up > 0 ? t.teamActive : null;
   })();
   const paused = team?.standby.state === "active";
   // The user's full-throttle override (JHT-T33): on with its end, ending within the hour, or ended.
@@ -861,8 +863,13 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
                         >
                           {current.session}
                         </Link>
-                        <span className="text-[11px] uppercase tracking-widest" style={{ color: isUp(current) ? "var(--color-green)" : "var(--color-dim)" }}>
-                          {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
+                        {/* in pause = amber, never green (JHT-T181): the word says it, as the sign beside the name does */}
+                        <span
+                          data-testid={isUp(current) && current.agent?.paused ? "panel-paused-word" : undefined}
+                          className="text-[11px] uppercase tracking-widest"
+                          style={{ color: isUp(current) ? (current.agent?.paused ? "var(--color-yellow)" : "var(--color-green)") : "var(--color-dim)" }}
+                        >
+                          {isUp(current) ? (current.agent?.paused ? t.pausedWord : t.up) : current.heldByUser ? t.heldByUser : t.down}
                         </span>
                       </div>
                       <p
@@ -1015,10 +1022,10 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
                 pluralText(appLocale(), counts.working, t.summaryWorking),
                 pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
               ].join(" · ")}
-              {counts.up > 0 && (
+              {counts.up > 0 && counts.questions !== null && (
                 <>
                   {" · "}
-                  <span data-testid="panel-questions-summary" title={t.questionsSummaryHelp}>
+                  <span data-testid="panel-questions-summary" title={counts.questionsPartly ? `${t.questionsSummaryHelp} ${t.questionsPartlyUnknown}` : t.questionsSummaryHelp}>
                     {counts.questions}
                   </span>
                 </>
