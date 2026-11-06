@@ -376,6 +376,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A letöltött csomag hiányos vagy sérült.", "Próbáld újra. Ha ismét megtörténik, ellenőrizd az internetkapcsolatot, vagy frissítsd a Job Hunter Teamet."],
     pt: ["O pacote descarregado está incompleto ou danificado.", "Tenta novamente. Se voltar a acontecer, verifica a ligação à internet ou atualiza o Job Hunter Team."],
   },
+  "Job Hunter Team is installed, but another account on this computer can change the folder of its programs, so the app does not use it, for safety.": {
+    de: ["Job Hunter Team ist installiert, aber ein anderes Konto auf diesem Computer darf den Ordner mit seinen Programmen ändern, deshalb verwendet die App ihn aus Sicherheitsgründen nicht.", "Bitte die Person, die diesen Computer verwaltet, den anderen Konten die Schreibberechtigung für den Ordner .local\\bin in deinem Profil zu entziehen, und versuche es dann erneut."],
+    es: ["Job Hunter Team está instalado, pero otra cuenta de este equipo puede modificar la carpeta de sus programas, así que la app no la usa por seguridad.", "Pide a quien administra el equipo que quite a las demás cuentas el permiso de escritura sobre la carpeta .local\\bin de tu perfil y vuelve a intentarlo."],
+    fr: ["Job Hunter Team est installé, mais un autre compte de cet ordinateur peut modifier le dossier de ses programmes ; l’app ne l’utilise donc pas, par sécurité.", "Demande à la personne qui gère l’ordinateur de retirer aux autres comptes l’autorisation d’écriture sur le dossier .local\\bin de ton profil, puis réessaie."],
+    hu: ["A Job Hunter Team telepítve van, de ezen a számítógépen egy másik fiók módosíthatja a programjai mappáját, ezért az app biztonsági okból nem használja.", "Kérd meg a számítógép üzemeltetőjét, hogy vonja meg a többi fióktól az írási jogot a profilod .local\\bin mappáján, majd próbáld újra."],
+    pt: ["O Job Hunter Team está instalado, mas outra conta deste computador pode alterar a pasta dos seus programas, por isso a app não a usa por segurança.", "Pede a quem gere o computador que retire às outras contas a permissão de escrita na pasta .local\\bin do teu perfil e tenta novamente."],
+  },
   "The team environment is not installed on this computer.": {
     de: ["Die Teamumgebung ist auf diesem Computer nicht installiert.", "Beginne erneut mit der technischen Einrichtung."],
     es: ["El entorno del equipo no está instalado en este ordenador.", "Vuelve a empezar desde la configuración técnica."],
@@ -1957,6 +1964,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   runtime_wrapper_install_failed: translated("Preparing the team’s environment did not succeed."),
   runtime_install_unsupported: translated("Running the team on this computer is not available on this system."),
   runtime_missing: translated("The team environment is not installed on this computer."),
+  runtime_folder_shared: translated("Job Hunter Team is installed, but another account on this computer can change the folder of its programs, so the app does not use it, for safety."),
   installer_digest_missing: translated("The team environment package failed its integrity check."),
   installer_digest_invalid: translated("The team environment package failed its integrity check."),
   installer_digest_mismatch: translated("The downloaded package is not the one this version of the app expects."),

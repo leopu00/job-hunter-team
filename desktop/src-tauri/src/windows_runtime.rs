@@ -355,6 +355,13 @@ const MANIFEST_FILES: [(&str, Place, &str); 8] = [
     ("windows-private-acl.ps1", Place::Bin, "windows-private-acl.ps1"),
     ("docker.exe", Place::Runtime, "bin/docker.exe"),
 ];
+/// Whether a node named by a `BundleFailure` sits in the folder the wrapper shares with other programs (`.local\bin`): that
+/// folder and the files install.ps1 puts in it. The runtime directory and what is in it are ours and protected, not shared.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn node_is_in_shared_bin_dir(node: &str) -> bool {
+    node == "bin-dir" || MANIFEST_FILES.iter().any(|(key, place, _)| *key == node && matches!(place, Place::Bin))
+}
+
 /// A test-channel install also pins its image: the file and its manifest
 /// line come together, or neither does.
 const IMAGE_PIN: &str = "runtime-image";
@@ -480,16 +487,31 @@ const LOCAL_SYSTEM_SID: &str = "S-1-5-18";
 #[cfg_attr(not(windows), allow(dead_code))]
 const BUILTIN_ADMINS_SID: &str = "S-1-5-32-544";
 
+/// Whether an access mask of an ACE gives a right to CHANGE what it is on: write data or add a file (0x2), append data or
+/// add a folder (0x4), write extended attributes (0x10), delete what is in a folder (0x40), write attributes (0x100), delete
+/// the node (0x10000), change its permissions (0x40000) or its owner (0x80000), and the generic write and all (a DACL read back
+/// has them mapped, but one that was not is still counted). Reading, listing, running and synchronizing are not.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn mask_allows_changing(mask: u32) -> bool {
+    const CHANGING: u32 = 0x0000_0002 | 0x0000_0004 | 0x0000_0010 | 0x0000_0040 | 0x0000_0100 | 0x0001_0000 | 0x0004_0000 | 0x0008_0000
+        | 0x4000_0000 | 0x1000_0000;
+    mask & CHANGING != 0
+}
+
 /// The rule an ACL breaks, if it breaks one. The runtime directory must have its inheritance
-/// cut (`must_cut`). Every node, file or directory, must give access to the user and to nobody
-/// else but SYSTEM and the local Administrators: for a file that is the ACL it really has,
-/// which in the protected directory is the one it inherits. A file does not have to cut its
-/// own inheritance (the checked wrapper never asks it: it asks the owner, and the directory),
-/// nor does the folder the wrapper sits in, which has the user profile's.
+/// cut (`must_cut`) and, being ours and protected, gives access to the user and to nobody else but SYSTEM and the
+/// local Administrators, whatever the access. Every other node, file or directory (the folder the wrapper sits in, which
+/// is shared with other programs and has the profile's ACL, and the files in it) must give access to the user, and
+/// no account but the user, SYSTEM and the local Administrators may CHANGE it (`writer_sids`): whoever may add, rename
+/// or delete a file there may swap the wrapper after the check. An account that may only read and run is no risk of
+/// that, and a group a program of the person's made (a sandbox's, say) that the profile hands down is not a reason to
+/// stop. A file does not have to cut its own inheritance (the checked wrapper never asks it: it asks the owner, and the
+/// directory).
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn node_acl_rule(
     inheritance_disabled: bool,
     allowed_sids: &[String],
+    writer_sids: &[String],
     user_sid: &str,
     must_cut: bool,
 ) -> Option<&'static str> {
@@ -499,10 +521,8 @@ pub(crate) fn node_acl_rule(
     if !allowed_sids.iter().any(|sid| sid == user_sid) {
         return Some("acl_user_missing");
     }
-    if allowed_sids
-        .iter()
-        .any(|sid| sid != user_sid && sid != LOCAL_SYSTEM_SID && sid != BUILTIN_ADMINS_SID)
-    {
+    let judged = if must_cut { allowed_sids } else { writer_sids };
+    if judged.iter().any(|sid| sid != user_sid && sid != LOCAL_SYSTEM_SID && sid != BUILTIN_ADMINS_SID) {
         return Some("acl_other_account");
     }
     None
@@ -531,7 +551,7 @@ fn attest_paths(wrapper: &Path, runtime_dir: &Path) -> Result<(), BundleFailure>
         }
         let Ok(user) = crate::private_acl::current_user_sid() else { return Some("user_unreadable") };
         let Ok(acl) = crate::private_acl::read_acl(path) else { return Some("acl_unreadable") };
-        node_acl_rule(acl.inheritance_disabled, &acl.allowed_sids, &user, must_cut)
+        node_acl_rule(acl.inheritance_disabled, &acl.allowed_sids, &acl.writer_sids, &user, must_cut)
     };
     let ancestors_rule = |path: &Path| -> Option<&'static str> {
         let mut current = Some(path);
@@ -1312,26 +1332,66 @@ mod tests {
     /// user's own folder and the runtime's files in the protected directory: none of them cuts
     /// its own inheritance, and none has to. The directory does.
     #[test]
-    fn a_node_may_inherit_its_acl_but_gives_access_to_nobody_besides_the_user_system_and_admins() {
+    fn a_node_may_inherit_its_acl_but_nobody_besides_the_user_system_and_admins_may_change_it() {
         let user = "S-1-5-21-1-2-3-1001";
         let sids = |list: &[&str]| list.iter().map(|sid| (*sid).to_owned()).collect::<Vec<_>>();
         let usual = sids(&[user, "S-1-5-18", "S-1-5-32-544"]);
         // A file with the ACL it inherits (inheritance not cut), a directory with it cut.
-        assert_eq!(node_acl_rule(false, &usual, user, false), None, "an inheriting file, or the wrapper's folder with the profile's ACL");
-        assert_eq!(node_acl_rule(true, &usual, user, false), None);
-        assert_eq!(node_acl_rule(true, &usual, user, true), None);
-        assert_eq!(node_acl_rule(true, &sids(&[user]), user, true), None);
+        assert_eq!(node_acl_rule(false, &usual, &usual, user, false), None, "an inheriting file, or the wrapper's folder with the profile's ACL");
+        assert_eq!(node_acl_rule(true, &usual, &usual, user, false), None);
+        assert_eq!(node_acl_rule(true, &usual, &usual, user, true), None);
+        assert_eq!(node_acl_rule(true, &sids(&[user]), &sids(&[user]), user, true), None);
         // The directory must have cut it.
-        assert_eq!(node_acl_rule(false, &usual, user, true), Some("acl_inherited"));
-        // The user must have access, and nobody else beyond SYSTEM and the Administrators.
-        assert_eq!(node_acl_rule(true, &sids(&["S-1-5-18", "S-1-5-32-544"]), user, true), Some("acl_user_missing"));
-        assert_eq!(node_acl_rule(false, &sids(&[]), user, false), Some("acl_user_missing"));
+        assert_eq!(node_acl_rule(false, &usual, &usual, user, true), Some("acl_inherited"));
+        // The user must have access.
+        assert_eq!(node_acl_rule(true, &sids(&["S-1-5-18", "S-1-5-32-544"]), &sids(&[]), user, true), Some("acl_user_missing"));
+        assert_eq!(node_acl_rule(false, &sids(&[]), &sids(&[]), user, false), Some("acl_user_missing"));
+        // The runtime directory is ours and protected: any other account with ANY access is wrong there.
         for other in ["S-1-1-0", "S-1-5-32-545", "S-1-5-11", "S-1-5-21-1-2-3-1002"] {
             let mut open = usual.clone();
             open.push(other.to_owned());
-            assert_eq!(node_acl_rule(true, &open, user, true), Some("acl_other_account"), "{other} on the directory");
-            assert_eq!(node_acl_rule(false, &open, user, false), Some("acl_other_account"), "{other} on a file, or on the folder the wrapper sits in");
+            assert_eq!(node_acl_rule(true, &open, &sids(&[user]), user, true), Some("acl_other_account"), "{other} on the directory, even reading");
         }
+        // The wrapper's folder is shared and inherits the profile's: another account that may only read and run (a group
+        // a program of the person's made, say) is no reason to stop; one that may CHANGE it is.
+        let sandbox = "S-1-5-21-1-2-3-1004";
+        let mut readers = usual.clone();
+        readers.push(sandbox.to_owned());
+        assert_eq!(node_acl_rule(false, &readers, &usual, user, false), None, "a read-only group on a file or the shared folder");
+        assert_eq!(node_acl_rule(true, &readers, &usual, user, false), None);
+        for other in ["S-1-1-0", "S-1-5-32-545", "S-1-5-11", sandbox] {
+            let mut writers = usual.clone();
+            writers.push(other.to_owned());
+            assert_eq!(node_acl_rule(false, &writers, &writers, user, false), Some("acl_other_account"), "{other} that may change a file, or the folder the wrapper sits in");
+        }
+    }
+
+    #[test]
+    fn only_the_folder_shared_with_other_programs_and_its_files_are_told_apart_from_the_runtime_directory() {
+        for shared in ["bin-dir", "jht-wrapper.ps1", "windows-private-acl.ps1"] {
+            assert!(node_is_in_shared_bin_dir(shared), "{shared}");
+        }
+        for ours in ["runtime-dir", "manifest", "docker-compose.yml", "docker-compose.podman.yml", "container-runtime", "podman-machine", "jht-container.service", "docker.exe", "runtime-image", "bundle", "unknown"] {
+            assert!(!node_is_in_shared_bin_dir(ours), "{ours}");
+        }
+    }
+
+    /// Which access masks of an ACE give a right to change: a group a sandboxing tool adds, with ReadAndExecute only, is not one.
+    #[test]
+    fn only_a_mask_that_can_change_the_node_counts() {
+        const READ_AND_EXECUTE_SYNCHRONIZE: u32 = 0x0012_00A9;
+        const READ: u32 = 0x0012_0089;
+        const MODIFY: u32 = 0x0013_01BF;
+        const FULL_CONTROL: u32 = 0x001F_01FF;
+        for reading in [READ_AND_EXECUTE_SYNCHRONIZE, READ, 0x0000_0001, 0x0000_0020, 0x0012_0000, 0x8000_0000, 0xA000_0000] {
+            assert!(!mask_allows_changing(reading), "{reading:#x} only reads or runs");
+        }
+        for changing in [MODIFY, FULL_CONTROL, 0x2, 0x4, 0x10, 0x40, 0x100, 0x1_0000, 0x4_0000, 0x8_0000, 0x4000_0000, 0x1000_0000] {
+            assert!(mask_allows_changing(changing), "{changing:#x} can change");
+        }
+        // reading plus any one right to change counts
+        assert!(mask_allows_changing(READ_AND_EXECUTE_SYNCHRONIZE | 0x4_0000), "permissions can be rewritten");
+        assert!(mask_allows_changing(READ_AND_EXECUTE_SYNCHRONIZE | 0x40), "files of the folder can be deleted");
     }
 
     /// The layout install.ps1 writes on the Podman runtime, on disk: the
