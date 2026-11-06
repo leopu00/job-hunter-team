@@ -52,12 +52,14 @@ def test_failed_containment_notices_are_logged_and_do_not_block_release_or_reenf
             f'log() {{ printf "%s\\n" "$*" >> "{log}"; }}\n'
             f'tmux() {{ printf "%s\\n" "$*" >> "{log}"; }}\n'
             'capture_for_containment() { printf "/fixture/evidence"; }\n'
-            + function("maybe_enforce_containments") + '\nmaybe_enforce_containments\n')
+            + function("maybe_enforce_containments") + '\nmaybe_enforce_containments\n'
+            + f'printf "next watchdog step\\n" >> "{log}"\n')
     result = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     actions = log.read_text()
     assert "SCOUT-1 released" in actions
     assert "kill-session -t =SCOUT-2" in actions and "stopped again" in actions
+    assert actions.rstrip().endswith("next watchdog step")
     rows = [json.loads(line) for line in (tmp_path / "logs/runtime.log").read_text().splitlines()]
     assert len(rows) == 4 and all(row["code"] == "message_not_delivered" for row in rows)
     direct = subprocess.run([sys.executable, str(DELIVERY), "send", str(sender), "CAPITANO", "fixture"],

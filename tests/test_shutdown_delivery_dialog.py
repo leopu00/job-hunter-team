@@ -21,7 +21,17 @@ def test_shutdown_delivery_and_timeout_in_an_isolated_godot_project(tmp_path):
     ):
         target = project / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / "game" / relative, target)
+        if relative == "tools/shutdown_delivery_selftest.gd":
+            # A main scene loads after the fake autoloads; --script compiles
+            # a SceneTree before those names exist in the isolated project.
+            source = (ROOT / "game" / relative).read_text(encoding="utf-8")
+            source = source.replace("extends SceneTree", "extends Node").replace("func _init()", "func _ready()")
+            source = source.replace("root.add_child(", "get_tree().root.add_child(")
+            source = source.replace("await process_frame", "await get_tree().process_frame")
+            source = source.replace("\tquit(", "\tget_tree().quit(")
+            target.write_text(source, encoding="utf-8")
+        else:
+            shutil.copyfile(ROOT / "game" / relative, target)
     (project / "services.gd").write_text('''extends Node
 var lang := "it"
 const VOID := Color.BLACK
@@ -55,15 +65,19 @@ func active_agents() -> PackedStringArray: return PackedStringArray()
     (project / "panel.gd").write_text("class_name BracketPanel\nextends PanelContainer\n", encoding="utf-8")
     aliases = ("UIStrings", "Palette", "TerminalTheme", "AgentNames", "Sfx", "Log", "SetupService", "HeadlessSession")
     config = ('config_version=5\n[application]\nconfig/name="Shutdown Fixture"\n'
+              'run/main_scene="res://runner.tscn"\n'
               'config/use_custom_user_dir=true\nconfig/custom_user_dir='
               + json.dumps(str(tmp_path / "user")) + '\n[autoload]\n')
     config += "\n".join(f'{name}="*res://services.gd"' for name in aliases)
     (project / "project.godot").write_text(config, encoding="utf-8")
+    (project / "runner.tscn").write_text('[gd_scene load_steps=2 format=3]\n'
+        '[ext_resource type="Script" path="res://tools/shutdown_delivery_selftest.gd" id="1"]\n'
+        '[node name="Runner" type="Node"]\nscript = ExtResource("1")\n', encoding="utf-8")
     imported = subprocess.run([binary, "--headless", "--path", str(project), "--editor", "--import", "--quit"],
                               capture_output=True, text=True, timeout=90)
     assert imported.returncode == 0, imported.stdout + imported.stderr
-    result = subprocess.run([binary, "--headless", "--path", str(project), "--script",
-                             "res://tools/shutdown_delivery_selftest.gd"],
+    assert "SCRIPT ERROR" not in imported.stderr, imported.stdout + imported.stderr
+    result = subprocess.run([binary, "--headless", "--path", str(project)],
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "SHUTDOWN-DELIVERY-TEST PASS" in result.stdout
+    assert "SHUTDOWN-DELIVERY-TEST PASS" in result.stdout, result.stdout + result.stderr

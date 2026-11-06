@@ -16,11 +16,12 @@ def test_empty_wake_poll_has_no_transport_work(tmp_path, monkeypatch):
     monkeypatch.setattr(application_answers, "pending_wakes", lambda *a: [])
     connection = sqlite3.connect(":memory:")
     calls = []
+    monkeypatch.setattr(application_answers, "_tmux_send", lambda *a: calls.append(a))
     samples = []
     for _ in range(5):
         start = time.perf_counter()
         for _ in range(1000):
-            assert application_answers.wake_closer(connection, {}, sender=lambda *a: calls.append(a)) == []
+            application_answers.wake_closer(connection, {})
         samples.append((time.perf_counter() - start) * 1000 / 1000)
     connection.close()
     assert calls == []

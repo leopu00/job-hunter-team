@@ -7,6 +7,8 @@ static func request(run: Callable, ready_flag: String) -> bool:
 	if int(cleared.get("code", -1)) != 0:
 		report("shutdown.not_delivered")
 		return false
+	# ⚠️ NON TRADURRE: è un ORDINE che il Capitano esegue.
+	# Il censimento O-07 esclude questa busta agente: tradurla cambierebbe il protocollo.
 	var order := "[@utente -> @capitano] [SHUTDOWN] L'utente sta chiudendo " \
 			+ "l'applicazione. Usa la skill graceful-shutdown: fai annotare a " \
 			+ "ogni agente lo stato del lavoro in corso sulla propria agenda, " \
