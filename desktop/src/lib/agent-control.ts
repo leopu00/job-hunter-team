@@ -29,7 +29,15 @@ export type PanelList = TeamAgentsRead & {
 export type TeamControlState = {
   /** the user stopped the team (it does not restart by itself) */
   halted: boolean;
-  standby: { state: "off" | "active" | "expired" | "invalid" | "unknown"; until: string | null; weeklyReset: boolean };
+  standby: {
+    state: "off" | "active" | "expired" | "invalid" | "unknown";
+    until: string | null;
+    weeklyReset: boolean;
+    /** the person's PAUSE (sessions on, the Assistente stays reachable) or the technical standby; null for an image that does not say */
+    mode: "pause" | "standby" | null;
+    /** the pause waits for the person's word (its `until` is only the cap of 7 days) */
+    untilResumed: boolean;
+  };
   /** the sessions held off: by the user from here, or by the team for safety; null when unknown */
   held: { session: string; byUser: boolean }[] | null;
   /** the user's full-throttle override: off, on until `expiresAt`, or ended; unknown for an image that does not say */
@@ -64,7 +72,12 @@ export type PanelHistory = {
 };
 
 export type AgentAction = "start" | "stop" | "restart";
-export type PauseExit = { kind: "hours"; hours: number } | { kind: "until"; until: string } | { kind: "weekly_reset" };
+export type PauseExit =
+  | { kind: "hours"; hours: number }
+  | { kind: "until"; until: string }
+  | { kind: "weekly_reset" }
+  /** «until I say so» (JHT-T181): the person's word is the exit; the team's cap of 7 days rings if it is forgotten */
+  | { kind: "until_resumed" };
 export type ActionResult =
   | "started"
   | "already_running"
@@ -76,7 +89,11 @@ export type ActionResult =
   | "resumed"
   | "not_paused"
   | "team_stopped"
-  | "team_already_stopped";
+  | "team_already_stopped"
+  | "agent_paused"
+  | "agent_already_paused"
+  | "agent_resumed"
+  | "agent_not_paused";
 export type ExclusionResult = "excluded" | "exclusion_withdrawn";
 
 export type Outcome<T> = { ok: true; at: number; value: T } | { ok: false; at: number; code: string };
@@ -144,6 +161,8 @@ export async function readTeamState(): Promise<Outcome<TeamControlState>> {
         state: standby.state as TeamControlState["standby"]["state"],
         until: typeof standby.until === "string" ? standby.until : null,
         weeklyReset: standby.weeklyReset === true,
+        mode: standby.mode === "pause" || standby.mode === "standby" ? standby.mode : null,
+        untilResumed: standby.untilResumed === true,
       },
       held,
       burnIntent: {
@@ -315,6 +334,10 @@ const RESULTS = new Set<string>([
   "not_paused",
   "team_stopped",
   "team_already_stopped",
+  "agent_paused",
+  "agent_already_paused",
+  "agent_resumed",
+  "agent_not_paused",
 ]);
 
 const EXCLUSION_RESULTS = new Set<string>(["excluded", "exclusion_withdrawn"]);
@@ -339,6 +362,18 @@ export function pauseTeam(exit: PauseExit, target: string): Promise<Outcome<Acti
 
 export function resumeTeam(target: string): Promise<Outcome<ActionResult>> {
   return act({ op: "resume", target });
+}
+
+/**
+ * The pause of ONE agent (JHT-T181): its session stays on with its context, it is told to close its step and wait,
+ * and nothing sends it work until it is resumed. Not the stop («Stop» shuts the session and loses its context).
+ */
+export function pauseAgent(session: string, target: string): Promise<Outcome<ActionResult>> {
+  return act({ op: "pause_agent", session, target });
+}
+
+export function resumeAgent(session: string, target: string): Promise<Outcome<ActionResult>> {
+  return act({ op: "resume_agent", session, target });
 }
 
 /**

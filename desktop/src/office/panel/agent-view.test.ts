@@ -13,6 +13,7 @@ const agent = (name: string, role: string, state = "lavora"): TeamAgent => ({
   state: { state: state as TeamAgent["state"]["state"] },
   usage: { contextPct: null, contextTokens: null, contextWindow: null, contextAt: null, tokensHour: null, tokensAt: null },
   questions: null,
+  paused: false,
 });
 const list = (agents: TeamAgent[]): PanelList => ({
   agents,
@@ -25,7 +26,7 @@ const list = (agents: TeamAgent[]): PanelList => ({
 });
 const team = (held: TeamControlState["held"]): TeamControlState => ({
   halted: false,
-  standby: { state: "off", until: null, weeklyReset: false },
+  standby: { state: "off", until: null, weeklyReset: false, mode: null, untilResumed: false },
   held,
   burnIntent: { state: "off", expiresAt: null, remainingMin: null },
 });

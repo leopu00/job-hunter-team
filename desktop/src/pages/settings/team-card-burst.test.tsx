@@ -22,7 +22,7 @@ const reply = (fields: Record<string, unknown> = {}) => ({
 });
 const state = (): TeamControlState => ({
   halted: false,
-  standby: { state: "off", until: null, weeklyReset: false },
+  standby: { state: "off", until: null, weeklyReset: false, mode: null, untilResumed: false },
   held: null,
   burnIntent: { state: "off", expiresAt: null, remainingMin: null },
 });
