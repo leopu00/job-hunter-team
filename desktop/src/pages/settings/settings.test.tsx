@@ -12,8 +12,13 @@ import { EXPORT_TEXT } from "../export/export.i18n";
 import { TEAM_SETTINGS_TEXT } from "../team-settings/team-settings.i18n";
 import { WORK_HOURS_TEXT } from "../work-hours/work-hours.i18n";
 import { SECTION_IDS } from "./sections";
+import { ProviderLoginProvider } from "../../provider-login/ProviderLoginProvider";
 import SettingsPage from "./index";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
+
+vi.mock("../../provider-login/provider-login-native", () => ({
+  readProviderLoginState: vi.fn().mockResolvedValue({ ok: true, state: "expired", provider: "codex" }),
+}));
 
 const props = { params: {}, search: new URLSearchParams() };
 /** The page of one section: /settings/<section>. */
@@ -70,6 +75,19 @@ describe("the settings page", () => {
     expect(card).toHaveTextContent(/provider \(Codex\)/);
     await user.click(screen.getByRole("button", { name: "Set up the provider" }));
     expect(open).toHaveBeenCalledOnce();
+  });
+
+  it("offers «Sign in again» on its own: it needs no setup to reopen, and says the team's word on the sign-in", async () => {
+    render(
+      <ProviderLoginProvider enabled>
+        <SettingsPage {...inSection("team")} />
+      </ProviderLoginProvider>,
+    );
+    const card = await screen.findByTestId("settings-provider");
+    expect(await within(card).findByText(/sign-in has expired/)).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Sign in again" })).toBeInTheDocument();
+    // the setup's own step is a different thing and is not there when the dashboard gives no way to it
+    expect(within(card).queryByRole("button", { name: "Set up the provider" })).not.toBeInTheDocument();
   });
 
   it("says what it keeps and where, in the app's language", () => {

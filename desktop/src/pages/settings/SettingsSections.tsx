@@ -6,6 +6,8 @@ import { useExistingTeamReadOnly, useExistingTeamView } from "../../lib/existing
 import { localUninstallAvailable } from "../../lib/local-uninstall";
 import { useLocalProfileLink } from "../../lib/local-profile-link";
 import { useProviderSetup } from "../../lib/provider-setup";
+import { ProviderLoginCard } from "../../provider-login/ProviderLoginCard";
+import { useProviderLogin } from "../../provider-login/ProviderLoginProvider";
 import ThemePicker from "../../shell/ThemePicker";
 import BackupPage from "../backup";
 import ComputerPage from "../computer";
@@ -62,6 +64,7 @@ export function AppearanceSection(_props: PageProps) {
 export function TeamSection(_props: PageProps) {
   const t = SETTINGS_TEXT[appLocale()];
   const providerSetup = useProviderSetup();
+  const providerLogin = useProviderLogin();
   // the team's hours and models are written to the team: not in the read-only view
   const readOnly = useExistingTeamReadOnly();
   return (
@@ -75,14 +78,19 @@ export function TeamSection(_props: PageProps) {
           <At name="models"><TeamSettingsPage {...NO_PROPS} /></At>
         </>
       )}
-      {providerSetup && (
+      {(providerSetup || providerLogin) && (
         <section data-testid="settings-provider" aria-labelledby="settings-provider-title" className={cardCls}>
           <h2 id="settings-provider-title" className="text-[13px] font-semibold text-[var(--color-bright)]">{t.providerTitle}</h2>
-          <p className="text-[12px] text-[var(--color-muted)]">{t.providerText}</p>
-          <div>
-            <button type="button" onClick={providerSetup.open} className={smallButtonCls}>{t.providerButton}</button>
-          </div>
-          <ProviderSignOut />
+          <ProviderLoginCard />
+          {providerSetup && (
+            <>
+              <p className="text-[12px] text-[var(--color-muted)]">{t.providerText}</p>
+              <div>
+                <button type="button" onClick={providerSetup.open} className={smallButtonCls}>{t.providerButton}</button>
+              </div>
+              <ProviderSignOut />
+            </>
+          )}
         </section>
       )}
     </>

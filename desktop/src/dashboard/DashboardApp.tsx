@@ -113,6 +113,8 @@ import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
 import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
+import { ProviderLoginProvider } from "../provider-login/ProviderLoginProvider";
+import { readProviderLoginState } from "../provider-login/provider-login-native";
 import { TeamOffContext, type TeamOff } from "../lib/team-off";
 import MessagesPage from "../pages/messages";
 import { readTeamStart } from "../guided-onboarding/deps";
@@ -1040,7 +1042,13 @@ export default function DashboardApp() {
       already = null;
     }
     if (!attemptIsCurrent()) return;
-    if (already?.providerAuthenticated) {
+    // The file is there; the team says whether it still works. A sign-in the team refuses is not «ready»: the person signs in again
+    // (what cannot be asked leaves the answer as the file gave it).
+    const refused = already?.providerAuthenticated
+      ? await readProviderLoginState().then((read) => read.ok && (read.state === "expired" || read.state === "missing" || read.state === "unreadable"))
+      : false;
+    if (!attemptIsCurrent()) return;
+    if (already?.providerAuthenticated && !refused) {
       providerSessionIdentityRef.current = null;
       setProviderLogin(null);
       if (markerId) rememberProviderSignedIn(markerId, submission.provider);
@@ -2113,11 +2121,13 @@ export default function DashboardApp() {
     <>
       <TeamOffContext.Provider value={teamOff}>
         <ProviderSetupContext.Provider value={providerSetup}>
-          <LocalProfileLinkContext.Provider value={localProfileLink}>
-            <ConnectTeamContext.Provider value={connectTeamEntry}>
-              <Shell key={identityKey} identityKey={identityKey ?? undefined} onLogout={logout} />
-            </ConnectTeamContext.Provider>
-          </LocalProfileLinkContext.Provider>
+          <ProviderLoginProvider key={`login:${identityKey}`} enabled={providerSetup !== null} rememberedProvider={markerId ? readOnboardingProvider(markerId)?.provider : undefined}>
+            <LocalProfileLinkContext.Provider value={localProfileLink}>
+              <ConnectTeamContext.Provider value={connectTeamEntry}>
+                <Shell key={identityKey} identityKey={identityKey ?? undefined} onLogout={logout} />
+              </ConnectTeamContext.Provider>
+            </LocalProfileLinkContext.Provider>
+          </ProviderLoginProvider>
         </ProviderSetupContext.Provider>
       </TeamOffContext.Provider>
       {connectDialogElement}
