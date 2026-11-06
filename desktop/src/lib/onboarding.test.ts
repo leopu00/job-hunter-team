@@ -10,7 +10,10 @@ import {
   markOnboardingReady,
   markOnboardingStarted,
   OnboardingSaveError,
+  forgetShellOpened,
+  rememberShellOpened,
   resetOnboardingMarker,
+  shellOpenedThisRun,
   runtimeStateFromSnapshot,
   type OnboardingMarkerStore,
   type OnboardingRuntimeSnapshot,
@@ -306,5 +309,51 @@ describe("isOnboardingProfileReady", () => {
     expect(isOnboardingProfileReady(READY_PROFILE)).toBe(true);
     expect(isOnboardingProfileReady({ ...READY_PROFILE, email: null })).toBe(false);
     expect(isOnboardingProfileReady({ ...READY_PROFILE, skills: { primary: ["one"] } })).toBe(false);
+  });
+});
+
+describe("the app opened in this run", () => {
+  function runStore() {
+    const values = new Map<string, string>();
+    return {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+  }
+
+  it("is remembered per identity, in full or without the team", () => {
+    const run = runStore();
+    expect(shellOpenedThisRun("local:opaque-a", run)).toBeNull();
+    rememberShellOpened("local:opaque-a", "open", run);
+    rememberShellOpened("synthetic-user-b", "team-off", run);
+    expect(shellOpenedThisRun("local:opaque-a", run)).toBe("open");
+    expect(shellOpenedThisRun("synthetic-user-b", run)).toBe("team-off");
+    expect(shellOpenedThisRun("synthetic-user-c", run)).toBeNull();
+    forgetShellOpened("local:opaque-a", run);
+    expect(shellOpenedThisRun("local:opaque-a", run)).toBeNull();
+  });
+
+  it("a value it did not write is nothing, and a closed store is nothing too", () => {
+    const run = runStore();
+    run.setItem("jht.desktop.onboarding.opened.synthetic-user", "yes");
+    expect(shellOpenedThisRun("synthetic-user", run)).toBeNull();
+    const closed = {
+      getItem: () => { throw new Error("closed"); },
+      setItem: () => { throw new Error("closed"); },
+      removeItem: () => { throw new Error("closed"); },
+    };
+    expect(() => rememberShellOpened("synthetic-user", "open", closed)).not.toThrow();
+    expect(shellOpenedThisRun("synthetic-user", closed)).toBeNull();
+  });
+
+  it("«start over» forgets it: the setup is asked again even before the app is closed", () => {
+    sessionStorage.clear();
+    const store = new Map<string, string>();
+    const markers = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => { store.set(key, value); } };
+    rememberShellOpened("local:opaque-restart");
+    expect(shellOpenedThisRun("local:opaque-restart")).toBe("open");
+    resetOnboardingMarker("local:opaque-restart", markers);
+    expect(shellOpenedThisRun("local:opaque-restart")).toBeNull();
   });
 });

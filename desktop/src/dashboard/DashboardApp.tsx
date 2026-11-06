@@ -67,8 +67,11 @@ import {
   readOnboardingProvider,
   rememberChosenProvider,
   rememberProviderSignedIn,
+  forgetShellOpened,
+  rememberShellOpened,
   resetOnboardingMarker,
   runtimeStateFromSnapshot,
+  shellOpenedThisRun,
   type OnboardingActivityState,
   type OnboardingDraft,
   type SubscriptionProvider,
@@ -591,6 +594,19 @@ export default function DashboardApp() {
         // origin of the webview, a cleared storage): the app reopens that team like any saved one. Starting the
         // wizard again at the welcome would ask for what the team already has.
         else if (owner === "self" && !next.resumeAvailable) next = { ...next, resumeAvailable: true };
+      }
+      // The app was already open in this run and the page was reloaded (a language picked in Settings, «Back to
+      // home» after an error): it opens again as it was, without the team if it was so. The setup left half-done
+      // comes back at the next start of the app, as the marker says.
+      const opened = next?.phase === "required" ? shellOpenedThisRun(markerId) : null;
+      if (opened && activeIdentityKeyRef.current === initializingKey) {
+        if (opened === "team-off") {
+          setTeamOffKey(initializingKey);
+          setSavedTeamOpening({ identityKey: initializingKey, phase: "done" });
+          // as «Open without the team» does: the pages that need the chat say so if it is not there
+          void reconnectDirectChat().catch(() => undefined);
+        }
+        next = { phase: "ready" };
       }
       if (next && activeIdentityKeyRef.current === initializingKey) setGate(next);
     } catch {
@@ -1333,11 +1349,18 @@ export default function DashboardApp() {
   }, [connectChatWithoutTeam]);
   // Leaves the mode for today's flow: the account is initialised again and the resume offers «start the team».
   const startTeamFromTeamOff = useCallback(() => {
+    // the app opened without the team in this run is over: the gate asks the setup's resume
+    if (markerId) forgetShellOpened(markerId);
     setTeamOffKey(null);
     setSavedTeamOpening(null);
     resumeAttemptedIdentityRef.current = null;
     void initializeAccount();
-  }, [initializeAccount]);
+  }, [initializeAccount, markerId]);
+  // The app is open in this run (see rememberShellOpened): a reload of the page opens it again, as it was.
+  useEffect(() => {
+    if (gate.phase !== "ready" || !identityKey || !markerId) return;
+    rememberShellOpened(markerId, teamOffKey === identityKey ? "team-off" : "open");
+  }, [gate.phase, identityKey, markerId, teamOffKey]);
   // A local profile has no cloud account: once the app is open, the pages show the team of this computer. Set while
   // rendering, before the Shell's pages read in their effects (see lib/local-team-data.ts).
   setLocalTeamData(localProfile && gate.phase === "ready" && linkedView === null ? identityKey : null);
