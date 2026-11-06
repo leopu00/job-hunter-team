@@ -5201,9 +5201,10 @@ mod tests {
         attested_local_fixture_with(None)
     }
 
-    /// The fixture with the engine's answer to `ps` said by the test (a shell command), or the one container as Podman lists it.
+    /// The fixture with the engine's answer to `ps` said by the test (a shell command made from the one container as Podman
+    /// lists it, with the labels of the installed runtime), or that one container.
     /// Every call of the engine is written, one first word per line, in `engine-calls.log` next to the runtime.
-    fn attested_local_fixture_with(ps_arm: Option<&str>) -> (PathBuf, PathBuf, PathBuf, String) {
+    fn attested_local_fixture_with(ps_arm: Option<&dyn Fn(&serde_json::Value) -> String>) -> (PathBuf, PathBuf, PathBuf, String) {
         use std::os::unix::fs::PermissionsExt;
 
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -5247,8 +5248,11 @@ mod tests {
             ("io.podman.compose.version".to_owned(), serde_json::json!("1.6.0")),
             ("PODMAN_SYSTEMD_UNIT".to_owned(), serde_json::json!(podman_systemd_unit())),
         ]);
-        let listing = serde_json::json!([{"Id": id, "State": "running", "Labels": labels, "Image": "example.invalid/jht:test"}]).to_string();
-        let ps_arm = ps_arm.map(str::to_owned).unwrap_or_else(|| format!("printf '%s\\n' '{listing}'"));
+        let row = serde_json::json!({"Id": id, "State": "running", "Labels": labels, "Image": "example.invalid/jht:test"});
+        let ps_arm = match ps_arm {
+            Some(said) => said(&row),
+            None => format!("printf '%s\\n' '{}'", serde_json::json!([row])),
+        };
         let calls = root.join("engine-calls.log");
         fs::write(
             &engine,
@@ -5438,23 +5442,36 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn the_container_rules_hold_on_the_listing() {
-        let listing = |rows: serde_json::Value| format!("printf '%s\\n' '{rows}'");
-        let jht = |state: &str, service: &str| {
-            serde_json::json!({"Id": "a".repeat(64), "State": state, "Labels": {"com.docker.compose.service": service}})
+        let listing = |rows: Vec<serde_json::Value>| format!("printf '%s\\n' '{}'", serde_json::Value::Array(rows));
+        let with = |row: &serde_json::Value, state: &str, service: &str, id: &str| {
+            let mut changed = row.clone();
+            changed["State"] = state.into();
+            changed["Labels"]["com.docker.compose.service"] = service.into();
+            changed["Id"] = id.into();
+            changed
         };
-        // each case: what the engine lists -> what the chat finds (an error is the code the page answers with)
-        let cases: Vec<(&str, String, Option<&'static str>)> = vec![
-            ("nothing listed", "printf '[]\\n'".to_owned(), Some("local_team_not_running")),
-            ("a stopped jht", listing(serde_json::json!([jht("exited", "jht")])), Some("local_team_not_running")),
-            ("only the broker", listing(serde_json::json!([jht("running", "jht-broker")])), Some("local_team_not_running")),
-            ("the engine cannot be asked (machine off)", "echo 'cannot connect' >&2; exit 125".to_owned(), Some("local_team_not_running")),
-            ("not Podman's listing", "printf 'not json\\n'".to_owned(), Some("container_unavailable")),
-            ("two jht", listing(serde_json::json!([jht("running", "jht"), {"Id": "b".repeat(64), "State": "running", "Labels": {"com.docker.compose.service": "jht"}}])), Some("container_unavailable")),
+        let aaa = "a".repeat(64);
+        let bbb = "b".repeat(64);
+        // each case: what the engine lists (made from the one container of the installed runtime) -> what the chat finds
+        type Said = Box<dyn Fn(&serde_json::Value) -> String>;
+        let cases: Vec<(&str, Said, Option<&'static str>)> = vec![
+            ("the installed jht", Box::new(|row| listing(vec![row.clone()])), None),
+            ("the installed jht and another service", Box::new({ let (a, b) = (aaa.clone(), bbb.clone()); move |row| listing(vec![with(row, "running", "jht", &a), with(row, "running", "jht-broker", &b)]) }), None),
+            ("nothing listed", Box::new(|_| "printf '[]\\n'".to_owned()), Some("local_team_not_running")),
+            ("a stopped jht", Box::new({ let a = aaa.clone(); move |row| listing(vec![with(row, "exited", "jht", &a)]) }), Some("local_team_not_running")),
+            ("only the broker", Box::new({ let a = aaa.clone(); move |row| listing(vec![with(row, "running", "jht-broker", &a)]) }), Some("local_team_not_running")),
+            ("a jht the runtime did not start", Box::new(|row| { let mut other = row.clone(); other["Labels"] = serde_json::json!({"com.docker.compose.service": "jht"}); listing(vec![other]) }), Some("local_container_not_attested")),
+            ("the engine cannot be asked (machine off)", Box::new(|_| "echo 'cannot connect' >&2; exit 125".to_owned()), Some("local_team_not_running")),
+            ("not Podman's listing", Box::new(|_| "printf 'not json\\n'".to_owned()), Some("container_unavailable")),
+            ("two running jht", Box::new({ let (a, b) = (aaa.clone(), bbb.clone()); move |row| listing(vec![with(row, "running", "jht", &a), with(row, "running", "jht", &b)]) }), Some("container_unavailable")),
         ];
-        for (name, arm, expected) in cases {
-            let (root, runtime, wrapper, _id) = attested_local_fixture_with(Some(&arm));
+        for (name, said, expected) in cases {
+            let (root, runtime, wrapper, id) = attested_local_fixture_with(Some(&*said));
             let found = AttestedLocalTeam::resolve(&wrapper, &runtime, LOCAL_TEST_TIMEOUT).map(|team| team.container_id().to_owned());
-            assert_eq!(found.clone().err(), expected, "{name}: {found:?}");
+            match expected {
+                None => assert_eq!(found, Ok(id), "{name}"),
+                Some(code) => assert_eq!(found.clone().err(), Some(code), "{name}: {found:?}"),
+            }
             let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
             assert_eq!(calls.lines().collect::<Vec<_>>(), ["ps"], "{name}: one call, never an inspect or an exec");
             fs::remove_dir_all(root).unwrap();
@@ -5486,9 +5503,10 @@ mod tests {
             assert_eq!(operation(super::RemoteOperation::Delivery(bad), Some(b"x")).err(), Some("invalid_agent"), "{bad:?}");
         }
         assert_eq!(operation(super::RemoteOperation::Chat(ChatOperation::Read { agent: "capitano", cursor: None }), None).err(), Some("invalid_request"));
-        // all of it found the container once
+        // all of it only listed the engine and ran in the container: no inspect (the kept slot is one for the whole process, so a
+        // test running at the same time may have taken it and made the container be found again)
         let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
-        assert_eq!(calls.lines().filter(|call| *call == "ps").count(), 1);
+        assert!(calls.lines().all(|call| call == "ps" || call == "exec") && calls.lines().filter(|call| *call == "ps").count() <= 4, "{calls}");
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -6312,9 +6330,10 @@ mod tests {
         assert_eq!(probe(&connection).state, "ready");
         // a local chat never pays an ssh connection per read, even where ssh has no master
         assert_eq!(serde_json::to_value(probe(&connection)).unwrap(), serde_json::json!({"state": "ready"}));
-        // the engine was asked ONCE for both probes (the second used the kept container) and was only listed, never run in
+        // the engine was only listed, never inspected or run in: the first probe asked once, the second used the kept container
+        // (the kept slot is one for the whole process, so a test running at the same time may have taken it: at most one more)
         let calls = fs::read_to_string(root.join("engine-calls.log")).unwrap();
-        assert_eq!(calls.lines().collect::<Vec<_>>(), ["ps"]);
+        assert!((1..=2).contains(&calls.lines().count()) && calls.lines().all(|call| call == "ps"), "{calls}");
         assert!(!flag.exists());
         fs::remove_dir_all(root).unwrap();
     }
@@ -6323,7 +6342,7 @@ mod tests {
     #[test]
     fn local_probe_says_why_there_is_no_container() {
         // no container listed: this computer's team is not running, the code the Messages page answers with «Start the team»
-        let (root, runtime, wrapper, _id) = attested_local_fixture_with(Some("printf '[]\\n'"));
+        let (root, runtime, wrapper, _id) = attested_local_fixture_with(Some(&|_| "printf '[]\\n'".to_owned()));
         let scope = crate::account_scope::AccountScope::synthetic(b"synthetic-account-a");
         let owner = root.join(".desktop-account-scope");
         fs::write(&owner, format!("{}\n", scope.digest())).unwrap();
