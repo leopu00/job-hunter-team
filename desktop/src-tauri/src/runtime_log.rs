@@ -263,6 +263,17 @@ impl RuntimeLog {
         let _ = append(&self.path, &entry, LOG_MAX_BYTES);
     }
 
+    /// A call of the chat that failed, or that answered but slowly, with how long it took: the operation (one of
+    /// `CHAT_CALLS`, else `other`), the closed code (`ok_slow` for a call that worked and was slow) and the step of the
+    /// container check it stopped at when that is what failed. Never an agent, a text, a host or an account.
+    pub(crate) fn record_chat_call(&self, operation: &str, code: &str, reason: Option<&str>, took: Duration) {
+        let operation = if CHAT_CALLS.contains(&operation) { operation } else { "other" };
+        let code = if code == "ok_slow" { code } else { chat_failure_code(code) };
+        let because = reason.map(|reason| format!(" ({})", if ATTEST_REASONS.contains(&reason) { reason } else { "unlisted" })).unwrap_or_default();
+        let entry = format!("=== {} direct_chat.{operation}: {code}{because} took_ms={}\n", utc(SystemTime::now()), took.as_millis().min(600_000));
+        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+    }
+
     /// A read of the team's budget that did not give the numbers, by its closed code only (the chat's codes, `budget_unreadable`,
     /// `budget_unavailable`, `budget_reply_unexpected`): never a number, a role or what the team said. The same code is written once
     /// in five minutes.
@@ -682,6 +693,9 @@ pub(crate) const ATTEST_REASONS: &[&str] = &[
     "label_config_files", "label_compose_version", "label_systemd_unit", "label_config_hash_differs",
     "label_image", "label_windows",
 ];
+
+/// The calls of the chat that leave a line in the log when they fail or are slow.
+pub(crate) const CHAT_CALLS: [&str; 6] = ["probe", "connect", "read", "send", "answer", "enter"];
 
 /// The codes a failed chat read or send may leave in the log; any other is `io_error_other`.
 fn chat_failure_code(code: &str) -> &str {
