@@ -233,6 +233,8 @@ const S := {
 	"shutdown.detach_back": "Riapri il gioco quando vuoi e ritrovi l'ufficio al punto in cui è arrivato. Per fermare il team basta rientrare e, chiudendo, scegliere di fermarlo.",
 	"shutdown.detach_confirm": "ESCI COSÌ, LI LASCIO LAVORARE",
 	"shutdown.ordered": "Ho chiesto al Capitano di chiudere la giornata: ogni agente annota dove era arrivato, poi si ferma.",
+	"shutdown.not_delivered": "L’ordine di chiusura non è stato consegnato. Puoi annullare o chiudere subito.",
+	"shutdown.timed_out": "La chiusura non è stata confermata entro cinque minuti. Puoi annullare o chiudere subito.",
 	"shutdown.waiting": "Ancora %d agenti al lavoro · %d s. Puoi aspettare o chiudere subito.",
 	"shutdown.done": "Team fermo. Chiudo.",
 	"headless.back": "○ IL TEAM HA LAVORATO SENZA DI TE PER %s · ORA SONO %d IN UFFICIO",

@@ -410,23 +410,23 @@ def test_sentinel_removes_an_invalid_flag(bridge, sb):
 
 
 def test_sentinel_sampling_is_not_gated_by_standby():
-    """Accettazione 3, sul sorgente: il silenzio vive SOLO nel chokepoint
-    jht_tmux_send; il path fetch→write_jsonl non consulta lo standby, quindi
-    sentinel-data.jsonl continua a crescere per costruzione."""
-    src = _src(LAUNCHER_DIR / "sentinel-bridge.py")
-    fn = src[src.index("def jht_tmux_send"):]
-    fn = fn[:fn.index("\ndef ")]
-    assert "_standby_active()" in fn, "guard assente dal chokepoint tmux"
-    body = src[src.index("        if parsed:"):src.index("write_jsonl(entry)")]
-    assert "standby" not in body, (
-        "il path del campionamento non deve dipendere dallo standby")
+    from fake_sentinel_loop import context
+    from sentinel_loop import _before_tick, _sample
+    api, run, events = context({"usage": 10})
+    _before_tick(api, run)
+    _sample(api, run)
+    assert not run.within_hours
+    assert events == [("standby", {"usage": 10, "provider": "fixture"}),
+                      ("agent_pause", None), ("sample", {"usage": 10, "source": "bridge"})]
 
 
 def test_sentinel_evaluates_the_wake_even_on_failed_fetch():
-    """`until` non ha bisogno del weekly: la sveglia si valuta anche quando il
-    fetch fallisce (il wake step sta PRIMA del ramo `if parsed:`)."""
-    src = _src(LAUNCHER_DIR / "sentinel-bridge.py")
-    assert src.index("_standby_step(parsed)") < src.index("        if parsed:")
+    from fake_sentinel_loop import context
+    from sentinel_loop import _before_tick
+    api, run, events = context()
+    _before_tick(api, run)
+    assert run.parsed is None
+    assert events == [("standby", None), ("agent_pause", None)]
 
 
 # ── Pacing e heartbeat: sospensione totale, senza deroghe ────────────────

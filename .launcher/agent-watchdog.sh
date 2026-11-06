@@ -693,26 +693,9 @@ session_role() {
 }
 
 worker_kickoff() {
-  # Un respawn senza kick-off lascia l'agente al prompt vuoto: la sessione
-  # risulta viva e non lavora — esattamente il guasto invisibile che questo
-  # watchdog esiste per evitare. Messaggio minimo per ruolo; il protocollo
-  # completo sta nel prompt che start-agent.sh ha già installato.
-  local session="$1" role="$2" body
-  case "$role" in
-    scout)     body="Resume the main loop: start from CIRCLE 1 of the candidate profile and notify the Analysts in batches of 3–5 positions." ;;
-    analista)  body="Resume the main loop using the db_query.py next-for-analista queue." ;;
-    scorer)    body="Resume the main loop using the db_query.py next-for-scorer queue." ;;
-    scrittore) body="Resume the main loop using the db_query.py next-for-scrittore queue." ;;
-    closer)    body="Resume the main loop from apply_gate.py queue. A stop on the user's choice stays stopped; a wait for answers is worked out (CL-05, CL-08)." ;;
-    *)         body="Resume the main loop as instructed by your prompt." ;;
-  esac
-  # La lingua del team per nome (T140), riletta qui a ogni respawn: un cambio di lingua vale dal giro dopo.
-  # In una subshell: la libreria non entra nel watchdog (JHT_SPAWN_LIB_DIR, la stessa variabile della libreria). Senza libreria, il messaggio parte come prima.
-  local language
-  language="$( ( . "${JHT_SPAWN_LIB_DIR:-/app/.launcher}/spawn-lib.sh" 2>/dev/null && jht_team_language_line ) 2>/dev/null )" || language=""
-  ( sleep 12
-    jht-tmux-send "$session" "[@watchdog -> @$(echo "$session" | tr '[:upper:]' '[:lower:]')] [MSG] ${language:+$language }Session recreated by the watchdog. $body" >/dev/null 2>&1 || true
-  ) >/dev/null 2>&1 &
+  JHT_HOME="$JHT_HOME" JHT_TMUX_SENDER="$TMUX_SENDER" python3 \
+    "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+    kickoff "$1" "$2" >>"$LOG" 2>&1 &
 }
 
 mark_roster_respawn() {
@@ -898,14 +881,7 @@ agent_is_paused() {
 }
 
 maybe_mail_tick() {
-  command -v "$MAIL_BIN" >/dev/null 2>&1 || return 0
-  local session text
-  "$MAIL_BIN" tick 2>/dev/null | while IFS=$'\t' read -r session text; do
-    [ -n "$session" ] && [ -n "$text" ] || continue
-    agent_is_paused "$session" && continue
-    "$TMUX_SENDER" "$session" "$text" >/dev/null 2>&1 || true
-  done
-  return 0
+  JHT_HOME="$JHT_HOME" JHT_TMUX_SENDER="$TMUX_SENDER" "$MAIL_BIN" tick --deliver
 }
 
 # --- rete della domanda sul piano
@@ -990,16 +966,10 @@ bridge_flap_record() {
 }
 
 bridge_escalate() {
-  # avvisa il Capitano UNA volta per finestra di cooldown (no spam), poi tace.
-  # Il cooldown e' PER CHIAVE: fino al 2026-09-03 c'era un solo
-  # `bridge-escalate.ts` per qualunque `what`, quindi un'escalation sulla suite
-  # bridge zittiva per un'ora quella sui process pid1-managed e viceversa —
-  # cioe' l'allarme piu' grave dei due poteva non arrivare mai.
-  local key="$1" what="$2"
-  escalate_once "$BRIDGE_STATE_DIR/bridge-escalate-$(escalate_key "$key").ts" \
-    "$BRIDGE_ESCALATE_COOLDOWN_SEC" || return 0
-  log "bridge-watchdog: FLAP CAP exceeded ($what) — STOPPING respawn and escalating to Capitano"
-  jht-tmux-send CAPITANO "[WATCHDOG] $what keeps dying (>${BRIDGE_FLAP_CAP} respawns in $((BRIDGE_FLAP_WINDOW_SEC/60)) min). Automatic respawn has been STOPPED to prevent a crash loop. Manual diagnosis is required: check \$JHT_HOME/logs/*-bridge.log. The Mantenitore will still run a complete canary on the next sweep." >/dev/null 2>&1 || true
+  JHT_HOME="$JHT_HOME" python3 \
+    "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+    bridge "$BRIDGE_STATE_DIR/bridge-escalate-$(escalate_key "$1").ts" \
+    "$BRIDGE_ESCALATE_COOLDOWN_SEC" "$2" "$BRIDGE_FLAP_CAP" "$BRIDGE_FLAP_WINDOW_SEC" "$TMUX_SENDER"
 }
 
 tg_bots_configured() {
@@ -1151,9 +1121,11 @@ maybe_enforce_containments() {
     [ -z "$session" ] && continue
     log "containment: $session released — it was held for mode $held_for, the team is now in $mode"
     message="[CONTAINMENT] $session was held down for mode $held_for; the team is now in $mode, so the hold has ended and normal supervision resumes."
-    "$TMUX_SENDER" "${actor:-CAPITANO}" "$message" >/dev/null 2>&1 || true
+    JHT_HOME="$JHT_HOME" python3 "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+      send "$TMUX_SENDER" "${actor:-CAPITANO}" "$message"
     if [ "${actor:-CAPITANO}" != "CAPITANO" ]; then
-      "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1 || true
+      JHT_HOME="$JHT_HOME" python3 "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+        send "$TMUX_SENDER" CAPITANO "$message"
     fi
   done <<EOF
 $expired
@@ -1169,9 +1141,11 @@ EOF
     if tmux kill-session -t "=$session" 2>/dev/null; then
       log "containment: $session was live despite sticky containment — captured to $evidence and stopped again"
       message="[CONTAINMENT] $session was started despite your keep-down decision. The watchdog captured it to $evidence and stopped it again; the containment remains active. Original evidence: $old_evidence"
-      "$TMUX_SENDER" "${actor:-CAPITANO}" "$message" >/dev/null 2>&1 || true
+      JHT_HOME="$JHT_HOME" python3 "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+        send "$TMUX_SENDER" "${actor:-CAPITANO}" "$message"
       if [ "${actor:-CAPITANO}" != "CAPITANO" ]; then
-        "$TMUX_SENDER" CAPITANO "$message" >/dev/null 2>&1 || true
+        JHT_HOME="$JHT_HOME" python3 "${JHT_WATCHDOG_DELIVERY:-$_AGENT_WATCHDOG_DIR/../shared/skills/watchdog_delivery.py}" \
+          send "$TMUX_SENDER" CAPITANO "$message"
       fi
     fi
   done <<EOF

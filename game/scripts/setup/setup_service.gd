@@ -3974,25 +3974,8 @@ static func active_agents() -> PackedStringArray:
 ## sulla propria agenda a che punto era, così alla riapertura si riprende invece
 ## di ricominciare. Il gioco non ferma nessuno da sé — aspetta il flag.
 static func request_graceful_shutdown() -> bool:
-	_run("docker", PackedStringArray(["exec", "jht", "rm", "-f",
-			SHUTDOWN_READY_FLAG]))
-	# ⚠️ NON TRADURRE: questo non è testo dell'interfaccia, è un ORDINE che il
-	# Capitano ESEGUE leggendolo. Gli agenti del prodotto girano in italiano;
-	# riscriverlo in inglese cambierebbe il COMPORTAMENTO — nel migliore dei
-	# casi l'ordine non viene riconosciuto e la chiusura pulita non parte.
-	# Riconoscibile dalla busta `[@mittente -> @destinatario]`: dove la vedi,
-	# vale la stessa regola. Il censimento della copy (O-07) lo salta apposta,
-	# e tests/test_shutdown_timeout_contract.py asserisce su questo testo.
-	var order := "[@utente -> @capitano] [SHUTDOWN] L'utente sta chiudendo " \
-			+ "l'applicazione. Usa la skill graceful-shutdown: fai annotare a " \
-			+ "ogni agente lo stato del lavoro in corso sulla propria agenda, " \
-			+ "poi fermali uno a uno e infine crea il flag " \
-			+ SHUTDOWN_READY_FLAG + " che chiude l'applicazione."
-	var res := _run("docker", PackedStringArray(["exec", "jht",
-			"jht-tmux-send", "CAPITANO", order]))
-	Log.call_deferred("info", "setup", "ordine di chiusura al Capitano → %d"
-			% res["code"])
-	return res["code"] == 0
+	return preload("res://scripts/setup/graceful_shutdown_request.gd").request(
+			_run, SHUTDOWN_READY_FLAG)
 
 
 ## Il Capitano ha finito? Il flag è l'unica prova che accettiamo.

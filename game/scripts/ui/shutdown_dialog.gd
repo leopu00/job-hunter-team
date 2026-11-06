@@ -24,6 +24,8 @@ extends CanvasLayer
 signal chosen(mode: String)  # "graceful" | "detach" | "forced" | "cancel"
 
 const POLL_S := 3.0
+const GRACEFUL_WAIT_S := 300.0
+const ShutdownRequest = preload("res://scripts/setup/graceful_shutdown_request.gd")
 
 var _agents: PackedStringArray
 var _status: Label
@@ -31,10 +33,17 @@ var _choices: VBoxContainer
 var _buttons: HBoxContainer
 var _waiting := false
 var _elapsed := 0.0
+var _request_shutdown: Callable
+var _shutdown_ready: Callable
+var _active_agents: Callable
 
 
-func _init(agents: PackedStringArray) -> void:
+func _init(agents: PackedStringArray, request := Callable(),
+		ready := Callable(), active := Callable()) -> void:
 	_agents = agents
+	_request_shutdown = request if request.is_valid() else SetupService.request_graceful_shutdown
+	_shutdown_ready = ready if ready.is_valid() else SetupService.graceful_shutdown_ready
+	_active_agents = active if active.is_valid() else SetupService.active_agents
 	layer = 95
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
@@ -161,14 +170,24 @@ func _start_graceful() -> void:
 	_leave_choices()
 	_add_button(UIStrings.t("shutdown.forced_now"), Palette.RED,
 			func() -> void: chosen.emit(HeadlessSession.MODE_FORCED))
+	if not bool(_request_shutdown.call()):
+		_fail_graceful("shutdown.not_delivered")
+		return
 	_status.text = UIStrings.t("shutdown.ordered")
-	SetupService.request_graceful_shutdown()
 
 
 ## Uscire lasciandoli al lavoro è l'unica delle tre che continua a spendere
 ## dopo che la finestra è sparita: prima di farlo si dice per intero cosa resta
 ## acceso, come si torna e come si ferma. Un passo in più su una decisione che
 ## si prende la sera e si verifica la mattina dopo.
+func _fail_graceful(code: String) -> void:
+	_waiting = false
+	_status.text = UIStrings.t(code)
+	ShutdownRequest.report(code)
+	_add_button(UIStrings.t("shutdown.cancel"), Palette.MUTED,
+			func() -> void: chosen.emit(HeadlessSession.MODE_CANCEL))
+
+
 func _ask_detach() -> void:
 	if _waiting:
 		return
@@ -188,11 +207,14 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if fmod(_elapsed, POLL_S) > delta:
 		return
-	if SetupService.graceful_shutdown_ready():
+	if bool(_shutdown_ready.call()):
 		_status.text = UIStrings.t("shutdown.done")
 		chosen.emit(HeadlessSession.MODE_GRACEFUL)
 		_waiting = false
 		return
-	var left := SetupService.active_agents()
+	if _elapsed >= GRACEFUL_WAIT_S:
+		_fail_graceful("shutdown.timed_out")
+		return
+	var left: PackedStringArray = _active_agents.call()
 	_status.text = UIStrings.t("shutdown.waiting") % [left.size(),
 			int(_elapsed)]

@@ -312,17 +312,8 @@ mail_nudge_held=0
 _mail_exit() {
   local rc="$1"
   trap - EXIT
-  if [ "$mail_nudge_held" = 1 ]; then
-    echo "jht-tmux-send: queued $mail_id in the mailbox of $session; nudge held, the terminal is not at its prompt (it will be repeated)"
-    exit 0
-  fi
-  case "$rc" in
-    0) echo "jht-tmux-send: queued $mail_id in the mailbox of $session (nudge delivered)" ;;
-    3) echo "jht-tmux-send: queued $mail_id in the mailbox of $session, but the terminal does not respond (rc=3)" >&2
-       exit 3 ;;
-    *) echo "jht-tmux-send: queued $mail_id in the mailbox of $session; nudge unconfirmed (rc=$rc), it will be repeated" >&2
-       exit 0 ;;
-  esac
+  python3 "$MAIL_LIB" transport-exit "$session" "$mail_id" "$rc" "$mail_nudge_held"
+  exit $?
 }
 if [ -n "$mail_id" ]; then
   trap '_mail_exit $?' EXIT
@@ -428,7 +419,7 @@ if [ -n "$mail_id" ]; then
   # chat dell'utente, `agent_chat.prompt_state`): durante un turno puo' comparire un menu o una domanda
   # di permesso, e un tasto digitato sopra la risponde. Altrimenti non si digita niente: il messaggio
   # resta in coda e il richiamo del watchdog ritenta.
-  if ! python3 "$MAIL_LIB" nudge "$session" "$mail_id" >/dev/null 2>&1; then
+  if ! python3 "$MAIL_LIB" nudge "$session" "$mail_id" --check >/dev/null 2>&1; then
     mail_nudge_held=1
     exit 0
   fi

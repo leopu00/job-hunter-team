@@ -49,6 +49,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
 DIR_NAME = ".agent-pauses"
 LOG = JHT_HOME / "logs" / "agent-pauses.jsonl"
@@ -189,19 +191,14 @@ def _write(session: str, payload: dict, home=None) -> None:
 
 
 def _live_sessions() -> list[str]:
-    try:
-        r = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"],
-                           capture_output=True, timeout=5)
-        if r.returncode != 0:
-            return []
-        return [s.strip() for s in r.stdout.decode("utf-8", errors="replace").splitlines() if s.strip()]
-    except (subprocess.TimeoutExpired, OSError):
-        return []
+    from delivery_sessions import sessions
+    return sessions(runner=subprocess.run, home=_home())
 
 
 def _send(session: str, message: str) -> bool:
+    from tmux_send_run import run
     try:
-        r = subprocess.run(["jht-tmux-send", session, message], capture_output=True, timeout=30)
+        r = run(["jht-tmux-send", session, message], 30)
         return r.returncode == 0
     except (subprocess.TimeoutExpired, OSError):
         return False
@@ -242,10 +239,15 @@ def resume(session: str, why: str = "resumed by the user", home=None, notify: bo
     if not removed:
         return {"removed": False, "notified": False}
     notified = False
-    if notify and session in _live_sessions():
+    live = session in _live_sessions() if notify else False
+    if live:
         notified = _send(session, RESUME_TEXT.format(why=why or "resumed"))
-    log_event("resume", session=session, notified=notified, why=why)
-    return {"removed": True, "notified": notified}
+    if live and not notified:
+        from delivery_status import report
+        report("message_not_delivered", home=_home(home))
+    log_event("resume" if notified or not live else "resume_not_delivered",
+              session=session, notified=notified, why=why)
+    return {"removed": True, "notified": notified, "live": live}
 
 
 def wake_expired(now: Optional[datetime] = None, home=None) -> list[str]:
