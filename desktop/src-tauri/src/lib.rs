@@ -8,6 +8,8 @@ mod closer_desktop;
 pub mod cli_adapter;
 mod desktop_platform;
 mod direct_chat;
+#[cfg(test)]
+mod main_thread_commands_tests;
 mod agent_control;
 mod existing_team_agents;
 mod existing_team_cloud_token;

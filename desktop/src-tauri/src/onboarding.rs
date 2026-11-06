@@ -4932,21 +4932,47 @@ fn linux_login_command(wrapper: PathBuf) -> Command {
     cmd
 }
 
+/// Starting a login first ends the one an earlier sign-in left in the container and asks the team which provider
+/// it uses: two runs of the wrapper (seconds each, up to twenty on a slow computer). A sync command would run
+/// them on the main thread and freeze the window, so the command is async and the work is done on a thread of its own.
 #[tauri::command]
-pub(crate) fn onboarding_provider_login(
+pub(crate) async fn onboarding_provider_login(
     window: tauri::Window,
     app: tauri::AppHandle,
-    state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
     host: ExecutionHost,
     on_event: Channel<InteractiveEvent>,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<InteractiveStart, OnboardingError> {
-    let scope = scopes.lock_active().map_err(failure)?;
-    // A provider login writes the provider's credentials into the team's host: on an existing team, the full link.
-    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &host) {
-        return Err(failure(code));
+    let expected = scopes.active().map_err(failure)?;
+    {
+        let scope = scopes.lock_expected(&expected).map_err(failure)?;
+        // A provider login writes the provider's credentials into the team's host: on an existing team, the full link.
+        if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &host) {
+            return Err(failure(code));
+        }
     }
+    let scope_state = scopes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<OnboardingNativeState>();
+        start_provider_login(&app, &state, &scope_state, &expected, host, on_event, on_progress)
+    })
+    .await
+    .map_err(|_| failure("state_failed"))?
+}
+
+fn start_provider_login(
+    app: &tauri::AppHandle,
+    state: &OnboardingNativeState,
+    scopes: &AccountScopeState,
+    expected: &AccountScope,
+    host: ExecutionHost,
+    on_event: Channel<InteractiveEvent>,
+    on_progress: Channel<OnboardingProgress>,
+) -> Result<InteractiveStart, OnboardingError> {
+    let app = app.clone();
+    // The scope the host was judged for: a change of account in between is an error, not a login for the new one.
+    let scope = scopes.lock_expected(expected).map_err(failure)?;
     let mut slot = state
         .interactive
         .lock()
@@ -5271,11 +5297,27 @@ fn valid_provider_login_input(input: &str) -> bool {
         })
 }
 
+/// «Cancel» ends the login's process and then asks the container to stop what the login started there (the
+/// wrapper or ssh, up to twenty seconds): off the main thread, like the start.
 #[tauri::command]
-pub(crate) fn onboarding_provider_login_close(
+pub(crate) async fn onboarding_provider_login_close(
     app: tauri::AppHandle,
-    state: State<'_, OnboardingNativeState>,
     scopes: State<'_, AccountScopeState>,
+    session_id: String,
+) -> Result<(), OnboardingError> {
+    let scope_state = scopes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<OnboardingNativeState>();
+        close_provider_login(&app, &state, &scope_state, session_id)
+    })
+    .await
+    .map_err(|_| failure("state_failed"))?
+}
+
+fn close_provider_login(
+    app: &tauri::AppHandle,
+    state: &OnboardingNativeState,
+    scopes: &AccountScopeState,
     session_id: String,
 ) -> Result<(), OnboardingError> {
     let scope = scopes.lock_active().map_err(failure)?;
@@ -5297,7 +5339,7 @@ pub(crate) fn onboarding_provider_login_close(
     // Killing the app's own end does not end what the login started in the container: «Cancel» stops that too, best
     // effort (the person has cancelled; a refusal here is not theirs to hear about). The session exists only because it
     // was opened with the host's full permission: the stop runs on that same host.
-    stop_provider_login_in_container(&app, scope.scope(), &session.host);
+    stop_provider_login_in_container(app, scope.scope(), &session.host);
     Ok(())
 }
 
@@ -9830,7 +9872,7 @@ exit 0
     fn a_new_provider_login_first_ends_the_one_an_earlier_sign_in_left_in_the_container() {
         let source = include_str!("onboarding.rs");
         let body = source
-            .split("pub(crate) fn onboarding_provider_login(")
+            .split("fn start_provider_login(")
             .nth(1)
             .and_then(|rest| rest.split("pub(crate) fn onboarding_provider_login_input(").next())
             .expect("the login command");
