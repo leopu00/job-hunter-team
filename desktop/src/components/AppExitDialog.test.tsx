@@ -5,6 +5,7 @@ import AppExitDialog from "./AppExitDialog";
 import { APP_EXIT_TEXT } from "./AppExitDialog.i18n";
 import { EXIT_EVENT, EXIT_OPEN_EVENT, rememberedExit } from "../lib/app-exit";
 import { fill } from "../lib/text-slots";
+import { setSetupExit } from "../lib/setup-exit";
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -51,7 +52,10 @@ beforeEach(() => {
   native.isTauri.mockReturnValue(true);
   native.listeners.clear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setSetupExit(null);
+});
 
 describe("AppExitDialog", () => {
   it("answers the close button by saying the page is there, and asks where the team is, before showing anything", async () => {
@@ -344,5 +348,127 @@ describe("AppExitDialog", () => {
     await waitFor(() => expect(native.listeners.has(EXIT_EVENT)).toBe(true));
     unmount();
     expect(native.listeners.has(EXIT_EVENT)).toBe(false);
+  });
+});
+
+describe("AppExitDialog during the setup, before the team's start", () => {
+  const SETUP = { failed: false, step: 2, total: 6, label: "Container" };
+  /** The native side during the setup: the machine as found, the team's containers on it, the others. */
+  function machine(state: { machine: string; team?: string; teamContainers?: number; others?: number; failing?: Record<string, string> }) {
+    native.invoke.mockImplementation(async (command: string) => {
+      if (state.failing?.[command]) throw { code: state.failing[command] };
+      if (command === "app_exit_state") {
+        return { team: state.team ?? "local", otherContainers: state.others ?? 0, machine: state.machine, teamContainers: state.teamContainers ?? 0 };
+      }
+      return undefined;
+    });
+  }
+
+  it("says where the setup is and that no team runs, asks the machine's state, and offers no team stop and no «remember»", async () => {
+    setSetupExit(SETUP);
+    machine({ machine: "on" });
+    render(<AppExitDialog />);
+    await closeButton();
+    const dialog = await screen.findByRole("dialog");
+    expect(calls().slice(0, 2)).toEqual(["app_exit_ack", 'app_exit_state:{"setup":true}']);
+    expect(screen.getByTestId("app-exit-setup")).toHaveTextContent(fill(T.setupRunning, { step: 2, total: 6, label: "Container" }));
+    expect(dialog).toHaveTextContent(T.setupNoTeam);
+    expect(dialog).not.toHaveTextContent(T.body);
+    expect(screen.getByTestId("app-exit-left-on")).toHaveTextContent(T.leftMachine);
+    for (const mode of ["ordered", "forced", "detach", "remember"]) expect(screen.queryByTestId(`app-exit-${mode}`)).toBeNull();
+    expect(screen.getByTestId("app-exit-setup-machine")).toHaveFocus();
+    await userEvent.click(screen.getByTestId("app-exit-setup-machine"));
+    await waitFor(() => expect(calls()).toContain('app_exit_finish:{"mode":"machine"}'));
+    expect(calls().some((call) => call.includes('"forced"') || call === "app_exit_order")).toBe(false);
+  });
+
+  it("closes leaving the machine on when asked to", async () => {
+    setSetupExit(SETUP);
+    machine({ machine: "on" });
+    render(<AppExitDialog />);
+    await closeButton();
+    await userEvent.click(await screen.findByTestId("app-exit-setup-detach"));
+    await waitFor(() => expect(calls()).toContain('app_exit_finish:{"mode":"detach"}'));
+  });
+
+  it("does not apply a choice remembered for the team: it asks", async () => {
+    localStorage.setItem("jht.app-exit.choice", "forced");
+    setSetupExit({ ...SETUP, failed: true });
+    machine({ machine: "on" });
+    render(<AppExitDialog />);
+    await closeButton();
+    expect(await screen.findByTestId("app-exit-setup")).toHaveTextContent(fill(T.setupFailed, { step: 2, total: 6, label: "Container" }));
+    expect(calls().some((call) => call.startsWith("app_exit_finish"))).toBe(false);
+    expect(rememberedExit()).toBe("forced");
+  });
+
+  it.each([
+    ["off", {}, "leftNothing"],
+    ["on", { others: 2 }, "leftMachine"],
+  ] as const)("with the machine %s offers only closing", async (state, extra, left) => {
+    setSetupExit(SETUP);
+    machine({ machine: state, ...extra });
+    render(<AppExitDialog />);
+    await closeButton();
+    expect(await screen.findByTestId("app-exit-left-on")).toHaveTextContent(T[left]);
+    expect(screen.queryByTestId("app-exit-setup-machine")).toBeNull();
+    if ("others" in extra) expect(screen.getByTestId("app-exit-others")).toHaveTextContent(fill(T.setupOthers, { count: 2 }));
+    expect(screen.getByTestId("app-exit-setup-detach")).toHaveTextContent(T.closeOnly);
+  });
+
+  it("names the team's container when the setup has started it, and says when the machine cannot be read", async () => {
+    setSetupExit(SETUP);
+    machine({ machine: "on", teamContainers: 1 });
+    const { unmount } = render(<AppExitDialog />);
+    await closeButton();
+    expect(await screen.findByTestId("app-exit-left-on")).toHaveTextContent(T.leftMachineAndContainer);
+    unmount();
+    machine({ machine: "unknown" });
+    render(<AppExitDialog />);
+    await closeButton();
+    expect(await screen.findByTestId("app-exit-left-on")).toHaveTextContent(T.leftUnknown);
+    expect(screen.getByTestId("app-exit-setup-machine")).toHaveTextContent(T.tryStopMachine);
+  });
+
+  it.each([
+    ["app_exit_machine_not_stopped", "setupStopFailed"],
+    ["app_exit_machine_state_unknown", "setupMachineUnknown"],
+  ] as const)("a machine that did not turn off (%s) is told, and the app stays open with the same choices", async (code, text) => {
+    setSetupExit(SETUP);
+    machine({ machine: "on", failing: { app_exit_finish: code } });
+    render(<AppExitDialog />);
+    await closeButton();
+    await userEvent.click(await screen.findByTestId("app-exit-setup-machine"));
+    expect(await screen.findByTestId("app-exit-failed")).toHaveTextContent(T[text]);
+    expect(screen.getByTestId("app-exit-setup-detach")).toBeInTheDocument();
+  });
+
+  it("on a computer without a machine, or for a team on a VPS, asks as for a team", async () => {
+    setSetupExit(SETUP);
+    machine({ machine: "none" });
+    const { unmount } = render(<AppExitDialog />);
+    await closeButton();
+    expect(await screen.findByTestId("app-exit-ordered")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-exit-setup")).toBeNull();
+    unmount();
+    machine({ machine: "on", team: "vps" });
+    render(<AppExitDialog />);
+    await closeButton();
+    await waitFor(() => expect(calls()).toContain('app_exit_finish:{"mode":"detach"}'));
+    expect(screen.queryByTestId("app-exit-setup")).toBeNull();
+  });
+});
+
+describe("«Remember my choice»", () => {
+  it("keeps the box and its words on one line, in the dialog's own type, whatever the app's label and input rules say", async () => {
+    team();
+    render(<AppExitDialog />);
+    await navbarButton();
+    const box = await screen.findByTestId("app-exit-remember");
+    const label = box.closest("label") as HTMLLabelElement;
+    expect(label).toHaveTextContent(T.remember);
+    expect(label.style.display).toBe("flex");
+    expect(label.style.textTransform).toBe("none");
+    expect(box).toHaveClass("w-auto");
   });
 });

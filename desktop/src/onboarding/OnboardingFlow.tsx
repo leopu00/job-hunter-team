@@ -15,6 +15,7 @@ import {
 import { OAuthLoginTakeover } from "../oauth-login-takeover";
 import { describeError, errorCodeOf, type DescribedError } from "../lib/error-catalog";
 import { cleanImagesResult } from "../lib/clean-images";
+import { setSetupExit } from "../lib/setup-exit";
 import { appLocale } from "../lib/app-locale";
 import { runtimeText } from "../lib/onboarding-runtime.i18n";
 import VpsProfileImport from "./VpsProfileImport";
@@ -222,6 +223,24 @@ function RuntimeView({ host, platform, t, locale, runtime, activity, onRetry, on
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerMismatch, failureKey]);
+
+  // A step before the team's start: the agents have not started, so the close dialog asks about what the setup left on
+  // instead of how to stop a team (lib/setup-exit). A calm failure is a team that runs and waits: not this case.
+  const setupStep = runtime.status === "ready" || runtime.status === "collecting" || runtime.stage === "team-start" ||
+    runtime.stage === "assistant" || (runtime.status === "failed" && runtime.calm === true)
+    ? null
+    : (() => {
+        const stages = runtimeStages(host, t);
+        const index = stages.findIndex((stage) => stage.value === runtime.stage);
+        return { failed: runtime.status === "failed", step: Math.max(1, index + 1), total: stages.length, label: stages[index]?.label ?? t.configuration };
+      })();
+  const setupKey = setupStep ? JSON.stringify(setupStep) : "";
+  useEffect(() => {
+    if (!setupStep) return;
+    setSetupExit(setupStep);
+    return () => setSetupExit(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setupKey]);
 
   if (runtime.status === "ready") {
     return (

@@ -51,6 +51,9 @@ pub(crate) enum ExitMode {
     Ordered,
     Forced,
     Detach,
+    /// Only the machine: while the setup has not started the team yet there is no container to bring down, and the machine
+    /// it already turned on is the one thing left running.
+    Machine,
 }
 
 /// Where the team is, as far as leaving is concerned.
@@ -78,6 +81,9 @@ pub(crate) enum Step {
 pub(crate) fn plan(mode: ExitMode, host: TeamHost) -> Result<Vec<Step>, &'static str> {
     match (mode, host) {
         (ExitMode::Detach, _) => Ok(Vec::new()),
+        (ExitMode::Machine, TeamHost::Vps) => Err("app_exit_vps_untouched"),
+        // the setup may have turned the machine on before any team is set up here: it is stopped all the same
+        (ExitMode::Machine, _) => Ok(if cfg!(any(target_os = "macos", windows)) { vec![Step::MachineStop] } else { Vec::new() }),
         (_, TeamHost::None) => Ok(Vec::new()),
         (_, TeamHost::Vps) => Err("app_exit_vps_untouched"),
         (ExitMode::Ordered | ExitMode::Forced, TeamHost::Local) => {
@@ -205,12 +211,36 @@ pub(crate) fn progress(flag: bool, sessions: Sessions) -> ExitProgress {
     ExitProgress { ready: flag || remaining.is_empty(), active: remaining.len(), remaining: names_for_page(&remaining) }
 }
 
+/// Whether the team's machine is on, for the question asked during the setup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum MachineOn {
+    On,
+    Off,
+    /// Podman gave no answer: it is not said to be off.
+    Unknown,
+    /// Not asked: not during the setup, a team on a VPS, or a computer without a machine (Linux).
+    None,
+}
+
+pub(crate) fn machine_on(running: Option<bool>) -> MachineOn {
+    match running {
+        Some(true) => MachineOn::On,
+        Some(false) => MachineOn::Off,
+        None => MachineOn::Unknown,
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ExitState {
     team: TeamHost,
     /// Containers that are not the team's running on the team's machine: leaving does not stop the machine for them.
     other_containers: usize,
+    machine: MachineOn,
+    /// The team's own containers running on it, asked only during the setup with the machine on (0 otherwise): the setup may
+    /// have started the container before the agents.
+    team_containers: usize,
 }
 
 #[derive(Serialize)]
@@ -323,16 +353,23 @@ pub(crate) async fn app_exit_state(
     window: tauri::Window,
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
+    setup: Option<bool>,
 ) -> Result<ExitState, ExitError> {
+    // during the setup the page asks whether the machine is on: the team is not started yet, and the machine is what is left
+    let setup = setup == Some(true);
     on_scope(&window, &scopes, "state", move |scope| {
         let team = local_destination(&app, scope)?;
-        // only a team on this computer has a machine to speak of, and only a Mac or a Windows has one (Linux runs the container itself)
-        let other_containers = if team == TeamHost::Local && cfg!(any(target_os = "macos", windows)) {
-            crate::podman::other_containers_on_jht_machine(STATE_TIMEOUT).unwrap_or(0)
+        // only a Mac or a Windows has a machine (Linux runs the container itself), and a team on a VPS has none here
+        let has_machine = team != TeamHost::Vps && cfg!(any(target_os = "macos", windows));
+        let machine = if setup && has_machine { machine_on(crate::podman::jht_machine_on(STATE_TIMEOUT)) } else { MachineOn::None };
+        let (team_containers, other_containers) = if machine == MachineOn::On {
+            crate::podman::containers_on_jht_machine(STATE_TIMEOUT).unwrap_or((0, 0))
+        } else if has_machine && team == TeamHost::Local {
+            (0, crate::podman::other_containers_on_jht_machine(STATE_TIMEOUT).unwrap_or(0))
         } else {
-            0
+            (0, 0)
         };
-        Ok(ExitState { team, other_containers })
+        Ok(ExitState { team, other_containers, machine, team_containers })
     })
     .await
 }
@@ -557,8 +594,8 @@ mod tests {
     }
 
     #[test]
-    fn the_modes_the_page_may_name_are_three_words() {
-        for (word, mode) in [("ordered", ExitMode::Ordered), ("forced", ExitMode::Forced), ("detach", ExitMode::Detach)] {
+    fn the_modes_the_page_may_name_are_four_words() {
+        for (word, mode) in [("ordered", ExitMode::Ordered), ("forced", ExitMode::Forced), ("detach", ExitMode::Detach), ("machine", ExitMode::Machine)] {
             assert_eq!(serde_json::from_str::<ExitMode>(&format!("\"{word}\"")).unwrap(), mode);
         }
         assert!(serde_json::from_str::<ExitMode>("\"stop\"").is_err());
@@ -574,8 +611,27 @@ mod tests {
 
     #[test]
     fn the_state_says_how_many_containers_that_are_not_the_team_s_share_the_machine() {
-        let state = ExitState { team: TeamHost::Local, other_containers: 2 };
-        assert_eq!(serde_json::to_string(&state).unwrap(), r#"{"team":"local","otherContainers":2}"#);
+        let state = ExitState { team: TeamHost::Local, other_containers: 2, machine: MachineOn::None, team_containers: 0 };
+        assert_eq!(serde_json::to_string(&state).unwrap(), r#"{"team":"local","otherContainers":2,"machine":"none","teamContainers":0}"#);
+    }
+
+    #[test]
+    fn during_the_setup_the_machine_is_on_off_or_unknown_never_off_by_default() {
+        assert_eq!(machine_on(Some(true)), MachineOn::On);
+        assert_eq!(machine_on(Some(false)), MachineOn::Off);
+        assert_eq!(machine_on(None), MachineOn::Unknown);
+        let state = ExitState { team: TeamHost::None, other_containers: 0, machine: MachineOn::On, team_containers: 1 };
+        assert_eq!(serde_json::to_string(&state).unwrap(), r#"{"team":"none","otherContainers":0,"machine":"on","teamContainers":1}"#);
+    }
+
+    #[test]
+    fn stopping_only_the_machine_never_brings_a_container_down_and_never_touches_a_vps() {
+        for host in [TeamHost::Local, TeamHost::None] {
+            let steps = plan(ExitMode::Machine, host).unwrap();
+            assert!(!steps.contains(&Step::ContainerDown), "{host:?}");
+            assert_eq!(steps, if cfg!(any(target_os = "macos", windows)) { vec![Step::MachineStop] } else { vec![] }, "{host:?}");
+        }
+        assert_eq!(plan(ExitMode::Machine, TeamHost::Vps), Err("app_exit_vps_untouched"));
     }
 
     #[test]

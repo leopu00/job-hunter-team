@@ -30,6 +30,30 @@ export interface AppExitText {
   machineUnknown: string;
   /** Containers that are not the team's run on its machine (`{count}`): stopping the team leaves the machine on for them. */
   othersKept: string;
+  /** During the setup, before the team's start: where it is (`{step}` of `{total}`, `{label}` the step's name). */
+  setupRunning: string;
+  setupFailed: string;
+  /** The agents have not started: no team to stop. */
+  setupNoTeam: string;
+  /** The box that says what the setup leaves on, and its four cases. */
+  leftOn: string;
+  leftMachine: string;
+  leftMachineAndContainer: string;
+  leftNothing: string;
+  leftUnknown: string;
+  /** `{count}` containers that are not the team's keep the machine on. */
+  setupOthers: string;
+  stopMachine: string;
+  stopMachineHint: string;
+  tryStopMachine: string;
+  tryStopMachineHint: string;
+  keepMachine: string;
+  keepMachineHint: string;
+  closeOnly: string;
+  closeOnlyHint: string;
+  setupStopping: string;
+  setupStopFailed: string;
+  setupMachineUnknown: string;
 }
 
 export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
@@ -53,6 +77,26 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Non sono riuscito a fermare tutto, e l’app resta aperta. Puoi riprovare, forzare lo stop o lasciare la squadra al lavoro.",
     othersKept: "Sullo stesso motore girano anche {count} container che non sono di Job Hunter Team: se fermi la squadra, il motore resta acceso per loro.",
     machineUnknown: "Lo stato della macchina è sconosciuto: non riesco a leggere se è accesa, quindi non ho fermato niente e l’app resta aperta. Puoi riprovare o lasciare la squadra al lavoro.",
+    setupRunning: "La preparazione è in corso (passaggio {step} di {total}, {label}): se chiudi si interrompe. Alla prossima apertura puoi riprenderla da dove era arrivata.",
+    setupFailed: "La preparazione si è fermata al passaggio {step} di {total}, {label}. Alla prossima apertura puoi riprenderla da lì.",
+    setupNoTeam: "Gli agenti non sono ancora partiti: non c’è una squadra da fermare.",
+    leftOn: "Cosa resta acceso",
+    leftMachine: "La macchina Linux di Job Hunter Team: è accesa e usa memoria finché non la spegni.",
+    leftMachineAndContainer: "La macchina Linux di Job Hunter Team, con il container della squadra già pronto (gli agenti no): usano memoria finché non li spegni.",
+    leftNothing: "Niente: la macchina di Job Hunter Team è spenta.",
+    leftUnknown: "Non riesco a leggere se la macchina di Job Hunter Team è accesa.",
+    setupOthers: "Sulla stessa macchina girano anche {count} container che non sono di Job Hunter Team: resta accesa per loro.",
+    stopMachine: "Spegni la macchina e chiudi",
+    stopMachineHint: "La macchina si spegne e restituisce la memoria; con lei si ferma il container, se c’è.",
+    tryStopMachine: "Prova a spegnerla e chiudi",
+    tryStopMachineHint: "Se non riesco a leggerla non la spengo, e l’app resta aperta.",
+    keepMachine: "Chiudi e lasciala accesa",
+    keepMachineHint: "La prossima preparazione parte prima.",
+    closeOnly: "Chiudi",
+    closeOnlyHint: "Si chiude solo la finestra.",
+    setupStopping: "Spengo la macchina…",
+    setupStopFailed: "Non sono riuscito a spegnere la macchina, e l’app resta aperta. Puoi riprovare o chiudere lasciandola accesa.",
+    setupMachineUnknown: "Non riesco a leggere se la macchina è accesa, quindi non l’ho spenta e l’app resta aperta. Puoi riprovare o chiudere lasciandola com’è.",
   },
   en: {
     menu: "Quit Job Hunter Team",
@@ -74,6 +118,26 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "I could not stop everything, and the app stays open. You can try again, force the stop or leave the team working.",
     othersKept: "{count} other container(s) that are not Job Hunter Team’s run on the same engine: if you stop the team, the engine stays on for them.",
     machineUnknown: "The state of the machine is unknown: I cannot read whether it is on, so I stopped nothing and the app stays open. You can try again or leave the team working.",
+    setupRunning: "The setup is under way (step {step} of {total}, {label}): closing interrupts it. Next time you open the app you can pick it up where it got to.",
+    setupFailed: "The setup stopped at step {step} of {total}, {label}. Next time you open the app you can pick it up from there.",
+    setupNoTeam: "The agents have not started yet: there is no team to stop.",
+    leftOn: "What stays on",
+    leftMachine: "The Job Hunter Team Linux machine: it is on and uses memory until you turn it off.",
+    leftMachineAndContainer: "The Job Hunter Team Linux machine, with the team’s container already ready (the agents are not): they use memory until you turn them off.",
+    leftNothing: "Nothing: the Job Hunter Team machine is off.",
+    leftUnknown: "I cannot read whether the Job Hunter Team machine is on.",
+    setupOthers: "{count} other container(s) that are not Job Hunter Team’s run on the same machine: it stays on for them.",
+    stopMachine: "Turn off the machine and close",
+    stopMachineHint: "The machine turns off and gives its memory back; the container, if there is one, stops with it.",
+    tryStopMachine: "Try to turn it off and close",
+    tryStopMachineHint: "If I cannot read it I do not turn it off, and the app stays open.",
+    keepMachine: "Close and leave it on",
+    keepMachineHint: "The next setup starts sooner.",
+    closeOnly: "Close",
+    closeOnlyHint: "Only the window closes.",
+    setupStopping: "Turning off the machine…",
+    setupStopFailed: "I could not turn off the machine, and the app stays open. You can try again or close and leave it on.",
+    setupMachineUnknown: "I cannot read whether the machine is on, so I did not turn it off and the app stays open. You can try again or close and leave it as it is.",
   },
   hu: {
     menu: "Kilépés a Job Hunter Teamből",
@@ -95,6 +159,26 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Nem sikerült mindent leállítani, az alkalmazás nyitva marad. Próbálhatod újra, erőltetheted a leállítást, vagy hagyhatod dolgozni a csapatot.",
     othersKept: "Ugyanezen a motoron {count} nem a Job Hunter Team-hez tartozó konténer is fut: ha leállítod a csapatot, a motor értük bekapcsolva marad.",
     machineUnknown: "A gép állapota ismeretlen: nem tudom kiolvasni, hogy be van-e kapcsolva, ezért nem állítottam le semmit, és az alkalmazás nyitva marad. Próbálhatod újra, vagy hagyhatod dolgozni a csapatot.",
+    setupRunning: "A beállítás folyamatban van ({step}/{total}. lépés, {label}): ha bezárod, megszakad. A következő megnyitáskor onnan folytathatod, ahol tartott.",
+    setupFailed: "A beállítás a(z) {step}/{total}. lépésnél állt meg: {label}. A következő megnyitáskor onnan folytathatod.",
+    setupNoTeam: "Az ügynökök még nem indultak el: nincs leállítandó csapat.",
+    leftOn: "Mi marad bekapcsolva",
+    leftMachine: "A Job Hunter Team Linux gépe: be van kapcsolva, és memóriát használ, amíg ki nem kapcsolod.",
+    leftMachineAndContainer: "A Job Hunter Team Linux gépe, a csapat már kész konténerével (az ügynökök még nem): memóriát használnak, amíg ki nem kapcsolod őket.",
+    leftNothing: "Semmi: a Job Hunter Team gépe ki van kapcsolva.",
+    leftUnknown: "Nem tudom kiolvasni, hogy a Job Hunter Team gépe be van-e kapcsolva.",
+    setupOthers: "Ugyanezen a gépen {count} nem a Job Hunter Team-hez tartozó konténer is fut: értük bekapcsolva marad.",
+    stopMachine: "Gép kikapcsolása és bezárás",
+    stopMachineHint: "A gép kikapcsol és visszaadja a memóriát; vele együtt leáll a konténer is, ha van.",
+    tryStopMachine: "Megpróbálom kikapcsolni, és bezárom",
+    tryStopMachineHint: "Ha nem tudom kiolvasni, nem kapcsolom ki, és az alkalmazás nyitva marad.",
+    keepMachine: "Bezárás, a gép maradjon bekapcsolva",
+    keepMachineHint: "A következő beállítás hamarabb indul.",
+    closeOnly: "Bezárás",
+    closeOnlyHint: "Csak az ablak záródik be.",
+    setupStopping: "Kikapcsolom a gépet…",
+    setupStopFailed: "Nem sikerült kikapcsolni a gépet, az alkalmazás nyitva marad. Próbálhatod újra, vagy bezárhatod bekapcsolva hagyva.",
+    setupMachineUnknown: "Nem tudom kiolvasni, hogy a gép be van-e kapcsolva, ezért nem kapcsoltam ki, és az alkalmazás nyitva marad. Próbálhatod újra, vagy bezárhatod úgy, ahogy van.",
   },
   es: {
     menu: "Salir de Job Hunter Team",
@@ -116,6 +200,26 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "No he podido detenerlo todo, y la app sigue abierta. Puedes reintentar, forzar la parada o dejar el equipo trabajando.",
     othersKept: "En el mismo motor se ejecutan también {count} contenedor(es) que no son de Job Hunter Team: si detienes el equipo, el motor sigue encendido para ellos.",
     machineUnknown: "El estado de la máquina es desconocido: no puedo leer si está encendida, así que no he detenido nada y la app sigue abierta. Puedes reintentar o dejar el equipo trabajando.",
+    setupRunning: "La preparación está en curso (paso {step} de {total}, {label}): si cierras, se interrumpe. La próxima vez que abras la app podrás retomarla donde se quedó.",
+    setupFailed: "La preparación se detuvo en el paso {step} de {total}, {label}. La próxima vez que abras la app podrás retomarla desde ahí.",
+    setupNoTeam: "Los agentes aún no han arrancado: no hay un equipo que detener.",
+    leftOn: "Qué queda encendido",
+    leftMachine: "La máquina Linux de Job Hunter Team: está encendida y usa memoria hasta que la apagues.",
+    leftMachineAndContainer: "La máquina Linux de Job Hunter Team, con el contenedor del equipo ya listo (los agentes no): usan memoria hasta que los apagues.",
+    leftNothing: "Nada: la máquina de Job Hunter Team está apagada.",
+    leftUnknown: "No puedo leer si la máquina de Job Hunter Team está encendida.",
+    setupOthers: "En la misma máquina también funcionan {count} contenedores que no son de Job Hunter Team: sigue encendida para ellos.",
+    stopMachine: "Apaga la máquina y cierra",
+    stopMachineHint: "La máquina se apaga y devuelve la memoria; con ella se detiene el contenedor, si lo hay.",
+    tryStopMachine: "Intenta apagarla y cierra",
+    tryStopMachineHint: "Si no puedo leerla, no la apago y la app sigue abierta.",
+    keepMachine: "Cierra y déjala encendida",
+    keepMachineHint: "La próxima preparación arranca antes.",
+    closeOnly: "Cerrar",
+    closeOnlyHint: "Solo se cierra la ventana.",
+    setupStopping: "Apago la máquina…",
+    setupStopFailed: "No he podido apagar la máquina y la app sigue abierta. Puedes reintentar o cerrar dejándola encendida.",
+    setupMachineUnknown: "No puedo leer si la máquina está encendida, así que no la he apagado y la app sigue abierta. Puedes reintentar o cerrar dejándola como está.",
   },
   de: {
     menu: "Job Hunter Team beenden",
@@ -137,6 +241,26 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Ich konnte nicht alles anhalten, und die App bleibt offen. Du kannst es erneut versuchen, das Anhalten erzwingen oder das Team weiterarbeiten lassen.",
     othersKept: "Auf demselben Motor laufen auch {count} Container, die nicht zu Job Hunter Team gehören: Wenn du das Team anhältst, bleibt der Motor für sie an.",
     machineUnknown: "Der Zustand der Maschine ist unbekannt: Ich kann nicht lesen, ob sie an ist, deshalb habe ich nichts angehalten, und die App bleibt offen. Du kannst es erneut versuchen oder das Team weiterarbeiten lassen.",
+    setupRunning: "Die Einrichtung läuft (Schritt {step} von {total}, {label}): Wenn du schließt, wird sie unterbrochen. Beim nächsten Öffnen kannst du dort weitermachen, wo sie war.",
+    setupFailed: "Die Einrichtung ist bei Schritt {step} von {total} stehen geblieben: {label}. Beim nächsten Öffnen kannst du dort weitermachen.",
+    setupNoTeam: "Die Agenten sind noch nicht gestartet: Es gibt kein Team anzuhalten.",
+    leftOn: "Was an bleibt",
+    leftMachine: "Die Linux-Maschine von Job Hunter Team: Sie ist an und braucht Speicher, bis du sie ausschaltest.",
+    leftMachineAndContainer: "Die Linux-Maschine von Job Hunter Team, mit dem schon bereiten Container des Teams (die Agenten nicht): Sie brauchen Speicher, bis du sie ausschaltest.",
+    leftNothing: "Nichts: Die Maschine von Job Hunter Team ist aus.",
+    leftUnknown: "Ich kann nicht lesen, ob die Maschine von Job Hunter Team an ist.",
+    setupOthers: "Auf derselben Maschine laufen auch {count} Container, die nicht zu Job Hunter Team gehören: Sie bleibt für sie an.",
+    stopMachine: "Maschine ausschalten und schließen",
+    stopMachineHint: "Die Maschine schaltet sich aus und gibt den Speicher frei; der Container, falls vorhanden, hält mit ihr an.",
+    tryStopMachine: "Versuchen auszuschalten und schließen",
+    tryStopMachineHint: "Wenn ich sie nicht lesen kann, schalte ich sie nicht aus, und die App bleibt offen.",
+    keepMachine: "Schließen und an lassen",
+    keepMachineHint: "Die nächste Einrichtung startet schneller.",
+    closeOnly: "Schließen",
+    closeOnlyHint: "Nur das Fenster schließt sich.",
+    setupStopping: "Ich schalte die Maschine aus…",
+    setupStopFailed: "Ich konnte die Maschine nicht ausschalten, und die App bleibt offen. Du kannst es erneut versuchen oder schließen und sie an lassen.",
+    setupMachineUnknown: "Ich kann nicht lesen, ob die Maschine an ist, deshalb habe ich sie nicht ausgeschaltet, und die App bleibt offen. Du kannst es erneut versuchen oder schließen und sie lassen, wie sie ist.",
   },
   fr: {
     menu: "Quitter Job Hunter Team",
@@ -158,6 +282,26 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Je n’ai pas pu tout arrêter, et l’app reste ouverte. Tu peux réessayer, forcer l’arrêt ou laisser l’équipe travailler.",
     othersKept: "{count} autre(s) conteneur(s) qui ne sont pas ceux de Job Hunter Team tournent sur le même moteur : si tu arrêtes l’équipe, le moteur reste allumé pour eux.",
     machineUnknown: "L’état de la machine est inconnu : je ne peux pas lire si elle est allumée, donc je n’ai rien arrêté et l’app reste ouverte. Tu peux réessayer ou laisser l’équipe travailler.",
+    setupRunning: "La préparation est en cours (étape {step} sur {total}, {label}) : si tu fermes, elle s’interrompt. À la prochaine ouverture, tu pourras la reprendre là où elle en était.",
+    setupFailed: "La préparation s’est arrêtée à l’étape {step} sur {total}, {label}. À la prochaine ouverture, tu pourras la reprendre de là.",
+    setupNoTeam: "Les agents n’ont pas encore démarré : il n’y a pas d’équipe à arrêter.",
+    leftOn: "Ce qui reste allumé",
+    leftMachine: "La machine Linux de Job Hunter Team : elle est allumée et utilise de la mémoire jusqu’à ce que tu l’éteignes.",
+    leftMachineAndContainer: "La machine Linux de Job Hunter Team, avec le conteneur de l’équipe déjà prêt (pas les agents) : ils utilisent de la mémoire jusqu’à ce que tu les éteignes.",
+    leftNothing: "Rien : la machine de Job Hunter Team est éteinte.",
+    leftUnknown: "Je ne peux pas lire si la machine de Job Hunter Team est allumée.",
+    setupOthers: "Sur la même machine tournent aussi {count} conteneurs qui ne sont pas à Job Hunter Team : elle reste allumée pour eux.",
+    stopMachine: "Éteindre la machine et fermer",
+    stopMachineHint: "La machine s’éteint et rend sa mémoire ; le conteneur, s’il y en a un, s’arrête avec elle.",
+    tryStopMachine: "Essayer de l’éteindre et fermer",
+    tryStopMachineHint: "Si je ne peux pas la lire, je ne l’éteins pas, et l’app reste ouverte.",
+    keepMachine: "Fermer et la laisser allumée",
+    keepMachineHint: "La prochaine préparation démarre plus vite.",
+    closeOnly: "Fermer",
+    closeOnlyHint: "Seule la fenêtre se ferme.",
+    setupStopping: "J’éteins la machine…",
+    setupStopFailed: "Je n’ai pas pu éteindre la machine, et l’app reste ouverte. Tu peux réessayer ou fermer en la laissant allumée.",
+    setupMachineUnknown: "Je ne peux pas lire si la machine est allumée, donc je ne l’ai pas éteinte et l’app reste ouverte. Tu peux réessayer ou fermer en la laissant telle quelle.",
   },
   pt: {
     menu: "Sair de Job Hunter Team",
@@ -179,5 +323,25 @@ export const APP_EXIT_TEXT: Record<Locale, AppExitText> = {
     failed: "Não consegui parar tudo, e a app fica aberta. Podes tentar de novo, forçar a paragem ou deixar a equipa a trabalhar.",
     othersKept: "No mesmo motor correm também {count} contentor(es) que não são do Job Hunter Team: se paras a equipa, o motor fica ligado para eles.",
     machineUnknown: "O estado da máquina é desconhecido: não consigo ler se está ligada, por isso não parei nada e a app fica aberta. Podes tentar de novo ou deixar a equipa a trabalhar.",
+    setupRunning: "A preparação está em curso (passo {step} de {total}, {label}): se fechares, é interrompida. Da próxima vez que abrires a app, podes retomá-la onde ficou.",
+    setupFailed: "A preparação parou no passo {step} de {total}, {label}. Da próxima vez que abrires a app, podes retomá-la daí.",
+    setupNoTeam: "Os agentes ainda não arrancaram: não há uma equipa para parar.",
+    leftOn: "O que fica ligado",
+    leftMachine: "A máquina Linux do Job Hunter Team: está ligada e usa memória até a desligares.",
+    leftMachineAndContainer: "A máquina Linux do Job Hunter Team, com o contentor da equipa já pronto (os agentes não): usam memória até os desligares.",
+    leftNothing: "Nada: a máquina do Job Hunter Team está desligada.",
+    leftUnknown: "Não consigo ler se a máquina do Job Hunter Team está ligada.",
+    setupOthers: "Na mesma máquina correm também {count} contentores que não são do Job Hunter Team: fica ligada para eles.",
+    stopMachine: "Desliga a máquina e fecha",
+    stopMachineHint: "A máquina desliga-se e devolve a memória; com ela para o contentor, se houver.",
+    tryStopMachine: "Tenta desligá-la e fecha",
+    tryStopMachineHint: "Se não a conseguir ler, não a desligo e a app fica aberta.",
+    keepMachine: "Fecha e deixa-a ligada",
+    keepMachineHint: "A próxima preparação arranca mais depressa.",
+    closeOnly: "Fechar",
+    closeOnlyHint: "Só a janela fecha.",
+    setupStopping: "A desligar a máquina…",
+    setupStopFailed: "Não consegui desligar a máquina e a app fica aberta. Podes tentar de novo ou fechar deixando-a ligada.",
+    setupMachineUnknown: "Não consigo ler se a máquina está ligada, por isso não a desliguei e a app fica aberta. Podes tentar de novo ou fechar deixando-a como está.",
   },
 };
