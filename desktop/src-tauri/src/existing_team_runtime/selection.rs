@@ -221,4 +221,3 @@ pub(crate) fn selected_at(
         candidate_sha256: hash,
     }))
 }
-

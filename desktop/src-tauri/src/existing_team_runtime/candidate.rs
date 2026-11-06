@@ -195,4 +195,3 @@ pub(crate) fn write_candidate_at(
 ) -> Result<CandidateWrite, &'static str> {
     write_candidate_hooked(root, scope, bytes, &mut || {})
 }
-

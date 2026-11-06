@@ -113,4 +113,3 @@ pub(crate) fn valid_target(target: &RuntimeTarget) -> bool {
         && target.os == "linux"
         && matches!(target.architecture.as_str(), "amd64" | "arm64")
 }
-

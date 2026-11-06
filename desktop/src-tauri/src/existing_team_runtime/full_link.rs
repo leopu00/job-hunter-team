@@ -273,4 +273,3 @@ pub(crate) fn restore_full_link_at(
 /// The tests that grant or revoke share the one static of the process: cargo runs tests in parallel.
 #[cfg(test)]
 pub(crate) static FULL_LINK_TEST_LOCK: Mutex<()> = Mutex::new(());
-

@@ -224,4 +224,3 @@ pub(crate) fn claim_own_vps_at(
     let key = pinned_key.ok_or("own_vps_claim_refused")?;
     mark_own_vps_at(root, scope, address, *port, key).map_err(|_| "own_vps_claim_refused")
 }
-

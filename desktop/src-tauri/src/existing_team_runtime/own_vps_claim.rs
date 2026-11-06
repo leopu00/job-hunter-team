@@ -115,4 +115,3 @@ pub(crate) async fn own_vps_claim(
     scopes.lock_expected(&expected).map_err(|_| "own_vps_claim_refused")?;
     result
 }
-

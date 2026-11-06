@@ -79,4 +79,3 @@ pub(crate) fn root(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
         .app_local_data_dir()
         .map_err(|_| "existing_team_runtime_unavailable")
 }
-

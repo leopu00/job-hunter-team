@@ -101,4 +101,3 @@ pub(crate) fn clear_link_at(root: &Path, scope: &AccountScope) -> Result<(), &'s
     }
     Ok(())
 }
-
