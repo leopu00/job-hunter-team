@@ -543,7 +543,8 @@ def _install_block_is_isolated() -> None:
     (None, 0, 0, None),                                        # first install
     ("6.0.2-late", 0x8A15002B - 2**32, 0, None),               # a Try again: already installed, the right one
     ("5.4.0", None, 24, "podman_version_mismatch: Podman 5.4.0"),  # another major: left alone, winget not run
-    (None, 0x8A150006 - 2**32, 21, "podman_not_installable: winget install Podman.CLI 6.0.2 exited with"),
+    # winget fails with another code: the official release is tried, and when that fails too both reasons are told
+    (None, 0x8A150006 - 2**32, 21, f"podman_not_installable: the zip is not reachable here (winget: winget exited with {0x8A150006 - 2**32})"),
 ])
 def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, expected_exit, expected_line):
     _install_block_is_isolated()
@@ -567,7 +568,8 @@ def test_the_install_block_with_a_fake_winget(tmp_path, installed, winget_code, 
         tmp_path,
         "$ErrorActionPreference = 'Stop'\n"
         f"$LocalAppData = '{tmp_path}'\n$PodmanCliVersion = '6.0.2'\n$InstallDependencies = $true\n"
-        "function Write-JhtPhase { }\n" + winget + _enabler_install_block() + "\nexit 0\n",
+        "function Write-JhtPhase { }\n" + winget
+        + "function Install-PodmanForThisUser { throw 'the zip is not reachable here' }\n" + _enabler_install_block() + "\nexit 0\n",
     )
     assert done.returncode == expected_exit, done.stdout + done.stderr
     if expected_line:
@@ -1067,3 +1069,76 @@ def test_an_empty_list_of_programs_is_updated_once_and_then_the_zip_installs_pod
     lines = calls.read_text().splitlines()
     assert [line.split(" ")[0] for line in lines] == ["install", "source", "install", "ZIP"], lines
     assert lines[1] == "source update --disable-interactivity"
+
+
+# ── JHT-T184, 06/11: a winget that FAILS (any code) is no stop either: the official release takes over ──
+
+WINGET_FAILS = [1, 1603, 0x8A150006 - 2**32, -1978334968, -1978335216]   # -1978334968 = 0x8A15 + 1601 as the installer reported it
+
+
+@needs_powershell
+@pytest.mark.parametrize("code", WINGET_FAILS)
+def test_a_winget_that_fails_with_any_code_hands_over_to_the_zip_and_says_so(tmp_path, code):
+    calls = tmp_path / "calls"
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value ($args -join ' ')\n  $global:LASTEXITCODE = {code}\n"
+    done = _block_with(tmp_path, winget, "function Use-Winget { return $true }\n" + _zip_stub(tmp_path, calls, True))
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = calls.read_text().splitlines()
+    assert [line.split(" ")[0] for line in lines] == ["install", "ZIP"], lines
+    assert f"winget could not install Podman (winget exited with {code}): installing it for this Windows user from the official release instead." in done.stdout
+    assert "was installed for this Windows user from the official release, without winget" in done.stdout
+    assert done.stderr == ""
+
+
+@needs_powershell
+def test_a_winget_that_fails_and_a_zip_that_fails_tell_both_reasons_in_one_line(tmp_path):
+    calls = tmp_path / "calls"
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value 'WINGET'\n  $global:LASTEXITCODE = -1978334968\n"
+    done = _block_with(tmp_path, winget, "function Use-Winget { return $true }\n" + _zip_stub(tmp_path, calls, False, fails="the Podman 6.0.2 download has SHA-256 abc, expected def"))
+    assert done.returncode == 21, done.stdout + done.stderr
+    assert "podman_not_installable: the Podman 6.0.2 download has SHA-256 abc, expected def (winget: winget exited with -1978334968)" in done.stderr
+    assert "podman_other_user" not in done.stderr
+
+
+@needs_powershell
+def test_a_winget_that_cannot_even_be_run_hands_over_to_the_zip(tmp_path):
+    calls = tmp_path / "calls"
+    done = _block_with(tmp_path, "  throw 'winget.exe cannot be started'\n", "function Use-Winget { return $true }\n" + _zip_stub(tmp_path, calls, True))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert calls.read_text().split() == ["ZIP"]
+    assert "winget could not install Podman (winget.exe cannot be started)" in done.stdout
+
+
+@needs_powershell
+def test_a_winget_that_says_it_worked_and_leaves_no_podman_hands_over_to_the_zip(tmp_path):
+    calls = tmp_path / "calls"
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value 'WINGET'\n  $global:LASTEXITCODE = 0\n"
+    done = _block_with(tmp_path, winget, "function Use-Winget { return $true }\n" + _zip_stub(tmp_path, calls, True))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert calls.read_text().split() == ["WINGET", "ZIP"]
+    assert "winget reported success but left no podman.exe for this user" in done.stdout
+
+
+@needs_powershell
+def test_a_winget_that_works_never_reaches_the_zip(tmp_path):
+    calls = tmp_path / "calls"
+    fake_podman = tmp_path / "Programs" / "Podman" / "podman.exe"
+    fake_podman.parent.mkdir(parents=True)
+    winget = f"  Add-Content -LiteralPath '{calls}' -Value 'WINGET'\n" + _ps_make_podman(fake_podman, "6.0.2") + "  $global:LASTEXITCODE = 0\n"
+    done = _block_with(tmp_path, winget, "function Use-Winget { return $true }\nfunction Install-PodmanForThisUser { throw 'must not run' }\n")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert calls.read_text().split() == ["WINGET"]
+    assert "official release" not in done.stdout
+
+
+def test_any_failure_of_winget_but_the_second_pass_of_another_users_case_sets_the_zip_way():
+    enabler = _code(ENABLER)
+    block = enabler[enabler.index("if ($InstallDependencies) {") :]
+    block = block[: block.index("$Podman = Find-Podman")]
+    # no throw is left in the winget part: a code, a missing list, an exception, a false success all set $viaZip
+    winget_part = block[: block.index("if ($viaZip -or $otherUser) {")]
+    assert "throw " not in winget_part
+    assert winget_part.count("$viaZip = $true") >= 4
+    # the way it is told, in the output the app and the person read
+    assert "winget could not install Podman ($wingetFailure): installing it for this Windows user from the official release instead." in block
+    assert block.index("winget could not install Podman") < block.index("Install-PodmanForThisUser")
