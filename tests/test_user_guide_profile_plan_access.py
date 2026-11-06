@@ -161,7 +161,7 @@ def test_validate_row_says_it_does_not_check_the_team_minimum():
 # ── the app: read only and write access ──────────────────────────────────
 
 def test_thirty_days_are_the_native_constant():
-    native = text("desktop/src-tauri/src/existing_team_runtime.rs")
+    native = text("desktop/src-tauri/src/existing_team_runtime/full_link.rs")
     assert "FULL_LINK_MAX_AGE_S: u64 = 30 * 24 * 60 * 60" in native
     assert "up to 30 days" in flat(DESKTOP)
 
@@ -197,7 +197,7 @@ def test_what_ends_the_write_access_is_what_the_app_says():
 
 def test_the_restart_survival_is_native_only_where_the_record_is_kept():
     # The record is written and read back on unix only: the guide says Mac, and says nothing of Windows.
-    native = text("desktop/src-tauri/src/existing_team_runtime.rs")
+    native = text("desktop/src-tauri/src/existing_team_runtime/full_link.rs")
     assert "#[cfg(unix)]\npub(crate) fn restore_full_link_at" in native
     assert "On a Mac the write access you confirmed survives a restart" in flat(DESKTOP)
     section_text = section(DESKTOP, "## 🔗 A team on a VPS: read only and write access")

@@ -26,10 +26,132 @@ use std::{
 };
 use tauri::{Manager, State};
 
-const CANDIDATE_FILE: &str = "existing-team-runtime-candidate.json";
-const SELECTION_FILE: &str = "existing-team-runtime-selection.json";
-const OWN_VPS_FILE: &str = "own-vps-marker.json";
-const MAX_BYTES: usize = 8192;
+/// `before_link` runs once the bytes are staged and validated, right before
+/// the definitive file is created: the window a concurrent writer can use.
+pub(crate) fn write_candidate_hooked(
+    root: &Path,
+    scope: &AccountScope,
+    bytes: &[u8],
+    before_link: &mut dyn FnMut(),
+) -> Result<CandidateWrite, &'static str> {
+    parse_candidate_bytes(bytes)?;
+    let parent = account_dir(root, scope);
+    let parent_meta =
+        fs::symlink_metadata(&parent).map_err(|_| "existing_team_runtime_unavailable")?;
+    if parent_meta.file_type().is_symlink() || !parent_meta.is_dir() {
+        return Err("existing_team_runtime_unavailable");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if parent_meta.uid() != unsafe { libc::geteuid() }
+            || parent_meta.permissions().mode() & 0o022 != 0
+        {
+            return Err("existing_team_runtime_unavailable");
+        }
+    }
+    let destination = path(root, scope, CANDIDATE_FILE);
+    match fs::symlink_metadata(&destination) {
+        Ok(_) => return Err("existing_team_runtime_candidate_exists"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("existing_team_runtime_unavailable"),
+    }
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "existing_team_runtime_unavailable")?
+        .as_nanos();
+    let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .map_err(|_| "existing_team_runtime_unavailable")?;
+    let staged = (|| {
+        set_private_permissions(&temporary).map_err(|_| "existing_team_runtime_unavailable")?;
+        file.write_all(bytes)
+            .map_err(|_| "existing_team_runtime_unavailable")?;
+        file.sync_all()
+            .map_err(|_| "existing_team_runtime_unavailable")?;
+        drop(file);
+        let staged = read_bytes(
+            &temporary,
+            "existing_team_runtime_unavailable",
+            "existing_team_runtime_unavailable",
+        )?;
+        if staged != bytes {
+            return Err("existing_team_runtime_unavailable");
+        }
+        parse_candidate_bytes(&staged)?;
+        Ok(())
+    })();
+    if let Err(error) = staged {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    before_link();
+    let linked = fs::hard_link(&temporary, &destination);
+    let _ = fs::remove_file(&temporary);
+    match linked {
+        Ok(()) => {
+            let published = read_bytes(
+                &destination,
+                "existing_team_runtime_unavailable",
+                "existing_team_runtime_unavailable",
+            )?;
+            if published == bytes {
+                Ok(CandidateWrite::Written)
+            } else {
+                Err("existing_team_runtime_unavailable")
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            match read_bytes(
+                &destination,
+                "existing_team_runtime_candidate_conflict",
+                "existing_team_runtime_candidate_conflict",
+            ) {
+                Ok(existing) if existing == bytes => Ok(CandidateWrite::Identical),
+                _ => Err("existing_team_runtime_candidate_conflict"),
+            }
+        }
+        Err(_) => Err("existing_team_runtime_unavailable"),
+    }
+}
+
+
+mod candidate;
+pub(crate) use candidate::{parse_candidate_bytes, candidate_for_request, candidate_for_request_at, saved_binding_at, candidate_identity_at, candidate_host_for_team, RegistrationGate, registration_gate_at, candidate_bytes, CandidateWrite, write_candidate_at, };
+use candidate::{read_candidate_at, candidate_matches_probed, };
+mod full_link;
+pub(crate) use full_link::{grant_full_link, full_link_granted, revoke_full_link, FULL_LINK_MAX_AGE_S, FullLinkRestore, FullLinkForgotten, unix_now, remember_full_link_at, forget_full_link_at, restore_full_link_at, };
+mod identity;
+pub(crate) use identity::{RuntimeTarget, Candidate, SavedSelection, ActivatedTarget, connection_key, hex, sha256, team_id, valid_target, };
+use identity::{Selection, };
+mod own_vps;
+pub(crate) use own_vps::{mark_own_vps_at, mark_own_vps, OwnVpsState, own_vps_state_at, own_vps_for_writes_at, own_vps_for_reads_at, claim_own_vps_at, };
+mod own_vps_claim;
+pub(crate) use own_vps_claim::{own_vps_identity_input, own_vps_identity_matches, OwnVpsClaimRequest, own_vps_claim, };
+use own_vps_claim::OWN_VPS_IDENTITY_PY;
+mod rebind;
+pub(crate) use rebind::{forget_team_at, RebindBase, rebind_base_at, clear_for_rebind_at, clear_link_at, };
+mod selection;
+pub(crate) use selection::{activate, activate_at, activate_or_keep, activate_or_keep_at, selected, selected_or_own, selected_or_own_at, selected_at, };
+#[allow(unused_imports)] // The crate's existing API is kept by the facade.
+pub(crate) use selection::pinned_key_for;
+use selection::{selection_may_be_absent, read_selection_at, };
+mod storage;
+pub(crate) use storage::{root, };
+use storage::{CANDIDATE_FILE, SELECTION_FILE, OWN_VPS_FILE, MAX_BYTES, account_dir, path, read_bytes, };
+#[cfg(test)]
+pub(crate) use full_link::FULL_LINK_TEST_LOCK;
+pub(crate) use own_vps_claim::__cmd__own_vps_claim;
+pub(crate) use own_vps_claim::__tauri_command_name_own_vps_claim;
+
 const READ_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub(crate) const POSITIONS_READ_PY: &str = r#"import json,sqlite3,sys,re
@@ -505,18 +627,6 @@ window=rows[offset:offset+limit] if limit is not None else rows[offset:]
 emit({'ok':True,'data':{'items':[light(item) for item in window],'total':len(rows),'scamSection':section_total}})
 "#;
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct RuntimeTarget {
-    pub(crate) container_id: String,
-    pub(crate) image_id: String,
-    pub(crate) platform_image_id: String,
-    pub(crate) oci_revision: String,
-    pub(crate) digest: String,
-    pub(crate) os: String,
-    pub(crate) architecture: String,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "op", rename_all = "lowercase", deny_unknown_fields)]
 enum PositionsRequest {
@@ -823,1105 +933,6 @@ fn valid_positions_reply(request: &PositionsRequest, reply: &Value) -> bool {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct Candidate {
-    schema: u8,
-    host: ExecutionHost,
-    team_id: String,
-    runtime: RuntimeTarget,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Selection {
-    schema: u8,
-    host: ExecutionHost,
-    team_id: String,
-    candidate_sha256: String,
-}
-
-/// A valid saved selection, read by the rules of every read of one: the host,
-/// the team and the SHA-256 of every byte of the candidate it was made from.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SavedSelection {
-    pub(crate) host: ExecutionHost,
-    pub(crate) team_id: String,
-    pub(crate) candidate_sha256: String,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub(crate) struct ActivatedTarget {
-    pub(crate) team_id: String,
-    pub(crate) runtime: RuntimeTarget,
-    candidate_sha256: String,
-}
-
-impl ActivatedTarget {
-    #[cfg(test)]
-    pub(crate) fn synthetic_for_tests() -> Self {
-        Self {
-            team_id: "t".repeat(16),
-            runtime: RuntimeTarget {
-                container_id: "a".repeat(64),
-                image_id: format!("sha256:{}", "b".repeat(64)),
-                platform_image_id: format!("sha256:{}", "c".repeat(64)),
-                oci_revision: "d".repeat(40),
-                digest: format!("sha256:{}", "e".repeat(64)),
-                os: "linux".into(),
-                architecture: "amd64".into(),
-            },
-            candidate_sha256: "f".repeat(64),
-        }
-    }
-
-    pub(crate) fn candidate_sha256(&self) -> &str {
-        &self.candidate_sha256
-    }
-}
-
-/// The identity of a read-only connection, as one opaque value the renderer may hold: the account
-/// scope and the candidate's SHA-256 (the candidate's bytes carry the host, the team and the
-/// container). Two connections that differ in any of them never share a key.
-pub(crate) fn connection_key(scope: &AccountScope, target: &ActivatedTarget) -> String {
-    sha256(format!("{}\n{}", scope.digest(), target.candidate_sha256).as_bytes())
-}
-
-pub(crate) fn hex(value: &str, length: usize) -> bool {
-    value.len() == length
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
-
-pub(crate) fn sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
-
-pub(crate) fn team_id(value: &str) -> bool {
-    (16..=128).contains(&value.len())
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
-}
-
-pub(crate) fn valid_target(target: &RuntimeTarget) -> bool {
-    hex(&target.container_id, 64)
-        && target
-            .image_id
-            .strip_prefix("sha256:")
-            .is_some_and(|value| hex(value, 64))
-        && target
-            .platform_image_id
-            .strip_prefix("sha256:")
-            .is_some_and(|value| hex(value, 64))
-        && target.platform_image_id != target.image_id
-        && hex(&target.oci_revision, 40)
-        && target
-            .digest
-            .strip_prefix("sha256:")
-            .is_some_and(|value| hex(value, 64))
-        && target.os == "linux"
-        && matches!(target.architecture.as_str(), "amd64" | "arm64")
-}
-
-fn account_dir(root: &Path, scope: &AccountScope) -> PathBuf {
-    root.join("accounts").join(scope.digest())
-}
-
-fn path(root: &Path, scope: &AccountScope, name: &str) -> PathBuf {
-    account_dir(root, scope).join(name)
-}
-
-fn private_file(
-    path: &Path,
-    missing: &'static str,
-    invalid: &'static str,
-) -> Result<(), &'static str> {
-    let meta = fs::symlink_metadata(path).map_err(|error| {
-        if error.kind() == std::io::ErrorKind::NotFound {
-            missing
-        } else {
-            invalid
-        }
-    })?;
-    let parent = path.parent().ok_or(invalid)?;
-    let parent_meta = fs::symlink_metadata(parent).map_err(|_| invalid)?;
-    if meta.file_type().is_symlink()
-        || !meta.file_type().is_file()
-        || meta.len() == 0
-        || meta.len() > MAX_BYTES as u64
-        || parent_meta.file_type().is_symlink()
-        || !parent_meta.is_dir()
-    {
-        return Err(invalid);
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        if meta.uid() != unsafe { libc::geteuid() }
-            || meta.uid() != parent_meta.uid()
-            || meta.permissions().mode() & 0o777 != 0o600
-            || parent_meta.permissions().mode() & 0o022 != 0
-        {
-            return Err(invalid);
-        }
-    }
-    Ok(())
-}
-
-fn read_bytes(
-    path: &Path,
-    missing: &'static str,
-    invalid: &'static str,
-) -> Result<Vec<u8>, &'static str> {
-    private_file(path, missing, invalid)?;
-    let mut options = File::options();
-    options.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    let mut file = options.open(path).map_err(|_| invalid)?;
-    let mut bytes = Vec::new();
-    Read::by_ref(&mut file)
-        .take((MAX_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|_| invalid)?;
-    if bytes.len() > MAX_BYTES {
-        return Err(invalid);
-    }
-    Ok(bytes)
-}
-
-pub(crate) fn root(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
-    app.path()
-        .app_local_data_dir()
-        .map_err(|_| "existing_team_runtime_unavailable")
-}
-
-/// Validates candidate bytes in memory: the same rules `read_candidate_at`
-/// applies on every read, so a writer can check what it is about to publish.
-pub(crate) fn parse_candidate_bytes(bytes: &[u8]) -> Result<Candidate, &'static str> {
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|_| "existing_team_runtime_candidate_invalid")?;
-    let candidate: Candidate = serde_json::from_value(value.clone())
-        .map_err(|_| "existing_team_runtime_candidate_invalid")?;
-    if value
-        != serde_json::to_value(&candidate)
-            .map_err(|_| "existing_team_runtime_candidate_invalid")?
-        || candidate.schema != 1
-        || !team_id(&candidate.team_id)
-        || !valid_target(&candidate.runtime)
-    {
-        return Err("existing_team_runtime_candidate_invalid");
-    }
-    Ok(candidate)
-}
-
-fn read_candidate_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(Candidate, String), &'static str> {
-    let bytes = read_bytes(
-        &path(root, scope, CANDIDATE_FILE),
-        "existing_team_runtime_candidate_required",
-        "existing_team_runtime_candidate_invalid",
-    )?;
-    let candidate = parse_candidate_bytes(&bytes)?;
-    Ok((candidate, sha256(&bytes)))
-}
-
-/// Reads the producer-delivered candidate and binds it to the explicit
-/// existing-team request. It does not activate or persist anything.
-pub(crate) fn candidate_for_request(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    team: &str,
-) -> Result<ActivatedTarget, &'static str> {
-    candidate_for_request_at(&root(app)?, scope, host, team)
-}
-
-pub(crate) fn candidate_for_request_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    team: &str,
-) -> Result<ActivatedTarget, &'static str> {
-    let (candidate, candidate_sha256) = read_candidate_at(root, scope)?;
-    if candidate.host != *host || candidate.team_id != team {
-        return Err("existing_team_runtime_candidate_mismatch");
-    }
-    Ok(ActivatedTarget {
-        team_id: candidate.team_id,
-        runtime: candidate.runtime,
-        candidate_sha256,
-    })
-}
-
-/// Whether this scope has a candidate and whether it has a selection (a file of
-/// any kind counts, even an invalid one or a dangling symlink). Local only.
-pub(crate) fn saved_binding_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(bool, bool), &'static str> {
-    let present = |name: &str| match fs::symlink_metadata(path(root, scope, name)) {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(_) => Err("existing_team_runtime_unavailable"),
-    };
-    Ok((present(CANDIDATE_FILE)?, present(SELECTION_FILE)?))
-}
-
-/// What the app's own provisioning of a VPS writes, privately, once the host is set up and its key
-/// pinned: the account, the host (address and port) and the fingerprint of the host key it is
-/// bound to. It is the positive mark of «a VPS of the person's own»; the absence of other files
-/// is not (JHT-T30). Never returned by a command, never read from the renderer.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct OwnVpsMarker {
-    schema: u8,
-    scope: String,
-    address: String,
-    port: u16,
-    host_key: String,
-}
-
-fn own_vps_marker_valid(marker: &OwnVpsMarker) -> bool {
-    let key = marker.host_key.as_bytes();
-    marker.schema == 1
-        && !marker.scope.is_empty()
-        && marker.scope.len() <= 128
-        && !marker.address.is_empty()
-        && marker.address.len() <= 255
-        && marker.address == marker.address.trim()
-        && marker.port != 0
-        && marker.host_key.starts_with("SHA256:")
-        && key.len() <= 128
-        && key.iter().all(|byte| byte.is_ascii_graphic())
-}
-
-/// The marker this scope has, if there is one and it is well formed: a private file of the account,
-/// canonical, of this account, and nothing else.
-fn read_own_vps_marker_at(root: &Path, scope: &AccountScope) -> Option<OwnVpsMarker> {
-    let bytes = read_bytes(
-        &path(root, scope, OWN_VPS_FILE),
-        "existing_team_runtime_own_vps_missing",
-        "existing_team_runtime_own_vps_invalid",
-    )
-    .ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    let marker: OwnVpsMarker = serde_json::from_value(value.clone()).ok()?;
-    (serde_json::to_value(&marker).ok()? == value && own_vps_marker_valid(&marker) && marker.scope == scope.digest())
-        .then_some(marker)
-}
-
-/// Writes the marker for the VPS the app has just set up and pinned. Only the provisioning calls it,
-/// after the host's key is confirmed: `host_key` is the fingerprint of that pinned key. It replaces the
-/// marker of an earlier host of the same account.
-pub(crate) fn mark_own_vps_at(
-    root: &Path,
-    scope: &AccountScope,
-    address: &str,
-    port: u16,
-    host_key: &str,
-) -> Result<(), &'static str> {
-    let marker = OwnVpsMarker {
-        schema: 1,
-        scope: scope.digest().to_owned(),
-        address: address.trim().to_owned(),
-        port,
-        host_key: host_key.to_owned(),
-    };
-    if !own_vps_marker_valid(&marker) {
-        return Err("existing_team_runtime_own_vps_invalid");
-    }
-    let bytes = serde_json::to_vec(&marker).map_err(|_| "existing_team_runtime_unavailable")?;
-    let destination = path(root, scope, OWN_VPS_FILE);
-    let parent = destination.parent().ok_or("existing_team_runtime_unavailable")?;
-    fs::create_dir_all(parent).map_err(|_| "existing_team_runtime_unavailable")?;
-    if fs::symlink_metadata(parent).map_err(|_| "existing_team_runtime_unavailable")?.file_type().is_symlink() {
-        return Err("existing_team_runtime_unavailable");
-    }
-    set_private_dir_permissions(parent).map_err(|_| "existing_team_runtime_unavailable")?;
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "existing_team_runtime_unavailable")?
-        .as_nanos();
-    let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(&temporary).map_err(|_| "existing_team_runtime_unavailable")?;
-    let written = (|| {
-        set_private_permissions(&temporary).map_err(|_| "existing_team_runtime_unavailable")?;
-        file.write_all(&bytes).map_err(|_| "existing_team_runtime_unavailable")?;
-        file.sync_all().map_err(|_| "existing_team_runtime_unavailable")?;
-        drop(file);
-        fs::rename(&temporary, &destination).map_err(|_| "existing_team_runtime_unavailable")
-    })();
-    if written.is_err() {
-        let _ = fs::remove_file(&temporary);
-        return written;
-    }
-    if read_own_vps_marker_at(root, scope).as_ref() != Some(&marker) {
-        return Err("existing_team_runtime_unavailable");
-    }
-    Ok(())
-}
-
-pub(crate) fn mark_own_vps(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    address: &str,
-    port: u16,
-    host_key: &str,
-) -> Result<(), &'static str> {
-    mark_own_vps_at(&root(app)?, scope, address, port, host_key)
-}
-
-/// Where a VPS of the person's own stands (JHT-T30). The reads and the writes do not ask the same:
-///
-/// - `Marked`: the app's own provisioning wrote the mark for this host, and the host key pinned NOW is
-///   the marked one. The full connection: reads and writes.
-/// - `Claimable`: no existing team in the account and no mark for this host: a VPS the app set up before
-///   the mark existed (or the mark is of another host). Reads yes; writes only after the person claims it.
-/// - `KeyChanged`: the mark is for this host and port, but the key pinned now is another: the VPS was
-///   reinstalled or replaced. Reads yes; writes need a new claim, and the message says so.
-/// - `NotOwn`: an existing team's candidate or selection in the account, this computer, or no pin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum OwnVpsState {
-    Marked,
-    Claimable,
-    KeyChanged,
-    NotOwn,
-}
-
-impl OwnVpsState {
-    /// The word the page reads.
-    pub(crate) fn word(self) -> &'static str {
-        match self {
-            OwnVpsState::Marked => "marked",
-            OwnVpsState::Claimable => "claimable",
-            OwnVpsState::KeyChanged => "key_changed",
-            OwnVpsState::NotOwn => "not_own",
-        }
-    }
-
-    /// Why a write is refused here, or none when it may go: the codes the page turns into the
-    /// invitation to claim the VPS. An existing team has its own rule (the full link), not this one.
-    pub(crate) fn write_refusal(self) -> Option<&'static str> {
-        match self {
-            OwnVpsState::Marked => None,
-            OwnVpsState::Claimable => Some("own_vps_claim_required"),
-            OwnVpsState::KeyChanged => Some("own_vps_key_changed"),
-            OwnVpsState::NotOwn => Some("own_vps_claim_refused"),
-        }
-    }
-}
-
-/// The state of the VPS `host` for this account, from the saved files and the key pinned now
-/// (`pinned_key`, read from the local pin by the caller). Read from the files, never from what the
-/// renderer says. An existing team's candidate or selection in the account always wins: it is that
-/// team's rule, never an own VPS, mark or no mark.
-pub(crate) fn own_vps_state_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    pinned_key: Option<&str>,
-) -> OwnVpsState {
-    let (ExecutionHost::Vps { address, port, .. }, Some(pinned_key)) = (host, pinned_key) else {
-        return OwnVpsState::NotOwn;
-    };
-    if !matches!(saved_binding_at(root, scope), Ok((false, false))) {
-        return OwnVpsState::NotOwn;
-    }
-    match read_own_vps_marker_at(root, scope) {
-        Some(marker) if marker.address == address.trim() && marker.port == *port => {
-            if marker.host_key == pinned_key {
-                OwnVpsState::Marked
-            } else {
-                OwnVpsState::KeyChanged
-            }
-        }
-        _ => OwnVpsState::Claimable,
-    }
-}
-
-/// WRITES to a VPS of the person's own (the panel's actions, the chat's messages, the judgements):
-/// only with the mark. «The scope has no candidate and no selection» is not a permission to write.
-pub(crate) fn own_vps_for_writes_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    pinned_key: Option<&str>,
-) -> bool {
-    own_vps_state_at(root, scope, host, pinned_key) == OwnVpsState::Marked
-}
-
-/// READS of a VPS the app set up (positions, agents, the setup's snapshot): the mark, or what held
-/// before the mark existed, a scope with no candidate and no selection (only the existing-team
-/// commands write them). A VPS the app set up before the mark must not go back to being unreadable;
-/// what it cannot do without the mark is write. A read exposes the person's own data to the person.
-pub(crate) fn own_vps_for_reads_at(root: &Path, scope: &AccountScope) -> bool {
-    matches!(saved_binding_at(root, scope), Ok((false, false)))
-}
-
-/// The person says that this VPS was set up by them with the app (JHT-T30). Writes the mark, and only
-/// when all of it holds: the VPS is a host with a pinned key, the account has no existing team (a
-/// read-only view or a connection to one always has its candidate or selection), the VPS answers as
-/// the team of this account (`identity_matches`, from the identity probe), and the person confirmed. Atomic
-/// (the mark is written once, after the checks); a refusal leaves no file.
-pub(crate) fn claim_own_vps_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    pinned_key: Option<&str>,
-    identity_matches: bool,
-) -> Result<(), &'static str> {
-    let ExecutionHost::Vps { address, port, .. } = host else {
-        return Err("own_vps_claim_refused");
-    };
-    match own_vps_state_at(root, scope, host, pinned_key) {
-        OwnVpsState::Marked => return Ok(()),
-        OwnVpsState::Claimable | OwnVpsState::KeyChanged => {}
-        OwnVpsState::NotOwn => return Err("own_vps_claim_refused"),
-    }
-    if !identity_matches {
-        return Err("own_vps_claim_refused");
-    }
-    let key = pinned_key.ok_or("own_vps_claim_refused")?;
-    mark_own_vps_at(root, scope, address, *port, key).map_err(|_| "own_vps_claim_refused")
-}
-
-/// The script the identity probe runs in the VPS's container, through the read channel of the host's
-/// wrapper (the chat's): it starts nothing and prints one boolean. The account's id arrives on standard
-/// input and nothing of `cloud.json` comes back. An unreadable file is «no».
-const OWN_VPS_IDENTITY_PY: &str = r#"import json,sys
-try:
- expected=json.loads(sys.stdin.readline()).get('user_id')
- cloud=json.load(open('/jht_home/cloud.json'))
- match=isinstance(expected,str) and len(expected)>=16 and cloud.get('user_id')==expected
-except Exception:
- match=False
-print(json.dumps({'match':match}))"#;
-
-/// What the probe sends: the script in hex, then the expected id. Never an argument.
-pub(crate) fn own_vps_identity_input(user_id: &str) -> Option<Vec<u8>> {
-    if !crate::onboarding::valid_team_id(user_id) {
-        return None;
-    }
-    let mut input = hex_encode(OWN_VPS_IDENTITY_PY.as_bytes()).into_bytes();
-    input.push(b'\n');
-    input.extend_from_slice(json!({ "user_id": user_id }).to_string().as_bytes());
-    input.push(b'\n');
-    Some(input)
-}
-
-/// The probe's one answer: exactly `{"match": true}`. Anything else, an error, a different shape: no.
-pub(crate) fn own_vps_identity_matches(stdout: &[u8]) -> bool {
-    serde_json::from_slice::<Value>(stdout.trim_ascii())
-        .ok()
-        .and_then(|value| {
-            let object = value.as_object()?;
-            (object.len() == 1).then(|| object.get("match") == Some(&Value::Bool(true)))
-        })
-        .unwrap_or(false)
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct OwnVpsClaimRequest {
-    confirmed: bool,
-}
-
-/// `account_id` is the one the backend authenticated itself, never one the page sent.
-fn claim_own_vps_impl(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    account_id: &str,
-    request: &OwnVpsClaimRequest,
-) -> Result<(), &'static str> {
-    if !request.confirmed {
-        return Err("own_vps_claim_not_confirmed");
-    }
-    let input = own_vps_identity_input(account_id).ok_or("own_vps_claim_refused")?;
-    let host = direct_chat::load_persisted_host(app, scope).map_err(|_| "own_vps_claim_refused")?;
-    if !matches!(host, ExecutionHost::Vps { .. }) {
-        return Err("own_vps_claim_refused");
-    }
-    let validated = crate::runtime_host::validate_host_for_scope(app, &host, scope).map_err(|_| "own_vps_claim_refused")?;
-    let pinned = crate::runtime_host::pinned_host_fingerprint(&validated).map_err(|_| "own_vps_claim_refused")?;
-    let root = root(app)?;
-    // Before any network: an existing team, or no VPS of the app's, is refused here.
-    match own_vps_state_at(&root, scope, &host, Some(&pinned)) {
-        OwnVpsState::Marked => return Ok(()),
-        OwnVpsState::NotOwn => return Err("own_vps_claim_refused"),
-        OwnVpsState::Claimable | OwnVpsState::KeyChanged => {}
-    }
-    let started = std::time::Instant::now();
-    let log = crate::runtime_log::RuntimeLog::new(app);
-    // The probe goes where the chat's reads go, to the wrapper's python channel, which reads the
-    // attested container and never starts it.
-    let probe = run_ssh_command(&validated, &crate::agent_control::own_vps_read_command(), Some(&input), Duration::from_secs(30), None);
-    let outcome = match &probe {
-        Ok(result) if result.success() => {
-            let matches = own_vps_identity_matches(&result.stdout);
-            claim_own_vps_at(&root, scope, &host, Some(&pinned), matches)
-        }
-        _ => Err("own_vps_claim_unreachable"),
-    };
-    // The runtime log keeps that a claim was made and how it ended: no host, no account, no answer.
-    if let Some(log) = log {
-        log.record("own_vps_claim", outcome.map(|_| 0), &[], &[], started.elapsed());
-    }
-    outcome
-}
-
-/// «This VPS I set up with the app» (JHT-T30). Only the app's own window, only with the person's
-/// confirmation, never by itself: nothing calls it but the page's button. The page sends no identifier:
-/// the account is the one whose session this backend holds and verified (`authenticated_account_id`),
-/// and it must be the account the app is working in; the identity probe asks the VPS about that account.
-#[tauri::command]
-pub(crate) async fn own_vps_claim(
-    window: tauri::Window,
-    app: tauri::AppHandle,
-    keys: State<'_, crate::auth_store::SystemKeyCache>,
-    scopes: State<'_, AccountScopeState>,
-    request: OwnVpsClaimRequest,
-) -> Result<(), &'static str> {
-    if !direct_chat::window_may_write(window.label()) {
-        return Err("own_vps_claim_refused");
-    }
-    let expected = scopes.active().map_err(|_| "own_vps_claim_refused")?;
-    let account_id = crate::auth_store::authenticated_account_id(&app, &keys).await?;
-    if crate::account_scope::scope_of_authenticated(account_id.as_bytes()) != expected {
-        return Err("own_vps_claim_refused");
-    }
-    let scope_state = scopes.inner().clone();
-    let worker_expected = expected.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "own_vps_claim_refused")?;
-        claim_own_vps_impl(&app, &worker_expected, &account_id, &request)
-    })
-    .await
-    .unwrap_or(Err("own_vps_claim_unreachable"));
-    scopes.lock_expected(&expected).map_err(|_| "own_vps_claim_refused")?;
-    result
-}
-
-/// «Forget the team» for an account: the existing-team candidate and selection, and the own-VPS mark.
-/// After it nothing in the scope says a team is connected, and no VPS is the person's own until the
-/// app provisions one again. Missing files are fine; any other failure is reported, and the rest are
-/// still tried.
-#[allow(dead_code)] // the command that forgets a team calls it; the guarantee is tested here
-pub(crate) fn forget_team_at(root: &Path, scope: &AccountScope) -> Result<(), &'static str> {
-    let mut outcome = Ok(());
-    for name in [CANDIDATE_FILE, SELECTION_FILE, OWN_VPS_FILE] {
-        match fs::remove_file(path(root, scope, name)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => outcome = Err("existing_team_runtime_unavailable"),
-        }
-    }
-    outcome
-}
-
-/// The saved pair that an updated team may replace: its runtime and the SHA-256 of the candidate's bytes.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct RebindBase {
-    pub(crate) runtime: RuntimeTarget,
-    pub(crate) candidate_sha256: String,
-}
-
-/// What a rebind starts from: a valid candidate for exactly this host (same user, port and key) and
-/// this team, and a selection that is absent or attests exactly that candidate. Anything else, an
-/// invalid file, another host or team, a selection of other bytes, is `None`: no rebind, and the
-/// registration refuses as it always did.
-pub(crate) fn rebind_base_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    team: &str,
-) -> Option<RebindBase> {
-    let (candidate, candidate_sha256) = read_candidate_at(root, scope).ok()?;
-    if candidate.host != *host || candidate.team_id != team {
-        return None;
-    }
-    match fs::symlink_metadata(path(root, scope, SELECTION_FILE)) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return None,
-        Ok(_) => {
-            let selection = read_selection_at(root, scope).ok()?;
-            if selection.host != *host
-                || selection.team_id != team
-                || selection.candidate_sha256 != candidate_sha256
-            {
-                return None;
-            }
-        }
-    }
-    Some(RebindBase {
-        runtime: candidate.runtime,
-        candidate_sha256,
-    })
-}
-
-/// The first half of a rebind: removes the selection and then the candidate, and only if the candidate
-/// is still the very one the person was shown being replaced. The order matters: a stop in between
-/// leaves a candidate without selection (rebindable again), never a selection without its candidate.
-/// The new candidate is then written by the ordinary, never-replacing write.
-pub(crate) fn clear_for_rebind_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    team: &str,
-    expected_sha256: &str,
-) -> Result<(), &'static str> {
-    match rebind_base_at(root, scope, host, team) {
-        Some(base) if base.candidate_sha256 == expected_sha256 => {}
-        _ => return Err("existing_team_runtime_target_changed"),
-    }
-    // The permission to write goes first: a candidate that comes back byte for byte the same must not
-    // find the old record still there.
-    forget_full_link_at(root, scope)?;
-    for name in [SELECTION_FILE, CANDIDATE_FILE] {
-        match fs::remove_file(path(root, scope, name)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err("existing_team_runtime_unavailable"),
-        }
-    }
-    Ok(())
-}
-
-/// Removes the account's persisted existing-team binding. The selection goes
-/// first, so an interruption can only leave a candidate to be reconnected,
-/// never a selection whose candidate has already gone away.
-pub(crate) fn clear_link_at(root: &Path, scope: &AccountScope) -> Result<(), &'static str> {
-    // The permission to write goes first (see `clear_for_rebind_at`); a record that cannot be taken away
-    // is an error, and nothing else is removed.
-    forget_full_link_at(root, scope)?;
-    for name in [SELECTION_FILE, CANDIDATE_FILE] {
-        match fs::remove_file(path(root, scope, name)) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err("existing_team_runtime_unavailable"),
-        }
-    }
-    Ok(())
-}
-
-/// The host and team of the candidate this scope has, for the backend's own use
-/// (reopening a saved team). It never leaves the backend: no command returns it.
-pub(crate) fn candidate_identity_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<(ExecutionHost, String), &'static str> {
-    let (candidate, _) = read_candidate_at(root, scope)?;
-    Ok((candidate.host, candidate.team_id))
-}
-
-/// Gets the custodial host only after binding it to the explicit team id.
-/// The CLI companion never accepts a host, target or pin from stdin.
-pub(crate) fn candidate_host_for_team(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    team: &str,
-) -> Result<(ExecutionHost, ActivatedTarget), &'static str> {
-    let (candidate, candidate_sha256) = read_candidate_at(&root(app)?, scope)?;
-    if candidate.team_id != team {
-        return Err("existing_team_runtime_candidate_mismatch");
-    }
-    let target = ActivatedTarget {
-        team_id: candidate.team_id,
-        runtime: candidate.runtime,
-        candidate_sha256,
-    };
-    Ok((candidate.host, target))
-}
-
-fn candidate_matches_probed(
-    candidate: &Candidate,
-    candidate_sha256: &str,
-    host: &ExecutionHost,
-    probed: &ActivatedTarget,
-) -> bool {
-    candidate.host == *host
-        && candidate.team_id == probed.team_id
-        && candidate.runtime == probed.runtime
-        && candidate_sha256 == probed.candidate_sha256
-}
-
-fn selection_may_be_absent(
-    host: &ExecutionHost,
-    candidate_exists: bool,
-) -> Result<(), &'static str> {
-    if candidate_exists || matches!(host, ExecutionHost::Vps { .. }) {
-        Err("existing_team_runtime_selection_required")
-    } else {
-        Ok(())
-    }
-}
-
-fn write_selection_at(
-    root: &Path,
-    scope: &AccountScope,
-    candidate: &Candidate,
-    hash: &str,
-) -> Result<(), &'static str> {
-    let parent = account_dir(root, scope);
-    fs::create_dir_all(&parent).map_err(|_| "existing_team_runtime_unavailable")?;
-    set_private_dir_permissions(&parent).map_err(|_| "existing_team_runtime_unavailable")?;
-    let destination = path(root, scope, SELECTION_FILE);
-    if fs::symlink_metadata(&destination).is_ok() {
-        return Err("existing_team_runtime_already_selected");
-    }
-    let payload = serde_json::to_vec(&Selection {
-        schema: 1,
-        host: candidate.host.clone(),
-        team_id: candidate.team_id.clone(),
-        candidate_sha256: hash.to_owned(),
-    })
-    .map_err(|_| "existing_team_runtime_unavailable")?;
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "existing_team_runtime_unavailable")?
-        .as_nanos();
-    let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|_| "existing_team_runtime_unavailable")?;
-    let result = (|| {
-        set_private_permissions(&temporary).map_err(|_| "existing_team_runtime_unavailable")?;
-        file.write_all(&payload)
-            .map_err(|_| "existing_team_runtime_unavailable")?;
-        file.sync_all()
-            .map_err(|_| "existing_team_runtime_unavailable")?;
-        drop(file);
-        fs::rename(&temporary, &destination).map_err(|_| "existing_team_runtime_unavailable")?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temporary);
-    }
-    result
-}
-
-/// What the in-app registration may do in this scope. Decided locally, before a
-/// single SSH call, by ONE predicate that discover and register both use.
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum RegistrationGate {
-    /// Neither a candidate nor a selection: a new candidate may be published.
-    Fresh,
-    /// A valid selection and no candidate: only the candidate whose bytes the
-    /// selection attests may be published back. The selection is never written.
-    Restore(SavedSelection),
-}
-
-/// A candidate of ANY kind (invalid, a symlink, even a dangling one) means the
-/// existing path owns this scope. So does a selection that is not a valid
-/// private one: only a valid selection without its candidate can be restored.
-pub(crate) fn registration_gate_at(
-    root: &Path,
-    scope: &AccountScope,
-) -> Result<RegistrationGate, &'static str> {
-    match fs::symlink_metadata(path(root, scope, CANDIDATE_FILE)) {
-        Ok(_) => return Err("existing_team_runtime_candidate_exists"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err("existing_team_runtime_unavailable"),
-    }
-    match fs::symlink_metadata(path(root, scope, SELECTION_FILE)) {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(RegistrationGate::Fresh)
-        }
-        Err(_) => return Err("existing_team_runtime_unavailable"),
-    }
-    // One read, with the rules of `selected_at` (O_NOFOLLOW, private, canonical).
-    read_selection_at(root, scope)
-        .map(RegistrationGate::Restore)
-        .map_err(|_| "existing_team_runtime_already_selected")
-}
-
-/// The exact bytes of a candidate for this host, team and verified runtime and
-/// their SHA-256, validated in memory by the same rules every read applies.
-pub(crate) fn candidate_bytes(
-    host: &ExecutionHost,
-    team: &str,
-    runtime: &RuntimeTarget,
-) -> Result<(Vec<u8>, String), &'static str> {
-    let candidate = Candidate {
-        schema: 1,
-        host: host.clone(),
-        team_id: team.to_owned(),
-        runtime: runtime.clone(),
-    };
-    let bytes =
-        serde_json::to_vec(&candidate).map_err(|_| "existing_team_runtime_candidate_invalid")?;
-    // Every read refuses more than MAX_BYTES: never publish what could not be read back.
-    if bytes.len() > MAX_BYTES || parse_candidate_bytes(&bytes)? != candidate {
-        return Err("existing_team_runtime_candidate_invalid");
-    }
-    let hash = sha256(&bytes);
-    Ok((bytes, hash))
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) enum CandidateWrite {
-    Written,
-    /// The definitive file appeared first with exactly these bytes (a second
-    /// registration that raced this one).
-    Identical,
-}
-
-/// Publishes a candidate without ever replacing one. The bytes are validated in
-/// memory and again on the private temporary file BEFORE `hard_link` makes them
-/// definitive and immutable; the link fails if the definitive file exists, and
-/// there is no fallback to `rename`, which would overwrite. It never creates
-/// the account directory: the confirmed SSH pin already lives inside it.
-pub(crate) fn write_candidate_at(
-    root: &Path,
-    scope: &AccountScope,
-    bytes: &[u8],
-) -> Result<CandidateWrite, &'static str> {
-    write_candidate_hooked(root, scope, bytes, &mut || {})
-}
-
-/// `before_link` runs once the bytes are staged and validated, right before
-/// the definitive file is created: the window a concurrent writer can use.
-pub(crate) fn write_candidate_hooked(
-    root: &Path,
-    scope: &AccountScope,
-    bytes: &[u8],
-    before_link: &mut dyn FnMut(),
-) -> Result<CandidateWrite, &'static str> {
-    parse_candidate_bytes(bytes)?;
-    let parent = account_dir(root, scope);
-    let parent_meta =
-        fs::symlink_metadata(&parent).map_err(|_| "existing_team_runtime_unavailable")?;
-    if parent_meta.file_type().is_symlink() || !parent_meta.is_dir() {
-        return Err("existing_team_runtime_unavailable");
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        if parent_meta.uid() != unsafe { libc::geteuid() }
-            || parent_meta.permissions().mode() & 0o022 != 0
-        {
-            return Err("existing_team_runtime_unavailable");
-        }
-    }
-    let destination = path(root, scope, CANDIDATE_FILE);
-    match fs::symlink_metadata(&destination) {
-        Ok(_) => return Err("existing_team_runtime_candidate_exists"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err("existing_team_runtime_unavailable"),
-    }
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| "existing_team_runtime_unavailable")?
-        .as_nanos();
-    let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|_| "existing_team_runtime_unavailable")?;
-    let staged = (|| {
-        set_private_permissions(&temporary).map_err(|_| "existing_team_runtime_unavailable")?;
-        file.write_all(bytes)
-            .map_err(|_| "existing_team_runtime_unavailable")?;
-        file.sync_all()
-            .map_err(|_| "existing_team_runtime_unavailable")?;
-        drop(file);
-        let staged = read_bytes(
-            &temporary,
-            "existing_team_runtime_unavailable",
-            "existing_team_runtime_unavailable",
-        )?;
-        if staged != bytes {
-            return Err("existing_team_runtime_unavailable");
-        }
-        parse_candidate_bytes(&staged)?;
-        Ok(())
-    })();
-    if let Err(error) = staged {
-        let _ = fs::remove_file(&temporary);
-        return Err(error);
-    }
-    before_link();
-    let linked = fs::hard_link(&temporary, &destination);
-    let _ = fs::remove_file(&temporary);
-    match linked {
-        Ok(()) => {
-            let published = read_bytes(
-                &destination,
-                "existing_team_runtime_unavailable",
-                "existing_team_runtime_unavailable",
-            )?;
-            if published == bytes {
-                Ok(CandidateWrite::Written)
-            } else {
-                Err("existing_team_runtime_unavailable")
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            match read_bytes(
-                &destination,
-                "existing_team_runtime_candidate_conflict",
-                "existing_team_runtime_candidate_conflict",
-            ) {
-                Ok(existing) if existing == bytes => Ok(CandidateWrite::Identical),
-                _ => Err("existing_team_runtime_candidate_conflict"),
-            }
-        }
-        Err(_) => Err("existing_team_runtime_unavailable"),
-    }
-}
-
-/// Called only after the exact host/team identity and both required sessions
-/// have passed the read-only remote probe.
-pub(crate) fn activate(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    probed: &ActivatedTarget,
-) -> Result<(), &'static str> {
-    activate_at(&root(app)?, scope, host, probed)
-}
-
-pub(crate) fn activate_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    probed: &ActivatedTarget,
-) -> Result<(), &'static str> {
-    let (candidate, hash) = read_candidate_at(root, scope)?;
-    if !candidate_matches_probed(&candidate, &hash, host, probed) {
-        return Err("existing_team_runtime_candidate_mismatch");
-    }
-    write_selection_at(root, scope, &candidate, &hash)
-}
-
-/// The full connection («Confirm and connect») of a team this profile may have selected already:
-/// opening the same team read only saves the selection first. The same target is kept as it is;
-/// a selection of another one is `existing_team_runtime_target_changed`, never replaced.
-pub(crate) fn activate_or_keep(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    probed: &ActivatedTarget,
-) -> Result<(), &'static str> {
-    activate_or_keep_at(&root(app)?, scope, host, probed)
-}
-
-pub(crate) fn activate_or_keep_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-    probed: &ActivatedTarget,
-) -> Result<(), &'static str> {
-    match activate_at(root, scope, host, probed) {
-        Err("existing_team_runtime_already_selected") => match selected_at(root, scope, host)? {
-            Some(selected) if selected == *probed => Ok(()),
-            _ => Err("existing_team_runtime_target_changed"),
-        },
-        other => other,
-    }
-}
-
-/// The one parser of a selection's bytes, for `selected_at` and the
-/// registration gate alike: canonical JSON, schema 1, a valid team id and the
-/// SHA-256 of a candidate.
-fn parse_selection_bytes(bytes: &[u8]) -> Result<SavedSelection, &'static str> {
-    let invalid = "existing_team_runtime_selection_invalid";
-    let value: serde_json::Value = serde_json::from_slice(bytes).map_err(|_| invalid)?;
-    let selection: Selection = serde_json::from_value(value.clone()).map_err(|_| invalid)?;
-    if value != serde_json::to_value(&selection).map_err(|_| invalid)?
-        || selection.schema != 1
-        || !team_id(&selection.team_id)
-        || !hex(&selection.candidate_sha256, 64)
-    {
-        return Err(invalid);
-    }
-    Ok(SavedSelection {
-        host: selection.host,
-        team_id: selection.team_id,
-        candidate_sha256: selection.candidate_sha256,
-    })
-}
-
-fn read_selection_at(root: &Path, scope: &AccountScope) -> Result<SavedSelection, &'static str> {
-    let bytes = read_bytes(
-        &path(root, scope, SELECTION_FILE),
-        "existing_team_runtime_selection_invalid",
-        "existing_team_runtime_selection_invalid",
-    )?;
-    parse_selection_bytes(&bytes)
-}
-
-/// A local connection without a selection preserves the existing local path.
-/// Every VPS operation requires a selection; once present, it must see the
-/// same candidate bytes, host and team or fail closed.
-pub(crate) fn selected(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<Option<ActivatedTarget>, &'static str> {
-    selected_at(&root(app)?, scope, host)
-}
-
-/// The pinned target of an existing team, or `None` for a VPS the person made with the app: it has
-/// no existing-team selection to find (`selected` refuses a VPS without one), it is theirs and
-/// connected, and it is reached through the host's wrapper. For READING it is theirs when the scope
-/// has no candidate and no selection (`own_vps_for_reads_at`, read from the files, never from the
-/// renderer): a half-saved existing team stays the refusal it is. WRITING needs more, the mark the
-/// app's own setup writes (`own_vps_for_writes_at`), and the page offers to claim a VPS that has none. Every reader of a VPS team goes through here.
-pub(crate) fn selected_or_own(
-    app: &tauri::AppHandle,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<Option<ActivatedTarget>, &'static str> {
-    selected_or_own_at(&root(app)?, scope, host)
-}
-
-/// The fingerprint of the host key the person confirmed for this host, read from the local pin; none
-/// when the host does not validate or has no pin (and then no write to an own VPS goes).
-pub(crate) fn pinned_key_for(app: &tauri::AppHandle, scope: &AccountScope, host: &ExecutionHost) -> Option<String> {
-    let validated = crate::runtime_host::validate_host_for_scope(app, host, scope).ok()?;
-    crate::runtime_host::pinned_host_fingerprint(&validated).ok()
-}
-
-pub(crate) fn selected_or_own_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<Option<ActivatedTarget>, &'static str> {
-    match selected_at(root, scope, host) {
-        Err("existing_team_runtime_selection_required") if own_vps_for_reads_at(root, scope) => Ok(None),
-        other => other,
-    }
-}
-
 /// The command a reader of the team's data runs, always with the same input (the app's own script
 /// in hex, then the request): the pinned container of an existing team, or, on the VPS the app set
 /// up itself, its host's wrapper on the python channel the chat uses (only when the wrapper carries
@@ -1943,43 +954,6 @@ pub(crate) fn read_command(
     host: &ExecutionHost,
 ) -> Result<String, &'static str> {
     read_command_for(selected_or_own(app, scope, host)?, host)
-}
-
-pub(crate) fn selected_at(
-    root: &Path,
-    scope: &AccountScope,
-    host: &ExecutionHost,
-) -> Result<Option<ActivatedTarget>, &'static str> {
-    let selection_path = path(root, scope, SELECTION_FILE);
-    if let Err(error) = fs::symlink_metadata(&selection_path) {
-        return if error.kind() == std::io::ErrorKind::NotFound {
-            let candidate_exists = match fs::symlink_metadata(path(root, scope, CANDIDATE_FILE)) {
-                Ok(_) => true,
-                Err(candidate_error) if candidate_error.kind() == std::io::ErrorKind::NotFound => {
-                    false
-                }
-                Err(_) => return Err("existing_team_runtime_candidate_invalid"),
-            };
-            selection_may_be_absent(host, candidate_exists)?;
-            Ok(None)
-        } else {
-            Err("existing_team_runtime_selection_invalid")
-        };
-    }
-    let selection = read_selection_at(root, scope)?;
-    let (candidate, hash) = read_candidate_at(root, scope)?;
-    if selection.host != *host
-        || candidate.host != *host
-        || selection.team_id != candidate.team_id
-        || selection.candidate_sha256 != hash
-    {
-        return Err("existing_team_runtime_target_changed");
-    }
-    Ok(Some(ActivatedTarget {
-        team_id: candidate.team_id,
-        runtime: candidate.runtime,
-        candidate_sha256: hash,
-    }))
 }
 
 /// The container engine of the VPS, chosen the same way by every remote script: Docker when it is
@@ -2392,280 +1366,6 @@ pub(crate) fn chat_wrapper_arguments(operation: &ChatOperation<'_>) -> Result<Ve
     arguments.insert(0, "desktop-chat".to_owned());
     Ok(arguments)
 }
-
-/// The full connection of an existing team ("Conferma e collega") in this run of the app: the
-/// connection key of the one team the person confirmed. Only the native side of that command
-/// sets it, and only when it succeeds. What writes to the team (the chat, the agent controls) is
-/// allowed only to a team that holds it: the read-only view activates a target too, and never
-/// holds it. It lives in memory: an app run starts without it, so after a restart it fails closed, and
-/// the one way back without a new confirmation is `restore_full_link_at`, which the start-up reopening
-/// calls after every check passed, from the record of the person's own confirmation (30 days at most,
-/// this very candidate; see below). The commands that read it must refuse any window but `main` first.
-static FULL_LINK: Mutex<Option<String>> = Mutex::new(None);
-
-pub(crate) fn grant_full_link(scope: &AccountScope, target: &ActivatedTarget) {
-    if let Ok(mut slot) = FULL_LINK.lock() {
-        *slot = Some(connection_key(scope, target));
-    }
-}
-
-pub(crate) fn full_link_granted(scope: &AccountScope, target: &ActivatedTarget) -> bool {
-    FULL_LINK
-        .lock()
-        .map(|slot| slot.as_deref() == Some(connection_key(scope, target).as_str()))
-        .unwrap_or(false)
-}
-
-pub(crate) fn revoke_full_link() {
-    if let Ok(mut slot) = FULL_LINK.lock() {
-        *slot = None;
-    }
-}
-
-// ---- the full connection kept across a restart
-
-/// The record of a full connection the person confirmed, next to the candidate and the selection.
-/// Exact keys: the connection key (account and the bytes of the saved candidate, so another candidate
-/// is another key) and when it was given. Nothing else is in it, no host, no fingerprint, no secret.
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct FullLinkMark {
-    schema: u8,
-    connection_key: String,
-    granted_at: u64,
-}
-
-const FULL_LINK_FILE: &str = "existing-team-runtime-full-link.json";
-/// A permission given longer ago than this is not kept: the person is asked again.
-pub(crate) const FULL_LINK_MAX_AGE_S: u64 = 30 * 24 * 60 * 60;
-const FULL_LINK_MAX_BYTES: usize = 1024;
-
-/// What the reopening at start-up did with the record: the closed words the log writes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FullLinkRestore {
-    Restored,
-    NotRestored,
-    Expired,
-    Discarded,
-}
-
-impl FullLinkRestore {
-    pub(crate) fn word(self) -> &'static str {
-        match self {
-            Self::Restored => "restored",
-            Self::NotRestored => "not_restored",
-            Self::Expired => "expired",
-            Self::Discarded => "discarded",
-        }
-    }
-}
-
-/// What `forget_full_link_at` had to do. Both leave a record that can never bring the permission back.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FullLinkForgotten {
-    Removed,
-    /// The file could not be removed and was made unreadable as a record (overwritten or renamed).
-    Neutralized,
-}
-
-pub(crate) fn unix_now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_secs()).unwrap_or(0)
-}
-
-/// Temporary files of an interrupted write of the record (the process died between creating one and the
-/// rename): harmless, swept at the next write and at every start-up reopening. Only names this module gives them.
-fn sweep_full_link_leftovers(root: &Path, scope: &AccountScope) {
-    let Ok(entries) = fs::read_dir(account_dir(root, scope)) else { return };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        if name.to_string_lossy().starts_with("existing-team-runtime-full-link.tmp-") {
-            let _ = fs::remove_file(entry.path());
-        }
-    }
-}
-
-/// Writes the record of the full connection that was just granted: a private temporary file and a
-/// rename, so a reader sees the whole record or none. Where mode 0600 means nothing (not Unix) there
-/// is no record and the permission stays what it always was, for this run of the app only.
-#[cfg(unix)]
-pub(crate) fn remember_full_link_at(
-    root: &Path,
-    scope: &AccountScope,
-    target: &ActivatedTarget,
-    now: u64,
-) -> Result<(), &'static str> {
-    let unavailable = "existing_team_runtime_unavailable";
-    let parent = account_dir(root, scope);
-    let parent_meta = fs::symlink_metadata(&parent).map_err(|_| unavailable)?;
-    {
-        use std::os::unix::fs::{MetadataExt, PermissionsExt};
-        if parent_meta.file_type().is_symlink()
-            || !parent_meta.is_dir()
-            || parent_meta.uid() != unsafe { libc::geteuid() }
-            || parent_meta.permissions().mode() & 0o022 != 0
-        {
-            return Err(unavailable);
-        }
-    }
-    // Only in a folder that passed the checks above: a link or a folder that is not ours is never swept.
-    sweep_full_link_leftovers(root, scope);
-    let payload = serde_json::to_vec(&FullLinkMark {
-        schema: 1,
-        connection_key: connection_key(scope, target),
-        granted_at: now,
-    })
-    .map_err(|_| unavailable)?;
-    let destination = path(root, scope, FULL_LINK_FILE);
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| unavailable)?.as_nanos();
-    let temporary = destination.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(&temporary).map_err(|_| unavailable)?;
-    let written = (|| {
-        set_private_permissions(&temporary).map_err(|_| unavailable)?;
-        file.write_all(&payload).map_err(|_| unavailable)?;
-        file.sync_all().map_err(|_| unavailable)?;
-        drop(file);
-        fs::rename(&temporary, &destination).map_err(|_| unavailable)
-    })();
-    if written.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    written
-}
-
-#[cfg(not(unix))]
-pub(crate) fn remember_full_link_at(
-    _root: &Path,
-    _scope: &AccountScope,
-    _target: &ActivatedTarget,
-    _now: u64,
-) -> Result<(), &'static str> {
-    Ok(())
-}
-
-/// Takes the record away. A file that cannot be removed is made unreadable as a record, so the next
-/// start cannot give back a permission the person took away; only when neither works is it an error
-/// (`existing_team_full_link_not_removed`), and the caller shows it.
-pub(crate) fn forget_full_link_at(root: &Path, scope: &AccountScope) -> Result<FullLinkForgotten, &'static str> {
-    let file = path(root, scope, FULL_LINK_FILE);
-    match fs::remove_file(&file) {
-        Ok(()) => return Ok(FullLinkForgotten::Removed),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(FullLinkForgotten::Removed),
-        Err(_) => {}
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let overwritten = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(&file)
-            .and_then(|mut handle| handle.write_all(b"x").and_then(|_| handle.sync_all()))
-            .is_ok();
-        if overwritten {
-            return Ok(FullLinkForgotten::Neutralized);
-        }
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).map(|elapsed| elapsed.as_nanos()).unwrap_or(0);
-        if fs::rename(&file, file.with_extension(format!("discarded-{nonce}"))).is_ok() {
-            return Ok(FullLinkForgotten::Neutralized);
-        }
-    }
-    Err("existing_team_full_link_not_removed")
-}
-
-/// A record that can be believed, read from the descriptor itself: not a link, a regular file, ours,
-/// private (0600), one name, at most 1 KiB, and the exact keys. `Ok(None)` is no file at all.
-#[cfg(unix)]
-fn read_full_link_mark(file: &Path) -> Result<Option<FullLinkMark>, ()> {
-    use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
-    let mut handle = match OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(file)
-    {
-        Ok(handle) => handle,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(()),
-    };
-    let meta = handle.metadata().map_err(|_| ())?;
-    if !meta.file_type().is_file()
-        || meta.uid() != unsafe { libc::geteuid() }
-        || meta.permissions().mode() & 0o777 != 0o600
-        || meta.nlink() != 1
-        || meta.len() == 0
-        || meta.len() > FULL_LINK_MAX_BYTES as u64
-    {
-        return Err(());
-    }
-    let mut bytes = Vec::new();
-    Read::by_ref(&mut handle)
-        .take((FULL_LINK_MAX_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)
-        .map_err(|_| ())?;
-    if bytes.len() > FULL_LINK_MAX_BYTES {
-        return Err(());
-    }
-    let value: Value = serde_json::from_slice(&bytes).map_err(|_| ())?;
-    let mark: FullLinkMark = serde_json::from_value(value.clone()).map_err(|_| ())?;
-    if value != serde_json::to_value(&mark).map_err(|_| ())? || mark.schema != 1 || !hex(&mark.connection_key, 64) {
-        return Err(());
-    }
-    Ok(Some(mark))
-}
-
-/// At the end of a reopening that PASSED every check (the pin, the identity probe, the selection that
-/// is the saved candidate), gives the full connection back, and only through `grant_full_link`, when
-/// the record says this very connection (account and candidate bytes) and is not older than
-/// `FULL_LINK_MAX_AGE_S`. A record that is too old, from the future (the clock went back), of another
-/// candidate, or not believable is removed and the view stays read-only; no record is read-only too.
-#[cfg(unix)]
-pub(crate) fn restore_full_link_at(
-    root: &Path,
-    scope: &AccountScope,
-    target: &ActivatedTarget,
-    now: u64,
-) -> FullLinkRestore {
-    sweep_full_link_leftovers(root, scope);
-    let file = path(root, scope, FULL_LINK_FILE);
-    let mark = match read_full_link_mark(&file) {
-        Ok(None) => return FullLinkRestore::NotRestored,
-        Ok(Some(mark)) => mark,
-        Err(()) => {
-            let _ = forget_full_link_at(root, scope);
-            return FullLinkRestore::Discarded;
-        }
-    };
-    if mark.granted_at > now || now - mark.granted_at > FULL_LINK_MAX_AGE_S {
-        let _ = forget_full_link_at(root, scope);
-        return FullLinkRestore::Expired;
-    }
-    if mark.connection_key != connection_key(scope, target) {
-        let _ = forget_full_link_at(root, scope);
-        return FullLinkRestore::Discarded;
-    }
-    grant_full_link(scope, target);
-    FullLinkRestore::Restored
-}
-
-#[cfg(not(unix))]
-pub(crate) fn restore_full_link_at(
-    _root: &Path,
-    _scope: &AccountScope,
-    _target: &ActivatedTarget,
-    _now: u64,
-) -> FullLinkRestore {
-    FullLinkRestore::NotRestored
-}
-
-/// The tests that grant or revoke share the one static of the process: cargo runs tests in parallel.
-#[cfg(test)]
-pub(crate) static FULL_LINK_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn snapshot_command(target: &RuntimeTarget) -> Result<String, &'static str> {
     command(target, "\"$JHT_ENGINE\" exec \"$JHT_CID\" node -e 'const fs=require(\"fs\"); let c={}; try{c=JSON.parse(fs.readFileSync(\"/jht_home/jht.config.json\",\"utf8\"))}catch{}; const p=String(c.active_provider||\"\").toLowerCase(); const marker={claude:\"/jht_home/.claude/.credentials.json\",anthropic:\"/jht_home/.claude/.credentials.json\",codex:\"/jht_home/.codex/auth.json\",openai:\"/jht_home/.codex/auth.json\",kimi:\"/jht_home/.kimi/credentials/kimi-code.json\",moonshot:\"/jht_home/.kimi/credentials/kimi-code.json\"}[p]; const ok=[\"claude\",\"anthropic\",\"codex\",\"openai\",\"kimi\",\"moonshot\"].includes(p); console.log(\"runtimeInstalled=1\\ncontainerRunning=1\\nproviderConfigured=\"+(ok?\"1\":\"0\")+\"\\nproviderAuthenticated=\"+(marker&&fs.existsSync(marker)?\"1\":\"0\")+\"\\nprofileReady=\"+(fs.existsSync(\"/jht_home/profile/ready.flag\")?\"1\":\"0\")+\"\\nassistantWelcomed=\"+(fs.existsSync(\"/jht_home/profile/welcomed.flag\")?\"1\":\"0\"));'")
@@ -3794,7 +2494,7 @@ mod tests {
 
     #[test]
     fn the_claim_asks_the_backend_for_the_account_and_ties_it_to_the_active_scope() {
-        let source = include_str!("existing_team_runtime.rs");
+        let source = include_str!("existing_team_runtime/own_vps_claim.rs");
         let command = &source[source.find("pub(crate) async fn own_vps_claim(").unwrap()..];
         let command = &command[..command.find("
 }
