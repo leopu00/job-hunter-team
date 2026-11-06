@@ -79,6 +79,7 @@ function itemEnd(mask: string, start: number): number {
     if (mask.startsWith("#[", i)) { i = closing(mask, i + 1, "[", "]") + 1; continue; }
     break;
   }
+  const item = /^(?:(?:pub(?:\([^)]*\))?|async|unsafe|extern|default)\s+)*(?:fn|struct|enum|impl|const|static|type|mod|use|trait|union)\b/.test(mask.slice(i));
   let parens = 0;
   let brackets = 0;
   for (; i < mask.length; i++) {
@@ -87,7 +88,7 @@ function itemEnd(mask: string, start: number): number {
     if (mask[i] === "[") brackets++;
     if (mask[i] === "]") brackets--;
     if (!parens && !brackets && mask[i] === ";") return i + 1;
-    if (!parens && !brackets && mask[i] === ",") return i + 1;
+    if (!item && !parens && !brackets && mask[i] === ",") return i + 1;
     if (!parens && !brackets && mask[i] === "}") return i;
     if (!parens && !brackets && mask[i] === "{") return closing(mask, i, "{", "}") + 1;
   }
