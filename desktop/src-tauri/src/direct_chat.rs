@@ -1937,9 +1937,11 @@ fn container_not_found_code(refused: Option<&'static str>, unchecked: Option<&'s
     }
 }
 
-/// One and only one currently-running Compose service named `jht` is the chat target. The compose
-/// invocation is rooted in the attested runtime directory; `inspect` checks the service label again
-/// before its id is accepted for exec.
+/// One and only one currently-running Compose service named `jht` is the chat target. On Podman the engine
+/// is asked ONCE for the containers of the fixed JHT project and service, with their state, labels and image as
+/// JSON (T191: the listing of ids and an `inspect` for each of the project's three containers took 4 to 5 s on a
+/// Windows computer; the one listing takes one engine call). On Docker the compose listing is read and each id
+/// inspected. Either way every candidate meets the same rules: `judge_candidate`.
 fn local_chat_container(
     engine: &LocalChatEngine,
     runtime: &Path,
@@ -1949,6 +1951,153 @@ fn local_chat_container(
     let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout));
     #[cfg(not(target_os = "macos"))]
     let expected_config_hash: Option<Result<String, &'static str>> = None;
+    let candidates = if engine.podman {
+        listed_candidates(engine, timeout)?
+    } else {
+        inspected_candidates(engine, runtime, timeout)?
+    };
+    let mut found: Option<String> = None;
+    // Why a container that is running as `jht` was not taken: it is not the one installed, or the check could
+    // not be made (the hash it has to carry was not worked out) which is not the same thing.
+    let mut refused: Option<&'static str> = None;
+    let mut unchecked: Option<&'static str> = None;
+    for candidate in candidates {
+        // On Windows the image is part of the identity, and `inspect` is where it was always read from: a listing that
+        // did not carry it, or carried one that is not the runtime's, is settled by one inspect of this container (a
+        // listing that agrees costs nothing more).
+        let listed_image_is_the_runtimes = candidate.image.as_deref().is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
+        let image = if cfg!(windows) && candidate.running && candidate.service_is_jht() && !listed_image_is_the_runtimes && engine.podman {
+            inspected_image(engine, &candidate.id, timeout).or_else(|| candidate.image.clone())
+        } else {
+            candidate.image.clone()
+        };
+        match judge_candidate(engine, runtime, expected_config_hash.as_ref(), &candidate, image.as_deref()) {
+            Verdict::Skip => {}
+            Verdict::Unchecked(reason) => unchecked = Some(reason),
+            Verdict::Refused(reason) => refused = Some(reason),
+            Verdict::Take => {
+                if found.replace(candidate.id).is_some() {
+                    return Err("container_unavailable");
+                }
+            }
+        }
+    }
+    // Why there is none, said apart: the team is not up, what is up is not the one the app's runtime
+    // started (it is never used for the chat), or it could not be checked now (the page tries again).
+    if let Some(id) = found {
+        return Ok(id);
+    }
+    if let Some(reason) = refused.or(unchecked) {
+        note_attest_reason(reason);
+    }
+    Err(container_not_found_code(refused, unchecked))
+}
+
+/// A container the engine listed for the project: what the rules judge.
+struct Candidate {
+    id: String,
+    running: bool,
+    labels: Value,
+    /// Where the listing carries it (Podman's JSON does; the Docker path asks `inspect` for it on Windows only).
+    image: Option<String>,
+}
+
+impl Candidate {
+    fn service_is_jht(&self) -> bool {
+        label(&self.labels, "com.docker.compose.service") == Some("jht")
+    }
+}
+
+enum Verdict {
+    /// Not the chat's target (stopped, or another service).
+    Skip,
+    /// The chat's target.
+    Take,
+    /// Running as `jht` but not the installed one.
+    Refused(&'static str),
+    /// Running as `jht` but the check could not be made now.
+    Unchecked(&'static str),
+}
+
+/// The rules a container meets to be the chat's target, for the Podman listing and the Docker inspect alike:
+/// running, the `jht` service, and (on Podman) the labels and, on Windows, the image of the installed runtime.
+fn judge_candidate(
+    engine: &LocalChatEngine,
+    runtime: &Path,
+    expected_config_hash: Option<&Result<String, &'static str>>,
+    candidate: &Candidate,
+    image: Option<&str>,
+) -> Verdict {
+    if !candidate.running || !candidate.service_is_jht() {
+        return Verdict::Skip;
+    }
+    let image_is_the_runtimes = !cfg!(windows) || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
+    if engine.podman {
+        if let Some(reason) = attestation_refusal(expected_config_hash, &candidate.labels, runtime, image_is_the_runtimes) {
+            return if attest_reason_may_pass(reason) { Verdict::Unchecked(reason) } else { Verdict::Refused(reason) };
+        }
+    }
+    Verdict::Take
+}
+
+/// The Podman listing of the project's `jht` service: one engine call. A listing the engine could not give (the
+/// machine is off, the connection is refused) is no container, as the listing of ids always was.
+fn listed_candidates(engine: &LocalChatEngine, timeout: Duration) -> Result<Vec<Candidate>, &'static str> {
+    let listed = run_local_engine(engine, local_listing_args(), None, timeout)?;
+    if !listed.success() {
+        return Ok(Vec::new());
+    }
+    parse_listing(&listed.stdout)
+}
+
+/// The arguments of the one listing: every container (stopped ones too, so a stopped `jht` is told from none) that
+/// carries the project's and the service's labels, whole ids, as JSON. No quote, no space in an argument.
+fn local_listing_args() -> Vec<OsString> {
+    [
+        "ps",
+        "-a",
+        "--no-trunc",
+        "--filter",
+        "label=com.docker.compose.project=jht",
+        "--filter",
+        "label=com.docker.compose.service=jht",
+        "--format",
+        "json",
+    ]
+    .map(OsString::from)
+    .to_vec()
+}
+
+/// Podman's `ps --format json`: an array of objects with `Id`, `State`, `Labels` and `Image`. Anything else is an
+/// engine the app does not know how to read: no container is taken from it.
+fn parse_listing(stdout: &[u8]) -> Result<Vec<Candidate>, &'static str> {
+    let text = std::str::from_utf8(stdout).map_err(|_| "container_unavailable")?.trim();
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+    let Ok(Value::Array(rows)) = serde_json::from_str::<Value>(text) else {
+        return Err("container_unavailable");
+    };
+    if rows.len() > 16 {
+        return Err("container_unavailable");
+    }
+    let mut candidates = Vec::with_capacity(rows.len());
+    for row in rows {
+        let Some(id) = row.get("Id").and_then(Value::as_str).filter(|id| container_id(id)) else {
+            return Err("container_unavailable");
+        };
+        candidates.push(Candidate {
+            id: id.to_owned(),
+            running: row.get("State").and_then(Value::as_str) == Some("running"),
+            labels: row.get("Labels").filter(|labels| labels.is_object()).cloned().unwrap_or(Value::Null),
+            image: row.get("Image").and_then(Value::as_str).map(str::trim).filter(|image| !image.is_empty()).map(str::to_owned),
+        });
+    }
+    Ok(candidates)
+}
+
+/// The Docker way: the compose listing of ids, then an `inspect` of each for its state, labels and, on Windows, image.
+fn inspected_candidates(engine: &LocalChatEngine, runtime: &Path, timeout: Duration) -> Result<Vec<Candidate>, &'static str> {
     let listed = run_local_engine(engine, local_compose_args(engine, runtime), None, timeout)?;
     let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
         .map_err(|_| "container_unavailable")?
@@ -1959,11 +2108,7 @@ fn local_chat_container(
     if ids.len() > 16 || ids.iter().any(|id| !container_id(id)) {
         return Err("container_unavailable");
     }
-    let mut found = None;
-    // Why a container that is running as `jht` was not taken: it is not the one installed, or the check could
-    // not be made (the hash it has to carry was not worked out) which is not the same thing.
-    let mut refused: Option<&'static str> = None;
-    let mut unchecked: Option<&'static str> = None;
+    let mut candidates = Vec::new();
     for id in ids {
         let inspected = run_local_engine(
             engine,
@@ -1991,34 +2136,19 @@ fn local_chat_container(
         let Ok(labels) = serde_json::from_str::<Value>(labels) else {
             continue;
         };
-        let service = label(&labels, "com.docker.compose.service");
-        if running != "true" || service != Some("jht") {
-            continue;
-        }
-        let image_is_the_runtimes = !cfg!(windows) || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime));
-        if engine.podman {
-            if let Some(reason) = attestation_refusal(expected_config_hash.as_ref(), &labels, runtime, image_is_the_runtimes) {
-                if attest_reason_may_pass(reason) {
-                    unchecked = Some(reason);
-                } else {
-                    refused = Some(reason);
-                }
-                continue;
-            }
-        }
-        if found.replace(id).is_some() {
-            return Err("container_unavailable");
-        }
+        candidates.push(Candidate { id: id.to_owned(), running: running == "true", labels, image: image.filter(|image| !image.is_empty()).map(str::to_owned) });
     }
-    // Why there is none, said apart: the team is not up, what is up is not the one the app's runtime
-    // started (it is never used for the chat), or it could not be checked now (the page tries again).
-    if let Some(id) = found {
-        return Ok(id.to_owned());
+    Ok(candidates)
+}
+
+/// The image of a container, from one `inspect`: for a listing that did not carry it, on Windows.
+fn inspected_image(engine: &LocalChatEngine, id: &str, timeout: Duration) -> Option<String> {
+    let inspected = run_local_engine(engine, ["inspect", "--type", "container", id, "--format", "{{.Config.Image}}"], None, timeout).ok()?;
+    if !inspected.success() {
+        return None;
     }
-    if let Some(reason) = refused.or(unchecked) {
-        note_attest_reason(reason);
-    }
-    Err(container_not_found_code(refused, unchecked))
+    let image = std::str::from_utf8(&inspected.stdout).ok()?.trim();
+    (!image.is_empty()).then(|| image.to_owned())
 }
 
 fn local_chat_exec_args(
@@ -2042,6 +2172,49 @@ fn local_chat_exec_args(
             .map(OsString::from),
     );
     Ok(args)
+}
+
+/// What the wrapper's `python` action ran in the container: the first line of standard input is the hex of the
+/// program, which is read and executed. No double quote in it (Windows PowerShell 5.1 dropped them in a native argument).
+const LOCAL_PYTHON_LAUNCH: &str = "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())";
+
+/// What the wrapper's `send` action ran: the message on standard input to the container's tmux helper, with the session as
+/// `$1`. The empty IFS and `set -f` keep the message one word and its `*` and `?` from matching file names, as the quotes
+/// did; there are none, so the line reaches the engine the same through every shell.
+const LOCAL_DELIVERY_SCRIPT: &str = "IFS=; set -f; msg=$(cat); exec jht-tmux-send $1 $msg";
+
+/// The probe, the Python scripts and the delivery of a message on this computer's team, without the wrapper: the
+/// same attested container the chat finds (kept for a few seconds, shared with the chat's reads) and the program
+/// the wrapper ran in it. The probe is the finding: a container that is there answers «true».
+fn run_local_native(
+    wrapper: &Path,
+    runtime: &Path,
+    operation: &RemoteOperation<'_>,
+    input: Option<&[u8]>,
+    timeout: Duration,
+) -> Result<ProcessResult, &'static str> {
+    if let RemoteOperation::Delivery(session) = operation {
+        if !existing_team_runtime::chat_session_ok(session) {
+            return Err("invalid_agent");
+        }
+    }
+    let team = local_chat_team(wrapper, runtime, timeout)?;
+    let result = match operation {
+        RemoteOperation::Probe => return Ok(ProcessResult { code: 0, stdout: b"true\n".to_vec() }),
+        RemoteOperation::Python => team.exec(&["python3", "-c", LOCAL_PYTHON_LAUNCH], input, timeout),
+        RemoteOperation::Delivery(session) => team.exec(&["sh", "-c", LOCAL_DELIVERY_SCRIPT, "sh", *session], input, timeout),
+        RemoteOperation::Chat(_) => return Err("invalid_request"),
+    };
+    // the engine could not run the exec, or says the container is gone (125): the next call finds it again. The delivery's
+    // own codes (2 to 5) and a timeout are not a lost container.
+    let lost = match &result {
+        Err(code) => *code != "process_timeout",
+        Ok(done) => done.code == 125,
+    };
+    if lost {
+        forget_local_chat_team(wrapper, runtime);
+    }
+    result
 }
 
 /// The local implementation of read/send/answer/enter executes no wrapper action. Its protected
@@ -2169,7 +2342,8 @@ fn attested_exec_args(container: &str, argv: &[&str], with_input: bool) -> Resul
 
 fn run_connection(
     connection: &Connection,
-    local_args: &[&str],
+    // the wrapper action that named the operation before the local runtime ran it natively: no local operation runs it now
+    _local_args: &[&str],
     remote_operation: RemoteOperation<'_>,
     input: Option<&[u8]>,
     timeout: Duration,
@@ -2209,16 +2383,14 @@ fn run_connection(
                         }
                         done
                     }
-                _ => crate::onboarding::run_verified_local_wrapper(
-                    connection
-                        .local_wrapper
-                        .as_deref()
-                        .ok_or_else(|| failure("runtime_missing"))?,
-                    local_args,
-                    input,
-                    timeout,
-                )
-                .map_err(failure)
+                // The probe, the Python scripts and the delivery of a message: no wrapper (a PowerShell on Windows, seconds
+                // each) in between. The runtime is attested in Rust and the container found as the chat finds it
+                // (and kept for the chat's next calls); the program run in it is the one the wrapper ran.
+                RemoteOperation::Probe | RemoteOperation::Python | RemoteOperation::Delivery(_) => {
+                    let runtime = connection.local_runtime.as_deref().ok_or_else(|| failure("runtime_missing"))?;
+                    let wrapper = connection.local_wrapper.as_deref().ok_or_else(|| failure("runtime_missing"))?;
+                    run_local_native(wrapper, runtime, &remote_operation, input, timeout).map_err(failure)
+                }
             }
         }
         ValidatedHost::Vps { .. } => {
@@ -2270,6 +2442,10 @@ fn probe(connection: &Connection) -> DirectChatStatus {
         }
         // The host answered and there is no container for the team: say which kind of «no container» it is.
         Ok(_) => status("error", Some(probe_no_container_code(&connection.validated))),
+        // This computer's team, found natively: the code says what it is, not only that it is not there.
+        Err(error) if matches!(connection.validated, ValidatedHost::Local) && matches!(error.code, "local_team_not_running" | "local_container_not_attested") => {
+            status("error", Some(error.code))
+        }
         // The host could not be asked at all (runtime missing, another account's, a timeout).
         Err(_) => status("error", Some("container_unavailable")),
     }
