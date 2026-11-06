@@ -57,12 +57,17 @@ describe("pickWorkStats", () => {
       null,
       "ok",
     ];
-    for (const value of off) expect(pickWorkStats(value), JSON.stringify(value).slice(0, 80)).toEqual({ ok: false, error: "stats_unavailable" });
+    for (const value of off) expect(pickWorkStats(value), JSON.stringify(value).slice(0, 80)).toEqual({ ok: false, error: "stats_reply_unexpected" });
   });
 
-  it("passes the team's own closed errors and turns any other word into «unavailable»", () => {
+  it("passes the team's own closed errors and turns any other word into «cannot be read», never «the team does not offer it»", () => {
     expect(pickWorkStats({ ok: false, error: "stats_unreadable" })).toEqual({ ok: false, error: "stats_unreadable" });
-    expect(pickWorkStats({ ok: false, error: "/home/x/secret" })).toEqual({ ok: false, error: "stats_unavailable" });
+    expect(pickWorkStats({ ok: false, error: "/home/x/secret" })).toEqual({ ok: false, error: "stats_unreadable" });
+    expect(pickWorkStats({ ok: false })).toEqual({ ok: false, error: "stats_unreadable" });
+  });
+
+  it("says «the team does not offer it» only when the team's script says the file is missing", () => {
+    expect(pickWorkStats({ ok: false, error: "stats_unavailable" })).toEqual({ ok: false, error: "stats_unavailable" });
   });
 });
 
@@ -82,10 +87,69 @@ describe("the two commands", () => {
     const boom = async () => {
       throw new Error("down");
     };
-    expect(await readWorkStats(boom)).toEqual({ ok: false, error: "stats_unavailable" });
+    expect(await readWorkStats(boom)).toEqual({ ok: false, error: "stats_unreadable" });
     expect(await clearWorkStats(boom)).toEqual({ ok: false, error: "stats_clear_failed" });
     expect(await clearWorkStats(async () => ({ ok: true, removed: 3 }))).toEqual({ ok: false, error: "stats_clear_failed" });
     expect(await clearWorkStats(async () => ({ ok: false, error: "stats_clear_failed" }))).toEqual({ ok: false, error: "stats_clear_failed" });
+  });
+});
+
+describe("a failed read tells its own reason", () => {
+  it("says the reason of the native error, by its own code, and never «the team does not offer it» for a failure", async () => {
+    for (const code of ["process_timeout", "account_scope_mismatch", "runtime_missing", "invalid_request"]) {
+      expect(await readWorkStats(async () => Promise.reject({ code }))).toEqual({ ok: false, error: code });
+    }
+    // the chat's «cannot read the messages» is the statistics' own «cannot be read»
+    expect(await readWorkStats(async () => Promise.reject({ code: "read_failed" }))).toEqual({ ok: false, error: "stats_unreadable" });
+    expect(await readWorkStats(async () => Promise.reject("a sentence with spaces"))).toEqual({ ok: false, error: "stats_unreadable" });
+    // clearing tells its reason too
+    expect(await clearWorkStats(async () => Promise.reject({ code: "read_only_link" }))).toEqual({ ok: false, error: "read_only_link" });
+  });
+
+  it("connects the chat again once when it is not connected, then reads again", async () => {
+    let connected = false;
+    const asked: string[] = [];
+    const result = await readWorkStats(
+      async () => {
+        asked.push(connected ? "read" : "read-disconnected");
+        if (!connected) throw { code: "disconnected" };
+        return { ok: true, nights: [], from: null, to: null, lastObservation: null, retentionDays: 90, threshold: null, scheduleState: "undeclared" };
+      },
+      async () => {
+        connected = true;
+        return { state: "ready" };
+      },
+    );
+    expect(result.ok).toBe(true);
+    expect(asked).toEqual(["read-disconnected", "read"]);
+  });
+
+  it("tells «not connected» when connecting again does not help, and does not loop", async () => {
+    let reads = 0;
+    let reconnects = 0;
+    const disconnected = async () => {
+      reads += 1;
+      throw { code: "disconnected" };
+    };
+    expect(await readWorkStats(disconnected, async () => { reconnects += 1; })).toEqual({ ok: false, error: "disconnected" });
+    expect([reads, reconnects]).toEqual([2, 1]);
+    reads = 0;
+    reconnects = 0;
+    expect(await readWorkStats(disconnected, async () => { reconnects += 1; throw { code: "connect_failed" }; })).toEqual({ ok: false, error: "disconnected" });
+    expect([reads, reconnects]).toEqual([1, 1]);
+  });
+
+  it("does not connect the chat again for any other failure", async () => {
+    let reconnects = 0;
+    await readWorkStats(async () => Promise.reject({ code: "read_failed" }), async () => { reconnects += 1; });
+    expect(reconnects).toBe(0);
+  });
+
+  it("takes the answer of a team that has only just started (no night yet, nothing declared) whole, not as a failure", async () => {
+    const fresh = { ok: true, nights: [], from: null, to: null, lastObservation: null, retentionDays: 90, threshold: null, scheduleState: "undeclared" };
+    const picked = pickWorkStats(fresh);
+    expect(picked.ok).toBe(true);
+    expect(await readWorkStats(async () => fresh)).toEqual(picked);
   });
 });
 
@@ -109,10 +173,10 @@ describe("the answer the team's native side serialises", () => {
 
   it("is refused as soon as it carries a field the reader does not know", () => {
     for (const [name, value] of replies) {
-      expect(pickWorkStats({ ...(value as object), added: 1 }), name).toEqual({ ok: false, error: "stats_unavailable" });
+      expect(pickWorkStats({ ...(value as object), added: 1 }), name).toEqual({ ok: false, error: "stats_reply_unexpected" });
       const withNight = { ...(value as { nights: object[] }) };
       withNight.nights = withNight.nights.map((night) => ({ ...night, added: 1 }));
-      if (withNight.nights.length) expect(pickWorkStats(withNight), name).toEqual({ ok: false, error: "stats_unavailable" });
+      if (withNight.nights.length) expect(pickWorkStats(withNight), name).toEqual({ ok: false, error: "stats_reply_unexpected" });
     }
   });
 });

@@ -11,7 +11,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { resetStateStreamForTests, startStateStream } from "../lib/state-stream";
-import { PROFILE_FIELD_KEYS } from "./contract";
+import { PROFILE_FIELD_KEYS, PROFILE_REREAD_EVENT } from "./contract";
 import { PROFILE_PROGRESS_EVERY_MS, PROFILE_PROGRESS_STREAMED_MS, useProfileProgress } from "./useProfileProgress";
 import type { ProfileProgressRead } from "./read";
 
@@ -135,6 +135,36 @@ describe("the profile progress, read while the card is there", () => {
     await tick(PROFILE_PROGRESS_EVERY_MS);
     expect(result.current.state).toBe("ready");
     expect(result.current.filled).toBe(3);
+  });
+
+  it("keeps the reason of a read that FAILED, and has none for «the team has no profile yet»", async () => {
+    const results: ProfileProgressRead[] = [{ ok: false, code: "profile_unavailable" }, { ok: false, code: "process_timeout" }, reading(3)];
+    const read = vi.fn(async () => results.shift() ?? reading(3));
+    const { result } = renderHook(() => useProfileProgress(read));
+    await tick(0);
+    expect(result.current.state).toBe("unavailable");
+    expect(result.current.reason).toBeUndefined();
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(result.current.state).toBe("unavailable");
+    expect(result.current.reason).toBe("process_timeout");
+    await tick(PROFILE_PROGRESS_EVERY_MS);
+    expect(result.current.state).toBe("ready");
+    expect(result.current.reason).toBeUndefined();
+  });
+
+  it("reads again at once when a card says the chat was connected again", async () => {
+    const results: ProfileProgressRead[] = [{ ok: false, code: "disconnected" }, reading(3)];
+    const read = vi.fn(async () => results.shift() ?? reading(3));
+    const { result } = renderHook(() => useProfileProgress(read));
+    await tick(0);
+    expect(result.current.reason).toBe("disconnected");
+    expect(read).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      window.dispatchEvent(new Event(PROFILE_REREAD_EVENT));
+    });
+    await tick(0);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(result.current.state).toBe("ready");
   });
 
   it("keeps what it read when a later read fails", async () => {

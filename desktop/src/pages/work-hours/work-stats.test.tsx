@@ -195,8 +195,82 @@ describe("what happened", () => {
     cleanup();
     serve(stats(days(3).map((n) => ({ ...n, note: "extra field" }))));
     show();
-    expect(await screen.findByTestId("work-stats-failed")).toHaveTextContent("does not offer the working-hours statistics yet");
+    // an answer off the closed shape is not «the team does not offer it»: it says the app does not recognise it, and offers no update
+    const unexpected = await screen.findByTestId("work-stats-failed");
+    expect(unexpected).toHaveTextContent("not in a form this app recognises");
+    expect(unexpected).not.toHaveTextContent("does not offer the working-hours statistics yet");
     expect(screen.queryByTestId("work-stats-table")).toBeNull();
+  });
+
+  it("when the chat cannot be connected it says so and offers «Reconnect the chat» instead of asking the person to do it", async () => {
+    let connectable = false;
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "direct_chat_reconnect") {
+        if (!connectable) throw { code: "connect_failed" };
+        return { state: "ready" };
+      }
+      if (!connectable) throw { code: "disconnected" };
+      return stats(days(3));
+    });
+    const user = userEvent.setup();
+    show();
+    const failed = await screen.findByTestId("work-stats-failed");
+    expect(failed).toHaveTextContent("The chat is not connected to the team.");
+    expect(failed).not.toHaveTextContent("Update the team");
+    // the button is there instead of «Try again»: the sentence asks for a reconnection and the page does it
+    expect(within(failed).queryByRole("button", { name: "Try again" })).toBeNull();
+    // the chat cannot be connected: the page says why (the reconnect's own code), not «not connected» again
+    await user.click(within(failed).getByTestId("work-stats-reconnect"));
+    await waitFor(() => expect(screen.getByTestId("work-stats-failed")).toHaveTextContent("The team cannot be reached."));
+    // it can now: «Try again» connects the chat again too, and the statistics are there
+    connectable = true;
+    await user.click(within(screen.getByTestId("work-stats-failed")).getByRole("button", { name: "Try again" }));
+    expect(await screen.findByTestId("work-stats-summary")).toBeInTheDocument();
+    expect(native.invoke.mock.calls.filter(([command]) => command === "direct_chat_reconnect").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("«Reconnect the chat» connects the chat and reads the statistics again", async () => {
+    let connectable = false;
+    let connected = false;
+    native.invoke.mockImplementation(async (command: string) => {
+      if (command === "direct_chat_reconnect") {
+        if (!connectable) throw { code: "connect_failed" };
+        connected = true;
+        return { state: "ready" };
+      }
+      if (!connected) throw { code: "disconnected" };
+      return stats(days(3));
+    });
+    const user = userEvent.setup();
+    show();
+    const failed = await screen.findByTestId("work-stats-failed");
+    // the page's own try to connect failed once (nothing to connect yet); the team is reachable now
+    connectable = true;
+    await user.click(within(failed).getByTestId("work-stats-reconnect"));
+    expect(await screen.findByTestId("work-stats-summary")).toBeInTheDocument();
+    expect(screen.queryByTestId("work-stats-failed")).toBeNull();
+  });
+
+  it("says «the team does not offer it» (and to update the team) only when the team's script says the file is missing", async () => {
+    serve({ ok: false, error: "stats_unavailable" });
+    show();
+    const failed = await screen.findByTestId("work-stats-failed");
+    expect(failed).toHaveTextContent("does not offer the working-hours statistics yet");
+    expect(failed).toHaveTextContent("Update the team");
+  });
+
+  it("tells a failure of the channel by its own reason, with no «update the team»", async () => {
+    for (const [code, said] of [["process_timeout", /too long|timed out|ran out of time/i], ["account_scope_mismatch", /account/i]] as const) {
+      cleanup();
+      native.invoke.mockImplementation(async () => {
+        throw { code };
+      });
+      show();
+      const failed = await screen.findByTestId("work-stats-failed");
+      expect(failed).toHaveTextContent(said);
+      expect(failed).not.toHaveTextContent("Update the team");
+      expect(failed).not.toHaveTextContent(code);
+    }
   });
 
   it("clears only after a confirmation that says the team collects again, then shows no data", async () => {

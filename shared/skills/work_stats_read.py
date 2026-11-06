@@ -12,7 +12,7 @@ path='/app/shared/skills/work_stats.py'
 if not os.path.isfile(path): emit({'ok':False,'error':'stats_unavailable'})
 try:
  spec=importlib.util.spec_from_file_location('work_stats',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-except Exception: emit({'ok':False,'error':'stats_unavailable'})
+except Exception: emit({'ok':False,'error':'stats_unreadable' if op=='read' else 'stats_clear_failed'})
 try:
  out=mod.read(nights) if op=='read' else mod.clear()
 except Exception as error:

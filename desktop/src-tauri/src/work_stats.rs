@@ -19,7 +19,7 @@ const TIMEOUT: Duration = Duration::from_secs(40);
 const MAX_NIGHTS: usize = 90;
 
 /// The fixed script: loads the team's own `work_stats.py` and answers one JSON. An image older than the
-/// feature has no such file: `stats_unavailable`.
+/// feature has no such file: `stats_unavailable`, and that is the only case that says so (a file that does not load is `stats_unreadable`).
 pub(crate) const WORK_STATS_PY: &str = r#"import importlib.util,json,os,sys
 def emit(value): print(json.dumps(value,separators=(',',':'))); raise SystemExit(0)
 try: req=json.loads(sys.stdin.readline())
@@ -34,7 +34,7 @@ path='/app/shared/skills/work_stats.py'
 if not os.path.isfile(path): emit({'ok':False,'error':'stats_unavailable'})
 try:
  spec=importlib.util.spec_from_file_location('work_stats',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-except Exception: emit({'ok':False,'error':'stats_unavailable'})
+except Exception: emit({'ok':False,'error':'stats_unreadable' if op=='read' else 'stats_clear_failed'})
 try:
  out=mod.read(nights) if op=='read' else mod.clear()
 except Exception as error:
@@ -157,23 +157,37 @@ fn code_of(reply: &Value, allowed: &[&'static str], fallback: &'static str) -> &
     allowed.iter().copied().find(|code| Some(*code) == said).unwrap_or(fallback)
 }
 
-/// The statistics of the team's work, as the team keeps them. Reads: it works in the read-only view.
+/// The codes this reading may leave in the runtime log: its own, then the chat's (`log.record_read_failure`).
+const STATS_CODES: &[&str] = &["stats_unreadable", "stats_unavailable", "stats_reply_unexpected", "stats_clear_failed"];
+
+/// The statistics of the team's work, as the team keeps them. Reads: it works in the read-only view. A read that does not give
+/// the numbers leaves its closed code in the runtime log (never a number), and the page is told that same code.
 #[tauri::command]
 pub(crate) async fn work_stats_read(
     window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<StatsReply, DirectChatError> {
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
-    let reply = team_script_read(&state, &scopes, WORK_STATS_PY, json!({"op": "read", "nights": 30}), TIMEOUT).await?;
+    let result = read_stats(&state, &scopes).await;
+    note_failure(&app, "stats.read", &result);
+    result
+}
+
+/// One read through the chat's Python channel. Each way of not getting the numbers has its own code: the file missing in an old
+/// image is `stats_unavailable` and nothing else is; a chat that is not connected, a read that failed or ran out of time is the
+/// chat's own error, passed on; an answer the app does not recognise is `stats_reply_unexpected`.
+async fn read_stats(state: &State<'_, DirectChatState>, scopes: &State<'_, AccountScopeState>) -> Result<StatsReply, DirectChatError> {
+    let reply = team_script_read(state, scopes, WORK_STATS_PY, json!({"op": "read", "nights": 30}), TIMEOUT).await?;
     if reply.get("ok") != Some(&Value::Bool(true)) {
-        return Ok(StatsReply::failed(code_of(&reply, &["stats_unreadable"], "stats_unavailable")));
+        return Ok(StatsReply::failed(code_of(&reply, &["stats_unreadable", "stats_unavailable"], "stats_unreadable")));
     }
     Ok(match shape(&reply) {
         Ok(statistics) => StatsReply { ok: true, statistics: Some(statistics), error: None },
-        Err(()) => StatsReply::failed("stats_unavailable"),
+        Err(()) => StatsReply::failed("stats_reply_unexpected"),
     })
 }
 
@@ -182,17 +196,35 @@ pub(crate) async fn work_stats_read(
 #[tauri::command]
 pub(crate) async fn work_stats_clear(
     window: tauri::Window,
+    app: tauri::AppHandle,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<StatsReply, DirectChatError> {
     if !window_may_write(window.label()) {
         return Err(failure("invalid_request"));
     }
-    let reply = team_script_write(&state, &scopes, WORK_STATS_PY, json!({"op": "clear"}), TIMEOUT).await?;
+    let result = clear_stats(&state, &scopes).await;
+    note_failure(&app, "stats.clear", &result);
+    result
+}
+
+async fn clear_stats(state: &State<'_, DirectChatState>, scopes: &State<'_, AccountScopeState>) -> Result<StatsReply, DirectChatError> {
+    let reply = team_script_write(state, scopes, WORK_STATS_PY, json!({"op": "clear"}), TIMEOUT).await?;
     if reply.get("ok") == Some(&Value::Bool(true)) && reply.get("cleared") == Some(&Value::Bool(true)) {
         return Ok(StatsReply { ok: true, statistics: None, error: None });
     }
-    Ok(StatsReply::failed(code_of(&reply, &["stats_clear_failed"], "stats_unavailable")))
+    Ok(StatsReply::failed(code_of(&reply, &["stats_clear_failed", "stats_unavailable"], "stats_clear_failed")))
+}
+
+/// What a failed read or clear leaves in the runtime log: its closed code only.
+fn note_failure(app: &tauri::AppHandle, what: &'static str, result: &Result<StatsReply, DirectChatError>) {
+    let said = match result {
+        Ok(reply) => reply.error,
+        Err(error) => Some(error.code),
+    };
+    if let (Some(code), Some(log)) = (said, crate::runtime_log::RuntimeLog::new(app)) {
+        log.record_read_failure(what, STATS_CODES, code);
+    }
 }
 
 #[cfg(test)]
@@ -298,9 +330,12 @@ mod tests {
     #[test]
     fn a_failure_is_one_of_the_closed_codes_and_nothing_else() {
         let said = |code: &str| json!({"ok": false, "error": code});
-        assert_eq!(code_of(&said("stats_unreadable"), &["stats_unreadable"], "stats_unavailable"), "stats_unreadable");
-        assert_eq!(code_of(&said("rm -rf / or a sentence"), &["stats_unreadable"], "stats_unavailable"), "stats_unavailable");
-        assert_eq!(code_of(&json!({"ok": false}), &["stats_clear_failed"], "stats_unavailable"), "stats_unavailable");
+        let allowed = ["stats_unreadable", "stats_unavailable"];
+        assert_eq!(code_of(&said("stats_unreadable"), &allowed, "stats_unreadable"), "stats_unreadable");
+        // the file missing in the image is the one answer that says «the team does not offer it»
+        assert_eq!(code_of(&said("stats_unavailable"), &allowed, "stats_unreadable"), "stats_unavailable");
+        assert_eq!(code_of(&said("rm -rf / or a sentence"), &allowed, "stats_unreadable"), "stats_unreadable");
+        assert_eq!(code_of(&json!({"ok": false}), &["stats_clear_failed", "stats_unavailable"], "stats_clear_failed"), "stats_clear_failed");
         let failed = serde_json::to_value(StatsReply::failed("stats_unavailable")).unwrap();
         assert_eq!(failed, json!({"ok": false, "error": "stats_unavailable"}));
     }
@@ -308,15 +343,21 @@ mod tests {
     #[test]
     fn the_commands_take_no_argument_from_the_page_and_clearing_is_a_write() {
         let code = include_str!("work_stats.rs");
-        let read = code.split("pub(crate) async fn work_stats_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        let clear = code.split("pub(crate) async fn work_stats_clear(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let read_command = code.split("pub(crate) async fn work_stats_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let clear_command = code.split("pub(crate) async fn work_stats_clear(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let read = code.split("async fn read_stats(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let clear = code.split("async fn clear_stats(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(read.contains("team_script_read(") && !read.contains("team_script_write("), "reading is a read");
         assert!(clear.contains("team_script_write(") && !clear.contains("team_script_read("), "clearing is a write");
-        for command in [read, clear] {
+        assert!(read_command.contains("read_stats(") && clear_command.contains("clear_stats("));
+        for command in [read_command, clear_command] {
             let signature = command.split(") -> Result").next().unwrap();
             assert!(!signature.contains("String") && !signature.contains("Value") && !signature.contains("u32"), "no argument from the page");
+            assert!(command.contains("note_failure("), "a failed read leaves its code in the log");
         }
-        assert!(clear.contains("window_may_write(") && read.contains("window.label() != \"main\""));
+        assert!(clear_command.contains("window_may_write(") && read_command.contains("window.label() != \"main\""));
+        // an answer the app does not recognise is not «the team does not offer it»
+        assert!(read.contains("stats_reply_unexpected") && !read.contains("failed(\"stats_unavailable\")"));
     }
 
     #[test]

@@ -1339,6 +1339,27 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A csapat keretre adott válasza olyan formájú, amelyet az alkalmazás nem ismer fel.", "Ellenőrizd, hogy az alkalmazás és a csapat ugyanazon a verzión van-e, majd próbáld újra."],
     pt: ["A resposta da equipa sobre o orçamento tem uma forma que esta aplicação não reconhece.", "Confirma que a aplicação e a equipa estão na mesma versão e tenta de novo."],
   },
+  "The team's first-start answer is not in a form this app recognises.": {
+    de: ["Die Antwort des Teams zum ersten Start hat eine Form, die diese App nicht erkennt.", "Prüfe, ob App und Team dieselbe Version haben, und versuche es erneut."],
+    es: ["La respuesta del equipo sobre el primer arranque tiene una forma que esta aplicación no reconoce.", "Comprueba que la aplicación y el equipo tengan la misma versión e inténtalo de nuevo."],
+    fr: ["La réponse de l’équipe sur le premier démarrage a une forme que l’application ne reconnaît pas.", "Vérifie que l’application et l’équipe sont à la même version, puis réessaie."],
+    hu: ["A csapat az első indításról olyan formájú választ adott, amelyet az alkalmazás nem ismer fel.", "Ellenőrizd, hogy az alkalmazás és a csapat ugyanazon a verzión van-e, majd próbáld újra."],
+    pt: ["A resposta da equipa sobre o primeiro arranque tem uma forma que esta aplicação não reconhece.", "Confirma que a aplicação e a equipa estão na mesma versão e tenta de novo."],
+  },
+  "The team's profile answer is not in a form this app recognises.": {
+    de: ["Die Profil-Antwort des Teams hat eine Form, die diese App nicht erkennt.", "Prüfe, ob App und Team dieselbe Version haben, und versuche es erneut."],
+    es: ["La respuesta del equipo sobre el perfil tiene una forma que esta aplicación no reconoce.", "Comprueba que la aplicación y el equipo tengan la misma versión e inténtalo de nuevo."],
+    fr: ["La réponse de l’équipe sur le profil a une forme que l’application ne reconnaît pas.", "Vérifie que l’application et l’équipe sont à la même version, puis réessaie."],
+    hu: ["A csapat profilra adott válasza olyan formájú, amelyet az alkalmazás nem ismer fel.", "Ellenőrizd, hogy az alkalmazás és a csapat ugyanazon a verzión van-e, majd próbáld újra."],
+    pt: ["A resposta da equipa sobre o perfil tem uma forma que esta aplicação não reconhece.", "Confirma que a aplicação e a equipa estão na mesma versão e tenta de novo."],
+  },
+  "The team's statistics answer is not in a form this app recognises.": {
+    de: ["Die Statistik-Antwort des Teams hat eine Form, die diese App nicht erkennt.", "Prüfe, ob App und Team dieselbe Version haben, und versuche es erneut."],
+    es: ["La respuesta del equipo sobre las estadísticas tiene una forma que esta aplicación no reconoce.", "Comprueba que la aplicación y el equipo tengan la misma versión e inténtalo de nuevo."],
+    fr: ["La réponse de l’équipe sur les statistiques a une forme que l’application ne reconnaît pas.", "Vérifie que l’application et l’équipe sont à la même version, puis réessaie."],
+    hu: ["A csapat statisztikákra adott válasza olyan formájú, amelyet az alkalmazás nem ismer fel.", "Ellenőrizd, hogy az alkalmazás és a csapat ugyanazon a verzión van-e, majd próbáld újra."],
+    pt: ["A resposta da equipa sobre as estatísticas tem uma forma que esta aplicação não reconhece.", "Confirma que a aplicação e a equipa estão na mesma versão e tenta de novo."],
+  },
   "The team's statistics cannot be read.": {
     de: ["Die Statistiken des Teams lassen sich nicht lesen.", "Versuche es gleich noch einmal; ändert sich nichts, prüfe, ob das Team läuft."],
     es: ["No se pueden leer las estadísticas del equipo.", "Vuelve a intentarlo en un momento; si no cambia, comprueba que el equipo esté en marcha."],
@@ -2200,6 +2221,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["A profil előrehaladása nem olvasható.", "Próbáld újra egy pillanat múlva; ha így marad, nézd meg a csapat állapotát."],
     ["Não é possível ler o progresso do perfil.", "Tenta novamente daqui a pouco; se continuar assim, vê o estado da equipa."],
   ),
+  profile_reply_unexpected: translated("The team's profile answer is not in a form this app recognises."),
   profile_unavailable: tr(
     ["Das Profil des Teams lässt sich nicht lesen.", "Versuche es gleich noch einmal; bleibt es so, sieh dir den Zustand des Teams an."],
     ["No se puede leer el perfil del equipo.", "Vuelve a intentarlo en un momento; si sigue igual, mira el estado del equipo."],
@@ -2214,6 +2236,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
     ["A profilfájl megvan, de nem olvasható.", "Kérd meg az Asszisztenst, hogy írja meg újra, vagy ellenőrizd a fájlt a csapatnál."],
     ["O ficheiro do perfil existe, mas não pode ser lido.", "Pede ao Assistente que o escreva de novo, ou verifica o ficheiro a partir da equipa."],
   ),
+  team_start_reply_unexpected: translated("The team's first-start answer is not in a form this app recognises."),
   team_start_unavailable: tr(
     ["Der erste Start des Teams lässt sich nicht lesen.", "Versuche es gleich noch einmal; bleibt es so, sieh dir den Zustand des Teams an."],
     ["No se puede leer el primer arranque del equipo.", "Vuelve a intentarlo en un momento; si sigue igual, mira el estado del equipo."],
@@ -2388,6 +2411,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   budget_unreadable: translated("The team's budget cannot be read."),
   budget_unavailable: translated("The team does not offer the budget figures yet."),
   budget_reply_unexpected: translated("The team's budget answer is not in a form this app recognises."),
+  stats_reply_unexpected: translated("The team's statistics answer is not in a form this app recognises."),
   stats_unreadable: translated("The team's statistics cannot be read."),
   stats_unavailable: translated("The team does not offer the working-hours statistics yet."),
   stats_clear_failed: translated("The statistics were not cleared."),

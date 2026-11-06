@@ -1303,6 +1303,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The team's budget answer is not in a form this app recognises.",
     "Check that the app and the team are on the same version, then try again.",
   ),
+  stats_reply_unexpected: copy(
+    "La squadra ha risposto sulle statistiche in una forma che l’app non riconosce.",
+    "Controlla che l’app e la squadra siano alla stessa versione e riprova.",
+    "The team's statistics answer is not in a form this app recognises.",
+    "Check that the app and the team are on the same version, then try again.",
+  ),
   stats_unreadable: copy(
     "Non riesco a leggere le statistiche della squadra.",
     "Riprova fra poco; se non cambia, controlla che la squadra sia in funzione.",
@@ -2086,6 +2092,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The profile's progress cannot be read.",
     "Try again in a moment; if it stays so, look at the team's state.",
   ),
+  profile_reply_unexpected: copy(
+    "La squadra ha risposto sul profilo in una forma che l’app non riconosce.",
+    "Controlla che l’app e la squadra siano alla stessa versione e riprova.",
+    "The team's profile answer is not in a form this app recognises.",
+    "Check that the app and the team are on the same version, then try again.",
+  ),
   profile_unavailable: copy(
     "Non riesco a leggere il profilo della squadra.",
     "Riprova tra poco; se resta così, guarda lo stato della squadra.",
@@ -2097,6 +2109,12 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Chiedi all’Assistente di riscriverlo, o controlla il file dalla squadra.",
     "The profile file is there but cannot be read.",
     "Ask the Assistant to write it again, or check the file from the team.",
+  ),
+  team_start_reply_unexpected: copy(
+    "La squadra ha risposto sulla prima partenza in una forma che l’app non riconosce.",
+    "Controlla che l’app e la squadra siano alla stessa versione e riprova.",
+    "The team's first-start answer is not in a form this app recognises.",
+    "Check that the app and the team are on the same version, then try again.",
   ),
   team_start_unavailable: copy(
     "Non riesco a leggere a che punto è la prima partenza della squadra.",
