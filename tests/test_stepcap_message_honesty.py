@@ -93,13 +93,14 @@ def test_an_ordinary_pane_is_not_mistaken_for_a_quota_wall(wd):
     assert wd.find_usage_limit(tail) is None
 
 
-def test_the_captain_is_told_not_to_go_looking_when_it_is_a_quota_wall():
-    """Il consiglio operativo cambia col caso: «inspect what is running» su un
-    usage limit è tempo buttato, e va detto esplicitamente."""
-    # Le stringhe nel sorgente sono spezzate su più righe dal wrapping: si
-    # normalizza prima di cercarle, altrimenti il test misura l'indentazione.
-    source = " ".join(WATCHDOG.read_text(encoding="utf-8").split())
-
-    assert "a pause does not refill a quota" in source
-    assert "Do not inspect what is running" in source
-    assert "Do not look for a rabbit hole" in source
+def test_the_captain_is_told_not_to_go_looking_when_it_is_a_quota_wall(wd, monkeypatch):
+    from types import SimpleNamespace
+    module = wd._delivery_module()
+    messages = []
+    ctx = SimpleNamespace(throttle_for=lambda *a: 60, arm_pause=lambda *a: {
+        "via": "none", "applied_sec": 60, "until": 60}, emit=lambda *a, **k: None,
+        notify_captain=lambda text: messages.append(text) or True, ESCALATE_AT=4)
+    module._throttle(ctx, "SCOUT-1", "scout-1", {}, 0, "fixture", "quota", "quota", 3)
+    assert "a pause does not refill a quota" in messages[0]
+    assert "Do not inspect what is running" in messages[0]
+    assert "Do not look for a rabbit hole" in module._escalation_message("scout-1", "quota", 4, "quota")

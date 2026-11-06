@@ -90,6 +90,14 @@ READY = "some output\n╭──────────────────�
 ALWAYS = lambda session: True
 
 
+def remind(*args, **kwargs):
+    return mail.remind(*args, sender=lambda *a: True, **kwargs)
+
+
+def tick(*args, **kwargs):
+    return mail.tick(*args, sender=lambda *a: True, **kwargs)
+
+
 def first_nudge(routed, now=T0):
     """What the transport does after `route`: ask for the nudge, which is recorded when the terminal is ready."""
     assert mail.nudge(routed["session"], routed["id"], now=now, capture=lambda s: READY) is True
@@ -151,24 +159,24 @@ def test_a_queued_message_is_woken_for_again_after_a_minute_then_after_five_and_
     routed = route(now=T0)
     first_nudge(routed)
     receivers = frozenset({"capitano-1"})
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=59), ready=ALWAYS) == []
-    [second] = mail.remind(receivers, now=T0 + timedelta(seconds=60), ready=ALWAYS)
+    assert remind(receivers, now=T0 + timedelta(seconds=59), ready=ALWAYS) == []
+    [second] = remind(receivers, now=T0 + timedelta(seconds=60), ready=ALWAYS)
     assert second == {"session": "CAPITANO", "text": mail.nudge_text(1)}
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=60 + 299), ready=ALWAYS) == []
-    assert len(mail.remind(receivers, now=T0 + timedelta(seconds=60 + 300), ready=ALWAYS)) == 1
-    assert mail.remind(receivers, now=T0 + timedelta(days=1), ready=ALWAYS) == [], "three nudges, no more"
+    assert remind(receivers, now=T0 + timedelta(seconds=60 + 299), ready=ALWAYS) == []
+    assert len(remind(receivers, now=T0 + timedelta(seconds=60 + 300), ready=ALWAYS)) == 1
+    assert remind(receivers, now=T0 + timedelta(days=1), ready=ALWAYS) == [], "three nudges, no more"
     assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])].count("nudged") == 3
 
 
 def test_a_message_that_was_taken_is_not_woken_for():
     first_nudge(route(now=T0))
     mail.drain("capitano-1", now=T0 + timedelta(seconds=5))
-    assert mail.remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=120), ready=ALWAYS) == []
+    assert remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=120), ready=ALWAYS) == []
 
 
 def test_the_nudge_carries_no_content_of_any_message():
     first_nudge(route(message=envelope(text="the secret words of the message"), now=T0))
-    [line] = mail.remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=61), ready=ALWAYS)
+    [line] = remind(frozenset({"capitano-1"}), now=T0 + timedelta(seconds=61), ready=ALWAYS)
     assert "secret" not in line["text"] and "[@" not in line["text"], "no envelope: it can never be routed itself"
 
 
@@ -182,9 +190,9 @@ def test_the_tick_expires_tells_and_wakes_and_makes_no_folder_for_those_who_are_
     first_nudge(route(now=T0))  # an ordinary request, 10 minutes of patience
     urgent = mail.route("CAPITANO", envelope(kind="URG", text="stop now"), identity=VERIFIED, receivers=receivers, now=T0)
     first_nudge(urgent)
-    lines = mail.tick(receivers, now=T0 + timedelta(seconds=60), ready=ALWAYS)
+    lines = tick(receivers, now=T0 + timedelta(seconds=60), ready=ALWAYS)
     assert [l for l in lines if "new message" in l["text"]] == [{"session": "CAPITANO", "text": mail.nudge_text(2)}]
-    lines = mail.tick(receivers, now=T0 + timedelta(seconds=60 + 120), ready=ALWAYS)
+    lines = tick(receivers, now=T0 + timedelta(seconds=60 + 120), ready=ALWAYS)
     expired = mail.state_of("capitano-1", urgent["id"])
     assert expired == "expired"
     typed = [l for l in lines if "was not taken" in l["text"]]
@@ -250,9 +258,9 @@ def test_the_reminders_wait_for_the_prompt_and_come_back_when_it_is_there():
     routed = route(now=T0)
     first_nudge(routed)
     receivers = frozenset({"capitano-1"})
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=90), ready=lambda s: False) == []
+    assert remind(receivers, now=T0 + timedelta(seconds=90), ready=lambda s: False) == []
     assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])].count("nudged") == 1, "a held reminder is not counted"
-    [line] = mail.remind(receivers, now=T0 + timedelta(seconds=95), ready=ALWAYS)
+    [line] = remind(receivers, now=T0 + timedelta(seconds=95), ready=ALWAYS)
     assert line["session"] == "CAPITANO"
 
 
@@ -408,32 +416,32 @@ def test_a_terminal_that_does_not_respond_keeps_its_exit_code_three(wire, jht_ho
 
 # -- the watchdog ----------------------------------------------------------------------------------------------------------
 
-def test_the_watchdog_runs_the_tick_each_round_and_types_what_it_prints(tmp_path):
+def test_the_watchdog_delegates_mail_delivery_to_the_mailbox_command(tmp_path):
     source = WATCHDOG.read_text(encoding="utf-8")
     assert 'MAIL_BIN="${JHT_MAIL_BIN:-jht-mail}"' in source
     assert source.index("    maybe_mail_tick\n") > source.index("    maybe_respawn_workers\n")
     start = source.index("maybe_mail_tick() {")
     function = source[start:source.index("\n}\n", start) + 3]
     fake_mail = tmp_path / "fake-mail"
-    fake_mail.write_text("#!/bin/sh\nprintf 'CAPITANO\\twake up\\nSCOUT-1\\t[@watchdog -> @scout-1] [MSG] late\\n\\n'\n")
+    log = tmp_path / "forwarded.log"
+    fake_mail.write_text(f'#!/bin/sh\nprintf "%s|%s|%s\\n" "$*" "$JHT_TMUX_SENDER" "$JHT_HOME" >> "{log}"\n')
     fake_mail.chmod(0o755)
     sender = tmp_path / "fake-sender"
-    log = tmp_path / "typed.log"
-    sender.write_text(f"#!/bin/sh\nprintf '%s|%s\\n' \"$1\" \"$2\" >> {log}\n")
+    sender.write_text('#!/bin/sh\nexit 99\n')
     sender.chmod(0o755)
-    script = f'MAIL_BIN="{fake_mail}"\nTMUX_SENDER="{sender}"\n{function}\nmaybe_mail_tick\n'
+    script = f'JHT_HOME="{tmp_path}"\nMAIL_BIN="{fake_mail}"\nTMUX_SENDER="{sender}"\n{function}\nmaybe_mail_tick\n'
     done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
     assert done.returncode == 0, done.stderr
-    assert log.read_text().splitlines() == ["CAPITANO|wake up", "SCOUT-1|[@watchdog -> @scout-1] [MSG] late"]
+    assert log.read_text().splitlines() == [f"tick --deliver|{sender}|{tmp_path}"]
 
 
-def test_the_watchdog_does_nothing_when_the_command_is_not_installed():
+def test_the_watchdog_exposes_a_missing_mailbox_command():
     source = WATCHDOG.read_text(encoding="utf-8")
     start = source.index("maybe_mail_tick() {")
     function = source[start:source.index("\n}\n", start) + 3]
-    done = subprocess.run(["bash", "-c", f'MAIL_BIN="/nonexistent/jht-mail"\n{function}\nmaybe_mail_tick; echo rc=$?'],
+    done = subprocess.run(["bash", "-c", f'JHT_HOME="/fixture"\nTMUX_SENDER="fixture"\nMAIL_BIN="/nonexistent/jht-mail"\n{function}\nmaybe_mail_tick'],
                           capture_output=True, text=True, timeout=30)
-    assert done.stdout.strip() == "rc=0"
+    assert done.returncode == 127 and "No such file" in done.stderr
 
 
 # -- the skills say it, in every language -------------------------------------------------------------------------------------
@@ -518,9 +526,9 @@ def test_a_first_nudge_held_because_the_terminal_was_busy_goes_as_soon_as_it_is_
     routed = route(now=T0)
     assert mail.nudge(routed["session"], routed["id"], now=T0, capture=lambda s: BUSY) is False
     receivers = frozenset({"capitano-1"})
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=30), ready=lambda s: False) == []
-    [line] = mail.remind(receivers, now=T0 + timedelta(seconds=40), ready=ALWAYS)
+    assert remind(receivers, now=T0 + timedelta(seconds=30), ready=lambda s: False) == []
+    [line] = remind(receivers, now=T0 + timedelta(seconds=40), ready=ALWAYS)
     assert line == {"session": "CAPITANO", "text": mail.nudge_text(1)}
     assert [r["state"] for r in mail.receipts("capitano-1", routed["id"])] == ["queued", "nudged"]
-    assert mail.remind(receivers, now=T0 + timedelta(seconds=41), ready=ALWAYS) == [], "then the schedule: 60 s after this one"
-    assert len(mail.remind(receivers, now=T0 + timedelta(seconds=40 + 60), ready=ALWAYS)) == 1
+    assert remind(receivers, now=T0 + timedelta(seconds=41), ready=ALWAYS) == [], "then the schedule: 60 s after this one"
+    assert len(remind(receivers, now=T0 + timedelta(seconds=40 + 60), ready=ALWAYS)) == 1

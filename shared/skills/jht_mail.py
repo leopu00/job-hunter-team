@@ -887,31 +887,24 @@ def session_ready(session: str, capture=None) -> bool:
         return False
 
 
-def nudge(session: str, message_id: str, *, now: datetime | None = None, capture=None) -> bool:
-    """Whether the transport may type the nudge for this message now. If so, the nudge is recorded
-    (the not-taken clock and the schedule of the next ones start from here); if not, nothing is
-    recorded and nothing is typed: the message waits in the box and the next round tries again."""
-    agent = agent_id(session)
-    if not MESSAGE_ID.match(str(message_id)) or not session_ready(session, capture):
-        return False
-    try:
-        record_nudge(agent, [message_id], now=now)
-    except OSError:
-        pass  # the receipt is bookkeeping; the nudge itself is still worth typing
-    return True
+def _mail_delivery():
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import mail_delivery
+    return mail_delivery
 
 
-def nudge_through(binary: str, session: str, message_id: str, *, timeout: int = 100) -> str:
-    """For a caller that is not the transport (the chat): type the nudge with the transport's own
-    typing, if the terminal is at its prompt. "nudged" or "held"; a failure of the typing is "held"
-    too, because the message is safe and the watchdog will wake the agent again."""
-    if not nudge(session, message_id):
-        return "held"
-    try:
-        done = subprocess.run([binary, session, nudge_text(1)], capture_output=True, timeout=timeout, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return "held"
-    return "nudged" if done.returncode == 0 else "held"
+def _delivery_context():
+    from delivery_context import Context
+    return Context(globals())
+
+
+def nudge(session, message_id, *, now=None, capture=None, record=True):
+    return _mail_delivery().nudge(_delivery_context(), session, message_id, now=now, capture=capture, record=record)
+
+
+def nudge_through(binary, session, message_id, *, timeout=100):
+    return _mail_delivery().nudge_through(_delivery_context(), binary, session, message_id, timeout=timeout)
 
 
 def nudge_text(count: int) -> str:
@@ -923,42 +916,12 @@ def _nudges(agent: str, message_id: str) -> list[datetime]:
     return sorted(t for t in (_parse(r.get("at")) for r in receipts(agent, message_id) if r.get("state") == "nudged") if t)
 
 
-def remind(receivers, now: datetime | None = None, ready=None) -> list[dict]:
-    """Nudges that are due: a queued message that has none yet (the first was held) as soon as the
-    terminal is ready; then 60 seconds after its first nudge, and 5 minutes after the second; never
-    more than three times. One line per box, and only when the
-    terminal is at its prompt (`ready(session)`; the real check when None): otherwise nothing is
-    recorded and the next round looks again."""
-    moment = _utc(now)
-    due = []
-    gate = ready or session_ready
-    for agent in sorted(receivers):
-        if not box_dir(agent).is_dir():
-            continue  # no folder is created for a receiver nobody wrote to
-        waiting = []
-        for item in pending(agent, now=moment):
-            sent = _nudges(agent, item["id"])
-            # No nudge yet (the first was held: the terminal was busy): it goes as soon as the terminal is
-            # ready. After one or two, the schedule; after three, no more.
-            if not sent or (len(sent) <= len(RENEWAL_AFTER)
-                            and (moment - sent[-1]).total_seconds() >= RENEWAL_AFTER[len(sent) - 1]):
-                waiting.append(item["id"])
-        if waiting and gate(session_of(agent)):
-            record_nudge(agent, waiting, now=moment)
-            due.append({"session": session_of(agent), "text": nudge_text(len(pending(agent, now=moment)))})
-    return due
+def remind(receivers, now=None, ready=None, sender=None):
+    return _mail_delivery().remind(_delivery_context(), receivers, now=now, ready=ready, sender=sender)
 
 
-def tick(receivers, now: datetime | None = None, ready=None) -> list[dict]:
-    """What the watchdog does on each round: expire, tell, and wake again. Returns the lines to type."""
-    moment = _utc(now)
-    lines: list[dict] = []
-    for agent in sorted(receivers):
-        if not box_dir(agent).is_dir():
-            continue
-        lines.extend(sweep(agent, now=moment, receivers=receivers)["typed"])
-    lines.extend(remind(receivers, now=moment, ready=ready))
-    return lines
+def tick(receivers, now=None, ready=None, sender=None, allowed=None):
+    return _mail_delivery().tick(_delivery_context(), receivers, now=now, ready=ready, sender=sender, allowed=allowed)
 
 
 # -- command line -----------------------------------------------------------------------
@@ -1034,11 +997,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("pending", help="the queued messages of a box")
     p.add_argument("--agent")
     sub.add_parser("sweep", help="expire what was not taken in time").add_argument("agents", nargs="*")
-    sub.add_parser("tick", help="sweep and wake again; prints 'SESSION<TAB>TEXT' lines to type (the watchdog runs this)")
+    sub.add_parser("tick", help="sweep and plan nudges, or deliver them").add_argument("--deliver", action="store_true")
     sub.add_parser("route", help="(the transport) queue the message on stdin when it applies").add_argument("session")
     n = sub.add_parser("nudge", help="(the transport) may the nudge for this message be typed now?")
     n.add_argument("session")
     n.add_argument("message_id")
+    n.add_argument("--check", action="store_true")
+    end = sub.add_parser("transport-exit")
+    end.add_argument("session")
+    end.add_argument("message_id")
+    end.add_argument("rc", type=int)
+    end.add_argument("held", type=int)
     return parser
 
 
@@ -1085,12 +1054,9 @@ def main(argv=None) -> int:
             print("\t".join((routed["id"], routed["session"], routed["recipient"], "new" if routed["created"] else "again")))
             return EXIT["ok"]
         if args.command == "nudge":
-            return EXIT["ok"] if nudge(args.session, args.message_id) else EXIT["held"]
-        if args.command == "tick":
-            for line in tick(load_receivers()):
-                text = " ".join(_LINE_BREAK.split(line["text"])).replace("\t", " ")
-                print(f"{line['session']}\t{text}")
-            return EXIT["ok"]
+            return EXIT["ok"] if nudge(args.session, args.message_id, record=not args.check) else EXIT["held"]
+        if args.command in ("tick", "transport-exit"):
+            return _mail_delivery().command(_delivery_context(), args)
         if args.command == "sweep":
             names = args.agents or sorted(
                 p.name for p in (home() / "mailbox").glob("*")

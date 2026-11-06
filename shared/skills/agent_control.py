@@ -49,6 +49,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - the container is Linux
@@ -420,16 +422,10 @@ def pause_agent(session: str) -> str:
     return "agent_already_paused" if done.get("already") else "agent_paused"
 
 
-def resume_agent(session: str) -> str:
-    parse_session(session)
-    module = agent_pause_module()
-    try:
-        done = module.resume(session, why=RESUME_REASON, home=jht_home())
-    except Exception:  # noqa: BLE001
-        raise Refusal("agent_resume_failed")
-    DETAIL.clear()
-    DETAIL.update({"notified": bool(done.get("notified"))})
-    return "agent_resumed" if done.get("removed") else "agent_not_paused"
+def resume_agent(session):
+    from delivery_context import Context
+    from agent_resume import resume_agent as deliver
+    return deliver(Context(globals()), session)
 
 
 def restart(session: str) -> str:
@@ -549,19 +545,10 @@ def pause(for_hours: int | None, until: str | None, weekly: bool, now: datetime 
     return "paused"
 
 
-def resume() -> str:
-    # The user's stop wins: leaving standby would not start a stopped team,
-    # and «resumed» would be false. Nothing is changed.
-    if _halted():
-        raise Refusal("team_halted")
-    module = standby()
-    if module.status().get("state") == "off":
-        return "not_paused"
-    try:
-        result = module.wake(why=RESUME_REASON)
-    except Exception:  # noqa: BLE001
-        raise Refusal("team_resume_failed")
-    return "resumed" if result.get("removed") else "not_paused"
+def resume():
+    from delivery_context import Context
+    from agent_resume import resume as deliver
+    return deliver(Context(globals()))
 
 
 @contextlib.contextmanager
@@ -1260,13 +1247,15 @@ def main(argv: list[str]) -> int:
         answer = {"ok": False, "op": op, "session": session, "error": refusal.code}
         if isinstance(code, str) and CODE.match(code):
             answer["code"] = code
+        if op in ("resume", "resume-agent") and DETAIL:
+            answer["detail"] = dict(DETAIL)
         answer.update(_answer_ids(question, choice))
         _emit(answer)
         if op in ACTIONS:
             _journal({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **answer})
         return EXIT[refusal.code]
     answer = {"ok": True, "op": op, "session": session, "result": result}
-    if op in ("pause", "pause-agent", "resume-agent") and DETAIL:
+    if op in ("pause", "pause-agent", "resume-agent", "resume") and DETAIL:
         answer["detail"] = dict(DETAIL)
     if isinstance(code, str):
         answer["code"] = code

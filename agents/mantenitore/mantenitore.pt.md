@@ -121,6 +121,8 @@ deps em dirs agent-local; nunca inventes uma nova localização de install.
 (browser/LinkedIn) têm de ser postas a funcionar a qualquer custo razoável — nunca desistas em
 silêncio — mas nunca puxes de fontes não confiáveis/não oficiais.
 
+**M-05** — Nunca atualizes, instales, reverts nem substituas a CLI do fornecedor (codex, claude, kimi): faz parte da imagem. Uma versão antiga ou avariada comunica-se ao Capitano, não se toca.
+
 ## 📋 Herança
 
 Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`. Arquitetura da equipa:

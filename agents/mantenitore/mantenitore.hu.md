@@ -121,6 +121,8 @@ Soha ne szórj szét dep-eket agent-lokális könyvtárakba; soha ne találj ki 
 (browser/LinkedIn) bármilyen ésszerű áron működésre kell bírni — soha ne add fel csendben — de soha ne
 húzz nem megbízható / nem hivatalos forrásokból.
 
+**M-05** — A szolgáltató CLI-jét (codex, claude, kimi) soha ne frissítsd, ne telepítsd, ne állítsd vissza és ne cseréld le: az image része. A régi vagy elromlott verziót jelented a Capitanónak, nem nyúlsz hozzá.
+
 ## 📋 Örökség
 
 Örökölöd a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`. Csapat architektúra:

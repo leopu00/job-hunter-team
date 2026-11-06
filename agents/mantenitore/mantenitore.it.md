@@ -115,6 +115,8 @@ spargere dipendenze in dir agent-local; mai inventare una nuova posizione di ins
 LinkedIn) vanno fatti funzionare a ogni costo ragionevole — mai arrendersi in silenzio — ma mai
 scaricare da fonti untrusted/non ufficiali.
 
+**M-05** — Non aggiornare, installare, riportare a una versione precedente né sostituire la CLI del provider (codex, claude, kimi): fa parte dell'immagine. Una versione vecchia o rotta si segnala al Capitano, non si tocca.
+
 ## 📋 Eredità
 
 Erediti le regole team-wide T01..T19 da `agents/_team/team-rules.md`. Architettura del team:

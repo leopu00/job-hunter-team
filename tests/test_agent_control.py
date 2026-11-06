@@ -1005,3 +1005,27 @@ def test_the_screen_is_the_last_120_lines_and_nothing_is_typed(team, capsys):
     calls = (team.tmp / "tmux.log").read_text().splitlines()
     assert any(call.startswith("capture-pane") and "-S -120" in call for call in calls)
     assert not any(call.split(" ")[0] in ("send-keys", "paste-buffer", "load-buffer") for call in calls)
+
+
+def test_team_resume_reports_the_sessions_that_did_not_receive_the_order(team, capsys):
+    team.up('SCOUT-1','SCOUT-2')
+    team.run('pause','--for-hours','1',capsys=capsys)
+    _script(team.tmp/'bin'/'jht-tmux-send','#!/bin/bash\nexit 3\n')
+    code,answer=team.run('resume',capsys=capsys)
+    assert code==110 and answer['error']=='team_resume_failed' and answer['ok'] is False
+    assert answer['detail']['pause_removed'] is True
+    assert answer['detail']['reached']==[]
+    assert sorted(answer['detail']['not_reached'])==['SCOUT-1','SCOUT-2']
+    assert not (team.home/'.team-standby.flag').exists()
+
+
+def test_one_agent_resume_records_a_failed_delivery_in_its_journal(team,capsys):
+    team.up('SCOUT-1')
+    team.run('pause-agent','SCOUT-1',capsys=capsys)
+    _script(team.tmp/'bin'/'jht-tmux-send','#!/bin/bash\nexit 3\n')
+    code,answer=team.run('resume-agent','SCOUT-1',capsys=capsys)
+    assert code==124 and answer['error']=='agent_resume_failed'
+    assert answer['detail']=={'notified':False,'pause_removed':True}
+    rows=[json.loads(line) for line in (team.home/'logs/agent-pauses.jsonl').read_text().splitlines()]
+    assert rows[-1]['event']=='resume_not_delivered' and rows[-1]['notified'] is False
+    assert 'message_not_delivered' in (team.home/'logs/runtime.log').read_text()

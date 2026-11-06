@@ -768,17 +768,23 @@ def _transport_run(args, timeout, text=True):
 # <<< tmux_send_run bootstrap
 
 
-def notify_captain(message: str) -> bool:
-    for cand in ("jht-tmux-send",
-                 "/app/agents/_skills/tmux-send/jht-tmux-send"):
-        try:
-            res = _transport_run([cand, CAPTAIN_SESSION, message], TMUX_SEND_WAIT_S)
-        except FileNotFoundError:
-            continue
-        except (OSError, subprocess.SubprocessError):
-            return False
-        return res.returncode == 0
-    return False
+def _delivery_module():
+    skill_path = str(Path(__file__).resolve().parent.parent / "shared" / "skills")
+    if skill_path not in sys.path:
+        sys.path.insert(0, skill_path)
+    module = _load_shared("stepcap_delivery", "stepcap_delivery.py")
+    if module is None:
+        raise RuntimeError("delivery_state_unavailable: step-cap delivery module missing")
+    return module
+
+
+def _delivery_context():
+    from delivery_context import Context
+    return Context(globals())
+
+
+def notify_captain(message):
+    return _delivery_module().notify_captain(_delivery_context(), message)
 
 
 # ── Un giro ───────────────────────────────────────────────────────────────
@@ -795,228 +801,11 @@ def _agent_paused(session: str) -> bool:
 
 
 def _handle_agent(session, agent, entry, now, live_workers):
-    if _agent_paused(session):
-        return  # in pausa per volere dell'utente: fermo e non lo si tocca
-    pane = capture_pane(session)
-    if pane is None:
-        return  # tmux non risponde per questa sessione: si riprova al giro dopo
-    tail = pane_tail(pane)
-    current = pane_hash(tail)
-    marker = find_marker(tail)
-    phase = entry.get("phase", "idle")
-
-    # (a) Verifica post-ripresa: il pane deve muoversi entro un giro. Se non si
-    #     muove il paste non è entrato — va detto, non nascosto.
-    if phase == "resumed":
-        if current == entry.get("resume_hash"):
-            emit("resume_failed", agent=agent, ts=now, session=session,
-                 consecutive=entry.get("consecutive"))
-        entry.update(phase="idle", hash=current, resume_hash=None,
-                     stall_hash=None, immobile=0)
-        return
-
-    # (b) Throttle in corso.
-    if phase == "throttled":
-        if now < (entry.get("until") or 0):
-            return
-        if current != entry.get("stall_hash"):
-            # L'agente è ripartito da solo (o qualcuno gli ha scritto): niente
-            # nudge. Il contatore NON si azzera — solo la produzione lo azzera.
-            emit("recovered", agent=agent, ts=now, session=session,
-                 consecutive=entry.get("consecutive"))
-            clear_throttle(agent)
-            entry.update(phase="idle", hash=current, until=None, stall_hash=None,
-                         immobile=0)
-            return
-        if entry.get("via") == "engine":
-            engine = _throttle_engine()
-            flag = engine.get_flag(agent) if engine is not None else {}
-            if isinstance(flag, dict) and flag.get("state") == getattr(engine, "IN_THROTTLE", "IN_THROTTLE") \
-                    and now < float(entry.get("until") or 0) + ENGINE_WAKE_GRACE_SEC:
-                return          # e' il motore che lo sveglia, al suo giro: una sveglia sola
-        gate = resume_gate(now, live_workers)
-        if gate:
-            emit("gated", agent=agent, ts=now, session=session, gate=gate,
-                 consecutive=entry.get("consecutive"))
-            entry["until"] = now + GATE_RETRY_SEC
-            return
-        clear_throttle(agent)
-        message = RESUME_TEXT.format(AGENT=agent.upper())
-        if send_resume(session, agent, message):
-            emit("resumed", agent=agent, ts=now, session=session,
-                 consecutive=entry.get("consecutive"),
-                 throttle_sec=entry.get("throttle_sec"))
-            entry.update(phase="resumed", resume_hash=current, hash=None,
-                         until=None, stall_hash=None)
-        else:
-            emit("resume_send_failed", agent=agent, ts=now, session=session,
-                 consecutive=entry.get("consecutive"))
-            entry.update(phase="idle", hash=None, until=None, stall_hash=None,
-                         immobile=0)
-        return
-
-    # (c) Escalation in corso: non si tocca più finché il pane non cambia.
-    if phase == "escalated":
-        if current != entry.get("stall_hash"):
-            emit("recovered", agent=agent, ts=now, session=session,
-                 consecutive=entry.get("consecutive"))
-            entry.update(phase="idle", hash=current, stall_hash=None, immobile=0)
-        return
-
-    # (d) RILEVAZIONE. Due strade verso lo stesso verdetto:
-    #     - marcatore in coda E pane immobile → stallo subito (via storica);
-    #     - nessun marcatore ma pane immobile da IDLE_STALL_ROUNDS giri →
-    #       stallo lo stesso. Senza questa seconda strada il watchdog vede
-    #       solo gli stalli che si annunciano da soli, cioè quasi nessuno.
-    usage_line = find_usage_limit(tail)
-    previous = entry.get("hash")
-    entry["hash"] = current
-    if previous is None or previous != current:
-        entry["immobile"] = 0
-        entry["idle_noted"] = False
-        return
-    if marker:
-        entry["immobile"] = 0
-    else:
-        rounds = int(entry.get("immobile") or 0) + 1
-        entry["immobile"] = rounds
-        if rounds < IDLE_STALL_ROUNDS:
-            return
-        # Fermo DEVE essere fermo: durante un halt o fuori finestra l'immobilità
-        # è il comportamento giusto. Si continua a contare (così alla riapertura
-        # il verdetto è immediato) ma non si chiama stallo ciò che è un ordine.
-        if resume_gate(now, live_workers):
-            return
-        calm = _idle_by_design(agent, now)
-        if calm:
-            if not entry.get("idle_noted"):
-                entry["idle_noted"] = True
-                emit("idle_by_design", agent=agent, ts=now, session=session, why=calm, rounds=rounds)
-            return
-        marker = f"no marker: pane unchanged for {rounds} cycles"
-    stall_rounds = int(entry.get("immobile") or 0)
-    observed = describe_stall(marker, stall_rounds, usage_line)
-
-    produced = produced_count(agent)
-    baseline = entry.get("produced")
-    progressed = (baseline is not None and produced is not None
-                  and produced > baseline)
-    consecutive = 1 if (progressed or not entry.get("consecutive")) \
-        else int(entry["consecutive"]) + 1
-    entry["consecutive"] = consecutive
-    entry["produced"] = produced
-    entry["stall_hash"] = current
-    emit("detected", agent=agent, ts=now, session=session, marker=marker,
-         consecutive=consecutive, produced=produced)
-
-    if consecutive >= ESCALATE_AT:
-        entry["phase"] = "escalated"
-        entry["until"] = None
-        emit("escalated", agent=agent, ts=now, session=session, marker=marker,
-             consecutive=consecutive)
-        last = entry.get("last_escalate_ts") or 0
-        if now - last >= ESCALATE_COOLDOWN_SEC:
-            entry["last_escalate_ts"] = now
-            if usage_line:
-                notify_captain(
-                    "[FROM @SYSTEM TO @CAPITANO] %s %s, %d times in a row with "
-                    "no progress in between. Pausing and resuming will NOT help: "
-                    "it goes back to the same wall until the quota resets. "
-                    "Do not look for a rabbit hole — decide whether to wait for "
-                    "the reset or move its work elsewhere. "
-                    "History: logs/stepcap.jsonl."
-                    % (agent, observed, consecutive))
-            else:
-                notify_captain(
-                    "[FROM @SYSTEM TO @CAPITANO] %s %s, %d consecutive times "
-                    "without producing anything between attempts: this looks like "
-                    "a rabbit hole, not an isolated incident. I will NOT resume it "
-                    "automatically again — decide whether to use `/clear` or respawn. "
-                    "History: logs/stepcap.jsonl."
-                    % (agent, observed, consecutive))
-        return
-
-    seconds = throttle_for(agent, consecutive)
-    armed = {"via": "none", "applied_sec": 0, "until": now}
-    try:
-        armed = arm_pause(agent, seconds, now, "stepcap: %s" % marker)
-    except OSError as exc:
-        _log("throttle was not written for %s: %s" % (agent, exc))
-    seconds = armed["applied_sec"]
-    entry.update(phase="throttled", until=armed["until"], throttle_sec=seconds, via=armed["via"])
-    emit("throttled", agent=agent, ts=now, session=session, marker=marker,
-         consecutive=consecutive, throttle_sec=seconds)
-    if consecutive == ESCALATE_AT - 1:
-        if usage_line:
-            notify_captain(
-                "[FROM @SYSTEM TO @CAPITANO] %s %s, %d times in a row. I paused "
-                "it for %d min, but a pause does not refill a quota: if it is "
-                "still empty it will stop again. Do not inspect what is running — "
-                "there is nothing wrong with it."
-                % (agent, observed, consecutive, max(1, seconds // 60)))
-        else:
-            notify_captain(
-                "[FROM @SYSTEM TO @CAPITANO] %s %s, %d consecutive times without "
-                "producing anything between attempts. I paused it for %d min and "
-                "will then resume it; if it happens again, I will stop resuming "
-                "and pass the decision to you. Inspect what is running."
-                % (agent, observed, consecutive, max(1, seconds // 60)))
+    return _delivery_module()._handle_agent(_delivery_context(), session, agent, entry, now, live_workers)
 
 
-def check_missing_acks(state: dict, now: float) -> list:
-    """Agenti che hanno ricevuto la sveglia e non hanno firmato: ESCALATION.
-
-    È l'altro segnale di questo watchdog, e l'unico DETERMINISTICO. Il ciclo del
-    cap di step guarda il pane e deve indovinare; qui non si indovina: il motore
-    dei throttle ha mandato la sveglia, ha scritto `NOTIFIED` con l'ora, e ha
-    lasciato l'ack all'agente. Se il flag è ancora lì dopo N minuti l'agente non
-    è inattivo — non ha risposto a una richiesta che gli è arrivata.
-
-    Nessun nudge: questo watchdog non sa cosa ha bloccato l'agente e riprovare a
-    scrivergli è ciò che ha già fallito. Si porta la prova al Capitano, che
-    decide (`/clear` o respawn).
-    """
-    mod = _throttle_engine()
-    if mod is None:
-        return []
-    try:
-        limit = float(NOTIFIED_ACK_MAX_SEC) if NOTIFIED_ACK_MAX_SEC \
-            else float(mod.NOTIFIED_ACK_MAX_SEC)
-        stuck = mod.notified_without_ack(now=now, max_sec=limit)
-    except Exception as exc:  # noqa: BLE001 — il segnale nuovo non abbatte il giro
-        _log("failed to read throttle flags: %s" % exc)
-        return []
-    if not stuck:
-        # Nessuno fermo: si buttano i cooldown, così un agente che si ribloccasse
-        # domani viene segnalato subito e non dopo un'ora di silenzio.
-        state.pop("ack_escalations", None)
-        return []
-
-    sent = state.setdefault("ack_escalations", {})
-    if not isinstance(sent, dict):
-        sent = {}
-        state["ack_escalations"] = sent
-    for row in stuck:
-        agent = row["agent"]
-        emit("notified_no_ack", agent=agent, ts=now, session=row.get("session"),
-             waiting_sec=row.get("waiting_sec"), threshold_sec=int(limit))
-        last = sent.get(agent) or 0
-        if now - float(last) < ACK_ESCALATE_COOLDOWN_SEC:
-            continue
-        sent[agent] = now
-        notify_captain(
-            "[FROM @SYSTEM TO @CAPITANO] %s received the throttle-engine wake-up "
-            "%d min ago and still has not acknowledged it (flag remains NOTIFIED). "
-            "This is not 'possibly idle': the wake-up arrived and got no response, "
-            "so the agent is blocked. I will not send anything else — decide whether "
-            "to use `/clear` or respawn. Evidence: state/throttle-flags.json; history: "
-            "logs/throttle-engine.jsonl."
-            % (agent, max(1, int(row.get("waiting_sec", 0) // 60))))
-    # Un agente che ha firmato non deve portarsi dietro il suo cooldown.
-    live = {row["agent"] for row in stuck}
-    for gone in [a for a in sent if a not in live]:
-        sent.pop(gone, None)
-    return stuck
+def check_missing_acks(state, now):
+    return _delivery_module().check_missing_acks(_delivery_context(), state, now)
 
 
 def tick(now=None) -> dict:

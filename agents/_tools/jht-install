@@ -39,6 +39,29 @@ die() { echo "jht-install: $*" >&2; exit 1; }
 lane="${1:-help}"
 shift || true
 
+# La CLI del provider (codex, claude, kimi) fa parte dell'IMMAGINE: nessun agente la aggiorna, la installa o la
+# sostituisce (JHT-T195). Un pacchetto che e' una di quelle CLI si rifiuta in ogni corsia, con lo stesso exit 3
+# di `apt` («non si fa a runtime»): una versione vecchia o rotta si segnala al Capitano, non si tocca.
+refuse_provider_cli() {
+  local arg name
+  for arg in "$@"; do
+    name="${arg#@}"                # @openai/codex@0.1 -> openai/codex@0.1
+    name="${name%%@*}"             # versione fuori
+    name="${name%%==*}"; name="${name%%>=*}"; name="${name%%<=*}"; name="${name%%~=*}"; name="${name%%[*}"
+    name=$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')
+    case "$name" in
+      openai/codex|codex|anthropic-ai/claude-code|claude-code|kimi-cli|kimi|moonshotai/kimi-cli)
+        echo "jht-install: '$arg' is the provider's CLI, part of the image: nobody in the team updates, installs or replaces it." >&2
+        echo "  An old or broken version is reported to the Captain (and the user), not touched." >&2
+        exit 3
+        ;;
+    esac
+  done
+}
+case "$lane" in
+  py|python|node|npm) refuse_provider_cli "$@" ;;
+esac
+
 case "$lane" in
   apt)
     # Niente sudo nel container: la shell di un agente non diventa root.

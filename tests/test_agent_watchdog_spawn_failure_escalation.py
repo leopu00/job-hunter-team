@@ -128,6 +128,7 @@ class Harness:
             "JHT_NODE_BIN": _bash_path(self.node),
             "JHT_START_AGENT": _bash_path(self.start),
             "JHT_TMUX_SENDER": _bash_path(self.sender),
+            "JHT_WATCHDOG_DELIVERY": _bash_path(ROOT / "shared" / "skills" / "watchdog_delivery.py"),
             "JHT_NOTIFY_USER_BIN": _bash_path(self.notify),
             "JHT_AGENT_RECOVERY_LOG": _bash_path(self.logs / "agent-recoveries.tsv"),
             "JHT_AGENT_SPAWN_FAILURE_LOG": _bash_path(

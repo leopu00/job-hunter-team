@@ -333,6 +333,7 @@ desculpas.
 | Biblioteca Python ainda nao importada | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` para STT de voz |
 | Pacote de sistema (binario CLI) | nao em runtime: vai para a imagem | pede ao Capitao; `jht-install apt <pkg>` explica |
 | Ferramenta CLI de Node | `npm install -g <pkg>` no prefixo do utilizador | `npm install -g yt-dlp` |
+| CLI do fornecedor (codex, claude, kimi) | nunca: faz parte da imagem, ninguem a atualiza, instala nem substitui | comunica uma versao antiga ou avariada ao Capitano e ao utilizador |
 | Binario pre-compilado | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | ferramentas LLM pontuais |
 | Ficheiro de modelo (Whisper, etc.) | download em runtime para `$JHT_HOME/.cache/<tool>/` | variantes de modelo small/medium |
 

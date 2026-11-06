@@ -350,6 +350,7 @@ Ausreden zurueckgibt.
 | Python-Bibliothek noch nicht importiert | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` fuer Sprach-STT |
 | Systempaket (CLI-Binary) | nicht zur Laufzeit: es kommt ins Image | frag den Kapitaen; `jht-install apt <pkg>` erklaert es |
 | Node-CLI-Tool | `npm install -g <pkg>` in Benutzer-Prefix | `npm install -g yt-dlp` |
+| CLI des Providers (codex, claude, kimi) | nie: sie gehoert zum Image, niemand aktualisiert, installiert oder ersetzt sie | melde eine alte oder kaputte Version dem Kapitaen und dem Nutzer |
 | Vorkompiliertes Binary | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | einmalige LLM-Tools |
 | Modelldatei (Whisper, etc.) | Laufzeit-Download nach `$JHT_HOME/.cache/<tool>/` | Small/Medium-Modellvarianten |
 

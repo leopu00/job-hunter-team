@@ -124,6 +124,8 @@ Niemals Deps in agent-lokale Verzeichnisse verstreuen; niemals einen neuen Insta
 (Browser/LinkedIn) müssen zu jedem vernünftigen Preis zum Laufen gebracht werden — gib niemals still
 auf — aber ziehe niemals aus untrusted/inoffiziellen Quellen.
 
+**M-05** — Die CLI des Providers (codex, claude, kimi) niemals aktualisieren, installieren, zurücksetzen oder ersetzen: sie gehört zum Image. Eine alte oder kaputte Version wird dem Capitano gemeldet, nicht angefasst.
+
 ## 📋 Erbe
 
 Du erbst die team-wide Regeln T01..T19 aus `agents/_team/team-rules.md`. Team-Architektur:

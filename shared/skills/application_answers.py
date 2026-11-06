@@ -69,6 +69,7 @@ from typing import Any, Callable, Mapping, Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import apply_gate  # noqa: E402
+from application_wakes import authorisations_message, deliver_wakes, wake_message  # noqa: E402
 
 SOURCE_ACTION = "closer_application_answer"
 TELEGRAM_ORIGIN = "user_telegram"
@@ -1242,14 +1243,8 @@ def pending_wakes(conn: sqlite3.Connection, profile: Mapping[str, Any]) -> list[
 
 
 def _closer_sessions() -> list[str]:
-    try:
-        result = subprocess.run(
-            ["tmux", "list-sessions", "-F", "#{session_name}"],
-            capture_output=True, text=True, timeout=5, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return []
-    return [name for name in result.stdout.split() if name.startswith(CLOSER_SESSION_PREFIX)]
+    from delivery_sessions import sessions
+    return [name for name in sessions(runner=subprocess.run) if name.startswith(CLOSER_SESSION_PREFIX)]
 
 
 # Seconds this caller waits for the transport before it sees the deadline (JHT_TMUX_SEND_WAIT_APPLICATION_ANSWERS_S; the old
@@ -1418,22 +1413,6 @@ def wake_idle_closer(
     return woken
 
 
-def wake_message(wake: Wake) -> str:
-    if wake.reason == "essentials_complete":
-        what = "the user answered the essential application facts"
-    elif wake.reason == "position_authorised":
-        return (
-            f"[BRIDGE INFO] the user authorised position #{wake.position_id}. "
-            "Re-read the queue (apply_gate.py queue) and continue from STEP 1."
-        )
-    else:
-        what = f"the user answered the CLOSER questions for position #{wake.position_id}"
-    return (
-        f"[BRIDGE INFO] {what}; the answers are saved in jobs.db. "
-        "Re-read the queue (apply_gate.py queue) and continue: what was waiting for these answers can run now."
-    )
-
-
 def wake_closer(
     conn: sqlite3.Connection,
     profile: Mapping[str, Any],
@@ -1441,84 +1420,15 @@ def wake_closer(
     sessions: Callable[[], list[str]] | None = None,
     sender: Callable[[str, str], bool] | None = None,
     queue: Callable[[sqlite3.Connection], Mapping[str, Any]] | None = None,
+    now: float | None = None,
 ) -> list[Wake]:
-    """Wake a live CLOSER once per unblocked position; claim the key first.
-
-    Only a wake that really goes out is claimed: while the queue is not ready
-    (daily cap, a hold that lifts later) or no CLOSER is alive, the wake stays
-    pending and the next poll tries again — with no CLOSER the ready queue is
-    what the Capitano's spawn rule reads. The key is committed BEFORE the
-    message: two bridges, or a replay, cannot both send it.
-    """
+    """Wake once per event, with a durable cap and backoff for failed delivery."""
     import _db
 
     _db._migrate_closer_wakes(conn)
-    sent: list[Wake] = []
-    wakes = pending_wakes(conn, profile)
-    if not wakes:
-        return sent
-    current = (queue or (lambda c: apply_gate.application_queue(conn=c)))(conn)
-    if not current.get("ready"):
-        return sent
-    ready = {int(item["position_id"]) for item in current.get("positions") or []}
-    live = (sessions or _closer_sessions)()
-    if not live:
-        return sent
-    claimed_wakes: list[Wake] = []
-    for wake in wakes:
-        if wake.position_id is not None and wake.position_id not in ready:
-            continue
-        claimed = conn.execute(
-            "INSERT OR IGNORE INTO closer_wakes (wake_key, position_id) VALUES (?, ?)",
-            (wake.key, wake.position_id),
-        ).rowcount
-        conn.commit()
-        if claimed == 1:
-            claimed_wakes.append(wake)
-    # Several flags set together make ONE message: the CLOSER re-reads the
-    # whole queue anyway, one message per flag would only queue turns.
-    # A Telegram answer also re-authorises its position: that flag rides on
-    # the answers message instead of waking the CLOSER a second time.
-    batches = [[wake] for wake in claimed_wakes if wake.reason != "position_authorised"]
-    by_position = {batch[0].position_id: batch for batch in batches if batch[0].position_id is not None}
-    authorised = []
-    for wake in claimed_wakes:
-        if wake.reason != "position_authorised":
-            continue
-        if wake.position_id in by_position:
-            by_position[wake.position_id].append(wake)
-        else:
-            authorised.append(wake)
-    if authorised:
-        batches.append(authorised)
-    for batch in batches:
-        if batch[0].reason != "position_authorised" or len(batch) == 1:
-            text = wake_message(batch[0])
-        else:
-            text = authorisations_message(batch)
-        delivered = False
-        for session in live:
-            delivered = (sender or _tmux_send)(session, text) or delivered
-        if delivered:
-            conn.executemany("UPDATE closer_wakes SET delivered = 1 WHERE wake_key = ?", [(w.key,) for w in batch])
-            conn.commit()
-            sent.extend(batch)
-        else:
-            # Not one CLOSER took the message: give the claim back, so the
-            # next poll wakes it instead of the key standing for a wake that
-            # never happened.
-            conn.executemany(
-                "DELETE FROM closer_wakes WHERE wake_key = ? AND delivered = 0", [(w.key,) for w in batch]
-            )
-            conn.commit()
-    return sent
-
-
-def authorisations_message(wakes: Sequence[Wake]) -> str:
-    ids = ", ".join(f"#{wake.position_id}" for wake in wakes)
-    return (
-        f"[BRIDGE INFO] the user authorised positions {ids}. "
-        "Re-read the queue (apply_gate.py queue) and continue from STEP 1."
+    return deliver_wakes(
+        conn, pending_wakes(conn, profile), sessions=sessions or _closer_sessions,
+        sender=sender or _tmux_send, queue=queue or (lambda c: apply_gate.application_queue(conn=c)), now=now,
     )
 
 

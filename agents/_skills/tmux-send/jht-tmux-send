@@ -312,17 +312,8 @@ mail_nudge_held=0
 _mail_exit() {
   local rc="$1"
   trap - EXIT
-  if [ "$mail_nudge_held" = 1 ]; then
-    echo "jht-tmux-send: queued $mail_id in the mailbox of $session; nudge held, the terminal is not at its prompt (it will be repeated)"
-    exit 0
-  fi
-  case "$rc" in
-    0) echo "jht-tmux-send: queued $mail_id in the mailbox of $session (nudge delivered)" ;;
-    3) echo "jht-tmux-send: queued $mail_id in the mailbox of $session, but the terminal does not respond (rc=3)" >&2
-       exit 3 ;;
-    *) echo "jht-tmux-send: queued $mail_id in the mailbox of $session; nudge unconfirmed (rc=$rc), it will be repeated" >&2
-       exit 0 ;;
-  esac
+  python3 "$MAIL_LIB" transport-exit "$session" "$mail_id" "$rc" "$mail_nudge_held"
+  exit $?
 }
 if [ -n "$mail_id" ]; then
   trap '_mail_exit $?' EXIT
@@ -428,10 +419,62 @@ if [ -n "$mail_id" ]; then
   # chat dell'utente, `agent_chat.prompt_state`): durante un turno puo' comparire un menu o una domanda
   # di permesso, e un tasto digitato sopra la risponde. Altrimenti non si digita niente: il messaggio
   # resta in coda e il richiamo del watchdog ritenta.
-  if ! python3 "$MAIL_LIB" nudge "$session" "$mail_id" >/dev/null 2>&1; then
+  if ! python3 "$MAIL_LIB" nudge "$session" "$mail_id" --check >/dev/null 2>&1; then
     mail_nudge_held=1
     exit 0
   fi
+fi
+
+# ── Un pannello che e' una SHELL NUDA non e' un agente (JHT-T195) ─────────────
+# Se la CLI dell'agente non e' partita (o e' uscita), nel pannello resta il prompt della shell: un messaggio
+# incollato li' viene LETTO COME COMANDI («-bash: syntax error near unexpected token `('») e il mittente crede
+# di aver scritto a un agente. Si guarda il PROCESSO del pannello, mai il testo a schermo (un testo si
+# somiglia, un processo no): e' una shell nuda quando
+#   - il processo in primo piano del pannello e' una shell (`pane_current_command`),
+#   - quella shell e' lei stessa in primo piano sul terminale (il gruppo di processi in primo piano, `tpgid`, e'
+#     il suo: se esegue un figlio, per esempio il launcher che sta avviando la CLI, in primo piano c'e' il figlio),
+#   - e non sta eseguendo uno script o un `-c` (una shell che E' lo script del launcher ha il percorso fra gli
+#     argomenti: una shell interattiva ha al piu' opzioni).
+# Il dubbio (ps assente, numeri illeggibili) NON e' una shell nuda: si consegna come prima.
+# Non si digita e non si preme niente, il mittente lo sa dallo stderr: exit 3, il segnale che gia' vuol dire
+# «pannello che non risponde» e che autorizza solo la VERIFICA di vita del Dottore. Con un messaggio in coda
+# nella casella postale il messaggio resta in coda: si salta solo il sollecito (vedi _mail_exit).
+_pane_is_bare_shell() {
+  local pid command pgid tpgid args word
+  pid=$(tmux display-message -p -t "=$session:" '#{pane_pid}' 2>/dev/null || true)
+  command=$(tmux display-message -p -t "=$session:" '#{pane_current_command}' 2>/dev/null || true)
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  command=${command##*/}
+  command=${command#-}
+  case "$command" in
+    bash|zsh|sh|dash|ash|ksh|fish|tcsh|csh) ;;
+    *) return 1 ;;
+  esac
+  pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)
+  tpgid=$(ps -o tpgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)
+  case "$pgid" in ''|*[!0-9]*) return 1 ;; esac
+  case "$tpgid" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$pgid" = "$tpgid" ] || return 1
+  args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+  [ -n "$args" ] || return 1
+  set -f
+  # shellcheck disable=SC2086
+  set -- $args
+  set +f
+  shift
+  for word in "$@"; do
+    case "$word" in
+      -c) return 1 ;;   # `sh -c "..."`: un comando, non un prompt
+      -*) ;;            # un'opzione (-l, -i, --login)
+      *) return 1 ;;    # un operando: lo script che questa shell sta eseguendo
+    esac
+  done
+  return 0
+}
+if _pane_is_bare_shell; then
+  echo "jht-tmux-send: the terminal of '$session' is a bare shell: the agent's CLI is not running there. Nothing was typed or pressed." >&2
+  echo "  Just spawned? Its CLI may not be up yet: look again with capture-pane in about 30 seconds. Still a shell: do not write into it, ask for a liveness check or a restart (the spawn skill of its role)." >&2
+  exit 3
 fi
 
 # Signature per la verify: testa E coda del messaggio. La testa basta per i

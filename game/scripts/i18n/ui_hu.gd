@@ -36,6 +36,8 @@ const S := {
 	"shutdown.detach_back": "Bármikor újranyithatod a játékot, és ott találod az irodát, ahol tart. A csapat leállításához lépj vissza, és kilépéskor válaszd a leállítást.",
 	"shutdown.detach_confirm": "ÍGY LÉPEK KI, HAGYOM ŐKET DOLGOZNI",
 	"shutdown.ordered": "Megkértem a Kapitányt, hogy zárja le a napot: minden ügynök feljegyzi, hol tartott, aztán megáll.",
+	"shutdown.not_delivered": "A leállítási parancs kézbesítése sikertelen. Megszakíthatod vagy azonnal bezárhatod.",
+	"shutdown.timed_out": "A leállítás öt percen belül nem kapott megerősítést. Megszakíthatod vagy azonnal bezárhatod.",
 	"shutdown.waiting": "Még %d ügynök dolgozik · %d mp. Várhatsz, vagy bezárhatod azonnal.",
 	"shutdown.done": "A csapat leállt. Bezárom.",
 	"headless.back": "○ A CSAPAT NÉLKÜLED DOLGOZOTT %s · MOST %d VAN AZ IRODÁBAN",
