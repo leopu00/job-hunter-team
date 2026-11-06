@@ -430,7 +430,7 @@ impl RuntimeLog {
             }
             .to_owned(),
             Err(code) => match code {
-                "runtime_missing" | "process_start_failed" | "process_timeout"
+                "runtime_missing" | "runtime_folder_shared" | "process_start_failed" | "process_timeout"
                 | "process_write_failed" | "process_wait_failed" | "process_output_unavailable"
                 | "process_input_failed" | "process_pipe_failed" => code,
                 _ => "io_error_other",

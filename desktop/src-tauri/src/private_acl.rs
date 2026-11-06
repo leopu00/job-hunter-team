@@ -42,6 +42,10 @@ const ACCESS_DENIED_ACE_TYPE: u8 = 1;
 pub(crate) struct AclReport {
     pub(crate) inheritance_disabled: bool,
     pub(crate) allowed_sids: Vec<String>,
+    /// The accounts of `allowed_sids` whose entry gives a right to CHANGE the node: write data or add a file, append or add a
+    /// folder, write attributes, delete (the node or what is in it), change the permissions or the owner. An account that
+    /// is only allowed to read and run is in `allowed_sids` and not here.
+    pub(crate) writer_sids: Vec<String>,
 }
 
 pub(crate) fn protect_dir(path: &Path) -> Result<(), &'static str> {
@@ -286,6 +290,7 @@ pub(crate) fn read_acl(path: &Path) -> Result<AclReport, &'static str> {
             return Err("permissions_unreadable");
         }
         let mut allowed_sids = Vec::new();
+        let mut writer_sids = Vec::new();
         for index in 0..size.AceCount {
             let mut ace: *mut core::ffi::c_void = ptr::null_mut();
             // SAFETY: `index` is below the ACE count of a valid ACL.
@@ -300,7 +305,12 @@ pub(crate) fn read_acl(path: &Path) -> Result<AclReport, &'static str> {
                     // SAFETY: an ACCESS_ALLOWED_ACE stores its SID in place,
                     // starting at SidStart.
                     let sid = unsafe { ptr::addr_of!((*allowed).SidStart) } as PSID;
-                    allowed_sids.push(sid_string(sid)?);
+                    let sid = sid_string(sid)?;
+                    // SAFETY: the mask is a field of the same ACE.
+                    if crate::windows_runtime::mask_allows_changing(unsafe { (*allowed).Mask }) {
+                        writer_sids.push(sid.clone());
+                    }
+                    allowed_sids.push(sid);
                 }
                 ACCESS_DENIED_ACE_TYPE => {}
                 _ => return Err("permissions_unexpected"),
@@ -309,6 +319,7 @@ pub(crate) fn read_acl(path: &Path) -> Result<AclReport, &'static str> {
         Ok(AclReport {
             inheritance_disabled: control & SE_DACL_PROTECTED != 0,
             allowed_sids,
+            writer_sids,
         })
     })();
     // SAFETY: allocated by GetNamedSecurityInfoW.
@@ -529,6 +540,7 @@ mod tests {
         let ok = AclReport {
             inheritance_disabled: true,
             allowed_sids: vec![user.clone(), LOCAL_SYSTEM_SID.into()],
+            writer_sids: vec![user.clone(), LOCAL_SYSTEM_SID.into()],
         };
         assert!(is_owner_only(&ok, &user));
         assert!(!is_owner_only(
