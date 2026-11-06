@@ -895,8 +895,12 @@ def test_the_zip_is_the_pinned_release_checked_before_anything_is_read_out_of_it
     assert "$PodmanZipPrograms = @('podman.exe', 'gvproxy.exe', 'win-sshproxy.exe')" in enabler
     function = enabler[enabler.index("function Install-PodmanForThisUser {") :]
     function = function[: function.index("\n}\n")]
-    # the digest first, then the archive is opened; the names come from the script, never from the archive
-    assert function.index("Get-FileHash") < function.index("-ne $Sha256") < function.index("OpenRead")
+    # the file is opened ONCE (nobody may write to it or delete it meanwhile), the digest is taken of that open stream, and the
+    # archive is read from the same stream: the digest first, then the archive; the names come from the script, never from it
+    assert function.count("[IO.File]::Open($zipFile") == 1 and "[IO.FileShare]::Read)" in function
+    assert "Get-FileHash" not in function and "OpenRead" not in function and "ZipFile]::" not in function
+    assert function.index("[IO.File]::Open($zipFile") < function.index("ComputeHash($stream)") < function.index("-ne $Sha256") < function.index("$stream.Position = 0") < function.index("ZipArchive(")
+    assert "ZipArchive($stream," in function and function.index("ZipArchive(") < function.index("GetEntry(")
     assert "GetEntry(\"podman-$Version/usr/bin/$name\")" in function
     assert "Expand-Archive" not in enabler and "ExtractToDirectory" not in enabler and "ExtractToFile" not in enabler
     assert "FullName" not in function and ".Name" not in function
