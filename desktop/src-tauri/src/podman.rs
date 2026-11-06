@@ -378,6 +378,14 @@ pub(crate) fn jht_machine_is_off() -> bool {
     machine_state(LISTING_TIMEOUT) == MachineState::Off
 }
 
+/// Whether Podman says the JHT machine is on (a read of its state, `machine inspect`, which starts nothing): its memory is
+/// then already taken from the computer's, and the memory the team asks the computer for is only what is left to ask. An
+/// answer that is not a clear «on» (Podman not found, a timeout, stopped, not there) is NOT «on».
+#[cfg(windows)]
+pub(crate) fn jht_machine_is_running() -> bool {
+    machine_state(LISTING_TIMEOUT) == MachineState::Running
+}
+
 /// What to do with the machine, from what is known of it: the end, or to stop it. It falls on the safe side: a machine
 /// that may be on with containers nobody could list is not stopped.
 #[derive(Debug, PartialEq, Eq)]

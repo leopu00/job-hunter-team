@@ -3003,8 +3003,15 @@ fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resour
     crate::resources::Installed { machine: true, runtime: false, machine_running: true }
 }
 
-/// Windows' machine (WSL) is not looked for: it counts as there and its memory as not taken yet.
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+/// Windows' machine is not looked for on the disk: it counts as there. Whether it is ON is asked of Podman (a read, nothing
+/// is started): a machine that is up has already taken its memory from what the computer reports free, so the team is not
+/// asked for it a second time (it would warn of a shortage that the machine itself causes).
+#[cfg(windows)]
+fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
+    crate::resources::Installed { machine: true, runtime: false, machine_running: crate::podman::jht_machine_is_running() }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
     crate::resources::Installed { machine: true, runtime: false, machine_running: false }
 }
