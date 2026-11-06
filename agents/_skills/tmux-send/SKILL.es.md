@@ -86,7 +86,7 @@ Tipos estandar (consulta `agents/_manual/communication-rules.md` para la taxonom
   - Si el destinatario usa el buzón (`mail_receivers`), `0` significa **en cola**: el mensaje es un archivo duradero y el terminal solo recibió un aviso corto. Si el agente lo *tomó* lo dice `jht-mail status <agente> <id>`; un mensaje que nadie toma a tiempo se comunica al remitente. Una vez en cola, la salida es `0` pase lo que pase con el aviso, salvo `3` (un terminal que no responde); una sesión que desaparece tras encolar ya no responde `2`, el mensaje espera en el buzón. El aviso se escribe solo cuando el terminal espera en su prompt; si no, queda retenido (la salida sigue siendo `0`) y el watchdog lo repite.
 - `1` — argumentos faltantes
 - `2` — la sesion de destino no existe (verifica el nombre con `tmux ls`)
-- `3` — el texto nunca aparecio y el panel no esta ocupado → TUI no receptiva. **El unico codigo que sugiere muerta/bloqueada.**
+- `3` — el texto nunca aparecio y el panel no esta ocupado → TUI no receptiva. **El unico codigo que sugiere muerta/bloqueada.** Tambien sale 3, **sin haber escrito ni pulsado nada**, cuando el panel es una **shell desnuda** (la CLI del agente no arranco o salio): no escribas en ella; pide una comprobacion de vida o un reinicio.
 - `4` — peer ocupado en un turno largo mas alla del presupuesto de espera → **vivo**. Reintenta mas tarde, nunca respawnear.
 - `5` — texto aceptado pero nunca enviado ("vivo pero mudo") → **vivo**. Reintenta mas tarde, nunca respawnear.
 - `7` — el texto salio del composer pero nada prueba que la CLI lo tomara: **no se sabe**. Mira el panel antes de volver a escribir; nunca respawnear.

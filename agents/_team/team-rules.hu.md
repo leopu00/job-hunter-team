@@ -339,6 +339,7 @@ vissza.
 | Meg nem importalt Python-konyvtar | `uv pip install --user <pkg>` (RULE-T13) | `uv pip install --user faster-whisper` hang STT-hez |
 | Rendszercsomag (CLI binarisa) | nem futasidoben: az image-be kerul | kerdezd a Kapitanyt; `jht-install apt <pkg>` elmagyarazza |
 | Node CLI eszkoz | `npm install -g <pkg>` felhasznaloi prefixbe | `npm install -g yt-dlp` |
+| Szolgaltatoi CLI (codex, claude, kimi) | soha: az image resze, senki nem frissiti, nem telepiti es nem csereli | a regi vagy elromlott verziot jelentsd a Kapitanynak es a felhasznalonak |
 | Elofordaitott binaris | `curl -L <url> -o $JHT_AGENT_DIR/bin/<name> && chmod +x` | egyszeri LLM eszkozok |
 | Modellfajl (Whisper, stb.) | futasideju letoltes a `$JHT_HOME/.cache/<tool>/`-ba | small/medium modell-valtozatok |
 

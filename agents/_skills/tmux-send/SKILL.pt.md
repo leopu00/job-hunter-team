@@ -86,7 +86,7 @@ Tipos padrao (veja `agents/_manual/communication-rules.md` para a taxonomia comp
   - Se o destinatário usa a caixa (`mail_receivers`), `0` significa **em fila**: a mensagem é um ficheiro duradouro e o terminal só recebeu um aviso curto. Se o agente a *apanhou* diz-o `jht-mail status <agente> <id>`; uma mensagem que ninguém apanha a tempo é comunicada ao remetente. Depois de em fila, a saída é `0` aconteça o que acontecer ao aviso, exceto `3` (um terminal que não responde); uma sessão que desaparece depois de enfileirar já não responde `2`, a mensagem espera na caixa. O aviso só é escrito quando o terminal espera no prompt; caso contrário fica retido (a saída continua `0`) e o watchdog repete-o.
 - `1` — argumentos ausentes
 - `2` — sessao de destino nao existe (verifique o nome com `tmux ls`)
-- `3` — texto nunca apareceu e o painel nao esta ocupado → TUI nao receptiva. **O unico codigo que sugere morta/encravada.**
+- `3` — texto nunca apareceu e o painel nao esta ocupado → TUI nao receptiva. **O unico codigo que sugere morta/encravada.** Sai 3 tambem, **sem ter escrito nem premido nada**, quando o painel e uma **shell nua** (a CLI do agente nao arrancou ou saiu): nao escrevas la dentro; pede uma verificacao de vida ou um reinicio.
 - `4` — peer ocupado num turno longo alem do orcamento de espera → **vivo**. Tente mais tarde, nunca respawnar.
 - `5` — texto aceite mas nunca submetido ("vivo mas mudo") → **vivo**. Tente mais tarde, nunca respawnar.
 - `7` — o texto saiu do composer mas nada prova que a CLI o aceitou: **nao se sabe**. Veja o painel antes de escrever de novo; nunca respawnar.

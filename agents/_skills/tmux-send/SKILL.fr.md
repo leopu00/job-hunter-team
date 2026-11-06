@@ -86,7 +86,7 @@ Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie 
   - Si le destinataire utilise la boîte (`mail_receivers`), `0` signifie **en file** : le message est un fichier durable et le terminal n'a reçu qu'un court rappel. Que l'agent l'ait *pris*, c'est `jht-mail status <agent> <id>` qui le dit ; un message que personne ne prend à temps est signalé à l'expéditeur. Une fois en file, la sortie est `0` quoi qu'il arrive au rappel, sauf `3` (un terminal qui ne répond pas) ; une session qui disparaît après la mise en file ne répond plus `2`, le message attend dans la boîte. Le rappel n'est tapé que lorsque le terminal attend à son prompt ; sinon il est retenu (la sortie reste `0`) et le watchdog le répète.
 - `1` — arguments manquants
 - `2` — la session cible n'existe pas (verifiez le nom avec `tmux ls`)
-- `3` — le texte n'est jamais apparu et le panneau n'est pas occupe → TUI non receptive. **Le seul code qui suggere morte/bloquee.**
+- `3` — le texte n'est jamais apparu et le panneau n'est pas occupe → TUI non receptive. **Le seul code qui suggere morte/bloquee.** Sort aussi en 3, **sans avoir tape ni appuye sur rien**, quand le panneau est un **shell nu** (la CLI de l'agent n'a pas demarre ou est sortie) : n'ecris pas dedans ; demande une verification de vie ou un redemarrage.
 - `4` — pair occupe sur un tour long au-dela du budget d'attente → **vivant**. Reessayez plus tard, ne jamais respawner.
 - `5` — texte accepte mais jamais soumis ("vivant mais muet") → **vivant**. Reessayez plus tard, ne jamais respawner.
 - `7` — le texte a quitte le composer mais rien ne prouve que la CLI l'a pris : **inconnu**. Regardez le panneau avant de reecrire ; ne jamais respawner.
