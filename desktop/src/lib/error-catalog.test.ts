@@ -32,6 +32,17 @@ const NOT_ERRORS: Record<string, string> = {
   podman_not_installable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   podman_machine_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   user_dir_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
+  // load_times.rs: the closed words of the load-times log (pages, the way a native read went) and the `op` of a request
+  // whose time is written (team_settings.rs reads only); never shown, never an error.
+  chat: "the way a native read went, in the load-times log (load_times.rs ReadVia), never an error",
+  wrapper: "the way a native read went, in the load-times log (load_times.rs ReadVia), never an error",
+  read: "the op of a team-settings request whose time is written (team_settings.rs), never an error",
+  team_log: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_scout: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_analista: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_scorer: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_scrittore: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_critico: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
   ok_slow: "the runtime log's word for a chat call that worked but took long (direct_chat.rs, runtime_log.rs); it is written there and never shown",
   position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
   // host_agents.rs (the agents and the chats the app reads from the files of a team that is off): the fields of the roster

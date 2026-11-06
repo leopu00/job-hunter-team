@@ -172,7 +172,10 @@ pub(crate) async fn work_stats_read(
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
+    let started = std::time::Instant::now();
     let result = read_stats(&state, &scopes).await;
+    let worked = matches!(&result, Ok(reply) if reply.ok);
+    crate::load_times::note_native_read(&app, "work.stats", crate::load_times::ReadVia::Chat, worked, started);
     note_failure(&app, "stats.read", &result);
     result
 }

@@ -1,7 +1,7 @@
 //! The load-times log (`load-times.log`, beside the runtime log): how long the team's reads and the app's pages take, in
 //! closed fields only. Moved here from runtime_log.rs as it was; the readers still name it through `runtime_log`.
 use crate::runtime_log::{append, utc, RuntimeLog};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 /// The page-load timings file is smaller: a line a read, rotated as the runtime log is.
 const LOAD_LOG_MAX_BYTES: u64 = 128 * 1024;
@@ -11,7 +11,12 @@ pub(crate) const POSITIONS_READ_KINDS: [&str; 11] = ["list", "detail", "facets",
 const POSITIONS_READ_OTHER: &str = "other";
 
 /// The pages whose load time is written down, as the load-times log names them.
-pub(crate) const LOAD_PAGES: [&str; 3] = ["map", "positions", "position"];
+pub(crate) const LOAD_PAGES: [&str; 21] = [
+    "dashboard", "map", "positions", "position", "swipe", "team", "team_log", "team_scout", "team_analista", "team_scorer",
+    "team_scrittore", "team_critico", "messages", "profile", "agents", "agent", "office", "mail", "budget", "settings", "help",
+];
+/// Where the first data a page showed came from.
+pub(crate) const LOAD_SOURCES: [&str; 4] = ["memory", "stream", "native", "cloud"];
 /// The most calls to the cloud one page load lists.
 const LOAD_CLOUD_MAX: usize = 24;
 
@@ -29,7 +34,10 @@ pub(crate) struct LoadCloudCall {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct PageLoadMetric {
     page: String,
-    first_data_ms: u64,
+    /// None when the page showed nothing (it is never filled in with the end of a read).
+    first_data_ms: Option<u64>,
+    #[serde(default)]
+    first_data_source: Option<String>,
     complete_ms: u64,
     native_reads: u32,
     native_ms: u64,
@@ -72,7 +80,7 @@ impl RuntimeLog {
 
     /// How long a page took to show its data, from the click to the first data and to the last, with
     /// the reads of the team and the calls to the cloud it made. Closed fields only: the page from a
-    /// list of three, numbers (capped), and the cloud calls as a table's name or `rates`.
+    /// closed list, numbers (capped), where the first data came from, and the cloud calls as a table's name or `rates`.
     pub(crate) fn record_page_load(&self, metric: &PageLoadMetric) {
         let Some(page) = LOAD_PAGES.iter().find(|page| **page == metric.page) else {
             return;
@@ -92,10 +100,14 @@ impl RuntimeLog {
                 format!("{name}:{}", cap(call.ms))
             })
             .collect();
+        let first = metric.first_data_ms.map_or_else(|| "-".to_owned(), |ms| cap(ms).to_string());
+        let source = match metric.first_data_source.as_deref() {
+            None => "-",
+            Some(said) => LOAD_SOURCES.iter().find(|known| **known == said).copied().unwrap_or(POSITIONS_READ_OTHER),
+        };
         let entry = format!(
-            "=== {} page.load page={page} first_data_ms={} complete_ms={} native_reads={} native_ms={} cloud_calls={} cloud={}\n",
+            "=== {} page.load page={page} first_data_ms={first} first_data_source={source} complete_ms={} native_reads={} native_ms={} cloud_calls={} cloud={}\n",
             utc(SystemTime::now()),
-            cap(metric.first_data_ms),
             cap(metric.complete_ms),
             metric.native_reads.min(10_000),
             cap(metric.native_ms),
@@ -112,6 +124,51 @@ impl RuntimeLog {
 pub(crate) fn page_load_metric(app: tauri::AppHandle, metric: PageLoadMetric) {
     if let Some(log) = RuntimeLog::new(&app) {
         log.record_page_load(&metric);
+    }
+}
+
+/// The native reads of the pages whose time is written, as the load-times log names them. A name that is not here is «other».
+pub(crate) const NATIVE_READS: [&str; 8] =
+    ["team.budget", "work.stats", "profile.progress", "team.start", "team.settings", "team.provider", "mail.status", "swipe.deck"];
+
+/// The way a native read went: the chat's channel into the container (served by the state stream where it is open), the
+/// host's wrapper on this computer, or ssh to a server.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum ReadVia {
+    Chat,
+    Wrapper,
+    Ssh,
+}
+
+impl ReadVia {
+    fn name(self) -> &'static str {
+        match self {
+            ReadVia::Chat => "chat",
+            ReadVia::Wrapper => "wrapper",
+            ReadVia::Ssh => "ssh",
+        }
+    }
+}
+
+impl RuntimeLog {
+    /// How long one native read of a page took, end to end: its name from a closed list, the way it went, whether it gave its
+    /// answer, the milliseconds. Nothing of the answer, the host or the account.
+    pub(crate) fn record_native_read(&self, op: &str, via: ReadVia, ok: bool, took: Duration) {
+        let op = NATIVE_READS.iter().find(|known| **known == op).copied().unwrap_or(POSITIONS_READ_OTHER);
+        let entry = format!(
+            "=== {} native.read op={op} via={} ok={ok} ms={}\n",
+            utc(SystemTime::now()),
+            via.name(),
+            took.as_millis().min(600_000),
+        );
+        let _ = append(&self.path().with_file_name("load-times.log"), &entry, LOAD_LOG_MAX_BYTES);
+    }
+}
+
+/// Writes the time of a native read that started at `started` (best effort: without a log folder, no line).
+pub(crate) fn note_native_read(app: &tauri::AppHandle, op: &'static str, via: ReadVia, ok: bool, started: Instant) {
+    if let Some(log) = RuntimeLog::new(app) {
+        log.record_native_read(op, via, ok, started.elapsed());
     }
 }
 
@@ -171,20 +228,55 @@ mod tests {
         };
         log.record_page_load(&metric("map", &["position_views", "rates"]));
         log.record_page_load(&metric("positions", &[]));
-        // a page that is not one of the three, and a label that is a path or a word of someone's: nothing / «other»
+        // a page that is not one of the list, and a label that is a path or a word of someone's: nothing / «other»
         log.record_page_load(&metric("/positions/secret-id", &[]));
         log.record_page_load(&metric("position", &["Bearer abc.def", "https://host.invalid/x", "a".repeat(33).as_str()]));
         let text = fs::read_to_string(root.join("logs").join("load-times.log")).unwrap();
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 3, "{text}");
-        assert!(lines[0].ends_with("page.load page=map first_data_ms=1200 complete_ms=600000 native_reads=4 native_ms=5100 cloud_calls=2 cloud=position_views:310,rates:310"), "{}", lines[0]);
+        assert!(lines[0].ends_with("page.load page=map first_data_ms=1200 first_data_source=- complete_ms=600000 native_reads=4 native_ms=5100 cloud_calls=2 cloud=position_views:310,rates:310"), "{}", lines[0]);
         assert!(lines[1].ends_with("cloud_calls=0 cloud=-"));
         assert!(lines[2].contains("page=position ") && lines[2].ends_with("cloud=other:310,other:310,other:310"), "{}", lines[2]);
         assert!(!text.contains("secret") && !text.contains("Bearer") && !text.contains("host.invalid"));
         // a request with a field that is not in the form is no request at all
+        // a page that showed nothing says so, and a source off the list is «other»
+        let shown = |first: serde_json::Value, source: serde_json::Value| -> PageLoadMetric {
+            serde_json::from_value(serde_json::json!({
+                "page": "budget", "firstDataMs": first, "firstDataSource": source, "completeMs": 40, "nativeReads": 0, "nativeMs": 0, "cloud": [],
+            }))
+            .unwrap()
+        };
+        log.record_page_load(&shown(serde_json::json!(12), serde_json::json!("memory")));
+        log.record_page_load(&shown(serde_json::Value::Null, serde_json::Value::Null));
+        log.record_page_load(&shown(serde_json::json!(5), serde_json::json!("C:/Users/someone")));
+        let text = fs::read_to_string(root.join("logs").join("load-times.log")).unwrap();
+        let lines: Vec<&str> = text.lines().skip(3).collect();
+        assert!(lines[0].contains("page=budget first_data_ms=12 first_data_source=memory complete_ms=40"), "{}", lines[0]);
+        assert!(lines[1].contains("first_data_ms=- first_data_source=- complete_ms=40"), "{}", lines[1]);
+        assert!(lines[2].contains("first_data_source=other ") && !text.contains("someone"));
         assert!(serde_json::from_value::<PageLoadMetric>(serde_json::json!({
             "page": "map", "firstDataMs": 1, "completeMs": 2, "nativeReads": 0, "nativeMs": 0, "cloud": [], "url": "x"
         })).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_native_read_leaves_its_closed_name_its_way_and_its_time_only() {
+        let root = dir("native-read");
+        let log = RuntimeLog::in_dir(&root.join("logs"));
+        log.record_native_read("team.budget", ReadVia::Chat, true, Duration::from_millis(14_250));
+        log.record_native_read("mail.status", ReadVia::Wrapper, false, Duration::from_millis(31));
+        log.record_native_read("team.settings", ReadVia::Ssh, true, Duration::from_secs(4_000));
+        // a name that is not one of the reads (a word of someone's, a path) is just «other»
+        log.record_native_read("/home/someone/secret", ReadVia::Chat, true, Duration::from_millis(5));
+        let text = fs::read_to_string(root.join("logs").join("load-times.log")).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4, "{text}");
+        assert!(lines[0].ends_with("native.read op=team.budget via=chat ok=true ms=14250"), "{}", lines[0]);
+        assert!(lines[1].ends_with("native.read op=mail.status via=wrapper ok=false ms=31"), "{}", lines[1]);
+        assert!(lines[2].ends_with("op=team.settings via=ssh ok=true ms=600000"), "{}", lines[2]);
+        assert!(lines[3].contains("op=other ") && !text.contains("secret"));
+        assert!(!root.join("logs").join("runtime.log").exists());
         let _ = fs::remove_dir_all(&root);
     }
 }

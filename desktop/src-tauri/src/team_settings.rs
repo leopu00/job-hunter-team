@@ -442,6 +442,9 @@ pub(crate) async fn team_settings(
     };
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
+    let reading = request.get("op").and_then(Value::as_str) == Some("read");
+    let started = std::time::Instant::now();
+    let worker = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "account_scope_changed")?;
         let found = std::cell::RefCell::new(None);
@@ -450,7 +453,7 @@ pub(crate) async fn team_settings(
             request,
             window_is_main,
             || {
-                let (found_destination, print) = destination(&app, &worker_expected)?;
+                let (found_destination, print) = destination(&worker, &worker_expected)?;
                 let mode = destination_mode(&found_destination);
                 let claim = match &found_destination {
                     Destination::OwnVps { state, .. } => state.write_refusal(),
@@ -461,7 +464,7 @@ pub(crate) async fn team_settings(
                 Ok((mode, claim, print, target))
             },
             |request| match found.borrow().as_ref() {
-                Some(found_destination) => run(found_destination, request, &app, &worker_expected),
+                Some(found_destination) => run(found_destination, request, &worker, &worker_expected),
                 None => Err("team_settings_unavailable"),
             },
         );
@@ -469,12 +472,20 @@ pub(crate) async fn team_settings(
         if let (Some(settings), Some(true), Some("local")) =
             (written, reply.get("ok").and_then(Value::as_bool), reply.get("target").and_then(Value::as_str))
         {
-            crate::local_action_log::record(&app, &worker_expected, "settings.update", &crate::local_action_log::settings_of(&settings));
+            crate::local_action_log::record(&worker, &worker_expected, "settings.update", &crate::local_action_log::settings_of(&settings));
         }
         Ok::<Value, &'static str>(reply)
     })
     .await
     .unwrap_or(Err("team_settings_unavailable"));
+    if reading {
+        let via = match result.as_ref().ok().and_then(|reply| reply.get("target")).and_then(Value::as_str) {
+            Some("vps") => crate::load_times::ReadVia::Ssh,
+            _ => crate::load_times::ReadVia::Wrapper,
+        };
+        let worked = result.as_ref().is_ok_and(|reply| reply.get("ok") == Some(&Value::Bool(true)));
+        crate::load_times::note_native_read(&app, "team.settings", via, worked, started);
+    }
     if scopes.lock_expected(&expected).is_err() {
         return Ok(failure("account_scope_changed"));
     }
