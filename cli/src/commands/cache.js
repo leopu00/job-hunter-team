@@ -93,7 +93,12 @@ async function cacheClear() {
 // applicata SOLO quando il CLI gira; se l'utente non usa Codex per
 // settimane il file cresce indefinitamente. Noi lo pruniamo on-demand
 // qui sotto soglia + sopra mtime di sicurezza.
-const CODEX_LOGS_DB = join(JHT_HOME, '.codex', 'logs_2.sqlite');
+// I database di Codex stanno in CODEX_SQLITE_HOME quando il compose lo imposta
+// (docs/adr/0013), altrimenti dove sono sempre stati.
+export function codexSqliteDir(env = process.env, home = JHT_HOME) {
+  return (env.CODEX_SQLITE_HOME || '').trim() || join(home, '.codex');
+}
+const CODEX_LOGS_DB = join(codexSqliteDir(), 'logs_2.sqlite');
 const CODEX_LOGS_THRESHOLD_BYTES = 50 * 1024 * 1024; // sotto i 50 MB non vale il rischio
 const CODEX_LOGS_RETENTION_DAYS = 10;                 // allinea con la policy interna di Codex
 const CODEX_LOGS_IDLE_SECONDS = 3600;                 // mtime > 1h fa = nessuno sta scrivendo

@@ -108,6 +108,15 @@ services:
       - UV_TOOL_DIR=/opt/jht-deps/uv-tools
       - UV_TOOL_BIN_DIR=/opt/jht-deps/bin
       - UV_CACHE_DIR=/opt/jht-deps/uv-cache
+      # Lo stato SQLite di Codex (state, logs, thread_history, goals, memories,
+      # queue: WAL, aperti insieme da tutti gli agenti) sta nel volume e non
+      # nel bind-mount: su Windows /jht_home e' C:\ attraverso 9p, dove un
+      # commit costa ~150x di piu' (3 ms contro 0,02 ms) e l'apertura di Codex
+      # trova il database ancora preso da un altro agente ("database is
+      # locked"). Restano nel bind, dove l'app e i wrapper li cercano, solo
+      # auth.json (il login, uno solo), config.toml, version.json e sessions/.
+      # docs/adr/0013-codex-sqlite-state-off-the-host-bind.md
+      - CODEX_SQLITE_HOME=/opt/jht-deps/codex-state
       # PATH esplicito: il nuovo prefisso davanti, il vecchio dietro come
       # rete per chi ha gia' i CLI installati nel bind-mount.
       - PATH=/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:/jht_home/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games
