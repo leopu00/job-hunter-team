@@ -5442,14 +5442,16 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn the_container_rules_hold_on_the_listing() {
-        let listing = |rows: Vec<serde_json::Value>| format!("printf '%s\\n' '{}'", serde_json::Value::Array(rows));
-        let with = |row: &serde_json::Value, state: &str, service: &str, id: &str| {
+        fn listing(rows: Vec<serde_json::Value>) -> String {
+            format!("printf '%s\\n' '{}'", serde_json::Value::Array(rows))
+        }
+        fn with(row: &serde_json::Value, state: &str, service: &str, id: &str) -> serde_json::Value {
             let mut changed = row.clone();
             changed["State"] = state.into();
             changed["Labels"]["com.docker.compose.service"] = service.into();
             changed["Id"] = id.into();
             changed
-        };
+        }
         let aaa = "a".repeat(64);
         let bbb = "b".repeat(64);
         // each case: what the engine lists (made from the one container of the installed runtime) -> what the chat finds
