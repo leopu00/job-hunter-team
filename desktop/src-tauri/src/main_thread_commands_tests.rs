@@ -29,16 +29,19 @@ fn commands() -> Vec<Command> {
         let file = path.file_name().unwrap().to_string_lossy().into_owned();
         let mut rest = source.as_str();
         while let Some(at) = rest.find(marker) {
+            let at_line_start = at == 0 || rest[..at].ends_with('\n');
             rest = &rest[at + marker.len()..];
             let Some(fn_at) = rest.find("fn ") else { break };
             let head = &rest[..fn_at];
-            // a marker in a string or a comment is followed by no function before the next item
-            if head.contains("\n}\n") || head.contains("struct ") {
+            // a marker in a string or a comment is not at the start of a line, and what follows a real one is only
+            // the rest of the attribute and the function's keywords
+            if !at_line_start || head.contains(['{', ';', '"']) {
                 continue;
             }
             let after = &rest[fn_at + 3..];
             let name: String = after.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-            let body = after.split("\n}\n").next().unwrap_or("").to_owned();
+            // the body, without the function's own name (a command called `…_probe` is not a probe)
+            let body = after[name.len()..].split("\n}\n").next().unwrap_or("").to_owned();
             found.push(Command { file: file.clone(), name, is_async: head.contains("async"), body });
         }
     }
@@ -46,7 +49,11 @@ fn commands() -> Vec<Command> {
 }
 
 /// What puts a process or a long wait in a function.
-const WAITS: [&str; 9] = [
+const WAITS: [&str; 13] = [
+    "run_scoped_local(",
+    "run_ssh(",
+    "stop_provider_login_in_container(",
+    "configured_subscription_provider(",
     "run_connection(",
     "run_verified_local_wrapper(",
     "run_ssh_command",

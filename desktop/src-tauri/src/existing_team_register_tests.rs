@@ -3077,7 +3077,8 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         (&broker, "broker_login_view_open", "saved_host_action_refusal(", &["get_webview_window", "compare_exchange", "spawn_blocking"]),
     ];
     for (source, name, refusal_call, effects) in commands {
-        let text = body(source, name);
+        // the login's work is in `start_provider_login`, run off the main thread by the command of that name
+        let text = body(source, if name == "onboarding_provider_login" { "start_provider_login" } else { name });
         assert!(text.contains("window: tauri::Window"), "{name}: it knows which window asks");
         assert!(text.contains("window.label()"), "{name}: and says it");
         let asked = text.find(refusal_call).unwrap_or_else(|| panic!("{name}: it asks"));
@@ -3099,6 +3100,7 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
     assert!(save.matches("request.password.zeroize()").count() >= 3);
     // the closing of a login only kills the person's own process: it stays open to a read-only view
     assert!(!body(&onboarding, "onboarding_provider_login_close").contains("window"));
+    assert!(!body(&onboarding, "close_provider_login").contains("window"));
     // a host that cannot be read is closed
     let saved = include_str!("agent_control.rs").split("pub(crate) fn saved_host_action_refusal(").nth(1).unwrap().split("\n}\n").next().unwrap().to_owned();
     assert!(saved.contains("Err(code) => Some(code)") && !saved.contains(".ok()?"));
