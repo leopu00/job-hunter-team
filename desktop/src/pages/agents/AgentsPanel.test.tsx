@@ -1890,3 +1890,78 @@ describe("«Agenti»: the list reads again by itself", () => {
     await waitFor(() => expect(lists()).toBeGreaterThan(before));
   });
 });
+
+// The Team page shows the Agents page's parts one by one (tabs of the whole team, Info of one agent): every function the Agents
+// page had must still be there, each in its place, with the same test ids and the same confirmations.
+describe("«Agenti», the parts of the panel inside the Team page: no function of the Agents page is lost", () => {
+  const part = (only: "commands" | "lanes" | "log" | "agent", agent?: string) =>
+    render(<AgentsPanel params={{}} search={new URLSearchParams()} only={only} agent={agent} />);
+
+  it("commands: the summary of the team, Pause, Stop team and their confirmations, and nothing of the page around them", async () => {
+    where = "local";
+    part("commands");
+    await screen.findByTestId("panel-summary");
+    expect(screen.getByTestId("panel-team-state")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-stop-team")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-team-help")).toBeInTheDocument();
+    // not the page's own title, list of agents, detail or registry
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByTestId("panel-detail")).toBeNull();
+    expect(screen.queryByTestId("panel-row-SCOUT-1")).toBeNull();
+    expect(screen.queryByTestId("panel-action-log")).toBeNull();
+    // Pause and Stop team are confirmed, as on the page
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    expect(await screen.findByTestId("panel-confirm")).toBeInTheDocument();
+    expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+  });
+
+  it("lanes: what each agent worked on, read while it is open, with the window of the person's choice", async () => {
+    where = "local";
+    activityReply = () => ({ ok: true, data: { agents: [], windows: [] } });
+    part("lanes");
+    await screen.findByTestId("panel-work");
+    expect(screen.getByTestId("work-window-24h")).toBeInTheDocument();
+    expect(screen.queryByTestId("panel-summary")).toBeNull();
+    expect(ops().some((r) => r.op === "activity")).toBe(true);
+  });
+
+  it("log: the registry of the actions, alone", async () => {
+    where = "local";
+    part("log");
+    await screen.findByTestId("panel-action-log");
+    expect(screen.queryByTestId("panel-summary")).toBeNull();
+  });
+
+  it("agent: its state, its times, Pause, Restart and Stop of the agent that is on, each confirmed; Start for one that is off", async () => {
+    where = "local";
+    part("agent", "SCOUT-1");
+    await screen.findByTestId("panel-state");
+    expect(screen.getByTestId("panel-times")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-agent-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-restart")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-stop")).toBeInTheDocument();
+    // the terminal and the list are the Team page's own tabs, not here
+    expect(screen.queryByTestId("panel-terminal-section")).toBeNull();
+    expect(screen.queryByTestId("panel-row-CAPITANO")).toBeNull();
+    fireEvent.click(screen.getByTestId("panel-stop"));
+    expect(await screen.findByTestId("panel-confirm")).toBeInTheDocument();
+    expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+  });
+
+  it("agent: a paused agent shows the amber pause sign and Resume, never the green of one that works", async () => {
+    where = "local";
+    pausedAgents = new Set(["SCOUT-1"]);
+    part("agent", "SCOUT-1");
+    await screen.findByTestId("panel-led-paused");
+    expect(screen.getByTestId("panel-agent-resume")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-state")).toHaveTextContent("In pausa");
+  });
+
+  it("agent: one that is not in the team says so instead of showing the controls of another", async () => {
+    where = "local";
+    part("agent", "ANALISTA-9");
+    await screen.findByTestId("panel-part-agent-missing");
+    expect(screen.queryByTestId("panel-restart")).toBeNull();
+  });
+});

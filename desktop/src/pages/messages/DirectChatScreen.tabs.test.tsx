@@ -62,4 +62,74 @@ describe("DirectChatScreen with the tabs of the Team page", () => {
     await screen.findByTestId("direct-chat-composer");
     expect(screen.queryByTestId("team-tabs")).toBeNull();
   });
+
+  const withSquad = (render_: (tab: string) => React.ReactNode = (tab) => <p data-testid="squad-body">{tab}</p>) => ({
+    tabs: [{ id: "info", label: "Info" }, { id: "terminal", label: "Terminale" }],
+    render: (agent: { session: string }, tab: string) => <p data-testid="tab-body">{`${tab}:${agent.session}`}</p>,
+    squad: {
+      label: "Squadra",
+      tabs: [{ id: "commands", label: "Comandi" }, { id: "lanes", label: "Corsie" }, { id: "log", label: "Registro" }],
+      render: render_,
+      line: (up: number, total: number) => `${up} su ${total} accesi`,
+    },
+  });
+
+  it("has the whole team as the first row, with its own tabs, and leaves the agent underneath as it was", async () => {
+    const user = userEvent.setup();
+    render(<DirectChatScreen client={client()} initialAgentId="capitano" loadSessions={sessions} agentTabs={withSquad()} />);
+    const row = await screen.findByTestId("team-squad-row");
+    const nav = screen.getByRole("navigation", { name: "Chat agenti" });
+    expect(within(nav).getAllByRole("button")[0]).toBe(row);
+    await waitFor(() => expect(row).toHaveTextContent("1 su 2 accesi"));
+    await user.click(row);
+    expect(row).toHaveAttribute("aria-current", "page");
+    expect(within(screen.getByTestId("team-tabs")).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Comandi", "Corsie", "Registro"]);
+    expect(screen.getByTestId("squad-body")).toHaveTextContent("commands");
+    expect(screen.queryByTestId("direct-chat-composer")).toBeNull();
+    await user.click(screen.getByTestId("team-tab-lanes"));
+    expect(screen.getByTestId("squad-body")).toHaveTextContent("lanes");
+    // an agent brings back its own tabs, on the chat
+    await user.click(within(nav).getByRole("button", { name: /^Capitano/ }));
+    expect(row).not.toHaveAttribute("aria-current");
+    expect(within(screen.getByTestId("team-tabs")).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Chat", "Info", "Terminale"]);
+    expect(screen.getByTestId("direct-chat-composer")).toBeInTheDocument();
+  });
+
+  it("opens on the team's tab the address asks for", async () => {
+    render(<DirectChatScreen client={client()} initialAgentId="capitano" loadSessions={sessions} agentTabs={{ ...withSquad(), squad: { ...withSquad().squad, initial: "log" } }} />);
+    expect(await screen.findByTestId("squad-body")).toBeInTheDocument();
+    expect(screen.getByTestId("team-tab-log")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("lists the sessions that have no chat as rows of their own, with Info and Terminal only, so no agent of the old Agents page is lost", async () => {
+    const user = userEvent.setup();
+    const more = async (): Promise<ChatSession[]> => [
+      ...(await sessions()),
+      { session: "DOTTORE", up: true, state: { state: "idle" } as ChatSession["state"] },
+      { session: "CRITICO-S2", up: false, state: { state: "spento" } as ChatSession["state"] },
+    ];
+    render(<DirectChatScreen client={client()} initialAgentId="capitano" loadSessions={more} agentTabs={withSquad()} />);
+    const row = await screen.findByTestId("team-other-DOTTORE");
+    expect(screen.getByTestId("team-other-CRITICO-S2")).toBeInTheDocument();
+    await user.click(row);
+    expect(row).toHaveAttribute("aria-current", "page");
+    expect(within(screen.getByTestId("team-tabs")).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Info", "Terminale"]);
+    expect(screen.getByTestId("tab-body")).toHaveTextContent("info:DOTTORE");
+    await user.click(screen.getByTestId("team-tab-terminal"));
+    expect(screen.getByTestId("tab-body")).toHaveTextContent("terminal:DOTTORE");
+    expect(screen.queryByTestId("direct-chat-composer")).toBeNull();
+  });
+
+  it("shows an agent the person paused with an amber pause sign in the place of the dot, never green", async () => {
+    const paused = async (): Promise<ChatSession[]> => [
+      { session: "CAPITANO", up: true, state: { state: "idle" } as ChatSession["state"], paused: true },
+      { session: "SCOUT-1", up: true, state: { state: "lavora" } as ChatSession["state"] },
+    ];
+    render(<DirectChatScreen client={client()} initialAgentId="scout" loadSessions={paused} />);
+    expect(await screen.findByTestId("direct-chat-paused-capitano")).toHaveTextContent("⏸");
+    expect(screen.queryByTestId("direct-chat-led-capitano")).toBeNull();
+    // the others keep their dot
+    expect(screen.getByTestId("direct-chat-led-scout")).toBeInTheDocument();
+  });
 });
+

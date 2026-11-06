@@ -46,6 +46,7 @@ export default function MessagesPage({ search, reconfirmBridge, embedded }: Page
       ),
     squad: {
       label: words.squad,
+      line: (up, total) => words.squadLine.replace("{up}", String(up)).replace("{total}", String(total)),
       tabs: [
         { id: "commands", label: words.commands },
         { id: "lanes", label: words.lanes },

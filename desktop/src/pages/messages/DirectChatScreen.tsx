@@ -288,8 +288,8 @@ export type AgentTabs = {
     /** Open on this row, with this tab (from the address). */
     initial?: string;
     render: (tab: string) => ReactNode;
-    /** The line under its name in the list (how many are on). */
-    line?: string;
+    /** The line under its name in the list: how many of the agents are on. */
+    line?: (up: number, total: number) => string;
   };
 };
 
@@ -975,7 +975,7 @@ export default function DirectChatScreen({
               style={{ color: squadSelected ? "var(--color-bright)" : "var(--color-muted)", background: squadSelected ? "var(--color-card)" : "transparent" }}
             >
               {squad.label}
-              {squad.line && <span className="mt-0.5 block min-w-0 truncate text-[14px] font-normal normal-case tracking-normal text-[var(--color-dim)]">{squad.line}</span>}
+              {squad.line && sessions !== null && <span className="mt-0.5 block min-w-0 truncate text-[14px] font-normal normal-case tracking-normal text-[var(--color-dim)]">{squad.line(sessions.filter((entry) => entry.up).length, sessions.length)}</span>}
             </button>
           )}
           {agents.map((agent) => (
@@ -997,12 +997,19 @@ export default function DirectChatScreen({
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    aria-hidden
-                    data-testid={`direct-chat-led-${agent.id}`}
-                    className="inline-block h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: agent.up ? "var(--color-green)" : "var(--color-border)" }}
-                  />
+                  {agent.up && agent.paused ? (
+                    // paused by the person: on, but nobody works it. Amber in the dot's place, never the green of the one that works
+                    <span aria-hidden data-testid={`direct-chat-paused-${agent.id}`} className="inline-block w-2 shrink-0 text-[11px] leading-none" style={{ color: "var(--color-yellow)" }}>
+                      ⏸
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden
+                      data-testid={`direct-chat-led-${agent.id}`}
+                      className="inline-block h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: agent.up ? "var(--color-green)" : "var(--color-border)" }}
+                    />
+                  )}
                   <span className="min-w-0 break-words">{agent.label}</span>
                 </span>
                 {unread.last[agent.id] && (

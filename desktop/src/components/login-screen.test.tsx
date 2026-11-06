@@ -27,6 +27,26 @@ beforeEach(() => {
 });
 
 describe("LoginScreen", () => {
+  it("lists the local profiles saved on this computer to choose from, and asks for a new name only on the button that says so (T186)", async () => {
+    const A = "a".repeat(64);
+    const B = "b".repeat(64);
+    localStorage.setItem("jht.desktop.identity.v1", "local");
+    localStorage.setItem(
+      "jht.desktop.local-profiles.v2",
+      JSON.stringify({ version: 2, activeId: A, teamOwnerId: null, profiles: [
+        { profileId: A, displayName: "Persona Uno", createdAt: 1 },
+        { profileId: B, displayName: "Persona Due", createdAt: 2 },
+      ] }),
+    );
+    render(<LoginScreen loadBrowsers={noBrowsers} configured />);
+    expect(await screen.findByRole("button", { name: /Persona Uno/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Persona Due/ })).toBeInTheDocument();
+    // no empty form for a new name until the person asks for a new profile
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Usa in locale" })).toBeNull();
+    expect(screen.getByTestId("login-profile-last")).toBeInTheDocument();
+  });
+
   it("offers Google and local as independent entry paths without old personal questions", () => {
     render(<LoginScreen loadBrowsers={noBrowsers} configured />);
     expect(screen.getByRole("img", { name: /due percorsi di identità/i }))
