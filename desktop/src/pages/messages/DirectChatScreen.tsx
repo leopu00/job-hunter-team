@@ -276,6 +276,19 @@ export type AgentTabs = {
   render: (agent: { id: string; session: string; label: string; up: boolean }, tab: string) => ReactNode;
   /** The person chose another tab or agent: the page keeps the address. */
   onChange?: (agentId: string, tab: string) => void;
+  /**
+   * The whole team as a row on top of the list, with tabs of its own (commands, lanes, registry): what is of all the
+   * agents and not of one. Choosing it leaves the agent underneath as it was, and the chat goes on in the background.
+   */
+  squad?: {
+    label: string;
+    tabs: readonly { id: string; label: string }[];
+    /** Open on this row, with this tab (from the address). */
+    initial?: string;
+    render: (tab: string) => ReactNode;
+    /** The line under its name in the list (how many are on). */
+    line?: string;
+  };
 };
 
 export default function DirectChatScreen({
@@ -317,6 +330,10 @@ export default function DirectChatScreen({
 }) {
   const [agentId, setAgentId] = useState<string>(initialAgentId);
   const [tab, setTab] = useState<string>(agentTabs?.initial ?? "chat");
+  const [squadOn, setSquadOn] = useState<boolean>(Boolean(agentTabs?.squad?.initial));
+  const [squadTab, setSquadTab] = useState<string>(agentTabs?.squad?.initial ?? agentTabs?.squad?.tabs[0]?.id ?? "");
+  const squad = agentTabs?.squad && !embedded ? agentTabs.squad : null;
+  const squadSelected = squad !== null && squadOn;
   const [status, setStatus] = useState<DirectChatStatus>(INITIAL_STATUS);
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
   // The agent's questions: each read brings the open ones and the latest closed ones, whole.
@@ -418,6 +435,18 @@ export default function DirectChatScreen({
     return [...listed, { id: agentId, session, label: agentTitle(session, t.agents), up: false, state: sessions === null ? null : { state: "spento" as const } }];
   }, [sessions, t, agentId]);
   const selected = agents.find((agent) => agent.id === agentId) ?? agents[0];
+  // The team's sessions that have no chat (maintenance, a reviewer, the sentinel): rows of their own on the Team page, with Info and
+  // Terminal only, so no agent that the Agents page showed goes missing.
+  const others = useMemo(
+    () =>
+      agentTabs && !embedded && sessions
+        ? sessions.filter((entry) => !agents.some((agent) => agent.session === entry.session)).map((entry) => ({ session: entry.session, label: agentTitle(entry.session, t.agents), up: entry.up }))
+        : [],
+    [agentTabs, embedded, sessions, agents, t],
+  );
+  const [otherOn, setOtherOn] = useState<string | null>(null);
+  const [otherTab, setOtherTab] = useState("info");
+  const otherSelected = otherOn === null ? null : others.find((entry) => entry.session === otherOn) ?? null;
   // The agent is off when the team's sessions are known and this one is not up: its chat is read, and nothing is written to it.
   const agentOff = sessions !== null && !selected.up;
   // What the team says of this agent now, in the words of the agents' page («Scout · ▶ lavora»), instead of «team connected».
@@ -931,17 +960,37 @@ export default function DirectChatScreen({
           {t.agentsHeading}
         </div>
         <nav aria-label={t.agentsNavAria} className="min-h-0 overflow-y-auto overflow-x-hidden px-2 pb-3 grid grid-cols-[minmax(0,1fr)] content-start gap-1">
+          {squad && (
+            <button
+              type="button"
+              data-testid="team-squad-row"
+              aria-current={squadSelected ? "page" : undefined}
+              onClick={() => {
+                setOtherOn(null);
+                setSquadOn(true);
+              }}
+              className="min-h-9 w-full min-w-0 rounded border-b border-[var(--color-border)] px-3 py-2 text-left text-[14px] font-semibold uppercase tracking-wider"
+              style={{ color: squadSelected ? "var(--color-bright)" : "var(--color-muted)", background: squadSelected ? "var(--color-card)" : "transparent" }}
+            >
+              {squad.label}
+              {squad.line && <span className="mt-0.5 block min-w-0 truncate text-[14px] font-normal normal-case tracking-normal text-[var(--color-dim)]">{squad.line}</span>}
+            </button>
+          )}
           {agents.map((agent) => (
             <button
               key={agent.id}
               type="button"
-              aria-current={agent.id === agentId ? "page" : undefined}
+              aria-current={!squadSelected && !otherSelected && agent.id === agentId ? "page" : undefined}
               aria-describedby={agent.id !== agentId && unread.last[agent.id] ? `direct-chat-preview-${agent.id}` : undefined}
-              onClick={() => setAgentId(agent.id)}
+              onClick={() => {
+                setSquadOn(false);
+                setOtherOn(null);
+                setAgentId(agent.id);
+              }}
               className="min-h-9 w-full min-w-0 rounded px-3 py-2 text-left text-[14px] font-semibold transition-colors"
               style={{
-                color: agent.id === agentId ? "var(--color-green)" : "var(--color-muted)",
-                background: agent.id === agentId ? "var(--color-card)" : "transparent",
+                color: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-green)" : "var(--color-muted)",
+                background: !squadSelected && !otherSelected && agent.id === agentId ? "var(--color-card)" : "transparent",
               }}
             >
               <span className="flex items-center justify-between gap-2">
@@ -990,6 +1039,28 @@ export default function DirectChatScreen({
               )}
             </button>
           ))}
+          {others.map((entry) => (
+            <button
+              key={entry.session}
+              type="button"
+              data-testid={`team-other-${entry.session}`}
+              aria-current={otherSelected?.session === entry.session && !squadSelected ? "page" : undefined}
+              onClick={() => {
+                setSquadOn(false);
+                setOtherOn(entry.session);
+              }}
+              className="min-h-9 w-full min-w-0 rounded px-3 py-2 text-left text-[14px] font-semibold"
+              style={{
+                color: otherSelected?.session === entry.session && !squadSelected ? "var(--color-green)" : "var(--color-muted)",
+                background: otherSelected?.session === entry.session && !squadSelected ? "var(--color-card)" : "transparent",
+              }}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: entry.up ? "var(--color-green)" : "var(--color-border)" }} />
+                <span className="min-w-0 break-words">{entry.label}</span>
+              </span>
+            </button>
+          ))}
         </nav>
       </aside>
       )}
@@ -1000,13 +1071,13 @@ export default function DirectChatScreen({
           <div>
             <div className="text-[14px] uppercase tracking-[0.14em] text-[var(--color-dim)]">{t.title}</div>
             <h1 className="m-0 text-[18px] font-bold tracking-wide text-[var(--color-white)]">
-              <Link
+              {squadSelected ? squad.label : otherSelected ? otherSelected.label : <Link
                 href={`/agents/${encodeURIComponent(selected.session)}`}
                 data-testid="direct-chat-agent-page"
                 className="text-inherit no-underline hover:underline"
               >
                 {selected.label}
-              </Link>
+              </Link>}
             </h1>
           </div>
           {/* the wrapper is a div: the global rule of `label` (display: block) beats the utility `md:hidden` */}
@@ -1015,13 +1086,33 @@ export default function DirectChatScreen({
             {t.agentSelect}
             <select
               aria-label={t.agentSelect}
-              value={agentId}
-              onChange={(event) => setAgentId(event.target.value as typeof agentId)}
+              value={squadSelected ? "__squad" : otherSelected ? `__other:${otherSelected.session}` : agentId}
+              onChange={(event) => {
+                if (event.target.value === "__squad") {
+                  setOtherOn(null);
+                  setSquadOn(true);
+                  return;
+                }
+                if (event.target.value.startsWith("__other:")) {
+                  setSquadOn(false);
+                  setOtherOn(event.target.value.slice("__other:".length));
+                  return;
+                }
+                setSquadOn(false);
+                setOtherOn(null);
+                setAgentId(event.target.value as typeof agentId);
+              }}
               className="ml-2 rounded border border-[var(--color-border)] bg-[var(--color-card)] px-2 py-1.5 text-[14px] text-[var(--color-bright)]"
             >
+              {squad && <option value="__squad">{squad.label}</option>}
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {unread.counts[agent.id] > 0 ? `${agent.label} (${unreadLabel(unread.counts[agent.id])})` : agent.label}
+                </option>
+              ))}
+              {others.map((entry) => (
+                <option key={entry.session} value={`__other:${entry.session}`}>
+                  {entry.label}
                 </option>
               ))}
             </select>
@@ -1036,22 +1127,30 @@ export default function DirectChatScreen({
             data-testid="team-tabs"
             className="shrink-0 flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-panel)] px-3 sm:px-4"
           >
-            {[{ id: "chat", label: TEAM_TABS_TEXT[locale].chat }, ...agentTabs.tabs].map((item) => (
+            {(squadSelected ? squad.tabs : otherSelected ? agentTabs.tabs : [{ id: "chat", label: TEAM_TABS_TEXT[locale].chat }, ...agentTabs.tabs]).map((item) => (
               <button
                 key={item.id}
                 type="button"
                 role="tab"
                 id={`team-tab-${item.id}`}
-                aria-selected={tab === item.id}
+                aria-selected={(squadSelected ? squadTab : otherSelected ? otherTab : tab) === item.id}
                 data-testid={`team-tab-${item.id}`}
                 onClick={() => {
+                  if (squadSelected) {
+                    setSquadTab(item.id);
+                    return;
+                  }
+                  if (otherSelected) {
+                    setOtherTab(item.id);
+                    return;
+                  }
                   setTab(item.id);
                   agentTabs.onChange?.(agentId, item.id);
                 }}
                 className="min-h-10 shrink-0 border-b-2 px-3 text-[14px] font-semibold"
                 style={{
-                  borderColor: tab === item.id ? "var(--color-green)" : "transparent",
-                  color: tab === item.id ? "var(--color-bright)" : "var(--color-muted)",
+                  borderColor: (squadSelected ? squadTab : otherSelected ? otherTab : tab) === item.id ? "var(--color-green)" : "transparent",
+                  color: (squadSelected ? squadTab : otherSelected ? otherTab : tab) === item.id ? "var(--color-bright)" : "var(--color-muted)",
                 }}
               >
                 {item.label}
@@ -1060,9 +1159,13 @@ export default function DirectChatScreen({
           </div>
         )}
 
-        {agentTabs && !embedded && tab !== "chat" ? (
-          <div role="tabpanel" aria-labelledby={`team-tab-${tab}`} data-testid="team-tab-panel" className="flex-1 min-h-0 overflow-y-auto">
-            {agentTabs.render({ id: selected.id, session: selected.session, label: selected.label, up: selected.up }, tab)}
+        {agentTabs && !embedded && (squadSelected || otherSelected || tab !== "chat") ? (
+          <div role="tabpanel" aria-labelledby={`team-tab-${squadSelected ? squadTab : otherSelected ? otherTab : tab}`} data-testid="team-tab-panel" className="flex-1 min-h-0 overflow-y-auto">
+            {squadSelected
+              ? squad.render(squadTab)
+              : otherSelected
+                ? agentTabs.render({ id: otherSelected.session.toLowerCase(), session: otherSelected.session, label: otherSelected.label, up: otherSelected.up }, otherTab)
+                : agentTabs.render({ id: selected.id, session: selected.session, label: selected.label, up: selected.up }, tab)}
           </div>
         ) : (
         <>

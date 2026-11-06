@@ -6,6 +6,7 @@ import type { ExistingTeamBridge } from "../../lib/existing-team";
 import type { PageProps } from "../types";
 import { appLocale } from "../../lib/app-locale";
 import { AgentInfoTab, AgentTerminalTab } from "../agents/AgentPage";
+import AgentsPanel from "../agents/AgentsPanel";
 import { TEAM_TABS_TEXT } from "./team-tabs.i18n";
 import type { AgentTabs } from "./DirectChatScreen";
 import DirectChatScreen from "./DirectChatScreen";
@@ -32,7 +33,26 @@ export default function MessagesPage({ search, reconfirmBridge, embedded }: Page
       { id: "terminal", label: words.terminal },
     ],
     initial: requestedTab === "info" || requestedTab === "terminal" ? requestedTab : undefined,
-    render: (agent, tab) => (tab === "terminal" ? <AgentTerminalTab key={agent.session} session={agent.session} /> : <AgentInfoTab key={agent.session} session={agent.session} />),
+    render: (agent, tab) =>
+      tab === "terminal" ? (
+        <AgentTerminalTab key={agent.session} session={agent.session} />
+      ) : (
+        <div key={agent.session}>
+          {/* what the Agents page shows of one agent at the top (state, times, what it asks, Pause, Restart, Stop) and, under it, the info */}
+          <AgentsPanel params={{}} search={search} only="agent" agent={agent.session} />
+          <AgentInfoTab session={agent.session} />
+        </div>
+      ),
+    squad: {
+      label: words.squad,
+      tabs: [
+        { id: "commands", label: words.commands },
+        { id: "lanes", label: words.lanes },
+        { id: "log", label: words.log },
+      ],
+      initial: requestedTab === "squad" || requestedTab === "commands" || requestedTab === "lanes" || requestedTab === "log" ? (requestedTab === "squad" ? "commands" : requestedTab) : undefined,
+      render: (tab) => <AgentsPanel key={tab} params={{}} search={search} only={tab === "lanes" ? "lanes" : tab === "log" ? "log" : "commands"} />,
+    },
   };
   const readOnly = useExistingTeamReadOnly() !== null;
   const leaveReadOnly = useLeaveReadOnly();
