@@ -25,6 +25,7 @@ Short records of architecturally-significant decisions — what we chose, why, a
 | [0010](./0010-version-api-scorer-scale.md)            | Version the API Scorer on a coherent 100-point scale                   | Accepted                                                            |
 | [0011](./0011-tauri-desktop-shell.md)                 | Use Tauri 2 with React for the desktop shell                            | Accepted                                                            |
 | [0012](./0012-desktop-setup-matrix.md)                | Separate execution host from AI authentication in desktop setup        | Accepted                                                            |
+| [0013](./0013-codex-sqlite-state-off-the-host-bind.md)| Keep Codex's SQLite state on the VM's own disk, not on the host bind   | Proposed                                                           |
 
 ## When to add an ADR
 
