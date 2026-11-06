@@ -1122,6 +1122,7 @@ pub(crate) fn hide_console(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     command.creation_flags(CREATE_NO_WINDOW);
+    clean_powershell_env(command);
 }
 #[cfg(not(windows))]
 pub(crate) fn hide_console(command: &mut Command) {
@@ -1267,9 +1268,23 @@ fn clean_env_with(command: &mut Command, lookup: &dyn Fn(&str) -> Option<String>
     apply_env_changes(command, changes);
 }
 
-/// A child of the app starts with the environment of the system, not of the AppImage it runs from. A no-op everywhere else.
+/// A child of the app starts with the environment of the system, not of the AppImage it runs from. A no-op everywhere else. It
+/// is the one place every program goes through, so it also keeps the PowerShell that is the app's parent out of the children.
 pub(crate) fn clean_appimage_env(command: &mut Command) {
     clean_env_with(command, &|name| std::env::var(name).ok());
+    clean_powershell_env(command);
+}
+
+/// The folders Windows PowerShell looks its modules in. An app opened from PowerShell 7 inherits ITS list (the 7 folders first),
+/// and a Windows PowerShell 5.1 child that inherits it from the app cannot load its own `Microsoft.PowerShell.Security`
+/// (`Get-Acl`, `Get-FileHash`): the setup stops on «could not load the module» before it has done anything. A child gets the
+/// variable removed, so each PowerShell builds its list from the machine and the person as it does when nobody started it; one
+/// the caller set on purpose stays. Removing it from a program that does not read it changes nothing.
+pub(crate) fn clean_powershell_env(command: &mut Command) {
+    let chosen = command.get_envs().any(|(name, _)| name.eq_ignore_ascii_case("PSModulePath"));
+    if !chosen {
+        command.env_remove("PSModulePath");
+    }
 }
 
 /// The longest stdout line run_program_lines hands over whole; a longer one
@@ -2786,6 +2801,54 @@ mod tests {
         let seen = env_table(&[("APPDIR", IMAGE), ("APPIMAGE", "/home/ada/JHT.AppImage"), ("ARGV0", "JHT"), ("OWD", "/home/ada"), ("LD_LIBRARY_PATH", &libs)]);
         super::apply_env_changes(&mut cleaned, super::appimage_env_changes(&seen));
         assert_eq!(cleaned.status().unwrap().code(), Some(0));
+    }
+
+    #[test]
+    fn a_child_never_inherits_the_module_path_of_the_powershell_the_app_was_started_from() {
+        let removed = |command: &std::process::Command| command.get_envs().find(|(name, _)| name.eq_ignore_ascii_case("PSModulePath")).map(|(_, value)| value.map(|v| v.to_owned()));
+        // removed (the entry is there, with no value): the child builds its own list
+        let mut plain = std::process::Command::new("powershell.exe");
+        super::clean_powershell_env(&mut plain);
+        assert_eq!(removed(&plain), Some(None));
+        // every way a program is prepared goes through it
+        let mut through_the_one_place = std::process::Command::new("powershell.exe");
+        super::clean_appimage_env(&mut through_the_one_place);
+        assert_eq!(removed(&through_the_one_place), Some(None));
+        let mut hidden = std::process::Command::new("powershell.exe");
+        super::hide_console(&mut hidden);
+        #[cfg(windows)]
+        assert_eq!(removed(&hidden), Some(None));
+        // one the caller set on purpose stays
+        let mut chosen = std::process::Command::new("powershell.exe");
+        chosen.env("PSModulePath", "C:\\Mine\\Modules");
+        super::clean_powershell_env(&mut chosen);
+        assert_eq!(removed(&chosen), Some(Some(std::ffi::OsString::from("C:\\Mine\\Modules"))));
+    }
+
+    /// Every program the app starts goes through the one place, and on Windows that place keeps the app's PowerShell module path out
+    /// of the children (the setup, the status, the stop, the wrapper: every `powershell.exe` the app runs).
+    #[test]
+    fn the_one_place_cleans_the_module_path_on_every_route() {
+        let source = include_str!("runtime_host.rs").replace("\r\n", "\n");
+        let production = source.split("\nmod tests {").next().unwrap();
+        let windows_hide = &production[production.find("#[cfg(windows)]\npub(crate) fn hide_console").unwrap()..];
+        let windows_hide = &windows_hide[..windows_hide.find("\n}\n").unwrap()];
+        assert!(windows_hide.contains("clean_powershell_env(command)"));
+        let appimage = &production[production.find("pub(crate) fn clean_appimage_env").unwrap()..];
+        let appimage = &appimage[..appimage.find("\n}\n").unwrap()];
+        assert!(appimage.contains("clean_powershell_env(command)"));
+        // and each program that runs a PowerShell script is started through one of the two
+        for (name, source) in [("onboarding.rs", include_str!("onboarding.rs")), ("direct_chat.rs", include_str!("direct_chat.rs"))] {
+            let source = source.replace("\r\n", "\n");
+            let production = source.split("\nmod tests {").next().unwrap();
+            let lines: Vec<&str> = production.lines().collect();
+            for (index, line) in lines.iter().enumerate() {
+                if line.contains("powershell_path(") && line.contains("Command::new(") {
+                    let after = lines[index..lines.len().min(index + 45)].join("\n");
+                    assert!(after.contains("hide_console("), "{name}:{}: PowerShell started outside the one place", index + 1);
+                }
+            }
+        }
     }
 
     /// Every program the app starts goes through the one place: a `Command::new` in production code that is followed by neither
