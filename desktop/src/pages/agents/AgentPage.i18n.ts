@@ -16,6 +16,7 @@ export interface AgentPageText {
   terminalTitle: string; // {name}
   terminalLog: string; // {name}
   watchOnly: string; // {name}
+  terminalOff: string; // {name}
   writeTo: string; // {name}
   noChatYet: string; // {name}
 }
@@ -34,6 +35,7 @@ const it: AgentPageText = {
   terminalTitle: "Terminale di {name} in diretta",
   terminalLog: "Terminale di {name}, in sola lettura",
   watchOnly: "Qui si guarda soltanto: per scrivere a {name} usa la chat, non il terminale.",
+  terminalOff: "{name} è spento, quindi non ha un terminale.",
   writeTo: "Scrivi a {name}",
   noChatYet: "Con {name} non c’è una chat: si guarda e basta.",
 };
@@ -52,6 +54,7 @@ const en: AgentPageText = {
   terminalTitle: "{name}’s terminal, live",
   terminalLog: "{name}’s terminal, read only",
   watchOnly: "This is for watching only: to write to {name}, use the chat, not the terminal.",
+  terminalOff: "{name} is off, so it has no terminal.",
   writeTo: "Write to {name}",
   noChatYet: "There is no chat with {name}: this is for watching.",
 };
@@ -70,6 +73,7 @@ const de: AgentPageText = {
   terminalTitle: "Terminal von {name}, live",
   terminalLog: "Terminal von {name}, nur lesbar",
   watchOnly: "Hier kann man nur zusehen: Um {name} zu schreiben, nutze den Chat, nicht das Terminal.",
+  terminalOff: "{name} ist aus und hat daher kein Terminal.",
   writeTo: "{name} schreiben",
   noChatYet: "Mit {name} gibt es keinen Chat: Hier kann man nur zusehen.",
 };
@@ -88,6 +92,7 @@ const es: AgentPageText = {
   terminalTitle: "Terminal de {name} en directo",
   terminalLog: "Terminal de {name}, solo lectura",
   watchOnly: "Aquí solo se mira: para escribir a {name} usa el chat, no el terminal.",
+  terminalOff: "{name} está apagado, así que no tiene terminal.",
   writeTo: "Escribir a {name}",
   noChatYet: "No hay chat con {name}: aquí solo se mira.",
 };
@@ -106,6 +111,7 @@ const fr: AgentPageText = {
   terminalTitle: "Terminal de {name} en direct",
   terminalLog: "Terminal de {name}, en lecture seule",
   watchOnly: "Ici on regarde seulement : pour écrire à {name}, utilisez le chat, pas le terminal.",
+  terminalOff: "{name} est éteint, il n’a donc pas de terminal.",
   writeTo: "Écrire à {name}",
   noChatYet: "Il n’y a pas de chat avec {name} : ici on regarde seulement.",
 };
@@ -124,6 +130,7 @@ const hu: AgentPageText = {
   terminalTitle: "{name} terminálja élőben",
   terminalLog: "{name} terminálja, csak olvasható",
   watchOnly: "Itt csak nézni lehet: ha írni szeretnél neki ({name}), használd a csevegést, ne a terminált.",
+  terminalOff: "{name} ki van kapcsolva, ezért nincs terminálja.",
   writeTo: "Írás neki: {name}",
   noChatYet: "Vele ({name}) nincs csevegés: itt csak nézni lehet.",
 };
@@ -142,6 +149,7 @@ const pt: AgentPageText = {
   terminalTitle: "Terminal de {name} em direto",
   terminalLog: "Terminal de {name}, só de leitura",
   watchOnly: "Aqui só se observa: para escrever a {name}, use o chat, não o terminal.",
+  terminalOff: "{name} está desligado, por isso não tem terminal.",
   writeTo: "Escrever a {name}",
   noChatYet: "Não há chat com {name}: aqui só se observa.",
 };

@@ -549,3 +549,45 @@ describe("two profiles with the same name on one computer (03/11)", () => {
 function selectLocalProfileByIdSafe(id: string): "missing" | "ok" {
   try { selectLocalProfileById(id); return "ok"; } catch { return "missing"; }
 }
+
+describe("the store of a person who already has local profiles (T186)", () => {
+  // The shape the app writes after a person made two local profiles and used one; every value here is made up.
+  const A = "a".repeat(64);
+  const B = "b".repeat(64);
+  const seed = () => {
+    localStorage.setItem("jht.desktop.identity.v1", "local");
+    localStorage.setItem(
+      "jht.desktop.local-profiles.v2",
+      JSON.stringify({
+        version: 2,
+        activeId: A,
+        teamOwnerId: null,
+        profiles: [
+          { profileId: A, displayName: "Persona Uno", createdAt: 1 },
+          { profileId: B, displayName: "Persona Due", createdAt: 2 },
+        ],
+      }),
+    );
+  };
+
+  it("opens the profile that was used last, without asking for anything", () => {
+    localStorage.clear();
+    seed();
+    expect(localIdentitySelected()).toBe(true);
+    expect(readLocalProfile()).toEqual({ profileId: A, displayName: "Persona Uno" });
+    expect(listLocalProfiles().map((profile) => profile.displayName)).toEqual(["Persona Uno", "Persona Due"]);
+  });
+
+  it("keeps both profiles to choose from when the selection was cleared, and the used-last one is still known", () => {
+    localStorage.clear();
+    seed();
+    clearLocalIdentitySelection();
+    expect(localIdentitySelected()).toBe(false);
+    expect(listLocalProfiles()).toHaveLength(2);
+    expect(readLocalProfile()?.profileId).toBe(A);
+    // choosing one brings the person back in, the other untouched
+    expect(selectLocalProfileById(B).displayName).toBe("Persona Due");
+    expect(localIdentitySelected()).toBe(true);
+    expect(listLocalProfiles()).toHaveLength(2);
+  });
+});

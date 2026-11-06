@@ -6,6 +6,9 @@ import { compactCount, contextHigh, usageTooltip } from "./AgentUsage";
 /** Who the agent is, in pieces: the provider, the model and how hard it thinks (null where the session has none). */
 export type IdentityParts = { provider: string; model: string | null; effort: string | null };
 
+/** What the team does not say, the same in the four pieces. */
+const NONE = "—";
+
 function Piece({ label, testId, title, children }: { label: string; testId: string; title?: string; children: ReactNode }) {
   return (
     <div data-testid={testId} title={title} className="min-w-0 flex flex-col gap-0.5">
@@ -17,8 +20,8 @@ function Piece({ label, testId, title, children }: { label: string; testId: stri
 
 /**
  * The bar over the terminal: provider, model, how full the context is and what the last hour
- * cost, each under its own label. Only shown, never decided on. What the team does not say is «?»,
- * never 0; the whole sentences (the exact numbers, when they were read) are in the usage's tooltip.
+ * cost, each under its own label. Only shown, never decided on. What the team does not say is «—»
+ * (the same in the four), never 0; the whole sentences (the exact numbers, when they were read) are in the usage's tooltip.
  */
 export default function AgentStatusBar({
   t,
@@ -32,8 +35,8 @@ export default function AgentStatusBar({
   usage: AgentUsage | null;
 }) {
   const pct = usage?.contextPct ?? null;
-  const context = pct !== null ? `${Math.round(pct)}%` : usage?.contextTokens != null ? compactCount(usage.contextTokens) : "?";
-  const hour = usage?.tokensHour != null ? t.usageHourShort.replace("{tokens}", compactCount(usage.tokensHour)) : t.usageHourUnknownShort;
+  const context = pct !== null ? `${Math.round(pct)}%` : usage?.contextTokens != null ? compactCount(usage.contextTokens) : NONE;
+  const hour = usage?.tokensHour != null ? t.usageHourShort.replace("{tokens}", compactCount(usage.tokensHour)) : NONE;
   const detail = usage ? usageTooltip(t, usage) : undefined;
   return (
     <dl
@@ -43,10 +46,10 @@ export default function AgentStatusBar({
       style={{ borderColor: "var(--color-border)", background: "var(--color-panel)" }}
     >
       <Piece label={t.barProvider} testId="panel-bar-provider" title={identityText}>
-        {identity ? identity.provider : "—"}
+        {identity ? identity.provider : NONE}
       </Piece>
       <Piece label={t.barModel} testId="panel-bar-model" title={identityText}>
-        {identity ? [identity.model, identity.effort].filter(Boolean).join(" · ") || "—" : identityText}
+        {identity ? [identity.model, identity.effort].filter(Boolean).join(" · ") || NONE : NONE}
       </Piece>
       <Piece label={t.barContext} testId="panel-bar-context" title={detail}>
         <span style={{ color: usage && contextHigh(usage) ? "var(--color-yellow)" : undefined }} className="tabular-nums">

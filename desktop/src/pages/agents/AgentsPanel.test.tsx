@@ -283,6 +283,11 @@ describe("«Agenti», the agents' control panel", () => {
     expect(within(screen.getByTestId("panel-row-SCOUT-1")).getByTestId("panel-led-paused")).toBeInTheDocument();
     expect(within(screen.getByTestId("panel-row-CAPITANO")).queryByTestId("panel-led-paused")).toBeNull();
     expect(screen.getAllByTestId("panel-led-paused").length).toBe(2);
+    // «in pause = amber, never green»: the word beside the name is «in pausa» in amber, not the green «acceso»
+    const word = screen.getByTestId("panel-paused-word");
+    expect(word).toHaveTextContent(/^in pausa$/);
+    expect(word).toHaveStyle({ color: "var(--color-yellow)" });
+    expect(word.parentElement).not.toHaveTextContent(/acceso/);
     expect(screen.queryByTestId("panel-agent-pause")).toBeNull();
     fireEvent.click(screen.getByTestId("panel-agent-resume"));
     expect(screen.getByTestId("panel-confirm")).toHaveTextContent("Riprendere Scout-1");
@@ -290,6 +295,36 @@ describe("«Agenti», the agents' control panel", () => {
     fireEvent.click(within(screen.getByTestId("panel-confirm")).getByRole("button", { name: "Conferma" }));
     await screen.findByText("Scout-1 ha ripreso il lavoro.");
     expect(ops().filter((r) => r.op === "resume_agent")).toEqual([{ op: "resume_agent", session: "SCOUT-1", target: "T1", confirmed: true }]);
+  });
+
+  it("says «Squadra attiva» only of a team that has an agent on, and not where the team's state is not read", async () => {
+    show();
+    expect(await screen.findByTestId("panel-team-state")).toHaveTextContent("Squadra attiva");
+    cleanup();
+    // every agent off (the team off): nothing to say of it, whatever the fake state says
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") {
+        const data = listReply().data;
+        return { ok: true, data: { ...data, agents: data.agents.map((a) => ({ ...a, up: false, state: "spento" })) } };
+      }
+      if (args.request.op === "team") return { ok: true, data: { halted: false, standby, held } };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-team-state")).toBeNull();
+    cleanup();
+    // the state not read at all
+    native.invoke.mockImplementation(async (command: string, args: { request: Record<string, unknown> }) => {
+      if (command !== COMMAND) return { ok: false, error: "not_in_test" };
+      if (args.request.op === "list") return listReply();
+      if (args.request.op === "team") return { ok: false, error: "agent_control_failed" };
+      return { ok: true, data: { name: args.request.session, up: true, text: "" } };
+    });
+    show();
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-team-state")).toBeNull();
   });
 
   it("JHT-T181: no pause button on a maintenance agent", async () => {
@@ -414,10 +449,10 @@ describe("«Agenti», the agents' control panel", () => {
 
   it("in the read-only view: no control at all, and only reads reach the native side", async () => {
     enterExistingTeamReadOnly(false);
-    navigate("/agents?agent=SCOUT-1", { replace: true });
+    // the Agents address is the Team page now: the team's commands are its first tab of the whole team
+    navigate("/messages?tab=squad", { replace: true });
     render(<Shell />);
     expect(await screen.findByTestId("panel-read-only")).toHaveTextContent("Conferma e collega");
-    await screen.findByTestId("panel-terminal-SCOUT-1");
     for (const id of ["panel-stop", "panel-restart", "panel-start", "panel-pause", "panel-resume", "panel-agent-pause", "panel-agent-resume"]) {
       expect(screen.queryByTestId(id)).toBeNull();
     }
@@ -428,14 +463,16 @@ describe("«Agenti», the agents' control panel", () => {
     expect(fake.current!.calls).toEqual([]);
   });
 
-  it("in the read-only view «Chatta con» is there and leads to a Messages that only reads", async () => {
+  it("in the read-only view the old address of an agent leads to the Team page, whose chat only reads", async () => {
     expect(READ_ONLY_ROUTES.find((r) => r.path === "/messages")?.page).toBe(ROUTES.find((r) => r.path === "/messages")?.page);
     enterExistingTeamReadOnly(false);
     navigate("/agents?agent=CAPITANO", { replace: true });
     render(<Shell />);
-    const button = await screen.findByTestId("panel-chat-with");
-    expect(button).toHaveAttribute("href", "#/messages?agent=capitano");
-    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
+    // it opens on the Info of the agent (the old page was its detail); the chat is one tab away
+    const chat = await screen.findByTestId("team-tab-chat", undefined, { timeout: 5000 });
+    expect(screen.getByTestId("team-tab-info")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(chat);
+    expect(await screen.findByTestId("direct-chat-read-only-invite")).toBeInTheDocument();
   });
 
   it("a VPS of one's own without the mark offers the claim, and writes only after the person confirmed it", async () => {
@@ -491,7 +528,7 @@ describe("«Agenti», the agents' control panel", () => {
   it("the read-only view of an existing team never offers the claim", async () => {
     ownVps = "claimable";
     enterExistingTeamReadOnly(false);
-    navigate("/agents", { replace: true });
+    navigate("/messages?tab=squad", { replace: true });
     render(<Shell />);
     await screen.findByTestId("panel-read-only");
     await screen.findByTestId("panel-summary");
@@ -755,13 +792,13 @@ describe("«Agenti», each agent's health in small", () => {
     });
   });
 
-  it("says context and tokens of the hour next to the state, and «?» where the team does not say them, never 0", async () => {
+  it("says context and tokens of the hour next to the state, and «—» where the team does not say them, never 0", async () => {
     show();
     await screen.findByTestId("panel-summary");
     const short = (session: string) => within(screen.getByTestId(`panel-row-${session}`)).getByTestId("panel-usage-short");
     expect(short("CAPITANO")).toHaveTextContent("ctx 43% · 12,3K/h");
-    expect(short("SCOUT-1")).toHaveTextContent("ctx ? · 0/h");
-    expect(short("ASSISTENTE")).toHaveTextContent("ctx ? · ?/h");
+    expect(short("SCOUT-1")).toHaveTextContent("ctx — · 0/h");
+    expect(short("ASSISTENTE")).toHaveTextContent("ctx — · —");
     // a context near full stands out
     expect(within(short("SCORER-1")).getByText("ctx 91%")).toHaveStyle({ color: "var(--color-yellow)" });
     expect(within(short("CAPITANO")).getByText("ctx 43%")).not.toHaveStyle({ color: "var(--color-yellow)" });
@@ -785,7 +822,7 @@ describe("«Agenti», each agent's health in small", () => {
     );
     cleanup();
     show("agent=SCOUT-1");
-    expect(await screen.findByTestId("panel-bar-context")).toHaveTextContent("Contesto?");
+    expect(await screen.findByTestId("panel-bar-context")).toHaveTextContent("Contesto—");
     expect(screen.getByTestId("panel-bar-usage")).toHaveTextContent("Consumo0/h");
     expect(screen.getByTestId("panel-bar-usage").title).toMatch(/^contesto: non so\n0 token nell'ultima ora/);
   });
@@ -874,12 +911,12 @@ describe("«Agenti», stopping the whole team", () => {
 describe("«Agenti», who an agent is", () => {
   const it_ = AGENTS_PANEL_TEXT.it;
 
-  it("says cli, model, effort and where, with «non so» for what the session does not say", () => {
+  it("says cli, model, effort and where, and leaves out what the session does not say", () => {
     expect(identityLine(it_, { cli: "codex", model: "gpt-5.6-terra", effort: "high" }, "su questo computer")).toBe(
       "Codex · gpt-5.6-terra · effort alto · su questo computer",
     );
     expect(identityLine(it_, { cli: "claude", model: null, effort: null }, "sulla VPS vps.example")).toBe(
-      "Claude · modello: non so · effort: non so · sulla VPS vps.example",
+      "Claude · sulla VPS vps.example",
     );
     // kimi gets no model nor effort from the launcher: its own default, no effort part
     expect(identityLine(it_, { cli: "kimi", model: null, effort: null }, "su questo computer")).toBe("Kimi · modello predefinito · su questo computer");
@@ -906,13 +943,16 @@ describe("«Agenti», who an agent is", () => {
     expect(screen.getByTestId("panel-bar-model")).toHaveTextContent("Modellogpt-5.6-sol · effort alto");
     expect(screen.getByTestId("panel-bar-model")).toHaveAttribute("title", "Codex · gpt-5.6-sol · effort alto · sulla VPS vps.example");
     fireEvent.click(screen.getByTestId("panel-row-SCOUT-1"));
-    await waitFor(() => expect(screen.getByTestId("panel-bar-model")).toHaveTextContent(it_.identityUnknown));
+    // a session that does not say it: «—» like the other three, the long sentence only on hover
+    await waitFor(() => expect(screen.getByTestId("panel-bar-model")).toHaveTextContent(/^Modello—$/));
+    expect(screen.getByTestId("panel-bar-model")).toHaveAttribute("title", it_.identityUnknown);
+    expect(screen.getByTestId("panel-bar-provider")).toHaveTextContent(/^Provider—$/);
   });
 
   it("has every language's words for it", () => {
     for (const [locale, text] of Object.entries(AGENTS_PANEL_TEXT)) {
       expect(text.identityEffort, locale).toContain("{effort}");
-      for (const key of ["identityUnknown", "identityModelUnknown", "identityModelDefault", "identityEffortUnknown", "identityLocal", "effortLow", "effortMedium", "effortHigh"] as const) {
+      for (const key of ["identityUnknown", "identityModelDefault", "identityLocal", "effortLow", "effortMedium", "effortHigh"] as const) {
         expect(text[key].trim().length, `${locale} ${key}`).toBeGreaterThan(1);
       }
     }
@@ -960,18 +1000,22 @@ describe("«Agenti», the questions the agents asked the person", () => {
   it("counts the open questions at the top, and says when some agent does not say them", async () => {
     show();
     const summary = await screen.findByTestId("panel-questions-summary");
-    expect(summary).toHaveTextContent("3 domande aperte (di alcuni agenti non so)");
+    // the count of the agents that say it; that some do not is told on hover, not written on the screen
+    expect(summary).toHaveTextContent(/^3 domande aperte$/);
     expect(summary.title).toContain("quelle di un agente spento non si contano");
+    expect(summary.title).toContain("di alcuni agenti non so");
   });
 
-  it("says a known zero as zero, and «non so» when no agent says them", async () => {
+  it("says a known zero as zero, and nothing at all when no agent says them", async () => {
     agents = [agent("SCOUT-1", "scout", "1", "idle", { questions: { open: 0, unread: 0, items: [] } })];
     show();
     expect(await screen.findByTestId("panel-questions-summary")).toHaveTextContent("0 domande aperte");
     cleanup();
     agents = [agent("SCOUT-1", "scout", "1", "idle")];
     show();
-    expect(await screen.findByTestId("panel-questions-summary")).toHaveTextContent("domande: non so");
+    await screen.findByTestId("panel-summary");
+    expect(screen.queryByTestId("panel-questions-summary")).toBeNull();
+    expect(screen.getByTestId("panel-summary")).not.toHaveTextContent(/non so|\?/);
   });
 
   it("marks the row with the most urgent type and the unread count, and nothing where it is not known", async () => {
@@ -1010,14 +1054,13 @@ describe("«Agenti», the questions the agents asked the person", () => {
     expect(within(list).getByTestId("panel-questions-messages")).toHaveAttribute("href", "#/messages?agent=capitano");
   });
 
-  it("says «none» for a known zero and «non so» for an agent that does not say them", async () => {
+  it("says «none» for a known zero and nothing for an agent that does not say them", async () => {
     show("agent=SCOUT-1");
     expect(await screen.findByTestId("panel-questions")).toHaveTextContent(/^Nessuna domanda aperta$/);
     cleanup();
     show("agent=ASSISTENTE");
-    const unknown = await screen.findByTestId("panel-questions");
-    expect(unknown).toHaveTextContent("Domande: non so");
-    expect(unknown.title).toContain("non vuol dire nessuna");
+    await screen.findByTestId("panel-state");
+    expect(screen.queryByTestId("panel-questions")).toBeNull();
   });
 
   it("in the read-only view: no link to answer, it says where to answer", async () => {
@@ -1043,7 +1086,7 @@ describe("«Agenti», the questions the agents asked the person", () => {
       expect(text.questionExpiresMinutes, locale).toContain("{minutes}");
       expect(text.questionExpiresHours, locale).toContain("{hours}");
       expect(text.questionThen, locale).toContain("{option}");
-      for (const key of ["questionsUnknown", "questionsPartlyUnknown", "questionsSummaryHelp", "questionTypeNone", "questionsUnknownDetail", "questionsUnknownWhy", "questionsNone", "questionsAnswerInMessages", "questionsAnswerElsewhere"] as const) {
+      for (const key of ["questionsPartlyUnknown", "questionsSummaryHelp", "questionTypeNone", "questionsNone", "questionsAnswerInMessages", "questionsAnswerElsewhere"] as const) {
         expect(text[key], `${locale} ${key}`).toMatch(/\S/);
       }
     }
@@ -1052,7 +1095,7 @@ describe("«Agenti», the questions the agents asked the person", () => {
   it("only shows them: the panel's source names the questions only where it shows them", () => {
     const source = readFileSync("src/pages/agents/AgentsPanel.tsx", "utf8");
     const lines = source.split("\n").filter((line) => /questions/i.test(line));
-    const allowed = [/from "\.\/AgentQuestions"/, /questionsSummary\(t, /, /<QuestionMarks t=\{t\} questions=/, /^\s*questions=\{current\.agent!\.questions\}$/, /counts\.questions/, /title=\{t\.questionsSummaryHelp\}/, /data-testid="panel-questions-summary"/, /the questions of the agents that are up/];
+    const allowed = [/from "\.\/AgentQuestions"/, /questionsSummary\(t, /, /questionsPartlyKnown\(/, /<QuestionMarks t=\{t\} questions=/, /^\s*questions=\{current\.agent!\.questions\}$/, /counts\.questions/, /title=\{t\.questionsSummaryHelp\}/, /data-testid="panel-questions-summary"/, /the questions of the agents that are up/];
     for (const line of lines) expect(allowed.some((re) => re.test(line)), line).toBe(true);
   });
 });
@@ -1877,14 +1920,106 @@ describe("«Agenti»: the list reads again by itself", () => {
 
   it("coming back to Agents from another page reads the list at once", async () => {
     where = "local";
-    navigate("/agents?agent=CAPITANO", { replace: true });
+    navigate("/messages?tab=squad", { replace: true });
     render(<Shell />);
-    await screen.findByTestId("panel-summary");
-    expect(lists()).toBe(1);
+    // the Team page also reads the sessions for its list: the panel's part comes a little after
+    await screen.findByTestId("panel-summary", undefined, { timeout: 5000 });
     navigate("/help");
     await waitFor(() => expect(screen.queryByTestId("panel-summary")).toBeNull());
-    navigate("/agents?agent=CAPITANO");
+    const before = lists();
+    // back to the Team page (the old address of the Agents page leads here): the list is read again at once
+    navigate("/messages?tab=squad");
+    await screen.findByTestId("panel-summary", undefined, { timeout: 5000 });
+    await waitFor(() => expect(lists()).toBeGreaterThan(before));
+  });
+});
+
+// The Team page shows the Agents page's parts one by one (tabs of the whole team, Info of one agent): every function the Agents
+// page had must still be there, each in its place, with the same test ids and the same confirmations.
+describe("«Agenti», the parts of the panel inside the Team page: no function of the Agents page is lost", () => {
+  const part = (only: "commands" | "lanes" | "log" | "agent", agent?: string) =>
+    render(<AgentsPanel params={{}} search={new URLSearchParams()} only={only} agent={agent} />);
+
+  it("commands: the summary of the team, Pause, Stop team and their confirmations, and nothing of the page around them", async () => {
+    where = "local";
+    part("commands");
     await screen.findByTestId("panel-summary");
-    await waitFor(() => expect(lists()).toBe(2));
+    expect(screen.getByTestId("panel-team-state")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-stop-team")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-team-help")).toBeInTheDocument();
+    // not the page's own title, list of agents, detail or registry
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByTestId("panel-detail")).toBeNull();
+    expect(screen.queryByTestId("panel-row-SCOUT-1")).toBeNull();
+    expect(screen.queryByTestId("panel-action-log")).toBeNull();
+    // Pause and Stop team are confirmed, as on the page
+    fireEvent.click(screen.getByTestId("panel-stop-team"));
+    expect(await screen.findByTestId("panel-confirm")).toBeInTheDocument();
+    expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+  });
+
+  it("lanes: what each agent worked on, read while it is open, with the window of the person's choice", async () => {
+    where = "local";
+    activityReply = () => ({ ok: true, data: { agents: [], windows: [] } });
+    part("lanes");
+    await screen.findByTestId("panel-work");
+    expect(screen.getByTestId("work-window-24h")).toBeInTheDocument();
+    expect(screen.queryByTestId("panel-summary")).toBeNull();
+    expect(ops().some((r) => r.op === "activity")).toBe(true);
+  });
+
+  it("log: the registry of the actions, alone", async () => {
+    where = "local";
+    part("log");
+    await screen.findByTestId("panel-action-log");
+    expect(screen.queryByTestId("panel-summary")).toBeNull();
+  });
+
+  it("agent: its state, its times, Pause, Restart and Stop of the agent that is on, each confirmed; Start for one that is off", async () => {
+    where = "local";
+    part("agent", "SCOUT-1");
+    await screen.findByTestId("panel-state");
+    expect(screen.getByTestId("panel-times")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-agent-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-restart")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-stop")).toBeInTheDocument();
+    // the terminal and the list are the Team page's own tabs, not here
+    expect(screen.queryByTestId("panel-terminal-section")).toBeNull();
+    expect(screen.queryByTestId("panel-row-CAPITANO")).toBeNull();
+    fireEvent.click(screen.getByTestId("panel-stop"));
+    expect(await screen.findByTestId("panel-confirm")).toBeInTheDocument();
+    expect(ops().filter((r) => ACTIONS.has(String(r.op)))).toEqual([]);
+  });
+
+  it("agent: a paused agent shows the amber pause sign and Resume, never the green of one that works", async () => {
+    where = "local";
+    pausedAgents = new Set(["SCOUT-1"]);
+    part("agent", "SCOUT-1");
+    await screen.findByTestId("panel-led-paused");
+    expect(screen.getByTestId("panel-agent-resume")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-state")).toHaveTextContent("In pausa");
+  });
+
+  it("agent: one that is not in the team says so instead of showing the controls of another", async () => {
+    where = "local";
+    part("agent", "ANALISTA-9");
+    await screen.findByTestId("panel-part-agent-missing");
+    expect(screen.queryByTestId("panel-restart")).toBeNull();
+  });
+
+  it("agent: one the team lists as off (the roster of a stopped team) is started, not restarted or stopped, and its word is not green", async () => {
+    where = "local";
+    AGENTS.push(agent("SCORER-2", "scorer", "2", "spento", { up: false, created: null, activity: null }));
+    try {
+      part("agent", "SCORER-2");
+      await screen.findByTestId("panel-state");
+      expect(screen.getByTestId("panel-start")).toBeInTheDocument();
+      expect(screen.queryByTestId("panel-restart")).toBeNull();
+      expect(screen.queryByTestId("panel-stop")).toBeNull();
+      expect(screen.queryByTestId("panel-agent-pause")).toBeNull();
+    } finally {
+      AGENTS.pop();
+    }
   });
 });

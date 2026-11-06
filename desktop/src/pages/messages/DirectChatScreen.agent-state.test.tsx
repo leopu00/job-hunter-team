@@ -179,8 +179,8 @@ describe("loadChatSessions", () => {
     }));
     const got = await loadChatSessions(read as never);
     expect(got).toEqual([
-      { session: "SCOUT-1", up: false, state: { state: "spento" } },
-      { session: "CAPITANO", up: true, state: { state: "idle" } },
+      { session: "SCOUT-1", up: false, state: { state: "spento" }, paused: false },
+      { session: "CAPITANO", up: true, state: { state: "idle" }, paused: false },
     ]);
   });
 });

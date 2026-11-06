@@ -24,11 +24,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/positions", label: { web: "nav_positions" }, tour: "positions" },
   { href: "/swipe", label: { web: "nav_swipe" } },
   { href: "/map", label: { web: "nav_map" } },
-  // Team opens the agents' panel (turn each agent on or off); the team's activity page stays one address away and keeps the link lit.
-  { href: "/agents", label: { web: "nav_team" }, tour: "team", pending: "team", also: ["/team"] },
+  // Team is one page: the agents' list with the whole team on top, and for each agent its chat, its info and its terminal (it was the
+  // Agents page and Messages). The old addresses lead there (redirects.ts); the team's activity page stays one address away and keeps the link lit.
+  { href: "/messages", label: { web: "nav_team" }, tour: "team", pending: "team", also: ["/agents", "/team"] },
   { href: "/office", label: { own: "office" } },
   { href: "/budget", label: { own: "budget" } },
-  { href: "/messages", label: { web: "nav_messages" } },
 ];
 
 /** The bar of the read-only view of a team on a VPS: only what that view reads. */
@@ -36,7 +36,7 @@ export const READ_ONLY_NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: { web: "nav_dashboard" } },
   { href: "/positions", label: { web: "nav_positions" } },
   { href: "/map", label: { web: "nav_map" } },
-  { href: "/team", label: { own: "team" }, also: ["/agents"] },
+  { href: "/team", label: { own: "team" }, also: ["/agents", "/messages"] },
   { href: "/office", label: { own: "office" } },
 ];
 
