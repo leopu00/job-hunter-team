@@ -191,7 +191,7 @@ function moduleRefs(source: string, directory: string, explicitDirectory: string
 export function compiledRustSourceFiles(
   root: string,
   read = (file: string) => readFileSync(file, "utf8"),
-  exists = existsSync,
+  exists: (file: string) => boolean = existsSync,
 ): string[] {
   const seen = new Set<string>();
   const visit = (file: string) => {
