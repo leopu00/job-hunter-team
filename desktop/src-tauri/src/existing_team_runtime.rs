@@ -134,19 +134,19 @@ pub(crate) use identity::{RuntimeTarget, Candidate, SavedSelection, ActivatedTar
 use identity::{Selection, };
 mod own_vps;
 pub(crate) use own_vps::{mark_own_vps_at, mark_own_vps, OwnVpsState, own_vps_state_at, own_vps_for_writes_at, own_vps_for_reads_at, claim_own_vps_at, };
-#[cfg(test)]
-use own_vps::OwnVpsMarker;
 mod own_vps_claim;
 pub(crate) use own_vps_claim::{own_vps_identity_input, own_vps_identity_matches, OwnVpsClaimRequest, own_vps_claim, };
-use own_vps_claim::{OWN_VPS_IDENTITY_PY, claim_own_vps_impl, };
+use own_vps_claim::OWN_VPS_IDENTITY_PY;
 mod rebind;
 pub(crate) use rebind::{forget_team_at, RebindBase, rebind_base_at, clear_for_rebind_at, clear_link_at, };
 mod selection;
-pub(crate) use selection::{activate, activate_at, activate_or_keep, activate_or_keep_at, selected, selected_or_own, pinned_key_for, selected_or_own_at, selected_at, };
-use selection::{selection_may_be_absent, write_selection_at, parse_selection_bytes, read_selection_at, };
+pub(crate) use selection::{activate, activate_at, activate_or_keep, activate_or_keep_at, selected, selected_or_own, selected_or_own_at, selected_at, };
+#[allow(unused_imports)] // The crate's existing API is kept by the facade.
+pub(crate) use selection::pinned_key_for;
+use selection::{selection_may_be_absent, read_selection_at, };
 mod storage;
 pub(crate) use storage::{root, };
-use storage::{CANDIDATE_FILE, SELECTION_FILE, OWN_VPS_FILE, MAX_BYTES, account_dir, path, private_file, read_bytes, };
+use storage::{CANDIDATE_FILE, SELECTION_FILE, OWN_VPS_FILE, MAX_BYTES, account_dir, path, read_bytes, };
 #[cfg(test)]
 pub(crate) use full_link::FULL_LINK_TEST_LOCK;
 pub(crate) use own_vps_claim::__cmd__own_vps_claim;
