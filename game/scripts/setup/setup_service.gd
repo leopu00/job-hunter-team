@@ -62,7 +62,7 @@ const AUTH_PATHS := {
 ## Immagine di runtime. Il compose usa la stessa variabile: chi vuole provare
 ## un tag diverso esporta JHT_IMAGE e l'app resta coerente con il container.
 ## Il default invece e' l'identita' immutabile attestata dal manifest release.
-const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht@sha256:f64d7d876841a49b83046c10d78b7794c5d6b1f3436d649a91c1485fd8bb69b9"
+const DEFAULT_RUNTIME_IMAGE := "ghcr.io/leopu00/jht@sha256:351bff12cef44c4ba634da9f0f3fca329d1a628227cb9442047744dba321dad1"
 ## Un host 0.3.3 interpreta anche `upgrade --check --json` come pull + up.
 ## Perciò l'app non invoca mai direttamente il wrapper trovato sull'host: prima
 ## avvia una copia temporanea del dispatcher production che conosce il

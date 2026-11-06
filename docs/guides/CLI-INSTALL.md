@@ -85,7 +85,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 | `JHT_INSTALL_DIR` | `$HOME/.jht/src` | Where the repo lands in native mode |
 | `JHT_RUNTIME_DIR` | `$HOME/.jht/runtime` | Where `docker-compose.yml` lands in Docker mode |
 | `JHT_BIN_DIR` | `$HOME/.local/bin` | Where the `jht` wrapper / symlink lands |
-| `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:f64d7d876841a49b83046c10d78b7794c5d6b1f3436d649a91c1485fd8bb69b9` | Content-addressed container image referenced by the compose |
+| `JHT_IMAGE` | `ghcr.io/leopu00/jht@sha256:351bff12cef44c4ba634da9f0f3fca329d1a628227cb9442047744dba321dad1` | Content-addressed container image referenced by the compose |
 | `JHT_RAW_BASE` | `https://raw.githubusercontent.com/leopu00/job-hunter-team/$JHT_BRANCH` | Base URL for the runtime file downloads |
 | `JHT_SKIP_ONBOARD` | `0` | Skip the post-install `jht setup` wizard |
 
@@ -249,7 +249,7 @@ Example output of the older default on macOS (abridged; exact actions depend on 
 ╚══════════════════════════════════════════╝
 
   mode:   Docker (isolated)
-  image:  ghcr.io/leopu00/jht@sha256:f64d7d876841a49b83046c10d78b7794c5d6b1f3436d649a91c1485fd8bb69b9
+  image:  ghcr.io/leopu00/jht@sha256:351bff12cef44c4ba634da9f0f3fca329d1a628227cb9442047744dba321dad1
   branch: production
   runtime:$HOME/.jht/runtime
   dry-run: ON (no changes to the system)
