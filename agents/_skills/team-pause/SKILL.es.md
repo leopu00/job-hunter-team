@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — una pausa no es un apagado
 
-El 05/11 el usuario le dijo al Assistente *«hagan una pausa, yo les digo cuándo reanudar»*. El Assistente pidió un «controlled freeze» al Capitano; el Capitano, sin ninguna skill para la pausa, escribió el flag de parada y **cerró todas las sesiones** — cada agente perdió su contexto — y al usuario se le dijo *«Paused ✅»*. Esta skill existe para que no vuelva a pasar: la pausa que pide el usuario mantiene las sesiones encendidas y el contexto intacto, y **lo que le dices al usuario es lo que dice la respuesta del comando**.
+Una pausa no es un apagado. Si a «hagan una pausa» se respondiera con el flag de parada, se cerrarían todas las sesiones, cada agente perdería su contexto y al usuario se le diría «Paused ✅» por lo que es un apagado. Esta skill existe para que eso no ocurra: la pausa que pide el usuario mantiene las sesiones encendidas y el contexto intacto, y **lo que le dices al usuario es lo que dice la respuesta del comando**.
 
 ## 1. Qué palabra significa qué
 

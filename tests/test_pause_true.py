@@ -1,11 +1,10 @@
 """JHT-T181: la pausa VERA. Le sessioni restano accese col loro contesto, nessuno lavora, e alla
 ripresa ognuno riparte dal punto in cui era. Non è lo spegnimento.
 
-Origine (05/11): all'ordine «fate una pausa» l'Assistente ha chiesto un «controlled freeze» al Capitano,
-che non aveva nessuna skill per la pausa e ha scritto `.team-halted.flag` + chiuso tutte le sessioni
-(il contesto perso); l'utente ha letto «Paused ✅». Qui si fissa il motore: pausa di squadra «finché
-dico io» (tetto 7 giorni), pausa del singolo agente, messaggi che dicono «pausa, non spegnimento»,
-Assistente non zittito, esito onesto (chi è stato raggiunto e chi no).
+Il rischio che si chiude: rispondere a «fate una pausa» con lo stop (`.team-halted.flag` e le sessioni chiuse)
+fa perdere il contesto a ogni agente e all'utente si dice «Paused ✅» per uno spegnimento. Qui si fissa il
+motore: pausa di squadra «finché dico io» (tetto 7 giorni), pausa del singolo agente, messaggi che dicono
+«pausa, non spegnimento», Assistente non zittito, esito onesto (chi è stato raggiunto e chi no).
 
 Tutto gira su un tmux finto, un jht-tmux-send finto che registra e una JHT_HOME privata (come
 test_agent_control.py): niente può toccare un tmux o un agente veri.
@@ -84,7 +83,7 @@ def test_every_role_is_told_it_is_a_pause_not_a_shutdown(team, capsys):
         assert "[PAUSA]" in text and "PAUSE, not a shutdown" in text and "context stay" in text
         assert "WAIT SILENTLY" in text and "[RIPRENDI]" in text
     (captain,) = _to(team, "CAPITANO")
-    # il Capitano è quello che il 05/11 ha spento tutto: gli si dice cosa NON fare
+    # il Capitano e' quello che potrebbe rispondere con lo stop: gli si dice cosa NON fare
     assert "Do NOT write `.team-halted.flag`" in captain and "do NOT run `jht team stop`" in captain
     assert "do NOT kill or spawn any session" in captain
     (sentinel,) = _to(team, "SENTINELLA")
@@ -400,3 +399,48 @@ def test_the_assistente_runs_the_pause_itself_and_never_asks_for_a_freeze():
         for old in ("Proceed with controlled freeze", "freeze controllato", "freeze controlado", "freeze contrôlé",
                     "kontrolliertem Freeze", "freeze controlado", "kontrollált freeze"):
             assert old not in text, f"assistente{suffix}.md still asks the Capitano for «{old}»"
+
+
+# ── il tetto vale anche in LETTURA: i marcatori stanno in una cartella che gli agenti possono scrivere ──
+def test_a_mark_with_an_exit_past_the_cap_is_not_a_pause(tmp_path):
+    import agent_pause as ap
+    now = datetime(2026, 11, 5, 22, 0, tzinfo=timezone.utc)
+    d = tmp_path / ".agent-pauses"
+    d.mkdir()
+    (d / "SCOUT-1.json").write_text(json.dumps({"session": "SCOUT-1", "until": "2999-01-01T00:00:00+00:00"}))
+    (d / "CAPITANO.json").write_text(json.dumps({"until": "2030-01-01T00:00:00+00:00"}))      # nemmeno `since`
+    for name in ("SCOUT-1", "CAPITANO"):
+        assert not ap.is_paused(name, now, tmp_path), name
+        assert ap.status(name, now, tmp_path)["state"] == "invalid"
+    # la scadenza giusta (il tetto) e la sua tolleranza reggono, un'ora oltre no
+    ap.pause("SCOUT-2", now=now, home=tmp_path, notify=False)
+    assert ap.is_paused("SCOUT-2", now, tmp_path)
+    (d / "SCOUT-3.json").write_text(json.dumps({"until": (now + timedelta(days=7, minutes=5)).isoformat()}))
+    (d / "SCOUT-4.json").write_text(json.dumps({"until": (now + timedelta(days=7, hours=1)).isoformat()}))
+    assert ap.is_paused("SCOUT-3", now, tmp_path) and not ap.is_paused("SCOUT-4", now, tmp_path)
+    assert sorted(ap.paused_sessions(now, tmp_path)) == ["SCOUT-2", "SCOUT-3"]
+
+
+def test_the_wake_up_takes_away_a_forged_mark_without_telling_anyone_to_resume(tmp_path, monkeypatch):
+    import agent_pause as ap
+    sent = []
+    monkeypatch.setattr(ap, "_send", lambda s, m: sent.append((s, m)) or True)
+    monkeypatch.setattr(ap, "_live_sessions", lambda: ["SCOUT-1", "SCOUT-5"])
+    monkeypatch.setattr(ap, "LOG", tmp_path / "logs" / "agent-pauses.jsonl")
+    now = datetime(2026, 11, 5, 22, 0, tzinfo=timezone.utc)
+    d = tmp_path / ".agent-pauses"
+    d.mkdir()
+    (d / "SCOUT-1.json").write_text(json.dumps({"until": "2999-01-01T00:00:00+00:00"}))     # forged
+    ap.pause("SCOUT-5", now=now - timedelta(days=9), home=tmp_path, notify=False)             # ran out for real
+    woken = ap.wake_expired(now, tmp_path)
+    assert sorted(woken) == ["SCOUT-1", "SCOUT-5"]
+    assert not (d / "SCOUT-1.json").exists() and not (d / "SCOUT-5.json").exists()
+    assert [s for s, _ in sent] == ["SCOUT-5"]          # only the pause that ran out is told to resume
+
+
+def test_a_session_name_with_a_trailing_newline_is_not_a_session(tmp_path):
+    import agent_pause as ap
+    with pytest.raises(ValueError):
+        ap.marker_path("SCOUT-1\n", tmp_path)
+    assert ap.is_paused("SCOUT-1\n", home=tmp_path) is False
+    assert ap.NAME.match("SCOUT-1\n") is None

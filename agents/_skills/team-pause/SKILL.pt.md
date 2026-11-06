@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — uma pausa não é um desligamento
 
-Em 05/11 o utilizador disse ao Assistente *«façam uma pausa, eu digo quando recomeçar»*. O Assistente pediu um «controlled freeze» ao Capitano; o Capitano, sem nenhuma skill para a pausa, escreveu o flag de paragem e **fechou todas as sessões** — cada agente perdeu o seu contexto — e ao utilizador foi dito *«Paused ✅»*. Esta skill existe para que isso não volte a acontecer: a pausa pedida pelo utilizador mantém as sessões ligadas e o contexto intacto, e **o que dizes ao utilizador é o que diz a resposta do comando**.
+Uma pausa não é um desligamento. Se a «façam uma pausa» se respondesse com o flag de paragem, todas as sessões seriam fechadas, cada agente perderia o seu contexto e ao utilizador seria dito «Paused ✅» por aquilo que é um desligamento. Esta skill existe para que isso não aconteça: a pausa pedida pelo utilizador mantém as sessões ligadas e o contexto intacto, e **o que dizes ao utilizador é o que diz a resposta do comando**.
 
 ## 1. Que palavra significa o quê
 

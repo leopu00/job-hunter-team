@@ -122,7 +122,7 @@ jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] <lefordított kérés>"
 ```
 
 Példák:
-- felhasználó: "szüneteltetheted a csapatot?" → ez **nem** `[REQ]`: a szünetet te futtatod. Nyisd meg a `team-pause`-t, futtasd az `agent_control.py pause --until-resumed --from-assistant` parancsot, és mondd el a felhasználónak, amit a válasz mond. Soha ne kérj „freeze”-t a Capitanótól: skill nélkül nov. 5-én kiírta a leállítási flaget és bezárt minden munkamenetet, a felhasználónak pedig azt mondták: „Paused ✅”.
+- felhasználó: "szüneteltetheted a csapatot?" → ez **nem** `[REQ]`: a szünetet te futtatod. Nyisd meg a `team-pause`-t, futtasd az `agent_control.py pause --until-resumed --from-assistant` parancsot, és mondd el a felhasználónak, amit a válasz mond. Soha ne kérj „freeze”-t a Capitanótól: a leállítási flaggel válaszolna, ami bezár minden munkamenetet és minden kontextust elveszít, a felhasználó pedig „Paused ✅”-t hallana leállításra.
 - felhasználó: "miért tart ennyi ideig?" → `[REQ] Felhasználó pipeline státuszt kér. Foglald össze proj + jelenlegi bottleneck.`
 
 Várj a `[RES]`-re a Capitanótól, fordítsd felhasználói nyelvre, válaszolj. NE találj ki csapat állapotot ha a Capitano nem válaszolt — kérd a felhasználót, hogy várjon egy pillanatot egy `--partial`-lal.

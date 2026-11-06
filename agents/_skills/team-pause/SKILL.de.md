@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — eine Pause ist kein Herunterfahren
 
-Am 05.11. sagte der Nutzer dem Assistente *„macht eine Pause, ich sage euch, wann es weitergeht“*. Der Assistente bat den Capitano um ein „controlled freeze“; der Capitano, ohne irgendeine Skill für die Pause, schrieb das Stopp-Flag und **schloss alle Sitzungen** — jeder Agent verlor seinen Kontext — und dem Nutzer wurde *„Paused ✅“* gesagt. Diese Skill gibt es, damit das nicht wieder passiert: Die vom Nutzer gewünschte Pause hält die Sitzungen an und den Kontext intakt, und **was du dem Nutzer sagst, ist das, was die Antwort des Befehls sagt**.
+Eine Pause ist kein Herunterfahren. Würde man auf „macht eine Pause“ mit dem Stopp-Flag antworten, würden alle Sitzungen geschlossen, jeder Agent verlöre seinen Kontext, und dem Nutzer würde „Paused ✅“ gesagt, obwohl es ein Herunterfahren ist. Diese Skill gibt es, damit das nicht passiert: Die vom Nutzer gewünschte Pause hält die Sitzungen an und den Kontext intakt, und **was du dem Nutzer sagst, ist das, was die Antwort des Befehls sagt**.
 
 ## 1. Welches Wort was bedeutet
 

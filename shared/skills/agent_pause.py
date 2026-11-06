@@ -54,9 +54,12 @@ DIR_NAME = ".agent-pauses"
 LOG = JHT_HOME / "logs" / "agent-pauses.jsonl"
 # Lo stesso tetto della pausa di squadra (standby.MANUAL_MAX): nessuna pausa vive per sempre.
 MAX_PAUSE = timedelta(days=7)
+# The cap holds when the mark is READ, not only when it is written: the marks sit in a folder the agents can write,
+# and one with an `until` of the year 2999 would be a pause that never ends. A few minutes of slack for clocks.
+READ_SLACK = timedelta(minutes=10)
 # Gli stessi nomi di sessione del pannello (agent_control.NAME): una grammatica chiusa, perché
 # il nome diventa un nome di file.
-NAME = re.compile(r"^[A-Z][A-Z0-9-]{0,39}$")
+NAME = re.compile(r"^[A-Z][A-Z0-9-]{0,39}\Z")   # \Z: a `$` would let a trailing newline through
 # Sessioni a cui non si scrive MAI (non sono agenti LLM in chat): in sync con standby.NEVER_MESSAGE.
 NEVER_MESSAGE = {"SENTINELLA-WORKER", "DOCTOR-WATCHDOG"}
 
@@ -102,13 +105,17 @@ def _parse_ts(value) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def read(session: str, home=None) -> Optional[dict]:
-    """Il marcatore, o None se assente/illeggibile/senza un `until` valido (fail-closed: non è una pausa)."""
+def read(session: str, home=None, now: Optional[datetime] = None) -> Optional[dict]:
+    """Il marcatore, o None se assente/illeggibile/senza un `until` valido o con un `until` OLTRE il tetto dei
+    7 giorni da adesso (fail-closed: non è una pausa; `wake_expired` lo toglie)."""
     try:
         data = json.loads(marker_path(session, home).read_text(encoding="utf-8"))
     except (OSError, ValueError, UnicodeDecodeError):
         return None
-    if not isinstance(data, dict) or _parse_ts(data.get("until")) is None:
+    if not isinstance(data, dict):
+        return None
+    until = _parse_ts(data.get("until"))
+    if until is None or until > _now(now) + MAX_PAUSE + READ_SLACK:
         return None
     return data
 
@@ -122,7 +129,7 @@ def status(session: str, now: Optional[datetime] = None, home=None) -> dict:
         return base
     if not exists:
         return base
-    data = read(session, home)
+    data = read(session, home, now)
     if data is None:
         return dict(base, state="invalid")
     expired = _now(now) >= _parse_ts(data["until"])
@@ -252,7 +259,10 @@ def wake_expired(now: Optional[datetime] = None, home=None) -> list[str]:
     for name in names[:500]:
         if not NAME.match(name) or is_paused(name, now, home):
             continue
-        res = resume(name, why="the pause reached its 7 day limit", home=home)
+        # a pause that ran out is told to resume; a mark that never was a pause (unreadable, or with an exit
+        # past the cap) is only taken away: nobody paused that agent, so nobody has anything to resume
+        ran_out = status(name, now, home)["state"] == "expired"
+        res = resume(name, why="the pause reached its 7 day limit", home=home, notify=ran_out)
         if res["removed"]:
             woken.append(name)
     return woken

@@ -121,7 +121,7 @@ jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] <translated request>"
 ```
 
 Examples:
-- user: "can you pause the team?" → **not** a `[REQ]`: a pause is yours to run. Open `team-pause`, run `agent_control.py pause --until-resumed --from-assistant`, and tell the user what the answer says. Never ask the Capitano for a «freeze»: with no skill for it, on 05/11 it wrote the stop flag and closed every session, and the user was told «Paused ✅».
+- user: "can you pause the team?" → **not** a `[REQ]`: a pause is yours to run. Open `team-pause`, run `agent_control.py pause --until-resumed --from-assistant`, and tell the user what the answer says. Never ask the Capitano for a «freeze»: it would answer with the stop flag, which closes every session and loses every context, and the user would hear «Paused ✅» for a shutdown.
 - user: "why is it taking so long?" → `[REQ] User asks pipeline status. Summarize proj + current bottleneck.`
 
 Wait for `[RES]` from the Capitano, translate into user language, reply. Do NOT invent team state if the Capitano hasn't replied — ask the user to wait a moment with a `--partial`.

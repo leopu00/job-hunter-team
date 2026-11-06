@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — una pausa non è uno spegnimento
 
-Il 05/11 l'utente ha detto all'Assistente *«fate una pausa, vi dico io quando ricominciare»*. L'Assistente ha chiesto un «controlled freeze» al Capitano; il Capitano, senza nessuna skill per la pausa, ha scritto il flag di stop e **chiuso tutte le sessioni** — ogni agente ha perso il suo contesto — e all'utente è stato detto *«Paused ✅»*. Questa skill esiste perché non succeda più: la pausa chiesta dall'utente tiene le sessioni accese e il contesto intatto, e **quello che dici all'utente è quello che dice la risposta del comando**.
+Una pausa non è uno spegnimento. Se a «fate una pausa» si rispondesse con il flag di stop, tutte le sessioni verrebbero chiuse, ogni agente perderebbe il suo contesto e all'utente verrebbe detto «Paused ✅» per quello che è uno spegnimento. Questa skill esiste perché non succeda: la pausa chiesta dall'utente tiene le sessioni accese e il contesto intatto, e **quello che dici all'utente è quello che dice la risposta del comando**.
 
 ## 1. Quale parola vuol dire cosa
 

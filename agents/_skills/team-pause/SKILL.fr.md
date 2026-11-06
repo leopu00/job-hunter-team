@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — une pause n'est pas un arrêt
 
-Le 05/11, l'utilisateur a dit à l'Assistente *« faites une pause, je vous dis quand reprendre »*. L'Assistente a demandé un « controlled freeze » au Capitano ; le Capitano, sans aucune skill pour la pause, a écrit le flag d'arrêt et **fermé toutes les sessions** — chaque agent a perdu son contexte — et on a dit à l'utilisateur *« Paused ✅ »*. Cette skill existe pour que cela n'arrive plus : la pause demandée par l'utilisateur garde les sessions allumées et le contexte intact, et **ce que tu dis à l'utilisateur est ce que dit la réponse de la commande**.
+Une pause n'est pas un arrêt. Si l'on répondait à « faites une pause » par le flag d'arrêt, toutes les sessions seraient fermées, chaque agent perdrait son contexte et l'on dirait à l'utilisateur « Paused ✅ » pour ce qui est une extinction. Cette skill existe pour que cela n'arrive pas : la pause demandée par l'utilisateur garde les sessions allumées et le contexte intact, et **ce que tu dis à l'utilisateur est ce que dit la réponse de la commande**.
 
 ## 1. Quel mot veut dire quoi
 

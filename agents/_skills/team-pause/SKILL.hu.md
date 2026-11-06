@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — a szünet nem leállítás
 
-Nov. 5-én a felhasználó azt mondta az Assistentének: *„tartsatok szünetet, majd én szólok, mikor folytassátok”*. Az Assistente „controlled freeze”-t kért a Capitanótól; a Capitano, a szünethez semmilyen skill nélkül, kiírta a leállítási flaget és **bezárta az összes munkamenetet** — minden ügynök elvesztette a kontextusát — a felhasználónak pedig azt mondták: *„Paused ✅”*. Ez a skill azért van, hogy ez ne történjen meg újra: a felhasználó kérte szünet bekapcsolva tartja a munkameneteket és érintetlenül hagyja a kontextust, és **amit a felhasználónak mondasz, az a parancs válaszában szereplő tény**.
+A szünet nem leállítás. Ha a „tartsatok szünetet” kérésre a leállítási flaggel válaszolnának, minden munkamenet bezárulna, minden ügynök elveszítené a kontextusát, és a felhasználónak „Paused ✅”-t mondanának, pedig leállítás lenne. Ez a skill azért van, hogy ez ne történjen meg: a felhasználó kérte szünet bekapcsolva tartja a munkameneteket és érintetlenül hagyja a kontextust, és **amit a felhasználónak mondasz, az a parancs válaszában szereplő tény**.
 
 ## 1. Melyik szó mit jelent
 

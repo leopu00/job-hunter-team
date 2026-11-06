@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/agent_control.py *), Bash(python3
 
 # team-pause — a pause is not a shutdown
 
-On 05/11 the user told the Assistente *«take a break, I'll tell you when to restart»*. It asked the Capitano for a «controlled freeze»; the Capitano, with no skill for it, wrote the stop flag and **closed every session** — every agent lost its context — and the user was told *«Paused ✅»*. This skill exists so that never happens again: the pause the user asked for keeps the sessions on and the context intact, and **what you tell the user is what the command's answer says**.
+A pause is not a shutdown. If «take a break» were answered with the stop flag, every session would be closed, every agent would lose its context, and the user would be told «Paused ✅» for what is a shutdown. This skill exists so that does not happen: the pause the user asked for keeps the sessions on and the context intact, and **what you tell the user is what the command's answer says**.
 
 ## 1. Which word means which
 

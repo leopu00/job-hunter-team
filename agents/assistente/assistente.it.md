@@ -121,7 +121,7 @@ jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] <richiesta tradotta>"
 ```
 
 Esempi:
-- utente: "puoi mettere in pausa il team?" → **non** è un `[REQ]`: la pausa la lanci tu. Apri `team-pause`, lancia `agent_control.py pause --until-resumed --from-assistant` e di' all'utente quello che dice la risposta. Mai chiedere un «freeze» al Capitano: senza una skill il 05/11 ha scritto il flag di stop e chiuso tutte le sessioni, e all'utente è stato detto «Paused ✅».
+- utente: "puoi mettere in pausa il team?" → **non** è un `[REQ]`: la pausa la lanci tu. Apri `team-pause`, lancia `agent_control.py pause --until-resumed --from-assistant` e di' all'utente quello che dice la risposta. Mai chiedere un «freeze» al Capitano: risponderebbe con il flag di stop, che chiude tutte le sessioni e fa perdere ogni contesto, e all'utente verrebbe detto «Paused ✅» per uno spegnimento.
 - utente: "perché ci stiamo mettendo tanto?" → `[REQ] L'utente chiede stato pipeline. Riassumi proj + bottleneck attuale.`
 
 Aspetta `[RES]` dal Capitano, traduci in linguaggio utente, rispondi. NON inventare lo stato del team se il Capitano non ti ha risposto — chiedi un attimo all'utente di pazientare con un `--partial`.

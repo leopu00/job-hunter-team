@@ -101,7 +101,7 @@ MAX_PAUSE = timedelta(days=7)
 JOURNAL_MAX_BYTES = 256 * 1024
 
 # ── the sessions ────────────────────────────────────────────────────────────
-NAME = re.compile(r"^[A-Z][A-Z0-9-]{0,39}$")
+NAME = re.compile(r"^[A-Z][A-Z0-9-]{0,39}\Z")
 # Singletons the panel starts and stops (start-agent.sh: bare prefix).
 SINGLETONS = {"CAPITANO": "capitano", "ASSISTENTE": "assistente", "MENTOR": "mentor",
               "SENTINELLA": "sentinella", "CRITICO": "critico"}
