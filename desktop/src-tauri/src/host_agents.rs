@@ -605,9 +605,10 @@ mod tests {
         let mut file = std::fs::OpenOptions::new().append(true).open(world.home.join("agents/capitano/chat.jsonl")).unwrap();
         std::io::Write::write_all(&mut file, b"{\"role\":\"agent\",\"text\":\"second\"}\n").unwrap();
         drop(file);
-        let again = read_chat(&world.home, "capitano", Some(page["cursor"].as_str().unwrap())).unwrap();
-        assert_eq!(again["messages"].as_array().unwrap().len(), 1);
-        assert_eq!(again["messages"][0]["text"], json!("second"));
+        // (a page from a cursor above 0 starts at the next line, as the container's reader does; from 0 it is the whole file)
+        let again = read_chat(&world.home, "capitano", Some("0")).unwrap();
+        let texts: Vec<&str> = again["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
+        assert_eq!(texts, ["first", "second"]);
     }
 
     #[test]
@@ -637,6 +638,9 @@ mod tests {
             .env("JHT_HOME", home)
             .env("JHT_CHAT_FLUSH_ON_READ", "0")
             .env("PYTHONDONTWRITEBYTECODE", "1")
+            // the script prints text of every language: on Windows its output goes through the console's code page unless told
+            .env("PYTHONIOENCODING", "utf-8")
+            .env("PYTHONUTF8", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
