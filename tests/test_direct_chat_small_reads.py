@@ -39,7 +39,8 @@ def _constant(name: str) -> int:
 TAIL = _constant("SMALL_READ_TAIL")
 OVERLAP = _constant("SMALL_READ_OVERLAP")
 PROBE = re.search(r'const SMALL_READ_SIZE_PROBE: &str = "(\d+)";', SOURCE).group(1)
-CHAT_READ_PY = re.search(r'const CHAT_READ_PY: &str = r#"(.*?)"#;', SOURCE, re.S).group(1)
+SCRIPT_SOURCE = DIRECT_CHAT.with_suffix("").joinpath("scripts.rs").read_text(encoding="utf-8")
+CHAT_READ_PY = re.search(r'const CHAT_READ_PY: &str = r#"(.*?)"#;', SCRIPT_SOURCE, re.S).group(1)
 AGENT = "assistente"
 
 

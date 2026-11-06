@@ -3029,11 +3029,13 @@ fn t54_a_team_half_saved_or_changed_is_closed_and_a_host_that_is_not_the_selecte
 fn every_command() -> Vec<(String, String, String)> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut found = Vec::new();
-    let mut files: Vec<_> = fs::read_dir(&dir).unwrap().map(|entry| entry.unwrap().path()).collect();
+    let mut files = crate::main_thread_commands_tests::rust_sources(&dir);
     files.sort();
     for file in files {
-        let name = file.file_name().unwrap().to_string_lossy().into_owned();
-        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+        let relative = file.strip_prefix(&dir).unwrap();
+        let name = relative.to_string_lossy().replace('\\', "/");
+        if !name.ends_with(".rs") || name.ends_with("_tests.rs")
+            || relative.components().any(|component| component.as_os_str() == "tests") {
             continue;
         }
         let source = fs::read_to_string(&file).unwrap().replace("\r\n", "\n");

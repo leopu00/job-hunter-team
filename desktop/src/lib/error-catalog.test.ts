@@ -21,12 +21,17 @@ import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
 import { liveScreenErrorCode } from "./live-screen";
 import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
+import { compiledRustSourceFiles, withoutRustTests } from "../test-support/rust-sources";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  adapter_failed: "CLI adapter JSON failure written to stdout, never returned to the renderer",
+  adapter_request_invalid: "CLI adapter rejects its stdin request with JSON on stdout, never a desktop error",
+  adapter_unavailable: "CLI adapter exit report on stdout, never returned to the renderer",
+  adapter_usage_invalid: "CLI adapter rejects its command arguments on stdout, never a desktop error",
   // runtime_up.rs (the machine and the folders `jht up` needs, got ready by the app): the closed reason words of the runtime log; the
   // person reads the error of the exit code (podman_missing, podman_start_failed), never these.
   podman_not_installable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
@@ -583,36 +588,21 @@ const NOT_ERRORS: Record<string, string> = {
 };
 
 function compiledRustModules(): string[] {
-  const lib = readFileSync(join(RUST, "lib.rs"), "utf8");
-  const modules: string[] = [];
-  const lines = lib.split("\n");
-  lines.forEach((line, index) => {
-    const match = /^mod (\w+);$/.exec(line.trim());
-    // A module behind any `#[cfg(...test...)]` (`test`, `all(test, unix)`) is test code.
-    if (match && !/^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "")) modules.push(match[1]);
-  });
-  return modules;
+  return compiledRustFiles().filter((file) => !file.includes("/") && file !== "lib.rs").map((file) => file.replace(/\.rs$/, ""));
 }
 
 /**
  * The files the compiled modules are made of: each module, plus the non-test files it pulls in
  * with `#[path = "x.rs"] mod y;` (the assisted browser's transport is one).
  */
+let rustFileInventory: string[] | undefined;
+
 function compiledRustFiles(): string[] {
-  return compiledRustModules().flatMap((module) => {
-    const lines = readFileSync(join(RUST, `${module}.rs`), "utf8").split("\n");
-    const submodules = lines.flatMap((line, index) => {
-      const match = /^#\[path = "([\w.]+\.rs)"\]$/.exec(line.trim());
-      const test = /^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "");
-      return match && !test && /^mod \w+;$/.test(lines[index + 1]?.trim() ?? "") ? [match[1]] : [];
-    });
-    return [`${module}.rs`, ...submodules];
-  });
+  return rustFileInventory ??= compiledRustSourceFiles(join(RUST, "lib.rs")).filter((file) => file !== "lib.rs");
 }
 
 function withoutTests(source: string): string {
-  const index = source.indexOf("#[cfg(test)]\nmod tests");
-  return index >= 0 ? source.slice(0, index) : source;
+  return withoutRustTests(source);
 }
 
 const SNAKE_LITERAL = /"([a-z][a-z0-9]*(?:_[a-z0-9]+)+)"/g;
