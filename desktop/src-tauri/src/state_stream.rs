@@ -1491,7 +1491,7 @@ done"#
     #[test]
     fn the_stream_goes_with_the_account_before_its_write_access_is_forgotten() {
         let production = include_str!("account_scope.rs");
-        for function in ["pub(crate) fn runtime_account_scope_reset(", "fn activate_scope_from("] {
+        for function in ["pub(crate) async fn runtime_account_scope_reset(", "fn activate_scope_from("] {
             let body = production.split(function).nth(1).unwrap().split("\n}\n").next().unwrap();
             let at = |needle: &str| body.find(needle).unwrap_or_else(|| panic!("{needle}"));
             assert!(at("active.take()") < at("direct_chat::teardown"), "{function}");

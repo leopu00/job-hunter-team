@@ -195,8 +195,8 @@ fn forget_probe(inner: &DirectChatInner) {
 }
 
 /// The kept answer when it is fresh, otherwise `probe`'s, kept in its turn. The caller holds the connection's
-/// lock, so a second ask that comes while a probe runs waits for it and then finds its answer here: one
-/// process for both.
+/// lock (on a VPS; on this computer the container's lookup is one at a time and kept), so a second ask that comes while a
+/// probe runs finds its answer here, or the container already found: no second process for both.
 fn status_kept_or_probed(
     memo: &Mutex<ProbeMemo>,
     scope: &AccountScope,
@@ -249,6 +249,72 @@ enum RemoteOperation<'a> { Probe, Python, Delivery(&'a str), Chat(ChatOperation<
 impl Drop for Connection {
     fn drop(&mut self) {
         close_connection(self);
+    }
+}
+
+impl Connection {
+    /// This computer's team, as far as a call needs it: the paths of the attested runtime, the owner's marker, the
+    /// account. It owns no tunnel and no ssh master, so it can be used without the connection's lock and dropped with no
+    /// side effect. None for a VPS, whose master and tunnel belong to the connection itself.
+    fn detached_local(&self) -> Option<Connection> {
+        if !matches!(self.validated, ValidatedHost::Local) {
+            return None;
+        }
+        Some(Connection {
+            app: self.app.clone(),
+            scope: self.scope.clone(),
+            host: self.host.clone(),
+            validated: self.validated.clone(),
+            runtime: None,
+            local_wrapper: self.local_wrapper.clone(),
+            local_runtime: self.local_runtime.clone(),
+            local_owner_marker: self.local_owner_marker.clone(),
+            control_path: None,
+            tunnel: None,
+            link: self.link,
+        })
+    }
+}
+
+/// A connection of the tests of `with_connection_read`, built here and not in the tests' text: a test that builds one runs on
+/// Unix only (see `only_unix_tests_build_a_connection`).
+#[cfg(all(test, unix))]
+fn synthetic_connection(validated: ValidatedHost, scope: &AccountScope) -> Connection {
+    Connection {
+        app: None,
+        scope: scope.clone(),
+        host: ExecutionHost::Local,
+        validated,
+        runtime: None,
+        local_wrapper: Some(PathBuf::from("/synthetic/wrapper")),
+        local_runtime: Some(PathBuf::from("/synthetic/runtime")),
+        local_owner_marker: Some(PathBuf::from("/synthetic/marker")),
+        control_path: None,
+        tunnel: None,
+        link: VpsLink::Master,
+    }
+}
+
+/// Runs a READ of the connection of `scope`. On this computer the connection's lock is let go before the work (the
+/// exec in the team's container, a second or more, and many more with the old wrapper), so that a read of the profile,
+/// a read of the chat and a probe do not wait for each other; on a VPS the lock is kept, because the ssh master and the
+/// tunnel are the connection's own. A connection that is not of `scope`, or none, is refused before anything runs.
+fn with_connection_read<T>(
+    inner: &DirectChatInner,
+    scope: &AccountScope,
+    work: impl FnOnce(&Connection) -> Result<T, DirectChatError>,
+) -> Result<T, DirectChatError> {
+    let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+    let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+    if &connection.scope != scope {
+        return Err(failure("account_scope_mismatch"));
+    }
+    match connection.detached_local() {
+        Some(local) => {
+            drop(slot);
+            work(&local)
+        }
+        None => work(connection),
     }
 }
 
@@ -2705,6 +2771,13 @@ fn status_for_scope(
         .lock()
         .map_err(|_| failure("state_failed"))?;
     match slot.as_ref() {
+        // This computer's team: the lock is let go before the probe, so that a read of the chat or of the profile does not
+        // wait for it (the container found for the probe is kept for them, one lookup at a time).
+        Some(connection) if &connection.scope == scope && matches!(connection.validated, ValidatedHost::Local) => {
+            let local = connection.detached_local().ok_or_else(|| failure("state_failed"))?;
+            drop(slot);
+            Ok(status_kept_or_probed(&inner.probe_memo, scope, std::time::Instant::now, || probe(&local)))
+        }
         Some(connection) if &connection.scope == scope => Ok(status_kept_or_probed(
             &inner.probe_memo,
             scope,
@@ -3004,18 +3077,12 @@ pub(crate) async fn direct_chat_read(
         let scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let slot = inner
-            .connection
-            .lock()
-            .map_err(|_| failure("state_failed"))?;
-        let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
-        if &connection.scope != scope.scope() {
-            return Err(failure("account_scope_mismatch"));
-        }
-        if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {
-            return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));
-        }
-        read_page(connection, &agent_id, cursor.as_deref())
+        with_connection_read(&inner, scope.scope(), |connection| {
+            if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {
+                return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));
+            }
+            read_page(connection, &agent_id, cursor.as_deref())
+        })
     })
     .await
     .map_err(|_| failure("read_failed"))?;
@@ -3778,25 +3845,25 @@ pub(crate) async fn team_script_read(
     request: Value,
     timeout: Duration,
 ) -> Result<Value, DirectChatError> {
-    chat_write(
+    chat_scoped(
         state,
         scopes,
-        move |inner| {
-            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
-            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
-            let result = run_python(connection, script, &request, timeout)?;
-            if result.stdout.len() > TEAM_SCRIPT_REPLY_MAX {
-                return Err(failure("read_failed"));
-            }
-            let (exit, bytes) = (result.code, result.stdout.len());
-            let parsed: Result<Value, DirectChatError> = parse_json(result, "read_failed");
-            if parsed.is_err() {
-                // why the answer was no JSON (the wrapper's exit and how much it printed, never what), for the runtime log
-                if let Some(log) = connection.app.as_ref().and_then(crate::runtime_log::RuntimeLog::new) {
-                    log.record_script_read_failure(exit, bytes);
+        move |inner, scope| {
+            with_connection_read(inner, scope, |connection| {
+                let result = run_python(connection, script, &request, timeout)?;
+                if result.stdout.len() > TEAM_SCRIPT_REPLY_MAX {
+                    return Err(failure("read_failed"));
                 }
-            }
-            parsed
+                let (exit, bytes) = (result.code, result.stdout.len());
+                let parsed: Result<Value, DirectChatError> = parse_json(result, "read_failed");
+                if parsed.is_err() {
+                    // why the answer was no JSON (the wrapper's exit and how much it printed, never what), for the runtime log
+                    if let Some(log) = connection.app.as_ref().and_then(crate::runtime_log::RuntimeLog::new) {
+                        log.record_script_read_failure(exit, bytes);
+                    }
+                }
+                parsed
+            })
         },
         "read_failed",
     )
@@ -3837,20 +3904,40 @@ async fn chat_write<T: Send + 'static>(
     work: impl FnOnce(&DirectChatInner) -> Result<T, DirectChatError> + Send + 'static,
     default: &'static str,
 ) -> Result<T, DirectChatError> {
+    chat_scoped(
+        state,
+        scopes,
+        move |inner, scope| {
+            // a connection that is not there, or is another account's, is refused before the work
+            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
+            if &connection.scope != scope {
+                return Err(failure("account_scope_mismatch"));
+            }
+            drop(slot);
+            work(inner)
+        },
+        default,
+    )
+    .await
+}
+
+/// The same job on a thread of its own, for the account that asked, which `work` is given: the account's lock is held
+/// for the job, as for every chat call. `work` takes the connection's lock itself, for as little time as it needs
+/// (`with_connection_read` lets it go before the exec on this computer).
+async fn chat_scoped<T: Send + 'static>(
+    state: &State<'_, DirectChatState>,
+    scopes: &State<'_, AccountScopeState>,
+    work: impl FnOnce(&DirectChatInner, &AccountScope) -> Result<T, DirectChatError> + Send + 'static,
+    default: &'static str,
+) -> Result<T, DirectChatError> {
     let expected = scopes.active().map_err(failure)?;
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
     let inner = Arc::clone(&state.inner);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let scope = scope_state.lock_expected(&worker_expected).map_err(failure)?;
-        {
-            let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
-            let connection = slot.as_ref().ok_or_else(|| failure("disconnected"))?;
-            if &connection.scope != scope.scope() {
-                return Err(failure("account_scope_mismatch"));
-            }
-        }
-        work(&inner)
+        work(&inner, scope.scope())
     })
     .await
     .map_err(|_| failure(default))?;
@@ -4493,7 +4580,7 @@ mod tests {
     fn only_the_per_command_link_to_a_vps_reads_small() {
         let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
         let read = source.split("pub(crate) async fn direct_chat_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n            return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
+        assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n                return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
         assert!(read.contains("read_page(connection, &agent_id, cursor.as_deref())"), "every other link reads as before");
     }
 
@@ -7209,5 +7296,86 @@ mod probe_memo_tests {
             let body = rest.split("\n}\n").next().unwrap();
             assert!(body.contains("forget_probe("), "{place} keeps a probe answer of a connection that is gone");
         }
+    }
+}
+
+#[cfg(test)]
+mod connection_read_tests {
+    use super::*;
+
+    #[cfg(unix)]
+    fn vps() -> ValidatedHost {
+        ValidatedHost::Vps {
+            address: "203.0.113.7".into(),
+            user: "jht".into(),
+            port: 22,
+            key_path: PathBuf::from("/nonexistent/key"),
+            known_hosts: PathBuf::from("/nonexistent/known_hosts"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_read_on_this_computer_lets_go_of_the_connection_before_it_works_and_a_vps_read_keeps_it() {
+        let scope = AccountScope::synthetic(b"synthetic-read-a");
+        let inner = DirectChatInner::default();
+        *inner.connection.lock().unwrap() = Some(synthetic_connection(ValidatedHost::Local, &scope));
+        let free_inside = with_connection_read(&inner, &scope, |_| Ok(inner.connection.try_lock().is_ok())).unwrap();
+        assert!(free_inside, "the lock was still held while the read worked on this computer");
+        // the read got the paths of the runtime of the connection, not its tunnel or master
+        let paths = with_connection_read(&inner, &scope, |connection| {
+            Ok((connection.local_wrapper.clone(), connection.local_runtime.clone(), connection.control_path.is_none() && connection.tunnel.is_none()))
+        })
+        .unwrap();
+        assert_eq!(paths, (Some(PathBuf::from("/synthetic/wrapper")), Some(PathBuf::from("/synthetic/runtime")), true));
+        // a VPS: the master and the tunnel are the connection's own, so its lock stays
+        *inner.connection.lock().unwrap() = Some(synthetic_connection(vps(), &scope));
+        let held_inside = with_connection_read(&inner, &scope, |_| Ok(inner.connection.try_lock().is_err())).unwrap();
+        assert!(held_inside, "a VPS read let go of the connection it works on");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_read_of_another_account_or_of_no_connection_is_refused_before_it_works() {
+        let (mine, other) = (AccountScope::synthetic(b"synthetic-read-a"), AccountScope::synthetic(b"synthetic-read-b"));
+        let inner = DirectChatInner::default();
+        let ran = std::cell::Cell::new(false);
+        let work = |_: &Connection| {
+            ran.set(true);
+            Ok(())
+        };
+        assert_eq!(with_connection_read(&inner, &mine, work).err().map(|error| error.code), Some("disconnected"));
+        *inner.connection.lock().unwrap() = Some(synthetic_connection(ValidatedHost::Local, &other));
+        assert_eq!(with_connection_read(&inner, &mine, work).err().map(|error| error.code), Some("account_scope_mismatch"));
+        assert!(!ran.get());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_detached_connection_owns_nothing_to_close() {
+        let scope = AccountScope::synthetic(b"synthetic-read-a");
+        assert!(synthetic_connection(vps(), &scope).detached_local().is_none());
+        let local = synthetic_connection(ValidatedHost::Local, &scope);
+        let detached = local.detached_local().unwrap();
+        assert!(detached.control_path.is_none() && detached.tunnel.is_none() && detached.runtime.is_none());
+        // dropping it closes nothing: close_connection only acts on a VPS master or a tunnel
+        drop(detached);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_reads_that_ran_a_process_under_the_lock_no_longer_do() {
+        let source = include_str!("direct_chat.rs");
+        // the read of a page, the scripts' read and the probe go through the release; the sends keep their serial lock
+        for (place, needle) in [
+            ("pub(crate) async fn direct_chat_read(", "with_connection_read("),
+            ("pub(crate) async fn team_script_read(", "with_connection_read("),
+            ("fn status_for_scope(", "detached_local()"),
+        ] {
+            let body = source.split(place).nth(1).unwrap_or_else(|| panic!("{place}")).split("\n}\n").next().unwrap();
+            assert!(body.contains(needle), "{place} holds the connection's lock for its process again");
+        }
+        let write = source.split("fn send_impl(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(write.contains("send_lock"), "a send is serial");
     }
 }

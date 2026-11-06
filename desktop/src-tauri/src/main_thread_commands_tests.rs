@@ -48,8 +48,10 @@ fn commands() -> Vec<Command> {
     found
 }
 
-/// What puts a process or a long wait in a function.
-const WAITS: [&str; 13] = [
+/// What puts a process or a long wait in a function: an engine or a wrapper run, a child process waited for, and (read
+/// with the white space taken out, so a chain over several lines is seen too) a lock that another operation keeps while it
+/// runs a process: the connection's, the login's session, the sends', the account's write lock, and the teardown of all of them.
+const WAITS: [&str; 22] = [
     "run_scoped_local(",
     "run_ssh(",
     "stop_provider_login_in_container(",
@@ -63,7 +65,26 @@ const WAITS: [&str; 13] = [
     ".output()",
     ".wait()",
     "wait_with_output",
+    "Command::new(",
+    ".connection.lock()",
+    ".interactive.lock()",
+    ".send_lock.lock()",
+    ".write()",
+    "teardown(",
+    "activate_scope(",
+    "activate_scope_from(",
+    "run_python(",
 ];
+
+/// Sync commands that may touch those, each with the reason it can: they are rare, or have nothing in the way.
+const ALLOWED_SYNC: [(&str, &str); 2] = [
+    ("runtime_playground_local_reset", "a debug build only (playground_reset_enabled); the person's own testing, never a release"),
+    ("runtime_playground_local_orphan_recover", "a debug build only (playground_reset_enabled); the person's own testing, never a release"),
+];
+
+fn squashed(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
 
 #[test]
 fn the_commands_of_the_chat_are_all_async_so_the_window_never_waits_for_them() {
@@ -79,16 +100,39 @@ fn the_commands_of_the_chat_are_all_async_so_the_window_never_waits_for_them() {
 }
 
 #[test]
-fn no_sync_command_starts_a_process_or_waits_for_the_connection() {
+fn no_sync_command_starts_a_process_or_waits_for_the_connection_or_the_login() {
     let all = commands();
     assert!(all.len() > 100, "the scan found only {} commands", all.len());
-    let offenders: Vec<String> = all
-        .iter()
-        .filter(|command| !command.is_async)
-        .filter_map(|command| {
-            let hit = WAITS.iter().find(|wait| command.body.contains(*wait))?;
-            Some(format!("{}::{} ({hit})", command.file, command.name))
-        })
-        .collect();
-    assert!(offenders.is_empty(), "sync commands that start a process or wait: {offenders:?}");
+    let mut offenders = Vec::new();
+    let mut seen_allowed = Vec::new();
+    for command in all.iter().filter(|command| !command.is_async) {
+        let body = squashed(&command.body);
+        let Some(hit) = WAITS.iter().find(|wait| body.contains(&squashed(wait))) else { continue };
+        if ALLOWED_SYNC.iter().any(|(name, _)| *name == command.name) {
+            seen_allowed.push(command.name.clone());
+        } else {
+            offenders.push(format!("{}::{} ({hit})", command.file, command.name));
+        }
+    }
+    assert!(offenders.is_empty(), "sync commands that start a process or wait for a lock: {offenders:?}");
+    // an allowed command that no longer touches any of it (or is gone, or is async) is taken off the list
+    for (name, reason) in ALLOWED_SYNC {
+        assert!(seen_allowed.iter().any(|seen| seen == name), "{name} is listed as allowed ({reason}) but no longer needs it");
+    }
+}
+
+#[test]
+fn the_commands_that_change_the_account_or_take_the_login_input_are_async() {
+    let all = commands();
+    for name in [
+        "runtime_account_scope_reset",
+        "runtime_account_scope_set_local",
+        "onboarding_local_owner_return",
+        "onboarding_provider_login_input",
+        "onboarding_provider_login",
+        "onboarding_provider_login_close",
+    ] {
+        let command = all.iter().find(|command| command.name == name).unwrap_or_else(|| panic!("{name} is not a command any more"));
+        assert!(command.is_async, "{name} runs on the main thread and waits for the connection or the login");
+    }
 }

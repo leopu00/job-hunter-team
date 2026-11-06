@@ -1140,7 +1140,7 @@ pub(crate) fn onboarding_local_owner_confirm(
 /// does and enters the owner's. The owner's profile id goes back to the
 /// renderer, which keeps it as it keeps the id of a profile it creates.
 #[tauri::command]
-pub(crate) fn onboarding_local_owner_return(
+pub(crate) async fn onboarding_local_owner_return(
     window: tauri::Window,
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
@@ -1356,7 +1356,7 @@ pub(crate) fn runtime_local_profile_create(
 }
 
 #[tauri::command]
-pub(crate) fn runtime_account_scope_set_local(
+pub(crate) async fn runtime_account_scope_set_local(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
     chat: State<'_, direct_chat::DirectChatState>,
@@ -1522,7 +1522,7 @@ pub(crate) async fn runtime_local_profile_migrate_to_authenticated(
 }
 
 #[tauri::command]
-pub(crate) fn runtime_account_scope_reset(
+pub(crate) async fn runtime_account_scope_reset(
     app: tauri::AppHandle,
     scopes: State<'_, AccountScopeState>,
     chat: State<'_, direct_chat::DirectChatState>,

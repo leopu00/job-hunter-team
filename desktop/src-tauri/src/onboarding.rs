@@ -5244,7 +5244,7 @@ fn start_provider_login(
 }
 
 #[tauri::command]
-pub(crate) fn onboarding_provider_login_input(
+pub(crate) async fn onboarding_provider_login_input(
     window: tauri::Window,
     app: tauri::AppHandle,
     state: State<'_, OnboardingNativeState>,
@@ -9982,7 +9982,7 @@ exit 0
         let body = source
             .split("fn start_provider_login(")
             .nth(1)
-            .and_then(|rest| rest.split("pub(crate) fn onboarding_provider_login_input(").next())
+            .and_then(|rest| rest.split("pub(crate) async fn onboarding_provider_login_input(").next())
             .expect("the login command");
         let stop = body.find("stop_provider_login_in_container(").expect("the login ends the earlier one");
         let spawn = body.find(".spawn()").expect("the login starts its process");
