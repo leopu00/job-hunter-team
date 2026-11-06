@@ -90,13 +90,16 @@ RUNTIME_SELECTION_FILE="$RUNTIME_DIR/container-runtime"
 PODMAN_MACHINE_FILE="$RUNTIME_DIR/podman-machine"
 PODMAN_ADAPTER_BIN="$RUNTIME_DIR/bin"
 DOCKER_SHIM="${JHT_DOCKER_SHIM:-$PODMAN_ADAPTER_BIN/docker}"
-if [ -n "${JHT_CONTAINER_RUNTIME:-}" ]; then
-  CONTAINER_RUNTIME="$(printf '%s' "$JHT_CONTAINER_RUNTIME" | tr '[:upper:]' '[:lower:]')"
+# The engine of THIS runtime is the one its attested bundle names (the container-runtime file). No environment variable the person
+# can have left behind (an older terminal's, a program's) chooses it; only a test names another one, with its own variable.
+if [ -n "${JHT_TEST_CONTAINER_RUNTIME:-}" ]; then
+  CONTAINER_RUNTIME="$(printf '%s' "$JHT_TEST_CONTAINER_RUNTIME" | tr '[:upper:]' '[:lower:]')"
 elif [ -f "$RUNTIME_SELECTION_FILE" ]; then
   CONTAINER_RUNTIME="$(tr -d '\r\n' < "$RUNTIME_SELECTION_FILE" | tr '[:upper:]' '[:lower:]')"
 else
   CONTAINER_RUNTIME="docker"
 fi
+unset JHT_CONTAINER_RUNTIME
 case "$CONTAINER_RUNTIME" in docker|podman) ;; *) err_runtime="unsupported container runtime: $CONTAINER_RUNTIME" ;; esac
 PODMAN_MACHINE_OVERRIDE="${JHT_PODMAN_MACHINE:-}"
 PODMAN_MACHINE_NAME=""
@@ -132,7 +135,7 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:351bff12cef44c4ba634da9f0f3fca329d1a628227cb9442047744dba321dad1"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:4524a256c6ccc1c63435ede438ecd7d6d3359401cbae98ce17c0e705ae9cfb64"
 DEFAULT_RUNTIME_VERSION="0.4.0"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then

@@ -188,3 +188,107 @@ def test_the_doctor_reads_the_alerts_in_every_language(suffix):
     text = (REPO / "agents" / "dottore" / f"dottore{suffix}.md").read_text(encoding="utf-8")
     assert "scout_empty_alert.py list" in text and "resolved: false" in text
     assert "scout_coverage.py next --agent" in text and "tmux-send" in text
+
+
+# ── JHT-T187 follow-up: one message to the user in 24 h in total, and a file of alerts that does not grow without end ──────────
+def streak_on(home, source, base, agent="scout-1", extra=()):
+    rows = [line(i, source=source, agent=agent, ago=NOW - base) for i in range(3)]
+    write(home, list(extra) + rows)
+
+
+def test_many_dry_sources_in_a_night_are_many_lines_in_the_file_and_one_message_to_the_user(home):
+    calls, kept = [], []
+    for n in range(5):
+        streak_on(home, "src%d" % n, NOW + n * 600, extra=kept)
+        kept = [r for r in json.loads("[" + ",".join((home / "logs" / "scout-passes.jsonl").read_text().splitlines()) + "]")]
+        alert = ea.check("scout-1", NOW + n * 600 + 200, run=run_recorder(calls))
+        assert alert is not None
+    rows = alerts(home)
+    assert len(rows) == 5 and len(calls) == 1                                            # one delivery in total
+    assert [r["notified"] for r in rows] == [True, False, False, False, False]
+    assert all(r.get("held") == "cap" for r in rows[1:]) and "held" not in rows[0]
+
+
+def test_after_24_hours_the_next_alert_tells_the_user_again(home):
+    calls = []
+    streak_on(home, "src0", NOW)
+    ea.check("scout-1", NOW + 200, run=run_recorder(calls))
+    later = NOW + 25 * 3600
+    streak_on(home, "src1", later)
+    assert ea.check("scout-1", later + 200, run=run_recorder(calls))["notified"] is True
+    assert len(calls) == 2
+    streak_on(home, "src2", NOW + 3600)                                                  # inside the first window, after a held one
+    assert ea.check("scout-1", NOW + 3600 + 200, run=run_recorder(calls))["notified"] is False
+
+
+def test_a_delivery_that_failed_does_not_use_the_turn(home):
+    def broken(cmd, **kwargs):
+        raise OSError("no tool")
+
+    streak_on(home, "src0", NOW)
+    assert ea.check("scout-1", NOW + 200, run=broken)["notified"] is False
+    calls = []
+    streak_on(home, "src1", NOW + 600)
+    assert ea.check("scout-1", NOW + 800, run=run_recorder(calls))["notified"] is True and len(calls) == 1
+
+
+def test_the_window_can_be_set_and_a_nonsense_value_is_24_hours(home, monkeypatch):
+    monkeypatch.setenv("JHT_SCOUT_EMPTY_NOTIFY_H", "48")
+    assert ea.notify_every_h() == 48.0
+    for raw in ("0", "-5", "100000", "daily", ""):
+        monkeypatch.setenv("JHT_SCOUT_EMPTY_NOTIFY_H", raw)
+        assert ea.notify_every_h() == 24.0
+
+
+def test_two_scouts_finishing_a_streak_together_tell_the_user_once(home):
+    """The cap is checked and the message sent under one lock: the second Scout finds the first one's line."""
+    calls = []
+    write(home, [line(i, source="a", agent="scout-1", ago=0) for i in range(3)] + [line(i, source="b", agent="scout-2") for i in range(3)])
+    first = ea.check("scout-1", NOW + 200, run=run_recorder(calls))
+    second = ea.check("scout-2", NOW + 200, run=run_recorder(calls))
+    assert (first["notified"], second["notified"]) == (True, False) and len(calls) == 1
+
+
+def test_the_file_of_alerts_keeps_its_newest_lines_past_the_size_cap(home, monkeypatch):
+    path = home / "logs" / "scout-alerts.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old = [{"v": 1, "kind": "empty_streak", "ts": NOW - 1000 + i, "agent": "scout-1", "source": "old%d" % i, "country": "de",
+            "passes": 3, "began": NOW - 2000 + i, "notified": False} for i in range(200)]
+    path.write_text("".join(json.dumps(r) + "\n" for r in old), encoding="utf-8")
+    monkeypatch.setattr(ea, "ALERTS_MAX_BYTES", 8 * 1024)
+    assert path.stat().st_size > ea.ALERTS_MAX_BYTES
+    assert ea._append({"v": 1, "kind": "empty_streak", "ts": NOW, "agent": "scout-1", "source": "new", "country": "de",
+                       "passes": 3, "began": NOW - 5, "notified": False}, path)
+    rows = alerts(home)
+    assert len(rows) < 201 and rows[-1]["source"] == "new"                              # the oldest went, the newest stay
+    assert rows[-2]["source"] == "old199" and all(isinstance(r, dict) for r in rows)    # whole lines only
+    assert path.stat().st_size <= 4 * 1024 + 400
+
+
+def test_a_file_under_the_cap_is_not_touched(home):
+    path = home / "logs" / "scout-alerts.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ea._append({"v": 1, "kind": "empty_streak", "ts": NOW, "agent": "scout-1", "source": "x", "country": "de", "passes": 3,
+                "began": NOW, "notified": False}, path)
+    before = path.read_bytes()
+    ea._trim(path)
+    assert path.read_bytes() == before
+
+
+def test_the_doctor_still_sees_the_held_alerts(home):
+    calls = []
+    streak_on(home, "src0", NOW)
+    ea.check("scout-1", NOW + 200, run=run_recorder(calls))
+    streak_on(home, "src1", NOW + 600)
+    ea.check("scout-1", NOW + 800, run=run_recorder(calls))
+    assert {a["source"] for a in ea.recent(24, NOW + 900)} == {"src0", "src1"}
+
+
+@pytest.mark.parametrize("suffix", ["", ".it", ".de", ".fr", ".es", ".hu", ".pt"])
+def test_no_prompt_or_skill_promises_the_user_a_message_for_every_alert(suffix):
+    """The user is told at most once a day: the prompts that talk about the alert say so, in every language."""
+    day = {"": "at most once a day", ".it": "al giorno", ".de": "einmal am Tag", ".fr": "par jour", ".es": "una vez al día",
+           ".hu": "naponta egyszer", ".pt": "uma vez por dia"}[suffix]
+    for path in (REPO / "agents" / "scout" / f"scout{suffix}.md", REPO / "agents" / "dottore" / f"dottore{suffix}.md",
+                 REPO / "agents" / "_skills" / "scout-pass-log" / f"SKILL{suffix}.md"):
+        assert day in path.read_text(encoding="utf-8"), path.name

@@ -1592,7 +1592,7 @@ export default function DashboardApp() {
       markOnboardingStarted(markerId);
       setConnectedExistingTeamKey(identityKey);
       openFullExistingTeam(snapshot);
-      navigate("/agents", { replace: true });
+      navigate("/messages?tab=squad", { replace: true });
       return;
     }
     // A code the dialog knows, so it says what failed; a bare Error was «unknown» to the dialog.

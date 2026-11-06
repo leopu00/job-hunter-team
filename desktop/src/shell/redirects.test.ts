@@ -42,8 +42,20 @@ describe("the old addresses of the pages that are now sections of Settings", () 
   });
 
   it("leaves every other address alone", () => {
-    for (const path of ["/dashboard", "/agents", "/mail", "/profile", "/help", "/office", "/messages", "/settings/appearance"]) {
+    for (const path of ["/dashboard", "/mail", "/profile", "/help", "/office", "/messages", "/settings/appearance"]) {
       expect(redirectFor(path, ""), path).toBeNull();
     }
+  });
+
+  it("sends the Agents page and the page of one agent to the Team page, with the agent and the tab", () => {
+    expect(redirectFor("/agents", "")).toBe("/messages?tab=squad");
+    expect(redirectFor("/agents", "?agent=SCOUT-1")).toBe("/messages?agent=scout&tab=info");
+    expect(redirectFor("/agents", "?agent=capitano")).toBe("/messages?agent=capitano&tab=info");
+    expect(redirectFor("/agents/ANALISTA-2", "")).toBe("/messages?agent=analista-2&tab=info");
+    expect(redirectFor("/agents/scout-1", "")).toBe("/messages?agent=scout&tab=info");
+    // a session without a chat is a row of its own
+    expect(redirectFor("/agents/DOTTORE", "")).toBe("/messages?session=DOTTORE&tab=info");
+    expect(redirectFor("/agents/CRITICO-S2", "")).toBe("/messages?session=CRITICO-S2&tab=info");
+    expect(redirectFor("/agents/a/b", "")).toBeNull();
   });
 });

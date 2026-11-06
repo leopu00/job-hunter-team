@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const native = vi.hoisted(() => ({ invoke: vi.fn(), isTauri: vi.fn(() => false) }));
 vi.mock("@tauri-apps/api/core", () => native);
 import ThemePicker from "./ThemePicker";
+import { reachable } from "./ThemeEditor";
 import { CUSTOM_STORAGE_KEY, THEMES, THEME_STORAGE_KEY, readStoredCustom } from "./theme";
 import { PRESETS } from "./theme-presets";
 import { STATUS_TOKENS, TOKEN_NAMES } from "./theme-custom";
 import { readThemeFile, writeThemeFile } from "./theme-file";
+import { categoryPalette } from "@/lib/theme-palette";
 
 const css = readFileSync(join(process.cwd(), "src/dashboard/dashboard.css"), "utf8").replace(/\r\n?/g, "\n");
 
@@ -65,7 +67,8 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
   it("opens from the theme menu as a dialog with a name, puts the focus inside and gives it back on Escape", async () => {
     const { user, dialog } = await openEditor();
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(within(dialog).getByRole("combobox", { name: "Parti da" })).toHaveFocus();
+    expect(within(dialog).getByRole("radio", { name: "Scuro" })).toHaveFocus();
+    expect(within(dialog).getByRole("radio", { name: "Scuro" })).toHaveAttribute("aria-checked", "true");
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: /Cambia tema/ })).toHaveFocus();
@@ -73,7 +76,11 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
 
   it("keeps the Tab inside the dialog, both ways", async () => {
     const { user, dialog } = await openEditor();
-    const inside = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), select, input')];
+    const inside = reachable(dialog);
+    // the radio tiles off their turn, what is in the closed «Altro» and the preview are not in the round
+    expect(inside.filter((item) => item.getAttribute("role") === "radio")).toHaveLength(1);
+    expect(inside[inside.length - 1].tagName).toBe("SUMMARY");
+    expect(inside.some((item) => item.closest("[inert]"))).toBe(false);
     inside[inside.length - 1].focus();
     await user.tab();
     expect(inside[0]).toHaveFocus();
@@ -83,7 +90,8 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
 
   it("starts from the palette in force, with every colour readable and Save available", async () => {
     const { dialog } = await openEditor();
-    expect(within(dialog).getByText("Tutti i colori sono leggibili.")).toBeVisible();
+    // once on screen under the colours, once in the polite list for a screen reader
+    expect(within(dialog).getAllByText("Tutti i colori sono leggibili.")).toHaveLength(2);
     expect(save()).toHaveAttribute("aria-disabled", "false");
     expect(textField("Sfondo")).toHaveValue(PRESETS.dark.seeds.background);
   });
@@ -203,14 +211,16 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
     await first.user.click(save());
     cleanup();
 
-    // the second one starts from a template: it is offered the template's name
+    // opened on the theme in force it edits it; starting again from a template makes a new one, with the template's name
     const second = await openEditor();
-    await second.user.selectOptions(screen.getByRole("combobox", { name: "Parti da" }), "forest");
     expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Ambra");
+    expect(screen.getByRole("radio", { name: "Ambra" })).toHaveAttribute("aria-checked", "true");
+    await second.user.click(screen.getByRole("radio", { name: "Foresta" }));
+    expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Foresta");
     cleanup();
     localStorage.setItem(THEME_STORAGE_KEY, "dark");
     const third = await openEditor();
-    await third.user.selectOptions(screen.getByRole("combobox", { name: "Parti da" }), "forest");
+    await third.user.click(screen.getByRole("radio", { name: "Foresta" }));
     expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Foresta");
     await third.user.click(save());
     expect(screen.getByRole("button", { name: "Tema: Foresta. Cambia tema" })).toBeInTheDocument();
@@ -251,6 +261,64 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
     expect(localStorage.getItem(CUSTOM_STORAGE_KEY)).toBeNull();
   });
 
+  it("previews the real Dashboard, chart colours included, drawn with the theme being made, only to look at", async () => {
+    const { user } = await openEditor();
+    await type(user, "Accento", "#e0a030");
+    const preview = screen.getByTestId("theme-preview");
+    const dashboard = preview.querySelector("[inert]") as HTMLElement;
+    expect(dashboard).toHaveAttribute("aria-hidden", "true");
+    expect(dashboard).toHaveTextContent("Dashboard");
+    // the chart of the types takes its colours from the main colour, as on the page
+    const cats = categoryPalette("#e0a030", preview.style.getPropertyValue("--color-card"))!;
+    expect(preview.style.getPropertyValue("--cat-0")).toBe(cats[0]);
+    expect(preview.style.getPropertyValue("--cat-5")).toBe(cats[5]);
+  });
+
+  it("blinks a colour where it is used while the pointer is on it, and stops when the colour is changed", async () => {
+    const { user, dialog } = await openEditor();
+    const preview = screen.getByTestId("theme-preview");
+    const row = textField("Accento").closest(".theme-editor__seed") as HTMLElement;
+    await user.hover(row);
+    expect(row).toHaveAttribute("data-pointed", "true");
+    await vi.waitFor(() => expect(preview.style.getPropertyValue("--color-green")).toBe("#ff2bd6"), { timeout: 2000 });
+    await user.unhover(row);
+    expect(preview.style.getPropertyValue("--color-green")).toBe(PRESETS.dark.seeds.accent);
+    // one click on a suggested colour: the colour is shown as it is
+    await user.hover(row);
+    const suggestion = within(row).getAllByRole("button", { name: /^Accento: #/ })[0];
+    const colour = suggestion.getAttribute("title")!;
+    await user.click(suggestion);
+    expect(textField("Accento")).toHaveValue(colour);
+    expect(preview.style.getPropertyValue("--color-green")).toBe(colour);
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it("keeps files, copy and paste, reset and delete in «Altro», closed", async () => {
+    const { user, dialog } = await openEditor();
+    const more = dialog.querySelector("details")!;
+    expect(more.open).toBe(false);
+    expect(within(more).getByText("Altro")).toBeInTheDocument();
+    expect(within(more).getByRole("button", { name: "Importa da file…", hidden: true })).toBeInTheDocument();
+    await user.click(within(more).getByText("Altro"));
+    expect(more.open).toBe(true);
+  });
+
+  it("edits a saved theme picked among its tiles: its colours and its name", async () => {
+    const first = await openEditor();
+    await type(first.user, "Accento", "#e0a030");
+    await first.user.clear(screen.getByRole("textbox", { name: "Nome del tema" }));
+    await first.user.type(screen.getByRole("textbox", { name: "Nome del tema" }), "Ambra");
+    await first.user.click(save());
+    cleanup();
+    localStorage.setItem(THEME_STORAGE_KEY, "light");
+    const { user } = await openEditor();
+    expect(screen.getByRole("radio", { name: "Chiaro" })).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("radio", { name: "Ambra" }));
+    expect(screen.getByRole("radio", { name: "Ambra" })).toHaveAttribute("aria-checked", "true");
+    expect(textField("Accento")).toHaveValue("#e0a030");
+    expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Ambra");
+  });
+
   it("speaks the app's language", async () => {
     setLocale("en");
     render(<ThemePicker />);
@@ -275,7 +343,7 @@ describe("a theme that comes in and goes out as text", { timeout: 60_000 }, () =
     await user.upload(screen.getByTestId("theme-file-input"), asFile(GOOD_FILE));
     await vi.waitFor(() => expect(noteOf(dialog)).toBe("Importato: Il mio tema. Controlla l'anteprima e salva se va bene."));
     expect(textField("Accento")).toHaveValue("#7cc4ff");
-    expect(within(dialog).getByRole("combobox", { name: "Parti da" })).toHaveValue("ocean");
+    expect(within(dialog).getByRole("radio", { name: "Oceano" })).toHaveAttribute("aria-checked", "true");
     expect(localStorage.getItem(CUSTOM_STORAGE_KEY)).toBeNull();
     expect(document.documentElement.style.getPropertyValue("--color-green")).toBe("");
     expect(screen.getByTestId("theme-preview").style.getPropertyValue("--color-green")).toBe("#7cc4ff");
@@ -301,7 +369,7 @@ describe("a theme that comes in and goes out as text", { timeout: 60_000 }, () =
     await user.upload(screen.getByTestId("theme-file-input"), asFile(content as unknown));
     await vi.waitFor(() => expect(noteOf(dialog)).toBe(message));
     expect(textField("Accento")).toHaveValue(PRESETS.dark.seeds.accent);
-    expect(within(dialog).getByRole("combobox", { name: "Parti da" })).toHaveValue("dark");
+    expect(within(dialog).getByRole("radio", { name: "Scuro" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("brings a well-formed but unreadable palette into the editor with the list of why, and Save stays off", async () => {

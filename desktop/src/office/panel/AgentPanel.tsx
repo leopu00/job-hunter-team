@@ -9,6 +9,7 @@ import { AGENTS_PANEL_TEXT } from "../../pages/agents/AgentsPanel.i18n";
 import { Confirm, displayName, failureText, identityLine, resultText, Terminal, type Pending } from "../../pages/agents/AgentsPanel";
 import { UsageShort } from "../../pages/agents/AgentUsage";
 import { isDirectChatAgentId, type DirectChatAgentId } from "../../pages/messages/DirectChatScreen";
+import { teamAddress } from "../../shell/redirects";
 import { DIRECT_CHAT_TEXT } from "../../pages/messages/direct-chat.i18n";
 import type { AgentStatuses, OfficeClick } from "../contract";
 import { fill, ofCount, officeText } from "../office.i18n";
@@ -202,7 +203,7 @@ export default function AgentPanel({ target, subtitle, statuses, readOnly, child
         </section>
       )}
 
-      <SecondaryLink label={t.openAgentPage} onClick={() => onNavigate(`/agents/${encodeURIComponent(view.session)}`)} />
+      <SecondaryLink label={t.openAgentPage} onClick={() => onNavigate(teamAddress(view.session, "info"))} />
 
       {pending && list && (
         <ConfirmLayer onCancel={() => !acting && setPending(null)}>
