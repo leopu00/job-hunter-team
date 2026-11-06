@@ -135,7 +135,7 @@ if [ "$CONTAINER_RUNTIME" = "podman" ]; then
     export PODMAN_COMPOSE_PROVIDER="$(command -v podman-compose)"
   fi
 fi
-DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:4524a256c6ccc1c63435ede438ecd7d6d3359401cbae98ce17c0e705ae9cfb64"
+DEFAULT_RUNTIME_IMAGE="ghcr.io/leopu00/jht@sha256:c2c67cb66f3f12936f4a81d79be2765d250c9321a0cd05ddf1c9e94b3d3bae65"
 DEFAULT_RUNTIME_VERSION="0.4.0"
 GAME_EXECUTABLE_OVERRIDE="${JHT_GAME_EXECUTABLE:-}"
 if [ -n "${JHT_GAME_CONTROL_DIR:-}" ]; then
