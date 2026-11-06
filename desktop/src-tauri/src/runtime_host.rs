@@ -1289,14 +1289,14 @@ pub(crate) fn clean_powershell_env(command: &mut Command) {
     clean_runtime_machine_env(command);
 }
 
-/// The variables that would name another Podman machine than the runtime's own. The runtime says which machine is the team's in
-/// its attested `podman-machine` file; a variable that names one (`JHT_PODMAN_MACHINE`, or Podman's `CONTAINER_CONNECTION` and
-/// `CONTAINER_HOST`) comes from the environment the app was started in, which can be older than the install (a terminal opened
+/// The variables that would name another engine or Podman machine than the runtime's own. The runtime says which are the team's in
+/// its attested `container-runtime` and `podman-machine` files; a variable that names one (`JHT_CONTAINER_RUNTIME`,
+/// `JHT_PODMAN_MACHINE`, or Podman's `CONTAINER_CONNECTION` and `CONTAINER_HOST`) comes from the environment the app was started in, which can be older than the install (a terminal opened
 /// before an update) or another program's, and a wrapper that obeyed it would start a machine that is not the team's. A child
 /// gets none of them; one the caller sets on purpose stays.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn clean_runtime_machine_env(command: &mut Command) {
-    for name in ["JHT_PODMAN_MACHINE", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
+    for name in ["JHT_PODMAN_MACHINE", "JHT_CONTAINER_RUNTIME", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
         let chosen = command.get_envs().any(|(set, _)| set.eq_ignore_ascii_case(name));
         if !chosen {
             command.env_remove(name);
@@ -2849,7 +2849,7 @@ mod tests {
         };
         let mut child = std::process::Command::new("powershell.exe");
         super::clean_runtime_machine_env(&mut child);
-        for name in ["JHT_PODMAN_MACHINE", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
+        for name in ["JHT_PODMAN_MACHINE", "JHT_CONTAINER_RUNTIME", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
             assert_eq!(state(&child, name), Some(None), "{name} is removed from what the child inherits");
         }
         // a value the caller sets on purpose stays (the app names the machine it means in its own calls)
