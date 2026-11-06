@@ -5383,6 +5383,7 @@ mod tests {
     /// The fixture with the engine's answer to `ps` said by the test (a shell command made from the one container as Podman
     /// lists it, with the labels of the installed runtime), or that one container.
     /// Every call of the engine is written, one first word per line, in `engine-calls.log` next to the runtime.
+    #[cfg(unix)]
     fn attested_local_fixture_with(ps_arm: Option<&dyn Fn(&serde_json::Value) -> String>) -> (PathBuf, PathBuf, PathBuf, String) {
         use std::os::unix::fs::PermissionsExt;
 
