@@ -149,7 +149,9 @@ function migrationRetryable(error: unknown): boolean {
     "local_migration_in_progress",
   ].includes(nativeErrorCode(error) ?? "");
 }
-const PROFILE_RECHECK_MS = 2_000;
+// How long the setup waits before it looks at the profile again: the first looks come quickly, then the pace
+// slows, so a slow computer is not asked the same thing every two seconds for as long as the person chats.
+const PROFILE_RECHECK_STEPS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
 const SAFE_RUNTIME_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const CONTAINER_RUNTIME_ERRORS = new Set([
   "container_start_failed",
@@ -782,18 +784,20 @@ export default function DashboardApp() {
     if (!identityKey || !markerId) return;
     if (assistantChatIdentityKey !== identityKey && connectedExistingTeamKey !== identityKey) return;
     let active = true;
+    let looks = 0;
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const verifyConversationalProfile = async () => {
       const submission = submissionRef.current;
       if (!active || activeIdentityKeyRef.current !== identityKey) return;
       try {
-        const [nativeSnapshot, chat] = await Promise.all([
-          submission ? readOnboardingSnapshot(submission.host) : resumeOnboardingSnapshot(),
-          directChatStatus(),
-        ]);
+        const nativeSnapshot = await (submission ? readOnboardingSnapshot(submission.host) : resumeOnboardingSnapshot());
         if (!active || activeIdentityKeyRef.current !== identityKey) return;
-        const snapshot = { ...nativeSnapshot, directChatReady: chat.state === "ready" };
+        // The chat is asked only when everything else is there: with a piece missing the answer cannot make the
+        // runtime ready, and asking costs a process on the computer (seconds on a slow one).
+        const chat = isOnboardingAssistantReachable({ ...nativeSnapshot, directChatReady: true }) ? await directChatStatus() : null;
+        if (!active || activeIdentityKeyRef.current !== identityKey) return;
+        const snapshot = { ...nativeSnapshot, directChatReady: chat?.state === "ready" };
         // After the setup the person is guided up to a team that works (not to a team that merely has a start button):
         // the gate stays required until then, unless they choose «continue later». A team connected in full keeps its
         // own way out (below). The first-run state is read only once the profile is confirmed.
@@ -819,7 +823,11 @@ export default function DashboardApp() {
       } catch {
         // The Assistant chat remains usable. A later independent read retries the gate.
       }
-      if (active) timeout = setTimeout(() => void verifyConversationalProfile(), PROFILE_RECHECK_MS);
+      if (active) {
+        const delay = PROFILE_RECHECK_STEPS_MS[Math.min(looks, PROFILE_RECHECK_STEPS_MS.length - 1)];
+        looks += 1;
+        timeout = setTimeout(() => void verifyConversationalProfile(), delay);
+      }
     };
 
     void verifyConversationalProfile();

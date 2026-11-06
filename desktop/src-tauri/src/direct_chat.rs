@@ -147,11 +147,68 @@ pub(crate) struct DirectChatState {
 #[derive(Default)]
 struct DirectChatInner {
     connection: Mutex<Option<Connection>>,
+    /// What the last probe said, for a little while: see `ProbeMemo`.
+    probe_memo: Mutex<ProbeMemo>,
     subscribers: Mutex<Vec<Channel<DirectChatEvent>>>,
     send_lock: Mutex<()>,
     /// An attachment is being chosen, copied or told: a second one waits for the person to finish.
     /// Its own `Arc`: the guard that holds it must not carry the whole state (and the connection's drop glue) with it.
     attach_busy: Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// How long a probe's answer is kept. A probe is a process on the computer (seconds on a slow one), and the
+/// screens ask «is the chat there?» more often than that answer changes; the answer of a team that is up
+/// is kept longer than a failure, which the person may be fixing.
+const PROBE_READY_KEPT: Duration = Duration::from_secs(15);
+const PROBE_FAILED_KEPT: Duration = Duration::from_secs(5);
+
+/// The last probe's answer for an account, with the moment it was taken. Whoever finds it fresh uses it and
+/// starts no process; it is dropped whenever the connection changes (connect, reconnect, close, sign-out).
+#[derive(Default)]
+struct ProbeMemo {
+    kept: Option<(AccountScope, std::time::Instant, DirectChatStatus)>,
+}
+
+impl ProbeMemo {
+    fn fresh(&self, scope: &AccountScope, now: std::time::Instant) -> Option<DirectChatStatus> {
+        let (kept_scope, at, answer) = self.kept.as_ref()?;
+        let life = if answer.state == "ready" { PROBE_READY_KEPT } else { PROBE_FAILED_KEPT };
+        (kept_scope == scope && now.saturating_duration_since(*at) < life).then(|| answer.clone())
+    }
+
+    fn keep(&mut self, scope: &AccountScope, now: std::time::Instant, answer: &DirectChatStatus) {
+        self.kept = Some((scope.clone(), now, answer.clone()));
+    }
+
+    fn forget(&mut self) {
+        self.kept = None;
+    }
+}
+
+/// Drops the kept probe answer: the connection it described is gone or new.
+fn forget_probe(inner: &DirectChatInner) {
+    if let Ok(mut memo) = inner.probe_memo.lock() {
+        memo.forget();
+    }
+}
+
+/// The kept answer when it is fresh, otherwise `probe`'s, kept in its turn. The caller holds the connection's
+/// lock, so a second ask that comes while a probe runs waits for it and then finds its answer here: one
+/// process for both.
+fn status_kept_or_probed(
+    memo: &Mutex<ProbeMemo>,
+    scope: &AccountScope,
+    now: impl Fn() -> std::time::Instant,
+    probe: impl FnOnce() -> DirectChatStatus,
+) -> DirectChatStatus {
+    if let Some(answer) = memo.lock().ok().and_then(|memo| memo.fresh(scope, now())) {
+        return answer;
+    }
+    let answer = probe();
+    if let Ok(mut memo) = memo.lock() {
+        memo.keep(scope, now(), &answer);
+    }
+    answer
 }
 
 struct Connection {
@@ -2361,6 +2418,7 @@ async fn connect_scoped(
             .lock()
             .map_err(|_| failure("state_failed"))?
             .take();
+        forget_probe(&state.inner);
         emit(
             &state.inner,
             DirectChatEvent::Status {
@@ -2388,6 +2446,7 @@ async fn connect_scoped(
                 .map_err(|_| failure("state_failed"))?;
             let ready = ready_for(&connection);
             *slot = Some(connection);
+            forget_probe(&state.inner);
             emit(
                 &state.inner,
                 DirectChatEvent::Status {
@@ -2421,20 +2480,29 @@ pub(crate) async fn direct_chat_connect(
     connect_scoped(app, &state, scopes.inner().clone(), expected, host).await
 }
 
+// The commands below ask the connection, which can mean a process on the computer (the probe) and the connection's
+// lock, held while another operation runs. A sync command runs on the main thread, the window's own: it
+// would freeze the window for as long as that takes (seconds on a slow Windows computer). So they are async
+// and the work is done on a thread of its own, as the other chat commands do.
 #[tauri::command]
-pub(crate) fn direct_chat_subscribe(
+pub(crate) async fn direct_chat_subscribe(
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
     on_event: Channel<DirectChatEvent>,
 ) -> Result<DirectChatStatus, DirectChatError> {
-    let scope = scopes.lock_active().map_err(failure)?;
-    state
-        .inner
-        .subscribers
-        .lock()
-        .map_err(|_| failure("state_failed"))?
-        .push(on_event);
-    status_for_scope(&state.inner, scope.scope())
+    let inner = Arc::clone(&state.inner);
+    let scope_state = scopes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state.lock_active().map_err(failure)?;
+        inner
+            .subscribers
+            .lock()
+            .map_err(|_| failure("state_failed"))?
+            .push(on_event);
+        status_for_scope(&inner, scope.scope())
+    })
+    .await
+    .map_err(|_| failure("state_failed"))?
 }
 
 fn status_for_scope(
@@ -2446,19 +2514,30 @@ fn status_for_scope(
         .lock()
         .map_err(|_| failure("state_failed"))?;
     match slot.as_ref() {
-        Some(connection) if &connection.scope == scope => Ok(probe(connection)),
+        Some(connection) if &connection.scope == scope => Ok(status_kept_or_probed(
+            &inner.probe_memo,
+            scope,
+            std::time::Instant::now,
+            || probe(connection),
+        )),
         Some(_) => Err(failure("account_scope_mismatch")),
         None => Ok(status("disconnected", None)),
     }
 }
 
 #[tauri::command]
-pub(crate) fn direct_chat_status(
+pub(crate) async fn direct_chat_status(
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<DirectChatStatus, DirectChatError> {
-    let scope = scopes.lock_active().map_err(failure)?;
-    status_for_scope(&state.inner, scope.scope())
+    let inner = Arc::clone(&state.inner);
+    let scope_state = scopes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state.lock_active().map_err(failure)?;
+        status_for_scope(&inner, scope.scope())
+    })
+    .await
+    .map_err(|_| failure("state_failed"))?
 }
 
 #[tauri::command]
@@ -3064,18 +3143,25 @@ pub(crate) struct DirectChatAttachState {
 
 /// What the 📎 button says: on, or off with the reason. Reads the connection only: nothing is probed.
 #[tauri::command]
-pub(crate) fn direct_chat_attach_state(
+pub(crate) async fn direct_chat_attach_state(
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<DirectChatAttachState, DirectChatError> {
-    let scope = scopes.lock_active().map_err(failure)?;
-    let slot = state.inner.connection.lock().map_err(|_| failure("state_failed"))?;
-    let code = match slot.as_ref() {
-        Some(connection) if &connection.scope == scope.scope() => attach_refusal(connection),
-        Some(_) => return Err(failure("account_scope_mismatch")),
-        None => Some("attach_not_connected"),
-    };
-    Ok(DirectChatAttachState { available: code.is_none(), code })
+    let inner = Arc::clone(&state.inner);
+    let scope_state = scopes.inner().clone();
+    // It only reads the connection, but the connection's lock may be held by a probe or a read: it waits off the main thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state.lock_active().map_err(failure)?;
+        let slot = inner.connection.lock().map_err(|_| failure("state_failed"))?;
+        let code = match slot.as_ref() {
+            Some(connection) if &connection.scope == scope.scope() => attach_refusal(connection),
+            Some(_) => return Err(failure("account_scope_mismatch")),
+            None => Some("attach_not_connected"),
+        };
+        Ok(DirectChatAttachState { available: code.is_none(), code })
+    })
+    .await
+    .map_err(|_| failure("state_failed"))?
 }
 
 #[derive(Debug, Serialize)]
@@ -3659,32 +3745,39 @@ pub(crate) async fn direct_chat_team_language_set(
 }
 
 #[tauri::command]
-pub(crate) fn direct_chat_close(
+pub(crate) async fn direct_chat_close(
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
 ) -> Result<(), DirectChatError> {
-    let scope = scopes.lock_active().map_err(failure)?;
-    let mut slot = state
-        .inner
-        .connection
-        .lock()
-        .map_err(|_| failure("state_failed"))?;
-    if slot
-        .as_ref()
-        .is_some_and(|connection| &connection.scope != scope.scope())
-    {
-        return Err(failure("account_scope_mismatch"));
-    }
-    if let Some(mut connection) = slot.take() {
-        close_connection(&mut connection);
-    }
-    emit(
-        &state.inner,
-        DirectChatEvent::Status {
-            status: status("disconnected", None),
-        },
-    );
-    Ok(())
+    let inner = Arc::clone(&state.inner);
+    let scope_state = scopes.inner().clone();
+    // Closing a VPS link runs ssh (up to 5 s) and waits for the connection's lock: off the main thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        let scope = scope_state.lock_active().map_err(failure)?;
+        let mut slot = inner
+            .connection
+            .lock()
+            .map_err(|_| failure("state_failed"))?;
+        if slot
+            .as_ref()
+            .is_some_and(|connection| &connection.scope != scope.scope())
+        {
+            return Err(failure("account_scope_mismatch"));
+        }
+        if let Some(mut connection) = slot.take() {
+            close_connection(&mut connection);
+        }
+        forget_probe(&inner);
+        emit(
+            &inner,
+            DirectChatEvent::Status {
+                status: status("disconnected", None),
+            },
+        );
+        Ok(())
+    })
+    .await
+    .map_err(|_| failure("state_failed"))?
 }
 
 pub(crate) fn teardown(state: &DirectChatState) {
@@ -3694,6 +3787,7 @@ pub(crate) fn teardown(state: &DirectChatState) {
             close_connection(&mut connection);
         }
     }
+    forget_probe(&state.inner);
     if let Ok(mut subscribers) = state.inner.subscribers.lock() {
         subscribers.clear();
     }
@@ -6454,5 +6548,87 @@ mod attachment_command_tests {
         assert!(command.contains("local_wall_clock("));
         // the person's own name goes back to their screen, never into the message or a log
         assert!(!command.contains("attachment_message(&locale, &saved.display)"));
+    }
+}
+
+#[cfg(test)]
+mod probe_memo_tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::time::Instant;
+
+    fn ready() -> DirectChatStatus {
+        status("ready", None)
+    }
+    fn failed() -> DirectChatStatus {
+        status("error", Some("container_unavailable"))
+    }
+    fn scope(label: &[u8]) -> AccountScope {
+        AccountScope::synthetic(label)
+    }
+
+    #[test]
+    fn a_ready_answer_is_kept_for_a_while_and_a_failure_for_less() {
+        let a = scope(b"synthetic-memo-a");
+        let t0 = Instant::now();
+        let mut memo = ProbeMemo::default();
+        assert_eq!(memo.fresh(&a, t0), None);
+        memo.keep(&a, t0, &ready());
+        assert_eq!(memo.fresh(&a, t0 + PROBE_READY_KEPT - Duration::from_millis(1)), Some(ready()));
+        assert_eq!(memo.fresh(&a, t0 + PROBE_READY_KEPT), None);
+        memo.keep(&a, t0, &failed());
+        assert_eq!(memo.fresh(&a, t0 + PROBE_FAILED_KEPT - Duration::from_millis(1)), Some(failed()));
+        assert_eq!(memo.fresh(&a, t0 + PROBE_FAILED_KEPT), None);
+        assert!(PROBE_FAILED_KEPT < PROBE_READY_KEPT);
+    }
+
+    #[test]
+    fn an_answer_is_of_one_account_and_is_dropped_when_the_connection_changes() {
+        let (a, b) = (scope(b"synthetic-memo-a"), scope(b"synthetic-memo-b"));
+        let t0 = Instant::now();
+        let mut memo = ProbeMemo::default();
+        memo.keep(&a, t0, &ready());
+        assert_eq!(memo.fresh(&b, t0), None);
+        memo.forget();
+        assert_eq!(memo.fresh(&a, t0), None);
+    }
+
+    #[test]
+    fn two_asks_in_a_row_start_one_probe_and_a_stale_or_forgotten_answer_starts_another() {
+        let a = scope(b"synthetic-memo-a");
+        let memo = Mutex::new(ProbeMemo::default());
+        let origin = Instant::now();
+        let clock = Cell::new(origin);
+        let probes = Cell::new(0);
+        let ask = |answer: DirectChatStatus| {
+            status_kept_or_probed(&memo, &a, || clock.get(), || {
+                probes.set(probes.get() + 1);
+                answer
+            })
+        };
+        assert_eq!(ask(ready()), ready());
+        // the second finds the first's answer: its own probe never runs
+        assert_eq!(ask(failed()), ready());
+        assert_eq!(probes.get(), 1);
+        clock.set(origin + PROBE_READY_KEPT + Duration::from_secs(1));
+        assert_eq!(ask(failed()), failed());
+        assert_eq!(probes.get(), 2);
+        memo.lock().unwrap().forget();
+        assert_eq!(ask(ready()), ready());
+        assert_eq!(probes.get(), 3);
+    }
+
+    #[test]
+    fn the_status_of_a_connection_goes_through_the_memo_and_every_change_of_the_connection_drops_it() {
+        let source = include_str!("direct_chat.rs");
+        let body = source.split("fn status_for_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(body.contains("status_kept_or_probed("), "{body}");
+        assert!(!body.contains("Ok(probe(connection))"));
+        // connect and reconnect, close and sign-out
+        for place in ["fn connect_scoped(", "pub(crate) async fn direct_chat_close(", "pub(crate) fn teardown("] {
+            let rest = source.split(place).nth(1).unwrap_or_else(|| panic!("{place}"));
+            let body = rest.split("\n}\n").next().unwrap();
+            assert!(body.contains("forget_probe("), "{place} keeps a probe answer of a connection that is gone");
+        }
     }
 }
