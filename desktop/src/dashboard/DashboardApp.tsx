@@ -58,6 +58,7 @@ import {
   loadLocalOnboardingGate,
   loadOnboardingGate,
   markOnboardingReady,
+  mergeProviderLoginAction,
   markOnboardingStarted,
   clearOnboardingDraft,
   clearOnboardingInterruption,
@@ -113,6 +114,7 @@ import ExistingTeamConnectModal from "../onboarding/ExistingTeamConnectModal";
 import { ReconfirmExistingTeamContext } from "../lib/reconfirm-existing-team";
 import { ConnectTeamContext, type ConnectTeamEntry } from "../lib/connect-team";
 import { ProviderSetupContext } from "../lib/provider-setup";
+import { ProviderLoginProvider, teamRefusesSignIn } from "../provider-login";
 import { TeamOffContext, type TeamOff } from "../lib/team-off";
 import MessagesPage from "../pages/messages";
 import { readTeamStart } from "../guided-onboarding/deps";
@@ -443,13 +445,6 @@ function nativeErrorCode(error: unknown): string | null {
     typeof (error as { code?: unknown }).code === "string"
     ? (error as { code: string }).code
     : null;
-}
-
-function mergeProviderLoginAction(
-  actions: OnboardingProviderLoginAction[],
-  action: OnboardingProviderLoginAction,
-): OnboardingProviderLoginAction[] {
-  return [...actions.filter((current) => current.kind !== action.kind), action];
 }
 
 /**
@@ -1039,6 +1034,9 @@ export default function DashboardApp() {
     } catch {
       already = null;
     }
+    if (!attemptIsCurrent()) return;
+    // A file the team refuses (an agent refused after it, or no credentials in it) is no sign-in: the person signs in again.
+    if (already?.providerAuthenticated && await teamRefusesSignIn()) already = null;
     if (!attemptIsCurrent()) return;
     if (already?.providerAuthenticated) {
       providerSessionIdentityRef.current = null;
@@ -2113,11 +2111,13 @@ export default function DashboardApp() {
     <>
       <TeamOffContext.Provider value={teamOff}>
         <ProviderSetupContext.Provider value={providerSetup}>
-          <LocalProfileLinkContext.Provider value={localProfileLink}>
-            <ConnectTeamContext.Provider value={connectTeamEntry}>
-              <Shell key={identityKey} identityKey={identityKey ?? undefined} onLogout={logout} />
-            </ConnectTeamContext.Provider>
-          </LocalProfileLinkContext.Provider>
+          <ProviderLoginProvider key={`login:${identityKey}`} enabled={providerSetup !== null} rememberedProvider={markerId ? readOnboardingProvider(markerId)?.provider : undefined}>
+            <LocalProfileLinkContext.Provider value={localProfileLink}>
+              <ConnectTeamContext.Provider value={connectTeamEntry}>
+                <Shell key={identityKey} identityKey={identityKey ?? undefined} onLogout={logout} />
+              </ConnectTeamContext.Provider>
+            </LocalProfileLinkContext.Provider>
+          </ProviderLoginProvider>
         </ProviderSetupContext.Provider>
       </TeamOffContext.Provider>
       {connectDialogElement}

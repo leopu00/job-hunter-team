@@ -28,6 +28,10 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
   ok_slow: "the runtime log's word for a chat call that worked but took long (direct_chat.rs, runtime_log.rs); it is written there and never shown",
+  // provider_login.rs: the words of the states of the provider sign-in (a closed table the page turns into a calm line or a banner;
+  // the failures of the reading have their own codes in the catalog).
+  not_applicable: "state of the provider sign-in (provider_login.rs): the team uses no subscription sign-in, never an error",
+  probably_expired: "state of the provider sign-in (provider_login.rs): old, the team keeps working; the card says so, never an error",
   position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
   // host_agents.rs (the agents and the chats the app reads from the files of a team that is off): the fields of the roster
   // and of the chat lines, and the words of the roles and the status the chat file uses. Words of a closed table.

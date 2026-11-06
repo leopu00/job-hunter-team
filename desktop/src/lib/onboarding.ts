@@ -603,6 +603,11 @@ export function isOnboardingAssistantReachable(snapshot: OnboardingRuntimeSnapsh
     snapshot.assistantRunning && snapshot.captainRunning && snapshot.directChatReady);
 }
 
+/** One action of a provider sign-in replaces the one of its kind that was shown (the setup's step and «Sign in again» alike). */
+export function mergeProviderLoginAction(actions: OnboardingProviderLoginAction[], action: OnboardingProviderLoginAction): OnboardingProviderLoginAction[] {
+  return [...actions.filter((current) => current.kind !== action.kind), action];
+}
+
 export function isOnboardingRuntimeReady(snapshot: OnboardingRuntimeSnapshot): boolean {
   return isOnboardingAssistantReachable(snapshot) && snapshot.profileReady;
 }
