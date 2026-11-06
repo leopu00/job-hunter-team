@@ -1371,7 +1371,7 @@ fn wrapper_path(app: &tauri::AppHandle) -> Option<PathBuf> {
 }
 
 pub(crate) fn verified_local_wrapper_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
-    wrapper_path(app).ok_or("runtime_missing")
+    wrapper_path(app).ok_or_else(|| runtime_refusal(app))
 }
 
 fn wrapper_source(path: &Path) -> Option<String> {
@@ -2199,7 +2199,7 @@ fn install_local_windows(
     })?;
     let Some(wrapper) = wrapper_path(app) else {
         note_runtime_attestation(app, log);
-        return Err(failure("runtime_missing"));
+        return Err(failure(runtime_refusal(app)));
     };
     register_autostart_noted(&wrapper, log, phase);
     Ok(wrapper)
@@ -2208,26 +2208,47 @@ fn install_local_windows(
 /// install.ps1 said it was done and the app does not accept what it installed: the runtime
 /// log keeps which check refused it, by the fixed name of the node and of the rule (never a path).
 #[cfg(windows)]
+/// The node and the rule that made the app refuse the wrapper it found, by fixed words, never a path.
+fn attestation_refusal(app: &tauri::AppHandle) -> Option<(String, String)> {
+    let home = app.path().home_dir().ok()?;
+    let runtime = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))?;
+    let candidate = wrapper_candidates(&home).into_iter().next()?;
+    let Some(source) = wrapper_source(&candidate) else {
+        return Some(("jht-wrapper.ps1".to_owned(), "unreadable".to_owned()));
+    };
+    if !crate::windows_runtime::wrapper_has_protocols(&source) {
+        return Some(("jht-wrapper.ps1".to_owned(), "protocols".to_owned()));
+    }
+    let failure = crate::windows_runtime::bundle_failure(&candidate, &runtime)?;
+    Some((failure.node.to_owned(), failure.rule.to_owned()))
+}
+
+/// Why there is no wrapper to use: none is installed (`runtime_missing`), or one is there and the app does not accept it
+/// because another account of the computer can change the folder it sits in or its files (`runtime_folder_shared`: the person
+/// is told that, and what to do, instead of «the environment is not installed»). Any other refusal stays `runtime_missing`;
+/// the runtime log keeps which node and which rule.
+fn refusal_code(rule: Option<&str>) -> &'static str {
+    if rule == Some("acl_other_account") {
+        "runtime_folder_shared"
+    } else {
+        "runtime_missing"
+    }
+}
+
+fn runtime_refusal(app: &tauri::AppHandle) -> &'static str {
+    let refused = attestation_refusal(app);
+    refusal_code(refused.as_ref().map(|(_, rule)| rule.as_str()))
+}
+
 fn note_runtime_attestation(app: &tauri::AppHandle, log: Option<&RuntimeLog>) {
     let Some(log) = log else { return };
-    let refused = (|| -> Option<(String, String)> {
-        let home = app.path().home_dir().ok()?;
-        let runtime = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))?;
-        let candidate = wrapper_candidates(&home).into_iter().next()?;
-        let Some(source) = wrapper_source(&candidate) else {
-            return Some(("jht-wrapper.ps1".to_owned(), "unreadable".to_owned()));
-        };
-        if !crate::windows_runtime::wrapper_has_protocols(&source) {
-            return Some(("jht-wrapper.ps1".to_owned(), "protocols".to_owned()));
-        }
-        let failure = crate::windows_runtime::bundle_failure(&candidate, &runtime)?;
-        Some((failure.node.to_owned(), failure.rule.to_owned()))
-    })();
+    let refused = attestation_refusal(app);
+    let code = refusal_code(refused.as_ref().map(|(_, rule)| rule.as_str()));
     let step = match refused {
         Some((node, rule)) => format!("runtime attestation {node} {rule}"),
         None => "runtime attestation not reproduced".to_owned(),
     };
-    log.record(&step, Err("runtime_missing"), &[], &[], Duration::ZERO);
+    log.record(&step, Err(code), &[], &[], Duration::ZERO);
 }
 
 /// The logon task of this user, registered after an install or a reuse. How it
@@ -2429,7 +2450,7 @@ fn install_local(
                     ensure_local_install_success(result)
                 })?;
             }
-            wrapper_path(app).ok_or_else(|| failure("runtime_missing"))
+            wrapper_path(app).ok_or_else(|| failure(runtime_refusal(app)))
         }
     }
 }
@@ -2702,7 +2723,7 @@ pub(crate) fn run_linkedin_command(
     };
     match host {
         ValidatedHost::Local => {
-            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
             run_scoped_local(app, scope, &wrapper, operation, timeout)
         }
         ValidatedHost::Vps { .. } => run_ssh(host, remote, None, timeout, None),
@@ -2724,7 +2745,7 @@ pub(crate) fn run_host_jht(
     match host {
         ValidatedHost::Local => {
             crate::account_scope::validate_local_runtime(app, scope)?;
-            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
             refuse_broad_podman_machine(run_verified_local_wrapper(&wrapper, args, input, timeout))
         }
         ValidatedHost::Vps { .. } => crate::runtime_host::run_ssh_command(
@@ -2982,8 +3003,15 @@ fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resour
     crate::resources::Installed { machine: true, runtime: false, machine_running: true }
 }
 
-/// Windows' machine (WSL) is not looked for: it counts as there and its memory as not taken yet.
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+/// Windows' machine is not looked for on the disk: it counts as there. Whether it is ON is asked of Podman (a read, nothing
+/// is started): a machine that is up has already taken its memory from what the computer reports free, so the team is not
+/// asked for it a second time (it would warn of a shortage that the machine itself causes).
+#[cfg(windows)]
+fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
+    crate::resources::Installed { machine: true, runtime: false, machine_running: crate::podman::jht_machine_is_running() }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 fn local_installed_state(_app: &tauri::AppHandle, _home: &Path) -> crate::resources::Installed {
     crate::resources::Installed { machine: true, runtime: false, machine_running: false }
 }
@@ -4841,7 +4869,7 @@ fn configured_subscription_provider(
 ) -> Result<SubscriptionProvider, OnboardingError> {
     let result = match host {
         ValidatedHost::Local => {
-            let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+            let wrapper = wrapper_path(app).ok_or_else(|| failure(runtime_refusal(app)))?;
             run_scoped_local(
                 app,
                 scope,
@@ -4957,7 +4985,7 @@ pub(crate) fn onboarding_provider_login(
         let provider = configured_subscription_provider(&app, scope.scope(), &validated)?;
         let mut command = match &validated {
             ValidatedHost::Local => {
-                let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                let wrapper = wrapper_path(&app).ok_or_else(|| failure(runtime_refusal(&app)))?;
                 #[cfg(target_os = "macos")]
                 {
                     let oauth_args = LocalCliOperation::OauthLogin.argv();
@@ -5319,7 +5347,7 @@ fn wake_local_runtime(
     scope: &AccountScope,
     log: Option<&RuntimeLog>,
 ) -> Result<(), OnboardingError> {
-    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    let wrapper = wrapper_path(app).ok_or_else(|| failure(runtime_refusal(app)))?;
     start_and_verify_local_container_with(
         |operation, timeout| run_scoped_local_logged(app, scope, &wrapper, operation, timeout, log),
         thread::sleep,
@@ -5392,7 +5420,7 @@ fn start_team_impl(
 ) -> Result<(), OnboardingError> {
     match validated {
         ValidatedHost::Local => {
-            let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+            let wrapper = wrapper_path(app).ok_or_else(|| failure(runtime_refusal(app)))?;
             crate::account_scope::validate_local_runtime(app, scope).map_err(failure)?;
             let runtime = crate::direct_chat::local_runtime_path(app).ok();
             let started = Instant::now();
@@ -5718,7 +5746,7 @@ pub(crate) async fn onboarding_podman_machine_recreate(
         let _scope = scope_state
             .lock_expected(&worker_expected)
             .map_err(failure)?;
-        let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+        let wrapper = wrapper_path(&app).ok_or_else(|| failure(runtime_refusal(&app)))?;
         if let Err(error) = crate::account_scope::validate_local_runtime(&app, &worker_expected) {
             return Err(local_failure(error, "podman_machine_recreate_failed"));
         }
@@ -5870,7 +5898,7 @@ pub(crate) async fn onboarding_clean_images(
         match &validated {
             ValidatedHost::Local if cfg!(windows) => Err(failure("clean_images_unsupported")),
             ValidatedHost::Local => {
-                let wrapper = wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                let wrapper = wrapper_path(&app).ok_or_else(|| failure(runtime_refusal(&app)))?;
                 clean_images_with(
                     |timeout| {
                         run_scoped_local(
@@ -6030,7 +6058,7 @@ fn local_team_update(
     action: TeamUpdateAction,
 ) -> Result<crate::team_update::TeamUpdateOutcome, OnboardingError> {
     use crate::team_update::{plan, read_pin, reinstall_check, Mode, Pin};
-    let wrapper = wrapper_path(app).ok_or_else(|| failure("runtime_missing"))?;
+    let wrapper = wrapper_path(app).ok_or_else(|| failure(runtime_refusal(app)))?;
     let channel = release_channel::current().map_err(failure)?;
     let pin = read_pin(&team_runtime_dir(app)?);
     match plan(channel.as_ref(), &pin).map_err(failure)? {
@@ -6256,7 +6284,7 @@ fn plan_operation_on_host(
 ) -> Result<ProcessResult, &'static str> {
     match validated {
         ValidatedHost::Local => {
-            let wrapper = wrapper_path(app).ok_or("runtime_missing")?;
+            let wrapper = wrapper_path(app).ok_or_else(|| runtime_refusal(app))?;
             run_scoped_local(app, scope, &wrapper, operation, SNAPSHOT_TIMEOUT)
         }
         ValidatedHost::Vps { .. } => match operation {
@@ -6638,7 +6666,7 @@ pub(crate) async fn onboarding_assistant_open(
                 match &validated {
                     ValidatedHost::Local => {
                         let wrapper =
-                            wrapper_path(&app).ok_or_else(|| failure("runtime_missing"))?;
+                            wrapper_path(&app).ok_or_else(|| failure(runtime_refusal(&app)))?;
                         crate::account_scope::validate_local_runtime(&app, &worker_expected)
                             .map_err(failure)?;
                         let runtime = crate::direct_chat::local_runtime_path(&app).ok();
@@ -9439,6 +9467,14 @@ exit 0
         }
         assert!(!super::retry_cold_windows_team_start(false, true, "timeout"));
         assert!(!super::retry_cold_windows_team_start(true, false, "timeout"));
+    }
+
+    #[test]
+    fn a_runtime_refused_for_another_accounts_write_access_is_told_apart_from_one_that_is_not_installed() {
+        assert_eq!(super::refusal_code(Some("acl_other_account")), "runtime_folder_shared");
+        for rule in [Some("acl_inherited"), Some("acl_user_missing"), Some("owner"), Some("protocols"), Some("bytes"), None] {
+            assert_eq!(super::refusal_code(rule), "runtime_missing", "{rule:?}");
+        }
     }
 
     #[test]

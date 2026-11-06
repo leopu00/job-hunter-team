@@ -146,6 +146,13 @@ const RUNTIME_MISSING = copy(
   "The team environment is not installed on this computer.",
   "Start again from the technical setup.",
 );
+// The runtime is there and the app does not trust it: another account of the computer can change the folder of its programs.
+const RUNTIME_FOLDER_SHARED = copy(
+  "Job Hunter Team è installato, ma un altro account di questo computer può modificare la cartella dei suoi programmi, quindi l’app non la usa per sicurezza.",
+  "Chiedi a chi gestisce il computer di togliere agli altri account il permesso di scrittura sulla cartella .local\\bin del tuo profilo, poi riprova.",
+  "Job Hunter Team is installed, but another account on this computer can change the folder of its programs, so the app does not use it, for safety.",
+  "Ask whoever manages this computer to remove the other accounts’ permission to write to the .local\\bin folder of your profile, then try again.",
+);
 const CONTAINER_ENGINE_MISSING = copy(
   "Il programma Docker non si trova su questo computer, quindi non posso parlare con la squadra.",
   "Installa Docker (o riavvia Job Hunter Team dopo averlo installato) e riprova.",
@@ -666,6 +673,7 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
   runtime_wrapper_install_failed: RUNTIME_PREPARE,
   runtime_install_unsupported: LOCAL_UNSUPPORTED,
   runtime_missing: RUNTIME_MISSING,
+  runtime_folder_shared: RUNTIME_FOLDER_SHARED,
   container_engine_missing: CONTAINER_ENGINE_MISSING,
   installer_digest_missing: RUNTIME_INTEGRITY,
   installer_digest_invalid: RUNTIME_INTEGRITY,
