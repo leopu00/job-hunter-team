@@ -2879,7 +2879,11 @@ mod tests {
         let appimage = &appimage[..appimage.find("\n}\n").unwrap()];
         assert!(appimage.contains("clean_powershell_env(command)"));
         // and each program that runs a PowerShell script is started through one of the two
-        for (name, source) in [("onboarding.rs", include_str!("onboarding.rs")), ("direct_chat.rs", include_str!("direct_chat.rs"))] {
+        for (name, source) in [
+            ("onboarding.rs", include_str!("onboarding.rs")),
+            ("onboarding/installer.rs", include_str!("onboarding/installer.rs")),
+            ("direct_chat.rs", include_str!("direct_chat.rs")),
+        ] {
             let source = source.replace("\r\n", "\n");
             let production = source.split("\nmod tests {").next().unwrap();
             let lines: Vec<&str> = production.lines().collect();
@@ -2905,6 +2909,7 @@ mod tests {
             ("direct_chat.rs", include_str!("direct_chat.rs")),
             ("runtime_log.rs", include_str!("runtime_log.rs")),
             ("onboarding.rs", include_str!("onboarding.rs")),
+            ("onboarding/installer.rs", include_str!("onboarding/installer.rs")),
         ];
         // macOS and Windows programs that cannot meet an AppImage
         let elsewhere = ["\"/usr/sbin/sysctl\"", "\"/usr/bin/open\"", "explorer.exe"];

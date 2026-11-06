@@ -14,14 +14,14 @@ import { describe, expect, it } from "vitest";
 import { locales } from "@/i18n/config";
 import { RUNTIME_TEXT } from "./onboarding-runtime.i18n";
 import { STATE_TEXT } from "./onboarding-state.i18n";
+import { withoutRustTests } from "../test-support/rust-sources";
 
 const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
-const ONBOARDING_RUST = ["onboarding.rs", "windows_runtime.rs", "profile_import.rs", "resources.rs"];
+const ONBOARDING_RUST = ["onboarding.rs", "onboarding/installer.rs", "windows_runtime.rs", "profile_import.rs", "resources.rs"];
 
 /** The string literals of Rust source, without its tests module. */
 export function rustLiterals(source: string): string[] {
-  const cut = source.indexOf("#[cfg(test)]\nmod tests {");
-  const code = cut >= 0 ? source.slice(0, cut) : source;
+  const code = withoutRustTests(source);
   const literals: string[] = [];
   let i = 0;
   while (i < code.length) {

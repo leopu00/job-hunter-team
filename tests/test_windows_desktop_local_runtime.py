@@ -157,7 +157,7 @@ def test_windows_installer_exposes_stable_podman_phases_and_exit_codes():
 def test_wsl_preflight_is_hidden_actionable_and_retried_on_the_next_prepare():
     onboarding = ONBOARDING.read_text(encoding="utf-8")
     begin = onboarding.index("fn install_local_windows(")
-    install = onboarding[begin : onboarding.index("fn download_verified_bytes", begin)]
+    install = onboarding[begin : onboarding.index("\n}\n", begin) + 2]
     # wsl --status runs through the launcher that keeps its stderr for the
     # runtime log, and its result is judged before anything is reused or
     # downloaded.

@@ -210,7 +210,10 @@ def test_desktop_local_plan_uses_the_authoritative_wrapper_commands_in_order():
 
 def test_desktop_delegates_podman_machine_orchestration_to_host_entrypoints():
     installer = _source(INSTALLER)
-    desktop = _source(DESKTOP).split("#[cfg(test)]", 1)[0]
+    desktop = "\n".join(
+        _source(path).split("#[cfg(test)]\nmod tests {", 1)[0]
+        for path in (DESKTOP, DESKTOP.parent / "onboarding" / "installer.rs")
+    )
     podman_install = installer[
         installer.index("install_podman_macos()") : installer.index(
             "install_docker_linux()"
