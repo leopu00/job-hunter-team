@@ -193,6 +193,64 @@ describe("the editor of the personal theme", { timeout: 60_000 }, () => {
     expect(document.documentElement.style.getPropertyValue("--color-panel")).toBe("");
   });
 
+  it("saves themes under a name: each one is an entry of «I tuoi temi», chosen from the menu, edited and renamed", async () => {
+    const first = await openEditor();
+    // a new theme from a ready palette is offered «Personale», never the name of a ready theme
+    expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Personale");
+    await type(first.user, "Accento", "#e0a030");
+    await first.user.clear(screen.getByRole("textbox", { name: "Nome del tema" }));
+    await first.user.type(screen.getByRole("textbox", { name: "Nome del tema" }), "Ambra");
+    await first.user.click(save());
+    cleanup();
+
+    // the second one starts from a template: it is offered the template's name
+    const second = await openEditor();
+    await second.user.selectOptions(screen.getByRole("combobox", { name: "Parti da" }), "forest");
+    expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Ambra");
+    cleanup();
+    localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    const third = await openEditor();
+    await third.user.selectOptions(screen.getByRole("combobox", { name: "Parti da" }), "forest");
+    expect(screen.getByRole("textbox", { name: "Nome del tema" })).toHaveValue("Foresta");
+    await third.user.click(save());
+    expect(screen.getByRole("button", { name: "Tema: Foresta. Cambia tema" })).toBeInTheDocument();
+
+    const user = third.user;
+    await user.click(screen.getByRole("button", { name: /Cambia tema/ }));
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByText("I tuoi temi")).toBeInTheDocument();
+    const mine = within(menu).getAllByRole("menuitemradio").slice(-2);
+    expect(mine.map((item) => item.textContent?.replace("✓", "").trim())).toEqual(["Ambra", "Foresta"]);
+    expect(mine[1]).toHaveAttribute("aria-checked", "true");
+    await user.click(mine[0]);
+    expect(readStoredCustom(localStorage)!.seeds.accent).toBe("#e0a030");
+    expect(screen.getByRole("button", { name: "Tema: Ambra. Cambia tema" })).toBeInTheDocument();
+
+    // editing the one in force: its name is in the field, a name already taken is refused, a new one renames it
+    await user.click(screen.getByRole("button", { name: /Cambia tema/ }));
+    await user.click(screen.getByRole("menuitem", { name: "Personalizza…" }));
+    const field = screen.getByRole("textbox", { name: "Nome del tema" });
+    expect(field).toHaveValue("Ambra");
+    await user.clear(field);
+    await user.type(field, "foresta");
+    await user.click(save());
+    expect(screen.getByRole("dialog")).toHaveTextContent("C'è già un tema che si chiama «foresta»: scegli un altro nome.");
+    await user.clear(field);
+    await user.type(field, "Ambra scura");
+    await user.click(save());
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Cambia tema/ }));
+    expect(within(screen.getByRole("menu")).getAllByRole("menuitemradio").slice(-2).map((item) => item.textContent?.replace("✓", "").trim())).toEqual(["Ambra scura", "Foresta"]);
+  });
+
+  it("does not save a theme with no name", async () => {
+    const { user } = await openEditor();
+    await user.clear(screen.getByRole("textbox", { name: "Nome del tema" }));
+    await user.click(save());
+    expect(screen.getByRole("dialog")).toHaveTextContent("Dai un nome al tema per salvarlo.");
+    expect(localStorage.getItem(CUSTOM_STORAGE_KEY)).toBeNull();
+  });
+
   it("speaks the app's language", async () => {
     setLocale("en");
     render(<ThemePicker />);

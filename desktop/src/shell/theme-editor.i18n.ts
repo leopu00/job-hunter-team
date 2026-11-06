@@ -22,6 +22,10 @@ export interface ThemeEditorText {
   fixAll: string;
   fixed: string; // {seed} {before} {after}
   nothingToFix: string;
+  name: string; // the label of the name the theme is saved under
+  nameTaken: string; // {name}
+  nameMissing: string;
+  libraryFull: string; // {max}
   save: string;
   saveBlocked: string;
   exportBlocked: string;
@@ -68,6 +72,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Correggi tutto",
     fixed: "{seed}: da {before} a {after}",
     nothingToFix: "Nessuna correzione trovata: cambia un colore a mano.",
+    name: "Nome del tema",
+    nameTaken: "C'è già un tema che si chiama «{name}»: scegli un altro nome.",
+    nameMissing: "Dai un nome al tema per salvarlo.",
+    libraryFull: "Hai già {max} temi salvati: eliminane uno per salvarne un altro.",
     save: "Salva",
     saveBlocked: "Per salvare correggi prima ciò che non va.",
     exportBlocked: "Un tema che non si legge bene non si esporta: correggi prima ciò che non va.",
@@ -118,6 +126,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Fix everything",
     fixed: "{seed}: from {before} to {after}",
     nothingToFix: "No fix found: change a colour by hand.",
+    name: "Theme name",
+    nameTaken: "There is already a theme called “{name}”: choose another name.",
+    nameMissing: "Give the theme a name to save it.",
+    libraryFull: "You already have {max} saved themes: delete one to save another.",
     save: "Save",
     saveBlocked: "To save, first fix what is wrong.",
     exportBlocked: "A theme that is hard to read is not exported: first fix what is wrong.",
@@ -168,6 +180,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Alles korrigieren",
     fixed: "{seed}: von {before} auf {after}",
     nothingToFix: "Keine Korrektur gefunden: ändere eine Farbe von Hand.",
+    name: "Name des Designs",
+    nameTaken: "Es gibt schon ein Design namens „{name}“: wähle einen anderen Namen.",
+    nameMissing: "Gib dem Design einen Namen, um es zu speichern.",
+    libraryFull: "Du hast schon {max} gespeicherte Designs: lösche eines, um ein weiteres zu speichern.",
     save: "Speichern",
     saveBlocked: "Zum Speichern erst korrigieren, was nicht stimmt.",
     exportBlocked: "Ein schlecht lesbares Design wird nicht exportiert: erst korrigieren, was nicht stimmt.",
@@ -218,6 +234,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Tout corriger",
     fixed: "{seed} : de {before} à {after}",
     nothingToFix: "Aucune correction trouvée : change une couleur à la main.",
+    name: "Nom du thème",
+    nameTaken: "Un thème s'appelle déjà « {name} » : choisissez un autre nom.",
+    nameMissing: "Donnez un nom au thème pour l'enregistrer.",
+    libraryFull: "Vous avez déjà {max} thèmes enregistrés : supprimez-en un pour en enregistrer un autre.",
     save: "Enregistrer",
     saveBlocked: "Pour enregistrer, corrige d'abord ce qui ne va pas.",
     exportBlocked: "Un thème peu lisible ne s'exporte pas : corrige d'abord ce qui ne va pas.",
@@ -268,6 +288,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Corregir todo",
     fixed: "{seed}: de {before} a {after}",
     nothingToFix: "No se encontró corrección: cambia un color a mano.",
+    name: "Nombre del tema",
+    nameTaken: "Ya hay un tema llamado «{name}»: elige otro nombre.",
+    nameMissing: "Ponle un nombre al tema para guardarlo.",
+    libraryFull: "Ya tienes {max} temas guardados: borra uno para guardar otro.",
     save: "Guardar",
     saveBlocked: "Para guardar, corrige antes lo que falla.",
     exportBlocked: "Un tema que se lee mal no se exporta: corrige antes lo que falla.",
@@ -318,6 +342,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Corrigir tudo",
     fixed: "{seed}: de {before} para {after}",
     nothingToFix: "Nenhuma correção encontrada: muda uma cor à mão.",
+    name: "Nome do tema",
+    nameTaken: "Já existe um tema chamado «{name}»: escolha outro nome.",
+    nameMissing: "Dê um nome ao tema para o guardar.",
+    libraryFull: "Já tem {max} temas guardados: apague um para guardar outro.",
     save: "Guardar",
     saveBlocked: "Para guardar, corrige primeiro o que não está bem.",
     exportBlocked: "Um tema que se lê mal não se exporta: corrige primeiro o que não está bem.",
@@ -368,6 +396,10 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     fixAll: "Mindent javít",
     fixed: "{seed}: {before} helyett {after}",
     nothingToFix: "Nincs javítás: változtass meg egy színt kézzel.",
+    name: "A téma neve",
+    nameTaken: "Már van „{name}” nevű téma: válassz másik nevet.",
+    nameMissing: "Adj nevet a témának a mentéshez.",
+    libraryFull: "Már {max} mentett témád van: törölj egyet, hogy újat menthess.",
     save: "Mentés",
     saveBlocked: "A mentéshez előbb javítsd, ami nem jó.",
     exportBlocked: "A rosszul olvasható témát nem lehet exportálni: előbb javítsd, ami nem jó.",
