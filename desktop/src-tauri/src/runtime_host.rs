@@ -1294,6 +1294,7 @@ pub(crate) fn clean_powershell_env(command: &mut Command) {
 /// `CONTAINER_HOST`) comes from the environment the app was started in, which can be older than the install (a terminal opened
 /// before an update) or another program's, and a wrapper that obeyed it would start a machine that is not the team's. A child
 /// gets none of them; one the caller sets on purpose stays.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn clean_runtime_machine_env(command: &mut Command) {
     for name in ["JHT_PODMAN_MACHINE", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
         let chosen = command.get_envs().any(|(set, _)| set.eq_ignore_ascii_case(name));

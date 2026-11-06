@@ -599,11 +599,11 @@ mod tests {
 
     #[test]
     fn the_machine_is_the_one_the_runtime_file_names_and_nothing_in_the_environment_changes_it() {
-        assert_eq!(machine_from_runtime_file(Some("team-machine\r\n")), "team-machine");
-        assert_eq!(machine_from_runtime_file(Some("  jht-podman  ")), "jht-podman");
+        assert_eq!(super::machine_from_runtime_file(Some("team-machine\r\n")), "team-machine");
+        assert_eq!(super::machine_from_runtime_file(Some("  jht-podman  ")), "jht-podman");
         // no file, an empty one, or one that does not name a machine: the default
         for contents in [None, Some(""), Some("\n"), Some("--connection"), Some("two words"), Some("a/b")] {
-            assert_eq!(machine_from_runtime_file(contents), "jht-podman", "{contents:?}");
+            assert_eq!(super::machine_from_runtime_file(contents), "jht-podman", "{contents:?}");
         }
         // on Windows the environment is not even read
         let source = include_str!("podman.rs").replace("\r\n", "\n");
