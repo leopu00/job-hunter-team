@@ -658,6 +658,19 @@ def _standby_step(parsed):
         print(f"[bridge V6] WARN standby step: {e}", file=sys.stderr)
 
 
+def _agent_pause_step():
+    """La sveglia del TETTO delle pause dei singoli agenti (JHT-T181, `agent_pause.py`): a ogni tick le pause
+    scadute si tolgono e l'agente riceve [RIPRENDI]. Come per lo standby, qui sta la sveglia: un agente fermo
+    apposta non deve restare muto oltre i sette giorni. Mai fa cadere il tick."""
+    try:
+        mod = _load_skill_module("agent_pause", "agent_pause.py")
+        woken = mod.wake_expired() if mod else []
+        if woken:
+            print(f"[bridge V6] agent pause: cap reached → [RIPRENDI] to {', '.join(woken)}")
+    except Exception as e:                                  # noqa: BLE001
+        print(f"[bridge V6] WARN agent pause step: {e}", file=sys.stderr)
+
+
 # rc=130: la casella del pane ha un testo che non e' provato nostro. Il pane e' vivo; N rifiuti di fila su una
 # sessione = prima si prova a liberarla (`--flush-ours`), poi si avvisa il Capitano e la mailbox, al piu'
 # una volta ogni COMPOSER_NOTICE_EVERY_SEC per sessione.
@@ -3287,6 +3300,7 @@ def main():
         # economica non compra niente — e il weekly-halt è già NEVER_YIELDS
         # della deroga stessa.
         _standby_step(parsed)
+        _agent_pause_step()
 
         # [PACING-DAILY-HALT-STANDBY-LEAK] — l'ESC iniziale ferma solo il
         # turno corrente. Finche' il flag e' vivo osserviamo i pane senza

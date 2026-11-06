@@ -782,7 +782,21 @@ def notify_captain(message: str) -> bool:
 
 
 # ── Un giro ───────────────────────────────────────────────────────────────
+def _agent_paused(session: str) -> bool:
+    """L'utente ha messo in pausa QUESTO agente (JHT-T181, `agent_pause.py`): niente nudge né sveglie.
+    Un solo predicato, come per lo standby; non solleva mai (un modulo rotto = non in pausa)."""
+    mod = _load_shared("agent_pause", "agent_pause.py")
+    if mod is None:
+        return False
+    try:
+        return bool(mod.is_paused(session, home=_home()))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _handle_agent(session, agent, entry, now, live_workers):
+    if _agent_paused(session):
+        return  # in pausa per volere dell'utente: fermo e non lo si tocca
     pane = capture_pane(session)
     if pane is None:
         return  # tmux non risponde per questa sessione: si riprova al giro dopo

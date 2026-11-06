@@ -136,6 +136,50 @@ MSG_STANDBY_SENTINELLA = (
 )
 
 
+# ── Testi della PAUSA dell'utente (JHT-T181) ─────────────────────────────
+# Non è uno spegnimento e non è uno standby tecnico: l'utente ha detto «fermatevi,
+# vi dico io quando ricominciare». Le sessioni restano accese col loro contesto;
+# chi le legge deve CHIUDERE il turno in modo pulito e restare in attesa, e alla
+# ripresa continuare dal punto in cui era. L'ASSISTENTE non tace: resta la voce
+# dell'utente, e deve dire com'è davvero.
+
+MSG_PAUSA_OPERATIVO = (
+    "[PAUSA] The user has paused the team{reason}. This is a PAUSE, not a shutdown: your "
+    "session and your context stay exactly as they are. Close the step you are in so nothing "
+    "is left half-written (do not start a new unit of work, no new orders, no new checks), "
+    "note in one line where you got to, then WAIT SILENTLY: do not message other agents and "
+    "do not poll. Resume ONLY when you receive '[RIPRENDI]', and then continue from that same "
+    "point."
+)
+
+MSG_PAUSA_CAPITANO = (
+    "[PAUSA TEAM] The user has paused the team{reason}. This is a PAUSE, not a stop: every "
+    "session stays on with its context. Do NOT write `.team-halted.flag`, do NOT run "
+    "`jht team stop`, do NOT kill or spawn any session.\n\n"
+    "WHAT YOU MUST DO:\n"
+    "1. Close your current step cleanly; no new orders, no new spawns, no throttle changes.\n"
+    "2. Note in one line where you got to, then wait SILENTLY.\n"
+    "3. DO NOT expect [BRIDGE PACING]/[HEARTBEAT]: they are suspended, not broken.\n"
+    "4. New user tickets or requests wait: the Assistente tells the user so.\n\n"
+    "RESUMING: only the user decides. You will receive '[RIPRENDI]'; continue from the point "
+    "you were at."
+)
+
+MSG_PAUSA_SENTINELLA = (
+    "[PAUSA] The user has paused the team{reason}. You will not receive [BRIDGE TICK] or "
+    "[BRIDGE PACING] while it lasts: this is NOT a source failure, so DO NOT use fallbacks "
+    "or run manual usage checks. The bridge keeps sampling by itself. Close your turn "
+    "cleanly and wait SILENTLY until '[RIPRENDI]', then continue from where you were."
+)
+
+MSG_PAUSA_ASSISTENTE = (
+    "[PAUSA] The user has paused the team{reason} (from the app). You are NOT paused: stay "
+    "available to the user. What is true, and what you may tell them: every session is still "
+    "on with its context, nobody works, nothing new starts until they resume. Do not wake "
+    "the Capitano for new requests or tickets: tell the user they wait for the resume."
+)
+
+
 def list_sessions():
     try:
         r = subprocess.run(
@@ -191,8 +235,12 @@ def send_message(session, message):
         return False
 
 
-def pause_all(include_core=False, reason=""):
+def pause_all(include_core=False, reason="", mode="standby", notify_assistant=True):
     """Mette in pausa il team. Ritorna (paused, skipped): liste di sessioni.
+
+    mode="pause" (JHT-T181, solo con include_core): la pausa dell'utente. Testi
+    dedicati; l'ASSISTENTE riceve un avviso (non un ordine di tacere) a meno che
+    `notify_assistant` sia False: chi ha chiesto la pausa è lui, sa già.
 
     include_core=False → comportamento storico (FATAL usage): operativi +
     Capitano, esclusi SENTINELLA/ASSISTENTE/SENTINELLA-WORKER.
@@ -206,7 +254,19 @@ def pause_all(include_core=False, reason=""):
         if s in exclude:
             skipped.append(s)
             continue
-        if include_core:
+        if include_core and mode == "pause":
+            if s == "ASSISTENTE":
+                if not notify_assistant:
+                    skipped.append(s)
+                    continue
+                msg = MSG_PAUSA_ASSISTENTE.format(reason=reason_sfx)
+            elif s == CAPITANO:
+                msg = MSG_PAUSA_CAPITANO.format(reason=reason_sfx)
+            elif s == SENTINELLA:
+                msg = MSG_PAUSA_SENTINELLA.format(reason=reason_sfx)
+            else:
+                msg = MSG_PAUSA_OPERATIVO.format(reason=reason_sfx)
+        elif include_core:
             if s == CAPITANO:
                 msg = MSG_STANDBY_CAPITANO.format(reason=reason_sfx)
             elif s == SENTINELLA:
