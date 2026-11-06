@@ -39,7 +39,7 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "Lingua della squadra",
     cardText: "La lingua in cui ti parlano gli agenti: nella chat e in tutto quello che scrivono per te. Cambiarla non rifà la preparazione.",
     cardSave: "Salva",
-    cardSaved: "Fatto: gli agenti useranno questa lingua.",
+    cardSaved: "Fatto: gli agenti useranno questa lingua dal prossimo messaggio.",
   },
   en: {
     title: "Team language: {language}?",
@@ -53,7 +53,7 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "Team language",
     cardText: "The language the agents speak to you: in the chat and in everything they write for you. Changing it does not run the setup again.",
     cardSave: "Save",
-    cardSaved: "Done: the agents will use this language.",
+    cardSaved: "Done: the agents will use this language from their next message.",
   },
   hu: {
     title: "A csapat nyelve: {language}?",
@@ -67,7 +67,7 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "A csapat nyelve",
     cardText: "Az a nyelv, amelyen az ügynökök beszélnek veled: a csevegésben és mindenben, amit neked írnak. A módosítása nem futtatja újra a telepítést.",
     cardSave: "Mentés",
-    cardSaved: "Kész: az ügynökök ezt a nyelvet fogják használni.",
+    cardSaved: "Kész: az ügynökök a következő üzenetüktől ezt a nyelvet fogják használni.",
   },
   es: {
     title: "Idioma del equipo: ¿{language}?",
@@ -81,7 +81,7 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "Idioma del equipo",
     cardText: "El idioma en el que te hablan los agentes: en el chat y en todo lo que escriben para ti. Cambiarlo no repite la preparación.",
     cardSave: "Guardar",
-    cardSaved: "Hecho: los agentes usarán este idioma.",
+    cardSaved: "Hecho: los agentes usarán este idioma a partir de su próximo mensaje.",
   },
   de: {
     title: "Sprache des Teams: {language}?",
@@ -95,7 +95,7 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "Sprache des Teams",
     cardText: "Die Sprache, in der die Agenten mit dir sprechen: im Chat und in allem, was sie für dich schreiben. Eine Änderung startet die Einrichtung nicht neu.",
     cardSave: "Speichern",
-    cardSaved: "Erledigt: Die Agenten verwenden diese Sprache.",
+    cardSaved: "Erledigt: Die Agenten verwenden diese Sprache ab ihrer nächsten Nachricht.",
   },
   fr: {
     title: "Langue de l’équipe : {language} ?",
@@ -109,7 +109,7 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "Langue de l’équipe",
     cardText: "La langue dans laquelle les agents te parlent : dans le chat et dans tout ce qu’ils écrivent pour toi. La changer ne relance pas l’installation.",
     cardSave: "Enregistrer",
-    cardSaved: "C’est fait : les agents utiliseront cette langue.",
+    cardSaved: "C’est fait : les agents utiliseront cette langue dès leur prochain message.",
   },
   pt: {
     title: "Idioma da equipa: {language}?",
@@ -123,6 +123,6 @@ export const TEAM_LANGUAGE_TEXT: Record<Locale, TeamLanguageText> = {
     cardTitle: "Idioma da equipa",
     cardText: "O idioma em que os agentes te falam: no chat e em tudo o que escrevem para ti. Mudá-lo não repete a preparação.",
     cardSave: "Guardar",
-    cardSaved: "Feito: os agentes vão usar este idioma.",
+    cardSaved: "Feito: os agentes vão usar este idioma a partir da próxima mensagem.",
   },
 };
