@@ -11,6 +11,8 @@ export { REREAD_EVERY_MS, FOCUS_REREAD_MIN_MS, type LoginView } from "./useLogin
 
 export interface ProviderLoginApi {
   view: LoginView;
+  /** The sign-in can be redone from this app: the team runs on this computer (a team on a server is signed in on the server). */
+  canSignIn: boolean;
   /** A sign-in window is open (or opening). */
   signingIn: boolean;
   /** Opens the provider's sign-in window: only the sign-in, no setup, no reinstall, no restart of the team. */
@@ -41,12 +43,13 @@ export function ProviderLoginProvider({ enabled, rememberedProvider, children }:
   const knownProvider = useRef<SubscriptionProvider | null>(null);
   if (view.kind === "state" && SUBSCRIPTION.includes(view.provider)) knownProvider.current = view.provider as SubscriptionProvider;
   const provider = useCallback(() => knownProvider.current ?? rememberedProvider ?? "codex", [rememberedProvider]);
-  // What the team says right after the sign-in is what the page shows at once (the banner does not wait for the next read). A read
-  // that cannot be made leaves no «expired» banner for a sign-in just made: the card says why it cannot tell.
+  // What the team says right after the sign-in is what the page shows at once (the banner does not wait for the next read). A
+  // refusal, or a read that cannot be made, is said in the window itself, so the person sees it on whatever page they are.
   const holds = useCallback(async () => {
     const after = await readProviderLoginState();
     setView(toView(after));
-    return !(after.ok && WITHOUT_SIGN_IN.includes(after.state));
+    if (!after.ok) return after.error;
+    return WITHOUT_SIGN_IN.includes(after.state) ? "provider_relogin_unverified" : null;
   }, [setView]);
   const signInWindow = useSignInWindow({ locale, provider, holds });
 
@@ -54,7 +57,8 @@ export function ProviderLoginProvider({ enabled, rememberedProvider, children }:
     () => (enabled ? {
       view,
       signingIn: signInWindow.login !== null,
-      signIn: () => void signInWindow.signIn(),
+      canSignIn: view.kind !== "loading" && view.here === true,
+      signIn: () => { if (view.kind !== "loading" && view.here === true) void signInWindow.signIn(); },
       reread: () => void readNow(),
       reconnect: () => void reconnect(),
     } : null),

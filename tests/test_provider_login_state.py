@@ -39,16 +39,20 @@ def fresh_codex(home: Path, days_old: float = 1.0) -> Path:
     return path
 
 
-def stand_in_tmux(folder: Path, activity: int, text: str) -> dict[str, str]:
-    """A tmux that lists one pane with the given last activity and shows the given text."""
+def stand_in_tmux(folder: Path, activity: int | None = None, text: str = "", list_rc: int = 0, list_err: str = "") -> dict[str, str]:
+    """A tmux that lists one pane with the given last activity (none when `activity` is None) and shows the given text.
+    `list_rc`/`list_err` make the listing fail the way tmux does."""
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "pane.txt").write_text(text, encoding="utf-8")
+    listing = "" if activity is None else f"%1 {activity}"
     tmux = folder / "tmux"
     tmux.write_text(
         f"#!{sys.executable}\n"
         "import sys\n"
         "if sys.argv[1] == 'list-panes':\n"
-        f"    print('%1 {activity}')\n"
+        f"    sys.stderr.write({list_err!r})\n"
+        f"    print({listing!r}) if {list_rc} == 0 else None\n"
+        f"    raise SystemExit({list_rc})\n"
         "elif sys.argv[1] == 'capture-pane':\n"
         f"    sys.stdout.write(open({str(folder / 'pane.txt')!r}, encoding='utf-8').read())\n",
         encoding="utf-8",
@@ -58,10 +62,9 @@ def stand_in_tmux(folder: Path, activity: int, text: str) -> dict[str, str]:
 
 
 def run(home: Path, request: str = '{"op":"state"}', extra: dict[str, str] | None = None) -> tuple[dict, str]:
-    env = {**os.environ, "JHT_HOME": str(home), **(extra or {})}
-    # no tmux at all unless the test gives one
-    if not extra:
-        env["PATH"] = str(home / "no-bin")
+    # by default the container has its tmux and no agent running (tmux says there is no server)
+    extra = extra or stand_in_tmux(home / "idle-bin", list_rc=1, list_err="no server running on /tmp/tmux-1000/default\n")
+    env = {**os.environ, "JHT_HOME": str(home), **extra}
     done = subprocess.run([sys.executable, "-I", str(SCRIPT)], input=request + "\n", capture_output=True, text=True, env=env, timeout=30)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout), done.stdout
@@ -93,6 +96,11 @@ def test_no_file_is_missing_and_a_file_that_is_no_login_is_unreadable(tmp_path):
     write_json(tmp_path / ".codex" / "auth.json", {})
     assert state(tmp_path) == "unreadable"
     write_json(tmp_path / ".codex" / "auth.json", ["a", "list"])
+    assert state(tmp_path) == "unreadable"
+    # a JSON object that is not a sign-in of this provider is no sign-in either
+    write_json(tmp_path / ".codex" / "auth.json", {"unrelated": True})
+    assert state(tmp_path) == "unreadable"
+    write_json(tmp_path / ".codex" / "auth.json", {"tokens": {}, "last_refresh": "2026-11-01T00:00:00Z"})
     assert state(tmp_path) == "unreadable"
 
 
@@ -173,15 +181,39 @@ def test_claude_is_checked_by_its_own_sentence_and_its_own_file(tmp_path):
     assert state(tmp_path, extra=extra) == "ready"
 
 
-def test_a_broken_tmux_is_no_evidence(tmp_path):
+def test_a_tmux_that_fails_is_a_failed_check_and_no_server_is_no_agent(tmp_path):
     config(tmp_path)
     fresh_codex(tmp_path)
-    folder = tmp_path / "bin"
-    folder.mkdir()
-    tmux = folder / "tmux"
-    tmux.write_text(f"#!{sys.executable}\nraise SystemExit(3)\n", encoding="utf-8")
-    tmux.chmod(0o755)
-    assert state(tmp_path, extra={"PATH": f"{folder}{os.pathsep}{os.environ['PATH']}"}) == "ready"
+    broken = stand_in_tmux(tmp_path / "bin", list_rc=3, list_err="something went wrong\n")
+    reply, _ = run(tmp_path, extra=broken)
+    assert reply == {"ok": False, "error": "provider_login_unreadable"}
+    missing = {"PATH": str(tmp_path / "nothing-here")}
+    reply, _ = run(tmp_path, extra=missing)
+    assert reply == {"ok": False, "error": "provider_login_unreadable"}
+    idle = stand_in_tmux(tmp_path / "idle", list_rc=1, list_err="no server running on /tmp/tmux-1000/default\n")
+    assert state(tmp_path, extra=idle) == "ready"
+
+
+def test_settings_that_cannot_be_read_are_a_failed_check_not_nothing_to_check(tmp_path):
+    (tmp_path / "jht.config.json").write_text("{ not json", encoding="utf-8")
+    reply, _ = run(tmp_path)
+    assert reply == {"ok": False, "error": "provider_login_unreadable"}
+    write_json(tmp_path / "jht.config.json", ["a", "list"])
+    reply, _ = run(tmp_path)
+    assert reply == {"ok": False, "error": "provider_login_unreadable"}
+
+
+def test_an_old_refusal_followed_by_answers_is_not_a_refusal(tmp_path):
+    config(tmp_path)
+    path = fresh_codex(tmp_path, days_old=1)
+    login_at = int(path.stat().st_mtime)
+    worked = "\n".join(f"• working on posizione-{n}" for n in range(12))
+    # the pane worked after the new sign-in: the old refusal is still in its last 40 lines, but answers came after it
+    extra = stand_in_tmux(tmp_path / "bin", login_at + 600, f"{CODEX_REFUSAL}\n{worked}\n> \n")
+    assert state(tmp_path, extra=extra) == "ready"
+    # the same refusal as the last thing said, under only the prompt and the status bar: it is the current one
+    extra = stand_in_tmux(tmp_path / "bin2", login_at + 600, f"{worked}\n{CODEX_REFUSAL}\n\n> \n  ? for shortcuts\n")
+    assert state(tmp_path, extra=extra) == "expired"
 
 
 def test_any_other_request_is_refused_with_a_closed_code(tmp_path):

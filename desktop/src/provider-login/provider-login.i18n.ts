@@ -9,6 +9,8 @@ export interface ProviderLoginText {
   missing: string;
   unreadable: string;
   signIn: string;
+  /** Where the team runs on a server: the sign-in is redone there, not from this app. */
+  onServer: string;
   signingIn: string;
   note: string;
   bannerTitle: string;
@@ -31,6 +33,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "Non c’è nessun accesso a {provider}.",
     unreadable: "Il file dell’accesso a {provider} non si legge: serve un nuovo accesso.",
     signIn: "Accedi di nuovo",
+    onServer: "La squadra gira su un server: l’accesso si rifà lì, con «jht oauth-login» sul server.",
     signingIn: "Accesso in corso…",
     note: "Rifà solo l’accesso: non reinstalla niente e non riavvia la squadra.",
     bannerTitle: "Gli agenti non riescono a usare il modello.",
@@ -48,6 +51,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "There is no {provider} sign-in.",
     unreadable: "The {provider} sign-in file cannot be read: a new sign-in is needed.",
     signIn: "Sign in again",
+    onServer: "The team runs on a server: the sign-in is redone there, with «jht oauth-login» on the server.",
     signingIn: "Signing in…",
     note: "It only signs in again: nothing is reinstalled and the team is not restarted.",
     bannerTitle: "The agents cannot use the model.",
@@ -65,6 +69,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "Es gibt keine {provider}-Anmeldung.",
     unreadable: "Die Datei der {provider}-Anmeldung lässt sich nicht lesen: Eine neue Anmeldung ist nötig.",
     signIn: "Erneut anmelden",
+    onServer: "Das Team läuft auf einem Server: Die Anmeldung wird dort wiederholt, mit «jht oauth-login» auf dem Server.",
     signingIn: "Anmeldung läuft …",
     note: "Es wird nur die Anmeldung wiederholt: nichts wird neu installiert und das Team nicht neu gestartet.",
     bannerTitle: "Die Agenten können das Modell nicht nutzen.",
@@ -82,6 +87,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "No hay ningún acceso a {provider}.",
     unreadable: "El archivo del acceso a {provider} no se puede leer: hace falta un acceso nuevo.",
     signIn: "Iniciar sesión de nuevo",
+    onServer: "El equipo funciona en un servidor: el acceso se repite allí, con «jht oauth-login» en el servidor.",
     signingIn: "Iniciando sesión…",
     note: "Solo repite el acceso: no se reinstala nada y el equipo no se reinicia.",
     bannerTitle: "Los agentes no pueden usar el modelo.",
@@ -99,6 +105,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "Il n’y a aucun accès à {provider}.",
     unreadable: "Le fichier d’accès à {provider} est illisible : un nouvel accès est nécessaire.",
     signIn: "Se reconnecter",
+    onServer: "L’équipe tourne sur un serveur : la connexion se refait là-bas, avec « jht oauth-login » sur le serveur.",
     signingIn: "Connexion en cours…",
     note: "Seule la connexion est refaite : rien n’est réinstallé et l’équipe n’est pas redémarrée.",
     bannerTitle: "Les agents ne peuvent pas utiliser le modèle.",
@@ -116,6 +123,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "Nincs {provider} bejelentkezés.",
     unreadable: "A(z) {provider} bejelentkezés fájlja nem olvasható: új bejelentkezés kell.",
     signIn: "Bejelentkezés újra",
+    onServer: "A csapat szerveren fut: a bejelentkezést ott kell megismételni, a szerveren a «jht oauth-login» paranccsal.",
     signingIn: "Bejelentkezés folyamatban…",
     note: "Csak a bejelentkezést ismétli meg: semmit sem telepít újra, és a csapat nem indul újra.",
     bannerTitle: "Az ügynökök nem tudják használni a modellt.",
@@ -133,6 +141,7 @@ export const PROVIDER_LOGIN_TEXT: Record<Locale, ProviderLoginText> = {
     missing: "Não há nenhum acesso a {provider}.",
     unreadable: "O ficheiro do acesso a {provider} não pode ser lido: é preciso um novo acesso.",
     signIn: "Iniciar sessão de novo",
+    onServer: "A equipa corre num servidor: o acesso refaz-se lá, com «jht oauth-login» no servidor.",
     signingIn: "A iniciar sessão…",
     note: "Só repete o acesso: nada é reinstalado e a equipa não é reiniciada.",
     bannerTitle: "Os agentes não conseguem usar o modelo.",

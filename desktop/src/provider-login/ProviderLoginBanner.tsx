@@ -21,8 +21,8 @@ export function ProviderLoginBanner({ locale: localeOverride }: { locale?: Local
       style={{ background: "var(--color-panel)", color: "var(--color-white)" }}
     >
       <strong>{t.bannerTitle}</strong>
-      <span className="text-[var(--color-muted)]">{withProvider(t.bannerText, name)}</span>
-      <button
+      <span className="text-[var(--color-muted)]">{withProvider(login.canSignIn ? t.bannerText : t.onServer, name)}</span>
+      {login.canSignIn && <button
         type="button"
         data-testid="provider-login-banner-signin"
         disabled={login.signingIn}
@@ -30,7 +30,7 @@ export function ProviderLoginBanner({ locale: localeOverride }: { locale?: Local
         className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:border-[var(--color-border-glow)] disabled:opacity-60"
       >
         {login.signingIn ? t.signingIn : t.signIn}
-      </button>
+      </button>}
     </div>
   );
 }

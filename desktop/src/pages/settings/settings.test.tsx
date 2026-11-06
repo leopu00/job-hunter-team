@@ -17,7 +17,7 @@ import SettingsPage from "./index";
 import { SETTINGS_TEXT, VPS_CONNECTION_TEXT } from "./settings.i18n";
 
 vi.mock("../../provider-login/provider-login-native", () => ({
-  readProviderLoginState: vi.fn().mockResolvedValue({ ok: true, state: "expired", provider: "codex" }),
+  readProviderLoginState: vi.fn().mockResolvedValue({ ok: true, state: "expired", provider: "codex", here: true }),
 }));
 
 const props = { params: {}, search: new URLSearchParams() };
