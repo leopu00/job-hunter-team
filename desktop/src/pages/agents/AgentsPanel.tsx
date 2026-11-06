@@ -167,8 +167,9 @@ export function panelRows(list: PanelList, team: TeamControlState | null): Panel
 /** What the panel may do on a row; nothing in the read-only view. */
 export function rowActions(row: PanelRow, readOnly: boolean): AgentAction[] {
   if (readOnly || SCHEDULED.has(row.session)) return [];
-  if (REVIEWER.test(row.session)) return row.agent ? ["stop"] : [];
-  if (!row.agent) return row.heldBySafety ? [] : ["start"];
+  // an agent the team lists as «off» (the roster of a stopped team, or a session that ended meanwhile) is a row with no session: it is started, not restarted
+  if (REVIEWER.test(row.session)) return isUp(row) ? ["stop"] : [];
+  if (!isUp(row)) return row.heldBySafety ? [] : ["start"];
   if (row.heldBySafety) return ["stop"];
   return ["restart", "stop"];
 }
@@ -860,7 +861,7 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
                         >
                           {current.session}
                         </Link>
-                        <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
+                        <span className="text-[11px] uppercase tracking-widest" style={{ color: isUp(current) ? "var(--color-green)" : "var(--color-dim)" }}>
                           {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
                         </span>
                       </div>
@@ -900,7 +901,7 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
                       {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {chatAgentOf(current) !== null && (
+                      {chatAgentOf(current) !== null && !only && (
                         <Link
                           href={`/messages?agent=${chatAgentOf(current)}`}
                           data-testid="panel-chat-with"

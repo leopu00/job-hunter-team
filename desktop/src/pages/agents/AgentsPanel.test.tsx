@@ -428,14 +428,16 @@ describe("«Agenti», the agents' control panel", () => {
     expect(fake.current!.calls).toEqual([]);
   });
 
-  it("in the read-only view «Chatta con» is there and leads to a Messages that only reads", async () => {
+  it("in the read-only view the old address of an agent leads to the Team page, whose chat only reads", async () => {
     expect(READ_ONLY_ROUTES.find((r) => r.path === "/messages")?.page).toBe(ROUTES.find((r) => r.path === "/messages")?.page);
     enterExistingTeamReadOnly(false);
     navigate("/agents?agent=CAPITANO", { replace: true });
     render(<Shell />);
-    const button = await screen.findByTestId("panel-chat-with");
-    expect(button).toHaveAttribute("href", "#/messages?agent=capitano");
-    expect(screen.queryByTestId("panel-chat-pane")).toBeNull();
+    // it opens on the Info of the agent (the old page was its detail); the chat is one tab away
+    const chat = await screen.findByTestId("team-tab-chat", undefined, { timeout: 5000 });
+    expect(screen.getByTestId("team-tab-info")).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(chat);
+    expect(await screen.findByTestId("direct-chat-read-only-invite")).toBeInTheDocument();
   });
 
   it("a VPS of one's own without the mark offers the claim, and writes only after the person confirmed it", async () => {
@@ -1963,5 +1965,20 @@ describe("«Agenti», the parts of the panel inside the Team page: no function o
     part("agent", "ANALISTA-9");
     await screen.findByTestId("panel-part-agent-missing");
     expect(screen.queryByTestId("panel-restart")).toBeNull();
+  });
+
+  it("agent: one the team lists as off (the roster of a stopped team) is started, not restarted or stopped, and its word is not green", async () => {
+    where = "local";
+    AGENTS.push(agent("SCORER-2", "scorer", "2", "spento", { up: false, created: null, activity: null }));
+    try {
+      part("agent", "SCORER-2");
+      await screen.findByTestId("panel-state");
+      expect(screen.getByTestId("panel-start")).toBeInTheDocument();
+      expect(screen.queryByTestId("panel-restart")).toBeNull();
+      expect(screen.queryByTestId("panel-stop")).toBeNull();
+      expect(screen.queryByTestId("panel-agent-pause")).toBeNull();
+    } finally {
+      AGENTS.pop();
+    }
   });
 });

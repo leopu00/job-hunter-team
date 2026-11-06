@@ -1078,7 +1078,7 @@ export default function DirectChatScreen({
         {!embedded && (
         <header className="shrink-0 min-h-14 px-4 sm:px-5 flex items-center justify-between gap-3 border-b border-[var(--color-border)] bg-[var(--color-panel)]">
           <div>
-            <div className="text-[14px] uppercase tracking-[0.14em] text-[var(--color-dim)]">{t.title}</div>
+            {!squadSelected && <div className="text-[14px] uppercase tracking-[0.14em] text-[var(--color-dim)]">{agentTabs ? TEAM_TABS_TEXT[locale].squad : t.title}</div>}
             <h1 className="m-0 text-[18px] font-bold tracking-wide text-[var(--color-white)]">
               {squadSelected ? squad.label : otherSelected ? otherSelected.label : <Link
                 href={`/agents/${encodeURIComponent(selected.session)}`}
