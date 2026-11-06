@@ -125,7 +125,7 @@ def test_windows_acl_gate_smokes_e03_clean_start_through_docker_dispatch():
         "E03 CLEAN_START installer-helper-smoke PASS",
     ):
         assert seam in smoke
-    assert smoke.index("$dockerManifestText =") < smoke.index("$env:JHT_CONTAINER_RUNTIME = 'docker'")
+    assert smoke.index("$dockerManifestText =") < smoke.index("$env:JHT_TEST_CONTAINER_RUNTIME = 'docker'")
     assert smoke.index("[IO.File]::WriteAllBytes($manifest, $podmanManifestBytes)") < smoke.index(
         "# E04 MANIFEST"
     )

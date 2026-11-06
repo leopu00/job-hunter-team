@@ -334,11 +334,14 @@ $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $
 $RuntimeSelectionFile = Join-Path $RuntimeDir 'container-runtime'
 $RuntimeMigrationMarker = Join-Path $RuntimeDir '.runtime-migrated-podman'
 $PodmanMachineFile = Join-Path $RuntimeDir 'podman-machine'
-$ContainerRuntime = if ($env:JHT_CONTAINER_RUNTIME) {
-  $env:JHT_CONTAINER_RUNTIME.Trim().ToLowerInvariant()
+# The engine of THIS runtime is the one its attested bundle names (the container-runtime file). No environment variable the person
+# can have left behind (an older terminal's, a program's) chooses it; only a test names another one, with its own variable.
+$ContainerRuntime = if ($env:JHT_TEST_CONTAINER_RUNTIME) {
+  $env:JHT_TEST_CONTAINER_RUNTIME.Trim().ToLowerInvariant()
 } elseif (Test-Path -LiteralPath $RuntimeSelectionFile -PathType Leaf) {
   ([IO.File]::ReadAllText($RuntimeSelectionFile)).Trim().ToLowerInvariant()
 } else { 'docker' }
+Remove-Item -LiteralPath Env:JHT_CONTAINER_RUNTIME -ErrorAction SilentlyContinue
 if ($ContainerRuntime -notin @('docker', 'podman')) { throw "runtime container non supportato: $ContainerRuntime" }
 $PodmanComposeFile = Join-Path $RuntimeDir 'docker-compose.podman.yml'
 $ContainerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
@@ -364,11 +367,14 @@ if ($ContainerRuntime -eq 'podman') {
   # docker.exe is private to this wrapper. Only this process sees it before
   # the user's PATH; other applications keep resolving their real Docker CLI.
   $env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
-  $env:CONTAINER_CONNECTION = if ($env:JHT_PODMAN_MACHINE) {
-    $env:JHT_PODMAN_MACHINE
-  } elseif (Test-Path -LiteralPath $PodmanMachineFile -PathType Leaf) {
+  # The machine of THIS runtime is the one its attested bundle names (the podman-machine file). No environment variable can name
+  # another: one a terminal opened before an update still carries, or that any program set, would start a machine that is not
+  # the team's and leave the team's own unreachable.
+  $env:CONTAINER_CONNECTION = if (Test-Path -LiteralPath $PodmanMachineFile -PathType Leaf) {
     ([IO.File]::ReadAllText($PodmanMachineFile)).Trim()
   } else { 'jht-podman' }
+  if ($env:CONTAINER_CONNECTION -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') { throw 'podman-machine does not name a Podman machine' }
+  Remove-Item -LiteralPath Env:JHT_PODMAN_MACHINE -ErrorAction SilentlyContinue
   $env:JHT_PODMAN_HTTP_PROXY = if ($env:JHT_PODMAN_HTTP_PROXY) { $env:JHT_PODMAN_HTTP_PROXY } else { 'http://127.0.0.1:3128' }
   $env:JHT_PODMAN_HTTPS_PROXY = if ($env:JHT_PODMAN_HTTPS_PROXY) { $env:JHT_PODMAN_HTTPS_PROXY } else { 'http://127.0.0.1:3128' }
   # The runtime's own docker-compose.exe (5.1.2, checked by the enabler),
