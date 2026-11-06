@@ -2621,7 +2621,7 @@ mod tests {
         let chosen = Some(mine).or(Some(agent));
         assert_eq!(host_environment(chosen, &[]), vec![("JHT_HOST_TYPE", "local".to_owned()), ("JHT_LANG", "it".to_owned()), ("JHT_USER_TZ", "Europe/Rome".to_owned())]);
         // the source in the hash is the wrapper's: the file of the runtime folder first, host.env second
-        let source = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/direct_chat.rs")).unwrap();
+        let source = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/direct_chat/runtime_integrity.rs")).unwrap();
         let hash = source.split("fn mac_config_hash(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(hash.contains("read_host_values(&runtime.join(\"host-values\"))") && hash.contains("&read_host_env") && hash.contains("text_the_wrapper_hashes("));
         let _ = fs::remove_dir_all(&dir);
