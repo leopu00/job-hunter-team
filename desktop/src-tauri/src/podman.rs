@@ -226,11 +226,31 @@ fn args(values: &[&str]) -> Vec<OsString> {
 /// under this name (JHT_PODMAN_MACHINE overrides it in both, and here).
 const JHT_PODMAN_MACHINE: &str = "jht-podman";
 
+#[cfg(not(windows))]
 fn jht_machine() -> String {
     std::env::var("JHT_PODMAN_MACHINE")
         .ok()
         .filter(|name| valid_machine_name(name))
         .unwrap_or_else(|| JHT_PODMAN_MACHINE.to_owned())
+}
+
+/// On Windows the machine is the one the runtime's attested `podman-machine` file names, never a variable of the environment
+/// the app was started in: that one can be older than the install, and the app would then look at (and stop) a machine that
+/// is not the team's.
+#[cfg(windows)]
+fn jht_machine() -> String {
+    let file = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
+        .and_then(|dir| std::fs::read_to_string(dir.join("podman-machine")).ok());
+    machine_from_runtime_file(file.as_deref())
+}
+
+/// The machine a runtime's `podman-machine` file names, or the default when there is none or it does not name a machine.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn machine_from_runtime_file(contents: Option<&str>) -> String {
+    contents
+        .map(str::trim)
+        .filter(|name| valid_machine_name(name))
+        .map_or_else(|| JHT_PODMAN_MACHINE.to_owned(), str::to_owned)
 }
 
 /// The memory install.sh gives the JHT machine when it creates it (and
@@ -565,6 +585,7 @@ mod tests {
     fn the_engine_check_names_the_jht_connection() {
         let info = jht_engine_args("jht-podman", &["info", "--format=json"]);
         assert_eq!(info[..3], args(&["--connection", "jht-podman", "info"])[..]);
+        #[cfg(not(windows))]
         assert_eq!(
             jht_machine(),
             std::env::var("JHT_PODMAN_MACHINE")
@@ -574,6 +595,22 @@ mod tests {
         );
         assert!(!valid_machine_name("jht podman"));
         assert!(!valid_machine_name("--connection"));
+    }
+
+    #[test]
+    fn the_machine_is_the_one_the_runtime_file_names_and_nothing_in_the_environment_changes_it() {
+        assert_eq!(machine_from_runtime_file(Some("team-machine\r\n")), "team-machine");
+        assert_eq!(machine_from_runtime_file(Some("  jht-podman  ")), "jht-podman");
+        // no file, an empty one, or one that does not name a machine: the default
+        for contents in [None, Some(""), Some("\n"), Some("--connection"), Some("two words"), Some("a/b")] {
+            assert_eq!(machine_from_runtime_file(contents), "jht-podman", "{contents:?}");
+        }
+        // on Windows the environment is not even read
+        let source = include_str!("podman.rs").replace("\r\n", "\n");
+        let production = source.split("\n#[cfg(test)]").next().unwrap();
+        let windows = &production[production.find("#[cfg(windows)]\nfn jht_machine()").unwrap()..];
+        let windows = &windows[..windows.find("\n}\n").unwrap()];
+        assert!(!windows.contains("env::var(\"JHT_PODMAN_MACHINE\")") && windows.contains("podman-machine"));
     }
 
     /// Every call that reaches the engine goes through jht_engine_args: only

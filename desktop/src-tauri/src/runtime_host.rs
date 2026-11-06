@@ -1285,6 +1285,22 @@ pub(crate) fn clean_powershell_env(command: &mut Command) {
     if !chosen {
         command.env_remove("PSModulePath");
     }
+    #[cfg(windows)]
+    clean_runtime_machine_env(command);
+}
+
+/// The variables that would name another Podman machine than the runtime's own. The runtime says which machine is the team's in
+/// its attested `podman-machine` file; a variable that names one (`JHT_PODMAN_MACHINE`, or Podman's `CONTAINER_CONNECTION` and
+/// `CONTAINER_HOST`) comes from the environment the app was started in, which can be older than the install (a terminal opened
+/// before an update) or another program's, and a wrapper that obeyed it would start a machine that is not the team's. A child
+/// gets none of them; one the caller sets on purpose stays.
+pub(crate) fn clean_runtime_machine_env(command: &mut Command) {
+    for name in ["JHT_PODMAN_MACHINE", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
+        let chosen = command.get_envs().any(|(set, _)| set.eq_ignore_ascii_case(name));
+        if !chosen {
+            command.env_remove(name);
+        }
+    }
 }
 
 /// The longest stdout line run_program_lines hands over whole; a longer one
@@ -2823,6 +2839,30 @@ mod tests {
         chosen.env("PSModulePath", "C:\\Mine\\Modules");
         super::clean_powershell_env(&mut chosen);
         assert_eq!(removed(&chosen), Some(Some(std::ffi::OsString::from("C:\\Mine\\Modules"))));
+    }
+
+    #[test]
+    fn a_child_never_inherits_the_name_of_another_podman_machine() {
+        let state = |command: &std::process::Command, name: &str| {
+            command.get_envs().find(|(set, _)| set.eq_ignore_ascii_case(name)).map(|(_, value)| value.map(|v| v.to_owned()))
+        };
+        let mut child = std::process::Command::new("powershell.exe");
+        super::clean_runtime_machine_env(&mut child);
+        for name in ["JHT_PODMAN_MACHINE", "CONTAINER_CONNECTION", "CONTAINER_HOST"] {
+            assert_eq!(state(&child, name), Some(None), "{name} is removed from what the child inherits");
+        }
+        // a value the caller sets on purpose stays (the app names the machine it means in its own calls)
+        let mut chosen = std::process::Command::new("podman.exe");
+        chosen.env("CONTAINER_CONNECTION", "team-machine");
+        super::clean_runtime_machine_env(&mut chosen);
+        assert_eq!(state(&chosen, "CONTAINER_CONNECTION"), Some(Some(std::ffi::OsString::from("team-machine"))));
+        assert_eq!(state(&chosen, "JHT_PODMAN_MACHINE"), Some(None));
+        // on Windows it is part of the one place every child goes through
+        let source = include_str!("runtime_host.rs").replace("\r\n", "\n");
+        let production = source.split("\nmod tests {").next().unwrap();
+        let powershell = &production[production.find("pub(crate) fn clean_powershell_env").unwrap()..];
+        let powershell = &powershell[..powershell.find("\n}\n").unwrap()];
+        assert!(powershell.contains("#[cfg(windows)]\n    clean_runtime_machine_env(command);"));
     }
 
     /// Every program the app starts goes through the one place, and on Windows that place keeps the app's PowerShell module path out
