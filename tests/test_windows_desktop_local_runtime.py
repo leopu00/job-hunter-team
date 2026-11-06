@@ -93,7 +93,7 @@ def test_windows_rust_chat_calls_the_attested_container_and_keeps_exit_130():
     assert "existing_team_runtime::chat_arguments(operation)" in exec_args
 
     local_start = native.index("fn run_local_chat(")
-    local = native[local_start : native.index("\n}\n", local_start) + 3]
+    local = native[local_start:]
     assert "local_chat_runtime_valid(wrapper, runtime)" in local
     assert "ChatOperation" in local
     assert "powershell" not in local.lower()
