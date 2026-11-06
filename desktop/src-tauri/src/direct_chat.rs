@@ -274,6 +274,25 @@ impl Connection {
     }
 }
 
+/// A connection of the tests of `with_connection_read`, built here and not in the tests' text: a test that builds one runs on
+/// Unix only (see `only_unix_tests_build_a_connection`).
+#[cfg(all(test, unix))]
+fn synthetic_connection(validated: ValidatedHost, scope: &AccountScope) -> Connection {
+    Connection {
+        app: None,
+        scope: scope.clone(),
+        host: ExecutionHost::Local,
+        validated,
+        runtime: None,
+        local_wrapper: Some(PathBuf::from("/synthetic/wrapper")),
+        local_runtime: Some(PathBuf::from("/synthetic/runtime")),
+        local_owner_marker: Some(PathBuf::from("/synthetic/marker")),
+        control_path: None,
+        tunnel: None,
+        link: VpsLink::Master,
+    }
+}
+
 /// Runs a READ of the connection of `scope`. On this computer the connection's lock is let go before the work (the
 /// exec in the team's container, a second or more, and many more with the old wrapper), so that a read of the profile,
 /// a read of the chat and a probe do not wait for each other; on a VPS the lock is kept, because the ssh master and the
@@ -4555,7 +4574,7 @@ mod tests {
     fn only_the_per_command_link_to_a_vps_reads_small() {
         let source = include_str!("direct_chat.rs").split("mod tests {").next().unwrap();
         let read = source.split("pub(crate) async fn direct_chat_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
-        assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n            return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
+        assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n                return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
         assert!(read.contains("read_page(connection, &agent_id, cursor.as_deref())"), "every other link reads as before");
     }
 
@@ -7244,22 +7263,7 @@ mod probe_memo_tests {
 mod connection_read_tests {
     use super::*;
 
-    fn connection(validated: ValidatedHost, scope: &AccountScope) -> Connection {
-        Connection {
-            app: None,
-            scope: scope.clone(),
-            host: ExecutionHost::Local,
-            validated,
-            runtime: None,
-            local_wrapper: Some(PathBuf::from("/synthetic/wrapper")),
-            local_runtime: Some(PathBuf::from("/synthetic/runtime")),
-            local_owner_marker: Some(PathBuf::from("/synthetic/marker")),
-            control_path: None,
-            tunnel: None,
-            link: VpsLink::Master,
-        }
-    }
-
+    #[cfg(unix)]
     fn vps() -> ValidatedHost {
         ValidatedHost::Vps {
             address: "203.0.113.7".into(),
@@ -7270,11 +7274,12 @@ mod connection_read_tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_read_on_this_computer_lets_go_of_the_connection_before_it_works_and_a_vps_read_keeps_it() {
         let scope = AccountScope::synthetic(b"synthetic-read-a");
         let inner = DirectChatInner::default();
-        *inner.connection.lock().unwrap() = Some(connection(ValidatedHost::Local, &scope));
+        *inner.connection.lock().unwrap() = Some(synthetic_connection(ValidatedHost::Local, &scope));
         let free_inside = with_connection_read(&inner, &scope, |_| Ok(inner.connection.try_lock().is_ok())).unwrap();
         assert!(free_inside, "the lock was still held while the read worked on this computer");
         // the read got the paths of the runtime of the connection, not its tunnel or master
@@ -7284,11 +7289,12 @@ mod connection_read_tests {
         .unwrap();
         assert_eq!(paths, (Some(PathBuf::from("/synthetic/wrapper")), Some(PathBuf::from("/synthetic/runtime")), true));
         // a VPS: the master and the tunnel are the connection's own, so its lock stays
-        *inner.connection.lock().unwrap() = Some(connection(vps(), &scope));
+        *inner.connection.lock().unwrap() = Some(synthetic_connection(vps(), &scope));
         let held_inside = with_connection_read(&inner, &scope, |_| Ok(inner.connection.try_lock().is_err())).unwrap();
         assert!(held_inside, "a VPS read let go of the connection it works on");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_read_of_another_account_or_of_no_connection_is_refused_before_it_works() {
         let (mine, other) = (AccountScope::synthetic(b"synthetic-read-a"), AccountScope::synthetic(b"synthetic-read-b"));
@@ -7299,22 +7305,24 @@ mod connection_read_tests {
             Ok(())
         };
         assert_eq!(with_connection_read(&inner, &mine, work).err().map(|error| error.code), Some("disconnected"));
-        *inner.connection.lock().unwrap() = Some(connection(ValidatedHost::Local, &other));
+        *inner.connection.lock().unwrap() = Some(synthetic_connection(ValidatedHost::Local, &other));
         assert_eq!(with_connection_read(&inner, &mine, work).err().map(|error| error.code), Some("account_scope_mismatch"));
         assert!(!ran.get());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_detached_connection_owns_nothing_to_close() {
         let scope = AccountScope::synthetic(b"synthetic-read-a");
-        assert!(connection(vps(), &scope).detached_local().is_none());
-        let local = connection(ValidatedHost::Local, &scope);
+        assert!(synthetic_connection(vps(), &scope).detached_local().is_none());
+        let local = synthetic_connection(ValidatedHost::Local, &scope);
         let detached = local.detached_local().unwrap();
         assert!(detached.control_path.is_none() && detached.tunnel.is_none() && detached.runtime.is_none());
         // dropping it closes nothing: close_connection only acts on a VPS master or a tunnel
         drop(detached);
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_reads_that_ran_a_process_under_the_lock_no_longer_do() {
         let source = include_str!("direct_chat.rs");

@@ -77,8 +77,7 @@ const WAITS: [&str; 22] = [
 ];
 
 /// Sync commands that may touch those, each with the reason it can: they are rare, or have nothing in the way.
-const ALLOWED_SYNC: [(&str, &str); 3] = [
-    ("onboarding_local_owner_take_over", "reads and rewrites two small files under the account's read lock; no connection, no process"),
+const ALLOWED_SYNC: [(&str, &str); 2] = [
     ("runtime_playground_local_reset", "a debug build only (playground_reset_enabled); the person's own testing, never a release"),
     ("runtime_playground_local_orphan_recover", "a debug build only (playground_reset_enabled); the person's own testing, never a release"),
 ];
