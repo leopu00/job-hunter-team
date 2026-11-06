@@ -172,7 +172,7 @@ def test_desktop_local_plan_uses_the_authoritative_wrapper_commands_in_order():
     providers = _rust_item(desktop, "impl SubscriptionProvider")
     container = _function(desktop, "start_and_verify_local_container_with")
     prepare = _function(desktop, "prepare_impl")
-    login = _function(desktop, "onboarding_provider_login")
+    login = _function(desktop, "start_provider_login")
     team = _function(desktop, "start_team_impl")
 
     _in_order(
