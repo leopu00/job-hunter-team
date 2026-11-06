@@ -281,7 +281,8 @@ function createGroupBeamsImageData(
     const x = cx + xOff;
     const y0 = baseY + yOff;
     const topY = y0 - height;
-    const topW = 0.8;
+    // sul chiaro la punta è un filo scuro: un po' più larga, o non si vede
+    const topW = mode === "light" ? 1.6 : 0.8;
     // Salienza ∝ score (feedback utente 21/07, SOLO globo — i grafici
     // tengono lo spettro pieno): con lo spettro al posto della scala
     // solo-verde, i beam rossi/ARANCIONI (score medio-bassi) attiravano
@@ -289,10 +290,13 @@ function createGroupBeamsImageData(
     // su curve ripide (esponente > 1): la fascia arancione 45-65 si
     // spegne davvero, i verdi alti restano pieni e vivi.
     const [r0, g0, b0] = scoreRgb(score);
-    // Sul chiaro un fascio quasi trasparente sparisce nella terra chiara: la
-    // salienza parte più alta, l'ordine fra score bassi e alti resta.
-    const sal = mode === "light" ? 0.5 + 0.5 * Math.pow(norm, 1.7) : 0.22 + 0.78 * Math.pow(norm, 1.7);
-    const keep = 0.4 + 0.6 * Math.pow(norm, 1.3);
+    // Sul chiaro un fascio chiaro o trasparente sparisce nella terra chiara: il
+    // colore resta pieno (niente sbiadire verso il grigio per gli score bassi),
+    // la salienza parte alta e la punta non sfuma fino a sparire. L'ordine fra
+    // score bassi e alti resta, nell'altezza e nell'opacità.
+    const light = mode === "light";
+    const sal = light ? 0.72 + 0.28 * Math.pow(norm, 1.7) : 0.22 + 0.78 * Math.pow(norm, 1.7);
+    const keep = light ? 0.85 + 0.15 * norm : 0.4 + 0.6 * Math.pow(norm, 1.3);
     const gray = (r0 + g0 + b0) / 3;
     const r = Math.round(gray + (r0 - gray) * keep);
     const g = Math.round(gray + (g0 - gray) * keep);
@@ -301,9 +305,9 @@ function createGroupBeamsImageData(
 
     const grad = ctx.createLinearGradient(x, y0, x, topY);
     grad.addColorStop(0, `${base}${sal})`);
-    grad.addColorStop(0.12, `${base}${0.92 * sal})`);
-    grad.addColorStop(0.5, `${base}${0.4 * sal})`);
-    grad.addColorStop(1, `${base}0)`);
+    grad.addColorStop(0.12, `${base}${(light ? 0.96 : 0.92) * sal})`);
+    grad.addColorStop(0.5, `${base}${(light ? 0.78 : 0.4) * sal})`);
+    grad.addColorStop(1, `${base}${light ? 0.4 * sal : 0})`);
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(x - beamW / 2, y0);
