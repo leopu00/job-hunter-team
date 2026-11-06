@@ -272,6 +272,8 @@ export type AgentTabs = {
   tabs: readonly { id: string; label: string }[];
   /** The tab to open first (from the address). */
   initial?: string;
+  /** Open on the session that has no chat (from the address), on the tab `initial` names if it is one of the tabs. */
+  initialOther?: string;
   /** What a tab shows for the chosen agent (the session is its tmux name, ANALISTA-2). */
   render: (agent: { id: string; session: string; label: string; up: boolean }, tab: string) => ReactNode;
   /** The person chose another tab or agent: the page keeps the address. */
@@ -444,8 +446,8 @@ export default function DirectChatScreen({
         : [],
     [agentTabs, embedded, sessions, agents, t],
   );
-  const [otherOn, setOtherOn] = useState<string | null>(null);
-  const [otherTab, setOtherTab] = useState("info");
+  const [otherOn, setOtherOn] = useState<string | null>(agentTabs?.initialOther ? agentTabs.initialOther.toUpperCase() : null);
+  const [otherTab, setOtherTab] = useState(agentTabs?.initial && agentTabs.tabs.some((item) => item.id === agentTabs.initial) ? agentTabs.initial : "info");
   const otherSelected = otherOn === null ? null : others.find((entry) => entry.session === otherOn) ?? null;
   // The agent is off when the team's sessions are known and this one is not up: its chat is read, and nothing is written to it.
   const agentOff = sessions !== null && !selected.up;

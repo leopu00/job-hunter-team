@@ -33,6 +33,7 @@ export default function MessagesPage({ search, reconfirmBridge, embedded }: Page
       { id: "terminal", label: words.terminal },
     ],
     initial: requestedTab === "info" || requestedTab === "terminal" ? requestedTab : undefined,
+    initialOther: search.get("session") ?? undefined,
     render: (agent, tab) =>
       tab === "terminal" ? (
         <AgentTerminalTab key={agent.session} session={agent.session} />

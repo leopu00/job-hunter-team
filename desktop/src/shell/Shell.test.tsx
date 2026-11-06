@@ -117,9 +117,11 @@ describe("Shell", () => {
     const nav = screen.getByRole("navigation", { name: "Navigazione app" });
     // The labels come from the web's dictionary once /api/i18n answers "it".
     await within(nav).findByRole("link", { name: "Posizioni" });
-    for (const label of ["Dashboard", "Mappa", "Swipe", "Team", "Ufficio", "Messaggi"]) {
+    for (const label of ["Dashboard", "Mappa", "Swipe", "Team", "Ufficio"]) {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
     }
+    // Messages is the Team page now: one link, not two
+    expect(within(nav).queryByRole("link", { name: "Messaggi" })).not.toBeInTheDocument();
     // the person's own pages are in the account menu, not in the bar
     for (const label of ["Profilo", "Impostazioni", "Guida", "Posta", "Agenti"]) {
       expect(within(nav).queryByRole("link", { name: label })).not.toBeInTheDocument();
@@ -332,11 +334,11 @@ describe("Shell", () => {
     for (const item of NAV_ITEMS) {
       expect(matchRoute(ROUTES, item.href)?.route.path).toBe(item.href);
     }
-    expect(NAV_ITEMS.map((item) => item.href)).toEqual(["/dashboard", "/positions", "/swipe", "/map", "/agents", "/office", "/budget", "/messages"]);
+    expect(NAV_ITEMS.map((item) => item.href)).toEqual(["/dashboard", "/positions", "/swipe", "/map", "/messages", "/office", "/budget"]);
     const links = within(screen.getByTestId("navbar-links")).getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/agents", "#/office", "#/budget", "#/messages"]);
-    // Team opens the agents' panel, and stays lit on the team's activity page too
-    expect(NAV_ITEMS.find((item) => item.label && "web" in item.label && item.label.web === "nav_team")?.also).toEqual(["/team"]);
+    expect(links).toEqual(["#/dashboard", "#/positions", "#/swipe", "#/map", "#/messages", "#/office", "#/budget"]);
+    // Team is the page of the agents and of the chat, and stays lit on the old Agents address and on the team's activity page
+    expect(NAV_ITEMS.find((item) => item.label && "web" in item.label && item.label.web === "nav_team")?.also).toEqual(["/agents", "/team"]);
     // Budget has its page in the routes, so its entry in the bar is lit
     expect(within(nav).getByRole("link", { name: "Budget" })).toHaveAttribute("href", "#/budget");
     expect(matchRoute(ROUTES, "/budget")?.route.path).toBe("/budget");

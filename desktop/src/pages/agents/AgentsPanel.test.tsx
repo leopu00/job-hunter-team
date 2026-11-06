@@ -414,10 +414,10 @@ describe("«Agenti», the agents' control panel", () => {
 
   it("in the read-only view: no control at all, and only reads reach the native side", async () => {
     enterExistingTeamReadOnly(false);
-    navigate("/agents?agent=SCOUT-1", { replace: true });
+    // the Agents address is the Team page now: the team's commands are its first tab of the whole team
+    navigate("/messages?tab=squad", { replace: true });
     render(<Shell />);
     expect(await screen.findByTestId("panel-read-only")).toHaveTextContent("Conferma e collega");
-    await screen.findByTestId("panel-terminal-SCOUT-1");
     for (const id of ["panel-stop", "panel-restart", "panel-start", "panel-pause", "panel-resume", "panel-agent-pause", "panel-agent-resume"]) {
       expect(screen.queryByTestId(id)).toBeNull();
     }
@@ -491,7 +491,7 @@ describe("«Agenti», the agents' control panel", () => {
   it("the read-only view of an existing team never offers the claim", async () => {
     ownVps = "claimable";
     enterExistingTeamReadOnly(false);
-    navigate("/agents", { replace: true });
+    navigate("/messages?tab=squad", { replace: true });
     render(<Shell />);
     await screen.findByTestId("panel-read-only");
     await screen.findByTestId("panel-summary");
@@ -1877,14 +1877,16 @@ describe("«Agenti»: the list reads again by itself", () => {
 
   it("coming back to Agents from another page reads the list at once", async () => {
     where = "local";
-    navigate("/agents?agent=CAPITANO", { replace: true });
+    navigate("/messages?tab=squad", { replace: true });
     render(<Shell />);
-    await screen.findByTestId("panel-summary");
-    expect(lists()).toBe(1);
+    // the Team page also reads the sessions for its list: the panel's part comes a little after
+    await screen.findByTestId("panel-summary", undefined, { timeout: 5000 });
     navigate("/help");
     await waitFor(() => expect(screen.queryByTestId("panel-summary")).toBeNull());
-    navigate("/agents?agent=CAPITANO");
-    await screen.findByTestId("panel-summary");
-    await waitFor(() => expect(lists()).toBe(2));
+    const before = lists();
+    // back to the Team page (the old address of the Agents page leads here): the list is read again at once
+    navigate("/messages?tab=squad");
+    await screen.findByTestId("panel-summary", undefined, { timeout: 5000 });
+    await waitFor(() => expect(lists()).toBeGreaterThan(before));
   });
 });

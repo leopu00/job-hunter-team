@@ -972,7 +972,7 @@ export default function AgentsPanel({ search, only, agent }: PageProps & { only?
       </div>
       )}
       {!only && list?.ok && <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.intro, { where })}</p>}
-      {!only && readOnly && (
+      {(!only || only === "commands") && readOnly && (
         <p data-testid="panel-read-only" className="text-[11px] mb-2 text-[var(--color-muted)]">
           {t.readOnly}
         </p>
