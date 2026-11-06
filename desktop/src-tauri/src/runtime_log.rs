@@ -473,7 +473,8 @@ pub(crate) fn failure_cause(stdout: &[u8], stderr: &[u8]) -> Option<String> {
 /// those to the next empty line it is all decoration, whatever way the console wrapped it. So the
 /// stderr is read forward, and the cause is the last message line that came before a decoration.
 fn stderr_cause(text: &str) -> Option<String> {
-    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let joined = join_wrapped_lines(text.lines().map(str::trim).collect());
+    let lines: Vec<&str> = joined.iter().map(String::as_str).collect();
     let mut causes: Vec<(usize, String)> = Vec::new();
     let mut decoration = false;
     for (index, line) in lines.iter().enumerate() {
@@ -500,6 +501,32 @@ fn stderr_cause(text: &str) -> Option<String> {
         }
     }
     causes.pop().map(|(_, cause)| cause)
+}
+
+/// A long message that the console wrapped is one message: a line that is long, does not end the way a sentence does and has
+/// another line of text right after it goes on in that line («…ma impossibile caricare il» / «modulo. Per ulteriori
+/// informazioni…»). The next line is not a continuation when it starts a message of its own («Get-Acl : …») or is decoration.
+fn join_wrapped_lines(lines: Vec<&str>) -> Vec<String> {
+    const WRAPPED_AT_LEAST: usize = 60;
+    let starts_a_message = |line: &str| line.split_once(" : ").is_some_and(|(source, _)| source.ends_with(".ps1") || !source.contains(char::is_whitespace));
+    let mut joined: Vec<String> = Vec::new();
+    let mut open = false;
+    for line in lines {
+        if open && !line.is_empty() && !is_decoration(line) && !starts_a_message(line) {
+            if let Some(last) = joined.last_mut() {
+                last.push(' ');
+                last.push_str(line);
+            }
+        } else {
+            joined.push(line.to_owned());
+        }
+        let last = joined.last().map(String::as_str).unwrap_or("");
+        open = !last.is_empty()
+            && !is_decoration(last)
+            && last.chars().count() >= WRAPPED_AT_LEAST
+            && !last.ends_with(['.', '!', '?', ':', ')', ']', '"', '\'', ',']);
+    }
+    joined
 }
 
 /// What PowerShell adds around an error's message.
@@ -1288,6 +1315,44 @@ mod tests {
         assert_eq!(failure_cause(b"JHT_PHASE image_pull\nall good\n", b"+ ~~~\n\n"), None);
         let long = format!("{}\n", "y".repeat(400));
         assert_eq!(failure_cause(b"", long.as_bytes()).unwrap().chars().count(), 241);
+    }
+
+    #[test]
+    fn a_message_the_console_wrapped_is_one_cause_with_its_command_name_dropped() {
+        // A module that cannot be loaded, as the console wraps it (shapes and words, nothing of a real computer).
+        let wrapped = stderr(&[
+            "Get-Acl : Comando Get-Acl trovato nel modulo Microsoft.PowerShell.Security, ma impossibile caricare il",
+            "modulo. Per ulteriori informazioni, eseguire 'Import-Module Microsoft.PowerShell.Security'.",
+            "In C:\\Users\\<profilo>\\AppData\\Local\\Temp\\jht-install-1\\install.ps1:488 car:3",
+            "+   Protect-JhtHomeAcl -Path $JhtHome",
+            "+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+            "    + CategoryInfo          : ObjectNotFound: (:) [Get-Acl], CommandNotFoundException",
+            "    + FullyQualifiedErrorId : CouldNotAutoloadMatchingModule",
+        ]);
+        assert_eq!(
+            failure_cause(b"", &wrapped).as_deref(),
+            Some("Comando Get-Acl trovato nel modulo Microsoft.PowerShell.Security, ma impossibile caricare il modulo. Per ulteriori informazioni, eseguire 'Import-Module Microsoft.PowerShell.Security'.")
+        );
+        // A short line before an error is not joined to it, nor is a sentence that ended, nor a new message.
+        let separate = stderr(&[
+            "WARNING: the machine is slow",
+            "Set-Content : Flusso illeggibile.",
+            "In C:\\x.ps1:569 car:3",
+            "+   Set-Content -Path $shimDest",
+        ]);
+        assert_eq!(failure_cause(b"", &separate).as_deref(), Some("Flusso illeggibile."));
+        let ended = stderr(&[
+            "The previous step wrote a long line of text that ends the way a sentence does, with a full stop.",
+            "Set-Content : Flusso illeggibile.",
+            "In C:\\x.ps1:569 car:3",
+        ]);
+        assert_eq!(failure_cause(b"", &ended).as_deref(), Some("Flusso illeggibile."));
+        let new_message = stderr(&[
+            "Some long line of a program that goes on and on without any punctuation at its end at all really",
+            "Get-Acl : Access to the path is denied.",
+            "In C:\\x.ps1:488 car:3",
+        ]);
+        assert_eq!(failure_cause(b"", &new_message).as_deref(), Some("Access to the path is denied."));
     }
 
     /// The stderr of a failed step as PowerShell 5.1 prints it, one line each.

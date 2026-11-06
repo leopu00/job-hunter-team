@@ -580,6 +580,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Podman is installed on this computer, but for another Windows user: this user cannot reach it, and installing it for this user too did not succeed.",
     "From the Windows account that installed Podman, uninstall “Podman CLI” from Windows’ apps, then come back to this account and press Try again: the app installs it for you.",
   ),
+  // Not the network and not a failed install: the PowerShell that ran the setup could not load one of its own modules.
+  powershell_modules_unavailable: copy(
+    "Windows PowerShell non riesce a caricare i suoi moduli di sistema, quindi la preparazione dell’ambiente non può andare avanti.",
+    "Chiudi Job Hunter Team e riaprilo dal menu Start o da Esplora file, non da una finestra di PowerShell 7, poi premi Riprova. Se si ripete, riavvia il computer.",
+    "Windows PowerShell cannot load its own system modules, so preparing the environment cannot go on.",
+    "Close Job Hunter Team and open it again from the Start menu or File Explorer, not from a PowerShell 7 window, then press Try again. If it happens again, restart the computer.",
+  ),
   homebrew_missing: copy(
     "Su questo Mac manca Homebrew: l’app lo usa per installare Podman.",
     "Scarica il pacchetto di installazione di Homebrew (il file .pkg) dalla pagina ufficiale brew.sh, aprilo e completa l’installazione di macOS, poi torna qui e premi Riprova.",

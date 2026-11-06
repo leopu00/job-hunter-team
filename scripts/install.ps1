@@ -74,6 +74,22 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# PSMODULEPATH-BEGIN
+# An app started from PowerShell 7 hands its module folders (the 7 ones first) down to the Windows PowerShell 5.1 it starts, and
+# 5.1 then cannot load Microsoft.PowerShell.Security (Get-Acl, Get-FileHash): "could not autoload the matching module". The list
+# is rebuilt from the folders Windows PowerShell itself uses, before any command that needs a module. PowerShell 7 keeps its own.
+if ($PSVersionTable.PSEdition -eq 'Desktop') {
+  $jhtModuleFolders = New-Object System.Collections.Generic.List[string]
+  $jhtModuleFolders.Add([IO.Path]::Combine([Environment]::GetFolderPath('MyDocuments'), 'WindowsPowerShell', 'Modules'))
+  $jhtModuleFolders.Add([IO.Path]::Combine([Environment]::GetFolderPath('ProgramFiles'), 'WindowsPowerShell', 'Modules'))
+  $jhtModuleFolders.Add([IO.Path]::Combine($PSHOME, 'Modules'))
+  foreach ($jhtScope in 'Machine', 'User') {
+    $jhtScoped = [Environment]::GetEnvironmentVariable('PSModulePath', $jhtScope)
+    if ($jhtScoped) { $jhtModuleFolders.Add($jhtScoped) }
+  }
+  $env:PSModulePath = [string]::Join(';', $jhtModuleFolders.ToArray())
+}
+# PSMODULEPATH-END
 
 # The test channel is one atomic contract. Validate it before environment,
 # filesystem, network or process access so malformed build metadata cannot
