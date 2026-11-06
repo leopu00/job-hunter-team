@@ -51,17 +51,31 @@ export function parseExitTeam(value: unknown): ExitTeam | null {
   return TEAMS.find((known) => known === team) ?? null;
 }
 
+/** Whether the team's machine is on, asked during the setup only; «none» when not asked or there is no machine (Linux, a VPS). */
+export type ExitMachine = "on" | "off" | "unknown" | "none";
+const MACHINES: readonly ExitMachine[] = ["on", "off", "unknown", "none"];
+
 /** What the native side tells before the question: where the team is, and how many containers that are not the team's share its machine. */
 export interface ExitState {
   team: ExitTeam;
   otherContainers: number;
+  machine: ExitMachine;
+  /** The team's own containers running on the machine, during the setup with the machine on. */
+  teamContainers: number;
 }
+
+const count = (value: unknown) => (typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0);
 
 export function parseExitState(value: unknown): ExitState | null {
   const team = parseExitTeam(value);
   if (!team) return null;
-  const others = (value as { otherContainers?: unknown }).otherContainers;
-  return { team, otherContainers: typeof others === "number" && Number.isSafeInteger(others) && others > 0 ? others : 0 };
+  const { otherContainers, machine, teamContainers } = value as { otherContainers?: unknown; machine?: unknown; teamContainers?: unknown };
+  return {
+    team,
+    otherContainers: count(otherContainers),
+    machine: MACHINES.find((known) => known === machine) ?? "none",
+    teamContainers: count(teamContainers),
+  };
 }
 
 export function parseExitProgress(value: unknown): ExitProgress | null {
@@ -78,11 +92,14 @@ export function exitErrorCode(error: unknown): string {
   return typeof code === "string" && code ? code : "agent_control_unanswered";
 }
 
-/** Where the team is. Resolves to null when it cannot be told (no account yet, not the desktop): the window then just closes. */
-export async function exitState(): Promise<ExitState | null> {
+/**
+ * Where the team is. Resolves to null when it cannot be told (no account yet, not the desktop): the window then just closes.
+ * `setup`: a setup is under way, so it also asks whether the machine is on (a look of a few seconds at most).
+ */
+export async function exitState(setup = false): Promise<ExitState | null> {
   if (!isTauri()) return null;
   try {
-    return parseExitState(await invoke("app_exit_state"));
+    return parseExitState(await (setup ? invoke("app_exit_state", { setup: true }) : invoke("app_exit_state")));
   } catch {
     return null;
   }
@@ -109,8 +126,11 @@ export async function exitPoll(): Promise<ExitProgress> {
   if (!progress) throw { code: "agent_control_unanswered" };
   return progress;
 }
-/** Leaves. `ordered` and `forced` stop the container and the machine first; a failure keeps the app open. */
-export const exitFinish = (mode: ExitMode) => call<void>("app_exit_finish", { mode });
+/**
+ * Leaves. `ordered` and `forced` stop the container and the machine first; `machine` (during the setup, never remembered)
+ * stops only the machine; a failure keeps the app open.
+ */
+export const exitFinish = (mode: ExitMode | "machine") => call<void>("app_exit_finish", { mode });
 
 /** Listens for a request to leave from the close button or ⌘Q; returns the way to stop listening. */
 export async function onExitRequested(handler: () => void): Promise<() => void> {

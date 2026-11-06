@@ -310,6 +310,11 @@ pub(crate) fn count_other_containers(stdout: &[u8]) -> usize {
         .count()
 }
 
+/// How many containers a `podman ps --format {{.Names}}` answer names that ARE the team's.
+pub(crate) fn count_team_containers(stdout: &[u8]) -> usize {
+    String::from_utf8_lossy(stdout).lines().map(str::trim).filter(|name| is_jht_container(name)).count()
+}
+
 /// The look at the containers is short: a machine that is on answers at once.
 const LISTING_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -384,6 +389,25 @@ pub(crate) fn jht_machine_is_off() -> bool {
 #[cfg(windows)]
 pub(crate) fn jht_machine_is_running() -> bool {
     machine_state(LISTING_TIMEOUT) == MachineState::Running
+}
+
+/// The containers running on the JHT machine from one look: the team's, and the others. None when it cannot be asked.
+pub(crate) fn containers_on_jht_machine(timeout: Duration) -> Option<(usize, usize)> {
+    let ps = jht_engine_args(&jht_machine(), &["ps", "--format", "{{.Names}}"]);
+    match command(&ps, timeout, None, true) {
+        Ok(output) if output.success => Some((count_team_containers(&output.stdout), count_other_containers(&output.stdout))),
+        _ => None,
+    }
+}
+
+/// Whether the JHT machine is on, read the same way (`machine inspect`, which starts nothing): Some(true) on, Some(false)
+/// stopped or not there, None when Podman gave no answer. For a question to the person, never a reason to act.
+pub(crate) fn jht_machine_on(timeout: Duration) -> Option<bool> {
+    match machine_state(timeout) {
+        MachineState::Running => Some(true),
+        MachineState::Off => Some(false),
+        MachineState::Unknown => None,
+    }
 }
 
 /// What to do with the machine, from what is known of it: the end, or to stop it. It falls on the safe side: a machine
@@ -555,7 +579,7 @@ pub(crate) async fn check_podman(
 #[cfg(test)]
 mod tests {
     use super::{
-        args, count_other_containers, jht_engine_args, jht_machine, machine_plan, machine_state_from, normalized_version,
+        args, count_other_containers, count_team_containers, jht_engine_args, jht_machine, machine_plan, machine_state_from, normalized_version,
         read_bounded_output, read_stderr_lines, valid_machine_name, CommandFailure, CommandOutcome, MachinePlan, MachineState,
         MachineStop, MAX_CAPTURE_BYTES, MAX_STDERR_LINE_BYTES,
     };
@@ -616,6 +640,14 @@ mod tests {
         // the compose file fixes three names: a name that only starts like them is the person's own
         assert_eq!(count_other_containers(b"jhtx\njhtml\njht-dev\njht-broker-2\njht-telegram-test\n"), 5);
         assert_eq!(count_other_containers(b"  postgres  \r\n"), 1);
+    }
+
+    #[test]
+    fn the_team_s_containers_are_counted_by_their_three_names_only() {
+        assert_eq!(count_team_containers(b"jht\njht-broker\njht-telegram\n"), 3);
+        assert_eq!(count_team_containers(b"jht\npostgres\n"), 1);
+        assert_eq!(count_team_containers(b"jhtx\njht-dev\npostgres\n\n"), 0);
+        assert_eq!(count_team_containers(b"  jht  \r\n"), 1);
     }
 
     fn outcome(success: bool, stdout: &str) -> Result<CommandOutcome, CommandFailure> {

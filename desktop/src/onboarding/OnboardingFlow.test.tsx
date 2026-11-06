@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OnboardingFlowProps } from "../lib/onboarding";
 import { describeError, ERROR_LOCALES } from "../lib/error-catalog";
 import { OnboardingFlow } from "./OnboardingFlow";
+import { setupExit } from "../lib/setup-exit";
 import { WINDOWS_SETUP } from "./windows-setup";
 
 vi.mock("../components/SshKeyPicker", () => ({
@@ -755,6 +756,24 @@ describe("OnboardingFlow technical setup", () => {
     expect(screen.getByRole("progressbar", { name: "Passaggi completati" })).toHaveAttribute("value", "2");
     expect(screen.getByText("Passaggio 3 di 7")).toBeInTheDocument();
     expect(screen.getByText("2 completati")).toBeInTheDocument();
+  });
+
+  it("tells the close dialog the step of a setup before the team's start, and nothing once the team starts", async () => {
+    const user = userEvent.setup();
+    const result = renderFlow();
+    await begin(user);
+    result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "working", stage: "container", message: "Preparo il container." }} />);
+    expect(setupExit()).toEqual({ failed: false, step: 2, total: 6, label: "Container" });
+    result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "failed", stage: "provider", message: "Non riuscito." }} />);
+    expect(setupExit()).toMatchObject({ failed: true, step: 3, label: "Provider" });
+    result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "action-required", stage: "team-start", message: "Avvia." }} />);
+    expect(setupExit()).toBeNull();
+    result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "failed", stage: "container", calm: true, message: "La squadra è accesa." }} />);
+    expect(setupExit()).toBeNull();
+    result.rerender(<OnboardingFlow {...result.props} runtime={{ status: "working", stage: "runtime", message: "Preparo." }} />);
+    expect(setupExit()).toMatchObject({ step: 1 });
+    result.unmount();
+    expect(setupExit()).toBeNull();
   });
 
   it("shows verified step progress, elapsed time and a sanitized activity timeline", async () => {
