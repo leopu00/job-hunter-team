@@ -70,4 +70,13 @@ describe("Rust production source inventory", () => {
     expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files))
       .toEqual(["lib.rs", "a.rs", "b.rs", "x.rs"]);
   });
+
+  it("removes complete test items with generic parameters or where-clause commas", () => {
+    for (const signature of ["fn helper<A, B>()", "fn helper<A, B>() where A: Clone, B: Clone"]) {
+      const source = `#[cfg(test)] ${signature} { failure("test_only_error"); }\nfn production() { failure("real_error"); }`;
+      const production = withoutRustTests(source);
+      expect(production).not.toContain("test_only_error");
+      expect(production).toContain('failure("real_error")');
+    }
+  });
 });
