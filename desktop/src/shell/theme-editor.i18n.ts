@@ -10,6 +10,12 @@ export interface ThemeEditorText {
   title: string;
   open: string; // the entry of the theme menu that opens the editor
   startFrom: string;
+  ready: string; // the group of the ready themes among the tiles to start from
+  templates: string; // the group of the coloured templates
+  colours: string; // step 2: change the colours
+  nameAndSave: string; // step 3: give it a name and save
+  more: string; // the closed section with files, copy and paste, reset, delete
+  previewHint: string; // over the preview: hovering a colour makes it blink where it is used
   seeds: Record<SeedKey, string>;
   colour: string; // {name}: the accessible name of the typed colour code
   preview: string;
@@ -60,6 +66,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Tema personale",
     open: "Personalizza…",
     startFrom: "Parti da",
+    ready: "Temi pronti",
+    templates: "Modelli",
+    colours: "Cambia i colori",
+    nameAndSave: "Dagli un nome e salva",
+    more: "Altro",
+    previewHint: "La tua Dashboard con questi colori. Passa sopra un colore: lampeggia dove si usa.",
     seeds: { background: "Sfondo", panel: "Pannello", text: "Testo", border: "Bordo", accent: "Accento" },
     colour: "{name}: codice colore",
     preview: "Anteprima",
@@ -114,6 +126,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Personal theme",
     open: "Customise…",
     startFrom: "Start from",
+    ready: "Ready themes",
+    templates: "Templates",
+    colours: "Change the colours",
+    nameAndSave: "Give it a name and save",
+    more: "More",
+    previewHint: "Your Dashboard with these colours. Hover a colour: it blinks where it is used.",
     seeds: { background: "Background", panel: "Panel", text: "Text", border: "Border", accent: "Accent" },
     colour: "{name}: colour code",
     preview: "Preview",
@@ -168,6 +186,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Eigenes Design",
     open: "Anpassen…",
     startFrom: "Ausgehen von",
+    ready: "Fertige Designs",
+    templates: "Vorlagen",
+    colours: "Farben ändern",
+    nameAndSave: "Benennen und speichern",
+    more: "Mehr",
+    previewHint: "Dein Dashboard mit diesen Farben. Fahre über eine Farbe: Sie blinkt dort, wo sie verwendet wird.",
     seeds: { background: "Hintergrund", panel: "Fläche", text: "Text", border: "Rand", accent: "Akzent" },
     colour: "{name}: Farbcode",
     preview: "Vorschau",
@@ -222,6 +246,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Thème personnel",
     open: "Personnaliser…",
     startFrom: "Partir de",
+    ready: "Thèmes prêts",
+    templates: "Modèles",
+    colours: "Changer les couleurs",
+    nameAndSave: "Nommer et enregistrer",
+    more: "Plus",
+    previewHint: "Votre tableau de bord avec ces couleurs. Survolez une couleur : elle clignote là où elle est utilisée.",
     seeds: { background: "Fond", panel: "Panneau", text: "Texte", border: "Bordure", accent: "Accent" },
     colour: "{name} : code couleur",
     preview: "Aperçu",
@@ -276,6 +306,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Tema personal",
     open: "Personalizar…",
     startFrom: "Partir de",
+    ready: "Temas listos",
+    templates: "Plantillas",
+    colours: "Cambia los colores",
+    nameAndSave: "Ponle un nombre y guarda",
+    more: "Más",
+    previewHint: "Tu panel con estos colores. Pasa sobre un color: parpadea donde se usa.",
     seeds: { background: "Fondo", panel: "Panel", text: "Texto", border: "Borde", accent: "Acento" },
     colour: "{name}: código de color",
     preview: "Vista previa",
@@ -330,6 +366,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Tema pessoal",
     open: "Personalizar…",
     startFrom: "Partir de",
+    ready: "Temas prontos",
+    templates: "Modelos",
+    colours: "Mude as cores",
+    nameAndSave: "Dê-lhe um nome e guarde",
+    more: "Mais",
+    previewHint: "O seu painel com estas cores. Passe sobre uma cor: pisca onde é usada.",
     seeds: { background: "Fundo", panel: "Painel", text: "Texto", border: "Borda", accent: "Destaque" },
     colour: "{name}: código da cor",
     preview: "Pré-visualização",
@@ -384,6 +426,12 @@ export const THEME_EDITOR_TEXT: Record<Locale, ThemeEditorText> = {
     title: "Saját téma",
     open: "Testreszabás…",
     startFrom: "Kiindulás",
+    ready: "Kész témák",
+    templates: "Sablonok",
+    colours: "Színek módosítása",
+    nameAndSave: "Nevezd el és mentsd",
+    more: "Továbbiak",
+    previewHint: "Az irányítópultod ezekkel a színekkel. Vidd egy szín fölé: villog, ahol használva van.",
     seeds: { background: "Háttér", panel: "Panel", text: "Szöveg", border: "Keret", accent: "Kiemelés" },
     colour: "{name}: színkód",
     preview: "Előnézet",
