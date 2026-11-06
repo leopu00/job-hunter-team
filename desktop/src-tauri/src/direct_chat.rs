@@ -2421,7 +2421,16 @@ fn run_connection(
     }
 }
 
+/// The probe, timed: the answer that is not "ready", and a "ready" that took long, are written to the runtime log.
 fn probe(connection: &Connection) -> DirectChatStatus {
+    let started = Instant::now();
+    let answer = probe_unlogged(connection);
+    let outcome = if answer.state == "ready" { Ok(()) } else { Err(answer.code.unwrap_or("container_unavailable")) };
+    log_chat_call(connection.app.as_ref(), "probe", outcome, started.elapsed());
+    answer
+}
+
+fn probe_unlogged(connection: &Connection) -> DirectChatStatus {
     if let (ValidatedHost::Vps { .. }, Some(path)) =
         (&connection.validated, &connection.control_path)
     {
@@ -2529,6 +2538,8 @@ async fn connect_scoped(
     expected: AccountScope,
     host: ExecutionHost,
 ) -> Result<DirectChatStatus, DirectChatError> {
+    let started = Instant::now();
+    let app_for_log = app.clone();
     {
         let _scope = scopes.lock_expected(&expected).map_err(failure)?;
         state
@@ -2556,6 +2567,7 @@ async fn connect_scoped(
     .map_err(|_| failure("connect_failed"))?;
     match result {
         Ok(connection) => {
+            log_chat_call(Some(&app_for_log), "connect", Ok(()), started.elapsed());
             let _scope = scopes.lock_expected(&expected).map_err(failure)?;
             let mut slot = state
                 .inner
@@ -2573,6 +2585,7 @@ async fn connect_scoped(
             Ok(ready)
         }
         Err(error) => {
+            log_chat_call(Some(&app_for_log), "connect", Err(error.code), started.elapsed());
             let _scope = scopes.lock_expected(&expected).map_err(failure)?;
             let failed = status("error", Some(error.code));
             emit(
@@ -2900,6 +2913,7 @@ pub(crate) async fn direct_chat_read(
     {
         return Err(failure("invalid_request"));
     }
+    let started = Instant::now();
     let expected = scopes.active().map_err(failure)?;
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
@@ -2927,6 +2941,7 @@ pub(crate) async fn direct_chat_read(
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     match result {
         Ok(page) => {
+            log_chat_call(Some(&app), "read", Ok(()), started.elapsed());
             emit(
                 &state.inner,
                 DirectChatEvent::Messages {
@@ -2937,7 +2952,7 @@ pub(crate) async fn direct_chat_read(
             Ok(page)
         }
         Err(error) => {
-            log_chat_failure(&app, "read", error.code);
+            log_chat_call(Some(&app), "read", Err(error.code), started.elapsed());
             emit(
                 &state.inner,
                 DirectChatEvent::Error {
@@ -3156,6 +3171,7 @@ pub(crate) async fn direct_chat_send(
     {
         return Err(failure("invalid_request"));
     }
+    let started = Instant::now();
     let expected = scopes.active().map_err(failure)?;
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
@@ -3186,6 +3202,7 @@ pub(crate) async fn direct_chat_send(
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     match result {
         Ok(receipt) => {
+            log_chat_call(Some(&app), "send", Ok(()), started.elapsed());
             emit(
                 &state.inner,
                 DirectChatEvent::Send {
@@ -3195,7 +3212,7 @@ pub(crate) async fn direct_chat_send(
             Ok(receipt)
         }
         Err(error) => {
-            log_chat_failure(&app, "send", error.code);
+            log_chat_call(Some(&app), "send", Err(error.code), started.elapsed());
             emit(
                 &state.inner,
                 DirectChatEvent::Error {
@@ -3449,6 +3466,7 @@ pub(crate) async fn direct_chat_attach(
     let worker_expected = expected.clone();
     let worker_scopes = scope_state.clone();
     let id = client_message_id;
+    let sent_from = Instant::now();
     let sent = tauri::async_runtime::spawn_blocking(move || {
         let scope = worker_scopes.lock_expected(&worker_expected).map_err(failure)?;
         {
@@ -3465,19 +3483,64 @@ pub(crate) async fn direct_chat_attach(
     let _scope = scopes.lock_expected(&expected).map_err(failure)?;
     match sent {
         Ok(receipt) => {
+            log_chat_call(Some(&app_for_log), "send", Ok(()), sent_from.elapsed());
             emit(&state.inner, DirectChatEvent::Send { receipt: receipt.clone() });
             Ok(DirectChatAttachment { outcome: "sent", display_name, code: None, receipt: Some(receipt) })
         }
         Err(error) => {
-            log_chat_failure(&app_for_log, "send", error.code);
+            log_chat_call(Some(&app_for_log), "send", Err(error.code), sent_from.elapsed());
             Ok(DirectChatAttachment { outcome: "saved_not_sent", display_name, code: Some(error.code), receipt: None })
         }
     }
 }
 
-/// The last failure of each operation written to the runtime log: a read that fails every two
-/// seconds writes one line, and a new one only when its code changes.
-static LOGGED_CHAT_FAILURE: Mutex<[Option<(&'static str, Option<&'static str>)>; 2]> = Mutex::new([None, None]);
+/// How long a call of the chat may take before it is written to the runtime log although it worked: a window that
+/// "does not answer" is a call that is slow, and the log must say which one and for how long.
+const SLOW_CHAT_CALL: Duration = Duration::from_secs(5);
+/// A slow call of the same kind is written again after this long, not at every slow call.
+const SLOW_CHAT_CALL_AGAIN: Duration = Duration::from_secs(30);
+
+/// What was last written to the runtime log for one kind of call: its failure (a read that fails every two seconds
+/// writes one line, and a new one only when its code changes; a call that works ends the failure) and when a slow one was.
+#[derive(Clone, Copy)]
+struct LoggedCall {
+    failure: Option<(&'static str, Option<&'static str>)>,
+    slow_at: Option<Instant>,
+}
+
+impl LoggedCall {
+    const NONE: Self = Self { failure: None, slow_at: None };
+}
+
+static LOGGED_CHAT_CALL: Mutex<[LoggedCall; 6]> = Mutex::new([LoggedCall::NONE; 6]);
+
+/// What a call of the chat leaves in the log, by the rules above: `None` when nothing new is to be said. A failure
+/// is written when it is not the one just written; a call that worked is written only when it was slow, and not
+/// again before `SLOW_CHAT_CALL_AGAIN`.
+fn chat_call_line(
+    last: &mut LoggedCall,
+    outcome: Result<(), (&'static str, Option<&'static str>)>,
+    took: Duration,
+    now: Instant,
+) -> Option<(&'static str, Option<&'static str>)> {
+    match outcome {
+        Err(failure) => {
+            if last.failure == Some(failure) {
+                return None;
+            }
+            last.failure = Some(failure);
+            Some(failure)
+        }
+        Ok(()) => {
+            last.failure = None;
+            if took < SLOW_CHAT_CALL || last.slow_at.is_some_and(|at| now.saturating_duration_since(at) < SLOW_CHAT_CALL_AGAIN) {
+                return None;
+            }
+            last.slow_at = Some(now);
+            Some(("ok_slow", None))
+        }
+    }
+}
 
 /// The rule the last container check stopped at, in the fixed words of `runtime_log::ATTEST_REASONS`; it
 /// goes to the runtime log with the failure it explains, and nowhere else.
@@ -3489,21 +3552,37 @@ fn note_attest_reason(reason: &'static str) {
     }
 }
 
-fn log_chat_failure(app: &tauri::AppHandle, operation: &'static str, code: &'static str) {
-    let slot = usize::from(operation == "send");
-    let reason = if matches!(code, "local_container_not_attested" | "container_unavailable") {
-        ATTEST_REASON.lock().ok().and_then(|mut said| said.take())
-    } else {
-        None
+/// A call of the chat (`runtime_log::CHAT_CALLS`) has ended: its failure, or its slowness, goes to the runtime log with the
+/// closed code, the operation and how long it took (T191: a chat that "did not answer" left nothing, and nobody could say
+/// which call was waiting for what). A log that cannot be written never stops the call.
+fn log_chat_call(app: Option<&tauri::AppHandle>, operation: &'static str, outcome: Result<(), &'static str>, took: Duration) {
+    log_chat_call_in(&LOGGED_CHAT_CALL, app.and_then(crate::runtime_log::RuntimeLog::new).as_ref(), operation, outcome, took);
+}
+
+fn log_chat_call_in(
+    memory: &Mutex<[LoggedCall; 6]>,
+    log: Option<&crate::runtime_log::RuntimeLog>,
+    operation: &'static str,
+    outcome: Result<(), &'static str>,
+    took: Duration,
+) {
+    let Some(slot) = crate::runtime_log::CHAT_CALLS.iter().position(|call| *call == operation) else {
+        return;
     };
-    if let Ok(mut last) = LOGGED_CHAT_FAILURE.lock() {
-        if last[slot] == Some((code, reason)) {
-            return;
-        }
-        last[slot] = Some((code, reason));
-    }
-    if let Some(log) = crate::runtime_log::RuntimeLog::new(app) {
-        log.record_chat_failure_because(operation, code, reason);
+    let outcome = outcome.map_err(|code| {
+        let reason = if matches!(code, "local_container_not_attested" | "container_unavailable") {
+            ATTEST_REASON.lock().ok().and_then(|mut said| said.take())
+        } else {
+            None
+        };
+        (code, reason)
+    });
+    let line = match memory.lock() {
+        Ok(mut last) => chat_call_line(&mut last[slot], outcome, took, Instant::now()),
+        Err(_) => None,
+    };
+    if let (Some((code, reason)), Some(log)) = (line, log) {
+        log.record_chat_call(operation, code, reason, took);
     }
 }
 
@@ -3721,6 +3800,7 @@ fn enter_request(window: &str, agent: &str, message_id: &str) -> Result<(), Dire
 /// question takes them, words. Only the app's own window may answer, as only it may send.
 #[tauri::command]
 pub(crate) async fn direct_chat_answer(
+    app: tauri::AppHandle,
     window: tauri::Window,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
@@ -3730,6 +3810,7 @@ pub(crate) async fn direct_chat_answer(
     text: Option<String>,
 ) -> Result<DirectChatAnswerReceipt, DirectChatError> {
     let input = answer_request(window.label(), &agent_id, &question_id, &choices, text.as_deref())?;
+    let started = Instant::now();
     let result = chat_write(
         &state,
         &scopes,
@@ -3737,6 +3818,7 @@ pub(crate) async fn direct_chat_answer(
         "answer_failed",
     )
     .await;
+    log_chat_call(Some(&app), "answer", result.as_ref().map(|_| ()).map_err(|error| error.code), started.elapsed());
     if let Err(error) = &result {
         emit(&state.inner, DirectChatEvent::Error { operation: "answer", code: error.code });
     }
@@ -3747,6 +3829,7 @@ pub(crate) async fn direct_chat_answer(
 /// team presses only if that message is still in the composer, and says what it saw.
 #[tauri::command]
 pub(crate) async fn direct_chat_enter(
+    app: tauri::AppHandle,
     window: tauri::Window,
     state: State<'_, DirectChatState>,
     scopes: State<'_, AccountScopeState>,
@@ -3754,7 +3837,9 @@ pub(crate) async fn direct_chat_enter(
     message_id: String,
 ) -> Result<DirectChatReceipt, DirectChatError> {
     enter_request(window.label(), &agent_id, &message_id)?;
+    let started = Instant::now();
     let result = chat_write(&state, &scopes, move |inner| enter_impl(inner, &agent_id, &message_id), "send_failed").await;
+    log_chat_call(Some(&app), "enter", result.as_ref().map(|_| ()).map_err(|error| error.code), started.elapsed());
     match &result {
         Ok(receipt) => emit(&state.inner, DirectChatEvent::Send { receipt: receipt.clone() }),
         Err(error) => emit(&state.inner, DirectChatEvent::Error { operation: "enter", code: error.code }),
@@ -6380,7 +6465,7 @@ mod tests {
         assert_eq!(crate::direct_chat::probe_no_container_code(&vps), "container_unavailable");
         // a host that could not be asked at all stays «unavailable», whichever it is
         let source = include_str!("direct_chat.rs");
-        let body = source.split("fn probe(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let body = source.split("fn probe_unlogged(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(body.contains("Err(_) => status(\"error\", Some(\"container_unavailable\"))"));
         assert!(body.contains("tunnel_unavailable"));
     }
@@ -6824,5 +6909,89 @@ mod attachment_command_tests {
         assert!(command.contains("local_wall_clock("));
         // the person's own name goes back to their screen, never into the message or a log
         assert!(!command.contains("attachment_message(&locale, &saved.display)"));
+    }
+}
+
+#[cfg(test)]
+mod chat_call_log_tests {
+    use super::*;
+
+    fn at(seconds: u64, origin: Instant) -> Instant {
+        origin + Duration::from_secs(seconds)
+    }
+
+    #[test]
+    fn a_failure_is_written_once_until_its_code_changes_or_a_call_works() {
+        let origin = Instant::now();
+        let mut last = LoggedCall::NONE;
+        let failed = |code| Err((code, None));
+        let took = Duration::from_millis(200);
+        assert_eq!(chat_call_line(&mut last, failed("read_failed"), took, at(0, origin)), Some(("read_failed", None)));
+        // every two seconds, the same failure: nothing new
+        assert_eq!(chat_call_line(&mut last, failed("read_failed"), took, at(2, origin)), None);
+        assert_eq!(chat_call_line(&mut last, failed("read_failed"), took, at(4, origin)), None);
+        // another code, or the same code for another reason of the container check, is new
+        assert_eq!(chat_call_line(&mut last, failed("process_timeout"), took, at(6, origin)), Some(("process_timeout", None)));
+        assert_eq!(
+            chat_call_line(&mut last, Err(("local_container_not_attested", Some("label_config_hash_differs"))), took, at(8, origin)),
+            Some(("local_container_not_attested", Some("label_config_hash_differs")))
+        );
+        // a call that works ends the failure: the same failure after it is a new one
+        assert_eq!(chat_call_line(&mut last, Ok(()), took, at(10, origin)), None);
+        assert_eq!(chat_call_line(&mut last, failed("process_timeout"), took, at(12, origin)), Some(("process_timeout", None)));
+    }
+
+    #[test]
+    fn a_call_that_worked_is_written_only_when_slow_and_not_again_for_a_while() {
+        let origin = Instant::now();
+        let mut last = LoggedCall::NONE;
+        assert_eq!(chat_call_line(&mut last, Ok(()), SLOW_CHAT_CALL - Duration::from_millis(1), at(0, origin)), None);
+        assert_eq!(chat_call_line(&mut last, Ok(()), SLOW_CHAT_CALL, at(1, origin)), Some(("ok_slow", None)));
+        // the next slow ones within the pause are not written, the one after it is
+        assert_eq!(chat_call_line(&mut last, Ok(()), Duration::from_secs(9), at(10, origin)), None);
+        assert_eq!(chat_call_line(&mut last, Ok(()), Duration::from_secs(9), at(1 + 30, origin)), Some(("ok_slow", None)));
+        // a fast call is never written
+        assert_eq!(chat_call_line(&mut last, Ok(()), Duration::from_millis(900), at(100, origin)), None);
+    }
+
+    #[test]
+    fn each_kind_of_call_has_its_own_memory_and_the_log_says_operation_code_and_time() {
+        let dir = std::env::temp_dir().join(format!("jht-chat-call-log-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let log = crate::runtime_log::RuntimeLog::in_dir(&dir);
+        let memory = Mutex::new([LoggedCall::NONE; 6]);
+        // a probe that failed after 8.7 s, a read that failed fast, a send that worked slowly
+        log_chat_call_in(&memory, Some(&log), "probe", Err("container_unavailable"), Duration::from_millis(8_700));
+        log_chat_call_in(&memory, Some(&log), "read", Err("read_failed"), Duration::from_millis(120));
+        log_chat_call_in(&memory, Some(&log), "send", Ok(()), Duration::from_secs(7));
+        // the same probe failure again, and a fast probe: nothing more
+        log_chat_call_in(&memory, Some(&log), "probe", Err("container_unavailable"), Duration::from_millis(9_000));
+        log_chat_call_in(&memory, Some(&log), "connect", Ok(()), Duration::from_millis(300));
+        // an operation outside the list leaves nothing
+        log_chat_call_in(&memory, Some(&log), "format_disk", Err("read_failed"), Duration::from_secs(1));
+        let text = fs::read_to_string(log.path()).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 3, "{text}");
+        assert!(lines[0].contains(" direct_chat.probe: container_unavailable took_ms=8700"), "{text}");
+        assert!(lines[1].contains(" direct_chat.read: read_failed took_ms=120"), "{text}");
+        assert!(lines[2].contains(" direct_chat.send: ok_slow took_ms=7000"), "{text}");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn every_call_of_the_chat_ends_in_the_log() {
+        let source = include_str!("direct_chat.rs");
+        for (name, call) in [
+            ("pub(crate) async fn direct_chat_read(", "\"read\""),
+            ("pub(crate) async fn direct_chat_send(", "\"send\""),
+            ("pub(crate) async fn direct_chat_answer(", "\"answer\""),
+            ("pub(crate) async fn direct_chat_enter(", "\"enter\""),
+            ("async fn connect_scoped(", "\"connect\""),
+            ("fn probe(connection: &Connection)", "\"probe\""),
+        ] {
+            let body = source.split(name).nth(1).unwrap_or_else(|| panic!("{name}")).split("\n}\n").next().unwrap();
+            assert!(body.contains("log_chat_call(") && body.contains(call), "{name} ends without a line in the runtime log");
+            assert!(body.contains("Instant::now()"), "{name} does not time itself");
+        }
     }
 }
