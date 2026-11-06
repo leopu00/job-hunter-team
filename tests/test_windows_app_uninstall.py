@@ -739,6 +739,26 @@ def test_remove_keeps_a_jht_that_is_not_ours_and_the_shared_path_entry(tmp_path)
 
 
 @needs_powershell
+@pytest.mark.parametrize("left", ["", "\r\n", "@echo off\r\nwhere pwsh.exe >nul 2>&1\r\n"], ids=["empty", "blank", "first-lines"])
+def test_remove_takes_a_command_file_that_a_write_cut_short(tmp_path, left):
+    """A jht.cmd left empty or cut by a failed write is ours: the beginning of our text, nobody else's command."""
+    user = User(tmp_path / "a")
+    (user.bin / "jht.cmd").write_bytes(left.encode("ascii"))
+    run = _run(tmp_path, user, mode="Remove")
+    assert run.code == 0, run.stdout + run.stderr
+    assert not (user.bin / "jht.cmd").exists()
+
+
+@needs_powershell
+def test_remove_keeps_a_command_file_that_is_not_the_beginning_of_ours(tmp_path):
+    user = User(tmp_path / "a")
+    (user.bin / "jht.cmd").write_bytes(b"@echo off\r\necho someone else's jht\r\n")
+    run = _run(tmp_path, user, mode="Remove")
+    assert run.code == 0, run.stdout + run.stderr
+    assert (user.bin / "jht.cmd").read_bytes() == b"@echo off\r\necho someone else's jht\r\n"
+
+
+@needs_powershell
 def test_remove_with_the_game_keeps_its_data_and_says_why(tmp_path):
     user = User(tmp_path / "a")
     run = _run(tmp_path, user, mode="Remove", language="it", game=True)

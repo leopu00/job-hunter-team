@@ -582,7 +582,9 @@ exit /b %errorlevel%
 powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
 exit /b %errorlevel%
 "@
-  Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
+  # Taken in place by a temporary file, never written in place: a program that holds the file for a moment must not leave it empty.
+  $shimBytes = [Text.Encoding]::ASCII.GetBytes((($shimContent -replace "`r?`n", "`r`n") + "`r`n"))
+  Publish-JhtFile -Destination $shimDest -Bytes $shimBytes
   Set-JhtNodeOwner -Path $shimDest
   Write-Ok "Podman runtime: $RuntimeDir"
   Write-Ok "wrapper: $wrapperDest"
