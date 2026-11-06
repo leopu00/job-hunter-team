@@ -23,6 +23,7 @@ import {
 import { THEME_TEXT } from "./theme.i18n";
 import { THEME_EDITOR_TEXT } from "./theme-editor.i18n";
 import ThemeEditor from "./ThemeEditor";
+import { PaletteIcon } from "./icons";
 
 const MENU_ID = "desktop-theme-menu";
 
@@ -251,6 +252,7 @@ export default function ThemePicker() {
             }}
             onKeyDown={moveFocus}
           >
+            <PaletteIcon />
             <span>{editorText.open}</span>
           </button>
         </div>

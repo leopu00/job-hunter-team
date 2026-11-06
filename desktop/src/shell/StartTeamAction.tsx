@@ -6,6 +6,7 @@ import { resumeOnboardingTeamStart, type OnboardingNativeProgress, type TeamResu
 import { RUNTIME_TEXT } from "../lib/onboarding-runtime.i18n";
 import { START_TEAM_PROGRESS_TEXT } from "./start-team-progress.i18n";
 import { TEAM_OFF_TEXT } from "./team-off.i18n";
+import { PlayIcon } from "./icons";
 
 /** What the page says when it asked for its data again: true it has it, false it does not yet, nothing: not known. */
 export type StartedReading = boolean | void | Promise<boolean | void>;
@@ -199,8 +200,9 @@ export function StartTeamAction({
         type="button"
         data-testid="start-team"
         onClick={() => void start()}
-        className="shrink-0 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] hover:border-[var(--color-border-glow)] disabled:opacity-50"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded border border-[var(--color-border)] px-3 py-1 text-[12px] font-semibold text-[var(--color-bright)] hover:border-[var(--color-border-glow)] disabled:opacity-50"
       >
+        <PlayIcon />
         {TEAM_OFF_TEXT[locale].start}
       </button>}
     </span>

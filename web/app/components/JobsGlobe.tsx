@@ -32,7 +32,7 @@ import {
 } from "@/lib/basemap-labels";
 import { attachTouchAxisLock } from "@/lib/globe-touch-axis-lock";
 import { ensureMaplibreWorkerUrl } from "@/lib/maplibre-worker";
-import { scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
+import { darkenRgb, SCORE_INK_KEEP_LIGHT, scoreToRgb, scoreSpectrumCss } from "@/lib/score-color";
 import { canonicalCountry, canonicalCityKey } from "@/lib/city-gazetteer";
 import { makeT } from "@/lib/i18n-dict";
 import GlobeLoadingStatus from "./GlobeLoadingStatus";
@@ -171,6 +171,8 @@ function iconIdForScores(scores: (number | null)[], remote: boolean): string {
 // Tinta del distintivo "da remoto" (anello alla base del fascio).
 // Azzurro: fuori dalla scala verde degli score, non ruba significato.
 const REMOTE_RING_RGB = "90,180,255";
+// Sul basemap chiaro lo stesso azzurro sparisce: un blu più scuro, stessa tinta.
+const REMOTE_RING_RGB_LIGHT = "24,104,196";
 
 function createGroupBeamsImageData(
   scores: (number | null)[],
@@ -179,7 +181,12 @@ function createGroupBeamsImageData(
   // bassi, su un canvas più piccolo. È il costo per-icona che poi
   // diventa texture nell'atlante GPU e ridisegno per frame.
   profile: MapTierProfile,
+  // Base del tema: sul chiaro i colori dello score (giallo, ambra, verde vivo) si leggono appena sulla terra chiara,
+  // quindi si scuriscono quanto il testo dello score (SCORE_INK_KEEP_LIGHT), la tinta resta.
+  mode: "dark" | "light" = "dark",
 ): { data: ImageData; w: number; h: number } | null {
+  const scoreRgb = (score: number | null) =>
+    mode === "light" ? darkenRgb(scoreToRgb(score), SCORE_INK_KEEP_LIGHT) : scoreToRgb(score);
   const total = Math.max(1, scores.length);
   // Sort desc e cap ai top N_CAP — visualizziamo la testa della
   // distribuzione, non l'intero spettro.
@@ -240,7 +247,7 @@ function createGroupBeamsImageData(
   // topSal: come per i beam, il gruppo il cui MIGLIOR score è basso ha
   // halo/core smorzati — solo i cluster buoni "brillano" a terra.
   const topScore = sortedDesc[0];
-  const [hr, hg, hb] = scoreToRgb(topScore);
+  const [hr, hg, hb] = scoreRgb(topScore);
   const haloBase = `rgba(${hr},${hg},${hb},`;
   const topSal = 0.4 + 0.6 * scoreNormHeight(topScore);
 
@@ -274,16 +281,22 @@ function createGroupBeamsImageData(
     const x = cx + xOff;
     const y0 = baseY + yOff;
     const topY = y0 - height;
-    const topW = 0.8;
+    // sul chiaro la punta è un filo scuro: un po' più larga, o non si vede
+    const topW = mode === "light" ? 1.6 : 0.8;
     // Salienza ∝ score (feedback utente 21/07, SOLO globo — i grafici
     // tengono lo spettro pieno): con lo spettro al posto della scala
     // solo-verde, i beam rossi/ARANCIONI (score medio-bassi) attiravano
     // l'occhio più dei verdi. Alpha e saturazione crescono con lo score
     // su curve ripide (esponente > 1): la fascia arancione 45-65 si
     // spegne davvero, i verdi alti restano pieni e vivi.
-    const [r0, g0, b0] = scoreToRgb(score);
-    const sal = 0.22 + 0.78 * Math.pow(norm, 1.7);
-    const keep = 0.4 + 0.6 * Math.pow(norm, 1.3);
+    const [r0, g0, b0] = scoreRgb(score);
+    // Sul chiaro un fascio chiaro o trasparente sparisce nella terra chiara: il
+    // colore resta pieno (niente sbiadire verso il grigio per gli score bassi),
+    // la salienza parte alta e la punta non sfuma fino a sparire. L'ordine fra
+    // score bassi e alti resta, nell'altezza e nell'opacità.
+    const light = mode === "light";
+    const sal = light ? 0.72 + 0.28 * Math.pow(norm, 1.7) : 0.22 + 0.78 * Math.pow(norm, 1.7);
+    const keep = light ? 0.85 + 0.15 * norm : 0.4 + 0.6 * Math.pow(norm, 1.3);
     const gray = (r0 + g0 + b0) / 3;
     const r = Math.round(gray + (r0 - gray) * keep);
     const g = Math.round(gray + (g0 - gray) * keep);
@@ -292,9 +305,9 @@ function createGroupBeamsImageData(
 
     const grad = ctx.createLinearGradient(x, y0, x, topY);
     grad.addColorStop(0, `${base}${sal})`);
-    grad.addColorStop(0.12, `${base}${0.92 * sal})`);
-    grad.addColorStop(0.5, `${base}${0.4 * sal})`);
-    grad.addColorStop(1, `${base}0)`);
+    grad.addColorStop(0.12, `${base}${(light ? 0.96 : 0.92) * sal})`);
+    grad.addColorStop(0.5, `${base}${(light ? 0.78 : 0.4) * sal})`);
+    grad.addColorStop(1, `${base}${light ? 0.4 * sal : 0})`);
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(x - beamW / 2, y0);
@@ -326,12 +339,12 @@ function createGroupBeamsImageData(
     const ry = rx * yScale;
     ctx.beginPath();
     ctx.ellipse(cx, baseY, rx + 2, ry + 2, 0, 0, 2 * Math.PI);
-    ctx.strokeStyle = `rgba(${REMOTE_RING_RGB},0.35)`;
+    ctx.strokeStyle = `rgba(${mode === "light" ? REMOTE_RING_RGB_LIGHT : REMOTE_RING_RGB},0.35)`;
     ctx.lineWidth = 5;
     ctx.stroke();
     ctx.beginPath();
     ctx.ellipse(cx, baseY, rx, ry, 0, 0, 2 * Math.PI);
-    ctx.strokeStyle = `rgba(${REMOTE_RING_RGB},0.9)`;
+    ctx.strokeStyle = `rgba(${mode === "light" ? REMOTE_RING_RGB_LIGHT : REMOTE_RING_RGB},0.9)`;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
@@ -683,6 +696,35 @@ function calmBasemapNames(map: MaplibreMap, mode: "dark" | "light") {
   }
 }
 
+// Sul desktop ogni palette ha i suoi colori (data-jht-theme, i token sulla
+// radice): la terra prende il pannello, il mare la riga, gli edifici la
+// scheda. Così il globo segue il tema, anche un template o un tema personale
+// (Foresta = terra e mare verdi), sempre a tinta unita. Lo Scuro, la base,
+// resta quello di sempre; sul web (nessun data-jht-theme) non cambia niente.
+function desktopPaletteTint(): Array<[string, Parameters<MaplibreMap["setPaintProperty"]>[1], string]> {
+  if (typeof document === "undefined") return [];
+  const palette = document.documentElement.dataset.jhtTheme;
+  if (!palette || palette === "dark") return [];
+  const tokens = getComputedStyle(document.documentElement);
+  const token = (name: string) => tokens.getPropertyValue(name).trim();
+  const land = token("--color-panel");
+  const water = token("--color-row");
+  const building = token("--color-card");
+  if (![land, water, building].every((colour) => /^#[0-9a-f]{6}$/i.test(colour))) return [];
+  return [
+    ["background", "background-color", land],
+    ["water", "fill-color", water],
+    ["landcover_wood", "fill-color", land],
+    ["landcover_grass", "fill-color", land],
+    ["landuse_overlay_national_park", "fill-color", land],
+    ["landuse_park", "fill-color", land],
+    ["landuse_residential", "fill-color", land],
+    ["national_park", "fill-color", land],
+    ["building", "fill-color", building],
+    ["building-3d", "fill-color", building],
+  ];
+}
+
 // Paint override per allineare il basemap al theme JHT.
 // Dark = inverso cromatico della light: stessa palette grayscale
 // neutra (warm offwhite → warm darkgray), nessun verde/blu acceso.
@@ -721,13 +763,40 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
         ];
   const style = map.getStyle();
   const layerIds = new Set((style?.layers ?? []).map((l) => l.id));
-  for (const [layerId, prop, value] of tweaks) {
+  for (const [layerId, prop, value] of [...tweaks, ...desktopPaletteTint()]) {
     if (layerIds.has(layerId)) {
       try {
         map.setPaintProperty(layerId, prop, value);
       } catch {
         /* layer non supporta la prop, skip */
       }
+    }
+  }
+}
+
+// Numeri e nomi accanto ai fasci: bianchi con alone nero sul basemap scuro, neri con alone bianco sul chiaro (il bianco
+// su una terra chiara si legge solo grazie all'alone, e pesa come una macchia).
+function pinLabelInk(mode: "dark" | "light") {
+  return mode === "light"
+    ? { text: "#111111", halo: "rgba(255,255,255,0.95)", leader: "rgba(0,0,0,0.55)" }
+    : { text: "#ffffff", halo: "rgba(0,0,0,0.95)", leader: "rgba(255,255,255,0.6)" };
+}
+
+// Riapplica gli inchiostri delle etichette ai layer già presenti: se il cambio di style li conserva, restano quelli del
+// tema di prima.
+function applyPinLabelInk(map: MaplibreMap, mode: "dark" | "light") {
+  const ink = pinLabelInk(mode);
+  for (const [id, prop, value] of [
+    [LAYER_DOT_ID, "text-color", ink.text],
+    [LAYER_DOT_ID, "text-halo-color", ink.halo],
+    [LAYER_LEADER_TEXT_ID, "text-color", ink.text],
+    [LAYER_LEADER_TEXT_ID, "text-halo-color", ink.halo],
+    [LAYER_LEADER_LINE_ID, "line-color", ink.leader],
+  ] as const) {
+    try {
+      if (map.getLayer(id)) map.setPaintProperty(id, prop, value);
+    } catch {
+      /* layer senza la prop: resta com'è */
     }
   }
 }
@@ -1372,10 +1441,10 @@ export default function JobsGlobe({
             "symbol-sort-key": 999,
           },
           paint: {
-            "text-color": "#ffffff",
-            // Halo nero più spesso e opaco per coprire i nomi città
+            "text-color": pinLabelInk(themeRef.current).text,
+            // Halo più spesso e opaco per coprire i nomi città
             // della basemap dietro al numero (es. "11" su "Milan").
-            "text-halo-color": "rgba(0,0,0,0.95)",
+            "text-halo-color": pinLabelInk(themeRef.current).halo,
             "text-halo-width": 2.5,
             "text-halo-blur": 0.5,
           },
@@ -1392,7 +1461,7 @@ export default function JobsGlobe({
           type: "line",
           source: LEADER_SOURCE_ID,
           filter: ["==", ["geometry-type"], "LineString"],
-          paint: { "line-color": "rgba(255,255,255,0.6)", "line-width": 1 },
+          paint: { "line-color": pinLabelInk(themeRef.current).leader, "line-width": 1 },
         });
         map.addLayer({
           id: LAYER_LEADER_TEXT_ID,
@@ -1419,14 +1488,15 @@ export default function JobsGlobe({
             "symbol-sort-key": 999,
           },
           paint: {
-            "text-color": "#ffffff",
-            "text-halo-color": "rgba(0,0,0,0.95)",
+            "text-color": pinLabelInk(themeRef.current).text,
+            "text-halo-color": pinLabelInk(themeRef.current).halo,
             "text-halo-width": 2.5,
             "text-halo-blur": 0.5,
           },
         });
       }
       layersReadyRef.current = true;
+      applyPinLabelInk(map, themeRef.current);
       // Halo/etichette secondo il tier corrente: va rifatto a ogni
       // style.load perché il cambio tema ricarica lo style da zero.
       applyProfileToStyle(map, profileRef.current);
@@ -1747,8 +1817,31 @@ export default function JobsGlobe({
     // style.load handler riapplichera' projection + tint + layer pin
     // perche' map.on('style.load', ...) e' persistent fra setStyle.
     layersReadyRef.current = false;
+    // I fasci sono disegnati coi colori della base di prima (sul chiaro sono
+    // più scuri): si buttano e si rigenerano al primo syncData.
+    for (const id of Array.from(registeredIconsRef.current)) {
+      try {
+        if (map.hasImage(id)) map.removeImage(id);
+      } catch {
+        /* race ok */
+      }
+    }
+    registeredIconsRef.current.clear();
     map.setStyle(nextTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
   }, [resolvedTheme]);
+
+  // Sul desktop la terra e il mare hanno i colori della palette scelta: un
+  // cambio di palette che resta nella stessa base (Chiaro → Grigio chiaro, un
+  // tema personale salvato di nuovo) non ricarica lo style, ritinge e basta.
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(() => {
+      const map = mapRef.current;
+      if (map && layersReadyRef.current) tintMap(map, themeRef.current);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-jht-theme", "style"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Cambio di lingua a mappa ferma: i nomi si riscrivono senza ricaricare lo
   // style (il cambio tema, invece, passa da style.load).
@@ -1778,6 +1871,7 @@ export default function JobsGlobe({
           g.scores,
           g.remote,
           profileRef.current,
+          themeRef.current,
         );
         if (img) {
           // pixelRatio 2 → l'icon-size 1.0 renderizza l'immagine a
@@ -2362,7 +2456,7 @@ export default function JobsGlobe({
                     rx="6.5"
                     ry="2.8"
                     fill="none"
-                    stroke={`rgb(${REMOTE_RING_RGB})`}
+                    stroke={`rgb(${paintedTheme(resolvedTheme) === "light" ? REMOTE_RING_RGB_LIGHT : REMOTE_RING_RGB})`}
                     strokeWidth="1.2"
                   />
                 </svg>

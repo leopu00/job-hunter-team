@@ -55,3 +55,27 @@ export function scoreInkCss(score: number | null | undefined): string {
   const [r, g, b] = scoreToRgb(score);
   return `color-mix(in oklab, rgb(${r}, ${g}, ${b}) var(--score-ink-keep, 100%), black)`;
 }
+
+const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const fromLinear = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+
+/**
+ * An sRGB colour (0-255 channels) mixed with black in Oklab, keeping `keep` of it: what `color-mix(in oklab, C keep, black)`
+ * gives in the browser. For what is drawn without CSS (the globe's beams, painted on a canvas) on a light base.
+ */
+export function darkenRgb([r, g, b]: [number, number, number], keep: number): [number, number, number] {
+  const [R, G, B] = [r, g, b].map((v) => toLinear(v / 255));
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B) * keep;
+  const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B) * keep;
+  const q = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B) * keep;
+  // scaling the cone responses scales L, a and b alike: the same as scaling the Oklab colour
+  const [lc, mc, qc] = [l ** 3, m ** 3, q ** 3];
+  return [
+    4.0767416621 * lc - 3.3077115913 * mc + 0.2309699292 * qc,
+    -1.2684380046 * lc + 2.6097574011 * mc - 0.3413193965 * qc,
+    -0.0041960863 * lc - 0.7034186147 * mc + 1.707614701 * qc,
+  ].map((v) => Math.round(fromLinear(Math.min(1, Math.max(0, v))) * 255)) as [number, number, number];
+}
+
+/** How much of the score colour a light base keeps (globals.css sets the same for the CSS: --score-ink-keep). */
+export const SCORE_INK_KEEP_LIGHT = 0.55;
