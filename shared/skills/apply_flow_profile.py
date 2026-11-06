@@ -68,6 +68,33 @@ def _core_fact_missing(platform: str, label: str, step: str, control_type: str =
     )
 
 
+def _location_input(recipe, platform, label, field_key, source_key, step):
+    def text_answer(present: bool, value: Any) -> str:
+        if present and (isinstance(value, bool) or not isinstance(value, (str, int, float))):
+            raise _inferred_answer_refused(
+                recipe,
+                BlockedHuman("answer_type_unknown", f"{platform} location needs text: {_safe_label(label)}", step),
+                lambda: None,
+            )
+        return str(value).strip() if present else ""
+
+    # What to type, in order: the suggestion the CLOSER chose for this field;
+    # the place it worked out to search for ("location search", CL-08, from
+    # the profile or the CV); the profile's location, only when it names a
+    # place (1888 after patch 21: a "…wide" work preference found two villages).
+    chosen_present, chosen = recipe._answer_for(label, field_key)
+    wanted, origin = text_answer(chosen_present, chosen), "chosen"
+    if not wanted:
+        search_present, search = recipe._answer_for(location_choice.SEARCH_LABEL, location_choice.SEARCH_KEY)
+        wanted, origin = text_answer(search_present, search), "search"
+    if not wanted:
+        profile_location = profile_facts.profile_value(recipe.profile, "location") or ""
+        if location_choice.searchable(profile_location):
+            wanted, origin = profile_location, "profile"
+            recipe.answer_sources[source_key] = "profile"
+    return wanted, origin
+
+
 def _fill_suggested_location(
     recipe: Any,
     page: Any,
@@ -98,29 +125,7 @@ def _fill_suggested_location(
         "options": [],
     }
 
-    def text_answer(present: bool, value: Any) -> str:
-        if present and (isinstance(value, bool) or not isinstance(value, (str, int, float))):
-            raise _inferred_answer_refused(
-                recipe,
-                BlockedHuman("answer_type_unknown", f"{platform} location needs text: {_safe_label(label)}", step),
-                lambda: None,
-            )
-        return str(value).strip() if present else ""
-
-    # What to type, in order: the suggestion the CLOSER chose for this field;
-    # the place it worked out to search for ("location search", CL-08, from
-    # the profile or the CV); the profile's location, only when it names a
-    # place (1888 after patch 21: a "…wide" work preference found two villages).
-    chosen_present, chosen = recipe._answer_for(label, field_key)
-    wanted, origin = text_answer(chosen_present, chosen), "chosen"
-    if not wanted:
-        search_present, search = recipe._answer_for(location_choice.SEARCH_LABEL, location_choice.SEARCH_KEY)
-        wanted, origin = text_answer(search_present, search), "search"
-    if not wanted:
-        profile_location = profile_facts.profile_value(recipe.profile, "location") or ""
-        if location_choice.searchable(profile_location):
-            wanted, origin = profile_location, "profile"
-            recipe.answer_sources[source_key] = "profile"
+    wanted, origin = _location_input(recipe, platform, label, field_key, source_key, step)
     if not wanted:
         if not required:
             return
@@ -151,6 +156,16 @@ def _fill_suggested_location(
             BlockedHuman("answer_not_accepted", f"{platform} did not keep the chosen location for: {_safe_label(label)}", step),
             lambda: None,
         )
+    return _location_stop(
+        recipe, page, platform, control, label, required, step,
+        source_key, search_request, origin, seen, answered,
+    )
+
+
+def _location_stop(
+    recipe, page, platform, control, label, required, step,
+    source_key, search_request, origin, seen, answered,
+):
     location_choice.dismiss(page, control)
     if origin == "profile":
         recipe.answer_sources.pop(source_key, None)

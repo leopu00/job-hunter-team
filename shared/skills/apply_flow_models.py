@@ -110,6 +110,33 @@ class Receipt:
         )
 
 
+def _checkpoint_data(path: Path, position_id: int, url: str) -> dict[str, Any] | None:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, TypeError) as exc:
+        raise FlowError(f"checkpoint cannot be read: {exc}") from exc
+    if not isinstance(raw, dict) or raw.get("version") != CHECKPOINT_VERSION:
+        raise FlowError("checkpoint has an unknown format")
+    if raw.get("position_id") != int(position_id) or raw.get("url") != url:
+        raise FlowError("checkpoint belongs to a different application")
+    return raw
+
+
+def _check_checkpoint_state(raw: dict[str, Any]) -> None:
+    valid_states = set(STEP_ORDER) | {
+        "blocked_human",
+        "denied",
+        "dry_run",
+        "complete",
+        EMAIL_CHANNEL_STATE,
+        page_failure.RETRY_LATER_STATE,
+    }
+    if raw.get("state") not in valid_states:
+        raise FlowError("checkpoint has an unknown state")
+
+
 @dataclass
 class FlowCheckpoint:
     position_id: int
@@ -174,26 +201,10 @@ class FlowCheckpoint:
 
     @classmethod
     def load(cls, path: Path, position_id: int, url: str) -> "FlowCheckpoint":
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
+        raw = _checkpoint_data(path, position_id, url)
+        if raw is None:
             return cls.new(position_id, url)
-        except (OSError, ValueError, TypeError) as exc:
-            raise FlowError(f"checkpoint cannot be read: {exc}") from exc
-        if not isinstance(raw, dict) or raw.get("version") != CHECKPOINT_VERSION:
-            raise FlowError("checkpoint has an unknown format")
-        if raw.get("position_id") != int(position_id) or raw.get("url") != url:
-            raise FlowError("checkpoint belongs to a different application")
-        valid_states = set(STEP_ORDER) | {
-            "blocked_human",
-            "denied",
-            "dry_run",
-            "complete",
-            EMAIL_CHANNEL_STATE,
-            page_failure.RETRY_LATER_STATE,
-        }
-        if raw.get("state") not in valid_states:
-            raise FlowError("checkpoint has an unknown state")
+        _check_checkpoint_state(raw)
         completed = raw.get("completed_steps")
         if not isinstance(completed, list) or any(step not in STEP_ORDER for step in completed):
             raise FlowError("checkpoint has invalid completed steps")
