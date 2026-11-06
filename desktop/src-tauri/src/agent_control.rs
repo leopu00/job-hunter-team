@@ -61,7 +61,7 @@ const MAX_REPLY: usize = 256 * 1024;
 const SCREEN_LIVE_MS: u64 = 2_000;
 const SCREEN_SLOW_MS: u64 = 10_000;
 
-/// The script's codes (100-112, 115-122), the CLI's (113-114) and the pinned target's.
+/// The script's codes (100-112, 115-124), the CLI's (113-114) and the pinned target's.
 const EXITS: &[(i32, &str)] = &[
     (2, "agent_control_unsupported"),
     (70, "existing_team_runtime_changed"),
@@ -88,6 +88,8 @@ const EXITS: &[(i32, &str)] = &[
     (120, "questions_unsupported"),
     (121, "team_stop_failed"),
     (122, "provider_not_configured"),
+    (123, "agent_pause_failed"),
+    (124, "agent_resume_failed"),
 ];
 
 /// The codes of the exclusions that act on the score (`acting` of shared/feedback-reasons.json).
@@ -97,6 +99,7 @@ const RESULTS: &[&str] = &[
     "excluded", "exclusion_withdrawn", "answered", "already_answered", "expired",
     "started", "already_running", "stopped", "already_stopped", "restarted", "paused",
     "already_paused", "resumed", "not_paused", "team_stopped", "team_already_stopped",
+    "agent_paused", "agent_already_paused", "agent_resumed", "agent_not_paused",
 ];
 
 // ── how the VPS was linked ──────────────────────────────────────────────────
@@ -129,6 +132,9 @@ pub(crate) enum PauseExit {
     /// at 8» in the user's own time zone and sends it in UTC.
     Until { until: String },
     WeeklyReset {},
+    /// «Until I say so» (JHT-T181): the person's word is the exit. The team's own cap of 7 days rings the
+    /// wake-up if it is forgotten.
+    UntilResumed {},
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -146,6 +152,11 @@ pub(crate) enum ControlRequest {
     Restart { session: String, target: String, confirmed: bool },
     Pause { exit: PauseExit, target: String, confirmed: bool },
     Resume { target: String, confirmed: bool },
+    /// The pause of ONE agent (JHT-T181): its session stays on with its context, the rest of the team works.
+    #[serde(rename = "pause_agent")]
+    PauseAgent { session: String, target: String, confirmed: bool },
+    #[serde(rename = "resume_agent")]
+    ResumeAgent { session: String, target: String, confirmed: bool },
     /// «Ferma la squadra» (JHT-T54): what `jht team stop` does, on the team the panel controls.
     #[serde(rename = "stop_team")]
     StopTeam { target: String, confirmed: bool },
@@ -202,8 +213,11 @@ impl ControlRequest {
                     Some(vec!["pause".into(), "--until".into(), until.clone()])
                 }
                 PauseExit::WeeklyReset {} => Some(vec!["pause".into(), "--wake-on-weekly".into()]),
+                PauseExit::UntilResumed {} => Some(vec!["pause".into(), "--until-resumed".into()]),
                 _ => None,
             },
+            Self::PauseAgent { session, .. } => with("pause-agent", session),
+            Self::ResumeAgent { session, .. } => with("resume-agent", session),
             Self::Resume { .. } => Some(vec!["resume".into()]),
             Self::StopTeam { .. } => Some(vec!["stop-team".into()]),
             Self::Exclusions {} => Some(vec!["exclusions".into()]),
@@ -222,6 +236,8 @@ impl ControlRequest {
             | Self::Stop { target, confirmed, .. }
             | Self::Restart { target, confirmed, .. }
             | Self::Pause { target, confirmed, .. }
+            | Self::PauseAgent { target, confirmed, .. }
+            | Self::ResumeAgent { target, confirmed, .. }
             | Self::ExclusionAccept { target, confirmed, .. }
             | Self::ExclusionWithdraw { target, confirmed, .. }
             | Self::Answer { target, confirmed, .. }
@@ -687,6 +703,10 @@ pub(crate) fn shape_team(reply: &Value) -> Option<Value> {
             "state": word(standby.get("state"), &["off", "active", "expired", "invalid", "unknown"]),
             "until": until,
             "weeklyReset": standby.get("weekly_reset") == Some(&Value::Bool(true)),
+            // JHT-T181: the person's pause (the Assistente stays on) against the technical standby, and
+            // whether it waits for the person's word. An image older than this says «standby», «not waiting».
+            "mode": word(standby.get("mode"), &["pause", "standby"]),
+            "untilResumed": standby.get("until_resumed") == Some(&Value::Bool(true)),
         },
         "held": held,
         "burnIntent": burn_intent,
@@ -756,6 +776,14 @@ pub(crate) fn answer(request: &ControlRequest, output: &ProcessResult, target: &
         // The app sends `stop-team` only in its one closed shape, so a script or a CLI that calls it
         // invalid is one older than the action (JHT-T54): «update the team», not «invalid request».
         ControlRequest::StopTeam { .. } if output.code == 100 => failure("team_stop_unsupported"),
+        // The same for the pause that waits for the person and for the pause of one agent (JHT-T181).
+        ControlRequest::PauseAgent { .. }
+        | ControlRequest::ResumeAgent { .. }
+        | ControlRequest::Pause { exit: PauseExit::UntilResumed {}, .. }
+            if output.code == 100 =>
+        {
+            failure("pause_unsupported")
+        }
         _ => {
             // The same exit, told for this computer's team: its action is not «on the VPS».
             if output.code == 122 && label.is_none() {
@@ -1030,6 +1058,8 @@ mod tests {
         assert_eq!(merged_agents(&live, &json!({"ok": true, "data": {}})), None);
     }
 
+    // the reader of the files is the unix one (host_agents): elsewhere it says it is not there, and the list stays the live one
+    #[cfg(unix)]
     #[test]
     fn the_roster_read_from_the_files_is_shaped_like_a_live_list_with_every_agent_off() {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -1049,6 +1079,13 @@ mod tests {
         assert!(agents.iter().all(|a| a["state"] == json!("spento")), "every agent of the roster is off");
         assert_eq!(agents[1]["role"], json!("scout"));
         assert_eq!(agents[1]["created"], json!(1_793_608_200));
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn without_the_reader_of_the_files_the_roster_is_not_read_and_says_why() {
+        let home = std::env::temp_dir();
+        assert_eq!(crate::host_agents::read_roster(&home).unwrap_err(), "host_db_unavailable");
     }
 
     #[test]
@@ -1071,6 +1108,11 @@ mod tests {
             json!({"op":"stop_team","session":"SCOUT-1","target":"t","confirmed":true}),
             json!({"op":"stop_team","target":"t"}),
             json!({"op":"stop-team","target":"t","confirmed":true}),
+            // the pause of one agent names its session, and its target and confirmation
+            json!({"op":"pause_agent","target":"t","confirmed":true}),
+            json!({"op":"pause_agent","session":"SCOUT-1","target":"t"}),
+            json!({"op":"pause-agent","session":"SCOUT-1","target":"t","confirmed":true}),
+            json!({"op":"pause","exit":{"kind":"until_resumed","hours":3},"target":"t","confirmed":true}),
         ] {
             assert!(req(bad.clone()).is_none(), "{bad}");
         }
@@ -1084,6 +1126,9 @@ mod tests {
             (json!({"op":"pause","exit":{"kind":"hours","hours":4},"target":"t","confirmed":true}), vec!["pause", "--for-hours", "4"]),
             (json!({"op":"pause","exit":{"kind":"until","until":"2026-10-20T06:00:00Z"},"target":"t","confirmed":true}), vec!["pause", "--until", "2026-10-20T06:00:00Z"]),
             (json!({"op":"pause","exit":{"kind":"weekly_reset"},"target":"t","confirmed":true}), vec!["pause", "--wake-on-weekly"]),
+            (json!({"op":"pause","exit":{"kind":"until_resumed"},"target":"t","confirmed":true}), vec!["pause", "--until-resumed"]),
+            (json!({"op":"pause_agent","session":"SCOUT-1","target":"t","confirmed":true}), vec!["pause-agent", "SCOUT-1"]),
+            (json!({"op":"resume_agent","session":"CRITICO-S2","target":"t","confirmed":true}), vec!["resume-agent", "CRITICO-S2"]),
             (json!({"op":"resume","target":"t","confirmed":false}), vec!["resume"]),
             (json!({"op":"stop_team","target":"t","confirmed":true}), vec!["stop-team"]),
         ] {
@@ -1096,6 +1141,9 @@ mod tests {
             json!({"op":"screen","session":"SENTINELLA-WORKER"}),
             json!({"op":"pause","exit":{"kind":"hours","hours":0},"target":"t","confirmed":true}),
             json!({"op":"pause","exit":{"kind":"hours","hours":169},"target":"t","confirmed":true}),
+            json!({"op":"pause_agent","session":"scout-1","target":"t","confirmed":true}),
+            json!({"op":"pause_agent","session":"SCOUT-1;rm","target":"t","confirmed":true}),
+            json!({"op":"resume_agent","session":"HQ-MASTER","target":"t","confirmed":true}),
             json!({"op":"pause","exit":{"kind":"until","until":"2026-10-20T06:00:00+02:00"},"target":"t","confirmed":true}),
             json!({"op":"pause","exit":{"kind":"until","until":"tomorrow"},"target":"t","confirmed":true}),
         ] {
@@ -1357,7 +1405,48 @@ mod tests {
         let team = req(json!({"op":"team"})).unwrap();
         let reply = json!({"ok":true,"data":{"halted":true,"standby":{"state":"active","until":"2026-10-20T06:00:00+00:00","weekly_reset":false},"held":[{"session":"SCOUT-1","by_user":true},{"session":"rm -rf","by_user":true}]}});
         let shaped = answer(&team, &ProcessResult { code: 0, stdout: reply.to_string().into_bytes() }, "t", None);
-        assert_eq!(shaped, json!({"ok":true,"data":{"halted":true,"standby":{"state":"active","until":"2026-10-20T06:00:00+00:00","weeklyReset":false},"held":[{"session":"SCOUT-1","byUser":true}],"burnIntent":{"state":null,"expiresAt":null,"remainingMin":null}}}));
+        // an image older than the pause field says neither the mode nor that it waits for the person
+        assert_eq!(shaped, json!({"ok":true,"data":{"halted":true,"standby":{"state":"active","until":"2026-10-20T06:00:00+00:00","weeklyReset":false,"mode":null,"untilResumed":false},"held":[{"session":"SCOUT-1","byUser":true}],"burnIntent":{"state":null,"expiresAt":null,"remainingMin":null}}}));
+    }
+
+    #[test]
+    fn the_team_read_says_a_pause_that_waits_for_the_person() {
+        let team = req(json!({"op":"team"})).unwrap();
+        let read = |standby: Value| {
+            let reply = json!({"ok":true,"data":{"halted":false,"standby":standby,"held":[]}});
+            answer(&team, &ProcessResult { code: 0, stdout: reply.to_string().into_bytes() }, "t", None)["data"]["standby"].clone()
+        };
+        assert_eq!(
+            read(json!({"state":"active","until":"2026-11-12T22:00:00+00:00","weekly_reset":false,"mode":"pause","until_resumed":true})),
+            json!({"state":"active","until":"2026-11-12T22:00:00+00:00","weeklyReset":false,"mode":"pause","untilResumed":true})
+        );
+        // a mode that is not one of the two words, or an `until_resumed` that is not a boolean, is nothing
+        assert_eq!(
+            read(json!({"state":"active","until":null,"weekly_reset":true,"mode":"rm -rf","until_resumed":"yes"})),
+            json!({"state":"active","until":null,"weeklyReset":true,"mode":null,"untilResumed":false})
+        );
+    }
+
+    #[test]
+    fn the_pause_of_one_agent_and_the_pause_that_waits_have_their_results_and_their_old_image_answer() {
+        let out = |code: i32, stdout: &str| ProcessResult { code, stdout: stdout.as_bytes().to_vec() };
+        let pause_agent = req(json!({"op":"pause_agent","session":"SCOUT-1","target":"t","confirmed":true})).unwrap();
+        let resume_agent = req(json!({"op":"resume_agent","session":"SCOUT-1","target":"t","confirmed":true})).unwrap();
+        for (request, result) in [(&pause_agent, "agent_paused"), (&pause_agent, "agent_already_paused"), (&resume_agent, "agent_resumed"), (&resume_agent, "agent_not_paused")] {
+            let reply = format!("{{\"ok\":true,\"op\":\"pause-agent\",\"session\":\"SCOUT-1\",\"result\":\"{result}\",\"detail\":{{\"notified\":true}}}}\n");
+            // the detail the script adds is for the Assistente, not for the page
+            assert_eq!(answer(request, &out(0, &reply), "t", None), json!({"ok":true,"data":{"result":result}}));
+        }
+        assert_eq!(answer(&pause_agent, &out(123, ""), "t", None), failure("agent_pause_failed"));
+        assert_eq!(answer(&resume_agent, &out(124, ""), "t", None), failure("agent_resume_failed"));
+        // an image older than the action calls it invalid: the page says «update the team»
+        assert_eq!(answer(&pause_agent, &out(100, ""), "t", None), failure("pause_unsupported"));
+        assert_eq!(answer(&resume_agent, &out(100, ""), "t", None), failure("pause_unsupported"));
+        let waiting = req(json!({"op":"pause","exit":{"kind":"until_resumed"},"target":"t","confirmed":true})).unwrap();
+        assert_eq!(answer(&waiting, &out(100, ""), "t", None), failure("pause_unsupported"));
+        // the pause for hours keeps its old wording: an invalid request is invalid
+        let hours = req(json!({"op":"pause","exit":{"kind":"hours","hours":4},"target":"t","confirmed":true})).unwrap();
+        assert_eq!(answer(&hours, &out(100, ""), "t", None), failure("agent_control_invalid"));
     }
 
     #[test]

@@ -703,6 +703,25 @@ def test_working_hours_assenti_significa_nessuna_restrizione(home):
 
 
 # ── Compat con chi scrive ancora il vecchio state file ───────────────────
+def test_un_agente_in_pausa_per_volere_dell_utente_non_riceve_la_sveglia_del_throttle(home):
+    """JHT-T181: la pausa del singolo agente (`agent_pause.py`) tiene fermo anche l'agente il cui throttle e'
+    scaduto. La sveglia non si perde (come per gli halt): riparte quando la pausa finisce."""
+    set_config(home, **{"scout-1": 300})
+    eng.register("scout-1", now=T0)
+    mark = home / ".agent-pauses" / "SCOUT-1.json"
+    mark.parent.mkdir(parents=True)
+    until = datetime.fromtimestamp(T0 + 86400, tz=timezone.utc).isoformat()
+    mark.write_text(json.dumps({"session": "SCOUT-1", "since": int(T0), "until": until}), encoding="utf-8")
+
+    eng.tick(now=T0 + 300)
+    assert SENT == [] and events("gated")[0]["gate"] == "agent-paused"
+    assert flag("scout-1")["state"] == eng.IN_THROTTLE
+
+    mark.unlink()
+    eng.tick(now=T0 + 300 + eng.GATE_RETRY_SEC)
+    assert [m["session"] for m in SENT] == ["SCOUT-1"]
+
+
 def test_il_gate_pre_task_vede_anche_il_throttle_pre_armato_dallo_stagger(home):
     """`spawn_stagger.py` e `stepcap-watchdog.py` scrivono ancora
     `state/throttle-<agente>.json`: se `check` non lo leggesse, quei due

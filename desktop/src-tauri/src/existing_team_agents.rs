@@ -507,6 +507,8 @@ pub(crate) fn shape_reply(request: &AgentsRequest, reply: &Value) -> Option<Valu
                 agent.insert("reason".into(), known("reason"));
                 agent.insert("since".into(), if states { epoch_number(item.get("since")) } else { Value::Null });
                 agent.insert("until".into(), if states { epoch_number(item.get("until")) } else { Value::Null });
+                // JHT-T181: the user paused THIS agent: its session is on, nobody works it until it is resumed.
+                agent.insert("paused".into(), json!(item.get("paused") == Some(&Value::Bool(true))));
                 agent.insert("usage".into(), shape_usage(item.get("usage")));
                 agent.insert("questions".into(), shape_questions(item.get("questions"), &mut question_budget));
                 agents.push(Value::Object(agent));
@@ -639,6 +641,18 @@ mod tests {
             .iter()
             .map(|agent| agent["name"].as_str().unwrap().to_owned())
             .collect()
+    }
+
+    #[test]
+    fn an_agent_the_user_paused_is_marked_and_nothing_else_is_taken_for_a_pause() {
+        let mut reply = list_reply(&["SCOUT-1", "SCOUT-2", "SCOUT-3", "CAPITANO"]);
+        reply["data"]["items"][0]["paused"] = json!(true);
+        reply["data"]["items"][1]["paused"] = json!("yes");
+        reply["data"]["items"][2]["paused"] = json!(false);
+        // CAPITANO answers no field at all: an image older than the pause
+        let shaped = shape_reply(&AgentsRequest::List {}, &reply).unwrap();
+        let paused: Vec<Value> = (0..4).map(|n| shaped["data"]["agents"][n]["paused"].clone()).collect();
+        assert_eq!(paused, [json!(true), json!(false), json!(false), json!(false)]);
     }
 
     #[test]

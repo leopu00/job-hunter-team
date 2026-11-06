@@ -8,8 +8,9 @@ import {
   readStoredCustom,
   readStoredPreference,
   resolveTheme,
+  isTemplateTheme,
+  READY_THEMES,
   SYSTEM_THEME,
-  THEMES,
   watchSystemTheme,
   type AppliedTheme,
   type Theme,
@@ -24,9 +25,12 @@ const MENU_ID = "desktop-theme-menu";
 /** Said by a picker that changed the palette, so the other one on screen (the navbar's and Settings') shows it too. */
 const THEME_CHANGED_EVENT = "jht-theme-changed";
 
-/** The menu's palettes in the order they are shown: «follow the system», [the person's own], the dark ones, the light ones. */
-const DARK_THEMES = THEMES.filter((entry) => entry.family === "dark");
-const LIGHT_THEMES = THEMES.filter((entry) => entry.family === "light");
+/**
+ * The menu's palettes in the order they are shown: «follow the system», [the person's own], the dark ones, the light ones.
+ * Only the ready ones: the coloured templates are where the personal theme starts from, not entries of the menu.
+ */
+const DARK_THEMES = READY_THEMES.filter((entry) => entry.family === "dark");
+const LIGHT_THEMES = READY_THEMES.filter((entry) => entry.family === "light");
 
 /** The swatch of the person's palette, from its five colours. */
 const swatchOf = (seeds: { panel: string; border: string; accent: string }) =>
@@ -193,6 +197,8 @@ export default function ThemePicker() {
           <span className="theme-picker__heading">{text.heading}</span>
           {option(SYSTEM_THEME, text.system)}
           {custom && option(CUSTOM_THEME, text.custom)}
+          {/* a coloured palette chosen before it became a template: still the one in force, so still in the menu */}
+          {isTemplateTheme(preference) && option(preference, text.names[preference])}
           <span className="theme-picker__heading">{text.groupDark}</span>
           {DARK_THEMES.map((entry) => option(entry.value, text.names[entry.value]))}
           <span className="theme-picker__heading">{text.groupLight}</span>

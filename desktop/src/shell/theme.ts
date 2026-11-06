@@ -7,23 +7,41 @@ export const THEME_STORAGE_KEY = "jht-desktop-theme";
  * (`:root[data-jht-theme="…"]`) and a BASE, light or dark, which says how the reused web views behave
  * (`data-theme`). The base is written here once: dashboard.html reads the same table through a test that
  * runs its script, so the two cannot drift apart.
+ *
+ * Two kinds. The READY ones (three dark, three light: plain, solid colours, nothing that pulls the eye off the data)
+ * are the menu. The TEMPLATES (the coloured palettes) are where the personal theme can start from: they are not in
+ * the menu, but whoever chose one before keeps it, so they stay palettes the page can wear.
  */
 export const THEMES = [
-  { value: "dark", label: "Scuro", family: "dark" },
-  { value: "light", label: "Chiaro", family: "light" },
-  { value: "graphite", label: "Grafite", family: "dark" },
-  { value: "ocean", label: "Oceano", family: "dark" },
-  { value: "paper", label: "Carta", family: "light" },
-  { value: "midnight", label: "Mezzanotte", family: "dark" },
-  { value: "forest", label: "Foresta", family: "dark" },
-  { value: "dusk", label: "Crepuscolo", family: "dark" },
-  { value: "contrast", label: "Alto contrasto", family: "dark" },
-  { value: "sage", label: "Salvia", family: "light" },
-  { value: "lavender", label: "Lavanda", family: "light" },
+  { value: "dark", label: "Scuro", family: "dark", kind: "ready" },
+  { value: "graphite", label: "Grafite", family: "dark", kind: "ready" },
+  { value: "contrast", label: "Alto contrasto", family: "dark", kind: "ready" },
+  { value: "light", label: "Chiaro", family: "light", kind: "ready" },
+  { value: "mist", label: "Grigio chiaro", family: "light", kind: "ready" },
+  { value: "contrastlight", label: "Alto contrasto chiaro", family: "light", kind: "ready" },
+  { value: "ocean", label: "Oceano", family: "dark", kind: "template" },
+  { value: "midnight", label: "Mezzanotte", family: "dark", kind: "template" },
+  { value: "forest", label: "Foresta", family: "dark", kind: "template" },
+  { value: "dusk", label: "Crepuscolo", family: "dark", kind: "template" },
+  { value: "paper", label: "Carta", family: "light", kind: "template" },
+  { value: "sage", label: "Salvia", family: "light", kind: "template" },
+  { value: "lavender", label: "Lavanda", family: "light", kind: "template" },
 ] as const;
+
+/** The two palettes held to 7:1 for text: the dark high contrast and its light twin. */
+export const STRICT_THEMES: readonly string[] = ["contrast", "contrastlight"];
+export function isStrictTheme(theme: string): boolean {
+  return STRICT_THEMES.includes(theme);
+}
 
 export type Theme = (typeof THEMES)[number]["value"];
 export type ThemeFamily = (typeof THEMES)[number]["family"];
+/** The palettes of the menu: the ready ones, in the order they are shown. */
+export const READY_THEMES = THEMES.filter((entry) => entry.kind === "ready");
+export const TEMPLATE_THEMES = THEMES.filter((entry) => entry.kind === "template");
+export function isTemplateTheme(value: unknown): value is Theme {
+  return TEMPLATE_THEMES.some((entry) => entry.value === value);
+}
 
 /** What is stored and chosen: one of the palettes, the person's own palette, or «follow the system» (also what nobody chose yet). */
 export const SYSTEM_THEME = "system";
@@ -84,7 +102,7 @@ export function parseCustomTheme(raw: unknown): CustomTheme | null {
   if (!isPlainObject(seeds) || !hasExactlyKeys(seeds, SEED_KEYS) || !SEED_KEYS.every((key) => isHexColour(seeds[key]))) return null;
   if (!isPlainObject(vars) || !hasExactlyKeys(vars, TOKEN_NAMES) || !TOKEN_NAMES.every((name) => isTokenValue(name, vars[name]))) return null;
   if (seedFamily(seeds as Seeds) !== family) return null;
-  if (checkTokens(vars as Tokens, { strict: start === "contrast" }).length > 0) return null;
+  if (checkTokens(vars as Tokens, { strict: isStrictTheme(start) }).length > 0) return null;
   return value as CustomTheme;
 }
 

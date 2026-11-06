@@ -238,6 +238,7 @@ They exist because of a measured incident (the night of 2026-07-15, an uncontrol
 - ❌ Braking on `AVANTI` when the rate has already fallen back in line — the drift is closing by itself and you end the window under target.
 - ❌ Chasing pace with the throttle on `LOCKOUT-IMMINENTE`: the brake is nearly saturated there and only the roster moves the outcome.
 - ❌ Pushing throttle numbers to agents over tmux (`[INFO] sleep 40s`). Always go through `throttle-config.py` — agents read the config file, they do not parse your tmux body. tmux is only for telling an agent to checkpoint *more or less often*, which is a different axis.
+- ❌ Using the stop (`.team-halted.flag`, `jht team stop`, killing sessions) when the user only asked for a **pause**: it throws every agent's context away. A pause is `team-pause`.
 
 ## See also
 

@@ -8,12 +8,14 @@ import { useExistingTeamReadOnly } from "../../lib/existing-team-readonly";
 import {
   answerQuestion,
   controlAgent,
+  pauseAgent,
   pauseTeam,
   readPanelActivity,
   readPanelHistory,
   readPanelList,
   readPanelScreen,
   readTeamState,
+  resumeAgent,
   resumeTeam,
   stopTeam,
   tomorrowAtEightUtc,
@@ -39,6 +41,7 @@ import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
 import { UsageShort } from "./AgentUsage";
 import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
 import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
+import { PauseResumeButton } from "./PauseResumeButton";
 import { SessionHistory } from "./AgentHistory";
 import { readWorkWindow, rememberWorkWindow, WorkLanes } from "./AgentWork";
 import ActionLogSection from "./ActionLogSection";
@@ -175,7 +178,10 @@ export type Pending =
   | { kind: "answer"; row: PanelRow; question: AgentQuestion; option: QuestionOption }
   | { kind: "pause" }
   | { kind: "stop-team" }
-  | { kind: "resume" };
+  | { kind: "resume" }
+  /** the pause of ONE agent (JHT-T181): its session stays on with its context; not the stop */
+  | { kind: "pause-agent"; row: PanelRow }
+  | { kind: "resume-agent"; row: PanelRow };
 
 export function fill(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key] ?? `{${key}}`));
@@ -228,6 +234,10 @@ export function resultText(t: AgentsPanelText, result: ActionResult, name: strin
     not_paused: t.resultNotPaused,
     team_stopped: t.resultTeamStopped,
     team_already_stopped: t.resultTeamAlreadyStopped,
+    agent_paused: t.resultAgentPaused,
+    agent_already_paused: t.resultAgentAlreadyPaused,
+    agent_resumed: t.resultAgentResumed,
+    agent_not_paused: t.resultAgentNotPaused,
   }[result];
   return fill(key, { name });
 }
@@ -250,6 +260,15 @@ export function isUp(row: PanelRow): boolean {
 }
 
 export function Led({ row }: { row: PanelRow }) {
+  // The user paused THIS agent (JHT-T181): not the green dot of one that works. Its own sign, amber, a pause
+  // glyph in the dot's place (the same box), so the list and the agent's page say it at a glance.
+  if (isUp(row) && row.agent?.paused) {
+    return (
+      <span aria-hidden data-testid="panel-led-paused" className="inline-block w-2.5 text-[11px] leading-none shrink-0" style={{ color: "var(--color-yellow)" }}>
+        ⏸
+      </span>
+    );
+  }
   const tone = isUp(row) ? describeAgentState(row.agent!.state, appLocale()).tone : "grey";
   return (
     <span
@@ -289,6 +308,8 @@ export function identityLine(t: AgentsPanelText, identity: AgentIdentity | null,
 export function stateLine(t: AgentsPanelText, row: PanelRow): string {
   if (row.heldBySafety) return t.heldBySafety;
   if (!row.agent || !isUp(row)) return row.heldByUser ? t.heldByUser : t.down;
+  // the user paused THIS agent (JHT-T181): its own state line would say what it was doing, and it is not
+  if (row.agent.paused) return t.pausedLine;
   return describeAgentState(row.agent.state, appLocale()).line;
 }
 
@@ -418,7 +439,7 @@ export function Confirm({
   onCancel: () => void;
   onConfirm: (exit?: PauseExit) => void;
 }) {
-  const [exit, setExit] = useState<"h1" | "h4" | "tomorrow" | "weekly">("h4");
+  const [exit, setExit] = useState<"resumed" | "h1" | "h4" | "tomorrow" | "weekly">("resumed");
   let title: string;
   let body: string[];
   let danger = false;
@@ -440,12 +461,21 @@ export function Confirm({
     title = fill(t.confirmStopTeam, { where });
     body = [t.bodyStopTeam];
     danger = true;
+  } else if (pending.kind === "pause-agent") {
+    const name = displayName(pending.row.session);
+    title = fill(t.confirmPauseAgent, { name, where });
+    body = [fill(t.bodyPauseAgent, { name })];
+  } else if (pending.kind === "resume-agent") {
+    const name = displayName(pending.row.session);
+    title = fill(t.confirmResumeAgent, { name, where });
+    body = [fill(t.bodyResumeAgent, { name })];
   } else {
     title = fill(t.confirmResume, { where });
     body = [t.bodyResume];
   }
   const choose = (): PauseExit | undefined => {
     if (pending.kind !== "pause") return undefined;
+    if (exit === "resumed") return { kind: "until_resumed" };
     if (exit === "h1") return { kind: "hours", hours: 1 };
     if (exit === "h4") return { kind: "hours", hours: 4 };
     if (exit === "tomorrow") return { kind: "until", until: tomorrowAtEightUtc() };
@@ -473,14 +503,28 @@ export function Confirm({
           <fieldset className="flex flex-col gap-1 my-2 text-[12px]" style={{ color: "var(--color-bright)" }}>
             {(
               [
+                ["resumed", t.pauseUntilResumed],
                 ["h1", t.pauseHours1],
                 ["h4", t.pauseHours4],
                 ["tomorrow", t.pauseTomorrow],
                 ["weekly", t.pauseWeekly],
               ] as const
             ).map(([value, label]) => (
-              <label key={value} className="flex items-center gap-2">
-                <input type="radio" name="pause-exit" value={value} checked={exit === value} onChange={() => setExit(value)} />
+              // inline: the global `label` (block, upper case, small) and `input` (full width) rules of the web
+              // styles would put the dot above and centred and the text in capitals
+              <label
+                key={value}
+                className="flex items-center gap-2"
+                style={{ display: "flex", textTransform: "none", letterSpacing: "normal", fontSize: "12px", fontWeight: 400, marginBottom: 0, color: "var(--color-bright)" }}
+              >
+                <input
+                  type="radio"
+                  name="pause-exit"
+                  value={value}
+                  checked={exit === value}
+                  onChange={() => setExit(value)}
+                  style={{ width: "auto", padding: 0, flexShrink: 0 }}
+                />
                 {label}
               </label>
             ))}
@@ -718,6 +762,9 @@ export default function AgentsPanel({ search }: PageProps) {
     if (pending.kind === "agent") {
       key = pending.row.session;
       done = await controlAgent(pending.op, pending.row.session, target);
+    } else if (pending.kind === "pause-agent" || pending.kind === "resume-agent") {
+      key = pending.row.session;
+      done = await (pending.kind === "pause-agent" ? pauseAgent : resumeAgent)(pending.row.session, target);
     } else if (pending.kind === "pause") {
       done = exit ? await pauseTeam(exit, target) : { ok: false, at: Date.now(), code: "agent_control_invalid" };
     } else if (pending.kind === "stop-team") {
@@ -725,7 +772,7 @@ export default function AgentsPanel({ search }: PageProps) {
     } else {
       done = await resumeTeam(target);
     }
-    const name = pending.kind === "agent" ? displayName(pending.row.session) : "";
+    const name = pending.kind === "agent" || pending.kind === "pause-agent" || pending.kind === "resume-agent" ? displayName(pending.row.session) : "";
     setNotices((all) => ({
       ...all,
       [key]: done.ok ? { ok: true, text: resultText(t, done.value, name) } : { ok: false, text: failureText(done.code) },
@@ -771,7 +818,9 @@ export default function AgentsPanel({ search }: PageProps) {
     if (!team) return null;
     if (team.halted) return t.teamHalted;
     if (team.standby.state === "active")
-      return team.standby.weeklyReset || !team.standby.until
+      return team.standby.mode === "pause" && team.standby.untilResumed
+        ? t.teamPausedByUser
+        : team.standby.weeklyReset || !team.standby.until
         ? t.teamPausedWeekly
         : fill(t.teamPausedUntil, { time: stamp(Date.parse(team.standby.until)) });
     if (team.standby.state === "expired") return t.teamPauseEnding;
@@ -867,14 +916,14 @@ export default function AgentsPanel({ search }: PageProps) {
             </span>
             {!readOnly && team && !team.halted && (
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  data-testid={paused ? "panel-resume" : "panel-pause"}
-                  onClick={() => setPending(paused ? { kind: "resume" } : { kind: "pause" })}
-                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border border-[var(--color-border)] text-[var(--color-bright)]"
-                >
-                  {paused ? t.resume : t.pause}
-                </button>
+                <PauseResumeButton
+                  paused={paused}
+                  pauseLabel={t.pause}
+                  resumeLabel={t.resume}
+                  onPause={() => setPending({ kind: "pause" })}
+                  onResume={() => setPending({ kind: "resume" })}
+                  testIdBase="panel"
+                />
                 <button
                   type="button"
                   data-testid="panel-stop-team"
@@ -1049,6 +1098,17 @@ export default function AgentsPanel({ search }: PageProps) {
                         >
                           {fill(t.chatWith, { name: chatName(chatAgentOf(current)!) })}
                         </Link>
+                      )}
+                      {/* the pause of THIS agent, next to Restart and Stop: its session stays on with its context */}
+                      {!readOnly && isUp(current) && !current.heldBySafety && !SCHEDULED.has(current.session) && !team?.halted && (
+                        <PauseResumeButton
+                          paused={current.agent?.paused === true}
+                          pauseLabel={t.pause}
+                          resumeLabel={t.resume}
+                          onPause={() => setPending({ kind: "pause-agent", row: current })}
+                          onResume={() => setPending({ kind: "resume-agent", row: current })}
+                          testIdBase="panel-agent"
+                        />
                       )}
                       {rowActions(current, readOnly).map((op) => (
                         <button

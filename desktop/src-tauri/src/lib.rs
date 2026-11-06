@@ -20,6 +20,10 @@ mod team_settings;
 mod export_file;
 mod host_agents;
 mod host_db;
+// The Windows primitives that open a file the team's agents wrote (links, junctions, second names refused).
+#[cfg(windows)]
+#[allow(dead_code)]
+mod host_files_windows;
 mod host_positions;
 mod external_links;
 mod existing_team_register;

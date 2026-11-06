@@ -2,7 +2,7 @@ import type { Theme } from "./theme";
 import type { Seeds, StatusColors } from "./theme-custom";
 
 /**
- * What the editor starts from: the five seeds of each ready palette and the colours of its states. The palettes
+ * What the editor starts from: the five seeds of each palette (ready ones and templates) and the colours of its states. The palettes
  * themselves are blocks of CSS the page cannot read for a theme that is not on it, so this table repeats them;
  * a test reads dashboard.css and fails when the two differ.
  */
@@ -12,12 +12,12 @@ export const PRESETS: Record<Theme, { seeds: Seeds; status: StatusColors }> = {
     status: { "--color-yellow": "#f5c518", "--color-blue": "#68adff", "--color-red": "#ff5f75", "--color-orange": "#ff9b57", "--color-purple": "#bd76ff", "--sync-warn": "#ddb461" },
   },
   light: {
-    seeds: { background: "#f5f6fa", panel: "#ffffff", text: "#303647", border: "#b9bdc9", accent: "#08713a" },
-    status: { "--color-yellow": "#795000", "--color-blue": "#1d5fa7", "--color-red": "#b6203a", "--color-orange": "#914000", "--color-purple": "#7330a6", "--sync-warn": "#795000" },
+    seeds: { background: "#ebedf0", panel: "#ffffff", text: "#1d222c", border: "#a3a9b5", accent: "#08703d" },
+    status: { "--color-yellow": "#7a5200", "--color-blue": "#1b5cab", "--color-red": "#b3192f", "--color-orange": "#9a3f00", "--color-purple": "#6f2da8", "--sync-warn": "#7a5200" },
   },
   graphite: {
-    seeds: { background: "#101111", panel: "#1a1c1c", text: "#cbd0cf", border: "#3b4040", accent: "#b6e36b" },
-    status: { "--color-yellow": "#e8c75a", "--color-blue": "#7eb8dc", "--color-red": "#ef7a76", "--color-orange": "#e6a568", "--color-purple": "#b89bd8", "--sync-warn": "#e1bd63" },
+    seeds: { background: "#141518", panel: "#1c1d21", text: "#d2d4da", border: "#4a4e58", accent: "#5aa9ff" },
+    status: { "--color-yellow": "#f5c518", "--color-blue": "#68adff", "--color-red": "#ff5f75", "--color-orange": "#ff9b57", "--color-purple": "#bd76ff", "--sync-warn": "#ddb461" },
   },
   ocean: {
     seeds: { background: "#06121a", panel: "#0c202c", text: "#bad5dc", border: "#245064", accent: "#44d9e6" },
@@ -42,6 +42,14 @@ export const PRESETS: Record<Theme, { seeds: Seeds; status: StatusColors }> = {
   contrast: {
     seeds: { background: "#000000", panel: "#0a0a0a", text: "#e8e8e8", border: "#767676", accent: "#ffe14d" },
     status: { "--color-yellow": "#ffd400", "--color-blue": "#7fc4ff", "--color-red": "#ff8a8a", "--color-orange": "#ffa94d", "--color-purple": "#d9a8ff", "--sync-warn": "#ffd400" },
+  },
+  mist: {
+    seeds: { background: "#dcdfe4", panel: "#eaecf0", text: "#1e222a", border: "#959ba7", accent: "#005b6b" },
+    status: { "--color-yellow": "#7a5200", "--color-blue": "#185aa8", "--color-red": "#b3192f", "--color-orange": "#9a3f00", "--color-purple": "#6f2da8", "--sync-warn": "#7a5200" },
+  },
+  contrastlight: {
+    seeds: { background: "#f0f0f0", panel: "#ffffff", text: "#0a0a0a", border: "#5e5e5e", accent: "#0036a8" },
+    status: { "--color-yellow": "#5c3d00", "--color-blue": "#0a4590", "--color-red": "#970a20", "--color-orange": "#7a3000", "--color-purple": "#5a1f8f", "--sync-warn": "#5c3d00" },
   },
   sage: {
     seeds: { background: "#f1f4ee", panel: "#fafbf7", text: "#333d2c", border: "#bcc7b0", accent: "#2f6b3a" },

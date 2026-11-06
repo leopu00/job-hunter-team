@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { DashboardPosition } from "@/lib/queries";
 import UnseenDot from "@/app/components/UnseenDot";
-import { scoreSpectrumCss } from "@/lib/score-color";
+import { scoreInkCss } from "@/lib/score-color";
 import { colorForFamily } from "@/lib/position-classifier";
 import { formatShortStamp } from "@/lib/short-stamp";
 import { useLocale } from "@/lib/use-locale";
@@ -112,8 +112,8 @@ function PositionCard({
         <span
           className="absolute right-0 top-0 flex h-9 w-9 items-center justify-center rounded-full border-2 text-[12px] font-bold tabular-nums"
           style={{
-            color: scoreSpectrumCss(p.score),
-            borderColor: scoreSpectrumCss(p.score),
+            color: scoreInkCss(p.score),
+            borderColor: scoreInkCss(p.score),
           }}
         >
           {p.score ?? "—"}
@@ -379,7 +379,7 @@ export default function RecentPositionsTable({
                     <div className="flex items-center gap-2 justify-center">
                       <span
                         className="text-[12px] font-semibold w-6 text-right tabular-nums"
-                        style={{ color: scoreSpectrumCss(p.score) }}
+                        style={{ color: scoreInkCss(p.score) }}
                       >
                         {p.score ?? "—"}
                       </span>
@@ -391,7 +391,7 @@ export default function RecentPositionsTable({
                           className="h-full rounded-full"
                           style={{
                             width: `${p.score ?? 0}%`,
-                            background: scoreSpectrumCss(p.score),
+                            background: scoreInkCss(p.score),
                           }}
                         />
                       </div>

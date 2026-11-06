@@ -167,7 +167,7 @@ function Set-JhtNodeOwner {
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
 $TestChannelImage = $Image
-$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:6ba9c9caf43c21f6af211b930a6d320820139db5d0334b839d14101aafe9da90' }
+$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:f64d7d876841a49b83046c10d78b7794c5d6b1f3436d649a91c1485fd8bb69b9' }
 $RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
 $RuntimeImageDigest = if ($TestChannel) { $ExpectedImageDigest } elseif ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$') { $Matches[1] } else { '' }
 $env:JHT_IMAGE = $Image
@@ -396,9 +396,9 @@ function Show-PodmanSetupProblem {
   switch ($Code) {
     21 {
       Write-JhtProblem -What 'Podman could not be installed.' -Todo @(
-        'The line above says why. Podman comes from winget: if winget is missing or broken,',
-        'install or repair "App Installer" from the Microsoft Store:',
-        '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
+        'The line above says why. Podman comes from winget, or from its official release when winget',
+        'cannot be used: check that this computer can reach github.com, and that winget works if you have it',
+        '(for a broken one, install or repair "App Installer": https://aka.ms/getwinget).',
         $again)
     }
     22 {
@@ -475,19 +475,8 @@ function Get-RuntimeFiles {
     Write-Fail "Protected host wrapper path overlaps a container-writable tree: $binFull"
   }
 
-  # Podman comes from winget (docker-compose and the runtime come from here, and
-  # a Podman already on the PATH needs nothing): with neither, this setup cannot
-  # go on. Said now, before a single folder is written, with the way out.
-  if (-not (Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue) -and
-      -not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    Write-JhtProblem -What 'winget is missing, and the installer needs it to install Podman.' -Todo @(
-      'Install "App Installer" from the Microsoft Store (it brings winget):',
-      '  https://apps.microsoft.com/detail/9nblggh4nns1   (or https://aka.ms/getwinget)',
-      'Then open a new PowerShell window and check it with: winget --version',
-      'Then run the same install command again. Nothing was installed or left behind.')
-    [Console]::Error.WriteLine('podman_not_installable: winget is required to install Podman dependencies.')
-    exit 21
-  }
+  # Podman comes from winget, or from its official release for this Windows user when winget is not usable (missing, an empty
+  # list of programs, Podman registered for another user): the enabler decides, so a PC without winget is no stop here (JHT-T184).
 
   # The folders that do not exist yet, with the ones above them: if the setup
   # stops, the ones it made and left empty go away again.

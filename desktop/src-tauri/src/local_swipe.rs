@@ -20,7 +20,7 @@ use crate::{
     account_scope::{AccountScope, AccountScopeState},
     direct_chat,
     existing_team_judgement::{FeedbackDirection, FeedbackValue, NOTE_MAX_BYTES},
-    existing_team_runtime::{hex_encode, local_reader_wrapper},
+    existing_team_runtime::{hex_encode, local_machine_is_off, local_reader_wrapper},
     runtime_host::{ProcessResult, ValidatedHost},
 };
 use serde::Deserialize;
@@ -461,6 +461,7 @@ pub(crate) fn deck_with(
     window_is_main: bool,
     tag: &str,
     gate: impl FnOnce() -> Result<(), &'static str>,
+    machine_is_off: impl FnOnce() -> bool,
     run: impl FnOnce(&[u8]) -> Result<ProcessResult, &'static str>,
     team_is_up: impl FnOnce() -> bool,
     saved: impl FnOnce() -> Option<Result<(Value, Option<i64>), &'static str>>,
@@ -472,9 +473,11 @@ pub(crate) fn deck_with(
         return failure(code);
     }
     let input = script_input(DECK_PY, &json!({ "op": "deck" }));
-    match run(&input) {
-        Ok(output) if output.success() => close_decks(&output, tag).unwrap_or_else(|| failure("positions_unavailable")),
-        _ if team_is_up() => failure("positions_unavailable"),
+    // A stopped machine is not asked for anything (the wrapper is not called): the deck is that of what the team saved.
+    let ran = if machine_is_off() { None } else { Some(run(&input)) };
+    match ran {
+        Some(Ok(output)) if output.success() => close_decks(&output, tag).unwrap_or_else(|| failure("positions_unavailable")),
+        Some(_) if team_is_up() => failure("positions_unavailable"),
         // The team is off: the deck of what it saved (its token names no file, so no verdict can come back with it), marked as saved.
         _ => match saved() {
             Some(Ok((raw, at))) => match close_deck_reply(&raw, tag) {
@@ -562,6 +565,7 @@ pub(crate) async fn local_swipe_deck_read(
                 *wrapper.borrow_mut() = Some(local_wrapper(&app, scope, false)?);
                 Ok(())
             },
+            local_machine_is_off,
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
             || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
             || {
@@ -815,7 +819,7 @@ mod tests {
 
     fn deck_run(said: &str, main: bool, gate: Result<(), &'static str>, up: bool) -> (Value, u32) {
         let runs = Cell::new(0);
-        let reply = deck_with(main, TAG, || gate, |_| {
+        let reply = deck_with(main, TAG, || gate, || false, |_| {
             runs.set(runs.get() + 1);
             exited(0, said)
         }, || up, || None);
@@ -831,7 +835,7 @@ mod tests {
     fn a_team_that_is_off_gives_the_deck_of_what_it_saved_and_that_deck_cannot_judge() {
         let saved = |raw: Value, at: Option<i64>| move || Some(Ok((raw, at)));
         let raw = json!({"ok": true, "ino": 0, "dev": 0, "pending": [row(1, "scored")], "reviewed": [{"row": row(5, "excluded"), "action": "like", "fb_score": 4}]});
-        let off = |saved: Option<Result<(Value, Option<i64>), &'static str>>| deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || false, || saved);
+        let off = |saved: Option<Result<(Value, Option<i64>), &'static str>>| deck_with(true, TAG, || Ok(()), || false, |_| exited(125, ""), || false, || saved);
         let deck = off(Some(Ok((raw.clone(), Some(1793879580)))));
         assert_eq!(deck["ok"], json!(true));
         assert_eq!(deck["saved"], json!({"at": 1793879580}));
@@ -843,7 +847,7 @@ mod tests {
         assert_eq!(off(Some(Err("host_db_unsafe"))), failure("host_db_unsafe"));
         assert_eq!(off(None), failure("local_team_not_running"));
         // the team is up and the script failed: the saved data are no stand-in
-        let up = deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || true, saved(json!({}), None));
+        let up = deck_with(true, TAG, || Ok(()), || false, |_| exited(125, ""), || true, saved(json!({}), None));
         assert_eq!(up, failure("positions_unavailable"));
     }
 
@@ -907,11 +911,29 @@ mod tests {
     }
 
     #[test]
+    fn a_stopped_machine_is_not_asked_for_the_deck_and_gives_what_the_team_saved() {
+        let raw = json!({"ok": true, "ino": 0, "dev": 0, "pending": [row(1, "scored")], "reviewed": []});
+        let deck = deck_with(
+            true,
+            TAG,
+            || Ok(()),
+            || true,
+            |_| panic!("the wrapper must not be called for a stopped machine"),
+            || panic!("nor the question whether the team is up"),
+            || Some(Ok((raw.clone(), Some(1793879580)))),
+        );
+        assert_eq!(deck["saved"], json!({"at": 1793879580}));
+        assert_eq!(deck["pending"].as_array().unwrap().len(), 1);
+        let nothing = deck_with(true, TAG, || Ok(()), || true, |_| panic!("no wrapper"), || panic!("no question"), || None);
+        assert_eq!(nothing, failure("local_team_not_running"));
+    }
+
+    #[test]
     fn a_deck_that_cannot_be_read_is_told_and_a_team_that_is_off_is_told_apart() {
         assert_eq!(deck_run("not json", true, Ok(()), true).0, failure("positions_unavailable"));
         assert_eq!(deck_run(r#"{"ok":false,"error":"positions_unavailable"}"#, true, Ok(()), true).0, failure("positions_unavailable"));
         assert_eq!(deck_run(r#"{"ok":false,"error":"/etc/passwd"}"#, true, Ok(()), true).0, failure("positions_unavailable"));
-        let reply = deck_with(true, TAG, || Ok(()), |_| exited(125, ""), || false, || None);
+        let reply = deck_with(true, TAG, || Ok(()), || false, |_| exited(125, ""), || false, || None);
         assert_eq!(reply, failure("local_team_not_running"));
         let empty = json!({"ok": true, "ino": 0, "dev": 0, "pending": [], "reviewed": []}).to_string();
         let (reply, _) = deck_run(&empty, true, Ok(()), true);

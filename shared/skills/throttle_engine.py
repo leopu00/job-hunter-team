@@ -1044,6 +1044,23 @@ def _halt_flags():
     )
 
 
+def _agent_paused(session: str, now=None) -> bool:
+    """L'utente ha messo in pausa QUESTO agente (JHT-T181, `agent_pause.py`): la sveglia del throttle non gli
+    arriva (rimanderebbe al lavoro un agente fermo apposta). Mai solleva: un modulo assente = non in pausa."""
+    try:
+        here = Path(__file__).resolve().parent
+        for cand in (here / "agent_pause.py", Path("/app/shared/skills/agent_pause.py")):
+            if cand.exists():
+                spec = importlib.util.spec_from_file_location("agent_pause_for_throttle", cand)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                when = datetime.fromtimestamp(now, tz=timezone.utc) if isinstance(now, (int, float)) else None
+                return bool(mod.is_paused(session, now=when, home=_home()))
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
 def wake_gate(now: float):
     """None se si può svegliare, altrimenti il MOTIVO del blocco.
 
@@ -1187,7 +1204,7 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
              flag=IN_THROTTLE)
         return True
 
-    gate = wake_gate(now)
+    gate = "agent-paused" if _agent_paused(session, now) else wake_gate(now)
     if gate:
         emit("gated", agent=agent, ts=now, session=session, gate=gate)
         entry["until"] = int(now + GATE_RETRY_SEC)

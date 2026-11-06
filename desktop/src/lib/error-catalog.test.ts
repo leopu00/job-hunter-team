@@ -113,7 +113,7 @@ const NOT_ERRORS: Record<string, string> = {
   // host_db.rs (the saved data of a team that is off): the two answers the caller turns into «the team is not running»
   // before the page sees them; the other five codes of the module have their sentence in the catalog.
   host_db_missing: "no jobs.db yet (the team never ran here): the read answers an empty team, the page never gets the code",
-  host_db_unavailable: "a system without the host reader (Windows for now): the read falls back to local_team_not_running",
+  host_db_unavailable: "a system without the host reader: the read falls back to local_team_not_running",
   // runtime_log.rs: why a copy of a support report was not kept or its folder not shown. The report's box
   // answers in its own seven-language lines (copyFailed, showFailed); the code is never put in front of the person.
   ...Object.fromEntries(
@@ -530,6 +530,13 @@ const NOT_ERRORS: Record<string, string> = {
   user_id: "field of the claim's identity probe (the account's id, from the backend's own session)",
   by_user: "agent control read field",
   weekly_reset: "agent control pause exit kind",
+  until_resumed: "agent control pause exit kind and read field (JHT-T181: the pause waits for the person's word)",
+  pause_agent: "operation name of the panel's request (JHT-T181: the pause of one agent)",
+  resume_agent: "operation name of the panel's request (JHT-T181: the pause of one agent)",
+  agent_paused: "agent control outcome",
+  agent_already_paused: "agent control outcome",
+  agent_resumed: "agent control outcome",
+  agent_not_paused: "agent control outcome",
   burn_intent: "agent control read field (the full-throttle override)",
   expires_at: "agent control read field (when the full-throttle override ends)",
   remaining_min: "agent control read field (minutes left of the full-throttle override)",

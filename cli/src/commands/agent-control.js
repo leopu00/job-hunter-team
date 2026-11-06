@@ -1,7 +1,8 @@
 // `jht agent-control` — the agents' control panel of the desktop app.
 //
 //   jht agent-control start|stop|restart <SESSION>
-//   jht agent-control pause --for-hours <n> | --until <iso> | --wake-on-weekly
+//   jht agent-control pause-agent|resume-agent <SESSION>
+//   jht agent-control pause --for-hours <n> | --until <iso> | --wake-on-weekly | --until-resumed
 //   jht agent-control resume | stop-team
 //   jht agent-control list | screen <SESSION> | team | history
 //   jht agent-control exclusions | exclusion-accept <CODE> | exclusion-withdraw <CODE>

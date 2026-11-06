@@ -7,7 +7,7 @@
  * The recipe is fixed: the first colour is the accent itself; the next ones are the accent's own hue (±30°) at other
  * lightnesses and chromas, then its neighbours (±60°, ±90°), then its complement (+150°); the lightness is picked from a
  * band that stands out on the card of the theme (a dark card gets light colours, a light card dark ones). Chosen by a search so that,
- * in each of the eleven palettes of the desktop and the web's light and dark, no two of the 14 look alike and each one stands
+ * in each of the thirteen palettes of the desktop and the web's light and dark, no two of the 14 look alike and each one stands
  * out on its card (theme-palette.test.ts checks every one of them on the real tokens).
  *
  * Pure functions here; `category-colors.ts` writes the result into the page as the variables `--cat-0 … --cat-13`.
@@ -18,7 +18,8 @@ export const PALETTE_SIZE = 14;
 type Rgb = [number, number, number];
 
 /** [hue offset in degrees, lightness step 0..4, chroma scale] of each slot after the accent. */
-const RECIPE: readonly [number, number, number][] = [
+type Recipe = readonly (readonly [number, number, number])[];
+const RECIPE: Recipe = [
   [-30, 0, 0.4],
   [-30, 4, 0.4],
   [30, 3, 0.4],
@@ -33,9 +34,29 @@ const RECIPE: readonly [number, number, number][] = [
   [150, 2, 0.4],
   [150, 3, 0.7],
 ];
-const LIGHTNESS = { dark: [0.6, 0.68, 0.76, 0.84, 0.92], light: [0.34, 0.41, 0.48, 0.56, 0.64] } as const;
-const MIN_CHROMA = 0.09;
-const MAX_CHROMA = 0.2;
+/**
+ * On a light card the same hues need their own lightness and chroma: the dark recipe there left the lightest colours
+ * under 3:1 on the card (2.4:1 on a grey one) and two pale ones too close to tell apart. Same hue offsets, so the family
+ * of the accent is kept; lightness and chroma chosen by a search over the light palettes for at least 3:1 on the card
+ * and a distance of at least 7 between any two colours.
+ */
+const RECIPE_LIGHT: Recipe = [
+  [-30, 0, 0.55],
+  [-30, 4, 0.7],
+  [30, 4, 0.7],
+  [-30, 1, 0.85],
+  [30, 1, 1],
+  [60, 3, 1],
+  [-60, 2, 0.7],
+  [-60, 3, 0.4],
+  [90, 4, 1],
+  [-90, 4, 0.7],
+  [150, 1, 0.4],
+  [150, 2, 1],
+  [150, 4, 0.85],
+];
+const LIGHTNESS = { dark: [0.6, 0.68, 0.76, 0.84, 0.92], light: [0.2, 0.36, 0.43, 0.51, 0.57] } as const;
+const CHROMA = { dark: { min: 0.09, max: 0.2 }, light: { min: 0.13, max: 0.24 } } as const;
 
 /** `#rgb` or `#rrggbb` (what every token of the themes is); anything else is not a colour this can use. */
 export function parseHex(value: string | null | undefined): Rgb | null {
@@ -100,10 +121,13 @@ export function categoryPalette(accent: string | null | undefined, card: string 
   const back = parseHex(card);
   if (!main || !back) return null;
   const [, chroma, hue] = toOklch(main);
-  const band = toOklch(back)[0] < 0.5 ? LIGHTNESS.dark : LIGHTNESS.light;
-  const base = Math.max(chroma, MIN_CHROMA);
+  const base = toOklch(back)[0] < 0.5 ? "dark" : "light";
+  const band = LIGHTNESS[base];
+  const { min, max } = CHROMA[base];
+  const recipe = base === "dark" ? RECIPE : RECIPE_LIGHT;
+  const start = Math.max(chroma, min);
   return [
     toHex(main),
-    ...RECIPE.map(([shift, step, scale]) => toHex(fromOklch(band[step], Math.min(MAX_CHROMA, scale * base), (hue + shift + 360) % 360))),
+    ...recipe.map(([shift, step, scale]) => toHex(fromOklch(band[step], Math.min(max, scale * start), (hue + shift + 360) % 360))),
   ];
 }

@@ -48,6 +48,8 @@
 
 /* ── Light theme overrides ───────────────────────────────────────── */
 html[data-theme="light"] {
+  /* the score scale as text on a light surface: mixed with black to this much (web/lib/score-color.ts, scoreInkCss) */
+  --score-ink-keep: 55%;
   --color-void: #f0f0f7;
   --color-deep: #e8e8f2;
   --color-panel: #ededf5;

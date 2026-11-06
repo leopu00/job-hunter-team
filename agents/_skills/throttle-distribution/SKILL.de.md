@@ -239,6 +239,7 @@ Sie existieren wegen eines gemessenen Vorfalls (in der Nacht des 2026-07-15 ein 
 - ❌ Bei `AVANTI` bremsen, obwohl die Rate schon wieder im Lot ist — die Abweichung schließt sich von selbst und du beendest das Fenster unter Ziel.
 - ❌ Dem Pacing bei `LOCKOUT-IMMINENTE` mit dem Throttle hinterherlaufen: dort ist die Bremse nahezu gesättigt und nur der Roster bewegt noch das Ergebnis.
 - ❌ Throttle-Zahlen via tmux an Agenten pushen (`[INFO] sleep 40s`). Gehe immer über `throttle-config.py` — Agenten lesen die Config-Datei, sie parsen nicht deinen tmux-Body. tmux dient nur dazu, einem Agenten zu sagen, dass er *häufiger oder seltener* checkpointen soll — das ist eine andere Achse.
+- ❌ Den Stopp (`.team-halted.flag`, `jht team stop`, Sitzungen beenden) verwenden, wenn der Nutzer nur eine **Pause** wollte: Jeder Agent verliert seinen Kontext. Die Pause ist `team-pause`.
 
 ## Siehe auch
 
