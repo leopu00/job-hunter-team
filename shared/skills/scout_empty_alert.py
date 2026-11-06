@@ -7,8 +7,10 @@ no error status: a 403 or a 429 is another problem and has its own words), this 
 
   1. writes one line to `$JHT_HOME/logs/scout-alerts.jsonl` (closed words and numbers: kind, agent, source, country, the number of
      passes, when the streak began). The Dottore reads it (`list`), so a Scout that loops is seen in his round;
-  2. tells the user ONCE per streak, in the user's language, through `jht-notify-user` (the app's panel, Telegram if linked): a
-     fixed sentence from the catalog, `scout_empty_notice.streak`, in plain words: no source name, no number, nothing to do;
+  2. tells the user, in the user's language, through `jht-notify-user` (the app's panel, Telegram if linked): a fixed sentence from
+     the catalog, `scout_empty_notice.streak`, in plain words: no source name, no number, nothing to do. AT MOST ONE message to the
+     user every 24 hours IN TOTAL (`JHT_SCOUT_EMPTY_NOTIFY_H`), whatever the number of Scouts and sources: the other alerts stay in
+     the file only (`notified: false`, `held: "cap"`), and the Doctor still reads them;
   3. prints one line to the Scout that logged the pass, saying where to go: `scout_coverage.py next`.
 
 The fourth empty pass of the same streak is not a new alert; a pass that returned something, or a pass on another source,
@@ -16,6 +18,8 @@ ends the streak. `scout_pass_log.py pass` calls `check` after writing its line, 
 passes is `JHT_SCOUT_EMPTY_ROUNDS` (3 by default, 2 to 10).
 
   python3 scout_empty_alert.py list [--since-hours H] [--json]     the alerts of the last 24 h and whether the Scout moved on
+
+The file of alerts has a size cap (256 KiB): when it is passed the oldest lines are dropped down to half of it, the newest stay.
 
 An error here is a warning on stderr and exit 0: the alert never stops the log it watches. Standard library only (the user's
 language and the notify tool are taken from web_action_notice.py, and only when an alert is really raised).
@@ -38,6 +42,10 @@ if str(HERE) not in sys.path:
 DEFAULT_ROUNDS = 3
 # Passes of one streak are one sitting of the Scout: three empty passes spread over days are not a loop.
 STREAK_SPAN_H = 6.0
+# One message to the user in this many hours, in total: ten sources dry in a night are ten lines in the file and ONE message.
+DEFAULT_NOTIFY_EVERY_H = 24.0
+# The file of alerts never grows without end: past this size the oldest lines go, down to half of it.
+ALERTS_MAX_BYTES = 256 * 1024
 READ_TAIL_BYTES = 256 * 1024
 KIND = "empty_streak"
 SOURCE_ACTION = "scout_empty_alert"
@@ -64,6 +72,14 @@ def rounds() -> int:
         return value if 2 <= value <= 10 else DEFAULT_ROUNDS
     except ValueError:
         return DEFAULT_ROUNDS
+
+
+def notify_every_h() -> float:
+    try:
+        value = float(os.environ.get("JHT_SCOUT_EMPTY_NOTIFY_H", ""))
+        return value if 1.0 <= value <= 24.0 * 30 else DEFAULT_NOTIFY_EVERY_H
+    except ValueError:
+        return DEFAULT_NOTIFY_EVERY_H
 
 
 def _tail_lines(path: Path) -> list:
@@ -121,10 +137,29 @@ def _already_raised(source: str, country: str, agent: str, began: float, path: P
     return False
 
 
+def _trim(path: Path) -> None:
+    """Past the size cap, keep the newest half of the lines (whole lines only). Never raises: a trim that fails is a file a bit big."""
+    try:
+        if path.stat().st_size <= ALERTS_MAX_BYTES:
+            return
+        kept, size = [], 0
+        for text in reversed(path.read_bytes().splitlines(keepends=True)):
+            size += len(text)
+            if size > ALERTS_MAX_BYTES // 2:
+                break
+            kept.insert(0, text)
+        tmp = path.with_suffix(".jsonl.tmp")
+        tmp.write_bytes(b"".join(kept))
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
 def _append(row: dict, path: Path) -> bool:
     line = (json.dumps(row, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
+        _trim(path)
         fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
             os.write(fd, line)
@@ -166,10 +201,45 @@ def check(agent: str, now: float | None = None, log: Path | None = None, alerts:
     if _already_raised(source, country, agent, began, path):
         return None
     key = ID_PART.sub("_", "%s:%s:%s:%s" % (agent, source, country, int(began)))[:150]
-    row = {"v": 1, "kind": KIND, "ts": round(now, 3), "agent": agent, "source": source, "country": country,
-           "passes": len(run_of), "began": began, "notified": notify_user(key, run=run)}
-    _append(row, path)
+    with _locked(path):
+        # one message to the user in 24 h in total: the other alerts are kept in the file and the Doctor reads them
+        capped = _told_recently(path, now)
+        row = {"v": 1, "kind": KIND, "ts": round(now, 3), "agent": agent, "source": source, "country": country,
+               "passes": len(run_of), "began": began, "notified": False if capped else notify_user(key, run=run)}
+        if capped:
+            row["held"] = "cap"
+        _append(row, path)
     return row
+
+
+def _told_recently(path: Path, now: float) -> bool:
+    """A message to the user was really delivered (`notified: true`) in the last window. A failed delivery does not use the turn."""
+    window = notify_every_h() * 3600
+    return any(r.get("kind") == KIND and r.get("notified") is True and 0 <= now - r["ts"] < window for r in _rows(path))
+
+
+class _locked:
+    """An exclusive lock on the file of alerts while the cap is checked and the message sent, so two Scouts finishing a streak at the
+    same moment do not both write to the user. Where fcntl does not exist (Windows) there is no lock: the sentence is still one per streak."""
+    def __init__(self, path: Path):
+        self.path, self.fd = path.with_suffix(".lock"), None
+
+    def __enter__(self):
+        try:
+            import fcntl  # noqa: PLC0415
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.fd = os.open(str(self.path), os.O_WRONLY | os.O_CREAT, 0o644)
+            fcntl.flock(self.fd, fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            if self.fd is not None:
+                os.close(self.fd)
+            self.fd = None
+        return self
+
+    def __exit__(self, *exc):
+        if self.fd is not None:
+            os.close(self.fd)   # closing the descriptor releases the lock
+        return False
 
 
 def recent(since_hours: float = 24.0, now: float | None = None, log: Path | None = None, alerts: Path | None = None) -> list:
