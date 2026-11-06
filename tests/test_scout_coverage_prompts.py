@@ -15,7 +15,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SUFFIXES = ("", ".it", ".de", ".es", ".fr", ".pt", ".hu")
 NEEDLES = ("scout-coverage", "scout_coverage.py next", "--query-kind", "--status closed", "scout_exhaustion.py check",
-           "core_missing", "3", "praktik", "platsbanken_search.py", "--query-kind broad")
+           "uncovered", "--status blocked", "scout_yield.py", "3", "praktik", "platsbanken_search.py", "--query-kind broad")
 
 
 def _prompt(suffix: str) -> str:
@@ -36,7 +36,7 @@ def test_the_skill_exists_in_every_language_with_the_same_commands(suffix):
     skill = (REPO_ROOT / "agents" / "_skills" / "scout-coverage" / ("SKILL%s.md" % suffix)).read_text(encoding="utf-8")
     assert skill.startswith("---\nname: scout-coverage\n")
     for needle in ("scout_coverage.py next", "scout_coverage.py plan", "scout_coverage.py status", "scout_pass_log.py pass",
-                   "--status closed", "--query-kind", "scout_exhaustion.py check", "core_missing", "level_terms", "cities",
+                   "--status closed", "--status blocked", "--query-kind", "scout_exhaustion.py check", "core_missing", "uncovered", "level_terms", "cities",
                    "role_language", "synonym", "plan_done", "broad", "broad_terms", "platsbanken_search.py", "boards --country",
                    "ats_board_search.py", "--drop-seniority", "--title-any", "dropped"):
         assert needle in skill, "%s: %r" % (suffix or "en", needle)
@@ -113,3 +113,26 @@ def test_the_tool_the_prompts_name_exists_and_takes_what_they_say():
         assert needle in tool, needle
     coverage = (REPO_ROOT / "shared" / "skills" / "scout_coverage.py").read_text(encoding="utf-8")
     assert "--agent" in coverage and "profile_news" in coverage
+
+
+@pytest.mark.parametrize("suffix", SUFFIXES)
+def test_the_captain_prompt_says_saturated_only_at_full_coverage_and_measures_the_night_at_the_bar(suffix):
+    """JHT-T187: the Captain sends a dry Scout to the next portal (`uncovered`), does not read an error as a dry market, and reports
+    positions at the bar (scout_yield.py), in all seven languages."""
+    text = (REPO_ROOT / "agents" / "capitano" / ("capitano%s.md" % suffix)).read_text(encoding="utf-8")
+    for needle in ("`uncovered`", "scout_coverage.py next --agent", "`blocked`", "scout_yield.py --json", "`good`", "`pending`", "`below`", "70"):
+        assert needle in text, "%s: %r" % (suffix or "en", needle)
+
+
+@pytest.mark.parametrize("suffix", SUFFIXES)
+def test_the_pass_log_skill_teaches_blocked_is_not_empty_and_the_three_empty_alert(suffix):
+    skill = (REPO_ROOT / "agents" / "_skills" / "scout-pass-log" / ("SKILL%s.md" % suffix)).read_text(encoding="utf-8")
+    for needle in ("--status blocked", "JHT_SCOUT_BLOCKED_PAUSE_H", "ALERT", "scout_coverage.py next"):
+        assert needle in skill, "%s: %r" % (suffix or "en", needle)
+
+
+def test_the_commands_the_prompts_name_exist():
+    skills = REPO_ROOT / "shared" / "skills"
+    assert '"blocked"' in (skills / "scout_pass_log.py").read_text(encoding="utf-8")
+    for tool in ("scout_yield.py", "scout_empty_alert.py"):
+        assert (skills / tool).is_file()
