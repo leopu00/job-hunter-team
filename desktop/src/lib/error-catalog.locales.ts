@@ -383,6 +383,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     hu: ["A Job Hunter Team telepítve van, de ezen a számítógépen egy másik fiók módosíthatja a programjai mappáját, ezért az app biztonsági okból nem használja.", "Kérd meg a számítógép üzemeltetőjét, hogy vonja meg a többi fióktól az írási jogot a profilod .local\\bin mappáján, majd próbáld újra."],
     pt: ["O Job Hunter Team está instalado, mas outra conta deste computador pode alterar a pasta dos seus programas, por isso a app não a usa por segurança.", "Pede a quem gere o computador que retire às outras contas a permissão de escrita na pasta .local\\bin do teu perfil e tenta novamente."],
   },
+  "Windows PowerShell cannot load its own system modules, so preparing the environment cannot go on.": {
+    de: ["Windows PowerShell kann seine eigenen Systemmodule nicht laden, deshalb kann die Vorbereitung der Umgebung nicht fortgesetzt werden.", "Schließe Job Hunter Team und öffne es erneut über das Startmenü oder den Datei-Explorer, nicht aus einem PowerShell-7-Fenster, und drücke dann auf Erneut versuchen. Wenn es wieder passiert, starte den Computer neu."],
+    es: ["Windows PowerShell no puede cargar sus propios módulos del sistema, así que la preparación del entorno no puede continuar.", "Cierra Job Hunter Team y ábrelo de nuevo desde el menú Inicio o el Explorador de archivos, no desde una ventana de PowerShell 7, y pulsa Reintentar. Si se repite, reinicia el equipo."],
+    fr: ["Windows PowerShell ne parvient pas à charger ses propres modules système, la préparation de l’environnement ne peut donc pas continuer.", "Ferme Job Hunter Team et rouvre-le depuis le menu Démarrer ou l’Explorateur de fichiers, pas depuis une fenêtre PowerShell 7, puis appuie sur Réessayer. Si cela se reproduit, redémarre l’ordinateur."],
+    hu: ["A Windows PowerShell nem tudja betölteni a saját rendszermoduljait, ezért a környezet előkészítése nem folytatható.", "Zárd be a Job Hunter Teamet, és nyisd meg újra a Start menüből vagy a Fájlkezelőből, ne PowerShell 7 ablakból, majd nyomd meg az Újrapróbálás gombot. Ha megismétlődik, indítsd újra a számítógépet."],
+    pt: ["O Windows PowerShell não consegue carregar os seus próprios módulos do sistema, por isso a preparação do ambiente não pode continuar.", "Fecha o Job Hunter Team e abre-o de novo a partir do menu Iniciar ou do Explorador de Ficheiros, não de uma janela do PowerShell 7, e carrega em Tentar novamente. Se voltar a acontecer, reinicia o computador."],
+  },
   "The team environment is not installed on this computer.": {
     de: ["Die Teamumgebung ist auf diesem Computer nicht installiert.", "Beginne erneut mit der technischen Einrichtung."],
     es: ["El entorno del equipo no está instalado en este ordenador.", "Vuelve a empezar desde la configuración técnica."],
@@ -1957,6 +1964,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   runtime_download_failed: translated("Preparing the team’s environment did not succeed."),
   runtime_download_refused: translated("The server did not hand over the team’s environment package."),
   runtime_download_tool_failed: translated("The program that downloads the team’s environment could not run on this computer."),
+  powershell_modules_unavailable: translated("Windows PowerShell cannot load its own system modules, so preparing the environment cannot go on."),
   runtime_install_failed: translated("Preparing the team’s environment did not succeed."),
   runtime_failed: translated("Preparing the team’s environment did not succeed."),
   runtime_wrapper_publish_failed: translated("Preparing the team’s environment did not succeed."),
