@@ -78,7 +78,8 @@ CODEX_SQLITE_HOME=/opt/jht-deps/codex-state
 - `jht cache` prunes the logs database in its new place; its other targets
   (`.codex/.tmp/plugins`, `.codex/cache`, `models_cache.json`) did not move.
 
-Codex 0.147 (the version in the image) defines `CODEX_SQLITE_HOME` and resolves
+Codex 0.147 (pinned in `shared/config/provider-versions.json` and installed in
+the dependency volume) defines `CODEX_SQLITE_HOME` and resolves
 it before the default; it was checked in the source of that tag and, running,
 in 0.166, where the six databases are created in the given directory and the
 home keeps only what is listed above.
