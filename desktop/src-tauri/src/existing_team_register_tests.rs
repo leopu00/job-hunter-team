@@ -3071,14 +3071,13 @@ fn t55_each_command_that_acts_on_the_host_asks_before_anything_else() {
         (&onboarding, "onboarding_team_update", "saved_host_action_refusal(", &["compare_exchange", "spawn_blocking", "load_persisted_host("]),
         (&onboarding, "onboarding_plans", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
         (&onboarding, "onboarding_plan_declare", "host_action_refusal(", &["compare_exchange", "spawn_blocking", "validate_host("]),
-        (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["state\n        .interactive", "validate_host(", "spawn("]),
+        (&onboarding, "onboarding_provider_login", "host_action_refusal(", &["spawn_blocking", "start_provider_login(", "state\n        .interactive", "validate_host(", "spawn("]),
         (&onboarding, "onboarding_provider_login_input", "host_action_refusal(&app, window.label(), scope.scope(), &session.host)", &["write_provider_input("]),
         (&mail, "mail_save_password", "saved_host_action_refusal(", &["spawn_blocking", "active_host("]),
         (&broker, "broker_login_view_open", "saved_host_action_refusal(", &["get_webview_window", "compare_exchange", "spawn_blocking"]),
     ];
     for (source, name, refusal_call, effects) in commands {
-        // the login's work is in `start_provider_login`, run off the main thread by the command of that name
-        let text = body(source, if name == "onboarding_provider_login" { "start_provider_login" } else { name });
+        let text = body(source, name);
         assert!(text.contains("window: tauri::Window"), "{name}: it knows which window asks");
         assert!(text.contains("window.label()"), "{name}: and says it");
         let asked = text.find(refusal_call).unwrap_or_else(|| panic!("{name}: it asks"));

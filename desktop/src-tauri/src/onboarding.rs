@@ -4944,30 +4944,35 @@ pub(crate) async fn onboarding_provider_login(
     on_event: Channel<InteractiveEvent>,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<InteractiveStart, OnboardingError> {
+    let expected = scopes.active().map_err(failure)?;
+    {
+        let scope = scopes.lock_expected(&expected).map_err(failure)?;
+        // A provider login writes the provider's credentials into the team's host: on an existing team, the full link.
+        if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &host) {
+            return Err(failure(code));
+        }
+    }
     let scope_state = scopes.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<OnboardingNativeState>();
-        start_provider_login(window, &app, &state, &scope_state, host, on_event, on_progress)
+        start_provider_login(&app, &state, &scope_state, &expected, host, on_event, on_progress)
     })
     .await
     .map_err(|_| failure("state_failed"))?
 }
 
 fn start_provider_login(
-    window: tauri::Window,
     app: &tauri::AppHandle,
     state: &OnboardingNativeState,
     scopes: &AccountScopeState,
+    expected: &AccountScope,
     host: ExecutionHost,
     on_event: Channel<InteractiveEvent>,
     on_progress: Channel<OnboardingProgress>,
 ) -> Result<InteractiveStart, OnboardingError> {
     let app = app.clone();
-    let scope = scopes.lock_active().map_err(failure)?;
-    // A provider login writes the provider's credentials into the team's host: on an existing team, the full link.
-    if let Some(code) = crate::agent_control::host_action_refusal(&app, window.label(), scope.scope(), &host) {
-        return Err(failure(code));
-    }
+    // The scope the host was judged for: a change of account in between is an error, not a login for the new one.
+    let scope = scopes.lock_expected(expected).map_err(failure)?;
     let mut slot = state
         .interactive
         .lock()
