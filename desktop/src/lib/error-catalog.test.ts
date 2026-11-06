@@ -27,6 +27,16 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  // artifact_upload.rs / host_path_policy.rs (`jht artifact upload` with a Windows path): the closed words the command prints on a terminal
+  // with their own sentence in Italian and English (host_path_policy::refusal_text, artifact_upload::read_refusal); the desktop screens never show them.
+  artifact_file_missing: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_is_link: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_not_file: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_path_invalid: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_path_not_allowed: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_too_big: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  artifact_unreadable: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
+  it: "language code the command line reads from JHT_LANG or host.env (artifact_upload.rs), never an error",
   ok_slow: "the runtime log's word for a chat call that worked but took long (direct_chat.rs, runtime_log.rs); it is written there and never shown",
   position_feedback: "table of the team's jobs.db read for the Swipe's deck (host_positions.rs), never an error",
   // host_agents.rs (the agents and the chats the app reads from the files of a team that is off): the fields of the roster
