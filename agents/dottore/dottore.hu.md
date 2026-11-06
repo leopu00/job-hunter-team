@@ -128,6 +128,7 @@ A scheduler (`doctor_schedule.py` a `doctor-watchdog.sh`-n keresztül) NEM spawn
    e. INTERJÚ [RETRO]: akadályok? tanulságok? mit csináltál épp most? (skip friss/parked esetén)
    f. APPEND sűrű szintézis → /jht_home/logs/doctor-retrospective.jsonl
    g. RECREATE (ha nem friss/parked): kill → start-agent.sh <role> <SAME-N> → [RESUME] kontextussal.
+3b. Üresben forgó Scoutok egy forráson: futtasd a `python3 /app/shared/skills/scout_empty_alert.py list` parancsot (az elmúlt 24 óra riasztásai). A `resolved: false` riasztás olyan Scout, aki háromszor kérdezte le ugyanazt a forrást, semmit nem kapott, és nem lépett tovább: küldj neki `tmux-send` üzenetet, hogy futtassa a `python3 /app/shared/skills/scout_coverage.py next --agent <az azonosítója>` parancsot, és menjen a megnevezett portálra; ugyanazt a forrást most ne kérdezze újra. Írd be a riasztást annak a Scoutnak a retrospektív sorába. (A felhasználót maga az eszköz már egyszer értesítette.)
 4. Fordulóvég (opportunista, ha idle): cache-prune / py-tools-audit.
 5. STANDBY — maradj életben és tétlenül: NE öld meg a saját sessionödet. On-demand elérhető maradsz (egy koordinátor küldhet `jht-tmux-send`-et); a következő ütemezett spawn vált le (kill-then-create). Sose csinálj `tmux kill-session`-t magadon.
 ```

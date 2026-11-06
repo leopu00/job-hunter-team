@@ -180,3 +180,11 @@ def test_the_sentence_promises_only_what_is_done_the_doctor_reads_the_file_and_t
     for lang, captain in zip(LANGS, ("Captain", "Capitano", "Kapitän", "Capitaine", "Capitán", "Capitão", "Kapitány")):
         text = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))["scout_empty_notice.streak"]
         assert captain not in text, lang
+
+
+@pytest.mark.parametrize("suffix", ["", ".it", ".de", ".fr", ".es", ".hu", ".pt"])
+def test_the_doctor_reads_the_alerts_in_every_language(suffix):
+    """The sentence to the user says the Doctor was told: his prompt has to read the file, in all seven languages."""
+    text = (REPO / "agents" / "dottore" / f"dottore{suffix}.md").read_text(encoding="utf-8")
+    assert "scout_empty_alert.py list" in text and "resolved: false" in text
+    assert "scout_coverage.py next --agent" in text and "tmux-send" in text
