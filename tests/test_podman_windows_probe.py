@@ -192,7 +192,9 @@ def test_runtime_enabler_attests_shim_override_and_persists_selection():
     assert "container-runtime=$selectionHash" in source
     assert "podman-machine=$machineHash" in source
     assert "jht-container.service=$containerUnitHash" in source
-    assert "SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')" in source
+    # the engine is named by the runtime's container-runtime file: the installer no longer writes the variable, it takes away the old one
+    assert "SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')" not in source
+    assert "SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', $null, 'User')" in source
     assert "Repair-LegacyBindMetadata" in source
     assert "$ContainerRuntime" in wrapper
     assert "& docker compose @files" in wrapper

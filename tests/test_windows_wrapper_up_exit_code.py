@@ -91,7 +91,7 @@ def _run(tmp_path: Path, command: str, compose_up: int = 0):
         **base,
         "PATH": str(bin_dir) if WINDOWS else f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
         "HOME": base["USERPROFILE"],
-        "JHT_CONTAINER_RUNTIME": "docker",
+        "JHT_TEST_CONTAINER_RUNTIME": "docker",
         "JHT_RUNTIME_DIR": str(runtime),
         "JHT_COMPOSE_FILE": str(runtime / "docker-compose.yml"),
         "JHT_HOST_ENV_FILE": str(tmp_path / "no-host.env"),

@@ -334,11 +334,14 @@ $WrapperPath = if ($env:JHT_WRAPPER_PATH)   { $env:JHT_WRAPPER_PATH }   else { $
 $RuntimeSelectionFile = Join-Path $RuntimeDir 'container-runtime'
 $RuntimeMigrationMarker = Join-Path $RuntimeDir '.runtime-migrated-podman'
 $PodmanMachineFile = Join-Path $RuntimeDir 'podman-machine'
-$ContainerRuntime = if ($env:JHT_CONTAINER_RUNTIME) {
-  $env:JHT_CONTAINER_RUNTIME.Trim().ToLowerInvariant()
+# The engine of THIS runtime is the one its attested bundle names (the container-runtime file). No environment variable the person
+# can have left behind (an older terminal's, a program's) chooses it; only a test names another one, with its own variable.
+$ContainerRuntime = if ($env:JHT_TEST_CONTAINER_RUNTIME) {
+  $env:JHT_TEST_CONTAINER_RUNTIME.Trim().ToLowerInvariant()
 } elseif (Test-Path -LiteralPath $RuntimeSelectionFile -PathType Leaf) {
   ([IO.File]::ReadAllText($RuntimeSelectionFile)).Trim().ToLowerInvariant()
 } else { 'docker' }
+Remove-Item -LiteralPath Env:JHT_CONTAINER_RUNTIME -ErrorAction SilentlyContinue
 if ($ContainerRuntime -notin @('docker', 'podman')) { throw "runtime container non supportato: $ContainerRuntime" }
 $PodmanComposeFile = Join-Path $RuntimeDir 'docker-compose.podman.yml'
 $ContainerUnitFile = Join-Path $RuntimeDir 'jht-container.service'
