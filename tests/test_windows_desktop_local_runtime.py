@@ -83,15 +83,17 @@ def test_windows_rust_chat_calls_the_attested_container_and_keeps_exit_130():
     fixed Python delivery script with process arguments.  Its exit 130 is the
     same fail-closed ``composer_has_text`` result used by the Mac path.
     """
-    source = DIRECT_CHAT.read_text(encoding="utf-8")
+    source = DIRECT_CHAT.with_suffix("").joinpath("transport.rs").read_text(encoding="utf-8")
+    native = DIRECT_CHAT.with_suffix("").joinpath("local_exec.rs").read_text(encoding="utf-8")
     failure = source[source.index("fn chat_failure(") : source.index("fn run_wrapper_chat", source.index("fn chat_failure("))]
     assert '130 => "composer_has_text"' in failure
 
-    exec_args = source[source.index("fn local_chat_exec_args(") : source.index("fn run_local_chat(", source.index("fn local_chat_exec_args("))]
+    exec_args = native[native.index("fn local_chat_exec_args(") : native.index("fn run_local_chat(", native.index("fn local_chat_exec_args("))]
     assert '"/app/shared/skills/agent_chat.py"' in exec_args
     assert "existing_team_runtime::chat_arguments(operation)" in exec_args
 
-    local = source[source.index("fn run_local_chat(") : source.index("fn run_connection(", source.index("fn run_local_chat("))]
+    local_start = native.index("fn run_local_chat(")
+    local = native[local_start:]
     assert "local_chat_runtime_valid(wrapper, runtime)" in local
     assert "ChatOperation" in local
     assert "powershell" not in local.lower()
