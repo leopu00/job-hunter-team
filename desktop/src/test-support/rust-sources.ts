@@ -129,7 +129,9 @@ export function withoutRustTests(source: string): string {
     if (!testOnly(source.slice(match.index, end))) continue;
     const until = itemEnd(mask, end);
     const start = attributesStart(mask, match.index);
-    chunks.push(source.slice(kept, start), source.slice(start, until).replace(/[^\n]/g, " "));
+    // A separator keeps adjacent production tokens apart without leaving huge
+    // whitespace blocks for the catalog's multiline regular expressions.
+    chunks.push(source.slice(kept, start), "\n");
     kept = until;
     attributes.lastIndex = until;
   }
