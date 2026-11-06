@@ -3318,6 +3318,19 @@ switch ($Sub) {
     exit $script:AgentControlExitCode
   }
 
+  # The document is a file of this computer: the container cannot see a Windows path, so the app reads it and hands it over
+  # (artifact_upload.rs). Nothing is decided here; the app's words and exit code are the command's.
+  { $_ -eq 'artifact' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'upload' } {
+    $uploader = Join-Path $LocalAppData 'Job Hunter Team\jht-desktop.exe'
+    if (-not (Test-Path -LiteralPath $uploader -PathType Leaf)) {
+      Write-Err 'artifact_upload_needs_app: l''app Job Hunter Team non e'' installata per questo utente.'
+      exit 1
+    }
+    $uploadArgs = if ($Rest.Count -gt 1) { @($Rest[1..($Rest.Count - 1)]) } else { @() }
+    & $uploader '--artifact-upload' @uploadArgs | Out-Host
+    exit $LASTEXITCODE
+  }
+
   'desktop-apply' {
     Invoke-DesktopApply $Rest
     exit $script:DesktopApplyExitCode

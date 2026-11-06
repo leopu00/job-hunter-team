@@ -27,6 +27,7 @@ import { SignOutContext } from "../lib/account-actions";
 import { NewVersionBanner } from "./NewVersionBanner";
 import { TeamUpdateNotice } from "./TeamUpdateNotice";
 import { TeamOffBanner } from "./TeamOffBanner";
+import { ProviderLoginBanner } from "../provider-login/ProviderLoginBanner";
 import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
 import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
 import { AwayGreeting } from "./AwayGreeting";
@@ -298,6 +299,7 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
               <NewVersionBanner />
           <TeamUpdateNotice />
               <TeamOffBanner />
+              <ProviderLoginBanner />
               <LocalTeamOwnerBanner onSwitch={onLogout} />
               <LocalTeamStoppedBar />
               <WriteAccessRestoredBanner />
@@ -322,6 +324,7 @@ export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, 
           <NewVersionBanner />
           <TeamUpdateNotice />
           <TeamOffBanner />
+          <ProviderLoginBanner />
           <LocalTeamOwnerBanner onSwitch={onLogout} />
           <LocalTeamStoppedBar />
             <WriteAccessRestoredBanner />
