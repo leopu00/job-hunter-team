@@ -39,7 +39,7 @@ export default function TeamCard({ readOnly, read = readTeamState }: { readOnly:
     <section data-testid="settings-team" aria-labelledby="settings-team-title" className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 flex flex-col gap-2">
       <h2 id="settings-team-title" className="text-[13px] font-semibold text-[var(--color-bright)]">{t.teamTitle}</h2>
       <p className="text-[12px] text-[var(--color-muted)]" data-testid="settings-team-state">{line}</p>
-      <button type="button" data-testid="settings-agents-link" onClick={() => navigate("/agents")} className={linkCls}>
+      <button type="button" data-testid="settings-agents-link" onClick={() => navigate("/messages?tab=squad")} className={linkCls}>
         <span className="block text-[13px] font-semibold text-[var(--color-bright)]">{t.agentsLink}</span>
         <span className="mt-1 block text-[11px] text-[var(--color-muted)]">{t.agentsNote}</span>
       </button>

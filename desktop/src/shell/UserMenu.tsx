@@ -7,6 +7,7 @@ import { navLabel, PendingMark } from "./MainNav";
 import { NAV_TEXT } from "./nav.i18n";
 import { usePendingSetup } from "./pending-setup";
 import { useLocation } from "./router";
+import { AccountIcon } from "./icons";
 
 const itemCls =
   "block w-full text-left px-3 py-1.5 text-[11px] font-semibold tracking-widest hover:bg-[var(--color-card)] no-underline disabled:opacity-50";
@@ -91,6 +92,7 @@ export default function UserMenu({
         style={lit ? { color: "var(--color-white)" } : undefined}
         onClick={() => setOpen((visible) => !visible)}
       >
+        <AccountIcon />
         {text.account} ▾
         {anyPending && <PendingMark />}
       </button>

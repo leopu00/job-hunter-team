@@ -38,9 +38,10 @@ import { useTeamOff } from "../../lib/team-off";
 import { nextScreenWait, SCREEN_SLOW_MS, screenPace } from "./terminal-pace";
 import type { PageProps } from "../types";
 import { AGENTS_PANEL_TEXT, type AgentsPanelText } from "./AgentsPanel.i18n";
+import { AGENT_PAGE_TEXT } from "./AgentPage.i18n";
 import { UsageShort } from "./AgentUsage";
 import AgentStatusBar, { type IdentityParts } from "./AgentStatusBar";
-import { QuestionList, QuestionMarks, questionsSummary } from "./AgentQuestions";
+import { QuestionList, QuestionMarks, questionsPartlyKnown, questionsSummary } from "./AgentQuestions";
 import { PauseResumeButton } from "./PauseResumeButton";
 import { SessionHistory } from "./AgentHistory";
 import { readWorkWindow, rememberWorkWindow, WorkLanes } from "./AgentWork";
@@ -52,6 +53,7 @@ import { REOPEN_NO_RETRY } from "../messages/DirectChatScreen";
 import { chatIdOfSession, sessionOfChatId } from "../messages/chat-agents";
 import { agentTitle } from "./agent-names";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
+import { StopIcon } from "../../shell/icons";
 
 /**
  * The agents the person can chat with are the ones the Messages page lists: the same rule, not a
@@ -166,8 +168,9 @@ export function panelRows(list: PanelList, team: TeamControlState | null): Panel
 /** What the panel may do on a row; nothing in the read-only view. */
 export function rowActions(row: PanelRow, readOnly: boolean): AgentAction[] {
   if (readOnly || SCHEDULED.has(row.session)) return [];
-  if (REVIEWER.test(row.session)) return row.agent ? ["stop"] : [];
-  if (!row.agent) return row.heldBySafety ? [] : ["start"];
+  // an agent the team lists as «off» (the roster of a stopped team, or a session that ended meanwhile) is a row with no session: it is started, not restarted
+  if (REVIEWER.test(row.session)) return isUp(row) ? ["stop"] : [];
+  if (!isUp(row)) return row.heldBySafety ? [] : ["start"];
   if (row.heldBySafety) return ["stop"];
   return ["restart", "stop"];
 }
@@ -284,7 +287,7 @@ const CLI_NAME: Record<AgentIdentity["cli"], string> = { claude: "Claude", codex
 /**
  * Who the agent is, in pieces: «Codex», «gpt-5.6-terra», «effort alto».
  * Only shown, never decided on (the agent can rewrite its session's options).
- * A part the session does not say is «non so»; Kimi gets no model nor effort
+ * A part the session does not say is null (the screens show «—», or leave it out); Kimi gets no model nor effort
  * from the launcher (its own default), the local scorer neither.
  */
 export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null): IdentityParts | null {
@@ -293,8 +296,8 @@ export function identityParts(t: AgentsPanelText, identity: AgentIdentity | null
   const effortName = { low: t.effortLow, medium: t.effortMedium, high: t.effortHigh };
   return {
     provider: CLI_NAME[identity.cli],
-    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : t.identityModelUnknown),
-    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : t.identityEffortUnknown,
+    model: identity.model ?? (identity.cli === "kimi" ? t.identityModelDefault : null),
+    effort: identity.cli === "kimi" ? null : identity.effort ? fill(t.identityEffort, { effort: effortName[identity.effort] }) : null,
   };
 }
 
@@ -586,7 +589,14 @@ function rememberView(view: "list" | "lanes"): void {
  * read-only view, the controls. Every action is confirmed, names where it
  * goes, and says what happened only once the team said so.
  */
-export default function AgentsPanel({ search }: PageProps) {
+/**
+ * `only`: a part of the panel inside the Team page, without the page around it (the title, the list of agents, the other parts):
+ * `commands` (the team's state with Pause, Resume and Stop), `lanes` (what each agent worked on), `log` (the registry of the actions),
+ * `agent` (the controls of the agent named by `agent`: its state, times, what it asks the person, Pause, Restart and Stop). Each part reads and
+ * confirms by itself, as the page does; without `only` this is the page of the Agents, as it has always been.
+ */
+export type PanelPart = "commands" | "lanes" | "log" | "agent";
+export default function AgentsPanel({ search, only, agent }: PageProps & { only?: PanelPart; agent?: string }) {
   const t = AGENTS_PANEL_TEXT[appLocale()];
   const readOnly = useExistingTeamReadOnly() !== null;
   const teamOff = useTeamOff();
@@ -594,7 +604,7 @@ export default function AgentsPanel({ search }: PageProps) {
   const [list, setList] = useState<Outcome<PanelList> | null>(null);
   const [team, setTeam] = useState<TeamControlState | null>(null);
   const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<string | null>(search.get("agent")?.toUpperCase() ?? null);
+  const [selected, setSelected] = useState<string | null>(agent?.toUpperCase() ?? search.get("agent")?.toUpperCase() ?? null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [acting, setActing] = useState(false);
   const [notices, setNotices] = useState<Record<string, Notice>>({});
@@ -642,7 +652,7 @@ export default function AgentsPanel({ search }: PageProps) {
   }, [read]);
   // The lanes' own read: when the view or the window changes, and every 30 s while it is open (a bucket is minutes long).
   useEffect(() => {
-    if (view !== "lanes") return;
+    if (view !== "lanes" && only !== "lanes") return;
     let alive = true;
     const load = async () => {
       const done = await readPanelActivity(workWindow);
@@ -654,7 +664,7 @@ export default function AgentsPanel({ search }: PageProps) {
       alive = false;
       clearInterval(timer);
     };
-  }, [view, workWindow]);
+  }, [view, workWindow, only]);
   useRefresh(() => void read());
   // One read at a time, and none while an action or a start is on its way: their own read follows them.
   const occupied = useRef(false);
@@ -736,11 +746,10 @@ export default function AgentsPanel({ search }: PageProps) {
   }, [occupiedNow]);
 
   const rows = useMemo(() => (list?.ok ? panelRows(list.value, team) : []), [list, team]);
+  const wanted = only === "agent" ? agent?.toUpperCase() ?? null : selected;
   const current =
-    rows.find((row) => row.session === selected) ??
-    rows.find((row) => row.role === selected?.toLowerCase()) ??
-    rows[0] ??
-    null;
+    rows.find((row) => row.session === wanted) ??
+    (only === "agent" ? null : rows.find((row) => row.role === wanted?.toLowerCase()) ?? rows[0] ?? null);
   const where = list?.ok
     ? list.value.where === "vps"
       ? fill(t.whereVps, { label: list.value.label ?? "" })
@@ -811,6 +820,7 @@ export default function AgentsPanel({ search }: PageProps) {
       total: rows.length,
       // only to be shown: the questions of the agents that are up, null where the team does not say them
       questions: questionsSummary(t, up.map((row) => row.agent!.questions)),
+      questionsPartly: questionsPartlyKnown(up.map((row) => row.agent!.questions)),
     };
   }, [rows, t]);
 
@@ -824,7 +834,8 @@ export default function AgentsPanel({ search }: PageProps) {
         ? t.teamPausedWeekly
         : fill(t.teamPausedUntil, { time: stamp(Date.parse(team.standby.until)) });
     if (team.standby.state === "expired") return t.teamPauseEnding;
-    return t.teamActive;
+    // «active» is said only of a team that has an agent on: with none (or with the state not read, `team` is null above) there is nothing to say
+    return counts.up > 0 ? t.teamActive : null;
   })();
   const paused = team?.standby.state === "active";
   // The user's full-throttle override (JHT-T33): on with its end, ending within the hour, or ended.
@@ -837,206 +848,10 @@ export default function AgentsPanel({ search }: PageProps) {
     return fill(burn.remainingMin <= 60 ? t.burnEnding : t.burnOn, { time, minutes: String(burn.remainingMin) });
   })();
 
-  return (
-    <div className="max-w-6xl mx-auto px-5 pt-6 pb-8" style={{ animation: "fade-in 0.35s ease both" }}>
-      <div className="flex items-start justify-between gap-4 mb-2">
-        <h1 className="text-xl font-bold uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-white)" }}>
-          {t.title}
-        </h1>
-        <button
-          type="button"
-          onClick={() => void read()}
-          disabled={busy}
-          className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
-        >
-          {busy ? t.refreshing : t.refresh}
-        </button>
-      </div>
-      {list?.ok && <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.intro, { where })}</p>}
-      {readOnly && (
-        <p data-testid="panel-read-only" className="text-[11px] mb-2 text-[var(--color-muted)]">
-          {t.readOnly}
-        </p>
-      )}
-
-      {list === null && <p className="text-[12px] text-[var(--color-muted)]">{t.reading}</p>}
-      {/* While the team of this computer is being started «there is no running team» is not an error: the start's own line says what is
-          happening, and a red sentence next to it says the opposite. Any other reason a read fails is still told. */}
-      {list && !list.ok && !(starting && list.code === "agent_control_no_team") && (
-        <div role="alert" data-testid="panel-error" className="text-[12px] text-[var(--color-red)]">
-          <strong>{t.failed}</strong>
-          <p>{readFailureText(list.code)}</p>
-          <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
-        </div>
-      )}
-
-      {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it; the
-          button stays while a start runs, also once the list answers (the flag «stopped by you» falls later) */}
-      {((list && !list.ok && list.code === "agent_control_no_team" && !teamOff) || starting) && (
-        <div className="mt-2">
-          <StartTeamAction onStarted={() => read(true)} waits={AGENTS_START_READ_WAITS} onBusy={setStarting} />
-        </div>
-      )}
-
-      {list?.ok && (
-        <>
-          {!readOnly && (list.value.ownVps === "claimable" || list.value.ownVps === "key_changed") && (
-            <OwnVpsClaim
-              reason={list.value.ownVps === "key_changed" ? "own_vps_key_changed" : "own_vps_claim_required"}
-              onClaimed={() => void read()}
-            />
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded border px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
-            <span data-testid="panel-summary" className="text-[11px]" style={{ color: "var(--color-bright)" }}>
-              {[
-                pluralText(appLocale(), counts.waiting, t.summaryWaiting),
-                pluralText(appLocale(), counts.working, t.summaryWorking),
-                pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
-              ].join(" · ")}
-              {counts.up > 0 && (
-                <>
-                  {" · "}
-                  <span data-testid="panel-questions-summary" title={t.questionsSummaryHelp}>
-                    {counts.questions}
-                  </span>
-                </>
-              )}
-              {teamLine && (
-                <>
-                  {" · "}
-                  <span data-testid="panel-team-state">{teamLine}</span>
-                </>
-              )}
-              {burnLine && (
-                <>
-                  {" · "}
-                  <span data-testid="panel-burn-intent">{burnLine}</span>
-                </>
-              )}
-            </span>
-            {!readOnly && team && !team.halted && (
-              <div className="flex gap-2">
-                <PauseResumeButton
-                  paused={paused}
-                  pauseLabel={t.pause}
-                  resumeLabel={t.resume}
-                  onPause={() => setPending({ kind: "pause" })}
-                  onResume={() => setPending({ kind: "resume" })}
-                  testIdBase="panel"
-                />
-                <button
-                  type="button"
-                  data-testid="panel-stop-team"
-                  onClick={() => setPending({ kind: "stop-team" })}
-                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
-                  style={{ color: "var(--color-red)", borderColor: "var(--color-red)" }}
-                >
-                  {t.stopTeam}
-                </button>
-              </div>
-            )}
-          </div>
-          {!readOnly && team && !team.halted && (
-            <p data-testid="panel-team-help" className="text-[11px] -mt-2 mb-3 text-[var(--color-muted)]">
-              {t.teamControlsHelp}
-            </p>
-          )}
-          {!readOnly && team && !team.halted && (
-            <div className="mb-3">
-              <BurstStrip />
-            </div>
-          )}
-          {notices.team && (
-            <p role={notices.team.ok ? "status" : "alert"} className="text-[11px] mb-2" style={{ color: notices.team.ok ? "var(--color-green)" : "var(--color-red)" }}>
-              {notices.team.text}
-            </p>
-          )}
-          {!list.value.statesKnown && (
-            <p data-testid="panel-states-unknown" className="text-[11px] mb-3 text-[var(--color-dim)]">
-              {t.statesUnknown}
-            </p>
-          )}
-          <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>
-          <div role="group" aria-label={t.viewLabel} className="flex gap-2 mb-2">
-            {(["list", "lanes"] as const).map((name) => (
-              <button
-                key={name}
-                type="button"
-                data-testid={`panel-view-${name}`}
-                aria-pressed={view === name}
-                onClick={() => {
-                  setView(name);
-                  rememberView(name);
-                }}
-                className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
-                style={{
-                  borderColor: view === name ? "var(--color-white)" : "var(--color-border)",
-                  color: view === name ? "var(--color-white)" : "var(--color-muted)",
-                }}
-              >
-                {name === "list" ? t.viewList : t.viewLanes}
-              </button>
-            ))}
-          </div>
-
-          {view === "lanes" && (
-            <WorkLanes
-              t={t}
-              activity={activity}
-              window={workWindow}
-              onWindow={(value) => {
-                setWorkWindow(value);
-                rememberWorkWindow(value);
-              }}
-            />
-          )}
-          {view === "list" && (
-            <div className="flex flex-col lg:flex-row gap-3 min-h-0">
-              <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-y-auto lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100svh/var(--zoom,1)-5rem)]" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
-                {rows.map((row) => {
-                  const active = current?.session === row.session;
-                  return (
-                    <li key={row.session}>
-                      <button
-                        type="button"
-                        data-testid={`panel-row-${row.session}`}
-                        data-state={row.agent ? row.agent.state.state : "down"}
-                        title={row.agent ? identityLine(t, row.agent.identity, where) : undefined}
-                        aria-current={active ? "true" : undefined}
-                        onClick={() => {
-                          setSelected(row.session);
-                        }}
-                        className="w-full text-left px-3 py-1.5 flex items-center gap-2"
-                        style={{ background: active ? "var(--color-card)" : "transparent" }}
-                      >
-                        <Led row={row} />
-                        <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: isUp(row) ? "var(--color-white)" : "var(--color-muted)" }}>
-                          {row.session}
-                        </span>
-                        <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
-                          {stateLine(t, row)}
-                          {isUp(row) && <UsageShort t={t} usage={row.agent!.usage} />}
-                          {isUp(row) && <QuestionMarks t={t} questions={row.agent!.questions} />}
-                        </span>
-                      </button>
-                      {notices[row.session] && !notices[row.session].ok && (
-                        <p role="alert" className="px-3 pb-1 text-[11px] text-[var(--color-red)]">
-                          {notices[row.session].text}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {current && (
-                <section
-                  data-testid="panel-detail"
-                  className="flex-1 min-w-0 flex flex-col overflow-hidden rounded border lg:sticky lg:top-[4.25rem] lg:h-[calc(100svh/var(--zoom,1)-5rem)] lg:min-h-[30rem]"
-                  style={{ borderColor: "var(--color-border)" }}
-                  aria-label={current.session}
-                >
-                  <div className="shrink-0 max-h-[45%] overflow-y-auto p-3" style={{ background: "var(--color-panel)" }}>
+  // The controls and facts of one agent (its state, times, what it asks the person, Pause, Restart and Stop, the last answer of the team):
+  // the top of the detail of the page of the Agents, and the whole of the `agent` part inside the Team page.
+  const detailTop = (current: PanelRow) => (
+                  <div className={only ? "p-3" : "shrink-0 max-h-[45%] overflow-y-auto p-3"} style={{ background: "var(--color-panel)" }}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -1049,8 +864,13 @@ export default function AgentsPanel({ search }: PageProps) {
                         >
                           {current.session}
                         </Link>
-                        <span className="text-[11px] uppercase tracking-widest" style={{ color: current.agent ? "var(--color-green)" : "var(--color-dim)" }}>
-                          {isUp(current) ? t.up : current.heldByUser ? t.heldByUser : t.down}
+                        {/* in pause = amber, never green (JHT-T181): the word says it, as the sign beside the name does */}
+                        <span
+                          data-testid={isUp(current) && current.agent?.paused ? "panel-paused-word" : undefined}
+                          className="text-[11px] uppercase tracking-widest"
+                          style={{ color: isUp(current) ? (current.agent?.paused ? "var(--color-yellow)" : "var(--color-green)") : "var(--color-dim)" }}
+                        >
+                          {isUp(current) ? (current.agent?.paused ? t.pausedWord : t.up) : current.heldByUser ? t.heldByUser : t.down}
                         </span>
                       </div>
                       <p
@@ -1089,7 +909,7 @@ export default function AgentsPanel({ search }: PageProps) {
                       {REVIEWER.test(current.session) && <p className="text-[11px] mt-1 text-[var(--color-dim)]">{t.reviewer}</p>}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {chatAgentOf(current) !== null && (
+                      {chatAgentOf(current) !== null && !only && (
                         <Link
                           href={`/messages?agent=${chatAgentOf(current)}`}
                           data-testid="panel-chat-with"
@@ -1141,6 +961,217 @@ export default function AgentsPanel({ search }: PageProps) {
                     </p>
                   )}
                   </div>
+  );
+
+  return (
+    <div className={only ? "px-4 sm:px-5 py-3" : "max-w-6xl mx-auto px-5 pt-6 pb-8"} data-testid={only ? `panel-part-${only}` : undefined} style={only ? undefined : { animation: "fade-in 0.35s ease both" }}>
+      {!only && (
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <h1 className="text-xl font-bold uppercase tracking-[0.18em] leading-none" style={{ color: "var(--color-white)" }}>
+          {t.title}
+        </h1>
+        <button
+          type="button"
+          onClick={() => void read()}
+          disabled={busy}
+          className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
+        >
+          {busy ? t.refreshing : t.refresh}
+        </button>
+      </div>
+      )}
+      {!only && list?.ok && <p className="text-[11px] mb-1 text-[var(--color-muted)]">{fill(t.intro, { where })}</p>}
+      {(!only || only === "commands") && readOnly && (
+        <p data-testid="panel-read-only" className="text-[11px] mb-2 text-[var(--color-muted)]">
+          {t.readOnly}
+        </p>
+      )}
+
+      {list === null && <p className="text-[12px] text-[var(--color-muted)]">{t.reading}</p>}
+      {/* While the team of this computer is being started «there is no running team» is not an error: the start's own line says what is
+          happening, and a red sentence next to it says the opposite. Any other reason a read fails is still told. */}
+      {list && !list.ok && !(starting && list.code === "agent_control_no_team") && (
+        <div role="alert" data-testid="panel-error" className="text-[12px] text-[var(--color-red)]">
+          <strong>{t.failed}</strong>
+          <p>{readFailureText(list.code)}</p>
+          <p className="text-[11px] text-[var(--color-muted)]">{fill(t.failedAt, { time: stamp(list.at) })}</p>
+        </div>
+      )}
+
+      {/* the team of this computer is stopped: the sentence says «start the team», so the page offers it; the
+          button stays while a start runs, also once the list answers (the flag «stopped by you» falls later) */}
+      {((list && !list.ok && list.code === "agent_control_no_team" && !teamOff) || starting) && (
+        <div className="mt-2">
+          <StartTeamAction onStarted={() => read(true)} waits={AGENTS_START_READ_WAITS} onBusy={setStarting} />
+        </div>
+      )}
+
+      {list?.ok && (
+        <>
+          {!readOnly && (list.value.ownVps === "claimable" || list.value.ownVps === "key_changed") && (
+            <OwnVpsClaim
+              reason={list.value.ownVps === "key_changed" ? "own_vps_key_changed" : "own_vps_claim_required"}
+              onClaimed={() => void read()}
+            />
+          )}
+          {(!only || only === "commands") && (
+          <>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3 rounded border px-3 py-2" style={{ borderColor: "var(--color-border)" }}>
+            <span data-testid="panel-summary" className="text-[11px]" style={{ color: "var(--color-bright)" }}>
+              {[
+                pluralText(appLocale(), counts.waiting, t.summaryWaiting),
+                pluralText(appLocale(), counts.working, t.summaryWorking),
+                pluralText(appLocale(), counts.up, t.summaryUp, { total: counts.total }),
+              ].join(" · ")}
+              {counts.up > 0 && counts.questions !== null && (
+                <>
+                  {" · "}
+                  <span data-testid="panel-questions-summary" title={counts.questionsPartly ? `${t.questionsSummaryHelp} ${t.questionsPartlyUnknown}` : t.questionsSummaryHelp}>
+                    {counts.questions}
+                  </span>
+                </>
+              )}
+              {teamLine && (
+                <>
+                  {" · "}
+                  <span data-testid="panel-team-state">{teamLine}</span>
+                </>
+              )}
+              {burnLine && (
+                <>
+                  {" · "}
+                  <span data-testid="panel-burn-intent">{burnLine}</span>
+                </>
+              )}
+            </span>
+            {!readOnly && team && !team.halted && (
+              <div className="flex gap-2">
+                <PauseResumeButton
+                  paused={paused}
+                  pauseLabel={t.pause}
+                  resumeLabel={t.resume}
+                  onPause={() => setPending({ kind: "pause" })}
+                  onResume={() => setPending({ kind: "resume" })}
+                  testIdBase="panel"
+                />
+                <button
+                  type="button"
+                  data-testid="panel-stop-team"
+                  onClick={() => setPending({ kind: "stop-team" })}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
+                  style={{ color: "var(--color-red)", borderColor: "var(--color-red)" }}
+                >
+                  <StopIcon />
+                  {t.stopTeam}
+                </button>
+              </div>
+            )}
+          </div>
+          {!readOnly && team && !team.halted && (
+            <p data-testid="panel-team-help" className="text-[11px] -mt-2 mb-3 text-[var(--color-muted)]">
+              {t.teamControlsHelp}
+            </p>
+          )}
+          {!readOnly && team && !team.halted && (
+            <div className="mb-3">
+              <BurstStrip />
+            </div>
+          )}
+          {notices.team && (
+            <p role={notices.team.ok ? "status" : "alert"} className="text-[11px] mb-2" style={{ color: notices.team.ok ? "var(--color-green)" : "var(--color-red)" }}>
+              {notices.team.text}
+            </p>
+          )}
+          {!list.value.statesKnown && (
+            <p data-testid="panel-states-unknown" className="text-[11px] mb-3 text-[var(--color-dim)]">
+              {t.statesUnknown}
+            </p>
+          )}
+          </>
+          )}
+          {!only && <p className="text-[11px] mb-2 text-[var(--color-muted)]">{fill(t.readAt, { time: stamp(list.at) })}</p>}
+          {!only && (
+          <div role="group" aria-label={t.viewLabel} className="flex gap-2 mb-2">
+            {(["list", "lanes"] as const).map((name) => (
+              <button
+                key={name}
+                type="button"
+                data-testid={`panel-view-${name}`}
+                aria-pressed={view === name}
+                onClick={() => {
+                  setView(name);
+                  rememberView(name);
+                }}
+                className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
+                style={{
+                  borderColor: view === name ? "var(--color-white)" : "var(--color-border)",
+                  color: view === name ? "var(--color-white)" : "var(--color-muted)",
+                }}
+              >
+                {name === "list" ? t.viewList : t.viewLanes}
+              </button>
+            ))}
+          </div>
+          )}
+
+          {((view === "lanes" && !only) || only === "lanes") && (
+            <WorkLanes
+              t={t}
+              activity={activity}
+              window={workWindow}
+              onWindow={(value) => {
+                setWorkWindow(value);
+                rememberWorkWindow(value);
+              }}
+            />
+          )}
+          {view === "list" && !only && (
+            <div className="flex flex-col lg:flex-row gap-3 min-h-0">
+              <ul aria-label={t.title} className="lg:w-[280px] shrink-0 flex flex-col gap-px rounded border overflow-y-auto lg:sticky lg:top-[4.25rem] lg:max-h-[calc(100svh/var(--zoom,1)-5rem)]" style={{ borderColor: "var(--color-border)", opacity: busy ? 0.6 : 1 }}>
+                {rows.map((row) => {
+                  const active = current?.session === row.session;
+                  return (
+                    <li key={row.session}>
+                      <button
+                        type="button"
+                        data-testid={`panel-row-${row.session}`}
+                        data-state={row.agent ? row.agent.state.state : "down"}
+                        title={row.agent ? identityLine(t, row.agent.identity, where) : undefined}
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => {
+                          setSelected(row.session);
+                        }}
+                        className="w-full text-left px-3 py-1.5 flex items-center gap-2"
+                        style={{ background: active ? "var(--color-card)" : "transparent" }}
+                      >
+                        <Led row={row} />
+                        <span className="text-[11px] font-semibold tracking-wider w-[110px] shrink-0" style={{ color: isUp(row) ? "var(--color-white)" : "var(--color-muted)" }}>
+                          {row.session}
+                        </span>
+                        <span className="text-[11px] min-w-0 leading-snug break-words" style={{ color: "var(--color-muted)" }}>
+                          {stateLine(t, row)}
+                          {isUp(row) && <UsageShort t={t} usage={row.agent!.usage} />}
+                          {isUp(row) && <QuestionMarks t={t} questions={row.agent!.questions} />}
+                        </span>
+                      </button>
+                      {notices[row.session] && !notices[row.session].ok && (
+                        <p role="alert" className="px-3 pb-1 text-[11px] text-[var(--color-red)]">
+                          {notices[row.session].text}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {current && (
+                <section
+                  data-testid="panel-detail"
+                  className="flex-1 min-w-0 flex flex-col overflow-hidden rounded border lg:sticky lg:top-[4.25rem] lg:h-[calc(100svh/var(--zoom,1)-5rem)] lg:min-h-[30rem]"
+                  style={{ borderColor: "var(--color-border)" }}
+                  aria-label={current.session}
+                >
+                  {detailTop(current)}
 
                   {current.agent && (
                     <AgentStatusBar
@@ -1174,7 +1205,8 @@ export default function AgentsPanel({ search }: PageProps) {
         </>
       )}
 
-      <ActionLogSection />
+      {only === "agent" && list?.ok && (current ? detailTop(current) : <p data-testid="panel-part-agent-missing" className="text-[13px] text-[var(--color-muted)]">{fill(AGENT_PAGE_TEXT[appLocale()].notFound, { name: agent ?? "" })}</p>)}
+      {(!only || only === "log") && <ActionLogSection />}
 
       {pending && list?.ok && (
         <Confirm t={t} pending={pending} where={where} busy={acting} onCancel={() => setPending(null)} onConfirm={(exit) => void runPending(exit)} />
