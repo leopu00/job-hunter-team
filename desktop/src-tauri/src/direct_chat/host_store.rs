@@ -246,4 +246,3 @@ pub(crate) fn load_persisted_host(
 ) -> Result<ExecutionHost, &'static str> {
     load_host(app, scope).map_err(|error| error.code)
 }
-

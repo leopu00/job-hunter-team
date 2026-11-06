@@ -10327,6 +10327,11 @@ mod existing_team_assistant_tests {
         for (name, source) in [
             ("cli_adapter", include_str!("cli_adapter.rs")),
             ("direct_chat", include_str!("direct_chat.rs")),
+            ("direct_chat/scripts", include_str!("direct_chat/scripts.rs")),
+            ("direct_chat/state", include_str!("direct_chat/state.rs")),
+            ("direct_chat/wire", include_str!("direct_chat/wire.rs")),
+            ("direct_chat/host_store", include_str!("direct_chat/host_store.rs")),
+            ("direct_chat/ssh_link", include_str!("direct_chat/ssh_link.rs")),
             ("runtime_host", include_str!("runtime_host.rs")),
             ("lib", include_str!("lib.rs").split("generate_handler").next().unwrap()),
         ] {

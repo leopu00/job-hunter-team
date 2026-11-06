@@ -223,4 +223,3 @@ pub(super) fn emit(inner: &DirectChatInner, event: DirectChatEvent) {
         subscribers.retain(|channel| channel.send(event.clone()).is_ok());
     }
 }
-

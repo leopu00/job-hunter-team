@@ -428,4 +428,3 @@ pub(crate) enum DirectChatEvent {
         code: &'static str,
     },
 }
-

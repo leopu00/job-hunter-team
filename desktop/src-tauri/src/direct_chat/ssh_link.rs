@@ -251,4 +251,3 @@ pub(super) fn close_connection(connection: &mut Connection) {
         let _ = child.wait();
     }
 }
-

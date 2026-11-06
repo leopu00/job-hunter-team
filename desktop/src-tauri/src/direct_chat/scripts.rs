@@ -105,4 +105,3 @@ except Exception:
  except OSError: pass
  raise
 print(json.dumps({'locale':locale,'stored':locale,'changed':True}))"#;
-
