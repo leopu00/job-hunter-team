@@ -44,6 +44,7 @@ import MainNav from "./MainNav";
 import { redirectFor } from "./redirects";
 import UserMenu from "./UserMenu";
 import { ACCOUNT_MENU_ITEMS, NAV_ITEMS, READ_ONLY_ACCOUNT_MENU_ITEMS, READ_ONLY_NAV_ITEMS } from "./nav-items";
+import { RefreshIcon } from "./icons";
 
 /**
  * The signed-in app: the web's protected layout (navbar on top, MainChrome
@@ -69,7 +70,7 @@ function Navbar({
   const [signingOut, setSigningOut] = useState(false);
   const [signOutFailed, setSignOutFailed] = useState(false);
   const button =
-    "text-[10px] font-semibold tracking-widest uppercase px-2 xl:px-3 py-1.5 rounded border border-[var(--color-border)] transition-colors text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline";
+    "inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-widest uppercase px-2 xl:px-3 py-1.5 rounded border border-[var(--color-border)] transition-colors text-[var(--color-muted)] hover:text-[var(--color-bright)] no-underline";
 
   async function logout() {
     if (signingOut) return;
@@ -107,6 +108,7 @@ function Navbar({
         </NavStrip>
         <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0" data-testid="navbar-actions">
           <button type="button" className={button} onClick={refresh}>
+            <RefreshIcon />
             {shellText.refresh}
           </button>
           {signOutFailed && <span role="alert" className="sr-only">{shellText.signOutFailed}</span>}

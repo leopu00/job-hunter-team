@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { scoreInkCss, scoreSpectrumCss, scoreToRgb } from "./score-color";
+import { darkenRgb, SCORE_INK_KEEP_LIGHT, scoreInkCss, scoreSpectrumCss, scoreToRgb } from "./score-color";
 import { toOklab } from "./theme-palette";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,5 +64,16 @@ describe("the score as text on the theme's surfaces (scoreInkCss)", () => {
     }
     // the reason for it: without the mix some score is under 2:1 on a light card
     expect(before).toBeLessThan(2);
+  });
+});
+
+describe("the score colour darkened for a canvas (the globe's beams on a light base)", () => {
+  it("is what the CSS mix gives, to the unit, and the colour itself when nothing is taken away", () => {
+    for (let score = 0; score <= 100; score += 5) {
+      const css = mixWithBlack(scoreToRgb(score), SCORE_INK_KEEP_LIGHT).map((v) => Math.round(v * 255));
+      darkenRgb(scoreToRgb(score), SCORE_INK_KEEP_LIGHT).forEach((v, i) => expect(Math.abs(v - css[i]), `score ${score}`).toBeLessThanOrEqual(1));
+      darkenRgb(scoreToRgb(score), 1).forEach((v, i) => expect(Math.abs(v - scoreToRgb(score)[i]), `score ${score}`).toBeLessThanOrEqual(1));
+    }
+    expect(SCORE_INK_KEEP_LIGHT).toBe(Number(/--score-ink-keep:\s*(\d+)%/.exec(globals)![1]) / 100);
   });
 });
