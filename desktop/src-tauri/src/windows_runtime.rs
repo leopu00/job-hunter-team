@@ -355,6 +355,13 @@ const MANIFEST_FILES: [(&str, Place, &str); 8] = [
     ("windows-private-acl.ps1", Place::Bin, "windows-private-acl.ps1"),
     ("docker.exe", Place::Runtime, "bin/docker.exe"),
 ];
+/// Whether a node named by a `BundleFailure` sits in the folder the wrapper shares with other programs (`.local\bin`): that
+/// folder and the files install.ps1 puts in it. The runtime directory and what is in it are ours and protected, not shared.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn node_is_in_shared_bin_dir(node: &str) -> bool {
+    node == "bin-dir" || MANIFEST_FILES.iter().any(|(key, place, _)| *key == node && matches!(place, Place::Bin))
+}
+
 /// A test-channel install also pins its image: the file and its manifest
 /// line come together, or neither does.
 const IMAGE_PIN: &str = "runtime-image";
@@ -1356,6 +1363,16 @@ mod tests {
             let mut writers = usual.clone();
             writers.push(other.to_owned());
             assert_eq!(node_acl_rule(false, &writers, &writers, user, false), Some("acl_other_account"), "{other} that may change a file, or the folder the wrapper sits in");
+        }
+    }
+
+    #[test]
+    fn only_the_folder_shared_with_other_programs_and_its_files_are_told_apart_from_the_runtime_directory() {
+        for shared in ["bin-dir", "jht-wrapper.ps1", "windows-private-acl.ps1"] {
+            assert!(node_is_in_shared_bin_dir(shared), "{shared}");
+        }
+        for ours in ["runtime-dir", "manifest", "docker-compose.yml", "docker-compose.podman.yml", "container-runtime", "podman-machine", "jht-container.service", "docker.exe", "runtime-image", "bundle", "unknown"] {
+            assert!(!node_is_in_shared_bin_dir(ours), "{ours}");
         }
     }
 

@@ -2205,10 +2205,8 @@ fn install_local_windows(
     Ok(wrapper)
 }
 
-/// install.ps1 said it was done and the app does not accept what it installed: the runtime
-/// log keeps which check refused it, by the fixed name of the node and of the rule (never a path).
-#[cfg(windows)]
 /// The node and the rule that made the app refuse the wrapper it found, by fixed words, never a path.
+#[cfg(windows)]
 fn attestation_refusal(app: &tauri::AppHandle) -> Option<(String, String)> {
     let home = app.path().home_dir().ok()?;
     let runtime = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))?;
@@ -2224,26 +2222,37 @@ fn attestation_refusal(app: &tauri::AppHandle) -> Option<(String, String)> {
 }
 
 /// Why there is no wrapper to use: none is installed (`runtime_missing`), or one is there and the app does not accept it
-/// because another account of the computer can change the folder it sits in or its files (`runtime_folder_shared`: the person
-/// is told that, and what to do, instead of «the environment is not installed»). Any other refusal stays `runtime_missing`;
-/// the runtime log keeps which node and which rule.
-fn refusal_code(rule: Option<&str>) -> &'static str {
-    if rule == Some("acl_other_account") {
-        "runtime_folder_shared"
-    } else {
-        "runtime_missing"
+/// because another account of the computer can change the folder the wrapper shares with other programs, or the files
+/// install.ps1 put in it (`runtime_folder_shared`: the person is told that, and what to do, instead of «the environment is
+/// not installed»). The runtime directory is strict for any access of another account, reading too, so the same sentence
+/// would be false there: it, and any other refusal, stays `runtime_missing`. The runtime log keeps which node and which rule.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn refusal_code(refused: Option<(&str, &str)>) -> &'static str {
+    match refused {
+        Some((node, "acl_other_account")) if crate::windows_runtime::node_is_in_shared_bin_dir(node) => "runtime_folder_shared",
+        _ => "runtime_missing",
     }
 }
 
+#[cfg(windows)]
 fn runtime_refusal(app: &tauri::AppHandle) -> &'static str {
     let refused = attestation_refusal(app);
-    refusal_code(refused.as_ref().map(|(_, rule)| rule.as_str()))
+    refusal_code(refused.as_ref().map(|(node, rule)| (node.as_str(), rule.as_str())))
 }
 
+/// Off Windows nothing is attested: no wrapper is no runtime.
+#[cfg(not(windows))]
+fn runtime_refusal(_app: &tauri::AppHandle) -> &'static str {
+    "runtime_missing"
+}
+
+/// install.ps1 said it was done and the app does not accept what it installed: the runtime
+/// log keeps which check refused it, by the fixed name of the node and of the rule (never a path).
+#[cfg(windows)]
 fn note_runtime_attestation(app: &tauri::AppHandle, log: Option<&RuntimeLog>) {
     let Some(log) = log else { return };
     let refused = attestation_refusal(app);
-    let code = refusal_code(refused.as_ref().map(|(_, rule)| rule.as_str()));
+    let code = refusal_code(refused.as_ref().map(|(node, rule)| (node.as_str(), rule.as_str())));
     let step = match refused {
         Some((node, rule)) => format!("runtime attestation {node} {rule}"),
         None => "runtime attestation not reproduced".to_owned(),
@@ -9471,10 +9480,17 @@ exit 0
 
     #[test]
     fn a_runtime_refused_for_another_accounts_write_access_is_told_apart_from_one_that_is_not_installed() {
-        assert_eq!(super::refusal_code(Some("acl_other_account")), "runtime_folder_shared");
-        for rule in [Some("acl_inherited"), Some("acl_user_missing"), Some("owner"), Some("protocols"), Some("bytes"), None] {
-            assert_eq!(super::refusal_code(rule), "runtime_missing", "{rule:?}");
+        for node in ["bin-dir", "jht-wrapper.ps1", "windows-private-acl.ps1"] {
+            assert_eq!(super::refusal_code(Some((node, "acl_other_account"))), "runtime_folder_shared", "{node}");
         }
+        // the runtime directory and its files are ours: any access of another account refuses them, reading too
+        for node in ["runtime-dir", "manifest", "docker-compose.yml", "docker.exe", "runtime-image", "podman-machine"] {
+            assert_eq!(super::refusal_code(Some((node, "acl_other_account"))), "runtime_missing", "{node}");
+        }
+        for rule in ["acl_inherited", "acl_user_missing", "owner", "protocols", "bytes", "missing"] {
+            assert_eq!(super::refusal_code(Some(("bin-dir", rule))), "runtime_missing", "{rule}");
+        }
+        assert_eq!(super::refusal_code(None), "runtime_missing");
     }
 
     #[test]
