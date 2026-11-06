@@ -66,9 +66,9 @@ impl Report {
 /// The folders the person is told about, in their language.
 fn folder_labels(italian: bool) -> Vec<&'static str> {
     if italian {
-        vec!["Documenti", "Download", "Scrivania", "la tua cartella utente"]
+        vec!["Documenti", "Download", "Scrivania"]
     } else {
-        vec!["Documents", "Downloads", "Desktop", "your user folder"]
+        vec!["Documents", "Downloads", "Desktop"]
     }
 }
 
@@ -178,7 +178,8 @@ fn write_report(report: &Report) {
     // a window program may have no console to write to: a failed write is not a reason to stop
     let _ = std::io::stdout().write_all(report.stdout.as_bytes());
     if !report.stderr.is_empty() {
-        let _ = writeln!(std::io::stderr(), "{}", report.stderr);
+        // the program is a window program: PowerShell may not carry its stderr, so the refusal is said on stdout, once
+        let _ = writeln!(std::io::stdout(), "{}", report.stderr);
     }
 }
 
@@ -209,13 +210,13 @@ mod real {
         FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TYPE_DISK,
     };
     use windows_sys::Win32::System::Com::CoTaskMemFree;
-    use windows_sys::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads};
+    use windows_sys::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_Profile};
 
     pub(super) fn run(args: &[String]) -> Report {
-        let host_env = std::env::var_os("USERPROFILE")
-            .and_then(|profile| std::fs::read_to_string(PathBuf::from(profile).join(".jht").join("host.env")).ok());
+        let profile = known_folder(&FOLDERID_Profile).map(PathBuf::from);
+        let host_env = profile.as_ref().and_then(|profile| std::fs::read_to_string(profile.join(".jht").join("host.env")).ok());
         let italian = language_is_italian(std::env::var("JHT_LANG").ok().as_deref(), host_env.as_deref());
-        let wrapper = std::env::var_os("USERPROFILE").map(|profile| PathBuf::from(profile).join(".local").join("bin").join("jht.ps1"));
+        let wrapper = profile.as_ref().map(|profile| profile.join(".local").join("bin").join("jht.ps1"));
         let runtime = crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"));
         let engine = match (wrapper, runtime) {
             (Some(wrapper), Some(runtime)) => crate::team_control::AttestedTeamEngine::resolve(&wrapper, Some(&runtime), true),
@@ -281,9 +282,7 @@ mod real {
     impl Documents for Computer {
         fn allowed_folders(&self) -> Vec<String> {
             let mut folders = Vec::new();
-            if let Some(profile) = std::env::var_os("USERPROFILE") {
-                folders.push(profile.to_string_lossy().into_owned());
-            }
+            // only the folders Windows knows as the person's documents: never the whole user folder (.ssh, AppData, …)
             for id in [&FOLDERID_Documents, &FOLDERID_Downloads, &FOLDERID_Desktop] {
                 if let Some(folder) = known_folder(id) {
                     folders.push(folder);
@@ -411,15 +410,17 @@ mod tests {
 
     fn computer() -> Fake {
         Fake {
-            folders: vec!["C:\\Users\\Ada Test".to_owned(), "D:\\Sync\\Documents".to_owned()],
+            folders: vec!["C:\\Users\\Ada Test\\Documents".to_owned(), "C:\\Users\\Ada Test\\Downloads".to_owned(), "D:\\Sync\\Documents".to_owned()],
             files: vec![
                 ("C:\\Users\\Ada Test\\Documents\\My CV (final).pdf", "\\\\?\\C:\\Users\\Ada Test\\Documents\\My CV (final).pdf", Ok(b"%PDF-1 made up".to_vec())),
                 ("D:\\Sync\\Documents\\cv.pdf", "\\\\?\\D:\\Sync\\Documents\\cv.pdf", Ok(b"%PDF-1 on another drive".to_vec())),
                 ("C:\\Users\\Ada Test\\Links\\cv.pdf", "\\\\?\\C:\\Data\\Elsewhere\\cv.pdf", Ok(b"reached through a folder junction".to_vec())),
                 ("C:\\Windows\\System32\\config\\SAM", "\\\\?\\C:\\Windows\\System32\\config\\SAM", Ok(b"never read".to_vec())),
-                ("C:\\Users\\Ada Test\\big.pdf", "\\\\?\\C:\\Users\\Ada Test\\big.pdf", Err(ReadError::TooBig)),
-                ("C:\\Users\\Ada Test\\folder", "\\\\?\\C:\\Users\\Ada Test\\folder", Err(ReadError::NotFile)),
-                ("C:\\Users\\Ada Test\\alias.pdf", "\\\\?\\C:\\Users\\Ada Test\\alias.pdf", Err(ReadError::Link)),
+                ("C:\\Users\\Ada Test\\cv.pdf", "\\\\?\\C:\\Users\\Ada Test\\cv.pdf", Ok(b"outside document folders".to_vec())),
+                ("C:\\Users\\Ada Test\\.ssh\\config", "\\\\?\\C:\\Users\\Ada Test\\.ssh\\config", Ok(b"invented private file".to_vec())),
+                ("C:\\Users\\Ada Test\\Documents\\big.pdf", "\\\\?\\C:\\Users\\Ada Test\\Documents\\big.pdf", Err(ReadError::TooBig)),
+                ("C:\\Users\\Ada Test\\Documents\\folder", "\\\\?\\C:\\Users\\Ada Test\\Documents\\folder", Err(ReadError::NotFile)),
+                ("C:\\Users\\Ada Test\\Documents\\alias.pdf", "\\\\?\\C:\\Users\\Ada Test\\Documents\\alias.pdf", Err(ReadError::Link)),
             ],
             opened: RefCell::new(Vec::new()),
         }
@@ -456,18 +457,18 @@ mod tests {
 
     #[test]
     fn a_file_outside_the_allowed_folders_is_refused_with_the_folders_and_never_read_by_the_container() {
-        for written in ["C:\\Windows\\System32\\config\\SAM", "C:\\Users\\Ada Test\\Links\\cv.pdf"] {
+        for written in ["C:\\Windows\\System32\\config\\SAM", "C:\\Users\\Ada Test\\Links\\cv.pdf", "C:\\Users\\Ada Test\\cv.pdf", "C:\\Users\\Ada Test\\.ssh\\config"] {
             let team = container(0, "");
             let report = upload(&args(&[written]), &computer(), Ok(&team), true);
             assert_eq!(report.code, 2, "{written}");
             assert!(report.stderr.starts_with("artifact_path_not_allowed:"), "{}", report.stderr);
-            assert!(report.stderr.contains("Documenti, Download, Scrivania, la tua cartella utente"), "{}", report.stderr);
+            assert!(report.stderr.contains("Documenti, Download, Scrivania"), "{}", report.stderr);
             assert!(report.stdout.is_empty());
             assert!(team.given.borrow().is_empty(), "nothing given to the container for {written}");
         }
         let team = container(0, "");
         let english = upload(&args(&["C:\\Windows\\System32\\config\\SAM"]), &computer(), Ok(&team), false);
-        assert!(english.stderr.contains("not in an allowed folder") && english.stderr.contains("Documents, Downloads, Desktop, your user folder"));
+        assert!(english.stderr.contains("not in an allowed folder") && english.stderr.contains("Documents, Downloads, Desktop"));
     }
 
     #[test]
@@ -496,10 +497,10 @@ mod tests {
     #[test]
     fn what_cannot_be_read_ends_with_its_own_word_and_the_container_is_not_asked() {
         let cases = [
-            ("C:\\Users\\Ada Test\\big.pdf", "artifact_too_big", 2),
-            ("C:\\Users\\Ada Test\\folder", "artifact_not_file", 2),
-            ("C:\\Users\\Ada Test\\alias.pdf", "artifact_is_link", 2),
-            ("C:\\Users\\Ada Test\\nothing.pdf", "artifact_file_missing", 1),
+            ("C:\\Users\\Ada Test\\Documents\\big.pdf", "artifact_too_big", 2),
+            ("C:\\Users\\Ada Test\\Documents\\folder", "artifact_not_file", 2),
+            ("C:\\Users\\Ada Test\\Documents\\alias.pdf", "artifact_is_link", 2),
+            ("C:\\Users\\Ada Test\\Documents\\nothing.pdf", "artifact_file_missing", 1),
         ];
         for (written, code, exit) in cases {
             let team = container(0, "");

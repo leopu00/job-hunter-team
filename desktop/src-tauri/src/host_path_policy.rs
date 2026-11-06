@@ -128,7 +128,8 @@ pub(crate) fn check_written_path(raw: &str) -> Result<String, Reason> {
     if checked.len() == drive {
         return Err(Reason::Empty);
     }
-    Ok(checked.join("\\"))
+    let normalized = checked.join("\\");
+    Ok(if unified.starts_with('\\') { format!("\\{normalized}") } else { normalized })
 }
 
 /// The final path an open file reports (`\\?\C:\Users\…`), as the plain path: the prefix taken off; a network path
@@ -223,6 +224,13 @@ mod tests {
         assert_eq!(check_written_path("sub folder\\cv.pdf").as_deref(), Ok("sub folder\\cv.pdf"));
         // another drive letter is a path like any other: whether it is allowed is decided by the final path
         assert_eq!(check_written_path("D:\\Papers\\cv.pdf").as_deref(), Ok("D:\\Papers\\cv.pdf"));
+    }
+
+    #[test]
+    fn a_path_rooted_on_the_current_drive_keeps_its_root() {
+        for raw in [r"\Users\Ada Test\Documents\cv.pdf", "/Users/Ada Test/Documents/cv.pdf"] {
+            assert_eq!(check_written_path(raw).as_deref(), Ok(r"\Users\Ada Test\Documents\cv.pdf"));
+        }
     }
 
     #[test]
