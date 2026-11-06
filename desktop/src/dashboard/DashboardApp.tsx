@@ -11,6 +11,7 @@ import { declarePlan, loadPlans } from "../lib/provider-plan";
 import { LOCAL_RUNTIME_REMOVED_EVENT } from "../lib/local-uninstall";
 import { failureText, stateText } from "../lib/onboarding-state.i18n";
 import { AccountScopeError } from "./AccountScopeError";
+import { profileRecheckDelay } from "./profile-recheck";
 import { readDesktopPlatform, type DesktopPlatform } from "../lib/desktop-platform";
 import {
   connectDirectChat,
@@ -149,9 +150,6 @@ function migrationRetryable(error: unknown): boolean {
     "local_migration_in_progress",
   ].includes(nativeErrorCode(error) ?? "");
 }
-// How long the setup waits before it looks at the profile again: the first looks come quickly, then the pace
-// slows, so a slow computer is not asked the same thing every two seconds for as long as the person chats.
-const PROFILE_RECHECK_STEPS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
 const SAFE_RUNTIME_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const CONTAINER_RUNTIME_ERRORS = new Set([
   "container_start_failed",
@@ -824,7 +822,7 @@ export default function DashboardApp() {
         // The Assistant chat remains usable. A later independent read retries the gate.
       }
       if (active) {
-        const delay = PROFILE_RECHECK_STEPS_MS[Math.min(looks, PROFILE_RECHECK_STEPS_MS.length - 1)];
+        const delay = profileRecheckDelay(looks);
         looks += 1;
         timeout = setTimeout(() => void verifyConversationalProfile(), delay);
       }

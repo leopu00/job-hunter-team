@@ -3684,6 +3684,22 @@ describe("DashboardApp onboarding router", () => {
       expect(screen.queryByTestId("shell")).not.toBeInTheDocument();
     });
 
+    it("does not ask the chat while a piece of the runtime is missing, and keeps looking at the runtime", async () => {
+      await toGuided("guided-chat-not-asked", [{ ...TEAM_READY, profileReady: true, captainRunning: false }]);
+      await screen.findByTestId("guided-onboarding");
+      const looksBefore = vi.mocked(readOnboardingSnapshot).mock.calls.length;
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2_500)); });
+      // the runtime is read again (the Captain may come up), the chat's probe, a process on the computer, is not started for nothing
+      expect(vi.mocked(readOnboardingSnapshot).mock.calls.length).toBeGreaterThan(looksBefore);
+      expect(directChatStatus).not.toHaveBeenCalled();
+    });
+
+    it("asks the chat once everything else is there", async () => {
+      vi.mocked(readTeamStart).mockResolvedValue({ phase: "burst", workers: 0, planDeclared: true });
+      await toGuided("guided-chat-asked", [{ ...TEAM_READY, profileReady: true }]);
+      await waitFor(() => expect(directChatStatus).toHaveBeenCalled(), { timeout: 3_500 });
+    });
+
     it("an unreadable first-run state is never a started team, and the way out is there", async () => {
       vi.mocked(readTeamStart).mockResolvedValue(null);
       await toGuided("guided-unreadable", [{ ...TEAM_READY, profileReady: true }]);
