@@ -10338,6 +10338,13 @@ mod existing_team_assistant_tests {
             ("direct_chat/container_discovery", include_str!("direct_chat/container_discovery.rs")),
             ("direct_chat/local_exec", include_str!("direct_chat/local_exec.rs")),
             ("direct_chat/transport", include_str!("direct_chat/transport.rs")),
+            ("direct_chat/lifecycle", include_str!("direct_chat/lifecycle.rs")),
+            ("direct_chat/read", include_str!("direct_chat/read.rs")),
+            ("direct_chat/send", include_str!("direct_chat/send.rs")),
+            ("direct_chat/attachments", include_str!("direct_chat/attachments.rs")),
+            ("direct_chat/logging", include_str!("direct_chat/logging.rs")),
+            ("direct_chat/write_actions", include_str!("direct_chat/write_actions.rs")),
+            ("direct_chat/team_api", include_str!("direct_chat/team_api.rs")),
             ("runtime_host", include_str!("runtime_host.rs")),
             ("lib", include_str!("lib.rs").split("generate_handler").next().unwrap()),
         ] {

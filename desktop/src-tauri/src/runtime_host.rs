@@ -2893,6 +2893,13 @@ mod tests {
             ("direct_chat/container_discovery.rs", include_str!("direct_chat/container_discovery.rs")),
             ("direct_chat/local_exec.rs", include_str!("direct_chat/local_exec.rs")),
             ("direct_chat/transport.rs", include_str!("direct_chat/transport.rs")),
+            ("direct_chat/lifecycle.rs", include_str!("direct_chat/lifecycle.rs")),
+            ("direct_chat/read.rs", include_str!("direct_chat/read.rs")),
+            ("direct_chat/send.rs", include_str!("direct_chat/send.rs")),
+            ("direct_chat/attachments.rs", include_str!("direct_chat/attachments.rs")),
+            ("direct_chat/logging.rs", include_str!("direct_chat/logging.rs")),
+            ("direct_chat/write_actions.rs", include_str!("direct_chat/write_actions.rs")),
+            ("direct_chat/team_api.rs", include_str!("direct_chat/team_api.rs")),
         ] {
             let source = source.replace("\r\n", "\n");
             let production = source.split("\nmod tests {").next().unwrap();
@@ -2928,6 +2935,13 @@ mod tests {
             ("direct_chat/container_discovery.rs", include_str!("direct_chat/container_discovery.rs")),
             ("direct_chat/local_exec.rs", include_str!("direct_chat/local_exec.rs")),
             ("direct_chat/transport.rs", include_str!("direct_chat/transport.rs")),
+            ("direct_chat/lifecycle.rs", include_str!("direct_chat/lifecycle.rs")),
+            ("direct_chat/read.rs", include_str!("direct_chat/read.rs")),
+            ("direct_chat/send.rs", include_str!("direct_chat/send.rs")),
+            ("direct_chat/attachments.rs", include_str!("direct_chat/attachments.rs")),
+            ("direct_chat/logging.rs", include_str!("direct_chat/logging.rs")),
+            ("direct_chat/write_actions.rs", include_str!("direct_chat/write_actions.rs")),
+            ("direct_chat/team_api.rs", include_str!("direct_chat/team_api.rs")),
             ("runtime_log.rs", include_str!("runtime_log.rs")),
             ("onboarding.rs", include_str!("onboarding.rs")),
         ];

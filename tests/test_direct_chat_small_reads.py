@@ -27,7 +27,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 DIRECT_CHAT = ROOT / "desktop" / "src-tauri" / "src" / "direct_chat.rs"
-SOURCE = DIRECT_CHAT.read_text(encoding="utf-8")
+SOURCE = DIRECT_CHAT.with_suffix("").joinpath("read.rs").read_text(encoding="utf-8")
 
 
 def _constant(name: str) -> int:
