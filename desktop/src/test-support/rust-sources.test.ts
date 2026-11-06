@@ -39,4 +39,35 @@ describe("Rust production source inventory", () => {
   it("fails when a declared production module is absent", () => {
     expect(() => compiledRustSourceFiles("/src/lib.rs", () => "mod missing;", () => false)).toThrow("missing production module missing");
   });
+
+  it("removes path attributes before a test cfg together with the gated item", () => {
+    const files: Record<string, string> = {
+      "/src/lib.rs": '#[path = "fake.rs"]\n#[cfg(test)]\nmod fake;\nmod production;',
+      "/src/fake.rs": "",
+      "/src/production.rs": "",
+    };
+    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files))
+      .toEqual(["lib.rs", "production.rs"]);
+  });
+
+  it("removes gated fields and variants without swallowing later production", () => {
+    const source = 'struct S { #[cfg(test)] fake: u8, value: u8, }\nenum E { #[cfg(test)] Fake, Real }\nfn production() { failure("production_error"); }\nmod after;';
+    const production = withoutRustTests(source);
+    expect(production).not.toContain("fake:");
+    expect(production).not.toContain("Fake");
+    expect(production).toContain("value: u8");
+    expect(production).toContain("Real");
+    expect(production).toContain('failure("production_error")');
+    const files: Record<string, string> = { "/src/lib.rs": source, "/src/after.rs": "" };
+    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files)).toEqual(["lib.rs", "after.rs"]);
+  });
+
+  it("follows multiple declarations and path attributes on the same line", () => {
+    const files: Record<string, string> = {
+      "/src/lib.rs": 'mod a; mod b; #[path = "x.rs"] mod y;',
+      "/src/a.rs": "", "/src/b.rs": "", "/src/x.rs": "",
+    };
+    expect(compiledRustSourceFiles("/src/lib.rs", (file) => files[file], (file) => file in files))
+      .toEqual(["lib.rs", "a.rs", "b.rs", "x.rs"]);
+  });
 });

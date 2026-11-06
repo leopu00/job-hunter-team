@@ -87,13 +87,37 @@ function itemEnd(mask: string, start: number): number {
     if (mask[i] === "[") brackets++;
     if (mask[i] === "]") brackets--;
     if (!parens && !brackets && mask[i] === ";") return i + 1;
+    if (!parens && !brackets && mask[i] === ",") return i + 1;
+    if (!parens && !brackets && mask[i] === "}") return i;
     if (!parens && !brackets && mask[i] === "{") return closing(mask, i, "{", "}") + 1;
   }
   throw new Error("Rust test attribute has no item");
 }
 
+function attributesStart(mask: string, before: number): number {
+  let start = before;
+  let i = before - 1;
+  while (i >= 0) {
+    while (i >= 0 && /\s/.test(mask[i])) i--;
+    if (mask[i] !== "]") break;
+    let depth = 1;
+    while (--i >= 0 && depth) {
+      if (mask[i] === "]") depth++;
+      if (mask[i] === "[") depth--;
+    }
+    while (i >= 0 && /\s/.test(mask[i])) i--;
+    if (mask[i] !== "#") break;
+    start = i--;
+  }
+  return start;
+}
+
+const productionSources = new Map<string, string>();
+
 /** Remove individual test-only items, keeping production that follows them. */
 export function withoutRustTests(source: string): string {
+  const cached = productionSources.get(source);
+  if (cached !== undefined) return cached;
   const mask = rustMask(source);
   const attributes = /#\s*\[/g;
   const chunks: string[] = [];
@@ -103,11 +127,14 @@ export function withoutRustTests(source: string): string {
     const end = closing(mask, bracket, "[", "]") + 1;
     if (!testOnly(source.slice(match.index, end))) continue;
     const until = itemEnd(mask, end);
-    chunks.push(source.slice(kept, match.index), source.slice(match.index, until).replace(/[^\n]/g, " "));
+    const start = attributesStart(mask, match.index);
+    chunks.push(source.slice(kept, start), source.slice(start, until).replace(/[^\n]/g, " "));
     kept = until;
     attributes.lastIndex = until;
   }
-  return chunks.join("") + source.slice(kept);
+  const production = chunks.join("") + source.slice(kept);
+  productionSources.set(source, production);
+  return production;
 }
 
 function explicitPath(source: string, mask: string, before: number): string | undefined {
@@ -135,7 +162,7 @@ type ModuleRef = { name: string; path?: string; directory: string; explicitDirec
 function moduleRefs(source: string, directory: string, explicitDirectory: string): ModuleRef[] {
   const mask = rustMask(source);
   const found: ModuleRef[] = [];
-  const declarations = /^[ \t]*(?:pub(?:\([^)]*\))?[ \t]+)?mod[ \t]+(\w+)[ \t]*(;|\{)/gm;
+  const declarations = /\b(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*(;|\{)/g;
   let cursor = 0;
   let depth = 0;
   for (let match; (match = declarations.exec(mask));) {
