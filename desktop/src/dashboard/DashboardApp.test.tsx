@@ -60,6 +60,13 @@ import { signOut, useSession } from "../lib/supabase";
 import { navigate } from "../shell/router";
 import { existingTeamBridge } from "../lib/existing-team";
 import DashboardApp from "./DashboardApp";
+import { teamRefusesSignIn } from "../provider-login/provider-login-native";
+
+// The team's own word on its provider sign-in: by default it cannot be asked, and the setup goes on from the file as it always did.
+vi.mock("../provider-login/provider-login-native", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../provider-login/provider-login-native")>()),
+  teamRefusesSignIn: vi.fn(),
+}));
 
 vi.mock("../lib/supabase", () => ({
   supabase: { from: vi.fn() },
@@ -347,6 +354,7 @@ async function reachAssistant(user: ReturnType<typeof userEvent.setup>) {
 describe("DashboardApp onboarding router", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(teamRefusesSignIn).mockResolvedValue(false);
     vi.mocked(runtimeLogPath).mockResolvedValue(null);
     vi.mocked(openRuntimeLog).mockResolvedValue(false);
     localStorage.clear();
@@ -3272,6 +3280,41 @@ describe("DashboardApp onboarding router", () => {
     requireOnboarding();
     vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
     vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+    await waitFor(() => expect(startOnboardingTeam).toHaveBeenCalled());
+    expect(startOnboardingProviderLogin).not.toHaveBeenCalled();
+  });
+
+  // The file is there, and the team says its agents were refused after it was written: the setup's «ready» was a false positive.
+  it.each(["expired", "missing", "unreadable"] as const)("starts the provider login when the file is there but the team says it is %s", async (state) => {
+    vi.mocked(useSession).mockReturnValue(signedInAs(`file-there-${state}-account`));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(teamRefusesSignIn).mockResolvedValue(true);
+    vi.mocked(startOnboardingProviderLogin).mockResolvedValue(`provider-session-${state}`);
+
+    const user = userEvent.setup();
+    render(<DashboardApp />);
+    await user.click(await screen.findByRole("button", { name: "submit-codex" }));
+    await user.click(await screen.findByRole("button", { name: "continue-runtime" }));
+
+    await waitFor(() => expect(startOnboardingProviderLogin).toHaveBeenCalledOnce());
+    expect(startOnboardingTeam).not.toHaveBeenCalled();
+  });
+
+  it("keeps a login the team calls old (probably expired) and goes on to start the team: only an agent's refusal blocks", async () => {
+    vi.mocked(useSession).mockReturnValue(signedInAs("file-there-old-account"));
+    requireOnboarding();
+    vi.mocked(prepareOnboardingRuntime).mockResolvedValue(PREPARED);
+    vi.mocked(readOnboardingSnapshot).mockResolvedValue({ ...PREPARED, providerAuthenticated: true });
+    vi.mocked(teamRefusesSignIn).mockResolvedValue(false);
     vi.mocked(startOnboardingTeam).mockResolvedValue(TEAM_READY);
 
     const user = userEvent.setup();

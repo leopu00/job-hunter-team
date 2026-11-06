@@ -12,7 +12,7 @@
 //! can see. The person (or support) can still turn it back on, or off, by setting the variable themselves: a value that is
 //! already there is never replaced.
 //!
-//! It is set before the web view exists (the web process inherits the environment of the app), at the first line of `run`.
+//! It is set before the web view exists (the web process inherits the environment of the app), after the one-shot upload exit.
 
 use std::ffi::OsString;
 
@@ -59,11 +59,17 @@ mod tests {
     }
 
     #[test]
-    fn it_is_the_first_thing_run_does_and_the_module_is_declared() {
+    fn it_is_the_first_window_startup_step_after_the_one_shot_upload_and_the_module_is_declared() {
         let lib = include_str!("lib.rs").replace("\r\n", "\n");
         assert!(lib.contains("mod linux_render;"));
         let run = lib.split("pub fn run() {\n").nth(1).unwrap();
-        assert!(run.starts_with("    linux_render::apply();\n"), "before the web view, before anything else");
+        let startup = run.strip_prefix(concat!(
+            "    // `jht-desktop.exe --artifact-upload <file>`: one command, no window (jht.ps1 calls it for `jht artifact upload`)\n",
+            "    if let Some(code) = artifact_upload::run_if_asked() {\n",
+            "        std::process::exit(code);\n",
+            "    }\n",
+        )).expect("only the one-shot upload, which exits without a window, may precede rendering setup");
+        assert!(startup.starts_with("    linux_render::apply();\n    tauri::Builder::default()\n"), "the first window startup step, before the web view");
     }
 
     #[test]

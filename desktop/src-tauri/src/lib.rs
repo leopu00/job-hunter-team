@@ -53,6 +53,8 @@ mod resources;
 mod release_channel_rules;
 mod runtime_host;
 mod runtime_up;
+mod artifact_upload;
+mod host_path_policy;
 mod single_instance;
 mod runtime_log;
 mod saved_vps;
@@ -62,6 +64,7 @@ mod team_export;
 mod team_owner;
 mod chat_attachment;
 mod profile_progress;
+mod provider_login;
 mod state_stream;
 mod team_start;
 mod team_update;
@@ -79,6 +82,10 @@ pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // `jht-desktop.exe --artifact-upload <file>`: one command, no window (jht.ps1 calls it for `jht artifact upload`)
+    if let Some(code) = artifact_upload::run_if_asked() {
+        std::process::exit(code);
+    }
     linux_render::apply();
     tauri::Builder::default()
         // first of all the plugins: a second opening of the app hands over to the one already open and ends here
@@ -236,6 +243,7 @@ pub fn run() {
             app_exit::app_exit_order,
             app_exit::app_exit_poll,
             app_exit::app_exit_finish,
+            provider_login::provider_login_state,
             work_stats::work_stats_read,
             work_stats::work_stats_clear,
             team_budget::team_budget_read,
