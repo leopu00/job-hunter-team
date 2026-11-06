@@ -1460,7 +1460,7 @@ done"#
         assert_eq!(code.matches("crate::work_stats::").count(), 1);
         assert!(code.contains("crate::work_stats::WORK_STATS_PY") && !code.contains("work_stats_clear"));
         // the callers: the chat's Read only, the panel's reads only (the activity among them), the profile read only
-        let chat = include_str!("direct_chat.rs");
+        let chat = include_str!("direct_chat/transport.rs");
         let chat_arm = chat.split("// The hot read goes over the state stream").nth(1).unwrap().split("let writes =").next().unwrap();
         assert!(chat_arm.contains("ChatOperation::Read { agent, cursor }") && chat_arm.matches("read_local(").count() == 1);
         let control = include_str!("agent_control.rs");

@@ -137,165 +137,117 @@ pub(crate) use ssh_link::lent_socket_still_ours;
 pub(crate) use ssh_link::lent_socket_still_ours;
 pub(crate) use ssh_link::shared_master;
 use ssh_link::close_connection;
-
-const REMOTE_CONTAINER_PROBE: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat probe"#;
-pub(crate) const REMOTE_PYTHON_STDIN: &str = r#"set -eu; JHT_BIN="$(command -v jht 2>/dev/null || true)"; [ -n "$JHT_BIN" ] || JHT_BIN="$HOME/.local/bin/jht"; [ -f "$JHT_BIN" ] && [ -x "$JHT_BIN" ] && [ ! -L "$JHT_BIN" ] || exit 70; grep -Fqx 'JHT_DESKTOP_CHAT_PROTOCOL=1' "$JHT_BIN" || exit 70; exec "$JHT_BIN" desktop-chat python"#;
-
-
-
-fn valid_agent(value: &str) -> bool {
-    existing_team_runtime::chat_agent_ok(value)
-}
-fn session_for(agent: &str) -> Option<String> {
-    existing_team_runtime::chat_session(agent)
-}
-
-
-
-
-/// The installed runtime directory, not a renderer value. The wrapper is still verified when the
-/// connection opens; chat actions themselves intentionally do not invoke it.
-fn local_runtime_dir(app: &tauri::AppHandle) -> Result<PathBuf, DirectChatError> {
-    #[cfg(windows)]
-    {
-        crate::windows_runtime::runtime_dir(std::env::var_os("LOCALAPPDATA"))
-            .ok_or_else(|| failure("runtime_missing"))
-    }
-    #[cfg(target_os = "macos")]
-    {
-        app.path()
-            .home_dir()
-            .map(|home| {
-                home.join("Library")
-                    .join("Application Support")
-                    .join("Job Hunter Team")
-                    .join("host-runtime")
-            })
-            .map_err(|_| failure("runtime_missing"))
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let data = std::env::var_os("XDG_DATA_HOME")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| {
-                app.path()
-                    .home_dir()
-                    .ok()
-                    .map(|home| home.join(".local").join("share"))
-            })
-            .ok_or_else(|| failure("runtime_missing"))?;
-        Ok(data.join("job-hunter-team").join("host-runtime"))
-    }
-}
-
-struct LocalChatEngine {
-    program: PathBuf,
-    podman: bool,
-}
-
-/// Resolve Docker before starting it. The Finder-launched macOS app does not necessarily inherit
-/// the user's shell PATH, while the wrapper deliberately adds these same locations.
-fn local_docker_cli() -> Result<PathBuf, &'static str> {
-    let mut candidates = Vec::new();
-    #[cfg(target_os = "macos")]
-    candidates.extend([
-        PathBuf::from("/opt/homebrew/bin/docker"),
-        PathBuf::from("/usr/local/bin/docker"),
-        PathBuf::from("/opt/podman/bin/docker"),
-        PathBuf::from("/Applications/Docker.app/Contents/Resources/bin/docker"),
-    ]);
-    if let Some(path) = std::env::var_os("PATH") {
-        candidates.extend(std::env::split_paths(&path).map(|dir| {
-            dir.join(if cfg!(windows) { "docker.exe" } else { "docker" })
-        }));
-    }
-    candidates
-        .into_iter()
-        .find(|candidate| fs::metadata(candidate).is_ok_and(|metadata| metadata.is_file()))
-        .ok_or("container_engine_missing")
-}
-
-/// The JHT-private Podman shim is the only Podman engine selected from the runtime. Docker is
-/// resolved once to an executable path, never assembled from page input or a shell string.
-/// A runtime without a `container-runtime` file is a Docker one (Linux with Docker never writes it;
-/// the wrapper and the integrity check read it the same way): only a file that is there and cannot
-/// be read, or says something else, is refused.
-fn local_chat_engine(runtime: &Path) -> Result<LocalChatEngine, &'static str> {
-    let selection = match fs::read_to_string(runtime.join("container-runtime")) {
-        Ok(value) => value,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => "docker".to_owned(),
-        Err(_) => return Err("runtime_missing"),
-    };
-    match selection.trim() {
-        "podman" => {
-            let shim = runtime.join("bin").join(if cfg!(windows) {
-                "docker.exe"
-            } else {
-                "docker"
-            });
-            let metadata = fs::symlink_metadata(&shim).map_err(|_| "runtime_missing")?;
-            if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
-                return Err("runtime_missing");
-            }
-            Ok(LocalChatEngine {
-                program: shim,
-                podman: true,
-            })
-        }
-        "docker" => Ok(LocalChatEngine {
-            program: local_docker_cli()?,
-            podman: false,
-        }),
-        _ => Err("runtime_missing"),
-    }
-}
-
-fn container_id(value: &str) -> bool {
-    (12..=64).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
+mod local_engine;
+use local_engine::local_runtime_dir;
+use local_engine::LocalChatEngine;
+use local_engine::local_docker_cli;
+use local_engine::local_chat_engine;
+use local_engine::container_id;
+use local_engine::local_engine_removed_environment;
+use local_engine::run_local_engine;
+use local_engine::local_compose_args;
+use local_engine::label;
+use local_engine::podman_systemd_unit;
+use local_engine::wrapper_compose_environment;
+#[cfg(unix)]
+use local_engine::read_host_values;
+#[cfg(target_os = "macos")]
+use local_engine::read_host_env;
+mod runtime_integrity;
 #[cfg(all(unix, not(target_os = "macos")))]
-fn digest_file(path: &Path) -> Option<String> {
-    let metadata = fs::symlink_metadata(path).ok()?;
-    if !metadata.file_type().is_file() || metadata.len() == 0 {
-        return None;
-    }
-    Some(format!("{:x}", Sha256::digest(fs::read(path).ok()?)))
-}
-
+use runtime_integrity::digest_file;
 #[cfg(unix)]
-fn unix_runtime_node_is_safe(path: &Path, directory: bool) -> bool {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
-
-    let Ok(metadata) = fs::symlink_metadata(path) else { return false };
-    (if directory { metadata.file_type().is_dir() } else { metadata.file_type().is_file() })
-        && metadata.uid() == unsafe { libc::geteuid() }
-        && metadata.permissions().mode() & 0o022 == 0
-}
-
+use runtime_integrity::unix_runtime_node_is_safe;
 #[cfg(unix)]
-fn unix_runtime_path_is_safe(runtime: &Path, wrapper: &Path) -> bool {
-    let Ok(runtime_real) = fs::canonicalize(runtime) else { return false };
-    let Ok(wrapper_real) = fs::canonicalize(wrapper) else { return false };
-    if runtime_real != runtime || wrapper_real != wrapper {
-        return false;
-    }
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return false };
-    let Ok(home) = fs::canonicalize(home) else { return false };
-    // The declared HOME can itself be a link. Compare only physical paths so
-    // a legacy bind below its real location cannot become a new trust root.
-    let physical_child = |parts: &[&str]| {
-        let candidate = parts.iter().fold(home.clone(), |path, part| path.join(part));
-        fs::canonicalize(&candidate).unwrap_or(candidate)
-    };
-    let legacy = physical_child(&[".jht"]);
-    let user_data = physical_child(&["Documents", "Job Hunter Team"]);
-    !runtime_real.starts_with(&legacy)
-        && !runtime_real.starts_with(&user_data)
-        && !wrapper_real.starts_with(&legacy)
-        && !wrapper_real.starts_with(&user_data)
-}
+use runtime_integrity::unix_runtime_path_is_safe;
+use runtime_integrity::local_chat_runtime_valid;
+#[cfg(unix)]
+use runtime_integrity::TOOL_ROOTS;
+#[cfg(unix)]
+use runtime_integrity::ADMIN_GROUP;
+#[cfg(unix)]
+use runtime_integrity::tool_folder_is_safe;
+#[cfg(unix)]
+use runtime_integrity::tool_file_is_safe;
+#[cfg(unix)]
+use runtime_integrity::tool_is_trusted;
+#[cfg(unix)]
+use runtime_integrity::find_trusted_tool;
+#[cfg(target_os = "macos")]
+pub(crate) use runtime_integrity::trusted_podman;
+#[cfg(target_os = "macos")]
+use runtime_integrity::mac_config_hash;
+mod container_attestation;
+use container_attestation::text_the_wrapper_hashes;
+use container_attestation::host_env_as_the_wrapper_records_it;
+use container_attestation::attest_reason_may_pass;
+#[cfg(unix)]
+use container_attestation::mac_config_hash_in;
+use container_attestation::windows_path_key;
+use container_attestation::windows_container_labels_are_attested;
+use container_attestation::is_pinned_image_reference;
+use container_attestation::windows_container_image_is_the_runtimes;
+use container_attestation::split_inspected;
+use container_attestation::podman_container_label_refusal;
+#[cfg(not(windows))]
+use container_attestation::podman_compose_label_refusal;
+use container_attestation::attestation_refusal;
+use container_attestation::container_not_found_code;
+mod container_discovery;
+use container_discovery::local_chat_container;
+use container_discovery::Candidate;
+use container_discovery::Verdict;
+use container_discovery::image_is_accepted;
+use container_discovery::needs_image_inspect;
+use container_discovery::judge_candidate;
+use container_discovery::listed_candidates;
+use container_discovery::local_listing_args;
+use container_discovery::parse_listing;
+use container_discovery::inspected_candidates;
+use container_discovery::inspected_image;
+mod local_exec;
+use local_exec::local_chat_exec_args;
+use local_exec::LOCAL_PYTHON_LAUNCH;
+use local_exec::LOCAL_DELIVERY_SCRIPT;
+use local_exec::run_local_native;
+use local_exec::run_local_chat;
+use local_exec::engine_lost_the_container;
+use local_exec::LOCAL_CHAT_TEAM_KEPT;
+use local_exec::LOCAL_CHAT_TEAM;
+use local_exec::local_chat_team;
+use local_exec::local_chat_team_key;
+use local_exec::forget_local_chat_team;
+pub(crate) use local_exec::local_runtime_path;
+pub(crate) use local_exec::AttestedLocalTeam;
+use local_exec::attested_exec_args;
+mod transport;
+use transport::REMOTE_CONTAINER_PROBE;
+pub(crate) use transport::REMOTE_PYTHON_STDIN;
+use transport::valid_agent;
+use transport::session_for;
+use transport::run_connection;
+use transport::probe;
+use transport::probe_unlogged;
+use transport::probe_no_container_code;
+use transport::hex_encode;
+use transport::python_input;
+use transport::run_python;
+use transport::remote_wrapper_command;
+use transport::UNKNOWN_ACTION;
+use transport::uses_pinned_chat;
+use transport::chat_failure;
+use transport::run_wrapper_chat;
+use transport::wrapper_outcome;
+use transport::run_chat;
+
+
+
+
+
+
+
+
+
 
 /// Linux's protected host bundle, ported from jht-wrapper.sh. It has no engine side effect: a
 /// malformed path, owner, manifest or selected engine is rejected before any native command.
@@ -396,1063 +348,13 @@ fn unix_runtime_bundle_valid(wrapper: &Path, runtime: &Path) -> bool {
     }
 }
 
-/// Native Linux Podman honors these inherited connection selectors. The
-/// checked runtime shim is local-only, so inherit neither selector for any
-/// of its discovery, inspect, or exec calls.
-fn local_engine_removed_environment(_engine: &LocalChatEngine) -> &'static [&'static str] {
-    #[cfg(all(unix, not(target_os = "macos")))]
-    if _engine.podman {
-        return &["CONTAINER_HOST", "CONTAINER_CONNECTION"];
-    }
-    &[]
-}
 
-fn run_local_engine<I, S>(
-    engine: &LocalChatEngine,
-    args: I,
-    input: Option<&[u8]>,
-    timeout: Duration,
-) -> Result<ProcessResult, &'static str>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<std::ffi::OsStr>,
-{
-    let program = engine.program.to_str().ok_or("runtime_missing")?;
-    if !local_engine_removed_environment(engine).is_empty() {
-        return run_program_without_env(
-            program,
-            args,
-            input,
-            timeout,
-            local_engine_removed_environment(engine),
-        );
-    }
-    run_program(program, args, input, timeout)
-}
 
-/// The desktop's local trust root. This is intentionally separate from process launch: all
-/// platforms reject an untrusted runtime before discovering a container or starting `exec -i`.
-fn local_chat_runtime_valid(wrapper: &Path, runtime: &Path) -> bool {
-    #[cfg(windows)]
-    {
-        return crate::windows_runtime::wrapper_bundle_valid(wrapper, runtime);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        return crate::onboarding::runtime_bundle_manifest_valid(runtime, wrapper)
-            && unix_runtime_path_is_safe(runtime, wrapper)
-            && unix_runtime_node_is_safe(runtime, true)
-            && unix_runtime_node_is_safe(wrapper, false)
-            && unix_runtime_node_is_safe(&runtime.join("bin/docker"), false)
-            && fs::canonicalize(runtime.join("bin/docker")).is_ok_and(|real| real == runtime.join("bin/docker"));
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        unix_runtime_bundle_valid(wrapper, runtime)
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        false
-    }
-}
 
-/// Docker's compose listing of the `jht` service, rooted in the attested runtime directory. Podman is not listed this
-/// way: the runtime's private shim is `podman --connection <attested machine>`, and `podman compose` may delegate to an
-/// arbitrary host provider, so it is not the runtime's authenticated Compose path. The fixed JHT project is listed by its
-/// labels (`local_listing_args`) and the labels are proved by `judge_candidate`.
-fn local_compose_args(engine: &LocalChatEngine, runtime: &Path) -> Vec<OsString> {
-    let mut args = vec![OsString::from("compose")];
-    args.push(OsString::from("-f"));
-    args.push(runtime.join("docker-compose.yml").into_os_string());
-    if engine.podman {
-        args.push(OsString::from("-f"));
-        args.push(runtime.join("docker-compose.podman.yml").into_os_string());
-    }
-    args.push(OsString::from("--project-directory"));
-    args.push(runtime.as_os_str().to_owned());
-    args.push(OsString::from("ps"));
-    args.push(OsString::from("-q"));
-    args.push(OsString::from("jht"));
-    args
-}
 
-fn label<'a>(labels: &'a Value, key: &str) -> Option<&'a str> {
-    labels.get(key).and_then(Value::as_str)
-}
 
-fn podman_systemd_unit() -> String {
-    ["podman-compose", "jht.service"].join("@")
-}
 
-/// The three values the wrapper puts in the environment of EVERY compose it runs (`scripts/jht-wrapper.sh`:
-/// `jht_read_host_env_value`, then `${X:-default}`, then `export`), because the compose file resolves
-/// `${JHT_HOST_TYPE}`, `${JHT_LANG}` and `${JHT_USER_TZ}` into the container's configuration and so into its
-/// `io.podman.compose.config-hash`: a value from `host.env` that passes the wrapper's check wins over the
-/// inherited environment (the last valid line of the file wins), then the inherited one, then `unknown` / `en` /
-/// `UTC`. The container the app starts is made by the wrapper, so it carries THESE values; the hash computed here
-/// has to be computed with the same ones, or a Mac whose `host.env` says `local` and its time zone (every Mac that
-/// ran the host setup) gets another hash and its own container is «not the one Job Hunter Team installed» (found in the Mac collaudo of 27/10).
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn wrapper_compose_environment(host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static str, String)> {
-    fn valid(key: &str, value: &str) -> bool {
-        match key {
-            "JHT_HOST_TYPE" => matches!(value, "local" | "vps"),
-            "JHT_LANG" => matches!(value, "en" | "it" | "hu" | "es" | "de" | "fr" | "pt"),
-            _ => !value.is_empty() && value.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'+' | b'.' | b'/' | b'-')),
-        }
-    }
-    let from_file = |key: &str| -> Option<String> {
-        let mut found = None;
-        for line in host_env?.lines() {
-            let line = line.strip_suffix('\r').unwrap_or(line).trim_start();
-            let Some(value) = line.strip_prefix(key).and_then(|rest| rest.strip_prefix('=')) else { continue };
-            let mut value = value;
-            if value.starts_with('"') && value.ends_with('"') || value.starts_with('\'') && value.ends_with('\'') {
-                let quote = if value.starts_with('"') { '"' } else { '\'' };
-                value = value.strip_prefix(quote).unwrap_or(value);
-                value = value.strip_suffix(quote).unwrap_or(value);
-            }
-            if valid(key, value) {
-                found = Some(value.to_owned());
-            }
-        }
-        found
-    };
-    [("JHT_HOST_TYPE", "unknown"), ("JHT_LANG", "en"), ("JHT_USER_TZ", "UTC")]
-        .into_iter()
-        .map(|(key, default)| (key, from_file(key).or_else(|| inherited(key).filter(|value| !value.is_empty())).unwrap_or_else(|| default.to_owned())))
-        .collect()
-}
 
-/// The file the wrapper takes the host type, the language and the time zone from (`jht_load_host_values`): in the runtime
-/// folder, which the container does not mount, so an agent cannot write it. A plain file of the user, not writable by
-/// others, small; anything else is not read (and then `host.env` is, as the wrapper does).
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn read_host_values(path: &Path) -> Option<String> {
-    use std::os::unix::fs::MetadataExt;
-    let metadata = fs::symlink_metadata(path).ok()?;
-    // SAFETY: geteuid has no arguments and cannot fail.
-    if !metadata.file_type().is_file() || metadata.len() > 65_536 || metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o022 != 0 {
-        return None;
-    }
-    fs::read_to_string(path).ok()
-}
-
-/// `host.env` where the wrapper reads it: `$JHT_HOST_ENV_FILE`, else `~/.jht/host.env`; a regular file, small.
-#[cfg(target_os = "macos")]
-fn read_host_env() -> Option<String> {
-    let path = std::env::var_os("JHT_HOST_ENV_FILE").map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".jht").join("host.env")))?;
-    let metadata = fs::symlink_metadata(&path).ok()?;
-    if !metadata.file_type().is_file() || metadata.len() > 65_536 {
-        return None;
-    }
-    fs::read_to_string(path).ok()
-}
-
-/// Where Homebrew (Apple silicon, Intel) and the Podman installer keep their tools.
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const TOOL_ROOTS: [&str; 3] = ["/opt/homebrew", "/usr/local", "/opt/podman"];
-
-/// The macOS group of the administrators (`admin`, gid 80). Homebrew leaves `Cellar` writable by it (`drwxrwxr-x
-/// user:admin`), and whoever is in the group can act as root on the machine anyway, so a folder on the way to a tool
-/// is not refused for that. It is the one exception: only on macOS, only this group, only for folders (never for the
-/// tool itself), and it replaces neither the owner (the user or root) nor the rule that others never write.
-#[cfg(unix)]
-const ADMIN_GROUP: Option<u32> = if cfg!(target_os = "macos") { Some(80) } else { None };
-
-/// A folder on the way to a tool is safe when the user or root owns it, nobody else can write in it, and the group
-/// cannot either, unless it is the administrators' (see `ADMIN_GROUP`): whoever can write in it can rename the tool
-/// and put another program in its place.
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn tool_folder_is_safe(owner: u32, group: u32, mode: u32, user: u32, admin_group: Option<u32>) -> bool {
-    (owner == user || owner == 0) && mode & 0o002 == 0 && (mode & 0o020 == 0 || admin_group == Some(group))
-}
-
-/// The tool itself is safe when the user or root owns it and neither the group (the administrators' included) nor
-/// others can write it.
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn tool_file_is_safe(owner: u32, mode: u32, user: u32) -> bool {
-    (owner == user || owner == 0) && mode & 0o022 == 0
-}
-
-/// `podman` and `podman-compose` are SYMLINKS on a Mac that has them from Homebrew (`/opt/homebrew/bin/podman` ->
-/// `../Cellar/podman/<version>/bin/podman-remote`), so the path is always resolved to the file it finally names. That
-/// file is trusted when it is a regular file inside one of the install `roots` that `tool_file_is_safe`, and every
-/// folder from its own up to the root is safe too (`tool_folder_is_safe`), as is the folder the path was asked in
-/// (the `bin` that holds the link: whoever writes there changes where it points). A regular file planted in a folder
-/// anyone can write, or in a path whose folders anyone can rename, is no more a tool of the install than a planted link.
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn tool_is_trusted(path: &Path, roots: &[&Path]) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let Ok(real) = fs::canonicalize(path) else { return false };
-    let Some(root) = roots.iter().filter_map(|root| fs::canonicalize(root).ok()).find(|root| real.starts_with(root)) else { return false };
-    let user = unsafe { libc::geteuid() };
-    let Ok(file) = fs::metadata(&real) else { return false };
-    if !file.file_type().is_file() || !tool_file_is_safe(file.uid(), file.mode(), user) {
-        return false;
-    }
-    let folders_to_the_root_are_safe = |start: &Path| {
-        let mut folder = Some(start);
-        while let Some(dir) = folder {
-            let Ok(metadata) = fs::metadata(dir) else { return false };
-            if !metadata.file_type().is_dir() || !tool_folder_is_safe(metadata.uid(), metadata.gid(), metadata.mode(), user, ADMIN_GROUP) {
-                return false;
-            }
-            if dir == root {
-                return true;
-            }
-            folder = dir.parent();
-        }
-        false
-    };
-    real.parent().is_some_and(folders_to_the_root_are_safe)
-        && path.parent().and_then(|dir| fs::canonicalize(dir).ok()).is_some_and(|dir| folders_to_the_root_are_safe(&dir))
-}
-
-/// The trusted `name` in the `bin` folder of an install root, and only there: the PATH the app was opened with is not
-/// searched (an entry of it that is empty or relative would be the folder it is run from).
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn find_trusted_tool(name: &str, roots: &[&Path]) -> Option<PathBuf> {
-    roots.iter().map(|root| root.join("bin").join(name)).find(|path| tool_is_trusted(path, roots))
-}
-
-/// The `podman` of this Mac's install (Homebrew's, or the Podman installer's), trusted as the engine calls need, or None. An
-/// app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin` for a PATH: the bare name `podman` is not found there.
-#[cfg(target_os = "macos")]
-pub(crate) fn trusted_podman() -> Option<PathBuf> {
-    find_trusted_tool("podman", &TOOL_ROOTS.map(Path::new))
-}
-
-/// The hash the running container has to carry, or why it could not be worked out: a reason in the fixed
-/// words of `runtime_log::ATTEST_REASONS`. A reason that waiting may cure (a probe that did not run, a
-/// plan that did not come) is told apart from one that waiting will not (another version, a missing file),
-/// see `attest_reason_may_pass`.
-#[cfg(target_os = "macos")]
-fn mac_config_hash(runtime: &Path, timeout: Duration) -> Result<String, &'static str> {
-    // The same source as the wrapper: the host values file of the runtime folder, and only if there is none, `host.env`.
-    let inherited = |key: &str| std::env::var(key).ok();
-    let text = text_the_wrapper_hashes(read_host_values(&runtime.join("host-values")), &read_host_env, &inherited);
-    mac_config_hash_in(runtime, timeout, text.as_deref(), &inherited)
-}
-
-/// The text the hash is worked out from, as the wrapper's `jht_load_host_values` takes its values: the file of the runtime folder when
-/// it is trusted, else `host.env`; and a host type that does not come from that file (from `host.env`, or from the environment
-/// because the file does not say it) goes through the rule of the Mac, a `vps` is a `local`.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn text_the_wrapper_hashes(values: Option<String>, host_env: &dyn Fn() -> Option<String>, inherited: &dyn Fn(&str) -> Option<String>) -> Option<String> {
-    let (text, type_from_values) = match values {
-        Some(values) => {
-            let says_type = wrapper_compose_environment(Some(&values), &|_| None).iter().any(|(key, value)| *key == "JHT_HOST_TYPE" && value != "unknown");
-            (Some(values), says_type)
-        }
-        None => (host_env(), false),
-    };
-    if type_from_values {
-        return text;
-    }
-    host_env_as_the_wrapper_records_it(text.as_deref(), inherited).or(text)
-}
-
-/// What the wrapper makes of a Mac whose host type in use is `vps` and does not come from its values file (from `host.env` or from the
-/// environment): `local` (it tells it on the terminal and in `host-values.log`). The text of `host.env` followed by a
-/// last valid line `JHT_HOST_TYPE=local`, which wins, or `None` when nothing changes.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn host_env_as_the_wrapper_records_it(host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Option<String> {
-    let vps = wrapper_compose_environment(host_env, inherited).iter().any(|(key, value)| *key == "JHT_HOST_TYPE" && value == "vps");
-    vps.then(|| format!("{}\nJHT_HOST_TYPE=local\n", host_env.unwrap_or("")))
-}
-
-/// Whether the reason a check could not be made may pass by itself: the probe or the plan did not run or
-/// did not answer, which is not the same as the container being another one.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn attest_reason_may_pass(reason: &str) -> bool {
-    reason.ends_with("_unreadable") || matches!(reason, "hash_dry_run_exit" | "hash_dry_run_timeout" | "hash_dry_run_not_started" | "hash_plan_without_create")
-}
-
-/// `host_env` is the text of `host.env` and `inherited` the process environment, so that a test can say both.
-#[cfg(unix)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn mac_config_hash_in(runtime: &Path, timeout: Duration, host_env: Option<&str>, inherited: &dyn Fn(&str) -> Option<String>) -> Result<String, &'static str> {
-    let search = |name: &str| {
-        #[cfg(test)]
-        {
-            let fixture = runtime.join("bin").join(name);
-            if fs::symlink_metadata(&fixture).is_ok_and(|metadata| metadata.file_type().is_file()) {
-                return Some(fixture);
-            }
-        }
-        find_trusted_tool(name, &TOOL_ROOTS.map(Path::new))
-    };
-    let podman = search("podman").ok_or("hash_tool_missing")?;
-    let compose = search("podman-compose").ok_or("hash_tool_missing")?;
-    // podman-compose runs `podman` by name, and an app opened from Finder has `/usr/bin:/bin:/usr/sbin:/sbin`
-    // for a PATH, without Homebrew's: its own version probe then said «No such file or directory: podman» and
-    // the container looked like another one. The children get the directory of the podman that was found
-    // and trusted in front of the PATH they have (the wrapper runs them with Homebrew in it).
-    let path_with_podman = podman
-        .parent()
-        .and_then(|dir| std::env::join_paths(std::iter::once(dir.to_path_buf()).chain(std::env::var_os("PATH").iter().flat_map(std::env::split_paths))).ok())
-        .and_then(|joined| joined.into_string().ok())
-        .ok_or("hash_tool_missing")?;
-    // A version that could not be read is not a version that differs.
-    let podman_said = podman.to_str().and_then(|program| run_program(program, ["--version"], None, timeout).ok()).filter(|result| result.success()).and_then(|result| String::from_utf8(result.stdout).ok());
-    match podman_said {
-        None => return Err("hash_podman_version_unreadable"),
-        Some(said) if said.trim() != "podman version 6.1.3" => return Err("hash_podman_version_differs"),
-        Some(_) => {}
-    }
-    let machine = fs::read_to_string(runtime.join("podman-machine")).map_err(|_| "hash_machine_file")?;
-    let machine = machine.strip_suffix('\n').ok_or("hash_machine_file")?;
-    if machine.is_empty() || !machine.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) { return Err("hash_machine_file"); }
-    let compose_said = compose.to_str().and_then(|program| {
-        let (result, stderr) = run_program_keeping_stderr_with_environment(program, ["--version"], None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION"], &[("CONTAINER_CONNECTION", machine), ("PATH", path_with_podman.as_str())]);
-        let mut output = result.ok().filter(ProcessResult::success)?.stdout;
-        output.extend_from_slice(&stderr);
-        String::from_utf8(output).ok()
-    });
-    match compose_said {
-        None => return Err("hash_compose_version_unreadable"),
-        Some(said) if !said.lines().any(|line| line == "podman-compose version 1.6.0") => return Err("hash_compose_version_differs"),
-        Some(_) => {}
-    }
-    let image = match fs::symlink_metadata(runtime.join("runtime-image")) {
-        Ok(_) => {
-            let image = fs::read_to_string(runtime.join("runtime-image")).map_err(|_| "hash_image_pin")?;
-            let image = image.strip_suffix('\n').ok_or("hash_image_pin")?.to_owned();
-            let digest = image.strip_prefix("ghcr.io/leopu00/jht@sha256:").ok_or("hash_image_pin")?;
-            if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return Err("hash_image_pin"); }
-            Some(image)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-        Err(_) => return Err("hash_image_pin"),
-    };
-    let args = vec![OsString::from("--verbose"), OsString::from("--dry-run"), OsString::from("--project-name"), OsString::from("jht"), OsString::from("--podman-path"), podman.into_os_string(), OsString::from("-f"), runtime.join("docker-compose.yml").into_os_string(), OsString::from("up"), OsString::from("-d"), OsString::from("--force-recreate"), OsString::from("jht")];
-    let mut environment = vec![("CONTAINER_CONNECTION", machine), ("PODMAN_COMPOSE_WARNING_LOGS", "false"), ("PATH", path_with_podman.as_str())];
-    if let Some(image) = image.as_deref() { environment.push(("JHT_IMAGE", image)); }
-    // The same environment the wrapper runs the compose in: see `wrapper_compose_environment`.
-    let host_environment = wrapper_compose_environment(host_env, inherited);
-    for (name, value) in &host_environment { environment.push((*name, value.as_str())); }
-    let (result, stderr) = run_program_keeping_stderr_with_environment(compose.to_str().ok_or("hash_tool_missing")?, args, None, timeout, runtime, &["CONTAINER_HOST", "CONTAINER_CONNECTION", "JHT_IMAGE"], &environment);
-    let planned = match result {
-        Ok(done) if done.success() => done,
-        Ok(_) => return Err("hash_dry_run_exit"),
-        Err("process_timeout") => return Err("hash_dry_run_timeout"),
-        Err(_) => return Err("hash_dry_run_not_started"),
-    };
-    let mut output = planned.stdout;
-    output.extend_from_slice(&stderr);
-    let output = std::str::from_utf8(&output).map_err(|_| "hash_plan_without_create")?;
-    let mut hash = None;
-    // podman-compose 1.6.0 hashes each service on its own: the plan of `jht` prints the create of its dependency first (with another hash); only the create of `jht` carries the hash its container is labelled with.
-    for line in output.lines().filter(|line| line.contains(" create --name=jht ")) { for (at, _) in line.match_indices("io.podman.compose.config-hash=") { let value = &line[at + "io.podman.compose.config-hash=".len()..]; let value: String = value.chars().take_while(|b| b.is_ascii_hexdigit()).collect(); if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) { return Err("hash_plan_ambiguous"); } match hash.as_deref() { None => hash = Some(value), Some(old) if old == value => {}, Some(_) => return Err("hash_plan_ambiguous") } } }
-    hash.ok_or("hash_plan_without_create")
-}
-
-/// A Windows path as the compose labels spell it, to compare with another: forward slashes as
-/// backslashes, no `\\?\` prefix, no trailing separator, and case ignored (the file system does).
-fn windows_path_key(path: &str) -> String {
-    let path = path.replace('/', "\\");
-    let path = path.strip_prefix("\\\\?\\").unwrap_or(&path);
-    // Unicode lower case, not ASCII: a profile name with accents is the same name in capitals.
-    path.trim_end_matches('\\').to_lowercase()
-}
-
-/// The Windows team's container. Its Compose provider is the runtime's own `docker-compose.exe`
-/// (Compose v2 over the Podman socket), which writes the `com.docker.compose.*` labels and none of
-/// `io.podman.compose.*`: the container is the one the runtime's two files started in the runtime
-/// directory. Asking for podman-compose's labels rejected every Windows container (G7).
-#[cfg_attr(not(windows), allow(dead_code))]
-fn windows_container_labels_are_attested(labels: &Value, runtime: &Path) -> bool {
-    if label(labels, "com.docker.compose.project") != Some("jht")
-        || label(labels, "com.docker.compose.service") != Some("jht")
-        || label(labels, "com.docker.compose.container-number") != Some("1")
-    {
-        return false;
-    }
-    let working_dir = label(labels, "com.docker.compose.project.working_dir").map(windows_path_key);
-    let listed: Vec<String> = label(labels, "com.docker.compose.project.config_files")
-        .map(|value| value.split(',').map(windows_path_key).collect())
-        .unwrap_or_default();
-    // The directory as the app names it, or as the system resolves it (a short 8.3 name or a link
-    // in the app's path against the long one in the labels): either way, one directory.
-    std::iter::once(runtime.to_path_buf()).chain(fs::canonicalize(runtime).ok()).any(|root| {
-        let files = [root.join("docker-compose.yml"), root.join("docker-compose.podman.yml")]
-            .map(|file| windows_path_key(&file.to_string_lossy()));
-        working_dir.as_deref() == Some(windows_path_key(&root.to_string_lossy()).as_str()) && listed == files
-    })
-}
-
-/// 64 lower-case hex digits after `ghcr.io/leopu00/jht@sha256:`: the only reference the runtime pins.
-fn is_pinned_image_reference(value: &str) -> bool {
-    value
-        .strip_prefix("ghcr.io/leopu00/jht@sha256:")
-        .is_some_and(|digest| digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
-}
-
-/// The image the container was made from is the runtime's pinned one: the digest in its
-/// `runtime-image`, which the manifest already attests. Without a pin file the runtime's default is
-/// a digest of the same repository.
-#[cfg_attr(not(windows), allow(dead_code))]
-fn windows_container_image_is_the_runtimes(image: &str, runtime: &Path) -> bool {
-    match fs::read_to_string(runtime.join("runtime-image")) {
-        Ok(pin) => pin.strip_suffix('\n').is_some_and(|pin| is_pinned_image_reference(pin) && pin == image),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => is_pinned_image_reference(image),
-        Err(_) => false,
-    }
-}
-
-/// `running|labels` as the engine's inspect prints it, plus `|image` where the image is asked for.
-#[cfg_attr(not(windows), allow(dead_code))]
-fn split_inspected(line: &str, with_image: bool) -> Option<(&str, &str, Option<&str>)> {
-    let (running, rest) = line.split_once('|')?;
-    if !with_image {
-        return Some((running, rest, None));
-    }
-    // the image is the last field: a label's text may hold a `|`, an image reference never does
-    let (labels, image) = rest.rsplit_once('|')?;
-    Some((running, labels, Some(image.trim())))
-}
-
-/// The first rule of the attestation the container's labels do not meet, in the fixed words of
-/// `runtime_log::ATTEST_REASONS`; `None` when they meet all of them.
-fn podman_container_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>, hash_known: bool) -> Option<&'static str> {
-    #[cfg(windows)]
-    {
-        let _ = (expected_config_hash, hash_known);
-        return (!windows_container_labels_are_attested(labels, runtime)).then_some("label_windows");
-    }
-    #[cfg(not(windows))]
-    podman_compose_label_refusal(labels, runtime, expected_config_hash, hash_known)
-}
-
-#[cfg(not(windows))]
-fn podman_compose_label_refusal(labels: &Value, runtime: &Path, expected_config_hash: Option<&str>, hash_known: bool) -> Option<&'static str> {
-    let runtime_text = runtime.to_string_lossy();
-    let systemd_unit = podman_systemd_unit();
-    if label(labels, "com.docker.compose.project") != Some("jht") || label(labels, "io.podman.compose.project") != Some("jht") {
-        return Some("label_project");
-    }
-    if label(labels, "com.docker.compose.service") != Some("jht") || label(labels, "io.podman.compose.service") != Some("jht") {
-        return Some("label_service");
-    }
-    if label(labels, "com.docker.compose.container-number") != Some("1") {
-        return Some("label_container_number");
-    }
-    if label(labels, "com.docker.compose.project.working_dir") != Some(runtime_text.as_ref()) {
-        return Some("label_working_dir");
-    }
-    if !label(labels, "io.podman.compose.config-hash").is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())) {
-        return Some("label_hash_form");
-    }
-    #[cfg(target_os = "macos")]
-    {
-        if label(labels, "com.docker.compose.project.config_files") != Some(runtime.join("docker-compose.yml").to_string_lossy().as_ref()) {
-            return Some("label_config_files");
-        }
-        if label(labels, "io.podman.compose.version") != Some("1.6.0") {
-            return Some("label_compose_version");
-        }
-        if label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str()) {
-            return Some("label_systemd_unit");
-        }
-        // With the hash not worked out (`hash_known` false) the other labels are still judged: a container that is
-        // visibly another one is said so, and only one that looks like the installed one waits for the hash.
-        return (hash_known && expected_config_hash != label(labels, "io.podman.compose.config-hash")).then_some("label_config_hash_differs");
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let _ = (expected_config_hash, hash_known);
-        let expected_files = format!("{}/docker-compose.yml,{}/docker-compose.podman-linux.yml", runtime_text, runtime_text);
-        if label(labels, "com.docker.compose.project.config_files") != Some(expected_files.as_str()) {
-            return Some("label_config_files");
-        }
-        if !label(labels, "io.podman.compose.version").is_some_and(|version| {
-            let mut parts = version.split('.');
-            matches!((parts.next(), parts.next()), (Some(major), Some(minor))
-                if major.parse::<u16>().is_ok_and(|major| major > 1)
-                || (major == "1" && minor.parse::<u16>().is_ok_and(|minor| minor >= 1)))
-        }) {
-            return Some("label_compose_version");
-        }
-        return (label(labels, "PODMAN_SYSTEMD_UNIT") != Some(systemd_unit.as_str())).then_some("label_systemd_unit");
-    }
-    #[cfg(not(unix))]
-    {
-        Some("label_windows")
-    }
-}
-
-/// The first thing that keeps a running `jht` container from being taken: the hash it has to carry could
-/// not be worked out (`expected` is the reason), or a label (or the image, on Windows) is not what the
-/// runtime writes. `None` when it is the one.
-fn attestation_refusal(expected: Option<&Result<String, &'static str>>, labels: &Value, runtime: &Path, image_is_the_runtimes: bool) -> Option<&'static str> {
-    match expected {
-        // The hash could not be worked out: the labels that need none are judged first, so a container that is visibly
-        // another one is said to be, and only one that looks like the installed one is left to the hash's reason.
-        Some(Err(reason)) => podman_container_label_refusal(labels, runtime, None, false).or(Some(*reason)),
-        _ => podman_container_label_refusal(labels, runtime, expected.and_then(|hash| hash.as_deref().ok()), true),
-    }
-    .or_else(|| (!image_is_the_runtimes).then_some("label_image"))
-}
-
-/// What is said when no container was taken: another one is up (it is not used), the check could not be
-/// made now (the page asks again, and waits as it does for a team that is starting), or none is up.
-fn container_not_found_code(refused: Option<&'static str>, unchecked: Option<&'static str>) -> &'static str {
-    match (refused, unchecked) {
-        (Some(_), _) => "local_container_not_attested",
-        (None, Some(_)) => "container_unavailable",
-        (None, None) => "local_team_not_running",
-    }
-}
-
-/// One and only one currently-running Compose service named `jht` is the chat target. On Podman the engine
-/// is asked ONCE for the containers of the fixed JHT project and service, with their state, labels and image as
-/// JSON (T191: the listing of ids and an `inspect` for each of the project's three containers took 4 to 5 s on a
-/// Windows computer; the one listing takes one engine call). On Docker the compose listing is read and each id
-/// inspected. Either way every candidate meets the same rules: `judge_candidate`.
-fn local_chat_container(
-    engine: &LocalChatEngine,
-    runtime: &Path,
-    timeout: Duration,
-) -> Result<String, &'static str> {
-    #[cfg(target_os = "macos")]
-    let expected_config_hash = engine.podman.then(|| mac_config_hash(runtime, timeout));
-    #[cfg(not(target_os = "macos"))]
-    let expected_config_hash: Option<Result<String, &'static str>> = None;
-    let candidates = if engine.podman {
-        listed_candidates(engine, timeout)?
-    } else {
-        inspected_candidates(engine, runtime, timeout)?
-    };
-    let mut found: Option<String> = None;
-    // Why a container that is running as `jht` was not taken: it is not the one installed, or the check could
-    // not be made (the hash it has to carry was not worked out) which is not the same thing.
-    let mut refused: Option<&'static str> = None;
-    let mut unchecked: Option<&'static str> = None;
-    for candidate in candidates {
-        // On Windows the image is part of the identity, and `inspect` is where it was always read from: a listing that
-        // did not carry it, or carried one that is not the runtime's, is settled by one inspect of this container (a
-        // listing that agrees costs nothing more).
-        let image = if needs_image_inspect(cfg!(windows), engine.podman, &candidate, runtime) {
-            inspected_image(engine, &candidate.id, timeout).or_else(|| candidate.image.clone())
-        } else {
-            candidate.image.clone()
-        };
-        match judge_candidate(engine, runtime, expected_config_hash.as_ref(), &candidate, image.as_deref()) {
-            Verdict::Skip => {}
-            Verdict::Unchecked(reason) => unchecked = Some(reason),
-            Verdict::Refused(reason) => refused = Some(reason),
-            Verdict::Take => {
-                if found.replace(candidate.id).is_some() {
-                    return Err("container_unavailable");
-                }
-            }
-        }
-    }
-    // Why there is none, said apart: the team is not up, what is up is not the one the app's runtime
-    // started (it is never used for the chat), or it could not be checked now (the page tries again).
-    if let Some(id) = found {
-        return Ok(id);
-    }
-    if let Some(reason) = refused.or(unchecked) {
-        note_attest_reason(reason);
-    }
-    Err(container_not_found_code(refused, unchecked))
-}
-
-/// A container the engine listed for the project: what the rules judge.
-struct Candidate {
-    id: String,
-    running: bool,
-    labels: Value,
-    /// Where the listing carries it (Podman's JSON does; the Docker path asks `inspect` for it on Windows only).
-    image: Option<String>,
-}
-
-impl Candidate {
-    fn service_is_jht(&self) -> bool {
-        label(&self.labels, "com.docker.compose.service") == Some("jht")
-    }
-}
-
-enum Verdict {
-    /// Not the chat's target (stopped, or another service).
-    Skip,
-    /// The chat's target.
-    Take,
-    /// Running as `jht` but not the installed one.
-    Refused(&'static str),
-    /// Running as `jht` but the check could not be made now.
-    Unchecked(&'static str),
-}
-
-/// Whether the image a container reports is accepted: only Windows asks, where the labels alone are not an identity.
-fn image_is_accepted(windows: bool, image: Option<&str>, runtime: &Path) -> bool {
-    !windows || image.is_some_and(|image| windows_container_image_is_the_runtimes(image, runtime))
-}
-
-/// Whether the listing's image is to be settled by an `inspect`: on Windows, for a Podman container that is running as
-/// `jht`, when the listing carried no image or one that is not the runtime's (the inspect is where it was always read from).
-fn needs_image_inspect(windows: bool, podman: bool, candidate: &Candidate, runtime: &Path) -> bool {
-    windows && podman && candidate.running && candidate.service_is_jht() && !image_is_accepted(windows, candidate.image.as_deref(), runtime)
-}
-
-/// The rules a container meets to be the chat's target, for the Podman listing and the Docker inspect alike:
-/// running, the `jht` service, and (on Podman) the labels and, on Windows, the image of the installed runtime.
-fn judge_candidate(
-    engine: &LocalChatEngine,
-    runtime: &Path,
-    expected_config_hash: Option<&Result<String, &'static str>>,
-    candidate: &Candidate,
-    image: Option<&str>,
-) -> Verdict {
-    if !candidate.running || !candidate.service_is_jht() {
-        return Verdict::Skip;
-    }
-    let image_is_the_runtimes = image_is_accepted(cfg!(windows), image, runtime);
-    if engine.podman {
-        if let Some(reason) = attestation_refusal(expected_config_hash, &candidate.labels, runtime, image_is_the_runtimes) {
-            return if attest_reason_may_pass(reason) { Verdict::Unchecked(reason) } else { Verdict::Refused(reason) };
-        }
-    }
-    Verdict::Take
-}
-
-/// The Podman listing of the project's `jht` service: one engine call. A listing the engine could not give (the
-/// machine is off, the connection is refused) is no container, as the listing of ids always was.
-fn listed_candidates(engine: &LocalChatEngine, timeout: Duration) -> Result<Vec<Candidate>, &'static str> {
-    let listed = run_local_engine(engine, local_listing_args(), None, timeout)?;
-    if !listed.success() {
-        return Ok(Vec::new());
-    }
-    parse_listing(&listed.stdout)
-}
-
-/// The arguments of the one listing: every container (stopped ones too, so a stopped `jht` is told from none) that
-/// carries the project's and the service's labels, whole ids, as JSON. No quote, no space in an argument.
-fn local_listing_args() -> Vec<OsString> {
-    [
-        "ps",
-        "-a",
-        "--no-trunc",
-        "--filter",
-        "label=com.docker.compose.project=jht",
-        "--filter",
-        "label=com.docker.compose.service=jht",
-        "--format",
-        "json",
-    ]
-    .map(OsString::from)
-    .to_vec()
-}
-
-/// Podman's `ps --format json`: an array of objects with `Id`, `State`, `Labels` and `Image`. Anything else is an
-/// engine the app does not know how to read: no container is taken from it.
-fn parse_listing(stdout: &[u8]) -> Result<Vec<Candidate>, &'static str> {
-    let text = std::str::from_utf8(stdout).map_err(|_| "container_unavailable")?.trim();
-    if text.is_empty() {
-        return Ok(Vec::new());
-    }
-    let Ok(Value::Array(rows)) = serde_json::from_str::<Value>(text) else {
-        return Err("container_unavailable");
-    };
-    if rows.len() > 16 {
-        return Err("container_unavailable");
-    }
-    let mut candidates = Vec::with_capacity(rows.len());
-    for row in rows {
-        let Some(id) = row.get("Id").and_then(Value::as_str).filter(|id| container_id(id)) else {
-            return Err("container_unavailable");
-        };
-        candidates.push(Candidate {
-            id: id.to_owned(),
-            running: row.get("State").and_then(Value::as_str).is_some_and(|state| state == "running"),
-            labels: row.get("Labels").filter(|labels| labels.is_object()).cloned().unwrap_or(Value::Null),
-            image: row.get("Image").and_then(Value::as_str).map(str::trim).filter(|image| !image.is_empty()).map(str::to_owned),
-        });
-    }
-    Ok(candidates)
-}
-
-/// The Docker way: the compose listing of ids, then an `inspect` of each for its state, labels and, on Windows, image.
-fn inspected_candidates(engine: &LocalChatEngine, runtime: &Path, timeout: Duration) -> Result<Vec<Candidate>, &'static str> {
-    let listed = run_local_engine(engine, local_compose_args(engine, runtime), None, timeout)?;
-    let ids: Vec<&str> = std::str::from_utf8(&listed.stdout)
-        .map_err(|_| "container_unavailable")?
-        .lines()
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .collect();
-    if ids.len() > 16 || ids.iter().any(|id| !container_id(id)) {
-        return Err("container_unavailable");
-    }
-    let mut candidates = Vec::new();
-    for id in ids {
-        let inspected = run_local_engine(
-            engine,
-            [
-                "inspect",
-                "--type",
-                "container",
-                id,
-                "--format",
-                // On Windows the image too: the labels alone are not an identity there.
-                if cfg!(windows) { "{{.State.Running}}|{{json .Config.Labels}}|{{.Config.Image}}" } else { "{{.State.Running}}|{{json .Config.Labels}}" },
-            ],
-            None,
-            timeout,
-        )?;
-        if !inspected.success() {
-            continue;
-        }
-        let Ok(line) = std::str::from_utf8(&inspected.stdout).map(str::trim) else {
-            continue;
-        };
-        let Some((running, labels, image)) = split_inspected(line, cfg!(windows)) else {
-            continue;
-        };
-        let Ok(labels) = serde_json::from_str::<Value>(labels) else {
-            continue;
-        };
-        candidates.push(Candidate { id: id.to_owned(), running: running == "true", labels, image: image.filter(|image| !image.is_empty()).map(str::to_owned) });
-    }
-    Ok(candidates)
-}
-
-/// The image of a container, from one `inspect`: for a listing that did not carry it, on Windows.
-fn inspected_image(engine: &LocalChatEngine, id: &str, timeout: Duration) -> Option<String> {
-    let inspected = run_local_engine(engine, ["inspect", "--type", "container", id, "--format", "{{.Config.Image}}"], None, timeout).ok()?;
-    if !inspected.success() {
-        return None;
-    }
-    let image = std::str::from_utf8(&inspected.stdout).ok()?.trim();
-    (!image.is_empty()).then(|| image.to_owned())
-}
-
-fn local_chat_exec_args(
-    container: &str,
-    operation: &ChatOperation<'_>,
-) -> Result<Vec<OsString>, &'static str> {
-    if !container_id(container) {
-        return Err("container_unavailable");
-    }
-    let mut args = vec![
-        OsString::from("exec"),
-        OsString::from("-i"),
-        OsString::from(container),
-        OsString::from("python3"),
-        OsString::from("-I"),
-        OsString::from("/app/shared/skills/agent_chat.py"),
-    ];
-    args.extend(
-        existing_team_runtime::chat_arguments(operation)?
-            .into_iter()
-            .map(OsString::from),
-    );
-    Ok(args)
-}
-
-/// What the wrapper's `python` action ran in the container: the first line of standard input is the hex of the
-/// program, which is read and executed. No double quote in it (Windows PowerShell 5.1 dropped them in a native argument).
-const LOCAL_PYTHON_LAUNCH: &str = "import sys;exec(bytes.fromhex(sys.stdin.buffer.readline().decode()).decode())";
-
-/// What the wrapper's `send` action ran: the message on standard input to the container's tmux helper, with the session as
-/// `$1`. The empty IFS and `set -f` keep the message one word and its `*` and `?` from matching file names, as the quotes
-/// did; there are none, so the line reaches the engine the same through every shell.
-const LOCAL_DELIVERY_SCRIPT: &str = "IFS=; set -f; msg=$(cat); exec jht-tmux-send $1 $msg";
-
-/// The probe, the Python scripts and the delivery of a message on this computer's team, without the wrapper: the
-/// same attested container the chat finds (kept for a few seconds, shared with the chat's reads) and the program
-/// the wrapper ran in it. The probe is the finding: a container that is there answers «true».
-fn run_local_native(
-    wrapper: &Path,
-    runtime: &Path,
-    operation: &RemoteOperation<'_>,
-    input: Option<&[u8]>,
-    timeout: Duration,
-) -> Result<ProcessResult, &'static str> {
-    if let RemoteOperation::Delivery(session) = operation {
-        if !existing_team_runtime::chat_session_ok(session) {
-            return Err("invalid_agent");
-        }
-    }
-    let team = local_chat_team(wrapper, runtime, timeout)?;
-    let result = match operation {
-        RemoteOperation::Probe => return Ok(ProcessResult { code: 0, stdout: b"true\n".to_vec() }),
-        RemoteOperation::Python => team.exec(&["python3", "-c", LOCAL_PYTHON_LAUNCH], input, timeout),
-        RemoteOperation::Delivery(session) => team.exec(&["sh", "-c", LOCAL_DELIVERY_SCRIPT, "sh", *session], input, timeout),
-        RemoteOperation::Chat(_) => return Err("invalid_request"),
-    };
-    // the engine could not run the exec, or says the container is gone (125): the next call finds it again. The delivery's
-    // own codes (2 to 5) and a timeout are not a lost container.
-    let lost = match &result {
-        Err(code) => *code != "process_timeout",
-        Ok(done) => done.code == 125,
-    };
-    if lost {
-        forget_local_chat_team(wrapper, runtime);
-    }
-    result
-}
-
-/// The local implementation of read/send/answer/enter executes no wrapper action. Its protected
-/// runtime, selected engine and single running container are verified in Rust before native exec.
-fn run_local_chat(
-    wrapper: &Path,
-    runtime: &Path,
-    operation: ChatOperation<'_>,
-    input: Option<&[u8]>,
-    timeout: Duration,
-) -> Result<ProcessResult, &'static str> {
-    let team = local_chat_team(wrapper, runtime, timeout)?;
-    let result = run_local_engine(
-        &team.engine,
-        local_chat_exec_args(&team.container, &operation)?,
-        input,
-        timeout,
-    );
-    if engine_lost_the_container(&result) {
-        forget_local_chat_team(wrapper, runtime);
-    }
-    result
-}
-
-/// The engine could not run the exec (not a timeout), or answered that the container is gone (exit 125, Podman's
-/// "no such container"; also an exit the chat script never uses): the container found a moment ago
-/// is no longer the one, so the next call finds it again instead of failing for five more seconds.
-fn engine_lost_the_container(result: &Result<ProcessResult, &'static str>) -> bool {
-    match result {
-        // A slow engine is not a lost container: emptying the kept one at every timeout would make each call pay the lookup.
-        Err(code) => *code != "process_timeout",
-        Ok(done) => done.code != 0 && (done.code == 125 || chat_failure(done.code, "").is_empty()),
-    }
-}
-
-/// How long the container found for one chat call serves the next ones.
-const LOCAL_CHAT_TEAM_KEPT: Duration = Duration::from_secs(5);
-
-static LOCAL_CHAT_TEAM: crate::team_control::ResolveCache<AttestedLocalTeam> = crate::team_control::ResolveCache::new();
-
-/// The attested container of this computer's team for a chat call. The page reads an agent's chat
-/// several times a second and sends from it: finding the container is the runtime check plus two
-/// engine calls (5 to 10 s on Windows), so one found a moment ago is reused, and a lookup that
-/// fails keeps nothing.
-fn local_chat_team(wrapper: &Path, runtime: &Path, timeout: Duration) -> Result<Arc<AttestedLocalTeam>, &'static str> {
-    LOCAL_CHAT_TEAM.get(&local_chat_team_key(wrapper, runtime), Instant::now(), LOCAL_CHAT_TEAM_KEPT, true, || AttestedLocalTeam::resolve(wrapper, runtime, timeout))
-}
-
-fn local_chat_team_key(wrapper: &Path, runtime: &Path) -> String {
-    format!("{}\n{}", wrapper.display(), runtime.display())
-}
-
-/// Drops the kept container: a lookup that fails keeps nothing, so asking for a fresh one that fails
-/// empties the slot.
-fn forget_local_chat_team(wrapper: &Path, runtime: &Path) {
-    let _ = LOCAL_CHAT_TEAM.get(&local_chat_team_key(wrapper, runtime), Instant::now(), LOCAL_CHAT_TEAM_KEPT, false, || Err("container_unavailable"));
-}
-
-/// The attested local runtime directory, for the commands that run in the team's container without
-/// the wrapper (team_control).
-pub(crate) fn local_runtime_path(app: &tauri::AppHandle) -> Result<PathBuf, &'static str> {
-    local_runtime_dir(app).map_err(|_| "runtime_missing")
-}
-
-/// The local team's container as the chat finds it: the runtime bundle attested, the private engine
-/// selected, and the one running `jht` service whose labels match. Resolved once; every command
-/// then runs in it as `exec <id> <argv>`, with no shell and no wrapper in between.
-pub(crate) struct AttestedLocalTeam {
-    engine: LocalChatEngine,
-    container: String,
-}
-
-impl AttestedLocalTeam {
-    pub(crate) fn resolve(wrapper: &Path, runtime: &Path, timeout: Duration) -> Result<Self, &'static str> {
-        if !local_chat_runtime_valid(wrapper, runtime) {
-            return Err("runtime_missing");
-        }
-        let engine = local_chat_engine(runtime)?;
-        let container = local_chat_container(&engine, runtime, timeout)?;
-        Ok(Self { engine, container })
-    }
-
-    /// The id of the container this team was attested as.
-    pub(crate) fn container_id(&self) -> &str {
-        &self.container
-    }
-
-    /// The container found again from the runtime and still this one (a second attestation, once, after a long exec was opened).
-    pub(crate) fn is_still_the_container(&self, runtime: &Path, timeout: Duration) -> bool {
-        local_chat_container(&self.engine, runtime, timeout).is_ok_and(|id| id == self.container)
-    }
-
-    /// `exec -i <container> <argv>` left running, with both pipes: for the long exec of the state stream. Its
-    /// standard error goes nowhere; the caller closes it. Same engine, same environment as every other exec here.
-    pub(crate) fn spawn_exec(&self, argv: &[&str]) -> Result<std::process::Child, &'static str> {
-        let args = attested_exec_args(&self.container, argv, true)?;
-        let program = self.engine.program.to_str().ok_or("runtime_missing")?;
-        let mut command = std::process::Command::new(program);
-        command.args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
-        for name in local_engine_removed_environment(&self.engine) {
-            command.env_remove(name);
-        }
-        crate::runtime_host::hide_console(&mut command);
-        crate::runtime_host::spawn_retrying_busy(&mut command).map_err(|_| "process_start_failed")
-    }
-
-    /// `exec [-i] <container> <argv>`: `-i` only when there is stdin to give.
-    pub(crate) fn exec(&self, argv: &[&str], input: Option<&[u8]>, timeout: Duration) -> Result<ProcessResult, &'static str> {
-        run_local_engine(&self.engine, attested_exec_args(&self.container, argv, input.is_some())?, input, timeout)
-    }
-}
-
-fn attested_exec_args(container: &str, argv: &[&str], with_input: bool) -> Result<Vec<OsString>, &'static str> {
-    if !container_id(container) || argv.is_empty() {
-        return Err("container_unavailable");
-    }
-    let mut args = vec![OsString::from("exec")];
-    if with_input {
-        args.push(OsString::from("-i"));
-    }
-    args.push(OsString::from(container));
-    args.extend(argv.iter().map(OsString::from));
-    Ok(args)
-}
-
-fn run_connection(
-    connection: &Connection,
-    // the wrapper action that named the operation before the local runtime ran it natively: no local operation runs it now
-    _local_args: &[&str],
-    remote_operation: RemoteOperation<'_>,
-    input: Option<&[u8]>,
-    timeout: Duration,
-) -> Result<ProcessResult, DirectChatError> {
-    match &connection.validated {
-        ValidatedHost::Local => {
-            crate::account_scope::verify_local_runtime_owner(
-                connection
-                    .local_owner_marker
-                    .as_deref()
-                    .ok_or_else(|| failure("local_account_owner_unavailable"))?,
-                &connection.scope,
-            )
-            .map_err(failure)?;
-            match remote_operation {
-                    RemoteOperation::Chat(operation) => {
-                        let runtime = connection
-                            .local_runtime
-                            .as_deref()
-                            .ok_or_else(|| failure("runtime_missing"))?;
-                        let wrapper = connection
-                            .local_wrapper
-                            .as_deref()
-                            .ok_or_else(|| failure("runtime_missing"))?;
-                        // The hot read goes over the state stream when it is open (and only the read: a send, an
-                        // answer or an Enter is exec by exec, and tells the stream to drop what it kept).
-                        let stream = connection.app.as_ref().map(|app| crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime });
-                        if let (Some(stream), ChatOperation::Read { agent, cursor }) = (&stream, &operation) {
-                            if let Some(done) = crate::state_stream::read_local(stream, &crate::state_stream::StreamRead::ChatRead { agent, cursor: *cursor }) {
-                                return Ok(done);
-                            }
-                        }
-                        let writes = !matches!(operation, ChatOperation::Read { .. });
-                        let done = run_local_chat(wrapper, runtime, operation, input, timeout).map_err(failure);
-                        if let (true, Some(stream)) = (writes, &stream) {
-                            crate::state_stream::invalidate_local(stream);
-                        }
-                        done
-                    }
-                // The probe, the Python scripts and the delivery of a message: no wrapper (a PowerShell on Windows, seconds
-                // each) in between. The runtime is attested in Rust and the container found as the chat finds it
-                // (and kept for the chat's next calls); the program run in it is the one the wrapper ran.
-                RemoteOperation::Probe | RemoteOperation::Python | RemoteOperation::Delivery(_) => {
-                    let runtime = connection.local_runtime.as_deref().ok_or_else(|| failure("runtime_missing"))?;
-                    let wrapper = connection.local_wrapper.as_deref().ok_or_else(|| failure("runtime_missing"))?;
-                    run_local_native(wrapper, runtime, &remote_operation, input, timeout).map_err(failure)
-                }
-            }
-        }
-        ValidatedHost::Vps { .. } => {
-            let selected = connection.app.as_ref().ok_or_else(|| failure("existing_team_runtime_target_changed"))
-                .and_then(|app| existing_team_runtime::selected_or_own(app, &connection.scope, &connection.host).map_err(failure))?;
-            if selected.as_ref().map(|target| (&target.team_id, &target.runtime)) != connection.runtime.as_ref().map(|target| (&target.team_id, &target.runtime)) {
-                return Err(failure("existing_team_runtime_target_changed"));
-            }
-            let command = match (selected.as_ref(), remote_operation) {
-                (Some(target), RemoteOperation::Probe) => existing_team_runtime::command(&target.runtime, "\"$JHT_ENGINE\" inspect --type container --format '{{.State.Running}}' \"$JHT_CID\"").map_err(failure)?,
-                (Some(target), RemoteOperation::Python) => existing_team_runtime::python_command(&target.runtime).map_err(failure)?,
-                (Some(target), RemoteOperation::Delivery(session)) => existing_team_runtime::delivery_command(&target.runtime, session).map_err(failure)?,
-                (Some(target), RemoteOperation::Chat(operation)) => existing_team_runtime::chat_command(&target.runtime, &operation).map_err(failure)?,
-                (None, RemoteOperation::Chat(operation)) => remote_wrapper_command(
-                    &existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?,
-                    operation.needs_answer_actions(),
-                ),
-                (None, RemoteOperation::Probe) => REMOTE_CONTAINER_PROBE.to_owned(),
-                (None, RemoteOperation::Python) => REMOTE_PYTHON_STDIN.to_owned(),
-                (None, RemoteOperation::Delivery(session)) => delivery_command(session).ok_or_else(|| failure("invalid_agent"))?,
-            };
-            match connection.link {
-                VpsLink::Master => run_ssh_command(&connection.validated, &command, input, timeout, connection.control_path.as_deref()),
-                VpsLink::PerCommand => run_ssh_command_without_pipes(&connection.validated, &command, input, timeout),
-            }
-            .map_err(failure)
-        }
-    }
-}
-
-/// The probe, timed: the answer that is not "ready", and a "ready" that took long, are written to the runtime log.
-fn probe(connection: &Connection) -> DirectChatStatus {
-    let started = Instant::now();
-    let answer = probe_unlogged(connection);
-    let outcome = if answer.state == "ready" { Ok(()) } else { Err(answer.code.unwrap_or("container_unavailable")) };
-    log_chat_call(connection.app.as_ref(), "probe", outcome, started.elapsed());
-    answer
-}
-
-fn probe_unlogged(connection: &Connection) -> DirectChatStatus {
-    if let (ValidatedHost::Vps { .. }, Some(path)) =
-        (&connection.validated, &connection.control_path)
-    {
-        if !check_tunnel(&connection.validated, path) {
-            return status("error", Some("tunnel_unavailable"));
-        }
-    }
-    let result = run_connection(
-        connection,
-        &["desktop-chat", "probe"],
-        RemoteOperation::Probe,
-        None,
-        CONNECT_TIMEOUT,
-    );
-    match result {
-        Ok(result) if result.success() && result.stdout_text().trim() == "true" => {
-            ready_for(connection)
-        }
-        // The host answered and there is no container for the team: say which kind of «no container» it is.
-        Ok(_) => status("error", Some(probe_no_container_code(&connection.validated))),
-        // This computer's team, found natively: the code says what it is, not only that it is not there.
-        Err(error) if matches!(connection.validated, ValidatedHost::Local) && matches!(error.code, "local_team_not_running" | "local_container_not_attested") => {
-            status("error", Some(error.code))
-        }
-        // The host could not be asked at all (runtime missing, another account's, a timeout).
-        Err(_) => status("error", Some("container_unavailable")),
-    }
-}
-
-/// What a probe that found no container for the team says. On this computer the team is not running: the
-/// chat's own code, which the pages answer with «Start the team». On a VPS the container is unavailable (the
-/// machine may be off or the team not installed there): nothing the app starts from here.
-fn probe_no_container_code(host: &ValidatedHost) -> &'static str {
-    match host {
-        ValidatedHost::Local => "local_team_not_running",
-        ValidatedHost::Vps { .. } => "container_unavailable",
-    }
-}
 
 fn connect_impl(
     app: &tauri::AppHandle,
@@ -1677,196 +579,6 @@ pub(crate) async fn direct_chat_reconnect(
     connect_scoped(app, &state, scopes.inner().clone(), expected, host).await
 }
 
-fn hex_encode(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(HEX[(byte >> 4) as usize] as char);
-        output.push(HEX[(byte & 15) as usize] as char);
-    }
-    output
-}
-
-fn python_input(script: &str, request: &Value) -> Result<Zeroizing<Vec<u8>>, DirectChatError> {
-    let mut input = Zeroizing::new(hex_encode(script.as_bytes()).into_bytes());
-    input.push(b'\n');
-    input.extend(serde_json::to_vec(request).map_err(|_| failure("request_invalid"))?);
-    input.push(b'\n');
-    Ok(input)
-}
-
-fn run_python(
-    connection: &Connection,
-    script: &str,
-    request: &Value,
-    timeout: Duration,
-) -> Result<ProcessResult, DirectChatError> {
-    // The profile bar's read, the team's first-start read and the statistics' read go over the state stream when it is open: the same script, as a file of the image.
-    if let (ValidatedHost::Local, Some(app), Some(wrapper), Some(runtime)) = (&connection.validated, connection.app.as_ref(), connection.local_wrapper.as_deref(), connection.local_runtime.as_deref()) {
-        let plain = request == &json!({"op": "read"});
-        let hot = if plain && script == crate::profile_progress::PROFILE_PROGRESS_PY {
-            Some(crate::state_stream::StreamRead::ProfileProgress)
-        } else if plain && script == crate::team_start::TEAM_START_PY {
-            Some(crate::state_stream::StreamRead::TeamStart)
-        } else if request == &json!({"op": "read", "nights": 30}) && script == crate::work_stats::WORK_STATS_PY {
-            Some(crate::state_stream::StreamRead::WorkStats)
-        } else {
-            None
-        };
-        if let Some(hot) = hot {
-            let context = crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime };
-            if let Some(done) = crate::state_stream::read_local(&context, &hot) {
-                return Ok(done);
-            }
-        }
-    }
-    let mut input = python_input(script, request)?;
-    let result = run_connection(
-        connection,
-        &["desktop-chat", "python"],
-        RemoteOperation::Python,
-        Some(&input),
-        timeout,
-    );
-    input.zeroize();
-    // clearing the statistics changes what the stream kept of them: it is dropped now
-    if script == crate::work_stats::WORK_STATS_PY && request == &json!({"op": "clear"}) {
-        if let (ValidatedHost::Local, Some(app), Some(wrapper), Some(runtime)) = (&connection.validated, connection.app.as_ref(), connection.local_wrapper.as_deref(), connection.local_runtime.as_deref()) {
-            crate::state_stream::invalidate_local(&crate::state_stream::LocalContext { app, scope: &connection.scope, wrapper, runtime });
-        }
-    }
-    result
-}
-
-/// The host's wrapper, run on a VPS that was never pinned: the checks of `REMOTE_PYTHON_STDIN`
-/// (the wrapper is there, executable, not a link, and speaks the chat protocol), then the wrapper
-/// with the arguments given. Every one was checked by the chat's argument list, and is quoted.
-fn remote_wrapper_command(arguments: &[String], answer_actions: bool) -> String {
-    let checks = REMOTE_PYTHON_STDIN.strip_suffix("desktop-chat python").unwrap_or(REMOTE_PYTHON_STDIN);
-    let checks = checks.strip_suffix(r#"exec "$JHT_BIN" "#).unwrap_or(checks);
-    let quoted: Vec<String> = arguments.iter().map(|argument| format!("'{argument}'")).collect();
-    // A wrapper without the chat marker does not know the actions: 64 says exactly that, and only 64
-    // sends the caller back to the older path. Any other exit (2 included, which python3 gives when the
-    // image has no agent_chat.py) is the script's, and is told as such. Answer and Enter came later:
-    // they need a marker of their own, and have no older path.
-    let answer = if answer_actions {
-        format!(r#"grep -Fqx 'JHT_DESKTOP_CHAT_ANSWER=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; "#)
-    } else {
-        String::new()
-    };
-    // An instance of a numbered role (`analista-2`) came later still: it needs its own marker. Without it the
-    // caller takes the older path, which does not know instances and says «update the team».
-    let instances = if arguments.iter().any(|argument| existing_team_runtime::chat_instance(argument).is_some()) {
-        format!(r#"grep -Fqx 'JHT_DESKTOP_CHAT_INSTANCES=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; "#)
-    } else {
-        String::new()
-    };
-    format!(r#"{checks}grep -Fqx 'JHT_DESKTOP_CHAT_FIXED=1' "$JHT_BIN" || exit {UNKNOWN_ACTION}; {answer}{instances}exec "$JHT_BIN" {}"#, quoted.join(" "))
-}
-
-/// The exit that says «the host's wrapper does not have the chat actions».
-const UNKNOWN_ACTION: i32 = 64;
-
-/// A pinned team's chat goes through the fixed script of the container. A local team reaches that
-/// same script directly from Rust; only an unpinned VPS goes through its host wrapper.
-fn uses_pinned_chat(connection: &Connection) -> bool {
-    matches!(connection.validated, ValidatedHost::Vps { .. }) && connection.runtime.is_some()
-}
-
-/// What the script (or the link under it) said, as a code of the error catalog. 2 is python3's
-/// answer for a missing file: an image older than this chat. 70 is the pinned container no longer
-/// being the one that was confirmed. 255 is ssh's own: the link is gone.
-fn chat_failure(code: i32, default: &'static str) -> &'static str {
-    match code {
-        2 => "chat_runtime_outdated",
-        70 => "existing_team_runtime_target_changed",
-        // The agent's terminal is not at its prompt (a menu, a sign-in, a permission question, text
-        // already typed): nothing was written, and the text was never typed over it.
-        119 => "agent_not_at_prompt",
-        120 => "invalid_request",
-        121 => "team_not_running",
-        122 => "agent_not_running",
-        123 => "agent_unavailable",
-        124 => "agent_busy",
-        125 => "agent_stuck",
-        126 => "send_failed",
-        127 => "read_failed",
-        128 => "persist_failed",
-        // The image has no fence for the user's words: older than the chat, the same «update the team».
-        129 => "chat_runtime_outdated",
-        // The agent is at an otherwise ready prompt, but has a draft. The transport left both
-        // that draft and the user's message untouched.
-        130 => "composer_has_text",
-        // An answer the team did not take: the question is no longer open (answered, expired), an
-        // option it does not have or words it does not take, a question it does not know, or a write
-        // that failed. The page has a sentence for each.
-        // The image has no questions to answer (no agent_questions, no database): update the team.
-        114 => "chat_runtime_outdated",
-        115 => "answer_failed",
-        116 => "not_found",
-        117 => "invalid_choice",
-        118 => "question_closed",
-        255 => "tunnel_unavailable",
-        _ => default,
-    }
-}
-
-/// Chat without a pinned container. For a local runtime `run_connection` executes the container
-/// script directly; for an unpinned VPS it uses the host wrapper. `None` is only the VPS wrapper's
-/// exit 64: it has no chat marker, so the caller keeps the older path while app and VPS update apart.
-fn run_wrapper_chat(
-    connection: &Connection,
-    operation: ChatOperation<'_>,
-    input: Option<&[u8]>,
-    timeout: Duration,
-    default: &'static str,
-) -> Result<Option<ProcessResult>, DirectChatError> {
-    let arguments = existing_team_runtime::chat_wrapper_arguments(&operation).map_err(failure)?;
-    let references: Vec<&str> = arguments.iter().map(String::as_str).collect();
-    let result = run_connection(
-        connection,
-        &references,
-        RemoteOperation::Chat(operation),
-        input,
-        timeout,
-    )?;
-    wrapper_outcome(
-        result,
-        default,
-        matches!(&connection.validated, ValidatedHost::Local),
-    )
-}
-
-/// What the wrapper's exit says: done, «this wrapper has no chat actions» (64, and only 64), or a
-/// failure of the script behind it. On this computer the four actions bypass that wrapper; a 2 or
-/// 64 therefore says the local runtime cannot provide this chat, never that the team is old.
-fn wrapper_outcome(
-    result: ProcessResult,
-    default: &'static str,
-    local: bool,
-) -> Result<Option<ProcessResult>, DirectChatError> {
-    match result.code {
-        0 => Ok(Some(result)),
-        UNKNOWN_ACTION if !local => Ok(None),
-        2 | UNKNOWN_ACTION if local => Err(failure("local_chat_wrapper_outdated")),
-        code => Err(failure(chat_failure(code, default))),
-    }
-}
-
-fn run_chat(
-    connection: &Connection,
-    operation: ChatOperation<'_>,
-    input: Option<&[u8]>,
-    timeout: Duration,
-    default: &'static str,
-) -> Result<ProcessResult, DirectChatError> {
-    let result = run_connection(connection, &[], RemoteOperation::Chat(operation), input, timeout)?;
-    if result.success() {
-        Ok(result)
-    } else {
-        Err(failure(chat_failure(result.code, default)))
-    }
-}
 
 pub(crate) fn window_may_write(label: &str) -> bool {
     label == "main"
@@ -3397,7 +2109,7 @@ mod tests {
             serde_json::json!({"state": "ready"})
         );
         // the status of a ready connection is this one
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs")).split("mod tests {").next().unwrap();
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs")).split("mod tests {").next().unwrap();
         assert!(source.contains("fn ready_for(connection: &Connection) -> DirectChatStatus {\n    ready_status(&connection.validated, connection.link)\n}"));
     }
 
@@ -3437,7 +2149,7 @@ mod tests {
 
     #[test]
     fn only_the_per_command_link_to_a_vps_reads_small() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs")).split("mod tests {").next().unwrap();
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs")).split("mod tests {").next().unwrap();
         let read = source.split("pub(crate) async fn direct_chat_read(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(read.contains("if connection.link == VpsLink::PerCommand && matches!(connection.validated, ValidatedHost::Vps { .. }) {\n                return small_read(cursor.as_deref(), &mut |cursor| read_page(connection, &agent_id, cursor));"));
         assert!(read.contains("read_page(connection, &agent_id, cursor.as_deref())"), "every other link reads as before");
@@ -4659,7 +3371,7 @@ mod tests {
 
     #[test]
     fn the_local_operations_that_ask_the_container_no_longer_run_the_wrapper() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         let local = source.split("ValidatedHost::Local => {\n            crate::account_scope::verify_local_runtime_owner(").nth(1).unwrap().split("ValidatedHost::Vps { .. } => {").next().unwrap();
         assert!(!local.contains("run_verified_local_wrapper"), "the local branch of run_connection starts the wrapper again");
         assert!(local.contains("run_local_native("));
@@ -5511,7 +4223,7 @@ mod tests {
         };
         assert_eq!(crate::direct_chat::probe_no_container_code(&vps), "container_unavailable");
         // a host that could not be asked at all stays «unavailable», whichever it is
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         let body = source.split("fn probe_unlogged(connection: &Connection)").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(body.contains("Err(_) => status(\"error\", Some(\"container_unavailable\"))"));
         assert!(body.contains("tunnel_unavailable"));
@@ -5844,7 +4556,7 @@ mod assistance_registration_tests {
 
     #[test]
     fn the_team_language_commands_are_the_app_windows_and_the_write_goes_through_the_one_gate() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         let set = source.split("pub(crate) async fn direct_chat_team_language_set(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(set.contains("!window_may_write(window.label())"), "only the app's own window may write the language");
         // the two ways of writing (over the English only, or the person's own choice), and nothing else
@@ -5963,7 +4675,7 @@ mod attachment_command_tests {
 
     #[test]
     fn the_command_checks_before_it_opens_the_window_and_tells_the_assistant_only_what_the_team_sees() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         let command = source
             .split("pub(crate) async fn direct_chat_attach(")
             .nth(1)
@@ -6060,7 +4772,7 @@ mod chat_call_log_tests {
 
     #[test]
     fn every_call_of_the_chat_ends_in_the_log() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         for (name, call) in [
             ("pub(crate) async fn direct_chat_read(", "\"read\""),
             ("pub(crate) async fn direct_chat_send(", "\"send\""),
@@ -6145,7 +4857,7 @@ mod probe_memo_tests {
 
     #[test]
     fn the_status_of_a_connection_goes_through_the_memo_and_every_change_of_the_connection_drops_it() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         let body = source.split("fn status_for_scope(").nth(1).unwrap().split("\n}\n").next().unwrap();
         assert!(body.contains("status_kept_or_probed("), "{body}");
         assert!(!body.contains("Ok(probe(connection))"));
@@ -6224,7 +4936,7 @@ mod connection_read_tests {
     #[cfg(unix)]
     #[test]
     fn the_reads_that_ran_a_process_under_the_lock_no_longer_do() {
-        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat.rs"));
+        let source = concat!(include_str!("direct_chat/scripts.rs"), include_str!("direct_chat/state.rs"), include_str!("direct_chat/wire.rs"), include_str!("direct_chat/host_store.rs"), include_str!("direct_chat/ssh_link.rs"), include_str!("direct_chat/local_engine.rs"), include_str!("direct_chat/runtime_integrity.rs"), include_str!("direct_chat/container_attestation.rs"), include_str!("direct_chat/container_discovery.rs"), include_str!("direct_chat/local_exec.rs"), include_str!("direct_chat/transport.rs"), include_str!("direct_chat.rs"));
         // the read of a page, the scripts' read and the probe go through the release; the sends keep their serial lock
         for (place, needle) in [
             ("pub(crate) async fn direct_chat_read(", "with_connection_read("),

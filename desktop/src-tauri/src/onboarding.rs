@@ -10332,6 +10332,12 @@ mod existing_team_assistant_tests {
             ("direct_chat/wire", include_str!("direct_chat/wire.rs")),
             ("direct_chat/host_store", include_str!("direct_chat/host_store.rs")),
             ("direct_chat/ssh_link", include_str!("direct_chat/ssh_link.rs")),
+            ("direct_chat/local_engine", include_str!("direct_chat/local_engine.rs")),
+            ("direct_chat/runtime_integrity", include_str!("direct_chat/runtime_integrity.rs")),
+            ("direct_chat/container_attestation", include_str!("direct_chat/container_attestation.rs")),
+            ("direct_chat/container_discovery", include_str!("direct_chat/container_discovery.rs")),
+            ("direct_chat/local_exec", include_str!("direct_chat/local_exec.rs")),
+            ("direct_chat/transport", include_str!("direct_chat/transport.rs")),
             ("runtime_host", include_str!("runtime_host.rs")),
             ("lib", include_str!("lib.rs").split("generate_handler").next().unwrap()),
         ] {
