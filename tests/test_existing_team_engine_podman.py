@@ -26,7 +26,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "desktop" / "src-tauri" / "src"
-RUNTIME = (SRC / "existing_team_runtime.rs").read_text(encoding="utf-8")
+RUNTIME = (SRC / "existing_team_runtime" / "runtime_commands.rs").read_text(encoding="utf-8")
 REGISTER = (SRC / "existing_team_register.rs").read_text(encoding="utf-8")
 
 REPO = "ghcr.io/leopu00/jht"
@@ -165,8 +165,13 @@ def test_the_discovery_and_the_commands_choose_the_engine_the_same_way():
     assert ENGINE.replace("{exit}", "71") in DISCOVERY
     assert "{engine}" in TEMPLATE and "engine = engine_selection(70)" in RUNTIME
     # nothing of the VPS view names the engine by hand any more, but the Docker branch of the checks
-    for source in (RUNTIME, REGISTER, (SRC / "existing_team_judgement.rs").read_text(encoding="utf-8"),
-                   (SRC / "agent_control.rs").read_text(encoding="utf-8"), (SRC / "direct_chat.rs").read_text(encoding="utf-8")):
+    runtime_modules = sorted(path for path in (SRC / "existing_team_runtime").glob("*.rs") if path.name != "tests.rs")
+    assert runtime_modules, "the guard must see the extracted runtime modules"
+    sources = [RUNTIME, (SRC / "existing_team_runtime.rs").read_text(encoding="utf-8"), REGISTER,
+               (SRC / "existing_team_judgement.rs").read_text(encoding="utf-8"),
+               (SRC / "agent_control.rs").read_text(encoding="utf-8"), (SRC / "direct_chat.rs").read_text(encoding="utf-8")]
+    sources.extend(path.read_text(encoding="utf-8") for path in runtime_modules)
+    for source in sources:
         code = "\n".join(line for line in source.split("#[cfg(test)]")[0].splitlines() if not line.lstrip().startswith("//"))
         assert "docker exec" not in code
         assert not re.search(r"docker (ps|start|stop|run)\b", code)

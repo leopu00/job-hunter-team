@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime.rs"
+SOURCE = ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime" / "positions_reader.rs"
 GOLDEN = ROOT / "tests" / "fixtures" / "positions_read_list_golden.json"
 
 

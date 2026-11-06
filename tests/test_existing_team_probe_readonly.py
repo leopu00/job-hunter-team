@@ -25,7 +25,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime.rs").read_text(encoding="utf-8")
+SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime" / "runtime_commands.rs").read_text(encoding="utf-8")
 IDENTITY_SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime" / "identity.rs").read_text(encoding="utf-8")
 
 TEAM_ID = "00000000-0000-4000-8000-0000000000aa"  # synthetic

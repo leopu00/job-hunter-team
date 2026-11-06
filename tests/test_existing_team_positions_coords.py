@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime.rs").read_text(encoding="utf-8")
+SOURCE = (ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime" / "positions_reader.rs").read_text(encoding="utf-8")
 
 
 def reader() -> str:

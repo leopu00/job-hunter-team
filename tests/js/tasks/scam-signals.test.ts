@@ -91,7 +91,7 @@ describe("the web and the skill agree", () => {
   });
 
   it("has the same codes and families as the team reader's Python (desktop core)", () => {
-    const source = readFileSync(resolve(ROOT, "desktop/src-tauri/src/existing_team_runtime.rs"), "utf-8");
+    const source = readFileSync(resolve(ROOT, "desktop/src-tauri/src/existing_team_runtime/positions_reader.rs"), "utf-8");
     const block = source.slice(source.indexOf("SCAM_FAMILY={"), source.indexOf("}", source.indexOf("SCAM_FAMILY={")));
     const python = Object.fromEntries(
       [...block.matchAll(/'(\w+)':'(\w+)'/g)].map((m) => [m[1], m[2]]),

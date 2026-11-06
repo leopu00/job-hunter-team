@@ -2859,17 +2859,27 @@ fn t48_the_code_that_gives_and_takes_the_permission_is_where_it_must_be() {
     let runtime_sources = [
         include_str!("existing_team_runtime.rs").split("#[cfg(test)]\nmod tests").next().unwrap(),
         include_str!("existing_team_runtime/candidate.rs"),
+        include_str!("existing_team_runtime/chat_commands.rs"),
+        include_str!("existing_team_runtime/commands.rs"),
         runtime_source,
         include_str!("existing_team_runtime/identity.rs"),
         include_str!("existing_team_runtime/own_vps.rs"),
         include_str!("existing_team_runtime/own_vps_claim.rs"),
+        include_str!("existing_team_runtime/positions_local.rs"),
+        include_str!("existing_team_runtime/positions_output.rs"),
+        include_str!("existing_team_runtime/positions_read.rs"),
+        include_str!("existing_team_runtime/positions_reader.rs"),
+        include_str!("existing_team_runtime/positions_request.rs"),
+        include_str!("existing_team_runtime/profile.rs"),
+        include_str!("existing_team_runtime/read_checks.rs"),
         include_str!("existing_team_runtime/rebind.rs"),
+        include_str!("existing_team_runtime/runtime_commands.rs"),
         include_str!("existing_team_runtime/selection.rs"),
         include_str!("existing_team_runtime/storage.rs"),
     ];
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/existing_team_runtime");
     let modules = fs::read_dir(dir).unwrap().filter_map(Result::ok)
-        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "rs")).count();
+        .filter(|entry| entry.file_name() != "tests.rs" && entry.path().extension().is_some_and(|ext| ext == "rs")).count();
     assert!(modules > 0, "the source guard must cover the runtime modules");
     assert_eq!(runtime_sources.len(), modules + 1, "keep every runtime module in the source guard");
     // the permission in memory is set by ONE function, and the restore goes through it

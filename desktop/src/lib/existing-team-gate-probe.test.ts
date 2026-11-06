@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 function probeScript(): string {
-  const source = readFileSync(fileURLToPath(new URL("../../src-tauri/src/existing_team_runtime.rs", import.meta.url)), "utf8");
+  const source = readFileSync(fileURLToPath(new URL("../../src-tauri/src/existing_team_runtime/runtime_commands.rs", import.meta.url)), "utf8");
   const start = source.indexOf("node -e '", source.indexOf("pub(crate) fn team_probe_command"));
   const end = source.indexOf("' || exit $?", start);
   if (start < 0 || end < 0) throw new Error("team probe script not found");

@@ -15,7 +15,7 @@ const PARSED_KEYS = [
 /** The keys the remote command behind `onboarding_resume_snapshot` really prints (read from the Rust source). */
 export function snapshotCommandKeys(): string[] {
   // vitest runs from desktop/
-  const source = readFileSync(resolve(process.cwd(), "src-tauri/src/existing_team_runtime.rs"), "utf8");
+  const source = readFileSync(resolve(process.cwd(), "src-tauri/src/existing_team_runtime/runtime_commands.rs"), "utf8");
   const start = source.indexOf("pub(crate) fn snapshot_command");
   const end = source.indexOf("fn hex_encode", start);
   if (start < 0 || end < 0) throw new Error("snapshot_command not found in the Rust source");

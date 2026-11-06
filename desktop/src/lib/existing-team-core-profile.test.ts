@@ -16,7 +16,7 @@ const python = spawnSync("python3", ["-I", "-c", "import os"]);
 const available = python.status === 0 && process.platform !== "win32";
 
 // vitest runs from desktop/
-const SOURCE = readFileSync(resolve(process.cwd(), "src-tauri/src/existing_team_runtime.rs"), "utf8");
+const SOURCE = readFileSync(resolve(process.cwd(), "src-tauri/src/existing_team_runtime/positions_reader.rs"), "utf8");
 const READER = /const POSITIONS_READ_PY: &str = r#"([\s\S]*?)"#;/.exec(SOURCE)?.[1] ?? "";
 
 const YAML_MAX = 65536;
