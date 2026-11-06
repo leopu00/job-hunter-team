@@ -1401,7 +1401,9 @@ fn wrapper_source(path: &Path) -> Option<String> {
 /// writes `$NAME = 1`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ProtocolForms {
-    /// Only the shell wrapper's line, for the checks that read the shell wrapper alone.
+    /// Only the shell wrapper's line, for the checks that read the shell wrapper alone (none of them is built on
+    /// Windows, where the wrapper is jht.ps1).
+    #[cfg_attr(windows, allow(dead_code))]
     Bash,
     /// The shell wrapper's line or the PowerShell one: what a check on this account's wrapper accepts, since on
     /// Windows the wrapper is jht.ps1.
