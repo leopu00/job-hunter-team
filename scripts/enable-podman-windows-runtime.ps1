@@ -684,6 +684,7 @@ if ($InstallDependencies) {
   Write-JhtPhase podman_install
   $otherUser = $false
   $viaZip = $false
+  $wingetFailure = ''
   $foundVersion = Get-PodmanVersion (Find-Podman)
   if ((Get-PodmanFit $foundVersion) -eq 'other') {
     Write-PodmanMismatch $foundVersion
@@ -717,30 +718,46 @@ if ($InstallDependencies) {
           if ($wingetCode -eq $WingetSourceDataMissing) { $viaZip = $true; break }
           if ($forThisUser) { $otherUser = -not (Find-Podman); break }
           if ($wingetCode -ne 0 -and $wingetCode -ne $WingetUpdateNotApplicable) {
-            throw "winget install Podman.CLI $PodmanCliVersion exited with $wingetCode."
+            # Whatever else winget fails with (1601: the Windows Installer it runs is unreachable from a session without a
+            # desktop; a package refused; a network error) is no stop: Podman for this user from the official release, below.
+            $wingetFailure = "winget exited with $wingetCode"
+            $viaZip = $true
+            break
           }
           if ($wingetCode -ne $WingetUpdateNotApplicable -or (Find-Podman)) { break }
         }
       }
     }
   } catch {
-    [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
-    exit 21
+    # winget itself could not be run: the same way out as when it fails
+    $wingetFailure = $_.Exception.Message
+    $viaZip = $true
   }
-  # Podman for this user from the official release: when winget is missing or its list stays empty, and when Podman is
-  # registered for another Windows user and winget could not put one in this user's folder. A zip that fails is its own
-  # reason (the download, the digest); for the other user's case the code stays the one the app tells that from.
+  # winget reported success and left this user no podman.exe: the files decide, not the exit code
+  if (-not $viaZip -and -not $otherUser -and ((Get-PodmanFit $foundVersion) -in 'absent', 'older') -and -not (Find-Podman)) {
+    $wingetFailure = 'winget reported success but left no podman.exe for this user'
+    $viaZip = $true
+  }
+  # Podman for this user from the official release: when winget is missing, fails (whatever the code), or its list stays
+  # empty, and when Podman is registered for another Windows user and winget could not put one in this user's folder. A zip
+  # that fails is its own reason (the download, the digest), with winget's beside it; for the other user's case the code
+  # stays the one the app tells that from.
   if ($viaZip -or $otherUser) {
+    if ($wingetFailure) {
+      [Console]::Out.WriteLine("winget could not install Podman ($wingetFailure): installing it for this Windows user from the official release instead.")
+    }
     try {
       Install-PodmanForThisUser
       $otherUser = $false
       [Console]::Out.WriteLine("Podman $PodmanCliVersion was installed for this Windows user from the official release, without winget.")
     } catch {
+      $reason = $_.Exception.Message
+      if ($wingetFailure) { $reason = "$reason (winget: $wingetFailure)" }
       if (-not $otherUser) {
-        [Console]::Error.WriteLine("podman_not_installable: $($_.Exception.Message)")
+        [Console]::Error.WriteLine("podman_not_installable: $reason")
         exit 21
       }
-      [Console]::Error.WriteLine("podman zip: $($_.Exception.Message)")
+      [Console]::Error.WriteLine("podman zip: $reason")
     }
   }
   # Not a download that failed: the network is not the cause, and Try again
