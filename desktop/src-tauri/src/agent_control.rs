@@ -904,6 +904,13 @@ pub(crate) fn control_for_scope(app: &tauri::AppHandle, scope: &AccountScope, re
         Destination::Vps { label, .. } | Destination::OwnVps { label, .. } => Some(label.clone()),
         Destination::Local { .. } => None,
     };
+    // The list of this computer's team when its machine is stopped (asked by a read of its state, which starts nothing): the
+    // roster's agents, all «off», and the wrapper is not called at all.
+    if let (Destination::Local { .. }, ControlRequest::List {}) = (&destination, &request) {
+        if let Some(listed) = list_of_a_stopped_machine(crate::existing_team_runtime::local_machine_is_off, || saved_list_reply(app, &print)) {
+            return listed;
+        }
+    }
     let shared = screen_master(app, scope, &request, &destination);
     match run(app, scope, &destination, &request, &argv, shared.as_deref()) {
         Ok(output) => {
@@ -958,6 +965,16 @@ fn saved_list_reply(app: &tauri::AppHandle, print: &str) -> Option<Value> {
     data.insert("where".into(), json!("local"));
     data.insert("label".into(), Value::Null);
     Some(shaped)
+}
+
+/// The list of this computer's team when the machine that runs it is stopped: what the files say, with no call to the wrapper.
+/// `None` when the machine is not known to be stopped, or when nothing is saved to list: the list is then asked as it always was.
+fn list_of_a_stopped_machine(machine_is_off: impl FnOnce() -> bool, saved: impl FnOnce() -> Option<Value>) -> Option<Value> {
+    if machine_is_off() {
+        saved()
+    } else {
+        None
+    }
 }
 
 /// A live list with the agents of `saved` that it does not name added as they are («off»). Nothing is added to a list that
@@ -1058,8 +1075,8 @@ mod tests {
         assert_eq!(merged_agents(&live, &json!({"ok": true, "data": {}})), None);
     }
 
-    // the reader of the files is the unix one (host_agents): elsewhere it says it is not there, and the list stays the live one
-    #[cfg(unix)]
+    // the reader of the files exists on unix and on Windows (host_agents): elsewhere it says it is not there, and the list stays the live one
+    #[cfg(any(unix, windows))]
     #[test]
     fn the_roster_read_from_the_files_is_shaped_like_a_live_list_with_every_agent_off() {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
@@ -1081,7 +1098,7 @@ mod tests {
         assert_eq!(agents[1]["created"], json!(1_793_608_200));
     }
 
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     #[test]
     fn without_the_reader_of_the_files_the_roster_is_not_read_and_says_why() {
         let home = std::env::temp_dir();
@@ -1093,6 +1110,20 @@ mod tests {
         let source = include_str!("agent_control.rs");
         let body = source.split("pub(crate) fn control_for_scope").nth(1).unwrap().split("const LOCAL_PROBE_TIMEOUT").next().unwrap();
         assert_eq!(body.matches("off_agents_of_local(").count(), 2, "the answer of the team and the failure to reach it");
+    }
+
+    #[test]
+    fn a_stopped_machine_lists_the_roster_without_the_wrapper_and_any_other_state_asks_as_before() {
+        let roster = json!({"ok": true, "data": {"agents": []}});
+        assert_eq!(list_of_a_stopped_machine(|| true, || Some(roster.clone())), Some(roster.clone()));
+        // stopped and nothing saved: the list is asked as it always was
+        assert_eq!(list_of_a_stopped_machine(|| true, || None), None);
+        // not stopped (or not known to be): the saved files are not even read
+        assert_eq!(list_of_a_stopped_machine(|| false, || panic!("not read")), None);
+        // and in control_for_scope the question comes before the wrapper is run
+        let source = include_str!("agent_control.rs");
+        let body = source.split("pub(crate) fn control_for_scope").nth(1).unwrap().split("const LOCAL_PROBE_TIMEOUT").next().unwrap();
+        assert!(body.find("list_of_a_stopped_machine(").unwrap() < body.find("match run(app, scope, &destination").unwrap());
     }
 
     #[test]
