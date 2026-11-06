@@ -422,6 +422,9 @@
   cursor: pointer;
 }
 
+/* «Personalizza…»: its icon sits where the other entries have their swatch */
+.theme-picker__edit svg { justify-self: center; }
+
 .theme-picker__option:hover,
 .theme-picker__option[aria-checked="true"] {
   background: var(--color-card);

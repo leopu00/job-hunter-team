@@ -49,6 +49,7 @@ import { REOPEN_NO_RETRY } from "../messages/DirectChatScreen";
 import { chatIdOfSession, sessionOfChatId } from "../messages/chat-agents";
 import { agentTitle } from "./agent-names";
 import { DIRECT_CHAT_TEXT } from "../messages/direct-chat.i18n";
+import { StopIcon } from "../../shell/icons";
 
 /**
  * The agents the person can chat with are the ones the Messages page lists: the same rule, not a
@@ -879,9 +880,10 @@ export default function AgentsPanel({ search }: PageProps) {
                   type="button"
                   data-testid="panel-stop-team"
                   onClick={() => setPending({ kind: "stop-team" })}
-                  className="text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest px-3 py-1 rounded border"
                   style={{ color: "var(--color-red)", borderColor: "var(--color-red)" }}
                 >
+                  <StopIcon />
                   {t.stopTeam}
                 </button>
               </div>

@@ -149,6 +149,19 @@ describe("Shell", () => {
     expect(vi.mocked(loadDashboard).mock.calls.length).toBe(before + 1);
   });
 
+  it("draws an icon next to the words of Refresh, Account and «Personalizza…», hidden from screen readers", async () => {
+    navigate("/dashboard", { replace: true });
+    const user = userEvent.setup();
+    render(<Shell />);
+    const refresh = screen.getByRole("button", { name: "Aggiorna" });
+    expect(refresh.querySelector('svg[data-icon="refresh"]')).toHaveAttribute("aria-hidden", "true");
+    const account = screen.getByTestId("account-menu-button");
+    expect(account.querySelector('svg[data-icon="account"]')).toHaveAttribute("aria-hidden", "true");
+    await user.click(screen.getByRole("button", { name: /Cambia tema/ }));
+    const customise = screen.getByRole("menuitem", { name: "Personalizza…" });
+    expect(customise.querySelector('svg[data-icon="palette"]')).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("names the theme picker and its themes in the app's language", async () => {
     document.cookie = "NEXT_LOCALE=en; path=/";
     try {
