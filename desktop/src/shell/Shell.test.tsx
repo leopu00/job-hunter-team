@@ -17,6 +17,9 @@ import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n"
 import { EXIT_OPEN_EVENT } from "../lib/app-exit";
 import Shell from "./Shell";
 import { SHELL_TEXT } from "./shell.i18n";
+import * as pageTiming from "../lib/page-timing";
+import { LOAD_PAGES } from "./route-paths";
+import { setLocalTeamData } from "../lib/local-team-data";
 
 vi.mock("../lib/supabase", () => ({ supabase: { from: vi.fn() }, supabaseConfigured: true, signOut: vi.fn() }));
 // The real map needs WebGL, which jsdom has not: the shell only has to route to it.
@@ -496,4 +499,34 @@ describe("Shell", () => {
       expect(matchRoute(ROUTES, path)?.route.path).toBe(path);
     },
   );
+});
+
+it("times a page of this computer's team without requiring a linked team", async () => {
+  const start = vi.spyOn(pageTiming, "beginPageLoad").mockReturnValue(() => undefined);
+  act(() => setLocalTeamData("synthetic-local-team"));
+  navigate("/map", { replace: true });
+  const view = render(<Shell />);
+  try {
+    expect(await screen.findByRole("heading", { name: "Mappa" })).toBeInTheDocument();
+    expect(start).toHaveBeenCalledWith("/map");
+  } finally {
+    view.unmount();
+    act(() => setLocalTeamData(null));
+    start.mockRestore();
+  }
+});
+
+it("every routable page has one closed timing key, including read-only variants", () => {
+  const keys = ROUTES.map(({ path }) => {
+    const concrete = path.replace(/:[^/]+/g, "synthetic-parameter");
+    expect(matchRoute(ROUTES, concrete)).not.toBeNull();
+    const key = pageTiming.pageOfPath(concrete);
+    expect(key).not.toContain("synthetic");
+    return key;
+  });
+  expect(new Set(keys).size).toBe(ROUTES.length);
+  expect([...keys].sort()).toEqual([...LOAD_PAGES].sort());
+  for (const { path } of READ_ONLY_ROUTES) {
+    expect(pageTiming.pageOfPath(path.replace(/:[^/]+/g, "synthetic-parameter"))).not.toBeNull();
+  }
 });
