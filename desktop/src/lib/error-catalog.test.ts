@@ -21,6 +21,7 @@ import { EXISTING_TEAM_ERROR_CODES } from "./existing-team";
 import { isRuntimeTextKey } from "./onboarding-runtime.i18n";
 import { liveScreenErrorCode } from "./live-screen";
 import { LOGIN_ERROR_CATALOG_CODE } from "./login-error-codes";
+import { compiledRustSourceFiles, withoutRustTests } from "../test-support/rust-sources";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
@@ -569,15 +570,7 @@ const NOT_ERRORS: Record<string, string> = {
 };
 
 function compiledRustModules(): string[] {
-  const lib = readFileSync(join(RUST, "lib.rs"), "utf8");
-  const modules: string[] = [];
-  const lines = lib.split("\n");
-  lines.forEach((line, index) => {
-    const match = /^mod (\w+);$/.exec(line.trim());
-    // A module behind any `#[cfg(...test...)]` (`test`, `all(test, unix)`) is test code.
-    if (match && !/^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "")) modules.push(match[1]);
-  });
-  return modules;
+  return compiledRustFiles().filter((file) => !file.includes("/") && file !== "lib.rs").map((file) => file.replace(/\.rs$/, ""));
 }
 
 /**
@@ -585,20 +578,11 @@ function compiledRustModules(): string[] {
  * with `#[path = "x.rs"] mod y;` (the assisted browser's transport is one).
  */
 function compiledRustFiles(): string[] {
-  return compiledRustModules().flatMap((module) => {
-    const lines = readFileSync(join(RUST, `${module}.rs`), "utf8").split("\n");
-    const submodules = lines.flatMap((line, index) => {
-      const match = /^#\[path = "([\w.]+\.rs)"\]$/.exec(line.trim());
-      const test = /^#\[cfg\(.*\btest\b.*\)\]$/.test(lines[index - 1]?.trim() ?? "");
-      return match && !test && /^mod \w+;$/.test(lines[index + 1]?.trim() ?? "") ? [match[1]] : [];
-    });
-    return [`${module}.rs`, ...submodules];
-  });
+  return compiledRustSourceFiles(join(RUST, "lib.rs")).filter((file) => file !== "lib.rs");
 }
 
 function withoutTests(source: string): string {
-  const index = source.indexOf("#[cfg(test)]\nmod tests");
-  return index >= 0 ? source.slice(0, index) : source;
+  return withoutRustTests(source);
 }
 
 const SNAKE_LITERAL = /"([a-z][a-z0-9]*(?:_[a-z0-9]+)+)"/g;
