@@ -47,6 +47,7 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 VERSION = 1
 # Where a candidate can end. `inserted` is the INSERT of Gate 5; the others are the reasons it never got there.
 OUTCOMES = (
@@ -220,8 +221,22 @@ def main(argv=None) -> int:
     except Refused as exc:
         print("scout_pass_log: refused: %s" % exc, file=sys.stderr)
         return 2
-    append(row)
+    if append(row) and row.get("kind") == "pass":
+        _watch_empty(row)
     return 0
+
+
+def _watch_empty(row: dict) -> None:
+    """Three empty passes in a row from the same source: one alert for the user and the Dottore, and a line for the Scout
+    (scout_empty_alert.py). Whatever goes wrong there is not the Scout's problem: the pass is already logged."""
+    try:
+        import scout_empty_alert  # noqa: PLC0415 — only after a pass, same folder
+        alert = scout_empty_alert.check(row["agent"], row["ts"])
+        if alert:
+            print("scout_pass_log: ALERT %d empty passes in a row on %s/%s: do not ask this source again now, run "
+                  "`python3 scout_coverage.py next` and go to the portal it names" % (alert["passes"], alert["source"], alert["country"]))
+    except Exception:  # noqa: BLE001
+        pass
 
 
 if __name__ == "__main__":

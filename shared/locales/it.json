@@ -278,6 +278,7 @@
   "web_action_notice.directive_changed_from_web": "Dal sito è stato aggiunto o cambiato un ordine permanente della squadra. Se non sei stato tu, controlla la bacheca nell'app.",
   "cloud_sync_notice.token_rejected": "Il box non riesce più a sincronizzarsi con il sito: il sito rifiuta il suo token di sincronizzazione (scaduto o revocato), e le posizioni nuove non arrivano più. Genera un token nuovo dal sito (Impostazioni › Cloud sync) e lancialo sul box con «jht cloud enable --token …», oppure ricollega la squadra dall'app.",
   "cloud_sync_notice.session_lost": "Il box ha perso la sessione con cui segue il sito in tempo reale: i comandi del sito (sync, chat, stop) gli arrivano ora con un ritardo fino a circa un minuto. Il tempo reale torna con un nuovo abbinamento del dispositivo.",
+  "scout_empty_notice.streak": "Uno degli Scout ha chiesto tre volte di fila allo stesso sito di annunci e non ha ricevuto niente, senza passare a un altro sito. Il Dottore è stato avvisato e lo Scout passa a un sito che non ha ancora coperto. Non devi fare nulla.",
   "onb.role.object": "Il tipo di lavoro che cerchi",
   "onb.role.text": "Quale famiglia di ruoli descrive meglio ciò che cerchi?",
   "onb.role.opt.software": "Software / engineering",
