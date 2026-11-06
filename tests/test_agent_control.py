@@ -34,7 +34,8 @@ case "$1" in
   has-session) [ -e "$dir/$(target "$3")" ] ;;
   kill-session) [ -n "$FAKE_TMUX_UNKILLABLE" ] || rm -f "$dir/$(target "$3")" ;;
   list-sessions)
-    n=0; for f in "$dir"/*; do [ -e "$f" ] || continue; n=1; printf '%s\t100\t200\n' "$(basename "$f")"; done
+    n=0; for f in "$dir"/*; do [ -e "$f" ] || continue; n=1
+      if [ "$3" = '#{session_name}' ]; then basename "$f"; else printf '%s\t100\t200\n' "$(basename "$f")"; fi; done
     [ "$n" = 1 ] || { echo "no server running on /tmp/fake" >&2; exit 1; } ;;
   capture-pane) echo "pane of $(target "$5")" ;;
   *) exit 0 ;;
@@ -603,7 +604,8 @@ def test_the_team_read_tells_stopped_paused_and_held(team, capsys):
     (team.home / ".team-halted.flag").write_text("x")
     data = team.run("team", capsys=capsys)[1]["data"]
     assert data["halted"] is True
-    assert data["standby"] == {"state": "active", "until": None, "weekly_reset": True}
+    assert data["standby"] == {"state": "active", "until": None, "weekly_reset": True,
+                               "mode": "pause", "until_resumed": False}
     assert data["held"] == [{"session": "SCOUT-1", "by_user": True}, {"session": "SCOUT-2", "by_user": False}]
 
 

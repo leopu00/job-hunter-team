@@ -8,7 +8,7 @@
 
 export const AGENT_CONTROL_SCRIPT = '/app/shared/skills/agent_control.py';
 
-// The script's own codes are 100-112 and 115-121; these two are the command's.
+// The script's own codes are 100-112 and 115-124; these two are the command's.
 export const EXIT_INVALID = 100;
 export const EXIT_NO_TEAM = 113;
 export const EXIT_UNANSWERED = 114;
@@ -23,7 +23,8 @@ const SESSION = new RegExp(
 const HOURS = /^[1-9][0-9]{0,2}$/;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/;
 
-const WITH_SESSION = new Set(['start', 'stop', 'restart', 'screen']);
+// `pause-agent` / `resume-agent` (JHT-T181): the pause of ONE agent, its session stays on.
+const WITH_SESSION = new Set(['start', 'stop', 'restart', 'screen', 'pause-agent', 'resume-agent']);
 const ALONE = new Set(['resume', 'stop-team', 'list', 'team', 'history', 'exclusions']);
 // The windows of the agents' activity (JHT-T171): the page's six, the script checks them again.
 const ACTIVITY_WINDOWS = new Set(['5m', '15m', '1h', '5h', '24h', '7d']);
@@ -52,6 +53,8 @@ export function agentControlArgv(args) {
   if (ALONE.has(op)) return rest.length === 0 ? [op] : null;
   if (op !== 'pause') return null;
   if (rest.length === 1 && rest[0] === '--wake-on-weekly') return [op, '--wake-on-weekly'];
+  // «until I say so» (JHT-T181): the person's word is the exit, the team's cap of 7 days is the script's.
+  if (rest.length === 1 && rest[0] === '--until-resumed') return [op, '--until-resumed'];
   if (rest.length !== 2) return null;
   const [flag, value] = rest;
   if (flag === '--for-hours' && HOURS.test(value) && Number(value) <= 168) return [op, flag, value];

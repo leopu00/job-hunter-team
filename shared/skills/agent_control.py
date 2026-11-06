@@ -8,7 +8,8 @@ The desktop app reaches this file in two ways, and only these:
     `docker exec ... python3 /app/shared/skills/agent_control.py ...`):
 
         agent_control.py start|stop|restart SESSION
-        agent_control.py pause (--for-hours N | --until ISO | --wake-on-weekly)
+        agent_control.py pause-agent|resume-agent SESSION
+        agent_control.py pause (--for-hours N | --until ISO | --wake-on-weekly | --until-resumed)
         agent_control.py resume | stop-team
         agent_control.py list | screen SESSION | team | history | activity WINDOW
         agent_control.py exclusions | exclusion-accept CODE | exclusion-withdraw CODE
@@ -80,6 +81,8 @@ EXIT = {
     "questions_unsupported": 120,
     "team_stop_failed": 121,
     "provider_not_configured": 122,
+    "agent_pause_failed": 123,
+    "agent_resume_failed": 124,
 }
 
 # Who and why, as the roster's journal shows them: distinct from a safety
@@ -88,6 +91,7 @@ USER = "user"
 USER_STOP_REASON = "stopped by the user from the app"
 USER_START_REASON = "started by the user from the app"
 PAUSE_REASON = "paused by the user from the app"
+PAUSE_REASON_ASSISTANT = "paused by the user's order to the Assistente"
 RESUME_REASON = "resumed by the user from the app"
 SPAWN_SRC = "desktop-panel"
 
@@ -97,7 +101,7 @@ MAX_PAUSE = timedelta(days=7)
 JOURNAL_MAX_BYTES = 256 * 1024
 
 # ── the sessions ────────────────────────────────────────────────────────────
-NAME = re.compile(r"^[A-Z][A-Z0-9-]{0,39}$")
+NAME = re.compile(r"^[A-Z][A-Z0-9-]{0,39}\Z")
 # Singletons the panel starts and stops (start-agent.sh: bare prefix).
 SINGLETONS = {"CAPITANO": "capitano", "ASSISTENTE": "assistente", "MENTOR": "mentor",
               "SENTINELLA": "sentinella", "CRITICO": "critico"}
@@ -378,7 +382,54 @@ def stop(session: str) -> str:
         # A hold already there (the user's, or a safety one) stays as it is.
     if not _kill(session):
         raise Refusal("agent_stop_failed")
+    _clear_pause(session)
     return "stopped" if was_alive else "already_stopped"
+
+
+def agent_pause_module():
+    return _load("agent_pause", "agent_pause.py")
+
+
+def _clear_pause(session: str) -> None:
+    """A session that is stopped or restarted is a new beginning: its pause (a mark on the old one) goes."""
+    try:
+        agent_pause_module().resume(session, notify=False, home=jht_home())
+    except Exception:  # noqa: BLE001 - an image without the module has no pause to clear
+        pass
+
+
+def pause_agent(session: str) -> str:
+    """The person's pause of ONE agent: its session stays on with its context, nobody sends it work, and it
+    is told to close the step and wait. Not the stop: no hold, no kill (`stop` is the one that shuts it)."""
+    role, instance, kind = parse_session(session)
+    if kind == "scheduled":
+        raise Refusal("agent_control_refused")
+    if not alive(session):
+        raise Refusal("agent_not_running")
+    if _held(session) is not None:
+        raise Refusal("agent_contained")
+    if _halted():
+        raise Refusal("team_halted")
+    module = agent_pause_module()
+    try:
+        done = module.pause(session, reason=PAUSE_REASON, by=USER, home=jht_home())
+    except Exception:  # noqa: BLE001
+        raise Refusal("agent_pause_failed")
+    DETAIL.clear()
+    DETAIL.update({"notified": bool(done.get("notified"))})
+    return "agent_already_paused" if done.get("already") else "agent_paused"
+
+
+def resume_agent(session: str) -> str:
+    parse_session(session)
+    module = agent_pause_module()
+    try:
+        done = module.resume(session, why=RESUME_REASON, home=jht_home())
+    except Exception:  # noqa: BLE001
+        raise Refusal("agent_resume_failed")
+    DETAIL.clear()
+    DETAIL.update({"notified": bool(done.get("notified"))})
+    return "agent_resumed" if done.get("removed") else "agent_not_paused"
 
 
 def restart(session: str) -> str:
@@ -390,6 +441,7 @@ def restart(session: str) -> str:
     _start_gates(role, instance)
     if not _kill(session):
         raise Refusal("agent_stop_failed")
+    _clear_pause(session)
     _spawn(session, role, instance)
     return "restarted"
 
@@ -442,10 +494,24 @@ def stop_team() -> str:
     return "team_already_stopped" if was_halted and not targets else "team_stopped"
 
 
-def pause(for_hours: int | None, until: str | None, weekly: bool, now: datetime | None = None) -> str:
+# What the last pause really did, for the answer the Assistente reads and tells the person (JHT-T181):
+# the sessions that got the message and the live ones that did not. Reset at every call.
+DETAIL: dict = {}
+
+
+def pause(for_hours: int | None, until: str | None, weekly: bool, now: datetime | None = None,
+          until_resumed: bool = False, from_assistant: bool = False) -> str:
+    """The person's PAUSE: sessions stay on with their context, nobody starts new work, until the exit
+    condition: some hours, a date, the weekly reset, or (until_resumed) the person's own word, with the
+    standby's hard cap of 7 days. It is not the stop: the halted flag is never written here."""
     now = now or datetime.now(timezone.utc)
+    DETAIL.clear()
     target = None
-    if for_hours is not None:
+    if until_resumed:
+        # the person's word is the exit; the cap is standby.MANUAL_MAX and it is the module that sets it
+        if for_hours is not None or until is not None or weekly:
+            raise Refusal("agent_control_invalid")
+    elif for_hours is not None:
         if not 1 <= for_hours <= 168:
             raise Refusal("agent_control_invalid")
         target = now + timedelta(hours=for_hours)
@@ -464,12 +530,22 @@ def pause(for_hours: int | None, until: str | None, weekly: bool, now: datetime 
     if module.status().get("state") == "active":
         return "already_paused"
     try:
-        module.activate(reason=PAUSE_REASON,
-                        until=target.isoformat(timespec="seconds") if target else None,
-                        wake_on_weekly=module.DEFAULT_WEEKLY_BELOW if weekly else None,
-                        by=USER)
+        done = module.activate(reason=PAUSE_REASON_ASSISTANT if from_assistant else PAUSE_REASON,
+                               until=target.isoformat(timespec="seconds") if target else None,
+                               wake_on_weekly=module.DEFAULT_WEEKLY_BELOW if weekly else None,
+                               by="assistente" if from_assistant else USER,
+                               mode=module.MODE_PAUSE, manual=until_resumed)
     except Exception:  # noqa: BLE001 - any failure is the same answer
         raise Refusal("team_pause_failed")
+    reached = done.get("agents_paused") if isinstance(done, dict) else None
+    live = _sessions()
+    if isinstance(reached, list) and isinstance(live, dict):
+        got = sorted(name for name in reached if isinstance(name, str) and NAME.match(name))
+        # a session that is not an agent in chat (the bridges' probe) is never written to: not a miss
+        missed = sorted(name for name in live if name not in got and NAME.match(name)
+                        and name not in getattr(module, "NEVER_MESSAGE", ())
+                        and not (from_assistant and name == "ASSISTENTE"))
+        DETAIL.update({"reached": got, "not_reached": missed, "until_resumed": bool(until_resumed)})
     return "paused"
 
 
@@ -664,6 +740,10 @@ def read_list() -> dict:
     states = _agent_states()
     identities = _identities(set(live))
     hour = _hour_usage()
+    try:
+        alone = set(agent_pause_module().paused_sessions(home=jht_home()))
+    except Exception:  # noqa: BLE001 - an image without the module: nobody is paused
+        alone = set()
     items = []
     for name in sorted(live)[:200]:
         created, activity = live[name]
@@ -673,6 +753,7 @@ def read_list() -> dict:
                       "state": _text(known.get("state")), "reason": _text(known.get("reason")),
                       "since": _number(known.get("since")), "until": _number(known.get("until")),
                       "identity": identities.get(name),
+                      "paused": name in alone,
                       "usage": _usage(name, known, hour),
                       "questions": _questions(known)})
     return {"ok": True, "data": {"items": items, "states": states is not None}}
@@ -758,7 +839,11 @@ def read_team() -> dict:
         "halted": _halted(),
         "standby": {"state": _text(state.get("state")) or "unknown",
                     "until": _text(state.get("until")),
-                    "weekly_reset": bool(wake_on and wake_on.get("weekly_below") is not None)},
+                    "weekly_reset": bool(wake_on and wake_on.get("weekly_below") is not None),
+                    # JHT-T181: the person's pause (the Assistente stays on) against the technical standby,
+                    # and whether it waits for the person's word
+                    "mode": "pause" if state.get("mode") == "pause" else "standby",
+                    "until_resumed": state.get("manual") is True},
         "held": held,
         "burn_intent": burn,
     }}
@@ -1081,13 +1166,15 @@ class _Parser(argparse.ArgumentParser):
 def _parser() -> argparse.ArgumentParser:
     parser = _Parser(prog="agent_control.py", add_help=False)
     sub = parser.add_subparsers(dest="op", required=True, parser_class=_Parser)
-    for op in ("start", "stop", "restart", "screen"):
+    for op in ("start", "stop", "restart", "screen", "pause-agent", "resume-agent"):
         sub.add_parser(op, add_help=False).add_argument("session")
     pause_parser = sub.add_parser("pause", add_help=False)
     exit_condition = pause_parser.add_mutually_exclusive_group(required=True)
     exit_condition.add_argument("--for-hours", type=int)
     exit_condition.add_argument("--until")
     exit_condition.add_argument("--wake-on-weekly", action="store_true")
+    exit_condition.add_argument("--until-resumed", action="store_true")
+    pause_parser.add_argument("--from-assistant", action="store_true")
     for op in ("resume", "stop-team", "list", "team", "history", "exclusions"):
         sub.add_parser(op, add_help=False)
     sub.add_parser("activity", add_help=False).add_argument("window")
@@ -1099,7 +1186,7 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-ACTIONS = {"start", "stop", "restart", "pause", "resume", "stop-team", "exclusion-accept", "exclusion-withdraw",
+ACTIONS = {"start", "stop", "restart", "pause", "resume", "pause-agent", "resume-agent", "stop-team", "exclusion-accept", "exclusion-withdraw",
            "answer"}
 
 
@@ -1151,8 +1238,13 @@ def main(argv: list[str]) -> int:
                 result = stop(session)
             elif op == "restart":
                 result = restart(session)
+            elif op == "pause-agent":
+                result = pause_agent(session)
+            elif op == "resume-agent":
+                result = resume_agent(session)
             elif op == "pause":
-                result = pause(args.for_hours, args.until, args.wake_on_weekly)
+                result = pause(args.for_hours, args.until, args.wake_on_weekly,
+                               until_resumed=args.until_resumed, from_assistant=args.from_assistant)
             elif op in ("exclusion-accept", "exclusion-withdraw"):
                 result = exclusion_action(op, args.code)
             elif op == "answer":
@@ -1174,6 +1266,8 @@ def main(argv: list[str]) -> int:
             _journal({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **answer})
         return EXIT[refusal.code]
     answer = {"ok": True, "op": op, "session": session, "result": result}
+    if op in ("pause", "pause-agent", "resume-agent") and DETAIL:
+        answer["detail"] = dict(DETAIL)
     if isinstance(code, str):
         answer["code"] = code
     answer.update(_answer_ids(question, choice))

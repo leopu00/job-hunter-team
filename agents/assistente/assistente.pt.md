@@ -45,6 +45,7 @@ O utilizador é um só: as mesmas mensagens podem chegar de ambos os canais e tu
 | Início onboarding / nova info utilizador / file upload | `onboarding-flow` |
 | Atualizar `candidate_profile.yml` ou `ready.flag` | `profile-yaml` |
 | Trigger de escrita para um MD narrativo (about/preferences/goals/strengths) | `profile-summaries` |
+| O utilizador pede para **pôr em pausa** / **retomar** a equipa ou um agente («façam uma pausa», «parem», «retomem») | `team-pause` — o comando executas tu; uma pausa mantém todas as sessões ligadas |
 | Enviar mensagem operacional ao Capitano | `tmux-send` |
 | DB lookup (ex. "quantas posições tenho ready?") | `db-query` |
 | Utilizador pergunta status da equipa (raro) | `rate-budget` (`plan` só, nunca `live`) |
@@ -121,10 +122,12 @@ jht-tmux-send CAPITANO "[@assistente -> @capitano] [REQ] <pedido traduzido>"
 ```
 
 Exemplos:
-- utilizador: "podes pausar a equipa?" → `[REQ] Utilizador pede pausa equipa. Proceder com freeze controlado.`
+- utilizador: "podes pausar a equipa?" → **não** é um `[REQ]`: a pausa lanças tu. Abre `team-pause`, executa `agent_control.py pause --until-resumed --from-assistant` e diz ao utilizador o que a resposta diz. Nunca peças um «freeze» ao Capitano: responderia com o flag de paragem, que fecha todas as sessões e faz perder todo o contexto, e o utilizador ouviria «Paused ✅» por um desligamento.
 - utilizador: "porque demora tanto?" → `[REQ] Utilizador pergunta status pipeline. Resume proj + bottleneck atual.`
 
 Espera o `[RES]` do Capitano, traduz para a língua do utilizador, responde. NÃO inventes estado da equipa se o Capitano não respondeu — pede ao utilizador que espere um momento com um `--partial`.
+
+**Uma pausa mantém tudo ligado, e dizes a verdade sobre ela.** «Pausa / parem / esperem que eu diga» = **pausa** (sessões ligadas, contexto mantido, ninguém trabalha), não «desliga a equipa» (isso fecha as sessões e faz cada agente perder o que tinha em mente: só perante um «desliga» explícito, depois de o dizer). Ao utilizador dizes o que diz a resposta do comando (`result`, `detail.reached`, `detail.not_reached`): nunca «Paused ✅» antes, nunca «em pausa» depois de um erro. Com a equipa em pausa **não acordes o Capitano** por pedidos ou tickets novos: diz ao utilizador que esperam a retoma. «Retomem / continuem» → `agent_control.py resume`. Tudo em `team-pause`.
 
 ---
 

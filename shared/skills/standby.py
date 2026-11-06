@@ -91,6 +91,7 @@ Uso:
   python3 standby.py status [--json]
   python3 standby.py active [--quiet]
   python3 standby.py on  --reason "…" [--until <iso>] [--wake-on-weekly [pct]]
+  python3 standby.py on  --pause [--manual] --reason "…"   (la pausa dell'utente, JHT-T181)
   python3 standby.py off [--reason "…"]
 """
 from __future__ import annotations
@@ -102,7 +103,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -143,6 +144,29 @@ RESUME_TEXT = (
     "work: bridges and pacing automation are active again. Continue from "
     "your queue without waiting for more instructions."
 )
+
+# ── La PAUSA dell'utente (JHT-T181) ──────────────────────────────────────
+# Stesso flag e stessi lettori dello standby (bridge, watchdog, doctor,
+# heartbeat, stepcap tacciono, nessun respawn né refresh: gli agenti restano
+# ACCESI col loro contesto), ma è un'altra cosa per chi la legge:
+#   • è una decisione dell'utente («fermatevi, vi dico io quando ricominciare»),
+#     non una sospensione tecnica per quota esaurita;
+#   • l'ASSISTENTE non viene zittito: è la voce con cui l'utente parla con la
+#     squadra e deve poter dire com'è davvero la situazione;
+#   • la ripresa dice «riparti dal punto in cui eri», non «dalla tua coda».
+# `manual: true` = l'utente ha detto «finché non dico io»: la condizione di uscita
+# è la sua parola, con un TETTO (`MANUAL_MAX`) dopo il quale suona la sveglia
+# come per ogni `until` — mai muti per sempre (un flag dimenticato acceso è
+# l'incidente che questo modulo esiste per non riprodurre).
+RESUME_PAUSE_TEXT = (
+    "[RIPRENDI] The pause is over ({why}). Your session and context were never closed: "
+    "pick up EXACTLY where you were, with the step you had in hand, and do not start over. "
+    "Normal automation (bridges, pacing, heartbeat) is active again."
+)
+MODE_STANDBY = "standby"
+MODE_PAUSE = "pause"
+MANUAL_MAX = timedelta(days=7)
+ASSISTANT = "ASSISTENTE"
 
 
 def _now(now: Optional[datetime] = None) -> datetime:
@@ -208,7 +232,8 @@ def read(home=None) -> Optional[dict]:
 def status(now: Optional[datetime] = None, home=None) -> dict:
     """Stato leggibile: {active, state, since, until, wake_on, reason, ...}."""
     base = {"active": False, "state": STATE_OFF, "since": None, "until": None,
-            "wake_on": None, "reason": None, "requested_by": None}
+            "wake_on": None, "reason": None, "requested_by": None,
+            "mode": None, "manual": False}
     if not flag_path(home).exists():
         return base
     data = read(home)
@@ -230,6 +255,8 @@ def status(now: Optional[datetime] = None, home=None) -> dict:
         "wake_on": _parse_wake_on(data.get("wake_on")),
         "reason": data.get("reason"),
         "requested_by": data.get("requested_by"),
+        "mode": MODE_PAUSE if data.get("mode") == MODE_PAUSE else MODE_STANDBY,
+        "manual": data.get("manual") is True,
     }
 
 
@@ -321,7 +348,8 @@ def _atomic_write(payload: dict) -> None:
 
 
 def enter(reason: str = "", until=None, wake_on_weekly=None,
-          by: str = "user", now: Optional[datetime] = None) -> dict:
+          by: str = "user", now: Optional[datetime] = None,
+          mode: str = MODE_STANDBY, manual: bool = False) -> dict:
     """Scrive il flag di standby. SOLO il flag: chi vuole anche mettere in
     pausa gli agenti usa `activate()` (l'ordine giusto è flag prima, pausa poi:
     fra i due un tick di bridge non deve poter svegliare nessuno).
@@ -330,6 +358,13 @@ def enter(reason: str = "", until=None, wake_on_weekly=None,
     condizione di uscita non si scrive.
     """
     nowdt = _now(now)
+    if mode not in (MODE_STANDBY, MODE_PAUSE):
+        raise ValueError(f"unknown mode {mode!r}")
+    if manual:
+        # «finché non dico io»: la sveglia è il TETTO, la vera uscita è la parola dell'utente.
+        if mode != MODE_PAUSE:
+            raise ValueError("only a pause can wait for the user")
+        until = nowdt + MANUAL_MAX
     until_dt = until if isinstance(until, datetime) else _parse_ts(until)
     if until_dt is not None and until_dt.tzinfo is None:
         until_dt = until_dt.replace(tzinfo=timezone.utc)
@@ -353,6 +388,10 @@ def enter(reason: str = "", until=None, wake_on_weekly=None,
         "reason": (reason or "").strip(),
         "requested_by": by,
     }
+    if mode == MODE_PAUSE:
+        # Solo la pausa porta i due campi: il flag dello standby resta com'era.
+        payload["mode"] = MODE_PAUSE
+        payload["manual"] = bool(manual)
     _atomic_write(payload)
     return payload
 
@@ -374,7 +413,8 @@ def _load_sibling(name: str, filename: str):
 
 
 def activate(reason: str = "", until=None, wake_on_weekly=None,
-             by: str = "user", now: Optional[datetime] = None) -> dict:
+             by: str = "user", now: Optional[datetime] = None,
+             mode: str = MODE_STANDBY, manual: bool = False) -> dict:
     """Standby completo: (1) flag, (2) soft-pause CORE INCLUSI, (3) log enter.
 
     Il flag va scritto PRIMA della pausa: appena c'è, i bridge tacciono e i
@@ -384,18 +424,23 @@ def activate(reason: str = "", until=None, wake_on_weekly=None,
     metà — qui non c'è urgenza, la quota è già finita).
     """
     payload = enter(reason=reason, until=until, wake_on_weekly=wake_on_weekly,
-                    by=by, now=now)
+                    by=by, now=now, mode=mode, manual=manual)
     paused = None
     sp = _load_sibling("soft_pause_team", "soft_pause_team.py")
     if sp is not None and hasattr(sp, "pause_all"):
         try:
-            paused, _skipped = sp.pause_all(include_core=True, reason=reason)
+            if mode == MODE_PAUSE:
+                # Chi ha chiesto la pausa dall'Assistente non ha bisogno di un secondo avviso.
+                paused, _skipped = sp.pause_all(include_core=True, reason=reason, mode=MODE_PAUSE,
+                                                notify_assistant=(by != "assistente"))
+            else:
+                paused, _skipped = sp.pause_all(include_core=True, reason=reason)
         except Exception as e:                                  # noqa: BLE001
             print(f"[standby] WARN soft pause failed: {e}", file=sys.stderr)
     else:
         print("[standby] WARN soft_pause_team could not be loaded: flag written "
               "but agents were NOT notified — pause them manually", file=sys.stderr)
-    log_event("enter", reason=payload["reason"],
+    log_event("enter", reason=payload["reason"], mode=mode, manual=bool(manual),
               weekly_usage=last_weekly_usage(),
               agents_paused=(len(paused) if paused is not None else None),
               until=payload.get("until"), wake_on=payload.get("wake_on"),
@@ -484,10 +529,19 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
 
     halted = HALTED_FLAG.exists()
     resumed = 0
+    # Chi l'utente ha messo in pausa DA SOLO (agent_pause.py) non riparte perché riparte la squadra.
+    alone = _load_sibling("agent_pause", "agent_pause.py")
+    try:
+        alone_paused = set(alone.paused_sessions(home=STANDBY_FLAG.parent)) if alone is not None else set()
+    except Exception:                                           # noqa: BLE001
+        alone_paused = set()
+    was_pause = isinstance(payload, dict) and payload.get("mode") == MODE_PAUSE
     if not halted:
-        msg = RESUME_TEXT.format(why=(why or "manual exit"))
+        msg = (RESUME_PAUSE_TEXT if was_pause else RESUME_TEXT).format(why=(why or "manual exit"))
         for s in _list_sessions():
-            if s in NEVER_MESSAGE:
+            if s in NEVER_MESSAGE or s in alone_paused:
+                continue
+            if was_pause and s == ASSISTANT and (payload or {}).get("requested_by") == "assistente":
                 continue
             if _send(s, msg):
                 resumed += 1
@@ -528,6 +582,12 @@ def main(argv: list[str]) -> int:
                       help=f"conditional exit: wake when weekly usage falls "
                            f"below PCT (default {DEFAULT_WEEKLY_BELOW:.0f})")
     p_on.add_argument("--by", default="user", help="requester (default: user)")
+    p_on.add_argument("--pause", action="store_true",
+                      help="the user's PAUSE (JHT-T181): sessions stay on, the Assistente "
+                           "stays reachable, [RIPRENDI] says \"pick up where you were\"")
+    p_on.add_argument("--manual", action="store_true",
+                      help="with --pause: wait for the user's word to resume (the exit "
+                           "condition is the user; hard cap 7 days, then the wake-up rings)")
 
     p_off = sub.add_parser("off", help="leave standby now (remove flag, then [RIPRENDI])")
     p_off.add_argument("--reason", default="", help="reason (recorded in logs)")
@@ -571,7 +631,9 @@ def main(argv: list[str]) -> int:
     if args.cmd == "on":
         try:
             res = activate(reason=args.reason, until=args.until,
-                           wake_on_weekly=args.wake_on_weekly, by=args.by)
+                           wake_on_weekly=args.wake_on_weekly, by=args.by,
+                           mode=MODE_PAUSE if args.pause else MODE_STANDBY,
+                           manual=args.manual)
         except ValueError as e:
             print(f"✗ {e}", file=sys.stderr)
             return 2

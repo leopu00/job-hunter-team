@@ -239,6 +239,7 @@ Existem por causa de um incidente medido (na noite de 2026-07-15, uma queima des
 - ❌ Travar em `AVANTI` quando a taxa já voltou ao normal — o desvio está a fechar-se sozinho e você fecha a janela abaixo do alvo.
 - ❌ Perseguir o pacing com o throttle em `LOCKOUT-IMMINENTE`: aí o travão está quase saturado e só o roster muda o desfecho.
 - ❌ Empurrar números de throttle para os agentes via tmux (`[INFO] sleep 40s`). Passe sempre pelo `throttle-config.py` — os agentes leem o ficheiro de config, não fazem parsing do corpo do seu tmux. O tmux serve apenas para dizer a um agente que faça checkpoint *mais ou menos vezes*, o que é outro eixo.
+- ❌ Usar a paragem (`.team-halted.flag`, `jht team stop`, matar sessões) quando o utilizador só pediu uma **pausa**: cada agente perde o contexto. A pausa é `team-pause`.
 
 ## Ver também
 

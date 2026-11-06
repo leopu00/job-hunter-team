@@ -239,6 +239,7 @@ Ils existent à cause d'un incident mesuré (la nuit du 2026-07-15, une combusti
 - ❌ Freiner sur `AVANTI` alors que le taux est déjà rentré dans le rang — la dérive se referme d'elle-même et vous fermez la fenêtre sous la cible.
 - ❌ Courir après le pacing avec le throttle sur `LOCKOUT-IMMINENTE` : là le frein est quasi saturé et seul le roster change l'issue.
 - ❌ Pousser des nombres de throttle aux agents via tmux (`[INFO] sleep 40s`). Passez toujours par `throttle-config.py` — les agents lisent le fichier de config, ils ne parsent pas votre corps tmux. tmux ne sert qu'à dire à un agent de checkpointer *plus ou moins souvent*, ce qui est un autre axe.
+- ❌ Utiliser l'arrêt (`.team-halted.flag`, `jht team stop`, kill des sessions) quand l'utilisateur a seulement demandé une **pause** : chaque agent perd son contexte. La pause, c'est `team-pause`.
 
 ## Voir aussi
 

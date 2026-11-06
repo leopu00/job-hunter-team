@@ -17,7 +17,7 @@ afterEach(() => {
 
 const state = (patch: Partial<TeamControlState> = {}): TeamControlState => ({
   halted: false,
-  standby: { state: "off", until: null, weeklyReset: false },
+  standby: { state: "off", until: null, weeklyReset: false, mode: null, untilResumed: false },
   held: null,
   burnIntent: { state: "off", expiresAt: null, remainingMin: null },
   ...patch,
@@ -74,7 +74,7 @@ describe("the Team card", () => {
   it.each([
     ["running", state(), "The team is running."],
     ["stopped", state({ halted: true }), "The team is stopped."],
-    ["paused", state({ standby: { state: "active", until: null, weeklyReset: false } }), "The team is paused."],
+    ["paused", state({ standby: { state: "active", until: null, weeklyReset: false, mode: null, untilResumed: false } }), "The team is paused."],
   ])("says the team is %s", async (_name, value, text) => {
     render(<TeamCard readOnly={false} read={ok(value)} />);
     await waitFor(() => expect(screen.getByTestId("settings-team-state")).toHaveTextContent(text));
