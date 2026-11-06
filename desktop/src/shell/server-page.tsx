@@ -5,6 +5,7 @@ import CloudDataNotice, { useCloudDataBlocked } from "./CloudDataNotice";
 import { useLocalTeamData } from "../lib/local-team-data";
 import { SHELL_TEXT } from "./shell.i18n";
 import { useLocation, useRefresh } from "./router";
+import { dataShown } from "../lib/page-timing";
 
 /**
  * Runs a web page that Next renders on the server (an async function that
@@ -25,42 +26,58 @@ type Props = {
   runKey?: string;
 };
 
-type State = { state: "loading" } | { state: "ready"; node: ReactNode } | { state: "failed" };
+type ReadSource = "native" | "cloud";
+type State = { state: "loading" } | {
+  state: "ready"; node: ReactNode; key: string; run: number; source: ReadSource;
+} | { state: "failed" };
 
-export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
+function usePageResult(render: Props["render"], readKey: string, source: ReadSource) {
   const [result, setResult] = useState<State>({ state: "loading" });
-  // A local profile's team is read from this computer (the shims answer from its database): nothing to block.
-  // Both hooks run on every render (never one inside the `&&`): the cloud session can come and go under the page.
-  const localTeam = useLocalTeamData();
-  const blocked = useCloudDataBlocked() && !localTeam;
-  const { path } = useLocation();
-  // what is read, for the page and its filters: asking again while this read runs waits for it
-  const readKey = `server-page:${path}?${runKey ?? ""}`;
-  const keyRef = useRef(readKey);
-  keyRef.current = readKey;
-  // The latest closure: a run started by runKey or refresh reads the props of now.
-  const latest = useRef(render);
-  latest.current = render;
-
+  const currentRun = useRef(0);
+  const latest = useRef({ render, key: readKey, source });
+  latest.current = { render, key: readKey, source };
   const run = useCallback(() => {
-    let live = true;
-    withReadDeadline(readOnce(keyRef.current, () => Promise.resolve().then(() => latest.current())))
-      .then((node) => live && setResult({ state: "ready", node }))
+    const request = latest.current;
+    const id = ++currentRun.current;
+    const current = () => currentRun.current === id && latest.current.key === request.key;
+    withReadDeadline(readOnce(request.key, () => Promise.resolve().then(request.render)))
+      .then((node) => {
+        if (current()) setResult({ state: "ready", node, key: request.key, run: id, source: request.source });
+      })
       .catch((error: unknown) => {
         console.error("[desktop] server page failed:", error);
         // A failed refresh keeps what is on screen.
-        if (live) setResult((prev) => (prev.state === "ready" ? prev : { state: "failed" }));
+        if (current()) setResult((prev) => (prev.state === "ready" ? prev : { state: "failed" }));
       });
-    return () => {
-      live = false;
-    };
-    // `render` is a fresh closure every render: the page runs once per mount,
-    // on refresh and on a new runKey, not on every re-render.
   }, []);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(run, [run, runKey]);
+  useEffect(() => {
+    run();
+    // Also cancels a refresh whose cleanup is not retained by useRefresh.
+    return () => { currentRun.current += 1; };
+  }, [run, readKey]);
   useRefresh(run);
+  const retry = useCallback(() => { setResult({ state: "loading" }); run(); }, [run]);
+  return { result, retry, currentRun };
+}
+
+function useFirstShown(result: State, readKey: string, pageSession: string, blocked: boolean, currentRun: { readonly current: number }) {
+  const shown = useRef({ session: pageSession, done: false });
+  useEffect(() => {
+    if (shown.current.session !== pageSession) shown.current = { session: pageSession, done: false };
+    if (blocked || result.state !== "ready" || result.key !== readKey || result.run !== currentRun.current || shown.current.done) return;
+    shown.current.done = true;
+    dataShown(result.source);
+  }, [result, readKey, pageSession, blocked, currentRun]);
+}
+
+export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
+  // Both hooks always run: a cloud session can come and go under this page.
+  const localTeam = useLocalTeamData();
+  const blocked = useCloudDataBlocked() && !localTeam;
+  const { path, search } = useLocation();
+  const readKey = `server-page:${path}?${runKey ?? ""}`;
+  const { result, retry, currentRun } = usePageResult(render, readKey, localTeam ? "native" : "cloud");
+  useFirstShown(result, readKey, `${path}?${search}`, blocked, currentRun);
 
   // Nothing to read with: the page is the notice, not its own empty states.
   if (blocked) return <CloudDataNotice />;
@@ -74,7 +91,7 @@ export default function ServerPage({ render, fallback = null, failure, runKey }:
           </p>
         )}
         <div className="max-w-6xl mx-auto px-5 pt-3">
-          <button type="button" className="border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]" onClick={() => { setResult({ state: "loading" }); run(); }}>
+          <button type="button" className="border border-[var(--color-border)] rounded px-3 py-1.5 text-[12px]" onClick={retry}>
             {SHELL_TEXT[appLocale()].retry}
           </button>
         </div>
