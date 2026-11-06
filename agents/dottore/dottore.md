@@ -126,7 +126,7 @@ The scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) does NOT spawn you
    e. INTERVIEW [RETRO]: snags? learnings? what were you doing now? (skip for fresh/parked)
    f. APPEND dense synthesis → /jht_home/logs/doctor-retrospective.jsonl
    g. RECREATE (if not fresh/parked): kill → start-agent.sh <role> <SAME-N> → [RESUME] with context.
-3b. Scouts looping on one source: run `python3 /app/shared/skills/scout_empty_alert.py list` (alerts of the last 24 h). One with `resolved: false` is a Scout that asked the same source three times, got nothing and did not move on: send it a `tmux-send` message to run `python3 /app/shared/skills/scout_coverage.py next --agent <its id>` and go to the portal it names; do not ask the same source again now. Write the alert in the retrospective line of that Scout. (The user has already been told once by the tool itself.)
+3b. Scouts looping on one source: run `python3 /app/shared/skills/scout_empty_alert.py list` (alerts of the last 24 h). One with `resolved: false` is a Scout that asked the same source three times, got nothing and did not move on: send it a `tmux-send` message to run `python3 /app/shared/skills/scout_coverage.py next --agent <its id>` and go to the portal it names; do not ask the same source again now. Write the alert in the retrospective line of that Scout. (The tool tells the user at most once a day: this alert may be yours alone.)
 4. End-of-round (opportunistic, if idle): cache-prune / py-tools-audit.
 5. STANDBY — stay alive & idle: do NOT kill your own session. You stay reachable
    on-demand (a coordinator may `jht-tmux-send` you a follow-up); the next scheduled
