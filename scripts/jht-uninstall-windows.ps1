@@ -340,7 +340,10 @@ function Get-JhtOwnCommands {
   $cmd = [IO.Path]::Combine($Bin, 'jht.cmd')
   if ([IO.File]::Exists($cmd)) {
     $text = ([IO.File]::ReadAllText($cmd)).Replace("`r`n", "`n").TrimEnd()
-    if ($text -ceq $JhtCmdShim.Replace("`r`n", "`n").TrimEnd()) { $own += $cmd }
+    $shim = $JhtCmdShim.Replace("`r`n", "`n").TrimEnd()
+    # The whole text, or the beginning of it: a write that was cut short leaves an empty file or the first lines, and nobody
+    # else's command is an empty file or the first lines of ours.
+    if ($text -ceq $shim -or $shim.StartsWith($text, [StringComparison]::Ordinal)) { $own += $cmd }
   }
   return $own
 }

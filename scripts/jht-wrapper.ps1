@@ -475,9 +475,12 @@ function Test-RuntimeDirectoryAcl {
     $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     foreach ($rule in $acl.Access) {
       if ($rule.AccessControlType -ne 'Allow') { continue }
-      $rights = [Security.AccessControl.FileSystemRights]$rule.FileSystemRights
-      $writes = $rights -band ([Security.AccessControl.FileSystemRights]::Write -bor [Security.AccessControl.FileSystemRights]::Modify -bor [Security.AccessControl.FileSystemRights]::FullControl)
-      if (-not $writes) { continue }
+      # What gives a right to CHANGE the folder (the same set as the desktop app's check): write data or add a file (0x2), append
+      # or add a folder (0x4), write extended attributes (0x10), delete what is in it (0x40), write attributes (0x100), delete it
+      # (0x10000), change its permissions (0x40000), take its ownership (0x80000), and the generic write (0x40000000) and all
+      # (0x10000000) bits. Reading, listing and running are not.
+      $changes = ([int]$rule.FileSystemRights) -band 0x500D0156
+      if (-not $changes) { continue }
       $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
       if ($sid -notin @($currentSid, 'S-1-5-18', 'S-1-5-32-544')) { return $false }
     }

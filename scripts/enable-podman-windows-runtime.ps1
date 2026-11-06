@@ -887,7 +887,9 @@ $files = @{
   (Join-Path $PSScriptRoot 'jht-wrapper.ps1') = (Join-Path $BinDir 'jht.ps1')
   $helperSource = (Join-Path $BinDir 'windows-private-acl.ps1')
 }
-foreach ($entry in $files.GetEnumerator()) { Copy-Item -LiteralPath $entry.Key -Destination $entry.Value -Force }
+# Each one takes its place by a temporary file beside it (Publish-JhtFile): a program that holds a file of the bin folder open for a
+# moment must not leave it truncated, and a file that is already these bytes is not touched.
+foreach ($entry in $files.GetEnumerator()) { Publish-JhtFile -Destination $entry.Value -Bytes ([IO.File]::ReadAllBytes($entry.Key)) }
 $selectionFile = Join-Path $RuntimeDir 'container-runtime'
 [IO.File]::WriteAllText($selectionFile, "podman`n", [Text.UTF8Encoding]::new($false))
 $machineFile = Join-Path $RuntimeDir 'podman-machine'

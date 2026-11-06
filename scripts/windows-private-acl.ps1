@@ -77,3 +77,51 @@ function Test-PrivateJhtHomeAcl {
     return $true
   } catch { return $false }
 }
+
+# A file of the bin folder is published by taking its place, never by writing in it. Writing in place truncates the file
+# first: a program that holds it open for a moment (a scanner that looks at a command file just written) then leaves it
+# EMPTY, and the person is left with a command that does nothing. Here the new bytes go to a temporary file beside it, and
+# the temporary takes the place of the file only when it is whole; a file that is already these bytes is not touched; while
+# another program holds the file open the take-over is tried again a few times, briefly, and if it never works the file is
+# as it was and the error says so.
+function Publish-JhtFile {
+  param(
+    [Parameter(Mandatory)][string]$Destination,
+    [Parameter(Mandatory)][byte[]]$Bytes,
+    [int]$Attempts = 6,
+    [int]$DelayMilliseconds = 500,
+    # called with the number of the attempt that found the file held, before the next one (a seam for tests)
+    [scriptblock]$OnBusy
+  )
+  $digest = {
+    param([byte[]]$Data)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return [Convert]::ToBase64String($sha.ComputeHash($Data)) } finally { $sha.Dispose() }
+  }
+  if ([IO.File]::Exists($Destination)) {
+    $current = $null
+    try { $current = [IO.File]::ReadAllBytes($Destination) } catch [IO.IOException] { }
+    if ($null -ne $current -and $current.Length -eq $Bytes.Length -and (& $digest $current) -ceq (& $digest $Bytes)) { return }
+  }
+  $folder = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Destination))
+  $temporary = [IO.Path]::Combine($folder, ('.jht-publish-{0}.tmp' -f [guid]::NewGuid().ToString('N')))
+  try {
+    $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try { $stream.Write($Bytes, 0, $Bytes.Length); $stream.Flush() } finally { $stream.Dispose() }
+    for ($attempt = 1; $true; $attempt++) {
+      try {
+        if ([IO.File]::Exists($Destination)) { [IO.File]::Replace($temporary, $Destination, [NullString]::Value) }
+        else { [IO.File]::Move($temporary, $Destination) }
+        return
+      } catch [IO.IOException] {
+        if ($attempt -ge $Attempts) {
+          throw ("{0} could not be replaced: another program holds it open ({1}). It was left as it was; close that program and run the installer again." -f $Destination, $_.Exception.Message)
+        }
+        if ($OnBusy) { & $OnBusy $attempt }
+        Start-Sleep -Milliseconds $DelayMilliseconds
+      }
+    }
+  } finally {
+    if ([IO.File]::Exists($temporary)) { try { [IO.File]::Delete($temporary) } catch { } }
+  }
+}
