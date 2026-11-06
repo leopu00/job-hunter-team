@@ -302,7 +302,7 @@ def every_flag_is_recorded_in_the_broker(request, monkeypatch):
 
     monkeypatch.setattr(apply_notary, "call", suite_notary.call)
     # A page filled with `page.set_content` is `about:blank`: it claims for a stand-in company site.
-    flow = sys.modules.get("apply_flow")
+    flow = sys.modules.get("apply_flow_engine") or sys.modules.get("apply_flow")
     claimer = getattr(flow, "_default_authorisation_claimer", None)
     if claimer is not None:
         monkeypatch.setattr(
