@@ -267,7 +267,7 @@ try {
 
   # E03 exercises the legacy Docker-only ownership repair. The clean install
   # above is Podman, whose manifest deliberately has five additional attested
-  # files. Merely overriding JHT_CONTAINER_RUNTIME would make that manifest
+  # files. Merely overriding JHT_TEST_CONTAINER_RUNTIME would make that manifest
   # inconsistent and the wrapper would correctly fail closed before Docker.
   # Use the exact Docker manifest for this branch, then restore the installed
   # Podman manifest before E04 checks the app-facing contract.
@@ -331,7 +331,7 @@ exit /b 0
   $env:JHT_WRAPPER_PATH = $installedWrapper
   # Exercise the legacy Docker ACL branch explicitly. The production Windows
   # selection installed above is Podman and therefore never chowns DrvFS.
-  $env:JHT_CONTAINER_RUNTIME = 'docker'
+  $env:JHT_TEST_CONTAINER_RUNTIME = 'docker'
   $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $installerOutput = & $windowsPowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $standalone -DryRun -SkipOnboard 2>&1
   if ($LASTEXITCODE -ne 0) { throw "desktop noninteractive installer contract failed: $($installerOutput | Out-String)" }

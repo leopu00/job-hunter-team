@@ -966,12 +966,13 @@ if ($legacyShimOwned) {
   Remove-Item -LiteralPath $legacyShim -Force -ErrorAction Stop
 }
 
-[Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'podman', 'User')
-# The machine is named by the runtime's own podman-machine file (attested with the rest of the bundle), never by a variable of
-# the person's environment: a persistent one outlives an update in every terminal opened before it and in every program started
-# from them, and a program that reads it would start the wrong machine. Older installs wrote it: it is taken away.
+# The engine and the machine are named by the runtime's own container-runtime and podman-machine files (attested with the rest of
+# the bundle), never by a variable of the person's environment: a persistent one outlives an update in every terminal opened
+# before it and in every program started from them, and a program that obeyed it would use the wrong engine or start the wrong
+# machine. Older installs wrote them: they are taken away.
+if ([Environment]::GetEnvironmentVariable('JHT_CONTAINER_RUNTIME', 'User')) { [Environment]::SetEnvironmentVariable('JHT_CONTAINER_RUNTIME', $null, 'User') }
 if ([Environment]::GetEnvironmentVariable('JHT_PODMAN_MACHINE', 'User')) { [Environment]::SetEnvironmentVariable('JHT_PODMAN_MACHINE', $null, 'User') }
-$env:JHT_CONTAINER_RUNTIME = 'podman'
+Remove-Item -LiteralPath Env:JHT_CONTAINER_RUNTIME -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath Env:JHT_PODMAN_MACHINE -ErrorAction SilentlyContinue
 $env:PATH = "$RuntimeShimDir$([IO.Path]::PathSeparator)$env:PATH"
 
