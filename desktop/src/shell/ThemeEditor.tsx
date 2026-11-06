@@ -378,7 +378,7 @@ export default function ThemeEditor({ onClose, onChanged, initialStart = "dark" 
           </div>
         )}
 
-        <label className="theme-editor__field">
+        <label className="theme-editor__field theme-editor__name">
           <span>{text.name}</span>
           <input
             type="text"
