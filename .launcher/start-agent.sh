@@ -1159,7 +1159,7 @@ case "$PROVIDER" in
     # default del CLI (gpt-5.6-sol), inclusi quelli calibrati su Terra.
     # project_doc_max_bytes: senza, Codex tronca AGENTS.md a 32 KiB (vedi
     # JHT_CODEX_PROJECT_DOC_MAX_BYTES in spawn-lib.sh).
-    CLI_ARGS="--yolo --model $codex_model -c model_reasoning_effort=$effort -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES"
+    CLI_ARGS="$(python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$codex_model" --effort "$effort" --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES")" || exit $?
     # --search: ricerca web nativa per i ruoli che la usano (parita' con
     # WebSearch di Claude; elenco in spawn-lib.sh).
     if jht_codex_web_search_role "$ROLE"; then

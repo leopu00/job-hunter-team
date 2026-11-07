@@ -109,7 +109,7 @@ def _codex_branch(source: str) -> str:
         re.DOTALL | re.MULTILINE,
     )
     assert match, "il ramo openai|codex non e' piu' in start-agent.sh"
-    return match.group(1)
+    return f'source "{ROOT / ".launcher" / "spawn-lib.sh"}"\n' + match.group(1)
 
 
 @pytest.mark.parametrize(

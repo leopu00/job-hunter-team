@@ -555,7 +555,7 @@ jht_spawn_model_name_ok() {
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local provider="${1:-}" model_flag=""
+  local provider="${1:-}"
   if [ -z "$provider" ]; then
     provider="$(jht_spawn_active_provider)" || return 2
   fi
@@ -568,8 +568,7 @@ jht_spawn_repl_cmd() {
   fi
   case "$provider" in
     openai|codex)
-      [ -n "$override" ] && model_flag=" -m $override"
-      printf '%s\n' "codex --yolo${model_flag} -c model_reasoning_effort=high -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES" ;;
+      python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$override" --effort high --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES" --command ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
     claude|anthropic)
       local home="${JHT_HOME:-/jht_home}"
@@ -743,24 +742,14 @@ jht_spawn_wait_repl() {
 }
 
 # jht_spawn_kickoff <sessione> <prompt>
-#   Auto-accept dei trust/approval dialog (3 Enter cadenzati) e SOLO DOPO
-#   iniezione del prompt iniziale. setsid scollega dal nostro process group,
-#   così il watchdog può uscire senza ammazzare gli sleep. Cadenze allungate:
-#   codex ci mette ~6s a renderizzare il banner e gli Enter mandati prima
-#   finiscono nel buffer della shell senza chiudere il dialog. L'Enter finale
-#   compensa il lag di Ink tra type e submit.
+#   Rinvio al modulo del container: Codex usa il recupero semantico e il
+#   trasporto verificato; gli altri provider conservano la cadenza precedente.
 jht_spawn_kickoff() {
   local session="$1" prompt="$2"
   # In coda e su una riga: send-keys manderebbe un a-capo come Invio.
   prompt="$prompt $(jht_team_language_line)"
-  JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" setsid sh -c '
-    sleep 6 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 3 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 3 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 4 && tmux send-keys -t "$JHT_SPAWN_SESSION" "$JHT_SPAWN_PROMPT"
-    sleep 1 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 2 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-  ' >/dev/null 2>&1 < /dev/null &
+  JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" JHT_SPAWN_PROVIDER="${ACTIVE_PROVIDER:-}" \
+    setsid python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/spawn_kickoff.py" >/dev/null 2>&1 < /dev/null &
   disown 2>/dev/null || true
 }
 
