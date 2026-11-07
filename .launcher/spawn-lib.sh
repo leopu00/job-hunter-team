@@ -555,7 +555,7 @@ jht_spawn_model_name_ok() {
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local provider="${1:-}" model_flag=""
+  local provider="${1:-}"
   if [ -z "$provider" ]; then
     provider="$(jht_spawn_active_provider)" || return 2
   fi
@@ -568,8 +568,7 @@ jht_spawn_repl_cmd() {
   fi
   case "$provider" in
     openai|codex)
-      [ -n "$override" ] && model_flag=" -m $override"
-      printf '%s\n' "codex --yolo${model_flag} -c model_reasoning_effort=high -c project_doc_max_bytes=$JHT_CODEX_PROJECT_DOC_MAX_BYTES" ;;
+      python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$override" --effort high --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES" --command ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
     claude|anthropic)
       local home="${JHT_HOME:-/jht_home}"
