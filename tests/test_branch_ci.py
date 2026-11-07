@@ -66,7 +66,7 @@ def test_the_rust_job_leaves_windows_out_of_a_developer_branch_only():
     # fromJSON(<developer branch> && '[...two...]' || '[...three...]')
     branch_only, everything = expression.split(" && '", 1)[1].split("' || '")
     assert "windows-latest" not in branch_only
-    assert "ubuntu-latest" in branch_only and "macos-latest" in branch_only
+    assert "ubuntu-24.04" in branch_only and "macos-latest" in branch_only
     assert "windows-latest" in everything.rstrip("') }}")
 
 
