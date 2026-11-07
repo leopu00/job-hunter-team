@@ -1,4 +1,12 @@
 $ErrorActionPreference = 'Stop'
+# The catch must be exercised under the two Windows interpreters, including
+# the second-failure throw; a full run without an ACL failure cannot prove it.
+foreach ($engine in 'powershell', 'pwsh') {
+  $major = if ($engine -eq 'powershell') { 5 } else { 7 }
+  Get-Command $engine -ErrorAction Stop | Out-Null
+  & $engine -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'windows-config-acl-diagnostic-selftest.ps1') -ExpectedMajor $major
+  if ($LASTEXITCODE -ne 0) { throw "ACL diagnostic regression failed under $engine (exit $LASTEXITCODE)" }
+}
 $root = Join-Path $env:RUNNER_TEMP ("jht-acl-selftest-" + [guid]::NewGuid().ToString('N'))
 . (Join-Path $PSScriptRoot 'windows-private-acl.ps1')
 New-Item -ItemType Directory -Path $root -Force | Out-Null
@@ -50,7 +58,7 @@ function Write-JhtAclRepairFailure {
   while ($node) {
     Write-JhtAclNodeDiagnostic -Path $node
     if ($node -ieq $Path) { break }
-    $parent = Split-Path -LiteralPath $node -Parent
+    $parent = Split-Path -LiteralPath $node
     if (-not $parent -or $parent -ieq $node) { break }
     $node = $parent
   }
