@@ -18,6 +18,15 @@ import { getDirectReader } from '../lib/cloud-direct.js';
 import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
 import {
+  CLOUD_CURSOR_FILE,
+  readSqliteTable,
+  sqliteHasColumn,
+  readSqliteTableDelta,
+  loadCloudCursor,
+  saveCloudCursor,
+  settledCursor,
+} from '../lib/cloud-pipeline/push-store.js';
+import {
   acknowledgeSync,
   publishSyncOutcome,
   pushRendezvousOutcome,
@@ -96,10 +105,6 @@ const PROFILE_DIR = join(JHT_HOME, 'profile');
 const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
 const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
-// Cursor delta-sync: per ogni tabella memorizziamo l'ultimo updated_at
-// pushato. Al tick successivo selezioniamo solo righe con updated_at >
-// cursor. Crollo bandwidth ~95% (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
-const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 // The sentinel bridge's samples of the TUI team's usage window, and the
 // cursor of the lane that sends them (usage-samples-push.js).
 const SENTINEL_DATA_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
@@ -1145,90 +1150,6 @@ function handleQuarantineResolve(identity, options = {}) {
   console.log(pc.green(`Resolved quarantine ${identity}; audit metadata retained.`));
 }
 
-function readSqliteTable(db, table, columns) {
-  try {
-    return db.prepare(`SELECT ${columns.join(', ')} FROM ${table}`).all();
-  } catch (err) {
-    if (/no such table/i.test(err.message)) return [];
-    throw err;
-  }
-}
-
-// Vero se la tabella SQLite locale ha la colonna richiesta. Serve per
-// includere nel push solo colonne che lo schema locale possiede davvero
-// (es. logo_* della feature loghi): un jobs.db piu' vecchio del codice non
-// deve far fallire il tick di sync.
-function sqliteHasColumn(db, table, col) {
-  try {
-    return db
-      .prepare(`PRAGMA table_info(${table})`)
-      .all()
-      .some((r) => r.name === col);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Legge una tabella SQLite filtrando per updated_at > cursor.
- * Se cursor e' null/undefined ritorna tutte le righe (first push o cursor
- * cancellato). Include updated_at nelle colonne selezionate (serve per
- * calcolare il nuovo cursor lato chiamante).
- *
- * Robust: se la tabella non esiste o non ha la colonna updated_at,
- * ricade su full SELECT (compatibile con schema vecchi / tabelle senza
- * timestamp di mutazione).
- */
-function readSqliteTableDelta(db, table, columns, cursor) {
-  const cols = columns.includes('updated_at') ? columns : [...columns, 'updated_at'];
-  try {
-    if (cursor) {
-      return db.prepare(
-        `SELECT ${cols.join(', ')} FROM ${table} WHERE updated_at > ?`
-      ).all(cursor);
-    }
-    return db.prepare(`SELECT ${cols.join(', ')} FROM ${table}`).all();
-  } catch (err) {
-    if (/no such table/i.test(err.message)) return [];
-    if (/no such column/i.test(err.message)) {
-      // schema legacy senza updated_at: fallback a full read
-      return readSqliteTable(db, table, columns);
-    }
-    throw err;
-  }
-}
-
-/**
- * Carica il cursor di sync. Le tabelle usano l'ISO dell'ultimo updated_at;
- * `profile_hash` è invece il fingerprint raw dell'ultimo snapshot confermato.
- * Missing keys = first push (legge tutto).
- */
-function loadCloudCursor() {
-  if (!existsSync(CLOUD_CURSOR_FILE)) return {};
-  try {
-    return JSON.parse(readFileSync(CLOUD_CURSOR_FILE, 'utf-8'));
-  } catch {
-    // corrotto: meglio ripartire da zero (full push) che fallire
-    return {};
-  }
-}
-
-/**
- * Salva il cursor di sync. Scritto solo dopo push API HTTP 200. Su
- * errore di scrittura logghiamo ma non blocchiamo il daemon: al prossimo
- * tick verra' rifatto il delta (al massimo ri-pusha righe gia' upsertate,
- * idempotente lato server).
- */
-async function saveCloudCursor(cursor) {
-  try {
-    writePrivateJson(CLOUD_CURSOR_FILE, cursor);
-    return true;
-  } catch (err) {
-    console.error(pc.yellow(`  warn: cursor save failed (${err.message})`));
-    return false;
-  }
-}
-
 /**
  * Carica il cursor di pull desired-state. Ritorna { since: ISO|null }.
  * Missing/corrupt = null → endpoint server applica default lookback 7gg.
@@ -1308,17 +1229,6 @@ async function saveDirectivesCursor(cursor) {
   } catch (err) {
     console.error(pc.yellow(`  warn: directives cursor save failed (${err.message})`));
   }
-}
-
-/** Cursor over rows whose outcome is durable (ACK or persisted quarantine). */
-function settledCursor(rows, field) {
-  let max = null;
-  for (const r of rows) {
-    const v = r?.[field];
-    if (!v) continue;
-    if (max === null || v > max) max = v;
-  }
-  return max;
 }
 
 async function performPush(options) {
