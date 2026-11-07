@@ -85,6 +85,53 @@ jobs:
           if [ -s game/.godot/global_script_class_cache.cfg ]; then
             sha256sum game/.godot/global_script_class_cache.cfg > "$meta/pure-class-cache.sha256"
           fi
+      - name: Stage small cache evidence from the actual proof outputs
+        id: small-evidence
+        if: always()
+        working-directory: payload
+        run: |
+          set -euo pipefail
+          meta="$RUNNER_TEMP/t204-supports-driver"
+          small="$RUNNER_TEMP/t204-supports-small"
+          mkdir "$small"
+          contexts=("$RUNNER_TEMP"/t204-supports-context.*/)
+          if [ "${#contexts[@]}" -ne 1 ]; then echo 'T204_CONTEXT_COUNT_INVALID' >&2; exit 2; fi
+          if [ ! -d "${contexts[0]}" ]; then echo 'T204_CONTEXT_DIRECTORY_MISSING' >&2; exit 2; fi
+          context="${contexts[0]}"
+          [ -s game/.godot/global_script_class_cache.cfg ]
+          [ -s "${context}mutant/game/.godot/global_script_class_cache.cfg" ]
+          [ -s "$meta/pure-generated.tar.gz" ]
+          cp game/.godot/global_script_class_cache.cfg "$small/pure-global_script_class_cache.cfg"
+          cp "${context}mutant/game/.godot/global_script_class_cache.cfg" "$small/mutant-global_script_class_cache.cfg"
+          cp "$meta/pure-generated.tar.gz" "$small/pure-generated.tar.gz"
+          cmp game/.godot/global_script_class_cache.cfg "$small/pure-global_script_class_cache.cfg"
+          cmp "${context}mutant/game/.godot/global_script_class_cache.cfg" "$small/mutant-global_script_class_cache.cfg"
+          cmp "$meta/pure-generated.tar.gz" "$small/pure-generated.tar.gz"
+          (
+            cd "$small"
+            sha256sum pure-global_script_class_cache.cfg mutant-global_script_class_cache.cfg pure-generated.tar.gz > SHA256SUMS
+            sha256sum -c SHA256SUMS
+            cat SHA256SUMS
+          )
+          bytes=$(du -sb "$small" | awk '{print $1}')
+          echo "T204_SMALL_EVIDENCE_BYTES=$bytes LIMIT=67108864"
+          [ "$bytes" -le 67108864 ]
+          for label in pure mutant; do
+            grep '^GODOT_CALL:' "${context}${label}-import-native.log"
+            sha256sum "${context}${label}-import-native.log"
+            cat "${context}final-${label}-class-cache.sha256"
+          done
+          echo T204_SMALL_EVIDENCE_READY
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - name: Preserve the small physical class caches and pure generated archive
+        if: ${{ always() && steps.small-evidence.outputs.ready == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: t204-godot-context-small-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: error
+          include-hidden-files: true
+          path: ${{ runner.temp }}/t204-supports-small/
       - name: Preserve all owner evidence and actual generated cache on any outcome
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
