@@ -181,7 +181,10 @@ pub(crate) async fn profile_progress_read(
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
+    let started = std::time::Instant::now();
     let result = read_progress(&state, &scopes).await;
+    let worked = matches!(&result, Ok(reply) if reply.ok);
+    crate::load_times::note_native_read(&app, "profile.progress", crate::load_times::ReadVia::Chat, worked, started);
     let said = match &result {
         Ok(reply) => reply.error,
         Err(error) => Some(error.code),

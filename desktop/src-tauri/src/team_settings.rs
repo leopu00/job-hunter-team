@@ -428,6 +428,23 @@ fn team_settings_with(
     reply(run(&request), target, &key)
 }
 
+/// Keep the selected channel even when the reply has no target (timeouts, transport errors or invalid JSON).
+fn team_settings_with_timing(
+    request: Value,
+    window_is_main: bool,
+    destination: impl FnOnce() -> Result<(Option<VpsMode>, Option<&'static str>, String, &'static str), &'static str>,
+    run: impl FnOnce(&Request) -> Result<ProcessResult, &'static str>,
+) -> (Value, crate::load_times::ReadVia) {
+    use crate::load_times::ReadVia;
+    let via = std::cell::Cell::new(ReadVia::Wrapper);
+    let reply = team_settings_with(request, window_is_main, || {
+        let selected = destination()?;
+        via.set(if selected.3 == "vps" { ReadVia::Ssh } else { ReadVia::Wrapper });
+        Ok(selected)
+    }, run);
+    (reply, via.get())
+}
+
 #[tauri::command]
 pub(crate) async fn team_settings(
     window: tauri::Window,
@@ -442,15 +459,18 @@ pub(crate) async fn team_settings(
     };
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    let reading = request.get("op").and_then(Value::as_str) == Some("read");
+    let started = std::time::Instant::now();
+    let worker = app.clone();
+    let (result, via) = tauri::async_runtime::spawn_blocking(move || {
         let _scope = scope_state.lock_expected(&worker_expected).map_err(|_| "account_scope_changed")?;
         let found = std::cell::RefCell::new(None);
         let written = request.get("settings").cloned().filter(|_| request.get("op").and_then(Value::as_str) == Some("write"));
-        let reply = team_settings_with(
+        let (reply, via) = team_settings_with_timing(
             request,
             window_is_main,
             || {
-                let (found_destination, print) = destination(&app, &worker_expected)?;
+                let (found_destination, print) = destination(&worker, &worker_expected)?;
                 let mode = destination_mode(&found_destination);
                 let claim = match &found_destination {
                     Destination::OwnVps { state, .. } => state.write_refusal(),
@@ -461,7 +481,7 @@ pub(crate) async fn team_settings(
                 Ok((mode, claim, print, target))
             },
             |request| match found.borrow().as_ref() {
-                Some(found_destination) => run(found_destination, request, &app, &worker_expected),
+                Some(found_destination) => run(found_destination, request, &worker, &worker_expected),
                 None => Err("team_settings_unavailable"),
             },
         );
@@ -469,16 +489,21 @@ pub(crate) async fn team_settings(
         if let (Some(settings), Some(true), Some("local")) =
             (written, reply.get("ok").and_then(Value::as_bool), reply.get("target").and_then(Value::as_str))
         {
-            crate::local_action_log::record(&app, &worker_expected, "settings.update", &crate::local_action_log::settings_of(&settings));
+            crate::local_action_log::record(&worker, &worker_expected, "settings.update", &crate::local_action_log::settings_of(&settings));
         }
-        Ok::<Value, &'static str>(reply)
+        Ok::<_, &'static str>((reply, via))
     })
     .await
-    .unwrap_or(Err("team_settings_unavailable"));
+    .unwrap_or(Err("team_settings_unavailable"))
+    .unwrap_or_else(|code| (failure(code), crate::load_times::ReadVia::Wrapper));
+    if reading {
+        let worked = result.get("ok") == Some(&Value::Bool(true));
+        crate::load_times::note_native_read(&app, "team.settings", via, worked, started);
+    }
     if scopes.lock_expected(&expected).is_err() {
         return Ok(failure("account_scope_changed"));
     }
-    Ok(result.unwrap_or_else(|error| failure(error)))
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -517,6 +542,31 @@ mod tests {
             ran.set(ran.get() + 1);
             reply
         })
+    }
+
+    #[test]
+    fn a_failed_settings_read_keeps_the_selected_channel_in_the_log() {
+        use crate::load_times::ReadVia;
+        let root = std::env::temp_dir().join(format!("jht-settings-read-timing-{}", std::process::id()));
+        let log = crate::runtime_log::RuntimeLog::in_dir(&root);
+        for (mode, expected) in [(None, ReadVia::Wrapper), (Some(VpsMode::Full), ReadVia::Ssh), (Some(VpsMode::ReadOnly), ReadVia::Ssh)] {
+            for failed in [Err("process_timeout"), Err("team_settings_unavailable"), done("invalid JSON")] {
+                let ran = Cell::new(false);
+                let (out, via) = team_settings_with_timing(json!({"op": "read"}), true, || at(mode), |_| {
+                    ran.set(true);
+                    failed
+                });
+                assert!(ran.get());
+                assert_eq!(out["ok"], false);
+                assert!(out.get("target").is_none());
+                assert_eq!(via, expected);
+                log.record_native_read("team.settings", via, false, Duration::from_millis(31));
+            }
+        }
+        let text = std::fs::read_to_string(root.join("load-times.log")).unwrap();
+        assert_eq!(text.lines().filter(|line| line.contains("via=ssh ok=false ms=31")).count(), 6);
+        assert_eq!(text.lines().filter(|line| line.contains("via=wrapper ok=false ms=31")).count(), 3);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

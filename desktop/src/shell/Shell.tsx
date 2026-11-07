@@ -1,45 +1,30 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { DashboardI18nProvider, useDashboardT } from "@/app/components/DashboardI18n";
-import MainChrome from "@/app/components/MainChrome";
+import { useEffect, useMemo, useState } from "react";
+import { useDashboardT } from "@/app/components/DashboardI18n";
 import Link from "../web-shims/next-link";
-import { DesktopWriteProvider } from "@/lib/desktop-write";
-import { ReadOnlyActionsProvider } from "@/lib/read-only-actions";
 import { useLocalTeamData, useLocalTeamSavedAt } from "../lib/local-team-data";
 import { LOCAL_TEAM_DATA_TEXT } from "../lib/local-team-data.i18n";
-import { LocalTeamStoppedBar } from "./LocalTeamStoppedBar";
 import { signOut } from "../lib/supabase";
 import { appLocale } from "../lib/app-locale";
 import {
-  existingTeamNotFullReason,
   existingTeamReadOnlyReason,
   useExistingTeamReadNotice,
   useExistingTeamReadOnly,
   useExistingTeamView,
 } from "../lib/existing-team-readonly";
 import { EXISTING_TEAM_READONLY_TEXT } from "../lib/existing-team-readonly.i18n";
-import { LeaveReadOnlyContext } from "../lib/leave-read-only";
 import { ChooseDestinationContext } from "../lib/choose-destination";
-import { ConnectInFull } from "./ConnectInFull";
-import { VpsLinkBar } from "./VpsLinkBar";
 import { SHELL_TEXT } from "./shell.i18n";
-import { MailRotationBanner } from "./MailRotationBanner";
 import { SignOutContext } from "../lib/account-actions";
-import { NewVersionBanner } from "./NewVersionBanner";
-import { TeamUpdateNotice } from "./TeamUpdateNotice";
-import { TeamOffBanner } from "./TeamOffBanner";
-import { ProviderLoginBanner } from "../provider-login/ProviderLoginBanner";
-import { LocalTeamOwnerBanner } from "./LocalTeamOwnerBanner";
-import { WriteAccessRestoredBanner } from "./WriteAccessRestoredBanner";
-import { AwayGreeting } from "./AwayGreeting";
 import NavStrip from "./NavStrip";
 import PageErrorBoundary from "./PageErrorBoundary";
 import { EXIT_OPEN_EVENT } from "../lib/app-exit";
 import { APP_EXIT_TEXT } from "../components/AppExitDialog.i18n";
-import { beginPageLoad } from "../lib/page-timing";
 import { forgetReadsInFlight } from "../lib/read-deadline";
-import { matchRoute, navigate, refresh, useLocation } from "./router";
+import { matchRoute, navigate, refresh, useLocation, type RouteMatch } from "./router";
 import DocumentPreviewHost from "../pages/positions/DocumentPreviewHost";
-import { HOME, READ_ONLY_HOME, READ_ONLY_ROUTES, ROUTES } from "./routes";
+import { HOME, READ_ONLY_HOME, READ_ONLY_ROUTES, ROUTES, type Route } from "./routes";
+import { PageTimingBoundary } from "./PageTimingBoundary";
+import { LinkedShellBars, LocalShellBars, ShellFrame, ShellProviders } from "./ShellFrames";
 import ThemePicker from "./ThemePicker";
 import MainNav from "./MainNav";
 import { redirectFor } from "./redirects";
@@ -155,184 +140,79 @@ export interface ShellProps {
   identityKey?: string;
 }
 
-/** A full-bleed page's column: as tall as the window, the navbar and its bars on top, the page in the rest, no page scroll. */
-const FULL_BLEED_COLUMN: CSSProperties = {
-  position: "relative",
-  zIndex: 1,
-  display: "flex",
-  flexDirection: "column",
-  height: "calc(100svh / var(--zoom, 1))",
-  overflow: "hidden",
-};
-
-export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, identityKey }: ShellProps) {
-  const { path, search } = useLocation();
-  // The existing team's VPS is what the pages read, in either kind of link; only the read-only one
-  // disables what writes (a team connected in full has the same pages, with their controls on).
-  const linkedTeam = useExistingTeamView();
-  const readOnlyTeam = useExistingTeamReadOnly();
-  const notFullReason = readOnlyTeam ? existingTeamNotFullReason(readOnlyTeam) : null;
-  const readNotice = useExistingTeamReadNotice();
-  const readOnly = linkedTeam !== null;
-  // A profile with no cloud account: the pages show the team of this computer, which they only read.
-  const localTeam = useLocalTeamData();
-  // The page of one position is the exception: what the person says or asks there is written in the team's own
-  // database through the native command (lib/local-judgement-api.ts), so its controls stay on.
+/** Saved data is read only; a live position keeps its native two-step write controls. */
+function useLocalReadOnly(localTeam: boolean, savedOnShow: boolean, path: string) {
   const onPositionPage = /^\/positions\/[^/]+\/?$/.test(path);
-  // The pages show what the team saved while it is off: nothing that needs the team is written from them, the position page included.
-  const savedOnShow = useLocalTeamSavedAt() !== null;
-  const localReadOnly = useMemo(
-    () =>
-      localTeam && savedOnShow
-        ? { readOnly: true, teamOff: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].savedHint }
-        : localTeam && !onPositionPage
-        ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly }
-        : // on the page of a position the authorisation of an application is on too, in two steps: the host's preview
-          // (summary, destination, digest), then the person's click carrying the digest and the destination back
-          { readOnly: false, reason: "", ...(localTeam ? { applyTwoStep: true } : {}) },
+  return useMemo(
+    () => localTeam && savedOnShow
+      ? { readOnly: true, teamOff: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].savedHint }
+      : localTeam && !onPositionPage
+      ? { readOnly: true, reason: LOCAL_TEAM_DATA_TEXT[appLocale()].readOnly }
+      : { readOnly: false, reason: "", ...(localTeam ? { applyTwoStep: true } : {}) },
     [localTeam, onPositionPage, savedOnShow],
   );
-  const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
-  // The old address of a page that is now a section of Settings: it goes on to the section, before anything is drawn.
-  const moved = redirectFor(path, search);
-  const params = useMemo(() => new URLSearchParams(search), [search]);
+}
 
-  // The shell is made again for every account (it is keyed by it): a read the last account started is never the one the next waits for.
-  useEffect(() => {
-    forgetReadsInFlight();
-    return forgetReadsInFlight;
-  }, []);
+type ShellPageProps = Pick<ShellProps, "onLogout" | "onChooseDestination"> & {
+  match: RouteMatch<Route>;
+  path: string;
+  params: URLSearchParams;
+  readOnly: boolean;
+};
 
-  // An old address goes on to its section; an empty or unknown hash lands on the dashboard.
-  useEffect(() => {
-    if (moved) navigate(moved, { replace: true });
-    else if (!match) navigate(readOnly ? READ_ONLY_HOME : HOME, { replace: true });
-  }, [match, moved, readOnly]);
-
-  // How long the page of a linked team takes to show its data (the load-times log, on this computer).
-  useEffect(() => {
-    beginPageLoad(readOnly ? path : "");
-  }, [path, search, readOnly]);
-
-  const Page = moved ? undefined : match?.route.page;
-  const page = Page && match && (
+function ShellPage({ match, path, params, readOnly, onLogout, onChooseDestination }: ShellPageProps) {
+  const Page = match.route.page;
+  return (
     <SignOutContext.Provider value={onLogout ?? null}>
       <ChooseDestinationContext.Provider value={onChooseDestination ?? null}>
         <PageErrorBoundary key={path} onHome={() => navigate(readOnly ? READ_ONLY_HOME : HOME)}>
           <Page params={match.params} search={params} />
         </PageErrorBoundary>
       </ChooseDestinationContext.Provider>
-      {/* the preview of a CV or a letter lives with the page (closed when the page is left) and with the signed-in app (closed with the account) */}
       <DocumentPreviewHost key={`preview:${path}`} />
     </SignOutContext.Provider>
   );
-  if (linkedTeam) {
-    const text = EXISTING_TEAM_READONLY_TEXT[appLocale()];
-    const navbar = <Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly />;
-    const strips = (
-      <>
-        {readOnlyTeam && (
-          <div className="flex items-center gap-3 px-4 py-2 border-b border-[var(--color-border)]">
-            <p
-              role="status"
-              data-testid="existing-team-readonly-banner"
-              className="min-w-0 flex-1 text-[11px] text-[var(--color-muted)]"
-            >
-              <strong className="text-[var(--color-bright)]">{existingTeamReadOnlyReason(readOnlyTeam)}.</strong>{" "}
-              {text.banner} <span data-testid="existing-team-judgement-how">{text.judgementHow}</span>
-              {notFullReason && <>{" "}<span data-testid="existing-team-readonly-why">{notFullReason}</span></>}
-            </p>
-            <ConnectInFull />
-          </div>
-        )}
-        {/* the sort the VPS cannot do is told only on the read-only link: a team connected in full is not «read only» */}
-        {readOnlyTeam && readNotice === "sort_last_action" && (
-          <p role="status" data-testid="existing-team-readonly-notice" className="px-4 py-2 text-[11px] text-[var(--color-muted)]">
-            {text.sortLastAction}
-          </p>
-        )}
-        <VpsLinkBar onCloseReadOnly={onCloseReadOnly} onChooseDestination={onChooseDestination} />
-        <WriteAccessRestoredBanner />
-        {identityKey && <AwayGreeting identityKey={identityKey} />}
-      </>
-    );
-    return (
-      <DashboardI18nProvider>
-        <ReadOnlyActionsProvider value={readOnlyTeam ? { readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) } : { readOnly: false, reason: "" }}>
-          <LeaveReadOnlyContext.Provider value={onCloseReadOnly ?? null}>
-          {match?.route.fullBleed ? (
-            // a full-bleed page: the same window-tall column as in the full shell; the read-only bars under the navbar take a third of the window at most and scroll past it
-            <div style={FULL_BLEED_COLUMN}>
-              {navbar}
-              <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
-                {strips}
-              </div>
-              <main className="relative min-h-0 flex-1" data-testid="full-bleed">
-                {page}
-              </main>
-            </div>
-          ) : (
-            <div style={{ position: "relative", zIndex: 1 }}>
-              {navbar}
-              {strips}
-              <MainChrome>{page}</MainChrome>
-            </div>
-          )}
-          </LeaveReadOnlyContext.Provider>
-        </ReadOnlyActionsProvider>
-      </DashboardI18nProvider>
-    );
-  }
-  // A full-bleed page (the office) is a column as tall as the window: the
-  // navbar, then the page in all the rest, with no margins and no page
-  // scroll. Every other page keeps the web's MainChrome.
-  if (match?.route.fullBleed) {
-    return (
-      <DashboardI18nProvider>
-        <DesktopWriteProvider value={{ canChange: true }}>
-          <ReadOnlyActionsProvider value={localReadOnly}>
-          <div style={FULL_BLEED_COLUMN}>
-            <Navbar onLogout={onLogout} />
-            {/* The bars take what they need up to a third of the window and scroll beyond it: the page under them always keeps room, and the navbar above is never pushed out. */}
-            <div className="shrink-0 max-h-[34%] overflow-y-auto" data-testid="full-bleed-bars">
-              <MailRotationBanner />
-              <NewVersionBanner />
-          <TeamUpdateNotice />
-              <TeamOffBanner />
-              <ProviderLoginBanner />
-              <LocalTeamOwnerBanner onSwitch={onLogout} />
-              <LocalTeamStoppedBar />
-              <WriteAccessRestoredBanner />
-        {identityKey && <AwayGreeting identityKey={identityKey} />}
-            </div>
-            <main className="relative min-h-0 flex-1" data-testid="full-bleed">
-              {page}
-            </main>
-          </div>
-          </ReadOnlyActionsProvider>
-        </DesktopWriteProvider>
-      </DashboardI18nProvider>
-    );
-  }
+}
+
+export default function Shell({ onLogout, onCloseReadOnly, onChooseDestination, identityKey }: ShellProps) {
+  const { path, search } = useLocation();
+  const linkedTeam = useExistingTeamView();
+  const readOnlyTeam = useExistingTeamReadOnly();
+  const readNotice = useExistingTeamReadNotice();
+  const readOnly = linkedTeam !== null;
+  const localTeam = useLocalTeamData();
+  const savedOnShow = useLocalTeamSavedAt() !== null;
+  const localReadOnly = useLocalReadOnly(localTeam, savedOnShow, path);
+  const match = matchRoute(readOnly ? READ_ONLY_ROUTES : ROUTES, path);
+  const moved = redirectFor(path, search);
+  const params = useMemo(() => new URLSearchParams(search), [search]);
+  // A new account must never wait for a read the last account started.
+  useEffect(() => {
+    forgetReadsInFlight();
+    return forgetReadsInFlight;
+  }, []);
+  useEffect(() => {
+    if (moved) navigate(moved, { replace: true });
+    else if (!match) navigate(readOnly ? READ_ONLY_HOME : HOME, { replace: true });
+  }, [match, moved, readOnly]);
+
+  const page = !moved && match ? (
+    <ShellPage match={match} path={path} params={params} readOnly={readOnly}
+      onLogout={onLogout} onChooseDestination={onChooseDestination} />
+  ) : null;
+  const bars = linkedTeam ? (
+    <LinkedShellBars readOnlyTeam={readOnlyTeam} readNotice={readNotice} identityKey={identityKey}
+      onCloseReadOnly={onCloseReadOnly} onChooseDestination={onChooseDestination} />
+  ) : <LocalShellBars onLogout={onLogout} identityKey={identityKey} />;
+  const actions = linkedTeam
+    ? readOnlyTeam ? { readOnly: true, reason: existingTeamReadOnlyReason(readOnlyTeam) } : { readOnly: false, reason: "" }
+    : localReadOnly;
   return (
-    <DashboardI18nProvider>
-      <DesktopWriteProvider value={{ canChange: true }}>
-        <ReadOnlyActionsProvider value={localReadOnly}>
-        <div style={{ position: "relative", zIndex: 1 }}>
-        <Navbar onLogout={onLogout} />
-          <MailRotationBanner />
-          <NewVersionBanner />
-          <TeamUpdateNotice />
-          <TeamOffBanner />
-          <ProviderLoginBanner />
-          <LocalTeamOwnerBanner onSwitch={onLogout} />
-          <LocalTeamStoppedBar />
-            <WriteAccessRestoredBanner />
-        {identityKey && <AwayGreeting identityKey={identityKey} />}
-          <MainChrome>{page}</MainChrome>
-        </div>
-        </ReadOnlyActionsProvider>
-      </DesktopWriteProvider>
-    </DashboardI18nProvider>
+    <ShellProviders linked={readOnly} readOnly={actions} onCloseReadOnly={onCloseReadOnly}>
+      <ShellFrame fullBleed={Boolean(match?.route.fullBleed)} bars={bars}
+        navbar={<Navbar onLogout={onLogout} onCloseReadOnly={onCloseReadOnly} readOnly={readOnly} />}>
+        <PageTimingBoundary path={page ? path : ""} search={search}>{page}</PageTimingBoundary>
+      </ShellFrame>
+    </ShellProviders>
   );
 }
