@@ -112,6 +112,11 @@ def _bash(script, **env):
 
 
 def _function(path: Path, name: str) -> str:
+    if path == START_AGENT and name == "get_agent_info":
+        module = REPO_ROOT / ".launcher" / "role-models.sh"
+        assert 'source "$DEV_TEAM_DIR/role-models.sh"' in path.read_text()
+        assert re.search(rf"^{name}\(\) \{{", module.read_text(), re.M)
+        return f'source "{module.as_posix()}"\n'
     src = path.read_text()
     m = re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", src, re.M | re.S)
     assert m, f"{name} non trovato in {path.name}"

@@ -1325,7 +1325,7 @@ download_runtime_files() {
         # User-level fallback: append to ~/.bashrc + ~/.zshrc if they exist
         # and not already present. Idempotent: skip if already added.
         for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-          if [ -f "$rc" ] && ! grep -q "$BIN_DIR" "$rc" 2>/dev/null; then
+          if [ -f "$rc" ] && ! grep -Fq -- "$BIN_DIR" "$rc" 2>/dev/null; then
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc"
             ok "PATH added to $rc"
             persistent_added=1
@@ -1339,7 +1339,7 @@ download_runtime_files() {
         local already=0 rc
         local -a created_rc
         for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-          if [ -f "$rc" ] && grep -q "$BIN_DIR" "$rc" 2>/dev/null; then already=1; fi
+          if [ -f "$rc" ] && grep -Fq -- "$BIN_DIR" "$rc" 2>/dev/null; then already=1; persistent_added=1; fi
         done
         if [ "$already" -eq 0 ]; then
           # one word per file, quoted: a HOME with a space in it stays one path
@@ -2458,7 +2458,7 @@ main() {
   save_pairing_token
   run_host_setup
   final_message
-  maybe_onboard
+  maybe_onboard; local wizard_result=$?; printf '\n  In this terminal, run: export PATH=%q:"$PATH"\n' "$BIN_DIR"; return "$wizard_result"
 }
 
 if [ "${JHT_INSTALLER_SOURCE_ONLY:-0}" != "1" ]; then

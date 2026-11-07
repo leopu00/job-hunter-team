@@ -3,6 +3,7 @@ import { appLocale } from "./app-locale";
 import { EXISTING_TEAM_READONLY_TEXT } from "./existing-team-readonly.i18n";
 import { startVpsLink, stopVpsLink } from "./vps-link";
 import { clearWriteAccessNotice } from "./write-access-restored";
+import { resetPageDataContext } from "./page-data";
 
 /**
  * The desktop is connected to an existing team's VPS only to read it. While
@@ -71,6 +72,7 @@ export function enterExistingTeamReadOnly(
   // Another connection (account, VPS, team) is another opening, never the same view refreshed.
   let opening = false;
   if (current === null || (identity !== undefined && identity !== connectionIdentity)) {
+    resetPageDataContext();
     session += 1;
     connectionIdentity = identity ?? "";
     opening = true;
@@ -96,6 +98,7 @@ export function enterExistingTeamReadOnly(
 export function leaveExistingTeamReadOnly(): void {
   clearWriteAccessNotice();
   if (!current) return;
+  resetPageDataContext();
   current = null;
   connectionIdentity = "";
   readNotice = null;

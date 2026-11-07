@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_desktop_chat_wrapper import _runtime
+from test_desktop_chat_wrapper import _digest, _runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 JHT = ROOT / "cli" / "bin" / "jht.js"
@@ -56,6 +56,42 @@ def test_the_cv_goes_to_the_attested_container_on_stdin_with_its_name(tmp_path: 
     assert call.startswith("docker exec -i aaaaaaaaaaaa node ") and call.endswith("artifact upload --stdin --name cv.pdf --json")
     assert str(source) not in call, "the container is never given a host path"
     assert copy.read_bytes() == PDF
+
+
+def test_the_official_host_command_keeps_documents_and_filename_spaces(tmp_path: Path):
+    wrapper, env, log = _runtime(tmp_path)
+    adapter = Path(env["JHT_RUNTIME_DIR"]) / "bin" / "docker"
+    delegate = adapter.with_name("docker-original")
+    adapter.rename(delegate)
+    adapter.write_text('#!/bin/sh\n# JHT_PODMAN_DOCKER_SHIM=1\n'
+                       'if [ "$1" = exec ]; then\n'
+                       '  { printf "%s\\0" "$@"; printf "\\n"; } >> "$JHT_TEST_ARGV_COPY"\n'
+                       'fi\n'
+                       f'exec "{delegate}" "$@"\n', encoding="utf-8")
+    adapter.chmod(0o700)
+    manifest = Path(env["JHT_RUNTIME_DIR"]) / ".runtime-integrity"
+    manifest.write_text("\n".join(
+        f"docker-shim={_digest(adapter)}" if line.startswith("docker-shim=") else line
+        for line in manifest.read_text(encoding="utf-8").splitlines()) + "\n", encoding="utf-8")
+    argv_file = tmp_path / "docker-argv"
+    env["JHT_TEST_ARGV_COPY"] = str(argv_file)
+    folder = Path(env["HOME"]) / "Documents" / "Job Hunter Team"
+    folder.mkdir(parents=True)
+    source = _file(folder, name="CV sintetico con spazi.pdf")
+    copy = tmp_path / "stdin-copy"
+    env.update({"JHT_TEST_RUNTIME_READY": "1", "JHT_TEST_STDIN_COPY": str(copy)})
+    done = subprocess.run([str(wrapper), "artifact", "upload", str(source), "--json"],
+                          env=env, text=True, capture_output=True, timeout=20, check=False)
+    assert done.returncode == 0, done.stderr
+    (call,) = _uploads(log.read_text(encoding="utf-8").splitlines())
+    assert call.endswith("artifact upload --stdin --name CV sintetico con spazi.pdf --json")
+    assert str(source) not in call
+    assert copy.read_bytes() == PDF
+    records = [[part.decode() for part in row.split(b"\0") if part]
+               for row in argv_file.read_bytes().splitlines()]
+    (upload,) = [args for args in records if "artifact" in args and "upload" in args]
+    assert upload[upload.index("artifact"):] == [
+        "artifact", "upload", "--stdin", "--name", "CV sintetico con spazi.pdf", "--json"]
 
 
 def test_a_folder_the_person_cannot_write_is_no_obstacle(tmp_path: Path):

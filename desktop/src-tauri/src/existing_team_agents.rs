@@ -691,16 +691,19 @@ mod tests {
     fn the_closed_list_is_the_one_of_the_launcher() {
         let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../.launcher/");
         let start = std::fs::read_to_string(format!("{root}start-agent.sh")).unwrap();
-        let body = &start[start.find("get_agent_info() {").unwrap()..];
-        let body = &body[..body.find("\n}\n").unwrap()];
-        let mut prefixes: Vec<String> = body
+        assert!(start.contains("source \"$DEV_TEAM_DIR/role-models.sh\""));
+        let table = std::fs::read_to_string(format!("{root}../shared/runtime/role-models.list")).unwrap();
+        let mut prefixes: Vec<String> = table
             .lines()
-            .filter_map(|line| line.split_once("echo \"").map(|(_, rest)| rest))
-            .filter_map(|rest| rest.split('"').next())
-            .filter_map(|quoted| quoted.split('|').next())
-            .filter(|prefix| !prefix.is_empty())
-            .map(str::to_owned)
+            .filter(|line| line.starts_with("role|"))
+            .map(|line| {
+                let fields: Vec<&str> = line.split('|').collect();
+                assert_eq!(fields.len(), 5);
+                assert!(!fields[4].is_empty());
+                fields[4].to_owned()
+            })
             .collect();
+        assert!(!prefixes.is_empty());
         for file in ["spawn-doctor.sh", "spawn-maintainer.sh"] {
             let source = std::fs::read_to_string(format!("{root}{file}")).unwrap();
             let line = source.lines().find(|line| line.starts_with("SESSION=\"")).unwrap();

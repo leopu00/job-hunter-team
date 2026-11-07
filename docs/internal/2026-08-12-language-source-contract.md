@@ -71,7 +71,8 @@ Sono writer autorizzati:
 
 - il picker iniziale e Impostazioni → Lingua del gioco;
 - `POST /api/i18n` sul desktop/web locale;
-- il preflight host, soltanto per inizializzare l'artefatto se manca;
+- il preflight host, per inizializzare l'artefatto o salvare la lingua scelta
+  esplicitamente nel suo picker; senza una nuova scelta prevale il valore canonico;
 - il trasporto desktop verso il runtime attivo, locale o VPS, per consegnare
   la stessa scelta al team controllato dal gioco.
 

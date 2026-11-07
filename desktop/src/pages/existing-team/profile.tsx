@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import ProfileLoading from "@/app/(protected)/profile/loading";
 import ProfileView, { type ProfileExportLink } from "@/app/(protected)/profile/ProfileView";
 import { appLocale } from "../../lib/app-locale";
@@ -6,16 +6,16 @@ import { describeError } from "../../lib/error-catalog";
 import {
   buildProfileView,
   missingCoreFields,
-  readExistingTeamProfile,
   type ExistingTeamProfileRead,
-  type ExistingTeamProfileReading,
   type ExistingTeamProfileView,
   type SummaryState,
 } from "../../lib/existing-team-profile";
 import { existingTeamReadOnlyReason, useExistingTeamView } from "../../lib/existing-team-readonly";
-import { useRefresh } from "../../shell/router";
 import type { PageProps } from "../types";
 import { EXISTING_TEAM_PROFILE_TEXT, type ExistingTeamProfileText } from "./existing-team-profile.i18n";
+import { usePageProfile } from "../../lib/page-profile-data";
+import { PageDataNotice } from "../../lib/PageDataNotice";
+import { ProfileReadHeader } from "./ProfileReadHeader";
 
 const YAML_MAX = 65536;
 
@@ -84,33 +84,7 @@ function notices(read: ExistingTeamProfileRead, built: Built, t: ExistingTeamPro
  * note says why, nothing is downloaded but the profile data on screen, and whatever
  * the core could not read, cut or leave out is told, one thing at a time.
  */
-export default function ExistingTeamProfilePage(_props: PageProps) {
-  const t = EXISTING_TEAM_PROFILE_TEXT[appLocale()];
-  const readOnly = useExistingTeamView();
-  const [reading, setReading] = useState<ExistingTeamProfileReading>({ kind: "unknown" });
-  const [busy, setBusy] = useState(false);
-  const latest = useRef(0);
-
-  const read = useCallback(async () => {
-    const mine = ++latest.current;
-    setBusy(true);
-    const result = await readExistingTeamProfile();
-    // A read that finished after a newer one started, or after leaving the page, is not shown.
-    if (latest.current !== mine) return;
-    setReading(result);
-    setBusy(false);
-  }, []);
-
-  useEffect(() => {
-    void read();
-    return () => {
-      latest.current++;
-    };
-  }, [read]);
-  useRefresh(() => void read());
-
-  const built = useMemo<Built | null>(() => (reading.kind === "read" ? build(reading.read) : null), [reading]);
-  const profile = built?.view?.profile ?? null;
+function useProfileExport(profile: Parameters<typeof ProfileView>[0]["profile"] | null) {
   const exportLink = useMemo<ProfileExportLink | undefined>(() => {
     if (!profile || typeof URL.createObjectURL !== "function") return undefined;
     const json = JSON.stringify(profile, null, 2);
@@ -125,35 +99,30 @@ export default function ExistingTeamProfilePage(_props: PageProps) {
     },
     [exportLink],
   );
+  return exportLink;
+}
+
+export default function ExistingTeamProfilePage(_props: PageProps) {
+  const t = EXISTING_TEAM_PROFILE_TEXT[appLocale()];
+  const readOnly = useExistingTeamView();
+  const { reading, busy, read, error, at, failedAt } = usePageProfile();
+  const built = useMemo<Built | null>(() => (reading.kind === "read" ? build(reading.read) : null), [reading]);
+  const profile = built?.view?.profile ?? null;
+  const exportLink = useProfileExport(profile);
 
   const failure =
-    reading.kind === "error"
-      ? describeError(reading.code, { fallback: "existing_team_unavailable", locale: appLocale() })
+    error
+      ? describeError(error.code, { fallback: "existing_team_unavailable", locale: appLocale() })
       : null;
   const reason = readOnly ? existingTeamReadOnlyReason(readOnly) : "";
+  const time = reading.kind === "read" ? (busy ? t.staleWhileReading : t.readAt).replace("{time}", stamp(reading.at)) : null;
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
+      {reading.kind === "read" && <PageDataNotice at={at} error={null} />}
       {/* No px-5 here: MainChrome already pads the page (max-w-6xl px-5); a second one put this block one margin to the right of the cards below. */}
       <div className="max-w-6xl mx-auto pt-6">
-        <div className="flex items-center justify-between gap-4 mb-2">
-          <p data-testid="profile-time" className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-            {reading.kind === "read" ? (busy ? t.staleWhileReading : t.readAt).replace("{time}", stamp(reading.at)) : null}
-          </p>
-          <button
-            type="button"
-            onClick={() => void read()}
-            disabled={busy}
-            className="text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-bright)] disabled:opacity-60 disabled:cursor-wait"
-          >
-            {busy ? t.refreshing : t.refresh}
-          </button>
-        </div>
-        {/* One note, not a column of lines and a dead button: why nothing here changes, and what is not downloaded. */}
-        <p className="text-[12px] mb-3 px-3 py-2 rounded border border-[var(--color-border)]" style={{ color: "var(--color-muted)" }}>
-          <span data-testid="profile-edit-reason">{reason}</span>{" "}
-          <span data-testid="profile-limits">{t.limits}</span>
-        </p>
+        <ProfileReadHeader t={t} time={time} busy={busy} read={read} reason={reason} />
 
         {reading.kind === "unknown" && !busy && (
           <div data-testid="profile-unknown" className="flex flex-col items-start gap-2 text-[12px]" style={{ color: "var(--color-muted)" }}>
@@ -164,14 +133,14 @@ export default function ExistingTeamProfilePage(_props: PageProps) {
           </div>
         )}
 
-        {reading.kind === "error" && failure && (
+        {error && failure && (
           <div role="alert" data-testid="profile-error" className="flex flex-col items-start gap-1 text-[12px]" style={{ color: "var(--color-red)" }}>
             <strong>{t.failed}</strong>
             <p>
               {failure.text} {failure.action}
             </p>
             <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-              {t.errorCode} <code>{reading.code}</code> · {t.failedAt.replace("{time}", stamp(reading.at))}
+              {t.errorCode} <code>{error.code}</code> · {t.failedAt.replace("{time}", stamp(failedAt!))}
             </p>
             <button type="button" onClick={() => void read()} disabled={busy} className="mt-1 text-[11px] font-semibold tracking-widest uppercase px-3 py-1.5 rounded border border-current disabled:opacity-60">
               {t.retry}
@@ -198,7 +167,7 @@ export default function ExistingTeamProfilePage(_props: PageProps) {
       {reading.kind === "unknown" && busy && <ProfileLoading />}
 
       {reading.kind === "read" && built?.view && (
-        <div data-testid="profile-view" aria-busy={busy} style={{ opacity: busy ? 0.55 : 1 }}>
+        <div data-testid="profile-view" data-stale={busy || !!error} aria-busy={busy} style={{ opacity: busy ? 0.55 : 1 }}>
           <ProfileView
             profile={built.view.profile}
             blocks={built.view.blocks}

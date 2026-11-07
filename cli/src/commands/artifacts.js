@@ -104,8 +104,13 @@ export function uploadFileToTeam(file) {
   try {
     data = readFileSync(file);
   } catch (error) {
+    const reason = error.code === 'ENOENT' || error.code === 'ENOTDIR'
+      ? 'The document is not available at this path in the current environment.'
+      : 'The document could not be read. Check that it is a readable file.';
     return { ok: false, code: EXIT_USAGE,
-      error: c.red(`: cannot read ${file}: ${error.message}`) };
+      error: c.red(`: artifact_file_unavailable: ${reason}\n` +
+        '  For a file on your computer, run jht artifact upload <file> from the host terminal.\n' +
+        '  Inside the team, use a readable container path; mounted documents are under /jht_user/.') };
   }
   return uploadBytesToTeam(basename(file), data);
 }

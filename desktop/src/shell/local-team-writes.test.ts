@@ -137,6 +137,7 @@ describe("the local mode's «signed in» is not an identity", () => {
       "lib/local-judgement-api.ts",
       "lib/local-summary-api.ts",
       "lib/local-team-data.ts",
+      "lib/page-position-data.ts",
       "pages/agents/ActionLogSection.tsx",
       "pages/map/map-api.ts",
       "pages/swipe/load-swipe.ts",
@@ -146,6 +147,10 @@ describe("the local mode's «signed in» is not an identity", () => {
       "web-shims/server/supabase-client.ts",
       "web-shims/server/supabase-server.ts",
     ]);
+    // Archive eligibility is only a gate; native readers still choose and attest the target.
+    const archive = readFileSync(join(src, "lib/page-position-data.ts"), "utf-8");
+    expect(archive.match(/teamDataFromTheTeam\(\)/g)).toHaveLength(1);
+    expect(archive).not.toMatch(/localTeamDataKey|profileId|accountId|containerId|hostname/);
     // the three stand-ins return null / the inert client / the bridge rows: no user id, no host, no container
     for (const file of ["web-shims/server/auth.ts", "web-shims/server/supabase-client.ts", "web-shims/server/supabase-server.ts"]) {
       const text = readFileSync(join(src, file), "utf-8");

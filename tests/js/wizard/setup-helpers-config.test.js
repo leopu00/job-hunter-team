@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('node:fs');
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  const { mockFsWithRoleModels } = await import('../helpers/mock-fs-with-role-models.js');
+  return mockFsWithRoleModels(actual, vi);
+});
 
 import * as fs from 'node:fs';
+import { CLAUDE_ALIAS } from '../../../shared/runtime/role-models.js';
 import {
   readConfigFileSnapshot,
   validateConfigBeforeWrite,
@@ -114,7 +119,8 @@ describe('summarizeExistingConfig', () => {
       providers: { claude: { model: 'claude-sonnet-4-6', auth_method: 'api_key' } },
     });
     expect(summary).toMatch(/Claude/i);
-    expect(summary).toMatch(/claude-sonnet-4-6/);
+    expect(Object.values(CLAUDE_ALIAS).filter((model) => !summary.includes(model))).toEqual([]);
+    expect(summary).not.toMatch(/claude-sonnet-4-6/);
     expect(summary).toMatch(/api_key/);
     // workspace non e' piu' parte del summary (path JHT fissi)
     expect(summary).not.toMatch(/Workspace/);

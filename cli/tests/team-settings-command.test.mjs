@@ -224,11 +224,13 @@ test('effective: an apply answers with the effective settings read back, not the
 test('effective: the defaults are the ones the launcher uses (get_agent_info and resolve_codex_model, run for real)', (t) => {
   const bash = spawnSync('bash', ['-c', 'echo ok'], { encoding: 'utf-8' });
   if (bash.status !== 0) return t.skip('no bash');
-  const source = readFileSync(join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '.launcher', 'start-agent.sh'), 'utf-8');
+  const launcherDir = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', '.launcher');
+  const source = readFileSync(join(launcherDir, 'role-models.sh'), 'utf-8');
+  assert.ok(readFileSync(join(launcherDir, 'start-agent.sh'), 'utf-8').includes('source "$DEV_TEAM_DIR/role-models.sh"'));
   const fn = (name) => {
     const m = source.match(new RegExp(`^${name}\\(\\) \\{.*?^\\}`, 'ms'));
-    assert.ok(m, `${name} is no longer in start-agent.sh`);
-    return m[0];
+    assert.ok(m, `${name} is no longer in role-models.sh`);
+    return `source ${JSON.stringify(join(launcherDir, 'role-models.sh'))}\n`;
   };
   const { effective } = out('codex');
   for (const role of LISTS.roles) {

@@ -20,6 +20,7 @@ import { existsSync } from 'node:fs';
 import { containerRunning, execArgvInContainer, CONTAINER_NAME } from '../utils/container-proxy.js';
 import { JHT_DB_PATH } from '../jht-paths.js';
 import { c } from './_colors.js';
+import { showHumanPosition, showHumanDashboard } from '../lib/position-show.js';
 
 // Le skill si risolvono dal percorso di QUESTO modulo, mai dalla cwd: il CLI
 // e' installato via symlink in $JHT_BIN_DIR, quindi la cwd dell'utente e'
@@ -136,16 +137,18 @@ function showAction(id, options, command) {
     process.exitCode = 1;
     return;
   }
-  const args = ['position', String(id)];
-  if (opts(options, command).json) args.push('--json');
-  const code = runDbQuery(args);
+  const o = opts(options, command);
+  const code = o.json
+    ? runDbQuery(['position', String(id), '--json'])
+    : showHumanPosition(id, o, (args) => runSkillCaptured('db_query.py', args));
   if (code !== 0) process.exitCode = code;
 }
 
 function dashboardAction(options, command) {
-  const args = ['dashboard'];
-  if (opts(options, command).json) args.push('--json');
-  const code = runDbQuery(args);
+  const o = opts(options, command);
+  const code = o.json
+    ? runDbQuery(['dashboard', '--json'])
+    : showHumanDashboard(o, (args) => runSkillCaptured('db_query.py', args));
   if (code !== 0) process.exitCode = code;
 }
 
@@ -211,12 +214,14 @@ export function registerPositionsCommand(program) {
   cmd
     .command('show <id>')
     .description('Show position details (UUID or numeric legacy_id)')
+    .option('--full', 'include the full job description and technical details')
     .option('--json', JSON_HELP)
     .action(showAction);
 
   cmd
     .command('dashboard')
     .description('pipeline summary (totals by state)')
+    .option('--full', 'include stages, application reviews and company coverage')
     .option('--json', JSON_HELP)
     .action(dashboardAction);
 

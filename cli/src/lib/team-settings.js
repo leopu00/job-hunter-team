@@ -21,15 +21,12 @@
  */
 import { readFileSync } from 'node:fs';
 import { FUTURE_SKEW_MS } from './team-command-guard.js';
+import { ROLES, MODEL_CLASSES, ROLE_DEFAULT_CLASS, ROLE_DEFAULT_EFFORT, DEFAULT_EFFORT, CODEX_MODEL, CLAUDE_ALIAS } from '../../../shared/runtime/role-models.js';
+export { ROLES, MODEL_CLASSES, ROLE_DEFAULT_CLASS, DEFAULT_EFFORT };
 
 export const SETTINGS_KEYS = ['working_hours', 'role_models'];
 export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 export const MIN_WINDOW_HOURS = 4;
-export const ROLES = [
-  'capitano', 'scout', 'analista', 'scorer', 'scrittore',
-  'critico', 'sentinella', 'assistente', 'mentor', 'closer',
-];
-export const MODEL_CLASSES = ['sol', 'terra', 'luna'];
 export const EFFORTS = ['low', 'medium', 'high'];
 
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -91,17 +88,9 @@ export function validRoleModels(value) {
 }
 
 /**
- * What the launcher (.launcher/start-agent.sh) uses for a role that team.role_models says nothing about:
- * the role map (get_agent_info: an empty alias is opus = sol, "sonnet" is terra; effort high for all).
- * A test runs the launcher's own functions and compares, so the two cannot drift apart.
+ * The role/model defaults are shared with the launcher through shared/runtime/role-models.list.
+ * A test executes the launcher too, preserving the provider and per-role override rules.
  */
-export const ROLE_DEFAULT_CLASS = Object.freeze({
-  capitano: 'sol', scrittore: 'sol', critico: 'sol', mentor: 'sol',
-  scout: 'terra', analista: 'terra', scorer: 'terra', assistente: 'terra', sentinella: 'terra', closer: 'terra',
-});
-export const DEFAULT_EFFORT = 'high';
-const CODEX_MODEL = Object.freeze({ sol: 'gpt-5.6-sol', terra: 'gpt-5.6-terra', luna: 'gpt-5.6-luna' });
-const CLAUDE_ALIAS = Object.freeze({ sol: 'opus', terra: 'sonnet' });
 const PROVIDER_OF = Object.freeze({ codex: 'codex', openai: 'codex', claude: 'claude', anthropic: 'claude', kimi: 'kimi', moonshot: 'kimi' });
 
 /**
@@ -125,7 +114,7 @@ export function effectiveSettings(config, roleModels) {
     effective[role] = {
       model,
       modelName: classApplies ? CODEX_MODEL[model] : CLAUDE_ALIAS[model],
-      effort: set.effort ?? DEFAULT_EFFORT,
+      effort: set.effort ?? ROLE_DEFAULT_EFFORT[role],
       from: set.model || set.effort ? 'config' : 'default',
     };
   }

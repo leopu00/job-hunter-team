@@ -7,6 +7,7 @@
 *.js text eol=lf
 *.mjs text eol=lf
 *.cjs text eol=lf
+shared/runtime/role-models.list text eol=lf
 *.ts text eol=lf
 # `*.tsx` mancava, e la mancanza si vedeva solo da Windows: con i .ts in LF e i
 # .tsx in CRLF, `prettier --check "web/**"` segnalava in locale TUTTI e 263 i

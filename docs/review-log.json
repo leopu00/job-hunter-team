@@ -1874,6 +1874,11 @@
       "path": "docs/internal/architecture/codex-managed-launch-policy.md",
       "description": "Politica comune di avvio e recupero della CLI Codex, compatibilità con il pin e limiti delle prove",
       "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/guides/WINDOWS-PODMAN-DISK.md",
+      "description": "Limite del disco Podman Windows, crescita del VHDX e compattazione non automatica",
+      "last_review": null
     }
   ]
 }

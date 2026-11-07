@@ -44,6 +44,11 @@ def _bash() -> str:
 
 
 def _function(source: str, name: str) -> str:
+    if name in {"get_agent_info", "resolve_codex_model"}:
+        module = ROOT / ".launcher" / "role-models.sh"
+        assert re.search(rf"^{re.escape(name)}\(\) \{{", module.read_text(), re.M)
+        assert 'source "$DEV_TEAM_DIR/role-models.sh"' in source
+        return f'source "{module.as_posix()}"\n'
     match = re.search(
         rf"^{re.escape(name)}\(\) \{{.*?^\}}",
         source,

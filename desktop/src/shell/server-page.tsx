@@ -5,7 +5,7 @@ import CloudDataNotice, { useCloudDataBlocked } from "./CloudDataNotice";
 import { useLocalTeamData } from "../lib/local-team-data";
 import { SHELL_TEXT } from "./shell.i18n";
 import { useLocation, useRefresh } from "./router";
-import { dataShown } from "../lib/page-timing";
+import { dataShown, type PageDataSource } from "../lib/page-timing";
 
 /**
  * Runs a web page that Next renders on the server (an async function that
@@ -24,30 +24,34 @@ type Props = {
   fallback?: ReactNode;
   failure?: ReactNode;
   runKey?: string;
+  dataSource?: () => PageDataSource | undefined;
+  scopeKey?: string;
+  canCommit?: () => boolean;
 };
 
-type ReadSource = "native" | "cloud";
+type ReadSource = PageDataSource;
 type State = { state: "loading" } | {
-  state: "ready"; node: ReactNode; key: string; run: number; source: ReadSource;
+  state: "ready"; node: ReactNode; key: string; run: number; source: ReadSource; scopeKey?: string; failed?: boolean;
 } | { state: "failed" };
 
-function usePageResult(render: Props["render"], readKey: string, source: ReadSource) {
+function usePageResult(render: Props["render"], readKey: string, source: ReadSource, options: Pick<Props, "dataSource" | "scopeKey" | "canCommit">) {
   const [result, setResult] = useState<State>({ state: "loading" });
   const currentRun = useRef(0);
-  const latest = useRef({ render, key: readKey, source });
-  latest.current = { render, key: readKey, source };
+  const latest = useRef({ render, key: readKey, source, ...options });
+  latest.current = { render, key: readKey, source, ...options };
   const run = useCallback(() => {
     const request = latest.current;
     const id = ++currentRun.current;
-    const current = () => currentRun.current === id && latest.current.key === request.key;
+    const current = () => currentRun.current === id && latest.current.key === request.key
+      && latest.current.scopeKey === request.scopeKey && (request.canCommit?.() ?? true);
     withReadDeadline(readOnce(request.key, () => Promise.resolve().then(request.render)))
       .then((node) => {
-        if (current()) setResult({ state: "ready", node, key: request.key, run: id, source: request.source });
+        if (current()) setResult({ state: "ready", node, key: request.key, run: id, source: request.dataSource?.() ?? request.source, scopeKey: request.scopeKey });
       })
       .catch((error: unknown) => {
         console.error("[desktop] server page failed:", error);
-        // A failed refresh keeps what is on screen.
-        if (current()) setResult((prev) => (prev.state === "ready" ? prev : { state: "failed" }));
+        // Keep the copy, with a visible failure; never keep another scope's node.
+        if (current()) setResult((prev) => (prev.state === "ready" && prev.scopeKey === request.scopeKey ? { ...prev, failed: true } : { state: "failed" }));
       });
   }, []);
   useEffect(() => {
@@ -70,18 +74,21 @@ function useFirstShown(result: State, readKey: string, pageSession: string, bloc
   }, [result, readKey, pageSession, blocked, currentRun]);
 }
 
-export default function ServerPage({ render, fallback = null, failure, runKey }: Props) {
+export default function ServerPage({ render, fallback = null, failure, runKey, dataSource, scopeKey, canCommit }: Props) {
   // Both hooks always run: a cloud session can come and go under this page.
   const localTeam = useLocalTeamData();
   const blocked = useCloudDataBlocked() && !localTeam;
   const { path, search } = useLocation();
   const readKey = `server-page:${path}?${runKey ?? ""}`;
-  const { result, retry, currentRun } = usePageResult(render, readKey, localTeam ? "native" : "cloud");
+  const { result, retry, currentRun } = usePageResult(render, readKey, localTeam ? "native" : "cloud", { dataSource, scopeKey, canCommit });
   useFirstShown(result, readKey, `${path}?${search}`, blocked, currentRun);
 
   // Nothing to read with: the page is the notice, not its own empty states.
   if (blocked) return <CloudDataNotice />;
-  if (result.state === "ready") return result.node;
+  if (result.state === "ready" && result.scopeKey === scopeKey) return <>
+    {result.failed && <p role="alert" className="text-[12px] text-[var(--color-red)]">{SHELL_TEXT[appLocale()].pageReadFailed(SHELL_TEXT[appLocale()].refresh)}</p>}
+    {result.node}
+  </>;
   if (result.state === "failed")
     return (
       <>

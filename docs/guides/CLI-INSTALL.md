@@ -133,6 +133,10 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
      `systemctl enable --now docker` if available, and `usermod -aG docker
      $USER` so subsequent runs don't need sudo. This is how a server that runs
      the team on Docker was installed.
+   On Windows the installer creates the dedicated `jht-podman` machine with a
+   disk limit of 30 GiB; it does not compact its VHDX automatically. See
+   [Windows Podman disk space](WINDOWS-PODMAN-DISK.md) for the limits and the
+   conditions required before any future compaction feature.
 3. **Verify the runtime** — with Podman, `podman info` on the dedicated
    connection (the `jht-podman` machine on macOS, the rootless service on
    Linux) plus its Compose provider; otherwise `docker info`, which on Linux

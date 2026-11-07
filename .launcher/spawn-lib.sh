@@ -22,6 +22,7 @@
 # daemon-lib.sh è inerte per costruzione (solo definizioni) e start-agent.sh lo
 # sorgea già PRIMA di questo file: il secondo source è un no-op.
 JHT_SPAWN_LIB_DIR="${JHT_SPAWN_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)}"
+. "$JHT_SPAWN_LIB_DIR/agent-environment.sh"
 if [ -f "$JHT_SPAWN_LIB_DIR/daemon-lib.sh" ]; then
   # shellcheck source=/dev/null
   . "$JHT_SPAWN_LIB_DIR/daemon-lib.sh"
@@ -651,7 +652,10 @@ jht_spawn_new_session() {
   secs="${JHT_SPAWN_TMUX_TIMEOUT_SEC:-45}"
   jht_timeout "$secs" \
     tmux new-session -d -x 220 -y 50 -s "$session" -c "$workdir" || rc=$?
-  [ "$rc" -eq 0 ] && return 0
+  if [ "$rc" -eq 0 ]; then
+    JHT_LANG="$(jht_spawn_user_locale)" send_optional_env bash "$session"
+    return $?
+  fi
   if [ "$rc" -eq 124 ]; then
     echo "[$label] ERROR: tmux new-session for '$session' did not return within ${secs}s (hung on workdir '$workdir') — spawn aborted" >&2
   else

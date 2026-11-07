@@ -16,14 +16,14 @@ import { useSyncExternalStore } from "react";
  * be lost. Anything this module does not recognise is `off`, never `up`.
  */
 export type StreamState = "up" | "fallback" | "off";
-export type StreamTopic = "agents" | "profile" | "chat";
+export type StreamTopic = "agents" | "profile" | "chat" | "positions";
 export type StreamHint = { topic: StreamTopic; agent?: string };
 
 export const STREAM_EVENT = "state-stream://event";
 export const STREAM_STATUS_EVENT = "state-stream://status";
 const STATUS_COMMAND = "state_stream_status";
 
-const TOPICS: readonly StreamTopic[] = ["agents", "profile", "chat"];
+const TOPICS: readonly StreamTopic[] = ["agents", "profile", "chat", "positions"];
 const AGENT_NAME = /^[a-z][a-z0-9_-]{0,63}$/;
 
 let state: StreamState = "off";

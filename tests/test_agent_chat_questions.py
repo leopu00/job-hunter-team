@@ -14,6 +14,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -424,3 +425,62 @@ def test_a_delivery_the_transport_could_not_prove_closes_the_question_but_leaves
     assert rc == 0, out
     # closed in the chat, and not seen: `jht-check-user-replies` is the second way for the words to reach the agent
     assert reply_of(box, row) == ("Pro", 1, 0)
+
+
+def test_plain_question_connections_apply_the_read_and_write_busy_timeouts(box):
+    probe = r"""
+import json, runpy, sqlite3, sys
+chat = runpy.run_path(sys.argv[1])
+connect = sqlite3.connect
+waits = []
+def observed_connect(*args, **kwargs):
+    connection = connect(*args, **kwargs)
+    waits.append(connection.execute("PRAGMA busy_timeout").fetchone()[0])
+    return connection
+sqlite3.connect = observed_connect
+chat["questions_of"]("assistente")
+chat["close_plain_questions"]("assistente", "synthetic reply")
+print(json.dumps(waits))
+"""
+    done = subprocess.run([sys.executable, "-I", "-c", probe, str(SCRIPT)],
+                          capture_output=True, text=True, env=box.env, timeout=30)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == [1000, 2000]
+
+
+def test_a_read_does_not_wait_five_seconds_for_an_exclusively_locked_database(box):
+    holder = sqlite3.connect(box.db, timeout=0.1, isolation_level=None)
+    # WAL lets readers continue during BEGIN EXCLUSIVE; rollback journaling
+    # makes this fixture exercise a real read blocked by another connection.
+    assert holder.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+    qid = ask(box)
+    holder.execute("BEGIN EXCLUSIVE")
+    try:
+        started = time.monotonic()
+        out = page(box)
+        took = time.monotonic() - started
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+    assert took < 3.5, f"the read waited {took:.1f}s for the lock"
+    assert "questions" not in out
+    assert page(box)["questions"][0]["id"] == qid
+
+
+def test_a_send_does_not_wait_five_seconds_for_a_database_held_by_another_writer(box):
+    row = plain(box)
+    holder = sqlite3.connect(box.db, timeout=0.1, isolation_level=None)
+    holder.execute("BEGIN IMMEDIATE")
+    try:
+        started = time.monotonic()
+        rc, out = send(box, "assistente", "c-lock", "Pro, 100 al mese")
+        took = time.monotonic() - started
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+    assert rc == 0, out
+    assert took < 4.0, f"the send waited {took:.1f}s for the lock"
+    assert reply_of(box, row)[0] is None
+    rc, out = send(box, "assistente", "c-after", "Pro")
+    assert rc == 0, out
+    assert reply_of(box, row)[0] == "Pro"

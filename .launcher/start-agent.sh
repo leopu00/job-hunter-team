@@ -28,6 +28,7 @@ source "$DEV_TEAM_DIR/daemon-lib.sh"
 # spawn-doctor.sh/spawn-maintainer.sh: viveva qui e loro non la vedevano,
 # quindi Dottore e Mantenitore restavano in inglese su ogni installazione.
 source "$DEV_TEAM_DIR/spawn-lib.sh"
+source "$DEV_TEAM_DIR/role-models.sh"
 
 if [ -z "${1:-}" ]; then
   echo "Usage: $0 <role> [instance] [mode]"
@@ -723,33 +724,6 @@ fi
 # e' un livello di sicurezza sopra che interviene quando il bridge fallisce
 # o serve un check fresco indipendente. Vedi agents/sentinella/sentinella.md
 # per il loop e le regole. Una sola istanza, polling 10 min, sonnet.
-get_agent_info() {
-  case "$1" in
-    # Opus high — task con reasoning pesante:
-    # Capitano (coordinatore team), Scrittore (creative writing CV),
-    # Critico (review di qualita' richiede nuance).
-    capitano)   echo "CAPITANO|high|" ;;
-    scrittore)  echo "SCRITTORE|high|" ;;
-    critico)    echo "CRITICO|high|" ;;
-    # Sonnet high — task I/O-bound, parsing, matching:
-    # piu' veloce, costa meno, effort high compensa.
-    scout)      echo "SCOUT|high|sonnet" ;;
-    analista)   echo "ANALISTA|high|sonnet" ;;
-    scorer)     echo "SCORER|high|sonnet" ;;
-    assistente) echo "ASSISTENTE|high|sonnet" ;;
-    # Mentor (user-facing always-on, come l'Assistente):
-    # Opus high — coaching/posizionamento richiedono nuance reasoning.
-    mentor)     echo "MENTOR|high|" ;;
-    # Sonnet high — la Sentinella governa pacing/throttle/escalation: le
-    # decisioni (vel vs target, ordini al Capitano) meritano effort high.
-    sentinella) echo "SENTINELLA|high|sonnet" ;;
-    # Sonnet high — il CLOSER compila form: il ragionamento difficile (cosa
-    # rispondere, se fermarsi) sta nel codice di `apply_flow.py` e nel gate,
-    # non nel modello. Stesso profilo dei worker leggeri come lo Scout.
-    closer)     echo "CLOSER|high|sonnet" ;;
-    *)          echo "" ;;
-  esac
-}
 
 # ── [JHT-CLOSER] Il consenso dell'utente, PRIMA di qualunque spawn ──────────
 #
@@ -1018,20 +992,6 @@ IFS='|' read -r PROVIDER AUTH_METHOD API_KEY <<< "$(extract_provider_info "$JHT_
 #   sonnet == gpt-5.6-terra
 # e le classi che `team.role_models` puo' chiedere (sol, terra, luna). Luna
 # non ha un alias nella mappa ruoli: ci si arriva solo dalla config.
-resolve_codex_model() {
-  local alias="$1"
-  local resolved=""
-  case "$alias" in
-    ""|opus|sol) resolved="gpt-5.6-sol" ;;
-    sonnet|terra) resolved="gpt-5.6-terra" ;;
-    luna) resolved="gpt-5.6-luna" ;;
-  esac
-  if [ -z "$resolved" ]; then
-    echo "Error: no Codex model mapping for role alias '$alias'." >&2
-    return 1
-  fi
-  printf '%s\n' "$resolved"
-}
 
 # Modello ed effort di QUESTO ruolo da `team.role_models.<ruolo>` del config:
 # stampa «classe|effort», vuoti se non c'e' niente (allora vale la mappa
@@ -1534,37 +1494,6 @@ if [ "$CLI_BIN" = "pi" ]; then
 fi
 
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
-
-# Env OPZIONALI che, quando esistono, devono arrivare all'agente. Le liste di
-# export qui sotto sono esplicite per costruzione — una tmux nuova non eredita
-# l'ambiente di questo processo, e sul ramo PowerShell (WSL) non eredita
-# proprio niente da bash — quindi una variabile che non è in lista, per
-# l'agente non esiste.
-#
-# Il caso che ha aperto questa lista (issue #132, 2026-08-08):
-# `JHT_SCOUT_COORD_DB` è l'UNICA deroga ammessa quando il percorso canonico del
-# database di coordinamento non è scrivibile. Il bootstrap pre-spawn la vedeva
-# (gira in questo processo) e lo Scout no: la deroga non raggiungeva chi la
-# doveva usare, e l'agente usciva 3 proprio sulla piattaforma dell'incidente.
-#
-# Si propagano SOLO se valorizzate: esportare una stringa vuota renderebbe
-# indistinguibile "non dichiarata" da "dichiarata male".
-OPTIONAL_AGENT_ENV=(JHT_SCOUT_COORD_DB)
-
-send_optional_env() {
-  # $1 = "bash" | "powershell" — la sintassi cambia, la lista no.
-  local _name _value
-  for _name in "${OPTIONAL_AGENT_ENV[@]}"; do
-    _value="${!_name:-}"
-    if [ -n "$_value" ]; then
-      if [ "$1" = "powershell" ]; then
-        jht_spawn_tmux send-keys -t "$SESSION" "\$env:$_name='$_value'" Enter
-      else
-        jht_spawn_tmux send-keys -t "$SESSION" "export $_name='$_value'" C-m
-      fi
-    fi
-  done
-}
 
 # Guscio di uno spawn interrotto. Col tetto sui client tmux qui sotto, un server
 # che non risponde non appende piu' lo script: lo fa USCIRE (set -e) dopo che

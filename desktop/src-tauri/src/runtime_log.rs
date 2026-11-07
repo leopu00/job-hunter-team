@@ -5,6 +5,7 @@
 //! is private to the user and rotated (runtime.log, .1, .2).
 
 use crate::runtime_host::{set_private_dir_permissions, set_private_permissions, ProcessResult};
+mod record;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -340,12 +341,11 @@ impl RuntimeLog {
     /// One step: its name, how it ended, its output. A log that cannot be
     /// written never stops the step it describes.
     pub(crate) fn record(&self, step: &str, ended: Result<i32, &str>, stdout: &[u8], stderr: &[u8], elapsed: Duration) {
-        let cause = (ended != Ok(0)).then(|| failure_cause(stdout, stderr)).flatten();
-        if let Ok(mut last) = self.cause.lock() {
-            *last = cause;
-        }
-        let entry = entry(step, ended, stdout, stderr, elapsed, SystemTime::now());
-        let _ = append(&self.path, &entry, LOG_MAX_BYTES);
+        let _ = self.record_checked(step, ended, stdout, stderr, elapsed);
+    }
+
+    pub(crate) fn record_checked(&self, step: &str, ended: Result<i32, &str>, stdout: &[u8], stderr: &[u8], elapsed: Duration) -> bool {
+        record::checked(self, step, ended, stdout, stderr, elapsed)
     }
 
     /// The cause of the last step, if it failed and said why; read once.

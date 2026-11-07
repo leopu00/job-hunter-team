@@ -6,6 +6,7 @@ import {
   JHT_CONFIG_PATH,
   JHT_CONFIG_DIR,
   writeConfigFile,
+  readConfigFileSnapshot,
   validateEmail,
 } from './setup-helpers.js';
 import { describeSecret } from './secret-ref.js';
@@ -13,6 +14,7 @@ import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 import { t } from './i18n.js';
 import { migrateToLatest } from '../src/commands/migrate.js';
+import { summarizeRoleModels } from './setup-models.js';
 
 /**
  * Setup Telegram CONSIGLIATO ma OPZIONALE (direction shift "interaction
@@ -156,6 +158,7 @@ export async function showSummary(prompter, params) {
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
   const summary = [
     `Provider:   ${selectedProvider.label}`,
+    summarizeRoleModels(readConfigFileSnapshot().config ?? {}),
     'Sign-in:    through the provider, done',
     '',
     `Config:     ${JHT_CONFIG_PATH}`,

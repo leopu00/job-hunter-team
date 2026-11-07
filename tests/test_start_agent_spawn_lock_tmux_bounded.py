@@ -35,6 +35,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 START_AGENT = ROOT / ".launcher" / "start-agent.sh"
 SPAWN_LIB = ROOT / ".launcher" / "spawn-lib.sh"
+AGENT_ENV = ROOT / ".launcher" / "agent-environment.sh"
 
 LOCK = 'flock -w "$JHT_SPAWN_LOCK_WAIT_SEC" 9'
 TMUX_CALL = re.compile(r"(?<![\w-])tmux\s+([a-z][a-z-]*)")
@@ -78,7 +79,9 @@ def _bare_calls(text: str):
 def _lock_region() -> str:
     source = START_AGENT.read_text(encoding="utf-8")
     anchor = source.index('locks/start-${SESSION}.lock"')
-    return source[source.index(LOCK, anchor) :]
+    exports = AGENT_ENV.read_text(encoding="utf-8")
+    assert "send_optional_env() {" in exports, "agent environment acquisition is empty or obsolete"
+    return source[source.index(LOCK, anchor) :] + "\n" + exports
 
 
 def test_no_bare_tmux_runs_while_the_spawn_lock_is_held():
@@ -121,6 +124,17 @@ def test_the_parser_sees_a_bare_call():
         'send_env_vars() {\n  tmux send-keys -t "$SESSION" "export X=1" C-m\n}\n'
         '  jht_timeout 5 tmux has-session -t "=$SESSION" 9>&-\n'
     )
+    assert len(offenders) == 1 and "send-keys" in offenders[0], offenders
+
+
+def test_the_real_acquisition_rejects_a_bare_call_in_the_moved_environment_module(tmp_path, monkeypatch):
+    source = AGENT_ENV.read_text(encoding="utf-8")
+    assert source.count("jht_spawn_tmux send-keys") == 2
+    mutated = tmp_path / "agent-environment.sh"
+    mutated.write_text(source.replace("jht_spawn_tmux send-keys", "tmux send-keys", 1), encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "AGENT_ENV", mutated)
+    offenders, seen = _bare_calls(_lock_region())
+    assert seen >= 4
     assert len(offenders) == 1 and "send-keys" in offenders[0], offenders
 
 

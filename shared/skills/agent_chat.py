@@ -1723,6 +1723,10 @@ def _question_view(aq, conn, source_id: str, created_at) -> dict | None:
 # with no buttons, and the person answers it in the chat's own box (``close_plain_questions`` closes it).
 PLAIN_QUESTION_ID = "pm:{row}"
 PLAIN_QUESTIONS_FOR_S = 7 * 86400.0
+# Plain-question storage must not hold up chat polling or an already delivered
+# message for SQLite's usual five-second wait when another connection has a lock.
+PLAIN_DB_READ_TIMEOUT_S = 1.0
+PLAIN_DB_WRITE_TIMEOUT_S = 2.0
 
 
 def _plain_questions(conn, agent: str) -> list:
@@ -1761,7 +1765,7 @@ def close_plain_questions(agent: str, text: str, seen: bool = True) -> None:
     if not text.strip() or not path.is_file():       # connect() would make an empty database of a missing one
         return
     try:
-        conn = sqlite3.connect(path, timeout=5)
+        conn = sqlite3.connect(path, timeout=PLAIN_DB_WRITE_TIMEOUT_S)
     except sqlite3.Error:
         return
     try:
@@ -1786,7 +1790,7 @@ def questions_of(agent: str) -> list | None:
     if aq is None or not path.is_file():
         return None
     try:
-        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=PLAIN_DB_READ_TIMEOUT_S)
     except sqlite3.Error:
         return None
     try:

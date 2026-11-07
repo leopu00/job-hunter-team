@@ -279,9 +279,11 @@ def test_start_agent_bootstraps_the_db_before_a_scout():
 
 def _extract_propagation(src):
     """La lista + la funzione VERE, ritagliate dal sorgente per eseguirle."""
-    start = src.index('OPTIONAL_AGENT_ENV=(')
-    end = src.index('send_env_vars() {')
-    return src[start:end]
+    assert 'source "$DEV_TEAM_DIR/spawn-lib.sh"' in src
+    with open(os.path.join(REPO_ROOT, '.launcher', 'spawn-lib.sh'), encoding='utf-8') as handle:
+        assert '. "$JHT_SPAWN_LIB_DIR/agent-environment.sh"' in handle.read()
+    with open(os.path.join(REPO_ROOT, '.launcher', 'agent-environment.sh'), encoding='utf-8') as handle:
+        return handle.read()
 
 
 # I client tmux che il ritaglio puo' usare, e che i test qui sotto sostituiscono.
@@ -340,9 +342,11 @@ SESSION=SCOUT-1
 send_optional_env {flavor}
 """
     r = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
-                       env={**os.environ, 'JHT_SCOUT_COORD_DB': '/shared/coord.db'})
+                       env={**os.environ, 'JHT_SCOUT_COORD_DB': '/shared/coord.db', 'JHT_LANG': 'it'})
     assert r.returncode == 0, r.stderr
     assert expected in calls.read_text(encoding='utf-8')
+    language = "export JHT_LANG='it'" if flavor == 'bash' else "$env:JHT_LANG='it'"
+    assert language in calls.read_text(encoding='utf-8')
 
 
 @pytest.mark.skipif(sys.platform == 'win32', reason='sandbox POSIX')
@@ -358,7 +362,7 @@ SESSION=SCOUT-1
 send_optional_env bash
 echo DONE
 """
-    env = {k: v for k, v in os.environ.items() if k != 'JHT_SCOUT_COORD_DB'}
+    env = {k: v for k, v in os.environ.items() if k not in ('JHT_SCOUT_COORD_DB', 'JHT_LANG')}
     r = subprocess.run(['bash', '-c', script], capture_output=True, text=True, env=env)
     assert r.returncode == 0, r.stderr
     assert 'DONE' in r.stdout

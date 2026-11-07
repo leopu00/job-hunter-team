@@ -185,6 +185,10 @@ def env(tmp_path):
     """Una copia di .launcher con il bridge finto, più gli stub nel PATH."""
     launcher = tmp_path / "launcher"
     shutil.copytree(LAUNCHER, launcher)
+    # Preserve the launcher's real ../shared/runtime input layout.
+    runtime = tmp_path / "shared" / "runtime"
+    runtime.mkdir(parents=True)
+    shutil.copy2(REPO_ROOT / "shared" / "runtime" / "role-models.list", runtime / "role-models.list")
     _write_exec(launcher / "tg-bridge.py", FAKE_BRIDGE)
 
     bin_dir = tmp_path / "bin"

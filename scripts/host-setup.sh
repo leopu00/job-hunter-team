@@ -245,9 +245,7 @@ PRESERVED_TZ="$(jht_read_host_env_value "$HOST_ENV_PATH" JHT_USER_TZ)" || PRESER
   printf 'JHT_LANG=%s\n' "$JHT_LANG"
   if [ -n "$PRESERVED_TZ" ]; then printf 'JHT_USER_TZ=%s\n' "$PRESERVED_TZ"; fi
 } | jht_write_host_env
-if ! jht_read_i18n_locale "$I18N_PREFS_PATH" >/dev/null 2>&1; then
-  printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" | jht_write_host_file "$I18N_PREFS_PATH"
-fi
+printf '{\n  "locale": "%s"\n}\n' "$JHT_LANG" | jht_write_host_file "$I18N_PREFS_PATH"
 
 # ── i18n: soltanto dati, mai helper shell dal filesystem ─────────────────
 # Questo script gira sull'host. Non importa codice da directory che il

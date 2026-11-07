@@ -142,7 +142,8 @@ describe("the hints", () => {
     expect(parseStreamHint({ topic: "chat", agent: "captain" })).toEqual({ topic: "chat", agent: "captain" });
     expect(parseStreamHint({ topic: "chat", agent: "../etc" })).toBeNull();
     expect(parseStreamHint({ topic: "chat", agent: 4 })).toBeNull();
-    expect(parseStreamHint({ topic: "positions" })).toBeNull();
+    expect(parseStreamHint({ topic: "positions" })).toEqual({ topic: "positions" });
+    expect(parseStreamHint({ topic: "not_a_topic" })).toBeNull();
     expect(parseStreamHint("agents")).toBeNull();
     expect(parseStreamHint(null)).toBeNull();
     expect(parseStreamStatus({ state: "up" })).toBe("up");

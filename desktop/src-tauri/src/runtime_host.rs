@@ -2247,7 +2247,7 @@ mod tests {
         }
         assert_eq!(super::PIPE_FREE_FILE_STALE_AFTER, Duration::from_secs(600));
         // and the app runs it at start, off the start's path
-        assert!(include_str!("lib.rs").split("generate_handler").next().unwrap().contains("std::thread::spawn(runtime_host::remove_stale_pipe_free_files);"));
+        assert!(crate::registration_source::before_handler_registration().contains("std::thread::spawn(runtime_host::remove_stale_pipe_free_files);"));
         let _ = fs::remove_dir_all(&dir);
     }
 

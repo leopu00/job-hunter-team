@@ -241,6 +241,20 @@ Materiale grafico interno (sorgenti SVG dei diagrammi, brief per la pipeline `ge
 |---|---|
 | [`TODO-ART.md`](assets/TODO-ART.md) | Cosa manca da disegnare: i sei ritratti `pensieroso` (Lotto 1, chiuso su dev6 il 29/07) e il Lotto 2 ancora aperto — formato, ancore, criteri di accettazione |
 
+## Checkpoint inattivi
+
+Materiale di recupero scollegato dal prodotto; ogni nota dichiara limiti e verifiche prima della ripresa.
+
+| File | Contenuto |
+|---|---|
+| [cli-launcher-20261107.md](checkpoint/cli-launcher-20261107.md) | Inactive CLI and launcher recovery records with explicit validation gaps |
+| [dashboard-move-20261107.md](checkpoint/dashboard-move-20261107.md) | Checkpoint disattivato del refactoring DashboardApp: snapshot, acquisizioni storiche e procedura di ripresa |
+| [desktop-recovery-20261107.md](checkpoint/desktop-recovery-20261107.md) | Inactive desktop recovery records and validation gaps |
+| [runtime-recovery-20261107.md](checkpoint/runtime-recovery-20261107.md) | Checkpoint inattivi dei recuperi runtime e test, fonti, limiti e condizioni di ripresa |
+| [source-guards-20261107.md](checkpoint/source-guards-20261107.md) | Checkpoint inattivi delle guardie sorgenti e dei residui storici: inventari, impronte e condizioni di ripresa |
+| [t200-and-residuals-20261107.md](checkpoint/t200-and-residuals-20261107.md) | Page memory cache recovery records and inactive historical changes |
+| [t204-rust-readers-20261107.md](checkpoint/t204-rust-readers-20261107.md) | Checkpoint scollegato dei lettori Rust, delle prove e dei residui di acquisizione: impronte, limiti e ripresa |
+
 ## 🗄️ _archive/
 
 Note storiche superate o consolidate altrove. Conservate per git-blame e ricerca, non più aggiornate.

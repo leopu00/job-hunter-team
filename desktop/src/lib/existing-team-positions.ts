@@ -4,6 +4,7 @@ import { nativeReadStarted } from "./page-timing";
 import { rememberLocalPositionToken } from "./local-swipe";
 import { localTeamData, reportLocalTeamRead, type SavedMark } from "./local-team-data";
 import { REFRESH_EVENT } from "../shell/refresh-event";
+import { positionArrayData, positionWindowData } from "./position-read-data";
 // The pages show an empty list for a list that could not be read, as the web does for a query
 // that fails; the header (shell/VpsLinkBar) is how the person is told it was not empty, and why.
 import { reportVpsRead } from "./vps-link";
@@ -103,12 +104,9 @@ async function read<T>(request: Request): Promise<DesktopVpsRead<T>> {
 
 function arrayRead<T>(value: DesktopVpsRead<unknown>): DesktopVpsRead<T[]> {
   if (value.source !== "vps") return value;
-  if (!value.data || typeof value.data !== "object" || Array.isArray(value.data)) {
-    return { source: "unavailable", code: "desktop_bad_reply" };
-  }
-  const items = (value.data as Record<string, unknown>).items;
-  return Array.isArray(items)
-    ? { source: "vps", data: items as T[] }
+  const items = positionArrayData<T>(value.data);
+  return items !== null
+    ? { source: "vps", data: items }
     : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
@@ -262,16 +260,9 @@ export async function readDesktopVpsPositionsWindow(
   const rows = value.source === "vps" ? (value.data as { total?: unknown } | null)?.total : undefined;
   reportPositionsNotice(value.source === "vps" && substituted && typeof rows === "number" && rows > 0 ? "sort_last_action" : null);
   if (value.source !== "vps") return value;
-  const data = value.data;
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return { source: "unavailable", code: "desktop_bad_reply" };
-  }
-  const { items, total, scamSection } = data as Record<string, unknown>;
-  // The count of the «suspicious» section rides with the page when the core sent one.
-  const section =
-    typeof scamSection === "number" && Number.isInteger(scamSection) && scamSection >= 0 ? { scamSection } : {};
-  return Array.isArray(items) && typeof total === "number" && Number.isInteger(total) && total >= 0
-    ? { source: "vps", data: { items: items as PositionWithScore[], total, ...section } }
+  const data = positionWindowData(value.data);
+  return data !== null
+    ? { source: "vps", data }
     : { source: "unavailable", code: "desktop_bad_reply" };
 }
 
@@ -467,8 +458,8 @@ export function readDesktopVpsPosition(
   });
 }
 
-export function readDesktopVpsPositionFacets(): Promise<
+export function readDesktopVpsPositionFacets(fresh = false): Promise<
   DesktopVpsRead<PositionFacet[]>
 > {
-  return readOnce<unknown>({ op: "facets" }).then(arrayRead<PositionFacet>);
+  return (fresh ? read<unknown>({ op: "facets" }) : readOnce<unknown>({ op: "facets" })).then(arrayRead<PositionFacet>);
 }

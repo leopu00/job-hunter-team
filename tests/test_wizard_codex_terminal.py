@@ -7,6 +7,8 @@ import os
 import select
 import shutil
 import signal
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -123,6 +125,19 @@ def begin_login(terminal):
     return screen
 
 
+def _wait_for_child_exit(pid, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError(f"Synthetic child PID {pid} still exists after {timeout}s")
+        time.sleep(min(0.01, remaining))
+
+
 def test_codex_code_and_wait_are_visible_in_the_wizard_terminal(tmp_path):
     node, home, env = prepare(tmp_path)
     terminal = WizardTerminal(node, env)
@@ -146,6 +161,7 @@ def test_ctrl_c_then_setup_reuses_saved_config_and_signs_in_here(tmp_path):
         interrupted.send(b"\x03")
         assert interrupted.finish() != 0
         child_pid = int((home / "fake-codex.pid").read_text())
+        _wait_for_child_exit(child_pid)
         with pytest.raises(ProcessLookupError):
             os.kill(child_pid, 0)
         assert not (home / ".codex/auth.json").exists()
@@ -166,3 +182,14 @@ def test_ctrl_c_then_setup_reuses_saved_config_and_signs_in_here(tmp_path):
         print("T211 resumed screen (synthetic):\n" + resumed.output.decode("utf-8", "replace"))
     finally:
         resumed.close()
+
+
+def test_exit_wait_refuses_a_process_that_stays_alive():
+    proc = subprocess.Popen([sys.executable, "-c", "import signal; signal.pause()"])
+    try:
+        with pytest.raises(AssertionError, match="still exists"):
+            _wait_for_child_exit(proc.pid, timeout=0.03)
+        assert proc.poll() is None, "The negative control must still be alive at the deadline"
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)

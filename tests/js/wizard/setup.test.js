@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LATEST_CONFIG_VERSION } from '../../../cli/src/commands/migrate.js';
+import { CODEX_MODEL } from '../../../shared/runtime/role-models.js';
 
 // Mock node:fs e setup-helpers per evitare scritture reali.
-vi.mock('node:fs');
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  const { mockFsWithRoleModels } = await import('../helpers/mock-fs-with-role-models.js');
+  return mockFsWithRoleModels(actual, vi);
+});
 vi.mock('../../../cli/wizard/setup-helpers.js', async (importOriginal) => {
   const original = await importOriginal();
   return {
@@ -130,7 +135,7 @@ describe('runSetupWizard — provider OpenAI (subscription)', () => {
     const [savedConfig] = vi.mocked(writeConfigFile).mock.calls[0];
     expect(savedConfig.active_provider).toBe('openai');
     expect(savedConfig.providers.openai.auth_method).toBe('subscription');
-    expect(savedConfig.providers.openai.model).toBe('gpt-4o');
+    expect(savedConfig.providers.openai.model).toBe(CODEX_MODEL.sol);
     // a new config is born at the latest version: nothing to migrate for the first `jht doctor`
     expect(savedConfig.version).toBe(LATEST_CONFIG_VERSION);
   });

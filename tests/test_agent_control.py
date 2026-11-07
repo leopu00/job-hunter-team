@@ -641,9 +641,10 @@ def test_the_journal_rotates_and_never_grows_without_end(team, capsys):
 # ── the grammar and the launcher ────────────────────────────────────────────
 def test_every_role_the_panel_starts_is_one_start_agent_knows(team):
     text = START_AGENT.read_text(encoding="utf-8")
-    body = text[text.index("get_agent_info()"):]
-    body = body[:body.index("\n}\n")]
-    known = set(re.findall(r"^\s*([a-z]+)\)", body, re.M))
+    assert 'source "$DEV_TEAM_DIR/role-models.sh"' in text
+    table = (ROOT / "shared/runtime/role-models.list").read_text()
+    known = {line.split("|")[1] for line in table.splitlines() if line.startswith("role|")}
+    assert known, "the role inventory must not be empty"
     roles = set(team.tool.SINGLETONS.values()) | set(team.tool.NUMBERED.values())
     assert roles <= known, roles - known
 

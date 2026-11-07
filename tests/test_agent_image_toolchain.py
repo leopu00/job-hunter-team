@@ -62,7 +62,7 @@ def _executable(path: Path, text: str) -> None:
 def image(tmp_path):
     """A fake /app and bin: everything the check looks for, all healthy."""
     app = tmp_path / "app"
-    for rel in (".launcher/start-agent.sh", ".launcher/entrypoint.sh", ".launcher/spawn-lib.sh",
+    for rel in (".launcher/start-agent.sh", ".launcher/entrypoint.sh", ".launcher/spawn-lib.sh", ".launcher/agent-environment.sh",
                 "shared/runtime/provider-pins.js", "shared/config/provider-versions.json"):
         (app / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, app / rel)

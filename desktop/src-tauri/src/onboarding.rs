@@ -10346,7 +10346,7 @@ mod existing_team_assistant_tests {
             ("cli_adapter", include_str!("cli_adapter.rs")),
             ("direct_chat", include_str!("direct_chat.rs")),
             ("runtime_host", include_str!("runtime_host.rs")),
-            ("lib", include_str!("lib.rs").split("generate_handler").next().unwrap()),
+            ("lib", crate::registration_source::before_handler_registration()),
         ] {
             assert!(!source.contains("assistant_start_command"), "{name}");
             assert!(!source.contains("existing_team_assistant_start_with"), "{name}");

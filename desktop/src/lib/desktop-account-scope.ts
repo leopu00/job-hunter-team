@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { suspendPageDataContext } from "./page-data";
 
 let transitions: Promise<void> = Promise.resolve();
 let migrationInFlight: { profileId: string; promise: Promise<DesktopProfileMigrationReceipt> } | null = null;
@@ -14,10 +15,15 @@ function serialize<T>(operation: () => Promise<T>): Promise<T> {
   return current;
 }
 
+function transition<T>(operation: () => Promise<T>): Promise<T> {
+  const release = suspendPageDataContext();
+  return serialize(operation).finally(release);
+}
+
 /** Asks the backend to derive and establish scope from its authenticated session. */
 export async function activateDesktopAccountScope(): Promise<void> {
   if (!isTauri()) desktopOnly();
-  await serialize(async () => {
+  await transition(async () => {
     await invoke("runtime_account_scope_set");
   });
 }
@@ -35,7 +41,7 @@ export async function createDesktopLocalProfile(): Promise<DesktopLocalProfile> 
 /** Activates only a capability that the backend previously issued and persisted. */
 export async function activateDesktopLocalScope(profileId: string): Promise<void> {
   if (!isTauri()) desktopOnly();
-  await serialize(async () => {
+  await transition(async () => {
     await invoke("runtime_account_scope_set_local", { profileId });
   });
 }
@@ -43,7 +49,7 @@ export async function activateDesktopLocalScope(profileId: string): Promise<void
 /** Atomically closes scoped resources and clears the backend ownership boundary. */
 export async function clearDesktopAccountScope(): Promise<void> {
   if (!isTauri()) desktopOnly();
-  await serialize(async () => {
+  await transition(async () => {
     await invoke("runtime_account_scope_reset");
   });
 }
@@ -51,7 +57,7 @@ export async function clearDesktopAccountScope(): Promise<void> {
 /** DEV/test-only native reset; release builds reject it before filesystem access. */
 export async function resetDesktopPlaygroundLocalScope(profileId: string): Promise<void> {
   if (!isTauri()) desktopOnly();
-  await serialize(async () => {
+  await transition(async () => {
     await invoke("runtime_playground_local_reset", { profileId });
   });
 }
@@ -60,7 +66,7 @@ export async function resetDesktopPlaygroundLocalScope(profileId: string): Promi
 export async function recoverDesktopPlaygroundLocalOrphan(): Promise<boolean> {
   if (!isTauri()) desktopOnly();
   let recovered = false;
-  await serialize(async () => {
+  await transition(async () => {
     recovered = await invoke<boolean>("runtime_playground_local_orphan_recover");
   });
   return recovered;
@@ -99,7 +105,7 @@ export function migrateDesktopLocalProfileToAccount(
       : Promise.reject({ code: "local_migration_in_progress" });
   }
   let current!: Promise<DesktopProfileMigrationReceipt>;
-  current = serialize(() => invoke<DesktopProfileMigrationReceipt>(
+  current = transition(() => invoke<DesktopProfileMigrationReceipt>(
     "runtime_local_profile_migrate_to_authenticated",
     { profileId },
   )).then((receipt) => {

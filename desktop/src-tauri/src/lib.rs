@@ -57,6 +57,7 @@ mod artifact_upload;
 mod host_path_policy;
 mod single_instance;
 mod load_times;
+mod page_data_log;
 mod runtime_log;
 mod saved_vps;
 mod team_control;
@@ -76,48 +77,16 @@ mod voice_input;
 mod vps_link;
 mod window_fit;
 mod windows_runtime;
+#[cfg(test)]
+mod registration_source;
 
 pub(crate) fn application_context() -> tauri::Context<tauri::Wry> {
     tauri::generate_context!()
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    // `jht-desktop.exe --artifact-upload <file>`: one command, no window (jht.ps1 calls it for `jht artifact upload`)
-    if let Some(code) = artifact_upload::run_if_asked() {
-        std::process::exit(code);
-    }
-    linux_render::apply();
-    tauri::Builder::default()
-        // first of all the plugins: a second opening of the app hands over to the one already open and ends here
-        // (single_instance.rs); the arguments and the folder it brings are not read
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            single_instance::bring_main_window_forward(app);
-        }))
-        .plugin(tauri_plugin_dialog::init())
-        // a new position's system notification (lib/notify): only what capabilities/new-position-notification.json allows
-        .plugin(tauri_plugin_notification::init())
-        .manage(account_scope::AccountScopeState::default())
-        .manage(broker_view::BrokerViewState::default())
-        .manage(direct_chat::DirectChatState::default())
-        .manage(state_stream::StateStreamState::default())
-        .manage(onboarding::OnboardingNativeState::default())
-        .manage(profile_import::ProfileImportState::default())
-        .manage(voice_input::VoiceInputState::default())
-        .manage(auth_store::system_key_cache())
-        .setup(|app| {
-            // inside the work area of its monitor, at any scale
-            window_fit::fit_main_window(app.handle());
-            voice_input::attach(app.handle())?;
-            // the folder of the private copies a document is opened from (and the sweep of what an earlier run left)
-            if let Ok(dir) = tauri::Manager::path(app).app_local_data_dir() {
-                std::thread::spawn(move || private_copy::init(dir));
-            }
-            // what a crash left of the ssh calls' temporary files (the pipe-free calls on Windows, the file of ssh's own messages on macOS and Linux), off the start's path
-            std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+macro_rules! registered_native_commands {
+    () => {
+        tauri::generate_handler![
             account_scope::onboarding_local_data_adopt,
             account_scope::onboarding_local_data_set_aside,
             account_scope::onboarding_local_owner_probe,
@@ -211,6 +180,7 @@ pub fn run() {
             onboarding::onboarding_local_uninstall,
             runtime_log::onboarding_runtime_log,
             load_times::page_load_metric,
+            page_data_log::page_data_failure,
             runtime_log::onboarding_runtime_log_open,
             saved_vps::saved_vps_list,
             saved_vps::saved_vps_add,
@@ -256,7 +226,47 @@ pub fn run() {
             voice_input::voice_input_start,
             voice_input::voice_input_status,
             voice_input::voice_input_stop
-        ])
+        ]
+    };
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    // `jht-desktop.exe --artifact-upload <file>`: one command, no window (jht.ps1 calls it for `jht artifact upload`)
+    if let Some(code) = artifact_upload::run_if_asked() {
+        std::process::exit(code);
+    }
+    linux_render::apply();
+    tauri::Builder::default()
+        // first of all the plugins: a second opening of the app hands over to the one already open and ends here
+        // (single_instance.rs); the arguments and the folder it brings are not read
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            single_instance::bring_main_window_forward(app);
+        }))
+        .plugin(tauri_plugin_dialog::init())
+        // a new position's system notification (lib/notify): only what capabilities/new-position-notification.json allows
+        .plugin(tauri_plugin_notification::init())
+        .manage(account_scope::AccountScopeState::default())
+        .manage(broker_view::BrokerViewState::default())
+        .manage(direct_chat::DirectChatState::default())
+        .manage(state_stream::StateStreamState::default())
+        .manage(onboarding::OnboardingNativeState::default())
+        .manage(profile_import::ProfileImportState::default())
+        .manage(voice_input::VoiceInputState::default())
+        .manage(auth_store::system_key_cache())
+        .setup(|app| {
+            // inside the work area of its monitor, at any scale
+            window_fit::fit_main_window(app.handle());
+            voice_input::attach(app.handle())?;
+            // the folder of the private copies a document is opened from (and the sweep of what an earlier run left)
+            if let Ok(dir) = tauri::Manager::path(app).app_local_data_dir() {
+                std::thread::spawn(move || private_copy::init(dir));
+            }
+            // what a crash left of the ssh calls' temporary files (the pipe-free calls on Windows, the file of ssh's own messages on macOS and Linux), off the start's path
+            std::thread::spawn(runtime_host::remove_stale_pipe_free_files);
+            Ok(())
+        })
+        .invoke_handler(registered_native_commands!())
         // the close button leaves nothing running unasked: the page is asked first (app_exit.rs)
         .on_window_event(|window, event| {
             if window.label() == "main" {

@@ -12,6 +12,7 @@ import ExistingTeamConnectModal from "./ExistingTeamConnectModal";
 import { ERROR_CATALOG } from "../lib/error-catalog";
 import { EXISTING_TEAM_RECEIPT_TEXT } from "./existing-team-receipt.i18n";
 import { EXISTING_TEAM_CHOICE_TEXT } from "./existing-team-choice.i18n";
+import { ONBOARDING_TEXT } from "./onboarding.i18n";
 
 vi.mock("../components/SshKeyPicker", () => ({
   default: ({ value, onChange, disabled }: { value: string; onChange: (path: string) => void; disabled?: boolean }) => (
@@ -621,7 +622,9 @@ describe("«Confirm and connect» on a profile with no saved target", () => {
   it("reads what the server declares, saves the target only once confirmed, then connects in full", async () => {
     const user = userEvent.setup();
     const connect = vi.fn().mockRejectedValueOnce(CANDIDATE_REQUIRED).mockResolvedValueOnce(RESULT);
-    const native = bridge({ connect });
+    let release: (value: { outcome: "registered" }) => void = () => {};
+    const register = vi.fn().mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const native = bridge({ connect, register });
     const onConnected = vi.fn().mockResolvedValue(undefined);
     const onReadOnlyConnected = vi.fn();
     render(<ExistingTeamConnectModal teamId="team-opaque-0001" bridge={native} onCancel={vi.fn()} onConnected={onConnected} onReadOnlyConnected={onReadOnlyConnected} />);
@@ -632,12 +635,16 @@ describe("«Confirm and connect» on a profile with no saved target", () => {
     expect(within(section).getByText("team-opaque-0001")).toBeInTheDocument();
     // the caution of the full connection, never the read-only one
     expect(section).toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.cautionFull);
+    expect(section).toHaveTextContent("da qui potrai scriverle nella chat e comandarla dal pannello Agenti");
     expect(section).not.toHaveTextContent(EXISTING_TEAM_RECEIPT_TEXT.it.caution);
     expect(within(section).queryByRole("button", { name: /sola lettura/i })).not.toBeInTheDocument();
     expect(native.register).not.toHaveBeenCalled();
     expect(connect).toHaveBeenCalledOnce();
 
-    await user.click(within(section).getByRole("button", { name: /^conferma e collega$/i }));
+    await user.click(within(section).getByRole("button", { name: ONBOARDING_TEXT.it.existingTeam.confirmAndLink }));
+    expect(await screen.findByText(EXISTING_TEAM_RECEIPT_TEXT.it.registeringDetailFull)).toBeInTheDocument();
+    expect(screen.queryByText(EXISTING_TEAM_RECEIPT_TEXT.it.registeringDetail)).not.toBeInTheDocument();
+    release({ outcome: "registered" });
     await waitFor(() => expect(onConnected).toHaveBeenCalledWith(RESULT));
     expect(native.register).toHaveBeenCalledWith(RECEIPT.candidateSha256);
     expect(connect).toHaveBeenCalledTimes(2);

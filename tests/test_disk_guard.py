@@ -605,6 +605,8 @@ def test_a_guard_that_crashes_does_not_block_the_spawn(tmp_path):
         (lib / "launcher").mkdir(parents=True)
         (lib / "shared" / "skills").mkdir(parents=True)
         (lib / "launcher" / "spawn-lib.sh").write_text(SPAWN_LIB.read_text(encoding="utf-8"), encoding="utf-8")
+        (lib / "launcher" / "agent-environment.sh").write_text(
+            (ROOT / ".launcher" / "agent-environment.sh").read_text(encoding="utf-8"), encoding="utf-8")
         (lib / "launcher" / "daemon-lib.sh").write_text(
             (ROOT / ".launcher" / "daemon-lib.sh").read_text(encoding="utf-8"), encoding="utf-8")
         (lib / "shared" / "skills" / "host_vitals.py").write_text(

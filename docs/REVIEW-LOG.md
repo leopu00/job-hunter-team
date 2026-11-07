@@ -246,6 +246,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/DESKTOP.md](./guides/DESKTOP.md) | Guida dell'app desktop: ogni pagina, l'ufficio e cosa vuol dire ogni oggetto, come ci si muove (anche da tastiera), cosa l'app non puo' fare e perche'. | — | 2026-10-27 | ✅ |
 | [docs/guides/API-TEAM.md](./guides/API-TEAM.md) | Guida pubblica del team API: i pezzi (esecuzione del ruolo, hub, lanciatore, esecutore, keyproxy), i quattro tetti di spesa (per run, per avvio, per sessione, keyproxy), le partenze scaglionate e le differenze volute col team TUI. | — | 2026-10-26 | ✅ |
 | [docs/guides/PARITY-ROUND.md](./guides/PARITY-ROUND.md) | Guida pubblica del giro di parita' TUI contro API: cosa lo rende pulito, configurazione fuori da git, check / start / --yes, lettura del REPORT e cosa il giro non fa mai. | — | 2026-09-28 | ✅ |
+| [docs/guides/WINDOWS-PODMAN-DISK.md](./guides/WINDOWS-PODMAN-DISK.md) | Limite del disco Podman Windows, crescita del VHDX e compattazione non automatica | — | — | ✅ |
 
 
 ## 🛰️ docs/internal

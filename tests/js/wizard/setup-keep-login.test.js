@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Gate CLI Linux 19i (A4): after the wait for the login ran out, `jht setup` → «Keep existing values» ended without
 // asking for the login that was still missing.
-vi.mock('node:fs');
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  const { mockFsWithRoleModels } = await import('../helpers/mock-fs-with-role-models.js');
+  return mockFsWithRoleModels(actual, vi);
+});
 vi.mock('../../../cli/wizard/setup-helpers.js', async (importOriginal) => {
   const original = await importOriginal();
   return { ...original, writeConfigFile: vi.fn(), readConfigFileSnapshot: vi.fn(() => ({ exists: false, config: null })) };

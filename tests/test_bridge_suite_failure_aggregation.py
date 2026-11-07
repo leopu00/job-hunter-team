@@ -29,6 +29,10 @@ def _launcher_with_daemons(
 ) -> tuple[Path, dict[str, str], Path]:
     launcher = tmp_path / "launcher"
     shutil.copytree(LAUNCHER, launcher)
+    # Preserve the launcher's real ../shared/runtime input layout.
+    runtime = tmp_path / "shared" / "runtime"
+    runtime.mkdir(parents=True)
+    shutil.copy2(ROOT / "shared" / "runtime" / "role-models.list", runtime / "role-models.list")
     source_path = launcher / "start-agent.sh"
     source = source_path.read_text(encoding="utf-8")
     for label, (variable, production_path) in DAEMONS.items():

@@ -21,6 +21,7 @@ import {
 import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-ref.js';
 import { runHealthCheck } from './setup-checks.js';
 import { t } from './i18n.js';
+import { summarizeRoleModels } from './setup-models.js';
 
 /** The most a file holding one API key can weigh. */
 const API_KEY_FILE_MAX_BYTES = 4096;
@@ -81,32 +82,8 @@ export async function runNonInteractiveSetup(opts) {
       // before, from --api-key
       let key = opts.apiKey;
       if (opts.apiKeyFile) {
-        // a regular file, not a link (and so not a pipe or a device that never ends), of a size a key can have
-        let stat = null;
-        try { stat = lstatSync(opts.apiKeyFile); } catch { /* said below */ }
-        if (!stat || !stat.isFile()) {
-          console.error(pc.red(stat
-            ? `The file given to --api-key-file must be a regular file, not a link or a device: ${opts.apiKeyFile}`
-            : `The file given to --api-key-file cannot be read: ${opts.apiKeyFile}`));
-          process.exitCode = 1;
-          return;
-        }
-        if (stat.size > API_KEY_FILE_MAX_BYTES) {
-          console.error(pc.red(`The file given to --api-key-file is too big for a key (over ${API_KEY_FILE_MAX_BYTES} bytes): ${opts.apiKeyFile}`));
-          process.exitCode = 1;
-          return;
-        }
-        // like ssh: a key that others can read is said, not refused
-        if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
-          console.error(pc.yellow(`The file ${opts.apiKeyFile} can be read by other users: chmod 600 it.`));
-        }
-        try {
-          key = readFileSync(opts.apiKeyFile, 'utf8').split(/\r?\n/)[0];
-        } catch {
-          console.error(pc.red(`The file given to --api-key-file cannot be read: ${opts.apiKeyFile}`));
-          process.exitCode = 1;
-          return;
-        }
+        key = readApiKeyFile(opts.apiKeyFile);
+        if (key === null) return;
       }
       if (!key || !key.trim()) {
         console.error(pc.red(opts.apiKeyFile ? 'The file given to --api-key-file is empty.' : '--api-key-file (or --api-key) is required, or use --secret-mode env/file'));
@@ -144,6 +121,42 @@ export async function runNonInteractiveSetup(opts) {
     if (!ok) console.log(pc.yellow(`  ${t('wizard.checks.health.failed_save_anyway')}`));
   }
 
+  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig });
+}
+
+function readApiKeyFile(file) {
+  let key;
+  // a regular file, not a link (and so not a pipe or a device that never ends), of a size a key can have
+  let stat = null;
+  try { stat = lstatSync(file); } catch { /* said below */ }
+  if (!stat || !stat.isFile()) {
+    console.error(pc.red(stat
+      ? `The file given to --api-key-file must be a regular file, not a link or a device: ${file}`
+      : `The file given to --api-key-file cannot be read: ${file}`));
+    process.exitCode = 1;
+    return null;
+  }
+  if (stat.size > API_KEY_FILE_MAX_BYTES) {
+    console.error(pc.red(`The file given to --api-key-file is too big for a key (over ${API_KEY_FILE_MAX_BYTES} bytes): ${file}`));
+    process.exitCode = 1;
+    return null;
+  }
+  // like ssh: a key that others can read is said, not refused
+  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+    console.error(pc.yellow(`The file ${file} can be read by other users: chmod 600 it.`));
+  }
+  try {
+    key = readFileSync(file, 'utf8').split(/\r?\n/)[0];
+  } catch {
+    console.error(pc.red(`The file given to --api-key-file cannot be read: ${file}`));
+    process.exitCode = 1;
+    return null;
+  }
+
+  return key;
+}
+
+function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig }) {
   // --- Assembla e salva config ---
   const providerConfig = { name: providerName, auth_method: authMethod, model };
   if (apiKeySecret) {
@@ -177,7 +190,7 @@ export async function runNonInteractiveSetup(opts) {
   } else {
     console.log(`  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`);
   }
-  console.log(`  Model:      ${model}`);
+  console.log(summarizeRoleModels(config));
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
   if (authMethod === 'subscription') {

@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import { writePrivateJson } from '../src/lib/secure-config-io.js';
 import path from 'node:path';
 import os from 'node:os';
+import { CODEX_MODEL } from '../../shared/runtime/role-models.js';
+import { summarizeRoleModels } from './setup-models.js';
 
 // Path fissi JHT (specchio di shared/paths.ts, con override env var).
 // cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
@@ -21,11 +23,7 @@ export const AI_PROVIDERS = [
     keyPrefix: 'sk-',
     keyPlaceholder: 'sk-proj-...',
     docsUrl: 'https://platform.openai.com/api-keys',
-    models: [
-      { value: 'gpt-4o', label: 'GPT-4o' },
-      { value: 'o3', label: 'o3' },
-      { value: 'o4-mini', label: 'o4-mini' },
-    ],
+    models: Object.values(CODEX_MODEL).map((value) => ({ value, label: value })),
   },
 ];
 
@@ -153,9 +151,8 @@ export function summarizeExistingConfig(config) {
     lines.push(`Provider: ${prov?.label ?? config.active_provider}`);
   }
   const activeProviderConfig = config.providers?.[config.active_provider];
-  if (activeProviderConfig?.model) {
-    lines.push(`Model: ${activeProviderConfig.model}`);
-  }
+  const models = summarizeRoleModels(config);
+  if (models) lines.push(models);
   if (activeProviderConfig?.auth_method) {
     lines.push(`Auth: ${activeProviderConfig.auth_method}`);
   }

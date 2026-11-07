@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { existingTeamView } from "./existing-team-readonly";
+import { resetPageDataContext } from "./page-data";
 
 /**
  * The pages show the data of the team on THIS computer: a profile with no cloud account has nothing else to
@@ -34,6 +35,7 @@ function subscribe(listener: () => void): () => void {
 /** `key` is the identity whose local team the pages read; null: not in this mode. Safe to call while rendering. */
 export function setLocalTeamData(key: string | null): void {
   if (identity === key) return;
+  resetPageDataContext();
   identity = key;
   stopped = false;
   savedAt = null;

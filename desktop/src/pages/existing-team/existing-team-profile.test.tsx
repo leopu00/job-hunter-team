@@ -157,7 +157,7 @@ describe("Profilo on an existing team read only", () => {
     expect(screen.queryByTestId("profile-unknown")).not.toBeInTheDocument();
   });
 
-  it("shows the real code of a failed read and never an older profile as the present", async () => {
+  it("shows the real refresh failure beside the previous profile marked as stale", async () => {
     const user = userEvent.setup();
     await open();
     await screen.findByTestId("profile-view");
@@ -167,12 +167,14 @@ describe("Profilo on an existing team read only", () => {
     expect(alert).toHaveTextContent(`${T.errorCode} positions_unavailable`);
     expect(alert).toHaveTextContent(T.failed);
     expect(within(alert).getByRole("button", { name: T.retry })).toBeInTheDocument();
-    expect(screen.queryByTestId("profile-view")).not.toBeInTheDocument();
-    expect(screen.queryByText("Synthetic Persona")).not.toBeInTheDocument();
+    expect(screen.getByTestId("profile-view")).toHaveAttribute("data-stale", "true");
+    expect(screen.getByTestId("profile-view")).toHaveTextContent("Synthetic Persona");
+    expect(screen.getByTestId("profile-time")).toBeInTheDocument();
     answer = async () => profileReply();
     await user.click(pageRefresh());
     expect(await screen.findByTestId("profile-view")).toBeInTheDocument();
     expect(screen.queryByTestId("profile-error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("profile-view")).toHaveAttribute("data-stale", "false");
   });
 
   it("calls a reply that is not whole a bad reply, not an empty profile", async () => {

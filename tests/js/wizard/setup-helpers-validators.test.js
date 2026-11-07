@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('node:fs');
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  const { mockFsWithRoleModels } = await import('../helpers/mock-fs-with-role-models.js');
+  return mockFsWithRoleModels(actual, vi);
+});
 
 import {
   validateApiKey,

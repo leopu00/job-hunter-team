@@ -1,0 +1,15 @@
+# model|class|codex model|claude alias|legacy role alias
+model|sol|gpt-5.6-sol|opus|
+model|terra|gpt-5.6-terra|sonnet|sonnet
+model|luna|gpt-5.6-luna||luna
+# role|name|default class|effort|session prefix
+role|capitano|sol|high|CAPITANO
+role|scout|terra|high|SCOUT
+role|analista|terra|high|ANALISTA
+role|scorer|terra|high|SCORER
+role|scrittore|sol|high|SCRITTORE
+role|critico|sol|high|CRITICO
+role|sentinella|terra|high|SENTINELLA
+role|assistente|terra|high|ASSISTENTE
+role|mentor|sol|high|MENTOR
+role|closer|terra|high|CLOSER

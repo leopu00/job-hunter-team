@@ -5,6 +5,7 @@
  */
 
 export const ERROR_TRANSLATION_LOCALES = ["de", "es", "fr", "hu", "pt"] as const;
+import { PAGE_DATA_ERROR_TRANSLATIONS } from "./error-catalog.page-data";
 
 export type ErrorTranslationLocale = (typeof ERROR_TRANSLATION_LOCALES)[number];
 export type ErrorTranslationPair = readonly [text: string, action: string];
@@ -1921,6 +1922,7 @@ const APPLY_BAD_NUMBER = tr(
 );
 
 export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> = {
+  ...PAGE_DATA_ERROR_TRANSLATIONS,
   unknown: translated("The operation did not succeed."),
   apply_authorisation_unrecorded: translated("The operation did not succeed."),
   apply_withdrawal_unconfirmed: APPLY_WITHDRAWAL_UNCONFIRMED,
