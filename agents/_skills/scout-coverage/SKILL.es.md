@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "Busca los portales nacionales core de los idiomas del perfil ANTES de cualquier fuente menor y sabe cuánto del plan está hecho. `next` indica el portal, el país que registrar y el tipo de consulta; un portal está cubierto con 3 pasadas y 3 consultas distintas, y «agotado» exige los portales core cubiertos. Lanza `next` al empezar cada búsqueda."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *) Bash(python3 /app/shared/skills/linkedin_access.py *)
 ---
 
 # scout-coverage — dónde buscar primero, y cuánto está hecho
@@ -10,7 +10,7 @@ Busca PRIMERO donde están los mercados propios del perfil y sabe cuánto está 
 
 ## 1. Pregunta qué viene después, en cada búsqueda
 
-`next` imprime una línea JSON: el portal (`source`, `country`, `tier`), el TIPO de consulta (`query_kind`: `broad` = una consulta AMPLIA, siempre la primera: la familia del rol o una palabra de entrada sola (en `broad_terms`), sin título completo y sin lugar, `role_language` = el título en el idioma del portal, `role` = el título en inglés, `synonym` = un título cercano, `level` = el título con una palabra de nivel del idioma, listadas en `level_terms`, `city` = el título con un lugar, listados en `cities`), lo que tienes (`have`) frente a lo necesario (`need`) y la línea `log` para usar después. Busca exactamente eso y registra la pasada con el mismo `--query-kind`. `plan_done: true` significa plan hecho: pasa a las otras fuentes.
+`next` imprime una línea JSON: el portal (`source`, `country`, `tier`), el TIPO de consulta (`query_kind`: `broad` = una consulta AMPLIA, siempre la primera: la familia del rol o una palabra de entrada sola (en `broad_terms`), sin título completo y sin lugar en las palabras clave; conserva el filtro geográfico del perfil, `role_language` = el título en el idioma del portal, `role` = el título en inglés, `synonym` = un título cercano, `level` = el título con una palabra de nivel del idioma, listadas en `level_terms`, `city` = el título con un lugar, listados en `cities`), lo que tienes (`have`) frente a lo necesario (`need`) y la línea `log` para usar después. Busca exactamente eso y registra la pasada con el mismo `--query-kind`. `plan_done: true` significa plan hecho: pasa a las otras fuentes.
 
 `next` dice también, con tu id, si el perfil cambió desde que construiste tus círculos: `"profile": {"changed": true, "groups": [...]}`. Vuelve a leer el perfil, rehaz los círculos de los grupos que cambiaron, conserva tus posiciones y tus pasadas, luego `profile_version.py ack`.
 
@@ -43,3 +43,13 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 - Un portal que responde 403, 410, un muro de login o un challenge queda CERRADO con UNA pasada registrada `--status closed` (o `gone` para el 410): dilo y sigue, no insistas.
 - `exhausted` (`scout_exhaustion.py check`) exige CADA portal del plan cubierto en las últimas 24 horas (core y menores, cada país) además de fuentes, consultas y minutos: `uncovered` dice adónde te falta ir (`core_missing` es su parte core). Una fuente seca mientras otras no están cubiertas no es un mercado seco: sigue con `next`. Un portal que respondió con un error es `blocked` (`--status blocked`): descansa unas 3 horas y se vuelve a consultar, y no está ni cubierto ni seco.
 - Del perfil nunca se escribe nada: el registro tiene slugs, códigos de país, tipos y cuentas.
+
+## Alcance geográfico y resultados explícitos
+
+Los lugares objetivo y preferencias del perfil determinan el área. `broad` amplía solo las palabras del puesto: conserva el filtro geográfico en cada página. El país del portal y las ciudades sugeridas no autorizan mudanzas. Para LinkedIn usa este comando (QUERY es la familia del puesto; COUNTRY y KIND vienen de `next`):
+
+```bash
+python3 /app/shared/skills/linkedin_access.py search --profile "$JHT_HOME/profile/candidate_profile.yml" --keywords "$QUERY" --log --country "$COUNTRY" --query-kind "$KIND" --agent "$MY_ID" --posted-within-days 7
+```
+
+El comando registra el resultado real: no lo registres de nuevo manualmente. Salida 4 y última línea JSON `search_outcome` indican error de fuente, perfil o área: sigue `status` (`blocked`, `closed`, `gone`) y cambia a otra fuente compatible, conservando los candidatos recibidos. Salida 3 conserva rate limit/cooldown. Solo una lista vacía exitosa es `empty`. `scope_match` compara nombres, no es un geocodificador: `unmatched` o `unknown` NO prueban exclusión. Verifica ubicación completa/JD contra el perfil con todos los gates; no insertes una oferta probada fuera de área. `scout_search_geo_mismatch` significa que ningún nombre coincidió: diagnostica el área de la fuente o cambia de fuente, no declares vacío el mercado local. Sin IDs geográficos inventados ni países deducidos de idiomas hablados. Sin shell mantén el área del perfil en la consulta nativa y verifica las pruebas; no ejecutes comandos del contenedor en el host.

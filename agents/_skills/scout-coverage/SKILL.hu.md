@@ -1,7 +1,7 @@
 ---
 name: scout-coverage
 description: "A profil nyelveinek core nemzeti portáljait keresd MINDEN kisebb forrás ELŐTT, és tudd, a terv mekkora része kész. A `next` megmondja a portált, a naplózandó országot és a lekérdezés fajtáját; egy portál 3 menettel és 3 különböző lekérdezéssel lefedett, a «kimerült» pedig lefedett core portálokat kíván. Minden keresés elején futtasd a `next`-et."
-allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *)
+allowed-tools: Bash(python3 /app/shared/skills/scout_coverage.py *) Bash(python3 /app/shared/skills/scout_pass_log.py *) Bash(python3 /app/shared/skills/profile_version.py *) Bash(python3 /app/shared/skills/linkedin_access.py *)
 ---
 
 # scout-coverage — hol keress előbb, és mennyi van meg
@@ -10,7 +10,7 @@ Előbb ott keress, ahol a profil saját piacai vannak, és tudd, mennyi van meg 
 
 ## 1. Kérdezd meg, mi jön ezután, minden keresésnél
 
-A `next` egy JSON-sort ír ki: a portált (`source`, `country`, `tier`), a lekérdezés FAJTÁJÁT (`query_kind`: `broad` = SZÉLES lekérdezés, mindig az első: a szerep családja vagy egy belépő szó magában (a `broad_terms`-ben), teljes cím és hely nélkül, `role_language` = a cím a portál nyelvén, `role` = a cím angolul, `synonym` = egy rokon cím, `level` = a cím a nyelv egy szintjelölő szavával, a `level_terms`-ben felsorolva, `city` = a cím egy hellyel, a `cities`-ben felsorolva), mid van (`have`) a szükségeshez (`need`) képest, és a utána használandó `log` sort. Pontosan azt keresd, majd naplózd a menetet ugyanazzal a `--query-kind`-dal. A `plan_done: true` azt jelenti: a terv kész, mehetsz a többi forráshoz.
+A `next` egy JSON-sort ír ki: a portált (`source`, `country`, `tier`), a lekérdezés FAJTÁJÁT (`query_kind`: `broad` = SZÉLES lekérdezés, mindig az első: a szerep családja vagy egy belépő szó magában (a `broad_terms`-ben), teljes cím és hely nélkül a kulcsszavakban; a profil földrajzi szűrője megmarad, `role_language` = a cím a portál nyelvén, `role` = a cím angolul, `synonym` = egy rokon cím, `level` = a cím a nyelv egy szintjelölő szavával, a `level_terms`-ben felsorolva, `city` = a cím egy hellyel, a `cities`-ben felsorolva), mid van (`have`) a szükségeshez (`need`) képest, és a utána használandó `log` sort. Pontosan azt keresd, majd naplózd a menetet ugyanazzal a `--query-kind`-dal. A `plan_done: true` azt jelenti: a terv kész, mehetsz a többi forráshoz.
 
 A `next` az azonosítóddal azt is megmondja, változott-e a profil, amióta a köreidet felépítetted: `"profile": {"changed": true, "groups": [...]}`. Olvasd újra a profilt, építsd újra a megváltozott csoportok köreit, tartsd meg a pozícióidat és a keresésnaplódat, majd `profile_version.py ack`.
 
@@ -43,3 +43,13 @@ python3 /app/shared/skills/scout_pass_log.py pass --source platsbanken --country
 - Az a portál, amelyik 403-at, 410-et, belépési falat vagy challenge-et ad, EGY `--status closed` (410-nél `gone`) menettel LEZÁRT: mondd ki, és menj tovább, ne erőltesd.
 - Az `exhausted` (`scout_exhaustion.py check`) a források, lekérdezések és percek mellett a terv MINDEN portáljának lefedését kéri az elmúlt 24 órában (core és kisebb, minden ország): az `uncovered` megmondja, hová kell még menned (a `core_missing` ennek a core része). Az a forrás, amelyik kiszáradt, miközben mások nincsenek lefedve, nem száraz piac: folytasd a `next` paranccsal. Az a portál, amelyik hibával válaszolt, `blocked` (`--status blocked`): kb. 3 órát pihen, majd újra megkérdezik, és sem nem lefedett, sem nem száraz.
 - A profilból soha nem írunk semmit: a napló slugokat, országkódokat, fajtákat és számokat tartalmaz.
+
+## Földrajzi hatókör és kifejezett eredmények
+
+A profil célhelyei és preferenciái adják a területet. A `broad` csak a szerep kulcsszavait bővíti: a földrajzi szűrő minden oldalon megmarad. A portál országa és javasolt városai nem engedélyeznek költözést. LinkedIn esetén ezt használd (QUERY a szerepcsalád; COUNTRY és KIND a `next` válaszából származik):
+
+```bash
+python3 /app/shared/skills/linkedin_access.py search --profile "$JHT_HOME/profile/candidate_profile.yml" --keywords "$QUERY" --log --country "$COUNTRY" --query-kind "$KIND" --agent "$MY_ID" --posted-within-days 7
+```
+
+A parancs naplózza a tényleges eredményt: ne naplózd újra kézzel. A 4-es kilépés és az utolsó JSON-sor `search_outcome` mezője forrás-, profil- vagy területi hibát jelez: kövesd a `status` értékét (`blocked`, `closed`, `gone`), és válts másik megfelelő forrásra a már kapott jelöltek megtartásával. A 3-as kilépés megtartja a rate limit/cooldown szabályt. Csak a sikeres üres lista `empty`. A `scope_match` helyneveket hasonlít, nem geokódoló: az `unmatched` vagy `unknown` NEM bizonyít kizárást. A teljes helyet/JD-t a profil alapján ellenőrizd, minden gate maradjon meg; bizonyítottan területen kívüli ajánlatot ne szúrj be. A `scout_search_geo_mismatch` azt jelzi, hogy egyetlen név sem egyezett: vizsgáld a forrás területét vagy válts forrást, ne nyilvánítsd üresnek a helyi piacot. Nincs kitalált földrajzi ID vagy beszélt nyelvből következtetett ország. Shell nélkül a natív lekérdezésben tartsd meg a profil területét és ellenőrizd a bizonyítékokat; a konténer parancsait ne futtasd a gazdagépen.

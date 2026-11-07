@@ -97,71 +97,11 @@ def _title_similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def _normalize_city(location):
-    """Estrae e normalizza il primo token della location come 'citta'.
-
-    Address vps1-postmortem anomalia #3: 7 (title, company) duplicate
-    perche' Scout dedup falliva quando stessa position arrivava da
-    source multipli con location string diversa:
-      - LinkedIn: 'Milan, Italy'
-      - Ashby:    'Milan, Lombardy, IT'
-      - Direct:   'Milano, IT'
-    Senza normalizzazione, Level 2/3 dedup non matchano e si crea row
-    duplicata. Tokenizziamo sul primo token + normalizzazione minima
-    (lowercase + strip diacritici comuni IT/EN).
-
-    Esempi:
-      'Milan, Italy'         -> 'milan'
-      'Milan, Lombardy, IT'  -> 'milan'
-      'Milano, IT'           -> 'milano'   # IT vs EN nome citta diverso
-      'New York, NY, USA'    -> 'new york'
-      None / ''              -> ''
-    """
-    if not location:
-        return ''
-    # Primo token comma-separated (la citta')
-    first = location.split(',')[0].strip().lower()
-    # Strip diacritics: 'münchen' -> 'munchen', 'köln' -> 'koln', 'genève' -> 'geneve'.
-    # NFD decompone i caratteri (ä = a + combining-diaeresis), poi filtriamo
-    # le marks combining (categoria 'Mn' di unicodedata).
-    import unicodedata
-    nfd = unicodedata.normalize('NFD', first)
-    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
-
-
-# Synonyms cross-language per le citta' italiane/europee piu' frequenti
-# nei JD. Tutto in lowercase. Se nessuna mappatura → ritorna l'input.
-_CITY_SYNONYMS = {
-    'milano': 'milan',
-    'milan': 'milan',
-    'roma': 'rome',
-    'rome': 'rome',
-    'torino': 'turin',
-    'turin': 'turin',
-    'firenze': 'florence',
-    'florence': 'florence',
-    'venezia': 'venice',
-    'venice': 'venice',
-    'napoli': 'naples',
-    'naples': 'naples',
-    'genova': 'genoa',
-    'genoa': 'genoa',
-    'monaco di baviera': 'munich',
-    'munchen': 'munich',
-    'munich': 'munich',
-    'koln': 'cologne',
-    'cologne': 'cologne',
-    'wien': 'vienna',
-    'vienna': 'vienna',
-    'praha': 'prague',
-    'prague': 'prague',
-}
-
-
-def _normalize_city_canonical(location):
-    """Normalizza city + applica synonym map cross-language."""
-    raw = _normalize_city(location)
-    return _CITY_SYNONYMS.get(raw, raw)
+from city_names import (
+    normalize_city as _normalize_city,
+    canonical_city as _normalize_city_canonical,
+    CITY_SYNONYMS as _CITY_SYNONYMS,
+)
 
 
 def _log_dedup_skip(level, existing_id, skipped_url, company, title):

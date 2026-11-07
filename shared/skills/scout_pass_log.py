@@ -221,9 +221,16 @@ def main(argv=None) -> int:
     except Refused as exc:
         print("scout_pass_log: refused: %s" % exc, file=sys.stderr)
         return 2
-    if append(row) and row.get("kind") == "pass":
-        _watch_empty(row)
+    record(row)
     return 0
+
+
+def record(row: dict) -> bool:
+    """Append once and retain the same empty-source alert for every caller."""
+    written = append(row)
+    if written and row.get("kind") == "pass":
+        _watch_empty(row)
+    return written
 
 
 def _watch_empty(row: dict) -> None:
