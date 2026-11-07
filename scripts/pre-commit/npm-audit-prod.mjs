@@ -17,6 +17,7 @@ const ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // `tui` era il terzo finché la TUI è stata rimossa il 2026-07-25.
 const WORKSPACES = ['cli', 'web'];
 const SKIP_DIRS = new Set();
+const AUDIT_ARGS = ['audit', '--omit=dev', '--audit-level=high'];
 
 let failed = false;
 
@@ -33,8 +34,8 @@ for (const ws of WORKSPACES) {
   }
   console.log(`[npm-audit] checking ${ws}...`);
   const res = spawnSync(
-    process.platform === 'win32' ? 'npm.cmd' : 'npm',
-    ['audit', '--omit=dev', '--audit-level=high'],
+    process.platform === 'win32' ? 'cmd.exe' : 'npm',
+    process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd', ...AUDIT_ARGS] : AUDIT_ARGS,
     { cwd: dir, stdio: 'inherit' }
   );
   if (res.status !== 0) {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -44,8 +44,57 @@ function run(fixture: ReturnType<typeof sandbox>, failure = "") {
   });
   expect(result.error).toBeUndefined();
   expect(result.signal).toBeNull();
-  const calls = readFileSync(fixture.calls, "utf-8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
-  return { ...result, calls };
+  return { ...result, calls: readCalls(fixture) };
+}
+
+function readCalls(fixture: ReturnType<typeof sandbox>) {
+  return readFileSync(fixture.calls, "utf-8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
+function realNpmFixture(prefix = "jht-real-npm-") {
+  const fixture = sandbox(prefix);
+  const bin = path.join(fixture.root, "fake npm bin");
+  mkdirSync(bin);
+  const recorder = path.join(bin, "record-npm.cjs");
+  writeFileSync(recorder, `
+const fs = require('node:fs');
+const path = require('node:path');
+fs.appendFileSync(process.env.JHT_AUDIT_TEST_CALLS, JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd() }) + '\\n');
+process.exit(path.basename(process.cwd()) === process.env.JHT_AUDIT_TEST_FAILURE ? 9 : 0);
+`);
+  writeFileSync(path.join(bin, "npm.cmd"), [
+    "@echo off", '"%JHT_AUDIT_TEST_NODE%" "%~dp0record-npm.cjs" %*', "exit /b %errorlevel%", "",
+  ].join("\r\n"));
+  writeFileSync(path.join(bin, "npm"), `#!/usr/bin/env node\nrequire(${JSON.stringify(recorder)});\n`);
+  chmodSync(path.join(bin, "npm"), 0o755);
+  return { ...fixture, bin };
+}
+
+function runWithRealNpm(fixture: ReturnType<typeof realNpmFixture>, failure = "") {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH"));
+  const result = spawnSync(process.execPath, [fixture.hook], {
+    cwd: tmpdir(),
+    encoding: "utf-8",
+    timeout: 10_000,
+    env: {
+      ...env,
+      PATH: [fixture.bin, path.dirname(process.execPath), process.env.PATH ?? ""].join(path.delimiter),
+      NODE_OPTIONS: "",
+      JHT_AUDIT_TEST_CALLS: fixture.calls,
+      JHT_AUDIT_TEST_FAILURE: failure,
+      JHT_AUDIT_TEST_NODE: process.execPath,
+    },
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.signal).toBeNull();
+  return { ...result, calls: readCalls(fixture) };
+}
+
+function expectedRealCalls(fixture: ReturnType<typeof realNpmFixture>, workspaces = ["cli", "web"]) {
+  return workspaces.map((workspace) => ({
+    args: ["audit", "--omit=dev", "--audit-level=high"],
+    cwd: path.join(fixture.root, workspace),
+  }));
 }
 
 afterEach(() => {
@@ -59,8 +108,10 @@ describe("production npm audit pre-commit gate", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.calls).toEqual(["cli", "web"].map((workspace) => ({
-      command: process.platform === "win32" ? "npm.cmd" : "npm",
-      args: ["audit", "--omit=dev", "--audit-level=high"],
+      command: process.platform === "win32" ? "cmd.exe" : "npm",
+      args: process.platform === "win32"
+        ? ["/d", "/s", "/c", "npm.cmd", "audit", "--omit=dev", "--audit-level=high"]
+        : ["audit", "--omit=dev", "--audit-level=high"],
       cwd: path.join(fixture.root, workspace),
     })));
   });
@@ -105,5 +156,32 @@ describe("production npm audit pre-commit gate", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(`${workspace}:`);
     expect(result.calls.map((call) => path.basename(call.cwd))).toEqual(["cli", "web"]);
+  });
+});
+
+describe("production npm audit with a real fake-npm process (npm.cmd on Windows)", () => {
+  it.each(["jht-real-npm-", "jht real npm # fixture %-"])("executes both audits from %s without mocking spawnSync", (prefix) => {
+    const fixture = realNpmFixture(prefix);
+    const result = runWithRealNpm(fixture);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.calls).toEqual(expectedRealCalls(fixture));
+  });
+
+  it.each(["cli", "web"])("propagates a real npm process failure in %s and still runs both audits", (workspace) => {
+    const fixture = realNpmFixture();
+    const result = runWithRealNpm(fixture, workspace);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("exit 9");
+    expect(result.calls).toEqual(expectedRealCalls(fixture));
+  });
+
+  it.each(["cli", "web"])("blocks a missing %s lock and really executes the other workspace audit", (workspace) => {
+    const fixture = realNpmFixture();
+    rmSync(path.join(fixture.root, workspace, "package-lock.json"));
+    const result = runWithRealNpm(fixture);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(`NPM_AUDIT_INPUT_MISSING: input richiesti mancanti: ${workspace}/package-lock.json`);
+    expect(result.calls).toEqual(expectedRealCalls(fixture, [workspace === "cli" ? "web" : "cli"]));
   });
 });
