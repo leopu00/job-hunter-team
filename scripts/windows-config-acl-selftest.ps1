@@ -453,10 +453,34 @@ exit /b 0
   $RuntimeManifest = $manifest
   Write-Host 'E04 MANIFEST app-accepted-keys PASS'
 
+  # This fixture tests removal of a broad grant, not recovery from an empty
+  # child DACL. Removing the parent's inherited ACEs also removes their copies
+  # from unprotected children: keep a broad inheritable grant until repair.
+  $repairOutside = Join-Path $root 'outside-the-home-installer'
+  $repairKept = Join-Path $repairOutside 'kept.txt'
   $acl = Get-Acl $root
   $acl.SetAccessRuleProtection($true, $false)
-  $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'Allow')))
+  $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($foreign, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
   Set-Acl $root $acl
+
+  # Check the persisted precondition, not just the rule object in memory.
+  # The old three-argument constructor must fail this regression even when
+  # NTFS has not yet removed the old inherited permissions from a child.
+  $inheritBoth = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit
+  $fixtureGrants = @((Get-Acl -LiteralPath $root -ErrorAction Stop).Access | Where-Object {
+    $_.AccessControlType -eq 'Allow' -and
+    $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $foreign.Value -and
+    ($_.InheritanceFlags -band $inheritBoth) -eq $inheritBoth -and
+    $_.PropagationFlags -eq [Security.AccessControl.PropagationFlags]::None -and
+    ($_.FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -eq [Security.AccessControl.FileSystemRights]::FullControl
+  })
+  if ($fixtureGrants.Count -ne 1) { throw 'ACL repair fixture must retain one broad inheritable FullControl grant before repair' }
+  $outsideEntries = @(Get-ChildItem -LiteralPath $repairOutside -Force -ErrorAction Stop)
+  if (@($outsideEntries | Where-Object { $_.Name -eq 'kept.txt' }).Count -ne 1 -or
+      (Get-Content -LiteralPath $repairKept -Raw -ErrorAction Stop).Trim() -ne 'kept') {
+    throw 'ACL repair fixture must remain enumerable and preserve kept.txt before repair'
+  }
+  Write-Host 'ACL_REPAIR_FIXTURE inherited-grant-and-enumeration PASS'
 
   Invoke-ProtectJhtHomeAclWithDiagnosis -Path $root -BaselineProcesses $beforeCleanStartProcesses
   $effective = Get-Acl $root
@@ -468,6 +492,11 @@ exit /b 0
     }
   }
   if (-not (Test-PrivateJhtHomeAcl -Path $root)) { throw 'foreign ACE survived repair' }
+  foreach ($repaired in @($repairOutside, $repairKept)) {
+    if (-not (Test-PrivateJhtHomeAcl -Path $repaired)) { throw "foreign child ACE survived repair: $repaired" }
+  }
+  if ((Get-Content -LiteralPath $repairKept -Raw -ErrorAction Stop).Trim() -ne 'kept') { throw 'ACL repair changed kept.txt' }
+  Write-Host 'ACL_REPAIR_FIXTURE child-privacy-and-content PASS'
 
   # A broad ACE must fail before docker compose is reached.
   $bad = Join-Path $root 'bad'; New-Item -ItemType Directory $bad | Out-Null
