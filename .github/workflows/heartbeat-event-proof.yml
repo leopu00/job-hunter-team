@@ -1,0 +1,82 @@
+name: Heartbeat event wait proof
+
+on:
+  push:
+    branches:
+      - 'gate-heartbeat-proof-*'
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    name: Windows heartbeat — ${{ matrix.case }}
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - case: positive
+            source: a2baba0e090b947965d207a921d3896b0a530a62
+            repeats: 5
+          - case: heartbeat-delivery-off
+            source: e04bdcccb6350946acc50bca2b5b77247ce3673f
+            repeats: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ matrix.source }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            desktop/src-tauri/target
+          key: desktop-cargo-${{ runner.os }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: desktop-cargo-${{ runner.os }}-
+      - name: Run the exact test and check its real outcome
+        shell: pwsh
+        working-directory: desktop/src-tauri
+        env:
+          EXPECTED_SOURCE: ${{ matrix.source }}
+          PROOF_CASE: ${{ matrix.case }}
+          PROOF_REPEATS: ${{ matrix.repeats }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $test = 'onboarding::tests::the_start_of_the_team_reports_its_steps_in_order_and_each_is_repeated_by_the_heartbeat_with_the_time'
+          $head = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $head -ne $env:EXPECTED_SOURCE) { throw 'Wrong source checkout' }
+          git diff --exit-code HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout is dirty before testing' }
+          $before = (Get-FileHash -Algorithm SHA256 -LiteralPath src/onboarding.rs).Hash
+          Write-Host "HEARTBEAT_PROOF controller=$env:GITHUB_SHA source=$head tree=$(git rev-parse 'HEAD^{tree}') case=$env:PROOF_CASE"
+          Write-Host "HEARTBEAT_PROOF crate=$PWD source_sha256_before=$before image=$env:ImageOS/$env:ImageVersion"
+          rustc --version
+          cargo --version
+          for ($iteration = 1; $iteration -le [int]$env:PROOF_REPEATS; $iteration++) {
+            $log = Join-Path $env:RUNNER_TEMP "heartbeat-$env:PROOF_CASE-$iteration.log"
+            & cargo test --locked --lib $test -- --exact --nocapture 2>&1 | Tee-Object -FilePath $log
+            $result = $LASTEXITCODE
+            $output = Get-Content -Raw -LiteralPath $log
+            if ($env:PROOF_CASE -eq 'positive') {
+              if ($result -ne 0 -or $output -notmatch 'test result: ok\. 1 passed; 0 failed;') {
+                throw "Positive test did not pass exactly once: iteration=$iteration exit=$result"
+              }
+            } else {
+              if ($result -ne 101 -or $output -notmatch 'test result: FAILED\. 0 passed; 1 failed;' -or
+                  $output -notmatch 'timed out after 5s waiting for heartbeat repeat of ui_team_resume_step_machine; saw 1 phase events') {
+                throw "Missing heartbeat was not rejected by the actual deadline: exit=$result"
+              }
+            }
+            Write-Host "HEARTBEAT_PROOF case=$env:PROOF_CASE iteration=$iteration actual_exit=$result verified=true"
+          }
+          $after = (Get-FileHash -Algorithm SHA256 -LiteralPath src/onboarding.rs).Hash
+          Write-Host "HEARTBEAT_PROOF source_sha256_after=$after"
+          if ($before -ne $after) { throw 'Test source changed during execution' }
+          git diff --exit-code HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout changed during execution' }
+          exit 0
