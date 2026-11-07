@@ -1879,6 +1879,41 @@
       "path": "docs/guides/WINDOWS-PODMAN-DISK.md",
       "description": "Limite del disco Podman Windows, crescita del VHDX e compattazione non automatica",
       "last_review": null
+    },
+    {
+      "path": "docs/internal/checkpoint/cli-launcher-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/dashboard-move-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/desktop-recovery-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/runtime-recovery-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/source-guards-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/t200-and-residuals-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/t204-rust-readers-20261107.md",
+      "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
+      "last_review": "2026-11-07"
     }
   ]
 }
