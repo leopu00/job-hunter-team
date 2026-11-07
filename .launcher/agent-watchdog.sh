@@ -1249,6 +1249,7 @@ while true; do
       log "config: ready again after ${config_not_ready_tick} ticks — resuming agent respawn"
       config_not_ready_tick=0
     fi
+    JHT_HOME="$JHT_HOME" JHT_TMUX_SENDER="$TMUX_SENDER" python3 "$_AGENT_WATCHDOG_DIR/../shared/skills/codex_dialog.py"
     # Refresh-per-età della Sentinella PRIMA del giro di ensure: se è troppo
     # vecchia la killa, poi ensure_agent la ricrea fresca nello stesso tick.
     maybe_refresh_sentinella

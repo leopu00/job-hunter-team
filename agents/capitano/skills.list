@@ -5,6 +5,7 @@
 
 # Inter-agent + user communication
 tmux-send
+codex-dialog
 
 # Chiusura ordinata quando l'utente esce dall'applicazione: ogni agente
 # annota dove era arrivato, poi il flag lascia chiudere il gioco.

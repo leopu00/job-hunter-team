@@ -742,24 +742,14 @@ jht_spawn_wait_repl() {
 }
 
 # jht_spawn_kickoff <sessione> <prompt>
-#   Auto-accept dei trust/approval dialog (3 Enter cadenzati) e SOLO DOPO
-#   iniezione del prompt iniziale. setsid scollega dal nostro process group,
-#   così il watchdog può uscire senza ammazzare gli sleep. Cadenze allungate:
-#   codex ci mette ~6s a renderizzare il banner e gli Enter mandati prima
-#   finiscono nel buffer della shell senza chiudere il dialog. L'Enter finale
-#   compensa il lag di Ink tra type e submit.
+#   Rinvio al modulo del container: Codex usa il recupero semantico e il
+#   trasporto verificato; gli altri provider conservano la cadenza precedente.
 jht_spawn_kickoff() {
   local session="$1" prompt="$2"
   # In coda e su una riga: send-keys manderebbe un a-capo come Invio.
   prompt="$prompt $(jht_team_language_line)"
-  JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" setsid sh -c '
-    sleep 6 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 3 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 3 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 4 && tmux send-keys -t "$JHT_SPAWN_SESSION" "$JHT_SPAWN_PROMPT"
-    sleep 1 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-    sleep 2 && tmux send-keys -t "$JHT_SPAWN_SESSION" Enter
-  ' >/dev/null 2>&1 < /dev/null &
+  JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" JHT_SPAWN_PROVIDER="${ACTIVE_PROVIDER:-}" \
+    setsid python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/spawn_kickoff.py" >/dev/null 2>&1 < /dev/null &
   disown 2>/dev/null || true
 }
 
