@@ -7513,12 +7513,16 @@ mod tests {
     /// setup goes on and ends done.
     #[test]
     fn the_start_of_the_team_reports_its_steps_in_order_and_each_is_repeated_by_the_heartbeat_with_the_time() {
-        let events = Arc::new(Mutex::new(Vec::<OnboardingProgress>::new()));
+        let events = Arc::new((Mutex::new(Vec::<OnboardingProgress>::new()), std::sync::Condvar::new()));
         let captured = Arc::clone(&events);
         let reporter = ProgressReporter::with_emitter(move |event| {
-            captured.lock().unwrap().push(event);
+            captured.0.lock().unwrap().push(event);
+            captured.1.notify_all();
         });
         let inside = reporter.clone();
+        let observed = Arc::clone(&events);
+        let mut heartbeat_timeout = None;
+        let timed_out = &mut heartbeat_timeout;
         reporter
             .run_with_interval(
                 OnboardingProgressStage::Team,
@@ -7529,13 +7533,27 @@ mod tests {
                 move || {
                     for step in [super::RESUME_STEP_MACHINE, super::RESUME_STEP_AGENTS, super::RESUME_STEP_VERIFY] {
                         inside.phase(step);
-                        thread::sleep(Duration::from_millis(15));
+                        let deadline = Instant::now() + Duration::from_secs(5);
+                        let mut seen = observed.0.lock().unwrap();
+                        while seen.iter().filter(|event| event.status == OnboardingProgressStatus::Progress && event.message == step).count() < 2 {
+                            let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+                                *timed_out = Some(format!(
+                                    "timed out after 5s waiting for heartbeat repeat of {step}; saw {} phase events",
+                                    seen.iter().filter(|event| event.status == OnboardingProgressStatus::Progress && event.message == step).count()
+                                ));
+                                break;
+                            };
+                            seen = observed.1.wait_timeout(seen, remaining).unwrap().0;
+                        }
+                        if timed_out.is_some() { break; }
                     }
                     Ok::<_, super::OnboardingError>(())
                 },
             )
             .unwrap();
-        let events = events.lock().unwrap();
+        // Let run_with_interval stop and join its heartbeat before failing.
+        if let Some(message) = heartbeat_timeout { panic!("{message}"); }
+        let events = events.0.lock().unwrap();
         assert_eq!(events.first().unwrap().status, OnboardingProgressStatus::Start);
         assert_eq!(events.last().unwrap().status, OnboardingProgressStatus::Done);
         // the steps, each said when it begins, in order
