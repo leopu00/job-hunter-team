@@ -226,3 +226,24 @@ def test_a_state_with_absurd_values_does_not_stop_the_scout_nor_hide_a_429(linke
 def test_the_limits_from_the_environment_never_crash_the_import(monkeypatch, value, expected):
     monkeypatch.setenv("JHT_LINKEDIN_TEST_VALUE", value)
     assert la._env_number("JHT_LINKEDIN_TEST_VALUE", 7.0) == expected
+
+
+@pytest.mark.parametrize("reason", ["cooldown", "request_cap"])
+def test_cached_rate_gates_do_not_count_as_source_attempts(linkedin, tmp_path, monkeypatch, capsys, reason):
+    import scout_coverage
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    now = datetime.now(timezone.utc).timestamp()
+    la.RATE_STATE.parent.mkdir(parents=True, exist_ok=True)
+    state = {"cooldown_until": now + 60} if reason == "cooldown" else {"requests": [now]}
+    if reason == "request_cap":
+        monkeypatch.setattr(la, "MAX_REQUESTS", 1)
+    la.RATE_STATE.write_text(json.dumps(state))
+    for _ in range(3):
+        assert la.main(["search", "--keywords", "data", "--location", "NL", "--log", "--country", "nl"]) == 3
+        outcome = json.loads(capsys.readouterr().out)
+        assert outcome["reason"] == reason and outcome["source_attempted"] is False
+        assert outcome["retry_after_s"] > 0 and outcome["retry_at"].endswith("Z")
+    assert linkedin.hits == [] and not (tmp_path / "logs/scout-passes.jsonl").exists()
+    entry = {"slug": "linkedin", "country": "nl", "portal_language": "nl", "access": "search"}
+    measured = scout_coverage.measure(entry, [])
+    assert measured["state"] == "untouched" and measured["blocks"] == measured["passes"] == 0

@@ -17,8 +17,8 @@ EMPTY = '<div class="jobs-search-no-results-banner">No jobs found</div>'
 ENTRY = {"slug": "linkedin", "country": "it", "portal_language": "it", "access": "search"}
 
 
-def reply(status=200, text=EMPTY):
-    return SimpleNamespace(status_code=status, text=text, url="https://jobs.example.invalid/jobs/view/101")
+def reply(status=200, text=EMPTY, url="https://jobs.example.invalid/jobs/view/101"):
+    return SimpleNamespace(status_code=status, text=text, url=url)
 
 
 @pytest.fixture
@@ -130,3 +130,29 @@ def test_a_real_job_page_keeps_its_fields_and_expired_redirect_remains_explicit(
     assert job["jd_text"] == "SQL reporting, fictional role." and job["jd_chars"] == len(job["jd_text"])
     source.replies.append(reply(text="<html><title>12 jobs in Italy</title></html>"))
     assert access.fetch_job("101")["expired"] is True
+
+
+def test_automatic_logging_keeps_the_three_empty_pass_alert_without_corrupting_jsonl(source, monkeypatch, capsys):
+    import scout_pass_log
+    seen = []
+
+    def watch(row):
+        seen.append(row)
+        if len(seen) == 3:
+            print("synthetic empty-source alert")
+
+    monkeypatch.setattr(scout_pass_log, "_watch_empty", watch)
+    for _ in range(3):
+        assert access.main(command()) == 0
+    output = capsys.readouterr()
+    assert len(seen) == 3 and len(rows(source)) == 3
+    assert all(row["status"] == "empty" for row in seen)
+    assert output.out == "" and "synthetic empty-source alert" in output.err
+
+
+@pytest.mark.parametrize("limit", ["0", "-1"])
+def test_invalid_limits_cannot_record_a_search_that_never_happened(source, capsys, limit):
+    assert access.main(command() + ["--limit", limit]) == 4
+    outcome = json.loads(capsys.readouterr().out)
+    assert outcome["code"] == "scout_search_input_invalid" and outcome["source_attempted"] is False
+    assert source.urls == [] and not (source.home / "logs/scout-passes.jsonl").exists()

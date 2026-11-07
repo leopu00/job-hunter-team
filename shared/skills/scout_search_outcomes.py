@@ -21,6 +21,8 @@ ERRORS = {
     "scout_search_log_unavailable": ("blocked", "The search outcome could not be recorded."),
     "scout_search_scope_unavailable": ("blocked", "The profile's search area could not be read."),
     "scout_search_scope_conflict": ("blocked", "The requested search area is not one of the profile's target places."),
+    "scout_search_geo_mismatch": ("blocked", "No returned place name matched the profile's search area; verify the locations or change source."),
+    "scout_search_input_invalid": ("blocked", "The result limit and search age must be positive integers."),
 }
 ERROR_EXIT = 4
 
@@ -47,7 +49,7 @@ def _runtime_line(code: str, message: str) -> None:
         os.close(fd)
 
 
-def failure(code: str, http_status: int | None = None) -> dict:
+def failure(code: str, http_status: int | None = None, *, source_attempted=True) -> dict:
     status, message = ERRORS[code]
     print(f"{code}: {message}", file=sys.stderr)
     try:
@@ -59,6 +61,8 @@ def failure(code: str, http_status: int | None = None) -> dict:
               "code": code, "message": message}
     if http_status is not None:
         result["http_status"] = http_status
+    if not source_attempted:
+        result["source_attempted"] = False
     return result
 
 
@@ -84,6 +88,9 @@ def response_outcome(response) -> dict | None:
 def record_pass(args, results: list, outcome: dict | None) -> dict | None:
     """Called only for --log; the command, not the model, maps errors to coverage."""
     import scout_pass_log as log
+    from contextlib import redirect_stdout
+    if outcome and outcome.get("source_attempted") is False:
+        return None
     status = outcome["status"] if outcome and outcome.get("search_outcome") else "ok" if results else "empty"
     if outcome and outcome.get("rate_limited"):
         status = "blocked"
@@ -94,8 +101,9 @@ def record_pass(args, results: list, outcome: dict | None) -> dict | None:
         argv += ["--agent", args.agent]
     try:
         row = log.build(log.parser().parse_args(argv))
-        if not log.append(row):
-            return failure("scout_search_log_unavailable")
+        with redirect_stdout(sys.stderr):
+            if not log.record(row):
+                return failure("scout_search_log_unavailable")
     except (OSError, ValueError):
         return failure("scout_search_log_unavailable")
     return None

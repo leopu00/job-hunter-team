@@ -100,3 +100,30 @@ def test_a_conflicting_location_cannot_override_the_profile(profile, monkeypatch
     monkeypatch.setattr(access, "_get", lambda *a, **kw: pytest.fail("network must not be called"))
     assert access.main(["search", "--profile", str(path), "--keywords", "data", "--location", "Dublin"]) == 4
     assert json.loads(capsys.readouterr().out)["code"] == "scout_search_scope_conflict"
+
+
+def test_result_qualifiers_cannot_be_dropped_when_the_profile_names_them(profile):
+    from scout_search_scope import place_match
+    assert place_match("Milano, Italia", "Milano, Texas") == "unmatched"
+    assert place_match("Milano, Italia", "Milan") == "unknown"
+    assert place_match("Milano, Italia", "Milan, Lombardia, Italia") == "matched"
+    assert place_match("Milano", "") == "unknown"
+
+
+@pytest.mark.parametrize("broken", [True, False])
+def test_three_local_profile_errors_do_not_close_or_cover_a_source(profile, monkeypatch, capsys, broken):
+    import scout_coverage
+    path, _ = profile
+    if broken:
+        path.write_text("location: [bad")
+    monkeypatch.setattr(access, "_get", lambda *a, **kw: pytest.fail("network must not be called"))
+    for _ in range(3):
+        args = ["search", "--profile", str(path), "--keywords", "data", "--log", "--country", "it"]
+        if not broken:
+            args += ["--location", "Dublin"]
+        assert access.main(args) == 4
+        assert json.loads(capsys.readouterr().out)["source_attempted"] is False
+    assert not (path.parents[1] / "logs/scout-passes.jsonl").exists()
+    entry = {"slug": "linkedin", "country": "it", "portal_language": "it", "access": "search"}
+    measured = scout_coverage.measure(entry, [])
+    assert measured["state"] == "untouched" and measured["passes"] == measured["blocks"] == 0

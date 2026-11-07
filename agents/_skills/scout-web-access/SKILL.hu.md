@@ -40,7 +40,7 @@ Kereses a guest endpoint-on `linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings
 ```bash
 # Allasok keresese az elmult 7 napbol
 python3 /app/shared/skills/linkedin_access.py search \
-    --keywords "python junior" --location "Italy" \
+    --keywords "python junior" --profile "$JHT_HOME/profile/candidate_profile.yml" \
     --limit 25 --posted-within-days 7
 # → stdout JSONL, 1 allas soronkent {job_id, url, title, company, location, source}
 
@@ -145,7 +145,7 @@ python3 /app/shared/skills/scout_workspace.py claim "$MY_ID" "$SOURCE" >/dev/nul
 
 # 2. LinkedIn kereses (nincs bejelentkezes, guest endpoint, frisesseg 7 nap)
 python3 /app/shared/skills/linkedin_access.py search \
-    --keywords "python junior" --location "Italy" \
+    --keywords "python junior" --profile "$JHT_HOME/profile/candidate_profile.yml" \
     --limit 25 --posted-within-days 7 > /tmp/scout_results.jsonl
 
 # 3. Minden eredmenyhez: dedup (SC-05) + nyilvanos JD lekerese + INSERT

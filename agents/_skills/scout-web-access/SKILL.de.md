@@ -40,7 +40,7 @@ Suche ueber Guest-Endpoint `linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/
 ```bash
 # Stellenangebote der letzten 7 Tage suchen
 python3 /app/shared/skills/linkedin_access.py search \
-    --keywords "python junior" --location "Italy" \
+    --keywords "python junior" --profile "$JHT_HOME/profile/candidate_profile.yml" \
     --limit 25 --posted-within-days 7
 # → stdout JSONL, 1 Stelle pro Zeile {job_id, url, title, company, location, source}
 
@@ -145,7 +145,7 @@ python3 /app/shared/skills/scout_workspace.py claim "$MY_ID" "$SOURCE" >/dev/nul
 
 # 2. LinkedIn-Suche (kein Login, Guest-Endpoint, Frische 7 Tage)
 python3 /app/shared/skills/linkedin_access.py search \
-    --keywords "python junior" --location "Italy" \
+    --keywords "python junior" --profile "$JHT_HOME/profile/candidate_profile.yml" \
     --limit 25 --posted-within-days 7 > /tmp/scout_results.jsonl
 
 # 3. Fuer jedes Ergebnis: Dedup (SC-05) + oeffentliche JD abrufen + INSERT

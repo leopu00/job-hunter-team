@@ -238,7 +238,7 @@ def _get(url: str, **kwargs):
         now = time.time()
         blocked = _gate(now)
         if blocked is not None:
-            return None, blocked
+            return None, {**blocked, "source_attempted": attempt > 0}
         r = requests.get(url, headers=_headers(), **kwargs)
         if r.status_code not in RATE_LIMITED_STATUS:
             if r.status_code == 200:

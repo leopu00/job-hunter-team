@@ -42,6 +42,8 @@ def _page(access, text: str) -> tuple[list, bool]:
 def search_ex(access, keywords: str, location: str = "", limit: int = 25,
               posted_within_days: int = 7) -> tuple[list, dict | None]:
     results, seen = [], set()
+    if limit <= 0 or posted_within_days <= 0:
+        return [], failure("scout_search_input_invalid", source_attempted=False)
     start = 0
     while len(results) < limit:
         params = {"keywords": keywords, "location": location, "f_TPR": f"r{posted_within_days * 86400}", "start": start}
@@ -51,6 +53,8 @@ def search_ex(access, keywords: str, location: str = "", limit: int = 25,
         except Exception as exc:
             return results, exception_outcome(exc)
         if outcome is not None:
+            if results and outcome.get("source_attempted") is False:
+                outcome = {**outcome, "source_attempted": True}
             return results, outcome
         outcome = response_outcome(response)
         if outcome:

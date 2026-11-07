@@ -318,6 +318,7 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
         step = {"plan_done": False, "source": entry["slug"], "name": entry["name"], "country": entry["country"],
                 "tier": entry["tier"], "host": entry.get("host"), "query_kind": kind,
                 "query_language": entry["portal_language"] if kind in ("role_language", "broad") else "en",
+                "search_scope": {"from": "profile", "keep_area": True},
                 "have": {"passes": numbers["passes"], "queries": numbers["queries"]}, "need": need}
         for field in ("api", "hint"):
             if entry.get(field):
@@ -325,7 +326,8 @@ def next_step(plan: dict, rows: list, need: dict | None = None, profile=None, no
         if kind == "broad":
             step["broad_terms"] = list(data.get("broad_terms", {}).get(entry["portal_language"], data.get("broad_terms", {}).get("en", []))) + list(terms)
             step["broad_worked_in_english"] = [e["term"] for e in data.get("broad_examples", {}).get("en", [])]
-            step["how"] = ("WIDE: the role's family or one of broad_terms on its own, no full title and no place; read ALL the "
+            step["how"] = ("WIDE: the role's family or one of broad_terms on its own, no full title and no place in keywords; "
+                           "keep the profile's geographic filter separate and unchanged; read ALL the "
                            "results (every page) and filter them against the profile yourself")
         if kind == "level":
             step["level_terms"] = terms

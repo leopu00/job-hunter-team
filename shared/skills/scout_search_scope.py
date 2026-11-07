@@ -12,9 +12,9 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from city_names import canonical_city
+
 MAX_PROFILE_BYTES = 64 * 1024
-# Display spellings of the same city; never geographic IDs or a country lookup.
-SPELLINGS = (("milano", "milan"), ("roma", "rome"), ("torino", "turin"), ("firenze", "florence"))
 
 
 class ScopeError(ValueError):
@@ -33,14 +33,26 @@ def _places(value) -> list[str]:
     return [v.strip() for v in values if isinstance(v, str) and v.strip()]
 
 
-def _aliases(place: str) -> set[str]:
-    value = normalized(place)
-    aliases = {value}
-    for spellings in SPELLINGS:
-        for spelling in spellings:
-            if value == spelling or value.startswith(spelling + " "):
-                aliases.update(other + value[len(spelling):] for other in spellings)
-    return aliases
+def place_key(place: str) -> tuple:
+    return (canonical_city(place), tuple(normalized(part) for part in place.split(",")[1:]))
+
+
+def place_match(place: str, returned: str) -> str:
+    """Compare declared place names, without claiming a geocoder verified them.
+
+    Different names may still be within commuting distance. They are unmatched,
+    not proof of exclusion; a missing location is unknown and must be inspected.
+    """
+    if not returned.strip():
+        return "unknown"
+    wanted = canonical_city(place)
+    parts = [normalized(part) for part in returned.split(",")]
+    if canonical_city(returned) != wanted:
+        return "unmatched"
+    qualifiers = [normalized(part) for part in place.split(",")[1:] if part.strip()]
+    if any(part not in parts[1:] for part in qualifiers):
+        return "unmatched" if len(parts) > 1 else "unknown"
+    return "matched"
 
 
 @dataclass(frozen=True)
@@ -55,9 +67,17 @@ class SearchScope:
         # A source's suggested city never becomes permission to relocate. A
         # translated spelling is allowed, but keep the profile's canonical text.
         for place in self.places:
-            if normalized(requested) in _aliases(place):
+            if place_key(requested) == place_key(place):
                 return place
         raise ScopeError("scout_search_scope_conflict")
+
+    def assess(self, results: list[dict], selected: str) -> tuple[list, dict | None]:
+        from scout_search_outcomes import failure
+        assessed = [{**row, "scope_match": place_match(selected, row.get("location") or "")} for row in results]
+        states = {row["scope_match"] for row in assessed}
+        if "unmatched" in states and "matched" not in states:
+            return assessed, failure("scout_search_geo_mismatch")
+        return assessed, None
 
 
 def from_profile(profile: dict) -> SearchScope:
@@ -115,9 +135,14 @@ def resolve(args) -> SearchScope | None:
 
 def run_search(access, args) -> tuple[list, dict | None]:
     from scout_search_outcomes import failure
+    if args.limit <= 0 or args.posted_within_days <= 0:
+        return [], failure("scout_search_input_invalid", source_attempted=False)
     try:
         scope = resolve(args)
         location = scope.select(args.location)
     except ScopeError as exc:
-        return [], failure(exc.code)
-    return access.search_ex(args.keywords, location, args.limit, args.posted_within_days)
+        return [], failure(exc.code, source_attempted=False)
+    results, outcome = access.search_ex(args.keywords, location, args.limit, args.posted_within_days)
+    if outcome:
+        return results, outcome
+    return scope.assess(results, location)
