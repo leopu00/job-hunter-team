@@ -3377,7 +3377,7 @@ pub(crate) async fn direct_chat_send(
 /// copied on this computer for this computer's team only: a VPS has its own disk, a read-only view
 /// writes nothing, and there is no copy without a connected team.
 fn attach_refusal(connection: &Connection) -> Option<&'static str> {
-    if !cfg!(any(target_os = "macos", target_os = "linux")) {
+    if !cfg!(any(target_os = "macos", target_os = "linux", windows)) {
         return Some("attach_platform");
     }
     if !matches!(&connection.validated, ValidatedHost::Local) {
@@ -3490,6 +3490,13 @@ fn attachment_message(locale: &str, file: &str) -> String {
 
 /// Where the system's window opens: the Downloads folder of the person, where a CV usually is, and
 /// not Documents, which holds their personal files. Without that folder the system chooses.
+/// The person's own folder: `HOME` where there is one, the profile folder on Windows, which is the one the
+/// installer and the wrapper mount as the team's documents (`<profile>\Documents\Job Hunter Team`).
+fn person_home() -> Option<PathBuf> {
+    let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+    std::env::var_os(name).filter(|value| !value.is_empty()).map(PathBuf::from)
+}
+
 fn downloads_of(home: &Path) -> Option<PathBuf> {
     let downloads = home.join("Downloads");
     downloads.is_dir().then_some(downloads)
@@ -3518,7 +3525,7 @@ fn attach_target(
     if let Some(code) = attach_refusal(connection) {
         return Err(failure(code));
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from).ok_or_else(|| failure("attach_platform"))?;
+    let home = person_home().ok_or_else(|| failure("attach_platform"))?;
     Ok(AttachTarget {
         wrapper: connection.local_wrapper.clone().ok_or_else(|| failure("runtime_missing"))?,
         runtime: connection.local_runtime.clone().ok_or_else(|| failure("runtime_missing"))?,
