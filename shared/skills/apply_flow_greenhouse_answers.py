@@ -157,55 +157,12 @@ class GreenhouseAnswersMixin:
             )
         radios = entry.locator("input[type=radio]")
         if radios.count():
-            wanted = _normalise_label(str(answer))
-            matches = []
-            for index in range(radios.count()):
-                radio = radios.nth(index)
-                labels = radio.evaluate(
-                    "element => Array.from(element.labels || []).map(label => label.innerText)"
-                )
-                if any(_normalise_label(str(value)) == wanted for value in labels):
-                    matches.append(radio)
-            if len(matches) != 1:
-                raise BlockedHuman(
-                    "answer_option_unknown",
-                    f"No single Greenhouse option matches the saved answer for: {_safe_label(label)}",
-                    "screening",
-                )
-            matches[0].check()
+            self._fill_answer_radios(radios, label, answer)
             return
 
         checkboxes = entry.locator("input[type=checkbox]")
         if checkboxes.count():
-            if checkboxes.count() == 1 and isinstance(answer, bool):
-                checkboxes.first.set_checked(answer)
-                return
-            values = answer if isinstance(answer, list) else [answer]
-            if not values or any(not isinstance(value, (str, int, float)) or isinstance(value, bool) for value in values):
-                raise BlockedHuman(
-                    "answer_type_unknown",
-                    f"Greenhouse checkbox question needs explicit option labels: {_safe_label(label)}",
-                    "screening",
-                )
-            wanted = {_normalise_label(str(value)) for value in values}
-            matched: dict[str, Any] = {}
-            for index in range(checkboxes.count()):
-                checkbox = checkboxes.nth(index)
-                labels = checkbox.evaluate(
-                    "element => Array.from(element.labels || []).map(label => label.innerText)"
-                )
-                for option_label in labels:
-                    normalised = _normalise_label(str(option_label))
-                    if normalised in wanted:
-                        matched[normalised] = checkbox
-            if set(matched) != wanted:
-                raise BlockedHuman(
-                    "answer_option_unknown",
-                    f"Greenhouse checkbox options do not exactly match the saved answer for: {_safe_label(label)}",
-                    "screening",
-                )
-            for checkbox in matched.values():
-                checkbox.check()
+            self._fill_answer_checkboxes(checkboxes, label, answer)
             return
 
         select = entry.locator("select")
@@ -222,40 +179,7 @@ class GreenhouseAnswersMixin:
 
         comboboxes = entry.locator("input[role=combobox]")
         if comboboxes.count() == 1:
-            values = answer if isinstance(answer, list) else [answer]
-            if not values or any(not isinstance(value, (str, int, float)) or isinstance(value, bool) for value in values):
-                raise BlockedHuman(
-                    "answer_type_unknown",
-                    f"Greenhouse select needs explicit option labels: {_safe_label(label)}",
-                    "screening",
-                )
-            for value in values:
-                comboboxes.first.click()
-                option = page.get_by_role("option", name=str(value), exact=True)
-                try:
-                    option.first.wait_for(state="visible", timeout=3_000)
-                except Exception as exc:
-                    raise BlockedHuman(
-                        "answer_option_unknown",
-                        f"Greenhouse select has no option matching the saved answer for: {_safe_label(label)}",
-                        "screening",
-                    ) from exc
-                if option.count() != 1:
-                    raise BlockedHuman(
-                        "answer_option_unknown",
-                        f"Greenhouse select option is ambiguous for: {_safe_label(label)}",
-                        "screening",
-                    )
-                option.first.click()
-            selected = entry.locator(".select__single-value, .select__multi-value__label")
-            observed = {_normalise_label(selected.nth(i).inner_text()) for i in range(selected.count())}
-            wanted = {_normalise_label(str(value)) for value in values}
-            if not wanted.issubset(observed):
-                raise BlockedHuman(
-                    "answer_not_accepted",
-                    f"Greenhouse did not retain the selected answer for: {_safe_label(label)}",
-                    "screening",
-                )
+            self._fill_answer_comboboxes(page, entry, comboboxes, label, answer)
             return
 
         text = entry.locator(
@@ -269,3 +193,88 @@ class GreenhouseAnswersMixin:
             f"Greenhouse field type is not supported safely: {_safe_label(label)}",
             "screening",
         )
+
+    def _fill_answer_radios(self, radios, label: str, answer: Any) -> None:
+        wanted = _normalise_label(str(answer))
+        matches = []
+        for index in range(radios.count()):
+            radio = radios.nth(index)
+            labels = radio.evaluate(
+                "element => Array.from(element.labels || []).map(label => label.innerText)"
+            )
+            if any(_normalise_label(str(value)) == wanted for value in labels):
+                matches.append(radio)
+        if len(matches) != 1:
+            raise BlockedHuman(
+                "answer_option_unknown",
+                f"No single Greenhouse option matches the saved answer for: {_safe_label(label)}",
+                "screening",
+            )
+        matches[0].check()
+
+    def _fill_answer_checkboxes(self, checkboxes, label: str, answer: Any) -> None:
+        if checkboxes.count() == 1 and isinstance(answer, bool):
+            checkboxes.first.set_checked(answer)
+            return
+        values = answer if isinstance(answer, list) else [answer]
+        if not values or any(not isinstance(value, (str, int, float)) or isinstance(value, bool) for value in values):
+            raise BlockedHuman(
+                "answer_type_unknown",
+                f"Greenhouse checkbox question needs explicit option labels: {_safe_label(label)}",
+                "screening",
+            )
+        wanted = {_normalise_label(str(value)) for value in values}
+        matched: dict[str, Any] = {}
+        for index in range(checkboxes.count()):
+            checkbox = checkboxes.nth(index)
+            labels = checkbox.evaluate(
+                "element => Array.from(element.labels || []).map(label => label.innerText)"
+            )
+            for option_label in labels:
+                normalised = _normalise_label(str(option_label))
+                if normalised in wanted:
+                    matched[normalised] = checkbox
+        if set(matched) != wanted:
+            raise BlockedHuman(
+                "answer_option_unknown",
+                f"Greenhouse checkbox options do not exactly match the saved answer for: {_safe_label(label)}",
+                "screening",
+            )
+        for checkbox in matched.values():
+            checkbox.check()
+
+    def _fill_answer_comboboxes(self, page, entry, comboboxes, label: str, answer: Any) -> None:
+        values = answer if isinstance(answer, list) else [answer]
+        if not values or any(not isinstance(value, (str, int, float)) or isinstance(value, bool) for value in values):
+            raise BlockedHuman(
+                "answer_type_unknown",
+                f"Greenhouse select needs explicit option labels: {_safe_label(label)}",
+                "screening",
+            )
+        for value in values:
+            comboboxes.first.click()
+            option = page.get_by_role("option", name=str(value), exact=True)
+            try:
+                option.first.wait_for(state="visible", timeout=3_000)
+            except Exception as exc:
+                raise BlockedHuman(
+                    "answer_option_unknown",
+                    f"Greenhouse select has no option matching the saved answer for: {_safe_label(label)}",
+                    "screening",
+                ) from exc
+            if option.count() != 1:
+                raise BlockedHuman(
+                    "answer_option_unknown",
+                    f"Greenhouse select option is ambiguous for: {_safe_label(label)}",
+                    "screening",
+                )
+            option.first.click()
+        selected = entry.locator(".select__single-value, .select__multi-value__label")
+        observed = {_normalise_label(selected.nth(i).inner_text()) for i in range(selected.count())}
+        wanted = {_normalise_label(str(value)) for value in values}
+        if not wanted.issubset(observed):
+            raise BlockedHuman(
+                "answer_not_accepted",
+                f"Greenhouse did not retain the selected answer for: {_safe_label(label)}",
+                "screening",
+            )

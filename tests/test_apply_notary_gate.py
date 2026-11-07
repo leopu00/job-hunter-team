@@ -121,10 +121,10 @@ def test_the_page_is_judged_where_it_is_after_the_redirects(box, register):
 
 def test_the_flow_asks_the_broker_right_before_the_click():
     # the browser path cannot run here without a browser: its order is pinned on the source
-    source = (ROOT / "shared" / "skills" / "apply_flow_execution.py").read_text(encoding="utf-8").replace("\r\n", "\n")
+    source = (ROOT / "shared" / "skills" / "apply_flow_submit.py").read_text(encoding="utf-8").replace("\r\n", "\n")
     cap = source.index("slot = self.cap_reserver(")
     claim = source.index("claim = self.authorisation_claimer(position_id=self.position_id, url=active_page.url)")
     marker = source.index('checkpoint.state = "submit"', claim)
     click = source.index("recipe.submit(active_page)", marker)
     assert cap < claim < marker < click
-    assert "self._release_cap_slot(slot)\n                    return self._deny(checkpoint, claim" in source
+    assert "self._release_cap_slot(slot)\n            return self._deny(checkpoint, claim" in source
