@@ -28,10 +28,6 @@ function getKey(): Buffer | null {
   }
 }
 
-export function isPiiEncryptionEnabled(): boolean {
-  return getKey() !== null;
-}
-
 export function encryptField(plain: string | null | undefined): string | null {
   if (plain == null || plain === "") return (plain ?? null) as string | null;
   if (plain.startsWith(PREFIX)) return plain; // già cifrato

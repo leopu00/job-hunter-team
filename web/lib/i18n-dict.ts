@@ -36,14 +36,3 @@ export function makeT(dict: Dictionary, locale: string) {
   return (key: string): string =>
     dict[key]?.[locale as Locale] ?? dict[key]?.en ?? key;
 }
-
-/**
- * Variante per i dizionari organizzati per lingua invece che per chiave
- * (`{ it: {...}, en: {...} }`), forma usata da `lib/dashboard-i18n.ts`.
- */
-export function makeTByLocale<T extends Record<string, unknown>>(
-  byLocale: Record<Locale, T>,
-  locale: string,
-): T {
-  return byLocale[locale as Locale] ?? byLocale.en;
-}
