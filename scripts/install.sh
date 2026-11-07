@@ -2146,7 +2146,7 @@ save_pairing_token() {
 # container made setuid there (P2 of the security review, 08/10). Prints the
 # account name and succeeds when there is such a conflict.
 bind_uid_conflict() {
-  local uid="$1" self="${SUDO_UID:-$(id -u)}" name=""
+  local uid="$1" self="$(id -u)" name=""; if [ "$self" = 0 ]; then self="${SUDO_UID:-$self}"; fi
   if command -v getent >/dev/null 2>&1; then
     name="$(getent passwd "$uid" 2>/dev/null | cut -d: -f1)"
   else
