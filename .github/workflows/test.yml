@@ -65,7 +65,7 @@ jobs:
   # segreti PRECHECK_NAMES e PRECHECK_OWNER, mai scritti qui). Rosso = il tratto non e' pronto.
   precheck:
     name: precheck — merge, whitespace, secrets, names
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     if: github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref)
     steps:
@@ -96,7 +96,7 @@ jobs:
 
   api-worker:
     name: API worker — format, types, offline tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -129,7 +129,7 @@ jobs:
   # quello che c'è in tests/js, e un modulo nuovo è coperto il giorno che nasce.
   vitest:
     name: vitest — tests/js
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -214,7 +214,7 @@ jobs:
   # quindi web/ non si installa. shared/ si': vedi sotto.
   desktop:
     name: desktop — types, vitest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -270,7 +270,7 @@ jobs:
       fail-fast: false
       matrix:
         # Windows solo fuori dai rami di sviluppo (vedi compose-provider-parity).
-        os: ${{ fromJSON((github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref)) && '["ubuntu-latest","macos-latest"]' || '["ubuntu-latest","macos-latest","windows-latest"]') }}
+        os: ${{ fromJSON((github.event_name == 'push' && !contains(fromJSON('["refs/heads/master","refs/heads/hq-master","refs/heads/master-arthur"]'), github.ref)) && '["ubuntu-24.04","macos-latest"]' || '["ubuntu-24.04","macos-latest","windows-latest"]') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -395,7 +395,7 @@ jobs:
   # tests/ e girano nel job `pytest`.
   agent-harness:
     name: agent-harness — types, vitest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -527,7 +527,7 @@ jobs:
   # repairs, pushes or writes to Supabase.
   migration-gate:
     name: Supabase migrations — immutable history + PostgreSQL 16
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -592,7 +592,7 @@ jobs:
   # installer pubblici. Ora gira qui, allo stesso trigger di vitest.
   pytest:
     name: pytest — agents, skills, sync
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -820,7 +820,7 @@ jobs:
   # quindi niente dipendenza dall'host, ed è la stessa cosa che gira su Vercel.
   e2e:
     name: e2e — welcome wizard, demo mode, social metadata
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.
@@ -1028,7 +1028,7 @@ jobs:
   # `local_supabase_e2e: true`.
   e2e-local-supabase:
     name: e2e — local Supabase (draft, dispatch only)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla.
     timeout-minutes: 40
@@ -1220,7 +1220,7 @@ jobs:
   # (~80 l'ora nelle ore di lavoro) per verificare il sito, non il ramo.
   smoke:
     name: smoke — produzione (post-deploy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Un job che si appende non e' un verdetto: senza questo tetto il blocco
     # resta in coda fino alle sei ore del runner e la CI non dice nulla — il
     # 21/09 e' successo per diciannove ore, con Lint e CI verdi accanto.

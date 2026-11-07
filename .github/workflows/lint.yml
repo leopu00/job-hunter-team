@@ -15,7 +15,7 @@ permissions:
 jobs:
   eslint-web:
     name: ESLint — web/
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -37,7 +37,7 @@ jobs:
 
   prettier:
     name: Prettier check — web/ + shared/
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -96,7 +96,7 @@ jobs:
   # ~15 secondi e non installa dipendenze.
   review-log:
     name: Review log — indice allineato
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -132,7 +132,7 @@ jobs:
   #    dipendenze di produzione, non serve un secondo posto in cui gira.
   workflow-gates:
     name: pre-commit — actionlint + zizmor
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

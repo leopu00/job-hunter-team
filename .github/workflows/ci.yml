@@ -15,7 +15,7 @@ permissions:
 jobs:
   lint-typecheck:
     name: Lint & Type-check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -50,7 +50,7 @@ jobs:
   # che test.yml non fa: lint, type-check e build del web.
   build:
     name: Build Web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web

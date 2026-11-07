@@ -14,7 +14,7 @@ permissions:
 jobs:
   tag:
     name: Tag current production HEAD
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 

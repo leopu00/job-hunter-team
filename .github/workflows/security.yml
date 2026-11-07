@@ -18,7 +18,7 @@ permissions:
 jobs:
   audit:
     name: npm audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -59,7 +59,7 @@ jobs:
 
   secrets:
     name: Gitleaks — secrets check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -72,7 +72,7 @@ jobs:
 
   sast:
     name: SAST — Semgrep
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       # Pin al digest, non al tag: `semgrep/semgrep` senza tag risolve
       # `:latest`, cioè un'immagine che cambia sotto i piedi — la stessa
