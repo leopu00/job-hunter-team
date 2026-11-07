@@ -29,7 +29,8 @@ export function recordLoginFailure(code, message, { dir = JHT_LOGS_DIR } = {}) {
     | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK;
   const fd = fs.openSync(join(dir, 'runtime.log'), flags, 0o600);
   try {
-    if (!fs.fstatSync(fd).isFile()) throw new Error('codex_login_log_unavailable');
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.nlink !== 1) throw new Error('codex_login_log_unavailable');
     fs.writeFileSync(fd, `${new Date().toISOString()} ${code}: ${message}\n`);
   } finally {
     fs.closeSync(fd);

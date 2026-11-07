@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, readFileSync, writeFileSync, symlinkSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, symlinkSync, linkSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runCodexDeviceLogin, recordLoginFailure } from '../wizard/codex-device-login.js';
@@ -122,4 +122,17 @@ test('runtime.log contains the closed error and refuses a symlink without changi
   symlinkSync(target, join(linked, 'runtime.log'));
   assert.throws(() => recordLoginFailure('codex_login_failed', 'Synthetic failure', { dir: linked }));
   assert.equal(readFileSync(target, 'utf8'), 'synthetic sentinel');
+});
+
+test('runtime.log refuses a hardlink without appending to the other file', (ctx) => {
+  const root = mkdtempSync(join(tmpdir(), 'jht-codex-hardlink-'));
+  ctx.after(() => rmSync(root, { recursive: true, force: true }));
+  const dir = join(root, 'logs');
+  mkdirSync(dir);
+  const target = join(root, 'auth.json');
+  const sentinel = '{"synthetic":true}';
+  writeFileSync(target, sentinel);
+  linkSync(target, join(dir, 'runtime.log'));
+  assert.throws(() => recordLoginFailure('codex_login_failed', 'Synthetic failure', { dir }));
+  assert.equal(readFileSync(target, 'utf8'), sentinel);
 });
