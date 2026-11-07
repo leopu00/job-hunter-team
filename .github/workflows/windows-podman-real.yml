@@ -9,6 +9,7 @@ name: Windows real Podman install (not blocking)
 # Not a required check: its result and times are for reading, not for
 # stopping a merge, until it has shown it is stable.
 on:
+  workflow_dispatch:
   push:
     branches:
       - master-arthur
@@ -48,6 +49,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
+      - name: Attest exact source before real installation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proof = Join-Path $env:RUNNER_TEMP 't205-real-proof'
+          New-Item -ItemType Directory -Path $proof -Force | Out-Null
+          "T205_PROOF=$proof" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          $head = git rev-parse HEAD
+          $tree = git rev-parse 'HEAD^{tree}'
+          if ($LASTEXITCODE -ne 0 -or $head -ne $env:GITHUB_SHA) { throw 'Real Podman source is not the approved immutable source.' }
+          "T205_SOURCE_TREE=$tree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "controller=$env:GITHUB_SHA source=$head tree=$tree" | Tee-Object -FilePath (Join-Path $proof 'source-before.txt')
+          git diff --exit-code HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Real Podman source is dirty before installation.' }
+          $files = @(git ls-files)
+          if ($LASTEXITCODE -ne 0 -or $files.Count -eq 0) { throw 'No immutable input manifest.' }
+          $lines = @($files | ForEach-Object { '{0}  {1}' -f (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant(), $_ })
+          [IO.File]::WriteAllLines((Join-Path $proof 'inputs-before.sha256'), $lines, [Text.UTF8Encoding]::new($false))
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
@@ -227,3 +246,36 @@ jobs:
           }
           & podman machine list 2>&1 | ForEach-Object { "  $_" }
           & wsl.exe --list --verbose 2>&1 | ForEach-Object { "  $_" }
+
+      - name: Preserve logs and attest unchanged source
+        if: always()
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proof = Join-Path $env:RUNNER_TEMP 't205-real-proof'
+          New-Item -ItemType Directory -Path $proof -Force | Out-Null
+          foreach ($log in @('install-first-.log', 'install-update-.log', 'jht-up.log', 'jht-status.log', 'jht-status-after-update-.log', 'counter-check-T71.log', 'times.tsv')) {
+            $path = Join-Path $env:RUNNER_TEMP $log
+            if (Test-Path -LiteralPath $path -PathType Leaf) { Copy-Item -LiteralPath $path -Destination (Join-Path $proof $log) }
+          }
+          $head = git rev-parse HEAD
+          $tree = git rev-parse 'HEAD^{tree}'
+          "controller=$env:GITHUB_SHA source=$head tree=$tree" | Out-File -FilePath (Join-Path $proof 'source-after.txt') -Encoding utf8
+          if ($LASTEXITCODE -ne 0 -or $head -ne $env:GITHUB_SHA -or $tree -ne $env:T205_SOURCE_TREE) { throw 'Real Podman source changed.' }
+          $files = @(git ls-files)
+          if ($LASTEXITCODE -ne 0 -or $files.Count -eq 0) { throw 'Missing post-install input manifest.' }
+          $lines = @($files | ForEach-Object { '{0}  {1}' -f (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant(), $_ })
+          [IO.File]::WriteAllLines((Join-Path $proof 'inputs-after.sha256'), $lines, [Text.UTF8Encoding]::new($false))
+          $before = [IO.File]::ReadAllText((Join-Path $proof 'inputs-before.sha256'))
+          $after = [IO.File]::ReadAllText((Join-Path $proof 'inputs-after.sha256'))
+          if ($before -cne $after) { throw 'Real Podman installation changed canonical inputs.' }
+          git diff --exit-code HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Real Podman source diff is not clean.' }
+
+      - name: Upload complete real Podman proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: real-podman-install-proof
+          path: ${{ runner.temp }}/t205-real-proof/
+          include-hidden-files: true
+          if-no-files-found: error
