@@ -307,7 +307,8 @@ def main(argv):
 
     s = sub.add_parser("search")
     s.add_argument("--keywords", required=True)
-    s.add_argument("--location", default="")
+    s.add_argument("--location", default=None, help="select a target place declared in the profile")
+    s.add_argument("--profile", default=None, help="default: $JHT_HOME/profile/candidate_profile.yml")
     s.add_argument("--limit", type=int, default=25)
     s.add_argument("--posted-within-days", type=int, default=7)
     s.add_argument("--log", action="store_true", help="record the actual outcome for coverage")
@@ -325,7 +326,8 @@ def main(argv):
 
     if args.cmd == "search":
         from scout_search_outcomes import ERROR_EXIT, record_pass
-        results, limited = search_ex(args.keywords, args.location, args.limit, args.posted_within_days)
+        from scout_search_scope import run_search
+        results, limited = run_search(sys.modules[__name__], args)
         log_error = record_pass(args, results, limited) if args.log else None
         for j in results:
             print(json.dumps(j))

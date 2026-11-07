@@ -19,6 +19,8 @@ ERRORS = {
     "scout_search_unrecognized": ("blocked", "The job source returned an unrecognized search page."),
     "scout_search_http": ("blocked", "The job source answered with an unexpected HTTP status."),
     "scout_search_log_unavailable": ("blocked", "The search outcome could not be recorded."),
+    "scout_search_scope_unavailable": ("blocked", "The profile's search area could not be read."),
+    "scout_search_scope_conflict": ("blocked", "The requested search area is not one of the profile's target places."),
 }
 ERROR_EXIT = 4
 
