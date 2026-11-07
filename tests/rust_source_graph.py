@@ -15,6 +15,38 @@ class RustFile:
     path: Path
     relative: str
     source: str
+    logical_module: str
+    original_source: str
+    include_tests: bool = False
+
+    @property
+    def code(self) -> str:
+        """Mask for source, with the same character offsets and newlines."""
+        return mask(self.source)
+
+    @property
+    def original_code(self) -> str:
+        """Mask on the original byte-decoded text, preserving CRLF offsets."""
+        code = mask(self.original_source) if self.include_tests else production_mask(self.original_source)
+        return " " + code[1:] if code.startswith("\ufeff") else code
+
+    def to_wire(self) -> dict:
+        """JSON-safe records whose masks use JavaScript UTF-16 string offsets.
+
+        Python's source/code properties use code-point offsets. Replacing an
+        astral character with one space would shift every later JS offset.
+        This adapter changes only the width of already masked characters.
+        """
+        def utf16_mask(source, code):
+            assert len(source) == len(code), "Rust source/mask offsets differ"
+            return "".join("  " if ord(original) > 0xFFFF and hidden == " " else hidden
+                           for original, hidden in zip(source, code))
+
+        return {"logical_module": self.logical_module, "relative": self.relative,
+                "source": self.source, "code": utf16_mask(self.source, self.code),
+                "original_source": self.original_source,
+                "original_code": utf16_mask(self.original_source, self.original_code),
+                "offset_units": "utf16"}
 
 
 def _explicit_path(source: str, code: str, before: int):
@@ -72,7 +104,9 @@ def _module_paths(source: str, directory: Path, explicit_directory: Path):
         else:
             opened = found.end() - 1
             end = closing(code, opened, "{", "}")
-            for child, path in _module_paths(source[opened + 1:end], directory / name, directory / name):
+            explicit = _explicit_path(source, code, found.start())
+            nested = explicit_directory / explicit if explicit is not None else directory / name
+            for child, path in _module_paths(source[opened + 1:end], nested, nested):
                 yield f"{name}::{child}", path
             cursor = end + 1
 
@@ -82,7 +116,7 @@ class RustTree:
         self.directory = Path(directory).resolve()
         assert self.directory.is_dir(), f"Rust source directory missing: {self.directory}"
 
-    def _walk(self, entry: Path, include_tests: bool):
+    def _walk(self, entry: Path, include_tests: bool, logical_root: str = ""):
         active = set()
         records = []
 
@@ -91,46 +125,65 @@ class RustTree:
             assert path.is_relative_to(self.directory), f"Rust module escapes source root: {path}"
             assert path not in active, f"cyclic Rust module graph at {path}"
             active.add(path)
-            raw = normalize(path.read_text(encoding="utf-8"))
+            original = path.read_bytes().decode("utf-8")
+            raw = normalize(original)
             text = raw if include_tests else production(raw)
             relative = os.path.relpath(path, self.directory).replace("\\", "/")
-            records.append((module, RustFile(path, relative, text)))
+            records.append((module, RustFile(path, relative, text, module, original, include_tests)))
             directory = path.parent if path.stem in {"lib", "main", "mod"} else path.parent / path.stem
             for child, target in _module_paths(text, directory, path.parent):
                 visit(target, f"{module}::{child}" if module else child)
             active.remove(path)
 
-        visit(entry, "")
+        visit(entry, logical_root)
         assert records, "empty Rust module graph"
         return records
 
-    def family(self, entry: str, *, include_tests: bool = False) -> list[RustFile]:
+    def compiled_records(self, entry: str = "lib.rs", *, include_tests: bool = False) -> list[RustFile]:
+        """A logical family registered in lib.rs, never a physical-file fallback.
+
+        This is the library target's graph. Other Cargo targets and standalone
+        execution harnesses must name their entrypoint explicitly instead.
+        """
         target = self.directory / entry
         crate = self.directory / "lib.rs"
-        if crate.is_file() and entry != "lib.rs":
+        assert crate.is_file(), f"missing Rust library entrypoint: {crate}"
+        records = self._walk(crate, include_tests)
+        if entry != "lib.rs":
             # Resolve the compiler's logical family even when a stale root
             # file still exists after a move; that orphan is not a fallback.
             module = entry.removesuffix(".rs").removesuffix("/mod").replace("/", "::")
-            records = self._walk(crate, include_tests)
-            candidates = [record.path for name, record in records if name == module]
+            candidates = [(name, record.path) for name, record in records if name == module]
             if not candidates:
-                candidates = [record.path for _, record in records if record.path == target.resolve()]
+                candidates = [(name, record.path) for name, record in records if record.path == target.resolve()]
             assert len(candidates) == 1, f"missing or ambiguous Rust entry module {module}"
-            target = candidates[0]
-        assert target.is_file(), f"missing Rust entry {entry}"
+            logical, target = candidates[0]
+            records = self._walk(target, include_tests, logical)
+        return [record for _, record in records]
+
+    def entrypoint_records(self, entry: str, *, include_tests: bool = False) -> list[RustFile]:
+        """Explicit standalone/Cargo target; does not imply library membership."""
+        target = self.directory / entry
+        assert target.is_file(), f"missing explicit Rust entrypoint {entry}"
         return [record for _, record in self._walk(target, include_tests)]
 
-    def source(self, entry: str, *, include_tests: bool = False) -> str:
-        return "\n".join(record.source for record in self.family(entry, include_tests=include_tests))
+    def family(self, entry: str, *, include_tests: bool = False, standalone: bool = False) -> list[RustFile]:
+        if standalone:
+            return self.entrypoint_records(entry, include_tests=include_tests)
+        return self.compiled_records(entry, include_tests=include_tests)
+
+    def source(self, entry: str, *, include_tests: bool = False, standalone: bool = False) -> str:
+        return "\n".join(record.source for record in self.family(entry, include_tests=include_tests, standalone=standalone))
 
     def symbol_source(self, entry: str, marker: str, *, include_tests: bool = False,
-                      preserve_newlines: bool = False) -> str:
+                      preserve_newlines: bool = False, standalone: bool = False) -> str:
         matches = []
         modifier = r"[ \t]*(?:(?:pub(?:\([^)]*\))?|async|unsafe|extern)\s+)*"
-        declaration = re.compile(r"(?m)^" + modifier + re.escape(marker))
-        for record in self.family(entry, include_tests=include_tests):
-            text = record.path.read_bytes().decode("utf-8") if preserve_newlines else record.source
-            code = (mask(text) if include_tests else production_mask(text)) if preserve_newlines else mask(text)
+        boundary = r"(?!\w)" if marker and (marker[-1].isalnum() or marker[-1] == "_") else ""
+        declaration = re.compile(r"(?m)^" + modifier + re.escape(marker) + boundary)
+        for record in self.family(entry, include_tests=include_tests, standalone=standalone):
+            text = record.original_source if preserve_newlines else record.source
+            code = record.original_code if preserve_newlines else record.code
             for found in declaration.finditer(code):
                 matches.append(text[found.start():item_end(code, found.start())])
         assert len(matches) == 1, f"{entry}: declaration {marker!r} matched {len(matches)} times"

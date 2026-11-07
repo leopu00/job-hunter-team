@@ -44,6 +44,8 @@
 # ---------------------------------------------------------------- gate: puri
 # Asseriscono su dati del repo (dizionari, tema, font imbarcati) e su
 # trasformazioni pure: nessuna scena, nessun backend, nessun tempo.
+# Synthetic source-guard helper selftest; exit and PASS marker are both required.
+source_guard_support|script|gate|any|-|tools/source_guard_support_selftest.gd|SOURCE-GUARD-SUPPORT-TEST PASS
 nav_grid|script|gate|any|-|tools/nav_grid_selftest.gd|-
 speech_bubble|script|gate|any|-|tools/speech_bubble_selftest.gd|-
 pipeline_queue|script|gate|any|-|tools/pipeline_queue_selftest.gd|-

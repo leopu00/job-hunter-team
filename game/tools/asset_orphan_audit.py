@@ -96,8 +96,8 @@ def collect_literals(sources: list[Path]) -> set[str]:
     for path in sources:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
+        except OSError as error:
+            raise OSError(f"Cannot read asset-audit source: {path}") from error
         lits.update(STRING_RE.findall(text))
     return lits
 

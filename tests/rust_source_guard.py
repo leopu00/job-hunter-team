@@ -24,26 +24,34 @@ def _entry(path, root: Path) -> str:
     return path.relative_to(root).as_posix() if path.is_absolute() else path.as_posix()
 
 
-def production_files(path, *, root: Path = RUST):
-    return RustTree(root).family(_entry(path, root))
+def compiled_records(path="lib.rs", *, root: Path = RUST, include_tests: bool = False):
+    return RustTree(root).compiled_records(_entry(path, root), include_tests=include_tests)
 
 
-def read_rust(path, *, root: Path = RUST, include_tests: bool = False) -> str:
-    return RustTree(root).source(_entry(path, root), include_tests=include_tests)
+def entrypoint_records(path, *, root: Path = RUST, include_tests: bool = False):
+    return RustTree(root).entrypoint_records(_entry(path, root), include_tests=include_tests)
+
+
+def production_files(path, *, root: Path = RUST, standalone: bool = False):
+    return RustTree(root).family(_entry(path, root), standalone=standalone)
+
+
+def read_rust(path, *, root: Path = RUST, include_tests: bool = False, standalone: bool = False) -> str:
+    return RustTree(root).source(_entry(path, root), include_tests=include_tests, standalone=standalone)
 
 
 def symbol_source(path, marker: str, *, root: Path = RUST, include_tests: bool = False,
-                  preserve_newlines: bool = False) -> str:
+                  preserve_newlines: bool = False, standalone: bool = False) -> str:
     return RustTree(root).symbol_source(_entry(path, root), marker, include_tests=include_tests,
-                                        preserve_newlines=preserve_newlines)
+                                        preserve_newlines=preserve_newlines, standalone=standalone)
 
 
 def declarations(source: str) -> list[str]:
     return [f"{found[1]} {found[2]}" for found in _DECLARATION.finditer(mask(normalize(source)))]
 
 
-def family_inputs(path, *, root: Path = RUST) -> list[str]:
-    found = [name for record in production_files(path, root=root) for name in declarations(record.source)]
+def family_inputs(path, *, root: Path = RUST, standalone: bool = False) -> list[str]:
+    found = [name for record in production_files(path, root=root, standalone=standalone) for name in declarations(record.source)]
     assert found, f"Rust family {path} contains no declarations"
     return found
 

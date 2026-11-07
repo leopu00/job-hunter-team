@@ -10,7 +10,7 @@ def normalize(source: str) -> str:
     return source.removeprefix("\ufeff").replace("\r\n", "\n")
 
 
-def mask(source: str) -> str:
+def mask(source: str, *, strings: list[str] | None = None) -> str:
     chars = list(source)
     i = 0
     while i < len(source):
@@ -39,6 +39,8 @@ def mask(source: str) -> str:
                 end = source.find('"' + raw[1], raw.end())
                 if end < 0:
                     raise AssertionError("Unclosed Rust raw string")
+                if strings is not None:
+                    strings.append(source[raw.end():end])
                 i = end + len(raw[1]) + 1
             elif char:
                 i = char.end()
@@ -48,6 +50,8 @@ def mask(source: str) -> str:
                     i += 2 if source[i] == "\\" else 1
                 if i >= len(source):
                     raise AssertionError("Unclosed Rust string")
+                if strings is not None:
+                    strings.append(source[start + 1:i])
                 i += 1
             else:
                 i += 1
@@ -56,6 +60,17 @@ def mask(source: str) -> str:
             if chars[at] != "\n":
                 chars[at] = " "
     return "".join(chars)
+
+
+def string_literals(source: str) -> list[str]:
+    """Lexical string contents in source order, excluding comments and chars.
+
+    Normal-string escapes remain lexical; raw-string contents stay verbatim.
+    Selection and masking use the same lexer and reject truncated literals.
+    """
+    strings: list[str] = []
+    mask(source, strings=strings)
+    return strings
 
 
 def closing(code: str, start: int, left: str, right: str) -> int:
@@ -116,20 +131,31 @@ def item_end(code: str, start: int) -> int:
             i = closing(code, i + 1, "[", "]") + 1
         else:
             break
-    item = re.match(r"(?:(?:pub(?:\([^)]*\))?|async|unsafe|extern|default)\s+)*"
-                    r"(?:fn|struct|enum|impl|const|static|type|mod|use|trait|union)\b", code[i:])
-    parens = brackets = 0
-    for at in range(i, len(code)):
+    item = re.match(r"(?:(?:pub(?:\([^)]*\))?|async|unsafe|extern|default|const(?=\s+(?:fn|unsafe|extern)\b))\s+)*"
+                    r"(?P<kind>fn|struct|enum|impl|const|static|type|mod|use|trait|union)\b", code[i:])
+    declaration = item is not None and item["kind"] in {"const", "static", "type", "use"}
+    parens = brackets = angles = 0
+    at = i
+    while at < len(code):
         token = code[at]
         parens += (token == "(") - (token == ")")
         brackets += (token == "[") - (token == "]")
+        if item and token == "<":
+            angles += 1
+        elif item and token == ">":
+            angles = max(0, angles - 1)
         if not parens and not brackets:
             if token == ";" or (not item and token == ","):
                 return at + 1
             if token == "}":
                 return at
             if token == "{":
-                return closing(code, at, "{", "}") + 1
+                end = closing(code, at, "{", "}")
+                if declaration or angles:
+                    at = end
+                else:
+                    return end + 1
+        at += 1
     raise AssertionError("Rust test attribute has no item")
 
 
@@ -155,7 +181,7 @@ def _attributes_start(code: str, before: int) -> int:
     return start
 
 
-def test_item_ranges(source: str):
+def _test_item_ranges(source: str):
     code = mask(source)
     kept = 0
     for attr in re.finditer(r"#\s*\[", code):
@@ -173,7 +199,7 @@ def production(source: str) -> str:
     source = normalize(source)
     chunks = []
     kept = 0
-    for start, end in test_item_ranges(source):
+    for start, end in _test_item_ranges(source):
         chunks.extend((source[kept:start], "\n"))
         kept = end
     return "".join(chunks) + source[kept:]
@@ -182,7 +208,7 @@ def production(source: str) -> str:
 def production_mask(source: str) -> str:
     """Select code on original offsets, including original CRLF literal bytes."""
     code = list(mask(source))
-    for start, end in test_item_ranges(source):
+    for start, end in _test_item_ranges(source):
         for at in range(start, end):
             if code[at] not in "\r\n":
                 code[at] = " "
