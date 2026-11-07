@@ -70,15 +70,15 @@ test('with a login already there the step goes on at once: no instruction to log
   assert.doesNotMatch(p.notes[0].body, /notify_body/);
 });
 
-test('without a login the person is told where to log in: SSH on a VPS, another terminal here on this computer', async () => {
+test('other providers retain their login instructions: SSH on a VPS, another terminal on this computer', async () => {
   for (const [isVps, key] of [[true, 'wizard.oauth.notify_body('], [false, 'wizard.oauth.notify_body_local(']]) {
     const p = prompter();
     const found = await runProviderLoginStep({
-      cmdName: 'codex', label: 'Codex (OpenAI)', isVps, prompter: p, t, tf,
+      cmdName: 'claude', label: 'Claude', isVps, prompter: p, t, tf,
       find: () => null,
-      wait: async () => '/jht_home/.codex/auth.json',
+      wait: async () => '/jht_home/.claude/.credentials.json',
     });
-    assert.equal(found, '/jht_home/.codex/auth.json');
+    assert.equal(found, '/jht_home/.claude/.credentials.json');
     assert.ok(p.notes[0].body.startsWith(key), p.notes[0].body);
     assert.match(p.stops[0], /wizard\.oauth\.detected/);
   }
@@ -87,7 +87,7 @@ test('without a login the person is told where to log in: SSH on a VPS, another 
 test('a login that never comes ends the step with the timeout said', async () => {
   const p = prompter();
   const found = await runProviderLoginStep({
-    cmdName: 'codex', label: 'Codex (OpenAI)', isVps: false, prompter: p, t, tf,
+    cmdName: 'claude', label: 'Claude', isVps: false, prompter: p, t, tf,
     find: () => null, wait: async () => null,
   });
   assert.equal(found, null);

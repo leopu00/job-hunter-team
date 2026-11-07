@@ -2400,7 +2400,7 @@ refuse_running_team() {
   done
   [ -z "$running" ] && return 0
   printf 'JHT_ERROR %s\n' team_running >&2
-  printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team is running on this computer ($running). Installing now would change its configuration under it, and jht could no longer start or restart it. Stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
+  printf "  ${RED}✗${RESET} %s\n" "team_running: Job Hunter Team is running on this computer ($running). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are." >&2
   exit "$TEAM_RUNNING_EXIT"
 }
 
