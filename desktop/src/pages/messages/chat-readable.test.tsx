@@ -147,7 +147,7 @@ describe("the time of a message", () => {
 });
 
 describe("the size of the text", () => {
-  const FILES = ["DirectChatScreen.tsx", "ChatMessageRow.tsx", "ChatQuestion.tsx", "stick-to-bottom.tsx", "chat-text.tsx"];
+  const FILES = ["DirectChatScreen.tsx", "DirectChatView.tsx", "DirectChatNavigation.tsx", "DirectChatHeader.tsx", "DirectChatStatusBar.tsx", "DirectChatTranscript.tsx", "DirectChatComposer.tsx", "ChatMessageRow.tsx", "ChatQuestion.tsx", "stick-to-bottom.tsx", "chat-text.tsx"];
   const source = (name: string) => readFileSync(`src/pages/messages/${name}`, "utf8");
 
   it("no text in the chat is smaller than 11 px, and the words people read are 15 px, with room between the lines", () => {
@@ -156,7 +156,7 @@ describe("the size of the text", () => {
         expect(Number(match[1]), `${name}: ${match[0]}`).toBeGreaterThanOrEqual(11);
       }
     }
-    const screenSource = source("DirectChatScreen.tsx");
+    const screenSource = source("DirectChatComposer.tsx");
     const rowSource = source("ChatMessageRow.tsx");
     // the bubble and the suggested replies (a line of its own component), the box people type in (the screen's)
     expect(rowSource).toMatch(/rounded-lg px-4 py-3 text-\[15px\] leading-\[1\.7\]/);
@@ -165,7 +165,7 @@ describe("the size of the text", () => {
     expect(source("ChatQuestion.tsx")).toMatch(/rounded-lg rounded-bl-sm px-4 py-3 text-\[15px\]/);  });
 
   it("the conversation and the box use the whole width of the page, not a narrow column", () => {
-    const screenSource = source("DirectChatScreen.tsx");
+    const screenSource = FILES.map(source).join("\n");
     expect(screenSource).not.toMatch(/max-w-4xl/);
     expect(screenSource).toMatch(/<div className="w-full flex flex-col gap-3">/);
     // a bubble can grow wide but a line stays short enough to follow
