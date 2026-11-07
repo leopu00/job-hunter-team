@@ -41,6 +41,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 
 | File | Topic |
 |---|---|
+| [`codex-managed-launch-policy.md`](architecture/codex-managed-launch-policy.md) | Avvio comune e recupero limitato dei dialoghi della CLI Codex: configurazione del pin, stato, prove e limiti |
 | [`tauri-onboarding-contract.md`](architecture/tauri-onboarding-contract.md) | 🚪 Onboarding Tauri 0.4 porta a porta: gate unico per account dopo il login Google (profilo → host → provider in abbonamento → runtime → login provider → Capitano/Assistente → chat diretta → marker `subscription-v1`), porte e proprietà dei moduli, backend `jht` riusato, sicurezza nativa; niente `api-worker` né upload CV |
 | [`closer-desktop-tauri.md`](architecture/closer-desktop-tauri.md) | 🖥️ Browser assistito dentro l'app Tauri: il frontend chiama solo `closer_desktop_request`, il Rust tiene il binding per account, l'attestazione del container e SSH senza PTY; binding assente = browser non disponibile |
 | [`assistance-host-registration.md`](architecture/assistance-host-registration.md) | 🔗 Registrazione della VPS di assistenza durante il primo setup: solo l'ExecutionHost VPS dell'account attivo, nessuna scelta di account, container o file dal renderer |

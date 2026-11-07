@@ -10,9 +10,11 @@ read (the product would fall back to `latest`).
 """
 
 import importlib.util
+from collections import Counter
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 import shutil
 import stat
@@ -182,13 +184,15 @@ loads_config=no
 case " $* " in *" features list "*) loads_config=yes ;; esac
 for arg in "$@"; do
   case "$arg" in
-    project_doc_max_bytes=*) [ "$loads_config" = yes ] || continue ;;
+    project_doc_max_bytes=*|notice.hide_rate_limit_model_nudge=*|check_for_update_on_startup=*) [ "$loads_config" = yes ] || continue ;;
   esac
   case "$arg" in
     --jht-not-a-flag) [ "$mode" = accepts-anything ] || { echo "error: unexpected argument '$arg' found" >&2; exit 2; } ;;
     --search) [ "$mode" = no-search ] && { echo "error: unexpected argument '--search' found" >&2; exit 2; } ;;
     project_doc_max_bytes=not_a_number) [ "$mode" = loads-anything ] || { echo "Error: failed to load bootstrap configuration" >&2; exit 1; } ;;
     project_doc_max_bytes=*) [ "$mode" = no-budget ] && { echo "Error: unknown key project_doc_max_bytes" >&2; exit 1; } ;;
+    notice.hide_rate_limit_model_nudge=*) [ "$mode" = no-notice ] && { echo "Error: unknown key notice.hide_rate_limit_model_nudge" >&2; exit 1; } ;;
+    check_for_update_on_startup=*) [ "$mode" = no-update ] && { echo "Error: unknown key check_for_update_on_startup" >&2; exit 1; } ;;
   esac
 done
 exit 0
@@ -226,6 +230,8 @@ def test_a_cli_that_takes_the_launcher_flags_passes(installer):
     [
         ("no-search", "flags"),
         ("no-budget", "config"),
+        ("no-notice", "config"),
+        ("no-update", "config"),
         ("accepts-anything", "flags-probe"),
         ("loads-anything", "config-probe"),
     ],
@@ -242,14 +248,36 @@ def test_a_failed_install_is_caught(installer):
     assert _tags(result) == {"install"}
 
 
-def test_the_flags_checked_are_the_ones_the_launcher_passes():
-    """Once e104f0e10 and 7f891f9d3 are merged, the launcher and the check agree."""
-    spawn_lib = (ROOT / ".launcher" / "spawn-lib.sh").read_text(encoding="utf-8")
-    start_agent = (ROOT / ".launcher" / "start-agent.sh").read_text(encoding="utf-8")
-    budget = re.search(r"^JHT_CODEX_PROJECT_DOC_MAX_BYTES=(\d+)$", spawn_lib, re.MULTILINE)
-    if budget:
-        assert f"project_doc_max_bytes={budget.group(1)}" in toolchain.CODEX_OVERRIDES
-    if 'CLI_ARGS="$CLI_ARGS --search"' in start_agent:
-        assert "--search" in toolchain.CODEX_FLAGS
-    assert 'CLI_ARGS="--yolo ' in start_agent
-    assert "-c model_reasoning_effort=$effort" in start_agent
+@pytest.mark.parametrize(
+    ("role", "role_models", "effort", "search"),
+    [("scout", None, "high", True), ("scorer", None, "high", False),
+     ("scorer", {"scorer": {"effort": "medium"}}, "medium", False)],
+)
+def test_the_flags_checked_are_the_ones_the_launcher_passes(tmp_path, role, role_models, effort, search):
+    """Exercise the actual role/config/launcher/builder chain against the image's independent contract."""
+    from test_agent_model_override import _command, _spawn_command
+
+    command = shlex.split(_command(_spawn_command(tmp_path, role, role_models)))
+    assert command[0] == "codex"
+    flags, overrides = [], []
+    index = 1
+    while index < len(command):
+        value = command[index]
+        if value in ("--model", "-c"):
+            assert index + 1 < len(command) and command[index + 1]
+            if value == "--model":
+                assert not command[index + 1].startswith("-")
+            else:
+                overrides.append(command[index + 1])
+            index += 2
+        else:
+            flags.append(value)
+            index += 1
+    assert command.count("--model") == 1
+    expected = [value.replace("model_reasoning_effort=high", f"model_reasoning_effort={effort}")
+                for value in toolchain.CODEX_OVERRIDES]
+    assert Counter(overrides) == Counter(expected)
+    assert "project_doc_max_bytes=131072" in overrides
+    assert f"model_reasoning_effort={effort}" in overrides
+    expected_flags = [flag for flag in toolchain.CODEX_FLAGS if search or flag != "--search"]
+    assert Counter(flags) == Counter(expected_flags)

@@ -133,7 +133,10 @@ exit "$fails"
 # launcher, so the image check asks the CLI before those commits are merged:
 # it is the check that says whether the pinned CLI accepts them.
 # tests/test_agent_image_toolchain.py keeps it equal to the launcher once they are.
-CODEX_OVERRIDES = ["model_reasoning_effort=high", "project_doc_max_bytes=131072"]
+CODEX_OVERRIDES = [
+    "model_reasoning_effort=high", "project_doc_max_bytes=131072",
+    "notice.hide_rate_limit_model_nudge=true", "check_for_update_on_startup=false",
+]
 CODEX_FLAGS = ["--yolo", "--search"]
 
 
