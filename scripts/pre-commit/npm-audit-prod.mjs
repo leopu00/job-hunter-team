@@ -9,8 +9,9 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(new URL('../..', import.meta.url).pathname);
+const ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // I due workspace npm che finiscono davvero in mano a qualcuno: il CLI
 // (installato sull'host e nel container) e il web (deployato su Vercel).
 // `tui` era il terzo finché la TUI è stata rimossa il 2026-07-25.

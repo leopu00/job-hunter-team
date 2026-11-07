@@ -8,8 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const gate = fileURLToPath(new URL("../../../scripts/pre-commit/npm-audit-prod.mjs", import.meta.url));
 const sandboxes: string[] = [];
 
-function sandbox() {
-  const root = realpathSync(mkdtempSync(path.join(tmpdir(), "jht-npm-audit-")));
+function sandbox(prefix = "jht-npm-audit-") {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), prefix)));
   sandboxes.push(root);
   const hook = path.join(root, "scripts/pre-commit/npm-audit-prod.mjs");
   mkdirSync(path.dirname(hook), { recursive: true });
@@ -63,6 +63,14 @@ describe("production npm audit pre-commit gate", () => {
       args: ["audit", "--omit=dev", "--audit-level=high"],
       cwd: path.join(fixture.root, workspace),
     })));
+  });
+
+  it("audits a complete checkout whose file URL escapes spaces, hashes and percent signs", () => {
+    const fixture = sandbox("jht audit # fixture %-");
+    const result = run(fixture);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe("");
+    expect(result.calls.map((call) => call.cwd)).toEqual(["cli", "web"].map((workspace) => path.join(fixture.root, workspace)));
   });
 
   it.each([
