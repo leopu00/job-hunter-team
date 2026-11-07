@@ -570,6 +570,17 @@ mod windows {
         now: u64,
         moment: &mut dyn FnMut(Moment),
     ) -> Result<Saved, &'static str> {
+        store_with_part_name(user_dir, source, now, moment, part_name)
+    }
+
+    // The same copy path, with a deterministic temporary name for collision tests.
+    pub(super) fn store_with_part_name(
+        user_dir: &Path,
+        source: &Path,
+        now: u64,
+        moment: &mut dyn FnMut(Moment),
+        part_name: impl FnOnce(u64) -> String,
+    ) -> Result<Saved, &'static str> {
         let (original, extension) = name_and_extension(source);
         // The extension is looked at before the file is read: a type that is not offered costs nothing.
         if !ALLOWED_EXTENSIONS.contains(&extension.as_str()) {
@@ -584,6 +595,7 @@ mod windows {
             return Err("attachments_folder_full");
         }
         let part = folder.path.join(part_name(now));
+        let mut created = false;
         let result = (|| -> Result<String, &'static str> {
             {
                 let mut file = OpenOptions::new()
@@ -592,6 +604,7 @@ mod windows {
                     .share_mode(FILE_SHARE_READ)
                     .open(&part)
                     .map_err(|_| "attachment_save_failed")?;
+                created = true;
                 file.write_all(&bytes).map_err(|_| "attachment_save_failed")?;
                 file.sync_all().map_err(|_| "attachment_save_failed")?;
             }
@@ -605,7 +618,7 @@ mod windows {
             }
             Err("attachments_folder_full")
         })();
-        if result.is_err() {
+        if created && result.is_err() {
             let _ = std::fs::remove_file(&part);
         }
         Ok(Saved { file: result?, size: bytes.len() as u64, display: display_name(&original) })
@@ -1092,6 +1105,27 @@ mod tests {
             let back = civil_seconds(n(0, 4), n(4, 6), n(6, 8), n(9, 11), n(11, 13), n(13, 15));
             assert_eq!(back as u64, seconds, "{text}");
         }
+    }
+
+    /// A collision is forced without depending on the counter or on the order of parallel tests.
+    #[cfg(windows)]
+    #[test]
+    fn a_preexisting_part_is_not_removed_when_its_creation_is_refused() {
+        let s = Scratch::new();
+        let user = s.user();
+        let folder = user.join(FOLDER);
+        fs::create_dir_all(&folder).unwrap();
+        let name = ".cv-preexisting.part";
+        let part = folder.join(name);
+        let original = b"preexisting content owned by another operation";
+        fs::write(&part, original).unwrap();
+        let source = s.put("cv.pdf", &pdf());
+
+        let result = windows::store_with_part_name(&user, &source, 7, &mut quiet, |_| name.to_owned());
+
+        assert_eq!(result.unwrap_err(), "attachment_save_failed");
+        assert_eq!(fs::read(&part).unwrap(), original);
+        assert_eq!(fs::read_dir(&folder).unwrap().count(), 1);
     }
 
     /// Windows: a junction needs no privilege (a symbolic link does), so it is the link of these tests.
