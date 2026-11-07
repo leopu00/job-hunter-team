@@ -7515,7 +7515,10 @@ mod tests {
     fn the_start_of_the_team_reports_its_steps_in_order_and_each_is_repeated_by_the_heartbeat_with_the_time() {
         let events = Arc::new((Mutex::new(Vec::<OnboardingProgress>::new()), std::sync::Condvar::new()));
         let captured = Arc::clone(&events);
+        let operation_thread = thread::current().id();
         let reporter = ProgressReporter::with_emitter(move |event| {
+            // Proof only: suppress heartbeat delivery, keep operation events.
+            if thread::current().id() != operation_thread { return; }
             captured.0.lock().unwrap().push(event);
             captured.1.notify_all();
         });
