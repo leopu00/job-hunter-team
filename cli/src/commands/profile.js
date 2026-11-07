@@ -8,6 +8,8 @@ import { JHT_PROFILE_DIR } from '../jht-paths.js';
 import { readRegularFile } from '../lib/secure-config-io.js';
 import { MAX_PROFILE_BYTES, PROFILE_READY_MESSAGE, importOutcome, importProfile } from '../lib/profile-import.js';
 import { resolveSession, sendMessage } from './team/chat.js';
+import { showProfileAction } from '../lib/profile-show.js';
+import { t } from '../../wizard/i18n.js';
 
 // shared/skills/validate_profile.py risolto relativo a questo file:
 // cli/src/commands → cli/src → cli → <repo root> → shared/skills/…
@@ -198,6 +200,12 @@ function importAction(file, opts) {
 
 export function registerProfileCommand(program) {
   const cmd = new Command('profile').description('Candidate profile (candidate_profile.yml)');
+
+  cmd
+    .command('show')
+    .description(t('profile.show.description'))
+    .option('--json', t('profile.show.json'))
+    .action(showProfileAction);
 
   cmd
     .command('validate [file]')
