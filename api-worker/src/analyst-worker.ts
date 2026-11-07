@@ -10,7 +10,7 @@ import {
   type AnalystWorkerOutcome,
 } from "./analyst-contract.js";
 import type { AuditEvent, WorkerErrorCode } from "./contract.js";
-import { WorkerFault, normalizeFault } from "./errors.js";
+import { WorkerFault } from "./errors.js";
 import { RunGuard } from "./guardrails.js";
 import {
   API_KEY_ENV_BY_PROVIDER,
@@ -26,6 +26,12 @@ import type {
 } from "./providers/analyst-provider.js";
 import { ANALYST_SYSTEM_PROMPT, buildAnalystPrompt } from "./role/analyst.js";
 import { ExclusiveRunLock } from "./run-lock.js";
+import {
+  assertLiveBudget,
+  elapsed,
+  knownFault,
+  sanitizeStopReason,
+} from "./worker-helpers.js";
 
 export type AnalystWorkerOptions = {
   runtimeDir: string;
@@ -277,36 +283,6 @@ export class AnalystApiWorker {
   }
 }
 
-function assertLiveBudget(profile: ModelProfile, maxCostUsd: number): void {
-  if (profile.provider === "mock") return;
-  if (
-    maxCostUsd <= 0 ||
-    !profile.pricing ||
-    profile.pricing.inputUsdPerMillionTokens +
-      profile.pricing.outputUsdPerMillionTokens <=
-      0
-  ) {
-    throw new WorkerFault("LIVE_BUDGET_REQUIRED", { limit: "cost_usd" });
-  }
-}
-
-function knownFault(error: unknown): WorkerFault {
-  if (error instanceof WorkerFault) return error;
-  if (error instanceof Error && error.name === "ZodError") {
-    return new WorkerFault("OUTPUT_VALIDATION", { cause: error });
-  }
-  return normalizeFault(error);
-}
-
-function sanitizeStopReason(raw: string): string {
-  return (
-    raw
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, "_")
-      .slice(0, 80) || "unknown"
-  );
-}
-
 function analystMessage(code: WorkerErrorCode): string {
   const messages: Record<WorkerErrorCode, string> = {
     INPUT_VALIDATION: "The Analyst worker input is invalid.",
@@ -330,8 +306,4 @@ function analystMessage(code: WorkerErrorCode): string {
     INTERNAL_ERROR: "The Analyst worker failed safely.",
   };
   return messages[code];
-}
-
-function elapsed(now: () => number, startedAt: number): number {
-  return Math.max(0, Math.round(now() - startedAt));
 }

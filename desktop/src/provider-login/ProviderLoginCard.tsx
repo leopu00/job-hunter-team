@@ -40,7 +40,7 @@ export function ProviderLoginCard({ locale: localeOverride }: { locale?: Locale 
         {failure && `${failure.text} ${failure.action}`}
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        {view.kind !== "loading" && (
+        {login.canSignIn && (
           <button type="button" data-testid="provider-login-signin" disabled={login.signingIn} onClick={login.signIn} className={buttonCls}>
             {login.signingIn ? t.signingIn : t.signIn}
           </button>
@@ -56,7 +56,11 @@ export function ProviderLoginCard({ locale: localeOverride }: { locale?: Locale 
           </button>
         )}
       </div>
-      {view.kind === "state" && <p className="text-[11px] text-[var(--color-muted)]">{t.note}</p>}
+      {view.kind !== "loading" && (
+        <p data-testid={login.canSignIn ? "provider-login-note" : "provider-login-on-server"} className="text-[11px] text-[var(--color-muted)]">
+          {login.canSignIn ? t.note : t.onServer}
+        </p>
+      )}
     </div>
   );
 }

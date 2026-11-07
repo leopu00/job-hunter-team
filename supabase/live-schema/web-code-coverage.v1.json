@@ -1726,9 +1726,6 @@
       "sha256:6a1f3d2538124ace59c299c27d1a0859f934c718f80317723be6a36a459ae65f": {
         "exception": "reviewed_dynamic_schema_use"
       },
-      "sha256:6f9b4d0b66833b80f625a5956218133df4f3c61d8d67e9be6e4fcd96541ad032": {
-        "exception": "reviewed_dynamic_schema_use"
-      },
       "sha256:70b5b02455514dd02cdf2c007faf26185a4052bd8b27fddc9b449f516dd8e068": {
         "exception": "reviewed_dynamic_schema_use"
       },

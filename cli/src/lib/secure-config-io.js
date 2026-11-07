@@ -170,7 +170,3 @@ export function readRegularFile(path, { maxBytes } = {}) {
 export function readRegularFileText(path, options) {
   return readRegularFile(path, options).toString('utf8');
 }
-
-export function repairPrivatePath(path, { directory = false } = {}) {
-  try { chmodSync(path, directory ? PRIVATE_DIR_MODE : PRIVATE_FILE_MODE); } catch { /* missing/unsupported */ }
-}

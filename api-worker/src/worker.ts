@@ -11,7 +11,7 @@ import {
   type ScoutWorkerOutcome,
   type StopReason,
 } from "./contract.js";
-import { WorkerFault, normalizeFault } from "./errors.js";
+import { WorkerFault } from "./errors.js";
 import { RunGuard } from "./guardrails.js";
 import {
   API_KEY_ENV_BY_PROVIDER,
@@ -34,6 +34,12 @@ import {
 import { ExclusiveRunLock } from "./run-lock.js";
 import { GuardedScoutTools, type ScoutJobSource } from "./tools.js";
 import type { ScoutWebJobReader } from "./web-job-reader.js";
+import {
+  assertLiveBudget,
+  elapsed,
+  knownFault as mapKnownFault,
+  sanitizeStopReason,
+} from "./worker-helpers.js";
 
 export type ScoutWorkerOptions = {
   runtimeDir: string;
@@ -327,40 +333,7 @@ function assertWebCapabilities(profile: ModelProfile): void {
   }
 }
 
-function assertLiveBudget(profile: ModelProfile, maxCostUsd: number): void {
-  if (profile.provider === "mock") return;
-  if (
-    maxCostUsd <= 0 ||
-    !profile.pricing ||
-    profile.pricing.inputUsdPerMillionTokens +
-      profile.pricing.outputUsdPerMillionTokens <=
-      0
-  ) {
-    throw new WorkerFault("LIVE_BUDGET_REQUIRED", { limit: "cost_usd" });
-  }
-}
-
 function normalizeStopReason(raw: string, proposalCount: number): StopReason {
   if (proposalCount === 0) return "no_candidates";
   return raw === "stop" || raw === "completed" ? "completed" : "provider_stop";
-}
-
-function sanitizeStopReason(raw: string): string {
-  const normalized = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "_")
-    .slice(0, 80);
-  return normalized || "unknown";
-}
-
-function mapKnownFault(error: unknown): WorkerFault {
-  if (error instanceof WorkerFault) return error;
-  if (error instanceof Error && error.name === "ZodError") {
-    return new WorkerFault("OUTPUT_VALIDATION", { cause: error });
-  }
-  return normalizeFault(error);
-}
-
-function elapsed(now: () => number, startedAt: number): number {
-  return Math.max(0, Math.round(now() - startedAt));
 }

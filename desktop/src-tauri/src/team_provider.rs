@@ -188,6 +188,9 @@ pub(crate) async fn team_provider(
         Err(_) => return Ok(failure("account_scope_unavailable")),
     };
     let main = window.label() == "main";
+    let reading = request.get("op").and_then(Value::as_str) == Some("status");
+    let started = std::time::Instant::now();
+    let worker = app.clone();
     let scope_state = scopes.inner().clone();
     let worker_expected = expected.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -200,7 +203,7 @@ pub(crate) async fn team_provider(
             request,
             main,
             || {
-                *found.borrow_mut() = Some(local_wrapper(&app, &worker_expected)?);
+                *found.borrow_mut() = Some(local_wrapper(&worker, &worker_expected)?);
                 Ok(())
             },
             |request| run_door(found.borrow().as_ref().ok_or("runtime_missing")?, request),
@@ -208,6 +211,10 @@ pub(crate) async fn team_provider(
     })
     .await
     .unwrap_or_else(|_| failure("team_provider_unavailable"));
+    if reading {
+        let worked = result.get("ok") == Some(&Value::Bool(true));
+        crate::load_times::note_native_read(&app, "team.provider", crate::load_times::ReadVia::Wrapper, worked, started);
+    }
     if scopes.lock_expected(&expected).is_err() {
         return Ok(failure("account_scope_changed"));
     }

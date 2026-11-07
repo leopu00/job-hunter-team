@@ -46,10 +46,6 @@ export const ROLE_SLOT: Readonly<Record<string, number>> = {
   closer: 12,
 };
 
-export function roleCategoryColor(role: string): string | null {
-  return role in ROLE_SLOT ? categoryColor(ROLE_SLOT[role]) : null;
-}
-
 const STYLE_ID = "jht-category-palette";
 
 /** Reads the theme's main colour and card from the page and writes the variables; null (and no variables) if they are not there. */

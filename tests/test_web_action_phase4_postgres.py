@@ -203,12 +203,6 @@ def _directive(db, user: str, text: str = "an order", status: str = "active") ->
 # the reasons: one list (no PostgreSQL needed)
 # --------------------------------------------------------------------------------------------------
 
-def _in_list_after(sql: str, variable: str) -> list[str]:
-    match = re.search(rf"IF {variable} NOT IN \(([^)]*)\)", sql)
-    assert match, variable
-    return re.findall(r"'([a-z_]+)'", match.group(1))
-
-
 def test_the_reasons_of_the_migration_are_those_of_the_catalogue():
     sql = M101.read_text()
     first, second = [m.group(1) for m in re.finditer(r"IF v_reason NOT IN \(([^)]*)\)", sql)]

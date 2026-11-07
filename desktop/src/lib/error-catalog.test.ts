@@ -42,6 +42,17 @@ const NOT_ERRORS: Record<string, string> = {
   artifact_too_big: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
   artifact_unreadable: "closed word of the terminal command `jht artifact upload` (artifact_upload.rs), with its own sentence there; never a screen error",
   it: "language code the command line reads from JHT_LANG or host.env (artifact_upload.rs), never an error",
+  // load_times.rs: the closed words of the load-times log (pages, the way a native read went) and the `op` of a request
+  // whose time is written (team_settings.rs reads only); never shown, never an error.
+  chat: "the way a native read went, in the load-times log (load_times.rs ReadVia), never an error",
+  wrapper: "the way a native read went, in the load-times log (load_times.rs ReadVia), never an error",
+  read: "the op of a team-settings request whose time is written (team_settings.rs), never an error",
+  team_log: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_scout: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_analista: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_scorer: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_scrittore: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
+  team_critico: "a page of the load-times log (load_times.rs LOAD_PAGES), never an error",
   ok_slow: "the runtime log's word for a chat call that worked but took long (direct_chat.rs, runtime_log.rs); it is written there and never shown",
   // provider_login.rs: the words of the states of the provider sign-in (a closed table the page turns into a calm line or a banner;
   // the failures of the reading have their own codes in the catalog).

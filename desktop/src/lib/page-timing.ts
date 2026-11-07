@@ -1,48 +1,48 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { PAGE_ROUTES, type PageKey } from "../shell/route-paths";
+import { matchRoute } from "../shell/router";
 
-/**
- * How long the pages of a linked team take to show their data: the globe, the list of positions and
- * one position. From the moment the page is asked for (the route changes) to the first data, and to
- * the last, with how many reads of the team it made and how long they took, and the calls to the
- * cloud it waited for (a table's name or `rates`, and their time). It is written down on this
- * computer, in the load-times log, by a native command that takes closed fields only: no address,
- * identifier, filter or row passes through here.
- *
- * «Last» is the moment of the last read that finished before 800 ms of quiet with none in flight.
+/** Local, closed metrics from route commit to visible data and the last observed activity.
+ * Completion means 800 ms of quiet after data is shown, with no native read in flight.
+ * A route left without data, or a load still waiting at 60 seconds, records a null first data.
  */
 const IDLE_MS = 800;
 const GIVE_UP_MS = 60_000;
-
-type Page = "map" | "positions" | "position";
+const DATA_SOURCES = ["memory", "stream", "native", "cloud"] as const;
+export type PageDataSource = typeof DATA_SOURCES[number];
 type Call = { label: string; ms: number };
 type Session = {
-  page: Page;
+  page: PageKey;
   begun: number;
   firstData: number | null;
+  firstDataSource: PageDataSource | null;
   last: number;
   inFlight: number;
   reads: number;
   readMs: number;
   cloud: Call[];
-  timer: ReturnType<typeof setTimeout> | null;
+  idle: ReturnType<typeof setTimeout> | null;
+  deadline: ReturnType<typeof setTimeout> | null;
   observer: PerformanceObserver | null;
 };
 
 let session: Session | null = null;
-let clock: () => number = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+let clock: () => number = () => performance.now();
 
-/** A test's clock. */
+/** A test's monotonic clock. */
 export function setPageTimingClock(next: (() => number) | null): void {
-  clock = next ?? (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+  clock = next ?? (() => performance.now());
 }
 
-export function pageOfPath(path: string): Page | null {
-  if (path === "/map") return "map";
-  if (path === "/positions") return "positions";
-  return /^\/positions\/[^/]+$/.test(path) ? "position" : null;
+export function pageOfPath(path: string): PageKey | null {
+  try {
+    return matchRoute(PAGE_ROUTES, path)?.route.key ?? null;
+  } catch {
+    return null;
+  }
 }
 
-/** What a request to the cloud asked, as a name that says nothing about the person: a table, or the rates. */
+/** Only the table name or rates is retained; addresses and filters never leave the observer. */
 export function cloudLabel(url: string): string {
   let parsed: URL;
   try {
@@ -55,19 +55,21 @@ export function cloudLabel(url: string): string {
   return table ? table[1] : "other";
 }
 
-function finish(emit: boolean): void {
+function finish(): void {
   const done = session;
   session = null;
   if (!done) return;
-  if (done.timer) clearTimeout(done.timer);
+  if (done.idle !== null) clearTimeout(done.idle);
+  if (done.deadline !== null) clearTimeout(done.deadline);
   done.observer?.disconnect();
-  if (!emit || (done.reads === 0 && done.cloud.length === 0)) return;
-  const firstData = done.firstData ?? done.last;
+  const ms = (at: number) => Math.max(0, Math.round(at - done.begun));
+  const last = done.firstData === null || done.inFlight > 0 ? Math.max(done.last, clock()) : done.last;
   void invoke("page_load_metric", {
     metric: {
       page: done.page,
-      firstDataMs: Math.max(0, Math.round(firstData - done.begun)),
-      completeMs: Math.max(0, Math.round(done.last - done.begun)),
+      firstDataMs: done.firstData === null ? null : ms(done.firstData),
+      firstDataSource: done.firstDataSource,
+      completeMs: ms(last),
       nativeReads: done.reads,
       nativeMs: Math.round(done.readMs),
       cloud: done.cloud.slice(0, 24),
@@ -76,55 +78,79 @@ function finish(emit: boolean): void {
 }
 
 function settle(now: Session): void {
-  if (now.timer) clearTimeout(now.timer);
-  now.timer = setTimeout(() => {
-    if (session !== now) return;
-    if (now.inFlight > 0 && clock() - now.begun < GIVE_UP_MS) return settle(now);
-    finish(true);
+  if (now.idle !== null) clearTimeout(now.idle);
+  now.idle = null;
+  if (now.firstData === null || now.inFlight > 0) return;
+  now.idle = setTimeout(() => {
+    if (session === now) finish();
   }, IDLE_MS);
 }
 
-/** The page of this route is being asked for: the clock starts. Any other route ends the one before. */
-export function beginPageLoad(path: string): void {
-  finish(true);
-  const page = pageOfPath(path);
-  if (!page || !isTauri()) return;
-  const now: Session = { page, begun: clock(), firstData: null, last: clock(), inFlight: 0, reads: 0, readMs: 0, cloud: [], timer: null, observer: null };
-  session = now;
-  if (typeof PerformanceObserver !== "undefined") {
-    try {
-      now.observer = new PerformanceObserver((list) => {
-        if (session !== now) return;
-        for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
-          if (entry.initiatorType !== "fetch" && entry.initiatorType !== "xmlhttprequest") continue;
-          if (entry.startTime < now.begun) continue;
-          now.cloud.push({ label: cloudLabel(entry.name), ms: Math.round(entry.duration) });
-          now.last = Math.max(now.last, entry.responseEnd);
-        }
-        settle(now);
-      });
-      now.observer.observe({ type: "resource", buffered: false });
-    } catch {
-      now.observer = null;
-    }
+function observeCloud(now: Session): void {
+  if (typeof PerformanceObserver === "undefined") return;
+  try {
+    now.observer = new PerformanceObserver((list) => {
+      if (session !== now) return;
+      for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
+        if (entry.initiatorType !== "fetch" && entry.initiatorType !== "xmlhttprequest") continue;
+        if (entry.startTime < now.begun) continue;
+        now.cloud.push({ label: cloudLabel(entry.name), ms: Math.round(entry.duration) });
+        now.last = Math.max(now.last, entry.responseEnd);
+      }
+      settle(now);
+    });
+    now.observer.observe({ type: "resource", buffered: false });
+  } catch {
+    now.observer?.disconnect();
+    now.observer = null;
   }
+}
+
+/** All registered routes, including local teams. Cleanup only closes the session it opened. */
+export function beginPageLoad(path: string): () => void {
+  finish();
+  const page = pageOfPath(path);
+  if (!page || !isTauri()) return () => undefined;
+  const begun = clock();
+  const now: Session = {
+    page, begun, firstData: null, firstDataSource: null, last: begun,
+    inFlight: 0, reads: 0, readMs: 0, cloud: [], idle: null, deadline: null, observer: null,
+  };
+  session = now;
+  now.deadline = setTimeout(() => { if (session === now) finish(); }, GIVE_UP_MS);
+  observeCloud(now);
+  return () => { if (session === now) finish(); };
+}
+
+/** Call after committed data is visible (including a successful empty result), never on a skeleton/error. */
+export function dataShown(source: PageDataSource): void {
+  const now = session;
+  if (!now || !DATA_SOURCES.includes(source)) return;
+  const shown = clock();
+  if (now.firstData === null) {
+    now.firstData = shown;
+    now.firstDataSource = source;
+  }
+  now.last = Math.max(now.last, shown);
   settle(now);
 }
 
-/** A read of the team starts; the function it returns is called when it ends, with whether it worked. */
+/** Counts completed reads, whether they worked or failed. Visible data is reported separately. */
 export function nativeReadStarted(): (worked: boolean) => void {
   const now = session;
   if (!now) return () => undefined;
   const started = clock();
+  let completed = false;
   now.inFlight += 1;
-  return (worked) => {
+  settle(now);
+  return (_worked) => {
+    if (completed || session !== now) return;
+    completed = true;
     now.inFlight -= 1;
-    if (session !== now) return;
     const ended = clock();
     now.reads += 1;
     now.readMs += ended - started;
     now.last = Math.max(now.last, ended);
-    if (worked && now.firstData === null) now.firstData = ended;
     settle(now);
   };
 }

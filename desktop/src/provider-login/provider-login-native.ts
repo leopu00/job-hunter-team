@@ -13,13 +13,19 @@ import { errorCodeOf } from "../lib/error-catalog";
  */
 export type ProviderLoginState = "ready" | "probably_expired" | "expired" | "missing" | "unreadable" | "not_applicable";
 export type LoginProvider = "claude" | "codex" | "kimi" | "none";
+/**
+ * `here`: the team runs on this computer, so its sign-in can be redone from the app (false for a team on a server). A failed read
+ * says it too; it is missing only when the native side could not answer at all.
+ */
 export type ProviderLoginResult =
-  | { ok: true; state: ProviderLoginState; provider: LoginProvider }
-  | { ok: false; error: string };
+  | { ok: true; state: ProviderLoginState; provider: LoginProvider; here: boolean }
+  | { ok: false; error: string; here?: boolean };
 
 const STATES: readonly string[] = ["ready", "probably_expired", "expired", "missing", "unreadable", "not_applicable"];
 const PROVIDERS: readonly string[] = ["claude", "codex", "kimi", "none"];
-const KNOWN_ERRORS: ReadonlySet<string> = new Set(["provider_login_unreadable", "provider_login_reply_unexpected"]);
+const UNREADABLE = "provider_login_unreadable";
+const READ_FAILED = "read_failed";
+const KNOWN_ERRORS: ReadonlySet<string> = new Set([UNREADABLE, "provider_login_reply_unexpected"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -28,13 +34,18 @@ export function pickProviderLoginState(reply: unknown): ProviderLoginResult {
   const unexpected: ProviderLoginResult = { ok: false, error: "provider_login_reply_unexpected" };
   if (!isRecord(reply)) return unexpected;
   if (reply.ok === false) {
-    return { ok: false, error: typeof reply.error === "string" && KNOWN_ERRORS.has(reply.error) ? reply.error : "provider_login_unreadable" };
+    const said = errorCodeOf(reply.error);
+    // the native side's own codes and the chat's (disconnected, process_timeout…) pass; the chat's «cannot read the messages»
+    // and anything else is the sign-in's own «cannot be read»
+    const error = said !== null && (KNOWN_ERRORS.has(said) || (!said.startsWith("provider_login_") && said !== READ_FAILED)) ? said : UNREADABLE;
+    return typeof reply.here === "boolean" ? { ok: false, error, here: reply.here } : { ok: false, error };
   }
   const keys = Object.keys(reply);
-  if (reply.ok !== true || keys.length !== 3 || !("state" in reply) || !("provider" in reply)) return unexpected;
-  const { state, provider } = reply;
+  if (reply.ok !== true || keys.length !== 4 || !("state" in reply) || !("provider" in reply) || !("here" in reply)) return unexpected;
+  const { state, provider, here } = reply;
   if (typeof state !== "string" || !STATES.includes(state) || typeof provider !== "string" || !PROVIDERS.includes(provider)) return unexpected;
-  return { ok: true, state: state as ProviderLoginState, provider: provider as LoginProvider };
+  if (typeof here !== "boolean") return unexpected;
+  return { ok: true, state: state as ProviderLoginState, provider: provider as LoginProvider, here };
 }
 
 type Call = (command: string) => Promise<unknown>;

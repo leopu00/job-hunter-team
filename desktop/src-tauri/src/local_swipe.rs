@@ -556,26 +556,31 @@ pub(crate) async fn local_swipe_deck_read(
         Err(_) => return Ok(failure("account_scope_unavailable")),
     };
     let main = direct_chat::window_may_write(window.label());
-    Ok(on_worker(scopes.inner(), expected, move |scope| {
+    let started = std::time::Instant::now();
+    let worker = app.clone();
+    let deck = on_worker(scopes.inner(), expected, move |scope| {
         let wrapper: RefCell<Option<PathBuf>> = RefCell::new(None);
         deck_with(
             main,
             &scope_tag(scope),
             || {
-                *wrapper.borrow_mut() = Some(local_wrapper(&app, scope, false)?);
+                *wrapper.borrow_mut() = Some(local_wrapper(&worker, scope, false)?);
                 Ok(())
             },
             local_machine_is_off,
             |input| run_script(wrapper.borrow().as_ref().ok_or("runtime_missing")?, input),
             || wrapper.borrow().as_ref().is_some_and(|path| team_is_up(path)),
             || {
-                let home = crate::account_scope::local_runtime_home(&app).ok()?;
-                let work = app.path().app_local_data_dir().ok()?.join("host-db");
+                let home = crate::account_scope::local_runtime_home(&worker).ok()?;
+                let work = worker.path().app_local_data_dir().ok()?.join("host-db");
                 crate::host_positions::read_saved_deck(&home, &work)
             },
         )
     })
-    .await)
+    .await;
+    let worked = deck.get("ok") == Some(&Value::Bool(true));
+    crate::load_times::note_native_read(&app, "swipe.deck", crate::load_times::ReadVia::Wrapper, worked, started);
+    Ok(deck)
 }
 
 /// The person's verdict on a position of the deck, written in the database of the team on this computer.

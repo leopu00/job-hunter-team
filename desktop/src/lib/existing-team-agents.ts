@@ -292,28 +292,3 @@ export function readTeamAgentsShared(now = Date.now()): Promise<TeamAgentsReadin
 export function resetTeamAgentsShared(): void {
   shared = null;
 }
-
-/** The last lines of one agent's terminal, read once when the person opens it. */
-export async function readAgentScreen(
-  name: string,
-  read: (name: string) => Promise<unknown> = (session) =>
-    invoke<unknown>(COMMAND, { request: { op: "screen", name: session } }),
-  now: () => number = Date.now,
-): Promise<AgentScreenReading> {
-  if (!SESSION.test(name)) return { kind: "error", at: now(), code: "agents_unavailable" };
-  try {
-    const reply = await read(name);
-    if (!isRecord(reply)) return { kind: "error", at: now(), code: "desktop_bad_reply" };
-    if (reply.ok === false) return { kind: "error", at: now(), code: teamStatusErrorCode(reply.error) };
-    const data = reply.ok === true && isRecord(reply.data) ? reply.data : null;
-    if (data && data.name === name && data.up === true && typeof data.text === "string") {
-      return { kind: "read", at: now(), up: true, text: data.text };
-    }
-    if (data && data.name === name && data.up === false && data.text === null) {
-      return { kind: "read", at: now(), up: false, text: null };
-    }
-    return { kind: "error", at: now(), code: "desktop_bad_reply" };
-  } catch (error) {
-    return { kind: "error", at: now(), code: teamStatusErrorCode(error) };
-  }
-}

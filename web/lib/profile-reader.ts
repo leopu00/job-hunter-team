@@ -24,15 +24,6 @@ function loadProfileYaml(): Record<string, unknown> | null {
   return isPlainObject(raw) ? raw : null;
 }
 
-export function readProfile(_workspacePath?: string): CandidateProfile | null {
-  try {
-    const raw = loadProfileYaml();
-    return raw ? mapYamlToProfile(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Legge il profilo dal path fisso ~/.jht/profile/candidate_profile.yml.
  * Restituisce null se mancante, vuoto, o con placeholder del template.

@@ -16,7 +16,7 @@ import {
   type Usage,
   type WorkerErrorCode,
 } from "./contract.js";
-import { WorkerFault, normalizeFault } from "./errors.js";
+import { WorkerFault } from "./errors.js";
 import { RunGuard, type StepReservation } from "./guardrails.js";
 import {
   API_KEY_ENV_BY_PROVIDER,
@@ -31,6 +31,12 @@ import {
 import { providerDiagnostic } from "./providers/ai-sdk.js";
 import type { ProviderStepRecord } from "./providers/provider.js";
 import { ExclusiveRunLock } from "./run-lock.js";
+import {
+  assertLiveBudget,
+  elapsed,
+  knownFault,
+  sanitizeStopReason,
+} from "./worker-helpers.js";
 
 export type StructuredRoleInput = {
   contractVersion: "1";
@@ -573,27 +579,6 @@ function roleEvent(
   } as AuditEvent;
 }
 
-function assertLiveBudget(profile: ModelProfile, maxCostUsd: number): void {
-  if (profile.provider === "mock") return;
-  if (
-    maxCostUsd <= 0 ||
-    !profile.pricing ||
-    profile.pricing.inputUsdPerMillionTokens +
-      profile.pricing.outputUsdPerMillionTokens <=
-      0
-  ) {
-    throw new WorkerFault("LIVE_BUDGET_REQUIRED", { limit: "cost_usd" });
-  }
-}
-
-function knownFault(error: unknown): WorkerFault {
-  if (error instanceof WorkerFault) return error;
-  if (error instanceof Error && error.name === "ZodError") {
-    return new WorkerFault("OUTPUT_VALIDATION", { cause: error });
-  }
-  return normalizeFault(error);
-}
-
 function publicMessage(role: AgentRole, code: WorkerErrorCode): string {
   const label = role[0]!.toUpperCase() + role.slice(1);
   const messages: Record<WorkerErrorCode, string> = {
@@ -619,23 +604,10 @@ function publicMessage(role: AgentRole, code: WorkerErrorCode): string {
   return messages[code];
 }
 
-function sanitizeStopReason(raw: string): string {
-  return (
-    raw
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/g, "_")
-      .slice(0, 80) || "unknown"
-  );
-}
-
 function timeoutFault(cause?: unknown): WorkerFault {
   return new WorkerFault("TIMEOUT", {
     retryable: true,
     limit: "timeout_ms",
     cause,
   });
-}
-
-function elapsed(now: () => number, startedAt: number): number {
-  return Math.max(0, Math.round(now() - startedAt));
 }

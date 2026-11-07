@@ -5,6 +5,7 @@ import {
   JHT_USER_OUTPUT_DIR,
   JHT_USER_UPLOADS_DIR,
 } from "./jht-paths";
+import { cloudCandidateFiles } from "./cloud-candidate-files";
 import { createClient } from "./supabase/server";
 import {
   documentFileNameFromPath,
@@ -36,20 +37,6 @@ function localCandidateFiles(): CandidateFileEntry[] {
   return files;
 }
 
-async function cloudCandidateFiles(): Promise<CandidateFileEntry[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return [];
-  const { data, error } = await supabase
-    .from("candidate_files")
-    .select("name, size, updated_at")
-    .eq("user_id", user.id);
-  if (error) return [];
-  return (data ?? []) as CandidateFileEntry[];
-}
-
 export async function resolveCoverLetterPdfFileName({
   explicitPath,
   legacyId,
@@ -62,6 +49,8 @@ export async function resolveCoverLetterPdfFileName({
   const explicitName = documentFileNameFromPath(explicitPath);
   if (explicitName) return explicitName;
   if (legacyId == null) return null;
-  const files = cloudMode ? await cloudCandidateFiles() : localCandidateFiles();
+  const files = cloudMode
+    ? await cloudCandidateFiles(await createClient())
+    : localCandidateFiles();
   return findIndexedCoverLetterPdfFileName(files, legacyId);
 }

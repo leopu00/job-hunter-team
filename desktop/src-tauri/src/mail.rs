@@ -263,20 +263,18 @@ pub(crate) async fn mail_status(
     scopes: State<'_, AccountScopeState>,
 ) -> Result<MailStatus, MailError> {
     let scope = scopes.active().map_err(failure)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let host = active_host(&app, &scope)?;
-        parse_status(run_host_jht(
-            &app,
-            &scope,
-            &host,
-            &["mail", "status"],
-            None,
-            STATUS_TIMEOUT,
-        ))
+    let started = std::time::Instant::now();
+    let worker = app.clone();
+    let (status, via) = tauri::async_runtime::spawn_blocking(move || {
+        let host = active_host(&worker, &scope).map_err(|code| (code, crate::load_times::ReadVia::Wrapper))?;
+        let via = if matches!(host, ValidatedHost::Local) { crate::load_times::ReadVia::Wrapper } else { crate::load_times::ReadVia::Ssh };
+        Ok((parse_status(run_host_jht(&worker, &scope, &host, &["mail", "status"], None, STATUS_TIMEOUT)), via))
     })
     .await
-    .unwrap_or(Err("mail_unavailable"))
-    .map_err(failure)
+    .unwrap_or(Err(("mail_unavailable", crate::load_times::ReadVia::Wrapper)))
+    .unwrap_or_else(|(code, via)| (Err(code), via));
+    crate::load_times::note_native_read(&app, "mail.status", via, status.is_ok(), started);
+    status.map_err(failure)
 }
 
 #[tauri::command]
