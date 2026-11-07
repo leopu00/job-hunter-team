@@ -6,7 +6,8 @@
 //! view; the sign-in itself is not this module's (it is the setup's own login command, which needs no setup around it).
 use crate::{
     account_scope::AccountScopeState,
-    direct_chat::{failure, team_script_read, DirectChatError, DirectChatState},
+    direct_chat::{failure, load_persisted_host, team_script_read, DirectChatError, DirectChatState},
+    runtime_host::ExecutionHost,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -38,13 +39,16 @@ pub(crate) struct ProviderLoginReply {
     /// Which provider the team signs in to: `claude`, `codex`, `kimi`, or `none`.
     #[serde(skip_serializing_if = "Option::is_none")]
     provider: Option<&'static str>,
+    /// The team runs on this computer, so its sign-in can be redone from here; false for a team on a server.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    here: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<&'static str>,
 }
 
 impl ProviderLoginReply {
     fn failed(code: &'static str) -> Self {
-        ProviderLoginReply { ok: false, state: None, provider: None, error: Some(code) }
+        ProviderLoginReply { ok: false, state: None, provider: None, here: None, error: Some(code) }
     }
 }
 
@@ -69,8 +73,9 @@ fn code_of(reply: &Value) -> &'static str {
     LOGIN_CODES.iter().copied().find(|code| Some(*code) == said).unwrap_or("provider_login_unreadable")
 }
 
-/// The state of the provider's sign-in. Only the main window asks. A read that does not give a state leaves its closed code
-/// in the runtime log (never what the team said), and the page is told that same code.
+/// The state of the provider's sign-in. Only the main window asks. Every answer says whether the team runs on this computer, a
+/// failed read too (the page offers the sign-in only then). A read that does not give a state leaves its closed code in the runtime
+/// log (never what the team said), and the page is told that same code.
 #[tauri::command]
 pub(crate) async fn provider_login_state(
     window: tauri::Window,
@@ -81,15 +86,19 @@ pub(crate) async fn provider_login_state(
     if window.label() != "main" {
         return Err(failure("invalid_request"));
     }
-    let result = read_state(&state, &scopes).await;
-    let said = match &result {
-        Ok(reply) => reply.error,
-        Err(error) => Some(error.code),
-    };
-    if let (Some(code), Some(log)) = (said, crate::runtime_log::RuntimeLog::new(&app)) {
+    // The gate of every command that reaches the saved host comes first: a window, a link or a host that may not be acted on is
+    // told so, and nothing is read. Past it, where the team runs is the app's own saved host (the chat reads the same one):
+    // only a team of this computer is signed in from here.
+    let scope = scopes.active().map_err(failure)?;
+    if let Some(code) = crate::agent_control::saved_host_action_refusal(&app, window.label(), &scope) {
+        return Ok(ProviderLoginReply { here: Some(false), ..ProviderLoginReply::failed(code) });
+    }
+    let here = matches!(load_persisted_host(&app, &scope), Ok(ExecutionHost::Local));
+    let reply = read_state(&state, &scopes).await.unwrap_or_else(|error| ProviderLoginReply::failed(error.code));
+    if let (Some(code), Some(log)) = (reply.error, crate::runtime_log::RuntimeLog::new(&app)) {
         log.record_read_failure("login.read", LOGIN_CODES, code);
     }
-    result
+    Ok(ProviderLoginReply { here: Some(here), ..reply })
 }
 
 async fn read_state(state: &State<'_, DirectChatState>, scopes: &State<'_, AccountScopeState>) -> Result<ProviderLoginReply, DirectChatError> {
@@ -98,7 +107,7 @@ async fn read_state(state: &State<'_, DirectChatState>, scopes: &State<'_, Accou
         return Ok(ProviderLoginReply::failed(code_of(&reply)));
     }
     Ok(match shape(&reply) {
-        Ok((word, provider)) => ProviderLoginReply { ok: true, state: Some(word), provider: Some(provider), error: None },
+        Ok((word, provider)) => ProviderLoginReply { ok: true, state: Some(word), provider: Some(provider), here: None, error: None },
         Err(()) => ProviderLoginReply::failed("provider_login_reply_unexpected"),
     })
 }
@@ -135,10 +144,10 @@ mod tests {
 
     #[test]
     fn the_reply_to_the_page_is_camel_case_with_only_what_it_has() {
-        let ok = serde_json::to_value(ProviderLoginReply { ok: true, state: Some("expired"), provider: Some("codex"), error: None }).unwrap();
-        assert_eq!(ok, json!({"ok": true, "state": "expired", "provider": "codex"}));
-        let bad = serde_json::to_value(ProviderLoginReply::failed("disconnected")).unwrap();
-        assert_eq!(bad, json!({"ok": false, "error": "disconnected"}));
+        let ok = serde_json::to_value(ProviderLoginReply { ok: true, state: Some("expired"), provider: Some("codex"), here: Some(false), error: None }).unwrap();
+        assert_eq!(ok, json!({"ok": true, "state": "expired", "provider": "codex", "here": false}));
+        let bad = serde_json::to_value(ProviderLoginReply { here: Some(true), ..ProviderLoginReply::failed("disconnected") }).unwrap();
+        assert_eq!(bad, json!({"ok": false, "here": true, "error": "disconnected"}));
     }
 
     /// The script sent is the file, and it reads credentials without ever printing them: no line of it prints anything but

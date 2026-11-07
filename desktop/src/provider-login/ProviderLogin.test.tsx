@@ -24,7 +24,7 @@ import { ProviderLoginBanner } from "./ProviderLoginBanner";
 import { ProviderLoginCard } from "./ProviderLoginCard";
 import { FOCUS_REREAD_MIN_MS, ProviderLoginProvider, REREAD_EVERY_MS } from "./ProviderLoginProvider";
 
-const state = (value: string, provider = "codex") => ({ ok: true as const, state: value, provider });
+const state = (value: string, provider = "codex", here = true) => ({ ok: true as const, state: value, provider, here });
 
 function Page({ enabled = true }: { enabled?: boolean }) {
   return (
@@ -89,7 +89,7 @@ describe("the state of the provider sign-in", () => {
   });
 
   it("a read that fails says its reason (the catalog's sentence), no banner, and the sign-in stays available", async () => {
-    native.read.mockResolvedValue({ ok: false, error: "provider_login_unreadable" });
+    native.read.mockResolvedValue({ ok: false, error: "provider_login_unreadable", here: true });
     render(<Page />);
     expect(await screen.findByText(/Non riesco a leggere se l’accesso al provider della squadra funziona\./)).toBeTruthy();
     expect(screen.queryByTestId("provider-login-banner")).toBeNull();
@@ -98,7 +98,7 @@ describe("the state of the provider sign-in", () => {
   });
 
   it("with the chat not connected the card offers «Ricollega la chat», which connects it and reads again", async () => {
-    native.read.mockResolvedValueOnce({ ok: false, error: "disconnected" }).mockResolvedValue(state("ready"));
+    native.read.mockResolvedValueOnce({ ok: false, error: "disconnected", here: true }).mockResolvedValue(state("ready"));
     render(<Page />);
     const button = await screen.findByTestId("provider-login-reconnect");
     expect(button.textContent).toBe("Ricollega la chat");
@@ -117,6 +117,33 @@ describe("the state of the provider sign-in", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(REREAD_EVERY_MS); });
     expect(native.read).toHaveBeenCalledTimes(2);
     expect(screen.getByTestId("provider-login-banner")).toBeTruthy();
+  });
+});
+
+describe("a team on a server", () => {
+  it("shows its state but offers no sign-in from here, and says where it is redone", async () => {
+    native.read.mockResolvedValue(state("expired", "codex", false));
+    render(<Page />);
+    const banner = await screen.findByTestId("provider-login-banner");
+    expect(banner.textContent).toContain("La squadra gira su un server");
+    expect(screen.queryByTestId("provider-login-banner-signin")).toBeNull();
+    expect(screen.queryByTestId("provider-login-signin")).toBeNull();
+    expect(screen.getByTestId("provider-login-on-server")).toBeTruthy();
+    expect(runtime.start).not.toHaveBeenCalled();
+  });
+
+  it("a failed read of a team on a server offers no sign-in either", async () => {
+    native.read.mockResolvedValue({ ok: false, error: "disconnected", here: false });
+    render(<Page />);
+    expect(await screen.findByTestId("provider-login-reconnect")).toBeTruthy();
+    expect(screen.queryByTestId("provider-login-signin")).toBeNull();
+  });
+
+  it("an answer that does not say where the team runs offers no sign-in", async () => {
+    native.read.mockResolvedValue({ ok: false, error: "process_timeout" });
+    render(<Page />);
+    expect(await screen.findByTestId("provider-login-retry")).toBeTruthy();
+    expect(screen.queryByTestId("provider-login-signin")).toBeNull();
   });
 });
 
@@ -180,18 +207,19 @@ describe("«Accedi di nuovo»", () => {
     expect(native.read).toHaveBeenCalledTimes(2);
   });
 
-  it("a read that cannot be made right after the sign-in does not leave the old banner: the card says it cannot tell", async () => {
+  it("a read that cannot be made right after the sign-in is said in the window, on any page, and the old banner goes", async () => {
     native.read.mockResolvedValue(state("expired"));
     const end = login({ code: 0 });
-    render(<Page />);
+    // only the banner, as on a page that is not Settings: the window must say it, there is no card to say it
+    render(<ProviderLoginProvider enabled><ProviderLoginBanner locale="it" /></ProviderLoginProvider>);
     fireEvent.click(await screen.findByTestId("provider-login-banner-signin"));
     await screen.findByTestId("provider-login-dialog");
-    native.read.mockResolvedValue({ ok: false, error: "provider_login_unreadable" });
+    native.read.mockResolvedValue({ ok: false, error: "provider_login_unreadable", here: true });
     await act(async () => { end(); });
-    await waitFor(() => expect(screen.queryByTestId("provider-login-dialog")).toBeNull());
+    const error = await screen.findByTestId("oauth-login-error");
+    expect(error.textContent).toContain("Non riesco a leggere se l’accesso al provider della squadra funziona.");
+    expect(screen.getByTestId("provider-login-dialog")).toBeTruthy();
     expect(screen.queryByTestId("provider-login-banner")).toBeNull();
-    expect(screen.getByTestId("provider-login-state").getAttribute("data-state")).toBe("failed");
-    expect(screen.getByTestId("provider-login-retry")).toBeTruthy();
   });
 
   it("a sign-in that ends but that the team still refuses is told, not called done", async () => {
@@ -241,7 +269,7 @@ describe("«Accedi di nuovo»", () => {
   });
 
   it("is available even when the state cannot be read (the sign-in does not need the chat)", async () => {
-    native.read.mockResolvedValue({ ok: false, error: "disconnected" });
+    native.read.mockResolvedValue({ ok: false, error: "disconnected", here: true });
     login({ code: 0 });
     render(<Page />);
     fireEvent.click(await screen.findByTestId("provider-login-signin"));
