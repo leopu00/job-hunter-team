@@ -11,6 +11,7 @@ import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -59,6 +60,12 @@ class _Server:
 
 @pytest.fixture()
 def linkedin(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir()
+    (profile_dir / "candidate_profile.yml").write_text(
+        "name: Synthetic Candidate\ntarget_role: Data Analyst\nlocation: NL\n"
+        "preferences:\n  work_mode: hybrid\n  relocation: false\n", encoding="utf-8")
     server = _Server()
     sleeps = []
     monkeypatch.setattr(la, "RATE_STATE", tmp_path / "state" / "linkedin-rate.json")
@@ -178,7 +185,10 @@ def test_the_cooldown_grows_when_it_happens_again_and_a_success_resets_it(linked
 def test_another_error_is_not_a_rate_limit(linkedin):
     linkedin.script["job"] = [(403, {}, "")]
     job = la.fetch_job("9")
-    assert job == {"job_id": "9", "url": f"{linkedin.url}/jobs/view/9", "status": 403, "blocked": True}
+    assert job == {"job_id": "9", "url": f"{linkedin.url}/jobs/view/9", "status": 403, "blocked": True,
+                   "search_status": "closed",
+                   "http_status": 403, "search_outcome": True, "source": "linkedin",
+                   "code": "scout_search_forbidden", "message": "The job source refused access."}
     assert not la.RATE_STATE.exists() or not _state().get("cooldown_until")
 
 
@@ -190,9 +200,14 @@ def test_the_command_line_says_it_in_the_last_line_and_the_exit_code(linkedin, c
     assert code == la.RATE_LIMITED_EXIT == 3
     assert [x["job_id"] for x in lines[:-1]] == ["1", "2", "3"] and lines[-1]["rate_limited"] is True
     assert lines[-1]["retry_after_s"] >= 600
+    assert lines[-1]["reason"] == "http_429"
+    assert len(linkedin.hits) == 2
+    assert [parse_qs(urlparse(path).query)["location"] for path in linkedin.hits] == [["NL"], ["NL"]]
+    assert [parse_qs(urlparse(path).query)["start"] for path in linkedin.hits] == [["0"], ["25"]]
     code = la.main(["fetch-job", "12345"])
     out = json.loads(capsys.readouterr().out)
     assert code == 3 and out["rate_limited"] is True and out["reason"] == "cooldown"
+    assert len(linkedin.hits) == 2
 
 
 def test_a_corrupt_state_file_is_the_old_behaviour_not_a_crash(linkedin):
@@ -223,3 +238,24 @@ def test_a_state_with_absurd_values_does_not_stop_the_scout_nor_hide_a_429(linke
 def test_the_limits_from_the_environment_never_crash_the_import(monkeypatch, value, expected):
     monkeypatch.setenv("JHT_LINKEDIN_TEST_VALUE", value)
     assert la._env_number("JHT_LINKEDIN_TEST_VALUE", 7.0) == expected
+
+
+@pytest.mark.parametrize("reason", ["cooldown", "request_cap"])
+def test_cached_rate_gates_do_not_count_as_source_attempts(linkedin, tmp_path, monkeypatch, capsys, reason):
+    import scout_coverage
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    now = datetime.now(timezone.utc).timestamp()
+    la.RATE_STATE.parent.mkdir(parents=True, exist_ok=True)
+    state = {"cooldown_until": now + 60} if reason == "cooldown" else {"requests": [now]}
+    if reason == "request_cap":
+        monkeypatch.setattr(la, "MAX_REQUESTS", 1)
+    la.RATE_STATE.write_text(json.dumps(state))
+    for _ in range(3):
+        assert la.main(["search", "--keywords", "data", "--location", "NL", "--log", "--country", "nl"]) == 3
+        outcome = json.loads(capsys.readouterr().out)
+        assert outcome["reason"] == reason and outcome["source_attempted"] is False
+        assert outcome["retry_after_s"] > 0 and outcome["retry_at"].endswith("Z")
+    assert linkedin.hits == [] and not (tmp_path / "logs/scout-passes.jsonl").exists()
+    entry = {"slug": "linkedin", "country": "nl", "portal_language": "nl", "access": "search"}
+    measured = scout_coverage.measure(entry, [])
+    assert measured["state"] == "untouched" and measured["blocks"] == measured["passes"] == 0
