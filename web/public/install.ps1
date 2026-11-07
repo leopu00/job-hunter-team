@@ -183,7 +183,7 @@ function Set-JhtNodeOwner {
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
 $TestChannelImage = $Image
-$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:04c8e69a436eed02dc2b42b8631d3072f5e690a31e660ff05c9f8f700b0a3aca' }
+$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:dcb4420e251d4177dd9c55cef23899e606fc3b13a290f14a0469510543d34c9b' }
 $RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
 $RuntimeImageDigest = if ($TestChannel) { $ExpectedImageDigest } elseif ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$') { $Matches[1] } else { '' }
 $env:JHT_IMAGE = $Image
