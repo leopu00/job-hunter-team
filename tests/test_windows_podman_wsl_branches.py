@@ -19,7 +19,9 @@ and a real Podman machine is in the collaudo script, not here.
 The fakes are POSIX sh scripts: pwsh on Linux and macOS finds a file named
 podman.exe as an application. On Windows the same scripts run under Git for
 Windows' bash, behind a small native launcher named like the real program
-(wsl.exe, podman.exe, docker.exe): the scripts look them up with Get-Command
+(wsl.exe, podman.exe, docker.exe). The UP Podman fake implements the same
+protocol directly in that native executable to fit its one-second budget.
+The scripts look them up with Get-Command
 -CommandType Application and run them as native processes. There the file runs
 under the shell named by JHT_TEST_SHELL (`powershell`, Windows PowerShell 5.1,
 the one the app uses; or `pwsh`), and every run checks that the engine was the
@@ -32,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -46,7 +49,7 @@ SELFTEST = SCRIPTS / "windows-config-acl-selftest.ps1"
 WINDOWS_RUNTIME_RS = ROOT / "desktop" / "src-tauri" / "src" / "windows_runtime.rs"
 
 
-from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, powershell_argv, windows_env
+from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_fake, launcher, powershell_argv, windows_env
 
 
 # Dot-sources functions (and, for the enabler, its machine block) from the real
@@ -420,12 +423,14 @@ def test_the_next_launch_retries_wsl_after_the_user_enables_it(tmp_path):
 UP_BODY = r"""
 $ContainerRuntime = $env:RUNTIME
 $env:CONTAINER_CONNECTION = 'jht-podman'
-$env:JHT_MACHINE_WAIT_SECONDS = '1'
+$env:JHT_MACHINE_WAIT_SECONDS = $env:FAKE_UP_WAIT_SECONDS
 $PodmanMachineBridgePath = $bridge
 $PSDefaultParameterValues['Update-ProcessPath:MachinePath'] = ''
 $PSDefaultParameterValues['Update-ProcessPath:UserPath'] = ''
 function Assert-TrustedRuntime { }
+if ($env:FAKE_UP_WAIT_SECONDS -eq '30') { $caseWatch = [Diagnostics.Stopwatch]::StartNew() }
 Start-PodmanMachineForUp
+if ($env:FAKE_UP_WAIT_SECONDS -eq '30') { [Console]::Out.WriteLine("UP_ELAPSED_MS=$($caseWatch.ElapsedMilliseconds)") }
 """
 
 # docker answers only once the machine started (the state file), unless told otherwise.
@@ -433,17 +438,54 @@ DOCKER_CASES = """  "info") [ "$DOCKER" = up ] && exit 0; [ "$DOCKER" = after-st
 UP_PODMAN_CASES = """  "--connection jht-podman info") [ "$DOCKER" = up ] && exit 0; [ "$DOCKER" = after-start ] && [ -f "$FAKE_STATE" ] && exit 0; exit 1 ;;
   "machine start "*) [ "$FAKE_FAIL" = start ] && { echo 'Error: machine start failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac; : > "$FAKE_STATE" ;;"""
 
+# Run the same UP protocol directly on Windows: starting Bash for every probe
+# and start would spend the one-second case budget before the fake responds.
+UP_PODMAN_NATIVE = r"""
+using System;
+using System.IO;
+public static class UpPodmanFake {
+  static string Env(string name) { return Environment.GetEnvironmentVariable(name); }
+  public static int Main(string[] args) {
+    string command = String.Join(" ", args);
+    File.AppendAllText(Env("FAKE_LOG"), command + "\n");
+    if (command == "--connection jht-podman info") {
+      return Env("DOCKER") == "up" ||
+        (Env("DOCKER") == "after-start" && File.Exists(Env("FAKE_STATE"))) ? 0 : 1;
+    }
+    if (command.StartsWith("machine start ", StringComparison.Ordinal)) {
+      if (Env("FAKE_FAIL") == "start") {
+        Console.Error.WriteLine("Error: machine start failed");
+        return 125;
+      }
+      if (!command.Contains("--update-connection=false"))
+        File.WriteAllText(Env("FAKE_DEFAULT"), "jht-podman");
+      File.WriteAllText(Env("FAKE_STATE"), "");
+    }
+    return 0;
+  }
+}
+"""
 
-def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail=""):
+
+def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail="", wait_seconds=1):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", DOCKER_CASES)
     if podman:
-        _fake(bin_dir, "podman.exe", UP_PODMAN_CASES)
+        if WINDOWS:
+            shutil.copyfile(launcher(UP_PODMAN_NATIVE), bin_dir / "podman.exe")
+        else:
+            _fake(bin_dir, "podman.exe", UP_PODMAN_CASES)
     return _run(
         tmp_path, WRAPPER, ["Start-PodmanMachineForUp", "Test-DockerReachable", "Write-Err"], UP_BODY,
-        {"RUNTIME": runtime, "DOCKER": docker, "FAKE_FAIL": fail},
+        {"RUNTIME": runtime, "DOCKER": docker, "FAKE_FAIL": fail, "FAKE_UP_WAIT_SECONDS": str(wait_seconds)},
     )
+
+
+def _up_elapsed_ms(stdout: str) -> int:
+    elapsed = re.findall(r"^UP_ELAPSED_MS=(\d+)\r?$", stdout, flags=re.MULTILINE)
+    assert len(elapsed) == 1, stdout
+    return int(elapsed[0])
 
 
 def test_docker_mode_never_touches_podman(tmp_path):
@@ -459,19 +501,21 @@ def test_a_machine_already_reachable_is_not_started_again(tmp_path):
 
 
 def test_an_unreachable_machine_is_started_with_the_named_connection(tmp_path):
-    result, calls = _up(tmp_path)
+    result, calls = _up(tmp_path, wait_seconds=30)
     assert result.returncode == 0, result.stderr
     assert calls == [INFO, START, INFO]
+    assert _up_elapsed_ms(result.stdout) < 30000
 
 
 def test_up_does_not_replace_the_users_default_connection(tmp_path):
     default = tmp_path / "default-connection"
     default.write_text("user-podman", encoding="utf-8")
-    result, calls = _up(tmp_path)
+    result, calls = _up(tmp_path, wait_seconds=30)
     assert result.returncode == 0, result.stderr
     assert calls == [INFO, START, INFO]
     assert default.read_text(encoding="utf-8") == "user-podman"
     assert not any("system connection" in call for call in calls)
+    assert _up_elapsed_ms(result.stdout) < 30000
 
 
 UNINSTALL_BODY = r"""
