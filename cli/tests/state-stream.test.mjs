@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { assertStateScriptGuard } from './source-guard-assertions.mjs';
 
 import {
   CACHE_MAX_BYTES, CACHE_MAX_ENTRIES, CHAT_AGENTS, EXIT_PROTOCOL, MAX_LINE, PROFILE_SCRIPT, READERS, TEAM_START_SCRIPT, WORK_STATS_SCRIPT, containerId, createStateStream, depthOf, opsOf, readerEnv, runReader,
@@ -559,18 +560,7 @@ test('source: the table holds absolute programs only, and every program is one o
 });
 
 test('source: the chat agents are the app list, and the profile script is the app constant byte for byte', () => {
-  const rust = readFileSync(join(ROOT, 'desktop/src-tauri/src/existing_team_runtime.rs'), 'utf8');
-  const listed = /const CHAT_AGENTS: \[&str; \d+\] = \[([^\]]*)\]/.exec(rust)[1].match(/"([a-z]+)"/g).map((s) => s.slice(1, -1));
-  assert.deepEqual(CHAT_AGENTS, listed);
-  const progress = readFileSync(join(ROOT, 'desktop/src-tauri/src/profile_progress.rs'), 'utf8');
-  const constant = /const PROFILE_PROGRESS_PY: &str = r#"([\s\S]*?)"#;/.exec(progress)[1];
-  assert.equal(readFileSync(join(ROOT, 'shared/skills/profile_progress.py'), 'utf8'), constant);
-  const start = readFileSync(join(ROOT, 'desktop/src-tauri/src/team_start.rs'), 'utf8');
-  const startConstant = /const TEAM_START_PY: &str = r#"([\s\S]*?)"#;/.exec(start)[1];
-  assert.equal(readFileSync(join(ROOT, 'shared/skills/team_start.py'), 'utf8'), startConstant);
-  const stats = readFileSync(join(ROOT, 'desktop/src-tauri/src/work_stats.rs'), 'utf8');
-  const statsConstant = /const WORK_STATS_PY: &str = r#"([\s\S]*?)"#;/.exec(stats)[1];
-  assert.equal(readFileSync(join(ROOT, 'shared/skills/work_stats_read.py'), 'utf8'), statsConstant);
+  assertStateScriptGuard(ROOT);
 });
 
 // ── the real command, over a pipe ─────────────────────────────────────────────────────────────

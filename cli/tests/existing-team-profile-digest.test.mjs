@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { digestProfileResult, PROFILE_FIELD_NAMES } from '../src/lib/existing-team-profile-digest.js';
+import { digestProfileResult } from '../src/lib/existing-team-profile-digest.js';
+import { assertProfileFieldGuard } from './source-guard-assertions.mjs';
 
 // `jht existing-team profile --digest` prints facts about the profile and no
 // value of it. Everything below is synthetic: the "values" are markers so that
@@ -139,11 +140,7 @@ test('values of the wrong type become null or unknown instead of travelling', ()
 });
 
 test('the field names it knows are the ones the core keeps (Rust PROFILE_FIELDS)', () => {
-  const source = readFileSync(join(HERE, '..', '..', 'desktop', 'src-tauri', 'src', 'existing_team_runtime.rs'), 'utf8');
-  const block = /const PROFILE_FIELDS: &\[&str\] = &\[([\s\S]*?)\];/.exec(source)?.[1] ?? '';
-  const rust = [...block.matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
-  assert.ok(rust.length > 20);
-  assert.deepEqual([...PROFILE_FIELD_NAMES].sort(), [...rust].sort());
+  assertProfileFieldGuard(join(HERE, '..', '..'));
 });
 
 // The command itself, with a companion that answers a synthetic profile.
