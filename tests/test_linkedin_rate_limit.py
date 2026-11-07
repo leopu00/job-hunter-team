@@ -11,6 +11,7 @@ import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -59,6 +60,12 @@ class _Server:
 
 @pytest.fixture()
 def linkedin(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    profile_dir = tmp_path / "profile"
+    profile_dir.mkdir()
+    (profile_dir / "candidate_profile.yml").write_text(
+        "name: Synthetic Candidate\ntarget_role: Data Analyst\nlocation: NL\n"
+        "preferences:\n  work_mode: hybrid\n  relocation: false\n", encoding="utf-8")
     server = _Server()
     sleeps = []
     monkeypatch.setattr(la, "RATE_STATE", tmp_path / "state" / "linkedin-rate.json")
@@ -193,9 +200,14 @@ def test_the_command_line_says_it_in_the_last_line_and_the_exit_code(linkedin, c
     assert code == la.RATE_LIMITED_EXIT == 3
     assert [x["job_id"] for x in lines[:-1]] == ["1", "2", "3"] and lines[-1]["rate_limited"] is True
     assert lines[-1]["retry_after_s"] >= 600
+    assert lines[-1]["reason"] == "http_429"
+    assert len(linkedin.hits) == 2
+    assert [parse_qs(urlparse(path).query)["location"] for path in linkedin.hits] == [["NL"], ["NL"]]
+    assert [parse_qs(urlparse(path).query)["start"] for path in linkedin.hits] == [["0"], ["25"]]
     code = la.main(["fetch-job", "12345"])
     out = json.loads(capsys.readouterr().out)
     assert code == 3 and out["rate_limited"] is True and out["reason"] == "cooldown"
+    assert len(linkedin.hits) == 2
 
 
 def test_a_corrupt_state_file_is_the_old_behaviour_not_a_crash(linkedin):
