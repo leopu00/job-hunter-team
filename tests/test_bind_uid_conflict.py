@@ -64,7 +64,7 @@ def env_for(bin_dir: Path, home: Path) -> dict[str, str]:
 # ── install.sh ───────────────────────────────────────────────────────────
 
 
-def run_installer_check(tmp_path, *, os_name: str = "", runtime: str = "", **kw):
+def run_installer_check(tmp_path, *, os_name: str = "", runtime: str = "", sudo_uid: str | None = None, **kw):
     bin_dir, log = stubs(tmp_path, **kw)
     home = tmp_path / "home"
     home.mkdir()
@@ -74,7 +74,10 @@ def run_installer_check(tmp_path, *, os_name: str = "", runtime: str = "", **kw)
         "refuse_foreign_bind_uid\n"
         'chown -R 1001:1001 "$HOME/.jht"\n'
     )
-    result = subprocess.run(["bash", "-c", script], env=env_for(bin_dir, home), capture_output=True, text=True, timeout=30)
+    env = env_for(bin_dir, home)
+    if sudo_uid is not None:
+        env["SUDO_UID"] = sudo_uid
+    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=30)
     return result, (log.read_text() if log.exists() else "")
 
 
@@ -88,6 +91,25 @@ def test_installer_goes_on_when_1001_is_the_installing_user(tmp_path):
     result, chowns = run_installer_check(tmp_path, owner_of_1001="leo", self_uid="1001")
     assert result.returncode == 0, result.stderr
     assert chowns.startswith("-R 1001:1001")
+
+
+@pytest.mark.parametrize("self_uid,sudo_uid,allowed", [
+    ("1001", "2002", True),
+    ("0", "1001", True),
+    ("2002", "1001", False),
+    ("0", "2002", False),
+])
+def test_installer_uses_sudo_uid_only_when_running_as_root(tmp_path, self_uid, sudo_uid, allowed):
+    result, chowns = run_installer_check(
+        tmp_path, owner_of_1001="fixture-user", self_uid=self_uid, sudo_uid=sudo_uid,
+    )
+    if allowed:
+        assert result.returncode == 0, result.stderr
+        assert chowns.startswith("-R 1001:1001")
+    else:
+        assert result.returncode == 1
+        assert "'fixture-user'" in result.stderr and "Nothing was changed" in result.stderr
+        assert chowns == ""
 
 
 def test_installer_stops_when_1001_is_another_account_and_changes_nothing(tmp_path):
