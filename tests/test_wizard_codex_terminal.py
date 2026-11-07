@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+PTY_ROWS, PTY_COLS = 40, 120
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="POSIX terminal; product runs in the Linux container")
 
 
@@ -33,6 +34,7 @@ import readline from 'node:readline';
 fs.writeFileSync(process.env.JHT_HOME + '/fake-codex.pid', String(process.pid));
 console.log('FAKE-ARGV ' + JSON.stringify(process.argv.slice(2)));
 console.log('FAKE-TTY ' + [process.stdin, process.stdout, process.stderr].map(s => Boolean(s.isTTY)).join(','));
+console.log('FAKE-SIZE ' + process.stdout.columns + 'x' + process.stdout.rows);
 console.log('https://example.invalid/device SYNTHETIC-CODE');
 console.error('SYNTHETIC sign-in waiting');
 const lines = readline.createInterface({ input: process.stdin });
@@ -57,9 +59,13 @@ lines.on('line', line => {
 
 class WizardTerminal:
     def __init__(self, node, env):
+        import fcntl
         import pty
+        import struct
+        import termios
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
+            fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", PTY_ROWS, PTY_COLS, 0, 0))
             os.execve(node, [node, str(ROOT / "cli/bin/jht.js"), "setup"], env)
         self.output = b""
         self.status = None
@@ -110,6 +116,7 @@ def begin_login(terminal):
     screen = terminal.output.decode("utf-8", "replace")
     assert 'FAKE-ARGV ["login","--device-auth"]' in screen
     assert "FAKE-TTY true,true,true" in screen
+    assert f"FAKE-SIZE {PTY_COLS}x{PTY_ROWS}" in screen
     assert "Waiting here while you sign in" in screen
     assert "jht setup" in screen
     assert "another terminal" not in screen
