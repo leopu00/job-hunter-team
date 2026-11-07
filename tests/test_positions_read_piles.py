@@ -12,14 +12,20 @@ from __future__ import annotations
 import io
 import json
 import re
+import shutil
 import sqlite3
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
+from rust_source_guard import declarations, production_files, symbol_source
+from rust_source_lex import mask
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "desktop" / "src-tauri" / "src" / "existing_team_runtime.rs"
+RUST = SOURCE.parent
 KEYS = ("scout", "analisti", "scorer", "scrittori", "critici")
 
 
@@ -156,11 +162,203 @@ def test_a_database_that_cannot_be_read_is_unavailable_and_not_zeros(tmp_path: P
     assert _run(tmp_path, {"op": "piles"})["ok"] is False
 
 
-def test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log():
+def _read_kind_definition(rust_root: Path = RUST) -> str:
+    return symbol_source("lib.rs", "const POSITIONS_READ_KINDS:", root=rust_root)
+
+
+def _read_kind_names(definition: str) -> list[str]:
+    code = mask(definition)
+    array = re.search(r"const POSITIONS_READ_KINDS:\s*\[&str;\s*(\d+)\]\s*=\s*\[(.*?)\];", code, re.S)
+    assert array, "POSITIONS_READ_KINDS must be a real nonempty array declaration"
+    assert re.fullmatch(r"[\s,]*", array.group(2)), "only simple string elements are supported"
+    body = definition[array.start(2):array.end(2)]
+    literals = {}
+
+    def mark_literal(found):
+        token = f"__kind_{len(literals)}__"
+        literals[token] = found[1]
+        return token
+
+    # Mark only simple quoted words, then let the SAME canonical lexer discard
+    # comments (including their decoy words). Expose every remaining quote so
+    # unsupported raw/escaped/char literals cannot disappear into the mask.
+    marked = re.sub(r'"([a-z_]+)"', mark_literal, body)
+    elements = mask(marked.replace('"', "@").replace("'", "@"))
+    assert re.fullmatch(r"\s*(?:__kind_\d+__(?:\s*,\s*__kind_\d+__)*)?\s*", elements), "only simple string elements are supported"
+    names = [literals[token] for token in re.findall(r"__kind_\d+__", elements)]
+    assert len(names) == int(array.group(1)) == 11, "POSITIONS_READ_KINDS lost an entry"
+    assert len(set(names)) == 11, "POSITIONS_READ_KINDS contains duplicate entries"
+    return names
+
+
+def _read_kind_owner(rust_root: Path) -> Path:
+    # The same production graph as symbol_source supplies the mutation's real
+    # input path; neither the old nor the moved filename is a fallback.
+    _read_kind_definition(rust_root)
+    owners = [record.path for record in production_files("lib.rs", root=rust_root)
+              if "const POSITIONS_READ_KINDS" in declarations(record.source)]
+    assert len(owners) == 1, "the read-kind definition must have one real input"
+    return owners[0]
+
+
+def _replace_read_kind_definition(rust_root: Path, replacement: str):
+    definition = _read_kind_definition(rust_root)
+    path = _read_kind_owner(rust_root)
+    source = path.read_text(encoding="utf-8")
+    assert source.count(definition) == 1
+    path.write_text(source.replace(definition, replacement), encoding="utf-8")
+
+
+def _request_kind_names(rust_root: Path = RUST) -> list[str]:
+    # Derive the ordered inventory from the real dispatcher's indexes, rather
+    # than copying the eleven words into a second list in this test.
+    source = symbol_source("existing_team_runtime.rs", "fn op(&self) -> &'static str", root=rust_root)
+    arms = re.findall(r"Self::([A-Za-z]+)(?:\s*\{\s*\.\.\s*\})?\s*=>\s*(\d+)", mask(source))
+    assert len(arms) == 11, "the request dispatcher lost a read kind"
+    ordered = sorted(arms, key=lambda arm: int(arm[1]))
+    assert [int(index) for _, index in ordered] == list(range(11))
+    return [re.sub(r"(?<!^)(?=[A-Z])", "_", variant).lower() for variant, _ in ordered]
+
+
+def test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(*, rust_root: Path = RUST):
     source = _script()
     block = source.split("if op=='piles':")[1].split("if op=='stats':")[0]
     for forbidden in ("INSERT", "UPDATE", "DELETE", "SELECT *", "os.", "subprocess", "open("):
         assert forbidden not in block, forbidden
     assert "SUM(" in block and "fetchone()" in block
-    log = (ROOT / "desktop" / "src-tauri" / "src" / "runtime_log.rs").read_text(encoding="utf-8")
+    log = _read_kind_definition(rust_root)
+    kinds = _read_kind_names(log)
+    expected = _request_kind_names(rust_root)
+    assert Counter(kinds) == Counter(expected), "the read-kind inventory changed"
+    assert kinds == expected, "the read-kind order changed"
     assert '"directives", "piles", "team_activity_log"]' in log
+
+
+@pytest.fixture
+def rust_sources(tmp_path):
+    destination = tmp_path / "src"
+    shutil.copytree(RUST, destination)
+    return destination
+
+
+def test_the_real_guard_fails_when_the_constant_is_removed(rust_sources):
+    _replace_read_kind_definition(rust_sources, "")
+    with pytest.raises(AssertionError, match="matched 0 times"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_fails_when_one_of_the_eleven_names_is_removed(rust_sources):
+    definition = _read_kind_definition(rust_sources)
+    name = _read_kind_names(definition)[0]
+    shortened, count = re.subn(r'"' + re.escape(name) + r'"\s*,\s*', "", definition, count=1)
+    assert count == 1
+    _replace_read_kind_definition(rust_sources, shortened)
+    with pytest.raises(AssertionError, match="lost an entry"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_fails_when_the_array_is_empty(rust_sources):
+    definition = _read_kind_definition(rust_sources)
+    empty, count = re.subn(r"(=\s*\[).*?(\];)", r"\1\2", definition, count=1, flags=re.S)
+    assert count == 1
+    _replace_read_kind_definition(rust_sources, empty)
+    with pytest.raises(AssertionError, match="lost an entry"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_fails_when_the_array_literal_is_truncated(rust_sources):
+    definition = _read_kind_definition(rust_sources)
+    path = _read_kind_owner(rust_sources)
+    source = path.read_text(encoding="utf-8")
+    assert source.count(definition) == 1
+    array_start = definition.index("=", definition.index("POSITIONS_READ_KINDS"))
+    path.write_text(source.split(definition)[0] + definition[:array_start + 1] + ' ["unterminated', encoding="utf-8")
+    with pytest.raises(AssertionError, match="Unclosed Rust string"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_fails_when_one_name_is_duplicated(rust_sources):
+    definition = _read_kind_definition(rust_sources)
+    names = _read_kind_names(definition)
+    duplicate = definition.replace(f'"{names[1]}"', f'"{names[0]}"', 1)
+    assert duplicate != definition
+    _replace_read_kind_definition(rust_sources, duplicate)
+    with pytest.raises(AssertionError, match="duplicate entries"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_fails_when_a_second_real_definition_is_added(rust_sources):
+    definition = _read_kind_definition(rust_sources)
+    (rust_sources / "duplicate.rs").write_text(definition, encoding="utf-8")
+    lib = rust_sources / "lib.rs"
+    lib.write_text(lib.read_text(encoding="utf-8") + "\nmod duplicate;\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="matched 2 times"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+@pytest.mark.parametrize("fake", ["comment", "literal", "test_item", "orphan"])
+def test_a_fake_definition_does_not_replace_the_real_one(rust_sources, fake):
+    path = _read_kind_owner(rust_sources)
+    definition = _read_kind_definition(rust_sources)
+    source = path.read_text(encoding="utf-8").replace(definition, "")
+    if fake == "comment":
+        source += f"\n/* {definition} */\n"
+    elif fake == "literal":
+        source += f'\nconst FAKE: &str = r##"{definition}"##;\n'
+    elif fake == "test_item":
+        source += f"\n#[cfg(test)]\n{definition}\n"
+    else:
+        (rust_sources / "orphan.rs").write_text(definition, encoding="utf-8")
+    path.write_text(source, encoding="utf-8")
+    with pytest.raises(AssertionError, match="matched 0 times"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_follows_the_constant_after_a_nested_module_move(rust_sources):
+    before = _read_kind_names(_read_kind_definition(rust_sources))
+    path = _read_kind_owner(rust_sources)
+    assert path.parent == rust_sources.resolve()
+    nested = rust_sources / "metrics" / "nested"
+    nested.mkdir(parents=True)
+    destination = nested / path.name
+    path.rename(destination)
+    lib = rust_sources / "lib.rs"
+    source = lib.read_text(encoding="utf-8")
+    edges = list(re.finditer(r"\bmod\s+" + re.escape(path.stem) + r"\s*;", mask(source)))
+    assert len(edges) == 1, "the real input must have one registered module edge"
+    edge = edges[0]
+    attribute = f'#[path = "{destination.relative_to(rust_sources).as_posix()}"]\n'
+    lib.write_text(source[:edge.start()] + attribute + source[edge.start():], encoding="utf-8")
+    assert _read_kind_owner(rust_sources) == destination.resolve()
+    assert _read_kind_names(_read_kind_definition(rust_sources)) == before
+    test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+@pytest.mark.parametrize("expression", [
+    '"" /* "{name}" */',
+    '"not_{name}" /* "{name}" */',
+    'stringify!(not_{name}) /* "{name}" */',
+    'stringify!("{name}")',
+    'concat!("{name}", "")',
+    'r#"{name}"#',
+    "'x'",
+    '"{name}" "ignored"',
+])
+def test_the_real_guard_rejects_fake_or_unsupported_array_elements(rust_sources, expression):
+    definition = _read_kind_definition(rust_sources)
+    name = _read_kind_names(definition)[0]
+    replacement = expression.format(name=name)
+    changed = definition.replace(f'"{name}"', replacement, 1)
+    assert changed != definition
+    _replace_read_kind_definition(rust_sources, changed)
+    with pytest.raises(AssertionError, match="simple string elements|inventory changed"):
+        test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
+
+
+def test_the_real_guard_ignores_internal_comment_decoys(rust_sources):
+    definition = _read_kind_definition(rust_sources)
+    name = _read_kind_names(definition)[0]
+    changed = definition.replace(f'"{name}"', f'/* "decoy" /* nested */ */ "{name}" // "decoy"\n', 1)
+    assert changed != definition
+    _replace_read_kind_definition(rust_sources, changed)
+    test_the_reader_stays_read_only_and_the_op_has_its_name_in_the_load_times_log(rust_root=rust_sources)
