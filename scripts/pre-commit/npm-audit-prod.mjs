@@ -9,28 +9,33 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(new URL('../..', import.meta.url).pathname);
+const ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // I due workspace npm che finiscono davvero in mano a qualcuno: il CLI
 // (installato sull'host e nel container) e il web (deployato su Vercel).
 // `tui` era il terzo finché la TUI è stata rimossa il 2026-07-25.
 const WORKSPACES = ['cli', 'web'];
 const SKIP_DIRS = new Set();
+const AUDIT_ARGS = ['audit', '--omit=dev', '--audit-level=high'];
 
 let failed = false;
 
 for (const ws of WORKSPACES) {
   if (SKIP_DIRS.has(ws)) continue;
   const dir = path.join(ROOT, ws);
-  if (!existsSync(path.join(dir, 'package.json'))) continue;
-  if (!existsSync(path.join(dir, 'package-lock.json'))) {
-    console.warn(`[npm-audit] ${ws}: package-lock.json mancante, skip`);
+  const missing = ['package.json', 'package-lock.json']
+    .filter((file) => !existsSync(path.join(dir, file)))
+    .map((file) => `${ws}/${file}`);
+  if (missing.length > 0) {
+    console.error(`[npm-audit] NPM_AUDIT_INPUT_MISSING: input richiesti mancanti: ${missing.join(', ')}; audit non eseguito`);
+    failed = true;
     continue;
   }
   console.log(`[npm-audit] checking ${ws}...`);
   const res = spawnSync(
-    process.platform === 'win32' ? 'npm.cmd' : 'npm',
-    ['audit', '--omit=dev', '--audit-level=high'],
+    process.platform === 'win32' ? 'cmd.exe' : 'npm',
+    process.platform === 'win32' ? ['/d', '/s', '/c', 'npm.cmd', ...AUDIT_ARGS] : AUDIT_ARGS,
     { cwd: dir, stdio: 'inherit' }
   );
   if (res.status !== 0) {
