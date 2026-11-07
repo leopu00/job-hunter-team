@@ -44,6 +44,8 @@ const S := {
 	"shutdown.detach_back": "Reopen the game whenever you like and you find the office where it got to. To stop the team, come back in and choose to stop it on the way out.",
 	"shutdown.detach_confirm": "QUIT LIKE THIS, LET THEM WORK",
 	"shutdown.ordered": "Asked the Captain to close the day: every agent records where it got to, then stops.",
+	"shutdown.not_delivered": "The shutdown order was not delivered. You can cancel or close now.",
+	"shutdown.timed_out": "Shutdown was not confirmed within five minutes. You can cancel or close now.",
 	"shutdown.waiting": "%d agents still working · %d s. Wait, or close now.",
 	"shutdown.done": "Team stopped. Closing.",
 	"headless.back": "○ THE TEAM WORKED WITHOUT YOU FOR %s · %d IN THE OFFICE NOW",

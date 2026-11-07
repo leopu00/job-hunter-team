@@ -36,6 +36,8 @@ const S := {
 	"shutdown.detach_back": "Öffne das Spiel wieder, wann du willst, und du findest das Büro genau da, wo es steht. Zum Anhalten des Teams komm zurück und wähle beim Schließen das Anhalten.",
 	"shutdown.detach_confirm": "SO BEENDEN, SIE ARBEITEN WEITER",
 	"shutdown.ordered": "Ich habe den Kapitän gebeten, den Tag abzuschließen: jeder Agent notiert seinen Stand und hält dann an.",
+	"shutdown.not_delivered": "Der Befehl zum Beenden wurde nicht zugestellt. Du kannst abbrechen oder sofort schließen.",
+	"shutdown.timed_out": "Das Beenden wurde innerhalb von fünf Minuten nicht bestätigt. Du kannst abbrechen oder sofort schließen.",
 	"shutdown.waiting": "Noch %d Agenten bei der Arbeit · %d s. Du kannst warten oder sofort schließen.",
 	"shutdown.done": "Team angehalten. Ich schließe.",
 	"headless.back": "○ DAS TEAM HAT %s OHNE DICH GEARBEITET · JETZT SIND %d IM BÜRO",

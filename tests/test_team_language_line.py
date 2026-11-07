@@ -154,40 +154,27 @@ def test_the_doctor_and_maintainer_kickoff_carries_the_line_in_one_line(tmp_path
     assert "\n" not in pasted
 
 
-def test_the_watchdog_resume_after_a_respawn_carries_the_line(tmp_path):
+def test_the_watchdog_resume_after_a_respawn_carries_the_line(tmp_path, monkeypatch):
+    from watchdog_delivery import kickoff
     _prefs(tmp_path, "en")
-    source = WATCHDOG.read_text(encoding="utf-8")
-    sent = tmp_path / "sent.txt"
-    script = "\n".join(
-        [
-            f"export JHT_SPAWN_LIB_DIR='{SPAWN_LIB.parent}'",
-            "sleep() { :; }",
-            f'jht-tmux-send() {{ printf "%s" "$2" > "{sent}"; }}',
-            _function(source, "worker_kickoff"),
-            "worker_kickoff SCOUT-1 scout",
-            "wait",
-        ]
-    )
-    assert _bash(script, tmp_path).returncode == 0
-    pasted = sent.read_text(encoding="utf-8")
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    sent = []
+    assert kickoff("SCOUT-1", "scout", sender=lambda s, text: sent.append(text) or True,
+                   sleeper=lambda delay: None)
+    pasted = sent[0]
     assert pasted.startswith("[@watchdog -> @scout-1] [MSG] [TEAM-LANGUAGE] English (en). ")
     assert "Session recreated by the watchdog. Resume the main loop" in pasted
 
 
-def test_the_watchdog_resume_still_goes_without_the_library(tmp_path):
-    sent = tmp_path / "sent.txt"
-    script = "\n".join(
-        [
-            f"export JHT_SPAWN_LIB_DIR='{tmp_path}/no-library-here'",
-            "sleep() { :; }",
-            f'jht-tmux-send() {{ printf "%s" "$2" > "{sent}"; }}',
-            _function(WATCHDOG.read_text(encoding="utf-8"), "worker_kickoff"),
-            "worker_kickoff ANALISTA-1 analista",
-            "wait",
-        ]
-    )
-    assert _bash(script, tmp_path).returncode == 0
-    assert sent.read_text(encoding="utf-8").startswith("[@watchdog -> @analista-1] [MSG] Session recreated by the watchdog.")
+def test_the_watchdog_uses_the_shared_language_rule_without_the_shell_library(tmp_path, monkeypatch):
+    from watchdog_delivery import kickoff
+    _prefs(tmp_path, "en")
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setenv("JHT_SPAWN_LIB_DIR", str(tmp_path / "no-library-here"))
+    sent = []
+    assert kickoff("ANALISTA-1", "analista", sender=lambda s, text: sent.append(text) or True,
+                   sleeper=lambda delay: None)
+    assert sent[0].startswith("[@watchdog -> @analista-1] [MSG] [TEAM-LANGUAGE] English (en).")
 
 
 def test_the_doctors_resume_template_asks_for_the_line_in_every_language():

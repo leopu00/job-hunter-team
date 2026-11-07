@@ -108,6 +108,8 @@ from pathlib import Path
 from typing import Optional
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
 # Stessa posizione e stessa forma di `.team-halted.flag` / `.burn-intent.flag`:
 # chi deve leggerlo lo trova dove già cerca gli altri.
@@ -449,15 +451,8 @@ def activate(reason: str = "", until=None, wake_on_weekly=None,
 
 
 def _list_sessions():
-    try:
-        r = subprocess.run(["tmux", "list-sessions", "-F", "#{session_name}"],
-                           capture_output=True, timeout=5)
-        if r.returncode != 0:
-            return []
-        return [s.strip() for s in
-                r.stdout.decode("utf-8", errors="replace").splitlines() if s.strip()]
-    except (subprocess.TimeoutExpired, OSError):
-        return []
+    from delivery_sessions import sessions
+    return sessions(runner=subprocess.run, home=STANDBY_FLAG.parent)
 
 
 # Seconds this caller waits for the transport before it sees the deadline (JHT_TMUX_SEND_WAIT_STANDBY_S; the old
@@ -529,6 +524,7 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
 
     halted = HALTED_FLAG.exists()
     resumed = 0
+    reached, not_reached = [], []
     # Chi l'utente ha messo in pausa DA SOLO (agent_pause.py) non riparte perché riparte la squadra.
     alone = _load_sibling("agent_pause", "agent_pause.py")
     try:
@@ -545,6 +541,11 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
                 continue
             if _send(s, msg):
                 resumed += 1
+                reached.append(s)
+            else:
+                not_reached.append(s)
+                from delivery_status import report
+                report("message_not_delivered", home=STANDBY_FLAG.parent)
     since = (payload or {}).get("since") if isinstance(payload, dict) else None
     standby_s = None
     if isinstance(since, (int, float)):
@@ -553,7 +554,8 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
               weekly_usage=(weekly_usage if weekly_usage is not None
                             else last_weekly_usage()),
               agents_resumed=resumed, halted=halted, standby_s=standby_s)
-    return {"removed": True, "resumed": resumed, "halted": halted, "why": why}
+    return {"removed": True, "resumed": resumed, "halted": halted, "why": why,
+            "reached": reached, "not_reached": not_reached}
 
 
 def main(argv: list[str]) -> int:

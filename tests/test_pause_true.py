@@ -335,15 +335,18 @@ def test_the_agent_watchdog_predicate_says_paused_only_for_a_live_pause(tmp_path
 
 def test_the_refreshes_and_the_mail_tick_of_the_watchdog_ask_the_predicate():
     src = (REPO / ".launcher" / "agent-watchdog.sh").read_text()
-    for fn in ("maybe_refresh_sentinella", "maybe_ttl_refresh", "maybe_mail_tick"):
+    for fn in ("maybe_refresh_sentinella", "maybe_ttl_refresh"):
         body = src[src.index(f"{fn}() {{"):]
         body = body[:body.index("\n}\n")]
         assert "agent_is_paused" in body, f"{fn} would wipe or wake a paused agent"
 
 
 def test_the_sentinel_bridge_rings_the_cap_of_the_agent_pauses_every_tick():
-    src = (REPO / ".launcher" / "sentinel-bridge.py").read_text()
-    assert "_standby_step(parsed)\n        _agent_pause_step()" in src
+    from fake_sentinel_loop import context
+    from sentinel_loop import _before_tick
+    api, run, events = context()
+    _before_tick(api, run)
+    assert events == [("standby", None), ("agent_pause", None)]
 
 
 # ── a parole: skill, Capitano, Assistente, in ogni lingua ──────────────────

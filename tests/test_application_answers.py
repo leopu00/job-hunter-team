@@ -39,7 +39,8 @@ CASES = json.loads((ROOT / "shared" / "cloud" / "application-answer-cases.json")
 
 
 @pytest.fixture
-def db(tmp_path):
+def db(tmp_path, monkeypatch):
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     path = tmp_path / "jobs.db"
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
@@ -552,11 +553,11 @@ def _answer(db, qid, reply):
                      (reply, qid))
 
 
-def _wake(db, profile=None, sessions=("CLOSER-1",), ready=(7, 8)):
+def _wake(db, profile=None, sessions=("CLOSER-1",), ready=(7, 8), now=None):
     sent = []
     with sqlite3.connect(db) as conn:
         woken = aa.wake_closer(
-            conn, profile or FULL_PROFILE,
+            conn, profile or FULL_PROFILE, now=now,
             sessions=lambda: list(sessions),
             sender=lambda session, text: sent.append((session, text)) or True,
             queue=lambda _c: {"ready": bool(ready), "positions": [{"position_id": p} for p in ready]},
@@ -584,13 +585,14 @@ def test_a_wake_no_closer_took_is_given_back_for_the_next_poll(db):
     _answer(db, first, "one month")
     with sqlite3.connect(db) as conn:
         lost = aa.wake_closer(
-            conn, FULL_PROFILE, sessions=lambda: ["CLOSER-1"], sender=lambda session, text: False,
+            conn, FULL_PROFILE, now=1000, sessions=lambda: ["CLOSER-1"], sender=lambda session, text: False,
             queue=lambda _c: {"ready": True, "positions": [{"position_id": 7}]},
         )
     assert lost == []
     assert row(db, "SELECT COUNT(*) FROM closer_wakes") == [(0,)]
 
-    woken, sent = _wake(db)
+    assert _wake(db, now=1001) == ([], [])
+    woken, sent = _wake(db, now=1060)
     assert [w.reason for w in woken] == ["answers_complete"] and len(sent) == 1
 
 
