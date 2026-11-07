@@ -1864,6 +1864,16 @@
       "path": "web/app/fonts/SOURCE.md",
       "description": "Source, license and checksums of the bundled JetBrains Mono font",
       "last_review": null
+    },
+    {
+      "path": "agents/_skills/codex-dialog/SKILL.md",
+      "description": "Gestione dei dialoghi della CLI Codex con recupero limitato, stato e notifiche al coordinatore",
+      "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/architecture/codex-managed-launch-policy.md",
+      "description": "Politica comune di avvio e recupero della CLI Codex, compatibilità con il pin e limiti delle prove",
+      "last_review": "2026-11-07"
     }
   ]
 }

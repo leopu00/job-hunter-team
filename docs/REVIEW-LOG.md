@@ -50,9 +50,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-11-06 | ✅ |
+| [agents/capitano/capitano.md](../agents/capitano/capitano.md) | 🎖️ Capitano — orchestrator del team, distribuisce ordini | — | 2026-11-07 | ✅ |
 | [agents/sentinella/sentinella.md](../agents/sentinella/sentinella.md) | 💂 Sentinella — watchdog rate-limit, fallback del bridge | — | 2026-11-02 | ✅ |
-| [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-11-06 | ✅ |
+| [agents/scout/scout.md](../agents/scout/scout.md) | 🔭 Scout — ricerca offerte (LinkedIn → ATS → niche → web) | — | 2026-11-07 | ✅ |
 | [agents/analista/analista.md](../agents/analista/analista.md) | 🔍 Analista — filtra JD vs profilo, popola companies/highlights | — | 2026-11-03 | ✅ |
 | [agents/scorer/scorer.md](../agents/scorer/scorer.md) | 🎯 Scorer — assegna score 0-100 alle posizioni filtrate | — | 2026-11-02 | ✅ |
 | [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-10-26 | ✅ |
@@ -130,7 +130,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/salary-estimate/SKILL.md](../agents/_skills/salary-estimate/SKILL.md) | Stima salariale gerarchica per il Scorer (bug 27). | — | 2026-07-30 | ✅ |
 | [agents/_skills/scaling-calc/SKILL.md](../agents/_skills/scaling-calc/SKILL.md) | 🎚️ scaling-calc — salire di marcia per gradini, non in 6ª — Calibrazione graduale del roster — misura il burn di 1 worker, calcola quanti worker e con quale throttle servono… | — | 2026-08-03 | ✅ |
 | [agents/_skills/scout-coord/SKILL.md](../agents/_skills/scout-coord/SKILL.md) | Boot-time coordination protocol between multiple Scouts. | — | 2026-08-08 | ✅ |
-| [agents/_skills/scout-web-access/SKILL.md](../agents/_skills/scout-web-access/SKILL.md) | Strato web-access cross-provider per gli Scout (F-2). | — | 2026-10-08 | ✅ |
+| [agents/_skills/scout-web-access/SKILL.md](../agents/_skills/scout-web-access/SKILL.md) | Strato web-access cross-provider per gli Scout (F-2). | — | 2026-11-07 | ✅ |
 | [agents/_skills/session-refresh/SKILL.md](../agents/_skills/session-refresh/SKILL.md) | Refresh sessione agente (solo Dottore): gate sul contesto misurato >50%, non sull'età della sessione | — | 2026-11-02 | ✅ |
 | [agents/_skills/spawn-doctor/SKILL.md](../agents/_skills/spawn-doctor/SKILL.md) | Spawn a fresh DOTTORE on-demand when you (Capitano/Assistente/Sentinella/Mentor) need an immediate health-check… | — | 2026-05-18 | ✅ |
 | [agents/_skills/telegram-send/SKILL.md](../agents/_skills/telegram-send/SKILL.md) | Send a message to the user via Telegram (outbound). | — | 2026-10-28 | ✅ |
@@ -150,10 +150,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/_skills/email-application-flow/SKILL.md](../agents/_skills/email-application-flow/SKILL.md) | 📮 CLOSER — candidatura via email: link solo dal checkpoint, gate prima dell'invio, send_started mai ritentato, ricevuta | — | 2026-10-08 | ✅ |
 | [agents/_skills/mailbox/SKILL.md](../agents/_skills/mailbox/SKILL.md) | Skill degli agenti: svuota la casella di posta (jht-mail drain) come prima azione di ogni turno; i messaggi degli altri agenti sono file con ricevuta | — | 2026-10-22 | ✅ |
 | [agents/_skills/scam-signals/SKILL.md](../agents/_skills/scam-signals/SKILL.md) | Skill dell'analista: segnali anti-truffa deterministici su una posizione prima del verdetto (stesso testo in altre aziende, anticipo di denaro, azienda non verificabile, solo chat privata) | — | 2026-10-22 | ✅ |
-| [agents/_skills/scout-coverage/SKILL.md](../agents/_skills/scout-coverage/SKILL.md) | Core portal search order and coverage requirements for each profile market | — | 2026-11-06 | ✅ |
+| [agents/_skills/scout-coverage/SKILL.md](../agents/_skills/scout-coverage/SKILL.md) | Core portal search order and coverage requirements for each profile market | — | 2026-11-07 | ✅ |
 | [agents/_skills/scout-language-gate/SKILL.md](../agents/_skills/scout-language-gate/SKILL.md) | Language screening of search candidates before fetching full advertisements | — | 2026-11-02 | ✅ |
 | [agents/_skills/scout-pass-log/SKILL.md](../agents/_skills/scout-pass-log/SKILL.md) | Search pass counts and candidate outcomes with a closed vocabulary | — | 2026-11-06 | ✅ |
 | [agents/_skills/team-pause/SKILL.md](../agents/_skills/team-pause/SKILL.md) | Pause and resume the team or one agent while preserving session context | — | 2026-11-06 | ✅ |
+| [agents/_skills/codex-dialog/SKILL.md](../agents/_skills/codex-dialog/SKILL.md) | Gestione dei dialoghi della CLI Codex con recupero limitato, stato e notifiche al coordinatore | 2026-11-07 | 2026-11-07 | 🟢 |
 
 
 ## 💂 Skill Sentinella
@@ -229,7 +230,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-11-03 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-10-26 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-10-22 | ✅ |
-| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-06 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-07 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-11-04 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-11-02 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
@@ -408,6 +409,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/architecture/closer-desktop-tauri.md](./internal/architecture/closer-desktop-tauri.md) | Browser assistito dentro l'app Tauri: richiesta unica al Rust, binding per account, container attestato, SSH senza PTY | — | 2026-10-16 | ✅ |
 | [docs/internal/experiments/2026-10-25-model-comparison-test-team.md](./internal/experiments/2026-10-25-model-comparison-test-team.md) | Confronto fra modelli su un team di prova (24-25/10/2026): solo metodo e numeri, nessun testo di annunci né dati di tester; in corso | — | 2026-10-25 | ✅ |
 | [docs/internal/ops/vps-provisioning-map.md](./internal/ops/vps-provisioning-map.md) | Mappa del provisioning di una VPS nuova (16/10/2026): cosa fanno desktop, gioco e CLI, fiducia nel server, installer e punti con prova automatica | — | 2026-10-16 | ✅ |
+| [docs/internal/architecture/codex-managed-launch-policy.md](./internal/architecture/codex-managed-launch-policy.md) | Politica comune di avvio e recupero della CLI Codex, compatibilità con il pin e limiti delle prove | 2026-11-07 | 2026-11-07 | 🟢 |
 
 
 ## 🔒 docs/security
