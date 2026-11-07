@@ -73,6 +73,8 @@ def test_a_running_team_stops_the_reinstall_with_its_own_exit(tmp_path, names):
     assert done.returncode == 84, done.stdout + done.stderr
     assert "went-on" not in done.stdout
     assert done.stderr.splitlines()[0] == "JHT_ERROR team_running"
+    assert "resume it with «jht setup» in this terminal; no down is needed" in done.stderr
+    assert done.stderr.index("jht setup") < done.stderr.index("jht down")
     assert "jht down" in done.stderr and "jht up" in done.stderr
 
 

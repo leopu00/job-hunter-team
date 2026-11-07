@@ -7,6 +7,7 @@
  * modification time, made a valid login wait for ever.
  */
 import fs from 'node:fs';
+import { runCodexLoginStep } from './codex-device-login.js';
 
 /** Per provider CLI, the marker that exists only after its login (the same files as the app's check). */
 const LOGIN_MARKERS = {
@@ -44,14 +45,15 @@ export async function waitForProviderLogin(cmdName, timeoutMs, { find = findProv
 
 /**
  * The step. Returns the marker found, or null when the login did not come (the wizard stops there).
- * On a VPS the person logs in from another terminal over SSH; on this computer, from another terminal here.
+ * Codex logs in here; the other providers retain their separate-terminal flow.
  */
-export async function runProviderLoginStep({ cmdName, label, isVps, prompter, t, tf, find = findProviderLogin, wait = waitForProviderLogin }) {
+export async function runProviderLoginStep({ cmdName, label, isVps, prompter, t, tf, find = findProviderLogin, wait = waitForProviderLogin, login, report }) {
   const already = find(cmdName);
   if (already) {
-    await prompter.note(tf('wizard.oauth.detected', cmdName, already), tf('wizard.oauth.notify_title', label));
+    await prompter.note(tf('wizard.oauth.detected', cmdName, already), tf('wizard.oauth.inline_title', label));
     return already;
   }
+  if (cmdName === 'codex') return runCodexLoginStep({ prompter, t, tf, find, login, report });
   await prompter.note(
     tf(isVps ? 'wizard.oauth.notify_body' : 'wizard.oauth.notify_body_local', cmdName, label),
     tf('wizard.oauth.notify_title', label),
