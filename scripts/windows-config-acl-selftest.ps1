@@ -506,7 +506,7 @@ exit /b 0
   $env:JHT_HOME_HOST = $bad
   $env:JHT_RUNTIME_DIR = (Join-Path $root 'runtime')
   $env:JHT_COMPOSE_FILE = (Join-Path $env:JHT_RUNTIME_DIR 'docker-compose.yml')
-  $output = & powershell -NoProfile -File (Join-Path $PSScriptRoot 'jht-wrapper.ps1') up 2>&1
+  $output = @(& { $ErrorActionPreference = 'Continue'; & powershell -NoProfile -File (Join-Path $PSScriptRoot 'jht-wrapper.ps1') up 2>&1 })
   $wrapperExit = $LASTEXITCODE
   $outputText = ($output | Out-String)
   if ($wrapperExit -eq 0 -or -not ($outputText -match 'owner-only|ACL')) { throw 'wrapper did not fail closed before compose' }
