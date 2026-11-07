@@ -28,12 +28,75 @@ function New-JhtDeadlineCase {
 
 function Stop-JhtFixtureChildren {
   foreach ($file in @(Get-ChildItem -LiteralPath $script:Sandbox -Filter '*.pid' -Recurse -File)) {
-    $child = Get-Process -Id ([int][IO.File]::ReadAllText($file.FullName)) -ErrorAction SilentlyContinue
-    if ($child -and -not $child.HasExited -and $child.Path -eq $script:Fake) {
-      $child.Kill()
-      Assert-JhtDeadlineCase ($child.WaitForExit(2000)) 'The fake child could not be stopped.'
-    }
+    $child = Get-JhtFixtureProcess $file.FullName
+    if (-not $child) { continue }
+    try {
+      if (-not $child.HasExited) {
+        $child.Kill()
+        Assert-JhtDeadlineCase ($child.WaitForExit(2000)) 'The fake child could not be stopped.'
+      }
+    } finally { $child.Dispose() }
   }
+}
+
+function Get-JhtFixtureProcess {
+  param([string]$PidFile)
+  $fixtureId = [int][IO.File]::ReadAllText($PidFile)
+  Assert-JhtDeadlineCase ($fixtureId -gt 0) 'Invalid fixture process identity.'
+  try { $child = [Diagnostics.Process]::GetProcessById($fixtureId) } catch [ArgumentException] { return $null }
+  try {
+    $identity = $null
+    if (-not $child.HasExited) {
+      try { $identity = $child.MainModule.FileName } catch { if (-not $child.HasExited) { throw } }
+    }
+    if (-not $child.HasExited -and -not $identity) { throw 'Fixture process identity could not be verified.' }
+    if (-not $child.HasExited -and -not [string]::Equals($identity, $script:Fake, [StringComparison]::OrdinalIgnoreCase)) {
+      [Console]::Out.WriteLine("T205_FIXTURE_PID_REUSED pid=$fixtureId")
+      $child.Dispose()
+      return $null
+    }
+    return $child
+  } catch { $child.Dispose(); throw }
+}
+
+function Wait-JhtFixtureImageRelease {
+  param([ValidateRange(0, 5000)][int]$TimeoutMilliseconds = 5000)
+  $clock = [Diagnostics.Stopwatch]::StartNew()
+  $fileCode = 0
+  do {
+    $alive = @()
+    foreach ($file in @(Get-ChildItem -LiteralPath $script:Sandbox -Filter '*.pid' -Recurse -File)) {
+      $child = Get-JhtFixtureProcess $file.FullName
+      if (-not $child) { continue }
+      try { if (-not $child.WaitForExit(0)) { $alive += $child.Id } } finally { $child.Dispose() }
+    }
+    if ($alive.Count -eq 0) {
+      try {
+        # Deny new readers/writers while permitting our ONE deletion through this lease.
+        return [IO.File]::Open($script:Fake, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::Delete)
+      } catch {
+        $reason = $_.Exception
+        while ($reason.InnerException) { $reason = $reason.InnerException }
+        if (-not ($reason -is [IO.IOException] -or $reason -is [UnauthorizedAccessException])) { throw }
+        $fileCode = $reason.HResult -band 0xffff
+      }
+    }
+    if ($clock.ElapsedMilliseconds -ge $TimeoutMilliseconds) {
+      if ($alive.Count) { throw "fixture_process_alive: owned_pids=$($alive -join ',') elapsed_ms=$($clock.ElapsedMilliseconds)" }
+      throw "fixture_file_not_released: owned_pids_exited=true win32=$fileCode elapsed_ms=$($clock.ElapsedMilliseconds)"
+    }
+    Start-Sleep -Milliseconds ([int][Math]::Max(0, [Math]::Min(20, $TimeoutMilliseconds - $clock.ElapsedMilliseconds)))
+  } while ($true)
+}
+
+function Test-JhtFixtureImageFence {
+  $held = [IO.File]::Open($script:Fake, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  $failure = $null
+  try {
+    try { $unexpected = Wait-JhtFixtureImageRelease -TimeoutMilliseconds 0; $unexpected.Dispose() } catch { $failure = $_.Exception }
+    Assert-JhtDeadlineCase ($failure -and $failure.Message.StartsWith('fixture_file_not_released:')) 'A real held image did not block fixture deletion.'
+    Assert-JhtDeadlineCase ($failure.Message.Contains('win32=32 ')) 'The held image did not produce the real sharing violation.'
+  } finally { $held.Dispose() }
 }
 
 function Test-JhtMachineDeadline {
@@ -53,8 +116,10 @@ function Test-JhtMachineDeadline {
   foreach ($name in 'parent.pid', 'child.pid', 'grandchild.pid') {
     $pidFile = Join-Path $case $name
     Assert-JhtDeadlineCase ([IO.File]::Exists($pidFile)) "Fake process did not start: $name"
-    $child = Get-Process -Id ([int][IO.File]::ReadAllText($pidFile)) -ErrorAction SilentlyContinue
-    if ($child) { Assert-JhtDeadlineCase ($child.WaitForExit(2000)) "Fake process survived: $name" }
+    $child = Get-JhtFixtureProcess $pidFile
+    if ($child) {
+      try { Assert-JhtDeadlineCase ($child.WaitForExit(2000)) "Fake process survived: $name" } finally { $child.Dispose() }
+    }
   }
   $log = [IO.File]::ReadAllText((Join-Path $case 'runtime.log'))
   Assert-JhtDeadlineCase ($log.Contains('podman_machine_timeout') -and $log.Contains('podman_machine_' + $Action)) 'Runtime log lost timeout or phase.'
@@ -99,8 +164,10 @@ function Test-JhtCaptureBound {
   Assert-JhtDeadlineCase ($failed.Data['Phase'] -eq 'podman_machine_ssh' -and $LASTEXITCODE -ne 0) 'The capture bound lost its phase/exit.'
   $log = [IO.File]::ReadAllText((Join-Path $case 'runtime.log'))
   Assert-JhtDeadlineCase ($log.Contains('podman_machine_command_failed') -and -not $log.Contains('synthetic-private-detail')) 'The capture bound lost its fixed event or logged private output.'
-  $helper = Get-Process -Id ([int][IO.File]::ReadAllText((Join-Path $case 'oversized-child.pid'))) -ErrorAction SilentlyContinue
-  if ($helper) { Assert-JhtDeadlineCase ($helper.WaitForExit(2000)) 'A rejected capture left its helper running.'; $helper.Dispose() }
+  $helper = Get-JhtFixtureProcess (Join-Path $case 'oversized-child.pid')
+  if ($helper) {
+    try { Assert-JhtDeadlineCase ($helper.WaitForExit(2000)) 'A rejected capture left its helper running.' } finally { $helper.Dispose() }
+  }
   [Console]::Out.WriteLine("T205_CASE engine=$($PSVersionTable.PSVersion) oversized_answer_rejected=true PASS")
 }
 
@@ -110,9 +177,15 @@ function Test-JhtInheritedPipe {
   $result = Invoke-JhtPodmanProcess -FilePath $script:Fake -Arguments @('machine', 'ssh', 'jht-fixture', 'pipe-held') -Phase podman_machine_ssh -TimeoutMilliseconds 1000
   Assert-JhtDeadlineCase ($result.ExitCode -eq 0 -and -not $result.OutputComplete) 'Inherited open pipe was silently declared complete.'
   Assert-JhtDeadlineCase ($clock.ElapsedMilliseconds -le 6000) 'The pipe drain did not keep its deadline.'
-  $helper = Get-Process -Id ([int][IO.File]::ReadAllText((Join-Path $case 'child.pid'))) -ErrorAction Stop
-  Assert-JhtDeadlineCase (-not $helper.HasExited -and $helper.Path -eq $script:Fake) 'A successful command killed its permitted helper.'
-  $helper.Dispose()
+  $helper = Get-JhtFixtureProcess (Join-Path $case 'child.pid')
+  Assert-JhtDeadlineCase ($null -ne $helper) 'A successful command killed its permitted helper.'
+  try {
+    Assert-JhtDeadlineCase (-not $helper.HasExited) 'A successful command killed its permitted helper.'
+    $failure = $null
+    try { $unexpected = Wait-JhtFixtureImageRelease -TimeoutMilliseconds 0; $unexpected.Dispose() } catch { $failure = $_.Exception }
+    Assert-JhtDeadlineCase ($failure -and $failure.Message.StartsWith('fixture_process_alive:')) 'The fixture fence missed a live owned helper.'
+    Assert-JhtDeadlineCase (-not $helper.HasExited) 'The fixture fence killed a permitted live helper.'
+  } finally { $helper.Dispose() }
   Stop-JhtFixtureChildren
   [IO.File]::Delete((Join-Path $case 'child.pid'))
   $failed = $null
@@ -120,8 +193,10 @@ function Test-JhtInheritedPipe {
   Assert-JhtDeadlineCase ($null -ne $failed -and $failed.Data['Code'] -eq 'podman_machine_command_failed') 'The SSH adapter accepted an incomplete inherited pipe.'
   $pidFile = Join-Path $case 'child.pid'
   Assert-JhtDeadlineCase ([IO.File]::Exists($pidFile)) 'The rejected adapter never started its real helper.'
-  $helper = Get-Process -Id ([int][IO.File]::ReadAllText($pidFile)) -ErrorAction SilentlyContinue
-  if ($helper) { Assert-JhtDeadlineCase ($helper.WaitForExit(2000)) 'The rejected SSH answer left its helper running.'; $helper.Dispose() }
+  $helper = Get-JhtFixtureProcess $pidFile
+  if ($helper) {
+    try { Assert-JhtDeadlineCase ($helper.WaitForExit(2000)) 'The rejected SSH answer left its helper running.' } finally { $helper.Dispose() }
+  }
   Stop-JhtFixtureChildren
   [Console]::Out.WriteLine("T205_CASE engine=$($PSVersionTable.PSVersion) inherited_pipe_incomplete=true ssh_rejected=true permitted_helper_alive=true rejected_helper_stopped=true PASS")
 }
@@ -160,6 +235,7 @@ $oldFixtureRoot = $env:JHT_PODMAN_FIXTURE_ROOT
 $script:Sandbox = Join-Path ([IO.Path]::GetTempPath()) ('jht-podman-deadline [case] ' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($script:Sandbox)
 $script:Fake = Join-Path $script:Sandbox 'podman.exe'
+$completed = $false
 try {
   $source = @'
 using System;
@@ -244,9 +320,20 @@ public static class PodmanDeadlineFake {
   Test-JhtCaptureBound
   Test-JhtInheritedPipe
   Test-JhtWithoutDeadlineCounterProof
-  [Console]::Out.WriteLine("T205_DEADLINE_SELFTEST engine=$($PSVersionTable.PSVersion) PASS")
+  Test-JhtFixtureImageFence
+  $completed = $true
 } finally {
-  Stop-JhtFixtureChildren
-  $env:JHT_PODMAN_FIXTURE_ROOT = $oldFixtureRoot
-  Remove-Item -LiteralPath $script:Sandbox -Recurse -Force
+  try {
+    if (-not $completed) { Stop-JhtFixtureChildren }
+    $lease = Wait-JhtFixtureImageRelease
+    try { Remove-Item -LiteralPath $script:Fake -Force } finally { $lease.Dispose() }
+    Remove-Item -LiteralPath $script:Sandbox -Recurse -Force
+    Assert-JhtDeadlineCase (-not [IO.Directory]::Exists($script:Sandbox)) 'The fixture sandbox remained after cleanup.'
+  } catch {
+    $failure = $_
+    if ([IO.Directory]::Exists($script:Sandbox)) { Stop-JhtFixtureChildren }
+    throw $failure
+  } finally { $env:JHT_PODMAN_FIXTURE_ROOT = $oldFixtureRoot }
 }
+[Console]::Out.WriteLine("T205_FIXTURE_CLEANUP engine=$($PSVersionTable.PSVersion) held_lock_rejected=true released=true sandbox_removed=true PASS")
+[Console]::Out.WriteLine("T205_DEADLINE_SELFTEST engine=$($PSVersionTable.PSVersion) PASS")

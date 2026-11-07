@@ -158,6 +158,7 @@ def assert_native_job_lifecycle(tmp_path):
                for action in ("ssh", "start", "init")), done.stdout
     assert any("inherited_pipe_incomplete=true ssh_rejected=true" in line for line in cases)
     assert any("without_deadline_hangs=true outer_watchdog_stopped=true" in line for line in cases)
+    assert "held_lock_rejected=true released=true sandbox_removed=true PASS" in done.stdout
     assert "T205_DEADLINE_SELFTEST engine=" in done.stdout
 
 
