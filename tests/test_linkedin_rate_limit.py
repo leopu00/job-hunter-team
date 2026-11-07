@@ -178,7 +178,10 @@ def test_the_cooldown_grows_when_it_happens_again_and_a_success_resets_it(linked
 def test_another_error_is_not_a_rate_limit(linkedin):
     linkedin.script["job"] = [(403, {}, "")]
     job = la.fetch_job("9")
-    assert job == {"job_id": "9", "url": f"{linkedin.url}/jobs/view/9", "status": 403, "blocked": True}
+    assert job == {"job_id": "9", "url": f"{linkedin.url}/jobs/view/9", "status": 403, "blocked": True,
+                   "search_status": "closed",
+                   "http_status": 403, "search_outcome": True, "source": "linkedin",
+                   "code": "scout_search_forbidden", "message": "The job source refused access."}
     assert not la.RATE_STATE.exists() or not _state().get("cooldown_until")
 
 

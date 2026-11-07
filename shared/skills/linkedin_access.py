@@ -276,192 +276,32 @@ ENTITY_URN_RE = re.compile(r'data-entity-urn="urn:li:jobPosting:(\d+)"')
 def search(keywords: str, location: str = "", limit: int = 25,
            posted_within_days: int = 7) -> list[dict]:
     """Cerca via guest endpoint. Niente login. Solo i risultati (vedi `search_ex` per l'esito di un 429)."""
-    return search_ex(keywords, location, limit, posted_within_days)[0]
+    from scout_search_outcomes import SearchSourceError
+    results, outcome = search_ex(keywords, location, limit, posted_within_days)
+    if outcome and not outcome.get("rate_limited"):
+        raise SearchSourceError(results, outcome)
+    return results
 
 
 def search_ex(keywords: str, location: str = "", limit: int = 25,
               posted_within_days: int = 7) -> tuple[list[dict], dict | None]:
-    """Cerca via guest endpoint. Niente login. Ritorna (risultati, rate_limited o None).
-
-    `f_TPR=r<seconds>` = posted in last N seconds.
-    Pagination: parametro `start` (offset di 10/25 alla volta).
-    Se LinkedIn risponde 429 (o la fonte e' in cooldown / ha raggiunto il tetto di richieste) la ricerca si ferma, i
-    risultati gia' raccolti restano e il secondo valore e' l'esito `rate_limited` con `retry_after_s` e `retry_at`.
-    """
-    f_tpr = f"r{posted_within_days * 86400}"
-    results: list[dict] = []
-    seen_ids = set()
-    start = 0
-
-    while len(results) < limit:
-        params = {
-            "keywords": keywords,
-            "location": location,
-            "f_TPR": f_tpr,
-            "start": start,
-        }
-        url = GUEST_SEARCH + "?" + urllib.parse.urlencode(params)
-        try:
-            r, limited = _get(url, timeout=20)
-        except Exception:
-            break
-        if limited is not None:
-            return results, limited
-        if r.status_code != 200 or not r.text.strip():
-            break
-
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(r.text, "lxml")
-        cards = soup.select(".base-card[data-entity-urn], .job-search-card[data-entity-urn]")
-        if not cards:
-            # Fallback regex se i selettori cambiano nome
-            ids = ENTITY_URN_RE.findall(r.text)
-            for jid in ids:
-                if jid in seen_ids:
-                    continue
-                seen_ids.add(jid)
-                results.append({
-                    "job_id": jid,
-                    "url": public_url(jid),
-                    "title": "",
-                    "company": "",
-                    "location": "",
-                    "source": "linkedin-guest",
-                })
-                if len(results) >= limit:
-                    break
-            break
-
-        before = len(results)
-        for card in cards:
-            urn = card.get("data-entity-urn", "")
-            m = re.search(r"urn:li:jobPosting:(\d+)", urn)
-            if not m:
-                continue
-            jid = m.group(1)
-            if jid in seen_ids:
-                continue
-            seen_ids.add(jid)
-            title_el = card.select_one("h3, .base-search-card__title, .job-search-card__title")
-            company_el = card.select_one(".base-search-card__subtitle, .job-search-card__subtitle, h4")
-            loc_el = card.select_one(".job-search-card__location, .base-search-card__metadata")
-            results.append({
-                "job_id": jid,
-                "url": public_url(jid),
-                "title": (title_el.get_text(strip=True) if title_el else "")[:200],
-                "company": (company_el.get_text(strip=True) if company_el else "")[:120],
-                "location": (loc_el.get_text(strip=True) if loc_el else "")[:120],
-                "source": "linkedin-guest",
-            })
-            if len(results) >= limit:
-                break
-        # Se la pagina non ha aggiunto nuovi risultati, stop (fine paginazione)
-        if len(results) == before:
-            break
-        start += 25
-        time.sleep(0.6 + random.uniform(0, 0.5))  # cortesia, anti-rate
-
-    return results, None
+    """Guest results plus an explicit error outcome (including rate limits)."""
+    from linkedin_search import search_ex as run_search
+    return run_search(sys.modules[__name__], keywords, location, limit, posted_within_days)
 
 
 # ── Fetch JD pubblico ────────────────────────────────────────────────
 def fetch_job(url_or_id: str) -> dict:
-    """Fetch JD via /jobs/view/<ID> pubblico. Estrae title, company,
-    location, JD body, criteri, posted_at, deadline (deadline_extract)."""
-    from bs4 import BeautifulSoup
-
-    jid = extract_job_id(url_or_id)
-    if not jid:
-        return {"error": f"could not extract job_id from: {url_or_id}"}
-    url = public_url(jid)
-
-    try:
-        from deadline_extract import parse_deadline  # type: ignore
-    except ImportError:
-        parse_deadline = lambda t: None  # noqa: E731
-
-    try:
-        r, limited = _get(url, timeout=25, allow_redirects=True)
-    except Exception as e:
-        return {"job_id": jid, "url": url, "error": str(e)}
-    if limited is not None:
-        # not a closed page and not «blocked for good»: LinkedIn says wait. The scout takes another source.
-        return {"job_id": jid, "url": url, "status": 429, **limited}
-
-    if r.status_code != 200:
-        return {"job_id": jid, "url": url, "status": r.status_code, "blocked": True}
-
-    html = r.text
-    final_url = r.url
-    soup = BeautifulSoup(html, "lxml")
-
-    # Title (anchor structure: "<Company> hiring <Role> in <City>, <Region>, <Country>")
-    page_title = soup.title.get_text(strip=True) if soup.title else ""
-
-    title_role = ""
-    company = ""
-    location = ""
-    m = re.match(r"^(.+?)\s+hiring\s+(.+?)\s+in\s+(.+?)\s*\|\s*LinkedIn\s*$", page_title)
-    if m:
-        company = m.group(1).strip()
-        title_role = m.group(2).strip()
-        location = m.group(3).strip()
-    else:
-        # Job scaduto → page_title è cose tipo "476 Python jobs in Italy"
-        if "jobs in" in page_title.lower() or "offerte di lavoro" in page_title.lower():
-            return {"job_id": jid, "url": final_url, "status": 200,
-                    "expired": True, "note": "redirected to a SERP — expired job"}
-
-    # JD body
-    jd_text = ""
-    for sel in [".show-more-less-html__markup", ".description__text",
-                ".decorated-job-posting__details"]:
-        el = soup.select_one(sel)
-        if el:
-            jd_text = el.get_text("\n", strip=True)
-            break
-
-    # Criteri (seniority / employment type / job function / industries)
-    criteria: dict[str, str] = {}
-    for li in soup.select(".description__job-criteria-list li, ul.description__job-criteria-list li"):
-        parts = list(li.stripped_strings)
-        if len(parts) >= 2:
-            criteria[parts[0]] = parts[1]
-
-    # Posted at (meta og:description di solito ha "Posted X:XX:XX AM")
-    posted_at = ""
-    for prop in ("og:description", "description"):
-        meta = soup.find("meta", attrs={"property": prop}) or \
-               soup.find("meta", attrs={"name": prop})
-        if meta:
-            posted_at = meta.get("content", "")
-            break
-
-    deadline = parse_deadline(jd_text) if jd_text else None
-
-    return {
-        "job_id": jid,
-        "url": final_url,
-        "status": 200,
-        "title": title_role[:200],
-        "company": company[:120],
-        "location": location[:120],
-        "jd_text": jd_text[:8000],
-        "jd_chars": len(jd_text),
-        "deadline": deadline or "",
-        "seniority": criteria.get("Seniority level", ""),
-        "employment_type": criteria.get("Employment type", ""),
-        "job_function": criteria.get("Job function", ""),
-        "industries": criteria.get("Industries", ""),
-        "posted_meta": posted_at[:300],
-        "source": "linkedin",
-    }
+    """Read a public job page, retaining explicit source failures."""
+    from linkedin_fetch import fetch_job as run_fetch
+    return run_fetch(sys.modules[__name__], url_or_id)
 
 
 RATE_LIMITED_EXIT = 3   # exit code of `search` / `fetch-job` when LinkedIn says wait
 
 
 def main(argv):
+    import scout_pass_log
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -470,6 +310,10 @@ def main(argv):
     s.add_argument("--location", default="")
     s.add_argument("--limit", type=int, default=25)
     s.add_argument("--posted-within-days", type=int, default=7)
+    s.add_argument("--log", action="store_true", help="record the actual outcome for coverage")
+    s.add_argument("--country", default="multi", help="source country for the pass log, not a geographic filter")
+    s.add_argument("--query-kind", default="other", choices=scout_pass_log.QUERY_KINDS)
+    s.add_argument("--agent", default=None)
 
     f = sub.add_parser("fetch-job")
     f.add_argument("url_or_id")
@@ -480,18 +324,26 @@ def main(argv):
     args = p.parse_args(argv)
 
     if args.cmd == "search":
+        from scout_search_outcomes import ERROR_EXIT, record_pass
         results, limited = search_ex(args.keywords, args.location, args.limit, args.posted_within_days)
+        log_error = record_pass(args, results, limited) if args.log else None
         for j in results:
             print(json.dumps(j))
         if limited is not None:
-            print(json.dumps(limited))          # the last line: rate_limited + when to come back
-            return RATE_LIMITED_EXIT
+            print(json.dumps(limited))
+            return RATE_LIMITED_EXIT if limited.get("rate_limited") else ERROR_EXIT
+        if log_error:
+            print(json.dumps(log_error))
+            return ERROR_EXIT
         return 0
 
     if args.cmd == "fetch-job":
+        from scout_search_outcomes import ERROR_EXIT
         job = fetch_job(args.url_or_id)
         print(json.dumps(job, indent=2, ensure_ascii=False))
-        return RATE_LIMITED_EXIT if job.get("rate_limited") else 0
+        if job.get("rate_limited"):
+            return RATE_LIMITED_EXIT
+        return ERROR_EXIT if job.get("search_outcome") else 0
 
     if args.cmd == "convert-url":
         jid = extract_job_id(args.url_or_id)
