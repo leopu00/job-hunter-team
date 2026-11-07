@@ -22,9 +22,12 @@ let failed = false;
 for (const ws of WORKSPACES) {
   if (SKIP_DIRS.has(ws)) continue;
   const dir = path.join(ROOT, ws);
-  if (!existsSync(path.join(dir, 'package.json'))) continue;
-  if (!existsSync(path.join(dir, 'package-lock.json'))) {
-    console.warn(`[npm-audit] ${ws}: package-lock.json mancante, skip`);
+  const missing = ['package.json', 'package-lock.json']
+    .filter((file) => !existsSync(path.join(dir, file)))
+    .map((file) => `${ws}/${file}`);
+  if (missing.length > 0) {
+    console.error(`[npm-audit] NPM_AUDIT_INPUT_MISSING: input richiesti mancanti: ${missing.join(', ')}; audit non eseguito`);
+    failed = true;
     continue;
   }
   console.log(`[npm-audit] checking ${ws}...`);
