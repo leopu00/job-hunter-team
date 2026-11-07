@@ -124,6 +124,7 @@ def test_the_enabler_pulls_through_the_function_and_not_through_out_null():
     assert "Invoke-PodmanPull -PodmanPath $Podman -Machine $MachineName -Image $RuntimeImage" in source
     assert "'pull' $RuntimeImage | Out-Null" not in source
     # the redirection of podman's stderr is inside the 'Continue' scope, and the exit code follows the pipeline
-    body = source[source.index("function Invoke-PodmanPull"):source.index("function Update-ProcessPath")]
+    start = source.index("function Invoke-PodmanPull")
+    body = source[start:source.index("\n}\n", start) + 3]
     assert body.index("$ErrorActionPreference = 'Continue'") < body.index("2>&1") < body.index("$code = $LASTEXITCODE")
     assert "Select-Object" not in body

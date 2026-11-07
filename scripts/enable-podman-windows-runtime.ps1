@@ -97,24 +97,7 @@ function Invoke-PodmanPull {
   }
 }
 
-function Update-ProcessPath {
-  param(
-    [string]$MachinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine'),
-    [string]$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User'),
-    [string]$ProcessPath = $env:PATH
-  )
-  $env:PATH = @(
-    $MachinePath,
-    $UserPath,
-    $ProcessPath
-  ) -join [IO.Path]::PathSeparator
-}
-
-function Invoke-Checked {
-  param([Parameter(Mandatory)][string]$FilePath, [Parameter(ValueFromRemainingArguments)][string[]]$Arguments)
-  & $FilePath @Arguments
-  if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')" }
-}
+. (Join-Path $PSScriptRoot 'podman-machine-bridge.ps1')
 
 # `jht up` says the containers were created, not that they stay up: with a runtime image that lacks the
 # broker's or the Telegram service's binary, the broker restarts in a loop and the Telegram service exits
@@ -414,7 +397,7 @@ function Test-LegacyWslOwner {
   param([Parameter(Mandatory)][string]$WindowsPath, [Parameter(Mandatory)][string]$PodmanPath)
   if (-not (Test-Path -LiteralPath $WindowsPath)) { return $false }
   $wslPath = ConvertTo-WslPath $WindowsPath
-  $owner = (& { $ErrorActionPreference = 'Continue'; & $PodmanPath machine ssh $MachineName "stat -c '%u' $(Quote-Sh $wslPath)" 2>$null } | Select-Object -Last 1)
+  $owner = (& { $ErrorActionPreference = 'Continue'; Invoke-JhtPodmanMachine -FilePath $PodmanPath -Arguments @('machine', 'ssh', $MachineName, "stat -c '%u' $(Quote-Sh $wslPath)") 2>$null } | Select-Object -Last 1)
   if ($LASTEXITCODE -ne 0) { throw "Cannot read the owner of '$WindowsPath' in the Podman machine." }
   return ([string]$owner).Trim() -ne '1000'
 }
@@ -795,7 +778,7 @@ try {
   # Windows PowerShell 5.1 gives a JSON array to the pipeline as ONE object: with a
   # second machine of this user, `$machine` was the whole list. Parse with -InputObject
   # and enumerate with foreach, the same in 5.1 and in PowerShell 7.
-  $machinesJson = ((& $Podman machine list --format json) -join "`n")
+  $machinesJson = ((Invoke-JhtPodmanMachine -FilePath $Podman -Arguments @('machine', 'list', '--format', 'json')) -join "`n")
   $parsedMachines = if ($machinesJson) { ConvertFrom-Json -InputObject $machinesJson } else { $null }
   $machines = @(foreach ($listed in $parsedMachines) { $listed })
   $machine = $machines | Where-Object Name -eq $MachineName | Select-Object -First 1
@@ -874,6 +857,7 @@ $metadataRepaired = Repair-LegacyBindMetadata -PodmanPath $Podman
 New-Item -ItemType Directory -Path $RuntimeDir, $RuntimeShimDir, $BinDir, $JhtHome -Force | Out-Null
 # Set-JhtAccessControl and the ~/.jht ACL functions.
 $helperSource = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
+$bridgeSource = Join-Path $PSScriptRoot 'podman-machine-bridge.ps1'
 . $helperSource
 Protect-OwnerOnlyDirectory -Path $RuntimeDir
 $legacyShim = Join-Path $BinDir 'docker.exe'
@@ -886,6 +870,7 @@ $files = @{
   (Join-Path $RepoRoot 'docker-compose.podman.yml') = (Join-Path $RuntimeDir 'docker-compose.podman.yml')
   (Join-Path $PSScriptRoot 'jht-wrapper.ps1') = (Join-Path $BinDir 'jht.ps1')
   $helperSource = (Join-Path $BinDir 'windows-private-acl.ps1')
+  $bridgeSource = (Join-Path $BinDir 'podman-machine-bridge.ps1')
 }
 # Each one takes its place by a temporary file beside it (Publish-JhtFile): a program that holds a file of the bin folder open for a
 # moment must not leave it truncated, and a file that is already these bytes is not touched.
@@ -934,6 +919,7 @@ $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $RuntimeDi
 $wrapperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'jht.ps1')).Hash.ToLowerInvariant()
 $shimHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $shim).Hash.ToLowerInvariant()
 $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'windows-private-acl.ps1')).Hash.ToLowerInvariant()
+$bridgeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $BinDir 'podman-machine-bridge.ps1')).Hash.ToLowerInvariant()
 $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $selectionFile).Hash.ToLowerInvariant()
 $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $machineFile).Hash.ToLowerInvariant()
 $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $containerUnitFile).Hash.ToLowerInvariant()
@@ -946,7 +932,7 @@ if ($PersistImagePin) {
 } else {
   Remove-Item -LiteralPath $runtimeImageFile -Force -ErrorAction SilentlyContinue
 }
-$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`n$runtimeImageManifest"
+$manifest = "version=1`ndocker-compose.yml=$composeHash`njht-wrapper.ps1=$wrapperHash`ndocker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`ncontainer-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`nwindows-private-acl.ps1=$helperHash`npodman-machine-bridge.ps1=$bridgeHash`n$runtimeImageManifest"
 [IO.File]::WriteAllText((Join-Path $RuntimeDir '.runtime-integrity'), $manifest, [Text.UTF8Encoding]::new($false))
 # Every file the wrapper checks the owner of (Test-RuntimeBundleTrusted), before the wrapper runs (T103).
 $bundleFiles = @(
@@ -958,6 +944,7 @@ $bundleFiles = @(
   (Join-Path $RuntimeDir '.runtime-integrity'),
   (Join-Path $BinDir 'jht.ps1'),
   (Join-Path $BinDir 'windows-private-acl.ps1'),
+  (Join-Path $BinDir 'podman-machine-bridge.ps1'),
   $shim
 )
 if (Test-Path -LiteralPath $runtimeImageFile -PathType Leaf) { $bundleFiles += $runtimeImageFile }

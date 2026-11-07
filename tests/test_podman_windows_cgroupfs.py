@@ -29,7 +29,10 @@ SOURCE = NETWORK.read_text(encoding="utf-8")
 HARNESS = r"""
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
+$bridge = Join-Path (Split-Path -LiteralPath $env:JHT_UNDER_TEST) 'podman-machine-bridge.ps1'
+. $bridge
+$source = (Get-Content -LiteralPath $env:JHT_UNDER_TEST -Raw -Encoding UTF8) + "`n" + (Get-Content -LiteralPath $bridge -Raw -Encoding UTF8)
+$ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
 $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-Checked' }, $true)
 if (-not $fn) { throw 'Invoke-Checked missing' }

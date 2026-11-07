@@ -52,7 +52,9 @@ def test_the_wrapper_never_reads_the_machine_variable_to_choose_the_machine():
     assert "Remove-Item -LiteralPath Env:JHT_PODMAN_MACHINE" in code
     assert "'JHT_CONTAINER_RUNTIME', 'JHT_PODMAN_MACHINE'" in code
     # the machine started by `up` is the one chosen from the file
-    assert "machine start --update-connection=false $env:CONTAINER_CONNECTION" in code
+    assert "Start-JhtPodmanMachineForUp -Runtime $ContainerRuntime -Connection $env:CONTAINER_CONNECTION" in code
+    bridge = _code(WRAPPER.parent / "podman-machine-bridge.ps1")
+    assert "@('machine', 'start', '--update-connection=false', $Connection)" in bridge
 
 
 def test_the_installer_no_longer_writes_the_machine_variable_and_takes_the_one_an_older_install_wrote():

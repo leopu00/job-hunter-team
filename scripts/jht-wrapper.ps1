@@ -196,6 +196,7 @@ function Invoke-JhtWindowsUninstall {
     (Join-Path $binPath 'jht.ps1'),
     (Join-Path $binPath 'jht.cmd'),
     (Join-Path $binPath 'windows-private-acl.ps1'),
+    (Join-Path $binPath 'podman-machine-bridge.ps1'),
     (Join-Path $binPath 'docker.exe')
   )
 
@@ -395,6 +396,7 @@ $GameExecutable = if ($env:JHT_GAME_EXECUTABLE) { $env:JHT_GAME_EXECUTABLE } els
 $WindowsInstanceGuardSha256 = 'bb90ae8f9f1f0cff7d41ceedc3eec380f18b78d7b4f4b07921606afda8b8054b'
 $JhtHome = if ($env:JHT_HOME_HOST) { $env:JHT_HOME_HOST } else { Join-Path $env:USERPROFILE '.jht' }
 $AclHelperPath = Join-Path $PSScriptRoot 'windows-private-acl.ps1'
+$PodmanMachineBridgePath = Join-Path (Split-Path -Parent $WrapperPath) 'podman-machine-bridge.ps1'
 . $AclHelperPath
 
 # Carica la host env (scritta da install.ps1 / setup wizard: JHT_HOST_TYPE=local|vps).
@@ -520,12 +522,13 @@ function Write-RuntimeManifest {
   $content = "version=1`ndocker-compose.yml=$hash`njht-wrapper.ps1=$wrapperHash`nwindows-private-acl.ps1=$helperHash`n"
   if ($ContainerRuntime -eq 'podman') {
     $podmanHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanComposeFile).Hash.ToLowerInvariant()
+    $bridgeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineBridgePath).Hash.ToLowerInvariant()
     $shimHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $DockerShim).Hash.ToLowerInvariant()
     $content += "docker-compose.podman.yml=$podmanHash`ndocker.exe=$shimHash`n"
     $selectionHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeSelectionFile).Hash.ToLowerInvariant()
     $machineHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineFile).Hash.ToLowerInvariant()
     $containerUnitHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
-    $content += "container-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`n"
+    $content += "container-runtime=$selectionHash`npodman-machine=$machineHash`njht-container.service=$containerUnitHash`npodman-machine-bridge.ps1=$bridgeHash`n"
   }
   if (Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf) {
     $runtimeImageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeImageFile).Hash.ToLowerInvariant()
@@ -551,7 +554,7 @@ function Test-RuntimeBundleTrusted {
     if ($values.version -ne '1') { return $false }
     $expectedKeys = @('version', 'docker-compose.yml', 'jht-wrapper.ps1', 'windows-private-acl.ps1')
     if ($ContainerRuntime -eq 'podman') {
-      $expectedKeys += @('docker-compose.podman.yml', 'docker.exe', 'container-runtime', 'podman-machine', 'jht-container.service')
+      $expectedKeys += @('docker-compose.podman.yml', 'docker.exe', 'container-runtime', 'podman-machine', 'jht-container.service', 'podman-machine-bridge.ps1')
     }
     $pinPresent = Test-Path -LiteralPath $RuntimeImageFile -PathType Leaf
     if ($pinPresent) { $expectedKeys += 'runtime-image' }
@@ -571,6 +574,7 @@ function Test-RuntimeBundleTrusted {
       $script:TrustedRuntimeImage = $pin
     }
     if ($ContainerRuntime -eq 'podman') {
+      if (-not (Test-ProtectedRuntimeNode $PodmanMachineBridgePath)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $RuntimeSelectionFile)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $PodmanMachineFile)) { return $false }
       if (-not (Test-ProtectedRuntimeNode $PodmanComposeFile)) { return $false }
@@ -581,6 +585,7 @@ function Test-RuntimeBundleTrusted {
       $selectionActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $RuntimeSelectionFile).Hash.ToLowerInvariant()
       $machineActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineFile).Hash.ToLowerInvariant()
       $containerUnitActual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ContainerUnitFile).Hash.ToLowerInvariant()
+      if ($values.'podman-machine-bridge.ps1' -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $PodmanMachineBridgePath).Hash.ToLowerInvariant()) { return $false }
       if ($values.'docker-compose.podman.yml' -ne $podmanActual -or $values.'docker.exe' -ne $shimActual -or $values.'container-runtime' -ne $selectionActual -or $values.'podman-machine' -ne $machineActual -or $values.'jht-container.service' -ne $containerUnitActual) { return $false }
       if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3128"' -Quiet)) { return $false }
       if (-not (Select-String -LiteralPath $PodmanComposeFile -SimpleMatch 'network_mode: "pasta:--no-udp,--no-icmp,--no-map-gw,-4,-o,127.0.0.1,-T,3129"' -Quiet)) { return $false }
@@ -672,14 +677,9 @@ function Require-Docker {
 # non ha chiesto di avviare il team.
 function Start-PodmanMachineForUp {
   if ($ContainerRuntime -ne 'podman') { return }
-  if (Test-DockerReachable) { return }
-  $podman = Get-Command podman.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $podman) { Write-Err 'podman_not_installable: podman.exe non disponibile.'; exit 21 }
-  & { $ErrorActionPreference = 'Continue'; & $podman.Source machine start --update-connection=false $env:CONTAINER_CONNECTION 2>$null }
-  if ($LASTEXITCODE -ne 0 -or -not (Test-DockerReachable)) {
-    Write-Err 'podman_machine_unavailable: la macchina Podman JHT non si avvia.'
-    exit 22
-  }
+  Assert-TrustedRuntime
+  . $PodmanMachineBridgePath
+  Start-JhtPodmanMachineForUp -Runtime $ContainerRuntime -Connection $env:CONTAINER_CONNECTION
 }
 
 function Require-ComposeFile {

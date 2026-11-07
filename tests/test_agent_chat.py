@@ -1350,7 +1350,8 @@ def test_a_held_turn_that_expires_is_left_as_it_is_when_the_text_is_not_proved_o
     _code, receipt = _held_half_drawn(box)
     _age_the_queue(box, 1300)
     page = box.run("read", "capitano", FAKE_FLUSH_RC="130")[1]            # the transport cannot prove it
-    assert page["settled"] == [{"id": receipt["messageId"], "how": "expired"}] and _delivered_ids(box) == []
+    # a held turn's text may still be in the composer: the page is told so, not that it is lost
+    assert page["settled"] == [{"id": receipt["messageId"], "how": "expired_held"}] and _delivered_ids(box) == []
     (box.state / "screen").write_text(WORKING_WITH_OUR_TEXT, encoding="utf-8")
     box.run("read", "capitano", FAKE_FLUSH_RC="0")
     assert _flush_calls(box) == ["CAPITANO"], "a working agent is not asked: only the first call counts"
@@ -1361,7 +1362,7 @@ def test_a_held_turn_expired_for_longer_than_the_window_is_not_given_an_enter(bo
     _code, receipt = _held_half_drawn(box)
     _age_the_queue(box, 1200 + 400)                # 400 s past its life: the window is 300 s
     page = box.run("read", "capitano", FAKE_FLUSH_RC="0")[1]
-    assert _flush_calls(box) == [] and page["settled"] == [{"id": receipt["messageId"], "how": "expired"}]
+    assert _flush_calls(box) == [] and page["settled"] == [{"id": receipt["messageId"], "how": "expired_held"}]
 
 
 def test_a_held_turn_that_expires_while_the_draining_process_waits_is_given_its_enter_by_it(box):

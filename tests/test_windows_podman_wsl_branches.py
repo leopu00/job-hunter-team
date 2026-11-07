@@ -54,7 +54,10 @@ from windows_native_fakes import ENGINE_CHECK, WINDOWS, assert_engine, install_f
 PRELUDE = r"""
 $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
+$bridge = Join-Path (Split-Path -LiteralPath $env:JHT_UNDER_TEST) 'podman-machine-bridge.ps1'
+. $bridge
+$source = (Get-Content -LiteralPath $env:JHT_UNDER_TEST -Raw -Encoding UTF8) + "`n" + (Get-Content -LiteralPath $bridge -Raw -Encoding UTF8)
+$ast = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
 foreach ($name in ($env:JHT_IMPORT -split ',')) {
   if (-not $name) { continue }
@@ -118,7 +121,7 @@ def _phases(stdout: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 MACHINE_BLOCK_BODY = r"""
-$block = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.TryStatementAst] -and $n.Extent.Text -match 'machine list' }, $true)
+$block = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.TryStatementAst] -and $n.Extent.Text -match '\$machinesJson\s*=' }, $true)
 if (-not $block) { throw 'machine block missing' }
 $Podman = $env:FAKE_PODMAN
 $MachineName = 'jht-podman'
@@ -417,12 +420,18 @@ def test_the_next_launch_retries_wsl_after_the_user_enables_it(tmp_path):
 UP_BODY = r"""
 $ContainerRuntime = $env:RUNTIME
 $env:CONTAINER_CONNECTION = 'jht-podman'
+$env:JHT_MACHINE_WAIT_SECONDS = '1'
+$PodmanMachineBridgePath = $bridge
+$PSDefaultParameterValues['Update-ProcessPath:MachinePath'] = ''
+$PSDefaultParameterValues['Update-ProcessPath:UserPath'] = ''
+function Assert-TrustedRuntime { }
 Start-PodmanMachineForUp
 """
 
 # docker answers only once the machine started (the state file), unless told otherwise.
 DOCKER_CASES = """  "info") [ "$DOCKER" = up ] && exit 0; [ "$DOCKER" = after-start ] && [ -f "$FAKE_STATE" ] && exit 0; exit 1 ;;"""
-UP_PODMAN_CASES = """  "machine start "*) [ "$FAKE_FAIL" = start ] && { echo 'Error: machine start failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac; : > "$FAKE_STATE" ;;"""
+UP_PODMAN_CASES = """  "--connection jht-podman info") [ "$DOCKER" = up ] && exit 0; [ "$DOCKER" = after-start ] && [ -f "$FAKE_STATE" ] && exit 0; exit 1 ;;
+  "machine start "*) [ "$FAKE_FAIL" = start ] && { echo 'Error: machine start failed' >&2; exit 125; }; case "$*" in *"--update-connection=false"*) ;; *) printf '%s' jht-podman > "$FAKE_DEFAULT" ;; esac; : > "$FAKE_STATE" ;;"""
 
 
 def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail=""):
@@ -446,13 +455,13 @@ def test_docker_mode_never_touches_podman(tmp_path):
 def test_a_machine_already_reachable_is_not_started_again(tmp_path):
     result, calls = _up(tmp_path, docker="up")
     assert result.returncode == 0, result.stderr
-    assert calls == ["info"]
+    assert calls == [INFO]
 
 
 def test_an_unreachable_machine_is_started_with_the_named_connection(tmp_path):
     result, calls = _up(tmp_path)
     assert result.returncode == 0, result.stderr
-    assert calls == ["info", START, "info"]
+    assert calls == [INFO, START, INFO]
 
 
 def test_up_does_not_replace_the_users_default_connection(tmp_path):
@@ -460,7 +469,7 @@ def test_up_does_not_replace_the_users_default_connection(tmp_path):
     default.write_text("user-podman", encoding="utf-8")
     result, calls = _up(tmp_path)
     assert result.returncode == 0, result.stderr
-    assert calls == ["info", START, "info"]
+    assert calls == [INFO, START, INFO]
     assert default.read_text(encoding="utf-8") == "user-podman"
     assert not any("system connection" in call for call in calls)
 

@@ -30,16 +30,7 @@ if (-not $Podman) {
 }
 if (-not $Podman) { throw 'podman.exe is unavailable.' }
 
-function Invoke-Checked {
-  param(
-    [Parameter(Mandatory)][string]$FilePath,
-    [Parameter(ValueFromRemainingArguments)][string[]]$Arguments
-  )
-  & $FilePath @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
-  }
-}
+. (Join-Path $PSScriptRoot 'podman-machine-bridge.ps1')
 
 function ConvertTo-WslPath {
   param([Parameter(Mandatory)][string]$Path)
@@ -56,7 +47,7 @@ function Quote-Sh {
 
 function Invoke-MachineShell {
   param([Parameter(Mandatory)][string]$Command)
-  & $Podman machine ssh $MachineName $Command
+  Invoke-JhtPodmanMachine -FilePath $Podman -Arguments @('machine', 'ssh', $MachineName, $Command)
   if ($LASTEXITCODE -ne 0) { throw "Podman machine command failed ($LASTEXITCODE): $Command" }
 }
 
@@ -316,7 +307,7 @@ if (@($machineOutput | Where-Object { ([string]$_).Trim() -eq 'JHT_MACHINE_RESTA
   $ErrorActionPreference = 'Continue'
   try {
     while (-not $servicesActive -and [DateTime]::UtcNow -lt $deadline) {
-      & $Podman machine ssh $MachineName "timeout 20 systemctl is-active --quiet $runtimeServices" 2>$null | Out-Null
+      Invoke-JhtPodmanMachine -FilePath $Podman -Arguments @('machine', 'ssh', $MachineName, "timeout 20 systemctl is-active --quiet $runtimeServices") 2>$null | Out-Null
       $servicesActive = ($LASTEXITCODE -eq 0)
       if (-not $servicesActive) { Start-Sleep -Seconds 2 }
     }
@@ -403,7 +394,7 @@ $proxyCheckEncoded = [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try {
-  $checkOutput = @(& $Podman machine ssh $MachineName "echo $proxyCheckEncoded | base64 -d | bash -s -- $Port $BrokerPort $TelegramPort" 2>&1 | ForEach-Object { [string]$_ })
+  $checkOutput = @(Invoke-JhtPodmanMachine -FilePath $Podman -Arguments @('machine', 'ssh', $MachineName, "echo $proxyCheckEncoded | base64 -d | bash -s -- $Port $BrokerPort $TelegramPort") 2>&1 | ForEach-Object { [string]$_ })
   $checkCode = $LASTEXITCODE
 } finally {
   $ErrorActionPreference = $previousPreference

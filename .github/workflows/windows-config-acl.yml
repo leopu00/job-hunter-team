@@ -9,6 +9,10 @@ on:
       - 'scripts/windows-private-acl.ps1'
       - 'scripts/enable-podman-windows-runtime.ps1'
       - 'scripts/configure-podman-windows-network.ps1'
+      - 'scripts/podman-machine-bridge.ps1'
+      - 'scripts/podman-machine-bridge-selftest.ps1'
+      - 'scripts/ci/podman_machine_bridge_gate.ps1'
+      - 'tests/test_windows_podman_readiness.py'
       - 'scripts/podman-windows-probe.ps1'
       - 'web/public/install.ps1'
       - 'tests/test_windows_native_runtime_pieces.py'
@@ -48,6 +52,10 @@ jobs:
       - name: Host ACL and fail-closed wrapper selftest
         shell: pwsh
         run: ./scripts/windows-config-acl-selftest.ps1
+
+      - name: Podman machine deadline and counter-proof on PowerShell 5.1 and 7
+        shell: pwsh
+        run: ./scripts/ci/podman_machine_bridge_gate.ps1
 
       # The Podman-in-WSL pieces only a real Windows runs: the docker.exe shims
       # compiled with Add-Type (the enabler's, which the product installs, and
@@ -129,7 +137,7 @@ jobs:
         run: |
           foreach ($shell in 'powershell', 'pwsh') {
             $env:JHT_TEST_SHELL = $shell
-            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py tests/test_podman_windows_bundle_owner.py tests/test_windows_pull_progress.py `
+            $out = python -m pytest tests/test_windows_podman_wsl_branches.py tests/test_windows_podman_readiness.py tests/test_podman_windows_setup_retry.py tests/test_podman_windows_sidecar_idmap.py tests/test_podman_windows_cgroupfs.py tests/test_podman_windows_bundle_owner.py tests/test_windows_pull_progress.py `
               -n 4 -p no:cacheprovider -rs --durations=15 --durations-min=1 2>&1
             $code = $LASTEXITCODE
             $out | ForEach-Object { "$_" }

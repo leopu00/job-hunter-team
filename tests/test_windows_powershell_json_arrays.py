@@ -14,11 +14,13 @@ switch PowerShell 7 added to keep the old behaviour). A last test keeps the old 
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from windows_native_fakes import install_fake
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -74,7 +76,14 @@ def test_the_5_1_shape_is_really_one_object(tmp_path):
 def test_the_setup_finds_its_machine_among_the_users_machines(tmp_path, shell):
     source = ENABLER.read_text(encoding="utf-8")
     block = source[source.index("$machinesJson = ") : source.index("  if (-not $machine) {")]
-    done = _run(tmp_path, shell, "$Podman = 'fake-engine'; $MachineName = 'jht-podman'\n" + block
+    bridge = ENABLER.with_name("podman-machine-bridge.ps1")
+    assert bridge.is_file(), "the setup's real sibling bridge is required"
+    podman = install_fake(tmp_path, "podman-json", "#!/bin/sh\n"
+                          "[ \"$*\" = 'machine list --format json' ] || exit 91\n"
+                          "printf '%s\\n' " + shlex.quote(MACHINES) + "\n")
+    bridge_path = str(bridge).replace("'", "''")
+    podman_path = str(podman).replace("'", "''")
+    done = _run(tmp_path, shell, f". '{bridge_path}'\n$Podman = '{podman_path}'; $MachineName = 'jht-podman'\n" + block
                 + "\n\"$($machine.Name) $([bool]$machine.Running)\"\n", MACHINES)
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout.strip().splitlines()[-1] == "jht-podman False"

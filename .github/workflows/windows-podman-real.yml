@@ -18,6 +18,7 @@ on:
       - 'scripts/windows-private-acl.ps1'
       - 'scripts/enable-podman-windows-runtime.ps1'
       - 'scripts/configure-podman-windows-network.ps1'
+      - 'scripts/podman-machine-bridge.ps1'
       - 'scripts/podman-windows-probe.ps1'
       - 'scripts/wsl-interop-connect-proxy.py'
       - 'docker-compose.yml'
@@ -68,7 +69,8 @@ jobs:
           New-Item -ItemType Directory -Path "$env:SERVED\scripts" -Force | Out-Null
           foreach ($relative in 'docker-compose.yml', 'docker-compose.podman.yml', 'scripts\jht-wrapper.ps1',
                                'scripts\windows-private-acl.ps1', 'scripts\enable-podman-windows-runtime.ps1',
-                               'scripts\configure-podman-windows-network.ps1', 'scripts\wsl-interop-connect-proxy.py') {
+                               'scripts\configure-podman-windows-network.ps1', 'scripts\podman-machine-bridge.ps1',
+                               'scripts\wsl-interop-connect-proxy.py') {
             Copy-Item -LiteralPath $relative -Destination (Join-Path $env:SERVED $relative)
           }
           $server = Start-Process -FilePath python -ArgumentList @('-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', $env:SERVED) -WindowStyle Hidden -PassThru
