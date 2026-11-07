@@ -144,10 +144,63 @@ pub(crate) fn local_wall_clock(unix_seconds: u64) -> u64 {
     unix_seconds.saturating_add_signed(if known { i64::from(parts.tm_gmtoff) } else { 0 })
 }
 
-/// No copy is made off macOS and Linux; the clock is left as it is.
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+/// The seconds of the clock on this computer's wall, from the zone Windows keeps (summer time at that
+/// moment included); the clock is left as it is when the system cannot say.
+#[cfg(windows)]
+pub(crate) fn local_wall_clock(unix_seconds: u64) -> u64 {
+    use windows_sys::Win32::Foundation::{FILETIME, SYSTEMTIME};
+    use windows_sys::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};
+    /// Seconds between 1601-01-01 (the Windows epoch) and 1970-01-01.
+    const EPOCH_GAP_SECONDS: u64 = 11_644_473_600;
+    let ticks = unix_seconds.saturating_add(EPOCH_GAP_SECONDS).saturating_mul(10_000_000);
+    let file_time = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+    // SAFETY: an all-zero SYSTEMTIME is a valid value (integers only).
+    let (mut utc, mut local): (SYSTEMTIME, SYSTEMTIME) = unsafe { (std::mem::zeroed(), std::mem::zeroed()) };
+    // SAFETY: the pointers are to values of ours that live for the calls; a null zone means the current one.
+    let known = unsafe {
+        FileTimeToSystemTime(&file_time, &mut utc) != 0 && SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) != 0
+    };
+    if !known {
+        return unix_seconds;
+    }
+    let seconds = |t: &SYSTEMTIME| {
+        civil_seconds(t.wYear.into(), t.wMonth.into(), t.wDay.into(), t.wHour.into(), t.wMinute.into(), t.wSecond.into())
+    };
+    unix_seconds.saturating_add_signed(seconds(&local) - seconds(&utc))
+}
+
+/// No copy is made on any other system; the clock is left as it is.
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 pub(crate) fn local_wall_clock(unix_seconds: u64) -> u64 {
     unix_seconds
+}
+
+/// The person's file name and its extension in lowercase, both empty when there is none.
+fn name_and_extension(source: &std::path::Path) -> (String, String) {
+    let original = source.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    let extension = std::path::Path::new(&original)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    (original, extension)
+}
+
+/// Days from 1970-01-01 to a civil date (Howard Hinnant's algorithm, the inverse of the one in `stamp`).
+#[cfg(any(windows, test))]
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = year - i64::from(month <= 2);
+    let era = year.div_euclid(400);
+    let year_of_era = year.rem_euclid(400);
+    let month_part = (month + 9) % 12;
+    let day_of_year = (153 * month_part + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+/// Seconds on a wall clock read as if it were UTC: the difference of two of them is a zone's offset.
+#[cfg(any(windows, test))]
+fn civil_seconds(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64) -> i64 {
+    days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second
 }
 
 /// `20261028-153045` from seconds on a wall clock (see `local_wall_clock`; the tests give UTC ones).
@@ -264,11 +317,7 @@ mod unix {
         now: u64,
         moment: &mut dyn FnMut(Moment),
     ) -> Result<Saved, &'static str> {
-        let original = source.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-        let extension = Path::new(&original)
-            .extension()
-            .map(|e| e.to_string_lossy().to_ascii_lowercase())
-            .unwrap_or_default();
+        let (original, extension) = name_and_extension(source);
         // The extension is looked at before the file is read: a type that is not offered costs nothing.
         if !ALLOWED_EXTENSIONS.contains(&extension.as_str()) {
             return Err("attachment_type");
@@ -329,22 +378,270 @@ mod unix {
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub(crate) use unix::{remove, store};
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+/// The same copy on Windows, where there is no `openat`: the folder is held open instead, and what is
+/// checked is checked on handles, never on a path that can change after.
+///
+/// - the file the person chose is opened once with `FILE_FLAG_OPEN_REPARSE_POINT`, so a symbolic link
+///   or a junction is opened as itself and refused; a reparse point that is neither (a cloud file that
+///   is not on the disk yet) is the person's own file and is opened again, as the very same file
+///   (volume and index), to be read; the bytes come from the handle, never from the path again;
+/// - the `allegati` folder is opened as itself (no link followed), checked on the handle (a folder, not
+///   a reparse point) and HELD for the whole copy with a share mode that does not allow delete or
+///   rename: the folder cannot be moved away or replaced by a junction while the copy goes on;
+/// - the copy is written under a temporary name made with CREATE_NEW (a name taken is an error), then
+///   moved to `cv-<date>-<time>.<ext>` with `MoveFileExW` WITHOUT `MOVEFILE_REPLACE_EXISTING`: a name
+///   taken is skipped, never overwritten.
+///
+/// What is NOT as tight as on Unix: the files of the copy are made by path inside the held folder,
+/// not relative to its descriptor. Between closing the temporary file and moving it the path is open
+/// to whoever can write in the folder, the team's container included; it can only put there a file
+/// (or a link, moved as a link and never followed) it could put there anyway, and the size check
+/// the caller makes from inside the container sees what was left.
+#[cfg(windows)]
+mod windows {
+    use super::*;
+    use std::fs::{File, OpenOptions};
+    use std::io::{Read, Write};
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    use std::os::windows::io::AsRawHandle;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS};
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, GetFileType, MoveFileExW, BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_DIRECTORY,
+        FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TYPE_DISK, MOVEFILE_WRITE_THROUGH,
+    };
+
+    static PART_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// The moments a test can act between: the person's file open, its size checked, the folder open.
+    pub(crate) type Moment = &'static str;
+
+    fn info_of(file: &File) -> Option<BY_HANDLE_FILE_INFORMATION> {
+        // SAFETY: an all-zero BY_HANDLE_FILE_INFORMATION is a valid value (integers only).
+        let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: the handle is open for as long as `file` lives; `info` is a valid, writable out structure.
+        (unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } != 0).then_some(info)
+    }
+
+    /// Which file a handle is: its volume and its index on the volume.
+    fn identity(info: &BY_HANDLE_FILE_INFORMATION) -> (u32, u64) {
+        (info.dwVolumeSerialNumber, (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow))
+    }
+
+    fn is_link(path: &Path) -> bool {
+        // std says «link» for a symbolic link and a junction, not for the other kinds of reparse point
+        std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
+    }
+
+    /// What the person chose, opened once and read from the handle. A link or a junction (an alias the
+    /// person picked included), a folder, a device or a file over the limit is refused.
+    fn read_source(source: &Path, moment: &mut dyn FnMut(Moment)) -> Result<Vec<u8>, &'static str> {
+        let share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+        let opened = OpenOptions::new().read(true).share_mode(share).custom_flags(FILE_FLAG_OPEN_REPARSE_POINT).open(source);
+        let first = match opened {
+            Ok(file) => file,
+            // a folder cannot be opened as a file (access denied): it is there and it is not a file
+            Err(_) => {
+                return Err(match std::fs::symlink_metadata(source) {
+                    Ok(meta) if meta.file_type().is_symlink() => "attachment_is_link",
+                    Ok(meta) if meta.is_dir() => "attachment_not_file",
+                    _ => "attachment_unreadable",
+                })
+            }
+        };
+        let info = info_of(&first).ok_or("attachment_unreadable")?;
+        let (file, info) = if info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            if is_link(source) {
+                return Err("attachment_is_link");
+            }
+            let again = OpenOptions::new().read(true).share_mode(share).open(source).map_err(|_| "attachment_unreadable")?;
+            let again_info = info_of(&again).ok_or("attachment_unreadable")?;
+            if identity(&again_info) != identity(&info) {
+                return Err("attachment_unreadable");
+            }
+            (again, again_info)
+        } else {
+            (first, info)
+        };
+        moment("source_open");
+        // SAFETY: the handle is open for as long as `file` lives.
+        let kind = unsafe { GetFileType(file.as_raw_handle()) };
+        if info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0 || kind != FILE_TYPE_DISK {
+            return Err("attachment_not_file");
+        }
+        let size = (u64::from(info.nFileSizeHigh) << 32) | u64::from(info.nFileSizeLow);
+        if size > MAX_BYTES {
+            return Err("attachment_too_big");
+        }
+        moment("source_checked");
+        let mut bytes = Vec::new();
+        file.take(MAX_BYTES + 1).read_to_end(&mut bytes).map_err(|_| "attachment_unreadable")?;
+        if bytes.len() as u64 > MAX_BYTES {
+            return Err("attachment_too_big");
+        }
+        Ok(bytes)
+    }
+
+    /// The `allegati` folder, held: opened as itself, checked on the handle, and kept open (no delete or
+    /// rename share) until this value is dropped.
+    struct Folder {
+        path: PathBuf,
+        _held: File,
+    }
+
+    fn hold(path: &Path) -> std::io::Result<File> {
+        OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)
+    }
+
+    /// `create`: the folder is made when it is not there (a copy); a take-back leaves it alone.
+    fn open_folder(user_dir: &Path, create: bool) -> Result<Folder, &'static str> {
+        // the person's folder is taken as it is, like on Unix; it has to be a folder
+        if !std::fs::metadata(user_dir).is_ok_and(|meta| meta.is_dir()) {
+            return Err("attachments_folder_unsafe");
+        }
+        let path = user_dir.join(FOLDER);
+        let held = match hold(&path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && create => {
+                match std::fs::create_dir(&path) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(_) => return Err("attachments_folder_unsafe"),
+                }
+                hold(&path).map_err(|_| "attachments_folder_unsafe")?
+            }
+            Err(_) => return Err("attachments_folder_unsafe"),
+        };
+        let info = info_of(&held).ok_or("attachments_folder_unsafe")?;
+        if info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY == 0 || info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err("attachments_folder_unsafe");
+        }
+        Ok(Folder { path, _held: held })
+    }
+
+    /// Our files already there: how many and how big. Links and anything not ours are not counted.
+    fn folder_load(folder: &Folder) -> Result<(usize, u64), &'static str> {
+        let dir = std::fs::read_dir(&folder.path).map_err(|_| "attachment_save_failed")?;
+        let (mut files, mut bytes) = (0usize, 0u64);
+        for entry in dir {
+            let entry = entry.map_err(|_| "attachment_save_failed")?;
+            if !entry.file_name().to_string_lossy().starts_with("cv-") {
+                continue;
+            }
+            let Ok(meta) = std::fs::symlink_metadata(entry.path()) else { continue };
+            if meta.is_file() && meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0 {
+                files += 1;
+                bytes += meta.len();
+            }
+        }
+        Ok((files, bytes))
+    }
+
+    fn part_name(seconds: u64) -> String {
+        let n = PART_COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!(".cv-{}-{}-{n}.part", std::process::id(), seconds)
+    }
+
+    /// Moves `from` to `to` and never over a file: `Ok(false)` when the name is taken.
+    fn move_no_replace(from: &Path, to: &Path) -> Result<bool, &'static str> {
+        let wide = |path: &Path| path.as_os_str().encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>();
+        let (from, to) = (wide(from), wide(to));
+        // SAFETY: both are NUL-terminated and live for the call; no MOVEFILE_REPLACE_EXISTING.
+        if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), MOVEFILE_WRITE_THROUGH) } != 0 {
+            return Ok(true);
+        }
+        match std::io::Error::last_os_error().raw_os_error().map(|code| code as u32) {
+            Some(ERROR_ALREADY_EXISTS | ERROR_FILE_EXISTS) => Ok(false),
+            _ => Err("attachment_save_failed"),
+        }
+    }
+
+    /// Copies the person's file into `<user_dir>\allegati`. `now`: seconds on the wall clock (the name).
+    pub(crate) fn store(
+        user_dir: &Path,
+        source: &Path,
+        now: u64,
+        moment: &mut dyn FnMut(Moment),
+    ) -> Result<Saved, &'static str> {
+        let (original, extension) = name_and_extension(source);
+        // The extension is looked at before the file is read: a type that is not offered costs nothing.
+        if !ALLOWED_EXTENSIONS.contains(&extension.as_str()) {
+            return Err("attachment_type");
+        }
+        let bytes = read_source(source, moment)?;
+        let decided = classify(&extension, &bytes)?;
+        let folder = open_folder(user_dir, true)?;
+        moment("folder_open");
+        let (files, used) = folder_load(&folder)?;
+        if files >= MAX_FILES || used + bytes.len() as u64 > MAX_FOLDER_BYTES {
+            return Err("attachments_folder_full");
+        }
+        let part = folder.path.join(part_name(now));
+        let result = (|| -> Result<String, &'static str> {
+            {
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .share_mode(FILE_SHARE_READ)
+                    .open(&part)
+                    .map_err(|_| "attachment_save_failed")?;
+                file.write_all(&bytes).map_err(|_| "attachment_save_failed")?;
+                file.sync_all().map_err(|_| "attachment_save_failed")?;
+            }
+            let base = format!("cv-{}", stamp(now));
+            for n in 1..=MAX_SAME_SECOND {
+                let name = if n == 1 { format!("{base}.{decided}") } else { format!("{base}-{n}.{decided}") };
+                // The move without replace is the whole of «never overwrite»: a name taken is skipped.
+                if move_no_replace(&part, &folder.path.join(&name))? {
+                    return Ok(name);
+                }
+            }
+            Err("attachments_folder_full")
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&part);
+        }
+        Ok(Saved { file: result?, size: bytes.len() as u64, display: display_name(&original) })
+    }
+
+    /// Takes back a copy this run made (the team did not see it): only that name, inside the folder; a
+    /// link there is removed as a link.
+    pub(crate) fn remove(user_dir: &Path, file: &str) {
+        if !file.starts_with("cv-") || !file.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.')) {
+            return;
+        }
+        if let Ok(folder) = open_folder(user_dir, false) {
+            let _ = std::fs::remove_file(folder.path.join(file));
+        }
+    }
+}
+
+#[cfg(windows)]
+pub(crate) use windows::{remove, store};
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 pub(crate) fn store(_user_dir: &Path, _source: &Path, _now: u64, _moment: &mut dyn FnMut(&'static str)) -> Result<Saved, &'static str> {
     Err("attach_platform")
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 pub(crate) fn remove(_user_dir: &Path, _file: &str) {}
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 use std::path::Path;
 
 #[cfg(test)]
 mod tests {
-    #![cfg(any(target_os = "macos", target_os = "linux"))]
     use super::*;
     use std::fs;
+    #[cfg(unix)]
     use std::os::unix::fs::{symlink, PermissionsExt};
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -362,7 +659,10 @@ mod tests {
                 SEQUENCE.fetch_add(1, Ordering::Relaxed)
             ));
             fs::create_dir_all(&path).unwrap();
-            Scratch(fs::canonicalize(path).unwrap())
+            // macOS keeps temp under a link (/var): the resolved name. Windows would give a \\?\ name, which cmd's mklink refuses.
+            #[cfg(unix)]
+            let path = fs::canonicalize(path).unwrap();
+            Scratch(path)
         }
         fn user(&self) -> PathBuf {
             let user = self.0.join("user");
@@ -465,17 +765,21 @@ mod tests {
         let path = s.user().join(FOLDER).join(&saved.file);
         assert_eq!(fs::read(&path).unwrap(), pdf());
         // the container's user must read it
+        #[cfg(unix)]
         assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o644);
         assert!(!saved.file.contains("Mario"));
     }
 
     /// TZ is the whole process's: one test at a time moves it, and puts it back.
+    #[cfg(unix)]
     static ZONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    #[cfg(unix)]
     extern "C" {
         fn tzset();
     }
 
+    #[cfg(unix)]
     fn in_zone<T>(zone: &str, then: impl FnOnce() -> T) -> T {
         let _only = ZONE.lock().unwrap_or_else(|e| e.into_inner());
         let before = std::env::var_os("TZ");
@@ -491,6 +795,7 @@ mod tests {
         out
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_name_reads_the_clock_of_this_computer_summer_time_included() {
         // POSIX zone rules, so no timezone database is needed on the machine that runs the test
@@ -512,6 +817,7 @@ mod tests {
         in_zone("UTC0", || assert_eq!(local_wall_clock(october), october));
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_copy_is_named_with_the_local_date_and_time() {
         let s = Scratch::new();
@@ -527,6 +833,7 @@ mod tests {
         assert_eq!(stamp(1_792_000_000), "20261014-174640");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_source_that_is_a_link_is_refused_and_nothing_is_read() {
         let s = Scratch::new();
@@ -572,6 +879,7 @@ mod tests {
         assert!(stored(&s).is_empty());
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_file_read_is_the_one_opened_even_if_the_path_is_swapped_after() {
         let s = Scratch::new();
@@ -654,6 +962,7 @@ mod tests {
         assert_eq!(display_name("\u{202e}\n"), "");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_link_in_place_of_the_folder_is_refused_and_nothing_goes_through_it() {
         let s = Scratch::new();
@@ -673,6 +982,7 @@ mod tests {
         assert_eq!(run(&s, &source, 1).unwrap_err(), "attachments_folder_unsafe");
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_folder_swapped_for_a_link_after_it_was_opened_changes_nothing() {
         let s = Scratch::new();
@@ -767,6 +1077,117 @@ mod tests {
         remove(&s.user(), "theirs.pdf");
         remove(&s.user(), "../user/allegati/theirs.pdf");
         assert!(theirs.exists());
+        remove(&s.user(), &saved.file);
+        assert!(!s.user().join(FOLDER).join(&saved.file).exists());
+    }
+
+    #[test]
+    fn the_civil_seconds_are_the_inverse_of_the_stamp() {
+        assert_eq!(days_from_civil(1970, 1, 1), 0);
+        assert_eq!(days_from_civil(2000, 2, 29), 11_016);
+        assert_eq!(civil_seconds(2026, 10, 14, 17, 46, 40), 1_792_000_000);
+        for seconds in [0u64, 951_782_400 + 3_661, 1_792_000_000, 1_804_000_123, 4_102_444_799] {
+            let text = stamp(seconds);
+            let n = |from: usize, to: usize| text[from..to].parse::<i64>().unwrap();
+            let back = civil_seconds(n(0, 4), n(4, 6), n(6, 8), n(9, 11), n(11, 13), n(13, 15));
+            assert_eq!(back as u64, seconds, "{text}");
+        }
+    }
+
+    /// Windows: a junction needs no privilege (a symbolic link does), so it is the link of these tests.
+    #[cfg(windows)]
+    fn junction(link: &Path, target: &Path) {
+        let done = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .unwrap();
+        assert!(done.status.success(), "mklink /J failed");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_name_reads_the_clock_of_this_computer_on_windows() {
+        let october = 1_792_000_000u64;
+        for moment in [october, october + 90 * 86_400] {
+            let local = local_wall_clock(moment);
+            let offset = local as i64 - moment as i64;
+            // a real zone: a whole number of quarter hours, within a day
+            assert!(offset.abs() <= 14 * 3_600 && offset % 900 == 0, "offset {offset}");
+        }
+        assert_eq!(stamp(local_wall_clock(october)).len(), 15);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_source_that_is_a_junction_or_a_symbolic_link_is_refused_and_nothing_is_read() {
+        let s = Scratch::new();
+        let real = s.0.join("realdir");
+        fs::create_dir_all(&real).unwrap();
+        let alias = s.0.join("alias.pdf");
+        junction(&alias, &real);
+        assert_eq!(run(&s, &alias, 1).unwrap_err(), "attachment_is_link");
+        // a file symbolic link needs a privilege the person's account may not have: said, not hidden
+        let file = s.put("real.pdf", &pdf());
+        let link = s.0.join("link.pdf");
+        match std::os::windows::fs::symlink_file(&file, &link) {
+            Ok(()) => assert_eq!(run(&s, &link, 1).unwrap_err(), "attachment_is_link"),
+            Err(error) => eprintln!("symbolic link not made here ({error}): that half of the test did not run"),
+        }
+        assert!(stored(&s).is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_junction_in_place_of_the_folder_is_refused_and_nothing_goes_through_it() {
+        let s = Scratch::new();
+        let outside = s.0.join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        junction(&s.user().join(FOLDER), &outside);
+        let source = s.put("cv.pdf", &pdf());
+        assert_eq!(run(&s, &source, 1).unwrap_err(), "attachments_folder_unsafe");
+        assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+        // and a take-back does not reach through it either
+        fs::write(outside.join("cv-x.pdf"), b"x").unwrap();
+        remove(&s.user(), "cv-x.pdf");
+        assert!(outside.join("cv-x.pdf").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_folder_cannot_be_moved_away_or_replaced_while_the_copy_goes_on() {
+        let s = Scratch::new();
+        let user = s.user();
+        fs::create_dir_all(user.join(FOLDER)).unwrap();
+        let outside = s.0.join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        let source = s.put("cv.pdf", &pdf());
+        let mut refused = None;
+        let (from, to) = (user.join(FOLDER), user.join("allegati-moved"));
+        let mut try_to_swap = |moment: &'static str| {
+            if moment == "folder_open" {
+                refused = Some(fs::rename(&from, &to).is_err());
+            }
+        };
+        let saved = store(&user, &source, 7, &mut try_to_swap).unwrap();
+        assert_eq!(refused, Some(true), "the held folder was moved");
+        assert!(user.join(FOLDER).join(&saved.file).is_file());
+        assert_eq!(fs::read_dir(&outside).unwrap().count(), 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_take_back_names_a_file_of_ours_only_and_never_a_stream_or_a_path() {
+        let s = Scratch::new();
+        let source = s.put("cv.pdf", &pdf());
+        let saved = run(&s, &source, 1).unwrap();
+        let theirs = s.user().join(FOLDER).join("theirs.pdf");
+        fs::write(&theirs, b"x").unwrap();
+        remove(&s.user(), "theirs.pdf");
+        remove(&s.user(), "..\\allegati\\theirs.pdf");
+        remove(&s.user(), &format!("{}:stream", saved.file));
+        assert!(theirs.exists() && s.user().join(FOLDER).join(&saved.file).exists());
         remove(&s.user(), &saved.file);
         assert!(!s.user().join(FOLDER).join(&saved.file).exists());
     }
