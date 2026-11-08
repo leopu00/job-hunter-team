@@ -175,7 +175,7 @@ try {
   # What Get-RuntimeFiles calls before it writes anything and when the Podman setup ends: the installer's own functions,
   # taken from the real file. The preflight asks for winget when no Podman is installed; this runner has neither, and
   # the enabler is replaced below by a fixture, so a stand-in winget lets it pass: what winget does is not on trial here.
-  foreach ($installerFunctionName in @('Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem')) {
+  foreach ($installerFunctionName in @('Write-JhtProblem', 'Remove-JhtCreatedEmptyDirs', 'Show-PodmanSetupProblem', 'Test-JhtDownloadedRuntimeScripts')) {
     $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $installerFunctionName }, $true)
     if (-not $fn) { throw "standalone $installerFunctionName function missing" }
     . ([scriptblock]::Create($fn.Extent.Text))
@@ -194,6 +194,7 @@ try {
       '*/scripts/windows-private-acl.ps1' { Join-Path $PSScriptRoot 'windows-private-acl.ps1'; break }
       '*/scripts/enable-podman-windows-runtime.ps1' { Join-Path $PSScriptRoot 'enable-podman-windows-runtime.ps1'; break }
       '*/scripts/configure-podman-windows-network.ps1' { Join-Path $PSScriptRoot 'configure-podman-windows-network.ps1'; break }
+      '*/scripts/podman-machine-bridge.ps1' { Join-Path $PSScriptRoot 'podman-machine-bridge.ps1'; break }
       '*/scripts/wsl-interop-connect-proxy.py' { Join-Path $PSScriptRoot 'wsl-interop-connect-proxy.py'; break }
       default { throw "unexpected clean-start URL: $Url" }
     }
@@ -207,6 +208,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -Destination (Join-Path $RuntimeDir 'docker-compose.podman.yml') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'jht-wrapper.ps1') -Destination (Join-Path $BinDir 'jht.ps1') -Force
     Copy-Item -LiteralPath (Join-Path $scripts 'windows-private-acl.ps1') -Destination (Join-Path $BinDir 'windows-private-acl.ps1') -Force
+    Copy-Item -LiteralPath (Join-Path $scripts 'podman-machine-bridge.ps1') -Destination (Join-Path $BinDir 'podman-machine-bridge.ps1') -Force
     New-Item -ItemType Directory -Path $RuntimeShimDir -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'container-runtime'), "podman`n", [Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText((Join-Path $RuntimeDir 'podman-machine'), "jht-podman`n", [Text.UTF8Encoding]::new($false))
@@ -221,6 +223,7 @@ try {
       'podman-machine' = (Join-Path $RuntimeDir 'podman-machine')
       'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
       'windows-private-acl.ps1' = (Join-Path $BinDir 'windows-private-acl.ps1')
+      'podman-machine-bridge.ps1' = (Join-Path $BinDir 'podman-machine-bridge.ps1')
     }
     $manifestText = "version=1`n"
     foreach ($name in $entries.Keys) {
@@ -240,8 +243,8 @@ try {
   $RawBaseOverride = 'https://clean-start.invalid/revision'
   $Branch = 'clean-start-fixture'
   $TestChannel = $false
-  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:04c8e69a436eed02dc2b42b8631d3072f5e690a31e660ff05c9f8f700b0a3aca'
-  $RuntimeImageDigest = 'sha256:04c8e69a436eed02dc2b42b8631d3072f5e690a31e660ff05c9f8f700b0a3aca'
+  $RuntimeImage = 'ghcr.io/leopu00/jht@sha256:dcb4420e251d4177dd9c55cef23899e606fc3b13a290f14a0469510543d34c9b'
+  $RuntimeImageDigest = 'sha256:dcb4420e251d4177dd9c55cef23899e606fc3b13a290f14a0469510543d34c9b'
   $DryRun = $false
   $env:USERPROFILE = $cleanProfile
   $env:JHT_USER_DIR_HOST = $cleanUserData
@@ -405,6 +408,7 @@ exit /b 0
     'jht-container.service' = (Join-Path $RuntimeDir 'jht-container.service')
     'jht-wrapper.ps1' = $installedWrapper
     'windows-private-acl.ps1' = $installedHelper
+    'podman-machine-bridge.ps1' = (Join-Path $BinDir 'podman-machine-bridge.ps1')
     'docker.exe' = (Join-Path $RuntimeShimDir 'docker.exe')
   }
   function Assert-AppManifest {
@@ -441,6 +445,7 @@ exit /b 0
   $ComposeFile = $appManifestFiles['docker-compose.yml']
   $WrapperPath = $installedWrapper
   $AclHelperPath = $installedHelper
+  $PodmanMachineBridgePath = $appManifestFiles['podman-machine-bridge.ps1']
   $PodmanComposeFile = $appManifestFiles['docker-compose.podman.yml']
   $DockerShim = $appManifestFiles['docker.exe']
   $RuntimeSelectionFile = $appManifestFiles['container-runtime']

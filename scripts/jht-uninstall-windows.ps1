@@ -332,7 +332,7 @@ function Get-JhtFileSha256 {
 function Get-JhtOwnCommands {
   param([Parameter(Mandatory)][string]$Bin, [Parameter(Mandatory)][hashtable]$Manifest)
   $own = @()
-  foreach ($pair in @(@('jht.ps1', 'jht-wrapper.ps1'), @('windows-private-acl.ps1', 'windows-private-acl.ps1'), @('docker.exe', 'docker.exe'))) {
+  foreach ($pair in @(@('jht.ps1', 'jht-wrapper.ps1'), @('windows-private-acl.ps1', 'windows-private-acl.ps1'), @('podman-machine-bridge.ps1', 'podman-machine-bridge.ps1'), @('docker.exe', 'docker.exe'))) {
     $path = [IO.Path]::Combine($Bin, $pair[0])
     $expected = $Manifest[$pair[1]]
     if ($expected -and [IO.File]::Exists($path) -and (Get-JhtFileSha256 $path) -ceq $expected) { $own += $path }

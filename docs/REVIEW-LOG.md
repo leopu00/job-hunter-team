@@ -418,6 +418,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/checkpoint/source-guards-20261107.md](./internal/checkpoint/source-guards-20261107.md) | Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa | 2026-11-07 | 2026-11-07 | 🟢 |
 | [docs/internal/checkpoint/t200-and-residuals-20261107.md](./internal/checkpoint/t200-and-residuals-20261107.md) | Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa | 2026-11-07 | 2026-11-07 | 🟢 |
 | [docs/internal/checkpoint/t204-rust-readers-20261107.md](./internal/checkpoint/t204-rust-readers-20261107.md) | Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa | 2026-11-07 | 2026-11-07 | 🟢 |
+| [docs/internal/checkpoint/t205-windows-bridge-20261107.md](./internal/checkpoint/t205-windows-bridge-20261107.md) | Ponte Windows con deadline e ownership, limiti e migrazione Rust T214 | 2026-11-07 | — | 🟢 |
 
 
 ## 🔒 docs/security

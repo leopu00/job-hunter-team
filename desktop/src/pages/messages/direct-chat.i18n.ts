@@ -64,6 +64,7 @@ export interface DirectChatText {
   working: string; // {name}
   /** Under a message of the person's that waited too long for its agent and was never typed. */
   queueExpired: string;
+  queueExpiredHeld: string;
   queueLate: string;
   /** What a system line with a closed code says, by code (the backend's English text is the fallback). */
   codes: Record<string, string>;
@@ -170,6 +171,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "L’agente ha risposto dopo questo messaggio.",
     working: "{name} sta lavorando…",
     queueExpired: "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo.",
+    queueExpiredHeld: "Non risulta inviato: l'agente è rimasto occupato a lungo, ma il testo può essere ancora nella sua casella e partire quando si libera. Guarda il terminale prima di riscriverlo.",
     queueLate: "Inviato in ritardo: il testo era rimasto nella casella dell'agente e ha avuto il suo Invio dopo la scadenza. Guarda il terminale prima di riscrivere.",
     codes: { mail_not_taken: "L'agente non ha ancora preso il messaggio.", message_too_long: "Un messaggio dell'agente era troppo lungo per essere mostrato qui." },
     keysHint: "Invio manda · Ctrl+Invio va a capo",
@@ -246,6 +248,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "The agent answered after this message.",
     working: "{name} is working…",
     queueExpired: "Not sent: the agent stayed busy for too long. Write it again.",
+    queueExpiredHeld: "Not shown as sent: the agent stayed busy for a long time, but the text may still be in its input box and go when it is free. Look at its terminal before writing it again.",
     queueLate: "Sent late: the text had stayed in the agent's input box and got its Enter after the time ran out. Look at its terminal before writing again.",
     codes: { mail_not_taken: "The agent has not taken your message yet.", message_too_long: "A message from the agent was too long to be shown here." },
     keysHint: "Enter sends · Ctrl+Enter starts a new line",
@@ -322,6 +325,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "Der Agent hat nach dieser Nachricht geantwortet.",
     working: "{name} arbeitet…",
     queueExpired: "Nicht gesendet: der Agent war zu lange beschäftigt. Schreib es noch einmal.",
+    queueExpiredHeld: "Nicht als gesendet bestätigt: Der Agent war lange beschäftigt, aber der Text kann noch in seinem Eingabefeld stehen und abgehen, sobald er frei ist. Schau in sein Terminal, bevor du es neu schreibst.",
     queueLate: "Verspätet gesendet: Der Text war im Eingabefeld des Agenten geblieben und bekam seinen Enter erst nach Ablauf der Zeit. Schau in sein Terminal, bevor du erneut schreibst.",
     codes: { mail_not_taken: "Der Agent hat deine Nachricht noch nicht abgeholt.", message_too_long: "Eine Nachricht des Agenten war zu lang, um hier angezeigt zu werden." },
     keysHint: "Enter sendet · Strg+Enter für eine neue Zeile",
@@ -398,6 +402,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "L’agent a répondu après ce message.",
     working: "{name} travaille…",
     queueExpired: "Non envoyé : l'agent est resté occupé trop longtemps. Réécris-le.",
+    queueExpiredHeld: "Pas confirmé comme envoyé : l'agent est resté longtemps occupé, mais le texte peut encore être dans sa zone de saisie et partir quand il sera libre. Regarde son terminal avant de le réécrire.",
     queueLate: "Envoyé en retard : le texte était resté dans la zone de saisie de l'agent et a reçu son Entrée après l'expiration. Regarde son terminal avant de réécrire.",
     codes: { mail_not_taken: "L'agent n'a pas encore pris ton message.", message_too_long: "Un message de l'agent était trop long pour être affiché ici." },
     keysHint: "Entrée envoie · Ctrl+Entrée pour aller à la ligne",
@@ -474,6 +479,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "El agente respondió después de este mensaje.",
     working: "{name} está trabajando…",
     queueExpired: "No enviado: el agente estuvo ocupado demasiado tiempo. Vuelve a escribirlo.",
+    queueExpiredHeld: "No consta como enviado: el agente estuvo ocupado mucho tiempo, pero el texto puede seguir en su cuadro de entrada y salir cuando quede libre. Mira su terminal antes de volver a escribirlo.",
     queueLate: "Enviado con retraso: el texto se quedó en el cuadro de entrada del agente y recibió su Intro tras agotarse el tiempo. Mira su terminal antes de volver a escribir.",
     codes: { mail_not_taken: "El agente aún no ha tomado tu mensaje.", message_too_long: "Un mensaje del agente era demasiado largo para mostrarse aquí." },
     keysHint: "Intro envía · Ctrl+Intro salta de línea",
@@ -550,6 +556,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "O agente respondeu depois desta mensagem.",
     working: "{name} está a trabalhar…",
     queueExpired: "Não enviado: o agente esteve ocupado demasiado tempo. Volta a escrevê-lo.",
+    queueExpiredHeld: "Não consta como enviado: o agente esteve ocupado muito tempo, mas o texto pode ainda estar na sua caixa de escrita e seguir quando ficar livre. Vê o seu terminal antes de o voltar a escrever.",
     queueLate: "Enviado com atraso: o texto ficou na caixa de escrita do agente e recebeu o seu Enter depois de acabar o tempo. Vê o seu terminal antes de voltar a escrever.",
     codes: { mail_not_taken: "O agente ainda não apanhou a tua mensagem.", message_too_long: "Uma mensagem do agente era demasiado longa para ser mostrada aqui." },
     keysHint: "Enter envia · Ctrl+Enter muda de linha",
@@ -626,6 +633,7 @@ export const DIRECT_CHAT_TEXT: Record<Locale, DirectChatText> = {
     answeredHelp: "Az ügynök válaszolt az üzenet után.",
     working: "{name} dolgozik…",
     queueExpired: "Nem lett elküldve: az ügynök túl sokáig volt elfoglalt. Írd meg újra.",
+    queueExpiredHeld: "Nem látszik elküldöttnek: az ügynök sokáig elfoglalt volt, de a szöveg még a beviteli mezőjében lehet, és elmegy, ha felszabadul. Nézd meg a terminálját, mielőtt újra megírnád.",
     queueLate: "Késve elküldve: a szöveg az ügynök beviteli mezőjében maradt, és az idő lejárta után kapta meg az Entert. Nézd meg a terminálját, mielőtt újra írsz.",
     codes: { mail_not_taken: "Az ügynök még nem vette át az üzenetedet.", message_too_long: "Az ügynök egyik üzenete túl hosszú volt ahhoz, hogy itt megjelenjen." },
     keysHint: "Enter: küldés · Ctrl+Enter: új sor",

@@ -345,7 +345,7 @@ enum Place {
     Runtime,
     Bin,
 }
-const MANIFEST_FILES: [(&str, Place, &str); 8] = [
+const MANIFEST_FILES: [(&str, Place, &str); 9] = [
     ("docker-compose.yml", Place::Runtime, "docker-compose.yml"),
     ("docker-compose.podman.yml", Place::Runtime, "docker-compose.podman.yml"),
     ("container-runtime", Place::Runtime, "container-runtime"),
@@ -353,6 +353,7 @@ const MANIFEST_FILES: [(&str, Place, &str); 8] = [
     ("jht-container.service", Place::Runtime, "jht-container.service"),
     ("jht-wrapper.ps1", Place::Bin, "jht.ps1"),
     ("windows-private-acl.ps1", Place::Bin, "windows-private-acl.ps1"),
+    ("podman-machine-bridge.ps1", Place::Bin, "podman-machine-bridge.ps1"),
     ("docker.exe", Place::Runtime, "bin/docker.exe"),
 ];
 /// Whether a node named by a `BundleFailure` sits in the folder the wrapper shares with other programs (`.local\bin`): that
@@ -1387,7 +1388,7 @@ mod tests {
 
     #[test]
     fn only_the_folder_shared_with_other_programs_and_its_files_are_told_apart_from_the_runtime_directory() {
-        for shared in ["bin-dir", "jht-wrapper.ps1", "windows-private-acl.ps1"] {
+        for shared in ["bin-dir", "jht-wrapper.ps1", "windows-private-acl.ps1", "podman-machine-bridge.ps1"] {
             assert!(node_is_in_shared_bin_dir(shared), "{shared}");
         }
         for ours in ["runtime-dir", "manifest", "docker-compose.yml", "docker-compose.podman.yml", "container-runtime", "podman-machine", "jht-container.service", "docker.exe", "runtime-image", "bundle", "unknown"] {
@@ -1457,6 +1458,7 @@ mod tests {
             ("jht-container.service", runtime.join("jht-container.service"), "[Unit]\n"),
             ("jht-wrapper.ps1", wrapper.clone(), "$JHT_HOST_RUNTIME_PROTOCOL = 1\n"),
             ("windows-private-acl.ps1", bin.join("windows-private-acl.ps1"), "param()\n"),
+            ("podman-machine-bridge.ps1", bin.join("podman-machine-bridge.ps1"), "param()\n# bounded Podman\n"),
             ("docker.exe", runtime.join("bin").join("docker.exe"), "MZ shim"),
         ];
         let digest = |path: &Path| format!("{:x}", Sha256::digest(fs::read(path).unwrap()));

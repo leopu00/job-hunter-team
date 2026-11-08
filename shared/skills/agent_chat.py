@@ -1198,8 +1198,8 @@ def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
     """``(waiting, settled)`` for the queued turns of the last day, oldest first.
 
     ``waiting``: fresh and not delivered, the turns a flush may type.  ``settled``: what became of the others,
-    ``{"id": message_id, "how": taken|pending|late|unconfirmed|expired}``; a turn past QUEUE_TTL_S and never
-    delivered is ``expired``, whatever the agent shows now.
+    ``{"id": message_id, "how": taken|pending|late|unconfirmed|expired|expired_held}``; past QUEUE_TTL_S, an
+    undelivered typed turn is ``expired_held``; a never-typed one is ``expired``, whatever the agent shows now.
     """
     delivered = chat_path(agent).parent / DELIVERED_FILE
     now = time.time()
@@ -1222,7 +1222,7 @@ def _queue_state(agent: str) -> tuple[list[dict], list[dict]]:
                 settled.append({"id": str(row.get("message_id")), "how": how})
         elif age > QUEUE_TTL_S:
             if age <= QUEUE_REPORT_S:
-                settled.append({"id": str(row.get("message_id")), "how": "expired"})
+                settled.append({"id": str(row.get("message_id")), "how": "expired_held" if row.get("typed") else "expired"})
         else:
             waiting.append(row)
     return waiting, settled[-64:]
@@ -1298,11 +1298,11 @@ def _typed_open(agent: str) -> bool:
 def _retire_typed(agent: str, session: str) -> None:
     """A typed turn that outlived QUEUE_TTL_S: its text may still wait in the composer, never proved taken.
 
-    The page tells the person «not sent, write it again» at that point, and the old text, still «ours, of any
-    age» for the transport, would be submitted by the next delivery: a double. So the one Enter it was waiting for
-    is given now, if the agent is free and the transport proves the text ours (the same ``--flush-ours``): the turn
-    is settled ``late`` («sent late»). Otherwise it is left as it was (expired), and tried again for
-    TYPED_LATE_WINDOW_S only: an agent that stays busy for longer is not given a message the page said was lost.
+    The page warns that the old text may still be in the composer and asks the person to check its terminal.
+    The one Enter it was waiting for is given now only if the agent is free and the transport proves the text
+    ours (the same ``--flush-ours``): the turn is settled ``late`` («sent late»). Otherwise it is left as it was
+    (``expired_held``), and tried again for TYPED_LATE_WINDOW_S only: an agent that stays busy for longer is not
+    given an old turn automatically. Its text may still be in the composer, so the page never says it was lost.
     """
     now = time.time()
     stale = [held for held in _queue_lines(agent)

@@ -1914,6 +1914,11 @@
       "path": "docs/internal/checkpoint/t204-rust-readers-20261107.md",
       "description": "Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa",
       "last_review": "2026-11-07"
+    },
+    {
+      "path": "docs/internal/checkpoint/t205-windows-bridge-20261107.md",
+      "description": "Ponte Windows con deadline e ownership, limiti e migrazione Rust T214",
+      "last_review": "2026-11-07"
     }
   ]
 }

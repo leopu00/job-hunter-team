@@ -19,7 +19,7 @@ services:
     # Utile per testare immagini di branch dev prima del merge a master.
     # Il default release e' content-addressed: reinstallare la stessa versione
     # non puo' risolvere byte diversi se il tag semver viene spostato.
-    image: &jht-image ${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:04c8e69a436eed02dc2b42b8631d3072f5e690a31e660ff05c9f8f700b0a3aca}
+    image: &jht-image ${JHT_IMAGE:-ghcr.io/leopu00/jht@sha256:dcb4420e251d4177dd9c55cef23899e606fc3b13a290f14a0469510543d34c9b}
     container_name: jht
     # Override del CMD Dockerfile (--help): entry point `pid1` che
     # in base a JHT_HOST_TYPE dispatch tra:

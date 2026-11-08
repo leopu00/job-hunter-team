@@ -16,6 +16,7 @@ FILES = [
     "install.ps1",
     "enable-podman-windows-runtime.ps1",
     "configure-podman-windows-network.ps1",
+    "podman-machine-bridge.ps1",
     "jht-uninstall-windows.ps1",
 ]
 

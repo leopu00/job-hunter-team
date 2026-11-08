@@ -29,6 +29,7 @@ SETUP_FILES = [
     "jht-wrapper.ps1",
     "enable-podman-windows-runtime.ps1",
     "configure-podman-windows-network.ps1",
+    "podman-machine-bridge.ps1",
     "podman-windows-probe.ps1",
     "windows-private-acl.ps1",
     "jht-uninstall-windows.ps1",
