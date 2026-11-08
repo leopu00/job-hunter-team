@@ -116,16 +116,27 @@ def test_a_control_character_is_refused_before_native_process_start(tmp_path):
     assert calls(env) == []
 
 
-@pytest.mark.parametrize("extra,code", [([], 0), (["--json"], 2)])
-def test_real_powershell_wrapper_dispatches_before_any_engine_access(tmp_path, extra, code):
+@pytest.mark.parametrize("monitor_args,code", [(["--window"], 0), (["--window", "--json"], 2),
+                                             (["--window", "--help"], 2), (["-h", "--window"], 2)])
+def test_real_powershell_wrapper_dispatches_before_any_engine_access(tmp_path, monitor_args, code):
     _, env, _ = fixture(tmp_path)
     env["FAKE_TERMINAL_EXECUTE"] = "0"
     env["JHT_WRAPPER_PATH"] = str(tmp_path / "not-the-invoked-wrapper.ps1")
     done = subprocess.run([env["REAL_PWSH"], "-NoLogo", "-NoProfile", "-File", str(PS),
-                           "monitor", "--window", *extra], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=15)
+                           "monitor", *monitor_args], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=15)
     assert done.returncode == code, done.stdout + done.stderr
     assert not Path(env["FAKE_FORBIDDEN_LOG"]).exists()
     if code == 0:
         assert calls(env)[0]["argv"][-2:] == [str(PS), "monitor"]
     else:
         assert "monitor_window_invalid" in done.stdout and calls(env) == []
+
+
+def test_plain_powershell_monitor_help_keeps_the_existing_read_only_help_path(tmp_path):
+    _, env, _ = fixture(tmp_path)
+    env["FAKE_TERMINAL_EXECUTE"] = "0"
+    done = subprocess.run([env["REAL_PWSH"], "-NoLogo", "-NoProfile", "-File", str(PS), "monitor", "--help"],
+                          env=env, cwd=tmp_path, capture_output=True, text=True, timeout=15)
+    assert done.returncode == 0 and "jht" in done.stdout
+    assert calls(env) == []
+    assert all(json.loads(line)[0] == "info" for line in Path(env["FAKE_FORBIDDEN_LOG"]).read_text().splitlines())

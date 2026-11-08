@@ -3292,6 +3292,10 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # corretto anche con 1 solo arg di coda.
 [string[]]$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
+if ($Sub -ceq 'monitor' -and $Rest -ccontains '--window') {
+  exit (Open-JhtMonitorWindow -CommandPath $PSCommandPath -WindowArgs $Rest)
+}
+
 # Questo gate deve precedere tutti i rami host-side: nel solo default non vede
 # `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima
 # di accorgersi che l'utente ha chiesto soltanto aiuto.
@@ -3307,10 +3311,6 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
 }
 
 # ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
-if ($Sub -ceq 'monitor' -and $Rest -ccontains '--window') {
-  exit (Open-JhtMonitorWindow -CommandPath $PSCommandPath -WindowArgs $Rest)
-}
-
 # Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
 # `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
 # cioe' il primo comando di chi non ha ancora deciso se installare (P-07).

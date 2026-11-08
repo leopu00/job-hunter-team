@@ -5762,6 +5762,12 @@ if [ "$SUB" = "uninstall" ]; then
   if jht_uninstall "${@:2}"; then exit 0; else exit $?; fi
 fi
 
+if [ "$SUB" = monitor ]; then
+  for arg in "${@:2}"; do
+    if [ "$arg" = --window ]; then jht_monitor_window "$0" "${@:2}"; exit $?; fi
+  done
+fi
+
 # Il gate informativo precede TUTTI i rami, inclusi quelli host-side. Tenerlo
 # solo nel catch-all lascia `up --help`, `setup --help`, ecc. liberi di entrare
 # nei rispettivi path Docker prima che il wrapper legga `--help`.
@@ -5783,12 +5789,6 @@ if [ "$#" -gt 1 ] && [ "$SUB" != "game" ] && [ "$SUB" != "gui" ] && [ "$SUB" != 
 fi
 
 # ⚠️ ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
-if [ "$SUB" = monitor ]; then
-  for arg in "${@:2}"; do
-    if [ "$arg" = --window ]; then jht_monitor_window "$0" "${@:2}"; exit $?; fi
-  done
-fi
-
 # Il contrario — chiamare ensure_up in cima al catch-all — faceva si' che un
 # semplice `jht --help` scaricasse l'immagine (~300 MB) e creasse container e
 # volumi, cioe' il primo comando di chi non ha ancora deciso se installare

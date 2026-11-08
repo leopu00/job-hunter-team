@@ -65,7 +65,8 @@ def test_new_terminal_executes_only_monitor_and_keeps_the_path_literal(tmp_path,
     assert not Path(env["FAKE_FORBIDDEN_LOG"]).exists()
 
 
-@pytest.mark.parametrize("args", [["--window", "--json"], ["--once", "--window"], ["--window", "--window"]])
+@pytest.mark.parametrize("args", [["--window", "--json"], ["--once", "--window"], ["--window", "--window"],
+                                 ["--window", "--help"], ["-h", "--window"]])
 def test_real_wrapper_refuses_extra_options_before_engine_or_terminal(tmp_path, args):
     bin_dir, env = environment(tmp_path)
     terminal(bin_dir, "tmux")
@@ -75,6 +76,16 @@ def test_real_wrapper_refuses_extra_options_before_engine_or_terminal(tmp_path, 
     assert "monitor_window_invalid" in done.stderr
     assert calls(env) == []
     assert not Path(env["FAKE_FORBIDDEN_LOG"]).exists()
+
+
+def test_plain_monitor_help_still_opens_no_terminal_and_starts_nothing(tmp_path):
+    _, env = environment(tmp_path)
+    done = subprocess.run(["bash", str(SH), "monitor", "--help"], env=env, cwd=tmp_path,
+                          capture_output=True, text=True, timeout=10)
+    assert done.returncode == 0 and "jht" in done.stdout
+    assert calls(env) == []
+    observed = Path(env["FAKE_FORBIDDEN_LOG"])
+    assert all(json.loads(line)[0] == "info" for line in observed.read_text().splitlines())
 
 
 def test_real_wrapper_dispatches_its_own_path_not_a_wrapper_override(tmp_path):

@@ -72,8 +72,8 @@ def environment(root):
                 "JHT_TEST_CONTAINER_RUNTIME", "JHT_CONTAINER_RUNTIME"):
         env.pop(key, None)
     for name in ("docker", "podman", "docker.exe", "podman.exe"):
-        executable(bin_dir / name, f'#!{sys.executable}\nimport os\n'
-                   'with open(os.environ["FAKE_FORBIDDEN_LOG"], "a") as f: f.write("engine called\\n")\n'
+        executable(bin_dir / name, f'#!{sys.executable}\nimport json, os, sys\n'
+                   'with open(os.environ["FAKE_FORBIDDEN_LOG"], "a") as f: f.write(json.dumps(sys.argv[1:])+"\\n")\n'
                    'raise SystemExit(99)\n')
     env["FAKE_FORBIDDEN_LOG"] = str(root / "forbidden.log")
     terminal(bin_dir, "uname")  # Never discover/open the real Mac desktop in these tests.
