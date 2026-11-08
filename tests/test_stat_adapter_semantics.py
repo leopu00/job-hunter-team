@@ -19,8 +19,12 @@ class StatAdapterSemantics(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.bin = self.root / "bin"
         self.bin.mkdir()
+        self.home = self.root / "home"
+        self.home.mkdir(mode=0o700)
         (self.bin / "python3").symlink_to(sys.executable)
-        self.env = {"PATH": f"{self.bin}:/usr/bin:/bin", "LC_ALL": "C"}
+        self.env = {"PATH": f"{self.bin}:/usr/bin:/bin", "LC_ALL": "C",
+                    "HOME": str(self.home), "JHT_HOME": str(self.home / ".jht"),
+                    "PYTHONNOUSERSITE": "1"}
 
     def tearDown(self):
         self.temporary.cleanup()
@@ -85,7 +89,7 @@ class StatAdapterSemantics(unittest.TestCase):
     def test_native_linux_uid_modes_symlinks_and_mutations_match_lstat(self):
         fixture.write_macos_host_tools(self.bin)
         # No Python is available here: these probes must be served by native stat.
-        native_env = {"PATH": "/nonexistent", "LC_ALL": "C"}
+        native_env = {**self.env, "PATH": "/nonexistent"}
         for name in (" spaced file ", "-leading-dash", "line\nbreak"):
             path = self.root / name
             path.write_bytes(b"synthetic")
