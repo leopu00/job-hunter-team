@@ -22,7 +22,7 @@ export const HIDDEN_COMMANDS = new Set([
 
 /** [title, names] in the order they are shown. */
 export const HELP_GROUPS = [
-  ['Every day', ['status', 'agents', 'team', 'positions', 'doctor', 'logs', 'setup']],
+  ['Every day', ['status', 'agents', 'monitor', 'team', 'positions', 'doctor', 'logs', 'setup']],
   ['Your team', [
     'working-hours', 'cron', 'apply', 'ticket', 'feedback', 'directives', 'coordinator', 'profile',
     'artifact', 'notifications', 'standby', 'burn', 'existing-team', 'providers',

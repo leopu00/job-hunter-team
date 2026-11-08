@@ -19,8 +19,9 @@ function sandbox({ config = false, sessions = '' } = {}) {
   const bin = join(root, 'bin');
   mkdirSync(home, { recursive: true });
   mkdirSync(bin);
+  const paneRows = sessions.replace(/\\n/g, '\n').split('\n').filter(Boolean).map((name, i) => `${name}\t1\t${12345+i}\t0`).join('\n');
   const tool = (name, body) => { writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`); chmodSync(join(bin, name), 0o755); };
-  tool('tmux', `case "$*" in *list-sessions*) printf '${sessions}' ;; *) echo 'tmux 3.5' ;; esac`);
+  tool('tmux', `case "$*" in *list-panes*) printf '%s' '${paneRows}' ;; *list-sessions*) printf '${sessions}' ;; *) echo 'tmux 3.5' ;; esac`);
   tool('git', 'echo "git version 2.0"');
   tool('npm', 'echo 10.0.0');
   if (config) {

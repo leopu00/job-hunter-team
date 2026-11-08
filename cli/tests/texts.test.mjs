@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,7 +72,7 @@ test('every text a screen asks for exists, and every text of the catalog is used
 
 function jht(args, box, env = {}) {
   const result = spawnSync(process.execPath, [entry, ...args], {
-    env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: box.root, JHT_HOME: box.home, ...env },
+    env: { PATH: `${box.bin}:${dirname(process.execPath)}:/usr/bin:/bin`, HOME: box.root, JHT_HOME: box.home, ...env },
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000,
   });
   return { out: `${result.stdout}${result.stderr}`, status: result.status };
@@ -82,14 +82,18 @@ function sandbox() {
   const root = mkdtempSync(join(tmpdir(), 'jht-lang-box-'));
   const home = join(root, '.jht');
   mkdirSync(home, { recursive: true });
-  return { root, home };
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nexit 0\n');
+  chmodSync(join(bin, 'tmux'), 0o755);
+  return { root, home, bin };
 }
 
 test('the every-day screens come out in the language of the person, and in English where it has no texts yet', () => {
   const box = sandbox();
   const it = { JHT_LANG: 'it' };
   assert.match(jht(['status'], box, it).out, /Stato[\s\S]*Configurazione\s+non trovata[\s\S]*Configurala con: jht setup/);
-  assert.match(jht(['agents'], box, it).out, /Agenti[\s\S]*Agente\s+Sessione\s+Stato[\s\S]*spento/);
+  assert.match(jht(['agents'], box, it).out, /Agenti[\s\S]*Agente\s+Sessione\s+Stato[\s\S]*Nessun agente avviato/);
   assert.match(jht(['doctor'], box, it).out, /Controllo ·/);
   assert.match(jht(['help'], box, it).out, /Ogni giorno:[\s\S]*La tua squadra:[\s\S]*Aiuto su un comando/);
   // a language with no texts yet is English, not half of one
@@ -103,7 +107,7 @@ test('the every-day screens come out in the language of the person, and in Engli
 test('--json is the same in every language', () => {
   const box = sandbox();
   for (const command of [['status', '--json'], ['agents', '--json'], ['doctor', '--json']]) {
-    const normalize = (out) => out.replace(/"message": ".*"/g, '"message": "-"').replace(/"section": ".*"/g, '"section": "-"');
+    const normalize = (out) => out.replace(/"at": [0-9.]+/g, '"at": 0').replace(/"message": ".*"/g, '"message": "-"').replace(/"section": ".*"/g, '"section": "-"');
     assert.equal(normalize(jht(command, box, { JHT_LANG: 'it' }).out), normalize(jht(command, box, { JHT_LANG: 'en' }).out), command.join(' '));
   }
 });

@@ -23,6 +23,7 @@ import { registerProvidersCommand } from './commands/providers.js';
 import { registerStatsCommand } from './commands/stats.js';
 import { registerPluginsCommand } from './commands/plugins.js';
 import { registerAgentsCommand } from './commands/agents.js';
+import { registerMonitorCommand } from './commands/monitor.js';
 import { registerNotificationsCommand } from './commands/notifications.js';
 import { registerSessionsCommand } from './commands/sessions.js';
 import { registerTemplatesCommand } from './commands/templates.js';
@@ -112,6 +113,7 @@ export function buildProgram() {
   registerStatsCommand(program);
   registerPluginsCommand(program);
   registerAgentsCommand(program);
+  registerMonitorCommand(program);
   registerNotificationsCommand(program);
   registerSessionsCommand(program);
   registerTemplatesCommand(program);

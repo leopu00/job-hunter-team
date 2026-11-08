@@ -230,7 +230,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Runbook sicuro per assistenti AI che installano, configurano e verificano la CLI | — | 2026-11-03 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Canali pubblici per test, feedback ed evidenze riproducibili senza dati personali | — | 2026-10-26 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | Setup CLI manuale su VPS Linux esistente, senza credenziali o infrastruttura reale negli esempi | — | 2026-10-22 | ✅ |
-| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-07 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Installazione CLI: comportamento verificato di install.sh/install.ps1, file creati e limiti | — | 2026-11-08 | ✅ |
 | [docs/guides/CLI-REFERENCE.md](./guides/CLI-REFERENCE.md) | ⌨️ CLI Reference — jht — Systematic reference of every jht command. | 2026-07-30 | 2026-11-04 | ✅ |
 | [docs/guides/EMAIL-FORWARDING.md](./guides/EMAIL-FORWARDING.md) | 📧 Email Forwarding — feed the team your job alerts — Give the team a dedicated email address and auto-forward your job-alert | — | 2026-11-02 | ✅ |
 | [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook delle superfici correnti e dell'endpoint /api/feedback | — | 2026-08-05 | ✅ |
@@ -418,7 +418,8 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [docs/internal/checkpoint/source-guards-20261107.md](./internal/checkpoint/source-guards-20261107.md) | Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa | 2026-11-07 | 2026-11-07 | 🟢 |
 | [docs/internal/checkpoint/t200-and-residuals-20261107.md](./internal/checkpoint/t200-and-residuals-20261107.md) | Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa | 2026-11-07 | 2026-11-07 | 🟢 |
 | [docs/internal/checkpoint/t204-rust-readers-20261107.md](./internal/checkpoint/t204-rust-readers-20261107.md) | Nota di recupero con stato, blocchi, riferimento Git e condizioni di ripresa | 2026-11-07 | 2026-11-07 | 🟢 |
-| [docs/internal/checkpoint/t205-windows-bridge-20261107.md](./internal/checkpoint/t205-windows-bridge-20261107.md) | Ponte Windows con deadline e ownership, limiti e migrazione Rust T214 | 2026-11-07 | — | 🟢 |
+| [docs/internal/checkpoint/t205-windows-bridge-20261107.md](./internal/checkpoint/t205-windows-bridge-20261107.md) | Ponte Windows con deadline e ownership, limiti e migrazione Rust T214 | 2026-11-07 | 2026-11-07 | 🟢 |
+| [docs/internal/ops/agent-monitor.md](./internal/ops/agent-monitor.md) | Inventario delle istanze e monitor nel terminale: fonti dei consumi, campionamento dei processi e limiti | — | — | ✅ |
 
 
 ## 🔒 docs/security
