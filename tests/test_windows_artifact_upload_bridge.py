@@ -1,7 +1,8 @@
 """`jht artifact upload <Windows path>` in a PowerShell terminal reaches the app, which reads the file (JHT upload piece).
 
 The Node CLI runs in the container, where a Windows path does not exist: the command ended with ENOENT. jht.ps1 has one branch for
-it and it decides nothing: it calls `jht-desktop.exe --artifact-upload <args>` and ends with the app's exit code. The app does the rest
+it and it decides nothing: it calls `jht-desktop.exe --artifact-upload <args>` when present, otherwise forwards host context to the CLI.
+Both paths keep the command's exit code. The app does the rest for its native reader
 (artifact_upload.rs, tested in Rust). Here: the branch is where it must be, before the default one that would `docker exec` the path
 into the container, and the Rust side takes the flag before it starts anything.
 """
@@ -26,13 +27,16 @@ def test_the_upload_branch_comes_before_the_default_one_that_would_run_the_path_
     assert WRAPPER.index("-eq 'artifact' -and $Rest.Count") < WRAPPER.index("\n  default {\n    Require-ComposeFile")
 
 
-def test_the_branch_only_calls_the_app_and_ends_with_its_exit_code():
+def test_the_branch_only_forwards_to_the_app_or_cli_and_keeps_their_exit_codes():
     branch = _branch()
     assert "jht-desktop.exe" in branch
     assert "& $uploader '--artifact-upload' @uploadArgs | Out-Host" in branch
     assert "exit $LASTEXITCODE" in branch
+    assert '-e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest' in branch
+    assert "Get-RunningComposeServiceId $Container" in branch
+    assert "docker inspect --type container $target --format '{{json .Mounts}}'" in branch
     # no logic of its own: no container, no file read, no path handling
-    for forbidden in ("docker", "Get-Content", "ReadAllBytes", "Resolve-Path", "Test-Path -LiteralPath $", "[IO.File]"):
+    for forbidden in ("Get-Content", "ReadAllBytes", "Resolve-Path", "Test-Path -LiteralPath $", "[IO.File]"):
         assert forbidden not in branch.replace("Test-Path -LiteralPath $uploader -PathType Leaf", ""), forbidden
     # stderr is not merged: under 'Stop' Windows PowerShell 5.1 turns a native program's stderr line into an error
     assert "2>&1" not in branch

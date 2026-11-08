@@ -20,6 +20,7 @@ import { readFileSync, readSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { runSkillCaptured } from './positions.js';
 import { c } from './_colors.js';
+import { windowsUploadRelativePath } from '../lib/artifact-host-path.js';
 
 // Un documento vale al massimo 10 MB (tetto della skill), che in base64
 // diventano ~13,4 MB, più la cornice JSON. 32 MB lasciano margine senza
@@ -100,6 +101,13 @@ function fetchAction(path, options) {
  * due trasporti quasi uguali che possono divergere su limiti o path.
  */
 export function uploadFileToTeam(file) {
+  let relative;
+  try {
+    relative = windowsUploadRelativePath(file, process.env.JHT_ARTIFACT_HOST_CONTEXT);
+  } catch (error) {
+    return { ok: false, code: EXIT_USAGE, error: c.red(`: ${error.message}`) };
+  }
+  if (relative !== null) return uploadWithSkill(['upload-file', '--', relative]);
   let data;
   try {
     data = readFileSync(file);
@@ -122,9 +130,11 @@ export function uploadFileToTeam(file) {
 export function uploadBytesToTeam(name, data) {
   // Il nome viaggia separato dai byte: la skill decide se l'estensione è
   // ammessa, qui non si giudica niente.
-  const result = runSkillCaptured('artifact.py',
-    ['upload', '--name', name],
-    { input: data.toString('base64'), maxBuffer: MAX_BUFFER });
+  return uploadWithSkill(['upload', '--name', name], data.toString('base64'));
+}
+
+function uploadWithSkill(args, input = null) {
+  const result = runSkillCaptured('artifact.py', args, { input, maxBuffer: MAX_BUFFER });
   const parsed = parseSkillJson(result.stdout);
   if (result.code !== 0 || !parsed || !parsed.ok) {
     return { ok: false, code: result.code === 0 ? EXIT_USAGE : result.code,
