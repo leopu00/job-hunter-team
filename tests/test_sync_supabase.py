@@ -82,7 +82,11 @@ class TestNormalization:
     ])
     def test_normalization(self, name, cases):
         for value, expected in cases:
-            assert getattr(self._mod, name)(value) == expected
+            actual = getattr(self._mod, name)(value)
+            if expected is None:
+                assert actual is None
+            else:
+                assert actual == expected
 
 @requires_sync
 class TestSyncEmptyDb:
