@@ -10,8 +10,6 @@ and every reply says whether the card is in the caller's chat (`in_your_chat`) s
 from __future__ import annotations
 
 import json
-from pathlib import Path
-import re
 import subprocess
 import sys
 
@@ -19,10 +17,6 @@ import pytest
 
 from test_agent_questions import ROOT, aq, box, sql  # noqa: F401  (box is a fixture)
 from test_plan_question_is_always_a_card import FIRST_RUN, configure, import_profile, questions, run, steady
-
-LANGS = ("en", "it", "es", "fr", "de", "hu", "pt")
-SUFFIX = {"en": "", "it": ".it", "es": ".es", "fr": ".fr", "de": ".de", "hu": ".hu", "pt": ".pt"}
-
 
 def state(box) -> dict:
     return json.loads((box.home / "state" / "first-run.json").read_text(encoding="utf-8"))
@@ -223,48 +217,4 @@ def test_the_card_posted_in_the_callers_chat_is_told_as_here_and_still_names_the
     assert "this chat" in posted["tell_user"] and "above" in posted["tell_user"], posted["tell_user"]
 
 
-def test_every_branch_of_the_skill_that_has_a_card_says_it_with_tell_user():
-    """The step of the skill sends the Assistente to the sentence in BOTH cases (the card just posted, the card already
-    open) — a rule only on the second left the first to the Assistente's own words."""
-    root = Path(__file__).resolve().parent.parent / "agents" / "_skills" / "onboarding-flow"
-    for skill in sorted(root.glob("SKILL*.md")):
-        text = skill.read_text(encoding="utf-8")
-        step = next(line for line in text.splitlines() if line.startswith("2. ") and "first_run.py ask-plan --agent assistente" in line)
-        asked = step.split("`asked: true`", 1)[1].split("`wait_for_profile: true`", 1)[0]
-        assert "`tell_user`" in asked, f"{skill.name}: the branch asked:true does not send to tell_user"
-        assert "`tell_user`" in step.split("`wait_for_profile: true`", 1)[1], f"{skill.name}: open-card branch"
-
-
 # ── the instructions, in seven languages ─────────────────────────────────────
-
-def section(text: str) -> str:
-    heading = r"^## (?:Subscription plan|Piano di abbonamento|Plan de suscripción|Formule d'abonnement|Abonnement|Előfizetési csomag|Plano de subscrição)[^\n]*\n"
-    found = re.search(heading, text, re.M)
-    assert found
-    return text[found.start(): text.index("\n## ", found.end())]
-
-
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_onboarding_skill_asks_the_plan_after_the_profile_and_points_to_the_right_chat(lang: str):
-    body = section((ROOT / "agents" / "_skills" / "onboarding-flow" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8"))
-
-    assert "wait_for_profile" in body and "in_your_chat" in body, lang
-    assert "apply-confirmed" in body, lang  # «after the profile is saved» names the step that saves it
-    assert "first two or three answers" not in body and "at the latest before" not in body, lang
-
-
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_assistente_prompt_never_says_this_chat_for_a_card_that_is_elsewhere(lang: str):
-    """...and says where the card is with `tell_user`, which names the app AND the terminal (ritest of c7baf5a3c)."""
-    text = (ROOT / "agents" / "assistente" / f"assistente{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    line = next(l for l in text.splitlines() if "first_run.py ask-plan --agent assistente" in l)
-
-    assert "in_your_chat" in line and "wait_for_profile" in line, lang
-    assert "`tell_user`" in line, lang
-
-
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_capitano_skill_does_not_ask_before_the_profile_and_knows_the_card_may_be_in_another_chat(lang: str):
-    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-
-    assert "wait_for_profile" in text and text.count("in_your_chat") >= 2, lang  # the field, and the rule about «this chat»

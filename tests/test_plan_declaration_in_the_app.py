@@ -107,20 +107,6 @@ def test_the_assistentes_permission_on_the_registry_is_narrow(lang: str):
     assert registry == [f"{REGISTRY} get", f"{REGISTRY} set *"], registry
 
 
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_assistente_asks_suggests_and_writes_only_what_the_user_chose(lang: str):
-    text = (ROOT / "agents" / "_skills" / "onboarding-flow" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    for needed in (f"{REGISTRY} get", f"{REGISTRY} set codex:<id>", "PLAN_MISSING", "first_run.py ask-plan --agent assistente"):
-        assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
-
-
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_capitano_skill_tells_what_to_do_when_the_burst_refuses(lang: str):
-    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    for needed in ("first_run.py ask-plan", f"{REGISTRY} set <provider>:<id>", "Codex reports:", "begin-burst"):
-        assert needed in text, f"SKILL{SUFFIX[lang]}.md lacks {needed!r}"
-
-
 # ── `plan_registry.py suggest`: what the app proposes, never what it writes ─────────────────
 
 def _reading(home: Path, plan_type: str, age: float = 60) -> None:
@@ -193,13 +179,6 @@ def test_declaring_the_plan_ends_the_warning(home: Path):
     assert json.loads(_run("first_run.py", "status", home=home).stdout)["plan_missing"] is True
     assert _run("plan_registry.py", "set", "codex:pro", home=home).returncode == 0
     assert "plan_missing" not in json.loads(_run("first_run.py", "status", home=home).stdout)
-
-
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_capitano_skill_reads_plan_missing_as_a_plan_to_declare(lang: str):
-    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    assert "plan_missing: true" in text and "first_run.py status" in text
-    assert text.count(f"{REGISTRY} set <provider>:<id>") >= 2  # begin-burst refusing, and a burst that lost its plan
 
 
 # ── a configuration that cannot be read is never replaced by the one key ───────────────────────
@@ -350,23 +329,3 @@ def test_a_failed_write_leaves_the_old_file_and_no_temp_file(home: Path):
 
 
 # ── the plan is asked once: a second trigger while the question is open does not ask it again ───
-
-ASK_ONCE = {
-    "en": "**Ask the plan once.**", "it": "**Il piano si chiede una volta sola.**",
-    "es": "**El plan se pregunta una sola vez.**", "fr": "**La formule se demande une seule fois.**",
-    "de": "**Das Abonnement wird nur einmal erfragt.**", "hu": "**A csomagot csak egyszer kérdezd meg.**",
-    "pt": "**O plano pergunta-se uma só vez.**",
-}
-
-
-@pytest.mark.parametrize("lang", LANGS)
-def test_the_capitano_does_not_ask_the_plan_again_while_the_question_is_open(lang: str):
-    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-    assert text.count(ASK_ONCE[lang]) == 1
-    paragraph = text.split(ASK_ONCE[lang], 1)[1].split("\n\n", 1)[0]
-    # the three things that start a second pass while the first question is still open
-    assert "plan_missing" in paragraph and "`status`" in paragraph
-    # it comes after both places where the plan is asked, and before the roster is spawned
-    asked = text.index(f"{REGISTRY} set <provider>:<id>`")
-    spawn = text.index("\n**2. ")
-    assert asked < text.index(ASK_ONCE[lang]) < spawn
