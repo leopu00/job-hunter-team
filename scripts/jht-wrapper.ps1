@@ -688,7 +688,8 @@ function Require-ComposeFile {
 }
 
 function Invoke-Compose {
-  param([switch]$NoInput, [Parameter(ValueFromRemainingArguments)] $Args)
+  [CmdletBinding(PositionalBinding=$false)]
+  param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
@@ -696,7 +697,8 @@ function Invoke-Compose {
   # image-only, lasciamo per simmetria col bash wrapper).
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  if ($NoInput) { $null | & docker compose @files --project-directory $RuntimeDir @Args }
+  if ($PSBoundParameters.ContainsKey('InputText')) { $InputText | & docker compose @files --project-directory $RuntimeDir @Args }
+  elseif ($NoInput) { $null | & docker compose @files --project-directory $RuntimeDir @Args }
   else { & docker compose @files --project-directory $RuntimeDir @Args }
 }
 
@@ -1582,9 +1584,18 @@ function Invoke-TelegramPairAll {
 # The runtime owns the policy; the host only transports closed operations.
 function Get-TelegramLifecyclePlan {
   param([string]$Phase, [string]$Action, [string]$Role)
-  $steps = @(Invoke-Compose -NoInput run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' $Phase $Action '--' $Role)
+  $steps = @(Invoke-Compose -NoInput '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' $Phase $Action '--' $Role)
   if ($LASTEXITCODE -ne 0) { throw 'telegram_lifecycle_plan_failed' }
   return $steps
+}
+
+function Confirm-TelegramLifecycle {
+  param([string]$Operation)
+  $observed = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $TelegramContainer --format '{{.State.Running}}' 2>&1 })
+  $code = $LASTEXITCODE
+  $payload = [string]$code + "`n" + ($observed -join "`n")
+  Invoke-Compose -InputText $payload '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' 'verify' $Operation | Out-Host
+  return $LASTEXITCODE
 }
 
 function Invoke-TelegramLifecycleSteps {
@@ -1594,12 +1605,14 @@ function Invoke-TelegramLifecycleSteps {
     switch -CaseSensitive ($step) {
       '' { continue }
       'start' {
-        Invoke-Compose up '-d' $TelegramContainer | Out-Host
+        Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Host
         if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
       }
       'stop' {
-        Invoke-Compose stop $TelegramContainer | Out-Host
+        Invoke-Compose '--profile' 'telegram' stop $TelegramContainer | Out-Host
         if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        if ((Confirm-TelegramLifecycle 'stop') -ne 0) { return 1 }
       }
       'pair' { $code = Invoke-TelegramPair $Role; if ($code -ne 0) { return $code } }
       'remove' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $Role); if ($code -ne 0) { return $code } }
@@ -1610,6 +1623,12 @@ function Invoke-TelegramLifecycleSteps {
     }
   }
   return 0
+}
+
+# Transport capability only; private configuration is interpreted in the runtime.
+function Resume-TelegramLifecycle {
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  return Invoke-TelegramLifecycle @('resume')
 }
 
 function Invoke-TelegramLifecycle {
@@ -2172,6 +2191,8 @@ function Ensure-Up {
       }
       Start-Sleep -Milliseconds 500
     }
+    $telegramCode = Resume-TelegramLifecycle
+    if ($telegramCode -ne 0) { exit $telegramCode }
   }
 }
 
@@ -3265,7 +3286,7 @@ function Invoke-RuntimeUpgrade {
       }
       $null = Invoke-BrokerMigrateLegacyOnce
     }
-    if ((Invoke-TelegramLifecycle @('resume')) -ne 0) {
+    if ((Resume-TelegramLifecycle) -ne 0) {
       Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
@@ -3404,7 +3425,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
-    $telegramCode = Invoke-TelegramLifecycle @('resume')
+    $telegramCode = Resume-TelegramLifecycle
     if ($telegramCode -ne 0) { exit $telegramCode }
     $null = Invoke-BrokerMigrateLegacyOnce
     Initialize-BrokerWebAuthorisations
@@ -3439,7 +3460,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
-    $telegramCode = Invoke-TelegramLifecycle @('resume')
+    $telegramCode = Resume-TelegramLifecycle
     if ($telegramCode -ne 0) { exit $telegramCode }
     $null = Invoke-BrokerMigrateLegacyOnce
     Initialize-BrokerWebAuthorisations

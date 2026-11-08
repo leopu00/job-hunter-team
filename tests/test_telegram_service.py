@@ -702,9 +702,9 @@ def test_container_lifecycle_starts_telegram_and_host_pairing_is_exposed() -> No
     assert bash_wrapper.count("telegram_prepare_legacy_inventory ||") >= 4
     assert "function Initialize-TelegramLegacyInventory" in powershell_wrapper
     assert powershell_wrapper.count("Initialize-TelegramLegacyInventory") >= 4
-    assert 'telegram_lifecycle_command resume' in bash_wrapper
+    assert 'telegram_lifecycle_resume' in bash_wrapper
     assert "'telegram' {" in powershell_wrapper
-    assert "Invoke-TelegramLifecycle @('resume')" in powershell_wrapper
+    assert "Resume-TelegramLifecycle" in powershell_wrapper
     assert "jht-telegram-admin" in bash_wrapper + powershell_wrapper
 
 

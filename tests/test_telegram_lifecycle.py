@@ -82,11 +82,12 @@ compose() {
       shift 2
       "$PYTHON" -I "$PLANNER" "$@"
       ;;
-    up) printf 'start\n' >> "$EVENTS" ;;
-    stop) printf 'stop\n' >> "$EVENTS" ;;
+    up) printf 'start\n' >> "$EVENTS"; [ "${NO_EFFECT:-}" = start ] || printf 'true' > "$ENGINE_STATE" ;;
+    stop) printf 'stop\n' >> "$EVENTS"; [ "${NO_EFFECT:-}" = stop ] || printf 'false' > "$ENGINE_STATE" ;;
     *) return 98 ;;
   esac
 }
+docker() { cat "$ENGINE_STATE"; }
 err() { printf '%s\n' "$*" >&2; }
 telegram_pair() {
   printf 'pair\n' >> "$EVENTS"
@@ -102,18 +103,25 @@ telegram_admin() {
 PS_TRANSPORT = r'''
 $TelegramContainer = 'jht-telegram'
 function Invoke-Compose {
-  param([switch]$NoInput, [Parameter(ValueFromRemainingArguments)] $Args)
+  [CmdletBinding(PositionalBinding=$false)]
+  param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
+  if ($Args[0] -eq '--profile') { $Args = @($Args[2..($Args.Count-1)]) }
   if ($Args[0] -eq 'run') {
     $i = [Array]::IndexOf($Args, '-I')
-    if (-not $NoInput) { throw 'planner stdin must be closed' }
-    $null | & $env:PYTHON '-I' $env:PLANNER @($Args[($i+2)..($Args.Count-1)])
+    if ($PSBoundParameters.ContainsKey('InputText')) {
+      $InputText | & $env:PYTHON '-I' $env:PLANNER @($Args[($i+2)..($Args.Count-1)])
+    } else {
+      if (-not $NoInput) { throw 'planner stdin must be closed' }
+      $null | & $env:PYTHON '-I' $env:PLANNER @($Args[($i+2)..($Args.Count-1)])
+    }
     return
   }
-  if ($Args[0] -eq 'up') { Add-Content $env:EVENTS 'start' }
-  elseif ($Args[0] -eq 'stop') { Add-Content $env:EVENTS 'stop' }
+  if ($Args[0] -eq 'up') { Add-Content $env:EVENTS 'start'; if ($env:NO_EFFECT -ne 'start') { Set-Content $env:ENGINE_STATE 'true' } }
+  elseif ($Args[0] -eq 'stop') { Add-Content $env:EVENTS 'stop'; if ($env:NO_EFFECT -ne 'stop') { Set-Content $env:ENGINE_STATE 'false' } }
   else { throw 'invalid transport' }
   $global:LASTEXITCODE = 0
 }
+function docker { Get-Content $env:ENGINE_STATE; $global:LASTEXITCODE = 0 }
 function Write-Err { param([string]$Message) [Console]::Error.WriteLine($Message) }
 function Invoke-TelegramPair {
   param([string]$Role)
@@ -131,9 +139,11 @@ function Invoke-TelegramAdmin {
 '''
 
 
-def run_host(tmp_path, language, args, *, fail_pair=False):
+def run_host(tmp_path, language, args, *, fail_pair=False, no_effect=""):
     events = tmp_path / "events"
     events.write_text("", encoding="utf-8")
+    engine_state = tmp_path / "engine-state"
+    engine_state.write_text("true" if no_effect == "stop" else "false", encoding="utf-8")
     mutate = tmp_path / "mutate.py"
     mutate.write_text(
         "import sys\nsys.path.insert(0, " + repr(str(ROOT)) + ")\n"
@@ -144,13 +154,14 @@ def run_host(tmp_path, language, args, *, fail_pair=False):
         encoding="utf-8",
     )
     env = {**os.environ, "PYTHON": sys.executable, "PLANNER": str(PLANNER),
-           "MUTATE": str(mutate), "EVENTS": str(events), "FAIL_PAIR": str(int(fail_pair))}
+           "MUTATE": str(mutate), "EVENTS": str(events), "FAIL_PAIR": str(int(fail_pair)),
+           "ENGINE_STATE": str(engine_state), "NO_EFFECT": no_effect}
     if language == "bash":
-        body = functions("telegram_lifecycle_plan", "telegram_lifecycle_steps", "telegram_lifecycle_command")
+        body = functions("telegram_lifecycle_plan", "telegram_lifecycle_verify", "telegram_lifecycle_steps", "telegram_lifecycle_command")
         script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + '\ntelegram_lifecycle_command "$@"\n'
         command = ["bash", "-c", script, "test-host", *args]
     else:
-        body = powershell_functions("Get-TelegramLifecyclePlan", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
+        body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
         script = tmp_path / "transport.ps1"
         script.write_text(PS_TRANSPORT + body + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
         command = ["pwsh", "-NoProfile", "-File", str(script), *args]
@@ -199,3 +210,32 @@ def test_pair_failure_retains_its_error_and_shuts_down_an_unconfigured_service(l
     assert result.returncode == 7, result.stdout + result.stderr
     assert events == ["start", "pair", "stop"]
     assert store.read_bot("assistente") is None
+
+
+@pytest.mark.parametrize("language", ["bash", "pwsh"])
+@pytest.mark.parametrize("operation", ["start", "stop"])
+def test_successful_engine_exit_without_the_requested_effect_is_refused(lifecycle_home, language, operation):
+    if operation == "stop":
+        configure()
+    args = ["pair", "assistente"] if operation == "start" else ["remove", "assistente"]
+    result, events = run_host(lifecycle_home, language, args, no_effect=operation)
+    assert result.returncode != 0, result.stdout + result.stderr
+    if operation == "start":
+        assert "pair" not in events
+    else:
+        assert events == ["start", "bots delete assistente", "stop"]
+    assert "telegram_lifecycle_state_unconfirmed" in result.stderr + result.stdout
+
+
+@pytest.mark.parametrize(("operation", "answer", "accepted"), [
+    ("start", "0\ntrue", True), ("stop", "0\nfalse", True),
+    ("stop", "1\nError response from daemon: No such container: jht-telegram", True),
+    ("stop", '1\nError: no container with name or ID "jht-telegram" found: no such container', True),
+    ("start", "0\nfalse", False), ("stop", "0\ntrue", False),
+    ("stop", "2\ndaemon unreachable", False),
+    ("stop", "1\nNo such container: other", False),
+    ("stop", "1\nNo such container: jht-telegram\nextra error", False),
+    ("stop", "0\nfalse\ntrue", False),
+])
+def test_verifier_accepts_only_the_observed_state_or_exact_missing_container(operation, answer, accepted):
+    assert lifecycle.verify_state(operation, answer) is accepted

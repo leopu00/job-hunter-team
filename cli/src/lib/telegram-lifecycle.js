@@ -2,7 +2,7 @@
 import { spawnSync } from 'node:child_process';
 
 export const telegramPlanArgs = (phase, action) => [
-  'run', '--rm', '--no-deps', '-T', '--entrypoint', '/usr/bin/python3',
+  '--profile', 'telegram', 'run', '--rm', '--no-deps', '-T', '--entrypoint', '/usr/bin/python3',
   'jht-telegram', '-I', '/app/shared/telegram_service/lifecycle.py', phase, action,
 ];
 
@@ -14,8 +14,16 @@ export function resumeTelegram({ run = spawnSync, cwd, env = process.env } = {})
   const operation = planned.stdout.trim();
   if (operation !== 'start' && operation !== 'stop') return false;
   const args = operation === 'start' ? ['up', '-d', 'jht-telegram'] : ['stop', 'jht-telegram'];
-  const applied = run('docker', ['compose', ...args], {
+  const applied = run('docker', ['compose', '--profile', 'telegram', ...args], {
     cwd, env: { ...env, MSYS_NO_PATHCONV: '1' }, stdio: 'inherit',
   });
-  return applied.status === 0 && !applied.error;
+  if (applied.status !== 0 || applied.error) return false;
+  const observed = run('docker', ['inspect', '--type', 'container', 'jht-telegram', '--format', '{{.State.Running}}'], {
+    cwd, env: { ...env, MSYS_NO_PATHCONV: '1' }, encoding: 'utf8', stdio: 'pipe',
+  });
+  const verified = run('docker', ['compose', ...telegramPlanArgs('verify', operation)], {
+    cwd, env: { ...env, MSYS_NO_PATHCONV: '1' }, encoding: 'utf8', stdio: 'pipe',
+    input: `${observed.status}\n${observed.stdout || ''}${observed.stderr || ''}`,
+  });
+  return verified.status === 0 && !verified.error;
 }

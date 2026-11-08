@@ -7,6 +7,7 @@ store remains accessible only to the Telegram uid; no token leaves this process.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 import sys
 
@@ -44,7 +45,31 @@ def plan(phase: str, action: str, role: str, configured: tuple[str, ...]) -> tup
     return ("start", action)
 
 
+def verify_state(operation: str, result: str) -> bool:
+    code, separator, message = result.partition("\n")
+    if not separator or len(result) > 65536 or operation not in ("start", "stop"):
+        return False
+    value = message.strip()
+    if code == "0":
+        return value == ("true" if operation == "start" else "false")
+    if code != "1" or operation != "stop":
+        return False
+    return bool(re.fullmatch(
+        r'(?:Error response from daemon: )?No such (?:container|object): jht-telegram'
+        r'|Error: no container with name or ID "jht-telegram" found: no such container', value,
+    ))
+
+
+def verify_command(argv: list[str]) -> int:
+    if len(argv) != 2 or not verify_state(argv[1], sys.stdin.read(65537)):
+        print("telegram_lifecycle_state_unconfirmed", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    if argv and argv[0] == "verify":
+        return verify_command(argv)
     parser = argparse.ArgumentParser(prog="telegram-lifecycle")
     parser.add_argument("phase", choices=("prepare", "complete"))
     parser.add_argument("action", choices=ACTIONS)
