@@ -524,8 +524,8 @@ def test_the_identity_only_cache_still_fails_with_young_collection(box, monkeypa
         with pytest.raises(AssertionError) as rejected:
             original_test(box, isolated)
     traceback = rejected.value.__traceback__
-    while traceback is not None:
-        if traceback.tb_frame.f_code is original_test.__code__ and traceback.tb_lineno == verdict_line:
-            break
+    while traceback is not None and traceback.tb_next is not None:
         traceback = traceback.tb_next
     assert traceback is not None, "The historical cache mutation must fail at the original verdict assertion"
+    assert traceback.tb_frame.f_code is original_test.__code__
+    assert traceback.tb_lineno == verdict_line
