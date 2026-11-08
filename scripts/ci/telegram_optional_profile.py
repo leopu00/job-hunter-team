@@ -32,11 +32,14 @@ def creation_plan(provider: str, compose: Path, directory: Path, words: list[str
            "PODMAN_COMPOSE_WARNING_LOGS": "false", "JHT_IMAGE": "example.invalid/jht:fixture"}
     result = subprocess.run(
         [provider, "--podman-path", str(engine), "--project-name", "jht", "-f", str(compose),
-         "--dry-run", *words], cwd=directory, env=env, capture_output=True, text=True, timeout=60,
+         "--verbose", "--dry-run", *words], cwd=directory, env=env, capture_output=True, text=True, timeout=60,
     )
     if result.returncode:
         raise RuntimeError("provider_failed: " + result.stdout + result.stderr)
-    names = re.findall(r"--name[= ](jht(?:-broker|-telegram)?)(?=[\s'\",\]]|$)", result.stdout + result.stderr)
+    commands = "\n".join(line for line in (result.stdout + result.stderr).splitlines() if str(engine) + " create " in line)
+    names = re.findall(r"--name[= ](jht(?:-broker|-telegram)?)(?=[\s'\",\]]|$)", commands)
+    if not names:
+        raise RuntimeError("provider_creation_trace_missing: " + result.stdout + result.stderr)
     if len(names) != len(set(names)):
         raise RuntimeError("duplicate_container_creation_plan")
     return set(names)

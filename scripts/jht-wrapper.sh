@@ -2081,7 +2081,7 @@ telegram_lifecycle_steps() {
   while IFS= read -r step; do
     case "$step" in ''|start|stop|pair|remove|chat-id|status|not-configured) ;; *) err 'telegram_lifecycle_plan_invalid'; return 1 ;; esac
   done <<< "$steps"
-  while IFS= read -r step; do
+  while IFS= read -r step <&3; do
     case "$step" in
       '') ;;
       start)
@@ -2099,7 +2099,7 @@ telegram_lifecycle_steps() {
       not-configured) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
       *) err 'telegram_lifecycle_plan_invalid'; return 1 ;;
     esac
-  done <<< "$steps"
+  done 3<<< "$steps"
 }
 
 # Transport capability only: old runtime bundles may not declare this service.

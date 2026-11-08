@@ -22,11 +22,15 @@ args = sys.argv[1:]
 i = next(n for n, value in enumerate(args) if value in ('exec','inspect','start','stop'))
 operation, rest = args[i], args[i+1:]
 state = Path(os.environ['ENGINE_STATE'])
+if operation == 'exec':
+    payload = sys.stdin.read()
+    # Record the completed pipe handoff, not the concurrent process launch.
+    with open(os.environ['EVENTS'], 'a') as log:
+        log.write(operation + '\n')
+    index = rest.index('-I')
+    raise SystemExit(subprocess.run([sys.executable, '-I', os.environ['PLANNER'], *rest[index+2:]], input=payload, text=True).returncode)
 with open(os.environ['EVENTS'], 'a') as log:
     log.write(operation + '\n')
-if operation == 'exec':
-    index = rest.index('-I')
-    raise SystemExit(subprocess.run([sys.executable, '-I', os.environ['PLANNER'], *rest[index+2:]]).returncode)
 if operation == 'inspect':
     print(state.read_text())
 elif os.environ.get('NO_EFFECT') != operation:
