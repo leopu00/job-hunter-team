@@ -29,9 +29,17 @@ if ($dispatch.Count -ne 1) { throw 'real dispatcher missing or duplicated' }
 function Require-ComposeFile { }
 function Require-Docker { }
 function Ensure-Up { }
+function Get-RunningComposeServiceId { param($Service) return $env:UPLOAD_CONTAINER_ID }
 function Write-Err { param($Message) [Console]::Error.WriteLine($Message) }
 function docker {
   [IO.File]::WriteAllText($env:UPLOAD_CALLS, (ConvertTo-Json -InputObject @($args) -Compress))
+  if ($args[0] -ceq 'inspect') {
+    if ($args[3] -cne $env:UPLOAD_CONTAINER_ID) { throw 'wrong inspect target' }
+    if ($env:UPLOAD_INSPECT_RC) { $global:LASTEXITCODE = [int]$env:UPLOAD_INSPECT_RC; return }
+    $env:UPLOAD_MOUNTS
+    $global:LASTEXITCODE = 0
+    return
+  }
   if ($env:UPLOAD_TRANSPORT_RC) {
     [Console]::Error.WriteLine('synthetic transport refused')
     $global:LASTEXITCODE = [int]$env:UPLOAD_TRANSPORT_RC
@@ -47,7 +55,7 @@ function docker {
     }
     $i++
   }
-  if ($args[$i] -cne 'fake-team' -or $args[$i+1] -cne 'node') { throw 'wrong target' }
+  if ($args[$i] -cne $env:UPLOAD_CONTAINER_ID -or $args[$i+1] -cne 'node') { throw 'wrong target' }
   $forwarded = @($args[($i+2)..($args.Count-1)])
   & $env:UPLOAD_NODE @forwarded
 }
@@ -84,6 +92,8 @@ def upload_case(tmp_path):
            'UPLOAD_ENTRY': str(ROOT / 'cli/bin/jht.js'), 'UPLOAD_NODE': node,
            'UPLOAD_APPDATA': str(tmp_path / 'appdata'),
            'UPLOAD_CALLS': str(tmp_path / 'calls.json'), 'UPLOAD_TRANSPORT_RC': '',
+           'UPLOAD_CONTAINER_ID': 'a' * 64, 'UPLOAD_INSPECT_RC': '',
+           'UPLOAD_MOUNTS': json.dumps([{'Type': 'bind', 'Source': HOST_ROOT, 'Destination': '/jht_user'}]),
            'NO_COLOR': '1', 'JHT_LANG': 'en'}
     env.pop('JHT_ARTIFACT_HOST_CONTEXT', None)
     return root, harness, env
@@ -116,10 +126,47 @@ def test_cli_only_upload_reads_the_real_mounted_document(upload_case, name):
 def test_cli_only_upload_uses_the_configured_shared_folder(upload_case):
     root, _, env = upload_case
     env['JHT_USER_DIR_HOST'] = r'D:\Shared documents'
+    env['UPLOAD_MOUNTS'] = json.dumps([{'Type': 'bind', 'Source': r'D:\Shared documents', 'Destination': '/jht_user'}])
     (root / 'cv.pdf').write_bytes(PDF)
     done, destination = run_upload(upload_case, r'D:\Shared documents\cv.pdf')
     assert done.returncode == 0, done.stdout + done.stderr
     assert (destination / 'cv.pdf').read_bytes() == PDF
+
+
+@pytest.mark.parametrize('divergence', ['home-profile', 'override-mount'])
+def test_only_the_actual_mount_can_select_between_two_different_homonyms(upload_case, divergence):
+    root, _, env = upload_case
+    actual = PDF + b'ACTUAL MOUNT A'
+    selected = PDF + b'HOST FILE B'
+    (root / 'cv.pdf').write_bytes(actual)
+    other = root.parent / 'other-host-folder'
+    other.mkdir()
+    (other / 'cv.pdf').write_bytes(selected)
+    env['HOME'] = r'C:\Users\Synthetic'
+    claimed = r'D:\Other documents' if divergence == 'override-mount' else r'C:\Users\Other\Documents\Job Hunter Team'
+    if divergence == 'home-profile':
+        env['USERPROFILE'] = r'C:\Users\Other'
+    else:
+        env['JHT_USER_DIR_HOST'] = claimed
+    done, destination = run_upload(upload_case, claimed + r'\cv.pdf')
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert b'artifact_host_path_unavailable' in done.stderr
+    assert not destination.exists(), 'the homonym from mount A must not be silently uploaded'
+    assert (root / 'cv.pdf').read_bytes() == actual
+    assert (other / 'cv.pdf').read_bytes() == selected
+    correct, destination = run_upload(upload_case, HOST_ROOT + r'\cv.pdf', '--json')
+    assert correct.returncode == 0, correct.stdout + correct.stderr
+    assert (destination / 'cv.pdf').read_bytes() == actual
+
+
+def test_an_inspect_failure_is_propagated_before_any_document_is_read(upload_case):
+    root, _, env = upload_case
+    (root / 'cv.pdf').write_bytes(PDF)
+    env['UPLOAD_INSPECT_RC'] = '43'
+    done, destination = run_upload(upload_case, HOST_ROOT + r'\cv.pdf')
+    assert done.returncode == 43, done.stdout + done.stderr
+    assert not destination.exists()
+    assert json.loads(Path(env['UPLOAD_CALLS']).read_text())[0] == 'inspect'
 
 
 @pytest.mark.parametrize('written', [

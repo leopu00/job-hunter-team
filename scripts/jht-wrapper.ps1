@@ -3302,30 +3302,30 @@ switch ($Sub) {
     }
     exit 0
   }
-
   'onboarding-snapshot' {
     Write-OnboardingSnapshot
     exit 0
   }
-
   'desktop-chat' {
     Invoke-DesktopChat $Rest
     exit $script:DesktopChatExitCode
   }
-
   'agent-control' {
     Invoke-AgentControl $Rest
     exit $script:AgentControlExitCode
   }
-
   # T217 bridge: the CLI decides which mounted file the host context names; the app remains the native reader when installed.
   { $_ -eq 'artifact' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'upload' } {
     $uploader = Join-Path $LocalAppData 'Job Hunter Team\jht-desktop.exe'
     if (-not (Test-Path -LiteralPath $uploader -PathType Leaf)) {
       Require-ComposeFile; Require-Docker; Ensure-Up
-      $context = @{ profile = $env:USERPROFILE; userDir = $env:JHT_USER_DIR_HOST; cwd = $PWD.Path } | ConvertTo-Json -Compress
+      $target = Get-RunningComposeServiceId $Container
+      if (-not $target) { Write-Err 'team_container_unavailable: avvia la squadra con jht up e riprova.'; exit 1 }
+      $mounts = & docker inspect --type container $target --format '{{json .Mounts}}'
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      $context = @{ mounts = ($mounts -join "`n"); cwd = $PWD.Path } | ConvertTo-Json -Compress
       $context = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($context))
-      & docker exec @ExecFlags -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $Container node $NodeEntry $Sub @Rest
+      & docker exec @ExecFlags -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest
       exit $LASTEXITCODE
     }
     $uploadArgs = if ($Rest.Count -gt 1) { @($Rest[1..($Rest.Count - 1)]) } else { @() }

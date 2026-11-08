@@ -32,7 +32,9 @@ def test_the_branch_only_forwards_to_the_app_or_cli_and_keeps_their_exit_codes()
     assert "jht-desktop.exe" in branch
     assert "& $uploader '--artifact-upload' @uploadArgs | Out-Host" in branch
     assert "exit $LASTEXITCODE" in branch
-    assert '-e "JHT_ARTIFACT_HOST_CONTEXT=$context" $Container node $NodeEntry $Sub @Rest' in branch
+    assert '-e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest' in branch
+    assert "Get-RunningComposeServiceId $Container" in branch
+    assert "docker inspect --type container $target --format '{{json .Mounts}}'" in branch
     # no logic of its own: no container, no file read, no path handling
     for forbidden in ("Get-Content", "ReadAllBytes", "Resolve-Path", "Test-Path -LiteralPath $", "[IO.File]"):
         assert forbidden not in branch.replace("Test-Path -LiteralPath $uploader -PathType Leaf", ""), forbidden

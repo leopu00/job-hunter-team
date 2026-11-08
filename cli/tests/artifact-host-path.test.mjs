@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import { windowsUploadRelativePath } from '../src/lib/artifact-host-path.js';
 
 const root = 'C:\\Users\\Synthetic\\Documents\\Job Hunter Team';
+const mount = (source = root) => ({ Type: 'bind', Source: source, Destination: '/jht_user' });
 const context = (overrides = {}) => Buffer.from(JSON.stringify({
-  profile: 'C:\\Users\\Synthetic', cwd: root, ...overrides,
+  mounts: JSON.stringify([mount()]), cwd: root, ...overrides,
 })).toString('base64');
 
 test('Windows host paths become relatives beneath the mount, including cwd and case-insensitive roots', () => {
@@ -13,8 +14,26 @@ test('Windows host paths become relatives beneath the mount, including cwd and c
   assert.equal(windowsUploadRelativePath('.\\nested\\cv.pdf', context()), 'nested/cv.pdf');
   assert.equal(windowsUploadRelativePath(`${root.toLowerCase()}\\cv.pdf`, context()), 'cv.pdf');
   assert.equal(windowsUploadRelativePath('D:\\Shared documents\\cv.pdf',
-    context({ userDir: 'D:\\Shared documents' })), 'cv.pdf');
+    context({ mounts: JSON.stringify([mount('D:\\Shared documents')]) })), 'cv.pdf');
 });
+
+for (const source of ['/mnt/c/Users/Synthetic/Documents/Job Hunter Team',
+  '/mnt/host/c/Users/Synthetic/Documents/Job Hunter Team',
+  '/host_mnt/c/Users/Synthetic/Documents/Job Hunter Team',
+  '/run/desktop/mnt/host/c/Users/Synthetic/Documents/Job Hunter Team']) {
+  test(`the engine's Windows drive representation is resolved: ${source}`, () => {
+    assert.equal(windowsUploadRelativePath(`${root}\\cv.pdf`,
+      context({ mounts: JSON.stringify([mount(source)]) })), 'cv.pdf');
+  });
+}
+
+for (const mounts of ['not json', '{}', '[]', JSON.stringify([mount(), mount()]),
+  JSON.stringify([{ ...mount(), Type: 'volume' }]), JSON.stringify([mount('/unrecognised/source')])]) {
+  test(`missing, ambiguous or non-bind mount metadata is refused: ${mounts}`, () => {
+    assert.throws(() => windowsUploadRelativePath(`${root}\\cv.pdf`, context({ mounts })),
+      /artifact_host_path_unavailable/);
+  });
+}
 
 for (const written of ['C:cv.pdf', '\\cv.pdf', '\\\\server\\cv.pdf', '//server/share/cv.pdf',
   'D:\\cv.pdf', `${root}-other\\cv.pdf`, `${root}\\..\\cv.pdf`, `${root}\\cv.pdf:stream`,
