@@ -59,6 +59,7 @@ def bridge(tmp_path, monkeypatch):
         finally:
             for proc in list(module._tmux_send_running.values()):
                 proc.wait(timeout=5)
+            assert not list(tmp_path.glob("timed-out.*")), "The fake sender exhausted its safety deadline"
 
 
 def _wait_for(predicate, seconds=6.0):

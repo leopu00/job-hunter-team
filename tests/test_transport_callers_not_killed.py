@@ -84,6 +84,7 @@ def world(tmp_path, monkeypatch):
                 if helper:
                     for proc in list(helper._running.values()):
                         proc.wait(timeout=5)
+            assert not list(tmp_path.glob("timed-out.*")), "The fake sender exhausted its safety deadline"
 
 
 def _wait_for(predicate, seconds=6.0):
@@ -204,6 +205,7 @@ def _short_lived_caller(tmp_path, use_helper):
         assert done.returncode == 0, done.stderr
         record, = sender.wait_started()
         yield sender, record["pid"]
+    assert not list(tmp_path.glob("timed-out.*")), "The fake sender exhausted its safety deadline"
 
 
 def test_a_caller_that_exits_after_the_deadline_does_not_take_the_transport_with_it(tmp_path):
