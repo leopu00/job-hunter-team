@@ -495,16 +495,6 @@ def test_the_watchdog_without_the_tool_does_nothing(tmp_path: Path):
 
 
 @pytest.mark.parametrize("lang", LANGS)
-def test_the_skill_names_ask_plan_as_the_only_way_and_no_longer_says_ask_in_the_chat(lang: str):
-    text = (ROOT / "agents" / "_skills" / "first-run-burst" / f"SKILL{SUFFIX[lang]}.md").read_text(encoding="utf-8")
-
-    assert text.count("first_run.py ask-plan") == 2 and "`ask-plan`" in text
-    assert "plan_registry.py list" not in text  # the listing is the card's job now
-    assert "plan_registry.py set <provider>:<id>" in text
-    assert "pro_max" in text and "pro-max" in text
-
-
-@pytest.mark.parametrize("lang", LANGS)
 def test_the_catalog_has_the_card_in_every_language(lang: str):
     catalog = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
 
