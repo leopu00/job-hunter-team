@@ -1,5 +1,6 @@
 """Owned, event-controlled fake sender for subprocess delivery tests (stdlib only)."""
 import json
+import math
 import os
 import pathlib
 import shlex
@@ -37,7 +38,8 @@ def _identity(pid):
 _SENDER_BODY = r'''
 def main():
     root, chatty, fixture = pathlib.Path(sys.argv[1]), sys.argv[2] == '1', sys.argv[3]
-    arguments = sys.argv[4:]
+    deadline = time.monotonic() + float(sys.argv[4])
+    arguments = sys.argv[5:]
     record = json.dumps(dict(pid=os.getpid(), args=arguments, fixture=fixture)) + '\n'
     fd = os.open(root / 'calls.log', os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     try:
@@ -59,7 +61,11 @@ def main():
                    ('release.all', 'release.' + phase, 'release.' + phase + '.' + str(pid)))
     for phase in ('paste', 'enter', 'exit'):
         while not released(phase):
-            time.sleep(.01)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                (root / ('timed-out.' + str(pid))).write_text(phase + '\n')
+                return 124
+            time.sleep(min(.01, remaining))
         if phase == 'paste':
             if chatty:
                 print('controlled sender stderr before paste', file=sys.stderr, flush=True)
@@ -90,7 +96,9 @@ class ControlledSender:
     caller still owns and joins its Popen handles, including early failures.
     """
 
-    def __init__(self, root, chatty=False):
+    def __init__(self, root, chatty=False, timeout=30):
+        if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError('Sender deadline must be finite and positive')
         path = pathlib.Path(root).absolute()
         if path.is_symlink():
             raise ValueError('Sender root must be a real owned directory')
@@ -98,6 +106,7 @@ class ControlledSender:
         if not path.is_dir() or path.stat().st_uid != os.getuid():
             raise ValueError('Sender root is not owned by the current UID')
         self.root, self.chatty = path.resolve(), bool(chatty)
+        self.timeout = timeout
         self.fixture = uuid.uuid4().hex
         self._known = {}
         self._closed = False
@@ -108,7 +117,7 @@ class ControlledSender:
         if destination.exists() or destination.is_symlink():
             raise FileExistsError('Refusing to overwrite an installed executable')
         command = [sys.executable, '-c', _sender_source(), str(self.root),
-                   '1' if self.chatty else '0', self.fixture]
+                   '1' if self.chatty else '0', self.fixture, str(self.timeout)]
         script = '#!/bin/sh\nexec ' + ' '.join(shlex.quote(arg) for arg in command) + ' "$@"\n'
         with destination.open('x') as stream:
             stream.write(script)
