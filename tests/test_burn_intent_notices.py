@@ -36,18 +36,14 @@ LANGS = ("en", "it", "de", "es", "fr", "hu", "pt")
 
 @pytest.fixture
 def bi(tmp_path, monkeypatch):
-    bi_module.INTENT_FLAG = tmp_path / ".burn-intent.flag"
-    bi_module.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
-    bi_module.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
-    bi_module.JHT_HOME = tmp_path
     # Nothing chosen: the system's zone, here a fixed one (UTC) so that the times below do not move.
     # The user's zone (JHT_USER_TZ) is looked up by format_time, which caches it for the process.
     monkeypatch.delenv("JHT_USER_TZ", raising=False)
     monkeypatch.setenv("JHT_HOST_ENV_FILE", str(tmp_path / "no-host.env"))
     import format_time
     format_time._read_profile_timezone.cache_clear()
-    monkeypatch.setattr(format_time, "_HOST_ENV_CANDIDATES", [])
-    monkeypatch.setattr(format_time, "_PROFILE_CANDIDATES", [])
+    monkeypatch.setattr(format_time, "_host_env_candidates", lambda: [])
+    monkeypatch.setattr(format_time, "_profile_candidates", lambda: [])
     monkeypatch.setattr(bi_module, "_system_zone", lambda: timezone.utc)
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     monkeypatch.setenv("JHT_LANG", "en")
@@ -130,16 +126,16 @@ def test_a_send_that_fails_is_not_marked_and_is_tried_again(bi):
     out.fail = True
     when = T0 + timedelta(hours=4, minutes=30)
     assert bi.announce(now=when, notifier=out) == []
-    assert not bi.NOTICES_FILE.exists()
+    assert not bi._path("NOTICES_FILE").exists()
     out.fail = False
     assert bi.announce(now=when + timedelta(minutes=1), notifier=out) == ["warning"]
-    assert json.loads(bi.NOTICES_FILE.read_text())["sent"] == ["warning"]
+    assert json.loads(bi._path("NOTICES_FILE").read_text())["sent"] == ["warning"]
 
 
 def test_no_flag_or_a_broken_one_announces_nothing_and_never_raises(bi):
     out = Outbox()
     assert bi.announce(now=T0, notifier=out) == []
-    bi.INTENT_FLAG.write_text("not json", encoding="utf-8")
+    bi._path("INTENT_FLAG").write_text("not json", encoding="utf-8")
     assert bi.announce(now=T0, notifier=out) == []
     assert out.sent == []
 
@@ -200,7 +196,7 @@ def test_the_sentinel_bridge_announces_before_it_sweeps(tmp_path, monkeypatch):
 
 
 def _team_in(bi, zone):
-    bi.JHT_HOME.joinpath("jht.config.json").write_text(
+    bi._path("JHT_HOME").joinpath("jht.config.json").write_text(
         json.dumps({"team": {"working_hours": {"timezone": zone, "windows": []}}}), encoding="utf-8")
 
 
@@ -224,7 +220,7 @@ def test_without_a_team_zone_or_with_a_wrong_one_it_is_the_system_zone(bi, monke
     assert "um 03:48" in bi.notice_text("expired", data)
     _team_in(bi, "Mars/Olympus_Mons")
     assert "um 03:48" in bi.notice_text("expired", data)
-    bi.JHT_HOME.joinpath("jht.config.json").write_text("{not json", encoding="utf-8")
+    bi._path("JHT_HOME").joinpath("jht.config.json").write_text("{not json", encoding="utf-8")
     assert "um 03:48" in bi.notice_text("expired", data)
 
 
@@ -244,7 +240,7 @@ def test_the_zone_chosen_at_the_setup_comes_first_even_without_working_hours(bi,
     import format_time
 
     data = bi.grant(hours=8.8, now=T0)  # ends 08:48 UTC
-    bi.JHT_HOME.joinpath("jht.config.json").write_text(json.dumps({"team": {"agents": 3}}), encoding="utf-8")
+    bi._path("JHT_HOME").joinpath("jht.config.json").write_text(json.dumps({"team": {"agents": 3}}), encoding="utf-8")
     monkeypatch.setenv("JHT_USER_TZ", "Europe/Rome")
     format_time._read_profile_timezone.cache_clear()
     monkeypatch.setenv("JHT_LANG", "it")

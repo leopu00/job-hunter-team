@@ -49,15 +49,12 @@ T0 = datetime(2026, 7, 27, 22, 0, tzinfo=timezone.utc)
 
 
 @pytest.fixture
-def bi(tmp_path):
+def bi(tmp_path, monkeypatch):
     """`burn_intent` puntato a una home usa-e-getta.
 
-    I path sono costanti di modulo risolte all'import: si riassegnano qui,
-    invece di ri-importare il modulo, così ogni test parte da un flag assente.
+    I path seguono la home del test alla chiamata, senza ri-importare il modulo.
     """
-    bi_module.INTENT_FLAG = tmp_path / ".burn-intent.flag"
-    bi_module.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
-    bi_module.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     return bi_module
 
 
@@ -96,9 +93,9 @@ def test_default_duration_is_one_window(bi):
 def test_sweep_removes_only_an_expired_flag(bi):
     bi.grant(hours=1, now=T0)
     assert bi.sweep(now=T0 + timedelta(minutes=30)) is None
-    assert bi.INTENT_FLAG.exists()
+    assert bi._path("INTENT_FLAG").exists()
     assert bi.sweep(now=T0 + timedelta(hours=2)) is not None
-    assert not bi.INTENT_FLAG.exists()
+    assert not bi._path("INTENT_FLAG").exists()
 
 
 def test_revoke_is_immediate(bi):
@@ -116,14 +113,14 @@ def test_absent_flag_means_brakes_on(bi):
 
 
 def test_corrupt_flag_means_brakes_on(bi):
-    bi.INTENT_FLAG.write_text("questo non è JSON", encoding="utf-8")
+    bi._path("INTENT_FLAG").write_text("questo non è JSON", encoding="utf-8")
     assert bi.is_active(now=T0) is False
 
 
 def test_flag_without_expiry_means_brakes_on(bi):
     """Un flag senza scadenza è esattamente il file dimenticato-acceso che
     questo modulo esiste per non riprodurre: non vale come deroga."""
-    bi.INTENT_FLAG.write_text(json.dumps({"granted_at": T0.isoformat()}),
+    bi._path("INTENT_FLAG").write_text(json.dumps({"granted_at": T0.isoformat()}),
                               encoding="utf-8")
     assert bi.is_active(now=T0) is False
 
@@ -134,7 +131,7 @@ def test_every_transition_is_written_down(bi):
     bi.grant(hours=2, reason="spremere", now=T0)
     bi.revoke(reason="fatto")
     rows = [json.loads(l) for l in
-            bi.AUDIT_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+            bi._path("AUDIT_LOG").read_text(encoding="utf-8").splitlines() if l.strip()]
     assert [r["event"] for r in rows] == ["granted", "revoked"]
     assert rows[0]["reason"] == "spremere"
 
@@ -163,7 +160,7 @@ def test_sentinel_bridge_consults_intent_before_writing_daily_halt(tmp_path, mon
     world = SingleTick(tmp_path, monkeypatch, active=active, consumed=20)
     world.run()
     assert "intent" in world.trace
-    assert world.module.DAILY_HALT_FLAG.exists() is (not active)
+    assert world.module._path("DAILY_HALT_FLAG").exists() is (not active)
     if active:
         assert "halt" not in world.trace and "grace" not in world.trace
     else:

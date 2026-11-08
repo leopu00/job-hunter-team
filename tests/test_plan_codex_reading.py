@@ -250,6 +250,6 @@ def test_a_plan_name_that_is_not_a_plain_word_is_not_kept(world, name):
 
 
 def test_a_failed_write_does_not_change_what_the_caller_reads(world, monkeypatch):
-    monkeypatch.setattr(world.bridge, "CODEX_READING_FILE", world.home / "no" / "such" / "dir" / "r.json")
+    monkeypatch.setitem(world.bridge._PATHS, "CODEX_READING_FILE", world.home / "no" / "such" / "dir" / "r.json")
     parsed = {"usage": 1, "usage_is_weekly": True, "plan_type": "prolite"}
     assert world.bridge._remember_codex_reading(parsed) is parsed

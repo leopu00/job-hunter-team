@@ -126,7 +126,7 @@ def _sentinel(world, monkeypatch, flush_rc, send_rc):
     _fake_sender(world.bin, flush_rc=flush_rc, send_rc=send_rc)
     module = _load("sentinel_bridge_under_test", "sentinel-bridge.py", world.home, world.bin)
     monkeypatch.setattr(module, "_standby_active", lambda: False)
-    monkeypatch.setattr(module, "LOGS_DIR", world.home / "logs")
+    monkeypatch.setitem(module._PATHS, "LOGS_DIR", world.home / "logs")
     module._composer_refusals.clear()
     module._composer_noticed_at.clear()
     return module

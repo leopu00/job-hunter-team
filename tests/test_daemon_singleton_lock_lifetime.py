@@ -122,9 +122,14 @@ def test_daemon_keeps_singleton_fd_and_rejects_second_process(
     # loaders exercise the exact lifetime that used to drop their module.
     sys.modules.pop("singleton_lock", None)
     daemon = _load(label, path)
-    monkeypatch.setattr(daemon, "LOGS_DIR", logs, raising=False)
-    monkeypatch.setattr(daemon, "LOCK_FILE", lock_file)
-    monkeypatch.setattr(daemon, "PID_FILE", pid_file, raising=False)
+    if label in ("sentinel-bridge", "window-ratio-meter"):
+        monkeypatch.setitem(daemon._PATHS, "LOCK_FILE", lock_file)
+        if "PID_FILE" in daemon._PATHS:
+            monkeypatch.setitem(daemon._PATHS, "PID_FILE", pid_file)
+    else:
+        monkeypatch.setattr(daemon, "LOGS_DIR", logs, raising=False)
+        monkeypatch.setattr(daemon, "LOCK_FILE", lock_file)
+        monkeypatch.setattr(daemon, "PID_FILE", pid_file, raising=False)
 
     try:
         getattr(daemon, acquire_name)()

@@ -524,11 +524,8 @@ def test_5e_uno_schermo_letto_come_menu_rc3_lo_dice_con_la_causa_vera_e_riprova_
 # ── Test 6 — burn-intent: la deroga passa dal motore, non dagli agenti ───
 @pytest.fixture
 def burn(home):
-    """`burn_intent` puntato alla home del test (i path sono costanti di
-    modulo risolte all'import)."""
+    """`burn_intent` segue la home del test alla chiamata."""
     bi = _load("burn_intent_under_test", SKILLS_DIR / "burn_intent.py")
-    bi.INTENT_FLAG = home / ".burn-intent.flag"
-    bi.AUDIT_LOG = home / "logs" / "burn-intent.jsonl"
     return bi
 
 

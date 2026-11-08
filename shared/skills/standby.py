@@ -110,19 +110,18 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["standby"].copy()
+def _path(name): return jht_home(paths=_PATHS, key=name)
 # Stessa posizione e stessa forma di `.team-halted.flag` / `.burn-intent.flag`:
 # chi deve leggerlo lo trova dove già cerca gli altri.
 FLAG_NAME = ".team-standby.flag"
-STANDBY_FLAG = JHT_HOME / FLAG_NAME
 # Un record per transizione (enter|exit|wake_check): risponde a «quanto è stato
 # in standby» e «perché non si è svegliato», le due domande che arriveranno.
-STANDBY_LOG = JHT_HOME / "logs" / "standby.jsonl"
 # Lo stop esplicito dell'utente. Qui viene SOLO letto: uscire dallo standby con
 # questo flag presente NON fa ripartire il team.
-HALTED_FLAG = JHT_HOME / ".team-halted.flag"
 # L'ultimo sample del sensore usage: weekly_usage per i log e per lo status.
-SENTINEL_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
 
 # Sessioni tmux a cui non si scrive MAI, nemmeno al risveglio: non sono agenti
 # LLM in chat. Tenuta in sync con soft_pause_team.NEVER_MESSAGE (test dedicato).
@@ -200,14 +199,11 @@ def _parse_wake_on(value) -> Optional[dict]:
 def flag_path(home=None) -> Path:
     """Path del flag.
 
-    `home=None` → la costante di modulo, risolta all'import (e ripuntabile dai
-    test, come la fixture di burn_intent). Un `home` ESPLICITO serve ai
-    chiamanti che risolvono `JHT_HOME` a ogni chiamata — stepcap-watchdog e
-    team_roster lo fanno di proposito — così il predicato risponde sulla loro
-    home invece che su quella congelata all'import di questo modulo.
+    `home=None` usa JHT_HOME alla chiamata. Un `home` esplicito mantiene la
+    destinazione del chiamante, come per stepcap-watchdog e team_roster.
     """
     if home is None:
-        return STANDBY_FLAG
+        return _path("STANDBY_FLAG")
     return Path(home) / FLAG_NAME
 
 
@@ -303,11 +299,11 @@ def log_event(event: str, **fields) -> None:
     """Appende una riga a logs/standby.jsonl. Best-effort: non deve mai far
     fallire la transizione che sta tracciando (stessa forma di burn_intent)."""
     try:
-        STANDBY_LOG.parent.mkdir(parents=True, exist_ok=True)
+        _path("STANDBY_LOG").parent.mkdir(parents=True, exist_ok=True)
         row = {"ts": int(_now().timestamp()), "event": event}
         row.update(fields)
         row["ts_iso"] = _now().isoformat(timespec="seconds")
-        with STANDBY_LOG.open("a", encoding="utf-8") as f:
+        with _path("STANDBY_LOG").open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except (OSError, TypeError, ValueError):
         pass
@@ -316,7 +312,7 @@ def log_event(event: str, **fields) -> None:
 def last_weekly_usage():
     """weekly_usage dall'ultimo sample del sensore, o None. Solo per i log."""
     try:
-        raw = SENTINEL_JSONL.read_text(encoding="utf-8").strip().splitlines()
+        raw = _path("SENTINEL_JSONL").read_text(encoding="utf-8").strip().splitlines()
         for line in reversed(raw):
             try:
                 s = json.loads(line)
@@ -331,16 +327,16 @@ def last_weekly_usage():
 
 
 def _atomic_write(payload: dict) -> None:
-    STANDBY_FLAG.parent.mkdir(parents=True, exist_ok=True)
+    _path("STANDBY_FLAG").parent.mkdir(parents=True, exist_ok=True)
     body = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     fd, tmp = tempfile.mkstemp(prefix=".team-standby-", suffix=".tmp",
-                               dir=str(STANDBY_FLAG.parent))
+                               dir=str(_path("STANDBY_FLAG").parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(body)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, STANDBY_FLAG)
+        os.replace(tmp, _path("STANDBY_FLAG"))
     except Exception:
         try:
             os.unlink(tmp)
@@ -452,7 +448,7 @@ def activate(reason: str = "", until=None, wake_on_weekly=None,
 
 def _list_sessions():
     from delivery_sessions import sessions
-    return sessions(runner=subprocess.run, home=STANDBY_FLAG.parent)
+    return sessions(runner=subprocess.run, home=_path("STANDBY_FLAG").parent)
 
 
 # Seconds this caller waits for the transport before it sees the deadline (JHT_TMUX_SEND_WAIT_STANDBY_S; the old
@@ -511,24 +507,24 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
     """
     payload = None
     try:
-        payload = json.loads(STANDBY_FLAG.read_text(encoding="utf-8"))
+        payload = json.loads(_path("STANDBY_FLAG").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         payload = None
     try:
-        STANDBY_FLAG.unlink()
+        _path("STANDBY_FLAG").unlink()
         removed = True
     except OSError:
         removed = False
     if not removed:
         return {"removed": False, "resumed": 0, "halted": False, "why": why}
 
-    halted = HALTED_FLAG.exists()
+    halted = _path("HALTED_FLAG").exists()
     resumed = 0
     reached, not_reached = [], []
     # Chi l'utente ha messo in pausa DA SOLO (agent_pause.py) non riparte perché riparte la squadra.
     alone = _load_sibling("agent_pause", "agent_pause.py")
     try:
-        alone_paused = set(alone.paused_sessions(home=STANDBY_FLAG.parent)) if alone is not None else set()
+        alone_paused = set(alone.paused_sessions(home=_path("STANDBY_FLAG").parent)) if alone is not None else set()
     except Exception:                                           # noqa: BLE001
         alone_paused = set()
     was_pause = isinstance(payload, dict) and payload.get("mode") == MODE_PAUSE
@@ -545,7 +541,7 @@ def wake(why: str = "", weekly_usage=None, now: Optional[datetime] = None) -> di
             else:
                 not_reached.append(s)
                 from delivery_status import report
-                report("message_not_delivered", home=STANDBY_FLAG.parent)
+                report("message_not_delivered", home=_path("STANDBY_FLAG").parent)
     since = (payload or {}).get("since") if isinstance(payload, dict) else None
     standby_s = None
     if isinstance(since, (int, float)):

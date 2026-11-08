@@ -53,8 +53,11 @@ from pathlib import Path
 from typing import Optional
 
 
-JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
-STATE_PATH = JHT_HOME / "state" / "first-run.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["first_run"].copy()
+def _path(name): return jht_home(paths=_PATHS, key=name)
 
 PHASE_AWAITING = "awaiting_profile"
 PHASE_BURST = "burst"
@@ -112,7 +115,7 @@ def _scored_count() -> Optional[int]:
     """
     try:
         import sqlite3
-        db = os.environ.get("JHT_DB") or str(JHT_HOME / "jobs.db")
+        db = os.environ.get("JHT_DB") or str(_path("JHT_HOME") / "jobs.db")
         if not Path(db).exists() or Path(db).stat().st_size == 0:
             return None
         conn = sqlite3.connect(db, timeout=10)
@@ -127,7 +130,7 @@ def _scored_count() -> Optional[int]:
 
 def _read() -> dict:
     try:
-        with STATE_PATH.open(encoding="utf-8") as f:
+        with _path("STATE_PATH").open(encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
@@ -135,12 +138,12 @@ def _read() -> dict:
 
 
 def _write(state: dict) -> dict:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_PATH.with_suffix(".json.tmp")
+    _path("STATE_PATH").parent.mkdir(parents=True, exist_ok=True)
+    tmp = _path("STATE_PATH").with_suffix(".json.tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
         f.write("\n")
-    tmp.replace(STATE_PATH)
+    tmp.replace(_path("STATE_PATH"))
     return state
 
 
@@ -350,7 +353,7 @@ def sourcing_cap(conn=None) -> Optional[dict]:
         since = began.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         own = conn is None
         if own:
-            db = os.environ.get("JHT_DB") or str(JHT_HOME / "jobs.db")
+            db = os.environ.get("JHT_DB") or str(_path("JHT_HOME") / "jobs.db")
             if not Path(db).exists():
                 return None
             conn = sqlite3.connect(db, timeout=10)
@@ -373,7 +376,7 @@ def is_scout(agent) -> bool:
 
 def reset() -> dict:
     try:
-        STATE_PATH.unlink()
+        _path("STATE_PATH").unlink()
     except FileNotFoundError:
         pass
     return status()
@@ -392,9 +395,6 @@ PLAN_ASKERS = ("capitano", "assistente")  # the agents the person talks to: the 
 MAX_PLAN_CARDS = 3  # cards about the plan, in all, for a provider; then nobody asks again
 ANSWER_PREFIX = "ans:"  # agent_questions.ANSWER_PREFIX: a test holds them equal
 _NOTIFY_ID = re.compile(r"\bid=(aq:[a-z0-9][a-z0-9_-]{0,39}:[0-9]+-[a-z0-9]{1,16})\b")
-
-
-LAUNCHABLE_PATH = JHT_HOME / "state" / "first-run-launchable.json"
 
 
 def _launch_missing(path: Path) -> Optional[list]:
@@ -417,7 +417,7 @@ def _first_seen_launchable(now: float, launchable: bool) -> Optional[float]:
     the questionnaire rewriting the profile after every card does not start the wait again. The record goes
     when the profile stops being launchable: a profile that is launchable again is a new one."""
     try:
-        record = json.loads(LAUNCHABLE_PATH.read_text(encoding="utf-8"))
+        record = json.loads(_path("LAUNCHABLE_PATH").read_text(encoding="utf-8"))
         since = record.get("since")
         since = float(since) if isinstance(since, (int, float)) and not isinstance(since, bool) else None
     except (OSError, ValueError, AttributeError):
@@ -425,13 +425,13 @@ def _first_seen_launchable(now: float, launchable: bool) -> Optional[float]:
     if not launchable:
         if since is not None:
             with contextlib.suppress(OSError):
-                LAUNCHABLE_PATH.unlink()
+                _path("LAUNCHABLE_PATH").unlink()
         return None
     if since is None:
         since = now
         try:
-            LAUNCHABLE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            LAUNCHABLE_PATH.write_text(json.dumps({"since": since}), encoding="utf-8")
+            _path("LAUNCHABLE_PATH").parent.mkdir(parents=True, exist_ok=True)
+            _path("LAUNCHABLE_PATH").write_text(json.dumps({"since": since}), encoding="utf-8")
         except OSError:
             pass  # not recorded: the wait counts from the file's modification, as it always did
     return since
@@ -451,7 +451,7 @@ def _profile_imported() -> Optional[float]:
     gate = _load_module("profile_gate", "profile_gate.py")
     if gate is None:
         return None
-    path = JHT_HOME / "profile" / "candidate_profile.yml"
+    path = _path("JHT_HOME") / "profile" / "candidate_profile.yml"
     try:
         usable, _ = gate.check_minimum_viable_profile(str(path))
         missing = _launch_missing(path) if usable else None
@@ -466,7 +466,7 @@ def _profile_imported() -> Optional[float]:
 
 
 def _db_path() -> str:
-    return os.environ.get("JHT_DB") or str(JHT_HOME / "jobs.db")
+    return os.environ.get("JHT_DB") or str(_path("JHT_HOME") / "jobs.db")
 
 
 def _plan_question_rows(question_id: str) -> tuple[bool, Optional[dict]]:
@@ -496,8 +496,8 @@ def _plan_question_lock():
     except ImportError:  # no flock here: the card is idempotent by its own record
         yield
         return
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with STATE_PATH.with_suffix(".lock").open("a") as handle:
+    _path("STATE_PATH").parent.mkdir(parents=True, exist_ok=True)
+    with _path("STATE_PATH").with_suffix(".lock").open("a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
@@ -511,7 +511,7 @@ def _user_chat(requested: str) -> str:
     While the first run is open and the person confirmed their profile with the Assistente's card
     (`state/profile-confirm-card.json` exists), they are in the Assistente's chat, whoever asks: the card goes
     there, never to a chat they are not looking at. Otherwise it goes where the caller says."""
-    if status().get("phase") != PHASE_STEADY and (STATE_PATH.parent / "profile-confirm-card.json").is_file():
+    if status().get("phase") != PHASE_STEADY and (_path("STATE_PATH").parent / "profile-confirm-card.json").is_file():
         return "assistente"
     return requested
 
@@ -741,12 +741,11 @@ START_MESSAGE = (
 # The reminders are written in a file of their own, never in first-run.json: that file is the Capitano's (begin-burst
 # rewrites all of it), and the watchdog that rewrote it from a state read a moment before could put back
 # `awaiting_profile` over a burst the Capitano had just opened, with no roster (found by the guardian, 29/10).
-NUDGE_PATH = JHT_HOME / "state" / "first-run-nudge.json"
 
 
 def _read_nudge() -> dict:
     try:
-        with NUDGE_PATH.open(encoding="utf-8") as f:
+        with _path("NUDGE_PATH").open(encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
@@ -754,12 +753,12 @@ def _read_nudge() -> dict:
 
 
 def _write_nudge(record: dict) -> None:
-    NUDGE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = NUDGE_PATH.with_suffix(f".json.{os.getpid()}.tmp")
+    _path("NUDGE_PATH").parent.mkdir(parents=True, exist_ok=True)
+    tmp = _path("NUDGE_PATH").with_suffix(f".json.{os.getpid()}.tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(record, f)
         f.write("\n")
-    tmp.replace(NUDGE_PATH)
+    tmp.replace(_path("NUDGE_PATH"))
 
 
 def _plan_declared_at() -> Optional[float]:

@@ -62,9 +62,6 @@ def put_config(home, config=NIGHT):
 @pytest.fixture()
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
-    monkeypatch.setattr(burn_intent, "INTENT_FLAG", tmp_path / ".burn-intent.flag")
-    monkeypatch.setattr(burn_intent, "AUDIT_LOG", tmp_path / "logs" / "burn-intent.jsonl")
-    monkeypatch.setattr(burn_intent, "NOTICES_FILE", tmp_path / ".burn-intent-notices.json")
     monkeypatch.setattr(pace_guard, "active_workers", lambda: [])
     (tmp_path / "logs").mkdir()
     put_config(tmp_path)

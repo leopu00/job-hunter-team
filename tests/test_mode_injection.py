@@ -251,8 +251,6 @@ def test_la_deroga_di_spesa_si_legge_dal_modulo_esistente(mb):
     """La scadenza di `.burn-intent.flag` ha UNA sola implementazione
     (`burn_intent.status`): qui si verifica che venga riusata, non ricopiata."""
     bi = _load("burn_intent_ref", SKILLS_DIR / "burn_intent.py")
-    bi.INTENT_FLAG = mb._home() / ".burn-intent.flag"
-    bi.AUDIT_LOG = mb._home() / "logs" / "burn-intent.jsonl"
     bi.grant(hours=2, reason="test")
     assert any(f["name"] == "burn-intent" for f in mb.read_flags())
     bi.revoke()

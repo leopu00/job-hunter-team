@@ -28,7 +28,7 @@ def bridge(tmp_path, monkeypatch):
     spec.loader.exec_module(mod)
     sessions = tmp_path / ".codex" / "sessions" / "2026"
     sessions.mkdir(parents=True)
-    monkeypatch.setattr(mod, "CODEX_SESSIONS_DIR", tmp_path / ".codex" / "sessions")
+    monkeypatch.setitem(mod._PATHS, "CODEX_SESSIONS_DIR", tmp_path / ".codex" / "sessions")
     return mod, sessions
 
 

@@ -461,7 +461,7 @@ def test_the_sentinel_bridge_records_after_each_reading_and_never_stops_on_a_fai
     ordered = [event for event in world.trace if event in ("sample", "role_usage", "stats", "published")]
     assert ordered == ["sample", "role_usage", "stats", "published"] * 2
     assert len(world.stats_args) == 2
-    assert all(args["sentinel_path"] == world.module.DATA_JSONL for args in world.stats_args)
+    assert all(args["sentinel_path"] == world.module._path("DATA_JSONL") for args in world.stats_args)
     assert capsys.readouterr().out.count("work-stats skipped: OSError") == 2
 
 

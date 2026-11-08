@@ -60,10 +60,11 @@ SENTINELLA_SESSION = "SENTINELLA"
 # transizione ON→OFF). Evita lo spam ma re-asserisce se il primo OFF non ha preso.
 OFFHOURS_REASSERT_SEC = int(os.environ.get("JHT_OFFHOURS_REASSERT_SEC", "1800"))
 
-JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
-CONFIG_PATH = JHT_HOME / "jht.config.json"
-LOGS_DIR = JHT_HOME / "logs"
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "shared" / "skills"))
+from jht_home import PATH_SPECS, RuntimePathContext, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["sentinel-bridge"].copy()
+def _path(name): return jht_home(empty_is_unset=False, paths=_PATHS, key=name)
 
 # ── Vitals RAM/CPU (2026-06-18) ─────────────────────────────────────────
 # Il bridge campiona i vitals di sistema a OGNI tick su un FILE DEDICATO
@@ -73,7 +74,6 @@ LOGS_DIR.mkdir(parents=True, exist_ok=True)
 # Il Mantenitore legge vitals.jsonl 1×/giorno e mette i picchi in croce con la
 # diagnosi infra. Logica di lettura in shared/skills/host_vitals.py.
 VITALS_SKILL = str(Path(__file__).resolve().parent.parent / "shared" / "skills" / "host_vitals.py")
-VITALS_FILE = LOGS_DIR / "vitals.jsonl"
 VITALS_ALERT_PCT = 95.0
 VITALS_ALERT_COOLDOWN_MIN = 30.0
 _LAST_VITALS_ALERT_AT = 0.0
@@ -85,23 +85,17 @@ VITALS_SILENT_MIN_MINUTES = 2.0    # pavimento: con tick brevissimi non si accus
 VITALS_SILENT_COOLDOWN_MIN = 60.0
 _LAST_VITALS_SILENT_AT = 0.0
 _BRIDGE_STARTED_AT = datetime.now(timezone.utc).isoformat()
-DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
-LOG_TXT = LOGS_DIR / "sentinel-log.txt"
-PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
 # Lockfile del singleton (flock). File DEDICATO e mai cancellato da nessuno:
 # il PID file lo rimuovono bridge-control.sh e pid1 (cleanupStaleBridgeState),
 # e cancellare un file flockato ne rompe la mutua esclusione (il prossimo
 # processo crea un inode nuovo e prende un lock diverso).
-LOCK_FILE = LOGS_DIR / "sentinel-bridge.lock"
 # State pubblico letto dall'UI web (web/app/api/bridge/status/route.ts).
 # Source-of-truth del prossimo tick: il bridge calcola e pubblica qui;
 # la UI legge senza ricostruire la logica (che cambierebbe ogni V*).
-STATE_FILE = LOGS_DIR / "sentinel-bridge-state.json"
 # Daily hard-stop (#2): flag CONDIVISO. Quando il consumo di oggi sfora il cap
 # giornaliero, questo bridge lo crea e mette il team in standby; pacing-bridge e
 # heartbeat-bridge lo leggono e tacciono. Rimosso da questo stesso bridge quando il
 # budget rientra (inizio finestra di lavoro del giorno dopo / reset weekly).
-DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
 STATE_VERSION = 7
 
 DEFAULT_TICK_MINUTES = 5               # default se config mancante
@@ -166,7 +160,6 @@ PACE_OVER_TOL = 1.0  # %/h sopra vel_target oltre cui il team "sta bruciando" �
 # Path dello state file del pacing-bridge: contiene current_window_target_pct
 # scritto a ogni tick. Letto lazy nel _is_in_gspot. Se manca → fallback
 # alle costanti statiche (back-compat completa).
-PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 
 # ── Notifica Sentinella ──────────────────────────────────────────────────
 # La Sentinella è SVEGLIATA solo quando la proj è fuori dal g-spot.
@@ -230,7 +223,7 @@ def _read_config_json():
     if _PLAIN_FILE_MOD is None:
         raise OSError("plain_file not loadable")
     try:
-        return _PLAIN_FILE_MOD.read_json(CONFIG_PATH)
+        return _PLAIN_FILE_MOD.read_json(_path("CONFIG_PATH"))
     except _PLAIN_FILE_MOD.NotPlain:
         raise OSError("config is not a plain file")
 
@@ -261,9 +254,9 @@ def _read_dynamic_target():
     trascurabile, evita di dover gestire file watching.
     """
     try:
-        if not PACING_STATE_FILE.exists():
+        if not _path("PACING_STATE_FILE").exists():
             return None, None
-        with PACING_STATE_FILE.open(encoding="utf-8") as f:
+        with _path("PACING_STATE_FILE").open(encoding="utf-8") as f:
             st = json.load(f)
     except (OSError, json.JSONDecodeError):
         return None, None
@@ -304,9 +297,9 @@ def _read_pacing_pace():
     a differenza di proj che è l'estrapolazione volatile a fine finestra.
     Ritorna (vel_team, vel_target) o (None, None) se assenti/illeggibili."""
     try:
-        if not PACING_STATE_FILE.exists():
+        if not _path("PACING_STATE_FILE").exists():
             return None, None
-        with PACING_STATE_FILE.open(encoding="utf-8") as f:
+        with _path("PACING_STATE_FILE").open(encoding="utf-8") as f:
             st = json.load(f)
     except (OSError, json.JSONDecodeError):
         return None, None
@@ -496,7 +489,7 @@ def _uncounted_usage():
     if not _UNCOUNTED_MOD:
         return None
     try:
-        gap = _UNCOUNTED_MOD.declared_gap(JHT_HOME, time.time() - 5 * 3600)
+        gap = _UNCOUNTED_MOD.declared_gap(_path("JHT_HOME"), time.time() - 5 * 3600)
     except Exception:
         return None
     if gap and not _UNCOUNTED_WARNED:
@@ -545,10 +538,11 @@ def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
         "sentinella_cooldown_min": SENTINELLA_COOLDOWN_MIN,
         "uncounted": _uncounted_usage(),
     }
-    tmp = STATE_FILE.with_suffix(".json.tmp")
+    tmp = _path("STATE_FILE").with_suffix(".json.tmp")
     try:
+        _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
         tmp.write_text(json.dumps(payload), encoding="utf-8")
-        os.replace(tmp, STATE_FILE)
+        os.replace(tmp, _path("STATE_FILE"))
     except OSError as e:
         print(f"[bridge V6] WARN write state: {e}", file=sys.stderr)
 
@@ -794,7 +788,7 @@ def jht_tmux_send(session, text):
 
 def _daily_halt_active():
     """True se il team è in standby per sforo del cap giornaliero (#2)."""
-    return DAILY_HALT_FLAG.exists()
+    return _path("DAILY_HALT_FLAG").exists()
 
 
 def _daily_hardstop_disabled():
@@ -829,7 +823,6 @@ DAILY_HARDSTOP_WINDOW_SEC = float(os.environ.get(
 #: Dove vive l'inizio-finestra della deroga. Su FILE e non in memoria: il
 #: bridge riparte (watchdog, FATAL→restart) e un orologio in RAM ripartirebbe
 #: da zero a ogni riavvio, cioè la deroga non scadrebbe mai davvero.
-HARDSTOP_OVERRIDE_STATE_FILE = LOGS_DIR / "daily-hardstop-override.json"
 
 #: Stato dell'avviso, conservato fra i tick del loop del bridge.
 _HARDSTOP_NOTICE_STATE: dict = {"since": None, "announced": None, "phase": None}
@@ -878,7 +871,7 @@ def _read_hardstop_override_started():
     scaduta: se non so quando la deroga è iniziata, il freno torna.
     """
     try:
-        raw = HARDSTOP_OVERRIDE_STATE_FILE.read_text(encoding="utf-8")
+        raw = _path("HARDSTOP_OVERRIDE_STATE_FILE").read_text(encoding="utf-8")
     except FileNotFoundError:
         return None
     except OSError:
@@ -895,10 +888,10 @@ def _persist_hardstop_override(phase, started_ts):
     cambia la decisione del tick, che è già presa in memoria."""
     try:
         if phase == HARDSTOP_OFF:
-            HARDSTOP_OVERRIDE_STATE_FILE.unlink(missing_ok=True)
+            _path("HARDSTOP_OVERRIDE_STATE_FILE").unlink(missing_ok=True)
         elif started_ts is not None:
-            LOGS_DIR.mkdir(parents=True, exist_ok=True)
-            HARDSTOP_OVERRIDE_STATE_FILE.write_text(
+            _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+            _path("HARDSTOP_OVERRIDE_STATE_FILE").write_text(
                 json.dumps({"started_ts": started_ts}), encoding="utf-8")
     except OSError as exc:
         print(f"[bridge V6] WARN hardstop-override persist: {exc}",
@@ -1031,8 +1024,7 @@ _DELIVERY_PARTS = {}
 
 
 def _delivery_context():
-    from delivery_context import Context
-    return Context(globals())
+    return RuntimePathContext(globals(), _PATHS, _path)
 
 
 def _delivery_part(name):
@@ -1122,10 +1114,10 @@ def _esc_sessions(sessions):
 def _write_daily_halt_payload(payload):
     """Write atomico: il daemon del throttle legge questo file in parallelo."""
     try:
-        DAILY_HALT_FLAG.parent.mkdir(parents=True, exist_ok=True)
-        tmp = DAILY_HALT_FLAG.with_suffix(".flag.tmp")
+        _path("DAILY_HALT_FLAG").parent.mkdir(parents=True, exist_ok=True)
+        tmp = _path("DAILY_HALT_FLAG").with_suffix(".flag.tmp")
         tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        os.replace(tmp, DAILY_HALT_FLAG)
+        os.replace(tmp, _path("DAILY_HALT_FLAG"))
         return True
     except OSError:
         return False
@@ -1167,7 +1159,7 @@ def _enforce_daily_halt():
     if not _daily_halt_active():
         return []
     try:
-        payload = json.loads(DAILY_HALT_FLAG.read_text(encoding="utf-8"))
+        payload = json.loads(_path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             payload = {}
     except (OSError, ValueError):
@@ -1229,7 +1221,7 @@ def _sampler_silence(tick_min):
     VITALS_SILENT_INTERVALS tick (o dall'avvio del bridge, se non c'e' mai stato un campione)."""
     max_age_min = max(VITALS_SILENT_MIN_MINUTES, VITALS_SILENT_INTERVALS * float(tick_min))
     try:
-        r = subprocess.run([sys.executable, VITALS_SKILL, "silent", "--file", str(VITALS_FILE),
+        r = subprocess.run([sys.executable, VITALS_SKILL, "silent", "--file", str(_path("VITALS_FILE")),
                             "--max-age-min", str(max_age_min), "--since", _BRIDGE_STARTED_AT],
                            capture_output=True, text=True, timeout=10)
         if r.returncode != 0 or not r.stdout.strip():
@@ -1252,7 +1244,7 @@ def _sustained_cpu():
     """host_vitals.py cpu-pressure on the samples already written: None or the pressure."""
     try:
         r = subprocess.run([sys.executable, VITALS_SKILL, "cpu-pressure",
-                            "--file", str(VITALS_FILE), "--pct", str(VITALS_ALERT_PCT)],
+                            "--file", str(_path("VITALS_FILE")), "--pct", str(VITALS_ALERT_PCT)],
                            capture_output=True, text=True, timeout=10)
         if r.returncode != 0 or not r.stdout.strip():
             return None
@@ -1270,8 +1262,6 @@ def cpu_alert_phrase(cpu):
 
 
 # ── Codex: lettura rollout JSONL ────────────────────────────────────────
-
-CODEX_SESSIONS_DIR = JHT_HOME / ".codex" / "sessions"
 
 
 _WEEKLY_MIN_MINUTES = 1440
@@ -1297,7 +1287,6 @@ def _plan_type_of(*rate_limits):
 
 # The last Codex reading, for `plan_registry.py`: which plan Codex reports and whether it has ONE weekly window.
 # A fact about the account, not about this minute, so it is kept: `jht providers plan` shows it without asking Codex.
-CODEX_READING_FILE = LOGS_DIR / "codex-plan-reading.json"
 CODEX_READING_REFRESH_SEC = 86400
 
 
@@ -1309,7 +1298,7 @@ def _remember_codex_reading(parsed):
             return parsed
         reading = {"plan_type": parsed.get("plan_type"), "single_weekly": parsed.get("usage_is_weekly") is True}
         try:
-            kept = json.loads(CODEX_READING_FILE.read_text(encoding="utf-8"))
+            kept = json.loads(_path("CODEX_READING_FILE").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             kept = {}
         if (isinstance(kept, dict) and kept.get("plan_type") == reading["plan_type"]
@@ -1317,9 +1306,10 @@ def _remember_codex_reading(parsed):
                 and isinstance(kept.get("observed_at"), (int, float))
                 and time.time() - kept["observed_at"] < CODEX_READING_REFRESH_SEC):
             return parsed
-        tmp = CODEX_READING_FILE.with_suffix(".json.tmp")
+        tmp = _path("CODEX_READING_FILE").with_suffix(".json.tmp")
+        _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
         tmp.write_text(json.dumps({**reading, "observed_at": time.time()}), encoding="utf-8")
-        os.replace(tmp, CODEX_READING_FILE)
+        os.replace(tmp, _path("CODEX_READING_FILE"))
     except OSError:
         pass
     return parsed
@@ -1406,10 +1396,10 @@ def fetch_codex_rollout():
     """Legge il rollout JSONL più recente sotto ~/.codex/sessions/ e
     estrae rate_limits.primary.used_percent + resets_at."""
     try:
-        if not CODEX_SESSIONS_DIR.exists():
+        if not _path("CODEX_SESSIONS_DIR").exists():
             return None
         candidates = []
-        for p in CODEX_SESSIONS_DIR.rglob("rollout-*.jsonl"):
+        for p in _path("CODEX_SESSIONS_DIR").rglob("rollout-*.jsonl"):
             try:
                 st = p.stat()
                 if st.st_size >= 512:
@@ -1505,7 +1495,7 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
     exe = executable or shutil.which("codex")
     if not exe:
         return None
-    env = {**os.environ, "CODEX_HOME": str(JHT_HOME / ".codex")}
+    env = {**os.environ, "CODEX_HOME": str(_path("JHT_HOME") / ".codex")}
     try:
         # Un gruppo di processi tutto suo: `codex` e' un lanciatore Node che avvia il binario nativo, e uccidere
         # solo il lanciatore lascerebbe il figlio vivo fino all'EOF di stdin.
@@ -1577,18 +1567,15 @@ def fetch_codex_app_server(timeout_s=None, executable=None):
             pass
 
 
-
 # ── Claude: HTTP API + 429 cooldown ─────────────────────────────────────
 
-CLAUDE_CREDENTIALS = JHT_HOME / ".claude" / ".credentials.json"
 CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
-CLAUDE_429_COOLDOWN_FILE = LOGS_DIR / "claude-429-cooldown"
 CLAUDE_429_COOLDOWN_S = 300
 
 
 def _read_claude_token():
     try:
-        with CLAUDE_CREDENTIALS.open(encoding="utf-8") as f:
+        with _path("CLAUDE_CREDENTIALS").open(encoding="utf-8") as f:
             creds = json.load(f)
         return (creds.get("claudeAiOauth") or {}).get("accessToken")
     except (FileNotFoundError, json.JSONDecodeError, OSError):
@@ -1597,19 +1584,20 @@ def _read_claude_token():
 
 def _load_claude_429_cooldown():
     try:
-        return float(CLAUDE_429_COOLDOWN_FILE.read_text(encoding="utf-8").strip())
+        return float(_path("CLAUDE_429_COOLDOWN_FILE").read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return 0.0
 
 
 def _save_claude_429_cooldown(until_epoch):
     try:
-        CLAUDE_429_COOLDOWN_FILE.write_text(f"{until_epoch:.0f}", encoding="utf-8")
+        _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+        _path("CLAUDE_429_COOLDOWN_FILE").write_text(f"{until_epoch:.0f}", encoding="utf-8")
     except OSError:
         pass
 
 
-_claude_429_until = _load_claude_429_cooldown()
+_claude_429_until, _claude_429_path = 0.0, None
 
 # ── Weekly reset STICKY (il team deve sempre conoscere gli orari finestre) ──
 # Il reset weekly cambia solo ~settimanalmente e SOLO l'HTTP /oauth/usage lo
@@ -1618,12 +1606,12 @@ _claude_429_until = _load_claude_429_cooldown()
 # lo riempiamo dalla cache (finché il reset è nel futuro). Così il pacing usa
 # sempre `residual_to_reset` ancorato al reset reale invece del fallback
 # `rolling_7d`. Idempotente, fail-open.
-WEEKLY_RESET_CACHE_FILE = LOGS_DIR / "weekly-reset-cache.json"
 
 
 def _save_weekly_reset_cache(at, at_unix):
     try:
-        WEEKLY_RESET_CACHE_FILE.write_text(
+        _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+        _path("WEEKLY_RESET_CACHE_FILE").write_text(
             json.dumps({"weekly_reset_at": at, "weekly_reset_at_unix": at_unix}),
             encoding="utf-8",
         )
@@ -1633,7 +1621,7 @@ def _save_weekly_reset_cache(at, at_unix):
 
 def _load_weekly_reset_cache():
     try:
-        return json.loads(WEEKLY_RESET_CACHE_FILE.read_text(encoding="utf-8"))
+        return json.loads(_path("WEEKLY_RESET_CACHE_FILE").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -1695,7 +1683,10 @@ def _ensure_reset_unix(parsed):
 
 def fetch_claude_api():
     """Ritorna dict {usage, reset_at, weekly_usage}, None, o 'RATE_LIMIT'."""
-    global _claude_429_until
+    global _claude_429_until, _claude_429_path
+    path = _path("CLAUDE_429_COOLDOWN_FILE")
+    if path != _claude_429_path:
+        _claude_429_until, _claude_429_path = _load_claude_429_cooldown(), path
     if time.time() < _claude_429_until:
         return "RATE_LIMIT"
     token = _read_claude_token()
@@ -1742,13 +1733,12 @@ def fetch_claude_api():
 
 # ── Kimi: HTTP API ──────────────────────────────────────────────────────
 
-KIMI_CREDENTIALS = JHT_HOME / ".kimi" / "credentials" / "kimi-code.json"
 KIMI_USAGES_URL = "https://api.kimi.com/coding/v1/usages"
 
 
 def _read_kimi_token():
     try:
-        with KIMI_CREDENTIALS.open(encoding="utf-8") as f:
+        with _path("KIMI_CREDENTIALS").open(encoding="utf-8") as f:
             return json.load(f).get("access_token")
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
@@ -1833,7 +1823,6 @@ def _load_bridge_message_mod():
 
 
 _BM_MOD = _load_bridge_message_mod()
-LAST_TICK_FILE = LOGS_DIR / "last-tick.txt"
 
 
 def _humanize_dur(hours):
@@ -1853,7 +1842,8 @@ def _humanize_dur(hours):
 def _write_last_tick(msg):
     """Persiste l'ultimo tick renderizzato → la skill rate-budget lo rilegge."""
     try:
-        LAST_TICK_FILE.write_text(msg, encoding="utf-8")
+        _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+        _path("LAST_TICK_FILE").write_text(msg, encoding="utf-8")
     except OSError:
         pass
 
@@ -1976,7 +1966,7 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
     if isinstance(mrp, (int, float)):
         extras["monthly_rem"] = mrp
     try:
-        th_path = DATA_JSONL.parent / "tools-health.json"
+        th_path = _path("DATA_JSONL").parent / "tools-health.json"
         if th_path.exists():
             th = json.loads(th_path.read_text(encoding="utf-8"))
             if th.get("any_broken") and th.get("broken"):
@@ -2063,10 +2053,10 @@ def load_last_sample(source=None):
     Quando il bridge calcola velocità deve usare solo i propri sample
     (source='bridge'), altrimenti i sample ad-hoc del Capitano
     (rate_budget live) si infilano tra tick e fanno scattare anti-spike."""
-    if not DATA_JSONL.exists():
+    if not _path("DATA_JSONL").exists():
         return None
     try:
-        raw = DATA_JSONL.read_text(encoding="utf-8").strip().splitlines()
+        raw = _path("DATA_JSONL").read_text(encoding="utf-8").strip().splitlines()
         if source is None:
             return json.loads(raw[-1]) if raw else None
         # Filtra per source: cerca dall'ultimo verso il primo
@@ -2091,10 +2081,10 @@ def _sample_epoch(sample):
 
 def load_recent_samples(n=30, source=None, since_h=None):
     """Ultimi N sample dal JSONL, opzionalmente filtrati per source e per eta' (`since_h` ore al massimo)."""
-    if not DATA_JSONL.exists():
+    if not _path("DATA_JSONL").exists():
         return []
     try:
-        raw = DATA_JSONL.read_text(encoding="utf-8").strip().splitlines()
+        raw = _path("DATA_JSONL").read_text(encoding="utf-8").strip().splitlines()
         out = []
         for line in raw:
             try:
@@ -2113,11 +2103,11 @@ def load_recent_samples(n=30, source=None, since_h=None):
 
 
 def write_jsonl(entry):
-    with DATA_JSONL.open("a", encoding="utf-8") as f:
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+    with _path("DATA_JSONL").open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
 
 
-ROLE_USAGE_FILE = LOGS_DIR / "role-usage.json"
 ROLE_USAGE_MAX_AGE_SEC = 15 * 60
 _TBA_MOD = None
 
@@ -2135,7 +2125,7 @@ def _write_role_usage(entry, now_ts):
             return None
         windows = _TBA_MOD.provider_windows(entry, now_ts)
         data = _TBA_MOD.role_usage(windows, now_ts, provider=entry.get("provider"))
-        _atomic_write_json(ROLE_USAGE_FILE, data)
+        _atomic_write_json(_path("ROLE_USAGE_FILE"), data)
         return data
     except Exception as e:  # noqa: BLE001 — la misura non ferma il sensore
         print(f"[bridge] role-usage skipped: {type(e).__name__}: {e}", flush=True)
@@ -2153,7 +2143,7 @@ def _record_work_stats():
         if _WORK_STATS_MOD is None:
             _WORK_STATS_MOD = _load_skill_module("work_stats", "work_stats.py")
         if _WORK_STATS_MOD is not None:
-            _WORK_STATS_MOD.record(sentinel_path=DATA_JSONL, log=lambda line: print(line, flush=True))
+            _WORK_STATS_MOD.record(sentinel_path=_path("DATA_JSONL"), log=lambda line: print(line, flush=True))
     except Exception as e:  # noqa: BLE001 — la statistica non ferma il sensore
         print(f"[bridge] work-stats skipped: {type(e).__name__}", flush=True)
 
@@ -2163,6 +2153,7 @@ def _atomic_write_json(path, data):
     cartella) e os.replace: con più bridge vivi insieme ognuno scrive il suo
     temporaneo, e chi legge vede sempre un JSON intero, il vecchio o il nuovo.
     Un temporaneo condiviso faceva mescolare le scritture."""
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -2179,7 +2170,7 @@ def _atomic_write_json(path, data):
 def _read_role_usage(now_ts):
     """role-usage.json se fresco (≤15 min), altrimenti None."""
     try:
-        data = json.loads(ROLE_USAGE_FILE.read_text(encoding="utf-8"))
+        data = json.loads(_path("ROLE_USAGE_FILE").read_text(encoding="utf-8"))
         gen = datetime.fromisoformat(str(data.get("generated_at"))).timestamp()
     except (OSError, ValueError, TypeError, AttributeError):
         return None
@@ -2341,7 +2332,7 @@ def _pace_guard_step(entry, within_hours=True, burn_intent_on=False):
                 # riparte come edge invece che come ripetizione.
                 _pace_advice_state.update(
                     {"ts": 0.0, "throttle_s": None, "verdict": None})
-        with (LOGS_DIR / "pace-guard.jsonl").open("a", encoding="utf-8") as f:
+        with (_path("LOGS_DIR") / "pace-guard.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(result) + "\n")
     except Exception:  # noqa: BLE001 — il bridge non muore per il guard
         pass
@@ -2381,7 +2372,7 @@ def _emergency_to_mailbox(result, now_ts):
 def _append_pace_mailbox(advice, delivered, kind="pace-guard"):
     """Una riga nella mailbox che il Capitano drena a inizio turno."""
     try:
-        with (LOGS_DIR / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
+        with (_path("LOGS_DIR") / "bridge-mailbox.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps({
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "kind": kind,
@@ -2463,6 +2454,7 @@ def _proj_text(entry):
 
 
 def write_log(entry):
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
     line = (
         f"[{entry['ts']}] provider={entry['provider']} "
         f"usage={entry['usage']}% "
@@ -2470,7 +2462,7 @@ def write_log(entry):
         f"proj={_proj_text(entry)} "
         f"status={entry.get('status', '-')} src={entry.get('source', '-')}"
     )
-    with LOG_TXT.open("a", encoding="utf-8") as f:
+    with _path("LOG_TXT").open("a", encoding="utf-8") as f:
         f.write(line + "\n")
 
 
@@ -2499,11 +2491,11 @@ def acquire_singleton_lock():
     if mod is None:
         print("[bridge V5] WARN singleton_lock not loadable — continuing without a lock")
         try:
-            PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
+            _path("PID_FILE").write_text(str(os.getpid()), encoding="utf-8")
         except OSError:
             pass
         return
-    mod.acquire_singleton(LOCK_FILE, pid_file=PID_FILE, label="bridge V5")
+    mod.acquire_singleton(_path("LOCK_FILE"), pid_file=_path("PID_FILE"), label="bridge V5")
 
 
 # ── Helper: chiama compute_metrics skill per scrivere sample ────────────
@@ -2580,7 +2572,7 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts, burn_intent_on=False):
         # il ciclo weekly e' di 7 giorni che terminano al reset → start = reset-7d.
         # Cosi' weekly_pace puo' calcolare ideal_used e debt_pct (saldo vs retta).
         wtot = wht.active_hours_in_range(wreset_dt - timedelta(days=7), wreset_dt, cfg)
-        return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah,
+        return wp.weekly_pace_assessment(str(_path("DATA_JSONL")), now_ts, wrem, wah,
                                          weekly_total_active_hours=wtot,
                                          burn_intent_on=bool(burn_intent_on),
                                          hours_to_reset=(wreset_unix - now_ts) / 3600.0)
@@ -2809,7 +2801,7 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
                 ws_ts = ws.timestamp()
                 base = None
                 seen = []
-                with open(DATA_JSONL, encoding="utf-8") as f:
+                with open(_path("DATA_JSONL"), encoding="utf-8") as f:
                     for line in f:
                         line = line.strip()
                         if not line:
@@ -3145,6 +3137,7 @@ def _do_fetch(provider):
 
 
 def main():
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
     return _delivery_part("sentinel_loop").main(_delivery_context())
 
 

@@ -36,7 +36,6 @@ def bridge(tmp_path, monkeypatch):
     spec.loader.exec_module(module)
     sessions = jht_home / ".codex" / "sessions" / "2027"
     sessions.mkdir(parents=True)
-    monkeypatch.setattr(module, "CODEX_SESSIONS_DIR", jht_home / ".codex" / "sessions")
     module.sessions_for_test = sessions
     return module
 
