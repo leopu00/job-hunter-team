@@ -8,7 +8,9 @@ a documented flow must not stop at the refusal.
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import shutil
 import re
 import sqlite3
 import subprocess
@@ -28,9 +30,10 @@ CATEGORIES = ("DEAD_LINK", "GEO", "LANGUAGE", "SENIORITY", "STACK", "DEGREE", "C
               "DUPLICATE", "LOW_SCORE", "CRITIC", "EXPIRED")
 
 
-@pytest.fixture
-def db(tmp_path):
-    path = tmp_path / "jobs.db"
+@pytest.fixture(scope="module")
+def seeded_db(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("update-seed")
+    path = directory / "jobs.db"
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     _db.ensure_schema(conn)
@@ -40,6 +43,18 @@ def db(tmp_path):
                      ("Engineer %d" % i, "https://x.example/%d" % i))
     conn.commit()
     conn.close()
+    assert set(os.listdir(directory)) == {"jobs.db"}, "seed has unclosed SQLite sidecars"
+    original = hashlib.sha256(path.read_bytes()).digest()
+    yield path
+    assert set(os.listdir(directory)) == {"jobs.db"}, "a case wrote into the shared seed directory"
+    assert hashlib.sha256(path.read_bytes()).digest() == original, "a case changed the shared seed"
+
+
+@pytest.fixture
+def db(tmp_path, seeded_db):
+    """Each case keeps its own writable database and adjacent files."""
+    path = tmp_path / "jobs.db"
+    shutil.copyfile(seeded_db, path)
     return path
 
 

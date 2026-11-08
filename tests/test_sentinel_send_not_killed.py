@@ -8,26 +8,18 @@ the round after an overrun asks the transport to submit a paste of ours that may
 (`--flush-ours`, which presses Enter only on a text it can prove is its own).
 """
 import importlib.util
+import json
 import os
-import stat
 import sys
 import time
 from pathlib import Path
 
 import pytest
 
+from controlled_sender import ControlledSender
+
 ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / ".launcher" / "sentinel-bridge.py"
-
-# A transport that is slow: a delivery pastes after 1.0 s and presses Enter 0.5 s later; `--flush-ours` answers 0.
-SLOW_SENDER = """#!/bin/bash
-echo "$*" >> "{dir}/calls.log"
-if [ "$1" = "--flush-ours" ]; then exit 0; fi
-sleep 1.0; touch "{dir}/pasted.$$"
-sleep 0.5; touch "{dir}/entered.$$"
-sleep 0.4
-exit 0
-"""
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="il bridge gira nel container Linux")
 
@@ -38,9 +30,8 @@ def bridge(tmp_path, monkeypatch):
     (home / "logs").mkdir(parents=True)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    sender = bin_dir / "jht-tmux-send"
-    sender.write_text(SLOW_SENDER.format(dir=tmp_path), encoding="utf-8")
-    sender.chmod(sender.stat().st_mode | stat.S_IEXEC)
+    sender = ControlledSender(tmp_path)
+    sender.install(bin_dir / "jht-tmux-send")
     monkeypatch.setenv("JHT_HOME", str(home))
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
     monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
@@ -52,10 +43,23 @@ def bridge(tmp_path, monkeypatch):
     module._tmux_send_running.clear()
     module._tmux_send_overran.clear()
     module._composer_refusals.clear()
-    return type("B", (), {"module": module, "dir": tmp_path,
-                          "calls": staticmethod(lambda: (tmp_path / "calls.log").read_text(encoding="utf-8").splitlines()
-                                                if (tmp_path / "calls.log").exists() else []),
-                          "entered": staticmethod(lambda: sorted(p.name for p in tmp_path.glob("entered.*")))})
+    def calls():
+        log = tmp_path / "calls.log"
+        rows = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        assert all(row["fixture"] == sender.fixture for row in rows)
+        return [" ".join(row["args"]) for row in rows]
+
+    try:
+        yield type("B", (), {"module": module, "dir": tmp_path, "sender": sender,
+                             "calls": staticmethod(calls),
+                             "entered": staticmethod(lambda: sorted(p.name for p in tmp_path.glob("entered.*")))})
+    finally:
+        try:
+            sender.close()
+        finally:
+            for proc in list(module._tmux_send_running.values()):
+                proc.wait(timeout=5)
+            assert not list(tmp_path.glob("timed-out.*")), "The fake sender exhausted its safety deadline"
 
 
 def _wait_for(predicate, seconds=6.0):
@@ -80,31 +84,47 @@ def _wait_for_exit(bridge):
 def test_a_transport_that_overruns_is_left_to_finish_and_still_presses_its_enter(bridge):
     assert bridge.module.jht_tmux_send("CAPITANO", "avviso") is False, "the tick goes on without waiting for it"
     assert bridge.entered() == [], "it was still pasting when the bridge stopped waiting"
+    bridge.sender.wait_started()
+    bridge.sender.release_all()
     assert _wait_for(lambda: len(bridge.entered()) == 1), "nobody killed it: the paste got its Enter"
     _wait_for_exit(bridge)
+    bridge.sender.wait_exited()
 
 
 def test_a_second_delivery_is_not_stacked_on_one_still_running(bridge):
     assert bridge.module.jht_tmux_send("CAPITANO", "primo") is False
     assert bridge.module.jht_tmux_send("CAPITANO", "secondo") is False
     assert [c for c in bridge.calls() if not c.startswith("--flush-ours")] == ["CAPITANO primo"]
+    bridge.sender.wait_started()
+    bridge.sender.release_all()
     assert _wait_for(lambda: len(bridge.entered()) == 1)
     _wait_for_exit(bridge)
+    bridge.sender.wait_exited()
 
 
 def test_the_round_after_an_overrun_first_asks_the_transport_to_free_the_composer(bridge):
     assert bridge.module.jht_tmux_send("CAPITANO", "primo") is False
+    bridge.sender.wait_started()
+    bridge.sender.release_all()
     assert _wait_for(lambda: len(bridge.entered()) == 1)
     _wait_for_exit(bridge)
+    bridge.sender.wait_exited()
     bridge.module.TMUX_SEND_WAIT_S = 5.0
     assert bridge.module.jht_tmux_send("CAPITANO", "secondo") is True
+    bridge.sender.wait_started(count=2)
+    bridge.sender.wait_exited()
     assert bridge.calls() == ["CAPITANO primo", "--flush-ours CAPITANO", "CAPITANO secondo"]
     # and only once: the next round goes straight to the delivery
     assert bridge.module.jht_tmux_send("CAPITANO", "terzo") is True
+    bridge.sender.wait_started(count=3)
+    bridge.sender.wait_exited()
     assert bridge.calls()[-1] == "CAPITANO terzo" and sum(c.startswith("--flush-ours") for c in bridge.calls()) == 1
 
 
 def test_a_delivery_that_ends_in_time_is_what_it_always_was(bridge):
     bridge.module.TMUX_SEND_WAIT_S = 5.0
+    bridge.sender.release_all()
     assert bridge.module.jht_tmux_send("CAPITANO", "avviso") is True
+    bridge.sender.wait_started()
+    bridge.sender.wait_exited()
     assert bridge.calls() == ["CAPITANO avviso"] and len(bridge.entered()) == 1

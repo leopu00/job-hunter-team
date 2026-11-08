@@ -163,7 +163,15 @@ def test_a_field_that_changed_shape_is_a_new_request_even_without_a_new_authoris
     conn.close()
 
     page.set_content(country_page(select_country("Spain", "France")))
+    country = page.locator("select")
+    country.wait_for(state="visible")
+    assert country.is_enabled()
+    assert country.locator("option").all_text_contents() == ["Select...", "Spain", "France"]
+    # These options are complete after set_content; this fixture never loads Italy later.
+    # Keep the real Playwright refusal without its unrelated 30-second default retry.
+    page.set_default_timeout(1_000)
     result = flow(box).run(page=page, navigate=False)
+    assert country.input_value() == ""
 
     assert result.reason in {"required_answer_missing", "answer_not_accepted"}
     assert (result.pending_question["field_type"], result.pending_question["options"]) == ("select", ["Spain", "France"])
