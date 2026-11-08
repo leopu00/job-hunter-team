@@ -235,6 +235,7 @@ def test_the_file_is_rewritten_when_the_plan_changes_and_not_for_nothing(world):
 
 def test_a_reading_older_than_a_day_is_refreshed(world):
     bridge, path = world.bridge, world.home / "logs" / "codex-plan-reading.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"plan_type": "prolite", "single_weekly": True,
                                 "observed_at": time.time() - 2 * 86400}), encoding="utf-8")
     bridge._remember_codex_reading({"usage": 1, "usage_is_weekly": True, "plan_type": "prolite"})
