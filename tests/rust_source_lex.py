@@ -1,6 +1,7 @@
 """Test-only Rust acquisition: mask tokens and remove only test-only items."""
 
 import re
+from functools import lru_cache
 
 _RAW = re.compile(r'(?:br|r)(#*)"')
 _CHAR = re.compile(r"'(?:\\(?:u\{[\da-f]+\}|x[\da-f]{2}|.)|[^'\\\n])'", re.I)
@@ -10,6 +11,9 @@ def normalize(source: str) -> str:
     return source.removeprefix("\ufeff").replace("\r\n", "\n")
 
 
+# Cache only exact text transformations. Filesystem reads, module membership
+# and symbol selection remain fresh in RustTree, including mutation fixtures.
+@lru_cache(maxsize=16)
 def mask(source: str) -> str:
     chars = list(source)
     i = 0
@@ -169,6 +173,7 @@ def test_item_ranges(source: str):
             kept = until
 
 
+@lru_cache(maxsize=16)
 def production(source: str) -> str:
     source = normalize(source)
     chunks = []
@@ -179,6 +184,7 @@ def production(source: str) -> str:
     return "".join(chunks) + source[kept:]
 
 
+@lru_cache(maxsize=16)
 def production_mask(source: str) -> str:
     """Select code on original offsets, including original CRLF literal bytes."""
     code = list(mask(source))
