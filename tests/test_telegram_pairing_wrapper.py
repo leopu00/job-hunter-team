@@ -615,7 +615,7 @@ def test_powershell_start_skips_the_inventory_only_without_legacy_sources(
     calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
     if inventoried:
         assert done.returncode == 1, done.stderr
-        assert calls == ["COMPOSE up -d jht-telegram"]
+        assert calls == ["COMPOSE --profile telegram up -d jht-telegram"]
     else:
         assert done.returncode == 0, done.stderr
         assert calls == []

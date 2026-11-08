@@ -19,10 +19,12 @@ PLANNER = ROOT / "shared/telegram_service/lifecycle.py"
 
 @pytest.fixture
 def lifecycle_home(tmp_path, monkeypatch):
-    for name in ("secrets", "secrets/bots", "state"):
+    for name in ("secrets", "secrets/bots", "state", "socket"):
         (tmp_path / name).mkdir(mode=0o700, exist_ok=True)
     monkeypatch.setenv("JHT_TELEGRAM_SECRETS", str(tmp_path / "secrets"))
     monkeypatch.setenv("JHT_TELEGRAM_STATE", str(tmp_path / "state"))
+    monkeypatch.setenv("JHT_TELEGRAM_SOCKET_DIR", str(tmp_path / "socket"))
+    monkeypatch.setenv("JHT_TELEGRAM_SERVICE_UID", str(os.getuid()))
     return tmp_path
 
 
@@ -239,3 +241,13 @@ def test_successful_engine_exit_without_the_requested_effect_is_refused(lifecycl
 ])
 def test_verifier_accepts_only_the_observed_state_or_exact_missing_container(operation, answer, accepted):
     assert lifecycle.verify_state(operation, answer) is accepted
+
+
+@pytest.mark.parametrize("language", ["bash", "pwsh"])
+def test_removing_an_absent_role_does_not_describe_the_other_bot_as_unconfigured(lifecycle_home, language):
+    configure("mentor")
+    result, events = run_host(lifecycle_home, language, ["remove", "assistente"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert events == ["start", "bots delete assistente"]
+    assert "non configurato" not in result.stdout
+    assert store.read_bot("mentor") is not None

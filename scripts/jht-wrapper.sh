@@ -1729,7 +1729,7 @@ telegram_legacy_sources_present() {
 telegram_prepare_legacy_inventory() {
   local role digests digest agent_status=0
   telegram_legacy_sources_present || return 0
-  compose up -d "$TELEGRAM_SERVICE" >/dev/null || return 1
+  COMPOSE_PROFILES=telegram compose up -d "$TELEGRAM_SERVICE" >/dev/null || return 1
   if telegram_admin legacy complete >/dev/null 2>&1; then
     return 0
   fi
@@ -1868,7 +1868,7 @@ telegram_pair_finish() {
   if telegram_legacy remaining >/dev/null; then
     case "$was_enabled" in *'"enabled": true'*) ;; *) first_cutover=1 ;; esac
     telegram_admin cutover enable >/dev/null || return 1
-    compose restart "$TELEGRAM_SERVICE" >/dev/null || return 1
+    COMPOSE_PROFILES=telegram compose restart "$TELEGRAM_SERVICE" >/dev/null || return 1
     if [ "$first_cutover" -eq 1 ] && [ "$TELEGRAM_PAIR_AGENTS_STOPPED" -eq 1 ]; then
       # Il riavvio spegne anche eventuali tg-bridge che conservavano il token
       # vecchio in memoria. Al boot pid1 vede il marker read-only.
@@ -2103,9 +2103,9 @@ telegram_lifecycle_steps() {
 }
 
 # Transport capability only: old runtime bundles may not declare this service.
-telegram_lifecycle_resume() {
+telegram_lifecycle_if_available() {
   compose_lacks_service "$TELEGRAM_SERVICE" && return 0
-  telegram_lifecycle_command resume
+  telegram_lifecycle_command "$@"
 }
 
 telegram_lifecycle_command() {
@@ -3761,7 +3761,7 @@ ensure_up() {
     fi
     sleep 0.5
   done
-  telegram_lifecycle_resume || exit $?
+  telegram_lifecycle_if_available resume || exit $?
 }
 
 # ── Client desktop nativo (mai Docker) ───────────────────────────────────
@@ -5254,7 +5254,7 @@ handle_runtime_upgrade() {
       || upgrade_note "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
     broker_migrate_legacy_once
   fi
-  telegram_lifecycle_resume \
+  telegram_lifecycle_if_available resume \
     || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
   # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
   # Mai su check, fallimento o rollback, che escono prima.
@@ -5944,7 +5944,7 @@ case "$SUB" in
     }
     compose up -d
     container_postcheck_running || exit 1
-    telegram_lifecycle_resume || exit $?
+    telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
     ;;
@@ -5960,7 +5960,7 @@ case "$SUB" in
     }
     compose up -d
     container_postcheck_running || exit 1
-    telegram_lifecycle_resume || exit $?
+    telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
     ;;
@@ -5999,7 +5999,7 @@ case "$SUB" in
     }
     compose up -d
     container_postcheck_running || exit 1
-    telegram_lifecycle_resume || exit $?
+    telegram_lifecycle_if_available resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
     ;;
@@ -6092,7 +6092,7 @@ case "$SUB" in
           'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
-        telegram_lifecycle_command status || exit $?
+        telegram_lifecycle_if_available status || exit $?
       fi
     else
       attest_status=$?

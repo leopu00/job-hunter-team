@@ -903,6 +903,7 @@ Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
 ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht
+ExecStartPost=/bin/sh -ec 'p() { /usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock "$$@"; }; probe() { rc=0; out=$$(p inspect --type container jht-telegram --format "{{.State.Running}}" 2>&1) || rc=$$?; printf "%%s\n%%s" "$$rc" "$$out"; }; op=$$(probe | p exec -i jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py boot); case "$$op" in start) p start --sig-proxy=false jht-telegram ;; stop) p stop --time 30 jht-telegram ;; noop) exit 0 ;; *) exit 1 ;; esac; probe | p exec -i jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py verify "$$op"'
 ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker
 TimeoutStartSec=90
 TimeoutStopSec=45
@@ -1043,7 +1044,10 @@ if ($runningImage -and $runningImage -ne $canonicalImage) {
 if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 # The team is up when each container of the compose file is running and stays so (a crash loop or an exit is the failure).
 $composeDefinition = Get-Content -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml') -Raw
-$expectedContainers = @(@('jht', 'jht-broker') | Where-Object { $composeDefinition -match "(?m)^  $([regex]::Escape($_)):" })
+$expectedContainers = @(& { $ErrorActionPreference = 'Continue'; & $Podman --connection $MachineName exec jht /usr/bin/python3 -I /app/shared/telegram_service/lifecycle.py expected-services })
+$expectedCode = $LASTEXITCODE
+$invalidNames = @($expectedContainers | Where-Object { $_ -cnotin @('jht', 'jht-broker', 'jht-telegram') -or $composeDefinition -notmatch "(?m)^  $([regex]::Escape($_)):" })
+if ($expectedCode -ne 0 -or $invalidNames.Count -or @($expectedContainers | Select-Object -Unique).Count -ne $expectedContainers.Count -or $expectedContainers -cnotcontains 'jht' -or $expectedContainers -cnotcontains 'jht-broker') { throw 'runtime_containers_plan_invalid' }
 $unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName $MachineName -Names $expectedContainers)
 if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 

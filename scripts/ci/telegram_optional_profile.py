@@ -36,7 +36,10 @@ def creation_plan(provider: str, compose: Path, directory: Path, words: list[str
     )
     if result.returncode:
         raise RuntimeError("provider_failed: " + result.stdout + result.stderr)
-    return set(re.findall(r"--name[= ](jht(?:-broker|-telegram)?)(?=\s|$)", result.stdout + result.stderr))
+    names = re.findall(r"--name[= ](jht(?:-broker|-telegram)?)(?=[\s'\",\]]|$)", result.stdout + result.stderr)
+    if len(names) != len(set(names)):
+        raise RuntimeError("duplicate_container_creation_plan")
+    return set(names)
 
 
 def check(provider: str, before: Path, expected: str) -> dict:

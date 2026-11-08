@@ -1370,7 +1370,7 @@ function Test-TelegramLegacySource {
 
 function Initialize-TelegramLegacyInventory {
   if (-not (Test-TelegramLegacySource)) { return $true }
-  Invoke-Compose up '-d' $TelegramContainer | Out-Null
+  Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Null
   if ($LASTEXITCODE -ne 0) { return $false }
   if ((Invoke-TelegramAdmin -AdminArgs @('legacy', 'complete')) -eq 0) { return $true }
   if (Test-ContainerUp) {
@@ -1447,7 +1447,7 @@ function Complete-TelegramPair {
   $remainingCode = $LASTEXITCODE
   if ($remainingCode -eq 0) {
     if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
-    Invoke-Compose restart $TelegramContainer
+    Invoke-Compose '--profile' 'telegram' restart $TelegramContainer
     if (-not $WasEnabled -and $AgentWasRunning) { Invoke-Compose restart $Container }
     Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
     return 0
@@ -1626,9 +1626,10 @@ function Invoke-TelegramLifecycleSteps {
 }
 
 # Transport capability only; private configuration is interpreted in the runtime.
-function Resume-TelegramLifecycle {
+function Invoke-AvailableTelegramLifecycle {
+  param([string]$Action)
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
-  return Invoke-TelegramLifecycle @('resume')
+  return Invoke-TelegramLifecycle @($Action)
 }
 
 function Invoke-TelegramLifecycle {
@@ -2191,7 +2192,7 @@ function Ensure-Up {
       }
       Start-Sleep -Milliseconds 500
     }
-    $telegramCode = Resume-TelegramLifecycle
+    $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
   }
 }
@@ -3286,7 +3287,7 @@ function Invoke-RuntimeUpgrade {
       }
       $null = Invoke-BrokerMigrateLegacyOnce
     }
-    if ((Resume-TelegramLifecycle) -ne 0) {
+    if ((Invoke-AvailableTelegramLifecycle 'resume') -ne 0) {
       Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
@@ -3425,7 +3426,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
-    $telegramCode = Resume-TelegramLifecycle
+    $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
     $null = Invoke-BrokerMigrateLegacyOnce
     Initialize-BrokerWebAuthorisations
@@ -3460,7 +3461,7 @@ switch ($Sub) {
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
-    $telegramCode = Resume-TelegramLifecycle
+    $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
     if ($telegramCode -ne 0) { exit $telegramCode }
     $null = Invoke-BrokerMigrateLegacyOnce
     Initialize-BrokerWebAuthorisations
@@ -3536,7 +3537,7 @@ switch ($Sub) {
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       if (-not [Console]::IsOutputRedirected) {
-        $telegramCode = Invoke-TelegramLifecycle @('status')
+        $telegramCode = Invoke-AvailableTelegramLifecycle 'status'
         if ($telegramCode -ne 0) { exit $telegramCode }
       }
     } else {

@@ -14,7 +14,7 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from shared.telegram_service import store
+from shared.telegram_service import lifecycle_state, store
 from shared.telegram_service.protocol import BOT_ROLES
 
 
@@ -38,9 +38,9 @@ def plan(phase: str, action: str, role: str, configured: tuple[str, ...]) -> tup
         return ("start", "pair")
     if action == "status":
         return ("status",) if configured else ("not-configured",)
-    if role not in configured:
-        if action == "chat-id":
-            raise ValueError("bot_not_configured")
+    if action == "chat-id" and role not in configured:
+        raise ValueError("bot_not_configured")
+    if action == "remove" and not configured:
         return ("not-configured",)
     return ("start", action)
 
@@ -67,9 +67,35 @@ def verify_command(argv: list[str]) -> int:
     return 0
 
 
+def boot_command() -> int:
+    try:
+        configured = lifecycle_state.boot_operation() == "start"
+        observed = sys.stdin.read(65537)
+        if verify_state("start", observed):
+            print("noop" if configured else "stop")
+        elif verify_state("stop", observed):
+            print("start" if configured else "noop")
+        else:
+            raise ValueError("telegram_lifecycle_state_unconfirmed")
+        return 0
+    except (lifecycle_state.StateError, OSError, ValueError):
+        print("telegram_lifecycle_state_unreadable", file=sys.stderr)
+        return 1
+
+
 def main(argv: list[str]) -> int:
     if argv and argv[0] == "verify":
         return verify_command(argv)
+    if argv == ["boot"]:
+        return boot_command()
+    if argv == ["expected-services"]:
+        try:
+            configured = lifecycle_state.boot_operation() == "start"
+        except (lifecycle_state.StateError, OSError, ValueError):
+            print("telegram_lifecycle_state_unreadable", file=sys.stderr)
+            return 1
+        print("jht\njht-broker" + ("\njht-telegram" if configured else ""))
+        return 0
     parser = argparse.ArgumentParser(prog="telegram-lifecycle")
     parser.add_argument("phase", choices=("prepare", "complete"))
     parser.add_argument("action", choices=ACTIONS)
@@ -78,8 +104,10 @@ def main(argv: list[str]) -> int:
     try:
         configured = tuple(role for role in BOT_ROLES if store.read_bot(role))
         operations = plan(args.phase, args.action, args.role, configured)
-    except (store.StoreError, ValueError) as exc:
-        print(getattr(exc, "code", str(exc)), file=sys.stderr)
+        lifecycle_state.publish(bool(configured))
+    except (store.StoreError, lifecycle_state.StateError, OSError, ValueError) as exc:
+        reason = str(exc) if isinstance(exc, (ValueError, lifecycle_state.StateError)) else getattr(exc, "code", "telegram_lifecycle_state_unreadable")
+        print(reason, file=sys.stderr)
         return 1
     for operation in operations:
         print(operation)
