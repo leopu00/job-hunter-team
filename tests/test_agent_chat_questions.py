@@ -8,6 +8,7 @@ the last test holds that table equal to agent_questions.
 
 from __future__ import annotations
 
+from contextlib import closing
 import importlib.util
 import json
 import os
@@ -40,17 +41,31 @@ print(json.dumps({"agent": q.agent, "body": q.body, "kind": q.kind, "source_id":
 """
 
 
+@pytest.fixture(scope="module")
+def _schema_database(tmp_path_factory):
+    home = tmp_path_factory.mktemp("chat-question-schema")
+    db = home / "jobs.db"
+    env = {**os.environ, "JHT_DB": str(db), "JHT_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1",
+           "JHT_EXTERNAL_CONTENT_NONCE": NONCE, "JHT_LANG": "it", "JHT_CHAT_PROMPT_WAIT": "0",
+           "JHT_ANSWER_WAKE_RETRY": "0"}
+    seed = subprocess.run([sys.executable, "-c", "from _db import get_db, ensure_schema; c=get_db(); ensure_schema(c); c.commit(); c.close()"],
+                          cwd=SKILLS, env=env, capture_output=True, text=True)
+    assert seed.returncode == 0, seed.stderr
+    return db
+
+
 @pytest.fixture()
-def box(tmp_path):
+def box(tmp_path, _schema_database):
     home = tmp_path / "home"
     home.mkdir()
     db = home / "jobs.db"
     base = {**os.environ, "JHT_DB": str(db), "JHT_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1",
             "JHT_EXTERNAL_CONTENT_NONCE": NONCE, "JHT_LANG": "it", "JHT_CHAT_PROMPT_WAIT": "0",
             "JHT_ANSWER_WAKE_RETRY": "0"}
-    seed = subprocess.run([sys.executable, "-c", "from _db import get_db, ensure_schema; c=get_db(); ensure_schema(c); c.commit(); c.close()"],
-                          cwd=SKILLS, env=base, capture_output=True, text=True)
-    assert seed.returncode == 0, seed.stderr
+    # Each case gets an independent SQLite snapshot, including any committed WAL pages.
+    with closing(sqlite3.connect(_schema_database.as_uri() + "?mode=ro", uri=True)) as source:
+        with closing(sqlite3.connect(db)) as target:
+            source.backup(target)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     state = tmp_path / "pane"
