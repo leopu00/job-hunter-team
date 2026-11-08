@@ -140,3 +140,12 @@ def test_control_characters_in_the_entry_path_are_refused_before_launch(tmp_path
     done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 1 and "monitor_window_unavailable" in done.stderr
     assert calls(env) == []
+
+
+def test_exit_attestation_refuses_a_missing_process_birth_token(tmp_path):
+    _, env = environment(tmp_path)
+    Path(env["FAKE_TERMINAL_LOG"]).write_text(json.dumps({"pid": os.getpid(), "start_ticks": None}) + "\n")
+    env["FAKE_TERMINAL_FIFO"] = str(tmp_path / "must-not-open")
+    with pytest.raises(AssertionError, match="birth token"):
+        release(env)
+    assert not Path(env["FAKE_TERMINAL_FIFO"]).exists()

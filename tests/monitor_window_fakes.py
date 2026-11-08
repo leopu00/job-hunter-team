@@ -1,4 +1,4 @@
-"""Owned terminal processes: argv, execution and release events, never real GUIs."""
+"""Linux behavior harness: owned terminal argv, execution and release; no real GUI."""
 import json
 import os
 import select
@@ -112,13 +112,17 @@ def read_until(process, text, timeout=10):
 
 
 def release(env):
+    rows = calls(env)
+    assert Path("/proc/self/stat").is_file(), "The exit attestation requires Linux /proc"
+    assert rows and all(isinstance(row.get("start_ticks"), str) and row["start_ticks"].isdigit()
+                        for row in rows), "Fake terminal birth token was not acquired"
     fd = os.open(env["FAKE_TERMINAL_FIFO"], os.O_WRONLY | os.O_NONBLOCK)
     try:
         os.write(fd, b"x")
     finally:
         os.close(fd)
     deadline = time.monotonic() + 5
-    for row in calls(env):
+    for row in rows:
         while True:
             try:
                 current = Path(f"/proc/{row['pid']}/stat").read_text().rsplit(")", 1)[1].split()[19]
