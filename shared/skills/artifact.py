@@ -247,6 +247,34 @@ def upload(name: str, data: bytes) -> dict:
     return {"ok": True, "path": container_path, "name": safe, "bytes": len(data)}
 
 
+def upload_file(relative: str) -> dict:
+    """CLI-only host paths are relative to the existing mounted user root.
+
+    The same openat reader as fetch anchors every component; read and limit
+    the opened regular file before upload can replace an existing document.
+    """
+    if not relative or relative.startswith('/') or '\\' in relative or '\0' in relative \
+            or any(part in ('', '.', '..') for part in relative.split('/')):
+        return {"ok": False, "error": "artifact_source_invalid: invalid mounted document path"}
+    fd = None
+    try:
+        fd = _open_beneath(user_root(), relative)
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            return {"ok": False, "error": "artifact_source_invalid: the document must be a regular file"}
+        if info.st_size > MAX_BYTES:
+            return {"ok": False, "error": "file over 10 MB"}
+        with os.fdopen(fd, 'rb') as document:
+            fd = None
+            data = document.read(MAX_BYTES + 1)
+    except OSError:
+        return {"ok": False, "error": "artifact_source_unavailable: cannot read the mounted document"}
+    finally:
+        if fd is not None:
+            os.close(fd)
+    return upload(os.path.basename(relative), data)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -262,11 +290,16 @@ def main() -> int:
     p_upload.add_argument("--raw", action="store_true",
                           help="read raw bytes instead of base64")
 
+    p_file = sub.add_parser("upload-file", help="hand a document from the mounted user root to the team")
+    p_file.add_argument("relative", help="relative path beneath the mounted user root")
+
     p_roots = sub.add_parser("roots", help="the data areas this skill can read")
 
     args = parser.parse_args()
     if args.command == "fetch":
         return emit(fetch(args.path, args.kind))
+    if args.command == "upload-file":
+        return emit(upload_file(args.relative))
     if args.command == "roots":
         return emit({"ok": True, "root": user_root(), "roots": list(roots()),
                      "upload_dir": user_root() + "/" + UPLOAD_SUBDIR})

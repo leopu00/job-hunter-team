@@ -63,21 +63,15 @@ def test_enough_room_is_ok(bridge):
     }
 
 
-def test_an_exhausted_five_hour_window_says_when_it_frees(bridge):
-    verdict = bridge.limits_verdict(_parsed(97, NOW + 1800, 50, NOW + 86400), NOW)
+@pytest.mark.parametrize("parsed,reset", [
+    pytest.param(_parsed(97, NOW + 1800, 50, NOW + 86400), NOW + 1800, id="five_hour"),
+    pytest.param(_parsed(10, NOW + 1800, 100, NOW + 3 * 86400), NOW + 3 * 86400, id="weekly"),
+    pytest.param(_parsed(99, NOW + 1800, 96, NOW + 7200), NOW + 7200, id="both"),
+])
+def test_exhausted_windows_wait_for_their_reset(bridge, parsed, reset):
+    verdict = bridge.limits_verdict(parsed, NOW)
     assert verdict["status"] == "exhausted"
-    assert verdict["resets_at"] == NOW + 1800
-
-
-def test_an_exhausted_weekly_window_blocks_until_the_weekly_reset(bridge):
-    verdict = bridge.limits_verdict(_parsed(10, NOW + 1800, 100, NOW + 3 * 86400), NOW)
-    assert verdict["status"] == "exhausted"
-    assert verdict["resets_at"] == NOW + 3 * 86400
-
-
-def test_both_exhausted_frees_only_when_the_later_reset_passes(bridge):
-    verdict = bridge.limits_verdict(_parsed(99, NOW + 1800, 96, NOW + 7200), NOW)
-    assert verdict["resets_at"] == NOW + 7200
+    assert verdict["resets_at"] == reset
 
 
 def test_the_threshold_is_the_one_constant(bridge):
