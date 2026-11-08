@@ -66,6 +66,9 @@ location_preferences: [<città>, …]
 contacts:                   # PII — il web la mostra reveal-on-click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
 preferences:
+  work_mode: <str|null>
+  work_mode_flexibility: <str|null>
+  relocation: <str|bool|null>
   salary_annual_eur: <obiettivo salariale nelle parole della persona, oppure null>
 
 ```

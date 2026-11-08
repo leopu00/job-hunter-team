@@ -66,6 +66,9 @@ location_preferences: [<varos>, …]
 contacts:                   # PII — a web reveal-on-click moddal jelenitI meg
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
 preferences:
+  work_mode: <str|null>
+  work_mode_flexibility: <str|null>
+  relocation: <str|bool|null>
   salary_annual_eur: <a személy bércélja a saját szavaival, vagy null>
 
 ```

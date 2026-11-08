@@ -33,6 +33,7 @@ def salary_home(tmp_path, monkeypatch):
     (home / "profile/summaries").mkdir(parents=True)
     monkeypatch.setenv("JHT_HOME", str(home))
     monkeypatch.setenv("JHT_DB", str(home / "jobs.db"))
+    monkeypatch.setenv("JHT_AGENT_DIR", str(home / "agents/assistente"))
     monkeypatch.setenv("JHT_USER_DIR", str(tmp_path / "person-documents"))
     monkeypatch.setenv("NO_PROXY", "127.0.0.1")
     return home
@@ -121,7 +122,7 @@ def test_saved_preference_is_used_and_named_in_the_persisted_judgment(salary_hom
             "--url", "https://jobs.example.test/1", "--jd-text", "Annual gross salary: EUR 30000–40000.",
             "--salary-declared-min", "30000",
             "--salary-declared-max", "40000", "--salary-declared-currency", "EUR", "--found-by", "scout-1")
-    command("db_update.py", "position", "1", "--status", "checked")
+    command("db_update.py", "position", "1", "--status", "checked", "--loc-city", "Exampletown")
     monkeypatch.setattr(local_scorer, "check_liveness", lambda position: {"state": "OPEN", "http": 200})
     monkeypatch.setattr(local_scorer, "query_feedback_context", lambda position: ([], {"outcome": "no-signal"}))
     with synthetic_model() as (endpoint, observed):
@@ -243,3 +244,28 @@ def test_profile_validation_keeps_preferences_closed(salary_home, preferences):
         capture_output=True, text=True, timeout=5)
     assert result.returncode == 1
     assert json.loads(result.stdout)["ok"] is False
+
+
+def test_salary_in_a_profile_review_is_persisted_only_after_confirmation(salary_home):
+    profile_review.write_profile(PROFILE)
+    agent = Path(os.environ["JHT_AGENT_DIR"])
+    agent.mkdir(parents=True)
+    (agent / "profile-review.yml").write_text(yaml.safe_dump({"preferences": {"salary_annual_eur": TARGET}}))
+    review = profile_review.stage()
+    assert review["changes"] == [{"field": "preferences.salary_annual_eur", "value": TARGET}]
+    assert json.loads(command("profile_salary.py").stdout)["salary_annual_eur"] is None
+    result = profile_review.confirm(review["review_id"])
+    assert result["profile_hash"]
+    assert json.loads(command("profile_salary.py").stdout)["salary_annual_eur"] == TARGET
+
+
+def test_the_salary_card_does_not_overwrite_the_amount_saved_from_chat(salary_home):
+    from shared.skills import onboarding_questionnaire
+
+    profile_review.write_profile({**PROFILE, "preferences": {"salary_annual_eur": TARGET}})
+    step = next(row for row in onboarding_questionnaire.load_steps() if row["id"] == "salary")
+    option = next(row for row in step["options"] if row["id"] == "market")
+    assert onboarding_questionnaire._write_choice(step, option, onboarding_questionnaire._catalog()) == []
+    saved = yaml.safe_load((salary_home / "profile/candidate_profile.yml").read_text())
+    assert next(block for block in saved["blocks"] if block["key"] == "preferences")["content"]
+    assert json.loads(command("profile_salary.py").stdout)["salary_annual_eur"] == TARGET

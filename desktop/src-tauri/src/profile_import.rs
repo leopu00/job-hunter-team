@@ -1312,7 +1312,7 @@ blocks: []
     #[test]
     fn salary_does_not_open_the_import_to_unknown_keys_or_values() {
         for extra in [
-            "private_unknown: forbidden\n",
+            "preferences: {salary_annual_eur: '40-50k EUR/year'}\nprivate_unknown: forbidden\n",
             "preferences: {salary_annual_eur: '40-50k EUR/year', private_unknown: forbidden}\n",
             "preferences: false\n",
             "preferences: {salary_annual_eur: 48000}\n",
