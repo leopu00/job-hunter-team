@@ -64,7 +64,7 @@ export interface DirectChatQuestion {
 export interface DirectChatPage {
   messages: DirectChatMessage[]; cursor?: string; questions?: DirectChatQuestion[]; queued?: string[];
   /** How the turns that left the queue ended (last day): typed and taken, still in the composer, no proof, or never typed. */
-  settled?: { id: string; how: "taken" | "pending" | "late" | "unconfirmed" | "expired" }[];
+  settled?: { id: string; how: "taken" | "pending" | "late" | "unconfirmed" | "expired" | "expired_held" }[];
   /**
    * What the agent's terminal shows within half an hour of the person's last turn, answered or not (the
    * agent may answer first and go on working): `working` (a running turn) or `idle` (an empty prompt).

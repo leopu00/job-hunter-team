@@ -216,7 +216,7 @@ export type TakenReason = (typeof TAKEN_REASONS)[number];
 export type Outcome =
   | { kind: "sent"; taken?: true }
   | { kind: "queued"; watched?: true }
-  | { kind: "expired" }
+  | { kind: "expired"; held?: true }
   | { kind: "late" }
   | { kind: "notSent"; presses: number }
   | { kind: "unknown"; reason?: TakenReason };
@@ -257,6 +257,7 @@ export function settleQueued(
       : ending.how === "unconfirmed" ? outcomeOf({ taken: null, reason: "unconfirmed" }, 0)
       : ending.how === "late" ? { kind: "late" }
       : ending.how === "expired" ? { kind: "expired" }
+      : ending.how === "expired_held" ? { kind: "expired", held: true }
       : null;
     if (!became) continue;
     next ??= new Map(outcomes);

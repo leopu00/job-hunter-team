@@ -88,7 +88,7 @@ def test_probe_is_valid_powershell():
 
 
 def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
-    source = NETWORK.read_text(encoding="utf-8")
+    source = NETWORK.read_text(encoding="utf-8") + (NETWORK.parent / "podman-machine-bridge.ps1").read_text(encoding="utf-8")
     proxy = PROXY.read_text(encoding="utf-8")
 
     assert "function Invoke-Checked" in source

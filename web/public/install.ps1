@@ -183,7 +183,7 @@ function Set-JhtNodeOwner {
   if ($actualSid.Value -ne $ownerSid.Value) { throw "Owner is not the current user: $Path" }
 }
 $TestChannelImage = $Image
-$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:04c8e69a436eed02dc2b42b8631d3072f5e690a31e660ff05c9f8f700b0a3aca' }
+$Image = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { 'ghcr.io/leopu00/jht@sha256:dcb4420e251d4177dd9c55cef23899e606fc3b13a290f14a0469510543d34c9b' }
 $RuntimeImage = if ($TestChannel) { $TestChannelImage } else { $Image }
 $RuntimeImageDigest = if ($TestChannel) { $ExpectedImageDigest } elseif ($RuntimeImage -match '@(sha256:[0-9a-f]{64})$') { $Matches[1] } else { '' }
 $env:JHT_IMAGE = $Image
@@ -447,6 +447,13 @@ function Show-PodmanSetupProblem {
   }
 }
 
+function Test-JhtDownloadedRuntimeScripts {
+  param([string]$ScriptsPath)
+  foreach ($ps1 in @('jht-wrapper.ps1', 'windows-private-acl.ps1', 'enable-podman-windows-runtime.ps1', 'configure-podman-windows-network.ps1', 'podman-machine-bridge.ps1')) {
+    [scriptblock]::Create((Get-Content -LiteralPath (Join-Path $ScriptsPath $ps1) -Raw)) | Out-Null
+  }
+}
+
 function Get-RuntimeFiles {
   Write-Step 3 $TotalSteps "Downloading and enabling the Podman runtime"
   Write-JhtPhase runtime_download
@@ -470,7 +477,7 @@ function Get-RuntimeFiles {
     foreach ($relative in @(
       'docker-compose.yml', 'docker-compose.podman.yml', 'scripts/jht-wrapper.ps1',
       'scripts/windows-private-acl.ps1', 'scripts/enable-podman-windows-runtime.ps1',
-      'scripts/configure-podman-windows-network.ps1', 'scripts/wsl-interop-connect-proxy.py'
+      'scripts/configure-podman-windows-network.ps1', 'scripts/podman-machine-bridge.ps1', 'scripts/wsl-interop-connect-proxy.py'
     )) { Write-Dry "iwr $releaseBase/$relative" }
     Write-JhtPhase image_pull
     Write-Dry "podman pull $RuntimeImage"
@@ -530,12 +537,11 @@ function Get-RuntimeFiles {
       'scripts/windows-private-acl.ps1' = (Join-Path $stageScripts 'windows-private-acl.ps1')
       'scripts/enable-podman-windows-runtime.ps1' = (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')
       'scripts/configure-podman-windows-network.ps1' = (Join-Path $stageScripts 'configure-podman-windows-network.ps1')
+      'scripts/podman-machine-bridge.ps1' = (Join-Path $stageScripts 'podman-machine-bridge.ps1')
       'scripts/wsl-interop-connect-proxy.py' = (Join-Path $stageScripts 'wsl-interop-connect-proxy.py')
     }
     foreach ($relative in $downloads.Keys) { Get-File -Url "$releaseBase/$relative" -Dest $downloads[$relative] }
-    foreach ($ps1 in @('jht-wrapper.ps1', 'windows-private-acl.ps1', 'enable-podman-windows-runtime.ps1', 'configure-podman-windows-network.ps1')) {
-      [scriptblock]::Create((Get-Content -LiteralPath (Join-Path $stageScripts $ps1) -Raw)) | Out-Null
-    }
+    Test-JhtDownloadedRuntimeScripts -ScriptsPath $stageScripts
     if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.yml') -Pattern '^\s*-\s*jht-runtime-mask:/jht_home/runtime(?:\s|$)' -Quiet)) { Write-Fail 'Downloaded compose does not enforce the protected runtime boundary.' }
     if (-not (Select-String -LiteralPath (Join-Path $stage 'docker-compose.podman.yml') -SimpleMatch 'keep-id:uid=1001,gid=1001' -Quiet)) { Write-Fail 'Downloaded Podman override lacks keep-id.' }
     if (-not (Select-String -LiteralPath (Join-Path $stageScripts 'jht-wrapper.ps1') -SimpleMatch '$JHT_HOST_RUNTIME_PROTOCOL = 1' -Quiet)) { Write-Fail 'Downloaded wrapper lacks the protected runtime protocol.' }
@@ -561,6 +567,7 @@ function Get-RuntimeFiles {
     (Join-Path $RuntimeDir '.runtime-integrity'),
     $wrapperDest,
     $helperDest,
+    (Join-Path $BinDir 'podman-machine-bridge.ps1'),
     (Join-Path $RuntimeDir 'bin\docker.exe')
   )
   $runtimeImageDest = Join-Path $RuntimeDir 'runtime-image'

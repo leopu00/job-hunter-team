@@ -23,6 +23,34 @@ function tr(
 }
 
 const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
+  "The Podman machine did not become ready in time.": tr(
+    ["Die Podman-Maschine wurde nicht rechtzeitig bereit.", "Prüfe, ob WSL und Podman antworten, und versuche es erneut."],
+    ["La máquina Podman no estuvo lista a tiempo.", "Comprueba que WSL y Podman respondan y vuelve a intentarlo."],
+    ["La machine Podman n’a pas été prête à temps.", "Vérifie que WSL et Podman répondent, puis réessaie."],
+    ["A Podman gép nem állt készen időben.", "Ellenőrizd, hogy a WSL és a Podman válaszol-e, majd próbáld újra."],
+    ["A máquina Podman não ficou pronta a tempo.", "Verifica se o WSL e o Podman respondem e tenta novamente."],
+  ),
+  "Podman did not respond in time. Setup stopped.": tr(
+    ["Podman hat nicht rechtzeitig geantwortet. Die Einrichtung wurde gestoppt.", "Prüfe, ob WSL antwortet, und versuche die Einrichtung erneut."],
+    ["Podman no respondió a tiempo. La instalación se detuvo.", "Comprueba que WSL responda y vuelve a intentar la instalación."],
+    ["Podman n’a pas répondu à temps. L’installation s’est arrêtée.", "Vérifie que WSL répond, puis réessaie l’installation."],
+    ["A Podman nem válaszolt időben. A telepítés leállt.", "Ellenőrizd, hogy a WSL válaszol-e, majd próbáld újra a telepítést."],
+    ["O Podman não respondeu a tempo. A instalação parou.", "Verifica se o WSL responde e tenta a instalação novamente."],
+  ),
+  "Podman did not respond and the command’s processes could not all be stopped.": tr(
+    ["Podman hat nicht geantwortet, und nicht alle Prozesse des Befehls konnten gestoppt werden.", "Starte Windows neu, bevor du die Einrichtung erneut versuchst."],
+    ["Podman no respondió y no se pudieron detener todos los procesos del comando.", "Reinicia Windows antes de volver a intentar la instalación."],
+    ["Podman n’a pas répondu et certains processus de la commande n’ont pas pu être arrêtés.", "Redémarre Windows avant de réessayer l’installation."],
+    ["A Podman nem válaszolt, és a parancs nem minden folyamatát sikerült leállítani.", "Indítsd újra a Windowst, mielőtt újra megpróbálod a telepítést."],
+    ["O Podman não respondeu e não foi possível parar todos os processos do comando.", "Reinicia o Windows antes de tentares a instalação novamente."],
+  ),
+  "The Podman command could not be started or its complete answer could not be read.": tr(
+    ["Der Podman-Befehl konnte nicht gestartet oder seine vollständige Antwort nicht gelesen werden.", "Prüfe die Installation von Podman und WSL und versuche es erneut."],
+    ["No se pudo iniciar el comando Podman o leer su respuesta completa.", "Comprueba la instalación de Podman y WSL y vuelve a intentarlo."],
+    ["La commande Podman n’a pas pu être lancée ou sa réponse complète n’a pas pu être lue.", "Vérifie l’installation de Podman et de WSL, puis réessaie."],
+    ["A Podman parancs nem indítható, vagy a teljes válasza nem olvasható.", "Ellenőrizd a Podman és a WSL telepítését, majd próbáld újra."],
+    ["Não foi possível iniciar o comando Podman ou ler a resposta completa.", "Verifica a instalação do Podman e do WSL e tenta novamente."],
+  ),
   "This document is not among the team’s documents, so no file was saved.": {
     de: ["Dieses Dokument gehört nicht zu den Dokumenten des Teams, deshalb wurde keine Datei gespeichert.", "Aktualisiere die Positionsseite und versuche es erneut; ist es weg, bitte das Team, es neu zu erstellen."],
     es: ["Este documento no está entre los documentos del equipo, así que no se guardó ningún archivo.", "Actualiza la página de la posición y vuelve a intentarlo; si ya no está, pide al equipo que lo prepare de nuevo."],
@@ -1987,6 +2015,10 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_other_machine_running: translated("Another Podman machine is already running: on a Mac only one can run at a time."),
   podman_other_machine_running_named: translated("The Podman machine “{machine}” is already running: on a Mac only one can run at a time."),
   podman_machine_mounts_home: translated("The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs."),
+  podman_machine_timeout: translated("Podman did not respond in time. Setup stopped."),
+  podman_machine_unavailable: translated("The Podman machine did not become ready in time."),
+  podman_machine_cleanup_failed: translated("Podman did not respond and the command’s processes could not all be stopped."),
+  podman_machine_command_failed: translated("The Podman command could not be started or its complete answer could not be read."),
   podman_machine_recreate_failed: translated("The JHT Podman machine was not recreated."),
   runtime_change_requires_migration: translated("On this Mac Job Hunter Team is already installed with another container engine (Docker with Colima). If the app switched to Podman, the provider CLIs, the broker's secrets (the mail password and the portal logins, LinkedIn included) and the Telegram connection would stay behind in the previous engine."),
   podman_machine_recreate_confirm: translated("Recreating the JHT Podman machine deletes what lives only inside it and is not kept: the installed provider CLIs (the jht-deps volume) and the secrets the broker saved (the jht-secrets and jht-telegram-secrets volumes), that is the mail password, the portal logins (LinkedIn included) and the Telegram connection."),

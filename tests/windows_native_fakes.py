@@ -129,15 +129,15 @@ public static class FakeLauncher {
 """
 
 
-@lru_cache(maxsize=1)
-def launcher() -> Path:
+@lru_cache(maxsize=4)
+def launcher(source: str = LAUNCHER) -> Path:
     root = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Microsoft.NET"
     compilers = [root / "Framework64" / "v4.0.30319" / "csc.exe", root / "Framework" / "v4.0.30319" / "csc.exe"]
     csc = next((c for c in compilers if c.is_file()), None)
     if csc is None:
         pytest.fail("the .NET Framework C# compiler is missing: the native fakes cannot be built")
     out = Path(tempfile.mkdtemp(prefix="jht-fake-launcher-"))
-    (out / "launcher.cs").write_text(LAUNCHER, encoding="utf-8")
+    (out / "launcher.cs").write_text(source, encoding="utf-8")
     built = subprocess.run(
         [str(csc), "/nologo", "/target:exe", f"/out:{out / 'launcher.exe'}", str(out / "launcher.cs")],
         capture_output=True, text=True, timeout=120,
