@@ -149,7 +149,8 @@ def test_only_an_absent_or_blank_field_uses_the_summary(salary_home, value):
         "source": "summaries/preferences.md", "salary_annual_eur": None, "preferences_summary": summary}
 
 
-@pytest.mark.parametrize("value", [1, True, [], {}, "é" * 4097])
+@pytest.mark.parametrize("value", [1, True, [], {}, "é" * 4097],
+                         ids=["number", "boolean", "list", "mapping", "oversize-utf8"])
 def test_malformed_salary_is_not_silently_replaced_by_a_summary(salary_home, value):
     profile_review.write_profile({**PROFILE, "preferences": {"salary_annual_eur": value}})
     (salary_home / "profile/summaries/preferences.md").write_text("Target: " + TARGET)
