@@ -3507,7 +3507,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @Rest
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
     break
   }
 
