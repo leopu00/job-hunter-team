@@ -316,6 +316,8 @@ export JHT_USER_TZ
 # Solo `%s` nei testi: niente altro `%`, niente barre rovesciate (il testo e' il formato di printf).
 jht_text_en() {
   case "$1" in
+    monitor.window_failed) printf '%s' "monitor_window_unavailable: cannot open a terminal window here. Run 'jht monitor' in the current terminal (or inside your tmux session)." ;;
+    monitor.window_invalid) printf '%s' "monitor_window_invalid: use 'jht monitor --window' without other options." ;;
     download.windows_missing) printf '%s' "Windows is not part of 0.4.0: the release has no installer for Windows. Nothing was downloaded." ;;
     download.linux_no_app) printf '%s' "In this version there is no desktop app for Linux: use install.sh. Nothing was downloaded." ;;
     download.release_no_app) printf '%s' "This release (v%s) has no app for macOS: use 0.4.0 or later. Nothing was downloaded." ;;
@@ -376,6 +378,8 @@ jht_text_en() {
 
 jht_text_it() {
   case "$1" in
+    monitor.window_failed) printf '%s' "monitor_window_unavailable: impossibile aprire una finestra qui. Esegui 'jht monitor' nel terminale corrente (o dentro la tua sessione tmux)." ;;
+    monitor.window_invalid) printf '%s' "monitor_window_invalid: usa 'jht monitor --window' senza altre opzioni." ;;
     download.windows_missing) printf '%s' "Windows non fa parte della 0.4.0: la release non ha un installer per Windows. Non e' stato scaricato niente." ;;
     download.linux_no_app) printf '%s' "In questa versione non c'e' l'app desktop per Linux: usa install.sh. Non e' stato scaricato niente." ;;
     download.release_no_app) printf '%s' "Questa release (v%s) non ha l'app per macOS: usa la 0.4.0 o successive. Non e' stato scaricato niente." ;;
@@ -446,6 +450,40 @@ jht_say() {
 }
 
 # Colori solo se stdout e' un terminale.
+# T220: declared host bridge to move into the T214 Rust sidecar. No data logic.
+# Explicit rule-2 exception: <=60 added lines, no installer/manifest dependency.
+jht_monitor_window() {
+  local self="$1" pid
+  shift
+  if [ "$#" -ne 1 ] || [ "$1" != --window ]; then err "$(jht_say monitor.window_invalid)"; return 2; fi
+  if [[ "$self" =~ [[:cntrl:]] ]]; then err "$(jht_say monitor.window_failed)"; return 1; fi
+  self="$(cd -P "$(dirname "$self")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "${self##*/}")" \
+    && [ -f "$self" ] && [ -x "$self" ] || { err "$(jht_say monitor.window_failed)"; return 1; }
+  if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
+    tmux new-window -n JHT-monitor -- "$self" monitor >/dev/null 2>&1 && return 0
+  elif [ "$HOST_KERNEL" = Darwin ] && command -v osascript >/dev/null 2>&1; then
+    if osascript - "$self" >/dev/null 2>&1 <<'JHT_MONITOR_APPLESCRIPT'
+on run argv
+  tell application "Terminal"
+    do script ((quoted form of (item 1 of argv)) & " monitor")
+    activate
+  end tell
+end run
+JHT_MONITOR_APPLESCRIPT
+    then return 0; fi
+  elif [ "$HOST_KERNEL" = Linux ] && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] \
+      && command -v x-terminal-emulator >/dev/null 2>&1; then
+    nohup x-terminal-emulator -e "$self" monitor </dev/null >/dev/null 2>&1 &
+    pid=$!
+    # Bounded launch check, not a claim that the GUI or its monitor is ready.
+    sleep 0.25
+    if kill -0 "$pid" 2>/dev/null; then return 0; fi
+    wait "$pid" && return 0
+  fi
+  err "$(jht_say monitor.window_failed)"
+  return 1
+}
+
 if [ -t 1 ]; then
   RED='\033[0;31m' YELLOW='\033[1;33m' DIM='\033[2m' BOLD='\033[1m' RESET='\033[0m'
 else
@@ -5722,6 +5760,12 @@ SUB="${1:-}"
 # Prima di tutto il resto: deve funzionare anche con il runtime gia' a meta'.
 if [ "$SUB" = "uninstall" ]; then
   if jht_uninstall "${@:2}"; then exit 0; else exit $?; fi
+fi
+
+if [ "$SUB" = monitor ]; then
+  for arg in "${@:2}"; do
+    if [ "$arg" = --window ]; then jht_monitor_window "$0" "${@:2}"; exit $?; fi
+  done
 fi
 
 # Il gate informativo precede TUTTI i rami, inclusi quelli host-side. Tenerlo

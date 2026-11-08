@@ -11,6 +11,7 @@ export async function monitor(options, {
   output = process.stdout, signals = process, open = openObservationStream,
   read = readObservation, intervalMs = 3000, shutdownMs = 4000,
 } = {}) {
+  if (options.window) throw new Error('observer_window_host_required');
   if (options.once || options.json) {
     const snapshot = read();
     output.write(options.json ? `${JSON.stringify(snapshot)}\n` : renderObservation(snapshot, { live: true }));
@@ -63,12 +64,13 @@ export async function monitor(options, {
 
 export function registerMonitorCommand(program) {
   program.command('monitor').description(say('observation.monitor_description'))
+    .option('--window', say('observation.window_option'))
     .option('--once', say('observation.once_option'))
     .option('--json', say('option.json'))
     .action(async (options) => {
       try { process.exitCode = await monitor(options); }
       catch (error) {
-        const code = ['observer_terminal_required', 'observer_read_invalid'].includes(error.message)
+        const code = ['observer_terminal_required', 'observer_read_invalid', 'observer_window_host_required'].includes(error.message)
           ? error.message : 'observer_read_failed';
         console.error(`${code}: ${errorText(code)}\n${say('observation.fix')}`);
         try { appendDiagnostic(code); }

@@ -1,5 +1,7 @@
 // English texts of the screens (the source: every other language has the same keys).
 export default {
+  "observation.window_option": "open a new terminal through the installed host command",
+  "error.observer_window_host_required": "Window opening is a host action: run the installed jht monitor --window outside the container, or jht monitor here.",
   'error.observer_session_logs_invalid': "Session logs have an invalid format; model and activity are unknown.",
   'error.observer_session_logs_unavailable': "Session logs could not be read; model and activity are unknown.",
   "observation.nd": "N/D",

@@ -437,6 +437,40 @@ function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundCo
 function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
 
+# T220: declared host bridge to move into the T214 Rust sidecar. No data logic.
+# Explicit rule-2 exception: <=60 added lines, no installer/manifest dependency.
+function Open-JhtMonitorWindow {
+  param([string]$CommandPath, [string[]]$WindowArgs)
+  if ($WindowArgs.Count -ne 1 -or $WindowArgs[0] -cne '--window') {
+    Write-Err "monitor_window_invalid: use 'jht monitor --window' without other options."
+    return 2
+  }
+  $process = $null
+  try {
+    if ($CommandPath -match '["\x00-\x1f]') { throw 'unsupported command path' }
+    if (-not (Test-Path -LiteralPath $CommandPath -PathType Leaf)) { throw 'command is unavailable' }
+    if ([Environment]::OSVersion.Platform -eq 'Win32NT' -and [Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0) { throw 'no interactive desktop' }
+    $shell = Get-Command pwsh.exe, powershell.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $shell) { throw 'PowerShell is unavailable' }
+    # Same process-only policy as the installed jht.cmd, never a policy change.
+    $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $CommandPath + '" monitor'
+    $terminal = Get-Command wt.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $executable = $shell.Source
+    # Avoid WT separators/environment expansion; PowerShell -File accepts these paths literally.
+    if ($terminal -and ($CommandPath + $shell.Source) -notmatch '[;%]') {
+      $executable = $terminal.Source
+      $arguments = '-w new new-tab --title "JHT monitor" "' + $shell.Source + '" ' + $arguments
+    }
+    $process = Start-Process -FilePath $executable -ArgumentList $arguments -PassThru -ErrorAction Stop
+    # Bounded launch check, not a claim that the GUI or its monitor is ready.
+    if ($process.WaitForExit(250) -and $process.ExitCode -ne 0) { throw 'terminal launch failed' }
+    return 0
+  } catch {
+    Write-Err "monitor_window_unavailable: cannot open a terminal window here. Run 'jht monitor' in the current terminal."
+    return 1
+  } finally { if ($process) { $process.Dispose() } }
+}
+
 function Get-AttestedRawBase {
   if ($RawBaseOverride) { return $RawBaseOverride }
   try {
@@ -3257,6 +3291,10 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # instead of `cloud login`. Forziamo array via @() per garantire splat
 # corretto anche con 1 solo arg di coda.
 [string[]]$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
+
+if ($Sub -ceq 'monitor' -and $Rest -ccontains '--window') {
+  exit (Open-JhtMonitorWindow -CommandPath $PSCommandPath -WindowArgs $Rest)
+}
 
 # Questo gate deve precedere tutti i rami host-side: nel solo default non vede
 # `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima
