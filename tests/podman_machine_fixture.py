@@ -74,7 +74,10 @@ os.execv("/usr/bin/stat", ["stat", *sys.argv[1:]])
 _STAT_LINUX = """if [ "$#" -eq 3 ]; then
     case "$1:$2" in
         '-f:%u %Lp'|'-c:%u %a')
-            if metadata=$({native} -c '%u %a' -- "$3" 2>/dev/null); then
+            path=$3
+            # GNU stat treats even '-- -' as stdin; Python stats the filename.
+            [ "$path" != '-' ] || path='./-'
+            if metadata=$({native} -c '%u %a' -- "$path" 2>/dev/null); then
                 uid=${{metadata%% *}}
                 mode=${{metadata#* }}
                 case "$uid" in

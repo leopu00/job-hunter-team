@@ -32,7 +32,7 @@ class StatAdapterSemantics(unittest.TestCase):
     def run_stat(self, *args, env=None):
         return subprocess.run([str(self.bin / "stat"), *map(str, args)], cwd=self.root,
                               env=self.env if env is None else env,
-                              capture_output=True, text=True, timeout=10)
+                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10)
 
     def assert_uid_mode(self, path, env=None):
         metadata = os.lstat(self.root / path)
@@ -90,7 +90,7 @@ class StatAdapterSemantics(unittest.TestCase):
         fixture.write_macos_host_tools(self.bin)
         # No Python is available here: these probes must be served by native stat.
         native_env = {**self.env, "PATH": "/nonexistent"}
-        for name in (" spaced file ", "-leading-dash", "line\nbreak"):
+        for name in (" spaced file ", "-leading-dash", "line\nbreak", "-"):
             path = self.root / name
             path.write_bytes(b"synthetic")
             for mode in (0o000, 0o640, 0o4751, 0o2750, 0o1777):
@@ -99,6 +99,12 @@ class StatAdapterSemantics(unittest.TestCase):
             path.write_bytes(b"mutated data at the same path")
             path.chmod(0o600)
             self.assert_uid_mode(name, env=native_env)
+        (self.root / "-").unlink()
+        for style, format_ in (("-f", "%u %Lp"), ("-c", "%u %a")):
+            missing = self.run_stat(style, format_, "-")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertEqual(missing.stdout, "")
+            self.assertIn("FileNotFoundError", missing.stderr)
         target = self.root / "target"
         target.write_bytes(b"target")
         target.chmod(0o000)
