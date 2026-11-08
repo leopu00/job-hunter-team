@@ -94,7 +94,7 @@ if [ -n "$min" ] && [ -n "$max" ]; then
 fi
 
 # 3. Calcola salary_fit (0-10) con la tua logica esistente
-#    (confronto con target candidato da candidate_profile.salary_annual_eur)
+#    (confronto con target candidato da preferences.salary_annual_eur)
 #    e include la nota "no_data_default" se failed=True.
 ```
 
@@ -131,3 +131,5 @@ settimana di operatività.
   side-fix bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — nasconde "5 passivo" quando
   `notes` contiene `no_data_default`
+
+L'obiettivo del candidato è `preferences.salary_annual_eur`, riportato esattamente dal profilo YAML. Solo se assente, null o vuoto, leggi `profile/summaries/preferences.md` cercando un obiettivo esplicito. Confrontalo col range offerto e nominali entrambi nella motivazione salariale; non inventare obiettivi mancanti, annualizzare importi o convertire valute.

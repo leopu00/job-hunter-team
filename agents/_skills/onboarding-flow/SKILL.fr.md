@@ -76,7 +76,7 @@ Continuez à poser des questions jusqu'à ce que l'utilisateur vous demande d'ar
 - `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` toutes avec CECR
 - `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
 - `has_degree` · résumés narratifs (voir `profile-summaries`)
-- `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projets, publications, open-source, bénévolat, certificats, `sector_details`
 
 ## Autorisation de travail — due diligence (NE PAS la sauter)
@@ -122,6 +122,8 @@ N'écris jamais une formule que l'utilisateur n'a pas choisie, ne la déduis jam
 ## Cartes du questionnaire — la partie structurée du profil, posée avec des boutons
 
 Métier, spécialité, expérience, situation actuelle, mode de travail, lieu, déménagement, contrat, salaire et type d'entreprise se demandent avec des **cartes**, une à la fois, via `python3 /app/shared/skills/onboarding_questionnaire.py`. Tu ne formules pas ces questions et tu n'écris pas ces champs toi-même : l'outil publie la carte (dans ton chat, avec les mots dans la langue de la personne) et écrit le clic de la personne, le SIEN.
+
+La carte salariale gère le choix sur l'importance du salaire, pas un montant indiqué dans le chat. Quand la personne donne un montant, conserve ses mots exacts dans `preferences.salary_annual_eur` et `summaries/preferences.md`. Si une révision du profil attend, inclus-le dans le changement préparé et attends la confirmation ; sinon enregistre et valide avec `profile-yaml`. N'invente jamais de montants et ne convertis ni devises ni périodes.
 
 **Quand :** une fois le profil enregistré (`profile_review.py apply-confirmed` a répondu `ok: true`), jamais dans les premiers messages et jamais pendant qu'une autre carte attend une réponse (celle de la formule comprise : deux cartes ouvertes à la fois troublent la personne).
 

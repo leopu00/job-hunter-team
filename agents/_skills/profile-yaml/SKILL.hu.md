@@ -133,6 +133,8 @@ sector_details:
   <szabad kulcsok, snake_case — lasd lenti szekci>
 ```
 
+Ha a személy bércélt ad meg, pontos szavait mentsd a YAML `preferences.salary_annual_eur` mezőjébe, és frissítsd a `summaries/preferences.md` fájlt is. Csak ezt a mezőt használd, ne gyökérszintű bérkulcsot vagy második bérobjektumot. Őrizd meg az összeget, pénznemet és időszakot; ne találj ki, ne évesíts és ne válts át semmit. Ha nincs megadott cél, a mező hiányozzon vagy legyen null. Mentés után validálj.
+
 A `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` kulcsokat a frontend szo szerint olvassa, hogy kitoltse a "Munkapreferenciak" szekci. Az alternativ nevek (`work_location`, `flexible`, `remote`) megmaradnak, de lathatatlanok a felhasznalo szamara.
 
 Teljes sema + peldak: `docs/examples/candidate_profile.yml.example` a repo gyokereben (dokumentaciohoz, **NE masold az ertekeket** — lasd anti-hallucinacio).

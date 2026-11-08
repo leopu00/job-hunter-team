@@ -133,6 +133,8 @@ sector_details:
   <freie Schlüssel, snake_case — siehe Abschnitt unten>
 ```
 
+Nennt die Person ein Gehaltsziel, speichere ihre genauen Worte unter `preferences.salary_annual_eur` im YAML und aktualisiere auch `summaries/preferences.md`. Verwende nur dieses Feld, keinen Gehaltsschlüssel an der Wurzel und kein zweites Gehaltsobjekt. Betrag, Währung und Zeitraum bleiben erhalten; nichts erfinden, auf Jahreswerte hochrechnen oder umrechnen. Ohne genanntes Ziel bleibt das Feld fehlend oder null. Nach dem Schreiben validieren.
+
 Die Schlüssel `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` werden vom Frontend wörtlich gelesen, um den Abschnitt "Arbeitspräferenzen" zu füllen. Alternative Namen (`work_location`, `flexible`, `remote`) bleiben geschrieben, sind aber für den Benutzer unsichtbar.
 
 Vollständiges Schema + Beispiele: `docs/examples/candidate_profile.yml.example` (zur Dokumentation, **NICHT die Werte kopieren** — siehe Anti-Halluzination).

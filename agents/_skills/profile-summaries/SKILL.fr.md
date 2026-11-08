@@ -29,6 +29,8 @@ mkdir -p "$JHT_HOME/profile/summaries"
 
 Des noms de fichiers différents (ex. `about-mario.md`, `goals_v2.md`) sont **silencieusement ignorés** par le frontend.
 
+Un objectif salarial indiqué par la personne doit aussi être enregistré dans le champ YAML `preferences.salary_annual_eur`, avec les mêmes montant, devise et période. Le récit seul n'est pas la préférence structurée : garde les deux à jour sans déduction ni conversion.
+
 ## Contraintes de style (contraignantes)
 
 - **Markdown simple** : paragraphes séparés par une ligne vide, `**gras**` pour souligner, listes seulement si elles aident la lisibilité.

@@ -29,6 +29,8 @@ mkdir -p "$JHT_HOME/profile/summaries"
 
 Az ettol eltero fajlnevek (pl. `about-mario.md`, `goals_v2.md`) a frontend altal **csendben figyelmen kivul maradnak**.
 
+A személy által megadott bércélt a YAML `preferences.salary_annual_eur` mezőjébe is mentsd, ugyanazzal az összeggel, pénznemmel és időszakkal. A leírás önmagában nem a strukturált preferencia: tartsd összhangban a kettőt, becslés és átváltás nélkül.
+
 ## Stilusszabalyok (kotelezo ervenyu)
 
 - **Egyszeru Markdown**: bekezdesek ures sorral elvalasztva, `**felkover**` kiemeleshez, listak csak ha javitjak az olvashatosagot.

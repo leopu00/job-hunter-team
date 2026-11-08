@@ -65,6 +65,9 @@ work_authorization:         # lista tipizzata (NON {eu,ch,…} annidato)
 location_preferences: [<città>, …]
 contacts:                   # PII — il web la mostra reveal-on-click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
+preferences:
+  salary_annual_eur: <obiettivo salariale nelle parole della persona, oppure null>
+
 ```
 
 ## 🧩🎨 L2/L3 — `blocks` (il cuore della flessibilità)

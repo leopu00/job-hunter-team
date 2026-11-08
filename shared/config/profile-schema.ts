@@ -214,6 +214,20 @@ export const CandidateProfileSchema = z
     education: z.array(EducationSchema).default([]),
     work_authorization: z.array(WorkAuthSchema).default([]),
     location_preferences: z.array(z.string().min(1)).default([]),
+    // The person's own text; no guessed amount, currency or annual conversion.
+    preferences: z
+      .object({
+        work_mode: z.string().nullable().optional(),
+        work_mode_flexibility: z.string().nullable().optional(),
+        relocation: z.union([z.string(), z.boolean()]).nullable().optional(),
+        salary_annual_eur: z.string().refine(
+          (text) => new TextEncoder().encode(text).length <= 8192,
+          "Salary preference exceeds 8192 UTF-8 bytes",
+        ).nullable().optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
 
     // PII
     contacts: ContactsSchema.optional(),

@@ -76,7 +76,7 @@ Continua a pedir até o utilizador dizer para parar — mais dados = CV e procur
 - `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` todas com CEFR
 - `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
 - `has_degree` · resumos narrativos (ver `profile-summaries`)
-- `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projetos, publicações, open-source, voluntariado, certificados, `sector_details`
 
 ## Work-authorization — due diligence (NÃO saltar)
@@ -122,6 +122,8 @@ Nunca escrevas um plano que o utilizador não escolheu, nunca o deduzas de outra
 ## Cartões do questionário — a parte estruturada do perfil, perguntada com botões
 
 Função, especialidade, experiência, situação atual, modalidade de trabalho, onde, mudança, contrato, salário e tipo de empresa perguntam-se com **cartões**, um de cada vez, com `python3 /app/shared/skills/onboarding_questionnaire.py`. Tu não formulas estas perguntas nem escreves estes campos: a ferramenta publica o cartão (no teu chat, com as palavras no idioma da pessoa) e escreve o clique da pessoa, o DELA.
+
+O cartão salarial gere a escolha sobre a importância do salário, não um valor indicado no chat. Quando a pessoa der um valor, conserva as suas palavras exatas em `preferences.salary_annual_eur` e `summaries/preferences.md`. Se houver uma revisão do perfil pendente, inclui-o na alteração preparada e espera a confirmação; caso contrário guarda e valida com `profile-yaml`. Nunca inventes valores nem convertas moedas ou períodos.
 
 **Quando:** depois de o perfil estar guardado (`profile_review.py apply-confirmed` respondeu `ok: true`), nunca nas primeiras mensagens e nunca enquanto outro cartão espera resposta (o do plano incluído: dois cartões abertos ao mesmo tempo confundem a pessoa).
 

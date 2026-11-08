@@ -64,6 +64,9 @@ work_authorization:         # typed list (NOT {eu,ch,…} nested)
 location_preferences: [<city>, …]
 contacts:                   # PII — the web shows it reveal-on-click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
+preferences:
+  salary_annual_eur: <the person's exact salary target, or null>
+
 ```
 
 ## 🧩🎨 L2/L3 — `blocks` (the heart of the flexibility)

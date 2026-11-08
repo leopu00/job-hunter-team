@@ -645,7 +645,7 @@
     {
       "id": "salary",
       "key": "onb.salary",
-      "note": "No field of the canonical profile holds this: it is written as an item of the recommended «preferences» block. The amount, where the person gives one, is free text handled by the tool.",
+      "note": "The importance choice is an item of the recommended «preferences» block. If the person also gives an amount in chat, the Assistant preserves that exact text in preferences.salary_annual_eur and summaries/preferences.md; the card does not invent or convert an amount.",
       "options": [
         {
           "id": "hard_floor",

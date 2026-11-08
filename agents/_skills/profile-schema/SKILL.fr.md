@@ -65,6 +65,9 @@ work_authorization:         # liste typee (PAS {eu,ch,…} imbrique)
 location_preferences: [<ville>, …]
 contacts:                   # PII — le web l'affiche en reveal-on-click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
+preferences:
+  salary_annual_eur: <objectif salarial dans les mots exacts de la personne, ou null>
+
 ```
 
 ## 🧩🎨 L2/L3 — `blocks` (le coeur de la flexibilite)

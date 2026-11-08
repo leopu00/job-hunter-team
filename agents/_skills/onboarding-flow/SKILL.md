@@ -78,7 +78,7 @@ Continua a chiedere finché l'utente non dice di fermarti — più dati = CV e r
 - `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` tutte con CEFR
 - `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
 - `has_degree` · summary narrativi (vedi `profile-summaries`)
-- `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Progetti, pubblicazioni, open-source, volontariato, certificati, `sector_details`
 
 ## Work-authorization — due diligence (NON saltarla)
@@ -124,6 +124,8 @@ Never write a plan the user did not choose, never infer it from anything else, n
 ## Questionnaire cards — the structured part of the profile, asked with buttons
 
 Role, specialty, experience, how the person stands now, work mode, where, relocation, contract, salary and kind of company are asked with **cards**, one at a time, by `python3 /app/shared/skills/onboarding_questionnaire.py`. You do not word these questions and you do not write these fields yourself: the tool posts the card (in your chat, the words are in the person's language) and writes the person's OWN click.
+
+The salary card owns the choice about salary importance, not an amount the person states in chat. When they give an amount, preserve their exact words in `preferences.salary_annual_eur` and in `summaries/preferences.md`. If a profile review is pending, include it in the staged patch and wait for confirmation; otherwise save and validate it with `profile-yaml`. Never invent amounts or convert currencies or periods.
 
 **When:** once the profile is saved (`profile_review.py apply-confirmed` said `ok: true`), never in the first messages, and never while another card waits for an answer (the plan's included: two cards open at once confuse the person).
 

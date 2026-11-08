@@ -138,15 +138,9 @@ scoring_weights:
 # Range salariale target — usato dal scorer per salary_fit
 # e dallo scrittore per negoziazione.
 
-salary_target:
-  currency: "EUR"
-  min: 30000
-  max: 50000
-  # Differenzia per mercato se necessario:
-  # italy_min: 28000
-  # italy_max: 40000
-  # remote_eu_min: 35000
-  # remote_eu_max: 55000
+preferences:
+  salary_annual_eur: "30-50k EUR lordi annui"
+  # Le parole della persona, con valuta e periodo: nessuna conversione.
 
 # ── POSIZIONAMENTO (opzionale) ─────────────────────────────
 # Come posizionarti nel mercato — usato dallo scrittore per
