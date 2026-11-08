@@ -494,4 +494,38 @@ def test_a_verdict_never_outlives_the_check_that_gave_it(box, monkeypatch):
             pdf_layout_check.analyze = lambda _p, _r=report, **_: _r
             assert apply_gate.cv_layout_hold(pdf) == verdict
             pdf_layout_check.analyze = None
-            gc.collect()
+            gc.collect(0)
+
+
+def test_the_identity_only_cache_still_fails_with_young_collection(box, monkeypatch):
+    import ast
+    import inspect
+
+    original_test = test_a_verdict_never_outlives_the_check_that_gave_it
+    tree = ast.parse(inspect.getsource(apply_gate.cv_layout_hold))
+    assignments = [node for node in ast.walk(tree) if isinstance(node, ast.Assign)
+                   and any(isinstance(target, ast.Name) and target.id == "key" for target in node.targets)]
+    assert len(assignments) == 1
+    key = assignments[0]
+    assert len(key.targets) == 1
+    assert ast.dump(key.value) == ast.dump(ast.parse("(digest, analyze)", mode="eval").body)
+    checker = key.value.elts[1]
+    key.value.elts[1] = ast.copy_location(
+        ast.Call(func=ast.Name(id="id", ctx=ast.Load()), args=[checker], keywords=[]), checker)
+    namespace = dict(vars(apply_gate), _LAYOUT_VERDICTS={})
+    exec(compile(ast.fix_missing_locations(tree), "<synthetic-layout-cache>", "exec"), namespace)
+
+    lines, first_line = inspect.getsourcelines(original_test)
+    verdict_asserts = [node for node in ast.walk(ast.parse("".join(lines))) if isinstance(node, ast.Assert)]
+    assert len(verdict_asserts) == 1
+    verdict_line = first_line + verdict_asserts[0].lineno - 1
+    with monkeypatch.context() as isolated:
+        isolated.setattr(apply_gate, "cv_layout_hold", namespace["cv_layout_hold"])
+        with pytest.raises(AssertionError) as rejected:
+            original_test(box, isolated)
+    traceback = rejected.value.__traceback__
+    while traceback is not None:
+        if traceback.tb_frame.f_code is original_test.__code__ and traceback.tb_lineno == verdict_line:
+            break
+        traceback = traceback.tb_next
+    assert traceback is not None, "The historical cache mutation must fail at the original verdict assertion"
