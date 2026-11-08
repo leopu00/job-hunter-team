@@ -108,6 +108,42 @@ def test_the_first_question_is_in_the_same_message_while_the_profile_is_not_read
     assert "Telegram" not in line["text"]
 
 
+@pytest.mark.parametrize("lang", ("it", "hu", "en"))
+@pytest.mark.parametrize("source", ("prefs", "env", "host"))
+@pytest.mark.parametrize("ready", (False, True))
+def test_the_delivered_welcome_follows_the_selected_language(home, lang, source, ready):
+    stale = "hu" if lang == "en" else "en"
+    host = home.path / "host.env"
+    host.write_text(f"JHT_LANG={lang if source == 'host' else stale}\n", encoding="utf-8")
+    home.env_extra.update(HOME=str(home.path), JHT_HOST_ENV_FILE=str(host))
+    if source != "host":
+        home.env_extra["JHT_LANG"] = lang if source == "env" else stale
+    if source == "prefs":
+        (home.path / "i18n-prefs.json").write_text(json.dumps({"locale": lang}), encoding="utf-8")
+    if ready:
+        home.ready.parent.mkdir(parents=True)
+        home.ready.touch()
+    home.telegram()
+    catalog = _catalog(lang)
+    if ready:
+        greeting = catalog["welcome.assistente"].split("\n\n")[0]
+        expected = greeting + "\n\n" + catalog["welcome.assistente_ready_who"] + "\n\n" + catalog["welcome.assistente_ready"]
+    else:
+        expected = catalog["welcome.assistente"] + "\n\n" + catalog["welcome.assistente_first"]
+
+    done = home.deliver()
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "WELCOME_DELIVERED chat=posted telegram=sent flag=ok"
+    [line] = home.lines()
+    assert line["role"] == "assistant" and line["done"] is True
+    assert line["text"] == expected
+    assert (home.path / "telegram.text").read_text(encoding="utf-8") == expected
+    assert home.flag.exists()
+    assert "chat=already" in home.deliver().stdout
+    assert len(home.lines()) == 1 and home.telegram_calls() == ["--from assistente"]
+
+
 def test_a_ready_profile_gets_the_welcome_without_the_question_and_without_the_request_for_the_cv(home):
     home.ready.parent.mkdir(parents=True)
     home.ready.write_text("2031-01-01T10:00:00Z\n", encoding="utf-8")
