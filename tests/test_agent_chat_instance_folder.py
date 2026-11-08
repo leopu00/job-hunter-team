@@ -10,6 +10,7 @@ Run with: pytest tests/test_agent_chat_instance_folder.py -v
 
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import os
 import sqlite3
@@ -36,16 +37,28 @@ FOLDERS = {
 }
 
 
-@pytest.fixture()
-def home(tmp_path):
-    folder = tmp_path / "home"
-    folder.mkdir()
-    env = {**os.environ, "JHT_DB": str(folder / "jobs.db"), "JHT_HOME": str(folder), "PYTHONDONTWRITEBYTECODE": "1"}
+@pytest.fixture(scope="module")
+def _schema_database(tmp_path_factory):
+    home = tmp_path_factory.mktemp("chat-instance-schema")
+    db = home / "jobs.db"
+    env = {**os.environ, "JHT_DB": str(db), "JHT_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1"}
     seed = subprocess.run(
         [sys.executable, "-c", "from _db import get_db, ensure_schema; c=get_db(); ensure_schema(c); c.commit(); c.close()"],
         cwd=SKILLS, env=env, capture_output=True, text=True,
     )
     assert seed.returncode == 0, seed.stderr
+    return db
+
+
+@pytest.fixture()
+def home(tmp_path, _schema_database):
+    folder = tmp_path / "home"
+    folder.mkdir()
+    env = {**os.environ, "JHT_DB": str(folder / "jobs.db"), "JHT_HOME": str(folder), "PYTHONDONTWRITEBYTECODE": "1"}
+    # Each case gets an independent SQLite snapshot, including any committed WAL pages.
+    with closing(sqlite3.connect(_schema_database.as_uri() + "?mode=ro", uri=True)) as source:
+        with closing(sqlite3.connect(env["JHT_DB"])) as target:
+            source.backup(target)
     return type("Home", (), {"path": folder, "env": env})
 
 
