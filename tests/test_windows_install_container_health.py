@@ -35,10 +35,11 @@ def test_the_setup_checks_the_containers_after_up_and_before_the_boot_service():
     assert up < check < service
     call = ENABLER[check:service]
     assert 'if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: ' in call
-    # the containers are the ones the compose file declares, the three of them in the repo's file
+    # The two unconditional services must settle; optional Telegram is checked by its lifecycle.
     wanted = ENABLER[up:check]
-    for name in ("'jht'", "'jht-broker'", "'jht-telegram'"):
+    for name in ("'jht'", "'jht-broker'"):
         assert name in wanted
+    assert "'jht-telegram'" not in wanted
     assert "docker-compose.yml" in wanted
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     for name in ("jht", "jht-broker", "jht-telegram"):

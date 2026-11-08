@@ -1398,11 +1398,11 @@ container_up() {
 # `read_only_container_id` distingue un progetto assente (3) da un risultato
 # ambiguo/non posseduto (1). Solo il primo puo' essere creato da un'azione che
 # ha gia' autorizzato esplicitamente una mutazione.
-# Any container of the project that runs (the broker, Telegram): `compose down` would stop it too.
+# Any container of the project that runs (the broker, Telegram): `compose --profile telegram down` would stop it too.
 # A list that cannot be read counts as running.
 project_has_running_container() {
   local ids id
-  ids="$(compose ps -q 2>/dev/null)" || return 0
+  ids="$(compose --profile telegram ps -q 2>/dev/null)" || return 0
   for id in $ids; do
     [ "$(docker inspect --type container "$id" --format '{{.State.Running}}' 2>/dev/null)" = false ] || return 0
   done
@@ -1419,13 +1419,13 @@ container_mutation_preflight() {
   [ "$status" -eq 3 ] && return 0
   # The containers of an earlier version (the compose changed, so its config hash did) that are
   # STOPPED: nothing runs to interrupt. They are ours (project, service, unit, files, version all
-  # as expected, only the hash differs) and are recreated with the new configuration; `compose down`
+  # as expected, only the hash differs) and are recreated with the new configuration; `compose --profile telegram down`
   # removes containers and the network, never the volumes: the team's data stays.
   if [ "$status" -eq 1 ] && [ "$CONTAINER_RUNTIME" = podman ] \
       && read_only_service_id "$CONTAINER_SERVICE" stopped-stale-config >/dev/null 2>&1 \
       && ! project_has_running_container; then
     warn "config_changed_stopped: i container del team, fermi, sono della versione di prima: li ricreo con la configurazione nuova (i volumi con i dati restano)."
-    compose down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
+    compose --profile telegram down || { err "Non riesco a rimuovere i container fermi della versione di prima: «jht down», poi «jht up»."; return 1; }
     return 0
   fi
   err "Container JHT esistente non attestabile; operazione interrotta."
@@ -1454,11 +1454,11 @@ container_down() {
       # No `jht` container. That is nothing to stop only when the WHOLE project is empty: status 3 also means that only the
       # agent service is missing, while the broker (the mail password) or Telegram still run, and a `jht down && rm -rf <runtime>`
       # would delete the compose that was needed to stop them. So the whole project is asked: a failed answer is a refusal, an
-      # empty one is «niente da fermare» (and the chain of the uninstall goes on, TEST 19i A1), a non-empty one goes on to `compose down`
-      # only once the services left are attested like the agent's: `compose down` stops every container of the project, so one that
+      # empty one is «niente da fermare» (and the chain of the uninstall goes on, TEST 19i A1), a non-empty one goes on to `compose --profile telegram down`
+      # only once the services left are attested like the agent's: `compose --profile telegram down` stops every container of the project, so one that
       # does not attest (or one of a service the compose does not have) is said and nothing is touched.
       local rest svc svc_status leftover=0 refused=""
-      if ! rest="$(compose ps -q 2>/dev/null)"; then
+      if ! rest="$(compose --profile telegram ps -q 2>/dev/null)"; then
         err "Container JHT non attestabile; arresto negato."
         return 1
       fi
@@ -1490,8 +1490,8 @@ container_down() {
     fi
   fi
   local status=0 errors
-  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { compose down; return $?; }
-  compose down 2>"$errors" || status=$?
+  errors="$(mktemp "${TMPDIR:-/tmp}/jht-down.XXXXXX")" || { compose --profile telegram down; return $?; }
+  compose --profile telegram down 2>"$errors" || status=$?
   local shown left
   shown="$(rootless_netns_noise_filter <"$errors")"
   [ -z "$shown" ] || printf '%s\n' "$shown" >&2
@@ -1503,7 +1503,7 @@ container_down() {
       "nota: il processo di rete del team era gia' chiuso"*)
         # podman-compose lists every container of the project (broker and telegram too):
         # an empty answer, and not a failed one, is «nothing left».
-        left="$(compose ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
+        left="$(compose --profile telegram ps -q 2>/dev/null)" && [ -z "$left" ] && return 0
         ;;
     esac
   fi
@@ -2063,6 +2063,44 @@ apply_host_command() {
   return 0
 }
 
+# The runtime owns the policy; this adapter only executes closed transport steps.
+telegram_lifecycle_plan() {
+  compose run --rm --no-deps -T --entrypoint /usr/bin/python3 "$TELEGRAM_SERVICE" \
+    -I /app/shared/telegram_service/lifecycle.py "$@" </dev/null
+}
+
+telegram_lifecycle_steps() {
+  local steps="$1" role="$2" step
+  while IFS= read -r step; do
+    case "$step" in ''|start|stop|pair|remove|chat-id|status|not-configured) ;; *) err 'telegram_lifecycle_plan_invalid'; return 1 ;; esac
+  done <<< "$steps"
+  while IFS= read -r step; do
+    case "$step" in
+      '') ;;
+      start) compose up -d "$TELEGRAM_SERVICE" >/dev/null || return $? ;;
+      stop)
+        compose stop "$TELEGRAM_SERVICE" >/dev/null || return $?
+        ;;
+      pair) telegram_pair "$role" || return $? ;;
+      remove) telegram_admin bots delete "$role" || return $? ;;
+      chat-id) telegram_admin bots chat-id "$role" || return $? ;;
+      status) telegram_admin bots status || return $? ;;
+      not-configured) printf '%s\n' 'Telegram non attivo: Telegram non configurato.' ;;
+      *) err 'telegram_lifecycle_plan_invalid'; return 1 ;;
+    esac
+  done <<< "$steps"
+}
+
+telegram_lifecycle_command() {
+  local action="${1:-status}" role="${2:-}" steps result=0 cleanup
+  [ "$action" != setup ] || role="${role:-assistente}"
+  steps="$(telegram_lifecycle_plan prepare "$action" -- "$role")" || return $?
+  telegram_lifecycle_steps "$steps" "$role" || result=$?
+  cleanup="$(telegram_lifecycle_plan complete "$action" -- "$role")" || return 1
+  telegram_lifecycle_steps "$cleanup" "$role" || return $?
+  return "$result"
+}
+
 telegram_command() {
   local action="${1:-status}"
   shift || true
@@ -2203,7 +2241,7 @@ remove_broker_reset_data() {
     err "reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati."
     return 1
   }
-  compose down || {
+  compose --profile telegram down || {
     err "reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati."
     return 1
   }
@@ -2686,7 +2724,7 @@ attest_why() {
 
 # ── Cache dell'attestazione (solo Podman, solo il controllo `exact`) ──────────────
 #
-# Ogni lettura dell'app attestava il container da zero: `podman info`, `podman-compose ps -q`, un dry run di
+# Ogni lettura dell'app attestava il container da zero: `podman info`, `podman-compose --profile telegram ps -q`, un dry run di
 # podman-compose per ricalcolare la config-hash attesa (oltre un secondo di CPU) e `podman inspect`. Qui si riusa
 # solo cio' che si RICALCOLA (la riga attesa, con la sua hash), mai cio' che si CONFRONTA: a ogni chiamata resta
 # l'inspect dell'id noto e il confronto della riga COMPLETA (progetto, servizio, numero, working_dir, config_files,
@@ -3706,6 +3744,7 @@ ensure_up() {
     fi
     sleep 0.5
   done
+  telegram_lifecycle_command resume || exit $?
 }
 
 # ── Client desktop nativo (mai Docker) ───────────────────────────────────
@@ -5198,10 +5237,8 @@ handle_runtime_upgrade() {
       || upgrade_note "broker_restart_failed: il broker dei segreti non e' ripartito. Cosa fare: jht up"
     broker_migrate_legacy_once
   fi
-  if grep -q "^  $TELEGRAM_SERVICE:" "$COMPOSE_FILE"; then
-    upgrade_run upgrade_compose "$COMPOSE_FILE" up -d --force-recreate "$TELEGRAM_SERVICE" \
-      || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
-  fi
+  telegram_lifecycle_command resume \
+    || upgrade_note "telegram_restart_failed: il servizio Telegram isolato non è ripartito. Cosa fare: jht up"
   # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
   # Mai su check, fallimento o rollback, che escono prima.
   upgrade_prune_old_images "$candidate_image" "$old_image" || true
@@ -5836,7 +5873,7 @@ case "$SUB" in
       exit 1
       ;;
     esac
-    compose down \
+    compose --profile telegram down \
       || { err "Non riesco a fermare i servizi prima di salvare lo stato del broker."; exit 1; }
     trap podman_state_backup_cleanup EXIT INT TERM
     podman_export_broker_state "$podman_bin" "$broker_state_image" \
@@ -5890,6 +5927,7 @@ case "$SUB" in
     }
     compose up -d
     container_postcheck_running || exit 1
+    telegram_lifecycle_command resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
     ;;
@@ -5905,6 +5943,7 @@ case "$SUB" in
     }
     compose up -d
     container_postcheck_running || exit 1
+    telegram_lifecycle_command resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
     ;;
@@ -5936,13 +5975,14 @@ case "$SUB" in
       exit 1
     }
     ensure_bind_owner
-    compose down
+    compose --profile telegram down
     telegram_prepare_legacy_inventory || {
       err "legacy_inventory_failed: il team resta fermo perché l'inventario Telegram host non è stato conservato."
       exit 1
     }
     compose up -d
     container_postcheck_running || exit 1
+    telegram_lifecycle_command resume || exit $?
     broker_migrate_legacy_once
     broker_configure_web_authorisations
     ;;
@@ -5984,8 +6024,7 @@ case "$SUB" in
   telegram)
     require_compose_file
     require_docker
-    ensure_up
-    telegram_command "${@:2}"
+    telegram_lifecycle_command "${@:2}"
     exit $?
     ;;
 
@@ -6036,6 +6075,7 @@ case "$SUB" in
           'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
       else
         status_human_running "$(docker inspect "$container_id" --format '{{.State.Status}}|{{.State.StartedAt}}|{{.Config.Image}}')"
+        telegram_lifecycle_command status || exit $?
       fi
     else
       attest_status=$?

@@ -882,10 +882,10 @@ def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: P
     return result, [call[call.index(" up ") + 1:] if " up " in call else call for call in calls]
 
 
-def test_with_podman_the_broker_and_the_telegram_service_are_created_one_at_a_time(tmp_path):
+def test_with_podman_only_the_unconditional_broker_precedes_the_team(tmp_path):
     result, calls = _up_in_turn(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert calls == ["up -d jht-broker", "up -d jht-telegram", "up -d", "after-up"]
+    assert calls == ["up -d jht-broker", "up -d", "after-up"]
 
 
 def test_with_docker_the_up_is_the_whole_one_as_before(tmp_path):

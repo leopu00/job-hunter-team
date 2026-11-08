@@ -139,8 +139,6 @@ services:
       # entry. Gli allegati inbound sono copiabili, mai modificabili in loco.
       - jht-telegram-sock:/run/jht-telegram:ro
       - jht-telegram-inbox:/jht_telegram_inbox:ro
-    depends_on:
-      - jht-telegram
     # Permette allo spike Scorer di raggiungere Ollama/llama.cpp avviato
     # sull'host anche su Docker Engine Linux. L'endpoint resta opt-in e il
     # runner accetta esclusivamente host locali.
@@ -207,6 +205,7 @@ services:
       - ALL
 
   jht-telegram:
+    profiles: [telegram]
     image: *jht-image
     container_name: jht-telegram
     entrypoint: ["/usr/bin/tini", "-g", "--"]

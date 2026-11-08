@@ -676,7 +676,8 @@ def test_compose_mounts_agent_socket_and_inbox_read_only() -> None:
     assert 'user: "1003:1003"' in compose
     assert "read_only: true" in compose
     assert "JHT_TELEGRAM_SERVICE_ENABLED=${JHT_TELEGRAM_SERVICE_ENABLED:-0}" in compose
-    assert "depends_on:\n      - jht-telegram" in compose
+    assert "depends_on:\n      - jht-telegram" not in compose
+    assert "profiles: [telegram]" in compose
     assert "network_mode: bridge" in compose
     assert "- /jht_home:size=64k,mode=0555" in compose
     assert "- /jht_user:size=64k,mode=0555" in compose
@@ -689,8 +690,11 @@ def test_container_lifecycle_starts_telegram_and_host_pairing_is_exposed() -> No
     container = (ROOT / "cli/src/commands/container.js").read_text(encoding="utf-8")
     bash_wrapper = (ROOT / "scripts/jht-wrapper.sh").read_text(encoding="utf-8")
     powershell_wrapper = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
-    assert "['up', '-d', 'jht-telegram']" in container
-    assert "['start', 'jht-telegram', 'jht']" in container
+    lifecycle = (ROOT / "cli/src/lib/telegram-lifecycle.js").read_text(encoding="utf-8")
+    assert "resumeTelegram({ cwd: REPO_ROOT })" in container
+    assert "['start', 'jht']" in container
+    assert "['up', '-d', 'jht-telegram']" in lifecycle
+    assert "telegramPlanArgs('prepare', 'resume')" in lifecycle
     assert 'telegram_admin_input bots pair "$role"' in bash_wrapper
     assert 'telegram_admin_input legacy remember "$role"' in bash_wrapper
     assert "jht-telegram-legacy.py" in bash_wrapper
@@ -698,9 +702,9 @@ def test_container_lifecycle_starts_telegram_and_host_pairing_is_exposed() -> No
     assert bash_wrapper.count("telegram_prepare_legacy_inventory ||") >= 4
     assert "function Initialize-TelegramLegacyInventory" in powershell_wrapper
     assert powershell_wrapper.count("Initialize-TelegramLegacyInventory") >= 4
-    assert 'force-recreate "$TELEGRAM_SERVICE"' in bash_wrapper
+    assert 'telegram_lifecycle_command resume' in bash_wrapper
     assert "'telegram' {" in powershell_wrapper
-    assert "'--force-recreate' $TelegramContainer" in powershell_wrapper
+    assert "Invoke-TelegramLifecycle @('resume')" in powershell_wrapper
     assert "jht-telegram-admin" in bash_wrapper + powershell_wrapper
 
 

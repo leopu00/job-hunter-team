@@ -14,6 +14,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { containerRunning, CONTAINER_NAME, execInContainer } from '../utils/container-proxy.js';
 import { c } from './_colors.js';
+import { resumeTelegram } from '../lib/telegram-lifecycle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,8 +108,8 @@ async function upAction() {
   }
 
   if (containerRunning()) {
-    if (!dockerCompose(['up', '-d', 'jht-telegram'])) {
-      console.error(c.red('docker compose up failed for jht-telegram'));
+    if (!resumeTelegram({ cwd: REPO_ROOT })) {
+      console.error(c.red('Telegram lifecycle reconciliation failed'));
       process.exitCode = 1;
       return;
     }
@@ -123,11 +124,12 @@ async function upAction() {
     return;
   }
   // Passo 2: start
-  if (!dockerCompose(['start', 'jht-telegram', 'jht'])) {
+  if (!dockerCompose(['start', 'jht'])) {
     console.error(c.red('docker compose start failed'));
     process.exitCode = 1;
     return;
   }
+  if (!resumeTelegram({ cwd: REPO_ROOT })) { process.exitCode = 1; return; }
   console.log(c.green(`✓ Container ${CONTAINER_NAME} started`));
   console.log(c.dim('  Interaction: JHT desktop app · logs: jht container logs -f'));
 }

@@ -902,7 +902,7 @@ Group=user
 Environment=HOME=/home/user
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=CONTAINERS_CGROUP_MANAGER=cgroupfs
-ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht
+ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht
 ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker
 TimeoutStartSec=90
 TimeoutStopSec=45
@@ -1043,7 +1043,7 @@ if ($runningImage -and $runningImage -ne $canonicalImage) {
 if ($LASTEXITCODE -ne 0) { throw 'The migrated JHT container did not start.' }
 # The team is up when each container of the compose file is running and stays so (a crash loop or an exit is the failure).
 $composeDefinition = Get-Content -LiteralPath (Join-Path $RuntimeDir 'docker-compose.yml') -Raw
-$expectedContainers = @(@('jht', 'jht-broker', 'jht-telegram') | Where-Object { $composeDefinition -match "(?m)^  $([regex]::Escape($_)):" })
+$expectedContainers = @(@('jht', 'jht-broker') | Where-Object { $composeDefinition -match "(?m)^  $([regex]::Escape($_)):" })
 $unsettledContainers = @(Get-UnsettledJhtContainers -Podman $Podman -MachineName $MachineName -Names $expectedContainers)
 if ($unsettledContainers.Count -gt 0) { throw "runtime_containers_unhealthy: $($unsettledContainers -join '; '). Run 'jht logs' to see why." }
 
