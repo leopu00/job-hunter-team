@@ -111,7 +111,7 @@ def bridge(tmp_path, monkeypatch):
         return real_run(argv, *args, **kwargs)
 
     monkeypatch.setattr(module.subprocess, "run", run)
-    monkeypatch.setattr(module, "VITALS_FILE", vitals)
+    monkeypatch.setitem(module._PATHS, "VITALS_FILE", vitals)
     monkeypatch.setattr(module, "session_exists", lambda session: True)
     monkeypatch.setattr(module, "jht_tmux_send", lambda session, text: sent.append(text) or True)
     monkeypatch.setattr(module, "_LAST_VITALS_ALERT_AT", 0.0)

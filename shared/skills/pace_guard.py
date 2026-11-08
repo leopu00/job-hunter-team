@@ -54,8 +54,10 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pace_reference  # noqa: E402  (il riferimento unico: ore attive, lo stesso della Sentinella)
 
-JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
-DATA_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["pace_guard"].copy()
+def _path(name): return jht_home(paths=_PATHS, key=name)
 
 # Durata nominale della finestra rolling, quando non è derivabile dal sample.
 DEFAULT_WINDOW_H = 5.0
@@ -121,11 +123,11 @@ def _load_module(name: str, filename: str):
 
 
 def load_last_sample() -> Optional[dict]:
-    if not DATA_JSONL.exists():
+    if not _path("DATA_JSONL").exists():
         return None
     last = None
     try:
-        with DATA_JSONL.open(encoding="utf-8") as f:
+        with _path("DATA_JSONL").open(encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:

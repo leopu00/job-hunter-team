@@ -77,7 +77,7 @@ class SingleTick:
             "_daily_hardstop_disabled": lambda: self.disabled,
             "_read_hardstop_override_started": self._read_override,
             "_persist_hardstop_override": self._persist_override,
-            "_daily_halt_active": lambda: self.module.DAILY_HALT_FLAG.exists(),
+            "_daily_halt_active": lambda: self.module._path("DAILY_HALT_FLAG").exists(),
             "_activate_daily_halt": self._halt,
         }
         for name, value in ports.items():
@@ -97,7 +97,7 @@ class SingleTick:
 
     def _halt(self, consumed, cap, budget):
         self.trace.append("halt")
-        self.module.DAILY_HALT_FLAG.write_text("fixture")
+        self.module._path("DAILY_HALT_FLAG").write_text("fixture")
         return []
 
     def _record_stats(self, **kwargs):

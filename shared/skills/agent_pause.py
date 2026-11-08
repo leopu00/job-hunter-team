@@ -51,9 +51,11 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["agent_pause"].copy()
+def _path(name): return jht_home(paths=_PATHS, key=name)
 DIR_NAME = ".agent-pauses"
-LOG = JHT_HOME / "logs" / "agent-pauses.jsonl"
 # Lo stesso tetto della pausa di squadra (standby.MANUAL_MAX): nessuna pausa vive per sempre.
 MAX_PAUSE = timedelta(days=7)
 # The cap holds when the mark is READ, not only when it is written: the marks sit in a folder the agents can write,
@@ -84,7 +86,7 @@ def _now(now: Optional[datetime] = None) -> datetime:
 
 
 def _home(home=None) -> Path:
-    return Path(home) if home is not None else JHT_HOME
+    return Path(home) if home is not None else _path("JHT_HOME")
 
 
 def marker_dir(home=None) -> Path:
@@ -163,10 +165,10 @@ def paused_sessions(now: Optional[datetime] = None, home=None) -> list[str]:
 
 def log_event(event: str, **fields) -> None:
     try:
-        LOG.parent.mkdir(parents=True, exist_ok=True)
+        _path("LOG").parent.mkdir(parents=True, exist_ok=True)
         row = {"ts": int(_now().timestamp()), "event": event}
         row.update(fields)
-        with LOG.open("a", encoding="utf-8") as f:
+        with _path("LOG").open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except (OSError, TypeError, ValueError):
         pass

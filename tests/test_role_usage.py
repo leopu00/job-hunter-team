@@ -192,7 +192,7 @@ def test_the_last_hour_per_agent_says_zero_only_for_an_agent_whose_logs_it_read(
 def test_bridge_writes_role_usage_and_the_tick_carries_it(home, tmp_path, monkeypatch):
     out = tmp_path / "logs" / "role-usage.json"
     out.parent.mkdir()
-    monkeypatch.setattr(bridge, "ROLE_USAGE_FILE", out)
+    monkeypatch.setitem(bridge._PATHS, "ROLE_USAGE_FILE", out)
     monkeypatch.setattr(bridge, "_TBA_MOD", series)
 
     written = bridge._write_role_usage(SAMPLE, NOW)
@@ -218,7 +218,7 @@ def test_bridge_writes_role_usage_and_the_tick_carries_it(home, tmp_path, monkey
 
 
 def test_role_usage_never_breaks_the_bridge(tmp_path, monkeypatch):
-    monkeypatch.setattr(bridge, "ROLE_USAGE_FILE", tmp_path / "missing" / "role-usage.json")
+    monkeypatch.setitem(bridge._PATHS, "ROLE_USAGE_FILE", tmp_path / "missing" / "role-usage.json")
     monkeypatch.setattr(bridge, "_TBA_MOD", series)
     assert bridge._write_role_usage(SAMPLE, NOW) is None
 

@@ -46,9 +46,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
-LOGS_DIR = JHT_HOME / "logs"
-DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["usage_record"].copy()
+def _path(name): return jht_home(empty_is_unset=False, paths=_PATHS, key=name)
 
 VALID_SOURCES = {
     "bridge",
@@ -103,11 +105,11 @@ def load_bridge():
 
 def load_history():
     """Carica gli ultimi N sample dal JSONL. Tollerante a righe corrotte."""
-    if not DATA_JSONL.exists():
+    if not _path("DATA_JSONL").exists():
         return []
     samples = []
     try:
-        with DATA_JSONL.open(encoding="utf-8") as f:
+        with _path("DATA_JSONL").open(encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -139,9 +141,9 @@ def find_last_same_provider(samples, provider):
 
 def append_sample(sample):
     """Append atomico. Crea la dir/file se non esiste."""
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
     line = json.dumps(sample, ensure_ascii=False) + "\n"
-    with DATA_JSONL.open("a", encoding="utf-8") as f:
+    with _path("DATA_JSONL").open("a", encoding="utf-8") as f:
         f.write(line)
 
 

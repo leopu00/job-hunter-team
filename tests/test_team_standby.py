@@ -82,19 +82,15 @@ stepcap = _load("stepcap_watchdog_under_test", LAUNCHER_DIR / "stepcap-watchdog.
 def sb(tmp_path, monkeypatch):
     """`standby` puntato a una home usa-e-getta, con send/tmux neutralizzati.
 
-    I path sono costanti di modulo risolte all'import: si riassegnano qui
-    (stesso schema della fixture `bi` di test_burn_intent). `_send` e
+    I path seguono JHT_HOME alla chiamata, come nella fixture `bi`. `_send` e
     `_list_sessions` sono sostituiti da recorder: il PRIMO asserisce anche
     l'ordine obbligato del risveglio (flag GIÀ rimosso quando si parla).
     """
-    sb_module.STANDBY_FLAG = tmp_path / ".team-standby.flag"
-    sb_module.STANDBY_LOG = tmp_path / "logs" / "standby.jsonl"
-    sb_module.HALTED_FLAG = tmp_path / ".team-halted.flag"
-    sb_module.SENTINEL_JSONL = tmp_path / "logs" / "sentinel-data.jsonl"
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     sb_module._SENT = []            # recorder condiviso coi test
 
     def fake_send(session, message):
-        assert not sb_module.STANDBY_FLAG.exists(), (
+        assert not sb_module._path("STANDBY_FLAG").exists(), (
             "ordine violato: [RIPRENDI] inviato col flag di standby ancora "
             "presente — il watchdog risilenzierebbe gli agenti appena svegli")
         sb_module._SENT.append((session, message))
@@ -109,10 +105,10 @@ def sb(tmp_path, monkeypatch):
 
 
 def _events(sb):
-    if not sb.STANDBY_LOG.exists():
+    if not sb._path("STANDBY_LOG").exists():
         return []
     return [json.loads(l) for l in
-            sb.STANDBY_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+            sb._path("STANDBY_LOG").read_text(encoding="utf-8").splitlines() if l.strip()]
 
 
 # ── Lifecycle del flag (stesso precedente di .burn-intent.flag) ──────────
@@ -121,13 +117,13 @@ def test_enter_requires_an_exit_condition(sb):
     """Uno standby senza condizione di uscita non si scrive."""
     with pytest.raises(ValueError):
         sb.enter(reason="weekly esaurito", now=T0)
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
 
 
 def test_cli_on_without_exit_condition_refuses(sb, capsys):
     rc = sb.main(["on", "--reason", "weekly esaurito"])
     assert rc != 0
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     assert "exit condition" in capsys.readouterr().err
 
 
@@ -155,8 +151,8 @@ def test_enter_refuses_an_until_in_the_past(sb):
 
 
 def test_malformed_flag_is_not_a_standby(sb):
-    sb.STANDBY_FLAG.parent.mkdir(parents=True, exist_ok=True)
-    sb.STANDBY_FLAG.write_text("questo non è JSON", encoding="utf-8")
+    sb._path("STANDBY_FLAG").parent.mkdir(parents=True, exist_ok=True)
+    sb._path("STANDBY_FLAG").write_text("questo non è JSON", encoding="utf-8")
     assert sb.is_active(now=T0) is False
     assert sb.status(now=T0)["state"] == "invalid"
 
@@ -164,8 +160,8 @@ def test_malformed_flag_is_not_a_standby(sb):
 def test_flag_without_exit_condition_is_not_honored(sb):
     """Il flag scritto a mano senza until/wake_on è il file dimenticato-acceso:
     non vale come standby (fail-closed nella direzione di burn_intent)."""
-    sb.STANDBY_FLAG.parent.mkdir(parents=True, exist_ok=True)
-    sb.STANDBY_FLAG.write_text(json.dumps({"since": 1, "reason": "x"}),
+    sb._path("STANDBY_FLAG").parent.mkdir(parents=True, exist_ok=True)
+    sb._path("STANDBY_FLAG").write_text(json.dumps({"since": 1, "reason": "x"}),
                                encoding="utf-8")
     assert sb.is_active(now=T0) is False
     assert sb.status(now=T0)["state"] == "invalid"
@@ -195,7 +191,7 @@ def test_wake_removes_flag_before_any_message(sb):
     sb.enter(wake_on_weekly=100, now=T0)
     res = sb.wake("weekly 97% sotto la soglia 100%", weekly_usage=97, now=T0)
     assert res["removed"] is True and res["halted"] is False
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     assert res["resumed"] == len(sb._SENT) == 5   # 7 sessioni − 2 NEVER_MESSAGE
 
 
@@ -215,11 +211,11 @@ def test_wake_with_halted_does_not_restart_the_team(sb):
     """Accettazione 7: lo stop dell'utente vince — flag di standby rimosso,
     nessun [RIPRENDI], e l'esito resta scritto nel log."""
     sb.enter(wake_on_weekly=100, now=T0)
-    sb.HALTED_FLAG.write_text("", encoding="utf-8")
+    sb._path("HALTED_FLAG").write_text("", encoding="utf-8")
     res = sb.wake("reset weekly", weekly_usage=3, now=T0)
     assert res["removed"] is True and res["halted"] is True
     assert res["resumed"] == 0 and sb._SENT == []
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     exits = [e for e in _events(sb) if e["event"] == "exit"]
     assert exits and exits[-1]["halted"] is True
 
@@ -232,10 +228,10 @@ def test_wake_without_flag_is_a_noop(sb):
 
 def test_standby_uses_its_own_flag_not_halted(sb):
     """Semantiche diverse, file diversi: lo standby non tocca .team-halted."""
-    assert sb.STANDBY_FLAG.name == ".team-standby.flag"
-    assert sb.HALTED_FLAG.name == ".team-halted.flag"
+    assert sb._path("STANDBY_FLAG").name == ".team-standby.flag"
+    assert sb._path("HALTED_FLAG").name == ".team-halted.flag"
     sb.enter(wake_on_weekly=100, now=T0)
-    assert not sb.HALTED_FLAG.exists()
+    assert not sb._path("HALTED_FLAG").exists()
 
 
 # ── Osservabilità: logs/standby.jsonl ────────────────────────────────────
@@ -260,7 +256,7 @@ def test_activate_writes_the_flag_before_pausing(sb, monkeypatch):
     class FakeSoftPause:
         @staticmethod
         def pause_all(include_core=False, reason=""):
-            assert sb.STANDBY_FLAG.exists(), (
+            assert sb._path("STANDBY_FLAG").exists(), (
                 "pausa partita PRIMA del flag: un tick fra i due passi "
                 "rimetterebbe in moto il team")
             order.append(("pause", include_core))
@@ -363,9 +359,9 @@ def test_sentinel_wake_step_wakes_within_one_tick(bridge, sb):
     il [RIPRENDI] parte — entro il tick stesso, non a quello dopo."""
     sb.enter(wake_on_weekly=100, now=T0)
     bridge._standby_step({"weekly_usage": 100})
-    assert sb.STANDBY_FLAG.exists() and sb._SENT == []
+    assert sb._path("STANDBY_FLAG").exists() and sb._SENT == []
     bridge._standby_step({"weekly_usage": 97})
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     assert {s for s, _ in sb._SENT} >= {"CAPITANO", "SENTINELLA", "SCOUT-1"}
     checks = [e for e in _events(sb) if e["event"] == "wake_check"]
     assert [c["wake"] for c in checks] == [False, True]
@@ -380,10 +376,10 @@ def test_sentinel_wake_step_survives_a_bridge_respawn(sb):
     reborn = _load("sentinel_bridge_reborn", LAUNCHER_DIR / "sentinel-bridge.py")
     reborn._STANDBY_MOD = sb
     reborn._standby_step({"weekly_usage": 100})   # ancora sopra soglia
-    assert sb.STANDBY_FLAG.exists(), "il respawn ha annullato lo standby"
+    assert sb._path("STANDBY_FLAG").exists(), "il respawn ha annullato lo standby"
     assert reborn._standby_active() is True
     reborn._standby_step({"weekly_usage": 42})    # quota tornata
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     assert any("[RIPRENDI]" in m for _, m in sb._SENT)
 
 
@@ -391,9 +387,9 @@ def test_sentinel_wake_step_respects_halted(bridge, sb):
     """Accettazione 7 dal lato bridge: condizione soddisfatta + halted →
     flag via, zero messaggi."""
     sb.enter(wake_on_weekly=100, now=T0)
-    sb.HALTED_FLAG.write_text("", encoding="utf-8")
+    sb._path("HALTED_FLAG").write_text("", encoding="utf-8")
     bridge._standby_step({"weekly_usage": 3})
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     assert sb._SENT == []
 
 
@@ -401,10 +397,10 @@ def test_sentinel_removes_an_invalid_flag(bridge, sb):
     """Un flag senza condizione di uscita non resta lì a confondere stepcap e
     watchdog (che guardano l'esistenza): il bridge, proprietario del lifecycle,
     lo rimuove e lo scrive nel log."""
-    sb.STANDBY_FLAG.parent.mkdir(parents=True, exist_ok=True)
-    sb.STANDBY_FLAG.write_text(json.dumps({"since": 1}), encoding="utf-8")
+    sb._path("STANDBY_FLAG").parent.mkdir(parents=True, exist_ok=True)
+    sb._path("STANDBY_FLAG").write_text(json.dumps({"since": 1}), encoding="utf-8")
     bridge._standby_step({"weekly_usage": 100})
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
     exits = [e for e in _events(sb) if e["event"] == "exit"]
     assert exits and "invalid" in exits[-1]["reason"]
 

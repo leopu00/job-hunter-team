@@ -55,10 +55,10 @@ if _HERE not in sys.path:
 import burn_intent  # noqa: E402
 from plain_file import read_plain  # noqa: E402  (the one reader of files the agents can write)
 
-JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
-CONFIG_FILE = JHT_HOME / "jht.config.json"
-STATE_FILE = JHT_HOME / ".burst.json"
-AUDIT_LOG = JHT_HOME / "logs" / "burst.jsonl"
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["burst"].copy()
+def _path(name): return jht_home(paths=_PATHS, key=name)
 
 MIN_MINUTES = 15
 MAX_HOURS = burn_intent.MAX_HOURS
@@ -106,10 +106,10 @@ def _parse_ts(value) -> Optional[datetime]:
 
 def _audit(event: str, **fields) -> None:
     try:
-        AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        _path("AUDIT_LOG").parent.mkdir(parents=True, exist_ok=True)
         row = {"ts": _now().isoformat(timespec="seconds"), "event": event}
         row.update(fields)
-        with AUDIT_LOG.open("a", encoding="utf-8") as f:
+        with _path("AUDIT_LOG").open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except (OSError, TypeError, ValueError):
         pass
@@ -213,7 +213,7 @@ def _write_json(path: Path, value) -> None:
 
 
 def _config() -> dict:
-    cfg = _read_json(CONFIG_FILE)
+    cfg = _read_json(_path("CONFIG_FILE"))
     if cfg is None:
         raise Refused("config_missing")
     if not isinstance(cfg, dict):
@@ -240,7 +240,7 @@ def _with_hours(cfg: dict, hours) -> dict:
 def _read_state() -> Optional[dict]:
     """The saved burst, or None. A file that is not one is no burst (and is never trusted to write hours)."""
     try:
-        data = _read_json(STATE_FILE)
+        data = _read_json(_path("STATE_FILE"))
     except Refused:
         return None
     if not isinstance(data, dict) or _parse_ts(data.get("until")) is None:
@@ -252,7 +252,7 @@ def _read_state() -> Optional[dict]:
 
 def _drop_state() -> None:
     try:
-        STATE_FILE.unlink()
+        _path("STATE_FILE").unlink()
     except OSError:
         pass
 
@@ -396,17 +396,17 @@ def start(until: str, now: Optional[datetime] = None) -> dict:
     }
     # State first: a crash between the steps must leave something that `sweep` can put back.
     try:
-        _write_json(STATE_FILE, record)
+        _write_json(_path("STATE_FILE"), record)
     except OSError:
         raise Refused("write_failed")
     try:
         if written is not None:
-            _write_json(CONFIG_FILE, _with_hours(cfg, written))
+            _write_json(_path("CONFIG_FILE"), _with_hours(cfg, written))
         burn_intent.grant(minutes / 60, reason=f"burst until {until}", granted_by="user", now=moment,
                           pace_cap_sec=BURST_PAUSE_SEC)
     except Exception:                       # noqa: BLE001 — nothing half done
         try:
-            _write_json(CONFIG_FILE, cfg)
+            _write_json(_path("CONFIG_FILE"), cfg)
         except Exception:                   # noqa: BLE001
             pass
         _drop_state()
@@ -426,7 +426,7 @@ def _restore(state: dict) -> str:
     if _hours_of(cfg) != written:
         return "kept"
     try:
-        _write_json(CONFIG_FILE, _with_hours(cfg, previous))
+        _write_json(_path("CONFIG_FILE"), _with_hours(cfg, previous))
     except OSError:
         raise Refused("write_failed")
     return "restored"

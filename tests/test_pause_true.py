@@ -146,23 +146,23 @@ def test_the_team_read_says_pause_and_that_it_waits_for_the_user(team, capsys):
 
 def test_the_technical_standby_keeps_its_old_flag_and_texts(tmp_path, monkeypatch):
     import standby as sb
-    sb.STANDBY_FLAG = tmp_path / ".team-standby.flag"
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     payload = sb.enter(wake_on_weekly=100)
     assert "mode" not in payload and "manual" not in payload
     assert sb.status()["mode"] == "standby" and sb.status()["manual"] is False
 
 
-def test_only_a_pause_can_wait_for_the_user(tmp_path):
+def test_only_a_pause_can_wait_for_the_user(tmp_path, monkeypatch):
     import standby as sb
-    sb.STANDBY_FLAG = tmp_path / ".team-standby.flag"
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     with pytest.raises(ValueError):
         sb.enter(manual=True)                                      # lo standby tecnico non aspetta nessuno
-    assert not sb.STANDBY_FLAG.exists()
+    assert not sb._path("STANDBY_FLAG").exists()
 
 
-def test_the_cap_rings_like_any_deadline(tmp_path):
+def test_the_cap_rings_like_any_deadline(tmp_path, monkeypatch):
     import standby as sb
-    sb.STANDBY_FLAG = tmp_path / ".team-standby.flag"
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     now = datetime(2026, 11, 5, 22, 0, tzinfo=timezone.utc)
     sb.enter(mode="pause", manual=True, reason="x", now=now)
     assert sb.status(now + timedelta(days=6))["state"] == "active"
@@ -260,7 +260,7 @@ def test_the_cap_wakes_the_agent_and_removes_the_mark(tmp_path, monkeypatch):
     sent = []
     monkeypatch.setattr(ap, "_send", lambda s, m: sent.append((s, m)) or True)
     monkeypatch.setattr(ap, "_live_sessions", lambda: ["SCOUT-3"])
-    monkeypatch.setattr(ap, "LOG", tmp_path / "logs" / "agent-pauses.jsonl")
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     now = datetime(2026, 11, 5, 22, 0, tzinfo=timezone.utc)
     ap.pause("SCOUT-3", now=now, home=tmp_path)
     assert ap.wake_expired(now + timedelta(days=1), tmp_path) == []
@@ -429,7 +429,7 @@ def test_the_wake_up_takes_away_a_forged_mark_without_telling_anyone_to_resume(t
     sent = []
     monkeypatch.setattr(ap, "_send", lambda s, m: sent.append((s, m)) or True)
     monkeypatch.setattr(ap, "_live_sessions", lambda: ["SCOUT-1", "SCOUT-5"])
-    monkeypatch.setattr(ap, "LOG", tmp_path / "logs" / "agent-pauses.jsonl")
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     now = datetime(2026, 11, 5, 22, 0, tzinfo=timezone.utc)
     d = tmp_path / ".agent-pauses"
     d.mkdir()

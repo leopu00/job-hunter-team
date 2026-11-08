@@ -142,24 +142,24 @@ def test_un_orologio_tornato_indietro_non_uccide_la_deroga():
 
 
 def test_lo_stato_persiste_e_si_rilegge(tmp_path, monkeypatch):
-    monkeypatch.setattr(bridge, 'HARDSTOP_OVERRIDE_STATE_FILE',
+    monkeypatch.setitem(bridge._PATHS, "HARDSTOP_OVERRIDE_STATE_FILE",
                         tmp_path / 'override.json')
-    monkeypatch.setattr(bridge, 'LOGS_DIR', tmp_path)
+    monkeypatch.setitem(bridge._PATHS, "LOGS_DIR", tmp_path)
     bridge._persist_hardstop_override(bridge.HARDSTOP_RUNNING, 1234.5)
     assert bridge._read_hardstop_override_started() == 1234.5
 
 
 def test_la_fase_off_cancella_lo_stato(tmp_path, monkeypatch):
-    monkeypatch.setattr(bridge, 'HARDSTOP_OVERRIDE_STATE_FILE',
+    monkeypatch.setitem(bridge._PATHS, "HARDSTOP_OVERRIDE_STATE_FILE",
                         tmp_path / 'override.json')
-    monkeypatch.setattr(bridge, 'LOGS_DIR', tmp_path)
+    monkeypatch.setitem(bridge._PATHS, "LOGS_DIR", tmp_path)
     bridge._persist_hardstop_override(bridge.HARDSTOP_RUNNING, 1234.5)
     bridge._persist_hardstop_override(bridge.HARDSTOP_OFF, None)
     assert bridge._read_hardstop_override_started() is None
 
 
 def test_file_mai_scritto_vuol_dire_mai_partita(tmp_path, monkeypatch):
-    monkeypatch.setattr(bridge, 'HARDSTOP_OVERRIDE_STATE_FILE',
+    monkeypatch.setitem(bridge._PATHS, "HARDSTOP_OVERRIDE_STATE_FILE",
                         tmp_path / 'assente.json')
     assert bridge._read_hardstop_override_started() is None
 
@@ -168,7 +168,7 @@ def test_file_mai_scritto_vuol_dire_mai_partita(tmp_path, monkeypatch):
 def test_un_file_malformato_produce_nan_quindi_scaduta(tmp_path, monkeypatch, content):
     target = tmp_path / 'override.json'
     target.write_text(content, encoding='utf-8')
-    monkeypatch.setattr(bridge, 'HARDSTOP_OVERRIDE_STATE_FILE', target)
+    monkeypatch.setitem(bridge._PATHS, "HARDSTOP_OVERRIDE_STATE_FILE", target)
     started = bridge._read_hardstop_override_started()
     assert started != started  # NaN
     assert phase_of(True, 1000.0, started)[0] == bridge.HARDSTOP_EXPIRED
@@ -176,9 +176,9 @@ def test_un_file_malformato_produce_nan_quindi_scaduta(tmp_path, monkeypatch, co
 
 def test_il_riavvio_del_bridge_non_riapre_la_finestra(tmp_path, monkeypatch):
     """Il motivo per cui lo stato sta su file e non in memoria."""
-    monkeypatch.setattr(bridge, 'HARDSTOP_OVERRIDE_STATE_FILE',
+    monkeypatch.setitem(bridge._PATHS, "HARDSTOP_OVERRIDE_STATE_FILE",
                         tmp_path / 'override.json')
-    monkeypatch.setattr(bridge, 'LOGS_DIR', tmp_path)
+    monkeypatch.setitem(bridge._PATHS, "LOGS_DIR", tmp_path)
     # prima vita del bridge: la finestra si apre a t=0
     phase, started = phase_of(True, 0.0, bridge._read_hardstop_override_started())
     bridge._persist_hardstop_override(phase, started)
@@ -294,7 +294,7 @@ def test_il_loop_applica_la_deroga_tramite_la_fase_non_la_variabile(
     assert "read_override" in world.trace
     assert len(world.phases) == 1
     assert world.phases[0][0] == getattr(world.module, expected)
-    assert world.module.DAILY_HALT_FLAG.exists() is halted
+    assert world.module._path("DAILY_HALT_FLAG").exists() is halted
     assert ("halt" in world.trace) is halted
     assert world.started == (world.now if expected == "HARDSTOP_RUNNING" else started)
 

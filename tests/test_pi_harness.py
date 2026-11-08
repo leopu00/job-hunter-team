@@ -496,11 +496,11 @@ def test_the_usage_bridge_publishes_the_gap(tmp_path: Path, monkeypatch) -> None
     bridge = _load("sentinel_bridge_pi_test", ROOT / ".launcher" / "sentinel-bridge.py")
 
     bridge._write_state_file({}, None, None, 10)
-    assert json.loads(bridge.STATE_FILE.read_text(encoding="utf-8"))["uncounted"] is None
+    assert json.loads(bridge._path("STATE_FILE").read_text(encoding="utf-8"))["uncounted"] is None
 
     _pi_session(tmp_path)
     bridge._write_state_file({}, None, None, 10)
-    published = json.loads(bridge.STATE_FILE.read_text(encoding="utf-8"))["uncounted"]
+    published = json.loads(bridge._path("STATE_FILE").read_text(encoding="utf-8"))["uncounted"]
     assert published["pi_sessions"] == 1
 
 

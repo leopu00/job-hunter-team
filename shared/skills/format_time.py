@@ -27,6 +27,9 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import jht_home  # noqa: E402
+
 try:
     from zoneinfo import ZoneInfo  # stdlib 3.9+
 except ImportError:  # pragma: no cover
@@ -44,16 +47,18 @@ DEFAULT_TZ = "UTC"
 #   2. ~/.jht/host.env::JHT_USER_TZ  (scritto da host-setup.sh interattivo)
 #   3. candidate_profile.yml::timezone  (legacy, ancora supportato)
 #   4. fallback hardcoded DEFAULT_TZ = "UTC"
-_HOST_ENV_CANDIDATES = [
-    Path(os.environ.get("JHT_HOST_ENV_FILE", "")) if os.environ.get("JHT_HOST_ENV_FILE") else None,
-    Path(os.environ.get("JHT_HOME", "/jht_home")) / "host.env",
-    Path.home() / ".jht" / "host.env",
-]
-_PROFILE_CANDIDATES = [
-    Path(os.environ.get("JHT_HOME", "/jht_home")) / "profile" / "candidate_profile.yml",
-    Path(os.environ.get("JHT_HOME", "/jht_home")) / "candidate_profile.yml",
-    Path("/jht_home/profile/candidate_profile.yml"),
-]
+def _host_env_candidates():
+    return [
+        Path(os.environ["JHT_HOST_ENV_FILE"]) if os.environ.get("JHT_HOST_ENV_FILE") else None,
+        jht_home(fallback="/jht_home", empty_is_unset=False) / "host.env",
+        jht_home({}) / "host.env",
+    ]
+
+
+def _profile_candidates():
+    base = jht_home(fallback="/jht_home", empty_is_unset=False)
+    return [base / "profile" / "candidate_profile.yml", base / "candidate_profile.yml",
+            Path("/jht_home/profile/candidate_profile.yml")]
 
 
 def _read_kv_file(path: Path, key: str) -> str | None:
@@ -73,15 +78,14 @@ def _read_kv_file(path: Path, key: str) -> str | None:
 
 
 @lru_cache(maxsize=1)
-def _read_profile_timezone() -> str:
+def _read_timezone_candidates(env_tz, host_candidates, profile_candidates) -> str:
     """Cascade lookup (vedi docstring modulo). Default UTC se niente settato."""
     # 1. env var diretta (priorità massima, usata dal wrapper jht)
-    env_tz = (os.environ.get("JHT_USER_TZ") or "").strip()
     if env_tz:
         return env_tz
 
     # 2. host.env in vari path candidati
-    for path in _HOST_ENV_CANDIDATES:
+    for path in host_candidates:
         if path is None:
             continue
         val = _read_kv_file(path, "JHT_USER_TZ")
@@ -89,7 +93,7 @@ def _read_profile_timezone() -> str:
             return val
 
     # 3. candidate_profile.yml (legacy)
-    for path in _PROFILE_CANDIDATES:
+    for path in profile_candidates:
         try:
             with path.open("r", encoding="utf-8") as f:
                 for raw in f:
@@ -107,6 +111,15 @@ def _read_profile_timezone() -> str:
     # essere in qualsiasi continente). Se vede UTC, sa che il setup non
     # è completo.
     return DEFAULT_TZ
+
+
+def _read_profile_timezone() -> str:
+    return _read_timezone_candidates(
+        (os.environ.get("JHT_USER_TZ") or "").strip(),
+        tuple(_host_env_candidates()), tuple(_profile_candidates()))
+
+
+_read_profile_timezone.cache_clear = _read_timezone_candidates.cache_clear
 
 
 def _to_aware_utc(dt: datetime) -> datetime:

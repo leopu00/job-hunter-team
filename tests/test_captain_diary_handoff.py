@@ -19,7 +19,7 @@ TODAY = "2026-10-27"
 
 @pytest.fixture()
 def logs(tmp_path: Path, monkeypatch) -> Path:
-    monkeypatch.setattr(diary, "DIARY_DIR", tmp_path)
+    monkeypatch.setitem(diary._PATHS, "DIARY_DIR", tmp_path)
     monkeypatch.setattr(diary, "_now_local", lambda: datetime(2026, 10, 27, 12, 0, tzinfo=timezone.utc))
     return tmp_path
 

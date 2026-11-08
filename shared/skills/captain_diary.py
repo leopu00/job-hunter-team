@@ -21,8 +21,11 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
-DIARY_DIR = JHT_HOME / "logs"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["captain_diary"].copy()
+def _path(name): return jht_home(empty_is_unset=False, paths=_PATHS, key=name)
 
 
 def _user_tz():
@@ -41,7 +44,7 @@ def _now_local():
 
 
 def _file_for(day_str: str) -> Path:
-    return DIARY_DIR / f"captain-diary-{day_str}.md"
+    return _path("DIARY_DIR") / f"captain-diary-{day_str}.md"
 
 
 def add(note: str) -> int:
@@ -52,7 +55,7 @@ def add(note: str) -> int:
     day = now.strftime("%Y-%m-%d")
     path = _file_for(day)
     try:
-        DIARY_DIR.mkdir(parents=True, exist_ok=True)
+        _path("DIARY_DIR").mkdir(parents=True, exist_ok=True)
         new_file = not path.exists()
         with path.open("a", encoding="utf-8") as f:
             if new_file:
@@ -78,7 +81,7 @@ def _latest_prior(day_str: str) -> Path | None:
     """Il file-diario più recente PRIMA di day_str (ieri, o l'ultimo giorno
     lavorato — i weekend/giorni off non hanno file)."""
     try:
-        cands = sorted(DIARY_DIR.glob("captain-diary-*.md"))
+        cands = sorted(_path("DIARY_DIR").glob("captain-diary-*.md"))
     except OSError:
         return None
     prior = [p for p in cands if p.stem.replace("captain-diary-", "") < day_str]

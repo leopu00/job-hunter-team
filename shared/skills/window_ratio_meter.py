@@ -39,16 +39,15 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
-LOGS_DIR = JHT_HOME / "logs"
-SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
-STATE_FILE = LOGS_DIR / "window-ratio-state.json"
-CONFIG_FILE = JHT_HOME / "jht.config.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["window_ratio_meter"].copy()
+def _path(name): return jht_home(empty_is_unset=False, paths=_PATHS, key=name)
 # Lockfile del singleton del DAEMON (--watch), file dedicato. Due daemon vivi
 # aggiornerebbero la stessa EMA due volte per tick, cioè una calibrazione
 # falsata ([BRIDGE-SINGLETON-PARTIAL]). Il one-shot non lo prende: è
 # diagnostica e non deve uscire in silenzio se il daemon è su.
-LOCK_FILE = LOGS_DIR / "window-ratio-meter.lock"
 
 # Soglie:
 #   MIN_DELTA_5H_ACCUM_PCT — `usage` e `weekly_usage` dal bridge sono INTERI
@@ -97,27 +96,27 @@ def _iso_to_ts(s) -> float | None:
 
 def _read_active_provider() -> str:
     try:
-        with CONFIG_FILE.open(encoding="utf-8") as f:
+        with _path("CONFIG_FILE").open(encoding="utf-8") as f:
             return (json.load(f).get("active_provider") or "openai").lower()
     except (OSError, json.JSONDecodeError):
         return "openai"
 
 
 def _read_state() -> dict:
-    if not STATE_FILE.exists():
+    if not _path("STATE_FILE").exists():
         return {}
     try:
-        with STATE_FILE.open(encoding="utf-8") as f:
+        with _path("STATE_FILE").open(encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return {}
 
 
 def _write_state(state: dict) -> None:
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_FILE.with_suffix(f".json.tmp.{os.getpid()}")
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+    tmp = _path("STATE_FILE").with_suffix(f".json.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
-    os.replace(tmp, STATE_FILE)
+    os.replace(tmp, _path("STATE_FILE"))
 
 
 def _iter_samples(since_ts: float | None = None):
@@ -125,9 +124,9 @@ def _iter_samples(since_ts: float | None = None):
 
     Skippa entry senza i campi necessari. Ordinato già per arrivo (append-only).
     """
-    if not SENTINEL_JSONL.exists():
+    if not _path("SENTINEL_JSONL").exists():
         return
-    with SENTINEL_JSONL.open(encoding="utf-8") as f:
+    with _path("SENTINEL_JSONL").open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -291,7 +290,7 @@ def _acquire_singleton() -> None:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from singleton_lock import acquire_singleton
-        acquire_singleton(LOCK_FILE, label="window-ratio-meter")
+        acquire_singleton(_path("LOCK_FILE"), label="window-ratio-meter")
     except SystemExit:
         raise
     except Exception as e:  # noqa: BLE001
@@ -302,7 +301,7 @@ def _acquire_singleton() -> None:
 def run_watch(tick_sec: int = WATCH_TICK_SEC) -> None:
     _acquire_singleton()
     print(
-        f"[window-ratio-meter] up — tick={tick_sec}s jht_home={JHT_HOME}",
+        f"[window-ratio-meter] up — tick={tick_sec}s jht_home={_path('JHT_HOME')}",
         flush=True,
     )
     while True:
@@ -329,14 +328,13 @@ def _self_test() -> int:
     import tempfile
     import textwrap
 
-    global LOGS_DIR, SENTINEL_JSONL, STATE_FILE, CONFIG_FILE
     tmp = Path(tempfile.mkdtemp(prefix="wrm_test_"))
-    LOGS_DIR = tmp / "logs"
-    LOGS_DIR.mkdir(parents=True)
-    SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
-    STATE_FILE = LOGS_DIR / "window-ratio-state.json"
-    CONFIG_FILE = tmp / "jht.config.json"
-    CONFIG_FILE.write_text(json.dumps({"active_provider": "openai"}))
+    _PATHS["LOGS_DIR"] = tmp / "logs"
+    _path("LOGS_DIR").mkdir(parents=True)
+    _PATHS["SENTINEL_JSONL"] = _path("LOGS_DIR") / "sentinel-data.jsonl"
+    _PATHS["STATE_FILE"] = _path("LOGS_DIR") / "window-ratio-state.json"
+    _PATHS["CONFIG_FILE"] = tmp / "jht.config.json"
+    _path("CONFIG_FILE").write_text(json.dumps({"active_provider": "openai"}))
 
     # Sintetico Codex Pro: ratio "vero" = 14.7% (1% di 5h cap = 0.147% weekly).
     # Generiamo 60 sample, spaziati 5 min, in stessa session. Aggiungiamo
@@ -346,7 +344,7 @@ def _self_test() -> int:
     base_ts = datetime(2026, 5, 25, 9, 0, tzinfo=timezone.utc).timestamp()
     usage = 0.0
     weekly = 50.0  # mid-week, partiamo da 50%
-    with SENTINEL_JSONL.open("w", encoding="utf-8") as f:
+    with _path("SENTINEL_JSONL").open("w", encoding="utf-8") as f:
         for i in range(60):
             ts = base_ts + i * 300  # ogni 5 min
             du = 0.8 + random.uniform(-0.1, 0.1)  # ~9.6%/h sul 5h cap
@@ -390,14 +388,14 @@ def _self_test() -> int:
     # Per-tick i Δ interi (+1/+1=100%, +1/0=0%) avvelenavano l'EMA a 25-100%.
     # Con l'accumulo (Δu≥10pp) l'EMA resta vicina al 15% vero.
     tmp2 = Path(tempfile.mkdtemp(prefix="wrm_quant_"))
-    LOGS_DIR = tmp2 / "logs"
-    LOGS_DIR.mkdir(parents=True)
-    SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
-    STATE_FILE = LOGS_DIR / "window-ratio-state.json"
-    CONFIG_FILE = tmp2 / "jht.config.json"
-    CONFIG_FILE.write_text(json.dumps({"active_provider": "openai"}))
+    _PATHS["LOGS_DIR"] = tmp2 / "logs"
+    _path("LOGS_DIR").mkdir(parents=True)
+    _PATHS["SENTINEL_JSONL"] = _path("LOGS_DIR") / "sentinel-data.jsonl"
+    _PATHS["STATE_FILE"] = _path("LOGS_DIR") / "window-ratio-state.json"
+    _PATHS["CONFIG_FILE"] = tmp2 / "jht.config.json"
+    _path("CONFIG_FILE").write_text(json.dumps({"active_provider": "openai"}))
     base2 = datetime(2026, 5, 26, 9, 0, tzinfo=timezone.utc).timestamp()
-    with SENTINEL_JSONL.open("w", encoding="utf-8") as f:
+    with _path("SENTINEL_JSONL").open("w", encoding="utf-8") as f:
         for i in range(120):
             ts = base2 + i * 300
             usage_i = i + 1  # intero, +1/tick
@@ -416,7 +414,7 @@ def _self_test() -> int:
        qema is not None and qema < 40.0)
 
     # Provider change: reset
-    CONFIG_FILE.write_text(json.dumps({"active_provider": "claude"}))
+    _path("CONFIG_FILE").write_text(json.dumps({"active_provider": "claude"}))
     state3 = run_once()
     ok("provider change resets state", state3["provider"] == "claude")
     ok(

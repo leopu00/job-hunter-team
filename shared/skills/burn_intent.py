@@ -107,15 +107,15 @@ if _HERE not in sys.path:
 import plain_file  # noqa: E402  (the one way the team reads a file its agents can write: no link followed, no pipe waited on)
 
 
-JHT_HOME = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["burn_intent"].copy()
+def _path(name): return jht_home(paths=_PATHS, key=name)
 # Stessa posizione e stessa forma di `.team-halted.flag`: chi deve leggerlo lo
 # trova dove già cerca l'altro, senza una nuova convenzione da imparare.
-INTENT_FLAG = JHT_HOME / ".burn-intent.flag"
 # Traccia esplicita di ogni transizione. Con i freni tolti la responsabilità di
 # non sprecare passa al coordinatore: va SCRITTO, non lasciato dedurre.
-AUDIT_LOG = JHT_HOME / "logs" / "burn-intent.jsonl"
 # Quali avvisi all'utente sono già partiti per la concessione corrente (JHT-T33).
-NOTICES_FILE = JHT_HOME / ".burn-intent-notices.json"
 # Quanto prima della scadenza l'utente viene avvisato.
 WARN_MINUTES = 60
 
@@ -167,7 +167,7 @@ def read() -> Optional[dict]:
     try:
         # plain_file: a pipe or a link made in place of the flag by an agent must not hold the readers that protect the
         # budget (the bridge, the app's Budget page); it reads as no flag, which is the fail-closed answer.
-        data = plain_file.read_json(INTENT_FLAG, max_size=FLAG_MAX_BYTES)
+        data = plain_file.read_json(_path("INTENT_FLAG"), max_size=FLAG_MAX_BYTES)
     except (OSError, plain_file.NotPlain, UnicodeDecodeError, ValueError):
         return None
     if not isinstance(data, dict):
@@ -243,26 +243,26 @@ def _audit(event: str, **fields) -> None:
     """Appende una riga all'audit log. Best-effort: non deve mai far fallire
     la transizione che sta tracciando."""
     try:
-        AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        _path("AUDIT_LOG").parent.mkdir(parents=True, exist_ok=True)
         row = {"ts": _now().isoformat(timespec="seconds"), "event": event}
         row.update(fields)
-        with AUDIT_LOG.open("a", encoding="utf-8") as f:
+        with _path("AUDIT_LOG").open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except (OSError, TypeError, ValueError):
         pass
 
 
 def _atomic_write(payload: dict) -> None:
-    INTENT_FLAG.parent.mkdir(parents=True, exist_ok=True)
+    _path("INTENT_FLAG").parent.mkdir(parents=True, exist_ok=True)
     body = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     fd, tmp = tempfile.mkstemp(prefix=".burn-intent-", suffix=".tmp",
-                               dir=str(INTENT_FLAG.parent))
+                               dir=str(_path("INTENT_FLAG").parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(body)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, INTENT_FLAG)
+        os.replace(tmp, _path("INTENT_FLAG"))
     except Exception:
         try:
             os.unlink(tmp)
@@ -311,7 +311,7 @@ def revoke(reason: str = "", now: Optional[datetime] = None) -> Optional[dict]:
     """Revoca immediata. Ritorna il payload rimosso, o None se non c'era nulla."""
     data = read()
     try:
-        INTENT_FLAG.unlink()
+        _path("INTENT_FLAG").unlink()
     except OSError:
         return None
     _audit("revoked", reason=(reason or "").strip(),
@@ -331,7 +331,7 @@ def sweep(now: Optional[datetime] = None) -> Optional[dict]:
         return None
     data = read()
     try:
-        INTENT_FLAG.unlink()
+        _path("INTENT_FLAG").unlink()
     except OSError:
         return None
     _audit("expired", expires_at=st.get("expires_at"), reason=st.get("reason"))
@@ -345,7 +345,7 @@ def _grant_key(data: dict) -> str:
 def _sent_notices(data: dict) -> list[str]:
     """Gli avvisi già inviati per QUESTA concessione; vuoto se il file è di un'altra o illeggibile."""
     try:
-        raw = plain_file.read_json(NOTICES_FILE, max_size=FLAG_MAX_BYTES)
+        raw = plain_file.read_json(_path("NOTICES_FILE"), max_size=FLAG_MAX_BYTES)
     except (OSError, plain_file.NotPlain, UnicodeDecodeError, ValueError):
         return []
     if not isinstance(raw, dict) or raw.get("key") != _grant_key(data):
@@ -359,14 +359,14 @@ def _mark_sent(data: dict, kind: str) -> None:
     if kind not in sent:
         sent.append(kind)
     body = json.dumps({"key": _grant_key(data), "sent": sent}, sort_keys=True) + "\n"
-    NOTICES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".burn-intent-notices-", suffix=".tmp", dir=str(NOTICES_FILE.parent))
+    _path("NOTICES_FILE").parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".burn-intent-notices-", suffix=".tmp", dir=str(_path("NOTICES_FILE").parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(body)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, NOTICES_FILE)
+        os.replace(tmp, _path("NOTICES_FILE"))
     except Exception:
         try:
             os.unlink(tmp)
@@ -428,7 +428,7 @@ def _user_zone():
 def _team_zone():
     """The zone the team works in (jht.config.json: team.working_hours.timezone), or None."""
     try:
-        name = plain_file.read_json(JHT_HOME / "jht.config.json")["team"]["working_hours"]["timezone"]
+        name = plain_file.read_json(_path("JHT_HOME") / "jht.config.json")["team"]["working_hours"]["timezone"]
     except Exception:                   # noqa: BLE001 — no config, or one without the field
         return None
     return _zone(name)

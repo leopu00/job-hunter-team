@@ -322,7 +322,7 @@ def test_the_bridge_reads_fifty_hours_of_history_whatever_the_cadence_and_logs_t
     rows = [{"ts": (now - timedelta(minutes=m)).isoformat(), "usage": 1} for m in range(0, 60 * 60, 1)]   # una al minuto, 60 h
     path = tmp_path / "sentinel-data.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in rows[::-1]), encoding="utf-8")
-    monkeypatch.setattr(bridge, "DATA_JSONL", path)
+    monkeypatch.setitem(bridge._PATHS, "DATA_JSONL", path)
     got = bridge.load_recent_samples(6000, since_h=50)
     assert len(got) == 50 * 60 + 1 or len(got) == 50 * 60
     assert bridge.load_recent_samples(100) and len(bridge.load_recent_samples(100)) == 100

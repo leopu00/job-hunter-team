@@ -380,9 +380,9 @@ def test_what_is_written_to_the_state_while_the_card_is_posted_is_kept(box, monk
     spec.loader.exec_module(module)
 
     def post(agent, card):
-        state = json.loads(module.STATE_PATH.read_text())
+        state = json.loads(module._path("STATE_PATH").read_text())
         state["written_meanwhile"] = True  # somebody else (burst, complete) writes the state during the post
-        module.STATE_PATH.write_text(json.dumps(state))
+        module._path("STATE_PATH").write_text(json.dumps(state))
         return "aq:capitano:1-abc", ""
 
     monkeypatch.setattr(module, "_post_plan_card", post)
@@ -391,7 +391,7 @@ def test_what_is_written_to_the_state_while_the_card_is_posted_is_kept(box, monk
 
     assert module.ask_plan()["asked"]
 
-    kept = json.loads(module.STATE_PATH.read_text())
+    kept = json.loads(module._path("STATE_PATH").read_text())
     assert kept["written_meanwhile"] is True and kept["plan_question"]["id"] == "aq:capitano:1-abc"
 
 

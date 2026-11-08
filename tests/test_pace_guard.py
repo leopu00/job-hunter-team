@@ -251,7 +251,7 @@ def _run_bridge_step(monkeypatch, tmp_path, result, sent, within_hours=True,
     monkeypatch.setattr(bridge, "_load_skill_module", _load)
     monkeypatch.setattr(bridge, "jht_tmux_send",
                         lambda session, text: (sent.append((session, text)), True)[1])
-    monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
+    monkeypatch.setitem(bridge._PATHS, "LOGS_DIR", tmp_path)
     bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75},
                             within_hours=within_hours,
                             burn_intent_on=burn_intent_on)
@@ -287,7 +287,7 @@ def test_a_lost_advice_stays_in_the_mailbox(tmp_path, monkeypatch):
     monkeypatch.setattr(bridge, "_load_skill_module",
                         lambda *a, **k: _StubGuard(r))
     monkeypatch.setattr(bridge, "jht_tmux_send", lambda session, text: False)
-    monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
+    monkeypatch.setitem(bridge._PATHS, "LOGS_DIR", tmp_path)
     bridge._pace_guard_step({"ts": "2026-07-26T16:00:00Z", "usage": 75})
 
     mailbox = (tmp_path / "bridge-mailbox.jsonl").read_text(encoding="utf-8")
@@ -572,7 +572,7 @@ def _run_step_with_mode(monkeypatch, tmp_path, result, sent, bridge=None):
     monkeypatch.setattr(bridge, "_load_skill_module", _load)
     monkeypatch.setattr(bridge, "jht_tmux_send",
                         lambda session, text: (sent.append((session, text)), True)[1])
-    monkeypatch.setattr(bridge, "LOGS_DIR", tmp_path)
+    monkeypatch.setitem(bridge._PATHS, "LOGS_DIR", tmp_path)
     # JHT_HOME sulla tmp: mode_banner risolve i suoi path a OGNI chiamata da
     # questa env var. JHT_DB via, o vincerebbe puntando il DB di chi lancia.
     monkeypatch.setenv("JHT_HOME", str(tmp_path))

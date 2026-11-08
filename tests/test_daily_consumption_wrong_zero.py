@@ -32,7 +32,7 @@ def test_the_daily_consumption_does_not_start_from_a_wrong_zero(monkeypatch, tmp
                         (start + timedelta(minutes=15), 70.0), (start + timedelta(minutes=20), 71.0)]
     data = tmp_path / "sentinel-data.jsonl"
     data.write_text("".join(_json.dumps({"ts": t.isoformat(), "weekly_usage": w}) + "\n" for t, w in samples), encoding="utf-8")
-    monkeypatch.setattr(bridge, "DATA_JSONL", data)
+    monkeypatch.setitem(bridge._PATHS, "DATA_JSONL", data)
     now = start + timedelta(hours=2)
     reset = (datetime(2026, 11, 4, 6, 35, tzinfo=UTC)).timestamp()
     entry = {"weekly_usage": 75.0, "weekly_remaining_pct": 25.0, "weekly_reset_at_unix": reset}

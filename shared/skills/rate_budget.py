@@ -32,8 +32,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
-DATA_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["rate_budget"].copy()
+def _path(name): return jht_home(empty_is_unset=False, paths=_PATHS, key=name)
 
 
 # ── Reset → DATA+ORA completa (mai ora-nuda) ────────────────────────────
@@ -89,10 +92,10 @@ def display_status(value):
 
 
 def load_last_sample():
-    if not DATA_JSONL.exists():
+    if not _path("DATA_JSONL").exists():
         return None
     try:
-        with DATA_JSONL.open(encoding="utf-8") as f:
+        with _path("DATA_JSONL").open(encoding="utf-8") as f:
             last = None
             for line in f:
                 line = line.strip()
@@ -422,7 +425,7 @@ def show_tick():
     sezioni: 5h / oggi / settimana + consiglio) che riceve la Sentinella.
     Il bridge lo renderizza ad ogni tick e lo scrive in logs/last-tick.txt;
     qui lo rileggiamo (zero chiamate al provider, zero ricalcolo divergente)."""
-    path = JHT_HOME / "logs" / "last-tick.txt"
+    path = _path("JHT_HOME") / "logs" / "last-tick.txt"
     try:
         msg = path.read_text(encoding="utf-8").strip()
     except (OSError, FileNotFoundError):

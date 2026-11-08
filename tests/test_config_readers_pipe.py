@@ -112,7 +112,7 @@ def test_the_apply_gate_reads_a_pipe_as_unreadable_and_a_normal_file_as_before(c
 
 def test_the_sentinel_bridge_reads_a_pipe_as_unreadable_and_goes_on(config):
     namespace = functions(".launcher/sentinel-bridge.py", {"read_config", "_read_config_json", "_load_skill_module"},
-                          {"CONFIG_PATH": config, "_PLAIN_FILE_MOD": None, "tempfile": __import__("tempfile")})
+                          {"_path": lambda name: config, "_PLAIN_FILE_MOD": None, "tempfile": __import__("tempfile")})
     namespace["datetime"] = __import__("datetime").datetime
     config.write_text(json.dumps({"active_provider": "kimi", "sentinella_tick_minutes": 0.5}), encoding="utf-8")
     assert namespace["read_config"]() == (0.5, "kimi")

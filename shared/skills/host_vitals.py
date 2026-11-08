@@ -59,8 +59,11 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 CGROUP = Path("/sys/fs/cgroup")
-DEFAULT_FILE = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht"))) / "logs" / "vitals.jsonl"
-DISK_NOTICE_FILE = DEFAULT_FILE.parent / "disk-notice.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jht_home import PATH_SPECS, jht_home  # noqa: E402
+
+_PATHS = PATH_SPECS["host_vitals"].copy()
+def _path(name): return jht_home(empty_is_unset=False, paths=_PATHS, key=name)
 MAX_LINES = 4000  # ~7+ giorni a 1 sample / 2-10 min — cap anti-crescita
 
 # ── Disco: soglie sullo spazio LIBERO, codici chiusi ───────────────────────
@@ -249,7 +252,7 @@ def engine_disk_path(env=None):
 def read_disk(env=None):
     """Spazio libero dei due volumi e il livello peggiore (`ok|warn|low|unknown`)."""
     env = os.environ if env is None else env
-    home = env.get("JHT_HOME") or str(Path.home() / ".jht")
+    home = str(jht_home(env))
     vols = {"jht_home": _volume(home), "engine": _volume(engine_disk_path(env))}
     known = [v for v in vols.values() if v["level"] != "unknown"]
     # Il peggiore: prima la gravità, a parità la percentuale più bassa. Un volume
@@ -332,7 +335,7 @@ def notify_disk(disk, state_path=None, notifier=_send_user_notice, now=None):
     così la prossima discesa avvisa di nuovo. Lo stato si scrive solo a consegna
     riuscita: un avviso fallito si ritenta al tick dopo.
     """
-    path = Path(state_path) if state_path else DISK_NOTICE_FILE
+    path = Path(state_path) if state_path else _path("DISK_NOTICE_FILE")
     now = time.time() if now is None else now
     code = disk.get("code")
     if not code:
@@ -458,7 +461,7 @@ def sampler_silence(samples, now, max_age_s, since=None):
 
 def read_samples(path=None, last=4 * CPU_ALERT_RUN):
     """Gli ultimi `last` campioni leggibili di vitals.jsonl, dal più vecchio."""
-    path = Path(path) if path else DEFAULT_FILE
+    path = Path(path) if path else _path("DEFAULT_FILE")
     out = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -478,7 +481,7 @@ def read_samples(path=None, last=4 * CPU_ALERT_RUN):
 
 def append_sample(path=None, max_lines=MAX_LINES):
     """Campiona e appende a vitals.jsonl; tronca ai max_lines più recenti."""
-    path = Path(path) if path else DEFAULT_FILE
+    path = Path(path) if path else _path("DEFAULT_FILE")
     path.parent.mkdir(parents=True, exist_ok=True)
     v = read_vitals()
     with open(path, "a", encoding="utf-8") as f:
@@ -495,7 +498,7 @@ def append_sample(path=None, max_lines=MAX_LINES):
 
 def summarize(path=None, hours=24):
     """Picchi/medie sulle ultime `hours` ore — per il Mantenitore."""
-    path = Path(path) if path else DEFAULT_FILE
+    path = Path(path) if path else _path("DEFAULT_FILE")
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     cpu, mem, swap = [], [], []
     peak_cpu = peak_mem = None

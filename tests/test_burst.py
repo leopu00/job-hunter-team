@@ -35,12 +35,7 @@ OFFICE = {"timezone": ROME, "windows": [{"days": ["mon", "tue", "wed", "thu", "f
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    burn_intent.INTENT_FLAG = tmp_path / ".burn-intent.flag"
-    burn_intent.AUDIT_LOG = tmp_path / "logs" / "burn-intent.jsonl"
-    burn_intent.NOTICES_FILE = tmp_path / ".burn-intent-notices.json"
-    burst.CONFIG_FILE = tmp_path / "jht.config.json"
-    burst.STATE_FILE = tmp_path / ".burst.json"
-    burst.AUDIT_LOG = tmp_path / "logs" / "burst.jsonl"
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
     monkeypatch.setattr(burn_intent, "_user_zone", lambda: None)
     monkeypatch.setattr(burn_intent, "_system_zone", lambda: timezone.utc)
     return tmp_path
@@ -408,7 +403,7 @@ def test_a_burn_that_does_not_say_a_tutta_leaves_the_pauses_as_they_are(home, th
 
 def test_a_cap_that_is_not_a_number_is_no_cap(home):
     burn_intent.grant(hours=2)
-    flag = json.loads(burn_intent.INTENT_FLAG.read_text(encoding="utf-8"))
+    flag = json.loads(burn_intent._path("INTENT_FLAG").read_text(encoding="utf-8"))
     for bad in ("60", -5, True, None, 1.5):
-        burn_intent.INTENT_FLAG.write_text(json.dumps({**flag, "pace_cap_sec": bad}), encoding="utf-8")
+        burn_intent._path("INTENT_FLAG").write_text(json.dumps({**flag, "pace_cap_sec": bad}), encoding="utf-8")
         assert burn_intent.pace_cap() is None, bad
