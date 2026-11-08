@@ -437,6 +437,38 @@ function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundCo
 function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
 
+# T220: declared host bridge to move into the T214 Rust sidecar. No data logic.
+# Explicit rule-2 exception: <=60 added lines, no installer/manifest dependency.
+function Open-JhtMonitorWindow {
+  param([string]$CommandPath, [string[]]$WindowArgs)
+  if ($WindowArgs.Count -ne 1 -or $WindowArgs[0] -cne '--window') {
+    Write-Err "monitor_window_invalid: use 'jht monitor --window' without other options."
+    return 2
+  }
+  $process = $null
+  try {
+    if ($CommandPath -match '["\x00-\x1f]') { throw 'unsupported command path' }
+    $shell = Get-Command pwsh.exe, powershell.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $shell) { throw 'PowerShell is unavailable' }
+    # Same process-only policy as the installed jht.cmd, never a policy change.
+    $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $CommandPath + '" monitor'
+    $terminal = Get-Command wt.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $executable = $shell.Source
+    # WT has a command separator of its own; use PowerShell directly for such paths.
+    if ($terminal -and -not ($CommandPath.Contains(';') -or $shell.Source.Contains(';'))) {
+      $executable = $terminal.Source
+      $arguments = '-w new new-tab --title "JHT monitor" "' + $shell.Source + '" ' + $arguments
+    }
+    $process = Start-Process -FilePath $executable -ArgumentList $arguments -PassThru -ErrorAction Stop
+    # Bounded launch check, not a claim that the GUI or its monitor is ready.
+    if ($process.WaitForExit(250) -and $process.ExitCode -ne 0) { throw 'terminal launch failed' }
+    return 0
+  } catch {
+    Write-Err "monitor_window_unavailable: cannot open a terminal window here. Run 'jht monitor' in the current terminal."
+    return 1
+  } finally { if ($process) { $process.Dispose() } }
+}
+
 function Get-AttestedRawBase {
   if ($RawBaseOverride) { return $RawBaseOverride }
   try {
@@ -3273,6 +3305,10 @@ if ($HelpRequested -and $Sub -notin @('game', 'gui', 'agent-control', 'desktop-a
 }
 
 # ORDINE: si guarda COSA e' stato chiesto PRIMA di decidere se serve Docker.
+if ($Sub -ceq 'monitor' -and $Rest -ccontains '--window') {
+  exit (Open-JhtMonitorWindow -CommandPath $PSCommandPath -WindowArgs $Rest)
+}
+
 # Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
 # `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
 # cioe' il primo comando di chi non ha ancora deciso se installare (P-07).

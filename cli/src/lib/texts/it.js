@@ -1,5 +1,7 @@
 // Testi italiani delle schermate: le stesse chiavi dell'inglese.
 export default {
+  "observation.window_option": "apri un nuovo terminale tramite il comando host installato",
+  "error.observer_window_host_required": "L'apertura è un'azione host: esegui jht monitor --window installato fuori dal container, oppure jht monitor qui.",
   'error.observer_session_logs_invalid': "Formato dei log della sessione non valido; modello e attività sconosciuti.",
   'error.observer_session_logs_unavailable': "Log della sessione non leggibili; modello e attività sconosciuti.",
   "observation.nd": "N/D",

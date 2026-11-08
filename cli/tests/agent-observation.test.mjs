@@ -90,6 +90,12 @@ test('a pipe gets an explicit refusal, --once and --json use the very same sampl
   assert.doesNotMatch(text, /\x1b\[/);
 });
 
+test('window opening belongs to the host wrapper and never silently reads in this terminal', async () => {
+  await assert.rejects(monitor({ window: true, once: true }, {
+    read: () => { throw new Error('must not read'); },
+  }), /observer_window_host_required/);
+});
+
 function fakeReader(reply) {
   // A real, owned child. EOF on its input closes it; no team process exists.
   const code = `const readline=require('node:readline');
