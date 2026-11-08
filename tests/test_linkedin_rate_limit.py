@@ -23,6 +23,37 @@ PAGE = "".join('<li><div class="base-card" data-entity-urn="urn:li:jobPosting:%d
                for i in range(1, 4))
 
 
+class _IdleHTTPServer(ThreadingHTTPServer):
+    def __init__(self, *args):
+        self.condition = threading.Condition()
+        self.pending = 0
+        super().__init__(*args)
+
+    def process_request(self, request, client_address):
+        with self.condition:
+            self.pending += 1
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._request_done()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_done()
+
+    def _request_done(self):
+        with self.condition:
+            self.pending -= 1
+            self.condition.notify_all()
+
+    def wait_idle(self):
+        with self.condition:
+            assert self.condition.wait_for(lambda: self.pending == 0, timeout=5), "HTTP handlers did not finish"
+
+
 class _Server:
     """Answers from a script: a list of (status, headers, body) per path prefix; the last entry repeats."""
 
@@ -33,10 +64,11 @@ class _Server:
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):  # noqa: N802
-                outer.hits.append(self.path)
-                key = "search" if "seeMoreJobPostings" in self.path else "job"
-                queue = outer.script.get(key) or [(200, {}, "")]
-                status, headers, body = queue.pop(0) if len(queue) > 1 else queue[0]
+                with outer.httpd.condition:
+                    outer.hits.append(self.path)
+                    key = "search" if "seeMoreJobPostings" in self.path else "job"
+                    queue = outer.script.get(key) or [(200, {}, "")]
+                    status, headers, body = queue.pop(0) if len(queue) > 1 else queue[0]
                 self.send_response(status)
                 for name, value in headers.items():
                     self.send_header(name, value)
@@ -49,33 +81,55 @@ class _Server:
             def log_message(self, *args):
                 pass
 
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.httpd = _IdleHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.httpd.server_port}"
-        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+
+    def reset(self, sleeps):
+        with self.httpd.condition:
+            self.httpd.wait_idle()
+            self.script, self.hits, self.sleeps = {}, [], sleeps
 
     def close(self):
-        self.httpd.shutdown()
-        self.httpd.server_close()
+        try:
+            self.httpd.shutdown()
+            self.thread.join(timeout=5)
+            assert not self.thread.is_alive(), "HTTP server did not stop"
+            self.httpd.wait_idle()
+        finally:
+            self.httpd.server_close()
+
+
+@pytest.fixture(scope="module")
+def _linkedin_server():
+    server = _Server()
+    try:
+        yield server
+    finally:
+        server.close()
 
 
 @pytest.fixture()
-def linkedin(tmp_path, monkeypatch):
+def linkedin(tmp_path, monkeypatch, _linkedin_server):
     monkeypatch.setenv("JHT_HOME", str(tmp_path))
     profile_dir = tmp_path / "profile"
     profile_dir.mkdir()
     (profile_dir / "candidate_profile.yml").write_text(
         "name: Synthetic Candidate\ntarget_role: Data Analyst\nlocation: NL\n"
         "preferences:\n  work_mode: hybrid\n  relocation: false\n", encoding="utf-8")
-    server = _Server()
+    server = _linkedin_server
     sleeps = []
+    server.reset(sleeps)
     monkeypatch.setattr(la, "RATE_STATE", tmp_path / "state" / "linkedin-rate.json")
     monkeypatch.setattr(la, "GUEST_SEARCH", server.url + "/jobs-guest/jobs/api/seeMoreJobPostings/search")
     monkeypatch.setattr(la, "public_url", lambda job_id: f"{server.url}/jobs/view/{job_id}")
     monkeypatch.setattr(la.time, "sleep", lambda seconds: sleeps.append(seconds))
     monkeypatch.setattr(la.random, "uniform", lambda a, b: 0.0)
-    server.sleeps = sleeps
-    yield server
-    server.close()
+    try:
+        yield server
+    finally:
+        server.httpd.wait_idle()
 
 
 def _state():
