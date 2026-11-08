@@ -213,6 +213,7 @@ Infra, deploy, lifecycle, accessi.
 
 | File | Topic |
 |---|---|
+| [`agent-monitor.md`](ops/agent-monitor.md) | Inventario delle istanze, consumi e monitor nel terminale: fonti, campionamento e limiti |
 | [`INFRA.md`](ops/INFRA.md) | Overview infra (canali utente↔team, network, storage) |
 | [`vps.md`](ops/vps.md) | Design VPS: host/container split, providers, install UX, lifecycle |
 | [`vps-provisioning-map.md`](ops/vps-provisioning-map.md) | Provisioning di una VPS nuova: la mappa del percorso reale (desktop e CLI) e quali punti hanno una prova automatica |

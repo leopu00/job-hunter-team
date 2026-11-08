@@ -515,71 +515,12 @@ def _newer(paths: Iterable[Path], since: float) -> list[Path]:
 
 
 def collect(src: Sources, cwd: str, created: float) -> tuple[list[Ev], bool, bool, dict | None]:
-    """(events, readable, unrecognised, context) of the agent whose cwd is
-    `cwd`, from the logs written since its session started. Events and context
-    of the CLI with the newest event; a context read before the session
-    started belongs to a previous run and is None."""
-    since = created - CLOCK_SLACK_S
-    candidates: list[Parsed] = []
-    listed = False
-    seen_lines = 0
-    seen_known = 0
-
-    def take(parsed: Parsed):
-        nonlocal seen_lines, seen_known
-        seen_lines += parsed.lines
-        seen_known += parsed.recognised
-        if parsed.events:
-            candidates.append(parsed)
-
-    # Claude
+    """Activity/context from the same bounded acquisition used by the CLI observer."""
     try:
-        root = src.claude / claude_slug(cwd)
-        if src.claude.is_dir():
-            listed = True
-        if root.is_dir():
-            for f in _newer(root.glob("*.jsonl"), since)[:2]:
-                take(parse_claude(tail_lines(f)))
-    except OSError:
-        pass
-    # Codex: only the date folders from the session's day on
-    try:
-        if src.codex.is_dir():
-            listed = True
-            day0 = datetime.fromtimestamp(since).strftime("%Y/%m/%d")
-            files = [p for p in src.codex.glob("*/*/*/rollout-*.jsonl")
-                     if "/".join(p.parts[-4:-1]) >= day0]
-            # Every agent of the team writes its rollouts in the same folders: the agent's own is
-            # found by the cwd of its first line, newest first. Only that line is read of the
-            # others, so an agent that writes rarely is found behind the busy ones.
-            for f in _newer(files, since)[:CODEX_ROLLOUTS_SCANNED]:
-                with f.open(encoding="utf-8", errors="replace") as handle:
-                    head = next(_objects(handle), {})
-                if (head.get("payload") or {}).get("cwd") == cwd:
-                    take(parse_codex(tail_lines(f)))
-                    break
-    except OSError:
-        pass
-    # Kimi
-    try:
-        if src.kimi.is_dir():
-            listed = True
-            root = src.kimi / hashlib.md5(cwd.encode()).hexdigest()
-            if root.is_dir():
-                failures: list[tuple[float, str, str]] = []
-                for log in _newer(src.kimi_logs.glob("kimi.*.log"), since)[:2]:
-                    failures += kimi_log_failures(tail_lines(log))
-                for wire in _newer(root.glob("*/wire.jsonl"), since)[:1]:
-                    take(parse_kimi(tail_lines(wire), wire.parent.name, failures))
-    except OSError:
-        pass
-
-    unrecognised = seen_lines >= 5 and seen_known == 0
-    if not candidates:
-        return [], listed, unrecognised, None
-    best = max(candidates, key=lambda p: p.events[-1].ts)
-    context = best.context if best.context and best.context["at"] >= since else None
-    return best.events, listed, False, context
+        from agent_session_logs import inspect_session
+    except ModuleNotFoundError:
+        from shared.skills.agent_session_logs import inspect_session
+    return inspect_session(sys.modules[__name__], src, cwd, created, include_identity=False)[:4]
 
 
 def agent_dir(home: Path, uid: str) -> Path | None:

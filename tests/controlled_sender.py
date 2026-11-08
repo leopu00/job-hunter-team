@@ -97,7 +97,7 @@ class ControlledSender:
     """
 
     def __init__(self, root, chatty=False, timeout=30):
-        if not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
+        if type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0:
             raise ValueError('Sender deadline must be finite and positive')
         path = pathlib.Path(root).absolute()
         if path.is_symlink():

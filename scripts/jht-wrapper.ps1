@@ -437,6 +437,40 @@ function Write-Err  { param([string]$Msg) Write-Host "error: $Msg" -ForegroundCo
 function Write-Warn { param([string]$Msg) Write-Host "warn:  $Msg" -ForegroundColor Yellow }
 function Write-Info { param([string]$Msg) Write-Host $Msg -ForegroundColor DarkGray }
 
+# T220: declared host bridge to move into the T214 Rust sidecar. No data logic.
+# Explicit rule-2 exception: <=60 added lines, no installer/manifest dependency.
+function Open-JhtMonitorWindow {
+  param([string]$CommandPath, [string[]]$WindowArgs)
+  if ($WindowArgs.Count -ne 1 -or $WindowArgs[0] -cne '--window') {
+    Write-Err "monitor_window_invalid: use 'jht monitor --window' without other options."
+    return 2
+  }
+  $process = $null
+  try {
+    if ($CommandPath -match '["\x00-\x1f]') { throw 'unsupported command path' }
+    if (-not (Test-Path -LiteralPath $CommandPath -PathType Leaf)) { throw 'command is unavailable' }
+    if ([Environment]::OSVersion.Platform -eq 'Win32NT' -and [Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0) { throw 'no interactive desktop' }
+    $shell = Get-Command pwsh.exe, powershell.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $shell) { throw 'PowerShell is unavailable' }
+    # Same process-only policy as the installed jht.cmd, never a policy change.
+    $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $CommandPath + '" monitor'
+    $terminal = Get-Command wt.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $executable = $shell.Source
+    # Avoid WT separators/environment expansion; PowerShell -File accepts these paths literally.
+    if ($terminal -and ($CommandPath + $shell.Source) -notmatch '[;%]') {
+      $executable = $terminal.Source
+      $arguments = '-w new new-tab --title "JHT monitor" "' + $shell.Source + '" ' + $arguments
+    }
+    $process = Start-Process -FilePath $executable -ArgumentList $arguments -PassThru -ErrorAction Stop
+    # Bounded launch check, not a claim that the GUI or its monitor is ready.
+    if ($process.WaitForExit(250) -and $process.ExitCode -ne 0) { throw 'terminal launch failed' }
+    return 0
+  } catch {
+    Write-Err "monitor_window_unavailable: cannot open a terminal window here. Run 'jht monitor' in the current terminal."
+    return 1
+  } finally { if ($process) { $process.Dispose() } }
+}
+
 function Get-AttestedRawBase {
   if ($RawBaseOverride) { return $RawBaseOverride }
   try {
@@ -3326,6 +3360,10 @@ $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
 # corretto anche con 1 solo arg di coda.
 [string[]]$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
+if ($Sub -ceq 'monitor' -and $Rest -ccontains '--window') {
+  exit (Open-JhtMonitorWindow -CommandPath $PSCommandPath -WindowArgs $Rest)
+}
+
 # Questo gate deve precedere tutti i rami host-side: nel solo default non vede
 # `up --help`, `setup --help`, ecc. e quei comandi toccherebbero Docker prima
 # di accorgersi che l'utente ha chiesto soltanto aiuto.
@@ -3370,40 +3408,40 @@ switch ($Sub) {
     }
     exit 0
   }
-
   'onboarding-snapshot' {
     Write-OnboardingSnapshot
     exit 0
   }
-
   'desktop-chat' {
     Invoke-DesktopChat $Rest
     exit $script:DesktopChatExitCode
   }
-
   'agent-control' {
     Invoke-AgentControl $Rest
     exit $script:AgentControlExitCode
   }
-
-  # The document is a file of this computer: the container cannot see a Windows path, so the app reads it and hands it over
-  # (artifact_upload.rs). Nothing is decided here; the app's words and exit code are the command's.
+  # T217 bridge: the CLI decides which mounted file the host context names; the app remains the native reader when installed.
   { $_ -eq 'artifact' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'upload' } {
     $uploader = Join-Path $LocalAppData 'Job Hunter Team\jht-desktop.exe'
     if (-not (Test-Path -LiteralPath $uploader -PathType Leaf)) {
-      Write-Err 'artifact_upload_needs_app: l''app Job Hunter Team non e'' installata per questo utente.'
-      exit 1
+      Require-ComposeFile; Require-Docker; Ensure-Up
+      $target = Get-RunningComposeServiceId $Container
+      if (-not $target) { Write-Err 'team_container_unavailable: avvia la squadra con jht up e riprova.'; exit 1 }
+      $mounts = & docker inspect --type container $target --format '{{json .Mounts}}'
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      $context = @{ mounts = ($mounts -join "`n"); cwd = $PWD.Path } | ConvertTo-Json -Compress
+      $context = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($context))
+      & docker exec @ExecFlags -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest
+      exit $LASTEXITCODE
     }
     $uploadArgs = if ($Rest.Count -gt 1) { @($Rest[1..($Rest.Count - 1)]) } else { @() }
     & $uploader '--artifact-upload' @uploadArgs | Out-Host
     exit $LASTEXITCODE
   }
-
   'desktop-apply' {
     Invoke-DesktopApply $Rest
     exit $script:DesktopApplyExitCode
   }
-
   'game' {
     $code = Invoke-GameCommand $Rest
     exit $code
@@ -3582,7 +3620,7 @@ switch ($Sub) {
     Require-ComposeFile
     Require-Docker
     Ensure-Up
-    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @Rest
+    & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry 'setup' @Rest
     break
   }
 

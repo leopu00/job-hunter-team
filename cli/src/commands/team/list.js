@@ -1,9 +1,10 @@
+import { handleAgents } from '../agents.js';
 // Comandi team list e team status
-import { errorBlock, hint, marks, table, terminalWidth, title, wrapText } from '../../lib/ui.js';
+import { marks, table, terminalWidth, title, wrapText } from '../../lib/ui.js';
 import { say } from '../../lib/texts.js';
 import {
   AGENTS, DEFAULT_TEAM, c,
-  tmuxAvailable, getActiveSessions, usingContainer, isAgentSession,
+  getActiveSessions, usingContainer, isAgentSession,
 } from './agents.js';
 
 export function listAction() {
@@ -33,39 +34,5 @@ export function listAction() {
 }
 
 export function statusAction() {
-  // Se il container gira, tmux sta dentro lui — non serve averlo sull'host.
-  // `process.exitCode` + `return` invece di `process.exit()`: l'exit code resta
-  // 1, ma le due righe di stderr — fra cui quella che dice come rimediare —
-  // fanno in tempo a uscire. Vedi [CLI-NO-GLOBAL-ERROR-HANDLER].
-  if (!usingContainer() && !tmuxAvailable()) {
-    console.error(errorBlock({
-      what: say('team.unreachable_what'),
-      why: say('team.unreachable_why'),
-      fix: say('team.unreachable_fix'),
-    }));
-    process.exitCode = 1;
-    return;
-  }
-
-  const sessions = getActiveSessions();
-  const agentSessions = sessions.filter((s) =>
-    AGENTS.some((a) => isAgentSession(s, a))
-  );
-
-  if (agentSessions.length === 0) {
-    console.log(title(say('team.title'), say('team.not_running')));
-    console.log(hint(say('team.next_start')));
-    console.log('');
-    return;
-  }
-
-  console.log(title(say('team.title'), `${say('team.n_running', { n: agentSessions.length })}${process.env.JHT_DEBUG ? (usingContainer() ? ' (container)' : ' (host)') : ''}`));
-  console.log(table(
-    [{ label: say('team.col_session') }, { label: say('team.col_does'), shrink: true }],
-    agentSessions.sort().map((name) => {
-      const agent = AGENTS.find((a) => isAgentSession(name, a));
-      return [`${c.green(marks().ok)} ${name}`, agent ? say(`role.${agent.role}`) : ''];
-    }),
-  ));
-  console.log('');
+  return handleAgents();
 }
