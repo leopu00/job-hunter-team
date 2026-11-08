@@ -18,6 +18,9 @@ def identity(provider, lines, since, state):
         if at is None or at < since:
             continue
         payload = record.get("payload")
+        if provider == "codex" and record.get("type") in {"session_meta", "event_msg", "turn_context", "response_item"} \
+                and not isinstance(payload, dict):
+            raise ValueError("invalid structured session payload")
         if provider == "codex" and record.get("type") == "turn_context" and isinstance(payload, dict):
             model, effort = payload.get("model"), payload.get("effort")
         elif provider == "claude" and record.get("type") == "assistant":

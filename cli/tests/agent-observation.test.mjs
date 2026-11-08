@@ -28,6 +28,8 @@ test('the real renderer shows actual model, each instance, measured zero vs N/D 
   assert.match(text, /scout-4/);
   assert.match(text, /dottore/);
   assert.match(text, /3500/);
+  assert.match(text, /Agent {2,}Session/);
+  assert.match(text, /capitano {2,}CAPITANO/);
   assert.match(text, /N\/D/);
   assert.match(text, /PID 123/);
   assert.match(text, /25% \[###/);
@@ -123,10 +125,10 @@ test('a bad stream reply actually fails the monitor and its owned child exits', 
   assert.equal(signals.listenerCount('SIGINT'), 0);
 });
 
-for (const corrupt of [
-  (data) => { data.agents = [null]; data.total = 1; data.running = 0; },
-  (data) => { data.agents[0].process.pids = {}; },
-]) test('malformed row or process data fails inside the monitor and cleans up its child', async () => {
+for (const [label, corrupt] of [
+  ['null row', (data) => { data.agents = [null]; data.total = 1; data.running = 0; }],
+  ['malformed pids', (data) => { data.agents[0].process.pids = {}; }],
+]) test(`${label} fails inside the monitor and cleans up its child`, async () => {
   const signals = new EventEmitter();
   const data = snapshot();
   corrupt(data);

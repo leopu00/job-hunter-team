@@ -41,8 +41,9 @@ def inspect_session(state, src, cwd, created, include_identity=True, index=None,
         parsed = parser(lines)
         counts[0] += parsed.lines
         counts[1] += parsed.recognised
+        current = identity(provider, lines, since, state) if include_identity else None
         if parsed.events:
-            candidates.append((parsed, identity(provider, lines, since, state) if include_identity else None))
+            candidates.append((parsed, current))
 
     try:
         root = src.claude / state.claude_slug(cwd)

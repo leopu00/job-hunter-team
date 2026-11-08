@@ -1,4 +1,4 @@
-import { table, title, wrapText, terminalWidth, hint } from './ui.js';
+import { table, title, wrapText, terminalWidth, hint, visibleLength } from './ui.js';
 import { say } from './texts.js';
 import { CODEX_MODEL } from '../../../shared/runtime/role-models.js';
 
@@ -66,5 +66,6 @@ export function renderObservation(snapshot, { usage = true, live = false, width 
     if (row.usage.reason) out.push(`${safe(row.id)}: ${nd()} — ${errorText(row.usage.reason)}`);
   }
   else for (const code of snapshot.errors.filter((c) => !c.startsWith('observer_usage_'))) out.push(errorText(code));
-  return out.flatMap((line) => line.split('\n').flatMap((part) => wrapText(part, width))).join('\n') + '\n';
+  return out.flatMap((line) => line.split('\n').flatMap((part) =>
+    visibleLength(part) <= width ? [part] : wrapText(part, width))).join('\n') + '\n';
 }
