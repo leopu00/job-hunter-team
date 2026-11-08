@@ -12,6 +12,8 @@ the fixture home so a runner's own XDG_CONFIG_HOME is never read.
 from __future__ import annotations
 
 import json
+import platform
+import shlex
 from pathlib import Path
 
 # The default mounts of `podman machine init` on macOS, as measured on
@@ -53,12 +55,8 @@ def _write_uname(bin_dir: Path, kernel: str) -> None:
     uname.chmod(0o700)
 
 
-def _write_stat_adapter(bin_dir: Path) -> None:
-    """Answer both the BSD (`-f '%u %Lp'`) and GNU (`-c '%u %a'`) probes, and the BSD identity of a file the attestation cache
-    keys on (`-f '%z %m %i %c'`: size, modification date, inode, change time)."""
-    stat = bin_dir / "stat"
-    stat.write_text(
-        """#!/usr/bin/env python3
+_NATIVE_STAT = "/usr/bin/stat"
+_STAT_PYTHON = """#!/usr/bin/env python3
 import os
 import sys
 
@@ -71,9 +69,45 @@ if len(sys.argv) == 4 and sys.argv[1:3] == ["-f", "%z %m %i %c"]:
     print(f"{metadata.st_size} {int(metadata.st_mtime)} {metadata.st_ino} {int(metadata.st_ctime)}")
     raise SystemExit(0)
 os.execv("/usr/bin/stat", ["stat", *sys.argv[1:]])
-""",
-        encoding="utf-8",
-    )
+"""
+
+_STAT_LINUX = """if [ "$#" -eq 3 ]; then
+    case "$1:$2" in
+        '-f:%u %Lp'|'-c:%u %a')
+            path=$3
+            # GNU stat treats even '-- -' as stdin; Python stats the filename.
+            [ "$path" != '-' ] || path='./-'
+            if metadata=$({native} -c '%u %a' -- "$path" 2>/dev/null); then
+                uid=${{metadata%% *}}
+                mode=${{metadata#* }}
+                case "$uid" in
+                    ''|*[!0-9]*) ;;
+                    *) case "$mode" in
+                        ''|*[!0-7]*) ;;
+                        *) printf '%s %o\\n' "$uid" "$((0$mode & 0777))"; exit 0 ;;
+                    esac ;;
+                esac
+            fi
+            ;;
+    esac
+fi
+"""
+
+
+def _write_stat_adapter(bin_dir: Path) -> None:
+    """Answer UID/mode and BSD identity probes without following symlinks.
+
+    GNU stat handles UID/mode cheaply on Linux. Identity stays in Python:
+    int() truncates negative fractional timestamps, unlike GNU stat's floor.
+    The shell/Python file needs no sidecar; on other hosts it stays Python.
+    """
+    program = _STAT_PYTHON
+    if platform.system() == "Linux":
+        fast = _STAT_LINUX.format(native=shlex.quote(_NATIVE_STAT))
+        program = ("#!/bin/sh\n''':'\n" + fast + 'exec python3 "$0" "$@"\n' + "':'''\n"
+                   + _STAT_PYTHON.partition("\n")[2])
+    stat = bin_dir / "stat"
+    stat.write_text(program, encoding="utf-8")
     stat.chmod(0o700)
 
 
