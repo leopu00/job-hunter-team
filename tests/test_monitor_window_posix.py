@@ -48,7 +48,7 @@ def test_new_terminal_executes_only_monitor_and_keeps_the_path_literal(tmp_path,
         env["DISPLAY"] = ":synthetic"
         name = "x-terminal-emulator"
     terminal(bin_dir, name)
-    done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, capture_output=True, text=True, timeout=10)
+    done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 0, done.stdout + done.stderr
     assert Path(env["FAKE_ENTRY_LOG"]).read_text().splitlines() == ["monitor"]
     observed = calls(env)
@@ -70,7 +70,7 @@ def test_real_wrapper_refuses_extra_options_before_engine_or_terminal(tmp_path, 
     bin_dir, env = environment(tmp_path)
     terminal(bin_dir, "tmux")
     env["TMUX"] = "synthetic-client"
-    done = subprocess.run(["bash", str(SH), "monitor", *args], env=env, capture_output=True, text=True, timeout=10)
+    done = subprocess.run(["bash", str(SH), "monitor", *args], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 2
     assert "monitor_window_invalid" in done.stderr
     assert calls(env) == []
@@ -79,19 +79,20 @@ def test_real_wrapper_refuses_extra_options_before_engine_or_terminal(tmp_path, 
 
 def test_real_wrapper_dispatches_its_own_path_not_a_wrapper_override(tmp_path):
     bin_dir, env = environment(tmp_path)
+    installed = executable(tmp_path / "jht", SH.read_text())
     terminal(bin_dir, "tmux")
     env["TMUX"] = "synthetic-client"
     env["JHT_WRAPPER_PATH"] = str(tmp_path / "not-the-invoked-wrapper")
-    done = subprocess.run(["bash", str(SH), "monitor", "--window"], env=env, capture_output=True, text=True, timeout=10)
+    done = subprocess.run([str(installed), "monitor", "--window"], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 0, done.stderr
-    assert calls(env)[0]["argv"][-2:] == [str(SH), "monitor"]
+    assert calls(env)[0]["argv"][-2:] == [str(installed), "monitor"]
     assert not Path(env["FAKE_FORBIDDEN_LOG"]).exists()
 
 
 def test_headless_call_does_not_choose_an_unrelated_tmux_server(tmp_path):
     bin_dir, env = environment(tmp_path)
     terminal(bin_dir, "tmux")
-    done = subprocess.run(["bash", str(SH), "monitor", "--window"], env=env, capture_output=True, text=True, timeout=10)
+    done = subprocess.run(["bash", str(SH), "monitor", "--window"], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 1
     assert "monitor_window_unavailable" in done.stderr and "jht monitor" in done.stderr
     assert calls(env) == []
@@ -106,7 +107,7 @@ def test_terminal_launch_error_is_visible_and_keeps_nonzero_exit(tmp_path, name,
     env.update(FAKE_KERNEL=kernel, FAKE_TERMINAL_FAIL=name, DISPLAY=":synthetic")
     if name == "tmux":
         env["TMUX"] = "synthetic-client"
-    done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, capture_output=True, text=True, timeout=10)
+    done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 1
     assert "monitor_window_unavailable" in done.stderr and "jht monitor" in done.stderr
 
@@ -120,7 +121,7 @@ def test_calling_terminal_is_free_while_the_new_window_is_still_alive(tmp_path):
     env.update(DISPLAY=":synthetic", FAKE_TERMINAL_HOLD="x-terminal-emulator", FAKE_TERMINAL_FIFO=str(fifo))
     script = helper(tmp_path)
     process = subprocess.Popen(["bash", "-c", '"$1" --window; printf "RETURNED:%s\\n" "$?"', "bridge", str(script)],
-                               env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                               env=env, cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
         assert b"RETURNED:0" in read_until(process, "RETURNED:0")
         assert calls(env)[0]["tool"] == "x-terminal-emulator"
@@ -136,6 +137,6 @@ def test_control_characters_in_the_entry_path_are_refused_before_launch(tmp_path
     bin_dir, env = environment(tmp_path)
     terminal(bin_dir, "tmux")
     env.update(TMUX="synthetic-client", FAKE_ENTRY=str(tmp_path / "unsafe\ncommand"))
-    done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, capture_output=True, text=True, timeout=10)
+    done = subprocess.run([str(helper(tmp_path)), "--window"], env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
     assert done.returncode == 1 and "monitor_window_unavailable" in done.stderr
     assert calls(env) == []

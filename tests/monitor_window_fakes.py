@@ -23,6 +23,10 @@ if name == 'uname':
     print(os.environ.get('FAKE_KERNEL', 'Linux'))
     sys.exit(0)
 record = {'tool': name, 'argv': args, 'pid': os.getpid()}
+try:
+    record['start_ticks'] = Path('/proc/self/stat').read_text().rsplit(')', 1)[1].split()[19]
+except OSError:
+    record['start_ticks'] = None
 if name == 'osascript':
     record['program'] = sys.stdin.read()
 with open(os.environ['FAKE_TERMINAL_LOG'], 'a') as handle:
@@ -113,3 +117,14 @@ def release(env):
         os.write(fd, b"x")
     finally:
         os.close(fd)
+    deadline = time.monotonic() + 5
+    for row in calls(env):
+        while True:
+            try:
+                current = Path(f"/proc/{row['pid']}/stat").read_text().rsplit(")", 1)[1].split()[19]
+                if current != row["start_ticks"]:
+                    break  # The owned process ended; a recycled PID is not ours.
+            except FileNotFoundError:
+                break
+            assert time.monotonic() < deadline, f"fake terminal did not exit: {row['pid']}"
+            time.sleep(0.01)
