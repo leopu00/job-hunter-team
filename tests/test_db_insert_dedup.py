@@ -1,18 +1,4 @@
-"""Test dedup positions in shared/skills/db_insert.py.
-
-Due famiglie di test, un solo tema — che una posizione buona non venga
-scartata come doppione, e che un doppione non entri due volte:
-
-1. city normalization + synonym map, che addresses anomalia #3 da
-   docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md (7
-   (title, company) duplicate quando stessa position arriva da source
-   multipli);
-2. correttezza del livello 0 (LinkedIn job ID) e del vincolo UNIQUE su
-   `positions.url` — [DEDUP-URL-CORRECTNESS], audit del 2026-07-30.
-
-Eseguire:
-    pytest tests/test_db_insert_dedup.py -v
-"""
+"""Position identity, city aliases, URL uniqueness and legacy migration."""
 
 import json
 import os
@@ -38,50 +24,26 @@ import db_insert  # noqa: E402
 class TestNormalizeCity:
     """_normalize_city e _normalize_city_canonical sono pure functions."""
 
-    def test_first_token_extracted(self):
-        assert db_insert._normalize_city('Milan, Italy') == 'milan'
-        assert db_insert._normalize_city('Milan, Lombardy, IT') == 'milan'
-        assert db_insert._normalize_city('New York, NY, USA') == 'new york'
-
-    def test_diacritics_stripped(self):
-        # 'München' (u + combining diaeresis decomposes via NFD)
-        munich_decomp = 'M' + 'u' + chr(0x308) + 'nchen'
-        assert db_insert._normalize_city(munich_decomp + ', Germany') == 'munchen'
-        # Precomposed form
-        assert db_insert._normalize_city('München') == 'munchen'
-        # Köln
-        assert db_insert._normalize_city('Köln') == 'koln'
-
-    def test_empty_and_none(self):
-        assert db_insert._normalize_city('') == ''
-        assert db_insert._normalize_city(None) == ''
-        assert db_insert._normalize_city('   ') == ''
-
-    def test_already_lowercase(self):
-        assert db_insert._normalize_city('milano') == 'milano'
-
-    def test_synonym_map_it_to_en(self):
-        # IT names map to EN canonical
-        assert db_insert._normalize_city_canonical('Milano') == 'milan'
-        assert db_insert._normalize_city_canonical('Roma') == 'rome'
-        assert db_insert._normalize_city_canonical('Torino') == 'turin'
-        # EN names map to themselves
-        assert db_insert._normalize_city_canonical('Milan') == 'milan'
-        assert db_insert._normalize_city_canonical('Rome') == 'rome'
-
-    def test_synonym_map_de_to_en(self):
-        assert db_insert._normalize_city_canonical('Munchen') == 'munich'
-        assert db_insert._normalize_city_canonical('München') == 'munich'
-        assert db_insert._normalize_city_canonical('Koln') == 'cologne'
-
-    def test_unknown_city_unchanged(self):
-        # Citta' non in synonym map → ritorna normalizzata
-        assert db_insert._normalize_city_canonical('Brescia') == 'brescia'
-        assert db_insert._normalize_city_canonical('Lisbon, Portugal') == 'lisbon'
-
-    def test_multi_word_city(self):
-        assert db_insert._normalize_city_canonical('New York') == 'new york'
-        assert db_insert._normalize_city_canonical('Los Angeles, CA') == 'los angeles'
+    @pytest.mark.parametrize('normalizer,cases', [
+        pytest.param('_normalize_city', [('Milan, Italy', 'milan'),
+                     ('Milan, Lombardy, IT', 'milan'), ('New York, NY, USA', 'new york')],
+                     id='first_token_extracted'),
+        pytest.param('_normalize_city', [('Mu\u0308nchen, Germany', 'munchen'),
+                     ('München', 'munchen'), ('Köln', 'koln')], id='diacritics_stripped'),
+        pytest.param('_normalize_city', [('', ''), (None, ''), ('   ', '')], id='empty_and_none'),
+        pytest.param('_normalize_city', [('milano', 'milano')], id='already_lowercase'),
+        pytest.param('_normalize_city_canonical', [('Milano', 'milan'), ('Roma', 'rome'),
+                     ('Torino', 'turin'), ('Milan', 'milan'), ('Rome', 'rome')], id='synonym_map_it_to_en'),
+        pytest.param('_normalize_city_canonical', [('Munchen', 'munich'), ('München', 'munich'),
+                     ('Koln', 'cologne')], id='synonym_map_de_to_en'),
+        pytest.param('_normalize_city_canonical', [('Brescia', 'brescia'),
+                     ('Lisbon, Portugal', 'lisbon')], id='unknown_city_unchanged'),
+        pytest.param('_normalize_city_canonical', [('New York', 'new york'),
+                     ('Los Angeles, CA', 'los angeles')], id='multi_word_city'),
+    ])
+    def test_normalization(self, normalizer, cases):
+        for value, expected in cases:
+            assert getattr(db_insert, normalizer)(value) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -118,270 +80,123 @@ def _insert_test_row(conn, title, company, location, url='https://test.example/1
 
 
 class TestCheckDuplicate:
-    """check_duplicate deve matchare Milano/Milan/Milan-Lombardy come stessa city."""
+    """Each case retains its own database, query URL and matching oracle."""
 
-    def test_level2_same_title_same_company_milano_vs_milan(self, in_memory_db):
-        conn = in_memory_db
-        _insert_test_row(conn, 'Software Engineer', 'Acme Corp', 'Milan, Italy')
-
+    @pytest.mark.parametrize('stored,query,matched,match_fragment', [
+        pytest.param(('Software Engineer', 'Acme Corp', 'Milan, Italy'),
+                     ('Software Engineer', 'Acme Corp', 'Milano, IT', 'https://different.url/2'),
+                     True, 'city-norm', id='level2_same_title_same_company_milano_vs_milan'),
+        pytest.param(('Software Engineer', 'Acme Corp', 'Milan, Italy'),
+                     ('Software Engineer', 'Acme Corp', 'Milan, Lombardy, IT', 'https://different.url/3'),
+                     True, None, id='level2_same_title_same_company_milan_lombardy_variant'),
+        pytest.param(('Senior Data Engineer', 'Acme Corp', 'Milano'),
+                     ('Senior Data Engineer II', 'Acme Corp', 'Milan, Italy', 'https://different.url/4'),
+                     True, 'simile', id='level3_similar_title_same_city'),
+        pytest.param(('Software Engineer', 'Acme Corp', 'Milan, Italy'),
+                     ('Software Engineer', 'Acme Corp', 'Berlin, Germany', 'https://different.url/5'),
+                     False, None, id='different_cities_not_matched'),
+        pytest.param(('Software Engineer', 'Acme Corp', 'Milan'),
+                     ('Software Engineer', 'Beta Corp', 'Milan', 'https://different.url/6'),
+                     False, None, id='different_company_not_matched'),
+        pytest.param(('Senior Backend', 'EuroCorp', 'München, Germany'),
+                     ('Senior Backend', 'EuroCorp', 'Munich', 'https://different.url/7'),
+                     True, None, id='diacritics_match'),
+    ])
+    def test_match(self, in_memory_db, stored, query, matched, match_fragment):
+        _insert_test_row(in_memory_db, *stored)
+        title, company, location, url = query
         existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://different.url/2',
-            company='Acme Corp',
-            title='Software Engineer',
-            location='Milano, IT'
-        )
-        assert existing is not None, "Milano should match Milan via synonym"
-        assert 'city-norm' in (match_type or ''), f"Expected city-norm match, got {match_type}"
+            in_memory_db, url=url, company=company, title=title, location=location)
+        assert (existing is not None) == matched
+        if match_fragment is not None:
+            assert match_fragment in (match_type or '')
 
-    def test_level2_same_title_same_company_milan_lombardy_variant(self, in_memory_db):
-        conn = in_memory_db
-        _insert_test_row(conn, 'Software Engineer', 'Acme Corp', 'Milan, Italy')
-
-        existing, _ = db_insert.check_duplicate(
-            conn,
-            url='https://different.url/3',
-            company='Acme Corp',
-            title='Software Engineer',
-            location='Milan, Lombardy, IT'
-        )
-        assert existing is not None, "Milan-Lombardy should match Milan"
-
-    def test_level3_similar_title_same_city(self, in_memory_db):
-        conn = in_memory_db
-        # Pair con similarity > 0.85: 'Senior Data Engineer' vs 'Senior Data Engineer II'
-        # (0.93). Coppie con riordino (Junior X vs X Junior, ratio ~0.69) NON
-        # vengono catturate dal threshold 0.85 — limitazione nota di difflib.
-        _insert_test_row(conn, 'Senior Data Engineer', 'Acme Corp', 'Milano')
-
-        existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://different.url/4',
-            company='Acme Corp',
-            title='Senior Data Engineer II',
-            location='Milan, Italy'
-        )
-        assert existing is not None
-        assert 'simile' in (match_type or '')
-
-    def test_different_cities_not_matched(self, in_memory_db):
-        """Stessa azienda+titolo ma citta' davvero diverse → NON dedup."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Software Engineer', 'Acme Corp', 'Milan, Italy')
-
-        existing, _ = db_insert.check_duplicate(
-            conn,
-            url='https://different.url/5',
-            company='Acme Corp',
-            title='Software Engineer',
-            location='Berlin, Germany'
-        )
-        assert existing is None, "Milan and Berlin must be distinct"
-
-    def test_different_company_not_matched(self, in_memory_db):
-        conn = in_memory_db
-        _insert_test_row(conn, 'Software Engineer', 'Acme Corp', 'Milan')
-
-        existing, _ = db_insert.check_duplicate(
-            conn,
-            url='https://different.url/6',
-            company='Beta Corp',
-            title='Software Engineer',
-            location='Milan'
-        )
-        assert existing is None, "Same role, different company = distinct"
-
-    def test_diacritics_match(self, in_memory_db):
-        """München vs Munich devono matchare (diacritic + synonym)."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Senior Backend', 'EuroCorp', 'München, Germany')
-
-        existing, _ = db_insert.check_duplicate(
-            conn,
-            url='https://different.url/7',
-            company='EuroCorp',
-            title='Senior Backend',
-            location='Munich'
-        )
-        assert existing is not None, "München should match Munich via diacritic+synonym"
-
-
-# ---------------------------------------------------------------------------
-# Livello 0 — LinkedIn job ID: dedup sì, sottostringa no
-#
-# [DEDUP-URL-CORRECTNESS]. `url LIKE '%<id>%'` non sa dove finisce l'id:
-# cercando 4381470286 matchava la riga il cui id è 43814702861, e una
-# posizione NUOVA veniva scartata come doppione con il log a dire che era un
-# doppione. Il livello 0 deve restare (lo stesso annuncio LinkedIn circola con
-# URL diversi): quello che sparisce è il falso positivo, non la dedup.
-# ---------------------------------------------------------------------------
+# LinkedIn IDs must match completely and survive tracking URL variations.
 
 class TestLinkedInJobIdLevel0:
-
-    def test_un_id_prefisso_di_un_altro_non_e_un_duplicato(self, in_memory_db):
-        """Il caso misurato in laboratorio: 4381470286 vs 43814702861."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
-                         url='https://www.linkedin.com/jobs/view/43814702861')
-
+    @pytest.mark.parametrize('stored,query,matched,expected_company', [
+        pytest.param([('Backend Dev', 'Acme', 'Milan',
+                       'https://www.linkedin.com/jobs/view/43814702861')],
+                     ('Data Engineer', 'Beta Corp', 'Rome',
+                      'https://www.linkedin.com/jobs/view/4381470286'), False, None,
+                     id='un_id_prefisso_di_un_altro_non_e_un_duplicato'),
+        pytest.param([('Backend Dev', 'Acme', 'Milan',
+                       'https://www.linkedin.com/jobs/view/4381470286')],
+                     ('Data Engineer', 'Beta Corp', 'Rome',
+                      'https://www.linkedin.com/jobs/view/43814702861'), False, None,
+                     id='il_verso_opposto_e_altrettanto_sbagliato'),
+        pytest.param([('Backend Dev', 'Acme', 'Milan',
+                       'https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286')],
+                     ('Data Engineer', 'Beta Corp', 'Rome',
+                      'https://www.linkedin.com/jobs/view/4381470286'), False, None,
+                     id='current_job_id_di_un_altro_annuncio_non_crea_un_duplicato'),
+        pytest.param([('Data Engineer', 'Beta Corp', 'Rome',
+                       'https://www.linkedin.com/jobs/view/4381470286')],
+                     ('Data Eng', 'Beta Srl', 'Roma',
+                      'https://it.linkedin.com/jobs/view/4381470286?refId=abc&trackingId=xyz'),
+                     True, None, id='lo_stesso_annuncio_con_url_diversi_resta_un_duplicato'),
+        pytest.param([('Data Engineer', 'Beta Corp', 'Rome',
+                       'https://www.linkedin.com/jobs/view/4381470286')],
+                     ('Data Eng', 'Beta Srl', 'Roma',
+                      'https://www.linkedin.com/jobs/view/4381470286?currentJobId=4381470286'),
+                     True, None, id='lo_stesso_annuncio_con_current_job_id_proprio_resta_un_duplicato'),
+        pytest.param([('Backend Dev', 'Acme', 'Milan',
+                       'https://www.linkedin.com/jobs/view/43814702861'),
+                      ('Data Engineer', 'Beta Corp', 'Rome',
+                       'https://www.linkedin.com/jobs/view/4381470286')],
+                     ('Data Eng', 'Beta Srl', 'Roma',
+                      'https://www.linkedin.com/jobs/view/4381470286?refId=q'),
+                     True, 'Beta Corp', id='trova_la_riga_giusta_anche_se_il_prefiltro_ne_pesca_un_altra'),
+        pytest.param([('Backend Dev', 'Acme', 'Milan',
+                       'https://jobs.lever.co/acme/4381470286')],
+                     ('Data Engineer', 'Beta Corp', 'Rome',
+                      'https://www.linkedin.com/jobs/view/4381470286'), False, None,
+                     id='url_non_linkedin_non_passa_dal_livello_0'),
+    ])
+    def test_job_identity(self, in_memory_db, stored, query, matched, expected_company):
+        for row in stored:
+            _insert_test_row(in_memory_db, *row)
+        title, company, location, url = query
         existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/4381470286',
-            company='Beta Corp', title='Data Engineer', location='Rome',
-        )
-        assert existing is None, (
-            f"4381470286 non è 43814702861: match spurio ({match_type}) — "
-            "una posizione buona verrebbe scartata come doppione"
-        )
-
-    def test_il_verso_opposto_e_altrettanto_sbagliato(self, in_memory_db):
-        """L'id più lungo cercato contro il più corto già in tabella."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
-                         url='https://www.linkedin.com/jobs/view/4381470286')
-
-        existing, _ = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/43814702861',
-            company='Beta Corp', title='Data Engineer', location='Rome',
-        )
-        assert existing is None
-
-    def test_current_job_id_di_un_altro_annuncio_non_crea_un_duplicato(self, in_memory_db):
-        """L'id sta nel path; `currentJobId=` in query string è un altro annuncio.
-
-        È il caso che rende il difetto IMMEDIATO, non solo latente: basta che
-        uno Scout salvi un URL con la query string così com'è.
-        """
-        conn = in_memory_db
-        _insert_test_row(
-            conn, 'Backend Dev', 'Acme', 'Milan',
-            url='https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286')
-
-        existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/4381470286',
-            company='Beta Corp', title='Data Engineer', location='Rome',
-        )
-        assert existing is None, (
-            f"match su un currentJobId= altrui ({match_type}): l'id dell'annuncio "
-            "è quello del path"
-        )
-
-    def test_lo_stesso_annuncio_con_url_diversi_resta_un_duplicato(self, in_memory_db):
-        """La funzione del livello 0, quella da NON perdere."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome',
-                         url='https://www.linkedin.com/jobs/view/4381470286')
-
-        existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://it.linkedin.com/jobs/view/4381470286?refId=abc&trackingId=xyz',
-            company='Beta Srl', title='Data Eng', location='Roma',
-        )
-        assert existing is not None, "stesso annuncio, URL diverso: è un duplicato"
-        assert (match_type or '').startswith('LinkedIn job ID'), match_type
-
-    def test_lo_stesso_annuncio_con_current_job_id_proprio_resta_un_duplicato(self, in_memory_db):
-        """`?currentJobId=` che ripete l'id del path non deve confondere."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome',
-                         url='https://www.linkedin.com/jobs/view/4381470286')
-
-        existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/4381470286?currentJobId=4381470286',
-            company='Beta Srl', title='Data Eng', location='Roma',
-        )
-        assert existing is not None
-        assert (match_type or '').startswith('LinkedIn job ID'), match_type
-
-    def test_trova_la_riga_giusta_anche_se_il_prefiltro_ne_pesca_un_altra(self, in_memory_db):
-        """Il duplicato vero può arrivare DOPO un candidato preso di striscio.
-
-        Con `fetchone` la query restituiva la prima riga che il LIKE toccava:
-        se era quella dall'id più lungo, il duplicato vero non veniva mai
-        guardato. Serve scorrere i candidati, non fermarsi al primo.
-        """
-        conn = in_memory_db
-        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
-                         url='https://www.linkedin.com/jobs/view/43814702861')
-        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome',
-                         url='https://www.linkedin.com/jobs/view/4381470286')
-
-        existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/4381470286?refId=q',
-            company='Beta Srl', title='Data Eng', location='Roma',
-        )
-        assert existing is not None, "il duplicato vero è la seconda riga, non la prima"
-        assert existing['company'] == 'Beta Corp', dict(existing)
-
-    def test_url_non_linkedin_non_passa_dal_livello_0(self, in_memory_db):
-        """Un id che compare in un URL non-LinkedIn non è un LinkedIn job ID."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Backend Dev', 'Acme', 'Milan',
-                         url='https://jobs.lever.co/acme/4381470286')
-
-        existing, _ = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/4381470286',
-            company='Beta Corp', title='Data Engineer', location='Rome',
-        )
-        assert existing is None
-
+            in_memory_db, url=url, company=company, title=title, location=location)
+        assert (existing is not None) == matched
+        if expected_company is not None:
+            assert existing['company'] == expected_company
+        elif matched:
+            assert (match_type or '').startswith('LinkedIn job ID'), match_type
 
 class TestLivelli1e3RestanoIntatti:
-    """Il fix tocca SOLO il livello 0: gli altri tre devono comportarsi uguale."""
-
-    def test_livello_1_url_esatto_anche_su_url_linkedin(self, in_memory_db):
-        conn = in_memory_db
-        url = 'https://www.linkedin.com/jobs/view/4381470286'
-        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome', url=url)
-
+    @pytest.mark.parametrize('stored,query,comparison,expected', [
+        pytest.param(('Data Engineer', 'Beta Corp', 'Rome',
+                      'https://www.linkedin.com/jobs/view/4381470286'),
+                     ('Data Engineer', 'Beta Corp', 'Rome',
+                      'https://www.linkedin.com/jobs/view/4381470286'),
+                     'present', None, id='livello_1_url_esatto_anche_su_url_linkedin'),
+        pytest.param(('Data Engineer', 'Beta Corp', 'Rome', 'https://jobs.lever.co/acme/abc-123'),
+                     ('Altro Titolo', 'Altro', 'Berlin', 'https://jobs.lever.co/acme/abc-123'),
+                     'equal', 'URL esatto', id='livello_1_url_esatto_non_linkedin'),
+        pytest.param(('Software Engineer', 'Acme Corp', 'Milan, Italy',
+                      'https://www.linkedin.com/jobs/view/1111111111'),
+                     ('Software Engineer', 'Acme Corp', 'Milano, IT',
+                      'https://www.linkedin.com/jobs/view/2222222222'),
+                     'contains', 'city-norm', id='livello_2_e_3_ancora_raggiungibili_da_un_url_linkedin'),
+    ])
+    def test_duplicate_fallback(self, in_memory_db, stored, query, comparison, expected):
+        _insert_test_row(in_memory_db, *stored)
+        title, company, location, url = query
         existing, match_type = db_insert.check_duplicate(
-            conn, url=url, company='Beta Corp', title='Data Engineer', location='Rome')
+            in_memory_db, url=url, company=company, title=title, location=location)
         assert existing is not None
-        # L'URL esatto è anche lo stesso job id: vince il livello 0, che è
-        # più specifico. Quello che conta è che il duplicato sia visto.
-        assert match_type is not None
-
-    def test_livello_1_url_esatto_non_linkedin(self, in_memory_db):
-        conn = in_memory_db
-        url = 'https://jobs.lever.co/acme/abc-123'
-        _insert_test_row(conn, 'Data Engineer', 'Beta Corp', 'Rome', url=url)
-
-        existing, match_type = db_insert.check_duplicate(
-            conn, url=url, company='Altro', title='Altro Titolo', location='Berlin')
-        assert existing is not None
-        assert match_type == 'URL esatto'
-
-    def test_livello_2_e_3_ancora_raggiungibili_da_un_url_linkedin(self, in_memory_db):
-        """Un URL LinkedIn che non matcha al livello 0 deve cadere sui livelli
-        successivi, non uscire dalla funzione."""
-        conn = in_memory_db
-        _insert_test_row(conn, 'Software Engineer', 'Acme Corp', 'Milan, Italy',
-                         url='https://www.linkedin.com/jobs/view/1111111111')
-
-        existing, match_type = db_insert.check_duplicate(
-            conn,
-            url='https://www.linkedin.com/jobs/view/2222222222',
-            company='Acme Corp', title='Software Engineer', location='Milano, IT',
-        )
-        assert existing is not None
-        assert 'city-norm' in (match_type or ''), match_type
-
+        if comparison == 'present':
+            assert match_type is not None
+        elif comparison == 'equal':
+            assert match_type == expected
+        else:
+            assert expected in (match_type or '')
 
 
 class TestUnaPosizioneEsclusaRestaUnDuplicato:
-    """Una posizione `excluded` blocca ancora il suo reinserimento, a ogni livello.
-
-    Ri-inserirla farebbe ripartire da zero verifica e dedup: token dello Scout
-    spesi su un'offerta già scartata (docstring di check_duplicate). Fino
-    all'08/10 l'unico test sul caso stava in test_scoring_logic.py, su una
-    COPIA della funzione scritta nel test, e provava il contrario: che una
-    posizione esclusa non bloccasse niente.
-    """
+    """Excluded positions still block reinsertion at every matching level."""
 
     @pytest.mark.parametrize('stored_url,new_url,new_company,new_title,expected', [
         ('https://www.linkedin.com/jobs/view/4381470286',
@@ -413,12 +228,7 @@ UNIQUE_INDEX = 'idx_positions_url_unique'
 
 
 def _fresh_db(tmp_path, name='jobs.db'):
-    """DB reale su disco con lo schema completo.
-
-    `ensure_schema` lavora sulla connessione che le passi — `DB_PATH` serve
-    solo a `get_db`, che qui non usiamo. Niente subprocess: i test restano
-    veloci e leggibili.
-    """
+    """Build the real schema on an explicit connection without resolving DB_PATH."""
     conn = sqlite3.connect(str(tmp_path / name))
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys=ON')
@@ -432,11 +242,7 @@ def _indexes(conn):
 
 
 def _make_preexisting_duplicates(conn, rows):
-    """Riporta il DB allo stato PRIMA del vincolo e ci mette dei duplicati.
-
-    È il solo modo onesto di provare la migrazione: il DB deve arrivarci già
-    sporco, come quello di un utente vero.
-    """
+    """Seed duplicates before reintroducing the real unique index."""
     conn.execute(f"DROP INDEX IF EXISTS {UNIQUE_INDEX}")
     ids = []
     for title, company, url, status in rows:
@@ -451,10 +257,7 @@ def _make_preexisting_duplicates(conn, rows):
 class TestVincoloUnicoSuUrl:
 
     def test_un_db_nuovo_nasce_gia_col_vincolo(self, tmp_path):
-        """La trappola di `fix(db): a new jobs.db was missing every column`:
-        una migrazione che gira solo prima del CREATE TABLE non trova niente
-        da fare su un DB nuovo. `_run_migrations` gira sui due lati, quindi
-        UNA chiamata deve bastare."""
+        """A single schema initialization must create the index on a new database."""
         conn = _fresh_db(tmp_path)
         assert UNIQUE_INDEX in _indexes(conn)
 
@@ -484,27 +287,23 @@ class TestMigrazioneConDuplicatiPreesistenti:
     """La politica dichiarata: nessuna riga viene cancellata, vince chi ha più
     lavoro sopra, i perdenti tengono la riga e cambiano URL con un frammento."""
 
-    def test_la_migrazione_non_fallisce_e_non_perde_righe(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize('suffix', [
+        pytest.param('duplicato', id='la_migrazione_non_fallisce_e_non_perde_righe'),
+        pytest.param('tre-volte', id='tre_righe_sullo_stesso_url_finiscono_tutte_distinte'),
+    ])
+    def test_three_preexisting_rows_survive_with_distinct_urls(self, tmp_path, monkeypatch, suffix):
         monkeypatch.setenv('JHT_HOME', str(tmp_path))
         conn = _fresh_db(tmp_path)
-        url = 'https://jobs.example/duplicato'
-        ids = _make_preexisting_duplicates(conn, [
-            ('Backend Dev', 'Acme', url, 'new'),
-            ('Backend Dev', 'Acme', url, 'new'),
-            ('Backend Dev', 'Acme', url, 'new'),
-        ])
-
-        _db_module.ensure_schema(conn)   # non deve sollevare
-
-        assert UNIQUE_INDEX in _indexes(conn), "il vincolo non è stato creato"
-        rimaste = {r[0] for r in conn.execute(
-            "SELECT id FROM positions WHERE id IN (?,?,?)", ids)}
-        assert rimaste == set(ids), "la migrazione ha cancellato delle righe"
+        url = f'https://jobs.example/{suffix}'
+        ids = _make_preexisting_duplicates(conn, [('Backend Dev', 'Acme', url, 'new')] * 3)
+        _db_module.ensure_schema(conn)
+        assert UNIQUE_INDEX in _indexes(conn), "the unique index was not created"
+        rows = conn.execute("SELECT id, url FROM positions WHERE id IN (?,?,?)", ids).fetchall()
+        assert {row['id'] for row in rows} == set(ids), "the migration deleted rows"
+        assert len({row['url'] for row in rows}) == 3, rows
 
     def test_vince_la_riga_con_piu_lavoro_sopra(self, tmp_path, monkeypatch):
-        """Non 'la più vecchia': quella con application > score > status più
-        avanzato. Qui il vincitore è la riga con lo score, che ha l'id più
-        ALTO — così il test non passerebbe per caso ordinando per id."""
+        """The scored row wins despite its higher ID."""
         monkeypatch.setenv('JHT_HOME', str(tmp_path))
         conn = _fresh_db(tmp_path)
         url = 'https://jobs.example/con-score'
@@ -521,25 +320,6 @@ class TestMigrazioneConDuplicatiPreesistenti:
         assert urls[secondo] == url, "doveva vincere la riga con lo score"
         assert urls[primo].startswith(url + '#jht-duplicate-'), urls[primo]
         assert str(secondo) in urls[primo], "il frammento deve dire di chi è duplicato"
-
-    def test_tre_righe_sullo_stesso_url_finiscono_tutte_distinte(self, tmp_path, monkeypatch):
-        """Due perdenti nello stesso gruppo non possono ricevere la stessa
-        stringa, altrimenti l'indice unico non nascerebbe comunque."""
-        monkeypatch.setenv('JHT_HOME', str(tmp_path))
-        conn = _fresh_db(tmp_path)
-        url = 'https://jobs.example/tre-volte'
-        ids = _make_preexisting_duplicates(conn, [
-            ('Backend Dev', 'Acme', url, 'new'),
-            ('Backend Dev', 'Acme', url, 'new'),
-            ('Backend Dev', 'Acme', url, 'new'),
-        ])
-
-        _db_module.ensure_schema(conn)
-
-        urls = [r[0] for r in conn.execute(
-            "SELECT url FROM positions WHERE id IN (?,?,?)", ids)]
-        assert len(set(urls)) == 3, urls
-        assert UNIQUE_INDEX in _indexes(conn)
 
     def test_il_link_del_perdente_apre_ancora_la_stessa_pagina(self, tmp_path, monkeypatch):
         """Frammento, non query string: `#...` non viaggia al server."""
@@ -575,9 +355,7 @@ class TestMigrazioneConDuplicatiPreesistenti:
         assert righe and righe[0]['url'] == url, righe
 
     def test_un_db_di_giugno_con_duplicati_si_aggiorna(self, tmp_path, monkeypatch):
-        """La prova vera: il DB di partenza è costruito col `_db.py` di un
-        commit precedente, non a mano. Uno schema scritto a mano non è mai
-        fedele abbastanza per provare che una migrazione regge."""
+        """Upgrade a database built by the historical module, not a copied schema."""
         old_src = subprocess.run(
             ['git', 'show', '50d804009:shared/skills/_db.py'],
             capture_output=True, text=True, cwd=REPO_ROOT)
@@ -698,13 +476,7 @@ def test_sei_scout_sullo_stesso_url_scrivono_una_riga_sola(tmp_path):
         f"un perdente è crepato invece di riportare il duplicato: {rcs} {outs}")
 
 
-# ── Gate 1 dello Scout: check-url ha lo stesso ancoraggio del livello 0 ──────
-#
-# `db_query.check_url` era il gemello peggiore del difetto del livello 0: il suo
-# pattern aveva un `%` anche FRA `view/` e l'id (`%/jobs/view/%<id>%`), quindi
-# bastava che quelle cifre comparissero in un punto qualsiasi di un URL job-view
-# perche' dicesse TROVATA. E' il primo gate che lo Scout interroga: un falso
-# positivo qui gli fa saltare un annuncio nuovo prima ancora di inserirlo.
+# check-url must use the same full LinkedIn ID boundary as insertion.
 
 def _check_url_out(tmp_path, monkeypatch, rows, needle):
     import importlib
@@ -734,32 +506,17 @@ def _check_url_out(tmp_path, monkeypatch, rows, needle):
     return buf.getvalue()
 
 
-def test_check_url_non_confonde_un_id_col_suo_prolungamento(tmp_path, monkeypatch):
-    out = _check_url_out(
-        tmp_path, monkeypatch,
-        [("Altro annuncio", "ACME",
-          "https://www.linkedin.com/jobs/view/43814702861", "new")],
-        "4381470286")
-    assert "NOT FOUND" in out, (
-        "4381470286 non e' 43814702861: un TROVATA qui fa saltare allo Scout "
-        "un annuncio nuovo")
-
-
-def test_check_url_trova_ancora_lid_giusto(tmp_path, monkeypatch):
-    out = _check_url_out(
-        tmp_path, monkeypatch,
-        [("Annuncio", "ACME",
-          "https://www.linkedin.com/jobs/view/43814702861", "new")],
-        "43814702861")
-    assert "FOUND" in out and "NOT FOUND" not in out
-
-
-def test_check_url_ignora_un_id_altrui_in_query_string(tmp_path, monkeypatch):
-    out = _check_url_out(
-        tmp_path, monkeypatch,
-        [("Annuncio", "ACME",
-          "https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286",
-          "new")],
-        "4381470286")
-    assert "NOT FOUND" in out, (
-        "l'id sta nella query string, non nel path: non e' quell'annuncio")
+@pytest.mark.parametrize('title,url,needle,found', [
+    pytest.param('Altro annuncio', 'https://www.linkedin.com/jobs/view/43814702861',
+                 '4381470286', False, id='non_confonde_un_id_col_suo_prolungamento'),
+    pytest.param('Annuncio', 'https://www.linkedin.com/jobs/view/43814702861',
+                 '43814702861', True, id='trova_ancora_lid_giusto'),
+    pytest.param('Annuncio', 'https://www.linkedin.com/jobs/view/1111111111?currentJobId=4381470286',
+                 '4381470286', False, id='ignora_un_id_altrui_in_query_string'),
+])
+def test_check_url_identity(tmp_path, monkeypatch, title, url, needle, found):
+    out = _check_url_out(tmp_path, monkeypatch, [(title, 'ACME', url, 'new')], needle)
+    if found:
+        assert 'FOUND' in out and 'NOT FOUND' not in out
+    else:
+        assert 'NOT FOUND' in out

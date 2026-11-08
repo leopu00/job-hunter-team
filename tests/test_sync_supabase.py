@@ -1,17 +1,4 @@
-"""
-Test sincronizzazione SQLite → Supabase (db_to_supabase.py).
-
-Copre:
-- Funzioni di normalizzazione (_normalize_remote, _normalize_status, ecc.)
-- Sync con DB SQLite vuoto (early return, zero chiamate HTTP)
-- Sync dry_run con dati reali SQLite (no scritture su Supabase)
-- Integrazione reale Supabase (richiede SUPABASE_SERVICE_ROLE_KEY)
-
-Eseguire con:
-    pytest tests/test_sync_supabase.py -v
-Con Supabase:
-    SUPABASE_SERVICE_ROLE_KEY=xxx pytest tests/test_sync_supabase.py -v
-"""
+"""SQLite-to-Supabase normalization, empty sync, dry run and optional live integration."""
 
 import os
 import sqlite3
@@ -48,16 +35,7 @@ def load_sync_module():
 
 
 def make_test_db(tmp_path):
-    """Crea un DB SQLite con lo schema REALE, non con una copia a mano.
-
-    Lo schema arriva da `shared/skills/_db.ensure_schema()` — la stessa
-    funzione che crea il database in produzione. Prima questa fixture
-    duplicava il DDL: quando la feature logo (2026-07-18) ha aggiunto
-    `companies.logo/logo_source/logo_fetched`, il sync ha iniziato a
-    leggerle e i test sono diventati rossi su codice sano. Costruendo il DB
-    con `ensure_schema` il drift non è più possibile: ogni colonna nuova
-    arriva automaticamente anche qui.
-    """
+    """Use the real schema so newly added columns are present in the fixture."""
     if SKILLS_DIR not in sys.path:
         sys.path.insert(0, SKILLS_DIR)
     import _db
@@ -70,83 +48,45 @@ def make_test_db(tmp_path):
     return db_path, conn
 
 
-# ---------------------------------------------------------------------------
-# 1. Funzioni di normalizzazione (unit test puri, no I/O)
-# ---------------------------------------------------------------------------
-
 @requires_sync
 class TestNormalization:
-    """_normalize_* devono mappare correttamente i valori legacy."""
+    """Legacy values retain the same normalizer, order and expected result."""
 
     @pytest.fixture(autouse=True)
     def mod(self):
         self._mod = load_sync_module()
 
-    def test_normalize_remote_full_remote(self):
-        assert self._mod._normalize_remote("remote") == "full_remote"
-        assert self._mod._normalize_remote("full_remote") == "full_remote"
-        assert self._mod._normalize_remote("full-remote") == "full_remote"
-
-    def test_normalize_remote_hybrid(self):
-        assert self._mod._normalize_remote("hybrid") == "hybrid"
-        assert self._mod._normalize_remote("HYBRID") == "hybrid"
-
-    def test_normalize_remote_onsite(self):
-        assert self._mod._normalize_remote("onsite") == "onsite"
-        assert self._mod._normalize_remote("on-site") == "onsite"
-        assert self._mod._normalize_remote("on_site") == "onsite"
-
-    def test_normalize_remote_none(self):
-        assert self._mod._normalize_remote(None) is None
-        assert self._mod._normalize_remote("") is None
-        assert self._mod._normalize_remote("unknown") is None
-
-    def test_normalize_status_valid(self):
-        mod = self._mod
-        for s in ["new", "checked", "excluded", "scored",
-                  "writing", "review", "ready", "applied", "response"]:
-            assert mod._normalize_status(s) == s, f"status '{s}' non passato"
-
-    def test_normalize_status_invalid_becomes_new(self):
-        assert self._mod._normalize_status("invalid_xyz") == "new"
-        assert self._mod._normalize_status(None) == "new"
-        assert self._mod._normalize_status("") == "new"
-
-    def test_normalize_app_status_valid(self):
-        mod = self._mod
-        for s in ["draft", "review", "approved", "applied", "response"]:
-            assert mod._normalize_app_status(s) == s
-
-    def test_normalize_app_status_invalid_becomes_draft(self):
-        assert self._mod._normalize_app_status("unknown") == "draft"
-        assert self._mod._normalize_app_status(None) == "draft"
-
-    def test_normalize_verdict_valid(self):
-        mod = self._mod
-        assert mod._normalize_verdict("PASS") == "PASS"
-        assert mod._normalize_verdict("NEEDS_WORK") == "NEEDS_WORK"
-        assert mod._normalize_verdict("REJECT") == "REJECT"
-
-    def test_normalize_verdict_uppercase(self):
-        """Il verdict viene normalizzato in uppercase."""
-        assert self._mod._normalize_verdict("pass") == "PASS"
-        assert self._mod._normalize_verdict("reject") == "REJECT"
-
-    def test_normalize_verdict_none(self):
-        assert self._mod._normalize_verdict(None) is None
-        assert self._mod._normalize_verdict("invalid") is None
-
-
-# ---------------------------------------------------------------------------
-# 2. Sync con DB vuoto (early return, zero chiamate HTTP)
-# ---------------------------------------------------------------------------
+    @pytest.mark.parametrize('name,cases', [
+        pytest.param('_normalize_remote', [('remote', 'full_remote'), ('full_remote', 'full_remote'),
+                     ('full-remote', 'full_remote')], id='normalize_remote_full_remote'),
+        pytest.param('_normalize_remote', [('hybrid', 'hybrid'), ('HYBRID', 'hybrid')],
+                     id='normalize_remote_hybrid'),
+        pytest.param('_normalize_remote', [('onsite', 'onsite'), ('on-site', 'onsite'),
+                     ('on_site', 'onsite')], id='normalize_remote_onsite'),
+        pytest.param('_normalize_remote', [(None, None), ('', None), ('unknown', None)],
+                     id='normalize_remote_none'),
+        pytest.param('_normalize_status', [(s, s) for s in (
+                     'new', 'checked', 'excluded', 'scored', 'writing', 'review', 'ready', 'applied', 'response')],
+                     id='normalize_status_valid'),
+        pytest.param('_normalize_status', [('invalid_xyz', 'new'), (None, 'new'), ('', 'new')],
+                     id='normalize_status_invalid_becomes_new'),
+        pytest.param('_normalize_app_status', [(s, s) for s in (
+                     'draft', 'review', 'approved', 'applied', 'response')], id='normalize_app_status_valid'),
+        pytest.param('_normalize_app_status', [('unknown', 'draft'), (None, 'draft')],
+                     id='normalize_app_status_invalid_becomes_draft'),
+        pytest.param('_normalize_verdict', [('PASS', 'PASS'), ('NEEDS_WORK', 'NEEDS_WORK'),
+                     ('REJECT', 'REJECT')], id='normalize_verdict_valid'),
+        pytest.param('_normalize_verdict', [('pass', 'PASS'), ('reject', 'REJECT')],
+                     id='normalize_verdict_uppercase'),
+        pytest.param('_normalize_verdict', [(None, None), ('invalid', None)], id='normalize_verdict_none'),
+    ])
+    def test_normalization(self, name, cases):
+        for value, expected in cases:
+            assert getattr(self._mod, name)(value) == expected
 
 @requires_sync
 class TestSyncEmptyDb:
-    """
-    Con DB SQLite vuoto, ogni sync_* ritorna subito senza mai chiamare Supabase.
-    Usa URL/key fake: se venisse chiamato urllib, il test fallirebbe con connessione rifiutata.
-    """
+    """An empty database must not contact the fake server."""
 
     FAKE_URL = "https://fake-supabase-project.invalid"
     FAKE_KEY = "fake-service-key-00000000000000000000000"
@@ -161,45 +101,21 @@ class TestSyncEmptyDb:
     def mod(self):
         self._mod = load_sync_module()
 
-    def test_sync_companies_empty_returns_empty_map(self, empty_db):
-        result = self._mod.sync_companies(
-            empty_db, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, dry_run=False
-        )
-        assert result == {}, "sync_companies DB vuoto deve restituire {}"
-
-    def test_sync_positions_empty_returns_empty_map(self, empty_db):
-        result = self._mod.sync_positions(
-            empty_db, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=False
-        )
-        assert result == {}
-
-    def test_sync_scores_empty_returns_none(self, empty_db):
-        # Nessuna eccezione, nessuna chiamata HTTP
-        self._mod.sync_scores(
-            empty_db, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=False
-        )
-
-    def test_sync_applications_empty_no_error(self, empty_db):
-        self._mod.sync_applications(
-            empty_db, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=False
-        )
-
-    def test_sync_highlights_empty_no_error(self, empty_db):
-        self._mod.sync_highlights(
-            empty_db, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=False
-        )
-
-
-# ---------------------------------------------------------------------------
-# 3. Sync dry_run con dati SQLite (mock sb_get → lista vuota)
-# ---------------------------------------------------------------------------
+    @pytest.mark.parametrize('name,extra,expected', [
+        pytest.param('sync_companies', (), {}, id='companies_empty_returns_empty_map'),
+        pytest.param('sync_positions', ({},), {}, id='positions_empty_returns_empty_map'),
+        pytest.param('sync_scores', ({},), None, id='scores_empty_returns_none'),
+        pytest.param('sync_applications', ({},), None, id='applications_empty_no_error'),
+        pytest.param('sync_highlights', ({},), None, id='highlights_empty_no_error'),
+    ])
+    def test_empty_sync(self, empty_db, name, extra, expected):
+        result = getattr(self._mod, name)(
+            empty_db, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, *extra, dry_run=False)
+        assert result == expected
 
 @requires_sync
 class TestSyncDryRunWithData:
-    """
-    Con dry_run=True e sb_get mockato a [] (nessun dato esistente su Supabase),
-    sync_* deve contare correttamente insert/update senza fare scritture.
-    """
+    """Dry runs count new rows without writing to Supabase."""
 
     FAKE_URL = "https://fake-supabase-project.invalid"
     FAKE_KEY = "fake-service-key"
@@ -245,50 +161,22 @@ class TestSyncDryRunWithData:
         monkeypatch.setattr(self._mod, "sb_post", fake_post)
         monkeypatch.setattr(self._mod, "sb_patch", lambda *a, **kw: None)
 
-    def test_sync_companies_counts_inserts(self, db_with_data, capsys):
-        self._mod.sync_companies(
-            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, dry_run=True
-        )
-        out = capsys.readouterr().out
-        assert "2 inserted" in out, f"Attese 2 companies da inserire, output: {out}"
+    @pytest.mark.parametrize('name,extra,expected_output', [
+        pytest.param('sync_companies', (), '2 inserted', id='companies_counts_inserts'),
+        pytest.param('sync_positions', ({},), '1 inserted', id='positions_counts_inserts'),
+        pytest.param('sync_scores', ({},), '1 skipped', id='scores_skips_without_position_map'),
+        pytest.param('sync_applications', ({},), '1 skipped', id='applications_skips_without_position_map'),
+        pytest.param('sync_highlights', ({},), '1 skipped', id='highlights_skips_without_position_map'),
+    ])
+    def test_dry_run_counts(self, db_with_data, capsys, name, extra, expected_output):
+        getattr(self._mod, name)(
+            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, *extra, dry_run=True)
+        assert expected_output in capsys.readouterr().out
 
     def test_sync_companies_dry_run_returns_empty_map(self, db_with_data):
-        """dry_run=True non chiama sb_post → id_map è vuoto."""
         result = self._mod.sync_companies(
-            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, dry_run=True
-        )
-        assert result == {}, "dry_run non deve costruire id_map (non chiama sb_post)"
-
-    def test_sync_positions_counts_inserts(self, db_with_data, capsys):
-        self._mod.sync_positions(
-            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
-        )
-        out = capsys.readouterr().out
-        assert "1 inserted" in out, f"Attesa 1 position da inserire, output: {out}"
-
-    def test_sync_scores_skips_without_position_map(self, db_with_data, capsys):
-        """Con position_map vuoto, tutti gli score vengono skippati."""
-        self._mod.sync_scores(
-            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
-        )
-        out = capsys.readouterr().out
-        assert "1 skipped" in out, f"Atteso 1 score skippato (no position map), output: {out}"
-
-    def test_sync_applications_skips_without_position_map(self, db_with_data, capsys):
-        """Con position_map vuoto, tutte le applications vengono skippate."""
-        self._mod.sync_applications(
-            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
-        )
-        out = capsys.readouterr().out
-        assert "1 skipped" in out, f"Attesa 1 application skippata, output: {out}"
-
-    def test_sync_highlights_skips_without_position_map(self, db_with_data, capsys):
-        """Con position_map vuoto, tutti gli highlights vengono skippati."""
-        self._mod.sync_highlights(
-            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, {}, dry_run=True
-        )
-        out = capsys.readouterr().out
-        assert "1 skipped" in out, f"Atteso 1 highlight skippato, output: {out}"
+            db_with_data, self.FAKE_URL, self.FAKE_KEY, self.FAKE_UID, dry_run=True)
+        assert result == {}, "dry_run must not build the id map"
 
     def test_sync_scores_with_position_map(self, db_with_data, capsys):
         """Con position_map corretto, gli score vengono sincronizzati."""
@@ -312,10 +200,6 @@ class TestSyncDryRunWithData:
                                   "writing", "review", "ready", "applied", "response"}, \
                 f"Status '{row['status']}' normalizzato a '{normalized}' non valido"
 
-
-# ---------------------------------------------------------------------------
-# 4. Integrazione reale Supabase (richiede service role key)
-# ---------------------------------------------------------------------------
 
 @requires_sync
 @requires_supabase

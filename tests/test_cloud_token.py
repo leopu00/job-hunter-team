@@ -1,11 +1,4 @@
-"""The box's website sync token, checked and renewed from the desktop app (shared/skills/cloud_token.py).
-
-A token that expired cut a box off the website for 16 days on 23/10 without anyone knowing. The app
-renews it for the user through this one script, so nobody opens a terminal on the box. The new token
-is a secret: it comes on stdin, it is verified with the website before anything is written, it must
-belong to the account the box is paired with, and it is never printed. Synthetic tokens and a fake
-website only.
-"""
+"""Renew website sync tokens through stdin, with account checks and no secret output."""
 from __future__ import annotations
 
 import io
