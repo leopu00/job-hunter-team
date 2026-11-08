@@ -97,7 +97,7 @@ def run_upload(case, *args, data=None):
     return done, root / 'allegati'
 
 
-@pytest.mark.parametrize('name', ['CV synthetic.pdf', "CV d'esempio.pdf", 'CV ünicode.pdf'])
+@pytest.mark.parametrize('name', ['CV synthetic.pdf', "CV d'esempio.pdf", 'CV ünicode.pdf', '-cv.pdf'])
 def test_cli_only_upload_reads_the_real_mounted_document(upload_case, name):
     root, _, env = upload_case
     (root / name).write_bytes(PDF)
@@ -150,6 +150,7 @@ def test_cli_only_invalid_sources_are_refused_without_writing(upload_case, kind)
     done, destination = run_upload(upload_case, HOST_ROOT + '\\' + name)
     assert done.returncode != 0, done.stdout + done.stderr
     assert done.stderr
+    assert b'artifact_upload_needs_app' not in done.stdout + done.stderr
     assert not destination.exists()
 
 
@@ -160,6 +161,40 @@ def test_cli_only_transport_failure_keeps_its_exit_code(upload_case):
     assert done.returncode == 41, done.stdout + done.stderr
     assert b'synthetic transport refused' in done.stderr
     assert not destination.exists()
+
+
+def test_cli_only_stdin_keeps_the_original_binary_bytes(upload_case):
+    data = PDF + b'\x00\xff\x80\r\n'
+    done, destination = run_upload(upload_case, '--stdin', '--name', 'cv.pdf', '--json', data=data)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert json.loads(done.stdout)['bytes'] == len(data)
+    assert (destination / 'cv.pdf').read_bytes() == data
+
+
+@pytest.mark.parametrize('kind', ['leaf', 'parent', 'fifo'])
+def test_cli_only_never_follows_links_or_blocks_on_a_pipe(upload_case, kind):
+    root, _, _ = upload_case
+    outside = root.parent / 'private'
+    outside.mkdir()
+    (outside / 'cv.pdf').write_bytes(PDF)
+    if kind == 'parent':
+        (root / 'nested').symlink_to(outside, target_is_directory=True)
+        relative = r'nested\cv.pdf'
+    elif kind == 'leaf':
+        (root / 'cv.pdf').symlink_to(outside / 'cv.pdf')
+        relative = 'cv.pdf'
+    else:
+        if not hasattr(os, 'mkfifo'):
+            # Windows has no POSIX FIFO; its regular-file oracle is the directory case.
+            (root / 'cv.pdf').mkdir()
+        else:
+            os.mkfifo(root / 'cv.pdf')
+        relative = 'cv.pdf'
+    done, destination = run_upload(upload_case, HOST_ROOT + '\\' + relative)
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert b'artifact_source_' in done.stderr
+    assert not destination.exists()
+    assert (outside / 'cv.pdf').read_bytes() == PDF
 
 
 def test_existing_app_upload_still_keeps_the_apps_exit_code(upload_case):
