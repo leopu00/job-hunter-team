@@ -233,6 +233,7 @@ def test_installer_and_wrapper_publish_the_same_podman_manifest_contract():
         "docker-compose.yml",
         "jht-wrapper.ps1",
         "windows-private-acl.ps1",
+        "podman-machine-bridge.ps1",
         "docker-compose.podman.yml",
         "docker.exe",
         "container-runtime",
@@ -262,7 +263,9 @@ def test_installer_and_wrapper_publish_the_same_podman_manifest_contract():
 def test_only_explicit_up_wakes_the_podman_machine():
     wrapper = _wrapper()
     wake = wrapper[wrapper.index("function Start-PodmanMachineForUp") : wrapper.index("function Require-ComposeFile")]
-    assert "machine start --update-connection=false" in wake
+    assert "Start-JhtPodmanMachineForUp -Runtime $ContainerRuntime -Connection $env:CONTAINER_CONNECTION" in wake
+    bridge = (ROOT / "scripts" / "podman-machine-bridge.ps1").read_text(encoding="utf-8")
+    assert "@('machine', 'start', '--update-connection=false', $Connection)" in bridge
     dispatcher = wrapper[wrapper.index("switch ($Sub)") :]
     assert dispatcher.count("Start-PodmanMachineForUp") == 1
     up = dispatcher[dispatcher.index("@('up', 'start-container')") : dispatcher.index("@('down', 'stop-container')")]
@@ -448,7 +451,7 @@ def test_windows_compose_provider_is_the_runtime_own_never_one_from_path():
         "'00e839301ca18ee5109b3ef086788f3a281c317c0b77ba42a06fc6f806401255'" in enabler
     )
     install = enabler.index("try { Install-PrivateComposeProvider -Destination $ComposeProvider }")
-    assert install < enabler.index("machine list --format json")
+    assert install < enabler.index("'machine', 'list', '--format', 'json'")
     assert 'podman_not_installable: $($_.Exception.Message)")\n  exit 21' in enabler[install:]
 
 

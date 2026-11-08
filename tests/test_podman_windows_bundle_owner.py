@@ -42,6 +42,7 @@ OWNER_CHECKED = {
     "$RuntimeManifest": "(Join-Path $RuntimeDir '.runtime-integrity')",
     "$WrapperPath": "(Join-Path $BinDir 'jht.ps1')",
     "$AclHelperPath": "(Join-Path $BinDir 'windows-private-acl.ps1')",
+    "$PodmanMachineBridgePath": "(Join-Path $BinDir 'podman-machine-bridge.ps1')",
     "$DockerShim": "$shim",
     "$RuntimeImageFile": "$runtimeImageFile",
 }

@@ -293,7 +293,8 @@ def _network_check_block() -> str:
     trap = trap[: trap.index("\n}\n") + 3]
     # up to the check of the cgroup manager that follows it (T87), which needs `podman info`
     check = source[source.index("$proxyCheck = @'") : source.index("$hostInfo = ")]
-    return trap + check
+    bridge = NETWORK.parent / "podman-machine-bridge.ps1"
+    return ". '" + str(bridge).replace("'", "''") + "'\n" + trap + check
 
 
 # The machine is a fake podman whose `machine ssh` runs the command with bash here, so the real
@@ -454,6 +455,7 @@ def test_already_installed_for_another_user_is_installed_for_this_one_or_its_own
 
 def _enabler_functions() -> str:
     source = ENABLER.read_text(encoding="utf-8")
+    source += "\n" + (ENABLER.parent / "podman-machine-bridge.ps1").read_text(encoding="utf-8")
     registry_paths = source[source.index("$PodmanRegistryPaths = ") :].split("\n", 1)[0] + "\n"
     return registry_paths + "".join(
         source[source.index(f"function {name} {{") :].split("\n}\n", 1)[0] + "\n}\n"

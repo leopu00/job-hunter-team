@@ -87,7 +87,7 @@ function ChatMessageRowView({
     if (outcome.kind === "expired") {
       return (
         <div data-testid="direct-chat-queue-expired" className="mt-1 text-right text-[14px] text-[var(--color-yellow)]">
-          {t.queueExpired}
+          {outcome.held ? t.queueExpiredHeld : t.queueExpired}
         </div>
       );
     }

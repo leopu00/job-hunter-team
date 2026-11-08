@@ -651,6 +651,30 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs.",
     "Recreate the Podman machine: your data in ~/.jht and in Documents › Job Hunter Team stays where it is.",
   ),
+  podman_machine_timeout: copy(
+    "Podman non ha risposto entro il tempo previsto. L’installazione si è fermata.",
+    "Controlla che WSL risponda, poi riprova l’installazione.",
+    "Podman did not respond in time. Setup stopped.",
+    "Check that WSL responds, then try setup again.",
+  ),
+  podman_machine_unavailable: copy(
+    "La macchina Podman non è diventata pronta entro il tempo previsto.",
+    "Controlla che WSL e Podman rispondano, poi riprova.",
+    "The Podman machine did not become ready in time.",
+    "Check that WSL and Podman respond, then try again.",
+  ),
+  podman_machine_cleanup_failed: copy(
+    "Podman non ha risposto e non è stato possibile arrestare tutti i processi del comando.",
+    "Riavvia Windows prima di riprovare l’installazione.",
+    "Podman did not respond and the command’s processes could not all be stopped.",
+    "Restart Windows before trying setup again.",
+  ),
+  podman_machine_command_failed: copy(
+    "Non è stato possibile avviare il comando Podman o leggerne la risposta completa.",
+    "Controlla l’installazione di Podman e WSL, poi riprova.",
+    "The Podman command could not be started or its complete answer could not be read.",
+    "Check the Podman and WSL installation, then try again.",
+  ),
   // A Mac installed from the command line with Colima: Podman would start the
   // team on empty volumes, and nothing moves them yet.
   runtime_change_requires_migration: copy(

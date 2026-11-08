@@ -478,6 +478,7 @@ class User:
             app_file.write_bytes(b"the app")
         (self.bin / "jht.ps1").write_text(WRAPPER_TEXT, encoding="utf-8")
         (self.bin / "windows-private-acl.ps1").write_text(HELPER_TEXT, encoding="utf-8")
+        (self.bin / "podman-machine-bridge.ps1").write_text("# synthetic bounded Podman helper\n", encoding="utf-8")
         shim = SCRIPT.read_text(encoding="utf-8-sig")
         shim = shim[shim.index("$JhtCmdShim = @'\n") + len("$JhtCmdShim = @'\n") : shim.index("\n'@", shim.index("$JhtCmdShim"))]
         (self.bin / "jht.cmd").write_bytes((shim.replace("\n", "\r\n") + "\r\n").encode("ascii"))
@@ -488,7 +489,8 @@ class User:
             (self.runtime / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
             (self.runtime / ".runtime-integrity").write_text(
                 f"version=1\njht-wrapper.ps1={_sha(self.bin / 'jht.ps1')}\n"
-                f"windows-private-acl.ps1={_sha(self.bin / 'windows-private-acl.ps1')}\n", encoding="utf-8")
+                f"windows-private-acl.ps1={_sha(self.bin / 'windows-private-acl.ps1')}\n"
+                f"podman-machine-bridge.ps1={_sha(self.bin / 'podman-machine-bridge.ps1')}\n", encoding="utf-8")
         (self.jht / "jobs.db").write_bytes(b"jobs")
         (self.jht / "profile" / "candidate.json").write_text("{}", encoding="utf-8")
         for folder in self.appdata:
@@ -684,7 +686,7 @@ def test_remove_takes_the_closed_list_and_nothing_else(tmp_path, two_users):
     assert run.task == "False"
     assert run.legacy_task == "True"
     for gone in (user.runtime, user.jht, *user.appdata, user.bin / "jht.ps1", user.bin / "jht.cmd",
-                 user.bin / "windows-private-acl.ps1"):
+                 user.bin / "windows-private-acl.ps1", user.bin / "podman-machine-bridge.ps1"):
         assert not gone.exists() and not gone.is_symlink(), gone
     # the app's own files are left to the uninstaller, which then removes the empty folder
     assert sorted(p.name for p in user.runtime_root.iterdir()) == sorted(f.name for f in user.app_files)

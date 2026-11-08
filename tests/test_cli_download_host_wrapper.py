@@ -12,7 +12,7 @@ WINDOWS_ACL_WORKFLOW = ROOT / ".github" / "workflows" / "windows-config-acl.yml"
 
 
 def test_powershell_wrapper_downloads_on_the_host_and_publishes_without_clobbering():
-    source = POWERSHELL_WRAPPER.read_text()
+    source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     for seam in (
         "function Invoke-HostDownload",
         "[IO.File]::Move($part, $destination)",
@@ -32,7 +32,7 @@ def test_powershell_wrapper_forwards_detached_compose_flag_as_a_literal():
 
 
 def test_powershell_download_exit_code_cannot_degrade_to_zero():
-    source = POWERSHELL_WRAPPER.read_text()
+    source = POWERSHELL_WRAPPER.read_text(encoding="utf-8")
     function = source[source.index("function Invoke-HostDownload") : source.index(
         "# ── Upgrade runtime", source.index("function Invoke-HostDownload")
     )]
@@ -50,7 +50,7 @@ def test_powershell_download_exit_code_cannot_degrade_to_zero():
 
 
 def test_windows_cmd_shim_propagates_powershell_exit_code_on_both_paths():
-    source = WINDOWS_INSTALLER.read_text()
+    source = WINDOWS_INSTALLER.read_text(encoding="utf-8")
     shim = source[source.index('$shimContent = @"') : source.index('"@', source.index('$shimContent = @"'))]
     assert "if errorlevel 1 goto jht_windows_powershell" in shim
     assert ":jht_windows_powershell" in shim
@@ -62,6 +62,9 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
     runtime_files = source[source.index("function Get-RuntimeFiles") : source.index(
         "# ── Step 4:", source.index("function Get-RuntimeFiles")
     )]
+    parser = source[source.index("function Test-JhtDownloadedRuntimeScripts {") : source.index(
+        "\n}\n", source.index("function Test-JhtDownloadedRuntimeScripts {")) + 3]
+    assert "[scriptblock]::Create((Get-Content -LiteralPath (Join-Path $ScriptsPath $ps1) -Raw))" in parser
     # Every executable/config input is staged from one immutable release. The
     # enabler verifies the image before publishing the attested Podman bundle.
     for seam in (
@@ -69,7 +72,7 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
         "'scripts/windows-private-acl.ps1' = (Join-Path $stageScripts 'windows-private-acl.ps1')",
         "'scripts/enable-podman-windows-runtime.ps1' = (Join-Path $stageScripts 'enable-podman-windows-runtime.ps1')",
         'Get-File -Url "$releaseBase/$relative"',
-        "[scriptblock]::Create((Get-Content -LiteralPath (Join-Path $stageScripts $ps1) -Raw))",
+        "Test-JhtDownloadedRuntimeScripts -ScriptsPath $stageScripts",
         "Invoke-PodmanRuntimeEnabler -ScriptPath",
         ". $helperDest",
         "Test-PrivateJhtHomeAcl -Path $JhtHome",
@@ -78,6 +81,8 @@ def test_windows_clean_install_publishes_acl_helper_and_attests_exact_bytes_befo
         assert seam in runtime_files
 
     assert runtime_files.index('Get-File -Url "$releaseBase/$relative"') < runtime_files.index(
+        "Test-JhtDownloadedRuntimeScripts -ScriptsPath $stageScripts"
+    ) < runtime_files.index(
         "Invoke-PodmanRuntimeEnabler -ScriptPath"
     )
     assert "Remove-Item -LiteralPath $stage -Recurse -Force" in runtime_files

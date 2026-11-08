@@ -74,6 +74,7 @@ def test_uninstall_preserves_user_data_and_only_removes_known_commands():
         "jht.ps1",
         "jht.cmd",
         "windows-private-acl.ps1",
+        "podman-machine-bridge.ps1",
         "docker.exe",
     ):
         assert f"'{filename}'" in uninstall
@@ -181,7 +182,7 @@ def test_confirm_removes_only_the_jht_machine_and_is_idempotent(tmp_path: Path):
     for directory in (runtime, bin_dir, data, documents, tools):
         directory.mkdir(parents=True, exist_ok=True)
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
-    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "docker.exe"):
+    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe"):
         (bin_dir / filename).write_text("jht\n", encoding="utf-8")
     (data / "profile.json").write_text("keep\n", encoding="utf-8")
     (documents / "cv.txt").write_text("keep\n", encoding="utf-8")
@@ -225,7 +226,7 @@ $first = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath $
 if ($first -ne 0) {{ throw "first uninstall returned $first" }}
 if (Test-Path -LiteralPath {_ps_literal(state)}) {{ throw 'JHT machine remained' }}
 if (Test-Path -LiteralPath {_ps_literal(runtime)}) {{ throw 'runtime remained' }}
-foreach ($name in @('jht.ps1','jht.cmd','windows-private-acl.ps1','docker.exe')) {{ if (Test-Path -LiteralPath (Join-Path $bin $name)) {{ throw "command remained: $name" }} }}
+foreach ($name in @('jht.ps1','jht.cmd','windows-private-acl.ps1','podman-machine-bridge.ps1','docker.exe')) {{ if (Test-Path -LiteralPath (Join-Path $bin $name)) {{ throw "command remained: $name" }} }}
 if (-not (Test-Path -LiteralPath {_ps_literal(data / 'profile.json')})) {{ throw 'user data was removed' }}
 if (-not (Test-Path -LiteralPath {_ps_literal(documents / 'cv.txt')})) {{ throw 'documents were removed' }}
 if ([Environment]::GetEnvironmentVariable('Path', 'Process') -split ';' -contains $bin) {{ throw 'owned PATH entry remained' }}
@@ -260,7 +261,7 @@ def test_unresponsive_wsl_keeps_everything_for_retry(tmp_path: Path):
     for directory in (runtime, bin_dir, tools):
         directory.mkdir(parents=True, exist_ok=True)
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
-    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "docker.exe"):
+    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe"):
         (bin_dir / filename).write_text("jht\n", encoding="utf-8")
     podman = tools / "podman.cmd"
     wsl = tools / "wsl.cmd"
@@ -301,7 +302,7 @@ def test_a_foreign_command_keeps_the_shared_bin_directory_on_path(tmp_path: Path
     for directory in (runtime, bin_dir, tools):
         directory.mkdir(parents=True, exist_ok=True)
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
-    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "docker.exe"):
+    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe"):
         (bin_dir / filename).write_text("jht\n", encoding="utf-8")
     foreign = bin_dir / "another-tool.exe"
     foreign.write_text("keep\n", encoding="utf-8")
@@ -320,7 +321,7 @@ $code = Invoke-JhtWindowsUninstall -UninstallArgs @('--confirm') -ProfilePath {_
 if ($code -ne 0) {{ throw "uninstall returned $code" }}
 if (-not (Test-Path -LiteralPath {_ps_literal(foreign)})) {{ throw 'foreign command was removed' }}
 if (-not (([Environment]::GetEnvironmentVariable('Path', 'Process') -split ';') -contains $bin)) {{ throw 'shared PATH entry was removed' }}
-foreach ($name in @('jht.ps1','jht.cmd','windows-private-acl.ps1','docker.exe')) {{ if (Test-Path -LiteralPath (Join-Path $bin $name)) {{ throw "JHT command remained: $name" }} }}
+foreach ($name in @('jht.ps1','jht.cmd','windows-private-acl.ps1','podman-machine-bridge.ps1','docker.exe')) {{ if (Test-Path -LiteralPath (Join-Path $bin $name)) {{ throw "JHT command remained: $name" }} }}
 """
     result = _run_harness(tmp_path, body)
     assert result.returncode == 0, result.stderr
@@ -371,7 +372,7 @@ def test_a_startup_task_that_cannot_be_removed_keeps_everything_for_retry(
     for directory in (runtime, bin_dir, tools):
         directory.mkdir(parents=True, exist_ok=True)
     (runtime / "container-runtime").write_text("podman\n", encoding="utf-8")
-    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "docker.exe"):
+    for filename in ("jht.ps1", "jht.cmd", "windows-private-acl.ps1", "podman-machine-bridge.ps1", "docker.exe"):
         (bin_dir / filename).write_text("jht\n", encoding="utf-8")
     podman = tools / "podman.cmd"
     wsl = tools / "wsl.cmd"

@@ -213,6 +213,7 @@ Infra, deploy, lifecycle, accessi.
 
 | File | Topic |
 |---|---|
+| [`agent-monitor.md`](ops/agent-monitor.md) | Inventario delle istanze, consumi e monitor nel terminale: fonti, campionamento e limiti |
 | [`INFRA.md`](ops/INFRA.md) | Overview infra (canali utente↔team, network, storage) |
 | [`vps.md`](ops/vps.md) | Design VPS: host/container split, providers, install UX, lifecycle |
 | [`vps-provisioning-map.md`](ops/vps-provisioning-map.md) | Provisioning di una VPS nuova: la mappa del percorso reale (desktop e CLI) e quali punti hanno una prova automatica |
@@ -254,6 +255,7 @@ Materiale di recupero scollegato dal prodotto; ogni nota dichiara limiti e verif
 | [source-guards-20261107.md](checkpoint/source-guards-20261107.md) | Checkpoint inattivi delle guardie sorgenti e dei residui storici: inventari, impronte e condizioni di ripresa |
 | [t200-and-residuals-20261107.md](checkpoint/t200-and-residuals-20261107.md) | Page memory cache recovery records and inactive historical changes |
 | [t204-rust-readers-20261107.md](checkpoint/t204-rust-readers-20261107.md) | Checkpoint scollegato dei lettori Rust, delle prove e dei residui di acquisizione: impronte, limiti e ripresa |
+| [t205-windows-bridge-20261107.md](checkpoint/t205-windows-bridge-20261107.md) | Ponte Windows con deadline e ownership; migrazione futura T214 |
 
 ## 🗄️ _archive/
 

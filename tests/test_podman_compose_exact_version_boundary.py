@@ -8,6 +8,9 @@ connection is touched.
 
 from __future__ import annotations
 
+# Shared immutable templates; each test still creates its own runtime.
+from functools import lru_cache
+
 import hashlib
 import json
 import os
@@ -81,8 +84,24 @@ def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@lru_cache(maxsize=16)
+def _prepared_executable_source(source: str) -> str:
+    python_header = "#!/usr/bin/env python3\n"
+    if source.startswith(python_header):
+        # Private stdlib-only fakes need no global PDF/notary site hooks.
+        # Keep the same PATH-selected interpreter and real process boundary.
+        source = (
+            "#!/bin/sh\n"
+            '""":"\n'
+            'exec python3 -S "$0" "$@"\n'
+            '":"""\n'
+            + source[len(python_header):]
+        )
+    return source
+
+
 def _write_executable(path: Path, source: str) -> None:
-    path.write_text(source, encoding="utf-8")
+    path.write_text(_prepared_executable_source(source), encoding="utf-8")
     path.chmod(0o700)
 
 
@@ -805,770 +824,44 @@ def _attest_machine(env: dict[str, str], value: str) -> None:
     manifest.chmod(0o600)
 
 
-@pytest.mark.parametrize("inherited_connection", [None, "user-default-machine"])
-@pytest.mark.parametrize("machine_override", [None, MACHINE])
-def test_exact_supported_versions_use_named_connection_for_real_ps_and_up(
-    tmp_path: Path,
-    inherited_connection: str | None,
-    machine_override: str | None,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    if inherited_connection is None:
-        env.pop("CONTAINER_CONNECTION", None)
-    else:
-        env["CONTAINER_CONNECTION"] = inherited_connection
-    if machine_override is not None:
-        env["JHT_PODMAN_MACHINE"] = machine_override
-
-    podman_version = subprocess.run(
-        ["podman", "--version"], env=env, text=True, capture_output=True, check=False
-    )
-    compose_version = subprocess.run(
-        ["podman-compose", "--version"],
-        env=env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert podman_version.stdout.strip() == "podman version 6.1.3"
-    assert compose_version.stdout.strip() == "podman-compose version 1.6.0"
-    podman_log.unlink()
-    Path(env["JHT_FIXTURE_COMPOSE_LOG"]).unlink()
-
-    probe = _run(wrapper, env, "desktop-chat", "probe")
-    up = _run(wrapper, env, "up")
-
-    assert probe.returncode == 0, probe.stderr
-    assert probe.stdout == "true\n"
-    assert up.returncode == 0, up.stderr
-    assert create_marker.read_text(encoding="utf-8") == "created\n"
-    assert any(args == ["--version"] for _, args in _compose_calls(env))
-    _assert_only_podman_path_option(_compose_calls(env))
-    assert all(connection == MACHINE for connection, _ in _compose_calls(env))
-    _assert_literal_project(_actual_compose_calls(env))
-    calls = _provider_podman_calls(podman_log)
-    assert [args for _, args in calls] == [
-        PS_Q_CHILD,
-        HASH_PROBE_CHILD,
-        PS_Q_CHILD,
-        HASH_PROBE_CHILD,
-        PS_UP_CHILD,
-        ["create", "jht"],
-        PS_Q_CHILD,
-        HASH_PROBE_CHILD,
-        *WEB_AUTHORISATION_LOOKUPS,
-    ]
-    assert all(connection == MACHINE for connection, _ in calls)
-    direct_calls = _direct_podman_calls(podman_log)
-    assert direct_calls
-    assert all(connection == "" for connection, _ in direct_calls)
-    assert any(
-        args == ["--connection", MACHINE, "info"] for _, args in direct_calls
-    )
-    assert all(
-        not any(arg == "--connection" or arg.startswith("--connection=") for arg in args[1:])
-        for _, args in calls
-    )
-    _assert_hash_probes_are_read_only(env)
-    docker_calls = _docker_calls(env)
-    assert any(args and args[0] == "info" for _, args in docker_calls)
-    assert any(args and args[0] == "inspect" for _, args in docker_calls)
-    assert all(connection == "" for connection, _ in docker_calls)
-    inspect = [args for _, args in docker_calls if args and args[0] == "inspect"]
-    assert len(inspect) == 3 + WEB_AUTHORISATION_INSPECTS
-    for inspect_call in inspect:
-        assert inspect_call[1:3] == ["--type", "container"]
-        inspect_argv = " ".join(inspect_call)
-        for field in (
-            ".Name",
-            "io.podman.compose.project",
-            "com.docker.compose.project",
-            "com.docker.compose.project.working_dir",
-            "com.docker.compose.project.config_files",
-            "io.podman.compose.service",
-            "com.docker.compose.service",
-            "com.docker.compose.container-number",
-            "io.podman.compose.version",
-            "PODMAN_SYSTEMD_UNIT",
-            "io.podman.compose.config-hash",
-        ):
-            assert field in inspect_argv
-
-
-def test_exact_1_6_fixture_accepts_ps_q_and_rejects_service_operand(tmp_path: Path):
-    _, env, podman_log, create_marker = _runtime(tmp_path)
-    compose_file = Path(env["JHT_RUNTIME_DIR"]) / "docker-compose.yml"
-    common = [
-        "podman-compose",
-        "--podman-path",
-        "podman",
-        "-f",
-        str(compose_file),
-        "-p",
-        "jht",
-        "ps",
-        "-q",
-    ]
-    provider_env = {**env, "CONTAINER_CONNECTION": MACHINE}
-
-    accepted = subprocess.run(
-        common,
-        env=provider_env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    rejected = subprocess.run(
-        [*common, "jht"],
-        env=provider_env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert accepted.returncode == 0
-    assert accepted.stdout.strip() == CONTAINER_ID
-    assert rejected.returncode == 2
-    assert not create_marker.exists()
-    assert _provider_podman_calls(podman_log) == [(MACHINE, PS_Q_CHILD)]
-
-
-def test_exact_1_6_dry_run_hash_probe_executes_only_read_only_podman_output(
-    tmp_path: Path,
-):
-    _, env, podman_log, create_marker = _runtime(tmp_path)
-    compose_file = Path(env["JHT_COMPOSE_FILE"])
-    provider_env = {**env, "CONTAINER_CONNECTION": MACHINE}
-
-    result = subprocess.run(
-        [
-            "podman-compose",
-            "--verbose",
-            "--dry-run",
-            "--project-name",
-            "jht",
-            "--podman-path",
-            "podman",
-            "-f",
-            str(compose_file),
-            "up",
-            "-d",
-            "--force-recreate",
-            "jht",
-        ],
-        env=provider_env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert f"io.podman.compose.config-hash={env['JHT_FIXTURE_CONFIG_HASH']}" in result.stderr
-    assert _provider_podman_calls(podman_log) == [(MACHINE, HASH_PROBE_CHILD)]
-    assert not create_marker.exists()
-    _assert_hash_probes_are_read_only(env)
-
-
-def test_exact_1_6_rejects_connection_injected_after_ps_with_exit_125(
-    tmp_path: Path,
-):
-    _, env, podman_log, create_marker = _runtime(tmp_path)
-    provider_env = {**env, "CONTAINER_CONNECTION": MACHINE}
-
-    result = subprocess.run(
-        [
-            "podman-compose",
-            "--podman-path",
-            "podman",
-            "--podman-args",
-            f"--connection {MACHINE}",
-            "-f",
-            env["JHT_COMPOSE_FILE"],
-            "-p",
-            "jht",
-            "ps",
-            "-q",
-        ],
-        env=provider_env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-
-    assert result.returncode == 125
-    assert not create_marker.exists()
-    assert _provider_podman_calls(podman_log) == [
-        (
-            MACHINE,
-            [
-                "ps",
-                "--connection",
-                MACHINE,
-                "-a",
-                "--filter",
-                "label=io.podman.compose.project=jht",
-                "--format",
-                "{{.ID}}",
-            ],
-        )
-    ]
-
-
-@pytest.mark.parametrize(
-    ("container_case", "inspect_expected"),
-    UNTRUSTED_CONTAINER_CASES,
-)
-def test_read_only_ps_rejects_unowned_ambiguous_or_stale_ids_without_create(
-    tmp_path: Path,
-    container_case: str,
-    inspect_expected: bool,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["CONTAINER_CONNECTION"] = "user-default-machine"
-    env["JHT_FIXTURE_CONTAINER_CASE"] = container_case
-
-    result = _run(wrapper, env, "desktop-chat", "probe")
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    expected_provider_calls = [(MACHINE, PS_Q_CHILD)]
-    if inspect_expected:
-        expected_provider_calls.append((MACHINE, HASH_PROBE_CHILD))
-    assert _provider_podman_calls(podman_log) == expected_provider_calls
-    assert all(connection == "" for connection, _ in _direct_podman_calls(podman_log))
-    assert not any(args and args[0] == "machine" for _, args in _podman_calls(podman_log))
-    compose_calls = _actual_compose_calls(env)
-    _assert_literal_project(compose_calls)
-    ps_calls = [call for call in compose_calls if call[1][-2:] == ["ps", "-q"]]
-    assert len(ps_calls) == 1
-    assert ps_calls[0][0] == MACHINE
-    docker_calls = _docker_calls(env)
-    inspect_calls = [args for _, args in docker_calls if args and args[0] == "inspect"]
-    assert bool(inspect_calls) is inspect_expected
-    assert all(connection == "" for connection, _ in docker_calls)
-    if inspect_expected:
-        _assert_hash_probes_are_read_only(env)
-
-
-@pytest.mark.parametrize(
-    ("container_case", "inspect_expected"),
-    tuple(case for case in UNTRUSTED_CONTAINER_CASES if case[0] not in ("zero", "stale")),
-)
-def test_up_rejects_untrusted_existing_container_before_any_mutation(
-    tmp_path: Path,
-    container_case: str,
-    inspect_expected: bool,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = container_case
-
-    result = _run(wrapper, env, "up")
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    expected_provider_calls = [(MACHINE, PS_Q_CHILD)]
-    if inspect_expected:
-        expected_provider_calls.append((MACHINE, HASH_PROBE_CHILD))
-        # The refusal then looks, read-only, twice more: whether it is a container of ours that only
-        # stopped with the hash of an earlier compose (the one `up` recreates), and for one that
-        # only changed its config-hash (stale_config_hint): two more id listings.
-        expected_provider_calls.append((MACHINE, PS_Q_CHILD))
-        expected_provider_calls.append((MACHINE, PS_Q_CHILD))
-    assert _provider_podman_calls(podman_log) == expected_provider_calls
-    compose_calls = _actual_compose_calls(env)
-    _assert_literal_project(compose_calls)
-    ps_calls = [call for call in compose_calls if call[1][-2:] == ["ps", "-q"]]
-    assert len(ps_calls) == (3 if inspect_expected else 1)
-    assert not any("up" in args and "--dry-run" not in args for _, args in compose_calls)
-    inspect_calls = [
-        args
-        for _, args in _docker_calls(env)
-        if args and args[0] == "inspect"
-    ]
-    assert bool(inspect_calls) is inspect_expected
-    if inspect_expected:
-        _assert_hash_probes_are_read_only(env)
-
-
-def test_up_starts_a_stopped_container_of_ours_instead_of_refusing_it(tmp_path: Path):
-    # The old «stale» case: the container exists, Exited, every label and the hash as expected. podman-compose
-    # 1.6.0 lists it (its `ps` is `podman ps -a`); it is ours and simply not running, so `up` goes on.
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "stale"
-
-    result = _run(wrapper, env, "up")
-
-    # the fixture's container stays Exited after `up` (it does not model the start), so the check after
-    # `up` cannot pass here; what is decided is that the precheck did not refuse and `up` ran once
-    assert "esistente non attestabile" not in result.stderr
-    real_up = [args for _, args in _actual_compose_calls(env) if "up" in args and "--dry-run" not in args]
-    assert len(real_up) == 1
-
-
-def test_upgrade_with_a_stopped_team_of_ours_counts_it_as_absent_and_never_asks_for_volumes(tmp_path: Path):
-    # Decision: an upgrade with the team stopped takes the baseline as «absent» (nothing runs, nothing to put
-    # back) and goes on; the stopped container is not a reason to refuse. The app is told the team is «ferma»,
-    # not «non-installata», and a failed upgrade removes the new container without ever touching the volumes.
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "stale"
-    # the emulated container never starts, so the verification of the new runtime fails by design: two
-    # observations are enough to say so (twenty took 40-50 s, close to the 60 s of WRAPPER_TIMEOUT_S, and
-    # timed out on a busy machine)
-    env["JHT_UPGRADE_VERIFY_TRIES"] = "2"
-
-    result = _run(wrapper, env, "upgrade", "--apply", "--json")
-
-    report = json.loads(result.stdout)
-    assert report["message"] != "Container esistente non attestabile"
-    assert report["phase"] != "preflight"
-    assert report["previous"] == {"version": "ferma", "image": "none"}
-    assert report["rolledBack"] is False
-    compose_calls = [args for _, args in _actual_compose_calls(env)]
-    assert any("up" in args and "--dry-run" not in args for args in compose_calls)
-    rollback = [args for args in compose_calls if "rm" in args]
-    assert rollback and all(args[-2:] == ["-sf", "jht"] for args in rollback)
-    assert not any(
-        flag in args for args in compose_calls for flag in ("-v", "--volumes", "-fsv", "-sfv")
-    )
-
-
-def test_up_creates_only_when_precheck_finds_no_existing_project_container(
-    tmp_path: Path,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"
-
-    result = _run(wrapper, env, "up")
-
-    assert result.returncode == 0, result.stderr
-    assert create_marker.read_text(encoding="utf-8") == "created\n"
-    assert [args for _, args in _provider_podman_calls(podman_log)] == [
-        PS_Q_CHILD,
-        PS_UP_CHILD,
-        ["create", "jht"],
-        PS_Q_CHILD,
-        HASH_PROBE_CHILD,
-        *WEB_AUTHORISATION_LOOKUPS,
-    ]
-    inspect_calls = [
-        args
-        for _, args in _docker_calls(env)
-        if args and args[0] == "inspect"
-    ]
-    assert len(inspect_calls) == 1 + WEB_AUTHORISATION_INSPECTS
-    assert ".Name" in " ".join(inspect_calls[0])
-    _assert_hash_probes_are_read_only(env)
-
-
-def test_up_makes_the_host_folder_the_compose_mounts_a_volume_in(tmp_path: Path):
-    # docker-compose.yml mounts the volume jht-runtime-mask on /jht_home/runtime, inside the ~/.jht bind. On an
-    # empty ~/.jht a Podman machine cannot make that mount point (smoke of the Mac: crun, Operation not permitted),
-    # so `up` makes it before the engine is asked: private, never a chown, and left alone when it is there.
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"
-    env["JHT_FIXTURE_REQUIRE_MOUNT_POINT"] = "1"
-    jht_home = Path(env["HOME"]) / ".jht"
-    jht_home.mkdir(mode=0o700)
-    assert not (jht_home / "runtime").exists()
-
-    result = _run(wrapper, env, "up")
-
-    assert "Operation not permitted" not in result.stderr, result.stderr
-    assert create_marker.read_text(encoding="utf-8") == "created\n"
-    assert (jht_home / "runtime").is_dir()
-    assert (jht_home / "runtime").stat().st_mode & 0o777 == 0o700
-    assert jht_home.stat().st_mode & 0o777 == 0o700
-    assert jht_home.stat().st_uid == os.getuid()
-
-    # idempotent, and a folder that is already there is not touched (its mode stays)
-    (jht_home / "runtime").chmod(0o755)
-    (jht_home / "runtime" / "kept").write_text("x", encoding="utf-8")
-    create_marker.unlink()
-    again = _run(wrapper, env, "up")
-    assert "Operation not permitted" not in again.stderr, again.stderr
-    assert (jht_home / "runtime").stat().st_mode & 0o777 == 0o755
-    assert (jht_home / "runtime" / "kept").read_text(encoding="utf-8") == "x"
-
-
-def test_up_makes_the_whole_data_folder_too_when_it_is_missing(tmp_path: Path):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"
-    env["JHT_FIXTURE_REQUIRE_MOUNT_POINT"] = "1"
-    jht_home = Path(env["HOME"]) / ".jht"
-    assert not jht_home.exists()
-
-    result = _run(wrapper, env, "up")
-
-    assert "Operation not permitted" not in result.stderr, result.stderr
-    # ~/.jht is made as the system makes any folder: on Linux with Docker it is handed to the container's user
-    # right after, and a 700 there could not be read by the person; only the folder made here is private
-    umask = os.umask(0)
-    os.umask(umask)
-    assert jht_home.stat().st_mode & 0o777 == 0o777 & ~umask
-    assert (jht_home / "runtime").is_dir()
-    assert (jht_home / "runtime").stat().st_mode & 0o777 == 0o700
-
-
-def test_literal_project_does_not_adopt_a_stage_compose_container(tmp_path: Path):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    runtime = Path(env["JHT_RUNTIME_DIR"])
-    stage = runtime / ".upgrade-stage.fixture"
-    stage.mkdir()
-    stage_compose = stage / "docker-compose.yml"
-    shutil.copy2(env["JHT_COMPOSE_FILE"], stage_compose)
-    provider_env = {**env, "CONTAINER_CONNECTION": MACHINE}
-
-    staged_up = subprocess.run(
-        [
-            "podman-compose",
-            "--podman-path",
-            "podman",
-            "-f",
-            str(stage_compose),
-            "-p",
-            "jht",
-            "up",
-            "-d",
-            "--force-recreate",
-            "jht",
-        ],
-        env=provider_env,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert staged_up.returncode == 0, staged_up.stderr
-    assert create_marker.exists()
-    metadata = json.loads(
-        Path(env["JHT_FIXTURE_CONTAINER_METADATA"]).read_text(encoding="utf-8")
-    )
-    assert metadata["io_project"] == metadata["com_project"] == "jht"
-    assert metadata["working_dir"] == str(stage)
-    assert metadata["config_files"] == str(stage_compose)
-    assert metadata["config_hash"] == env["JHT_FIXTURE_CONFIG_HASH"]
-
-    creates_before_probe = sum(
-        args == ["create", "jht"] for _, args in _provider_podman_calls(podman_log)
-    )
-    result = _run(wrapper, env, "desktop-chat", "probe")
-
-    assert result.returncode != 0
-    assert sum(
-        args == ["create", "jht"] for _, args in _provider_podman_calls(podman_log)
-    ) == creates_before_probe
-    assert any(
-        args == PS_Q_CHILD for _, args in _provider_podman_calls(podman_log)
-    )
-
-
-def test_named_connection_incompatibility_propagates_125_without_create(
-    tmp_path: Path,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_NAMED_CONNECTION_SUPPORTED"] = "0"
-
-    result = _run(wrapper, env, "up")
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    assert _provider_podman_calls(podman_log) == []
-    assert _actual_compose_calls(env) == []
-    assert ("", ["--connection", MACHINE, "info"]) in _direct_podman_calls(
-        podman_log
-    )
-
-
-def test_read_only_ps_fails_closed_without_create_on_connection_incompatibility(
-    tmp_path: Path,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_NAMED_CONNECTION_SUPPORTED"] = "0"
-
-    result = _run(wrapper, env, "desktop-chat", "probe")
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    assert _provider_podman_calls(podman_log) == []
-    assert _actual_compose_calls(env) == []
-    assert ("", ["--connection", MACHINE, "info"]) in _direct_podman_calls(
-        podman_log
-    )
-
-
-def test_machine_start_never_inherits_the_provider_connection(tmp_path: Path):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["CONTAINER_CONNECTION"] = "user-default-machine"
-    env["JHT_FIXTURE_REQUIRE_WAKE"] = "1"
-
-    result = _run(wrapper, env, "up")
-
-    assert result.returncode == 0, result.stderr
-    assert create_marker.read_text(encoding="utf-8") == "created\n"
-    calls = _podman_calls(podman_log)
-    machine_calls = [
-        (connection, args)
-        for connection, args in calls
-        if args and args[0] == "machine"
-    ]
-    provider_calls = _provider_podman_calls(podman_log)
-    assert machine_calls == [
-        ("", ["machine", "start", "--update-connection=false", MACHINE])
-    ]
-    assert provider_calls
-    assert all(connection == MACHINE for connection, _ in provider_calls)
-    assert all(connection == "" for connection, _ in _direct_podman_calls(podman_log))
-    assert all(connection == "" for connection, _ in _docker_calls(env))
-
-
-@pytest.mark.parametrize(
-    "operation",
-    (
-        ("logs", "--tail", "1"),
-        ("status",),
-        ("shell",),
-        ("providers", "current"),
-    ),
-)
-def test_runtime_operations_use_only_the_attested_container_id(
-    tmp_path: Path, operation: tuple[str, ...]
-):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    env["JHT_CONTAINER_NAME"] = "same-name-decoy"
-
-    result = _run(wrapper, env, *operation)
-
-    assert result.returncode == 0, result.stderr
-    targets = [
-        target
-        for _, args in _docker_calls(env)
-        if (target := _docker_runtime_target(args)) is not None
-    ]
-    assert targets
-    assert set(targets) == {CONTAINER_ID}
-    assert all(
-        "same-name-decoy" not in args and "jht" not in args
-        for _, args in _docker_calls(env)
-    )
-
-
-def test_host_download_is_checked_on_the_host_and_never_calls_the_container(
-    tmp_path: Path,
-):
-    # The download used to be copied from the attested container (docker cp, cleaned up there): it is now fetched and checked
-    # by the host from the release, in a private folder, and the container is no longer part of the command.
-    import threading
-    from functools import partial
-    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-
-    asset = b"verified release bytes\n"
-    release = tmp_path / "site" / "v0.4.0"
-    release.mkdir(parents=True)
-    (release / "job-hunter-team-macos-universal.dmg").write_bytes(asset)
-    (release / "SHA256SUMS").write_text(
-        f"{hashlib.sha256(asset).hexdigest()}  job-hunter-team-macos-universal.dmg\n", encoding="utf-8"
-    )
-
-    class Quiet(SimpleHTTPRequestHandler):
-        def log_message(self, *args):
-            pass
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Quiet, directory=str(tmp_path / "site")))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        wrapper, env, _, _ = _runtime(tmp_path)
-        env["JHT_CONTAINER_NAME"] = "same-name-decoy"
-        env["JHT_RELEASE_BASE_URL"] = f"http://127.0.0.1:{server.server_port}"
-        env["JHT_DOWNLOAD_HOST"] = "darwin-arm64"
-        # the fixture's curl only knows the runtime files of the upgrade: the download needs the real one
-        real_curl = shutil.which("curl", path=os.environ["PATH"])
-        assert real_curl, "curl is needed to download"
-        real_bin = tmp_path / "real-curl-bin"
-        real_bin.mkdir()
-        (real_bin / "curl").symlink_to(real_curl)
-        env["PATH"] = f"{real_bin}{os.pathsep}{env['PATH']}"
-        destination = tmp_path / "downloads" / "desktop.dmg"
-
-        result = _run(
-            wrapper,
-            env,
-            "download",
-            "--os",
-            "macos",
-            "--version",
-            "0.4.0",
-            "--output",
-            str(destination),
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    assert result.returncode == 0, result.stderr
-    assert destination.read_bytes() == asset
-    assert hashlib.sha256(asset).hexdigest() in result.stdout
-    # no call to any container engine for the download: not an exec, not a cp, not an inspect of the attested id or of a name
-    assert _docker_calls(env) == []
-    assert not [p for p in destination.parent.iterdir() if ".part" in p.name]
-
-
-@pytest.mark.parametrize("inherited_connection", [None, "user-default-machine"])
-def test_upgrade_check_uses_the_same_exact_version_named_connection_contract(
-    tmp_path: Path, inherited_connection: str | None
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    if inherited_connection is not None:
-        env["CONTAINER_CONNECTION"] = inherited_connection
-
-    result = _run(wrapper, env, "upgrade", "--check", "--json")
-
-    assert result.returncode == 0, result.stderr
-    assert '"ok":true' in result.stdout
-    assert not create_marker.exists()
-    compose_calls = _actual_compose_calls(env)
-    assert any(args[-2:] == ["config", "-q"] for _, args in compose_calls)
-    assert any(args[-2:] == ["pull", "jht"] for _, args in compose_calls)
-    # the image comes from the normalized config: podman-compose 1.6.0 refuses `config --images`
-    assert any(args[-1:] == ["config"] for _, args in compose_calls)
-    _assert_only_podman_path_option(compose_calls)
-    _assert_literal_project(compose_calls)
-    assert all(connection == MACHINE for connection, _ in _compose_calls(env))
-    calls = _provider_podman_calls(podman_log)
-    assert calls == [
-        (MACHINE, PS_Q_CHILD),
-        (MACHINE, HASH_PROBE_CHILD),
-        (MACHINE, PS_Q_CHILD),
-        (MACHINE, HASH_PROBE_CHILD),
-        (MACHINE, PS_Q_CHILD),
-        (MACHINE, HASH_PROBE_CHILD),
-        (MACHINE, ["pull", "jht"]),
-    ]
-    _assert_hash_probes_are_read_only(env)
-    assert all(connection == "" for connection, _ in _direct_podman_calls(podman_log))
-    assert all(connection == "" for connection, _ in _docker_calls(env))
-
-
-def test_upgrade_activate_commits_canonical_project_metadata_for_later_probes(
-    tmp_path: Path,
-):
-    wrapper, env, _, create_marker = _runtime(tmp_path)
-    env["CONTAINER_CONNECTION"] = "user-default-machine"
-    runtime = Path(env["JHT_RUNTIME_DIR"])
-    canonical_path = runtime / "docker-compose.yml"
-    canonical_compose = str(canonical_path)
-    baseline_bytes = canonical_path.read_bytes()
-    candidate_path = Path(env["JHT_FIXTURE_CANDIDATE_COMPOSE"])
-    candidate_bytes = candidate_path.read_bytes()
-    assert baseline_bytes != candidate_bytes
-
-    upgraded = _run(wrapper, env, "upgrade", "--apply", "--json")
-
-    assert upgraded.returncode == 0, upgraded.stderr
-    assert '"ok":true' in upgraded.stdout
-    assert create_marker.read_text(encoding="utf-8") == "created\n"
-    metadata = json.loads(
-        Path(env["JHT_FIXTURE_CONTAINER_METADATA"]).read_text(encoding="utf-8")
-    )
-    assert metadata["name"] == "jht"
-    assert metadata["io_project"] == metadata["com_project"] == "jht"
-    assert metadata["working_dir"] == str(runtime)
-    assert metadata["config_files"] == canonical_compose
-    assert metadata["io_service"] == metadata["com_service"] == "jht"
-    assert metadata["container_number"] == "1"
-    assert metadata["provider_version"] == "1.6.0"
-    assert metadata["systemd_unit"] == PODMAN_UNIT
-    assert metadata["config_hash"] == env["JHT_FIXTURE_CANDIDATE_CONFIG_HASH"]
-    assert metadata["image_digest"] == env["JHT_FIXTURE_IMAGE_DIGEST"]
-    assert metadata["compose_digest"] == hashlib.sha256(candidate_bytes).hexdigest()
-    assert ".upgrade-stage." not in json.dumps(metadata)
-    assert canonical_path.read_bytes() == candidate_bytes
-
-    up_calls = [
-        args
-        for _, args in _actual_compose_calls(env)
-        if "up" in args and "--dry-run" not in args
-    ]
-    assert len(up_calls) == 1
-    assert up_calls[0][up_calls[0].index("-f") + 1] == canonical_compose
-    assert up_calls[0][up_calls[0].index("-p") + 1] == "jht"
-    assert up_calls[0][up_calls[0].index("up") + 1 :] == [
-        "-d",
-        "--force-recreate",
-        "jht",
-    ]
-    stage_calls = [
-        args
-        for _, args in _actual_compose_calls(env)
-        if ".upgrade-stage." in " ".join(args)
-    ]
-    assert stage_calls
-    assert all("up" not in args for args in stage_calls)
-    assert all(
-        any(command in args for command in ("config", "pull")) for args in stage_calls
-    )
-
-    events = _events(env)
-    create_index = next(
-        index
-        for index, event in enumerate(events)
-        if event["tool"] == "podman" and event["args"] == ["create", "jht"]
-    )
-    ownership_inspects = [
-        index
-        for index, event in enumerate(events)
-        if event["tool"] == "docker"
-        and event["args"]
-        and event["args"][0] == "inspect"
-        and ".Name" in " ".join(event["args"])
-    ]
-    assert any(index < create_index for index in ownership_inspects)
-    assert any(index > create_index for index in ownership_inspects)
-
-    chat = _run(wrapper, env, "desktop-chat", "probe")
-    snapshot = _run(wrapper, env, "onboarding-snapshot")
-
-    assert chat.returncode == 0, chat.stderr
-    assert chat.stdout == "true\n"
-    assert snapshot.returncode == 0, snapshot.stderr
-    assert "runtimeInstalled=1" in snapshot.stdout
-    assert "containerRunning=1" in snapshot.stdout
-    assert all(connection == "" for connection, _ in _docker_calls(env))
-
-
-@pytest.mark.parametrize(
-    ("container_case", "inspect_expected"),
-    tuple(case for case in UNTRUSTED_CONTAINER_CASES if case[0] not in ("zero", "stale")),
-)
-def test_upgrade_rejects_untrusted_baseline_before_publish_or_up(
-    tmp_path: Path,
-    container_case: str,
-    inspect_expected: bool,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = container_case
-    canonical = Path(env["JHT_COMPOSE_FILE"])
-    baseline_bytes = canonical.read_bytes()
-
-    result = _run(wrapper, env, "upgrade", "--apply", "--json")
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    assert canonical.read_bytes() == baseline_bytes
-    assert not any(
-        "up" in args and "--dry-run" not in args
-        for _, args in _actual_compose_calls(env)
-    )
-    expected_provider_calls = [(MACHINE, PS_Q_CHILD)]
-    if inspect_expected:
-        expected_provider_calls.append((MACHINE, HASH_PROBE_CHILD))
-    assert _provider_podman_calls(podman_log) == expected_provider_calls
-    assert not any(
-        args and args[0] == "machine" for _, args in _actual_podman_calls(podman_log)
-    )
-    assert not any(
-        command in args
-        for _, args in _actual_compose_calls(env)
-        for command in ("config", "pull")
-    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 OPERATIONS = (
@@ -1578,91 +871,10 @@ OPERATIONS = (
 )
 
 
-@pytest.mark.parametrize("operation", OPERATIONS)
-@pytest.mark.parametrize(
-    ("variable", "unsupported"),
-    (
-        ("JHT_FIXTURE_COMPOSE_VERSION", "1.5.0"),
-        ("JHT_FIXTURE_PODMAN_VERSION", "6.2.0"),
-    ),
-)
-def test_unsupported_exact_version_fails_before_any_compose_operation(
-    tmp_path: Path,
-    operation: tuple[str, ...],
-    variable: str,
-    unsupported: str,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    env[variable] = unsupported
-
-    result = _run(wrapper, env, *operation)
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    assert _actual_compose_calls(env) == []
-    assert _actual_podman_calls(podman_log) == []
-    compose_calls = _compose_calls(env)
-    assert all(connection == MACHINE for connection, _ in compose_calls)
-    if variable == "JHT_FIXTURE_COMPOSE_VERSION":
-        assert compose_calls
-    assert all(connection == "" for connection, _ in _podman_calls(podman_log))
 
 
-@pytest.mark.parametrize("operation", OPERATIONS)
-@pytest.mark.parametrize(
-    "machine_state",
-    ("override-mismatch", "missing", "empty", "invalid"),
-)
-def test_unattested_or_ambiguous_machine_name_fails_before_compose(
-    tmp_path: Path,
-    operation: tuple[str, ...],
-    machine_state: str,
-):
-    wrapper, env, podman_log, create_marker = _runtime(tmp_path)
-    machine = Path(env["JHT_RUNTIME_DIR"]) / "podman-machine"
-    if machine_state == "override-mismatch":
-        env["JHT_PODMAN_MACHINE"] = "other-machine"
-    elif machine_state == "missing":
-        machine.unlink()
-    elif machine_state == "empty":
-        _attest_machine(env, "")
-    else:
-        _attest_machine(env, "invalid/name\n")
-
-    result = _run(wrapper, env, *operation)
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    assert _compose_calls(env) == []
-    assert _actual_podman_calls(podman_log) == []
 
 
-@pytest.mark.parametrize(
-    ("variable", "unsupported"),
-    (
-        ("JHT_FIXTURE_COMPOSE_VERSION", "1.5.0"),
-        ("JHT_FIXTURE_PODMAN_VERSION", "6.2.0"),
-    ),
-)
-def test_installer_version_mismatch_precedes_every_machine_or_provider_action(
-    tmp_path: Path,
-    variable: str,
-    unsupported: str,
-):
-    _, env, podman_log, create_marker = _runtime(tmp_path)
-    env[variable] = unsupported
-
-    result = _run_installer_podman_preflight(env)
-
-    assert result.returncode != 0
-    assert not create_marker.exists()
-    podman_calls = _podman_calls(podman_log)
-    compose_calls = _compose_calls(env)
-    assert podman_calls
-    assert all(call == ("", ["--version"]) for call in podman_calls)
-    assert all(call == (MACHINE, ["--version"]) for call in compose_calls)
-    if variable == "JHT_FIXTURE_COMPOSE_VERSION":
-        assert compose_calls
 
 
 # ── The hash follows the caller's environment (TEST 19g) ────────────────────────────────────────────
@@ -1684,67 +896,20 @@ def _status(tmp_path: Path, *, key: str | None, label_made_with: str | None):
     return _run(wrapper, env, "status"), create_marker
 
 
-def test_a_key_exported_in_the_terminal_does_not_make_the_running_team_inactive(tmp_path: Path):
-    result, created = _status(tmp_path, key="sk-test-terminal", label_made_with=None)   # made clean, asked with a key
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    assert "non attivo" not in result.stdout and "status=running" in result.stdout
-    assert not created.exists()
 
 
-def test_the_same_container_with_no_key_anywhere_is_as_before(tmp_path: Path):
-    result, _ = _status(tmp_path, key=None, label_made_with=None)
-    assert result.returncode == 0 and "status=running" in result.stdout
 
 
-def test_a_container_made_with_the_same_key_is_still_ours_for_that_terminal(tmp_path: Path):
-    result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-test-terminal")
-    assert result.returncode == 0 and "status=running" in result.stdout
 
 
-def test_a_container_made_with_another_key_is_not_a_free_pass(tmp_path: Path):
-    result, _ = _status(tmp_path, key="sk-test-terminal", label_made_with="sk-another")
-    assert result.returncode != 0
-    # a container that is there and cannot be attested is not «non attivo»: it says so and names the variable (not its value)
-    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
-    assert "OPENAI_API_KEY" in result.stdout and "unset" in result.stdout and "sk-test-terminal" not in result.stdout
 
 
-def test_a_wrong_hash_is_refused_with_a_key_exported_too(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    env["JHT_FIXTURE_ENV_IN_HASH"] = "1"
-    env["OPENAI_API_KEY"] = "sk-test-terminal"
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
-    result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attestabile" in result.stdout and "OPENAI_API_KEY" in result.stdout
 
 
-def test_the_caller_variables_the_wrapper_sets_aside_are_those_the_compose_takes():
-    import re
-    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
-    wrapper = WRAPPER.read_text(encoding="utf-8")
-    listed = set(re.search(r'^PODMAN_CALLER_ENV="([^"]+)"', wrapper, re.M).group(1).split())
-    taken = set(re.findall(r"\$\{([A-Z][A-Z0-9_]*)(?::-[^}]*)?\}", compose))
-    # HOME is the same for everyone who asks; JHT_IMAGE comes from the channel pin; the three below are read from host.env
-    # by the wrapper itself before any compose runs (so they do not follow the caller).
-    taken -= {"HOME", "JHT_IMAGE", "JHT_HOST_TYPE", "JHT_LANG", "JHT_USER_TZ"}
-    assert listed == taken, (sorted(listed ^ taken))
 
 
-def test_status_with_no_container_at_all_still_says_not_active(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
-    result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attivo" in result.stdout and "non attestabile" not in result.stdout
 
 
-def test_status_of_an_unattestable_container_without_a_caller_variable_names_none(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY"):
-        env.pop(name, None)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-config-hash"
-    result = _run(wrapper, env, "status")
-    assert result.returncode != 0 and "non attestabile" in result.stdout
-    assert "sono impostate" not in result.stdout and "non attivo" not in result.stdout
 
 
 # ── podman-compose looks for podman in PATH at its own start (TEST 19g) ──────────────────────────────
@@ -1803,34 +968,12 @@ def _probe_version(tmp_path: Path, *, ensure: bool) -> subprocess.CompletedProce
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
 
 
-def test_the_version_probe_of_podman_compose_works_when_podman_is_not_on_the_callers_path(tmp_path: Path):
-    done = _probe_version(tmp_path, ensure=True)
-    assert done.returncode == 0 and done.stdout.strip() == "1.6.0", (done.stdout, done.stderr)
 
 
-def test_without_the_directory_of_podman_the_probe_fails_which_is_the_case_of_the_report(tmp_path: Path):
-    done = _probe_version(tmp_path, ensure=False)
-    assert done.stdout.strip() == "", done.stdout
 
 
-def test_the_directory_of_podman_goes_at_the_end_of_the_path_and_only_once(tmp_path: Path):
-    tools = _tools_outside_path(tmp_path)
-    minimal = _minimal_path(tmp_path)
-    script = (
-        f'PATH="{minimal}"\npodman_binary() {{ printf "%s\\n" "{tools}/podman"; }}\n'
-        + _wrapper_functions("podman_ensure_on_path")
-        + "\npodman_ensure_on_path; podman_ensure_on_path; printf '%s' \"$PATH\"\n"
-    )
-    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=60)
-    assert done.stdout == f"{minimal}:{tools}", done.stdout
 
 
-def test_every_call_of_the_provider_makes_sure_podman_is_on_the_path():
-    text = WRAPPER.read_text(encoding="utf-8")
-    for name in ("podman_compose_version_number", "podman_compose_pair_supported", "podman_expected_config_hash"):
-        body = _wrapper_functions(name)
-        assert "podman_ensure_on_path" in body, name
-    assert "podman_ensure_on_path\n    podman_bin=\"$(podman_binary)\"" in text            # compose_file
 
 
 # ── The team can always be stopped from the terminal (TEST 19g) ─────────────────────────────────────
@@ -1849,67 +992,20 @@ def _team(tmp_path: Path, *args: str, key: str | None, made_with: str | None):
     return _run(wrapper, env, "team", *args), create_marker
 
 
-def test_team_stop_works_for_a_container_that_only_its_hash_does_not_attest(tmp_path: Path):
-    """A container made with another key is not «exactly ours» for `status`, and `jht team stop --all` answered «avvio automatico
-    negato»: the person could not stop the team. Every other label still attests it, as for `jht down`."""
-    result, created = _team(tmp_path, "stop", "--all", key="sk-test-terminal", made_with="sk-another")
-    assert result.returncode == 0, (result.stdout, result.stderr)
-    assert "avvio automatico negato" not in result.stderr and "config_changed_while_running" in result.stderr
-    assert not created.exists()
 
 
-def test_team_stop_still_refuses_a_container_that_is_not_ours_by_any_other_label(tmp_path: Path):
-    wrapper, env, _, created = _runtime(tmp_path)
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "wrong-working-dir"
-    result = _run(wrapper, env, "team", "stop", "--all")
-    assert result.returncode != 0 and not created.exists()
 
 
-def test_other_team_commands_still_need_the_exact_attestation(tmp_path: Path):
-    result, created = _team(tmp_path, "status", key="sk-test-terminal", made_with="sk-another")
-    assert result.returncode != 0 and "avvio automatico negato" in result.stderr
-    assert not created.exists()
 
 
 # ── `jht status` says what the provider said (TEST 19h) ──────────────────────────────────────────────
 
-def test_status_shows_the_first_line_the_provider_printed_when_it_cannot_list_the_project(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    env["JHT_FIXTURE_PS_FAILS"] = "\n  ERROR:podman_compose:failed to check if podman is installed: 'podman'\nsecond line\n"
-    result = _run(wrapper, env, "status")
-    assert result.returncode != 0
-    assert "non attestabile" in result.stdout and "non attivo" not in result.stdout
-    assert "Il provider ha detto: ERROR:podman_compose:failed to check if podman is installed: 'podman'" in result.stdout
-    assert "second line" not in result.stdout
 
 
-def test_status_cuts_a_long_provider_line_and_drops_control_characters(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    env["JHT_FIXTURE_PS_FAILS"] = "x" * 500 + "\x1b[31mred\x07"
-    result = _run(wrapper, env, "status")
-    said = next(line for line in result.stdout.splitlines() if "Il provider ha detto:" in line)
-    assert len(said.split("Il provider ha detto: ", 1)[1]) <= 200
-    assert "\x1b" not in result.stdout and "\x07" not in result.stdout
 
 
-def test_status_of_a_provider_that_says_nothing_gives_its_exit_code(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    env["JHT_FIXTURE_PS_FAILS"] = " "
-    result = _run(wrapper, env, "status")
-    assert "Il provider ha detto: provider exit code 1, nothing said" in result.stdout
 
 
-def test_the_reason_file_is_left_behind_by_no_one(tmp_path: Path):
-    wrapper, env, _, _ = _runtime(tmp_path)
-    tmp = tmp_path / "scratch"
-    tmp.mkdir()
-    env["TMPDIR"] = str(tmp)
-    env["JHT_FIXTURE_PS_FAILS"] = "boom"
-    _run(wrapper, env, "status")
-    ok_env = dict(env)
-    ok_env.pop("JHT_FIXTURE_PS_FAILS")
-    _run(wrapper, ok_env, "status")
-    assert list(tmp.iterdir()) == []
 
 
 # ── `jht status` for a person: a short screen at a terminal, key=value for the app on a pipe ────────
@@ -1932,32 +1028,3 @@ def _run_in_terminal(wrapper: Path, env: dict[str, str], *args: str) -> tuple[in
     finally:
         os.close(master)
     return process.returncode, b"".join(chunks).decode("utf-8", "replace")
-
-
-def test_status_at_a_terminal_is_a_screen_with_the_next_step_and_on_a_pipe_it_is_what_the_app_reads(tmp_path: Path):
-    import re
-    wrapper, env, _podman_log, _create_marker = _runtime(tmp_path)
-    env["JHT_LANG"] = "en"
-    code, out = _run_in_terminal(wrapper, env, "status")
-    plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", out)
-    assert code == 0, plain
-    assert "status=running" not in plain and "name=" not in plain
-    assert re.search(r"Container\s+running since ", plain) and re.search(r"Image\s+\S+", plain)
-    assert "→ Who is working: jht agents" in plain
-    piped = _run(wrapper, env, "status")
-    assert piped.returncode == 0 and "name=jht status=running" in piped.stdout
-    forced_code, forced = _run_in_terminal(wrapper, {**env, "JHT_MACHINE_OUTPUT": "1"}, "status")
-    assert forced_code == 0 and "status=running" in forced
-
-
-def test_status_of_a_team_that_is_not_there_says_what_to_do_at_a_terminal(tmp_path: Path):
-    import re
-    wrapper, env, _podman_log, _create_marker = _runtime(tmp_path)
-    env["JHT_LANG"] = "en"
-    env["JHT_FIXTURE_CONTAINER_CASE"] = "zero"                 # the project lists no container
-    code, out = _run_in_terminal(wrapper, env, "status")
-    plain = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", out)
-    assert code == 1 and "The team's container is not running." in plain and "→ Start it with: jht up" in plain
-    assert "non attivo" not in plain
-    piped = _run(wrapper, env, "status")
-    assert piped.returncode != 0 and "non attivo" in piped.stdout  # the app and the scripts keep the line they read

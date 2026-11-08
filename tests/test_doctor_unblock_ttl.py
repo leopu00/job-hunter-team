@@ -45,8 +45,11 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
+from typing import NamedTuple
 
 import pytest
 
@@ -722,6 +725,88 @@ def _send(tmux: Tmux, home: Path, session: str, msg: str, **env):
                           env=tmux.env(home, **env))
 
 
+# Independent stalled senders keep their real polling and retry deadlines.
+# Only their wall-time overlap changes, under the canonical loadfile scheduler.
+_FROZEN_SENDERS = {
+    "test_sender_does_not_claim_success_when_the_text_stayed_in_the_prompt":
+        ("SCOUT-1", "claude", "[@capitano -> @scout-1] [MSG] riprendi la coda"),
+    "test_sender_retries_are_bounded_on_a_frozen_tui":
+        ("SCOUT-1", "claude", "[@capitano -> @scout-1] [MSG] x"),
+    "test_sender_does_not_claim_success_on_a_codex_composer":
+        ("CAPITANO", "codex", "[@utente -> @capitano] [CHAT] assegna la coda"),
+}
+
+
+class _FrozenSenderResult(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+    draft: str
+    calls: tuple
+    pending: str | None
+
+
+def _run_frozen_sender(root, name):
+    session, style, message = _FROZEN_SENDERS[name]
+    home = root / "jht_home"
+    (home / "logs").mkdir(parents=True)
+    spec = {"created": _hours_ago(1), "submit": "frozen"}
+    if style == "codex":
+        spec["style"] = style
+    tmux = Tmux(root / "fake", {session: spec})
+    result = _send(tmux, home, session, message,
+                   JHT_TMUX_LOCK_DIR=str(home / "locks"))
+    pending = home / "logs" / "pending-input.jsonl"
+    return _FrozenSenderResult(
+        result.returncode, result.stdout, result.stderr, tmux.draft(session),
+        tuple(tuple(call) for call in tmux.calls("send-keys", session=session)),
+        pending.read_text() if pending.exists() else None,
+    )
+
+
+def _uses_loadfile(config):
+    worker = getattr(config, "workerinput", None)
+    if worker is None:
+        return False
+    # xdist resets dist on workers; original argv proves the scheduler here.
+    arguments = worker.get("mainargv", ())
+    scheduler = None
+    for index, argument in enumerate(arguments):
+        if argument == "--":
+            break
+        if argument == "--dist" and index + 1 < len(arguments):
+            scheduler = arguments[index + 1]
+        elif argument.startswith("--dist="):
+            scheduler = argument.split("=", 1)[1]
+    return scheduler == "loadfile"
+
+
+@pytest.fixture(scope="module")
+def _frozen_sender_batch(request, tmp_path_factory):
+    # Outside loadfile, do not multiply the batch on several xdist workers.
+    if not _uses_loadfile(request.config):
+        return None
+    selected = [item.name for item in request.session.items
+                if item.path == request.node.path and item.name in _FROZEN_SENDERS]
+    if not selected or len(selected) != len(set(selected)):
+        return None
+    root = tmp_path_factory.mktemp("frozen-senders")
+    with ThreadPoolExecutor(max_workers=min(3, len(selected))) as pool:
+        futures = {name: pool.submit(_run_frozen_sender, root / name, name)
+                   for name in selected}
+        results = {name: future.result() for name, future in futures.items()}
+    return MappingProxyType(results)
+
+
+@pytest.fixture
+def _frozen_sender(request, _frozen_sender_batch):
+    mode = "isolated_batch" if _frozen_sender_batch is not None else "isolated_single"
+    request.node.user_properties.append(("sender_execution", mode))
+    if _frozen_sender_batch is None:
+        return _run_frozen_sender(request.getfixturevalue("tmp_path"), request.node.name)
+    return _frozen_sender_batch[request.node.name]
+
+
 def test_sender_normal_delivery_still_exits_zero(tmux_factory, home):
     """Nessuna regressione sul caso sano: un Enter, exit 0."""
     tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "ok"}})
@@ -795,15 +880,13 @@ def test_sender_recovers_a_lost_enter_on_a_claude_pane(tmux_factory, home):
     assert tmux.draft("SCOUT-1") == "", "il messaggio è rimasto nel prompt"
 
 
-def test_sender_does_not_claim_success_when_the_text_stayed_in_the_prompt(tmux_factory, home):
+def test_sender_does_not_claim_success_when_the_text_stayed_in_the_prompt(_frozen_sender):
     """Il cuore della correzione: TUI congelata ⇒ exit 5, non exit 0.
 
     Un pane con testo non inviato risulta OCCUPATO a chiunque altro: dichiararlo
     consegnato è ciò che trasforma un Enter perso in un deadlock permanente.
     """
-    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "frozen"}})
-    msg = "[@capitano -> @scout-1] [MSG] riprendi la coda"
-    r = _send(tmux, home, "SCOUT-1", msg)
+    r = _frozen_sender
     assert r.returncode == 5, (r.returncode, r.stdout, r.stderr)
     # Quello che conta è che il messaggio dica "vivo, non morto": chi legge non
     # deve respawnare un agente che ha solo una riga appesa nel composer.
@@ -815,35 +898,33 @@ def test_sender_does_not_claim_success_when_the_text_stayed_in_the_prompt(tmux_f
     # marchio si infila fra la busta e il tipo. Quello che questo test deve
     # dimostrare non è l'identità byte per byte del testo: è che il messaggio
     # è rimasto appeso nel composer invece di partire.
-    assert "riprendi la coda" in tmux.draft("SCOUT-1")
+    assert "riprendi la coda" in r.draft
     # e il Dottore lo trova dove lo cerca
-    pending = [json.loads(l) for l in
-               (home / "logs" / "pending-input.jsonl").read_text().splitlines() if l.strip()]
+    assert r.pending is not None
+    pending = [json.loads(l) for l in r.pending.splitlines() if l.strip()]
     assert pending and pending[-1]["session"] == "SCOUT-1"
     assert pending[-1]["reason"] == "submit_unconfirmed"
 
 
-def test_sender_retries_are_bounded_on_a_frozen_tui(tmux_factory, home):
+def test_sender_retries_are_bounded_on_a_frozen_tui(_frozen_sender):
     """Mai un ciclo infinito: al massimo tre submit, poi si smette."""
-    tmux = tmux_factory({"SCOUT-1": {"created": _hours_ago(1), "submit": "frozen"}})
-    r = _send(tmux, home, "SCOUT-1", "[@capitano -> @scout-1] [MSG] x")
+    r = _frozen_sender
     assert r.returncode == 5
-    keys = [c[-1] for c in tmux.calls("send-keys", session="SCOUT-1") if "-l" not in c]
+    keys = [c[-1] for c in r.calls if "-l" not in c]
     assert keys.count("Enter") == 3, keys
     assert keys.count("Space") == 0, keys
 
 
-def test_sender_does_not_claim_success_on_a_codex_composer(tmux_factory, home):
+def test_sender_does_not_claim_success_on_a_codex_composer(_frozen_sender):
     """Codex apre il composer con "›", non con "❯"/">": 27/09.
 
     Il marker mancava, la riga del composer non veniva trovata e il mittente
     dichiarava "submit 1" con il testo ancora nel composer: il CAPITANO di una
     VPS ha accumulato decine di messaggi incollati e mai inviati.
     """
-    tmux = tmux_factory({"CAPITANO": {"created": _hours_ago(1), "submit": "frozen", "style": "codex"}})
-    r = _send(tmux, home, "CAPITANO", "[@utente -> @capitano] [CHAT] assegna la coda")
+    r = _frozen_sender
     assert r.returncode == 5, (r.returncode, r.stdout, r.stderr)
-    assert "assegna la coda" in tmux.draft("CAPITANO")
+    assert "assegna la coda" in r.draft
 
 
 def test_sender_refuses_a_wrapped_codex_draft_that_it_cannot_attest(tmux_factory, home):

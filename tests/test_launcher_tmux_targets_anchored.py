@@ -226,7 +226,16 @@ def _kill_group(pgid: int):
             os.killpg(pgid, sig)
         except (ProcessLookupError, PermissionError):
             return
-        time.sleep(0.2)
+        deadline = time.monotonic() + 0.2
+        while True:
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(0.01, remaining))
 
 
 def _self_timer(seconds: int = CASE_TIMEOUT_S + 5) -> str:

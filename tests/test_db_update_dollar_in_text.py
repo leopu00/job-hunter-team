@@ -10,7 +10,9 @@ read stdin, because there is one stdin.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -29,9 +31,10 @@ TEXT = "Salary up to $120k, bonus $10k, floor $5"
 CLOSINGS = ["   TXT", "\tTXT", "TXT   "]  # a copied indent of 3 spaces, a tab, trailing spaces
 
 
-@pytest.fixture
-def db(tmp_path):
-    path = tmp_path / "jobs.db"
+@pytest.fixture(scope="module")
+def seeded_db(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("update-seed")
+    path = directory / "jobs.db"
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     _db.ensure_schema(conn)
@@ -43,6 +46,18 @@ def db(tmp_path):
     conn.execute("INSERT INTO applications (position_id, status, applied, applied_via) VALUES (1, 'applied', 1, 'email')")
     conn.commit()
     conn.close()
+    assert set(os.listdir(directory)) == {"jobs.db"}, "seed has unclosed SQLite sidecars"
+    original = hashlib.sha256(path.read_bytes()).digest()
+    yield path
+    assert set(os.listdir(directory)) == {"jobs.db"}, "a case wrote into the shared seed directory"
+    assert hashlib.sha256(path.read_bytes()).digest() == original, "a case changed the shared seed"
+
+
+@pytest.fixture
+def db(tmp_path, seeded_db):
+    """Each case keeps its own writable database and adjacent files."""
+    path = tmp_path / "jobs.db"
+    shutil.copyfile(seeded_db, path)
     return path
 
 

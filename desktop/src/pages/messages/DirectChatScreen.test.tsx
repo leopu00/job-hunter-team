@@ -686,6 +686,7 @@ describe("DirectChatScreen: where the text goes, and when it is delivered", () =
     ["unconfirmed", "direct-chat-taken-unknown", "Non so se è stato preso"],
     ["late", "direct-chat-sent-late", "Inviato in ritardo"],
     ["expired", "direct-chat-queue-expired", "Non inviato: l'agente è rimasto occupato troppo a lungo. Riscrivilo."],
+    ["expired_held", "direct-chat-queue-expired", "il testo può essere ancora nella sua casella e partire quando si libera"],
   ] as const)("a queued turn that ends «%s» says it as the direct send does, never «Inviato»", async (how, testId, words) => {
     viewport(1280, 800);
     const { mock } = client();

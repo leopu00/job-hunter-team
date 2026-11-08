@@ -23,10 +23,13 @@ Cosa proteggono questi test — nell'ordine in cui contano:
 Eseguire con: pytest tests/test_db_query_limits.py -v
 """
 
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -60,9 +63,9 @@ QUEUES = [
     'next-for-calibration',
 ]
 
-# Seed in un interprete SEPARATO (stessa ragione di tests/test_db_query_json.py:
-# `_db.DB_PATH` è risolto all'import, quindi importarlo qui incollerebbe tutti i
-# test al database del primo). Le quantità sono scelte per superare il default:
+# Seed in un interprete separato, con JHT_DB esplicito e connessione chiusa:
+# il modello del file non condivide moduli o stato con le CLI dei singoli casi.
+# Le quantità sono scelte per superare il default:
 # 50 `new` e 45 `checked` con score, cioè code più lunghe di 20.
 _SEED = """
 import sys
@@ -106,10 +109,24 @@ def _seed(tmp_path, new, scored):
     return path
 
 
+@pytest.fixture(scope="module")
+def seeded_db(tmp_path_factory):
+    """One closed seed; each case still receives its own writable database."""
+    directory = tmp_path_factory.mktemp("query-limits-seed")
+    path = _seed(directory, NEW_POSITIONS, SCORED_POSITIONS)
+    assert set(os.listdir(directory)) == {"jobs.db"}, "seed has unclosed SQLite sidecars"
+    original = hashlib.sha256(Path(path).read_bytes()).digest()
+    yield path
+    assert set(os.listdir(directory)) == {"jobs.db"}, "a case wrote into the shared seed directory"
+    assert hashlib.sha256(Path(path).read_bytes()).digest() == original, "a case changed the shared seed"
+
+
 @pytest.fixture
-def db(tmp_path):
-    """DB reale (schema `_db.ensure_schema`) con code più lunghe del default."""
-    return _seed(tmp_path, NEW_POSITIONS, SCORED_POSITIONS)
+def db(tmp_path, seeded_db):
+    """Private copy: writes and adjacent policy files cannot reach another case."""
+    path = tmp_path / 'jobs.db'
+    shutil.copyfile(seeded_db, path)
+    return str(path)
 
 
 @pytest.fixture

@@ -109,6 +109,15 @@ $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
 $wanted = @($env:JHT_IMPORT -split ',' | Where-Object { $_ })
+if ($wanted -contains 'Test-LegacyWslOwner') {
+  $bridge = Join-Path (Split-Path -LiteralPath $env:JHT_UNDER_TEST) 'podman-machine-bridge.ps1'
+  $bridgeTokens = $null; $bridgeErrors = $null
+  $bridgeAst = [System.Management.Automation.Language.Parser]::ParseFile($bridge, [ref]$bridgeTokens, [ref]$bridgeErrors)
+  if ($bridgeErrors.Count) { throw "parse bridge: $($bridgeErrors[0])" }
+  $machine = @($bridgeAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-JhtPodmanMachine' }, $true))
+  if ($machine.Count -ne 1) { throw 'real bridge must define Invoke-JhtPodmanMachine exactly once' }
+  . $bridge
+}
 $found = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $wanted -contains $n.Name }, $true))
 if ($found.Count -ne $wanted.Count) { throw "functions not found: $($env:JHT_IMPORT)" }
 foreach ($fn in $found) { Invoke-Expression $fn.Extent.Text }

@@ -27,10 +27,10 @@ const RUST = fileURLToPath(new URL("../../src-tauri/src/", import.meta.url));
 
 /** Literals that look like codes but never reach the person, and why. */
 const NOT_ERRORS: Record<string, string> = {
+  expired_held: "closed queue outcome (direct_chat.rs QUEUE_ENDINGS), rendered by ChatMessageRow as text that may still be in the composer; never an error",
   // runtime_up.rs (the machine and the folders `jht up` needs, got ready by the app): the closed reason words of the runtime log; the
   // person reads the error of the exit code (podman_missing, podman_start_failed), never these.
   podman_not_installable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
-  podman_machine_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   user_dir_unavailable: "reason word in the runtime log of the native start (runtime_up.rs), never shown",
   // artifact_upload.rs / host_path_policy.rs (`jht artifact upload` with a Windows path): the closed words the command prints on a terminal
   // with their own sentence in Italian and English (host_path_policy::refusal_text, artifact_upload::read_refusal); the desktop screens never show them.
