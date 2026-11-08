@@ -1,11 +1,4 @@
-"""The box's website sync token, checked and renewed from the desktop app (shared/skills/cloud_token.py).
-
-A token that expired cut a box off the website for 16 days on 23/10 without anyone knowing. The app
-renews it for the user through this one script, so nobody opens a terminal on the box. The new token
-is a secret: it comes on stdin, it is verified with the website before anything is written, it must
-belong to the account the box is paired with, and it is never printed. Synthetic tokens and a fake
-website only.
-"""
+"""Renew website sync tokens through stdin, with account checks and no secret output."""
 from __future__ import annotations
 
 import io
@@ -170,25 +163,16 @@ def test_a_sync_the_user_turned_off_stays_off(box, capsys):
     assert written["token"] == NEW and written["enabled"] is False
 
 
-def test_a_token_the_website_refuses_is_not_written(box, capsys):
+@pytest.mark.parametrize("website,reason", [
+    pytest.param(Website({OLD: body()}), "token_rejected", id="website-refuses"),
+    pytest.param(Website({NEW: body(owner="00000000-0000-4000-8000-0000000000ff")}),
+                 "token_other_account", id="other-account"),
+    pytest.param(Website(status=503), "cloud_unreachable", id="unreachable"),
+])
+def test_rejected_replacement_keeps_the_cloud_file(box, capsys, website, reason):
     before = box.read_text()
-    code, out, _ = run("apply", stdin=line(NEW), website=Website({OLD: body()}), capsys=capsys)
-    assert (code, out) == (1, {"ok": False, "op": "apply", "code": "token_rejected"})
-    assert box.read_text() == before
-
-
-def test_a_token_of_another_account_is_not_written(box, capsys):
-    before = box.read_text()
-    site = Website({NEW: body(owner="00000000-0000-4000-8000-0000000000ff")})
-    code, out, _ = run("apply", stdin=line(NEW), website=site, capsys=capsys)
-    assert (code, out["code"]) == (1, "token_other_account")
-    assert box.read_text() == before
-
-
-def test_an_unreachable_website_writes_nothing(box, capsys):
-    before = box.read_text()
-    code, out, _ = run("apply", stdin=line(NEW), website=Website(status=503), capsys=capsys)
-    assert (code, out["code"]) == (1, "cloud_unreachable")
+    code, out, _ = run("apply", stdin=line(NEW), website=website, capsys=capsys)
+    assert (code, out) == (1, {"ok": False, "op": "apply", "code": reason})
     assert box.read_text() == before
 
 
@@ -223,6 +207,7 @@ def test_a_cloud_file_that_cannot_be_rewritten_is_said_and_leaves_no_temp_file(b
 
 
 def test_the_script_never_names_the_secret_in_a_log_or_an_environment():
+    """Security guard: token handling must neither log secrets nor export them in the environment."""
     source = (REPO / "shared" / "skills" / "cloud_token.py").read_text(encoding="utf-8")
     assert "logging" not in source and "os.environ[" not in source
     assert "print(" in source and source.count("print(") == 2  # the two JSON lines of main()
