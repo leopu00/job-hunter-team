@@ -457,7 +457,8 @@ jht_monitor_window() {
   shift
   if [ "$#" -ne 1 ] || [ "$1" != --window ]; then err "$(jht_say monitor.window_invalid)"; return 2; fi
   if [[ "$self" =~ [[:cntrl:]] ]]; then err "$(jht_say monitor.window_failed)"; return 1; fi
-  self="$(cd -P "$(dirname "$self")" && printf '%s/%s' "$(pwd -P)" "${self##*/}")" || return 1
+  self="$(cd -P "$(dirname "$self")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "${self##*/}")" \
+    && [ -f "$self" ] && [ -x "$self" ] || { err "$(jht_say monitor.window_failed)"; return 1; }
   if [ -n "${TMUX:-}" ] && command -v tmux >/dev/null 2>&1; then
     tmux new-window -n JHT-monitor -- "$self" monitor >/dev/null 2>&1 && return 0
   elif [ "$HOST_KERNEL" = Darwin ] && command -v osascript >/dev/null 2>&1; then

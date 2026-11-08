@@ -60,8 +60,9 @@ def test_windows_launch_executes_only_monitor_with_exact_path_and_arguments(tmp_
     assert not Path(env["FAKE_FORBIDDEN_LOG"]).exists()
 
 
-def test_wt_separator_in_a_path_uses_direct_powershell_without_interpretation(tmp_path):
-    argv, env, _ = fixture(tmp_path, path_name="literal; separator")
+@pytest.mark.parametrize("path_name", ["literal; separator", "literal %PROGRAMFILES% path"])
+def test_wt_metacharacter_in_a_path_uses_direct_powershell_without_interpretation(tmp_path, path_name):
+    argv, env, _ = fixture(tmp_path, path_name=path_name)
     done = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=15)
     assert done.returncode == 0, done.stdout + done.stderr
     assert [row["tool"] for row in calls(env)] == ["powershell.exe"]

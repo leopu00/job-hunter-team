@@ -448,14 +448,16 @@ function Open-JhtMonitorWindow {
   $process = $null
   try {
     if ($CommandPath -match '["\x00-\x1f]') { throw 'unsupported command path' }
+    if (-not (Test-Path -LiteralPath $CommandPath -PathType Leaf)) { throw 'command is unavailable' }
+    if ([Environment]::OSVersion.Platform -eq 'Win32NT' -and [Diagnostics.Process]::GetCurrentProcess().SessionId -eq 0) { throw 'no interactive desktop' }
     $shell = Get-Command pwsh.exe, powershell.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $shell) { throw 'PowerShell is unavailable' }
     # Same process-only policy as the installed jht.cmd, never a policy change.
     $arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $CommandPath + '" monitor'
     $terminal = Get-Command wt.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $executable = $shell.Source
-    # WT has a command separator of its own; use PowerShell directly for such paths.
-    if ($terminal -and -not ($CommandPath.Contains(';') -or $shell.Source.Contains(';'))) {
+    # Avoid WT separators/environment expansion; PowerShell -File accepts these paths literally.
+    if ($terminal -and ($CommandPath + $shell.Source) -notmatch '[;%]') {
       $executable = $terminal.Source
       $arguments = '-w new new-tab --title "JHT monitor" "' + $shell.Source + '" ' + $arguments
     }
