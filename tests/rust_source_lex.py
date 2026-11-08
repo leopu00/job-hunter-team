@@ -13,7 +13,11 @@ def normalize(source: str) -> str:
 
 # Cache only exact text transformations. Filesystem reads, module membership
 # and symbol selection remain fresh in RustTree, including mutation fixtures.
-@lru_cache(maxsize=16)
+# A crate traversal visits many distinct modules before querying one again.
+_SOURCE_CACHE_ITEMS = 256
+
+
+@lru_cache(maxsize=_SOURCE_CACHE_ITEMS)
 def mask(source: str) -> str:
     chars = list(source)
     i = 0
@@ -173,7 +177,7 @@ def test_item_ranges(source: str):
             kept = until
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=_SOURCE_CACHE_ITEMS)
 def production(source: str) -> str:
     source = normalize(source)
     chunks = []
@@ -184,7 +188,7 @@ def production(source: str) -> str:
     return "".join(chunks) + source[kept:]
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=_SOURCE_CACHE_ITEMS)
 def production_mask(source: str) -> str:
     """Select code on original offsets, including original CRLF literal bytes."""
     code = list(mask(source))
