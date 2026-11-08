@@ -1,5 +1,6 @@
 // English texts of the screens (the source: every other language has the same keys).
 export default {
+  'error.observer_session_logs_invalid': "Session logs have an invalid format; model and activity are unknown.",
   'error.observer_session_logs_unavailable': "Session logs could not be read; model and activity are unknown.",
   "observation.nd": "N/D",
   "observation.monitor": "Agent monitor",

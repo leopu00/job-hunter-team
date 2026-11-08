@@ -25,6 +25,7 @@ class Observer:
         self.index, self.index_at = {}, None
         self.index_errors = []
         self.log_failed = False
+        self.pending_logs = set()
 
     def metadata(self, uid, session, now, monotonic):
         key = (uid, session["created"])
@@ -37,8 +38,12 @@ class Observer:
             result = {"identity": None, "state": "sconosciuto", "reason": "fonti_illeggibili"}
             errors.append("observer_session_logs_unavailable")
         else:
-            events, readable, unrecognised, _, identity = inspect_session(
-                state, state.Sources(self.home), str(cwd), session["created"], index=self.index, errors=errors)
+            try:
+                events, readable, unrecognised, _, identity = inspect_session(
+                    state, state.Sources(self.home), str(cwd), session["created"], index=self.index, errors=errors)
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                events, readable, unrecognised, identity = [], False, True, None
+                errors.append("observer_session_logs_invalid")
             cpu, age = state.read_cpu(self.home, uid, now)
             verdict = state.fold(events, state.Ctx(now=now, session_created=session["created"],
                                                   readable=readable, unrecognised=unrecognised,
@@ -91,9 +96,11 @@ class Observer:
 
     def log(self, errors):
         fresh = set(errors) - self.logged
-        if fresh or self.log_failed:
+        self.pending_logs.update(fresh)
+        if self.pending_logs:
             try:
-                append_errors(self.home, fresh)
+                append_errors(self.home, self.pending_logs)
+                self.pending_logs.clear()
                 self.log_failed = False
             except OSError:
                 self.log_failed = True

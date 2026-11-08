@@ -210,6 +210,10 @@ def test_runtime_log_link_is_not_written(tmp_path):
     assert "observer_log_unavailable" in tool.sample(NOW, 1)["errors"]
     assert "observer_log_unavailable" in tool.sample(NOW+3, 4)["errors"]
     assert target.read_text() == "keep"
+    (tmp_path / "logs/runtime.log").unlink()
+    assert "observer_log_unavailable" not in tool.sample(NOW+6, 7)["errors"]
+    assert "observer_sessions_unavailable" in (tmp_path / "logs/runtime.log").read_text()
+    assert target.read_text() == "keep"
 
 
 @pytest.mark.parametrize("part", ["header", "tail"])
@@ -235,3 +239,14 @@ def test_unreadable_session_log_is_unknown_not_never_started_and_is_logged(tmp_p
     assert result["agents"][0]["state"] == "sconosciuto"
     assert "observer_session_logs_unavailable" in result["errors"]
     assert "observer_session_logs_unavailable" in (tmp_path / "logs/runtime.log").read_text()
+
+
+def test_invalid_session_record_keeps_inventory_and_reports_unknown_metadata(tmp_path):
+    path, records = codex(tmp_path)
+    records.append({"type": "event_msg", "timestamp": iso(NOW), "payload": ["not-an-event-object"]})
+    path.write_text("\n".join(json.dumps(row) for row in records) + "\n")
+    result = observer(tmp_path).sample(NOW, 1)
+    assert result["ok"] and result["running"] == 1
+    assert result["agents"][0]["identity"] is None
+    assert result["agents"][0]["state"] == "sconosciuto"
+    assert "observer_session_logs_invalid" in result["errors"]
