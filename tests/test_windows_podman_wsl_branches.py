@@ -424,12 +424,20 @@ UP_BODY = r"""
 $ContainerRuntime = $env:RUNTIME
 $env:CONTAINER_CONNECTION = 'jht-podman'
 $env:JHT_MACHINE_WAIT_SECONDS = $env:FAKE_UP_WAIT_SECONDS
-$PodmanMachineBridgePath = $bridge
+$PodmanMachineBridgePath = if ($env:FAKE_CLASSIFY_BRIDGE) { $env:FAKE_CLASSIFY_BRIDGE } else { $bridge }
 $PSDefaultParameterValues['Update-ProcessPath:MachinePath'] = ''
 $PSDefaultParameterValues['Update-ProcessPath:UserPath'] = ''
 function Assert-TrustedRuntime { }
+if ($env:FAKE_CLASSIFY_BRIDGE) { $global:JhtTestProcessEvidence = [Collections.Generic.List[object]]::new() }
 if ($env:FAKE_UP_WAIT_SECONDS -eq '30') { $caseWatch = [Diagnostics.Stopwatch]::StartNew() }
-Start-PodmanMachineForUp
+try { Start-PodmanMachineForUp } finally {
+  if ($env:FAKE_CLASSIFY_BRIDGE) {
+    $records = @($global:JhtTestProcessEvidence.ToArray())
+    [IO.File]::WriteAllText($env:FAKE_CLASSIFY_RESULTS, (ConvertTo-Json -InputObject $records -Compress -Depth 4))
+    $lines = @($records | ForEach-Object { $_.argv -join ' ' })
+    [IO.File]::AppendAllText($env:FAKE_LOG, ($lines -join "`n") + "`n")
+  }
+}
 if ($env:FAKE_UP_WAIT_SECONDS -eq '30') { [Console]::Out.WriteLine("UP_ELAPSED_MS=$($caseWatch.ElapsedMilliseconds)") }
 """
 
@@ -467,7 +475,38 @@ public static class UpPodmanFake {
 """
 
 
-def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail="", wait_seconds=1):
+# These two classification cases keep the real adapter/readiness and 1s clock.
+# Only completed process responses are supplied here. Native process lifetime,
+# capture and deadlines remain covered by the selftest and readiness suite.
+UP_CLASSIFICATION_PROCESS = r"""
+. $env:FAKE_REAL_BRIDGE
+function Invoke-JhtPodmanProcess {
+  param(
+    [Parameter(Mandatory)][string]$FilePath,
+    [Parameter(Mandatory)][string[]]$Arguments,
+    [Parameter(Mandatory)][string]$Phase,
+    [Parameter(Mandatory)][ValidateRange(1, 1000)][int]$TimeoutMilliseconds,
+    [string]$LogPath = '', [switch]$RequireCompleteOutput
+  )
+  if ($FilePath -ne $env:FAKE_CLASSIFY_PODMAN -or $RequireCompleteOutput) { throw 'fixture_process_contract: unexpected executable/options' }
+  $probe = $Arguments.Count -eq 3 -and $Arguments[0] -ceq '--connection' -and $Arguments[1] -ceq 'jht-podman' -and $Arguments[2] -ceq 'info'
+  $start = $Arguments.Count -eq 4 -and $Arguments[0] -ceq 'machine' -and $Arguments[1] -ceq 'start' -and $Arguments[2] -ceq '--update-connection=false' -and $Arguments[3] -ceq 'jht-podman'
+  if (-not ($probe -or $start)) { throw 'fixture_process_contract: unexpected argv' }
+  $wantedPhase = if ($probe) { 'podman_machine_probe' } else { 'podman_machine_start' }
+  if ($Phase -cne $wantedPhase) { throw 'fixture_process_contract: unexpected phase' }
+  $exit = if ($probe) { 1 } elseif ($env:FAKE_FAIL -eq 'start') { 125 } else { 0 }
+  $global:JhtTestProcessEvidence.Add([pscustomobject]@{
+    phase = $Phase; argv = [string[]]$Arguments; timeoutMs = $TimeoutMilliseconds; exitCode = [int]$exit; filePath = $FilePath
+  })
+  $global:LASTEXITCODE = $exit
+  $stderr = if ($exit -eq 125) { "Error: machine start failed$([Environment]::NewLine)" } else { '' }
+  return [pscustomobject]@{ ExitCode = [int]$exit; Stdout = [string]''; Stderr = [string]$stderr; OutputComplete = [bool]$true; ElapsedMilliseconds = [long]0 }
+}
+"""
+
+
+def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail="", wait_seconds=1,
+        classify_process=False):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", DOCKER_CASES)
@@ -476,9 +515,16 @@ def _up(tmp_path, *, runtime="podman", docker="after-start", podman=True, fail="
             shutil.copyfile(launcher(UP_PODMAN_NATIVE), bin_dir / "podman.exe")
         else:
             _fake(bin_dir, "podman.exe", UP_PODMAN_CASES)
+    classification_bridge = tmp_path / "classification-bridge.ps1"
+    if classify_process:
+        classification_bridge.write_text(UP_CLASSIFICATION_PROCESS, encoding="utf-8")
     return _run(
         tmp_path, WRAPPER, ["Start-PodmanMachineForUp", "Test-DockerReachable", "Write-Err"], UP_BODY,
-        {"RUNTIME": runtime, "DOCKER": docker, "FAKE_FAIL": fail, "FAKE_UP_WAIT_SECONDS": str(wait_seconds)},
+        {"RUNTIME": runtime, "DOCKER": docker, "FAKE_FAIL": fail, "FAKE_UP_WAIT_SECONDS": str(wait_seconds),
+         "FAKE_CLASSIFY_BRIDGE": str(classification_bridge) if classify_process else "",
+         "FAKE_REAL_BRIDGE": str(SCRIPTS / "podman-machine-bridge.ps1"),
+         "FAKE_CLASSIFY_PODMAN": str(bin_dir / "podman.exe"),
+         "FAKE_CLASSIFY_RESULTS": str(tmp_path / "process-results.json")},
     )
 
 
@@ -516,6 +562,37 @@ def test_up_does_not_replace_the_users_default_connection(tmp_path):
     assert default.read_text(encoding="utf-8") == "user-podman"
     assert not any("system connection" in call for call in calls)
     assert _up_elapsed_ms(result.stdout) < 30000
+
+
+# Run the real command dispatcher, isolating only its runtime prerequisites.
+SETUP_BODY = r"""
+function Require-ComposeFile { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-compose`n") }
+function Require-Docker { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-docker`n") }
+function Ensure-Up { [IO.File]::AppendAllText($env:FAKE_LOG, "guard-up`n") }
+$Sub = 'setup'; $Rest = @('--x', 'value with spaces')
+$ExecFlags = @('-i'); $Container = 'jht'; $NodeEntry = '/app/cli/bin/jht.js'
+$dispatch = @($ast.FindAll({ param($n)
+  $n -is [System.Management.Automation.Language.SwitchStatementAst] -and $n.Condition.Extent.Text -eq '$Sub'
+}, $true))
+if ($dispatch.Count -ne 1) { throw 'The real command dispatcher is missing or ambiguous.' }
+. ([scriptblock]::Create($dispatch[0].Extent.Text))
+"""
+
+
+def test_setup_forwards_the_subcommand_and_arguments_to_the_container(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    argv_file = tmp_path / "docker-argv"
+    _fake(bin_dir, "docker", r'''  "exec "*) printf '%s\0' "$@" > "$FAKE_ARGV" ;;''')
+    result, calls = _run(tmp_path, WRAPPER, [], SETUP_BODY,
+                         {"FAKE_ARGV": str(argv_file), "JHT_HOST_TYPE": "windows"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    argv = argv_file.read_bytes().split(b"\0")
+    assert argv[-1] == b""
+    expected = ["exec", "-i", "-e", "JHT_HOST_TYPE=windows", "jht", "node",
+                "/app/cli/bin/jht.js", "setup", "--x", "value with spaces"]
+    assert [arg.decode("utf-8") for arg in argv[:-1]] == expected
+    assert calls == ["guard-compose", "guard-docker", "guard-up", " ".join(expected)]
 
 
 UNINSTALL_BODY = r"""
@@ -584,9 +661,21 @@ def test_uninstall_removes_only_jht_and_preserves_the_users_default_connection(t
     ids=["no-podman-exe", "start-fails", "started-but-unreachable"],
 )
 def test_up_names_why_the_machine_is_not_there(tmp_path, podman, docker, fail, code, message):
-    result, _ = _up(tmp_path, podman=podman, docker=docker, fail=fail)
+    result, calls = _up(tmp_path, podman=podman, docker=docker, fail=fail, classify_process=podman)
     assert result.returncode == code, (result.returncode, result.stderr[-600:])
     assert message in (result.stdout + result.stderr)
+    if podman:
+        records = json.loads((tmp_path / "process-results.json").read_text(encoding="utf-8-sig"))
+        expected = {"podman_machine_probe": ["--connection", "jht-podman", "info"],
+                    "podman_machine_start": ["machine", "start", "--update-connection=false", "jht-podman"]}
+        assert records and records[0]["phase"] == "podman_machine_probe"
+        assert all(row["argv"] == expected[row["phase"]] for row in records)
+        assert all(row["filePath"] == str(tmp_path / "bin" / "podman.exe") for row in records)
+        assert all(type(row["timeoutMs"]) is int and 1 <= row["timeoutMs"] <= 1000 for row in records)
+        starts = [row for row in records if row["phase"] == "podman_machine_start"]
+        assert len(starts) == 1 and starts[0]["exitCode"] == (125 if fail == "start" else 0)
+        assert all(row["exitCode"] == 1 for row in records if row["phase"] == "podman_machine_probe")
+        assert calls == [" ".join(row["argv"]) for row in records]
 
 
 # ---------------------------------------------------------------------------
