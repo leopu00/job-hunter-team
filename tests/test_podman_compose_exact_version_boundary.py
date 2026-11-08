@@ -82,6 +82,17 @@ def _digest(path: Path) -> str:
 
 
 def _write_executable(path: Path, source: str) -> None:
+    python_header = "#!/usr/bin/env python3\n"
+    if source.startswith(python_header):
+        # Private stdlib-only fakes need no global PDF/notary site hooks.
+        # Keep the same PATH-selected interpreter and real process boundary.
+        source = (
+            "#!/bin/sh\n"
+            '""":"\n'
+            'exec python3 -S "$0" "$@"\n'
+            '":"""\n'
+            + source[len(python_header):]
+        )
     path.write_text(source, encoding="utf-8")
     path.chmod(0o700)
 
