@@ -60,9 +60,10 @@ function Get-JhtFixtureProcess {
 }
 
 function Wait-JhtFixtureImageRelease {
-  param([ValidateRange(0, 5000)][int]$TimeoutMilliseconds = 5000)
+  param([ValidateRange(0, 5000)][int]$TimeoutMilliseconds = 5000, [switch]$HoldWithoutSharing)
   $clock = [Diagnostics.Stopwatch]::StartNew()
   $fileCode = 0
+  $sharing = if ($HoldWithoutSharing) { [IO.FileShare]::None } else { [IO.FileShare]::Delete }
   do {
     $alive = @()
     foreach ($file in @(Get-ChildItem -LiteralPath $script:Sandbox -Filter '*.pid' -Recurse -File)) {
@@ -73,7 +74,7 @@ function Wait-JhtFixtureImageRelease {
     if ($alive.Count -eq 0) {
       try {
         # Deny new readers/writers while permitting our ONE deletion through this lease.
-        return [IO.File]::Open($script:Fake, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::Delete)
+        return [IO.File]::Open($script:Fake, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, $sharing)
       } catch {
         $reason = $_.Exception
         while ($reason.InnerException) { $reason = $reason.InnerException }
@@ -90,12 +91,23 @@ function Wait-JhtFixtureImageRelease {
 }
 
 function Test-JhtFixtureImageFence {
-  $held = [IO.File]::Open($script:Fake, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  # Finish asynchronous process teardown BEFORE isolating the file-sharing negative.
+  $ready = Wait-JhtFixtureImageRelease
+  try { Assert-JhtDeadlineCase $ready.CanWrite 'The image fence did not acquire its positive lease.' } finally { $ready.Dispose() }
+  # A real handle with NO sharing, including NO FILE_SHARE_DELETE, on every Windows version.
+  $held = Wait-JhtFixtureImageRelease -HoldWithoutSharing
   $failure = $null
   try {
     try { $unexpected = Wait-JhtFixtureImageRelease -TimeoutMilliseconds 0; $unexpected.Dispose() } catch { $failure = $_.Exception }
-    Assert-JhtDeadlineCase ($failure -and $failure.Message.StartsWith('fixture_file_not_released:')) 'A real held image did not block fixture deletion.'
-    Assert-JhtDeadlineCase ($failure.Message.Contains('win32=32 ')) 'The held image did not produce the real sharing violation.'
+    $observed = 'no exception; the held-file fence returned'
+    if ($failure) {
+      $reason = $failure
+      while ($reason.InnerException) { $reason = $reason.InnerException }
+      $native = if ($reason -is [ComponentModel.Win32Exception]) { " native_win32=$($reason.NativeErrorCode)" } else { '' }
+      $observed = "type=$($reason.GetType().FullName) hresult=$($reason.HResult)$native message=$($reason.Message)"
+    }
+    Assert-JhtDeadlineCase ($failure -and $failure.Message.StartsWith('fixture_file_not_released:')) "A real held image did not block fixture deletion: $observed"
+    Assert-JhtDeadlineCase ($failure.Message.Contains('win32=32 ')) "The held image did not produce the real sharing violation: $observed"
   } finally { $held.Dispose() }
 }
 
