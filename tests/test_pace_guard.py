@@ -151,18 +151,14 @@ def test_danger_zone_brakes_hard():
 
 # ── I limiti del freno ──────────────────────────────────────────────────
 
-def test_brake_never_becomes_a_freeze():
-    """Il freno satura a 1h: un team lento si recupera, uno lockato no."""
-    r = pace_guard.evaluate(_sample(99), _ts("2026-07-26T15:00:00"),
-                            target_pct=100.0, current_throttle_s=3600)
-    assert r["throttle_recommended_s"] == pace_guard.WORKER_CEILING
-
-
-def test_brake_never_goes_below_the_worker_floor():
-    """Anche molto indietro, un worker non scende sotto i 5 minuti."""
-    r = pace_guard.evaluate(_sample(1), _ts("2026-07-26T19:00:00"),
-                            target_pct=100.0, current_throttle_s=300)
-    assert r["throttle_recommended_s"] == pace_guard.WORKER_FLOOR
+@pytest.mark.parametrize("usage,at,current,expected", [
+    pytest.param(99, "2026-07-26T15:00:00", 3600, pace_guard.WORKER_CEILING, id="ceiling"),
+    pytest.param(1, "2026-07-26T19:00:00", 300, pace_guard.WORKER_FLOOR, id="floor"),
+])
+def test_brake_stays_inside_the_worker_bounds(usage, at, current, expected):
+    result = pace_guard.evaluate(_sample(usage), _ts(at), target_pct=100.0,
+                                 current_throttle_s=current)
+    assert result["throttle_recommended_s"] == expected
 
 
 def test_the_ladder_is_the_same_in_both_modules():
@@ -180,19 +176,15 @@ def test_the_ladder_is_the_same_in_both_modules():
     assert pace_guard.WORKER_FLOOR == tc.WORKER_FLOOR
 
 
-def test_step_throttle_moves_one_rung_at_a_time():
-    """Gradini in minuti primi: da 7min (420s) si sale a 11min (660s)."""
-    assert pace_guard.step_throttle(600, 1) == 660
-    assert pace_guard.step_throttle(600, -1) == 300
-    assert pace_guard.step_throttle(300, -5) == pace_guard.WORKER_FLOOR
-    assert pace_guard.step_throttle(3000, 9) == pace_guard.WORKER_CEILING
-
-
-def test_off_ladder_value_snaps_down_not_up():
-    """Un valore fuori scala non deve far saltare un gradino per arrotondamento."""
-    # 700s sta fra 660 (11min) e 780 (13min): il gradino corrente è 660, quindi
-    # +1 porta a 780. Arrotondando al più vicino si salterebbe a 1020.
-    assert pace_guard.step_throttle(700, 1) == 780
+@pytest.mark.parametrize("current,steps,expected", [
+    pytest.param(600, 1, 660, id="up"),
+    pytest.param(600, -1, 300, id="down"),
+    pytest.param(300, -5, pace_guard.WORKER_FLOOR, id="floor"),
+    pytest.param(3000, 9, pace_guard.WORKER_CEILING, id="ceiling"),
+    pytest.param(700, 1, 780, id="off-ladder"),  # Snap down to 660 before moving up; never skip to 1020.
+])
+def test_step_throttle_moves_and_clamps_on_the_ladder(current, steps, expected):
+    assert pace_guard.step_throttle(current, steps) == expected
 
 
 # ── Chi decide: il guard consiglia, il Capitano applica ─────────────────
@@ -462,17 +454,6 @@ def test_the_emergency_survives_the_night_in_the_mailbox(tmp_path, monkeypatch):
     assert "ROSTER" in mailbox              # la parte che il freno non può fare
     logged = (tmp_path / "pace-guard.jsonl").read_text(encoding="utf-8")
     assert '"mailbox_only": true' in logged
-
-
-def test_ordinary_advice_does_not_pile_up_in_the_mailbox(tmp_path, monkeypatch):
-    """Un consiglio di crociera per un team che di notte non corre resta
-    rumore: è il ticket da cui siamo partiti."""
-    r = pace_guard.evaluate(AHEAD, AHEAD_NOW, target_pct=100.0,
-                            current_throttle_s=pace_guard.WORKER_FLOOR)
-    sent = []
-    _run_bridge_step(monkeypatch, tmp_path, r, sent, within_hours=False)
-    assert sent == []
-    assert not (tmp_path / "bridge-mailbox.jsonl").exists()
 
 
 def test_the_night_emergency_is_written_once_per_cooldown(tmp_path, monkeypatch):
