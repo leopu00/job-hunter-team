@@ -53,7 +53,7 @@ def boot_operation() -> str:
     owner = int(os.environ.get("JHT_TELEGRAM_SERVICE_UID", "1003"))
     root = directory()
     _check_owner(root, owner, folder=True)
-    fd = os.open(root / "lifecycle.json", os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(root / "lifecycle.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         if not stat.S_ISREG(info.st_mode) or info.st_uid != owner or info.st_mode & 0o222 or info.st_size > 128:

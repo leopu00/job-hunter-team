@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import stat
 import subprocess
 import sys
 
@@ -127,3 +128,37 @@ def test_boot_rejects_untrusted_public_state(lifecycle_home, corruption):
                             env=env, capture_output=True, text=True, check=False)
     assert result.returncode == 1 and result.stdout == ""
     assert "state_unreadable" in result.stderr
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_boot_refuses_a_real_fifo_without_waiting_for_a_writer(lifecycle_home, configured):
+    lifecycle_state.publish(configured)
+    target = lifecycle_home / "socket/lifecycle.json"
+    regular = target.read_bytes()
+    command = [sys.executable, "-I", str(PLANNER), "boot"]
+    expected = "start\n" if configured else "noop\n"
+    before = subprocess.run(command, input="0\nfalse", capture_output=True,
+                            text=True, check=False, timeout=5)
+    assert before.returncode == 0 and before.stdout == expected and before.stderr == ""
+    target.unlink()
+    os.mkfifo(target, 0o444)
+    target.chmod(0o444)
+    fifo = target.stat()
+    assert stat.S_ISFIFO(fifo.st_mode) and fifo.st_uid == os.getuid()
+    assert stat.S_IMODE(fifo.st_mode) == 0o444
+    try:
+        # No writer is opened: O_RDONLY alone blocks before the descriptor checks.
+        refused = subprocess.run(command, input="0\nfalse", capture_output=True,
+                                 text=True, check=False, timeout=5)
+        assert refused.returncode == 1 and refused.stdout == ""
+        assert "state_unreadable" in refused.stderr
+        unchanged = target.stat()
+        assert (unchanged.st_ino, unchanged.st_mode, unchanged.st_uid) == (
+            fifo.st_ino, fifo.st_mode, fifo.st_uid)
+    finally:
+        target.unlink()
+    lifecycle_state.publish(configured)
+    assert target.read_bytes() == regular
+    after = subprocess.run(command, input="0\nfalse", capture_output=True,
+                           text=True, check=False, timeout=5)
+    assert after.returncode == 0 and after.stdout == expected and after.stderr == ""
