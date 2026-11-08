@@ -81,7 +81,7 @@ def test_stale_or_future_usage_is_not_shown_as_a_current_value(tmp_path, age):
     assert "observer_usage_stale" in (tmp_path / "logs/runtime.log").read_text()
 
 
-@pytest.mark.parametrize("value", [None, True, -1, float("nan"), float("inf"), "100", {}, []])
+@pytest.mark.parametrize("value", [None, True, -1, float("nan"), float("inf"), "100", {}, [], 10**1000])
 def test_invalid_usage_never_becomes_zero(tmp_path, value):
     usage(tmp_path, {"scout-4": value})
     result = observer(tmp_path, ()).sample(NOW, 1)
@@ -125,7 +125,8 @@ def test_tmux_inventory_is_read_once_and_never_sends_keys():
 
 
 @pytest.mark.parametrize("stdout", ["CAPITANO\tNaN\t10\t0", "CAPITANO\t100\t0\t0", "CAPITANO\t100\t10",
-                                    "CAPITANO\t100\t10\t0\nJHT-CAPITANO\t100\t11\t0"])
+                                    "CAPITANO\t100\t10\t0\nJHT-CAPITANO\t100\t11\t0",
+                                    "CAPITANO\t100\t10\t0\nSCOUT-1\t100\t10\t0"])
 def test_malformed_or_ambiguous_inventory_fails_closed(stdout):
     assert read_sessions(lambda *_a, **_kw: SimpleNamespace(returncode=0, stdout=stdout)) == (
         {}, ["observer_sessions_invalid"])
@@ -209,3 +210,28 @@ def test_runtime_log_link_is_not_written(tmp_path):
     assert "observer_log_unavailable" in tool.sample(NOW, 1)["errors"]
     assert "observer_log_unavailable" in tool.sample(NOW+3, 4)["errors"]
     assert target.read_text() == "keep"
+
+
+@pytest.mark.parametrize("part", ["header", "tail"])
+def test_unreadable_session_log_is_unknown_not_never_started_and_is_logged(tmp_path, monkeypatch, part):
+    path, _ = codex(tmp_path)
+    tool = observer(tmp_path)
+    if part == "header":
+        original = Path.open
+        def open_log(candidate, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError("synthetic unreadable session")
+            return original(candidate, *args, **kwargs)
+        monkeypatch.setattr(Path, "open", open_log)
+    else:
+        original = state.tail_lines
+        def tail_log(candidate, *args, **kwargs):
+            if candidate == path:
+                raise PermissionError("synthetic unreadable session")
+            return original(candidate, *args, **kwargs)
+        monkeypatch.setattr(state, "tail_lines", tail_log)
+    result = tool.sample(NOW, 1)
+    assert result["agents"][0]["identity"] is None
+    assert result["agents"][0]["state"] == "sconosciuto"
+    assert "observer_session_logs_unavailable" in result["errors"]
+    assert "observer_session_logs_unavailable" in (tmp_path / "logs/runtime.log").read_text()

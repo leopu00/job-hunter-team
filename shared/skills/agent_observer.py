@@ -23,6 +23,7 @@ class Observer:
         self.meter = meter or ProcessMeter()
         self.cache, self.logged = {}, set()
         self.index, self.index_at = {}, None
+        self.index_errors = []
         self.log_failed = False
 
     def metadata(self, uid, session, now, monotonic):
@@ -31,16 +32,21 @@ class Observer:
         if cached and monotonic - cached[0] < 15:
             return cached[1]
         cwd = state.agent_dir(self.home, uid)
+        errors = list(self.index_errors)
         if cwd is None:
             result = {"identity": None, "state": "sconosciuto", "reason": "fonti_illeggibili"}
+            errors.append("observer_session_logs_unavailable")
         else:
             events, readable, unrecognised, _, identity = inspect_session(
-                state, state.Sources(self.home), str(cwd), session["created"], index=self.index)
+                state, state.Sources(self.home), str(cwd), session["created"], index=self.index, errors=errors)
             cpu, age = state.read_cpu(self.home, uid, now)
             verdict = state.fold(events, state.Ctx(now=now, session_created=session["created"],
                                                   readable=readable, unrecognised=unrecognised,
                                                   cpu_pct=cpu, cpu_age_s=age))
             result = {**verdict, "identity": identity}
+        if errors:
+            result.update(state="sconosciuto", reason="fonti_illeggibili", identity=None)
+        result["errors"] = sorted(set(errors))
         result["observed_at"] = now
         self.cache[key] = (monotonic, result)
         return result
@@ -51,7 +57,8 @@ class Observer:
         sessions, errors = self.sessions()
         if sessions and (self.index_at is None or monotonic - self.index_at >= 15):
             since = min(s["created"] for s in sessions.values()) - state.CLOCK_SLACK_S
-            self.index = codex_index(state, state.Sources(self.home), since)
+            self.index_errors = []
+            self.index = codex_index(state, state.Sources(self.home), since, self.index_errors)
             self.index_at = monotonic
         processes, proc_errors = self.processes()
         meter = self.meter.sample(sessions, processes, monotonic, bool(proc_errors))
@@ -66,6 +73,7 @@ class Observer:
                 "state": "spento" if not errors or not any(e.startswith("observer_sessions_") for e in errors)
                 else "sconosciuto", "identity": None}
             tokens = usage["agents"].get(uid) if not usage["reason"] else None
+            errors.extend(metadata.get("errors", []))
             reason = usage["reason"] or ("observer_usage_unattributed" if tokens is None else None)
             rows.append({"id": uid, "name": uid.upper(),
                          "session": sessions[uid]["session"] if live else uid.upper(),
@@ -83,7 +91,7 @@ class Observer:
 
     def log(self, errors):
         fresh = set(errors) - self.logged
-        if fresh:
+        if fresh or self.log_failed:
             try:
                 append_errors(self.home, fresh)
                 self.log_failed = False

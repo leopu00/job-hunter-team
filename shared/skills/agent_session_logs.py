@@ -12,7 +12,7 @@ except ModuleNotFoundError:
     from shared.skills.agent_session_identity import identity
 
 
-def codex_index(state, src, since):
+def codex_index(state, src, since, errors=None):
     """One shared inventory per observer batch, not 400 log headers per agent."""
     out = {}
     for path in state._newer(src.codex.glob("*/*/*/rollout-*.jsonl"), since)[:state.CODEX_ROLLOUTS_SCANNED]:
@@ -24,11 +24,13 @@ def codex_index(state, src, since):
             if isinstance(cwd, str) and cwd not in out:
                 out[cwd] = (path, path.stat().st_mtime)
         except OSError:
+            if errors is not None:
+                errors.append("observer_session_logs_unavailable")
             continue
     return out
 
 
-def inspect_session(state, src, cwd, created, include_identity=True, index=None):
+def inspect_session(state, src, cwd, created, include_identity=True, index=None, errors=None):
     since = created - state.CLOCK_SLACK_S
     candidates = []
     listed = False
@@ -50,7 +52,8 @@ def inspect_session(state, src, cwd, created, include_identity=True, index=None)
             for path in state._newer(root.glob("*.jsonl"), since)[:2]:
                 take("claude", path, state.parse_claude)
     except OSError:
-        pass
+        if errors is not None:
+            errors.append("observer_session_logs_unavailable")
     try:
         if src.codex.is_dir():
             listed = True
@@ -70,7 +73,8 @@ def inspect_session(state, src, cwd, created, include_identity=True, index=None)
                     take("codex", path, state.parse_codex)
                     break
     except OSError:
-        pass
+        if errors is not None:
+            errors.append("observer_session_logs_unavailable")
     try:
         if src.kimi.is_dir():
             listed = True
@@ -82,7 +86,8 @@ def inspect_session(state, src, cwd, created, include_identity=True, index=None)
                 for wire in state._newer(root.glob("*/wire.jsonl"), since)[:1]:
                     take("kimi", wire, lambda lines: state.parse_kimi(lines, wire.parent.name, failures))
     except OSError:
-        pass
+        if errors is not None:
+            errors.append("observer_session_logs_unavailable")
     if not candidates:
         return [], listed, counts[0] >= 5 and counts[1] == 0, None, None
     best, current = max(candidates, key=lambda p: p[0].events[-1].ts)

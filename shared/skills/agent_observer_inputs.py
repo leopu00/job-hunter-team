@@ -32,6 +32,7 @@ def read_sessions(run=subprocess.run):
             return {}, []
         return {}, ["observer_sessions_unavailable"]
     sessions = {}
+    owners = {}
     for line in result.stdout.splitlines():
         fields = line.split("\t")
         if len(fields) != 4:
@@ -46,6 +47,9 @@ def read_sessions(run=subprocess.run):
         if existing["session"] != name or existing["created"] != int(created):
             return {}, ["observer_sessions_invalid"]
         if dead == "0" and int(pid) not in existing["pids"]:
+            if int(pid) in owners and owners[int(pid)] != uid:
+                return {}, ["observer_sessions_invalid"]
+            owners[int(pid)] = uid
             existing["pids"].append(int(pid))
     return sessions, []
 
@@ -76,7 +80,7 @@ def read_usage(home, now):
             if uid is None or name != uid or uid in out["agents"]:
                 raise ValueError("invalid instance")
             out["agents"][uid] = value if isinstance(value, (int, float)) and not isinstance(value, bool) \
-                and math.isfinite(value) and 0 <= value <= 2**53 - 1 else None
+                and 0 <= value <= 2**53 - 1 and math.isfinite(value) else None
         if not -60 <= out["age_seconds"] <= 900:
             out["reason"] = "observer_usage_stale"
     except FileNotFoundError:

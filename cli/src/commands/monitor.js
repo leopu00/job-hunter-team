@@ -39,10 +39,11 @@ export async function monitor(options, {
   lines.on('line', (line) => {
     clearTimeout(deadline);
     if (ended) return;
-    let snapshot;
-    try { snapshot = JSON.parse(line); } catch { fail('observer_read_invalid'); return; }
-    if (!validObservation(snapshot)) { fail('observer_read_invalid'); return; }
-    output.write(`\x1b[H\x1b[2J${renderObservation(snapshot, { live: true })}`);
+    try {
+      const snapshot = JSON.parse(line);
+      if (!validObservation(snapshot)) throw new Error('invalid');
+      output.write(`\x1b[H\x1b[2J${renderObservation(snapshot, { live: true })}`);
+    } catch { fail('observer_read_invalid'); return; }
     timer = setTimeout(request, intervalMs);
   });
   child.on('error', () => fail('observer_read_failed'));

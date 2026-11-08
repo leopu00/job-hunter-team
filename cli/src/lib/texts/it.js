@@ -1,5 +1,6 @@
 // Testi italiani delle schermate: le stesse chiavi dell'inglese.
 export default {
+  'error.observer_session_logs_unavailable': "Log della sessione non leggibili; modello e attività sconosciuti.",
   "observation.nd": "N/D",
   "observation.monitor": "Monitor agenti",
   "observation.identity": "Modello / effort",

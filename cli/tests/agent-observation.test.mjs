@@ -123,6 +123,21 @@ test('a bad stream reply actually fails the monitor and its owned child exits', 
   assert.equal(signals.listenerCount('SIGINT'), 0);
 });
 
+for (const corrupt of [
+  (data) => { data.agents = [null]; data.total = 1; data.running = 0; },
+  (data) => { data.agents[0].process.pids = {}; },
+]) test('malformed row or process data fails inside the monitor and cleans up its child', async () => {
+  const signals = new EventEmitter();
+  const data = snapshot();
+  corrupt(data);
+  assert.equal(validObservation(data), false);
+  let child;
+  await assert.rejects(monitor({}, { output: { isTTY: true, write() {} }, signals,
+    open: () => { child = fakeReader(data); return child; } }), /observer_read_invalid/);
+  assert.equal(child.exitCode, 0);
+  assert.equal(signals.listenerCount('SIGINT'), 0);
+});
+
 test('control characters from data are not passed to the display', () => {
   const data = snapshot();
   data.agents[0].identity.model = 'bad\x1b[2J';
