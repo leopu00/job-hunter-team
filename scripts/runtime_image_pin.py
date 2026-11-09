@@ -27,6 +27,10 @@ from typing import Any, Iterator
 
 
 SCHEMA_VERSION = 1
+# Schema 2 adds the digest of the CORE image (Assistente, broker, Pi, CLI: what the installers pull first); `digest` stays the full
+# runtime image, the contract every consumer already has. One repository, two digests. Without `core_digest` the manifest is schema 1
+# and nothing changes: the two-image runtime is off until the pin carries the second digest.
+CORE_SCHEMA_VERSION = 2
 MANIFEST_PATH = Path("release/runtime-image.v1.json")
 EXPECTED_KEYS = {
     "schema_version",
@@ -35,6 +39,7 @@ EXPECTED_KEYS = {
     "digest",
     "source_revision",
 }
+EXPECTED_CORE_KEYS = EXPECTED_KEYS | {"core_digest"}
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -144,10 +149,15 @@ class RuntimeImagePin:
     repository: str
     digest: str
     source_revision: str
+    core_digest: str | None = None
 
     @property
     def image_ref(self) -> str:
         return f"{self.repository}@{self.digest}"
+
+    @property
+    def core_image_ref(self) -> str | None:
+        return f"{self.repository}@{self.core_digest}" if self.core_digest else None
 
     @property
     def release_tag_ref(self) -> str:
@@ -160,14 +170,13 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         data = json.loads(raw)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise RuntimeImagePinError("manifest_invalid") from exc
-    if not isinstance(data, dict) or set(data) != EXPECTED_KEYS:
+    if not isinstance(data, dict) or set(data) not in (EXPECTED_KEYS, EXPECTED_CORE_KEYS):
         raise RuntimeImagePinError("manifest_shape")
     # bool e' una sottoclasse di int in Python: `True == 1` non deve poter
     # selezionare uno schema che non e' stato dichiarato come intero JSON.
-    if (
-        type(data.get("schema_version")) is not int
-        or data["schema_version"] != SCHEMA_VERSION
-    ):
+    # Schema 1 has no core digest, schema 2 has one: the shape and the number agree or the manifest is refused.
+    expected_schema = CORE_SCHEMA_VERSION if "core_digest" in data else SCHEMA_VERSION
+    if type(data.get("schema_version")) is not int or data["schema_version"] != expected_schema:
         raise RuntimeImagePinError("manifest_schema")
     if not isinstance(data.get("release_version"), str) or not VERSION_RE.fullmatch(
         data["release_version"]
@@ -183,6 +192,11 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         data["source_revision"]
     ):
         raise RuntimeImagePinError("source_revision_invalid")
+    core = data.get("core_digest")
+    if "core_digest" in data and (
+        not isinstance(core, str) or not DIGEST_RE.fullmatch(core) or core == data["digest"]
+    ):
+        raise RuntimeImagePinError("core_digest_invalid")  # two images, two different digests
     canonical = json.dumps(data, indent=2, sort_keys=True) + "\n"
     if raw != canonical:
         raise RuntimeImagePinError("manifest_not_canonical")
@@ -191,18 +205,27 @@ def load_manifest(path: Path) -> RuntimeImagePin:
         repository=data["repository"],
         digest=data["digest"],
         source_revision=data["source_revision"],
+        core_digest=core,
     )
+
+
+# The places that name the CORE image, with the pattern of the line (group `core_image`: the full reference). Empty until the
+# installers and wrappers carry the second constant; from then on a pin WITH a core digest needs every one of them to carry it
+# (a copy with one digest is refused), and a pin WITHOUT one needs none of them to.
+CORE_CONSUMER_PATTERNS: dict[Path, tuple[str, ...]] = {}
 
 
 def _pinned_group(pattern: str) -> str:
     """`image` (the full reference) or `digest` (the bare sha256:...) of a consumer pattern."""
     names = re.compile(pattern).groupindex
-    if set(names) not in ({"image"}, {"digest"}):
+    if set(names) not in ({"image"}, {"digest"}, {"core_image"}):
         raise RuntimeImagePinError("consumer_contract_invalid")
     return next(iter(names))
 
 
 def _pinned_value(pin: "RuntimeImagePin", group: str) -> str:
+    if group == "core_image":
+        return pin.core_image_ref or ""
     return pin.image_ref if group == "image" else pin.digest
 
 
@@ -246,6 +269,16 @@ def verify_tree(
                 raise RuntimeImagePinError("consumer_digest_drift")
         if MUTABLE_RELEASE_REF_RE.search(text):
             raise RuntimeImagePinError("consumer_mutable_ref")
+    for relative, patterns in CORE_CONSUMER_PATTERNS.items():
+        try:
+            text = (root / relative).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise RuntimeImagePinError("consumer_missing") from exc
+        for pattern in patterns:
+            group = _pinned_group(pattern)
+            values = [match.group(group) for match in re.finditer(pattern, text, flags=re.MULTILINE)]
+            if values != ([pin.core_image_ref] if pin.core_digest else []):
+                raise RuntimeImagePinError("consumer_core_drift")
     for installer, digest_file in INSTALLER_DIGESTS:
         if installer not in PINNED_CONSUMERS:
             continue
@@ -265,6 +298,7 @@ def update_tree(
     source_revision: str,
     release_version: str | None = None,
     manifest_path: Path = MANIFEST_PATH,
+    core_digest: str | None = None,
 ) -> RuntimeImagePin:
     """Point the manifest and EVERY consumer at a new image, or change nothing.
 
@@ -283,7 +317,9 @@ def update_tree(
     if version != package_version:
         raise RuntimeImagePinError("release_version_mismatch")
     # the same validation the manifest gets when it is read back
-    pin = RuntimeImagePin(version, "ghcr.io/leopu00/jht", digest, source_revision)
+    pin = RuntimeImagePin(version, "ghcr.io/leopu00/jht", digest, source_revision, core_digest)
+    if core_digest is not None and (not DIGEST_RE.fullmatch(core_digest) or core_digest == digest):
+        raise RuntimeImagePinError("core_digest_invalid")
     if not VERSION_RE.fullmatch(version):
         raise RuntimeImagePinError("version_invalid")
     if not DIGEST_RE.fullmatch(digest):
@@ -295,7 +331,7 @@ def update_tree(
         raise RuntimeImagePinError("consumer_contract_invalid")
     rewritten: dict[Path, str] = {}
     raw_bytes: dict[Path, bytes] = {}
-    for relative in PINNED_CONSUMERS:
+    for relative in (*PINNED_CONSUMERS, *(p for p in CORE_CONSUMER_PATTERNS if p not in PINNED_CONSUMERS)):
         try:
             with open(root / relative, encoding="utf-8", newline="") as handle:
                 raw = handle.read()
@@ -305,9 +341,13 @@ def update_tree(
         crlf = "\r\n" in raw and raw.count("\n") == raw.count("\r\n")
         text = raw.replace("\r\n", "\n") if crlf else raw
         spans: list[tuple[int, int, str]] = []
-        for pattern in CONSUMER_VALUE_PATTERNS[relative]:
+        for pattern in (*CONSUMER_VALUE_PATTERNS.get(relative, ()), *CORE_CONSUMER_PATTERNS.get(relative, ())):
             group = _pinned_group(pattern)
             found = list(re.finditer(pattern, text, flags=re.MULTILINE))
+            if group == "core_image" and not core_digest:
+                if found:  # a core constant with no core digest: the copy is ahead of the manifest
+                    raise RuntimeImagePinError("consumer_core_drift")
+                continue
             if len(found) != 1:
                 raise RuntimeImagePinError("consumer_pattern_unmatched")
             spans.append(
@@ -326,11 +366,12 @@ def update_tree(
                 raise RuntimeImagePinError("consumer_missing")
             digests[digest_file] = _installer_digest(raw_bytes[installer]) + "\n"
     manifest = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": CORE_SCHEMA_VERSION if core_digest else SCHEMA_VERSION,
         "release_version": version,
         "repository": pin.repository,
         "digest": digest,
         "source_revision": source_revision,
+        **({"core_digest": core_digest} if core_digest else {}),
     }
     # Every new content is written beside its file first: an I/O error there
     # (disk full, a read-only file) leaves the tree as it was. Only then the
@@ -389,7 +430,7 @@ def find_stray_pins(root: Path, pin: RuntimeImagePin) -> None:
         except (OSError, UnicodeError):
             continue  # not on disk (sparse checkout) or not text
         for found in STRAY_PIN_RE.findall(text):
-            if found != pin.image_ref:
+            if found not in (pin.image_ref, pin.core_image_ref):
                 raise RuntimeImagePinError("unlisted_stale_pin")
 
 
@@ -617,6 +658,8 @@ def _parser() -> argparse.ArgumentParser:
             "digest",
             "source_revision",
             "image_ref",
+            "core_digest",
+            "core_image_ref",
         ),
     )
     verify = subparsers.add_parser("verify-tree")
@@ -632,6 +675,7 @@ def _parser() -> argparse.ArgumentParser:
     update.add_argument("--root", type=Path, default=Path.cwd())
     update.add_argument("--digest", help="the multi-architecture index digest, sha256:...")
     update.add_argument("--source-revision", help="the commit the image was built from")
+    update.add_argument("--core-digest", help="the digest of the core image (schema 2); without it the manifest stays schema 1")
     update.add_argument(
         "--from-registry",
         action="store_true",
@@ -668,14 +712,12 @@ def main(argv: list[str] | None = None) -> int:
                 revision = found
             elif revision is None:
                 raise RuntimeImagePinError("update_source_ambiguous")
-            done = update_tree(args.root, digest, revision, args.release_version, args.manifest)
+            done = update_tree(args.root, digest, revision, args.release_version, args.manifest, args.core_digest)
             print(f"runtime-image-pin result=pass code=tree_updated image={done.image_ref} revision={done.source_revision}")
             return 0
         pin = load_manifest(manifest)
         if args.command == "show":
-            print(
-                pin.image_ref if args.field == "image_ref" else getattr(pin, args.field)
-            )
+            print(pin.image_ref if args.field == "image_ref" else getattr(pin, args.field) or "")
         elif args.command == "verify-tree":
             verified = verify_tree(args.root, args.version, args.manifest)
             find_stray_pins(args.root, verified)
