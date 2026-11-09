@@ -34,6 +34,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import codex_usage  # noqa: E402
+import model_pricing  # noqa: E402
 import pi_sessions  # noqa: E402
 import token_metrics_lib as tlib  # noqa: E402
 
@@ -459,6 +461,25 @@ def summarize_pi(events, searches=(), web_search=None):
     return block
 
 
+def cost_summary(provider, window_start_ts):
+    """What the window cost in USD, per agent and per model, from the tokens of every call and the price of the model
+    that answered (shared/config/model-prices.json, model_pricing.py): the same calculation for the calls of Codex and
+    for those of Pi. A model without a price is declared unknown, never zero. Kimi and Claude teams have no list yet."""
+    if provider in ("kimi", "claude"):
+        return None
+    ledger = model_pricing.Ledger()
+    for call in codex_usage.read_calls(CODEX_SESSIONS, window_start_ts):
+        ledger.add(call["agent"], "openai", call["model"], call["fresh"], call["cached"], call["written"],
+                   call["output"], call["reasoning"])
+    for event in pi_sessions.usage_events(JHT_HOME, window_start_ts):
+        tokens = model_pricing.from_pi(event)
+        ledger.add(event["agent"], "openai", event["model"], tokens["fresh"], tokens["cached"], tokens["written"],
+                   tokens["output"], tokens["reasoning"])
+    for event in pi_sessions.search_events(JHT_HOME, window_start_ts):
+        ledger.add_searches(event["agent"], "openai", event["searches"])
+    return ledger.summary()
+
+
 # ── Main loop ────────────────────────────────────────────────────────────
 
 
@@ -525,6 +546,11 @@ def main():
             out_raw += pi_block["output_raw"]
             cache_r += pi_block["cache_read_raw"]
 
+        try:
+            cost = cost_summary(provider, window_start_ts)
+        except (OSError, ValueError, model_pricing.PriceListError) as exc:  # a broken list is said, not a made-up cost
+            cost = {"error": str(exc)}
+
         bridge_pct = state.get("last_usage")
         bridge_proj = state.get("last_projection")
         bridge_status = state.get("last_status") or ""
@@ -556,6 +582,8 @@ def main():
         )
         if pi_block["events"]:
             line += f" | pi calls={pi_block['events']} cost=${pi_block['cost']:.4f}"
+        if cost and cost.get("calls"):
+            line += " | cost=" + (f"${cost['usd']:.4f}" if cost["usd"] is not None else f"?(price unknown: {','.join(cost['unknown_models']) or 'search'})")
         print(line, flush=True)
 
         with CSV_OUT.open("a") as f:
@@ -625,6 +653,7 @@ def main():
             # [JHT-TOKEN-MONITOR-WRITER-CRITIC].
             "per_writer_aggregated": tlib.aggregate_writer_critic_rates(per_agent_out),
             "pi": pi_block,
+            "cost": cost,
         }
         write_state_atomic(STATE_OUT, state_payload)
 
