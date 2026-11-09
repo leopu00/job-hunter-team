@@ -658,15 +658,12 @@ def _daily_halt_active() -> bool:
 FIRST_PASS_HOLD_SEC = 780
 
 
-def _first_pass_cap(agent: str):
-    """Il conto del primo passaggio se `agent` e' uno Scout nel burst del primo avvio, altrimenti None. Mai solleva."""
-    if _role_of(agent) != "scout":
-        return None
+def _burst(rule: str, *args):  # le regole del burst: throttle_burst.py (T309); senza il modulo o con un errore, nessuna
     try:
-        mod = _load_shared("first_run", "first_run.py")
-        return mod.sourcing_cap() if mod is not None else None
-    except Exception as exc:  # noqa: BLE001 — senza il conto resta la pausa di sempre
-        _log("could not read the first pass cap: %s" % exc)
+        mod = _load_shared("throttle_burst", "throttle_burst.py")
+        return getattr(mod, rule)(globals(), *args) if mod is not None else None
+    except Exception as exc:  # noqa: BLE001
+        _log("throttle_burst.%s failed: %s" % (rule, exc))
         return None
 
 
@@ -787,10 +784,12 @@ def _register(agent: str, seconds=None, reason=None, session=None,
     # rifiuta), e ogni giro di ricerca che fa da qui e' budget senza posizioni. Resta fermo FIRST_PASS_HOLD_SEC
     # per volta, e riprova da solo quando il burst finisce. Dopo la regola dell'unita' vuota, che altrimenti
     # accorcerebbe questa pausa a un minuto.
-    first_pass = _first_pass_cap(agent)
+    first_pass = _burst("first_pass_cap", agent)
     first_pass_held = first_pass is not None and first_pass["reached"] and applied < FIRST_PASS_HOLD_SEC
     if first_pass_held:
         applied, shortened_from, held = FIRST_PASS_HOLD_SEC, None, None
+    burst_cut = None if first_pass_held else _burst("wait_cap", agent, applied, now)
+    shortened_from, applied = (applied, burst_cut["cap_sec"]) if burst_cut else (shortened_from, applied)
     if applied <= 0:
         # Throttle 0 = nessuna pausa (il core interattivo ci sta per scelta:
         # deve restare reattivo per la chat dell'utente). L'agente resta ACTIVE
@@ -844,6 +843,7 @@ def _register(agent: str, seconds=None, reason=None, session=None,
         shortened = {"empty_unit_long_sec": long_unit}
     if first_pass_held:
         shortened = {"first_pass_cap": first_pass}
+    shortened = {"shortened_from": shortened_from, "burst_wait": burst_cut} if burst_cut else shortened
     emit("armed", agent=agent, ts=now, applied_sec=applied, until=until,
          reason=reason, **shortened)
     emit_pause("start", agent, now, id=pause_id,
