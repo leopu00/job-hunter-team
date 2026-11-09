@@ -435,7 +435,8 @@ def summarize_pi(events, searches=(), web_search=None):
     block = {"events": len(events), "sessions": len({e["session"] for e in events}),
              "input_raw": 0, "output_raw": 0, "cache_read_raw": 0, "cache_creation_raw": 0,
              "weighted": 0.0, "cost": 0.0, "cost_is_estimate": True, "agents": {},
-             "searches": 0, "search_cost": 0.0, "web_search": dict(web_search or {})}
+             "searches": 0, "search_cost": 0.0, "web_search": dict(web_search or {}),
+             "by_role_model": pi_sessions.breakdown([e["raw"] for e in events], searches)}
     for e in events:
         t = e["tokens"]
         block["input_raw"] += t["input"]

@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -188,4 +189,54 @@ def totals(events) -> dict:
         out["cost"] += event["cost"]
         out["calls"] += 1
     out["cost"] = round(out["cost"], 6)
+    return out
+
+
+# ── by role and model ───────────────────────────────────────────────────
+
+_INSTANCE = re.compile(r"-s?\d+$", re.IGNORECASE)
+
+
+def role_of(agent) -> str:
+    """`scout-2` -> `scout`, `critico-S1` -> `critico`; an agent with no name is `?unknown`."""
+    return _INSTANCE.sub("", str(agent or "").strip().lower()) or "?unknown"
+
+
+def exact_cost(event):
+    """The cost of one call by OUR shared price list (shared/skills/model_prices.py), or None while it is not there.
+    pi's own `cost` is an estimate: it prices the cache write, which OpenAI does not charge. What OpenAI bills is the
+    uncached input (pi's `input` plus its `cache_write`, which for OpenAI is the part of the prompt that was not cached
+    yet), the cached input, and the output (the reasoning is already inside it)."""
+    try:
+        import model_prices
+    except ImportError:
+        return None
+    return model_prices.call_cost(event["model"], event["input"] + event["cache_write"], event["cache_read"],
+                                  event["output"])
+
+
+def breakdown(events, searches=()) -> dict:
+    """`{role: {model: {calls, input, cache_read, cache_write, output, reasoning, pi_cost, exact_cost, searches,
+    search_fee}}}`: the tokens of each kind, pi's own estimate and OUR exact cost (None while the price list is missing
+    or the model is not in it), apart for every role and every model. `reasoning` is part of `output`, shown apart."""
+    out: dict = {}
+
+    def cell(agent, model):
+        return out.setdefault(role_of(agent), {}).setdefault(model or "?unknown", {
+            "calls": 0, "input": 0, "cache_read": 0, "cache_write": 0, "output": 0, "reasoning": 0,
+            "pi_cost": 0.0, "exact_cost": 0.0, "searches": 0, "search_fee": 0.0})
+
+    for e in events:
+        c = cell(e["agent"], e["model"])
+        c["calls"] += 1
+        for name in ("input", "cache_read", "cache_write", "output", "reasoning"):
+            c[name] += e[name]
+        c["pi_cost"] = round(c["pi_cost"] + e["cost"], 6)
+        exact = exact_cost(e)
+        c["exact_cost"] = None if exact is None or c["exact_cost"] is None else round(c["exact_cost"] + exact, 6)
+    for e in searches:  # the search fee is not tied to a model in the session: it goes to the role's last model cell
+        models = out.get(role_of(e["agent"]), {})
+        c = cell(e["agent"], next(reversed(models)) if models else None)
+        c["searches"] += e["searches"]
+        c["search_fee"] = round(c["search_fee"] + e["cost"], 6)
     return out

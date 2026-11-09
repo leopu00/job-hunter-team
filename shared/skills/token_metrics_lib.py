@@ -226,7 +226,8 @@ def read_pi_events(
 ) -> list[dict[str, Any]]:
     """Gli eventi token dell'harness pi, sotto `$JHT_HOME/.pi/agent/sessions/`, nella STESSA forma di
     `read_kimi_events` (così aggregate e rolling_rate_per_agent li leggono uguali), più il costo che pi calcola:
-      {"ts", "session", "agent", "tokens": {input, output, cache_read, cache_write}, "weighted", "cost"}
+      {"ts", "session", "agent", "tokens": {input, output, cache_read, cache_write}, "weighted", "cost", "model",
+       "raw": the event of pi_sessions.py as it is, for the per-role and per-model breakdown}
     `agent` è il nome della cartella dell'agente (`scout-1`), preso dal cwd dell'header. Solo lettura; i file
     illeggibili e le righe monche si saltano."""
     import pi_sessions
@@ -238,7 +239,7 @@ def read_pi_events(
         if weighted <= 0:
             continue
         events.append({"ts": e["ts"], "session": e["session"], "agent": e["agent"], "tokens": tokens,
-                       "weighted": float(weighted), "cost": e["cost"]})
+                       "weighted": float(weighted), "cost": e["cost"], "model": e["model"], "raw": e})
     return events
 
 
