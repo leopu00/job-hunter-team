@@ -365,7 +365,7 @@ jht_phase() {
   esac
   # The marker is for the desktop app, which reads the installer through a pipe. A person at a terminal gets the
   # human lines (✓ ▸) only. JHT_MACHINE_OUTPUT=1 forces the marker, =0 forbids it, unset: only when stdout is not a terminal.
-  if jht_machine_output; then printf 'JHT_PHASE %s\n' "$1"; fi
+  if jht_machine_output; then printf 'JHT_PHASE %s\n' "$1"; [ "${JHT_PHASE_TIMES:-}" != 1 ] || printf 'JHT_TIME %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"; fi
 }
 
 # Wrap commands with system side effects. In dry-run, print instead of executing.

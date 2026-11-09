@@ -188,6 +188,20 @@ def test_phase_lines_follow_who_is_reading(tmp_path, script, machine_output, sho
     assert "AFTER" in lines
 
 
+@pytest.mark.parametrize("script", [INSTALLER, ENABLER], ids=["install", "enabler"])
+def test_phase_time_line_only_when_asked_and_after_the_phase_line(tmp_path, script):
+    body = "Write-JhtPhase wsl_check\n[Console]::Out.WriteLine('AFTER')\n"
+    plain = _run(tmp_path, script, ["Write-JhtPhase"], body, {"JHT_MACHINE_OUTPUT": "1"})
+    assert plain.returncode == 0, plain.stderr
+    assert "JHT_TIME" not in plain.stdout
+    timed = _run(tmp_path, script, ["Write-JhtPhase"], body, {"JHT_MACHINE_OUTPUT": "1", "JHT_PHASE_TIMES": "1"})
+    lines = timed.stdout.splitlines()
+    assert lines[0] == "JHT_PHASE wsl_check" and lines[-1] == "AFTER", timed.stdout
+    assert re.fullmatch(r"JHT_TIME \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ wsl_check", lines[1]), lines
+    refused = _run(tmp_path, script, ["Write-JhtPhase"], body, {"JHT_MACHINE_OUTPUT": "0", "JHT_PHASE_TIMES": "1"})
+    assert "JHT_TIME" not in refused.stdout
+
+
 def test_a_problem_says_what_went_wrong_and_what_to_do_now(tmp_path):
     body = "Write-JhtProblem -What 'It broke.' -Todo @('Do this first.', 'Then run it again.')\n"
     result = _run(tmp_path, INSTALLER, ["Write-JhtProblem"], body)
