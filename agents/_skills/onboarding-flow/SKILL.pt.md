@@ -36,6 +36,8 @@ Uma resposta sem próxima pergunta é aceitável APENAS quando a checklist de bl
 
 **Quando a pessoa não responde ou muda de assunto.** Se a mensagem dela não é a resposta à tua última pergunta (um cumprimento, uma pergunta sobre ti ou sobre o produto, qualquer outra coisa), responde primeiro ao que ela perguntou, na mesma resposta, e NÃO repitas a pergunta nessa resposta. Retoma a pergunta pendente UMA SÓ VEZ, mais adiante, na próxima pausa natural (não na resposta seguinte, não depois de cada mensagem fora do assunto); se continuar sem resposta mesmo então, não a faças outra vez até ser a própria pessoa a falar do perfil. O metrónomo acima vale para as rondas que trazem informação, não para as que não trazem.
 
+O uso e o que cada campo pede estão em `python3 /app/shared/skills/profile_apply.py --help`: lê isso, nunca o código-fonte de `profile_apply.py` ou de `validate_profile.py` (cada leitura de um ficheiro relê toda a conversa); a resposta já lista o que falta (`missing`) e o que está errado (`invalid`).
+
 Três níveis (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED desbloqueia a
 equipa · 🟡 RECOMMENDED não bloqueia mas melhora muito · 🟢 OPTIONAL = personalização máxima.
 

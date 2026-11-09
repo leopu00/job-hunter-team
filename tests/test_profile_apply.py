@@ -131,3 +131,23 @@ def test_non_ascii_text_stays_readable_in_the_file(box: Box):
     box.run({"set": {"name": "Marta Rossetti", "location": "Forlì", "preferences.salary": "tra 32 e 38 mila € lordi"}})
     text = box.profile.read_text(encoding="utf-8")
     assert "Forlì" in text and "€" in text and "\\u" not in text
+
+
+def test_help_prints_the_usage_and_what_each_field_asks_and_reads_nothing(box: Box):
+    done = subprocess.run([sys.executable, "-I", str(SCRIPT), "--help"], stdin=subprocess.DEVNULL, capture_output=True,
+                          text=True, timeout=30, env=box.env, check=False)
+    assert done.returncode == 0 and done.stderr == ""
+    for word in ("profile_apply.py", '"set"', "seniority_target", "experience_years", "languages", "skills", "`missing`", "`invalid`"):
+        assert word in done.stdout, word
+    assert not box.profile.exists() and box.messages() == ""
+
+
+def test_every_language_of_the_onboarding_skill_sends_the_assistant_to_help_not_to_the_sources():
+    """A guard on the prompt (a text test, declared): luna read the sources of both scripts to learn the fields."""
+    skills = SCRIPT.parents[2] / "agents" / "_skills" / "onboarding-flow"
+    files = sorted(skills.glob("SKILL*.md"))
+    assert len(files) == 7
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        assert "profile_apply.py --help" in text, path.name
+        assert "validate_profile.py` " in text or "validate_profile.py`" in text, path.name
