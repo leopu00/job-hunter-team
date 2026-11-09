@@ -274,26 +274,15 @@ def test_the_meter_block_adds_the_search_fee_to_the_cost_and_shows_who_has_no_se
     assert meter.summarize_pi([])["searches"] == 0 and meter.summarize_pi([])["web_search"] == {}
 
 
-# --- by role and model, and the exact cost -----------------------------------------------------------------------
+# --- by role and model -----------------------------------------------------------------------
 
-@pytest.fixture
-def prices(monkeypatch):
-    """A stand-in for the shared price list (model_pricing.cost_usd): uncached input 2, cached 0.2, cache write 2.5, output 12
-    per million, whatever the model."""
-    import types
-    module = types.ModuleType("model_pricing")
-    module.cost_usd = lambda model, uncached, cached, out, searches=0, written_in=0, provider="openai", book=None: (
-        uncached * 2 + cached * 0.2 + written_in * 2.5 + out * 12) / 1e6
-    monkeypatch.setitem(sys.modules, "model_pricing", module)
-
-
-def test_roles_lose_their_instance_number(prices):
+def test_roles_lose_their_instance_number():
     for agent, role in [("scout-2", "scout"), ("critico-S1", "critico"), ("capitano", "capitano"), ("analista-10", "analista"),
                         ("", "?unknown"), (None, "?unknown")]:
         assert pi_sessions.role_of(agent) == role
 
 
-def test_the_breakdown_keeps_each_kind_of_token_apart_per_role_and_model(tmp_path, prices):
+def test_the_breakdown_keeps_each_kind_of_token_apart_per_role_and_model(tmp_path):
     session(tmp_path, "scout-1", [call(-60, 3, 121, 0, 13_772, 26, cost=0.04, model="gpt-a"),
                                   call(-50, 3, 144, 13_772, 1_574, 0, cost=0.01, model="gpt-a"),
                                   call(-40, 100, 10, 0, 0, 0, cost=0.5, model="gpt-b")], sid="a")
@@ -303,19 +292,12 @@ def test_the_breakdown_keeps_each_kind_of_token_apart_per_role_and_model(tmp_pat
     a = got["scout"]["gpt-a"]
     assert (a["calls"], a["input"], a["cache_read"], a["cache_write"], a["output"], a["reasoning"]) == (3, 13, 13_781, 15_356, 273, 28)
     assert a["pi_cost"] == pytest.approx(0.15)
-    # exact: the cache write at ITS price (OpenAI's "30m write", 1.25x the input), not as ordinary input
-    assert a["exact_cost"] == pytest.approx((13 * 2 + 13_781 * 0.2 + 15_356 * 2.5 + 273 * 12) / 1e6, abs=1e-6)
+    # the exact dollars live in the meter's state["cost"] only (model_pricing.Ledger), not in this breakdown
+    assert "exact_cost" not in a
     assert got["scout"]["gpt-b"]["calls"] == 1
 
 
-def test_without_the_price_list_the_exact_cost_is_none_not_zero(tmp_path, monkeypatch):
-    monkeypatch.setitem(sys.modules, "model_pricing", None)  # ImportError on import
-    session(tmp_path, "scout-1", [call(-60, 3, 4, cost=0.04)])
-    cell = pi_sessions.breakdown(pi_sessions.usage_events(tmp_path))["scout"]["gpt-x"]
-    assert cell["exact_cost"] is None and cell["pi_cost"] == 0.04
-
-
-def test_the_search_fee_lands_on_the_role_and_the_meter_block_carries_the_breakdown(tmp_path, prices, meter):
+def test_the_search_fee_lands_on_the_role_and_the_meter_block_carries_the_breakdown(tmp_path, meter):
     session(tmp_path, "mentor", [call(-60, 5, 5, model="gpt-m"), searched(-50, 3)])
     block = meter.summarize_pi(tlib.read_pi_events(NOW - 3600, jht_home=tmp_path), pi_sessions.search_events(tmp_path, NOW - 3600))
     cell = block["by_role_model"]["mentor"]["gpt-m"]

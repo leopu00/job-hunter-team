@@ -16,7 +16,7 @@ Read from pi 1.5.0 sessions (the format of its docs/session-format.md, version 3
     has a column "30m write" at 1.25x the input price (terra 2.50 vs 2.00 USD per 1M), and pi sends no cache option, so
     the default 30-minute retention applies: pi's price for the write is OpenAI's. `cost.total` is still pi's own
     computation (`totalFromProvider: false`): it knows nothing of the long-context tier (above 272k input tokens) nor of
-    a web search fee. OUR exact cost is `exact_cost` below, from the shared price list.
+    a web search fee. OUR exact cost is the token meter's `state["cost"]`, from the shared price list (model_pricing.py).
   * The `system` message of a session is huge (the whole prompt and the tool schemas): only assistant lines are parsed.
 
 Pure reading: nothing is written, a missing or unreadable folder is "no usage", a half-written last line is skipped.
@@ -205,29 +205,17 @@ def role_of(agent) -> str:
     return _INSTANCE.sub("", str(agent or "").strip().lower()) or "?unknown"
 
 
-def exact_cost(event):
-    """The cost of one call by OUR shared price list (shared/skills/model_pricing.py), or None while the module is not
-    there or the model has no price (never a zero). What OpenAI bills: the uncached input (pi's `input`), the cached
-    input (`cache_read`), what was written to the cache (`cache_write`, at its own price: 1.25x the input for the default
-    30 minutes) and the output (the reasoning is already inside it), with the long-context tier on the whole call."""
-    try:
-        import model_pricing
-    except ImportError:
-        return None
-    return model_pricing.cost_usd(event["model"], event["input"], event["cache_read"], event["output"],
-                                  written_in=event["cache_write"])
-
-
 def breakdown(events, searches=()) -> dict:
-    """`{role: {model: {calls, input, cache_read, cache_write, output, reasoning, pi_cost, exact_cost, searches,
-    search_fee}}}`: the tokens of each kind, pi's own estimate and OUR exact cost (None while the price list is missing
-    or the model is not in it), apart for every role and every model. `reasoning` is part of `output`, shown apart."""
+    """`{role: {model: {calls, input, cache_read, cache_write, output, reasoning, pi_cost, searches, search_fee}}}`: the
+    tokens of each kind and pi's own cost, apart for every role and every model. `reasoning` is part of `output`, shown
+    apart. The exact dollars are NOT here: they are `state["cost"]` of the token meter (model_pricing.Ledger, per agent
+    and per model), the only place of the exact money."""
     out: dict = {}
 
     def cell(agent, model):
         return out.setdefault(role_of(agent), {}).setdefault(model or "?unknown", {
             "calls": 0, "input": 0, "cache_read": 0, "cache_write": 0, "output": 0, "reasoning": 0,
-            "pi_cost": 0.0, "exact_cost": 0.0, "searches": 0, "search_fee": 0.0})
+            "pi_cost": 0.0, "searches": 0, "search_fee": 0.0})
 
     for e in events:
         c = cell(e["agent"], e["model"])
@@ -235,8 +223,6 @@ def breakdown(events, searches=()) -> dict:
         for name in ("input", "cache_read", "cache_write", "output", "reasoning"):
             c[name] += e[name]
         c["pi_cost"] = round(c["pi_cost"] + e["cost"], 6)
-        exact = exact_cost(e)
-        c["exact_cost"] = None if exact is None or c["exact_cost"] is None else round(c["exact_cost"] + exact, 6)
     for e in searches:  # the search fee is not tied to a model in the session: it goes to the role's last model cell
         models = out.get(role_of(e["agent"]), {})
         c = cell(e["agent"], next(reversed(models)) if models else None)
