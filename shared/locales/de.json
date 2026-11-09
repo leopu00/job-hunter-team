@@ -510,5 +510,9 @@
   "position_card.value.draft": "Entwurf",
   "position_card.value.approved": "Freigegeben",
   "quota_mode.noquota": "ℹ️ Dieser Anbieter meldet keine Nutzungslimits: Das Team wird daher nicht über ein Kontingent gesteuert und bei fehlenden Daten nicht pausiert. Die Ausgaben sind nur durch die Obergrenze begrenzt, die du beim Anbieter für diesen Schlüssel gesetzt hast (hier angegeben: %s). Prüfe sie und sag dem Kapitän, wenn das Team langsamer laufen oder stoppen soll.",
-  "quota_mode.no_ceiling": "keine angegeben"
+  "quota_mode.no_ceiling": "keine angegeben",
+  "pi_cap.halt_eur": "⛔ Das Team ist pausiert: Die Agenten auf pi haben heute %s ausgegeben und die von dir angegebene Obergrenze erreicht (%s). Es geht nichts verloren. Die Arbeit läuft morgen weiter, oder sobald du die Obergrenze in der Konfiguration erhöhst.",
+  "pi_cap.halt_tokens": "⛔ Das Team ist pausiert: Die Agenten auf pi haben in der letzten Stunde %s Tokens verbraucht und die von dir angegebene Obergrenze erreicht (%s pro Stunde). Es geht nichts verloren. Die Arbeit läuft weiter, wenn die Stundenzahl darunter fällt, oder sobald du die Obergrenze in der Konfiguration erhöhst.",
+  "pi_cap.resume": "▶️ Die von dir angegebene Ausgabengrenze erlaubt wieder zu arbeiten: Das Team kann weitermachen.",
+  "pi_cap.no_ceiling": "ℹ️ Die Agenten auf pi haben heute %s ausgegeben, und es ist keine Ausgabengrenze angegeben. Dieser Zugang meldet keine Nutzungslimits, daher stoppt nichts anderes die Ausgaben. Um eine Grenze zu setzen, sag es dem Kapitän oder schreibe no_quota_cap in die Konfiguration (zum Beispiel eur: 10)."
 }

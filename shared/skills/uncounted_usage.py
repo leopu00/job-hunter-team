@@ -1,16 +1,14 @@
-"""Usage the meters do not count: sessions of a harness they cannot read.
+"""Usage the usage bridge does not see: sessions of a harness whose files it does not read.
 
-token-meter.py and sentinel-bridge.py read the session files of the provider
-CLIs (Claude Code, Codex, Kimi). An agent started on the pi harness
-(JHT_AGENT_HARNESS_<ROLE>=pi, see .launcher/spawn-lib.sh) writes its sessions
-under `$JHT_HOME/.pi/agent/sessions`, which neither of them reads.
+sentinel-bridge.py measures the 5h and weekly limits from what the provider CLIs write (Claude Code, Codex, Kimi).
+An agent started on the pi harness (JHT_AGENT_HARNESS_<ROLE>=pi, see .launcher/spawn-lib.sh) writes its sessions
+under `$JHT_HOME/.pi/agent/sessions`, which the bridge does not read. The token meter does (pi_sessions.py counts
+tokens and cost per call), so for the per-session numbers there is no gap any more.
 
-With a few pi agents the 5h and weekly limits stay right, because they are
-measured on the account and the provider CLIs of the other agents keep
-recording them. The per-session token counts, though, miss whatever pi
-spent. This module does not count those tokens: it declares that they are
-missing, so a reader of the meters can tell "no usage" from "usage we do not
-see".
+With a few pi agents the limits stay right, because they are measured on the account and the provider CLIs of the
+other agents keep recording them. With ONLY pi agents there is nothing to read the limits from (see quota_data.py:
+the NO-QUOTA mode). This module does not count anything: it declares that pi worked in the window, so a reader of
+the bridge state can tell "no usage" from "usage the limits do not come from".
 """
 
 from __future__ import annotations
@@ -21,7 +19,7 @@ from pathlib import Path
 # Same folder as jht_pi_agent_dir in .launcher/spawn-lib.sh, plus pi's own
 # default `sessions` subfolder.
 PI_SESSIONS = (".pi", "agent", "sessions")
-NOTE = "pi sessions are not counted by the token meter or the usage bridge"
+NOTE = "pi sessions are not read by the usage bridge (the token meter counts them)"
 
 
 def pi_sessions(jht_home: Path, since_ts: float | None = None) -> int:

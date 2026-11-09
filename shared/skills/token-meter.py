@@ -5,6 +5,7 @@ Letture (sola lettura, NESSUN side-effect sul team / bridge):
   • $JHT_HOME/.kimi/sessions/*/*/wire.jsonl  → token_usage per messaggio
   • $JHT_HOME/.codex/sessions/.../rollout-*.jsonl  → total_token_usage per call
   • $JHT_HOME/.claude/projects/.../*.jsonl  → message.usage per response
+  • $JHT_HOME/.pi/agent/sessions/--<cwd>--/*.jsonl  → usage per call del modello (harness pi, vedi pi_sessions.py)
   • $JHT_HOME/logs/sentinel-bridge-state.json  → last_usage% del bridge
 
 Output:
@@ -33,8 +34,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pi_sessions  # noqa: E402
 import token_metrics_lib as tlib  # noqa: E402
-import uncounted_usage  # noqa: E402
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 KIMI_SESSIONS = JHT_HOME / ".kimi" / "sessions"
@@ -427,6 +428,36 @@ def codex_weighted(t):
     return tlib.billing_weighted(t, "openai")
 
 
+def summarize_pi(events, searches=(), web_search=None):
+    """Il blocco "pi" dello stato: quello che l'harness pi ha speso nella finestra, con il costo che calcola pi
+    (una STIMA: pi prezza anche la scrittura in cache, che OpenAI non fattura a parte) più la tariffa delle chiamate di
+    ricerca web, che pi non prezza (pi_sessions.SEARCH_CALL_USD). `web_search` dice, per agente, se la ricerca è accesa."""
+    block = {"events": len(events), "sessions": len({e["session"] for e in events}),
+             "input_raw": 0, "output_raw": 0, "cache_read_raw": 0, "cache_creation_raw": 0,
+             "weighted": 0.0, "cost": 0.0, "cost_is_estimate": True, "agents": {},
+             "searches": 0, "search_cost": 0.0, "web_search": dict(web_search or {})}
+    for e in events:
+        t = e["tokens"]
+        block["input_raw"] += t["input"]
+        block["output_raw"] += t["output"]
+        block["cache_read_raw"] += t["cache_read"]
+        block["cache_creation_raw"] += t["cache_write"]
+        block["weighted"] += e["weighted"]
+        block["cost"] += e["cost"]
+        agent = block["agents"].setdefault(e["agent"] or "?unknown", {"events": 0, "cost": 0.0})
+        agent["events"] += 1
+        agent["cost"] = round(agent["cost"] + e["cost"], 6)
+    for e in searches:
+        block["searches"] += e["searches"]
+        block["search_cost"] += e["cost"]
+        block["cost"] += e["cost"]
+        agent = block["agents"].setdefault(e["agent"] or "?unknown", {"events": 0, "cost": 0.0})
+        agent["cost"] = round(agent["cost"] + e["cost"], 6)
+    block["cost"] = round(block["cost"], 6)
+    block["search_cost"] = round(block["search_cost"], 6)
+    return block
+
+
 # ── Main loop ────────────────────────────────────────────────────────────
 
 
@@ -478,6 +509,21 @@ def main():
             in_raw, out_raw = totals["input_tokens"], totals["output_tokens"]
             cache_r, cache_c = totals["cached_input_tokens"], 0
 
+        # Gli agenti sull'harness pi (JHT_AGENT_HARNESS_<RUOLO>=pi) scrivono altrove: li leggiamo noi. Con OpenAI
+        # spendono lo stesso conto di Codex, quindi entrano nei totali e nel peso (che il bridge confronta con la
+        # sua percentuale); con un altro provider restano nel solo blocco "pi" dello stato.
+        pi_events = tlib.read_pi_events(window_start_ts, jht_home=JHT_HOME)
+        pi_block = summarize_pi(pi_events, pi_sessions.search_events(JHT_HOME, window_start_ts),
+                                pi_sessions.web_search_status(JHT_HOME, window_start_ts))
+        if provider not in ("kimi", "claude"):
+            totals = dict(totals)
+            totals["events"] += pi_block["events"]
+            totals["sessions"] += pi_block["sessions"]
+            weighted += pi_block["weighted"]
+            in_raw += pi_block["input_raw"] + pi_block["cache_creation_raw"]
+            out_raw += pi_block["output_raw"]
+            cache_r += pi_block["cache_read_raw"]
+
         bridge_pct = state.get("last_usage")
         bridge_proj = state.get("last_projection")
         bridge_status = state.get("last_status") or ""
@@ -507,11 +553,8 @@ def main():
             f"weighted={int(weighted):>8,} | ratio={ratio_str} ema={ema_str}kT/1% "
             f"calib={calibrator.calibrations}"
         )
-        # Agents on the pi harness write sessions this meter does not read:
-        # say so on every line instead of reporting their usage as zero.
-        uncounted = uncounted_usage.declared_gap(JHT_HOME, window_start_ts)
-        if uncounted:
-            line += f" | WARN {uncounted['pi_sessions']} {uncounted['note']}"
+        if pi_block["events"]:
+            line += f" | pi calls={pi_block['events']} cost=${pi_block['cost']:.4f}"
         print(line, flush=True)
 
         with CSV_OUT.open("a") as f:
@@ -521,12 +564,13 @@ def main():
                 f"{int(weighted)},{ratio or ''},{ratio_ema or ''},{totals['sessions']}\n"
             )
 
-        # Step 4: per-agent rolling rate sugli ultimi 60s. Solo Kimi: per
+        # Step 4: per-agent rolling rate sugli ultimi 60s. Kimi e pi: per
         # claude/codex non abbiamo ancora un mapping session→agent affidabile.
         per_agent_out: dict = {}
-        if provider == "kimi" and kimi_events:
+        rate_events = kimi_events if provider == "kimi" else pi_events
+        if rate_events:
             per_agent_raw = tlib.rolling_rate_per_agent(
-                kimi_events, PER_AGENT_ROLL_WIN_S, now_ts=now.timestamp()
+                rate_events, PER_AGENT_ROLL_WIN_S, now_ts=now.timestamp()
             )
             for agent, info in per_agent_raw.items():
                 rate_tpm = info["rate_tokens_per_min"]
@@ -579,7 +623,7 @@ def main():
             # del Capitano (RULE C-11). Vedi BACKLOG
             # [JHT-TOKEN-MONITOR-WRITER-CRITIC].
             "per_writer_aggregated": tlib.aggregate_writer_critic_rates(per_agent_out),
-            "uncounted": uncounted,
+            "pi": pi_block,
         }
         write_state_atomic(STATE_OUT, state_payload)
 

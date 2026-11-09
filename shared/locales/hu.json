@@ -511,5 +511,9 @@
   "position_card.value.draft": "Piszkozat",
   "position_card.value.approved": "Jóváhagyva",
   "quota_mode.noquota": "ℹ️ Ez a szolgáltató nem közöl használati korlátokat, ezért a csapatot nem kvóta szabályozza, és hiányzó adat miatt nem állítjuk le. A költésnek csak az a plafonja, amelyet a szolgáltatónál állítottál be ehhez a kulcshoz (itt megadva: %s). Ellenőrizd, és ha lassabb vagy leállított csapatot szeretnél, szólj a Kapitánynak.",
-  "quota_mode.no_ceiling": "nincs megadva"
+  "quota_mode.no_ceiling": "nincs megadva",
+  "pi_cap.halt_eur": "⛔ A csapat szünetel: a pi-n futó ügynökök ma %s összeget költöttek, és elérték az általad megadott plafont (%s). Nem vész el semmi. A munka holnap folytatódik, vagy amint a konfigurációban megemeled a plafont.",
+  "pi_cap.halt_tokens": "⛔ A csapat szünetel: a pi-n futó ügynökök az elmúlt órában %s tokent használtak, és elérték az általad megadott plafont (%s óránként). Nem vész el semmi. A munka akkor folytatódik, ha az óránkénti szám a plafon alá esik, vagy amint a konfigurációban megemeled.",
+  "pi_cap.resume": "▶️ Az általad megadott költési plafon újra engedi a munkát: a csapat folytathatja.",
+  "pi_cap.no_ceiling": "ℹ️ A pi-n futó ügynökök ma %s összeget költöttek, és nincs megadva költési plafon. Ez a hozzáférés nem közöl használati korlátokat, így semmi más nem fékezi a költést. Plafon beállításához szólj a Kapitánynak, vagy írd be a no_quota_cap értéket a konfigurációba (például eur: 10)."
 }
