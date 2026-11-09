@@ -365,6 +365,7 @@ def active_plan() -> Optional[dict]:
 # the smallest roster when no ceiling is declared. With a subscription the person did not name («I do not know», no
 # answer) the burst opens on the provider's lowest plan, which is DECLARED: the plan carries `assumed`, the burst's
 # answer says so and the Capitano's diary gets the line. The card stays open: nothing here waits for it.
+# Known limit: a plan the person declares AFTER the burst opened does not resize that burst (the roster is fixed at its start).
 _API_KEY_TIER_BY_EUR = ((30, 15), (10, 5))  # (ceiling EUR/day at least, roster tier); below, or no ceiling: tier 1
 
 
