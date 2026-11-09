@@ -230,7 +230,7 @@ _BURST_ROSTER = [
 # Quante posizioni lo Scout porta a casa nel PRIMO giro prima di fermarsi e
 # lasciare la finestra al downstream. Senza questo cap lo scouting si mangia
 # la finestra e il punteggio non arriva mai (root cause del run 2026-07-26).
-_BURST_SCOUT_CAP = {20: 25, 15: 20, 5: 15, 1: 10, 0: 8}
+_BURST_SCOUT_CAP = {20: 30, 15: 30, 5: 30, 1: 30, 0: 30}
 
 # Obiettivo dichiarato del burst: quante posizioni PUNTEGGIATE far vedere
 # all'utente prima di passare al regime normale.
