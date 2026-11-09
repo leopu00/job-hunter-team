@@ -7,6 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { CODEX_MODEL } from '../../shared/runtime/role-models.js';
 import { summarizeRoleModels } from './setup-models.js';
+import { harnessProblem } from '../../shared/runtime/agent-harness.js';
 
 // Path fissi JHT (specchio di shared/paths.ts, con override env var).
 // cli/wizard e' ESM .js e non puo' importare shared/*.ts direttamente.
@@ -65,6 +66,11 @@ export function validateConfigBeforeWrite(config) {
   }
   if (config.active_provider && !config.providers?.[config.active_provider]) {
     errors.push('The active provider must have an entry in providers');
+  }
+  // La CLI che guida gli agenti: assente = codex; pi solo dove il launcher lo fa partire.
+  if (config.harness !== undefined) {
+    const issue = harnessProblem(config.harness, config.active_provider, config.providers?.[config.active_provider]?.auth_method);
+    if (issue) errors.push(`harness: ${issue}`);
   }
   // Valida ogni provider configurato
   for (const key of validProviders) {
@@ -150,6 +156,7 @@ export function summarizeExistingConfig(config) {
     const prov = AI_PROVIDERS.find((p) => p.value === config.active_provider);
     lines.push(`Provider: ${prov?.label ?? config.active_provider}`);
   }
+  if (config.harness) lines.push(`Harness: ${config.harness}`);
   const activeProviderConfig = config.providers?.[config.active_provider];
   const models = summarizeRoleModels(config);
   if (models) lines.push(models);

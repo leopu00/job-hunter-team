@@ -22,6 +22,8 @@
 # daemon-lib.sh è inerte per costruzione (solo definizioni) e start-agent.sh lo
 # sorgea già PRIMA di questo file: il secondo source è un no-op.
 JHT_SPAWN_LIB_DIR="${JHT_SPAWN_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)}"
+# shellcheck source=/dev/null
+. "$JHT_SPAWN_LIB_DIR/spawn-harness.sh"
 . "$JHT_SPAWN_LIB_DIR/agent-environment.sh"
 if [ -f "$JHT_SPAWN_LIB_DIR/daemon-lib.sh" ]; then
   # shellcheck source=/dev/null
@@ -402,14 +404,18 @@ jht_codex_web_search_role() {
   return 1
 }
 
-# ── Harness per ruolo: pi (prototipo) ────────────────────────────────────────
+# ── Harness dell'agente: codex | pi ──────────────────────────────────────────
 # L'harness è la CLI che guida l'agente; il provider resta `active_provider`.
-# Di default l'harness è quella del provider (claude, codex, kimi). La variabile
-# JHT_AGENT_HARNESS_<RUOLO>=pi la sostituisce con pi (`@earendil-works/
-# pi-coding-agent`), che con lo stesso account parla al provider con un login
-# suo. Oggi vale SOLO per lo Scout e SOLO con active_provider=openai (Sign in
-# with ChatGPT): con un abbonamento Claude pi va sull'extra usage di Anthropic,
-# pagato a token, e si rifiuta di partire invece di spendere.
+# Due valori: `codex` (la CLI del provider, quella di sempre: Codex con
+# openai) e `pi` (`@earendil-works/pi-coding-agent`), che con lo stesso account
+# parla al provider con un login suo. La scelta è `harness` nel config
+# (jht.config.json, scritta da `jht setup` e `jht providers harness`) e vale
+# per TUTTI i ruoli; assente = `codex`. La variabile
+# JHT_AGENT_HARNESS_<RUOLO> la sostituisce per quel solo ruolo (`pi` o
+# `codex`): serve a provare un ruolo sull'altro harness senza toccare il config.
+# Pi parte solo con active_provider=openai (Sign in with ChatGPT): con un
+# abbonamento Claude pi va sull'extra usage di Anthropic, pagato a token, e si
+# rifiuta di partire invece di spendere.
 #
 # Il pin: un pi diverso da questa versione non parte. Si installa SOLO dal lock
 # rivisto di shared/runtime/pi-harness (integrity di ogni dipendenza, sha256 dei
@@ -420,32 +426,36 @@ JHT_PI_INSTALL="/app/shared/runtime/pi-harness/install-pi.sh"
 # I tool di pi accesi per l'agente: read/bash/edit/write sono il suo default,
 # grep/find/ls vanno chiesti. Niente MCP, niente estensioni.
 JHT_PI_TOOLS="read,bash,edit,write,grep,find,ls"
+# Gli harness che il config e la variabile conoscono (shared/runtime/agent-harness.js).
+JHT_AGENT_HARNESSES="codex pi"
 
-# jht_agent_harness <ruolo>
-#   Stampa "pi" se il ruolo deve girare su pi, niente per l'harness di oggi.
-#   rc 2 (col perché su stderr) se la variabile chiede qualcosa che non c'è:
-#   un valore sconosciuto o pi su un ruolo diverso dallo Scout. Un errore di
-#   configurazione ferma l'avvio, non ricade in silenzio sull'harness di oggi.
+# jht_agent_harness <ruolo> [harness-del-config]
+#   Stampa "pi" se il ruolo deve girare su pi, niente per la CLI del provider.
+#   Vince JHT_AGENT_HARNESS_<RUOLO>, poi l'harness del config, poi `codex`.
+#   rc 2 (col perché su stderr) se uno dei due chiede qualcosa che non c'è:
+#   un errore di configurazione ferma l'avvio, non ricade in silenzio
+#   sull'harness di oggi.
 jht_agent_harness() {
-  local role var value
+  local role var value="" source_name
   role="$(printf '%s' "${1:-}" | tr 'a-z' 'A-Z')"
   case "$role" in
     ""|*[!A-Z0-9_]*) return 0 ;;
   esac
   var="JHT_AGENT_HARNESS_${role}"
   value="${!var:-}"
+  source_name="$var"
+  if [ -z "$value" ]; then
+    value="${2:-}"
+    source_name="harness in the config"
+  fi
   case "$value" in
-    "") return 0 ;;
+    ""|codex) return 0 ;;
     pi) ;;
     *)
-      echo "Error: $var='$value' is not a known agent harness (the only one is 'pi'; leave it unset for the default)." >&2
+      echo "Error: $source_name='$value' is not a known agent harness (${JHT_AGENT_HARNESSES// /, }; leave it unset for the default)." >&2
       return 2
       ;;
   esac
-  if [ "$role" != "SCOUT" ]; then
-    echo "Error: $var=pi: the pi harness is available only for the scout in this release." >&2
-    return 2
-  fi
   printf 'pi\n'
 }
 
@@ -456,14 +466,14 @@ jht_pi_provider_check() {
     openai|codex) return 0 ;;
     anthropic|claude)
       if [ "${2:-}" != "api_key" ]; then
-        echo "Error: the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token. Unset JHT_AGENT_HARNESS_SCOUT to keep the scout on Claude Code." >&2
+        echo "Error: the pi harness is refused with a Claude subscription: Anthropic bills a subscription used from pi as extra usage, per token. Go back to the default harness: jht providers harness codex." >&2
       else
-        echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1}'). Unset JHT_AGENT_HARNESS_SCOUT." >&2
+        echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1}'). Go back to the default harness: jht providers harness codex." >&2
       fi
       return 1
       ;;
     *)
-      echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1:-}'). Unset JHT_AGENT_HARNESS_SCOUT." >&2
+      echo "Error: the pi harness supports only active_provider=openai for now (configured: '${1:-}'). Go back to the default harness: jht providers harness codex." >&2
       return 1
       ;;
   esac
@@ -556,7 +566,7 @@ jht_spawn_model_name_ok() {
 #   per diagnosi/sweep non superficiali. Per claude pre-seed dell'onboarding
 #   (skip del wizard TUI) + IS_SANDBOX.
 jht_spawn_repl_cmd() {
-  local provider="${1:-}"
+  local provider="${1:-}" pi_dir="${2:-}"
   if [ -z "$provider" ]; then
     provider="$(jht_spawn_active_provider)" || return 2
   fi
@@ -571,6 +581,7 @@ jht_spawn_repl_cmd() {
     openai|codex)
       python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/codex_launch_policy.py" --model "$override" --effort high --doc-max-bytes "$JHT_CODEX_PROJECT_DOC_MAX_BYTES" --command ;;
     kimi|moonshot) printf '%s\n' "kimi --yolo" ;;
+    pi) jht_spawn_pi_repl_cmd "$pi_dir" "$override" ;;
     claude|anthropic)
       local home="${JHT_HOME:-/jht_home}"
       python3 - "$home/.claude.json" <<'PYDOC' 2>/dev/null || true
@@ -752,7 +763,7 @@ jht_spawn_kickoff() {
   local session="$1" prompt="$2"
   # In coda e su una riga: send-keys manderebbe un a-capo come Invio.
   prompt="$prompt $(jht_team_language_line)"
-  JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" JHT_SPAWN_PROVIDER="${ACTIVE_PROVIDER:-}" \
+  JHT_SPAWN_SESSION="$session" JHT_SPAWN_PROMPT="$prompt" JHT_SPAWN_PROVIDER="${ACTIVE_CLI:-${ACTIVE_PROVIDER:-}}" \
     setsid python3 "$JHT_SPAWN_LIB_DIR/../shared/skills/spawn_kickoff.py" >/dev/null 2>&1 < /dev/null &
   disown 2>/dev/null || true
 }

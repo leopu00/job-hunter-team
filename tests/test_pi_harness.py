@@ -1,11 +1,13 @@
-"""The scout can run on the pi harness, behind JHT_AGENT_HARNESS_SCOUT=pi.
+"""Every role can run on the pi harness, chosen by `harness` in the config.
 
 pi (`@earendil-works/pi-coding-agent`) is a second harness for the same
-provider: `active_provider` still says which account pays, the variable says
-which CLI drives the agent. Without the variable nothing changes.
+provider: `active_provider` still says which account pays, `harness` says
+which CLI drives the agents (codex, the default, or pi). JHT_AGENT_HARNESS_<ROLE>
+overrides it for one role. Without either nothing changes.
 
 What these tests hold, each on the launcher's real code:
-- the variable is per role, only `pi` is known, only the scout may use it;
+- the config key and the per-role variable know `codex` and `pi` only, and
+  every role of the team (and the Dottore and Mantenitore) may use pi;
 - only active_provider=openai starts; a Claude subscription is refused,
   because Anthropic bills a subscription used from pi per token;
 - the command carries `--tui-mode regular` (pi's default fullscreen mode
@@ -68,7 +70,7 @@ def _launcher_blocks() -> tuple[str, str]:
     source = START_AGENT.read_text(encoding="utf-8")
     choose = _block(
         source,
-        "# ── Harness per ruolo (prototipo pi)",
+        "# ── Harness dell'agente (codex | pi)",
         "# Override sperimentale e ROLE-SCOPED",
     )
     compose = _block(
@@ -92,32 +94,38 @@ def _workdir(tmp_path: Path, identity: bool = True, skills: bool = True) -> Path
 
 def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
             auth: str = "subscription", harness: str | None = "pi",
+            config_harness: str | None = None,
             agent_dir: Path | None = None,
             role_models: dict | None = None) -> subprocess.CompletedProcess[str]:
     """Run the launcher's provider-to-command chain and print FULL_CMD.
 
-    With `role_models`, the config's team.role_models goes through the
-    launcher's own override first, as on a real start.
+    `harness` is the per-role variable, `config_harness` the `harness` key of
+    the config (what `jht setup` writes). With `role_models`, the config's
+    team.role_models goes through the launcher's own override first, as on a
+    real start.
     """
     source = START_AGENT.read_text(encoding="utf-8")
     choose, compose = _launcher_blocks()
     agent_dir = agent_dir or _workdir(tmp_path)
-    override: list[str] = []
+    config = tmp_path / "jht.config.json"
+    document: dict = {}
+    if config_harness is not None:
+        document["harness"] = config_harness
     if role_models is not None:
-        config = tmp_path / "jht.config.json"
-        config.write_text(json.dumps({"team": {"role_models": role_models}}), encoding="utf-8")
-        override = [
-            _function(source, "jht_role_model_override"),
-            'MODE=""',
-            f"JHT_CONFIG_FILE='{config}'",
-            _block(source, "# Override per ruolo dal config", "# Nessun default implicito"),
-        ]
+        document["team"] = {"role_models": role_models}
+    config.write_text(json.dumps(document), encoding="utf-8")
+    override = [
+        _function(source, "jht_role_model_override"),
+        'MODE=""',
+        _block(source, "# Override per ruolo dal config", "# Nessun default implicito"),
+    ]
     script = "\n".join([
         "set -euo pipefail",
         f'source "{SPAWN_LIB}"',
         _function(source, "get_agent_info"),
         _function(source, "resolve_codex_model"),
         f"ROLE={role}",
+        f"JHT_CONFIG_FILE='{config}'",
         f'IFS="|" read -r session_prefix effort model_override <<< "$(get_agent_info {role})"',
         f"PROVIDER={provider}",
         f"AUTH_METHOD={auth}",
@@ -138,26 +146,6 @@ def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
                           check=False, env=env)
 
 
-def test_pi_takes_the_class_and_effort_the_config_gives_the_role(tmp_path: Path) -> None:
-    """team.role_models reaches pi as it reaches Codex: luna and medium, not the map's terra and high."""
-    result = _launch(tmp_path, role_models={"scout": {"model": "luna", "effort": "medium"}})
-    assert result.returncode == 0, result.stderr
-    _env, argv = _argv(result.stdout.strip())
-
-    assert argv[0] == "pi"
-    assert _after(argv, "--model") == "gpt-5.6-luna"
-    assert _after(argv, "--thinking") == "medium"
-
-
-def test_pi_keeps_the_role_map_when_the_config_names_another_role(tmp_path: Path) -> None:
-    result = _launch(tmp_path, role_models={"scorer": {"model": "luna"}})
-    assert result.returncode == 0, result.stderr
-    _env, argv = _argv(result.stdout.strip())
-
-    assert _after(argv, "--model") == "gpt-5.6-terra"
-    assert _after(argv, "--thinking") == "high"
-
-
 def _argv(full_cmd: str) -> tuple[dict[str, str], list[str]]:
     """Split FULL_CMD as the pane's shell would: env assignments, then argv."""
     words = shlex.split(full_cmd)
@@ -176,12 +164,12 @@ def _after(argv: list[str], flag: str) -> str:
 # ── the variable ─────────────────────────────────────────────────────────
 
 
-def _harness(role: str, value: str | None) -> subprocess.CompletedProcess[str]:
+def _harness(role: str, value: str | None, config: str | None = None) -> subprocess.CompletedProcess[str]:
     env = _clean_env()
     if value is not None:
         env[f"JHT_AGENT_HARNESS_{role.upper()}"] = value
     return subprocess.run(
-        [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_agent_harness {role}'],
+        [_bash(), "-c", f'source "{SPAWN_LIB}"; jht_agent_harness {role} "$1"', "_", config or ""],
         capture_output=True, text=True, check=False, env=env,
     )
 
@@ -190,25 +178,6 @@ def test_without_the_variable_the_harness_is_today_s() -> None:
     result = _harness("scout", None)
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
-
-
-def test_the_scout_may_ask_for_pi() -> None:
-    result = _harness("scout", "pi")
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "pi"
-
-
-@pytest.mark.parametrize("role", ["analista", "capitano", "scorer", "assistente"])
-def test_pi_on_another_role_stops_the_start(role: str) -> None:
-    result = _harness(role, "pi")
-    assert result.returncode == 2
-    assert "only for the scout" in result.stderr
-
-
-def test_an_unknown_harness_stops_the_start_instead_of_falling_back() -> None:
-    result = _harness("scout", "opencode")
-    assert result.returncode == 2
-    assert "not a known agent harness" in result.stderr
 
 
 # ── the command ──────────────────────────────────────────────────────────
@@ -254,6 +223,7 @@ def test_an_openai_api_key_still_reaches_pi(tmp_path: Path) -> None:
         f'source "{SPAWN_LIB}"',
         _function(source, "resolve_codex_model"),
         "ROLE=scout PROVIDER=openai AUTH_METHOD=api_key model_override=sonnet",
+        f"JHT_CONFIG_FILE='{tmp_path}/none.json'",
         "CLI_ENV_PREFIX=\"OPENAI_API_KEY='sk-fixture' \"",
         choose,
         'printf "%s\\n" "$CLI_ENV_PREFIX"',

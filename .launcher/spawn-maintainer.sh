@@ -27,6 +27,8 @@ mkdir -p "$MANT_DIR/tools" "$MANT_DIR/tmp" "$LOGS_DIR"
 LABEL="spawn-maintainer"
 SESSION="MANTENITORE"
 ACTIVE_PROVIDER="$(jht_spawn_active_provider)" || exit 1
+# Pi, se il config lo chiede (harness): la CLI che guida il ruolo, non solo il provider.
+ACTIVE_CLI="$(jht_spawn_active_cli mantenitore)" || exit 1
 
 # 1) Killa ogni sessione MANTENITORE* esistente (idempotente: ne lascia uno).
 jht_spawn_kill_sessions '^MANTENITORE([-_].*)?$' "$LABEL"
@@ -54,7 +56,9 @@ tmux send-keys -t "$SESSION" "export PATH='$JHT_SPAWN_PANE_PATH'" C-m
 sleep 1
 
 # 6) Avvia il REPL del provider attivo (stesso del team).
-MANT_CMD="$(jht_spawn_repl_cmd "$ACTIVE_PROVIDER")" || exit 1
+# Chi legge o scrive nel pane deve sapere che qui gira pi, prima che il comando parta.
+jht_spawn_mark_harness "$SESSION" "$ACTIVE_CLI"
+MANT_CMD="$(jht_spawn_repl_cmd "$ACTIVE_CLI" "$MANT_DIR")" || exit 1
 tmux send-keys -t "$SESSION" "$MANT_CMD" C-m
 
 # 6b) Robustezza REPL: niente prompt-di-lavoro dentro una shell.

@@ -11,6 +11,7 @@ import {
   JHT_USER_DIR,
 } from '../../jht-paths.js';
 import { containerRunning, listContainerSessions } from '../../utils/container-proxy.js';
+import { usesPi } from '../../../../shared/runtime/agent-harness.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -49,9 +50,11 @@ export function tmuxAvailable() {
 // ce n'e' una "di default": chi non ha scelto non ha la CLI di nessuno.
 const PROVIDER_CLI = Object.freeze({ openai: 'codex', codex: 'codex', anthropic: 'claude', claude: 'claude', kimi: 'kimi', moonshot: 'kimi' });
 
+// ...salvo che il config scelga l'harness pi (`jht setup`, `jht providers harness`): allora e' pi.
 export function providerCli(config) {
   const id = typeof config?.active_provider === 'string' ? config.active_provider.trim().toLowerCase() : '';
-  return PROVIDER_CLI[id] ?? null;
+  const cli = PROVIDER_CLI[id] ?? null;
+  return cli && usesPi(config) ? 'pi' : cli;
 }
 
 export function cliAvailable(bin) {

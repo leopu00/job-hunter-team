@@ -216,12 +216,18 @@ export const ApplicationsSchema = z.object({
   auto_apply: AutoApplySchema.optional(),
 });
 
+// La CLI che guida gli agenti (shared/runtime/agent-harness.js, e il lanciatore
+// in .launcher/spawn-lib.sh). Assente = codex. Pi parte solo con openai: con un
+// abbonamento Claude Anthropic lo fattura a token come extra usage.
+export const AgentHarnessSchema = z.enum(["codex", "pi"]);
+
 // --- Root schema ---
 
 export const JHTConfigSchema = z
   .object({
     version: z.number().int().positive().default(1),
     active_provider: z.enum(["claude", "openai", "kimi"]),
+    harness: AgentHarnessSchema.optional(),
     providers: z.object({
       claude: AIProviderSchema.optional(),
       openai: AIProviderSchema.optional(),
@@ -242,7 +248,12 @@ export const JHTConfigSchema = z
         "Il provider attivo deve avere una configurazione in 'providers'",
       path: ["active_provider"],
     },
-  );
+  )
+  .refine((cfg) => cfg.harness !== "pi" || cfg.active_provider === "openai", {
+    message:
+      "L'harness pi parte solo con active_provider openai (con Claude e' a token, con Kimi non e' previsto)",
+    path: ["harness"],
+  });
 
 // --- Tipi derivati dallo schema ---
 

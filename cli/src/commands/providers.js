@@ -10,6 +10,7 @@ import { declaredPlan, planTable, plansOf, suggestedPlan, withDeclaredPlan } fro
 import { refreshModelPin } from './model-pin.js';
 import { isContainer } from '../../../shared/runtime/container.js';
 import { installSpec, pinnedVersion, pinnedPackage, manifestPath } from '../../../shared/runtime/provider-pins.js';
+import { announcePi, handleHarness, piUpdateSteps, printHarnessLine } from './providers-harness.js';
 import { c, GREEN, YELLOW, DIM, RESET } from './_colors.js';
 import { Command } from 'commander';
 import { hint, marks, title } from '../lib/ui.js';
@@ -132,6 +133,8 @@ async function handleProviders() {
 
   const activeProvider = config.active_provider ?? null;
   const providers = config.providers ?? {};
+
+  printHarnessLine(config);
 
   for (const [id, known] of Object.entries(KNOWN_PROVIDERS)) {
     const provCfg = providers[id];
@@ -307,6 +310,7 @@ const NPM_PREFIX_ENV = { NPM_CONFIG_PREFIX: NPM_PREFIX };
 const UPDATE_TARGETS = ['codex'];
 
 function updateSteps(target, { latest = false } = {}) {
+  if (target === 'pi') return piUpdateSteps();
   const spec = installSpec(target, { latest });
   if (!spec) return null;
   if (target === 'kimi') {
@@ -332,6 +336,7 @@ function updateSteps(target, { latest = false } = {}) {
 
 /** Una riga che dice SEMPRE cosa si sta per installare e da dove viene. */
 function announceSpec(target, { latest = false } = {}) {
+  if (target === 'pi') return announcePi();
   const pin = pinnedVersion(target);
   if (latest) {
     console.log(`  ${WARN}  ${target}: installing the LATEST published version on request `
@@ -360,6 +365,7 @@ function resolveUpdateTarget(id) {
   const lower = (id || '').trim().toLowerCase();
   if (lower === 'anthropic' || lower === 'claude') return 'claude';
   if (lower === 'openai' || lower === 'codex') return 'codex';
+  if (lower === 'pi') return 'pi';
   if (lower === 'kimi' || lower === 'moonshot') return 'kimi';
   return null;
 }
@@ -395,7 +401,7 @@ async function handleUpdate(id, opts = {}) {
     : [...UPDATE_TARGETS]; // `jht providers update` senza arg → aggiorna tutti
 
   if (targets.length === 0) {
-    console.error(`${ERR}  provider '${id}' unrecognized. Supported: codex`);
+    console.error(`${ERR}  provider '${id}' unrecognized. Supported: codex, pi`);
     process.exitCode = 1;
     return;
   }
@@ -1041,6 +1047,11 @@ export function registerProvidersCommand(program) {
     .action(handleUse);
 
   cmd
+    .command('harness [name]')
+    .description('Which program drives the agents: codex (default) or pi. Without a name, print the current one.')
+    .action((name) => handleHarness(name));
+
+  cmd
     .command('plan [id]')
     .description('Show the subscription plan and the possible ones; with an id, declare it (the Capitano sizes the first run on it)')
     .option('--json', 'one JSON object: the declared plan, the plans and the one Codex suggests (or, with an id, the plan declared)')
@@ -1048,7 +1059,7 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('update [id]')
-    .description('Install the provider\'s CLI (codex) at the version pinned by this release. Omitted id: all supported providers.')
+    .description('Install the provider\'s CLI (codex), or pi, at the version pinned by this release. Omitted id: all supported providers.')
     .option('--latest', 'install the latest published version instead of the release pin (explicit, temporary: the next boot restores the pin)')
     .action((id, opts) => handleUpdate(id, opts));
 

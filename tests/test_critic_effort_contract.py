@@ -114,7 +114,7 @@ def test_all_agent_repl_launchers_fail_closed_without_provider_configuration(tmp
     for launcher in (DOCTOR_SPAWN, MAINTAINER_SPAWN):
         text = launcher.read_text(encoding="utf-8")
         assert 'ACTIVE_PROVIDER="$(jht_spawn_active_provider)" || exit 1' in text
-        assert 'jht_spawn_repl_cmd "$ACTIVE_PROVIDER"' in text
+        assert 'jht_spawn_repl_cmd "$ACTIVE_CLI"' in text
 
 
 @pytest.mark.parametrize("skill", TRIAGE_SKILLS, ids=lambda p: p.name)

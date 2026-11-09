@@ -33,6 +33,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
+import { loginMarkerOf } from '../../../shared/runtime/agent-harness.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -265,25 +266,11 @@ async function hasProviderCredentials() {
   try {
     const raw = await readFile(JHT_CONFIG_PATH, 'utf-8');
     const cfg = JSON.parse(raw);
-    const provider = (cfg?.active_provider || '').toString().toLowerCase();
-    const markers = {
-      // kimi-cli 1.47+ scrive le creds OAuth in .kimi/credentials/<plan>.json
-      // (es. kimi-code.json per l'abbonamento kimi-for-coding), NON piu' in
-      // .kimi/kimi.json. Allineato a sentinel-bridge.py KIMI_CREDENTIALS.
-      //
-      // Accetta sia il nome-VENDOR (openai/anthropic — quello che scrive
-      // `jht providers use`) sia il nome-CLI storico (codex/claude): stesso
-      // marker. Senza gli alias, active_provider="openai" cadeva su
-      // markers[prov]=undefined → false SILENZIOSO → auto-start mai
-      // eseguito (stessa timebomb del post-mortem 2026-07-18 su
-      // agent-watchdog.sh config_ready, mai propagata qui).
-      kimi: `${JHT_HOME}/.kimi/credentials/kimi-code.json`,
-      claude: `${JHT_HOME}/.claude/.credentials.json`,
-      anthropic: `${JHT_HOME}/.claude/.credentials.json`,
-      codex: `${JHT_HOME}/.codex/auth.json`,
-      openai: `${JHT_HOME}/.codex/auth.json`,
-    };
-    const marker = markers[provider];
+    // Il marker del login del provider (kimi, claude/anthropic, codex/openai), o di pi se il config
+    // sceglie l'harness pi: shared/runtime/agent-harness.js. Specchio: config_ready() in
+    // agent-watchdog.sh. Un provider sconosciuto non ha marker: false, e l'auto-start non parte.
+    const relative = loginMarkerOf(cfg);
+    const marker = relative ? `${JHT_HOME}/${relative}` : null;
     if (!marker) return false;
     await access(marker);
     return true;

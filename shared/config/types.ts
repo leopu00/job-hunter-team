@@ -11,6 +11,12 @@ export type AIProviderName = "claude" | "openai" | "kimi";
 
 export type AuthMethod = "api_key" | "subscription";
 
+/**
+ * La CLI che guida gli agenti. `codex` (default) e' quella del provider; `pi` e'
+ * il Pi coding agent, nella sua TUI dentro tmux. Lista in shared/runtime/agent-harness.js.
+ */
+export type AgentHarnessName = "codex" | "pi";
+
 export interface AIProviderConfig {
   name: AIProviderName;
   auth_method: AuthMethod;
@@ -156,6 +162,8 @@ export interface JHTConfig {
   version: number;
   /** Provider AI attivo */
   active_provider: AIProviderName;
+  /** CLI che guida tutti gli agenti; assente = "codex". "pi" solo con active_provider openai. */
+  harness?: AgentHarnessName;
   /** Configurazione per ciascun provider */
   providers: Partial<Record<AIProviderName, AIProviderConfig>>;
   /** Canali di comunicazione */

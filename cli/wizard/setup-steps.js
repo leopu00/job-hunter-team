@@ -110,7 +110,7 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
 
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
-          baseProviders, workingHours } = params;
+          baseProviders, workingHours, harness } = params;
 
   const providerConfig = { name: providerChoice, auth_method: authMethod };
   if (authMethod === 'api_key' && apiKey) {
@@ -136,6 +136,9 @@ export async function assembleAndSaveConfig(prompter, params) {
     channels: {},
   });
 
+  // La CLI che guida gli agenti, scritta esplicita anche quando e' quella di sempre.
+  if (harness) config.harness = harness;
+
   // Working hours: presenti solo se l'utente ha scelto un preset (no 24/7).
   // Quando assenti il team gira 24/7 (default storico).
   if (workingHours) {
@@ -154,11 +157,13 @@ export async function assembleAndSaveConfig(prompter, params) {
 export async function showSummary(prompter, params) {
   const { selectedProvider } = params;
 
-  // Riepilogo minimo: il wizard chiede solo il provider, tutto il resto
+  // Riepilogo minimo: il wizard chiede il provider e la CLI che guida gli agenti, tutto il resto
   // (modello per-agente, autenticazione tramite OAuth CLI) e' implicito.
+  const saved = readConfigFileSnapshot().config ?? {};
   const summary = [
     `Provider:   ${selectedProvider.label}`,
-    summarizeRoleModels(readConfigFileSnapshot().config ?? {}),
+    ...(saved.harness === 'pi' ? ['Harness:    Pi'] : []),
+    summarizeRoleModels(saved),
     'Sign-in:    through the provider, done',
     '',
     `Config:     ${JHT_CONFIG_PATH}`,

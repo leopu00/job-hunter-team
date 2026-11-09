@@ -238,7 +238,11 @@ markers = {
   'codex':     f'{jht_home}/.codex/auth.json',
   'openai':    f'{jht_home}/.codex/auth.json',
 }
-has_creds = bool(prov) and os.path.exists(markers.get(prov, ''))
+marker = markers.get(prov, '')
+# Con l'harness pi (jht.config.json: harness) il login e' quello di pi, non del provider.
+if marker and d.get('harness') == 'pi' and prov in ('openai', 'codex'):
+  marker = f'{jht_home}/.pi/agent/auth.json'
+has_creds = bool(prov) and os.path.exists(marker)
 sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }
@@ -268,7 +272,7 @@ is_session_alive() {
   local cmd
   cmd=$(tmux list-panes -t "=$session:" -F '#{pane_current_command}' 2>/dev/null | head -1)
   case "$cmd" in
-    [Kk]imi|claude|Claude|codex|Codex|node|python|python3) return 0 ;;
+    [Kk]imi|claude|Claude|codex|Codex|pi|node|python|python3) return 0 ;;
     *)
       # Zombie: kill+rispawn al prossimo ensure_agent. Log a basso volume
       # qui per audit, il messaggio "session zombie — killing" è loud

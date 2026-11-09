@@ -64,7 +64,7 @@ def test_all_managed_entries_reach_ready_without_the_model_or_update_dialog(runt
         source = path.read_text()
         match = re.search(rf'^{variable}=.*\n.*tmux send-keys.*$', source, re.MULTILINE)
         assert match, "the real REPL launch block is required"
-        body += 'ACTIVE_PROVIDER=codex; SESSION=SYNTHETIC\n' + match.group() + "\n"
+        body += 'ACTIVE_PROVIDER=codex; ACTIVE_CLI=codex; SESSION=SYNTHETIC\n' + match.group() + "\n"
     result = run(runtime, body)
     assert result.returncode == 0, result.stderr
     assert (root / "ready").read_text() == "ready" and "Approaching" not in result.stdout

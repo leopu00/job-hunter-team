@@ -10,6 +10,7 @@ import {
 } from './agents.js';
 import { execArgvInContainer, execInContainer, execScriptInContainer } from '../../utils/container-proxy.js';
 import { diskLowRefusal } from '../../lib/disk-guard.js';
+import { harnessOf, harnessProblem } from '../../../../shared/runtime/agent-harness.js';
 import { readRegularFileText } from '../../lib/secure-config-io.js';
 import { say } from '../../lib/texts.js';
 import { hint } from '../../lib/ui.js';
@@ -472,6 +473,8 @@ function launchInContainer({ role, instance, mode, env, notATmuxSession, session
 export function startRefusal(config, { containerMode, hasTmux = tmuxAvailable, hasCli = cliAvailable } = {}) {
   const cliBin = providerCli(config);
   if (!cliBin) return 'no active provider. Run: jht providers use openai';
+  const harnessIssue = harnessProblem(harnessOf(config), config.active_provider, config.providers?.[config.active_provider]?.auth_method);
+  if (harnessIssue) return `${harnessIssue}. Go back to the default: jht providers harness codex`;
   if (containerMode) return null;
   if (!hasTmux()) return 'tmux not found. Install it with: brew install tmux';
   if (!hasCli(cliBin)) return `the ${cliBin} CLI of the active provider was not found.`;

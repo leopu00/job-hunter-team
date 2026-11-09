@@ -1177,14 +1177,19 @@ case "$PROVIDER" in
     ;;
 esac
 
-# ── Harness per ruolo (prototipo pi) ─────────────────────────────────────────
-# JHT_AGENT_HARNESS_<RUOLO>=pi fa girare quel ruolo su pi invece che sulla CLI
-# del provider; senza la variabile non cambia nulla. Regole e perché in
-# spawn-lib.sh (jht_agent_harness, jht_pi_provider_check). Il modello è quello
-# che lo stesso ruolo avrebbe su Codex: pi parla al provider openai con gli
-# stessi id. Gli argomenti si compongono più sotto, quando la workdir con
-# AGENTS.md e le skill esiste.
-if ! AGENT_HARNESS="$(jht_agent_harness "$ROLE")"; then
+# ── Harness dell'agente (codex | pi) ─────────────────────────────────────────
+# `harness` nel config (jht setup, jht providers harness) fa girare TUTTI i
+# ruoli su pi invece che sulla CLI del provider; senza, non cambia nulla.
+# JHT_AGENT_HARNESS_<RUOLO> lo cambia per quel solo ruolo. Regole e perché in
+# spawn-lib.sh (jht_config_harness, jht_agent_harness, jht_pi_provider_check).
+# Il modello e l'effort sono quelli che lo stesso ruolo avrebbe su Codex (la
+# mappa ruoli e team.role_models): pi parla al provider openai con gli stessi
+# id. Gli argomenti si compongono più sotto, quando la workdir con AGENTS.md e
+# le skill esiste.
+if ! CONFIG_HARNESS="$(jht_config_harness "$JHT_CONFIG_FILE")"; then
+  exit 1
+fi
+if ! AGENT_HARNESS="$(jht_agent_harness "$ROLE" "$CONFIG_HARNESS")"; then
   exit 1
 fi
 if [ "$AGENT_HARNESS" = "pi" ]; then
@@ -1232,7 +1237,7 @@ if ! command -v "$CLI_BIN" &>/dev/null; then
     claude) echo "Install the Claude CLI: https://claude.ai/download" ;;
     codex)  echo "Install the Codex CLI: https://github.com/openai/codex" ;;
     kimi)   echo "Install the Kimi CLI from provider Moonshot." ;;
-    pi)     echo "Install pi: bash $JHT_PI_INSTALL (or unset JHT_AGENT_HARNESS_SCOUT)." ;;
+    pi)     echo "Install pi: bash $JHT_PI_INSTALL (or go back to the default harness: jht providers harness codex)." ;;
   esac
   echo "Alternatively, edit ~/.jht/jht.config.json to use another provider."
   exit 1
@@ -1354,10 +1359,13 @@ fi
 #   - Claude Code legge CLAUDE.md
 #   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
 # Il contenuto è identico, cambia solo il nome del file.
+# pi legge sempre AGENTS.md (--append-system-prompt per percorso), qualunque
+# sia il provider: il controllo piu' sotto lo pretende.
 case "$PROVIDER" in
   anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
   *)                   IDENTITY_FILE="AGENTS.md" ;;
 esac
+[ "$CLI_BIN" = "pi" ] && IDENTITY_FILE="AGENTS.md"
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
 # Risoluzione locale del template d'identità.

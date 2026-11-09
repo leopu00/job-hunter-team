@@ -8,12 +8,15 @@
  */
 import fs from 'node:fs';
 import { runCodexLoginStep } from './codex-device-login.js';
+import { runPiLoginStep } from './pi-login.js';
+import { PI_LOGIN_MARKER } from '../../shared/runtime/agent-harness.js';
 
 /** Per provider CLI, the marker that exists only after its login (the same files as the app's check). */
 const LOGIN_MARKERS = {
   claude: ['.claude/.credentials.json'],
   codex: ['.codex/auth.json'],
   kimi: ['.kimi/credentials/kimi-code.json'],
+  pi: [PI_LOGIN_MARKER],
 };
 
 /** Where the team's home is seen from here: the container's two, and JHT_HOME when the wizard runs on the host. */
@@ -45,7 +48,7 @@ export async function waitForProviderLogin(cmdName, timeoutMs, { find = findProv
 
 /**
  * The step. Returns the marker found, or null when the login did not come (the wizard stops there).
- * Codex logs in here; the other providers retain their separate-terminal flow.
+ * Codex and Pi log in here; the other providers retain their separate-terminal flow.
  */
 export async function runProviderLoginStep({ cmdName, label, isVps, prompter, t, tf, find = findProviderLogin, wait = waitForProviderLogin, login, report }) {
   const already = find(cmdName);
@@ -54,6 +57,7 @@ export async function runProviderLoginStep({ cmdName, label, isVps, prompter, t,
     return already;
   }
   if (cmdName === 'codex') return runCodexLoginStep({ prompter, t, tf, find, login, report });
+  if (cmdName === 'pi') return runPiLoginStep({ prompter, t, tf, find, login, report });
   await prompter.note(
     tf(isVps ? 'wizard.oauth.notify_body' : 'wizard.oauth.notify_body_local', cmdName, label),
     tf('wizard.oauth.notify_title', label),

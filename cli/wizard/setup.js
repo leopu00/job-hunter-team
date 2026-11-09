@@ -29,6 +29,7 @@ import { formatSecretForConfig } from './secret-ref.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf } from './i18n.js';
 import { runProviderLoginStep } from './provider-login.js';
+import { promptHarness, updateIdFor, loginCmdFor } from './setup-harness.js';
 import pc from 'picocolors';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
@@ -147,10 +148,10 @@ export async function runSetupWizard(prompter) {
       // Kept values do not say there is a login: the wait for it may have run out before (30 minutes) and the setup
       // be run again. The kept provider is asked for its login the same way, and a login that is there ends it at once.
       const keptProvider = AI_PROVIDERS.find((p) => p.value === baseConfig.active_provider);
-      const keptCmd = keptProvider && PROVIDER_OAUTH_CMD[keptProvider.value];
+      const keptCmd = keptProvider && loginCmdFor(baseConfig.harness, keptProvider.value, PROVIDER_OAUTH_CMD);
       if (keptCmd) {
         const keptLogin = await runProviderLoginStep({
-          cmdName: keptCmd, label: keptProvider.label, isVps: (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps', prompter, t, tf,
+          cmdName: keptCmd, label: keptCmd === 'pi' ? 'Pi' : keptProvider.label, isVps: (process.env.JHT_HOST_TYPE || '').toLowerCase() === 'vps', prompter, t, tf,
         });
         if (!keptLogin) {
           await prompter.outro(t('wizard.oauth.aborted'));
@@ -209,6 +210,11 @@ export async function runSetupWizard(prompter) {
   }
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerChoice);
 
+  // --- Harness: il programma che guida gli agenti (codex | pi), subito dopo il provider ---
+  const harness = await promptHarness(prompter, {
+    t, provider: providerChoice, authMethod: 'subscription', current: baseConfig.harness,
+  });
+
   // --- Auth: solo subscription, nessun input richiesto ---
   // ADR-0004: solo subscription. L'autenticazione VERA (OAuth device flow)
   // viene fatta dal CLI provider (claude/codex/kimi) in uno step successivo
@@ -236,7 +242,7 @@ export async function runSetupWizard(prompter) {
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-    baseProviders: baseConfig.providers || {}, workingHours,
+    baseProviders: baseConfig.providers || {}, workingHours, harness,
   });
 
   // ────────────────────────────────────────────────────────────────────────
@@ -246,14 +252,14 @@ export async function runSetupWizard(prompter) {
   // ────────────────────────────────────────────────────────────────────────
 
   // --- Step 6: install/update CLI provider (sempre, senza chiedere) ---
-  const updateProviderId = PROVIDER_UPDATE_ID[providerChoice];
+  const updateProviderId = updateIdFor(harness, providerChoice, PROVIDER_UPDATE_ID);
   if (updateProviderId) {
     console.log('');
-    console.log(stepLine(1, 3, tf('wizard.provider.install_cli', selectedProvider.label)));
+    console.log(stepLine(1, 3, tf('wizard.provider.install_cli', harness === 'pi' ? 'Pi' : selectedProvider.label)));
     const ok = runJhtSubcommand(['providers', 'update', updateProviderId], 'providers update');
     if (!ok) {
       const cont = await prompter.confirm({
-        message: t('wizard.provider.install_failed_continue'),
+        message: t(harness === 'pi' ? 'wizard.provider.install_failed_continue_pi' : 'wizard.provider.install_failed_continue'),
         active: t('wizard.provider.install_failed_yes'),
         inactive: t('wizard.provider.install_failed_no'),
         initialValue: false,
@@ -281,12 +287,12 @@ export async function runSetupWizard(prompter) {
   // ────────────────────────────────────────────────────────────────────────
   // STEP 7: OAuth login (BLOCCANTE — wizard polla finche' rileva il login)
   // ────────────────────────────────────────────────────────────────────────
-  const oauthCmd = PROVIDER_OAUTH_CMD[providerChoice];
+  const oauthCmd = loginCmdFor(harness, providerChoice, PROVIDER_OAUTH_CMD);
   // a login that is already there ends the step; otherwise the person is told where to log in
   console.log('');
   console.log(stepLine(2, 3, t('wizard.step.login')));
   const loggedIn = await runProviderLoginStep({
-    cmdName: oauthCmd, label: selectedProvider.label, isVps, prompter, t, tf,
+    cmdName: oauthCmd, label: harness === 'pi' ? 'Pi' : selectedProvider.label, isVps, prompter, t, tf,
   });
   if (!loggedIn) {
     await prompter.outro(t('wizard.oauth.aborted'));

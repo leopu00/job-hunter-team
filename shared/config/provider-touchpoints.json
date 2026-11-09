@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "canonical_team_providers": ["claude", "openai", "kimi"],
+  "canonical_agent_harnesses": ["codex", "pi"],
   "touchpoints": [
     {"id": "config-schema", "concern": "validation and role-scoped local override", "path": "shared/config/schema.ts", "anchors": ["AIProviderSchema", "LocalScorerSchema"]},
     {"id": "config-types", "concern": "canonical TypeScript provider names", "path": "shared/config/types.ts", "anchors": ["AIProviderName", "LocalScorerConfig"]},
@@ -8,6 +9,15 @@
     {"id": "provider-cli", "concern": "list, select, install, update, and model pin", "path": "cli/src/commands/providers.js", "anchors": ["KNOWN_PROVIDERS", "active_provider"]},
     {"id": "provider-version-pin", "concern": "CLI version this release installs (issue #130: no mutable tag)", "path": "shared/config/provider-versions.json", "anchors": ["pins", "codex", "pinned_at"]},
     {"id": "provider-version-pin-loader", "concern": "read the pin and compose the install spec", "path": "shared/runtime/provider-pins.js", "anchors": ["pinnedVersion", "installSpec"]},
+    {"id": "agent-harness-catalog", "concern": "the harnesses (codex, pi) and which provider may run which", "path": "shared/runtime/agent-harness.js", "anchors": ["AGENT_HARNESSES", "harnessProblem", "usesPi"]},
+    {"id": "agent-harness-config", "concern": "the harness key of the config", "path": "shared/config/schema.ts", "anchors": ["AgentHarnessSchema", "harness"]},
+    {"id": "agent-harness-setup", "concern": "the harness question of the first setup and its two open product decisions", "path": "cli/wizard/setup-harness.js", "anchors": ["promptHarness", "harnessNote"]},
+    {"id": "agent-harness-login", "concern": "Pi login in the setup and its marker", "path": "cli/wizard/pi-login.js", "anchors": ["runPiLoginStep", "PI_CODING_AGENT_DIR"]},
+    {"id": "agent-harness-cli", "concern": "show and change the harness; install pi", "path": "cli/src/commands/providers-harness.js", "anchors": ["handleHarness", "PI_INSTALL_SCRIPT"]},
+    {"id": "agent-harness-cli-of-config", "concern": "team start: the CLI that drives the agents follows the harness", "path": "cli/src/commands/team/agents.js", "anchors": ["providerCli", "usesPi"]},
+    {"id": "agent-harness-launch", "concern": "per-agent harness, provider check and pi command for every role", "path": ".launcher/spawn-lib.sh", "anchors": ["jht_config_harness", "jht_agent_harness", "jht_pi_provider_check", "jht_spawn_active_cli"]},
+    {"id": "agent-harness-boot-login", "concern": "boot gate: the login marker follows the harness", "path": "cli/src/commands/pid1.js", "anchors": ["hasProviderCredentials", "loginMarkerOf"]},
+    {"id": "agent-harness-watchdog-login", "concern": "watchdog gate: the login marker follows the harness", "path": ".launcher/agent-watchdog.sh", "anchors": ["config_ready", ".pi/agent/auth.json"]},
     {"id": "agent-launch", "concern": "provider CLI dispatch and local Scorer dispatch", "path": ".launcher/start-agent.sh", "anchors": ["extract_provider_info", "LOCAL_SCORER_RUNNER"]},
     {"id": "local-scorer-adapter", "concern": "OpenAI-compatible request, canonical liveness/future-feedback context, response validation, and persistence boundary", "path": "shared/skills/local_scorer.py", "anchors": ["check_liveness", "request_score", "query_feedback_context", "score_to_db_args"]},
     {"id": "provider-health", "concern": "runtime provider health checks", "path": "cli/src/commands/doctor.js", "anchors": ["active_provider", "providers"]},

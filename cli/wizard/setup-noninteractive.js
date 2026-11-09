@@ -22,6 +22,8 @@ import { formatSecretForConfig, resolveSecret, describeSecret } from './secret-r
 import { runHealthCheck } from './setup-checks.js';
 import { t } from './i18n.js';
 import { summarizeRoleModels } from './setup-models.js';
+import { AGENT_HARNESSES, DEFAULT_HARNESS } from '../../shared/runtime/agent-harness.js';
+import { harnessRefusal } from './setup-harness.js';
 
 /** The most a file holding one API key can weigh. */
 const API_KEY_FILE_MAX_BYTES = 4096;
@@ -55,6 +57,13 @@ export async function runNonInteractiveSetup(opts) {
   const selectedProvider = AI_PROVIDERS.find((p) => p.value === providerName);
   if (!selectedProvider) {
     console.error(pc.red(`Invalid provider "${providerName}". Use: openai (Codex)`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const harness = opts.harness || DEFAULT_HARNESS;
+  if (!AGENT_HARNESSES.includes(harness)) {
+    console.error(pc.red(`Invalid harness "${harness}". Use: ${AGENT_HARNESSES.join(', ')}`));
     process.exitCode = 1;
     return;
   }
@@ -114,6 +123,9 @@ export async function runNonInteractiveSetup(opts) {
     return;
   }
 
+  const harnessIssue = harnessRefusal(harness, providerName, authMethod);
+  if (harnessIssue) { console.error(pc.red(`${harnessIssue}.`)); process.exitCode = 1; return; }
+
   // --- Health check ---
   if (!opts.skipHealth && authMethod === 'api_key') {
     const prompter = silentPrompter();
@@ -121,7 +133,7 @@ export async function runNonInteractiveSetup(opts) {
     if (!ok) console.log(pc.yellow(`  ${t('wizard.checks.health.failed_save_anyway')}`));
   }
 
-  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig });
+  saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness });
 }
 
 function readApiKeyFile(file) {
@@ -156,7 +168,7 @@ function readApiKeyFile(file) {
   return key;
 }
 
-function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig }) {
+function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, model, apiKeySecret, subscriptionConfig, harness }) {
   // --- Assembla e salva config ---
   const providerConfig = { name: providerName, auth_method: authMethod, model };
   if (apiKeySecret) {
@@ -172,6 +184,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
     active_provider: providerName,
     providers: { [providerName]: providerConfig },
     channels: {},
+    harness,
   };
 
   try {
@@ -185,6 +198,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   // --- Riepilogo ---
   console.log(pc.green('\n  Config saved!\n'));
   console.log(`  Provider:   ${selectedProvider.label}`);
+  if (harness === 'pi') console.log('  Harness:    Pi');
   if (authMethod === 'api_key') {
     console.log(`  Auth:       ${describeSecret(apiKeySecret)}`);
   } else {
@@ -194,7 +208,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   console.log(`  JHT home:   ${JHT_CONFIG_DIR}`);
   console.log('');
   if (authMethod === 'subscription') {
-    const updateId = providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
+    const updateId = harness === 'pi' ? 'pi' : providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
     console.log(pc.dim(`  Next step: jht providers update ${updateId}`));
     console.log(pc.dim('  Then start the CLI OAuth login provider (device flow).\n'));
   }

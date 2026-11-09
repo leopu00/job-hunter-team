@@ -24,6 +24,8 @@ mkdir -p "$DOTTORE_DIR/tools" "$DOTTORE_DIR/tmp" "$LOGS_DIR"
 LABEL="spawn-doctor"
 SESSION="DOTTORE"
 ACTIVE_PROVIDER="$(jht_spawn_active_provider)" || exit 1
+# Pi, se il config lo chiede (harness): la CLI che guida il ruolo, non solo il provider.
+ACTIVE_CLI="$(jht_spawn_active_cli dottore)" || exit 1
 
 # 1) Killa ogni sessione DOTTORE* esistente. Convenzione user: "se uno
 #    precedente non si è auto-killato, il nuovo lo killa". Match case-insensitive
@@ -81,7 +83,9 @@ PYEOF
 esac
 
 # 6) Avvia il REPL del provider attivo (effort alto).
-DOCTOR_CMD="$(jht_spawn_repl_cmd "$ACTIVE_PROVIDER")" || exit 1
+# Chi legge o scrive nel pane deve sapere che qui gira pi, prima che il comando parta.
+jht_spawn_mark_harness "$SESSION" "$ACTIVE_CLI"
+DOCTOR_CMD="$(jht_spawn_repl_cmd "$ACTIVE_CLI" "$DOTTORE_DIR")" || exit 1
 tmux send-keys -t "$SESSION" "$DOCTOR_CMD" C-m
 
 # 6b) Robustezza REPL (#12): niente prompt-di-lavoro dentro una shell.

@@ -34,6 +34,7 @@ export function registerSetupCommand(program) {
     .description(t('wizard.cli.description'))
     .option('--non-interactive', t('wizard.cli.non_interactive'))
     .option('--provider <name>', t('wizard.cli.provider'), 'openai')
+    .option('--harness <name>', t('wizard.cli.harness'), 'codex')
     .option('--auth-method <method>', t('wizard.cli.auth_method'), 'api_key')
     .option('--api-key <key>', t('wizard.cli.api_key'))
     .option('--api-key-file <path>', t('wizard.cli.api_key_file'))
