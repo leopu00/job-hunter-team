@@ -1951,14 +1951,9 @@ _kickoff() {
 }
 
 # ── Welcome kickoff helper ──────────────────────────────────────────────
-# Marker [WELCOME-USER] (decisione utente 2026-05-16): l'agente deve
-# inviare il welcome SOLO se riceve questo marker preciso. Niente reazione
-# a "ciao" generici, niente reazione a [CHAT] vuoti, niente rispamma a
-# restart con context pieno. Il prompt nel role .md ribadisce la regola.
-#
-# Lo stesso messaggio viene re-iniettato dal watchdog se il flag non
-# appare (3 retry × 90s) — copre boot lenti / trust dialog / contesto
-# pieno che ha ignorato il primo prompt.
+# Marker [WELCOME-USER] (decisione utente 2026-05-16): il welcome parte SOLO con questo marker preciso, mai su "ciao"
+# generici, [CHAT] vuoti o restart con context pieno (il prompt del ruolo ribadisce la regola). Lo stesso messaggio
+# viene re-iniettato dal watchdog se il flag non appare (3 retry × 90s): copre boot lenti, trust dialog, contesto pieno.
 #
 # Il flag dura quanto il profilo, non quanto l'avvio: vale per QUESTO avvio solo
 # se e' piu' recente del marcatore creato qui sotto prima del kickoff (e il
@@ -2008,6 +2003,9 @@ _welcome_kickoff() {
     "" \
     "4. Acknowledge the system with one line: '[@${role} -> @system] [WELCOME-ACK] sent/skipped + flag created'. THEN start working immediately (open pipeline-triage, read the budget, and act). DO NOT remain idle waiting for a Telegram signal."
   )
+  fi
+  if [ "$role" = "capitano" ]; then  # i fatti di avvio gia' letti (captain_boot.py): niente chiamate del modello per rileggerli
+    msg="$msg"$'\n\n'"$(timeout 60 python3 /app/shared/skills/captain_boot.py 2>/dev/null || true)"
   fi
   # Marcatore d'avvio: il flag conta solo se piu' recente di questo file.
   welcome_boot_marker="${welcome_log%.log}.boot"
