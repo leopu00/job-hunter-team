@@ -132,6 +132,12 @@ class WizardTerminal:
 DOWN = b"\x1b[B"
 
 
+def answer_language(terminal, keys=b""):
+    """The very first question: the language. Enter keeps the one in force."""
+    terminal.until("Choose your language")
+    terminal.send(keys + b"\r")
+
+
 def choose_harness(terminal, keys=b""):
     """The first question after the provider: which program runs the agents. Enter keeps codex, DOWN then Enter picks pi."""
     terminal.until("Program that runs the agents")
@@ -139,6 +145,7 @@ def choose_harness(terminal, keys=b""):
 
 
 def begin_login(terminal):
+    answer_language(terminal)
     choose_harness(terminal)
     terminal.until("When should the team work?")
     terminal.send(b"\r")
@@ -200,6 +207,7 @@ def test_ctrl_c_then_setup_reuses_saved_config_and_signs_in_here(tmp_path):
         interrupted.close()
     resumed = WizardTerminal(node, env)
     try:
+        answer_language(resumed)
         resumed.until("Keep")
         resumed.send(b"\r")
         resumed.until("https://example.invalid/device SYNTHETIC-CODE")
@@ -217,6 +225,7 @@ def test_choosing_pi_signs_in_to_pi_here_and_not_to_codex(tmp_path):
     node, home, env = prepare(tmp_path)
     terminal = WizardTerminal(node, env)
     try:
+        answer_language(terminal)
         choose_harness(terminal, DOWN)
         terminal.until("Pi signs in to ChatGPT with its own login")
         terminal.until("When should the team work?")
@@ -248,3 +257,14 @@ def test_exit_wait_refuses_a_process_that_stays_alive():
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+
+
+def test_the_wizard_asks_the_language_first_and_saves_the_answer(tmp_path):
+    node, home, env = prepare(tmp_path)
+    terminal = WizardTerminal(node, env)
+    try:
+        answer_language(terminal, DOWN)  # Italiano
+        terminal.until("Program that runs the agents")
+        assert json.loads((home / "i18n-prefs.json").read_text(encoding="utf-8")) == {"locale": "it"}
+    finally:
+        terminal.close()

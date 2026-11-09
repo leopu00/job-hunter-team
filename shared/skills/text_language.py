@@ -10,12 +10,15 @@ mixed text gives no answer (None), so a job title or a list of tools never raise
     python3 text_language.py line                 # the TEAM-LANGUAGE line the kickoff and resume messages carry
     python3 text_language.py guess "some text"    # the language the text looks to be in, or "unknown"
     python3 text_language.py check "some text"    # exit 0 if it fits the user's language or is unclear, 3 if not
+    python3 text_language.py set it               # the user's language is now Italian (writes i18n-prefs.json)
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 
@@ -93,6 +96,41 @@ def team_language_line(lang: str | None = None) -> str:
     )
 
 
+def set_language(code: str, home: str | os.PathLike | None = None) -> str:
+    """Save `code` as the user's language: `$JHT_HOME/i18n-prefs.json::locale`, the one place every reader looks first.
+
+    The Assistant calls this when the person writes to it in another language than the team's (RULE-T14 stays for
+    everything else: a teammate, a script or a job ad never changes it). The other keys of the file stay, the file
+    is replaced whole (a reader never sees half of it), and the next kickoff or resume line already carries the new
+    language. Raises ValueError for a code that is not one of the seven."""
+    if code not in LANGUAGE_NAMES:
+        raise ValueError(f"unknown language {code!r}: use one of {', '.join(LANGUAGES)}")
+    folder = os.fspath(home if home is not None else os.environ.get("JHT_HOME", "/jht_home"))
+    path = os.path.join(folder, "i18n-prefs.json")
+    prefs = {}
+    try:
+        with open(path, encoding="utf-8") as handle:
+            loaded = json.load(handle)
+        prefs = loaded if isinstance(loaded, dict) else {}
+    except (OSError, ValueError):
+        prefs = {}
+    prefs["locale"] = code
+    fd, tmp = tempfile.mkstemp(prefix=".i18n-prefs.", dir=folder)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(prefs, handle, indent=2)
+            handle.write("\n")
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    return code
+
+
 def wrong_language(text: str, expected: str | None = None) -> str | None:
     """The language `text` is clearly written in when it is not `expected` (default: the user's), else None."""
     guess = guess_language(text)
@@ -119,7 +157,18 @@ def main(argv: list[str]) -> int:
             return 3
         print("OK")
         return 0
-    print("usage: text_language.py lang | line | guess TEXT | check TEXT", file=sys.stderr)
+    if len(argv) == 2 and argv[0] == "set":
+        try:
+            code = set_language(argv[1])
+        except ValueError as error:
+            print(f"ERROR: {error}", file=sys.stderr)
+            return 2
+        except OSError as error:
+            print(f"ERROR: could not write the language preference: {error}", file=sys.stderr)
+            return 1
+        print(f"OK: the user's language is now {LANGUAGE_NAMES[code]} ({code})")
+        return 0
+    print("usage: text_language.py lang | line | guess TEXT | check TEXT | set CODE", file=sys.stderr)
     return 2
 
 

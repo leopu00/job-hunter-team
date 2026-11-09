@@ -7,6 +7,8 @@ vi.mock('node:fs', async (importOriginal) => {
   const { mockFsWithRoleModels } = await import('../helpers/mock-fs-with-role-models.js');
   return mockFsWithRoleModels(actual, vi);
 });
+// The first question of the setup is the language; it has its own tests (cli/tests/setup-language.test.mjs). Here it is answered.
+vi.mock('../../../cli/wizard/setup-language.js', () => ({ askLanguage: vi.fn(async () => 'en') }));
 vi.mock('../../../cli/wizard/setup-helpers.js', async (importOriginal) => {
   const original = await importOriginal();
   return { ...original, writeConfigFile: vi.fn(), readConfigFileSnapshot: vi.fn(() => ({ exists: false, config: null })) };
