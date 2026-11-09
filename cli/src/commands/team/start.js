@@ -74,18 +74,28 @@ function readSentinellaTickMinutes() {
 //      stabile quando inizia a operare.
 // Gli altri agenti (Scout, Analista, Scorer, Scrittore, Critico) li scala
 // il Capitano secondo le sue soglie, leggendo lo stato Bridge.
-function buildContainerBootstrap() {
+// Telegram exists for this team when a bot of the config has a token or the isolated service is (about to be) on
+// (the markers pid1 looks at). Otherwise there is nothing for a Telegram bridge to do, and it is not started.
+export function telegramConfigured(cfg = readJhtConfig(), markerExists = existsSync) {
+  const bots = cfg?.channels?.telegram?.bots;
+  const withToken = bots && typeof bots === 'object'
+    && Object.values(bots).some((b) => b && typeof b.bot_token === 'string' && b.bot_token.trim().length > 0);
+  return Boolean(withToken)
+    || markerExists('/run/jht-telegram/cutover') || markerExists('/run/jht-telegram/cutover-required');
+}
+
+export function buildContainerBootstrap(withTelegram = telegramConfigured()) {
   const tickMin = readSentinellaTickMinutes();
   return [
     { role: 'assistente', session: 'ASSISTENTE' },
-    {
+    ...(!withTelegram ? [] : [{
       // tg-bridge spawna internamente 3 processi (assistente/capitano/mentor),
       // ciascuno legge channels.telegram.bots.<role> dal config e dispatch
       // a tmux <ROLE>. Nessun env JHT_TG_TARGET_SESSION qui: lo script lo
       // deriva dal ruolo.
       role: 'tg-bridge', session: 'TG-BRIDGE', notATmuxSession: true,
       preDelayMs: 5000, env: {},
-    },
+    }]),
     { role: 'sentinella', session: 'SENTINELLA', preDelayMs: 3000 },
     {
       role: 'bridge', session: 'BRIDGE', notATmuxSession: true,
@@ -262,11 +272,12 @@ async function startActionContainer(agentArg, options = {}, releaseHaltGate = ()
   // Senza arg: bootstrap completo (SENTINELLA + BRIDGE + CAPITANO),
   // come fa la web UI. Con arg: lancia il singolo agente specificato.
   const useBootstrap = !agentArg;
-  const bootstrap = useBootstrap ? buildContainerBootstrap() : null;
+  const withTelegram = telegramConfigured();
+  const bootstrap = useBootstrap ? buildContainerBootstrap(withTelegram) : null;
 
   console.log('');
   console.log(c.bold(say('team.starting_container')));
-  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? '  | Bootstrap: ASSISTENTE + TG-BRIDGE + SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO' : ''}`));
+  console.log(c.dim(`  Mode: ${mode}${useBootstrap ? `  | Bootstrap: ASSISTENTE + ${withTelegram ? 'TG-BRIDGE + ' : ''}SENTINELLA + BRIDGE + TOKEN-METER + CAPITANO` : ''}`));
   console.log('');
 
   let started = 0;
