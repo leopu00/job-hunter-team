@@ -25,6 +25,22 @@ function isStopAllInfrastructure(session) {
   return STOP_ALL_INFRASTRUCTURE.some((pattern) => pattern.test(session));
 }
 
+// While the onboarding with the Assistente is open (`captain_gate.py` says 1: the Capitano is not due yet) the Assistente is the
+// ONLY agent working, and spending: a stop of everything has to stop it, or it answers «No active agents» with the one agent
+// that runs. Once the onboarding is closed it stays alive, as ever (it is the user's chat). Any other answer (the script
+// missing, a crash, no container) keeps it: never stop more than was asked.
+export function onboardingOpen(run = execArgvInContainer) {
+  const r = run(['python3', '/app/shared/skills/captain_gate.py'], { timeoutMs: 15_000 });
+  return r?.code === 1;
+}
+
+// The sessions `stop --all` closes: the team's, but the Assistente (unless `assistantStops`), plus the infrastructure ones.
+export function stopAllTargets(sessions, { assistantStops = false } = {}) {
+  return sessions.filter((s) =>
+    (isTeamSession(s) && (assistantStops || !keepsAliveOnStopAll(s)))
+    || isStopAllInfrastructure(s));
+}
+
 // I nomi delle sessioni che il team possiede, esatti: la stessa grammatica di start-agent.sh e del
 // pannello degli agenti (shared/skills/agent_control.py). Un prefisso non basta: `SENTINELLA-WORKER`
 // non è un agente del team ma la sonda `/usage` del bridge (la sua vita è del bridge), e `SCOUT-1`
@@ -79,6 +95,7 @@ export function stopAction(agentArg, options = {}) {
 
   const sessions = getActiveSessions();
   let targets;
+  let assistantStops = false;
 
   if (options.all || !agentArg) {
     // Prima dello stop, non dopo: se il file non si riesce a creare il
@@ -95,10 +112,8 @@ export function stopAction(agentArg, options = {}) {
         return;
       }
     }
-    targets = sessions.filter((s) =>
-      (isTeamSession(s) && !keepsAliveOnStopAll(s))
-      || isStopAllInfrastructure(s)
-    );
+    assistantStops = usingContainer() && sessions.some(keepsAliveOnStopAll) && onboardingOpen();
+    targets = stopAllTargets(sessions, { assistantStops });
     if (targets.length === 0) {
       console.log(c.yellow('No active agents to stop.'));
       return;
@@ -159,7 +174,7 @@ export function stopAction(agentArg, options = {}) {
 
   console.log('');
   console.log(c.green(`${stopped} agents stopped`));
-  if (options.all && sessions.some(keepsAliveOnStopAll)) {
+  if (options.all && !assistantStops && sessions.some(keepsAliveOnStopAll)) {
     console.log(c.dim('  ASSISTENTE preserved (use jht team stop assistente to close it)'));
   }
   console.log('');
