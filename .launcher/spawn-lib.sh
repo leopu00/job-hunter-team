@@ -426,6 +426,9 @@ JHT_PI_INSTALL="/app/shared/runtime/pi-harness/install-pi.sh"
 # I tool di pi accesi per l'agente: read/bash/edit/write sono il suo default,
 # grep/find/ls vanno chiesti. Niente MCP, niente estensioni.
 JHT_PI_TOOLS="read,bash,edit,write,grep,find,ls"
+# La ricerca web di pi e' un'estensione nostra (shared/runtime/pi-harness), per i ruoli che con
+# Codex hanno --search (JHT_CODEX_WEB_SEARCH_ROLES). Percorso fisso, non da ambiente: e' codice che pi carica.
+JHT_PI_WEB_SEARCH_EXT="/app/shared/runtime/pi-harness/web-search.js"
 # Gli harness che il config e la variabile conoscono (shared/runtime/agent-harness.js).
 JHT_AGENT_HARNESSES="codex pi"
 
@@ -479,7 +482,7 @@ jht_pi_provider_check() {
   esac
 }
 
-# jht_pi_args <agent_dir> <modello> <effort>
+# jht_pi_args <agent_dir> <modello> <effort> [ruolo]
 #   Gli argomenti di pi per un agente. Ognuno chiude una porta:
 #   --tui-mode regular  la TUI di pi è a schermo intero di default (alternate
 #                       screen): capture-pane vedrebbe solo la finestra e lo
@@ -491,11 +494,20 @@ jht_pi_provider_check() {
 #   -na -ns --skill     le skill sono SOLO la distribuzione del ruolo
 #                       (.agents/skills); -na evita la domanda di project trust
 #                       che le .agents/skills del progetto aprirebbero all'avvio.
+#   Con <ruolo> fra quelli della ricerca web, anche l'estensione di ricerca (-e esplicito: vale con -ne).
+#   Se il file manca lo dice e il ruolo parte senza ricerca, invece di far fallire pi all'avvio.
 jht_pi_args() {
-  local agent_dir="$1" model="$2" effort="$3"
+  local agent_dir="$1" model="$2" effort="$3" role="${4:-}"
   printf '%s' "--tui-mode regular -nc --append-system-prompt '$agent_dir/AGENTS.md'"
   printf '%s' " -na -ns --skill '$agent_dir/.agents/skills'"
   printf '%s' " --tools $JHT_PI_TOOLS --no-mcp -ne"
+  if [ -n "$role" ] && jht_codex_web_search_role "$role"; then
+    if [ -f "$JHT_PI_WEB_SEARCH_EXT" ]; then
+      printf '%s' " -e '$JHT_PI_WEB_SEARCH_EXT'"
+    else
+      echo "Warning: $JHT_PI_WEB_SEARCH_EXT is missing: the $role starts on pi without web search." >&2
+    fi
+  fi
   printf '%s\n' " --provider openai --model $model --thinking $effort"
 }
 

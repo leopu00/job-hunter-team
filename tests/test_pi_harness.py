@@ -96,7 +96,8 @@ def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
             auth: str = "subscription", harness: str | None = "pi",
             config_harness: str | None = None,
             agent_dir: Path | None = None,
-            role_models: dict | None = None) -> subprocess.CompletedProcess[str]:
+            role_models: dict | None = None,
+            after_lib: tuple[str, ...] = ()) -> subprocess.CompletedProcess[str]:
     """Run the launcher's provider-to-command chain and print FULL_CMD.
 
     `harness` is the per-role variable, `config_harness` the `harness` key of
@@ -122,6 +123,7 @@ def _launch(tmp_path: Path, *, role: str = "scout", provider: str = "openai",
     script = "\n".join([
         "set -euo pipefail",
         f'source "{SPAWN_LIB}"',
+        *after_lib,
         _function(source, "get_agent_info"),
         _function(source, "resolve_codex_model"),
         f"ROLE={role}",

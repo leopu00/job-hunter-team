@@ -1498,7 +1498,7 @@ if [ "$CLI_BIN" = "pi" ]; then
   if ! jht_pi_settings "$(jht_pi_agent_dir)/settings.json"; then
     exit 1
   fi
-  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort")"
+  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort" "$ROLE")"
 fi
 
 FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"

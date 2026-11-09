@@ -232,3 +232,50 @@ def test_the_service_spawners_ask_for_the_cli_and_mark_a_pi_session(script: str)
     assert 'ACTIVE_CLI="$(jht_spawn_active_cli ' in text
     assert 'jht_spawn_repl_cmd "$ACTIVE_CLI"' in text
     assert 'jht_spawn_mark_harness "$SESSION" "$ACTIVE_CLI"' in text
+
+
+# ── web search for the roles that have it on Codex ───────────────────────
+
+WEB_SEARCH_ROLES = ["scout", "analista", "mentor"]
+
+
+def _extension(tmp_path: Path) -> tuple[Path, tuple[str, ...]]:
+    ext = tmp_path / "pi-harness" / "web-search.js"
+    ext.parent.mkdir()
+    ext.write_text("// fixture\n", encoding="utf-8")
+    return ext, (f"JHT_PI_WEB_SEARCH_EXT='{ext}'",)
+
+
+def _extensions(argv: list[str]) -> list[str]:
+    return [argv[i + 1] for i, word in enumerate(argv) if word == "-e"]
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_the_web_search_extension_goes_to_the_roles_codex_gives_search_to(tmp_path: Path, role: str) -> None:
+    ext, lines = _extension(tmp_path)
+    result = _launch(tmp_path, role=role, harness=None, config_harness="pi", after_lib=lines)
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+    assert _extensions(argv) == ([str(ext)] if role in WEB_SEARCH_ROLES else [])
+    # -ne stays: no extension is discovered around the one named
+    assert "-ne" in argv
+
+
+def test_a_missing_extension_is_said_and_the_role_starts_without_search(tmp_path: Path) -> None:
+    result = _launch(tmp_path, role="scout", harness=None, config_harness="pi",
+                     after_lib=(f"JHT_PI_WEB_SEARCH_EXT='{tmp_path}/none.js'",))
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+    assert _extensions(argv) == []
+    assert "scout starts on pi without web search" in result.stderr
+
+
+def test_the_extension_path_is_not_taken_from_the_environment(tmp_path: Path) -> None:
+    """It is code pi loads: the path is fixed in the launcher, an exported variable does not move it."""
+    evil = tmp_path / "evil.js"
+    evil.write_text("// not ours\n", encoding="utf-8")
+    result = subprocess.run(
+        [_bash(), "-c", f'source "{SPAWN_LIB}"; printf %s "$JHT_PI_WEB_SEARCH_EXT"'],
+        capture_output=True, text=True, check=True, env=_clean_env(JHT_PI_WEB_SEARCH_EXT=str(evil)),
+    )
+    assert result.stdout == "/app/shared/runtime/pi-harness/web-search.js"
