@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "currency": "USD",
+  "unit": "USD per 1,000,000 tokens",
+  "note": "The one price list of the product: what a call to a model costs, from the tokens the CLI wrote for it. Read by shared/skills/model_pricing.py for every harness (Codex, Pi, later Kimi and Claude). A model that is not here has an UNKNOWN price, never a zero one. input = tokens neither cached nor written to the cache; cached_input = served from the cache; cache_write = written to the cache (the default 30-minute write), in place of input (absent: a write costs as input); output includes the reasoning. long_context: a call with more input tokens (input + cached + written) than above_input_tokens is billed at input_multiplier times every input price (cache rates included) and output_multiplier times the output price, for the whole call. web_search_per_call is a flat fee per search, on top of the tokens the search brings in. valid_until: the date the price is announced to end; the list must be reread before it.",
+  "providers": {
+    "openai": {
+      "source": "https://developers.openai.com/api/docs/pricing (Standard table) and https://developers.openai.com/api/docs/models/<model> (the model's own page, with the cache-write and long-context sentences quoted per model), first-party API, standard tier",
+      "read_on": "2026-11-09",
+      "web_search_per_call": {
+        "usd": 0.01,
+        "source": "https://developers.openai.com/api/docs/pricing, built-in tools: \"Web search (all models) | $10.00 / 1k calls + Search content tokens billed at model rates.\"",
+        "read_on": "2026-11-09"
+      },
+      "models": {
+        "gpt-5.6-luna": {
+          "input": 0.2,
+          "cached_input": 0.02,
+          "cache_write": 0.25,
+          "output": 1.2,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate."
+        },
+        "gpt-5.6-terra": {
+          "input": 2,
+          "cached_input": 0.2,
+          "cache_write": 2.5,
+          "output": 12,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate."
+        },
+        "gpt-5.6-sol": {
+          "input": 4,
+          "cached_input": 0.4,
+          "cache_write": 5,
+          "output": 20,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate.",
+          "valid_until": "2026-11-30",
+          "valid_until_quote": "GPT-5.6 Sol's promotional pricing is available until November 30, 2026. (the page does not say what price applies after)"
+        },
+        "gpt-6.1-sol": {
+          "input": 2,
+          "cached_input": 0.1,
+          "cache_write": 2.5,
+          "output": 10,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate."
+        },
+        "gpt-6.1-terra": {
+          "input": 1,
+          "cached_input": 0.05,
+          "cache_write": 1.25,
+          "output": 5,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+          "cache_write_quote": "Standard cache writes cost $1.25 per million tokens for 30-minute retention. (12-hour retention: 2.50; the 30-minute write is the default)"
+        },
+        "gpt-6-sol": {
+          "input": 2,
+          "cached_input": 0.2,
+          "cache_write": 2.5,
+          "output": 10,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate."
+        },
+        "gpt-6-luna": {
+          "input": 0.1,
+          "cached_input": 0.01,
+          "cache_write": 0.125,
+          "output": 0.5,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate."
+        },
+        "gpt-6-astra": {
+          "input": 10,
+          "cached_input": 1,
+          "cache_write": 12.5,
+          "output": 50,
+          "long_context": {
+            "above_input_tokens": 272000,
+            "input_multiplier": 2,
+            "output_multiplier": 1.5
+          },
+          "source": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+          "cache_write_quote": "Cache writes are billed at 1.25x the uncached input token rate."
+        },
+        "gpt-5-mini": {
+          "input": 0.25,
+          "cached_input": 0.025,
+          "output": 2,
+          "source": "https://developers.openai.com/api/docs/models/gpt-5-mini",
+          "cache_write_quote": "not on the page: a write bills as input"
+        },
+        "gpt-5": {
+          "input": 1.25,
+          "cached_input": 0.125,
+          "output": 10,
+          "source": "https://developers.openai.com/api/docs/models/gpt-5",
+          "cache_write_quote": "not on the page: a write bills as input"
+        }
+      }
+    },
+    "kimi": {
+      "source": "",
+      "read_on": "",
+      "models": {}
+    },
+    "anthropic": {
+      "source": "",
+      "read_on": "",
+      "models": {}
+    }
+  }
+}
