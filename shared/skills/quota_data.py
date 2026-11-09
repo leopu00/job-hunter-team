@@ -18,6 +18,7 @@ notice, so the person and the Captain read the same number.
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 
 NO_QUOTA_PREFIX = "no_quota_data:"
@@ -43,17 +44,39 @@ def _custom_model_provider(sessions_dir):
     return bool(found) and found.group(1).strip().lower() not in ("", "openai")
 
 
+def _day_dirs(sessions_dir, now):
+    """Codex writes sessions/YYYY/MM/DD: only today's and yesterday's folders (UTC and local) are looked at, never the whole history."""
+    days = set()
+    for moment in (now, now - 86400):
+        for convert in (time.gmtime, time.localtime):
+            t = convert(moment)
+            days.add(Path(sessions_dir) / ("%04d" % t.tm_year) / ("%02d" % t.tm_mon) / ("%02d" % t.tm_mday))
+    return sorted(days)
+
+
+def _window_has_reading(window):
+    return isinstance(window, dict) and window.get("used_percent") is not None
+
+
+def _limits_of(payload):
+    limits = payload.get("rate_limits") or (payload.get("info") or {}).get("rate_limits")
+    return isinstance(limits, dict) and (_window_has_reading(limits.get("primary"))
+                                         or _window_has_reading(limits.get("secondary")))
+
+
 def _recent_rollout_without_limits(sessions_dir, now):
-    """The newest rollout is alive (written lately) and reports token counts, so Codex works and still reports no limits."""
+    """The newest rollout is alive and reports token counts, and NONE of its recent events carries a rate-limit reading:
+    Codex works and reports no limits. One event with a reading is enough to say the data exists, so a failed fetch stays an outage."""
     newest = None
     try:
-        for path in Path(sessions_dir).rglob("rollout-*.jsonl"):
-            try:
-                mtime = path.stat().st_mtime
-            except OSError:
-                continue
-            if newest is None or mtime > newest[0]:
-                newest = (mtime, path)
+        for day in _day_dirs(sessions_dir, now):
+            for path in day.glob("rollout-*.jsonl"):
+                try:
+                    mtime = path.stat().st_mtime
+                except OSError:
+                    continue
+                if newest is None or mtime > newest[0]:
+                    newest = (mtime, path)
         if newest is None or now - newest[0] > RECENT_ROLLOUT_SEC:
             return False
         with newest[1].open("rb") as handle:
@@ -62,7 +85,20 @@ def _recent_rollout_without_limits(sessions_dir, now):
             tail = handle.read().decode("utf-8", errors="replace")
     except OSError:
         return False
-    return '"token_count"' in tail
+    counted = False
+    for line in tail.splitlines():
+        if '"token_count"' not in line and '"rate_limits"' not in line:
+            continue
+        try:
+            payload = (json.loads(line) or {}).get("payload") or {}
+        except ValueError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        if _limits_of(payload):
+            return False
+        counted = counted or payload.get("type") == "token_count"
+    return counted
 
 
 def no_quota_reason(provider, config, sessions_dir, now):

@@ -24,7 +24,9 @@ SUBSCRIPTION = {"active_provider": "openai", "providers": {"openai": {"auth_meth
 
 
 def rollout(sessions, name, lines, age_sec=60):
-    day = sessions / "2026" / "11" / "09"
+    import time
+    moment = time.gmtime(NOW)
+    day = sessions / ("%04d" % moment.tm_year) / ("%02d" % moment.tm_mon) / ("%02d" % moment.tm_mday)
     day.mkdir(parents=True, exist_ok=True)
     path = day / name
     path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
@@ -83,6 +85,28 @@ def test_an_old_or_empty_rollout_dir_may_be_an_outage(sessions):
     assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
 
 
+def test_one_event_with_a_reading_keeps_a_failed_fetch_an_outage(sessions):
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, WITH_LIMITS, TOKEN_COUNT])
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
+    nested = {"payload": {"type": "token_count", "info": {"rate_limits": {"secondary": {"used_percent": 0}}}}}
+    rollout(sessions, "rollout-b.jsonl", [nested], age_sec=5)
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
+
+
+def test_null_or_empty_limits_are_no_reading(sessions):
+    empty = {"payload": {"type": "token_count", "rate_limits": {"primary": None, "secondary": {}}}}
+    nulls = {"payload": {"type": "token_count", "rate_limits": None}}
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, empty, nulls])
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) == "no_rate_limits_in_rollouts"
+
+
+def test_only_recent_day_folders_are_read(sessions):
+    old = sessions / "2020" / "01" / "01"
+    old.mkdir(parents=True)
+    (old / "rollout-x.jsonl").write_text(json.dumps(TOKEN_COUNT) + "\n", encoding="utf-8")
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
+
+
 def test_other_providers_with_a_subscription_are_never_called_structural(sessions):
     rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT])
     assert quota_data.no_quota_reason("claude", SUBSCRIPTION, sessions, NOW) is None
@@ -112,6 +136,18 @@ class Wire:
     def run(self, reason="codex_rollout_none", within_hours=True):
         return SimpleNamespace(fail_streak=0, capitano_alerted=False, sentinel_alerted=False, state={},
                                within_hours=within_hours, fail_reason=reason, override_min=None, provider="openai")
+
+
+def test_a_failed_fetch_with_a_live_reading_in_the_rollout_stays_on_todays_failure_path(sessions):
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, WITH_LIMITS])
+    wire = Wire(SUBSCRIPTION, sessions)
+    run = wire.run()
+    run.fail_reason = quota_data.classify_failure(wire.api, "openai", "codex_rollout_none")
+    assert run.fail_reason == "codex_rollout_none"
+    loop._failure(wire.api, run)
+    loop._failure(wire.api, run)
+    assert run.fail_streak == 2 and run.capitano_alerted
+    assert any("[BRIDGE FAILURE]" in t for _, t in wire.sent)
 
 
 def test_failure_branch_declares_instead_of_failing(no_real_user_notice):
