@@ -138,6 +138,8 @@ sector_details:
   <free keys, snake_case — see the section below>
 ```
 
+When the person gives a salary target, save their exact words in `preferences.salary_annual_eur` in the YAML as well as updating `summaries/preferences.md`. Use this single field, not a root salary key or a second salary object. Preserve the amount, currency and period; never invent, annualize or convert them. If the person has not given a target, leave the field absent or null. Validate after the write.
+
 The keys `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` are read literally by the frontend to populate the "Preferenze di lavoro" section. Alternative names (`work_location`, `flexible`, `remote`) stay written but are invisible to the user.
 
 Full schema + examples: `docs/examples/candidate_profile.yml.example` (for documentation, **do NOT copy its values** — see anti-hallucination).

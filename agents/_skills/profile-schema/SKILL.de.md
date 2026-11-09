@@ -65,6 +65,12 @@ work_authorization:         # typisierte Liste (NICHT {eu,ch,…} verschachtelt)
 location_preferences: [<Stadt>, …]
 contacts:                   # PII — das Web zeigt sie mit Reveal-on-Click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
+preferences:
+  work_mode: <str|null>
+  work_mode_flexibility: <str|null>
+  relocation: <str|bool|null>
+  salary_annual_eur: <Gehaltsziel in den genauen Worten der Person oder null>
+
 ```
 
 ## 🧩🎨 L2/L3 — `blocks` (das Herzstück der Flexibilitaet)

@@ -427,6 +427,58 @@ fn validate_target_role_choice(profile: &Mapping) -> bool {
     allowed.contains(&specialty.as_str())
 }
 
+fn validate_preferences(value: Option<&Value>) -> bool {
+    let values = match value {
+        None | Some(Value::Null) => return true,
+        Some(Value::Mapping(values)) => values,
+        _ => return false,
+    };
+    only_keys(
+        values,
+        &["work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur"],
+    )
+        && ["work_mode", "work_mode_flexibility"].iter().all(|name| {
+            matches!(key(values, name), None | Some(Value::Null | Value::String(_)))
+        })
+        && matches!(
+            key(values, "relocation"),
+            None | Some(Value::Null | Value::String(_) | Value::Bool(_))
+        )
+        && match key(values, "salary_annual_eur") {
+            None | Some(Value::Null) => true,
+            Some(Value::String(text)) => text.len() <= 8192,
+            _ => false,
+        }
+}
+
+const PROFILE_FIELDS: &[&str] = &[
+    "schema_version",
+    "name",
+    "target_role",
+    "location",
+    "experience_years",
+    "has_degree",
+    "seniority_target",
+    "email",
+    "timezone",
+    "nationality",
+    "birth_year",
+    "experience_months",
+    "industry",
+    "target_role_category_id",
+    "target_specialty",
+    "skills",
+    "languages",
+    "experience",
+    "education",
+    "work_authorization",
+    "location_preferences",
+    "contacts",
+    "preferences",
+    "blocks",
+    "sources",
+];
+
 fn validate_profile_strict(raw: &[u8]) -> Result<(), &'static str> {
     if raw.is_empty() || raw.len() > MAX_PROFILE_BYTES || raw.contains(&0) {
         return Err("source_profile_invalid");
@@ -435,35 +487,7 @@ fn validate_profile_strict(raw: &[u8]) -> Result<(), &'static str> {
     let Value::Mapping(profile) = value else {
         return Err("source_profile_invalid");
     };
-    if !only_keys(
-        &profile,
-        &[
-            "schema_version",
-            "name",
-            "target_role",
-            "location",
-            "experience_years",
-            "has_degree",
-            "seniority_target",
-            "email",
-            "timezone",
-            "nationality",
-            "birth_year",
-            "experience_months",
-            "industry",
-            "target_role_category_id",
-            "target_specialty",
-            "skills",
-            "languages",
-            "experience",
-            "education",
-            "work_authorization",
-            "location_preferences",
-            "contacts",
-            "blocks",
-            "sources",
-        ],
-    ) || match key(&profile, "schema_version") {
+    if !only_keys(&profile, PROFILE_FIELDS) || match key(&profile, "schema_version") {
         None => false,
         Some(Value::Number(value)) => value.as_i64() != Some(1),
         _ => true,
@@ -514,6 +538,7 @@ fn validate_profile_strict(raw: &[u8]) -> Result<(), &'static str> {
         )
         || !optional_string_sequence(key(&profile, "location_preferences"), true)
         || !optional_string_sequence(key(&profile, "sources"), false)
+        || !validate_preferences(key(&profile, "preferences"))
         || !validate_contacts(key(&profile, "contacts"))
         || !validate_blocks(key(&profile, "blocks"))
         || !validate_target_role_choice(&profile)
@@ -1258,6 +1283,59 @@ blocks: []
         assert!(!REMOTE_PROFILE_PROGRAM.contains("O_CREAT"));
         assert!(!REMOTE_PROFILE_PROGRAM.contains("requests."));
         assert!(!REMOTE_PROFILE_PROGRAM.contains("urllib"));
+    }
+
+    #[test]
+    fn importing_a_saved_salary_keeps_its_exact_text_and_receipt() {
+        for salary in ["40-50k EUR/year", "USD 6,000/month", "  60 000 CHF / anno  "] {
+            let root = temp_root("salary");
+            let profile_dir = root.join("home/profile");
+            let receipt = root.join("app/accounts/opaque").join(RECEIPT_NAME);
+            let mut profile = VALID_PROFILE.to_vec();
+            profile.extend_from_slice(
+                format!("preferences:\n  salary_annual_eur: {salary:?}\n").as_bytes(),
+            );
+            let parsed = parse_source_envelope(&envelope(&profile)).unwrap();
+            let snapshot = persist_import(&profile_dir, &receipt, &parsed, false).unwrap();
+            assert!(snapshot.target_valid && snapshot.receipt_verified);
+            let bytes = fs::read(profile_dir.join(TARGET_NAME)).unwrap();
+            assert_eq!(bytes, profile);
+            let value: Value = serde_yaml::from_slice(&bytes).unwrap();
+            assert_eq!(value["preferences"]["salary_annual_eur"].as_str(), Some(salary));
+            let saved = read_receipt(&receipt).unwrap();
+            assert_eq!(saved.status, ReceiptStatus::Committed);
+            assert_eq!(saved.profile_sha256, profile_hash(&profile));
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn salary_does_not_open_the_import_to_unknown_keys_or_values() {
+        for extra in [
+            "preferences: {salary_annual_eur: '40-50k EUR/year'}\nprivate_unknown: forbidden\n",
+            "preferences: {salary_annual_eur: '40-50k EUR/year', private_unknown: forbidden}\n",
+            "preferences: false\n",
+            "preferences: {salary_annual_eur: 48000}\n",
+            "preferences: {salary_annual_eur: [48000]}\n",
+            "preferences: {salary_annual_eur: {min: 48000}}\n",
+            "preferences: {work_mode: false}\n",
+            "preferences: {relocation: 2}\n",
+        ] {
+            let mut profile = VALID_PROFILE.to_vec();
+            profile.extend_from_slice(extra.as_bytes());
+            assert_eq!(parse_source_envelope(&envelope(&profile)).unwrap_err(), "source_profile_invalid");
+        }
+        for (value, valid) in [("é".repeat(4096), true), ("é".repeat(4097), false)] {
+            let mut profile = VALID_PROFILE.to_vec();
+            profile.extend_from_slice(format!("preferences:\n  salary_annual_eur: {value:?}\n").as_bytes());
+            assert_eq!(parse_source_envelope(&envelope(&profile)).is_ok(), valid);
+        }
+        for value in ["null", "{}", "{salary_annual_eur: null}",
+                      "{work_mode: remote, work_mode_flexibility: flexible, relocation: true}"] {
+            let mut profile = VALID_PROFILE.to_vec();
+            profile.extend_from_slice(format!("preferences: {value}\n").as_bytes());
+            assert!(parse_source_envelope(&envelope(&profile)).is_ok());
+        }
     }
 
     #[test]

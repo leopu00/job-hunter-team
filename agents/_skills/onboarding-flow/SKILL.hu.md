@@ -76,7 +76,7 @@ Folytasd a kérdezést, amíg a felhasználó nem mondja, hogy álljál meg — 
 - `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` mind CEFR-rel
 - `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
 - `has_degree` · narratív összefoglalók (lásd `profile-summaries`)
-- `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projektek, publikációk, open-source, önkéntes munka, tanúsítványok, `sector_details`
 
 ## Work-authorization — átvilágítás (NE hagyd ki)
@@ -122,6 +122,8 @@ Soha ne írj be olyan csomagot, amelyet a felhasználó nem választott, soha ne
 ## A kérdőív kártyái — a profil strukturált része, gombokkal kérdezve
 
 A szerepet, a szakirányt, a tapasztalatot, a jelenlegi helyzetet, a munkavégzés módját, a helyet, a költözést, a szerződést, a fizetést és a cég típusát **kártyákkal** kérdezed, egyenként, a `python3 /app/shared/skills/onboarding_questionnaire.py` eszközzel. Ezeket a kérdéseket nem te fogalmazod meg, és ezeket a mezőket nem te írod: az eszköz kiteszi a kártyát (a te chatedben, a személy nyelvén), és a személy SAJÁT kattintását írja be.
+
+A bérkártya a fizetés fontosságáról szóló választ kezeli, nem a chatben megadott összeget. Ha a személy összeget ad meg, pontos szavait őrizd meg a `preferences.salary_annual_eur` mezőben és a `summaries/preferences.md` fájlban. Függő profilfelülvizsgálatnál tedd az előkészített módosításba, és várd meg a megerősítést; egyébként mentsd és validáld a `profile-yaml` segítségével. Ne találj ki összeget, és ne válts át pénznemet vagy időszakot.
 
 **Mikor:** miután a profil el van mentve (a `profile_review.py apply-confirmed` `ok: true`-t válaszolt), soha nem az első üzenetekben, és soha nem, amíg egy másik kártya választ vár (a csomagé sem: két egyszerre nyitott kártya összezavarja a személyt).
 

@@ -29,6 +29,8 @@ mkdir -p "$JHT_HOME/profile/summaries"
 
 Andere Dateinamen (z. B. `about-mario.md`, `goals_v2.md`) werden vom Frontend **stillschweigend ignoriert**.
 
+Ein von der Person genanntes Gehaltsziel muss auch im YAML-Feld `preferences.salary_annual_eur` mit demselben Betrag, derselben Währung und demselben Zeitraum gespeichert werden. Der Erzähltext allein ist kein strukturierter Wunsch; halte beide ohne Schätzung oder Umrechnung aktuell.
+
 ## Stilregeln (bindend)
 
 - **Einfaches Markdown**: Absätze durch Leerzeile getrennt, `**fett**` zum Hervorheben, Listen nur wenn sie die Lesbarkeit verbessern.
