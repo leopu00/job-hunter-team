@@ -58,6 +58,12 @@ const LIVE_SCREEN_SCRIPT = '/app/.launcher/live-screen.sh';
 // riempirebbe il log senza mai accendere lo schermo.
 const LIVE_SCREEN_FATAL_EXIT_CODES = new Set([2, 3]);
 
+const LIVE_SCREEN_BINARIES = ['Xvfb', 'x11vnc', 'websockify'];
+
+function onPath(bin, env = process.env) {
+  return String(env.PATH ?? '').split(':').filter(Boolean).some((dir) => existsSync(`${dir}/${bin}`));
+}
+
 export function telegramServiceEnabled(markerExists = existsSync) {
   return markerExists('/run/jht-telegram/cutover')
     || markerExists('/run/jht-telegram/cutover-required');
@@ -69,12 +75,18 @@ export function telegramServiceEnabled(markerExists = existsSync) {
  * disegna: spento, il browser headed del CLOSER non avrebbe dove aprirsi.
  * `JHT_LIVE_SCREEN=0` lo spegne (macchina senza app desktop, RAM contata).
  */
-export function liveScreenDecision({ env = process.env, scriptExists = existsSync } = {}) {
+export function liveScreenDecision({ env = process.env, scriptExists = existsSync, binaryOnPath = onPath } = {}) {
   if (String(env.JHT_LIVE_SCREEN ?? '').trim() === '0') {
     return { start: false, reason: 'JHT_LIVE_SCREEN=0' };
   }
   if (!scriptExists(LIVE_SCREEN_SCRIPT)) {
     return { start: false, reason: `${LIVE_SCREEN_SCRIPT} not found` };
+  }
+  // Immagine nucleo: lo schermo live arriva con gli strumenti, dopo l'onboarding.
+  // Senza i tre binari non è un guasto da respawnare né da mettere nel log come errore.
+  const missing = LIVE_SCREEN_BINARIES.filter((bin) => !binaryOnPath(bin, env));
+  if (missing.length) {
+    return { start: false, reason: `not installed yet: ${missing.join(', ')}` };
   }
   return { start: true, reason: 'enabled' };
 }
