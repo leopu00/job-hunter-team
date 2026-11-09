@@ -513,6 +513,7 @@
   "quota_mode.no_ceiling": "ninguno declarado",
   "pi_cap.halt_eur": "⛔ El equipo está en pausa: los agentes en pi han gastado hoy %s y han alcanzado el tope que declaraste (%s). No se pierde nada. El trabajo se reanuda mañana, o en cuanto subas el tope en la configuración.",
   "pi_cap.halt_tokens": "⛔ El equipo está en pausa: los agentes en pi usaron %s tokens en la última hora y han alcanzado el tope que declaraste (%s por hora). No se pierde nada. El trabajo se reanuda cuando la cuenta por hora baje de él, o en cuanto subas el tope en la configuración.",
+  "pi_cap.halt_credit": "⛔ El equipo está en pausa: %s dice que el crédito de tu cuenta se ha acabado. No se pierde nada. Recarga la cuenta con el proveedor: el trabajo se reanuda solo cuando una llamada vuelve a pasar.",
   "pi_cap.resume": "▶️ El tope de gasto que declaraste permite trabajar de nuevo: el equipo puede reanudarse.",
   "pi_cap.no_ceiling": "ℹ️ Los agentes en pi han gastado hoy %s y no hay ningún tope de gasto declarado. Este acceso no informa de límites de uso, así que nada más frena el gasto. Para fijar uno, díselo al Capitán o escribe no_quota_cap en la configuración (por ejemplo eur: 10)."
 }

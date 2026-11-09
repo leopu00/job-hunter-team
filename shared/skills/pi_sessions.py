@@ -150,6 +150,22 @@ def usage_events(jht_home, since_ts=None) -> list[dict]:
     return sorted(events, key=lambda event: event["ts"])
 
 
+def error_events(jht_home, since_ts=None) -> list[dict]:
+    """One event per call that ended in an error (`stopReason` "error"): `{ts, session, agent, provider, model, message}`,
+    oldest first. `message` is what the provider answered, cut to 400 characters; nothing of the request is in it."""
+    events = []
+    for entry, session, agent in _scan(jht_home, since_ts, '"errorMessage"'):
+        message = entry.get("message") if entry.get("type") == "message" else None
+        if not isinstance(message, dict) or message.get("role") != "assistant" or message.get("stopReason") != "error":
+            continue
+        moment = _epoch(entry.get("timestamp"))
+        if moment is None or (since_ts is not None and moment < since_ts):
+            continue
+        events.append({"ts": moment, "session": session, "agent": agent, "provider": str(message.get("provider") or ""),
+                       "model": str(message.get("model") or ""), "message": str(message.get("errorMessage") or "")[:400]})
+    return sorted(events, key=lambda event: event["ts"])
+
+
 def _custom(jht_home, since_ts, kind):
     for entry, session, agent in _scan(jht_home, since_ts, kind):
         data = entry.get("data")
