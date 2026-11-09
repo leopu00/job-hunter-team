@@ -76,7 +76,7 @@ Sigue preguntando hasta que el usuario diga que pare — más datos = CV y búsq
 - `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` todas con CEFR
 - `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
 - `has_degree` · resúmenes narrativos (ver `profile-summaries`)
-- `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Proyectos, publicaciones, open-source, voluntariado, certificados, `sector_details`
 
 ## Autorización de trabajo — due diligence (NO saltarla)
@@ -122,6 +122,8 @@ Nunca escribas un plan que el usuario no eligió, nunca lo deduzcas de otra cosa
 ## Tarjetas del cuestionario — la parte estructurada del perfil, preguntada con botones
 
 Rol, especialidad, experiencia, situación actual, modalidad de trabajo, dónde, traslado, contrato, salario y tipo de empresa se preguntan con **tarjetas**, de una en una, con `python3 /app/shared/skills/onboarding_questionnaire.py`. Tú no formulas estas preguntas ni escribes estos campos: la herramienta publica la tarjeta (en tu chat, con las palabras en el idioma de la persona) y escribe el clic de la persona, el SUYO.
+
+La tarjeta salarial gestiona la elección sobre la importancia del salario, no la cantidad indicada en el chat. Cuando la persona dé una cantidad, conserva sus palabras exactas en `preferences.salary_annual_eur` y `summaries/preferences.md`. Si hay una revisión del perfil pendiente, inclúyela en el cambio preparado y espera la confirmación; si no, guarda y valida con `profile-yaml`. Nunca inventes cantidades ni conviertas monedas o periodos.
 
 **Cuándo:** una vez guardado el perfil (`profile_review.py apply-confirmed` respondió `ok: true`), nunca en los primeros mensajes y nunca mientras otra tarjeta espera respuesta (la del plan incluida: dos tarjetas abiertas a la vez confunden a la persona).
 

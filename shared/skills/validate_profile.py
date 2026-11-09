@@ -247,6 +247,26 @@ def validate(profile) -> None:
     # Optional: absent is "not declared", never "no"; a key that is there must hold a boolean.
     if "has_degree" in profile and not isinstance(profile["has_degree"], bool):
         err("has_degree: boolean required when present")
+    preferences = profile.get("preferences")
+    if preferences is not None and not isinstance(preferences, dict):
+        err("preferences: mapping required when present")
+    elif isinstance(preferences, dict):
+        if set(preferences) - {"work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur"}:
+            err("preferences: unknown field")
+        for field in ("work_mode", "work_mode_flexibility"):
+            if preferences.get(field) is not None and not isinstance(preferences[field], str):
+                err(f"preferences.{field}: text or null required")
+        if preferences.get("relocation") is not None and not isinstance(preferences["relocation"], (str, bool)):
+            err("preferences.relocation: text, boolean or null required")
+        salary = preferences.get("salary_annual_eur")
+        if salary is not None and not isinstance(salary, str):
+            err("preferences.salary_annual_eur: text or null required")
+        elif isinstance(salary, str):
+            try:
+                if len(salary.encode("utf-8")) > 8192:
+                    err("preferences.salary_annual_eur: text exceeds 8192 UTF-8 bytes")
+            except UnicodeError:
+                err("preferences.salary_annual_eur: valid UTF-8 text required")
     validate_skills(profile.get("skills"))
     validate_languages(profile.get("languages"))
     validate_blocks(profile.get("blocks"))

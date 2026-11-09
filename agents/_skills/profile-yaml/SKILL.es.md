@@ -133,6 +133,8 @@ sector_details:
   <claves libres, snake_case — ver seccion abajo>
 ```
 
+Cuando la persona indique un objetivo salarial, guarda sus palabras exactas en `preferences.salary_annual_eur` del YAML y actualiza también `summaries/preferences.md`. Usa solo este campo, no una clave salarial en la raíz ni un segundo objeto salarial. Conserva cantidad, moneda y periodo; no los inventes, anualices ni conviertas. Si no ha indicado un objetivo, deja el campo ausente o null. Valida después de escribir.
+
 Las claves `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` son leidas literalmente por el frontend para poblar la seccion "Preferencias de trabajo". Nombres alternativos (`work_location`, `flexible`, `remote`) quedan escritos pero invisibles al usuario.
 
 Esquema completo + ejemplos: `docs/examples/candidate_profile.yml.example` (para documentacion, **NO copiar sus valores** — ver anti-alucinacion).

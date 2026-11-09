@@ -65,6 +65,12 @@ work_authorization:         # lista tipada (NÃO {eu,ch,…} aninhado)
 location_preferences: [<cidade>, …]
 contacts:                   # PII — o web mostra com reveal-on-click
   email: …  phone: …  linkedin: …  github: …  website: …  address: …
+preferences:
+  work_mode: <str|null>
+  work_mode_flexibility: <str|null>
+  relocation: <str|bool|null>
+  salary_annual_eur: <objetivo salarial nas palavras exatas da pessoa, ou null>
+
 ```
 
 ## 🧩🎨 L2/L3 — `blocks` (o coração da flexibilidade)

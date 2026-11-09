@@ -41,6 +41,8 @@ Filenames diversi (es. `about-mario.md`, `goals_v2.md`) sono **silenziosamente i
 
 Quando arriva un'informazione che cambia il senso di un MD esistente, **riscrivi il file da capo** (`Write` tool, NOT `Edit` append). Sono snapshot del presente, non log cronologici. Un append rischia di lasciare paragrafi obsoleti accanto al nuovo.
 
+A salary target given by the person must also be saved in the YAML field `preferences.salary_annual_eur`, with the same amount, currency and period. The narrative alone is not the structured preference; keep both in step, without guessing or converting.
+
 ## Trigger — quando scrivere ciascun file
 
 | File              | Quando scrivilo per la prima volta / aggiornalo                                                                                                                                                       |

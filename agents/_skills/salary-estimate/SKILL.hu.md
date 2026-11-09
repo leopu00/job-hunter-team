@@ -95,7 +95,7 @@ if [ -n "$min" ] && [ -n "$max" ]; then
 fi
 
 # 3. Kiszámítja a salary_fit értéket (0-10) a meglévő logikával
-#    (összehasonlítás a jelölt target értékével: candidate_profile.salary_annual_eur)
+#    (összehasonlítás a jelölt target értékével: preferences.salary_annual_eur)
 #    és hozzáadja a "no_data_default" megjegyzést, ha failed=True.
 ```
 
@@ -133,3 +133,5 @@ alatt.
   side-fix bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — elrejti a "passzív 5"-öt, ha
   a `notes` tartalmazza a `no_data_default` értéket
+
+A jelölt célja a YAML-profil `preferences.salary_annual_eur` mezőjében áll, változtatás nélkül. Csak ha hiányzik, null vagy üres, keresd a kifejezett célt a `profile/summaries/preferences.md` fájlban. Hasonlítsd az ajánlott sávhoz, és nevezd meg mindkettőt a bérindoklásban; hiányzó célt ne találj ki, ne évesíts összeget és ne válts pénznemet.

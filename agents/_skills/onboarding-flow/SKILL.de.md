@@ -76,7 +76,7 @@ Frage weiter, bis der Nutzer sagt, du sollst aufhören — mehr Daten = CV und S
 - `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` alle mit GER
 - `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
 - `has_degree` · narrative Zusammenfassungen (siehe `profile-summaries`)
-- `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projekte, Publikationen, Open-Source, Ehrenamt, Zertifikate, `sector_details`
 
 ## Arbeitserlaubnis — Due Diligence (NICHT überspringen)
@@ -122,6 +122,8 @@ Nie ein Abonnement eintragen, das der Nutzer nicht gewählt hat, nie aus etwas a
 ## Karten des Fragebogens — der strukturierte Teil des Profils, mit Schaltflächen gefragt
 
 Rolle, Spezialisierung, Erfahrung, aktuelle Situation, Arbeitsmodus, Ort, Umzug, Vertrag, Gehalt und Art des Unternehmens werden mit **Karten** gefragt, eine nach der anderen, mit `python3 /app/shared/skills/onboarding_questionnaire.py`. Du formulierst diese Fragen nicht und schreibst diese Felder nicht selbst: Das Werkzeug veröffentlicht die Karte (in deinem Chat, mit den Worten in der Sprache der Person) und schreibt den Klick der Person, ihren EIGENEN.
+
+Die Gehaltskarte verwaltet die Auswahl zur Bedeutung des Gehalts, nicht einen im Chat genannten Betrag. Nennt die Person einen Betrag, bewahre ihre genauen Worte unter `preferences.salary_annual_eur` und in `summaries/preferences.md`. Bei ausstehender Profilprüfung gehört er in den vorbereiteten Patch; warte auf die Bestätigung. Sonst speichere und validiere mit `profile-yaml`. Keine Beträge erfinden oder Währungen und Zeiträume umrechnen.
 
 **Wann:** sobald das Profil gespeichert ist (`profile_review.py apply-confirmed` hat `ok: true` geantwortet), nie in den ersten Nachrichten und nie, solange eine andere Karte auf Antwort wartet (auch die des Abonnements: zwei gleichzeitig offene Karten verwirren die Person).
 
