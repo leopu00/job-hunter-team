@@ -124,6 +124,28 @@ def test_tmux_inventory_is_read_once_and_never_sends_keys():
     assert sessions["scout-4"]["pids"] == [11]
 
 
+@pytest.mark.parametrize("stderr", [
+    "no server running on /tmp/tmux-501/default",
+    "no sessions",
+    "error connecting to /tmp/tmux-4202/default (No such file or directory)\n",
+])
+def test_no_tmux_server_is_an_empty_team_whichever_way_tmux_says_it(stderr):
+    run = lambda *_a, **_kw: SimpleNamespace(returncode=1, stdout="", stderr=stderr)
+    assert read_sessions(run) == ({}, [])
+
+
+@pytest.mark.parametrize("returncode,stderr", [
+    (1, "error connecting to /tmp/tmux-4202/default (Permission denied)"),
+    (1, "error connecting to /tmp/tmux-4202/default (Connection refused)"),
+    (1, "error connecting to /tmp/tmux-4202/default (No such file or directory) and more"),
+    (1, "something else broke"),
+    (2, "error connecting to /tmp/tmux-4202/default (No such file or directory)"),
+])
+def test_a_real_tmux_failure_stays_an_error(returncode, stderr):
+    run = lambda *_a, **_kw: SimpleNamespace(returncode=returncode, stdout="", stderr=stderr)
+    assert read_sessions(run) == ({}, ["observer_sessions_unavailable"])
+
+
 @pytest.mark.parametrize("stdout", ["CAPITANO\tNaN\t10\t0", "CAPITANO\t100\t0\t0", "CAPITANO\t100\t10",
                                     "CAPITANO\t100\t10\t0\nJHT-CAPITANO\t100\t11\t0",
                                     "CAPITANO\t100\t10\t0\nSCOUT-1\t100\t10\t0"])

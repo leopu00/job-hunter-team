@@ -28,7 +28,12 @@ def read_sessions(run=subprocess.run):
     except (OSError, subprocess.SubprocessError):
         return {}, ["observer_sessions_unavailable"]
     if result.returncode:
-        if result.returncode == 1 and any(s in result.stderr for s in ("no server running", "no sessions")):
+        # No tmux server at all is an empty team, not a failure. tmux words it two ways: "no server running" when it
+        # finds the socket's folder, and "error connecting to <socket> (No such file or directory)" when it does not
+        # (a machine where tmux never ran for this user). A refused connection or a permission error stays an error.
+        stderr = result.stderr or ""
+        missing_socket = "error connecting to " in stderr and stderr.rstrip().endswith("(No such file or directory)")
+        if result.returncode == 1 and (any(s in stderr for s in ("no server running", "no sessions")) or missing_socket):
             return {}, []
         return {}, ["observer_sessions_unavailable"]
     sessions = {}
