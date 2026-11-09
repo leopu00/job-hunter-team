@@ -722,7 +722,8 @@ function Require-ComposeFile {
 }
 
 function Invoke-Compose {
-  param([Parameter(ValueFromRemainingArguments)] $Args)
+  [CmdletBinding(PositionalBinding=$false)]
+  param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
   if (-not (Test-PrivateJhtHomeAcl -Path $JhtHome)) { throw "JHT_HOME ACL is not owner-only: $JhtHome" }
   Assert-TrustedRuntime
   # Docker Desktop Windows accetta forward-slash o backslash. project-directory
@@ -730,7 +731,9 @@ function Invoke-Compose {
   # image-only, lasciamo per simmetria col bash wrapper).
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  & docker compose @files --project-directory $RuntimeDir @Args
+  if ($PSBoundParameters.ContainsKey('InputText')) { $InputText | & docker compose @files --project-directory $RuntimeDir @Args }
+  elseif ($NoInput) { $null | & docker compose @files --project-directory $RuntimeDir @Args }
+  else { & docker compose @files --project-directory $RuntimeDir @Args }
 }
 
 # A failed `docker compose up` is the failure of the command that asked for it. What runs after it
@@ -754,7 +757,7 @@ function Stop-OnFailedComposeUp {
 function Invoke-PodmanServicesUpInTurn {
   if ($ContainerRuntime -ne 'podman') { return 0 }
   $definition = Get-Content -LiteralPath $ComposeFile -Raw
-  foreach ($service in @($BrokerContainer, $TelegramContainer)) {
+  foreach ($service in @($BrokerContainer)) {
     if ($definition -notmatch "(?m)^  $([regex]::Escape($service)):") { continue }
     Invoke-Compose 'up' '-d' $service | Out-Host
     if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
@@ -942,7 +945,7 @@ function Get-RunningComposeServiceId {
   if (-not $expectedProject) { $script:ServiceLookupReason = 'the compose project name could not be read'; return $null }
   $files = @('-f', $ComposeFile)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, 'ps', '-q')
+  $composeArgs = @('compose') + $files + @('--project-directory', $RuntimeDir, '--profile', 'telegram', 'ps', '-q')
   if ($ContainerRuntime -ne 'podman') { $composeArgs += $Service }
   $ids = @(& { $ErrorActionPreference = 'Continue'; & docker @composeArgs 2>$null } | ForEach-Object { "$($_)".Trim() } | Where-Object { $_ })
   $psCode = $LASTEXITCODE
@@ -1401,7 +1404,7 @@ function Test-TelegramLegacySource {
 
 function Initialize-TelegramLegacyInventory {
   if (-not (Test-TelegramLegacySource)) { return $true }
-  Invoke-Compose up '-d' $TelegramContainer | Out-Null
+  Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Null
   if ($LASTEXITCODE -ne 0) { return $false }
   if ((Invoke-TelegramAdmin -AdminArgs @('legacy', 'complete')) -eq 0) { return $true }
   if (Test-ContainerUp) {
@@ -1478,7 +1481,7 @@ function Complete-TelegramPair {
   $remainingCode = $LASTEXITCODE
   if ($remainingCode -eq 0) {
     if ((Invoke-TelegramAdmin -AdminArgs @('cutover', 'enable')) -ne 0) { return 1 }
-    Invoke-Compose restart $TelegramContainer
+    Invoke-Compose '--profile' 'telegram' restart $TelegramContainer
     if (-not $WasEnabled -and $AgentWasRunning) { Invoke-Compose restart $Container }
     Write-Info 'Telegram isolato attivo; il bridge legacy non puo'' essere riabilitato dagli agenti.'
     return 0
@@ -1612,6 +1615,71 @@ function Invoke-TelegramPairAll {
   return Complete-TelegramPair -WasEnabled $wasEnabled -AgentWasRunning $agentWasRunning
 }
 
+# The runtime owns the policy; the host only transports closed operations.
+function Get-TelegramLifecyclePlan {
+  param([string]$Phase, [string]$Action, [string]$Role)
+  $steps = @(Invoke-Compose -NoInput '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' $Phase $Action '--' $Role)
+  if ($LASTEXITCODE -ne 0) { throw 'telegram_lifecycle_plan_failed' }
+  return $steps
+}
+
+function Confirm-TelegramLifecycle {
+  param([string]$Operation)
+  $observed = @(& { $ErrorActionPreference = 'Continue'; & docker inspect --type container $TelegramContainer --format '{{.State.Running}}' 2>&1 })
+  $code = $LASTEXITCODE
+  $payload = [string]$code + "`n" + ($observed -join "`n")
+  Invoke-Compose -InputText $payload '--profile' 'telegram' run '--rm' '--no-deps' '-T' '--entrypoint' '/usr/bin/python3' $TelegramContainer '-I' '/app/shared/telegram_service/lifecycle.py' 'verify' $Operation | Out-Host
+  return $LASTEXITCODE
+}
+
+function Invoke-TelegramLifecycleSteps {
+  param([string[]]$Steps, [string]$Role)
+  if (@($Steps | Where-Object { $_ -cnotin @('', 'start', 'stop', 'pair', 'remove', 'chat-id', 'status', 'not-configured') }).Count) { throw 'telegram_lifecycle_plan_invalid' }
+  foreach ($step in $Steps) {
+    switch -CaseSensitive ($step) {
+      '' { continue }
+      'start' {
+        Invoke-Compose '--profile' 'telegram' up '-d' $TelegramContainer | Out-Host
+        if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        if ((Confirm-TelegramLifecycle 'start') -ne 0) { return 1 }
+      }
+      'stop' {
+        Invoke-Compose '--profile' 'telegram' stop $TelegramContainer | Out-Host
+        if ($LASTEXITCODE -ne 0) { return $LASTEXITCODE }
+        if ((Confirm-TelegramLifecycle 'stop') -ne 0) { return 1 }
+      }
+      'pair' { $code = Invoke-TelegramPair $Role; if ($code -ne 0) { return $code } }
+      'remove' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'delete', $Role); if ($code -ne 0) { return $code } }
+      'chat-id' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'chat-id', $Role); if ($code -ne 0) { return $code } }
+      'status' { $code = Invoke-TelegramAdmin -AdminArgs @('bots', 'status'); if ($code -ne 0) { return $code } }
+      'not-configured' { Write-Host 'Telegram non attivo: Telegram non configurato.' }
+      default { throw 'telegram_lifecycle_plan_invalid' }
+    }
+  }
+  return 0
+}
+
+# Transport capability only; private configuration is interpreted in the runtime.
+function Invoke-AvailableTelegramLifecycle {
+  param([string]$Action)
+  if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  return Invoke-TelegramLifecycle @($Action)
+}
+
+function Invoke-TelegramLifecycle {
+  param([string[]]$TelegramArgs)
+  $action = if ($TelegramArgs.Count -gt 0) { $TelegramArgs[0] } else { 'status' }
+  $role = if ($TelegramArgs.Count -gt 1) { $TelegramArgs[1] } elseif ($action -eq 'setup') { 'assistente' } else { '' }
+  try {
+    $steps = @(Get-TelegramLifecyclePlan 'prepare' $action $role)
+    $code = Invoke-TelegramLifecycleSteps $steps $role
+    $cleanup = @(Get-TelegramLifecyclePlan 'complete' $action $role)
+    $cleanupCode = Invoke-TelegramLifecycleSteps $cleanup $role
+    if ($cleanupCode -ne 0) { return $cleanupCode }
+    return $code
+  } catch { Write-Err 'telegram_lifecycle_failed'; return 1 }
+}
+
 function Invoke-TelegramCommand {
   param([string[]]$TelegramArgs)
   $action = if ($TelegramArgs.Count -gt 0) { $TelegramArgs[0] } else { 'status' }
@@ -1742,7 +1810,7 @@ function Remove-BrokerResetData {
     Write-Err 'reset: non riesco a determinare il progetto Compose; i volumi del broker non sono stati toccati.'
     return 1
   }
-  Invoke-Compose down
+  Invoke-Compose '--profile' 'telegram' down
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'reset: non riesco a fermare il runtime; i volumi del broker non sono stati toccati.'
     return 1
@@ -2158,6 +2226,8 @@ function Ensure-Up {
       }
       Start-Sleep -Milliseconds 500
     }
+    $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
+    if ($telegramCode -ne 0) { exit $telegramCode }
   }
 }
 
@@ -3251,10 +3321,8 @@ function Invoke-RuntimeUpgrade {
       }
       $null = Invoke-BrokerMigrateLegacyOnce
     }
-    if ((Get-Content -LiteralPath $ComposeFile -Raw) -match "(?m)^  $([regex]::Escape($TelegramContainer)):") {
-      if (-not (Invoke-UpgradeCompose $ComposeFile 'up' '-d' '--force-recreate' $TelegramContainer)) {
-        Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
-      }
+    if ((Invoke-AvailableTelegramLifecycle 'resume') -ne 0) {
+      Write-UpgradeNote "telegram_restart_failed: il servizio Telegram isolato non e' ripartito. Cosa fare: jht up"
     }
     # Solo qui: upgrade riuscito, container nuovo verificato e commit fatto.
     # Un errore della pulizia non deve mai far ripristinare un upgrade riuscito.
@@ -3396,6 +3464,8 @@ switch ($Sub) {
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
+    $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
+    if ($telegramCode -ne 0) { exit $telegramCode }
     $null = Invoke-BrokerMigrateLegacyOnce
     Initialize-BrokerWebAuthorisations
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
@@ -3406,7 +3476,7 @@ switch ($Sub) {
   { $_ -in @('down', 'stop-container') } {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose down
+    Invoke-Compose '--profile' 'telegram' down
     break
   }
 
@@ -3420,7 +3490,7 @@ switch ($Sub) {
   'recreate' {
     Require-ComposeFile
     Require-Docker
-    Invoke-Compose down
+    Invoke-Compose '--profile' 'telegram' down
     if (-not (Repair-MountOwnership)) { exit 1 }
     if (-not (Initialize-TelegramLegacyInventory)) {
       Write-Err 'legacy_inventory_failed: il team resta fermo perché l''inventario Telegram host non è stato conservato.'
@@ -3429,6 +3499,8 @@ switch ($Sub) {
     Stop-OnFailedComposeUp (Invoke-PodmanServicesUpInTurn)
     Invoke-Compose 'up' '-d'
     Stop-OnFailedComposeUp $LASTEXITCODE
+    $telegramCode = Invoke-AvailableTelegramLifecycle 'resume'
+    if ($telegramCode -ne 0) { exit $telegramCode }
     $null = Invoke-BrokerMigrateLegacyOnce
     Initialize-BrokerWebAuthorisations
     # The up went well (a failed one has already stopped jht with its code): 0, not the code of
@@ -3465,8 +3537,7 @@ switch ($Sub) {
   'telegram' {
     Require-ComposeFile
     Require-Docker
-    Ensure-Up
-    exit (Invoke-TelegramCommand $Rest)
+    exit (Invoke-TelegramLifecycle $Rest)
   }
 
   'reset' {
@@ -3503,6 +3574,10 @@ switch ($Sub) {
     Require-Docker
     if (Test-ContainerUp) {
       & docker inspect $Container --format 'name={{.Name}} status={{.State.Status}} started={{.State.StartedAt}} image={{.Config.Image}}'
+      if (-not [Console]::IsOutputRedirected) {
+        $telegramCode = Invoke-AvailableTelegramLifecycle 'status'
+        if ($telegramCode -ne 0) { exit $telegramCode }
+      }
     } else {
       Write-Host "container '$Container' non attivo"
       exit 1

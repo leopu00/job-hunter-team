@@ -286,7 +286,7 @@ def test_windows_logon_starts_machine_then_systemd_restores_the_whole_team():
     network = PODMAN_NETWORK.read_text(encoding="utf-8")
     install_service = enabler.index("Install-JhtContainerService -PodmanPath")
     assert "Install-JhtStartupTask" not in enabler
-    assert "start --sig-proxy=false jht-broker jht-telegram jht" in enabler
+    assert "start --sig-proxy=false jht-broker jht" in enabler
     assert "stop --time 30 jht jht-telegram jht-broker" in enabler
     assert "systemctl enable --no-reload $runtimeServices" in network
     # $runtimeServices is $egressServices plus the rootless API service.
@@ -514,7 +514,7 @@ def test_container_lifecycle_is_detached_from_the_desktop_process():
     assert "Type=oneshot" in unit
     assert "RemainAfterExit=yes" in unit
     assert "ExecStart=/usr/bin/podman --remote" in unit
-    assert "start --sig-proxy=false jht-broker jht-telegram jht" in unit
+    assert "start --sig-proxy=false jht-broker jht" in unit
     assert "WantedBy=multi-user.target" in unit
     assert "systemctl enable --no-reload jht-container.service" in enabler
 

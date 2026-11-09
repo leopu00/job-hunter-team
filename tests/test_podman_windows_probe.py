@@ -217,7 +217,7 @@ def test_runtime_enabler_installs_persistent_container_lifecycle():
     assert "Requires=jht-windows-egress-proxy.service" in source
     assert "After=jht-windows-egress-proxy.service" in source
     assert "Requires=jht-rootless-podman.service" in source
-    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht-telegram jht" in source
+    assert "ExecStart=/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock start --sig-proxy=false jht-broker jht" in source
     assert "ExecStop=-/usr/bin/podman --remote --url unix:///run/user/1000/podman/podman.sock stop --time 30 jht jht-telegram jht-broker" in source
     assert "WantedBy=multi-user.target" in source
     assert "systemctl enable --no-reload jht-container.service" in source
