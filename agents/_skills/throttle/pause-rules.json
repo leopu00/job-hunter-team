@@ -59,6 +59,6 @@
   },
   "burst_wait": {
     "roles": ["scout", "analista", "scorer"],
-    "cap_sec": 120
+    "cap_sec": 60
   }
 }

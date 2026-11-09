@@ -69,7 +69,7 @@ def eng(tmp_path, monkeypatch):
 
 def test_a_scout_that_found_nothing_in_the_burst_waits_the_cap(tmp_path, eng):
     res = eng.register("scout-1", reason="post-candidate", now=NOW)
-    assert res["applied_sec"] == CAP == 120 and res["until"] == NOW + CAP
+    assert res["applied_sec"] == CAP == 60 and res["until"] == NOW + CAP
     assert res["burst_wait"] == {"cap_sec": CAP, "from_sec": 300, "role": "scout"} and res["shortened_from"] == 300
 
 
