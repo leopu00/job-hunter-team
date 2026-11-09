@@ -251,8 +251,10 @@ if ($second -ne 0) {{ throw "second uninstall returned $second" }}
     calls = log.read_text(encoding="utf-8")
     assert "machine rm --force jht-podman" in calls
     # The logon task goes first, once: a sign-in during uninstall cannot restart the runtime.
-    assert calls.count(f"task unregister {STARTUP_TASK}") == 1
-    assert calls.index(f"task unregister {STARTUP_TASK}") < calls.index("machine rm")
+    # the task is namespaced by the user's SID since 3622abcd65: «Job Hunter Team - Start runtime [S-1-...]»
+    unregistered = [line for line in calls.splitlines() if line.startswith(f"task unregister {STARTUP_TASK_LABEL} [S-1-")]
+    assert len(unregistered) == 1
+    assert calls.index(unregistered[0]) < calls.index("machine rm")
     assert not (tmp_path / "startup-task-present").exists()
     assert "machine rm --force somebody-else" not in calls
     assert result.stdout.count("JHT_PHASE uninstall_machine") == 2
@@ -415,7 +417,7 @@ if (-not (Test-Path -LiteralPath {_ps_literal(bin_dir / 'jht.ps1')})) {{ throw '
     )
     assert result.returncode == 0, result.stderr
     calls = log.read_text(encoding="utf-8")
-    assert f"task unregister {STARTUP_TASK}" in calls
+    assert f"task unregister {STARTUP_TASK_LABEL} [S-1-" in calls
     assert "machine rm" not in calls
     assert (tmp_path / "startup-task-present").exists()
     assert "JHT_LEFT machine" in result.stdout
