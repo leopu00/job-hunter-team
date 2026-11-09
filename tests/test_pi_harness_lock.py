@@ -152,7 +152,7 @@ def _fake_npm(tmp_path: Path, answers: str) -> Path:
 
 
 def _install(tmp_path: Path, bindir: Path, harness: Path = HARNESS,
-             node_version: str | None = None) -> subprocess.CompletedProcess[str]:
+             node_version: str | None = None, umask: str = "022") -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env["PATH"] = f"{bindir}:{env.get('PATH', '')}"
     env["JHT_PI_PREFIX"] = str(tmp_path / "deps")
@@ -164,11 +164,34 @@ def _install(tmp_path: Path, bindir: Path, harness: Path = HARNESS,
             encoding="utf-8",
         )
         env["NODE_OPTIONS"] = f"--require={fake}"
-    return subprocess.run([_bash(), str(harness / "install-pi.sh")], capture_output=True,
-                          text=True, check=False, env=env)
+    return subprocess.run([_bash(), "-c", f'umask {umask}; exec "$0" "$@"', str(harness / "install-pi.sh")],
+                          capture_output=True, text=True, check=False, env=env)
 
 
 requires_node = pytest.mark.skipif(shutil.which("node") is None, reason="node required")
+
+
+@requires_node
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                    reason="needs mode bits that root does not feel")
+@pytest.mark.parametrize("umask", ["022", "077"])
+def test_the_installed_tree_is_readable_and_runnable_by_other_users(tmp_path: Path, umask: str) -> None:
+    """In the image root installs and `jht` runs: mktemp -d makes the stage 0700, and a 0700 root folder in the path
+    is a «Permission denied» for everyone else (the image check on GitHub, 09/11)."""
+    from stat import S_IMODE
+
+    pi = HARNESS and _lock()["packages"][PI]["version"]
+    done = _install(tmp_path, _fake_npm(tmp_path, pi), umask=umask)
+    assert done.returncode == 0, done.stderr
+    deps = tmp_path / "deps"
+    others = 0o005  # r-x for everyone else
+    for folder in (deps, deps / "pi", deps / "pi" / pi, deps / "pi" / pi / "node_modules",
+                   deps / "pi" / pi / "node_modules" / ".bin"):
+        assert S_IMODE(folder.stat().st_mode) & others == others, f"{folder} is not open to other users"
+        assert S_IMODE(folder.stat().st_mode) & 0o022 == 0, f"{folder} is writable by group or others"
+    binary = deps / "pi" / pi / "node_modules" / ".bin" / "pi"
+    assert S_IMODE(binary.stat().st_mode) & others == others
+    assert S_IMODE((deps / "pi" / pi / "package-lock.json").stat().st_mode) & 0o044 == 0o044
 
 
 @requires_node
