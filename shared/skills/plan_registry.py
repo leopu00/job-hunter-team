@@ -435,8 +435,8 @@ def _host_capacity() -> Optional[dict]:
     """Capacity of this machine from measurements (shared/skills/host_capacity.py), or None when it cannot be read."""
     try:
         mod = _host_capacity_module()
-        provider = _read_config().get("active_provider")
-        return mod.capacity(mod.read_probe(), mod.harness_of(normalize_provider(provider)))
+        config = _read_config()
+        return mod.capacity(mod.read_probe(), mod.harness_of(normalize_provider(config.get("active_provider")), config=config))
     except Exception:  # noqa: BLE001 - an unreadable machine has no cap, as before
         return None
 

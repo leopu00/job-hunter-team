@@ -51,6 +51,25 @@ lines.on('line', line => {
     # ESM is explicit even though the executable has no .mjs suffix.
     (bin_dir / "package.json").write_text('{"type":"module"}', encoding="utf-8")
     codex.chmod(0o755)
+    pi = bin_dir / "pi"
+    pi.write_text(f"#!{node}\n" + """
+import fs from 'node:fs';
+import readline from 'node:readline';
+fs.writeFileSync(process.env.JHT_HOME + '/fake-pi.pid', String(process.pid));
+console.log('FAKE-PI-ARGV ' + JSON.stringify(process.argv.slice(2)));
+console.log('FAKE-PI-DIR ' + process.env.PI_CODING_AGENT_DIR);
+console.log('FAKE-PI-TTY ' + [process.stdin, process.stdout, process.stderr].map(s => Boolean(s.isTTY)).join(','));
+console.log('SYNTHETIC pi waiting for /login');
+const lines = readline.createInterface({ input: process.stdin });
+lines.on('line', line => {
+  if (line.trim() !== 'finish') return;
+  fs.mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
+  fs.writeFileSync(process.env.PI_CODING_AGENT_DIR + '/auth.json', '{}');
+  console.log('SYNTHETIC pi authenticated');
+  lines.close();
+});
+""", encoding="utf-8")
+    pi.chmod(0o755)
     fake_jht = tmp_path / "fake-jht.cjs"
     fake_jht.write_text("process.exit(0);\n", encoding="utf-8")
     env = {**os.environ, "HOME": str(home), "JHT_HOME": str(home), "JHT_NODE_ENTRY": str(fake_jht),
@@ -110,7 +129,17 @@ class WizardTerminal:
         os.close(self.fd)
 
 
+DOWN = b"\x1b[B"
+
+
+def choose_harness(terminal, keys=b""):
+    """The first question after the provider: which program runs the agents. Enter keeps codex, DOWN then Enter picks pi."""
+    terminal.until("Program that runs the agents")
+    terminal.send(keys + b"\r")
+
+
 def begin_login(terminal):
+    choose_harness(terminal)
     terminal.until("When should the team work?")
     terminal.send(b"\r")
     terminal.until("https://example.invalid/device SYNTHETIC-CODE")
@@ -182,6 +211,32 @@ def test_ctrl_c_then_setup_reuses_saved_config_and_signs_in_here(tmp_path):
         print("T211 resumed screen (synthetic):\n" + resumed.output.decode("utf-8", "replace"))
     finally:
         resumed.close()
+
+
+def test_choosing_pi_signs_in_to_pi_here_and_not_to_codex(tmp_path):
+    node, home, env = prepare(tmp_path)
+    terminal = WizardTerminal(node, env)
+    try:
+        choose_harness(terminal, DOWN)
+        terminal.until("Pi signs in to ChatGPT with its own login")
+        terminal.until("When should the team work?")
+        terminal.send(b"\r")
+        terminal.until("SYNTHETIC pi waiting for /login")
+        screen = terminal.output.decode("utf-8", "replace")
+        assert 'FAKE-PI-ARGV ["-nc","-na","-ns","-ne","--no-mcp"]' in screen
+        assert f"FAKE-PI-DIR {home}/.pi/agent" in screen
+        assert "FAKE-PI-TTY true,true,true" in screen
+        assert "type /login" in screen
+        assert "FAKE-ARGV" not in screen, "codex is not started for a team that runs on pi"
+        assert not (home / ".pi/agent/auth.json").exists()
+        terminal.send(b"finish\n")
+        assert terminal.finish() == 0, terminal.output.decode("utf-8", "replace")
+        assert (home / ".pi/agent/auth.json").read_text() == "{}"
+        assert not (home / ".codex/auth.json").exists()
+        assert json.loads((home / "jht.config.json").read_text())["harness"] == "pi"
+        assert "Login pi detected" in terminal.output.decode("utf-8", "replace")
+    finally:
+        terminal.close()
 
 
 def test_exit_wait_refuses_a_process_that_stays_alive():

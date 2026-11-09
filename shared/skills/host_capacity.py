@@ -46,12 +46,18 @@ def _roles_on_pi(env):
                for name, value in (env or {}).items())
 
 
-def harness_of(provider, env=None):
-    """The harness that sizes the team: the provider's CLI, or pi when some role runs on it (JHT_AGENT_HARNESS_<ROLE>=pi,
-    see .launcher/spawn-lib.sh) and pi is the heavier of the two: the cap has to hold the heavier session. `env` defaults
-    to the environment of the process."""
+def _config_on_pi(config):
+    return isinstance(config, dict) and str(config.get("harness") or "").strip().lower() == "pi"
+
+
+def harness_of(provider, env=None, config=None):
+    """The harness that sizes the team: the provider's CLI, or pi when the team runs on it and pi is the heavier of the
+    two: the cap has to hold the heavier session. The team runs on pi when the config says so (`harness`, chosen in
+    `jht setup`; every role) or when some role is put on it (JHT_AGENT_HARNESS_<ROLE>=pi, see
+    .launcher/spawn-harness.sh). `env` defaults to the environment of the process; `config` is the parsed
+    jht.config.json, or None."""
     base = _PROVIDER_HARNESS.get(str(provider or "").strip().lower())
-    if _roles_on_pi(os.environ if env is None else env):
+    if _config_on_pi(config) or _roles_on_pi(os.environ if env is None else env):
         if base is None or RAM_GIB_PER_AGENT["pi"] >= RAM_GIB_PER_AGENT.get(base, UNKNOWN_HARNESS_GIB):
             return "pi"
     return base

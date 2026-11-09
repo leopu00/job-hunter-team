@@ -105,6 +105,41 @@ def test_a_role_on_pi_sizes_the_team_with_pi_when_pi_is_the_heavier_session():
     assert hc.harness_of("zzz", {"JHT_AGENT_HARNESS_SCOUT": "pi"}) == "pi"
 
 
+def test_the_harness_of_the_config_sizes_the_team_with_no_variable_at_all():
+    """`harness: pi` from `jht setup` puts every role on pi: the team is sized as pi even if no variable is set."""
+    pi = {"harness": "pi"}
+    assert hc.harness_of("openai", {}, pi) == "pi"
+    assert hc.harness_of("Codex", {}, {"harness": " PI "}) == "pi"
+    assert hc.harness_of("openai", {}, {"harness": "codex"}) == "codex"
+    assert hc.harness_of("openai", {}, {}) == hc.harness_of("openai", {}, None) == "codex"
+    assert hc.harness_of("openai", {}, {"harness": "other"}) == "codex"
+    assert hc.harness_of("openai", {}, "not a dict") == "codex"
+    assert hc.harness_of("claude", {}, pi) == "claude", "claude is heavier than pi: the cap keeps holding it"
+    assert hc.harness_of("zzz", {}, pi) == "pi"
+
+
+def test_the_variable_still_puts_a_role_on_pi_when_the_config_says_codex():
+    assert hc.harness_of("openai", {"JHT_AGENT_HARNESS_SCOUT": "pi"}, {"harness": "codex"}) == "pi"
+    # one role put back on codex does not make the rest of a pi team lighter
+    assert hc.harness_of("openai", {"JHT_AGENT_HARNESS_SCOUT": "codex"}, {"harness": "pi"}) == "pi"
+
+
+def test_the_team_is_sized_as_pi_from_the_config_the_cap_reads(tmp_path, monkeypatch):
+    """The wiring: plan_registry reads jht.config.json and hands it to harness_of (0.3 GiB per agent, not 0.22)."""
+    for name in [n for n in __import__("os").environ if n.startswith("JHT_AGENT_HARNESS_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("JHT_HOME", str(tmp_path))
+    monkeypatch.setattr(hc, "read_probe", lambda *a, **k: machine(9.0, 16))
+    seen = {}
+    for harness, expected in (("pi", "pi"), ("codex", "codex")):
+        (tmp_path / "jht.config.json").write_text(
+            '{"active_provider": "openai", "harness": "%s"}' % harness, encoding="utf-8")
+        monkeypatch.setattr(plan_registry, "_HOST_CAPACITY_MODULE", hc)
+        seen[harness] = plan_registry._host_capacity()
+        assert seen[harness]["ram_per_agent_gib"] == hc.RAM_GIB_PER_AGENT[expected], harness
+    assert seen["pi"]["cap"] <= seen["codex"]["cap"]
+
+
 def test_the_harness_of_the_process_is_read_when_no_environment_is_given(monkeypatch):
     monkeypatch.delenv("JHT_AGENT_HARNESS_SCOUT", raising=False)
     assert hc.harness_of("openai") == "codex"
