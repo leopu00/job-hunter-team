@@ -135,36 +135,13 @@ def test_team_list_shows_default_team(jht_home):
 # ── jht team status ─────────────────────────────────────────────────────────
 
 
-def cli_dependency_missing(stderr):
-    """Node says a package of the CLI is not installed (`npm ci` was never run in cli/ or shared/cron on this machine)."""
-    return "Cannot find package" in stderr or "ERR_MODULE_NOT_FOUND" in stderr
-
-
-def run_team_status(jht_home):
-    """`jht team status` with a made-up HOME. It loads the whole command tree, so it needs the Node dependencies of
-    cli/ and shared/cron. A machine that only runs the Python suite (the Linux gate) has none installed: that is not
-    a failure of the command, and the test says so instead of reporting a red it cannot judge. Any other failure of
-    the command is still a failure."""
-    code, out, err = run_jht("team", "status", env={"HOME": str(jht_home)})
-    if code != 0 and cli_dependency_missing(err):
-        pytest.skip("the CLI's Node dependencies are not installed here (npm ci in cli and shared/cron)")
-    return code, out, err
-
-
-def test_missing_dependency_is_told_apart_from_a_failing_command():
-    assert cli_dependency_missing("\n  Error: Cannot find package 'commander' imported from /x/cli/src/program.js\n")
-    assert cli_dependency_missing("Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/x/y.js'")
-    assert not cli_dependency_missing("Error: observer_read_failed")
-    assert not cli_dependency_missing("")
-
-
 def test_team_status_exits_zero(jht_home):
-    code, out, err = run_team_status(jht_home)
+    code, out, err = run_jht("team", "status", env={"HOME": str(jht_home)})
     assert code == 0, (out + err)[-600:]
 
 
 def test_team_status_no_agents_shows_hint(jht_home):
-    code, out, err = run_team_status(jht_home)
+    code, out, err = run_jht("team", "status", env={"HOME": str(jht_home)})
     assert code == 0, (out + err)[-600:]
     # Con nessun agente attivo deve mostrare un messaggio informativo
     combined = out + err
