@@ -136,14 +136,75 @@
       }
     },
     "kimi": {
-      "source": "",
-      "read_on": "",
-      "models": {}
+      "source": "Moonshot / Kimi API prices (cache miss | cache hit | output, USD per 1M tokens, no long-context tier): platform.kimi.ai/docs/pricing/chat. THE TABLES OF THAT PAGE DID NOT RENDER WHEN READ (09/11): the numbers are those of pi's own table for the provider moonshotai (api.moonshot.ai), which three public price pages repeat; reread the page before the first invoice.",
+      "read_on": "2026-11-09",
+      "note": "Run by pi as provider moonshotai. The K2 models are not available to accounts opened after 31/10/2026 and Moonshot retires them by the end of December 2026 (valid_until).",
+      "models": {
+        "kimi-k3": {
+          "input": 3,
+          "cached_input": 0.3,
+          "output": 15
+        },
+        "kimi-k3.1-pro": {
+          "input": 2,
+          "cached_input": 0.2,
+          "output": 10
+        },
+        "kimi-k2.7-code": {
+          "input": 0.95,
+          "cached_input": 0.19,
+          "output": 4,
+          "valid_until": "2026-12-31"
+        },
+        "kimi-k2.6": {
+          "input": 0.95,
+          "cached_input": 0.16,
+          "output": 4,
+          "valid_until": "2026-12-31"
+        }
+      }
     },
     "anthropic": {
       "source": "",
       "read_on": "",
       "models": {}
+    },
+    "glm": {
+      "source": "https://docs.z.ai/guides/overview/pricing (the model table, USD per 1M tokens; cached input storage is free for a limited time)",
+      "read_on": "2026-11-09",
+      "note": "Z.ai (GLM), run by pi as provider zai. The page shows no date and no long-context tier; pi's own table for the provider (glm-5.3: 1,000,000 tokens of context) agrees on every price below. A cache write costs as input (the page has no write price).",
+      "models": {
+        "glm-5.3": {
+          "input": 1.4,
+          "cached_input": 0.26,
+          "output": 4.4
+        },
+        "glm-5.3-flash": {
+          "input": 0.15,
+          "cached_input": 0.03,
+          "output": 0.5
+        },
+        "glm-5.3-flashx": {
+          "input": 0.37,
+          "cached_input": 0.075,
+          "output": 1.25
+        },
+        "glm-5.2": {
+          "input": 1.4,
+          "cached_input": 0.26,
+          "output": 4.4
+        },
+        "glm-5.1": {
+          "input": 1.4,
+          "cached_input": 0.26,
+          "output": 4.4
+        },
+        "glm-4.7": {
+          "input": 0.6,
+          "cached_input": 0.11,
+          "output": 2.2
+        }
+      }
     }
   }
 }

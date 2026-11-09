@@ -62,9 +62,25 @@ def test_a_pi_login_does_not_open_the_gate_of_a_codex_team(tmp_path: Path) -> No
     assert _config_ready(tmp_path, config) == 1
 
 
-def test_pi_in_the_config_changes_nothing_for_another_provider(tmp_path: Path) -> None:
+def test_pi_in_the_config_changes_nothing_for_a_provider_that_pi_does_not_run(tmp_path: Path) -> None:
+    _login(tmp_path, ".claude/.credentials.json")
+    assert _config_ready(tmp_path, {"active_provider": "claude", "harness": "pi"}) == 0
+
+
+@pytest.mark.parametrize("provider", ["glm", "kimi", "moonshot"])
+def test_pi_with_an_api_provider_opens_on_the_key_in_the_config_not_on_a_login(tmp_path: Path, provider: str) -> None:
+    key = tmp_path / "key"
+    config = {"active_provider": provider, "harness": "pi",
+              "providers": {provider: {"api_key_ref": {"type": "ref", "source": "file", "path": str(key)}}}}
     _login(tmp_path, ".kimi/credentials/kimi-code.json")
-    assert _config_ready(tmp_path, {"active_provider": "kimi", "harness": "pi"}) == 0
+    _login(tmp_path, ".pi/agent/auth.json")
+    assert _config_ready(tmp_path, config) == 1, "a login is not the key: the key file is not there"
+    key.write_text("synthetic", encoding="utf-8")
+    assert _config_ready(tmp_path, config) == 0
+    config["providers"][provider] = {"api_key_ref": {"type": "ref", "source": "env", "id": "ZAI_API_KEY"}}
+    assert _config_ready(tmp_path, config) == 0
+    config["providers"][provider] = {}
+    assert _config_ready(tmp_path, config) == 1, "no key at all"
 
 
 def test_the_pane_command_of_a_pi_agent_is_not_a_zombie() -> None:

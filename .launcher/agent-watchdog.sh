@@ -240,7 +240,17 @@ markers = {
 }
 # harness pi (campo `harness`, o JHT_AGENT_HARNESS_<RUOLO>=pi) con provider openai/codex: conta SOLO il login di pi, mai quello di codex
 pi = d.get('harness') == 'pi' or 'pi' in [v for k, v in os.environ.items() if k.startswith('JHT_AGENT_HARNESS_')]
-has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex') else markers.get(prov, ''))
+# glm/kimi/moonshot run only on pi and only with an API key: the key is in the config (a file or an env name), pi has no login for them
+def api_key_there():
+  cfg = (d.get('providers') or {}).get(prov) or {}
+  ref = cfg.get('api_key_ref')
+  if isinstance(ref, dict) and ref.get('source') == 'file':
+    return os.path.exists(str(ref.get('path') or ''))
+  return bool(ref) or bool(cfg.get('api_key'))
+if pi and prov in ('glm', 'kimi', 'moonshot'):
+  has_creds = api_key_there()
+else:
+  has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if pi and prov in ('openai', 'codex') else markers.get(prov, ''))
 sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }

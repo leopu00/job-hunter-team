@@ -25,7 +25,7 @@ export const ApiKeyRefSchema = z.union([
 
 export const AIProviderSchema = z
   .object({
-    name: z.enum(["claude", "openai", "kimi"]),
+    name: z.enum(["claude", "openai", "kimi", "glm"]),
     auth_method: z.enum(["api_key", "subscription"]),
     api_key: z.string().optional(),
     api_key_ref: ApiKeyRefSchema.optional(),
@@ -235,12 +235,13 @@ export const AgentHarnessSchema = z.enum(["codex", "pi"]);
 export const JHTConfigSchema = z
   .object({
     version: z.number().int().positive().default(1),
-    active_provider: z.enum(["claude", "openai", "kimi"]),
+    active_provider: z.enum(["claude", "openai", "kimi", "glm"]),
     harness: AgentHarnessSchema.optional(),
     providers: z.object({
       claude: AIProviderSchema.optional(),
       openai: AIProviderSchema.optional(),
       kimi: AIProviderSchema.optional(),
+      glm: AIProviderSchema.optional(),
     }),
     channels: ChannelsSchema.default({}),
     team: TeamSettingsSchema.optional(),
@@ -258,9 +259,9 @@ export const JHTConfigSchema = z
       path: ["active_provider"],
     },
   )
-  .refine((cfg) => cfg.harness !== "pi" || cfg.active_provider === "openai", {
+  .refine((cfg) => cfg.harness !== "pi" || ["openai", "kimi", "glm"].includes(cfg.active_provider), {
     message:
-      "L'harness pi parte solo con active_provider openai (con Claude e' a token, con Kimi non e' previsto)",
+      "L'harness pi parte solo con active_provider openai, kimi o glm (con Claude e' a token)",
     path: ["harness"],
   });
 

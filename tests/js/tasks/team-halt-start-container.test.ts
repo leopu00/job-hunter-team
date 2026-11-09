@@ -241,7 +241,8 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("1 started");
     expect(result.stdout).toContain("CAPITANO — synthetic launch failure");
-    expect(result.stdout).toContain("6 errors");
+    // five: the sandbox has no Telegram bot, so the bootstrap has no TG-BRIDGE (JHT-T306)
+    expect(result.stdout).toContain("5 errors");
   }, 15_000);
 
   it("CAPITANO già attivo attesta il bootstrap anche se lo spawn è skipped", () => {
@@ -257,7 +258,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     expect(result.stdout).toContain("CAPITANO — already active");
     expect(result.stdout).toContain("0 started");
     expect(result.stdout).toContain("1 already active");
-    expect(result.stdout).toContain("6 errors");
+    expect(result.stdout).toContain("5 errors");
     // Stesso budget degli altri due bootstrap completi del file. Qui non c'e'
     // nessuna attesa (nulla parte, quindi nessun preDelayMs): il tempo e' tutto
     // processi, 63 invocazioni del docker finto da ~50ms l'una, ~3,5s a

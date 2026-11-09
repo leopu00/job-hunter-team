@@ -7,7 +7,7 @@
 
 // --- Provider AI ---
 
-export type AIProviderName = "claude" | "openai" | "kimi";
+export type AIProviderName = "claude" | "openai" | "kimi" | "glm";
 
 export type AuthMethod = "api_key" | "subscription";
 

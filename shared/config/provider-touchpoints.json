@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "canonical_team_providers": ["claude", "openai", "kimi"],
+  "canonical_team_providers": ["claude", "openai", "kimi", "glm"],
   "canonical_agent_harnesses": ["codex", "pi"],
   "touchpoints": [
     {"id": "config-schema", "concern": "validation and role-scoped local override", "path": "shared/config/schema.ts", "anchors": ["AIProviderSchema", "LocalScorerSchema"]},

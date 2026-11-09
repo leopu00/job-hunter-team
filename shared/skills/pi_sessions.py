@@ -109,6 +109,7 @@ def _event(entry, session, agent):
     cost = usage.get("cost") if isinstance(usage.get("cost"), dict) else {}
     return {
         "ts": moment, "session": session, "agent": agent, "model": str(message.get("model") or ""),
+        "provider": str(message.get("provider") or ""),
         "input": _number(usage.get("input")), "output": _number(usage.get("output")),
         "cache_read": _number(usage.get("cacheRead")), "cache_write": _number(usage.get("cacheWrite")),
         "reasoning": _number(usage.get("reasoning")), "cost": float(_number(cost.get("total"))),
@@ -146,6 +147,22 @@ def usage_events(jht_home, since_ts=None) -> list[dict]:
         event = _event(entry, session, agent)
         if event and (since_ts is None or event["ts"] >= since_ts):
             events.append(event)
+    return sorted(events, key=lambda event: event["ts"])
+
+
+def error_events(jht_home, since_ts=None) -> list[dict]:
+    """One event per call that ended in an error (`stopReason` "error"): `{ts, session, agent, provider, model, message}`,
+    oldest first. `message` is what the provider answered, cut to 400 characters; nothing of the request is in it."""
+    events = []
+    for entry, session, agent in _scan(jht_home, since_ts, '"errorMessage"'):
+        message = entry.get("message") if entry.get("type") == "message" else None
+        if not isinstance(message, dict) or message.get("role") != "assistant" or message.get("stopReason") != "error":
+            continue
+        moment = _epoch(entry.get("timestamp"))
+        if moment is None or (since_ts is not None and moment < since_ts):
+            continue
+        events.append({"ts": moment, "session": session, "agent": agent, "provider": str(message.get("provider") or ""),
+                       "model": str(message.get("model") or ""), "message": str(message.get("errorMessage") or "")[:400]})
     return sorted(events, key=lambda event: event["ts"])
 
 

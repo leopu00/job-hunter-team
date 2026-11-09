@@ -514,6 +514,7 @@
   "quota_mode.no_ceiling": "nincs megadva",
   "pi_cap.halt_eur": "⛔ A csapat szünetel: a pi-n futó ügynökök ma %s összeget költöttek, és elérték az általad megadott plafont (%s). Nem vész el semmi. A munka holnap folytatódik, vagy amint a konfigurációban megemeled a plafont.",
   "pi_cap.halt_tokens": "⛔ A csapat szünetel: a pi-n futó ügynökök az elmúlt órában %s tokent használtak, és elérték az általad megadott plafont (%s óránként). Nem vész el semmi. A munka akkor folytatódik, ha az óránkénti szám a plafon alá esik, vagy amint a konfigurációban megemeled.",
+  "pi_cap.halt_credit": "⛔ A csapat szünetel: %s jelzi, hogy a fiókod egyenlege elfogyott. Semmi sem vész el. Töltsd fel a fiókot a szolgáltatónál: a munka magától folytatódik, amint egy hívás ismét átmegy.",
   "pi_cap.resume": "▶️ Az általad megadott költési plafon újra engedi a munkát: a csapat folytathatja.",
   "pi_cap.no_ceiling": "ℹ️ A pi-n futó ügynökök ma %s összeget költöttek, és nincs megadva költési plafon. Ez a hozzáférés nem közöl használati korlátokat, így semmi más nem fékezi a költést. Plafon beállításához szólj a Kapitánynak, vagy írd be a no_quota_cap értéket a konfigurációba (például eur: 10)."
 }

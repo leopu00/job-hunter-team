@@ -37,9 +37,11 @@ from pathlib import Path
 from datetime import datetime
 
 import pi_sessions
+import provider_credit
 import quota_data
 
 REASON = "pi_spend_cap"
+PROVIDER_NAMES = {"moonshotai": "Kimi (Moonshot)", "zai": "GLM (Z.ai)", "openai": "OpenAI"}
 
 
 def _positive(value):
@@ -65,7 +67,7 @@ def spend(home, now_ts):
     """What pi spent: `cost` today (dollars: pi's estimate plus the fee of the web searches), `hour_tokens` in the last hour,
     `calls` today."""
     start, hour = day_start(now_ts), now_ts - 3600
-    out = {"cost": 0.0, "hour_tokens": 0, "calls": 0}
+    out = {"cost": 0.0, "hour_tokens": 0, "calls": 0, "credit": provider_credit.exhausted(home, now_ts)}
     since = min(start, hour)
     for event in pi_sessions.usage_events(home, since):
         if event["ts"] >= start:
@@ -84,6 +86,8 @@ def decide(config, spent, no_quota_mode):
     """{"action": "none" | "halt" | "warn", ...}. Pure: a config and a measure in, a verdict out."""
     if not no_quota_mode:
         return {"action": "none"}  # with quota data the Sentinella paces by the windows and the daily cap
+    if spent.get("credit"):  # the provider answered that the credit is gone: every call would fail, the team waits
+        return {"action": "halt", "why": "credit", "provider": spent["credit"]["provider"], "spent": 0.0, "ceiling": 0.0}
     eur, tokens = ceilings(config)
     if eur is None and tokens is None:
         return {"action": "warn" if spent["calls"] else "none"}
@@ -103,6 +107,8 @@ def user_text(verdict, spent):
 
     if verdict["action"] == "warn":
         return i18n.tf("pi_cap.no_ceiling", "%s USD" % _money(spent["cost"]))
+    if verdict["why"] == "credit":
+        return i18n.tf("pi_cap.halt_credit", PROVIDER_NAMES.get(verdict["provider"], verdict["provider"] or "the provider"))
     if verdict["why"] == "eur":
         return i18n.tf("pi_cap.halt_eur", "%s USD" % _money(verdict["spent"]), "%s EUR" % _money(verdict["ceiling"]))
     return i18n.tf("pi_cap.halt_tokens", "%d" % verdict["spent"], "%d" % verdict["ceiling"])
@@ -132,6 +138,11 @@ def captain_text(verdict, spent, burst=None):
         return ("[BRIDGE INFO] pi spent %s USD today (its own estimate) and no spending ceiling is declared "
                 "(no_quota_cap in the configuration): this access has no quota data, so nothing else stops the "
                 "spending. Tell the person once, in their language, if they have not been told." % _money(spent["cost"]))
+    if verdict["why"] == "credit":
+        return ("[BRIDGE ALERT] PROVIDER CREDIT GONE (pi harness): %s answered that the credit of the account is exhausted. "
+                "The team is PAUSED: ESC to every session, no forced kill. This is a declared pause, not an outage and not "
+                "FATAL. It lifts by itself when a call goes through again (the person tops up the account with the provider). "
+                "Tell the person once, in their language." % PROVIDER_NAMES.get(verdict["provider"], verdict["provider"]))
     what = ("%s USD today against a ceiling of %s EUR" % (_money(verdict["spent"]), _money(verdict["ceiling"]))
             if verdict["why"] == "eur" else
             "%d tokens in the last hour against a ceiling of %d per hour" % (verdict["spent"], verdict["ceiling"]))
@@ -172,7 +183,7 @@ def _halt(api, run, verdict, spent, day, notify_user):
     burst = first_burst_progress(api._path("JHT_HOME"))
     _tell(api, run, "halt:%s:%s" % (day, verdict["why"]), captain_text(verdict, spent, burst), user_text(verdict, spent),
           notify_user)
-    api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"], 100.0, 100.0)
+    api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"] if verdict["ceiling"] else 100.0, 100.0, 100.0)
     try:
         payload = json.loads(api._path("DAILY_HALT_FLAG").read_text(encoding="utf-8"))
         payload["reason"] = REASON

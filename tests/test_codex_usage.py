@@ -137,3 +137,24 @@ def test_the_meter_prices_codex_and_pi_with_the_same_list_and_ignores_pis_own_fi
 def test_a_team_on_kimi_or_claude_has_no_cost_block_yet(tmp_path, monkeypatch):
     meter = load_meter(tmp_path, monkeypatch)
     assert meter.cost_summary("kimi", T0) is None and meter.cost_summary("claude", T0) is None
+
+
+def test_the_meter_prices_pi_calls_of_glm_and_kimi_by_the_provider_pi_wrote(tmp_path, monkeypatch):
+    """JHT-T314: a call is priced by the provider named in it (zai, moonshotai), not as OpenAI; an unknown model is unknown."""
+    folder = Path(tmp_path) / ".pi" / "agent" / "sessions" / "--jht_home-agents-scout-1--"
+    folder.mkdir(parents=True)
+    calls = [("zai", "glm-5.3", (1_000_000, 1_000_000, 0, 1_000_000)), ("moonshotai", "kimi-k3.1-pro", (1_000_000, 0, 0, 1_000_000)),
+             ("zai", "glm-9-mystery", (1, 1, 1, 1))]
+    rows = [{"type": "session", "version": 3, "id": "pi-x", "timestamp": iso(T0), "cwd": "/jht_home/agents/scout-1"}]
+    for n, (provider, model, token) in enumerate(calls):
+        rows.append({"type": "message", "timestamp": iso(T0 + 10 + n), "message": {
+            "role": "assistant", "provider": provider, "model": model, "usage": {
+                "input": token[0], "cacheRead": token[1], "cacheWrite": token[2], "output": token[3], "reasoning": 0,
+                "cost": {"total": 0.0, "totalFromProvider": False}}}})
+    (folder / "2026-11-09T10-00-00-000Z_x.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    meter = load_meter(tmp_path, monkeypatch)
+    for provider in ("glm", "kimi"):
+        out = meter.cost_summary(provider, T0 - 1)
+        assert out["models"]["glm-5.3"]["usd"] == pytest.approx(1.4 + 0.26 + 4.4, abs=1e-9)
+        assert out["models"]["kimi-k3.1-pro"]["usd"] == pytest.approx(2 + 10, abs=1e-9)
+        assert out["models"]["glm-9-mystery"]["price"] == "unknown"

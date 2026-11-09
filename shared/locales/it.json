@@ -516,6 +516,7 @@
   "quota_mode.no_ceiling": "nessuno dichiarato",
   "pi_cap.halt_eur": "⛔ Il team è in pausa: gli agenti su pi hanno speso oggi %s e hanno raggiunto il tetto che hai dichiarato (%s). Non si perde niente. Il lavoro riprende domani, o appena alzi il tetto nella configurazione.",
   "pi_cap.halt_tokens": "⛔ Il team è in pausa: gli agenti su pi hanno usato %s token nell'ultima ora e hanno raggiunto il tetto che hai dichiarato (%s all'ora). Non si perde niente. Il lavoro riprende quando il conteggio orario scende sotto il tetto, o appena lo alzi nella configurazione.",
+  "pi_cap.halt_credit": "⛔ Il team è in pausa: %s dice che il credito del tuo conto è finito. Non si perde niente. Ricarica il conto presso il fornitore: il lavoro riprende da solo quando una chiamata torna a passare.",
   "pi_cap.resume": "▶️ Il tetto di spesa che hai dichiarato permette di nuovo di lavorare: il team può ripartire.",
   "pi_cap.no_ceiling": "ℹ️ Gli agenti su pi hanno speso oggi %s e non c'è nessun tetto di spesa dichiarato. Questo accesso non comunica limiti di utilizzo, quindi nient'altro ferma la spesa. Per fissarne uno, dillo al Capitano o scrivi no_quota_cap nella configurazione (per esempio eur: 10)."
 }

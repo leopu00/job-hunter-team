@@ -27,7 +27,7 @@ The agent runs as the same user and can read the file too: this keeps the key ou
 hide it from the agent's own account. The file is for the run and is removed by whoever created it when the run ends.
 
     api_key_file.py check [--from-env VAR]         # exit 0 and «ok», or 78 and the reason
-    api_key_file.py exec --env NAME [--from-env VAR] -- CMD [ARG..]   # NAME in OPENAI_API_KEY ANTHROPIC_API_KEY MOONSHOT_API_KEY
+    api_key_file.py exec --env NAME [--from-env VAR] -- CMD [ARG..]   # NAME in OPENAI_API_KEY ANTHROPIC_API_KEY MOONSHOT_API_KEY ZAI_API_KEY
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 FILE_ENV = "JHT_API_KEY_FILE"
-KEY_ENV_NAMES = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY")
+KEY_ENV_NAMES = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY", "ZAI_API_KEY")
 MAX_BYTES = 4096
 TMPFS_TYPES = ("tmpfs", "ramfs")
 _KEY = re.compile(r"[!-~]{16,512}")
