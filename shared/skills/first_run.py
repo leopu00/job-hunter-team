@@ -170,12 +170,12 @@ def status() -> dict:
     return state
 
 
-def plan_info() -> dict:
-    """Roster e obiettivi derivati dall'abbonamento dichiarato dall'utente."""
+def plan_info(assume: bool = False) -> dict:
+    """Roster e obiettivi derivati dall'abbonamento dichiarato dall'utente (`assume`: senza, il piano di default)."""
     mod = _load_module("plan_registry", "plan_registry.py")
     if mod is None:
         return {"ok": False, "reason": "plan_registry is unavailable"}
-    return mod.burst_roster()
+    return mod.burst_roster(assume_default=assume)
 
 
 def plan_gap(state: dict) -> dict:
@@ -185,7 +185,7 @@ def plan_gap(state: dict) -> dict:
     The burst only ever opens with a declared plan, and begin_burst answers «already in progress» for a
     burst that runs, so without this nobody is told the plan is gone. Empty when the plan is declared, when
     there is no burst, or when the registry cannot be read (an unreadable table is not a missing plan)."""
-    if state.get("phase") != PHASE_BURST:
+    if state.get("phase") != PHASE_BURST or (state.get("plan") or {}).get("assumed"):
         return {}
     info = plan_info()
     if info.get("ok") or not info.get("hint"):
@@ -257,12 +257,8 @@ def _plan_hint(state: dict, info: dict) -> str:
 
 
 def begin_burst() -> dict:
-    """Profilo pronto → si apre la fase di burst. Idempotente.
-
-    Rifiuta di partire se l'abbonamento non è dichiarato: senza sapere la
-    capacità del piano il roster sarebbe un'ipotesi, e un'ipotesi sbagliata
-    verso l'alto brucia la finestra dell'utente al primo giorno.
-    """
+    """Profilo pronto → si apre il burst. Idempotente. Non aspetta il piano (T308): chiave API = roster dal tetto di
+    spesa; abbonamento non detto = il piano più basso, dichiarato (`plan_assumed`, diario del Capitano)."""
     state = status()
     if state["phase"] == PHASE_STEADY:
         return dict(state, note="first run has already been completed")
@@ -270,6 +266,9 @@ def begin_burst() -> dict:
         return dict(state, note="burst already in progress", **plan_gap(state), **roster_gap(state))
 
     info = plan_info()
+    if not info.get("ok"):  # a pick not written yet is written now, no card yet is asked now; then the default
+        with contextlib.suppress(Exception): plan_question_check(after_s=0)
+        info = plan_info(assume=True)
     if not info.get("ok"):
         return {"ok": False, "phase": state["phase"],
                 "reason": info.get("reason", "plan not declared"),
@@ -282,14 +281,15 @@ def begin_burst() -> dict:
         "burst_started_at": _now(),
         "scored_at_start": _scored_count() or 0,
         "plan": {k: info[k] for k in
-                 ("provider", "plan", "plan_label", "tier", "weekly_capped")},
+                 ("provider", "plan", "plan_label", "tier", "weekly_capped", "assumed")},
         "roster": info["roster"],
         "scout_cap_first_pass": info["scout_cap_first_pass"],
         "target_scored": info["target_scored"],
         "capped_by_host": info.get("capped_by_host", False),
     })
     _write(state)
-    return dict(state, ok=True)
+    registry = _load_module("plan_registry", "plan_registry.py")
+    return dict(state, ok=True, **registry.report_assumed(info))
 
 
 def complete(reason: str) -> dict:

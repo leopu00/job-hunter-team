@@ -83,7 +83,17 @@ def test_a_plan_that_is_not_in_the_table_is_refused_and_nothing_is_written(home:
 # ── the Capitano as the net ─────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("lang", LANGS)
-def test_begin_burst_refuses_and_tells_how_to_declare_the_plan(home: Path, lang: str):
+def test_begin_burst_without_a_plan_opens_on_the_default_and_says_so(home: Path, lang: str):
+    out = json.loads(_run("first_run.py", "begin-burst", home=home, lang=lang).stdout)
+    assert out["ok"] is True and out["plan"]["plan"] == "plus" and out["plan"]["assumed"], out
+    assert "plan_registry.py set openai:<plan>" in out["plan_assumed"]
+    assert "plan_missing" not in json.loads(_run("first_run.py", "status", home=home, lang=lang).stdout)
+    assert "Plan not declared" in "".join(p.read_text(encoding="utf-8") for p in (home / "logs").glob("captain-diary-*.md"))
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_begin_burst_refuses_only_when_the_provider_has_no_plan_to_assume(home: Path, lang: str):
+    (home / "jht.config.json").write_text(json.dumps({"active_provider": "nobody"}), encoding="utf-8")
     done = _run("first_run.py", "begin-burst", home=home, lang=lang)
     out = json.loads(done.stdout)
     assert out["ok"] is False

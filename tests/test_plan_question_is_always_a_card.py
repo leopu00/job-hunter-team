@@ -537,21 +537,21 @@ def test_ask_plan_after_an_i_do_not_know_still_waits_the_hour(box):
     assert not soon["asked"] and not soon.get("answered") and 3000 < soon["seconds_left"] <= 3600, soon
 
 
-def test_begin_burst_with_the_plan_picked_but_not_written_tells_to_write_it_and_not_to_ask(box):
+def test_begin_burst_with_the_plan_picked_but_not_written_writes_the_pick_and_does_not_wait(box):
     configure(box)
     first = run(box, "ask-plan")
     answer(box, first["question_id"], "pro_max")
 
-    refused = run(box, "begin-burst")
+    opened = run(box, "begin-burst")
 
-    assert not refused["ok"], refused
-    assert "plan_registry.py set openai:pro_max" in refused["hint"] and "Do NOT ask again" in refused["hint"]
-    assert "ask-plan" not in refused["hint"]
+    assert opened["ok"] and opened["plan"]["plan"] == "pro-max" and "plan_assumed" not in opened, opened
 
 
-def test_begin_burst_with_no_answer_still_says_to_ask_with_the_card(box):
+def test_begin_burst_with_no_answer_opens_on_the_default_plan_and_the_card_stays_open(box):
     configure(box)
+    import_profile(box, minutes_ago=60)
 
-    refused = run(box, "begin-burst")
+    opened = run(box, "begin-burst")
 
-    assert not refused["ok"] and "ask-plan" in refused["hint"], refused
+    assert opened["ok"] and opened["plan"]["plan"] == "plus" and opened["plan_assumed"], opened
+    assert len(questions(box)) == 1, "the card is asked, and the burst does not wait for it"
