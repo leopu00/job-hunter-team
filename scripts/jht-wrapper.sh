@@ -2140,9 +2140,22 @@ telegram_lifecycle_steps() {
   done 3<<< "$steps"
 }
 
+# Telegram keeps its whole state in the jht-telegram-state volume, which only the Telegram service (profile telegram)
+# ever mounts: no volume, never configured. True only when the engine LISTED the project's volumes and that one is not
+# among them; a listing that fails says nothing, and then the lifecycle runs as it always did. A person with old
+# Telegram files to migrate has the volume by now (telegram_prepare_legacy_inventory runs before every resume).
+telegram_state_volume_absent() {
+  local project ids
+  project="$(compose_project_name)" || return 1
+  ids="$(docker volume ls -q --filter "label=com.docker.compose.project=$project" 2>/dev/null)" || return 1
+  [ -z "$(printf '%s\n' "$ids" | awk -v expected="${project}_jht-telegram-state" '$0 == expected')" ]
+}
+
 # Transport capability only: old runtime bundles may not declare this service.
+# `resume` (what install, up and upgrade ask) leaves a never-configured Telegram alone: no run container, no volume.
 telegram_lifecycle_if_available() {
   compose_lacks_service "$TELEGRAM_SERVICE" && return 0
+  if [ "${1:-}" = resume ] && telegram_state_volume_absent; then return 0; fi
   telegram_lifecycle_command "$@"
 }
 

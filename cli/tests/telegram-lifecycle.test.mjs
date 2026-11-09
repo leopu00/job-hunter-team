@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resumeTelegram, telegramPlanArgs } from '../src/lib/telegram-lifecycle.js';
 
+// The engine lists the Telegram state volume: Telegram has been configured (or migrated) on this computer.
+const present = (run) => (command, args, options) => (
+  args[0] === 'volume' ? { status: 0, stdout: 'jht_jht-telegram-state\n' } : run(command, args, options));
+
 function transport(plan, result = { status: 0 }) {
   const calls = [];
-  return { calls, run(command, args, options) {
+  return { calls, run: present((command, args, options) => {
     calls.push({ command, args, options });
     if (calls.length === 1) return plan;
     if (calls.length === 3) return { status: 0, stdout: plan.stdout.trim() === 'start' ? 'true' : 'false' };
     return result;
-  } };
+  }) };
 }
 
 for (const [operation, expected] of [['start', ['up', '-d']], ['stop', ['stop']]]) {
@@ -47,14 +51,30 @@ test('a failed engine operation remains a failed command', () => {
 
 test('resume requires the runtime confirmation after inspecting the real engine state', () => {
   const calls = [];
-  const run = (command, args, options) => {
+  const run = present((command, args, options) => {
     calls.push({ command, args, options });
     if (calls.length === 1) return { status: 0, stdout: 'start' };
     if (calls.length === 3) return { status: 0, stdout: 'false' };
     return { status: calls.length === 4 ? 1 : 0 };
-  };
+  });
   assert.equal(resumeTelegram({ run }), false);
   assert.deepEqual(calls[2].args.slice(0, 4), ['inspect', '--type', 'container', 'jht-telegram']);
   assert.deepEqual(calls[3].args, ['compose', ...telegramPlanArgs('verify', 'start')]);
   assert.equal(calls[3].options.input, '0\nfalse');
+});
+
+test('a computer where Telegram was never configured has no state volume: nothing is run, not even the plan', () => {
+  const calls = [];
+  const run = (command, args) => { calls.push([command, ...args]); return { status: 0, stdout: '\n' }; };
+  assert.equal(resumeTelegram({ run, cwd: '/synthetic/runtime' }), true);
+  assert.deepEqual(calls, [['docker', 'volume', 'ls', '-q', '--filter', 'name=jht-telegram-state']]);
+});
+
+test('a listing that fails or cannot be read says nothing: the plan runs as before', () => {
+  for (const listed of [{ status: 1, stdout: '' }, { status: null, error: new Error('offline') }, { status: 0 }]) {
+    const calls = [];
+    const run = (command, args) => { calls.push(args); return args[0] === 'volume' ? listed : { status: 1 }; };
+    assert.equal(resumeTelegram({ run }), false);
+    assert.deepEqual(calls[1], ['compose', ...telegramPlanArgs('prepare', 'resume')]);
+  }
 });

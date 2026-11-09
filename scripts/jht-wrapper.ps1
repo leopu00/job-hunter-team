@@ -1659,10 +1659,23 @@ function Invoke-TelegramLifecycleSteps {
   return 0
 }
 
-# Transport capability only; private configuration is interpreted in the runtime.
+# Telegram keeps its whole state in the jht-telegram-state volume, which only the Telegram service (profile telegram)
+# ever mounts: no volume, never configured. True only when the engine LISTED the project's volumes and that one is
+# not among them; a listing that fails says nothing, and then the lifecycle runs as it always did.
+function Test-TelegramStateVolumeAbsent {
+  $project = Get-ComposeProjectName
+  if (-not $project) { return $false }
+  $ids = @(& { $ErrorActionPreference = 'Continue'; & docker volume ls -q --filter "label=com.docker.compose.project=$project" 2>$null })
+  if ($LASTEXITCODE -ne 0) { return $false }
+  return -not (@($ids | ForEach-Object { "$($_)".Trim() }) -contains "${project}_jht-telegram-state")
+}
+
+# Transport capability only; private configuration is interpreted in the runtime. `resume` (install, up, upgrade)
+# leaves a never-configured Telegram alone: no run container, no volume.
 function Invoke-AvailableTelegramLifecycle {
   param([string]$Action)
   if ((Get-Content -LiteralPath $ComposeFile -Raw) -notmatch '(?m)^  jht-telegram:') { return 0 }
+  if ($Action -eq 'resume' -and (Test-TelegramStateVolumeAbsent)) { return 0 }
   return Invoke-TelegramLifecycle @($Action)
 }
 
