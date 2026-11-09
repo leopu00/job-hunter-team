@@ -263,15 +263,33 @@ def test_powershell_reset_removes_all_broker_volumes_by_compose_labels(
     assert result.returncode == 0, result.stderr
     calls = log.read_text(encoding="utf-8")
     assert "-e JHT_HOST_TYPE=test -e JHT_HOST_RESET_PROTOCOL=1 agent-id" in calls
-    assert f"compose down broker={int(broker_running)}" in calls
+    # The runtime goes down WITH the telegram profile: the Telegram service mounts the broker volumes too, and a volume
+    # that a container still uses cannot be removed (the shell wrapper does the same with COMPOSE_PROFILES=telegram).
+    down = f"compose --profile telegram down broker={int(broker_running)}"
+    assert down in calls
     for logical in VOLUMES:
         assert f"label=com.docker.compose.project={project}" in calls
         if runtime == "docker":
             assert f"label=com.docker.compose.volume={logical}" in calls
         assert f"docker volume rm {project}_{logical}" in calls
+        assert calls.index(down) < calls.index(f"docker volume rm {project}_{logical}"), "down BEFORE the first volume is removed"
         assert f"Cancellato: volume broker {logical}" in calls
     assert not marker.exists()
     assert "rifai i login dei portali" in calls
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is not installed")
+def test_powershell_reset_cancellation_never_stops_compose_or_removes_volumes(tmp_path: Path):
+    result, log, marker = run_powershell_reset(
+        tmp_path, runtime="docker", broker_running=True, reset_code=0
+    )
+
+    assert result.returncode == 0, result.stderr
+    calls = log.read_text(encoding="utf-8")
+    assert "JHT_HOST_RESET_PROTOCOL=1" in calls
+    assert "compose" not in calls
+    assert "volume rm" not in calls
+    assert marker.exists()
 
 
 def test_cli_and_both_wrappers_share_the_confirmed_reset_contract():
@@ -298,7 +316,7 @@ def test_powershell_reset_contract_targets_only_attested_broker_volumes():
 
     assert "if ($ContainerRuntime -eq 'podman') { return 'jht' }" in reset
     assert "ConvertFrom-Json -ErrorAction Stop" in reset
-    assert "Invoke-Compose down" in reset
+    assert "Invoke-Compose '--profile' 'telegram' down" in reset
     assert 'label=com.docker.compose.project=$project' in reset
     assert 'label=com.docker.compose.volume=$logical' in reset
     assert 'Where-Object { $_ -eq "${project}_${logical}" }' in reset
