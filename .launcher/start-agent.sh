@@ -957,14 +957,14 @@ extract_provider_info() {
   fi
   if command -v python3 &>/dev/null; then
     python3 - "$cfg" 2>/dev/null <<'PYEOF' || echo "||"
-import json, sys
+import json, os, sys
 try:
     with open(sys.argv[1]) as f:
         c = json.load(f)
     active = c.get("active_provider", "") or ""
     prov = (c.get("providers") or {}).get(active, {}) if active else {}
     auth = prov.get("auth_method", "") or ""
-    key = prov.get("api_key", "") or ""
+    key = "" if os.environ.get("JHT_API_KEY_FILE") else prov.get("api_key", "") or ""
     print(f"{active}|{auth}|{key}")
 except Exception:
     print("||")
@@ -974,7 +974,7 @@ PYEOF
     active=$(jq -r '.active_provider // ""' "$cfg" 2>/dev/null || echo "")
     if [ -n "$active" ]; then
       auth=$(jq -r ".providers[\"$active\"].auth_method // \"\"" "$cfg" 2>/dev/null || echo "")
-      key=$(jq -r ".providers[\"$active\"].api_key // \"\"" "$cfg" 2>/dev/null || echo "")
+      key=$([ -n "${JHT_API_KEY_FILE:-}" ] || jq -r ".providers[\"$active\"].api_key // \"\"" "$cfg" 2>/dev/null || echo "")
     else
       auth=""
       key=""
@@ -1184,9 +1184,7 @@ esac
 # spawn-harness.sh e spawn-lib.sh (jht_pi_provider_check). Il modello e
 # l'effort sono quelli che lo stesso ruolo avrebbe su Codex; gli argomenti si
 # compongono più sotto, quando la workdir con AGENTS.md e le skill esiste.
-if ! AGENT_HARNESS="$(jht_role_harness "$ROLE" "$JHT_CONFIG_FILE")"; then
-  exit 1
-fi
+AGENT_HARNESS="$(jht_role_harness "$ROLE" "$JHT_CONFIG_FILE")" || exit 1
 if [ "$AGENT_HARNESS" = "pi" ]; then
   if ! jht_pi_provider_check "$PROVIDER" "$AUTH_METHOD"; then
     exit 1
@@ -1493,7 +1491,9 @@ if [ "$CLI_BIN" = "pi" ]; then
   CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort")$(jht_pi_extension_args "$ROLE")"
 fi
 
-FULL_CMD="${CLI_ENV_PREFIX}$(jht_cli_exec "$CLI_BIN")${CLI_ARGS:+ $CLI_ARGS}"
+# Chiave da file (JHT_API_KEY_FILE): il wrapper sta dopo le assegnazioni e prima del binario; il comando del pane non la contiene.
+KEY_WRAP="$(jht_key_wrap "$PROVIDER")" || exit $?
+FULL_CMD="${CLI_ENV_PREFIX}${KEY_WRAP}$(jht_cli_exec "$CLI_BIN")${CLI_ARGS:+ $CLI_ARGS}"
 
 # Guscio di uno spawn interrotto. Col tetto sui client tmux qui sotto, un server
 # che non risponde non appende piu' lo script: lo fa USCIRE (set -e) dopo che
