@@ -67,7 +67,7 @@ jht_key_wrap() {
   tool="$(cd "$JHT_SPAWN_LIB_DIR/../shared/skills" && pwd)/api_key_file.py"
   case "$tool" in *[!A-Za-z0-9_./-]*) echo "Error: the key file tool path has characters that cannot be typed into a pane." >&2; return 78 ;; esac
   if [ -n "$var" ]; then
-    python3 "$tool" check --from-env "$var" >&2 || return $?
+    python3 "$tool" check --from-env "$var" --env "$name" >&2 || return $?
     printf "python3 %s exec --env %s --from-env %s -- " "$tool" "$name" "$var"
     return 0
   fi

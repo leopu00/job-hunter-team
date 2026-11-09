@@ -128,15 +128,31 @@ def read_key(path=None, *, uid=None, mounts=Path("/proc/mounts")) -> str:
 
 
 _ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+# The config names the variable, and whoever writes the config must not be able to hand an agent another secret of the
+# container: the name has to be a key variable (…_KEY), outside the variables of the launcher and the services, and
+# never the key variable of ANOTHER provider.
+_DENIED_PREFIXES = ("JHT_", "FLEET", "SUPABASE", "TELEGRAM", "NEXT_", "LD_", "PYTHON", "NODE_")
 
 
-def read_key_env(name: str) -> str:
+def check_env_name(name: str, target: str | None = None) -> None:
+    """Raises KeyFileError unless `name` may be the source of a key (for the variable `target` of the provider)."""
+    if not _ENV_NAME.fullmatch(name or ""):
+        raise KeyFileError("the name of the environment variable is not valid")
+    upper = name.upper()
+    if not upper.endswith("_KEY"):
+        raise KeyFileError("the name of the environment variable must end in _KEY")
+    if upper.startswith(_DENIED_PREFIXES):
+        raise KeyFileError("the environment variable %s is not one a key may be read from" % name)
+    if name in KEY_ENV_NAMES and target is not None and name != target:
+        raise KeyFileError("%s is the key variable of another provider: refused" % name)
+
+
+def read_key_env(name: str, target: str | None = None) -> str:
     """The key held by the environment variable `name` of this process (the container's), checked like a file's content.
 
     For `api_key_ref` of source env in the config: the variable is in the environment of the container, so every launch
     (team start, the watchdog's restart) sees it. Raises KeyFileError; the message never holds the value."""
-    if not _ENV_NAME.fullmatch(name or ""):
-        raise KeyFileError("the name of the environment variable is not valid")
+    check_env_name(name, target)
     value = os.environ.get(name, "")
     if not value:
         raise KeyFileError("the environment variable %s is not set" % name)
@@ -155,13 +171,14 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="check the key file, print ok")
     check.add_argument("--from-env", metavar="VAR", help="take the key from this environment variable, not from the file")
+    check.add_argument("--env", choices=KEY_ENV_NAMES, help="the variable of the provider the key is for (with --from-env)")
     run = sub.add_parser("exec", help="start CMD with the key in the environment NAME")
     run.add_argument("--env", required=True, choices=KEY_ENV_NAMES)
     run.add_argument("--from-env", metavar="VAR", help="take the key from this environment variable, not from the file")
     run.add_argument("cmd", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
-        key = read_key_env(args.from_env) if args.from_env else read_key()
+        key = read_key_env(args.from_env, args.env) if args.from_env else read_key()
     except KeyFileError as error:
         return _refuse(error)
     if args.command == "check":

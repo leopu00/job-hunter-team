@@ -88,7 +88,7 @@ def test_a_variable_in_the_config_is_named_in_the_pane_and_its_value_never(tmp_p
     assert words[0] == "python3" and words[1].endswith("shared/skills/api_key_file.py")
     assert words[2:] == ["exec", "--env", name, "--from-env", "MY_RUN_KEY", "--"]
     assert KEY not in result.stdout + result.stderr
-    assert _ran(tmp_path) == ["check --from-env MY_RUN_KEY | file=-"]
+    assert _ran(tmp_path) == [f"check --from-env MY_RUN_KEY --env {name} | file=-"]
 
 
 def test_a_refused_variable_stops_the_spawn_with_the_code_of_the_checker(tmp_path: Path) -> None:
@@ -217,3 +217,30 @@ def test_a_refused_key_makes_the_restart_fail_instead_of_starting_without_it(tmp
     result = wd.run("respawn_worker scout 1 SCOUT-S1")
     assert result.returncode != 0
     assert not (tmp_path / "wrap.txt").exists()
+
+
+# ── which variables a config may name (the real checker: the stand-in above would not refuse anything) ─────
+
+def _real_wrap(tmp_path: Path, variable: str, provider: str = "openai", **env: str):
+    cfg = _config(tmp_path, {"auth_method": "api_key", "api_key_ref": {"type": "ref", "source": "env", "id": variable}}, active=provider)
+    script = f'source "{SPAWN_LIB}"; jht_key_wrap {provider} {shlex.quote(str(cfg))}'
+    base = {k: v for k, v in _clean_env(**env).items() if k != "JHT_API_KEY_FILE"}
+    return subprocess.run([_bash(), "-c", script], capture_output=True, text=True, check=False, env=base)
+
+
+@pytest.mark.parametrize("variable", ["MY_RUN_KEY", "OPENAI_API_KEY", "run_key"])
+def test_a_key_variable_is_accepted_by_the_real_checker(tmp_path: Path, variable: str) -> None:
+    result = _real_wrap(tmp_path, variable, **{variable: KEY})
+    assert result.returncode == 0, result.stderr
+    assert shlex.split(result.stdout)[2:] == ["exec", "--env", "OPENAI_API_KEY", "--from-env", variable, "--"]
+
+
+@pytest.mark.parametrize("variable", [
+    "PATH", "HOME", "FLEETD_TOKEN", "JHT_SECRET_KEY", "SUPABASE_SERVICE_KEY", "TELEGRAM_BOT_KEY", "NEXT_PUBLIC_KEY",
+    "LD_PRELOAD_KEY", "ANTHROPIC_API_KEY", "MOONSHOT_API_KEY",
+])
+def test_a_variable_that_is_not_a_key_for_this_provider_is_refused_and_its_value_never_used(tmp_path: Path, variable: str) -> None:
+    # PATH and HOME keep their own value: giving them a key would only break the shell of the test
+    result = _real_wrap(tmp_path, variable, **({} if variable in ("PATH", "HOME") else {variable: KEY}))
+    assert result.returncode == 78, result.stdout
+    assert result.stdout == "" and KEY not in result.stderr

@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasKeyRef, validateConfigBeforeWrite } from '../wizard/setup-helpers.js';
+import { hasKeyRef, isKeyVariable, validateConfigBeforeWrite } from '../wizard/setup-helpers.js';
 
 // The key can live in a file or in an environment variable (`api_key_ref`): the setup must finish with it, and the
 // config keeps the reference, never the key. The launcher resolves the reference at every start
@@ -79,4 +79,13 @@ test('without --secret-file the file mode still says what is missing', () => {
   const { done } = setup(['--secret-mode', 'file']);
   assert.notEqual(done.status, 0);
   assert.match(done.stderr, /--secret-file is required/);
+});
+
+test('only a key variable can be named: not a path, a service secret or a launcher variable', () => {
+  for (const ok of ['OPENAI_API_KEY', 'MY_RUN_KEY', 'run_key']) assert.equal(isKeyVariable(ok), true, ok);
+  for (const bad of ['PATH', 'HOME', 'FLEETD_TOKEN', 'JHT_SECRET_KEY', 'SUPABASE_SERVICE_KEY', 'TELEGRAM_BOT_KEY', 'NEXT_PUBLIC_KEY',
+    'LD_PRELOAD_KEY', 'has space', '1KEY', '', null, 'X'.repeat(70) + '_KEY']) {
+    assert.equal(isKeyVariable(bad), false, String(bad));
+    assert.equal(hasKeyRef({ type: 'ref', source: 'env', id: bad }), false, String(bad));
+  }
 });

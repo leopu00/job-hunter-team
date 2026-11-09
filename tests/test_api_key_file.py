@@ -300,3 +300,19 @@ def test_exec_from_env_starts_nothing_when_the_variable_is_not_right(tmp_path):
     marker = tmp_path / "started"
     done = run_from_env("exec", "--env", "OPENAI_API_KEY", "--from-env", "MY_RUN_KEY", "--", "touch", str(marker), MY_RUN_KEY="short")
     assert done.returncode == akf.EXIT_REFUSED and not marker.exists()
+
+
+@pytest.mark.parametrize("name", ["PATH", "HOME", "FLEETD_TOKEN", "JHT_SECRET_KEY", "SUPABASE_SERVICE_KEY", "TELEGRAM_BOT_KEY",
+                                  "NEXT_PUBLIC_KEY", "LD_PRELOAD_KEY", "PYTHONPATH_KEY", "SOME_OTHER_SECRET"])
+def test_a_variable_outside_the_key_names_is_refused_with_its_value_set(name):
+    done = run_from_env("check", "--from-env", name, **({} if name in ("PATH", "HOME") else {name: KEY}))
+    assert done.returncode == akf.EXIT_REFUSED and KEY not in done.stdout + done.stderr
+
+
+def test_the_key_variable_of_another_provider_is_not_a_source_for_this_one():
+    other = run_from_env("check", "--from-env", "ANTHROPIC_API_KEY", "--env", "OPENAI_API_KEY", ANTHROPIC_API_KEY=KEY)
+    assert other.returncode == akf.EXIT_REFUSED and "another provider" in other.stderr and KEY not in other.stderr
+    own = run_from_env("check", "--from-env", "OPENAI_API_KEY", "--env", "OPENAI_API_KEY", OPENAI_API_KEY=KEY)
+    assert own.returncode == 0
+    exec_other = run_from_env("exec", "--env", "OPENAI_API_KEY", "--from-env", "MOONSHOT_API_KEY", "--", "true", MOONSHOT_API_KEY=KEY)
+    assert exec_other.returncode == akf.EXIT_REFUSED
