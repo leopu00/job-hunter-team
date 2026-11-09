@@ -17,14 +17,14 @@ PLAN = {"active_provider": "openai", "providers": {"openai": {"plan": "pro-max"}
 
 
 def _boot(tmp_path: Path, *, ready: bool = True, plan: bool = True, phase: str | None = None,
-          diary: str | None = None) -> tuple[int, str, dict]:
+          diary: str | None = None, config: dict | None = None) -> tuple[int, str, dict]:
     home = tmp_path / "jht"
     for sub in ("profile", "state", "logs"):
         (home / sub).mkdir(parents=True, exist_ok=True)
     if ready:
         (home / "profile" / "ready.flag").write_text("x", encoding="utf-8")
-    if plan:
-        (home / "jht.config.json").write_text(json.dumps(PLAN), encoding="utf-8")
+    if plan or config:
+        (home / "jht.config.json").write_text(json.dumps(config or PLAN), encoding="utf-8")
     if phase:
         (home / "state" / "first-run.json").write_text(json.dumps({
             "phase": phase, "created_at": "2026-10-27T07:00:00+00:00", "burst_started_at": None,
@@ -51,6 +51,12 @@ def test_without_a_declared_plan_the_run_stays_closed_and_the_block_says_how_to_
     code, out, state = _boot(tmp_path, plan=False)
     assert code == 0 and state["phase"] == "awaiting_profile"
     assert "NOT opened" in out and "ask-plan" in out
+
+
+def test_a_subscription_nobody_named_opens_on_the_default_and_the_block_says_so(tmp_path: Path):
+    code, out, state = _boot(tmp_path, plan=False, config={"active_provider": "codex"})
+    assert code == 0 and state["phase"] == "burst" and state["plan"]["assumed"]
+    assert "PLAN ASSUMED, already in your diary" in out and "opened now by the system" in out
 
 
 def test_an_onboarding_that_is_not_closed_opens_nothing(tmp_path: Path):

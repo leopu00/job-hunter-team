@@ -8,8 +8,9 @@ the block is appended to the welcome message the Capitano is sent at its start (
 
   * The first run is opened here, and only here, when the onboarding is closed by the Assistente (`ready.flag`, or a
     profile that already passes the gate to start the search) and the run has not begun: `first_run.py begin-burst`,
-    exactly the command the skill first-run-burst asks for. It is idempotent, and it refuses without a declared
-    plan: then the block says so, and the Capitano asks the plan with the card, as the skill says. The roster is NOT
+    exactly the command the skill first-run-burst asks for. It is idempotent, and it does not wait for the plan: an API
+    key sizes the roster by its spending ceiling, a subscription nobody named opens on the lowest plan and the block says
+    so (`plan_assumed`). Only a provider with no plan to assume stays closed: then the block says how to ask the card. The roster is NOT
     started here: that stays the Capitano's (staggered, through start-agent.sh).
   * Nothing is drained: mail, user replies and the bridge are the Capitano's to read, so nothing is lost or read twice.
 
@@ -62,7 +63,8 @@ def first_run_line(gate: dict | None) -> str:
             return ("first run: NOT opened — the subscription plan is not declared (" + str(result.get("reason", "plan")) + "). "
                     "Ask it ONCE with `first_run.py ask-plan` (the card, never plain text), as your first-run-burst skill says.")
         if result is not None:
-            state, opened = result, "opened now by the system with begin-burst. "
+            state, opened = result, "opened now by the system with begin-burst. " + (
+                f"PLAN ASSUMED, already in your diary: {result['plan_assumed']} " if result.get("plan_assumed") else "")
     roster = state.get("roster")
     need = f" roster {json.dumps(roster, sort_keys=True)}, target_scored {state.get('target_scored')}," \
            f" scout_cap_first_pass {state.get('scout_cap_first_pass')}." if roster else ""
