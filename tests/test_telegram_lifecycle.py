@@ -89,10 +89,7 @@ compose() {
     *) return 98 ;;
   esac
 }
-docker() {
-  [ "${ABSENT:-}" != 1 ] || { printf 'Error: no such container "jht-telegram"\n' >&2; return 125; }
-  cat "$ENGINE_STATE"
-}
+docker() { cat "$ENGINE_STATE"; }
 err() { printf '%s\n' "$*" >&2; }
 telegram_pair() {
   printf 'pair\n' >> "$EVENTS"
@@ -126,10 +123,7 @@ function Invoke-Compose {
   else { throw 'invalid transport' }
   $global:LASTEXITCODE = 0
 }
-function docker {
-  if ($env:ABSENT -eq '1') { 'Error: no such container "jht-telegram"'; $global:LASTEXITCODE = 125; return }
-  Get-Content $env:ENGINE_STATE; $global:LASTEXITCODE = 0
-}
+function docker { Get-Content $env:ENGINE_STATE; $global:LASTEXITCODE = 0 }
 function Write-Err { param([string]$Message) [Console]::Error.WriteLine($Message) }
 function Invoke-TelegramPair {
   param([string]$Role)
@@ -144,6 +138,16 @@ function Invoke-TelegramAdmin {
   & $env:PYTHON $env:MUTATE $AdminArgs[1] $AdminArgs[2] | Out-Host
   return $LASTEXITCODE
 }
+'''
+
+
+# An engine that never created the container: Podman 5 answers inspect with exit 125. Defined after the transport,
+# so tests that swap the one-line fake `docker` above keep matching it.
+BASH_ABSENT = r'''
+docker() { printf 'Error: no such container "jht-telegram"\n' >&2; return 125; }
+'''
+PS_ABSENT = r'''
+function docker { 'Error: no such container "jht-telegram"'; $global:LASTEXITCODE = 125 }
 '''
 
 
@@ -163,15 +167,15 @@ def run_host(tmp_path, language, args, *, fail_pair=False, no_effect="", absent=
     )
     env = {**os.environ, "PYTHON": sys.executable, "PLANNER": str(PLANNER),
            "MUTATE": str(mutate), "EVENTS": str(events), "FAIL_PAIR": str(int(fail_pair)),
-           "ENGINE_STATE": str(engine_state), "NO_EFFECT": no_effect, "ABSENT": str(int(absent))}
+           "ENGINE_STATE": str(engine_state), "NO_EFFECT": no_effect}
     if language == "bash":
         body = functions("telegram_lifecycle_plan", "telegram_lifecycle_verify", "telegram_lifecycle_steps", "telegram_lifecycle_command")
-        script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + '\ntelegram_lifecycle_command "$@"\n'
+        script = BASH_TRANSPORT + '\nTELEGRAM_SERVICE=jht-telegram\n' + body + (BASH_ABSENT if absent else "") + '\ntelegram_lifecycle_command "$@"\n'
         command = ["bash", "-c", script, "test-host", *args]
     else:
         body = powershell_functions("Get-TelegramLifecyclePlan", "Confirm-TelegramLifecycle", "Invoke-TelegramLifecycleSteps", "Invoke-TelegramLifecycle")
         script = tmp_path / "transport.ps1"
-        script.write_text(PS_TRANSPORT + body + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
+        script.write_text(PS_TRANSPORT + body + (PS_ABSENT if absent else "") + '\nexit (Invoke-TelegramLifecycle $args)\n', encoding="utf-8")
         command = ["pwsh", "-NoProfile", "-File", str(script), *args]
     result = subprocess.run(command, env=env, capture_output=True, text=True, check=False, timeout=30)
     return result, events.read_text(encoding="utf-8-sig").splitlines()
