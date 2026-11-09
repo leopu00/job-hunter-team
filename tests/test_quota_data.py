@@ -261,3 +261,75 @@ def test_the_person_notice_exists_in_every_language(lang, monkeypatch):
     i18n._load.cache_clear() if hasattr(i18n, "_load") else None
     text = quota_data.user_text("10 EUR")
     assert "10 EUR" in text and "quota_mode." not in text
+
+
+# --- the pi harness: agents that write no Codex rollout ------------------------------------------------------
+
+def pi_session(home, age_sec=60, name="one.jsonl"):
+    import os
+    folder = home / ".pi" / "agent" / "sessions" / "--jht_home-agents-scout-1--"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / name
+    path.write_text(json.dumps({"type": "session", "version": 3, "id": "s1", "cwd": "/jht_home/agents/scout-1"}) + "\n",
+                    encoding="utf-8")
+    os.utime(path, (NOW - age_sec, NOW - age_sec))
+    return path
+
+
+def test_a_team_on_the_pi_harness_has_no_files_to_read_the_windows_from(tmp_path, sessions):
+    pi_session(tmp_path)
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW, tmp_path) == "harness_pi"
+
+
+def test_without_the_home_the_harness_is_not_told(tmp_path, sessions):
+    pi_session(tmp_path)
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW) is None
+
+
+def test_a_pi_session_that_went_quiet_may_be_an_outage(tmp_path, sessions):
+    pi_session(tmp_path, age_sec=3 * 3600)
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW, tmp_path) is None
+
+
+def test_no_pi_session_at_all_is_not_the_pi_harness(tmp_path, sessions):
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW, tmp_path) is None
+
+
+def test_a_codex_rollout_with_limits_alive_beside_pi_keeps_a_failed_fetch_an_outage(tmp_path, sessions):
+    pi_session(tmp_path)
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT, WITH_LIMITS])
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW, tmp_path) is None
+
+
+def test_a_codex_rollout_without_limits_beside_pi_keeps_its_own_reason(tmp_path, sessions):
+    pi_session(tmp_path)
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT])
+    assert quota_data.no_quota_reason("openai", SUBSCRIPTION, sessions, NOW, tmp_path) == "no_rate_limits_in_rollouts"
+
+
+def test_pi_does_not_make_other_providers_structural(tmp_path, sessions):
+    pi_session(tmp_path)
+    assert quota_data.no_quota_reason("claude", SUBSCRIPTION, sessions, NOW, tmp_path) is None
+    assert quota_data.no_quota_reason("kimi", {}, sessions, NOW, tmp_path) is None
+
+
+def test_the_failed_fetch_of_a_pi_team_is_declared_not_an_outage(tmp_path, sessions):
+    pi_session(tmp_path)
+    api = SimpleNamespace(time=SimpleNamespace(time=lambda: NOW))
+    api._read_config_json = lambda: SUBSCRIPTION
+    api._path = lambda name: sessions if name == "CODEX_SESSIONS_DIR" else tmp_path
+    assert quota_data.classify_failure(api, "openai", "codex_rollout_none") == "no_quota_data:harness_pi"
+
+
+def test_an_api_that_cannot_name_the_home_still_classifies_the_rest(tmp_path, sessions):
+    rollout(sessions, "rollout-a.jsonl", [TOKEN_COUNT])
+    api = SimpleNamespace(time=SimpleNamespace(time=lambda: NOW))
+    api._read_config_json = lambda: SUBSCRIPTION
+
+    def path(name):
+        if name == "JHT_HOME":
+            raise OSError("no home")
+        return sessions
+
+    api._path = path
+    assert quota_data.classify_failure(api, "openai", "codex_rollout_none") == "no_quota_data:no_rate_limits_in_rollouts"

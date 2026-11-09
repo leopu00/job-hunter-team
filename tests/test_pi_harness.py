@@ -477,8 +477,15 @@ def test_the_usage_bridge_publishes_the_gap(tmp_path: Path, monkeypatch) -> None
 
 
 @pytest.mark.skipif(shutil.which("python3") is None, reason="python3 required")
-def test_the_token_meter_declares_the_gap(tmp_path: Path) -> None:
-    _pi_session(tmp_path)
+def test_the_token_meter_counts_pi_instead_of_declaring_a_gap(tmp_path: Path) -> None:
+    session = _pi_session(tmp_path)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+    session.write_text(
+        json.dumps({"type": "session", "version": 3, "id": "s1", "cwd": "/jht_home/agents/scout-1"}) + "\n"
+        + json.dumps({"type": "message", "timestamp": stamp, "message": {"role": "assistant", "model": "m", "usage": {
+            "input": 10, "output": 20, "cacheRead": 100, "cacheWrite": 1000, "reasoning": 5, "totalTokens": 1130,
+            "cost": {"total": 0.5, "totalFromProvider": False}}}}) + "\n",
+        encoding="utf-8")
     state = tmp_path / "logs" / "token-meter-state.json"
     proc = subprocess.Popen(
         [sys.executable, str(ROOT / "shared" / "skills" / "token-meter.py")],
@@ -493,5 +500,8 @@ def test_the_token_meter_declares_the_gap(tmp_path: Path) -> None:
         proc.terminate()
         output, _ = proc.communicate(timeout=10)
     assert state.exists(), output
-    assert json.loads(state.read_text(encoding="utf-8"))["uncounted"]["pi_sessions"] == 1
-    assert "WARN 1 pi sessions are not counted" in output
+    published = json.loads(state.read_text(encoding="utf-8"))
+    assert published["pi"]["events"] == 1 and published["pi"]["cost"] == 0.5
+    assert published["pi"]["agents"] == {"scout-1": {"events": 1, "cost": 0.5}}
+    assert published["tokens"]["events"] == 1, "with OpenAI, pi spends the same account as Codex"
+    assert "not counted" not in output and "pi calls=1" in output

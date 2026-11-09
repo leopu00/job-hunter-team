@@ -87,10 +87,36 @@ def test_missing_cores_or_load_do_not_invent_a_limit():
 
 
 def test_the_harness_comes_from_the_active_provider():
-    assert hc.harness_of("openai") == hc.harness_of("Codex") == "codex"
-    assert hc.harness_of("anthropic") == "claude" and hc.harness_of("moonshot") == "kimi"
-    assert hc.harness_of("zzz") is None and hc.harness_of(None) is None
+    assert hc.harness_of("openai", {}) == hc.harness_of("Codex", {}) == "codex"
+    assert hc.harness_of("anthropic", {}) == "claude" and hc.harness_of("moonshot", {}) == "kimi"
+    assert hc.harness_of("zzz", {}) is None and hc.harness_of(None, {}) is None
     assert hc.capacity(machine(6.0, 16), None)["ram_per_agent_gib"] == hc.UNKNOWN_HARNESS_GIB
+
+
+# --- the pi harness -----------------------------------------------------------------------------------------
+
+def test_a_role_on_pi_sizes_the_team_with_pi_when_pi_is_the_heavier_session():
+    assert hc.harness_of("openai", {"JHT_AGENT_HARNESS_SCOUT": "pi"}) == "pi"
+    assert hc.harness_of("openai", {"JHT_AGENT_HARNESS_SCOUT": " PI "}) == "pi"
+    assert hc.harness_of("openai", {"JHT_AGENT_HARNESS_SCOUT": ""}) == "codex"
+    assert hc.harness_of("openai", {"JHT_AGENT_HARNESS_SCOUT": "other", "PATH": "pi"}) == "codex"
+    # claude is heavier than pi: the cap keeps holding the claude session
+    assert hc.harness_of("claude", {"JHT_AGENT_HARNESS_SCOUT": "pi"}) == "claude"
+    assert hc.harness_of("zzz", {"JHT_AGENT_HARNESS_SCOUT": "pi"}) == "pi"
+
+
+def test_the_harness_of_the_process_is_read_when_no_environment_is_given(monkeypatch):
+    monkeypatch.delenv("JHT_AGENT_HARNESS_SCOUT", raising=False)
+    assert hc.harness_of("openai") == "codex"
+    monkeypatch.setenv("JHT_AGENT_HARNESS_SCOUT", "pi")
+    assert hc.harness_of("openai") == "pi"
+
+
+def test_pi_has_its_own_ram_and_it_says_it_is_an_estimate():
+    got = hc.capacity(machine(9.0, 16), "pi")
+    assert got["ram_per_agent_gib"] == hc.RAM_GIB_PER_AGENT["pi"] and got["ram_per_agent_measured"] is False
+    assert "estimated, not measured" in got["message"]
+    assert hc.capacity(machine(9.0, 16), "codex")["cap"] > got["cap"] > hc.capacity(machine(9.0, 16), "claude")["cap"]
 
 
 def test_the_probe_reads_meminfo_and_the_container_limits(tmp_path):

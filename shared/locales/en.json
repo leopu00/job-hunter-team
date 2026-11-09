@@ -558,5 +558,9 @@
   "position_card.value.draft": "Draft",
   "position_card.value.approved": "Approved",
   "quota_mode.noquota": "ℹ️ This provider does not report usage limits, so the team is not paced by a quota and is not paused for missing data. Spending is bounded only by the ceiling you set with the provider for this key (declared here: %s). Check it, and tell the Captain if you want the team slower or stopped.",
-  "quota_mode.no_ceiling": "none declared"
+  "quota_mode.no_ceiling": "none declared",
+  "pi_cap.halt_eur": "⛔ The team is paused: the agents on pi have spent %s today and reached the ceiling you declared (%s). Nothing is lost. Work resumes tomorrow, or as soon as you raise the ceiling in the configuration.",
+  "pi_cap.halt_tokens": "⛔ The team is paused: the agents on pi used %s tokens in the last hour and reached the ceiling you declared (%s per hour). Nothing is lost. Work resumes when the hourly count falls below it, or as soon as you raise the ceiling in the configuration.",
+  "pi_cap.resume": "▶️ The spending ceiling you declared allows work again: the team can resume.",
+  "pi_cap.no_ceiling": "ℹ️ The agents on pi have spent %s today and no spending ceiling is declared. This access reports no usage limits, so nothing else stops the spending. To set a ceiling, tell the Captain or write no_quota_cap in the configuration (for example eur: 10)."
 }

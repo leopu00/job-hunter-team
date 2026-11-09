@@ -99,6 +99,8 @@ def billing_weighted(tokens: dict, provider: str = "kimi") -> float:
         input_tokens + output_tokens + cache_read_input_tokens*0.1 + cache_creation_input_tokens*1.25
     Codex (openai):
         input_tokens + output_tokens + reasoning_output_tokens + cached_input_tokens*0.5
+    pi (harness, see pi_sessions.py):
+        input + cache_write + output + cache_read*0.1
     """
     if provider in ("kimi", "moonshot"):
         return (
@@ -120,6 +122,15 @@ def billing_weighted(tokens: dict, provider: str = "kimi") -> float:
             + tokens.get("output_tokens", 0)
             + tokens.get("reasoning_output_tokens", 0)
             + tokens.get("cached_input_tokens", 0) * 0.5
+        )
+    if provider == "pi":
+        # pi on OpenAI: `input` is what was not cached, `cache_write` the first sight of a prompt (OpenAI charges no
+        # premium for it), `cache_read` a hit (a tenth of the price); `output` already includes the reasoning.
+        return (
+            tokens.get("input", 0)
+            + tokens.get("cache_write", 0)
+            + tokens.get("output", 0)
+            + tokens.get("cache_read", 0) * CACHE_READ_WEIGHT
         )
     raise ValueError(f"billing_weighted: unknown provider {provider!r}")
 
@@ -203,6 +214,31 @@ def read_kimi_events(
                 continue
 
     events.sort(key=lambda e: e["ts"])
+    return events
+
+
+# ── pi events reader ────────────────────────────────────────────────────
+
+def read_pi_events(
+    window_start_ts: float | None = None,
+    *,
+    jht_home: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Gli eventi token dell'harness pi, sotto `$JHT_HOME/.pi/agent/sessions/`, nella STESSA forma di
+    `read_kimi_events` (così aggregate e rolling_rate_per_agent li leggono uguali), più il costo che pi calcola:
+      {"ts", "session", "agent", "tokens": {input, output, cache_read, cache_write}, "weighted", "cost"}
+    `agent` è il nome della cartella dell'agente (`scout-1`), preso dal cwd dell'header. Solo lettura; i file
+    illeggibili e le righe monche si saltano."""
+    import pi_sessions
+
+    events = []
+    for e in pi_sessions.usage_events(jht_home or _jht_home(), window_start_ts):
+        tokens = {k: e[k] for k in ("input", "output", "cache_read", "cache_write")}
+        weighted = billing_weighted(tokens, "pi")
+        if weighted <= 0:
+            continue
+        events.append({"ts": e["ts"], "session": e["session"], "agent": e["agent"], "tokens": tokens,
+                       "weighted": float(weighted), "cost": e["cost"]})
     return events
 
 

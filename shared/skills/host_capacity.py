@@ -24,7 +24,10 @@ import re
 from pathlib import Path
 
 GIB = 1024 ** 3
-RAM_GIB_PER_AGENT = {"codex": 0.22, "claude": 0.6, "kimi": 0.6, "pi": 0.6}
+# pi: a dry measure, not a running team. The TUI of a Scout (17 skills) against a local stub, no model: 0.12 GiB resident
+# idle, 0.13 after one turn. A real session grows with its context and its tool output, so the figure here keeps a margin
+# of about 2x over the dry one and stays an ESTIMATE until a team on pi has been sampled.
+RAM_GIB_PER_AGENT = {"codex": 0.22, "claude": 0.6, "kimi": 0.6, "pi": 0.3}
 MEASURED = frozenset({"codex"})
 UNKNOWN_HARNESS_GIB = 0.6
 RAM_RESERVED_GIB = 2.0         # the system, the container runtime, the browser of a person who works on this machine
@@ -38,8 +41,20 @@ _PROVIDER_HARNESS = {"openai": "codex", "codex": "codex", "claude": "claude", "a
                      "kimi": "kimi", "moonshot": "kimi"}
 
 
-def harness_of(provider):
-    return _PROVIDER_HARNESS.get(str(provider or "").strip().lower())
+def _roles_on_pi(env):
+    return any(name.startswith("JHT_AGENT_HARNESS_") and str(value).strip().lower() == "pi"
+               for name, value in (env or {}).items())
+
+
+def harness_of(provider, env=None):
+    """The harness that sizes the team: the provider's CLI, or pi when some role runs on it (JHT_AGENT_HARNESS_<ROLE>=pi,
+    see .launcher/spawn-lib.sh) and pi is the heavier of the two: the cap has to hold the heavier session. `env` defaults
+    to the environment of the process."""
+    base = _PROVIDER_HARNESS.get(str(provider or "").strip().lower())
+    if _roles_on_pi(os.environ if env is None else env):
+        if base is None or RAM_GIB_PER_AGENT["pi"] >= RAM_GIB_PER_AGENT.get(base, UNKNOWN_HARNESS_GIB):
+            return "pi"
+    return base
 
 
 def _meminfo_gib(text, key):

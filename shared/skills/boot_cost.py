@@ -2,7 +2,7 @@
 """boot_cost — what each role's session spends in its first minutes after it starts.
 
 A restart of the containers starts every session again with a cold cache. This reads, only to read, the session
-files the provider CLIs already write (Codex `rollout-*.jsonl`, Claude Code project `*.jsonl`) and answers, per
+files the harnesses already write (Codex `rollout-*.jsonl`, Claude Code project `*.jsonl`, pi session `*.jsonl`) and answers, per
 role: how big the context of the first model call is (the prompt, the tools, the skills: what the session
 "rereads"), and what the session spent in its first N minutes, split in fresh input, input read from the cache and
 output. It prints numbers and role names only: no message text, no path, no identifier of a person.
@@ -343,6 +343,50 @@ def _calls_claude(path: Path, agent: str):
     return role_of(agent), calls
 
 
+def _pi_programs(message: dict) -> list[str]:
+    names = []
+    content = message.get("content")
+    for block in content if isinstance(content, list) else []:
+        if not isinstance(block, dict) or block.get("type") != "toolCall":
+            continue
+        given = block.get("arguments")
+        command = given.get("command") if isinstance(given, dict) else None
+        if block.get("name") == "bash" and command is not None:
+            names.extend(programs_in(command) or ["(shell)"])
+        else:
+            name = block.get("name")
+            names.append(name if name in _TOOLS else "(tool)")
+    return names
+
+
+def _calls_pi(path: Path):
+    """Same for a pi session (see pi_sessions.py): the header names the working directory, every assistant message is
+    a model call with its own usage. What pi books as `cacheWrite` is fresh input (OpenAI charges it as input), `input`
+    is the uncached rest, `cacheRead` is cached; `output` already includes the reasoning. The tool calls of a message
+    are read by the NEXT call."""
+    agent, calls, pending = None, [], []
+    with path.open(encoding="utf-8", errors="replace") as f:
+        for line in f:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("type") == "session":
+                cwd = e.get("cwd")
+                if isinstance(cwd, str) and cwd:
+                    agent = Path(cwd).name
+                continue
+            message = e.get("message")
+            usage = message.get("usage") if isinstance(message, dict) else None
+            ts = _ts(e.get("timestamp"))
+            if not isinstance(message, dict) or message.get("role") != "assistant" or not isinstance(usage, dict) or ts <= 0:
+                continue
+            fresh = _int(usage.get("input")) + _int(usage.get("cacheWrite"))
+            calls.append((ts, fresh, _int(usage.get("cacheRead")), _int(usage.get("output")), tuple(pending)))
+            pending = _pi_programs(message)
+    return role_of(agent), calls
+
+
 def sessions(jht_home: Path, since_ts: float):
     """Yield (role, calls) for every session file touched since `since_ts`. Links are not followed."""
     codex = jht_home / ".codex" / "sessions"
@@ -357,6 +401,14 @@ def sessions(jht_home: Path, since_ts: float):
             for jsonl in folder.glob("*.jsonl"):
                 if _regular(jsonl, since_ts):
                     yield _calls_claude(jsonl, folder.name[len(CLAUDE_AGENT_PREFIX):])
+    pi_root = jht_home / ".pi" / "agent" / "sessions"
+    if pi_root.is_dir() and not pi_root.is_symlink():
+        for folder in pi_root.iterdir():
+            if folder.is_symlink() or not folder.is_dir():
+                continue
+            for jsonl in folder.glob("*.jsonl"):
+                if _regular(jsonl, since_ts):
+                    yield _calls_pi(jsonl)
 
 
 def measure(jht_home: Path, since_ts: float, minutes: float) -> dict:
