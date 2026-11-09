@@ -33,12 +33,9 @@ CONTEXT_ONLY_DOCKERFILE = "FROM scratch\nCOPY . /app\n"
 # Cartelle che nel container servono davvero, benche' il loro NOME sia fra
 # quelli esclusi. Stanno qui perche' un'esclusione in profondita' scritta un
 # po' piu' larga le porterebbe via in silenzio: `shared/release/version.js` lo
-# importa `cli/src/lib/release-check.js`, che gira dentro il container, e le
-# altre due sono una route e degli asset dell'albero `web/`.
+# importa `cli/src/lib/release-check.js`, che gira dentro il container.
 KEPT_ON_PURPOSE = (
     "app/shared/release/version.js",
-    "app/web/app/docs",
-    "app/web/public/tutorials/game",
 )
 
 
@@ -131,3 +128,8 @@ def test_what_the_container_needs_survives_the_deep_exclusions(entries):
         assert any(
             name == path or name.startswith(f"{path}/") for name in entries
         ), path
+
+
+def test_the_web_tree_is_not_in_the_image(entries):
+    """~46 MB of site, routes and assets that nothing in the container reads (they run in the cloud)."""
+    assert [name for name in entries if name.startswith("app/web")] == []
