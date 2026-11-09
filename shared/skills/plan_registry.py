@@ -236,12 +236,6 @@ _BURST_SCOUT_CAP = {20: 25, 15: 20, 5: 15, 1: 10, 0: 8}
 # all'utente prima di passare al regime normale.
 _BURST_TARGET_SCORED = {20: 15, 15: 12, 5: 10, 1: 6, 0: 4}
 
-# RAM stimata per agente (GB). Cap hardware: su una macchina piccola il roster
-# del piano va ridotto anche se l'abbonamento lo permetterebbe.
-_RAM_GB_PER_AGENT = 0.6
-_RAM_GB_RESERVED = 2.0
-
-
 def _jht_home() -> Path:
     return Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
 
@@ -422,22 +416,26 @@ def _tier_bucket(tier: float) -> int:
     return 0
 
 
-def _host_agent_cap() -> Optional[int]:
-    """Quanti agenti regge questa macchina, dalla RAM. None se non misurabile.
-
-    Il collo di bottiglia misurato non è la CPU (i worker aspettano la rete)
-    ma la memoria: oltre il limite la macchina va in thrash e RALLENTA tutto.
-    """
+def _host_capacity() -> Optional[dict]:
+    """Capacity of this machine from measurements (shared/skills/host_capacity.py), or None when it cannot be read."""
     try:
-        total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-    except (ValueError, OSError, AttributeError):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("host_capacity", Path(__file__).with_name("host_capacity.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        provider = _read_config().get("active_provider")
+        return mod.capacity(mod.read_probe(), mod.harness_of(normalize_provider(provider)))
+    except Exception:  # noqa: BLE001 - an unreadable machine has no cap, as before
         return None
-    gb = total / (1024 ** 3)
-    usable = gb - _RAM_GB_RESERVED
-    if usable <= 0:
-        return 1
-    # +5 core fissi (Capitano, Sentinella, Assistente, Mentor, Dottore) già accesi.
-    return max(1, int(usable / _RAM_GB_PER_AGENT) - 5)
+
+
+def _host_agent_cap() -> Optional[int]:
+    """How many workers this machine carries: RAM per agent of the harness, cores and load. None if not measurable.
+
+    The cap comes from measurements (host_capacity.py): the RAM of a session of that harness, the free RAM of the
+    machine, its cores and its load. It is the one source for the stepcap watchdog, the spawn gate and the roster."""
+    info = _host_capacity()
+    return info["cap"] if info else None
 
 
 def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
@@ -457,6 +455,7 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
         (s, a, sc) for floor, s, a, sc in _BURST_ROSTER if floor == bucket)
 
     cap = host_cap if host_cap is not None else _host_agent_cap()
+    info = _host_capacity() if host_cap is None else None
     capped_by_host = False
     if cap is not None and scout + analista + scorer > cap:
         capped_by_host = True
@@ -490,6 +489,7 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
         "target_scored": _BURST_TARGET_SCORED[bucket],
         "host_agent_cap": cap,
         "capped_by_host": capped_by_host,
+        "host_note": info["message"] if info and info["cap"] == cap else None,
     }
 
 
