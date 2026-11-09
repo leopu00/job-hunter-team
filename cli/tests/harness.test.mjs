@@ -7,7 +7,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { providerCli } from '../src/commands/team/agents.js';
 import { startRefusal } from '../src/commands/team/start.js';
-import { harnessOf, harnessProblem, loginMarkerOf, usesPi } from '../../shared/runtime/agent-harness.js';
+import { harnessOf, harnessProblem, loginMarkerOf, usesPi, PI_IMAGE_BIN } from '../../shared/runtime/agent-harness.js';
+import { piProgram, runPiLogin } from '../wizard/pi-login.js';
+import { checkPi } from '../src/commands/providers-harness.js';
 
 // The first setup lets the person choose the program that runs the agents (codex | pi): what is asked, what is
 // installed and waited for, what the configuration says, and how `jht providers harness` and `team start` read it.
@@ -160,7 +162,6 @@ test('jht providers harness shows, changes and refuses', () => {
   assert.equal(JSON.parse(readFileSync(cfg, 'utf8')).harness, 'pi');
   assert.equal(jht(box, ['providers', 'harness']).out.trim(), 'pi');
   assert.match(jht(box, ['providers', 'harness', 'pi']).out, /already active/);
-  assert.match(jht(box, ['providers']).out, /Harness: pi/);
 
   assert.equal(jht(box, ['providers', 'harness', 'codex']).status, 0);
   assert.equal(JSON.parse(readFileSync(cfg, 'utf8')).harness, 'codex');
@@ -180,15 +181,21 @@ test('jht providers harness pi is refused for a provider pi cannot start on, and
   assert.equal(readFileSync(cfg, 'utf8'), text);
 });
 
-test('jht providers update pi runs the reviewed lock installer, and names it', () => {
-  const source = readFileSync(join(cli, 'src/commands/providers.js'), 'utf8');
-  const harnessSource = readFileSync(join(cli, 'src/commands/providers-harness.js'), 'utf8');
-  assert.match(harnessSource, /PI_INSTALL_SCRIPT = '\/app\/shared\/runtime\/pi-harness\/install-pi\.sh'/);
-  assert.match(source, /if \(target === 'pi'\) return piUpdateSteps\(\)/);
-  assert.match(harnessSource, /entrypoint: 'bash', args: \[PI_INSTALL_SCRIPT\]/);
-  const box = sandbox();
-  const r = jht(box, ['providers', 'update', 'nope']);
-  assert.match(r.out, /Supported: codex, pi/);
+test('jht providers update pi checks the pi of the image by its own path, and installs nothing', () => {
+  const calls = [];
+  const out = [];
+  const log = { log: (m) => out.push(m), error: (m) => out.push(m) };
+  const before = process.exitCode;
+  checkPi({ run: (cmd, args, opts) => { calls.push([cmd, args, opts.env.PI_TELEMETRY]); return { status: 0, stdout: '1.5.0\n' }; }, log });
+  assert.deepEqual(calls, [[PI_IMAGE_BIN, ['--version'], '0']]);
+  assert.match(out.join('\n'), /pi 1\.5\.0/);
+  checkPi({ run: () => ({ error: new Error('ENOENT') }), log });
+  assert.match(out.at(-1), /this image has no pi of its own/);
+  assert.equal(process.exitCode, 1);
+  process.exitCode = before;
+  assert.doesNotMatch(readFileSync(join(cli, 'src/commands/providers-harness.js'), 'utf8'), /install-pi\.sh/, 'nothing is installed under the folder the agents can write');
+  const r = jht(sandbox(), ['providers', 'update', 'nope']);
+  assert.match(r.out, /Supported: codex/);
 });
 
 test('team start follows the harness: the CLI is pi, and a provider pi cannot start on stops before the team', () => {
@@ -229,4 +236,14 @@ test('the harness of a config: absent is codex, an unknown value is not a harnes
   assert.match(harnessProblem('pi', 'claude', 'api_key'), /only active_provider=openai/);
   assert.match(harnessProblem('pi', 'kimi', 'subscription'), /only active_provider=openai/);
   assert.match(harnessProblem('x', 'openai'), /one of: codex, pi/);
+});
+
+test('the sign-in runs the pi of the image by its own path, and the name only when the image has none', () => {
+  assert.equal(PI_IMAGE_BIN, '/opt/jht-pi/bin/pi');
+  assert.equal(piProgram(() => true), PI_IMAGE_BIN);
+  assert.equal(piProgram(() => false), 'pi');
+  const seen = [];
+  const stdin = { isRaw: false, isPaused: () => true, pause() {}, resume() {}, isTTY: false };
+  runPiLogin({ spawn: (cmd, args) => { seen.push([cmd, args]); return { status: 0 }; }, stdin, env: { PATH: '/opt/jht-deps/bin' }, exists: () => true });
+  assert.equal(seen[0][0], PI_IMAGE_BIN, 'not a pi from the folder the agents can write');
 });

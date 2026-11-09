@@ -36,7 +36,7 @@ def test_the_four_lists_agree() -> None:
     union = re.search(r"AgentHarnessName = ([^;]*);", types)
     assert union and re.findall(r'"([a-z]+)"', union.group(1)) == expected
 
-    lib = (ROOT / ".launcher/spawn-lib.sh").read_text(encoding="utf-8")
+    lib = (ROOT / ".launcher/spawn-harness.sh").read_text(encoding="utf-8")
     launcher = re.search(r'^JHT_AGENT_HARNESSES="([^"]*)"', lib, re.M)
     assert launcher and launcher.group(1).split() == expected
 

@@ -22,7 +22,6 @@
 # daemon-lib.sh è inerte per costruzione (solo definizioni) e start-agent.sh lo
 # sorgea già PRIMA di questo file: il secondo source è un no-op.
 JHT_SPAWN_LIB_DIR="${JHT_SPAWN_LIB_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)}"
-# shellcheck source=/dev/null
 . "$JHT_SPAWN_LIB_DIR/spawn-harness.sh"
 . "$JHT_SPAWN_LIB_DIR/agent-environment.sh"
 if [ -f "$JHT_SPAWN_LIB_DIR/daemon-lib.sh" ]; then
@@ -404,18 +403,14 @@ jht_codex_web_search_role() {
   return 1
 }
 
-# ── Harness dell'agente: codex | pi ──────────────────────────────────────────
+# ── Harness dell'agente: pi ──────────────────────────────────────────────────
 # L'harness è la CLI che guida l'agente; il provider resta `active_provider`.
-# Due valori: `codex` (la CLI del provider, quella di sempre: Codex con
-# openai) e `pi` (`@earendil-works/pi-coding-agent`), che con lo stesso account
-# parla al provider con un login suo. La scelta è `harness` nel config
-# (jht.config.json, scritta da `jht setup` e `jht providers harness`) e vale
-# per TUTTI i ruoli; assente = `codex`. La variabile
-# JHT_AGENT_HARNESS_<RUOLO> la sostituisce per quel solo ruolo (`pi` o
-# `codex`): serve a provare un ruolo sull'altro harness senza toccare il config.
-# Pi parte solo con active_provider=openai (Sign in with ChatGPT): con un
-# abbonamento Claude pi va sull'extra usage di Anthropic, pagato a token, e si
-# rifiuta di partire invece di spendere.
+# Quale harness (codex o pi) lo decide `harness` nel config o la variabile
+# JHT_AGENT_HARNESS_<RUOLO> (spawn-harness.sh: jht_agent_harness). Pi
+# (`@earendil-works/pi-coding-agent`) con lo stesso account parla al provider
+# con un login suo, e parte SOLO con active_provider=openai (Sign in with
+# ChatGPT): con un abbonamento Claude va sull'extra usage di Anthropic, pagato
+# a token, e si rifiuta di partire invece di spendere.
 #
 # Il pin: un pi diverso da questa versione non parte. Si installa SOLO dal lock
 # rivisto di shared/runtime/pi-harness (integrity di ogni dipendenza, sha256 dei
@@ -426,41 +421,6 @@ JHT_PI_INSTALL="/app/shared/runtime/pi-harness/install-pi.sh"
 # I tool di pi accesi per l'agente: read/bash/edit/write sono il suo default,
 # grep/find/ls vanno chiesti. Niente MCP, niente estensioni.
 JHT_PI_TOOLS="read,bash,edit,write,grep,find,ls"
-# La ricerca web di pi e' un'estensione nostra (shared/runtime/pi-harness), per i ruoli che con
-# Codex hanno --search (JHT_CODEX_WEB_SEARCH_ROLES). Percorso fisso, non da ambiente: e' codice che pi carica.
-JHT_PI_WEB_SEARCH_EXT="/app/shared/runtime/pi-harness/web-search.js"
-# Gli harness che il config e la variabile conoscono (shared/runtime/agent-harness.js).
-JHT_AGENT_HARNESSES="codex pi"
-
-# jht_agent_harness <ruolo> [harness-del-config]
-#   Stampa "pi" se il ruolo deve girare su pi, niente per la CLI del provider.
-#   Vince JHT_AGENT_HARNESS_<RUOLO>, poi l'harness del config, poi `codex`.
-#   rc 2 (col perché su stderr) se uno dei due chiede qualcosa che non c'è:
-#   un errore di configurazione ferma l'avvio, non ricade in silenzio
-#   sull'harness di oggi.
-jht_agent_harness() {
-  local role var value="" source_name
-  role="$(printf '%s' "${1:-}" | tr 'a-z' 'A-Z')"
-  case "$role" in
-    ""|*[!A-Z0-9_]*) return 0 ;;
-  esac
-  var="JHT_AGENT_HARNESS_${role}"
-  value="${!var:-}"
-  source_name="$var"
-  if [ -z "$value" ]; then
-    value="${2:-}"
-    source_name="harness in the config"
-  fi
-  case "$value" in
-    ""|codex) return 0 ;;
-    pi) ;;
-    *)
-      echo "Error: $source_name='$value' is not a known agent harness (${JHT_AGENT_HARNESSES// /, }; leave it unset for the default)." >&2
-      return 2
-      ;;
-  esac
-  printf 'pi\n'
-}
 
 # jht_pi_provider_check <active_provider> <auth_method>
 #   0 se pi può partire su quel provider, altrimenti rc 1 e il perché.
@@ -482,7 +442,7 @@ jht_pi_provider_check() {
   esac
 }
 
-# jht_pi_args <agent_dir> <modello> <effort> [ruolo]
+# jht_pi_args <agent_dir> <modello> <effort>
 #   Gli argomenti di pi per un agente. Ognuno chiude una porta:
 #   --tui-mode regular  la TUI di pi è a schermo intero di default (alternate
 #                       screen): capture-pane vedrebbe solo la finestra e lo
@@ -494,20 +454,11 @@ jht_pi_provider_check() {
 #   -na -ns --skill     le skill sono SOLO la distribuzione del ruolo
 #                       (.agents/skills); -na evita la domanda di project trust
 #                       che le .agents/skills del progetto aprirebbero all'avvio.
-#   Con <ruolo> fra quelli della ricerca web, anche l'estensione di ricerca (-e esplicito: vale con -ne).
-#   Se il file manca lo dice e il ruolo parte senza ricerca, invece di far fallire pi all'avvio.
 jht_pi_args() {
-  local agent_dir="$1" model="$2" effort="$3" role="${4:-}"
+  local agent_dir="$1" model="$2" effort="$3"
   printf '%s' "--tui-mode regular -nc --append-system-prompt '$agent_dir/AGENTS.md'"
   printf '%s' " -na -ns --skill '$agent_dir/.agents/skills'"
   printf '%s' " --tools $JHT_PI_TOOLS --no-mcp -ne"
-  if [ -n "$role" ] && jht_codex_web_search_role "$role"; then
-    if [ -f "$JHT_PI_WEB_SEARCH_EXT" ]; then
-      printf '%s' " -e '$JHT_PI_WEB_SEARCH_EXT'"
-    else
-      echo "Warning: $JHT_PI_WEB_SEARCH_EXT is missing: the $role starts on pi without web search." >&2
-    fi
-  fi
   printf '%s\n' " --provider openai --model $model --thinking $effort"
 }
 
@@ -554,7 +505,7 @@ PYEOF
 # jht_pi_version_check — 0 se il pi sul PATH è quello del pin.
 jht_pi_version_check() {
   local got
-  got="$(PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 pi --version 2>/dev/null | tr -d '[:space:]')" || got=""
+  got="$(PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 "$(jht_pi_bin)" --version 2>/dev/null | tr -d '[:space:]')" || got=""
   if [ "$got" != "$JHT_PI_VERSION" ]; then
     echo "Error: pi ${got:-not runnable} found, this release needs pi $JHT_PI_VERSION: bash $JHT_PI_INSTALL" >&2
     return 1

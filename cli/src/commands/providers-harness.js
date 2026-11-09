@@ -3,10 +3,11 @@
  * (shared/runtime/agent-harness.js), kept out of providers.js.
  */
 import { readFile, access } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { writePrivateJson } from '../lib/secure-config-io.js';
-import { AGENT_HARNESSES, DEFAULT_HARNESS, harnessOf, harnessProblem } from '../../../shared/runtime/agent-harness.js';
+import { AGENT_HARNESSES, DEFAULT_HARNESS, PI_IMAGE_BIN, harnessOf, harnessProblem } from '../../../shared/runtime/agent-harness.js';
 import { c, DIM, RESET } from './_colors.js';
 import { marks } from '../lib/ui.js';
 
@@ -18,17 +19,29 @@ async function fileExists(p) {
   try { await access(p); return true; } catch { return false; }
 }
 
-// Pi (the `pi` harness) is not pinned in provider-versions.json: it installs from its own reviewed lock,
-// shared/runtime/pi-harness, with the script that sits there (the one the launcher names when pi is missing).
-// It is never in UPDATE_TARGETS: the boot update touches only the active provider's CLI.
-const PI_INSTALL_SCRIPT = '/app/shared/runtime/pi-harness/install-pi.sh';
-
-export function piUpdateSteps() {
-  return [{ entrypoint: 'bash', args: [PI_INSTALL_SCRIPT] }];
+// Pi (the `pi` harness) is not installed by `jht providers update`: it comes with the image, from the
+// reviewed lock of shared/runtime/pi-harness, in /opt/jht-pi (root's, which the agents run and cannot change).
+// `jht providers update pi` is the check that it is there and answers: installing one under /opt/jht-deps
+// would only leave a Pi that the agents can write. It is never in UPDATE_TARGETS (the boot update).
+export function checkPi({ run = spawnSync, log = console } = {}) {
+  console.log(`\n  ${DIM}── Checking pi ──${RESET}`);
+  console.log(`  ${DIM}pi comes with the image, from the reviewed lock of this release (${PI_IMAGE_BIN})${RESET}`);
+  const r = run(PI_IMAGE_BIN, ['--version'], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, PI_SKIP_VERSION_CHECK: '1', PI_TELEMETRY: '0' } });
+  if (r.error || r.status !== 0) {
+    log.error(`  ${ERR}  pi does not answer from ${PI_IMAGE_BIN}: this image has no pi of its own (an older image?). Update the image.`);
+    process.exitCode = 1;
+    return;
+  }
+  log.log(`  ${OK}  pi ${String(r.stdout).trim()}`);
 }
 
-export function announcePi() {
-  console.log(`  ${DIM}pi: installed from the reviewed lock of this release (shared/runtime/pi-harness)${RESET}`);
+/** `jht providers harness`: added to the providers command, so providers.js does not grow. */
+export function registerProvidersHarness(program) {
+  const providers = program.commands.find((cmd) => cmd.name() === 'providers');
+  providers
+    .command('harness [name]')
+    .description('Which program drives the agents: codex (default) or pi. Without a name, print the current one.')
+    .action((name) => handleHarness(name));
 }
 
 // jht providers harness [codex|pi]: which program drives the agents. Without a name it says the current one.
@@ -81,10 +94,4 @@ export async function handleHarness(name) {
     console.log(`  ${DIM}Install Pi and sign in to it: jht providers update pi, then jht setup (keep the configuration)${RESET}`);
   }
   console.log(`  ${DIM}Restart the team to apply: jht team stop --all && jht team start${RESET}`);
-}
-
-/** In `jht providers`: the program that drives the agents, only when it is not the default. */
-export function printHarnessLine(config) {
-  if (harnessOf(config) === DEFAULT_HARNESS) return;
-  console.log(`  ${DIM}Harness: ${config.harness} (change it with: jht providers harness <${AGENT_HARNESSES.join('|')}>)${RESET}\n`);
 }

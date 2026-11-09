@@ -20,6 +20,7 @@ import { registerCacheCommand } from './commands/cache.js';
 import { registerToolsCommand } from './commands/tools.js';
 import { registerLogsCommand } from './commands/logs.js';
 import { registerProvidersCommand } from './commands/providers.js';
+import { registerProvidersHarness } from './commands/providers-harness.js';
 import { registerStatsCommand } from './commands/stats.js';
 import { registerPluginsCommand } from './commands/plugins.js';
 import { registerAgentsCommand } from './commands/agents.js';
@@ -110,6 +111,7 @@ export function buildProgram() {
   registerToolsCommand(program);
   registerLogsCommand(program);
   registerProvidersCommand(program);
+  registerProvidersHarness(program);
   registerStatsCommand(program);
   registerPluginsCommand(program);
   registerAgentsCommand(program);

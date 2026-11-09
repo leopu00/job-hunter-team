@@ -108,7 +108,7 @@
   "wizard.provider.harness_codex": "Codex — recommended (the default)",
   "wizard.provider.harness_pi": "Pi — needs a ChatGPT Plus or Pro subscription",
   "wizard.provider.harness_pi_note": "Pi signs in to ChatGPT with its own login, separate from Codex's, and needs a ChatGPT Plus or Pro subscription. Every agent of the team runs in Pi's terminal interface, as it would in Codex's.\nYou can go back at any time with: jht providers harness codex",
-  "wizard.provider.install_failed_continue_pi": "Pi could not be installed. Continue the setup anyway?\n  Yes: carry on, then install it with: jht providers update pi\n  No: stop here; your choices are kept and jht setup starts again",
+  "wizard.provider.install_failed_continue_pi": "Pi was not found in this image, or does not answer. Continue the setup anyway?\n  Yes: carry on, then check it with: jht providers update pi\n  No: stop here; your choices are kept and jht setup starts again",
   "wizard.provider.install_failed_yes": "Yes, continue",
   "wizard.provider.install_failed_no": "No, stop here",
   "wizard.oauth.notify_title": "%s login (in another terminal)",

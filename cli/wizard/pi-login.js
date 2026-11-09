@@ -4,20 +4,25 @@
  * folder the launcher gives every Pi agent through PI_CODING_AGENT_DIR, so the login is made once.
  */
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { JHT_CONFIG_DIR } from './setup-helpers.js';
 import { recordLoginFailure } from './codex-device-login.js';
+import { PI_IMAGE_BIN } from '../../shared/runtime/agent-harness.js';
 
 /** Pi's arguments for a sign-in only: no identity files, no skills, no extensions, no MCP around it. */
 export const PI_LOGIN_ARGS = ['-nc', '-na', '-ns', '-ne', '--no-mcp'];
 
-export function runPiLogin({ spawn = spawnSync, stdin = process.stdin, env = process.env } = {}) {
+/** The Pi of the image by its own path (the PATH has a folder the agents can write before it), else `pi`. */
+export const piProgram = (exists = existsSync) => (exists(PI_IMAGE_BIN) ? PI_IMAGE_BIN : 'pi');
+
+export function runPiLogin({ spawn = spawnSync, stdin = process.stdin, env = process.env, exists = existsSync } = {}) {
   const wasRaw = stdin.isRaw === true;
   const wasPaused = stdin.isPaused();
   stdin.pause();
   try {
     if (stdin.isTTY) stdin.setRawMode(false);
-    return spawn('pi', PI_LOGIN_ARGS, {
+    return spawn(piProgram(exists), PI_LOGIN_ARGS, {
       stdio: 'inherit',
       env: {
         ...env,

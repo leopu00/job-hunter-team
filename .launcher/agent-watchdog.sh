@@ -238,11 +238,7 @@ markers = {
   'codex':     f'{jht_home}/.codex/auth.json',
   'openai':    f'{jht_home}/.codex/auth.json',
 }
-marker = markers.get(prov, '')
-# Con l'harness pi (jht.config.json: harness) il login e' quello di pi, non del provider.
-if marker and d.get('harness') == 'pi' and prov in ('openai', 'codex'):
-  marker = f'{jht_home}/.pi/agent/auth.json'
-has_creds = bool(prov) and os.path.exists(marker)
+has_creds = bool(prov) and os.path.exists(f'{jht_home}/.pi/agent/auth.json' if d.get('harness') == 'pi' and prov in ('openai', 'codex') else markers.get(prov, ''))  # harness pi: il login e' quello di pi
 sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }

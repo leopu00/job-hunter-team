@@ -1179,17 +1179,12 @@ esac
 
 # ── Harness dell'agente (codex | pi) ─────────────────────────────────────────
 # `harness` nel config (jht setup, jht providers harness) fa girare TUTTI i
-# ruoli su pi invece che sulla CLI del provider; senza, non cambia nulla.
-# JHT_AGENT_HARNESS_<RUOLO> lo cambia per quel solo ruolo. Regole e perché in
-# spawn-lib.sh (jht_config_harness, jht_agent_harness, jht_pi_provider_check).
-# Il modello e l'effort sono quelli che lo stesso ruolo avrebbe su Codex (la
-# mappa ruoli e team.role_models): pi parla al provider openai con gli stessi
-# id. Gli argomenti si compongono più sotto, quando la workdir con AGENTS.md e
-# le skill esiste.
-if ! CONFIG_HARNESS="$(jht_config_harness "$JHT_CONFIG_FILE")"; then
-  exit 1
-fi
-if ! AGENT_HARNESS="$(jht_agent_harness "$ROLE" "$CONFIG_HARNESS")"; then
+# ruoli su pi invece che sulla CLI del provider; JHT_AGENT_HARNESS_<RUOLO> lo
+# cambia per quel solo ruolo. Senza, non cambia nulla. Regole e perché in
+# spawn-harness.sh e spawn-lib.sh (jht_pi_provider_check). Il modello e
+# l'effort sono quelli che lo stesso ruolo avrebbe su Codex; gli argomenti si
+# compongono più sotto, quando la workdir con AGENTS.md e le skill esiste.
+if ! AGENT_HARNESS="$(jht_role_harness "$ROLE" "$JHT_CONFIG_FILE")"; then
   exit 1
 fi
 if [ "$AGENT_HARNESS" = "pi" ]; then
@@ -1359,13 +1354,10 @@ fi
 #   - Claude Code legge CLAUDE.md
 #   - Codex + Kimi leggono AGENTS.md (standard OpenAI / Moonshot)
 # Il contenuto è identico, cambia solo il nome del file.
-# pi legge sempre AGENTS.md (--append-system-prompt per percorso), qualunque
-# sia il provider: il controllo piu' sotto lo pretende.
 case "$PROVIDER" in
   anthropic|claude) IDENTITY_FILE="CLAUDE.md" ;;
   *)                   IDENTITY_FILE="AGENTS.md" ;;
 esac
-[ "$CLI_BIN" = "pi" ] && IDENTITY_FILE="AGENTS.md"
 IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 
 # Risoluzione locale del template d'identità.
@@ -1498,10 +1490,10 @@ if [ "$CLI_BIN" = "pi" ]; then
   if ! jht_pi_settings "$(jht_pi_agent_dir)/settings.json"; then
     exit 1
   fi
-  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort" "$ROLE")"
+  CLI_ARGS="$(jht_pi_args "$AGENT_DIR" "$pi_model" "$effort")$(jht_pi_extension_args "$ROLE")"
 fi
 
-FULL_CMD="${CLI_ENV_PREFIX}${CLI_BIN}${CLI_ARGS:+ $CLI_ARGS}"
+FULL_CMD="${CLI_ENV_PREFIX}$(jht_cli_exec "$CLI_BIN")${CLI_ARGS:+ $CLI_ARGS}"
 
 # Guscio di uno spawn interrotto. Col tetto sui client tmux qui sotto, un server
 # che non risponde non appende piu' lo script: lo fa USCIRE (set -e) dopo che

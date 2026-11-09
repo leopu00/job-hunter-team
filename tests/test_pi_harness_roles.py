@@ -8,6 +8,7 @@ in test_pi_harness.py.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -279,3 +280,68 @@ def test_the_extension_path_is_not_taken_from_the_environment(tmp_path: Path) ->
         capture_output=True, text=True, check=True, env=_clean_env(JHT_PI_WEB_SEARCH_EXT=str(evil)),
     )
     assert result.stdout == "/app/shared/runtime/pi-harness/web-search.js"
+
+
+# ── the pi of the image, not one the agents can leave in their own folder ──
+
+
+def _image_pi(tmp_path: Path) -> Path:
+    fake = tmp_path / "opt" / "jht-pi" / "bin" / "pi"
+    fake.parent.mkdir(parents=True)
+    fake.write_text("#!/usr/bin/env bash\necho 1.5.0\n", encoding="utf-8")
+    fake.chmod(0o755)
+    return fake
+
+
+def test_pi_is_run_by_the_path_of_the_image_when_it_is_there(tmp_path: Path) -> None:
+    fake = _image_pi(tmp_path)
+    result = _launch(tmp_path, harness=None, config_harness="pi", after_lib=(f"JHT_PI_IMAGE_BIN='{fake}'",))
+    assert result.returncode == 0, result.stderr
+    _env, argv = _argv(result.stdout.strip())
+    assert argv[0] == str(fake)
+
+
+def test_pi_keeps_its_name_when_the_image_has_no_pi_of_its_own(tmp_path: Path) -> None:
+    result = _launch(tmp_path, harness=None, config_harness="pi",
+                     after_lib=(f"JHT_PI_IMAGE_BIN='{tmp_path}/none/pi'",))
+    assert result.returncode == 0, result.stderr
+    assert _argv(result.stdout.strip())[1][0] == "pi"
+
+
+def test_other_clis_are_still_run_by_name(tmp_path: Path) -> None:
+    result = _launch(tmp_path, harness=None, config_harness="codex",
+                     after_lib=(f"JHT_PI_IMAGE_BIN='{_image_pi(tmp_path)}'",))
+    assert _argv(result.stdout.strip())[1][0] == "codex"
+
+
+def test_a_pi_left_in_the_agents_folder_does_not_replace_the_image_one(tmp_path: Path) -> None:
+    """PATH has a folder the agents can write before /usr/local/bin: the pi put there is neither run nor believed."""
+    image = _image_pi(tmp_path)
+    shadow = tmp_path / "jht-deps" / "bin"
+    shadow.mkdir(parents=True)
+    (shadow / "pi").write_text("#!/usr/bin/env bash\necho 9.9.9\n", encoding="utf-8")
+    (shadow / "pi").chmod(0o755)
+    env = _clean_env(PATH=f"{shadow}:{os.environ.get('PATH', '')}", JHT_HOME=str(tmp_path / "home"))
+    script = (f'source "{SPAWN_LIB}"; JHT_PI_IMAGE_BIN="{image}"; '
+              'jht_pi_version_check && printf "%s\\n" "$(jht_pi_bin)" "$(jht_cli_exec pi)"')
+    result = subprocess.run([_bash(), "-c", script], capture_output=True, text=True, check=False, env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == [str(image), str(image)]
+    assert "9.9.9" not in result.stdout
+
+
+def test_the_version_of_the_image_pi_is_the_one_checked_not_the_shadow(tmp_path: Path) -> None:
+    """The shadow pi answers the pinned version, the image one does not: the check follows the image one."""
+    image = _image_pi(tmp_path)
+    image.write_text("#!/usr/bin/env bash\necho 0.0.1\n", encoding="utf-8")
+    shadow = tmp_path / "jht-deps" / "bin"
+    shadow.mkdir(parents=True)
+    pinned = subprocess.run([_bash(), "-c", f'source "{SPAWN_LIB}"; printf %s "$JHT_PI_VERSION"'],
+                            capture_output=True, text=True, check=True).stdout
+    (shadow / "pi").write_text(f"#!/usr/bin/env bash\necho {pinned}\n", encoding="utf-8")
+    (shadow / "pi").chmod(0o755)
+    env = _clean_env(PATH=f"{shadow}:{os.environ.get('PATH', '')}")
+    result = subprocess.run([_bash(), "-c", f'source "{SPAWN_LIB}"; JHT_PI_IMAGE_BIN="{image}"; jht_pi_version_check'],
+                            capture_output=True, text=True, check=False, env=env)
+    assert result.returncode != 0
+    assert "pi 0.0.1 found" in result.stderr

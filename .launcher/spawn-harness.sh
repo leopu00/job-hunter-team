@@ -5,6 +5,81 @@
 # start-agent.sh (Dottore, Mantenitore). Le funzioni si risolvono alla chiamata: l'ordine di caricamento
 # fra i due file non conta.
 
+# Gli harness che il config e la variabile conoscono (shared/runtime/agent-harness.js).
+JHT_AGENT_HARNESSES="codex pi"
+
+# jht_agent_harness <ruolo> [harness-del-config]
+#   Stampa "pi" se il ruolo deve girare su pi, niente per la CLI del provider.
+#   Vince JHT_AGENT_HARNESS_<RUOLO>, poi l'harness del config, poi `codex`.
+#   rc 2 (col perché su stderr) se uno dei due chiede qualcosa che non c'è:
+#   un errore di configurazione ferma l'avvio, non ricade in silenzio
+#   sull'harness di oggi.
+jht_agent_harness() {
+  local role var value="" source_name
+  role="$(printf '%s' "${1:-}" | tr 'a-z' 'A-Z')"
+  case "$role" in
+    ""|*[!A-Z0-9_]*) return 0 ;;
+  esac
+  var="JHT_AGENT_HARNESS_${role}"
+  value="${!var:-}"
+  source_name="$var"
+  if [ -z "$value" ]; then
+    value="${2:-}"
+    source_name="harness in the config"
+  fi
+  case "$value" in
+    ""|codex) return 0 ;;
+    pi) ;;
+    *)
+      echo "Error: $source_name='$value' is not a known agent harness (${JHT_AGENT_HARNESSES// /, }; leave it unset for the default)." >&2
+      return 2
+      ;;
+  esac
+  printf 'pi\n'
+}
+
+# Il pi dell'immagine sta in /opt/jht-pi, di root: gli agenti lo eseguono e non lo cambiano. Il PATH degli agenti
+# ha davanti /opt/jht-deps/bin, che gli agenti possono scrivere: un pi lasciato lì (da un agente o da un'immagine
+# vecchia) oscurerebbe quello di root. Per questo pi si lancia, e se ne controlla la versione, per percorso
+# assoluto quando c'è; senza (immagine vecchia) resta il nome nudo e vale il controllo della versione.
+JHT_PI_IMAGE_BIN="/opt/jht-pi/bin/pi"
+
+# jht_pi_bin → il pi da eseguire: quello di root se c'è, altrimenti "pi".
+jht_pi_bin() {
+  if [ -x "$JHT_PI_IMAGE_BIN" ]; then printf '%s\n' "$JHT_PI_IMAGE_BIN"; else printf 'pi\n'; fi
+}
+
+# jht_cli_exec <cli> → cosa scrivere nel pane per lanciare quella CLI (pi per percorso assoluto, le altre per nome).
+jht_cli_exec() {
+  if [ "${1:-}" = "pi" ]; then jht_pi_bin; else printf '%s\n' "${1:-}"; fi
+}
+
+# jht_role_harness <ruolo> <jht.config.json>
+#   Come jht_agent_harness, con l'harness letto dal config (jht_config_harness). rc 2 col perché su stderr.
+jht_role_harness() {
+  local cfg_harness
+  cfg_harness="$(jht_config_harness "${2:-}")" || return 2
+  jht_agent_harness "${1:-}" "$cfg_harness"
+}
+
+# La ricerca web di pi è un'estensione nostra (shared/runtime/pi-harness), per i ruoli che con Codex hanno
+# --search (JHT_CODEX_WEB_SEARCH_ROLES). Percorso fisso, non da ambiente: è codice che pi carica.
+JHT_PI_WEB_SEARCH_EXT="/app/shared/runtime/pi-harness/web-search.js"
+
+# jht_pi_extension_args <ruolo>
+#   Gli argomenti di pi in più per quel ruolo: l'estensione di ricerca (-e esplicito: vale con -ne), solo per i
+#   ruoli con la ricerca web su Codex. Se il file manca lo dice e il ruolo parte senza ricerca, invece di far
+#   fallire pi all'avvio. Si accoda a jht_pi_args.
+jht_pi_extension_args() {
+  local role="${1:-}"
+  [ -n "$role" ] && jht_codex_web_search_role "$role" || return 0
+  if [ -f "$JHT_PI_WEB_SEARCH_EXT" ]; then
+    printf '%s' " -e '$JHT_PI_WEB_SEARCH_EXT'"
+  else
+    echo "Warning: $JHT_PI_WEB_SEARCH_EXT is missing: the $role starts on pi without web search." >&2
+  fi
+}
+
 # jht_config_harness <jht.config.json>
 #   Stampa l'harness scritto nel config (`harness`), niente se non c'è.
 #   rc 2 (col perché su stderr) se c'è un valore che non è un harness: un
@@ -50,7 +125,7 @@ jht_spawn_pi_repl_cmd() {
     . "$JHT_SPAWN_LIB_DIR/role-models.sh"
     model="$(resolve_codex_model sol)" || return 2
   fi
-  printf '%s%s\n' "PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 pi " \
+  printf '%s%s\n' "PI_CODING_AGENT_DIR='$(jht_pi_agent_dir)' PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 $(jht_pi_bin) " \
     "$(jht_pi_args "$workdir" "$model" high)"
 }
 

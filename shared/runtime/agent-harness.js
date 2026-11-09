@@ -43,6 +43,13 @@ export function harnessProblem(harness, provider, authMethod) {
   return `the pi harness supports only active_provider=openai for now (configured: '${provider ?? ''}')`;
 }
 
+/**
+ * The Pi of the image: root's, in /opt/jht-pi, which the agents run and cannot change. The agents' PATH puts
+ * /opt/jht-deps/bin (writable by them) first, so Pi is run by this path whenever it exists
+ * (.launcher/spawn-harness.sh: jht_pi_bin).
+ */
+export const PI_IMAGE_BIN = '/opt/jht-pi/bin/pi';
+
 /** Where each program keeps the marker that exists only after its login, under the team's home. */
 export const PI_LOGIN_MARKER = '.pi/agent/auth.json';
 
