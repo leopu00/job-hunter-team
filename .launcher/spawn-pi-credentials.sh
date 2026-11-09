@@ -21,7 +21,8 @@ PYEOF
 }
 
 # jht_pi_config_key_present <jht.config.json> → 0 se il provider attivo del config è in modalità api_key
-#   e ha una chiave scritta. La chiave non viene stampata.
+#   e ha una chiave scritta o un riferimento a una chiave in un file o in una variabile (api_key_ref: la chiave la
+#   controlla jht_key_wrap prima del pane). La chiave non viene stampata.
 jht_pi_config_key_present() {
   [ -f "${1:-}" ] || return 1
   python3 - "$1" <<'PYEOF'
@@ -30,7 +31,10 @@ try:
     with open(sys.argv[1], encoding="utf-8") as handle:
         cfg = json.load(handle)
     provider = (cfg.get("providers") or {}).get(cfg.get("active_provider") or "") or {}
-    ok = provider.get("auth_method") == "api_key" and bool(str(provider.get("api_key") or "").strip())
+    ref = provider.get("api_key_ref")
+    has_ref = isinstance(ref, dict) and ref.get("type") == "ref" and (
+        (ref.get("source") == "file" and bool(ref.get("path"))) or (ref.get("source") == "env" and bool(ref.get("id"))))
+    ok = provider.get("auth_method") == "api_key" and (bool(str(provider.get("api_key") or "").strip()) or has_ref)
 except Exception:
     ok = False
 raise SystemExit(0 if ok else 1)
@@ -38,7 +42,7 @@ PYEOF
 }
 
 # jht_pi_credentials_check <jht.config.json>
-#   0 se c'è una chiave (JHT_API_KEY_FILE, o la chiave api_key del provider attivo nel config) o un login di
+#   0 se c'è una chiave (JHT_API_KEY_FILE, o api_key / api_key_ref del provider attivo nel config) o un login di
 #   pi. Altrimenti rc 1, con su stderr cosa manca e come si rimedia; non scrive niente e non avvia niente.
 jht_pi_credentials_check() {
   [ -z "${JHT_API_KEY_FILE:-}" ] || return 0   # il file lo controlla jht_key_wrap, prima del pane

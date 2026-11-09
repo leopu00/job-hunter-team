@@ -255,3 +255,48 @@ def test_the_line_the_launcher_types_works_through_a_shell_and_keeps_the_key_out
                           env={**os.environ, "JHT_API_KEY_FILE": str(folder / "key")})
     seen = __import__("json").loads(done.stdout)
     assert seen["has_key"] and seen["argv"] == ["--provider", "openai"] and seen["other"] == "from-prefix"
+
+
+# ── the key held by a variable of the container (api_key_ref of source env) ───
+
+def run_from_env(*args, **env):
+    clean = {k: v for k, v in os.environ.items() if k != "JHT_API_KEY_FILE"}
+    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True,
+                          env={**clean, **env}, timeout=30)
+
+
+def test_check_from_env_says_ok_and_never_the_key():
+    done = run_from_env("check", "--from-env", "MY_RUN_KEY", MY_RUN_KEY=KEY)
+    assert (done.returncode, done.stdout.strip()) == (0, "ok") and KEY not in done.stdout + done.stderr
+
+
+@pytest.mark.parametrize(("value", "what"), [(None, "not set"), ("", "empty"), ("short", "short"), (KEY + " x", "space"), ("a\nb" + KEY, "newline")])
+def test_a_variable_that_is_not_one_plain_key_is_refused_without_printing_it(value, what):
+    env = {} if value is None else {"MY_RUN_KEY": value}
+    done = run_from_env("check", "--from-env", "MY_RUN_KEY", **env)
+    assert done.returncode == akf.EXIT_REFUSED, what
+    assert done.stderr.startswith("api_key_file: ") and "MY_RUN_KEY" in done.stderr
+    assert not value or value not in done.stdout + done.stderr
+
+
+@pytest.mark.parametrize("name", ["bad name", "1BAD", "A;B", "", "x" * 70])
+def test_a_name_that_is_not_a_variable_is_refused(name):
+    done = run_from_env("check", "--from-env", name, MY_RUN_KEY=KEY)
+    assert done.returncode == akf.EXIT_REFUSED and KEY not in done.stdout + done.stderr
+
+
+def test_exec_from_env_gives_the_key_under_the_name_of_the_provider_and_drops_the_source(tmp_path):
+    child = tmp_path / "child.py"
+    child.write_text(CHILD + "\nprint(json.dumps({'src': os.environ.get('MY_RUN_KEY')}))\n", encoding="utf-8")
+    done = run_from_env("exec", "--env", "OPENAI_API_KEY", "--from-env", "MY_RUN_KEY", "--", sys.executable, str(child), "--model", "m", MY_RUN_KEY=KEY)
+    assert done.returncode == 0, done.stderr
+    first, second = done.stdout.splitlines()
+    assert __import__("json").loads(first) == {"argv": ["--model", "m"], "has_key": True, "file_var": False, "other": None}
+    assert __import__("json").loads(second) == {"src": None}
+    assert KEY not in done.stderr
+
+
+def test_exec_from_env_starts_nothing_when_the_variable_is_not_right(tmp_path):
+    marker = tmp_path / "started"
+    done = run_from_env("exec", "--env", "OPENAI_API_KEY", "--from-env", "MY_RUN_KEY", "--", "touch", str(marker), MY_RUN_KEY="short")
+    assert done.returncode == akf.EXIT_REFUSED and not marker.exists()

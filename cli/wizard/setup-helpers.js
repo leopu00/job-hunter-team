@@ -42,6 +42,15 @@ export function readConfigFileSnapshot() {
   }
 }
 
+/** Un riferimento a una chiave (SecretRef: env, file o exec) scritto bene: la chiave non è nel config, ma si trova. */
+export function hasKeyRef(ref) {
+  if (!ref || typeof ref !== 'object' || ref.type !== 'ref') return false;
+  if (ref.source === 'file') return typeof ref.path === 'string' && ref.path !== '';
+  if (ref.source === 'env') return typeof ref.id === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(ref.id);
+  if (ref.source === 'exec') return typeof ref.command === 'string' && ref.command !== '';
+  return false;
+}
+
 /**
  * Valida la config prima di scriverla.
  * Replica le regole di shared/config/schema.ts (Zod) in JS puro.
@@ -79,8 +88,8 @@ export function validateConfigBeforeWrite(config) {
     if (!validProviders.includes(prov.name)) {
       errors.push(`providers.${key}.name is invalid`);
     }
-    if (prov.auth_method === 'api_key' && !prov.api_key) {
-      errors.push(`providers.${key}: api_key is required when auth_method = 'api_key'`);
+    if (prov.auth_method === 'api_key' && !prov.api_key && !hasKeyRef(prov.api_key_ref)) {
+      errors.push(`providers.${key}: api_key is required when auth_method = 'api_key' (or an api_key_ref to a file or an environment variable)`);
     }
     // Per auth_method = 'subscription' non imponiamo piu' un blocco
     // 'subscription' nel config: l'autenticazione vera e' OAuth device-flow
