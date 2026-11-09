@@ -429,12 +429,13 @@ def _host_capacity() -> Optional[dict]:
         return None
 
 
-def _host_agent_cap() -> Optional[int]:
+def _host_agent_cap(info: Optional[dict] = None) -> Optional[int]:
     """How many workers this machine carries: RAM per agent of the harness, cores and load. None if not measurable.
 
     The cap comes from measurements (host_capacity.py): the RAM of a session of that harness, the free RAM of the
-    machine, its cores and its load. It is the one source for the stepcap watchdog, the spawn gate and the roster."""
-    info = _host_capacity()
+    machine, its cores and its load. It is the one source for the stepcap watchdog, the spawn gate and the roster.
+    `info` is a reading already taken, so a caller that also wants the note reads the machine once."""
+    info = info if info is not None else _host_capacity()
     return info["cap"] if info else None
 
 
@@ -454,8 +455,8 @@ def burst_roster(plan: dict | None = None, host_cap: int | None = None) -> dict:
     scout, analista, scorer = next(
         (s, a, sc) for floor, s, a, sc in _BURST_ROSTER if floor == bucket)
 
-    cap = host_cap if host_cap is not None else _host_agent_cap()
     info = _host_capacity() if host_cap is None else None
+    cap = host_cap if host_cap is not None else _host_agent_cap(info)
     capped_by_host = False
     if cap is not None and scout + analista + scorer > cap:
         capped_by_host = True

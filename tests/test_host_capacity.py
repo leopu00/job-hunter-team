@@ -38,7 +38,7 @@ def test_the_cores_cap_the_workers_even_with_plenty_of_ram():
 
 def test_a_really_small_machine_gets_a_low_cap_and_says_why():
     tiny = hc.capacity(machine(2.0, 2), "codex")
-    assert tiny["cap"] == 1 and tiny["limit"] == "floor" and "too small" in tiny["message"]
+    assert tiny["cap"] == 1 and "too small" in tiny["message"]
     small = hc.capacity(machine(3.9, 2), "codex")
     assert small["cap"] == 3 and "3 workers" in small["message"]
     one_core = hc.capacity(machine(16, 1), "codex")
@@ -46,9 +46,22 @@ def test_a_really_small_machine_gets_a_low_cap_and_says_why():
     assert hc.capacity(machine(1.0, 1), "claude")["cap"] == 1
 
 
-def test_the_minimal_pipeline_is_kept_on_a_machine_that_can_hold_it():
-    got = hc.capacity(machine(5.9, 4), "claude")  # 5.9 GiB / 0.6 would be 1: a pipeline is still 3 workers
-    assert got["cap"] == 3 and got["limit"] == "floor" and "minimal pipeline" in got["message"]
+def test_a_machine_that_cannot_hold_the_fixed_agents_plus_a_pipeline_gets_one_worker_as_before():
+    # 4 GiB with an estimated 0.6 GiB per agent: (4 - 2) / 0.6 = 3 agents, the 5 fixed ones alone do not fit.
+    for harness in ("claude", "kimi", "pi"):
+        got = hc.capacity(machine(4.0, 4), harness)
+        assert got["cap"] == 1, harness
+    assert hc.capacity(machine(5.9, 4), "claude")["cap"] == 1     # the VM that the flat constant also gave 1 with
+    assert hc.capacity(machine(4.0, 4), "codex")["cap"] >= 3      # the measured 0.22 GiB per Codex agent does fit
+
+
+def test_nothing_raises_the_cap_above_what_the_ram_holds():
+    for total in (1.0, 2.0, 3.0, 4.0, 5.9, 8.0, 12.0, 32.0):
+        for cores in (1, 2, 4, 16):
+            for harness in ("codex", "claude", "kimi", "pi", None):
+                for load5, avail in ((0.5, total), (cores * 20.0, total), (1.0, 0.2)):
+                    got = hc.capacity(machine(total, cores, load5=load5, avail=avail), harness)
+                    assert 1 <= got["cap"] <= max(1, got["ram_cap"]), (total, cores, harness, load5, avail, got)
 
 
 def test_an_overloaded_machine_halves_the_cap_and_a_busy_one_does_not():
@@ -60,6 +73,7 @@ def test_an_overloaded_machine_halves_the_cap_and_a_busy_one_does_not():
 def test_little_free_ram_right_now_stops_the_growth():
     got = hc.capacity(machine(16, 8, avail=0.4), "codex")
     assert got["cap"] == 3 and got["limit"] == "free-ram"
+    assert hc.capacity(machine(4.0, 4, avail=0.2), "claude")["cap"] == 1   # braking never raises
 
 
 def test_a_machine_that_cannot_be_measured_has_no_cap():
@@ -101,11 +115,17 @@ def test_the_probe_reads_meminfo_and_the_container_limits(tmp_path):
 def test_the_big_roster_is_no_longer_cut_to_one_per_role_on_the_windows_pc(monkeypatch):
     plan = dict(plan_registry.find_plan("claude", "max20"))
     monkeypatch.setattr(plan_registry, "_host_capacity", lambda: hc.capacity(machine(5.9, 4), "codex"))
-    monkeypatch.setattr(plan_registry, "_host_agent_cap", lambda: hc.capacity(machine(5.9, 4), "codex")["cap"])
     roster = plan_registry.burst_roster(plan)
     assert roster["total_workers"] == 8 and not roster["capped_by_host"]
     assert roster["roster"] == {"scout": 4, "analista": 2, "scorer": 2}
     assert "carries 8 workers" in roster["host_note"]
+
+
+def test_the_roster_reads_the_machine_once_so_the_note_always_matches_the_cap(monkeypatch):
+    readings = iter([hc.capacity(machine(5.9, 4, load5=1.0), "codex"), hc.capacity(machine(5.9, 4, load5=99.0), "codex")])
+    monkeypatch.setattr(plan_registry, "_host_capacity", lambda: next(readings))
+    roster = plan_registry.burst_roster(dict(plan_registry.find_plan("claude", "max20")))
+    assert roster["host_agent_cap"] == 8 and "carries 8 workers" in roster["host_note"]
 
 
 def test_the_flat_constant_is_gone_and_a_failed_measurement_means_no_cap(monkeypatch):
