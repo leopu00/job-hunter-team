@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import json
 import math
+import sqlite3
+from pathlib import Path
 from datetime import datetime
 
 import pi_sessions
@@ -106,7 +108,26 @@ def user_text(verdict, spent):
     return i18n.tf("pi_cap.halt_tokens", "%d" % verdict["spent"], "%d" % verdict["ceiling"])
 
 
-def captain_text(verdict, spent):
+def first_burst_progress(home):
+    """(scored so far in the first burst, its target) while the burst is open and short of its target, else None.
+    Read from the burst's own state file and the scores table, writing nothing; any reading that fails is None."""
+    try:
+        state = json.loads((Path(home) / "state" / "first-run.json").read_text(encoding="utf-8"))
+        target = state.get("target_scored")
+        if state.get("phase") != "burst" or isinstance(target, bool) or not isinstance(target, int) or target <= 0:
+            return None
+        conn = sqlite3.connect("file:%s?mode=ro" % (Path(home) / "jobs.db"), uri=True, timeout=5)
+        try:
+            scored = int(conn.execute("SELECT COUNT(DISTINCT position_id) FROM scores").fetchone()[0])
+        finally:
+            conn.close()
+        produced = scored - int(state.get("scored_at_start") or 0)
+        return (max(produced, 0), target) if produced < target else None
+    except Exception:  # noqa: BLE001 - no reading, no sentence: the alert goes without it
+        return None
+
+
+def captain_text(verdict, spent, burst=None):
     if verdict["action"] == "warn":
         return ("[BRIDGE INFO] pi spent %s USD today (its own estimate) and no spending ceiling is declared "
                 "(no_quota_cap in the configuration): this access has no quota data, so nothing else stops the "
@@ -116,7 +137,10 @@ def captain_text(verdict, spent):
             "%d tokens in the last hour against a ceiling of %d per hour" % (verdict["spent"], verdict["ceiling"]))
     return ("[BRIDGE ALERT] SPENDING CEILING REACHED (pi harness): %s. The team is PAUSED: ESC to every session, no "
             "forced kill. This is a declared pause, not an outage and not FATAL. It lifts by itself when the spending "
-            "is back under the ceiling, or if the person raises it. Tell the person once, in their language." % what)
+            "is back under the ceiling, or if the person raises it. Tell the person once, in their language.%s" % (what, (
+                " The FIRST BURST is open and stops on this ceiling at %d of %d scored positions: say so in the chat, in "
+                "their language: how many scored positions they have, and that raising the ceiling (no_quota_cap in the "
+                "configuration) lets the burst go on to %d." % (burst[0], burst[1], burst[1])) if burst else ""))
 
 
 def _flag_reason(api):
@@ -145,7 +169,8 @@ def _tell(api, run, key, text, user, notify_user):
 
 
 def _halt(api, run, verdict, spent, day, notify_user):
-    _tell(api, run, "halt:%s:%s" % (day, verdict["why"]), captain_text(verdict, spent), user_text(verdict, spent),
+    burst = first_burst_progress(api._path("JHT_HOME"))
+    _tell(api, run, "halt:%s:%s" % (day, verdict["why"]), captain_text(verdict, spent, burst), user_text(verdict, spent),
           notify_user)
     api._activate_daily_halt(100.0 * verdict["spent"] / verdict["ceiling"], 100.0, 100.0)
     try:
